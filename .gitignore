@@ -5,3 +5,21 @@
 # React Router
 /.react-router/
 /build/
+public/build/
+
+dist/
+out/
+coverage
+.history
+
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+logs
+*.log
+vite.config.ts.*
+
+*.db
+*.db-journal
+

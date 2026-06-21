@@ -1,0 +1,287 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  SUPERVISOR
+  CREW
+  WAREHOUSE
+  FINANCE
+  ADMIN
+}
+
+enum DocStatus {
+  CREATED
+  PREPPED
+  SIGNED
+  FIELD_UPDATED
+  SUPERVISOR_APPROVED
+  CLARO_UPLOADED
+  LC_GENERATED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  role      Role
+  phone     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  // better-auth relations
+  sessions  Session[]
+  accounts  Account[]
+
+  supervisedInvoices    JafInvoice[]         @relation("SupervisorDocs")
+  preppedInvoices       JafInvoice[]         @relation("PreppedDocs")
+  releasedInvoices      JafInvoice[]         @relation("ReleasedDocs")
+  signedInvoices        JafInvoice[]         @relation("SignedDocs")
+  overriddenInvoices    JafInvoice[]         @relation("OverriddenDocs")
+  lcApprovedInvoices    JafInvoice[]         @relation("LcApprovedDocs")
+  closedReceivables     JafInvoice[]         @relation("ClosedReceivables")
+  restockRequests       VanRestockRequest[]  @relation("RestockRequests")
+  restockReleases       VanRestockRequest[]  @relation("RestockReleases")
+  restockReceivers      VanRestockRequest[]  @relation("RestockReceivers")
+  restockOverrides      VanRestockRequest[]  @relation("RestockOverrides")
+  consignmentReceipts   ConsignmentReceipt[] @relation("ConsignmentReceipts")
+  systemSettings        SystemSetting[]      @relation("SystemSettings")
+  auditTrail       AuditTrail[]
+  photos           Photo[]
+  notifications    Notification[]
+}
+
+model Session {
+  id        String   @id
+  userId    String
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  accountId         String
+  providerId        String
+  accessToken       String?
+  refreshToken      String?
+  idToken           String?
+  accessTokenExpiresAt DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope             String?
+  password          String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Warehouse {
+  id       String   @id @default(cuid())
+  name     String
+  zone     String
+  location String?
+  active   Boolean  @default(true)
+ 
+  invoices             JafInvoice[]
+  vanRestockRequests   VanRestockRequest[]
+  consignmentReceipts  ConsignmentReceipt[]
+}
+
+model JafInvoice {
+  id            String    @id @default(cuid())
+  controlNumber String    @unique
+  status        DocStatus @default(CREATED)
+
+  // Supervisor fills at intake
+  jobType             String
+  jobAddressEstimated String
+  estimatedMaterials  Json
+  assignedCrewIds     String[]
+  supervisorId        String
+  supervisor          User     @relation("SupervisorDocs", fields: [supervisorId], references: [id])
+  avisoNumber         String?
+  createdAt           DateTime @default(now())
+
+  // Warehouse prep (Step 2)
+  preppedAt   DateTime?
+  preppedById String?
+  preppedBy   User?    @relation("PreppedDocs", fields: [preppedById], references: [id])
+
+  // Dual signature at warehouse pickup (Step 3) — materialsTaken locked after this
+  // warehouseId set here, not at prep — crew may pull from a different zone warehouse
+  warehouseId      String?
+  warehouse        Warehouse? @relation(fields: [warehouseId], references: [id])
+  materialsTaken   Json?
+  releaseSignature String?    // base64 — warehouse person signs (gives)
+  releasedById     String?
+  releasedBy       User?      @relation("ReleasedDocs", fields: [releasedById], references: [id])
+  releaseSignedAt  DateTime?
+  crewSignature    String?    // base64 — crew member signs (receives)
+  signedById       String?
+  signedBy         User?      @relation("SignedDocs", fields: [signedById], references: [id])
+  signedAt         DateTime?
+
+  // Admin override
+  overriddenById    String?
+  overriddenBy      User?    @relation("OverriddenDocs", fields: [overriddenById], references: [id])
+  overrideSignature String?
+  overrideAt        DateTime?
+  overrideReason    String?
+
+  // Crew field update (Step 4)
+  jobAddressActual String?
+  materialsUsed    Json?
+  fieldNotes       String?
+  completedAt      DateTime?
+
+  // Supervisor approval + Claro submission (Step 5)
+  supervisorApprovedAt DateTime?
+  claroNotes           String?
+  claroPdfPath         String?
+  claroUploadedAt      DateTime?
+
+  // Lissette generates LC (Step 6)
+  lcRequestPdfPath String?
+  lcGeneratedAt    DateTime?
+  lcApprovedById   String?
+  lcApprovedBy     User?     @relation("LcApprovedDocs", fields: [lcApprovedById], references: [id])
+
+  // Payment tracking (receivables dashboard)
+  advanceReceivedAt      DateTime?
+  advanceAmount          Decimal?
+  finalPaymentReceivedAt DateTime?
+  finalPaymentAmount     Decimal?
+  receivableClosedAt     DateTime?
+  receivableClosedById   String?
+  receivableClosedBy     User?     @relation("ClosedReceivables", fields: [receivableClosedById], references: [id])
+
+  // Generated documents
+  warehouseReceiptPath String?
+
+  auditTrail AuditTrail[]
+  photos     Photo[]
+  poLinks    PoLink[]
+
+  @@map("jaf_invoice")
+}
+
+model AuditTrail {
+  id        String     @id @default(cuid())
+  docId     String
+  doc       JafInvoice @relation(fields: [docId], references: [id])
+  userId    String
+  user      User       @relation(fields: [userId], references: [id])
+  action    String   // e.g. "STATUS_CHANGED", "FIELD_UPDATED"
+  diffJson  Json     // {field, before, after}
+  timestamp DateTime   @default(now())
+}
+
+model Photo {
+  id           String   @id @default(cuid())
+  docId        String
+  doc          JafInvoice @relation(fields: [docId], references: [id])
+  uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+  localPath    String   // /var/jaf/uploads/photos/<docId>/<filename>
+  takenAt      DateTime @default(now())
+}
+
+model ServiceCode {
+  id            String  @id @default(cuid())
+  claroCode     String  @unique // e.g. "34006428"
+  name          String          // e.g. "REMOCION MENSAJERO"
+  description   String?
+  unit          String  @default("SR")
+  unitPrice     Decimal
+  accountCode   String?
+  subAct        String?
+  dept          String?
+  profitCenter  String?
+  act           String?
+  costCenterCode String?
+  active        Boolean @default(true)
+}
+
+model PoLink {
+  id               String @id @default(cuid())
+  docId            String
+  doc              JafInvoice @relation(fields: [docId], references: [id])
+  claroPONumber    String
+  acceptanceNumber String?
+  amount           Decimal?
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  message   String
+  docId     String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model SystemSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  updatedById String
+  updatedBy   User     @relation("SystemSettings", fields: [updatedById], references: [id])
+  updatedAt   DateTime @updatedAt
+}
+
+// Module 1 tables — schema defined now, routes built later
+model VanRestockRequest {
+  id                 String    @id @default(cuid())
+  requestedById      String
+  requestedBy        User      @relation("RestockRequests", fields: [requestedById], references: [id])
+  warehouseId        String
+  warehouse          Warehouse @relation(fields: [warehouseId], references: [id])
+  items              Json
+  status             String    @default("REQUESTED")
+  releaseSignature   String?
+  releasedById       String?
+  releasedBy         User?     @relation("RestockReleases", fields: [releasedById], references: [id])
+  releaseSignedAt    DateTime?
+  receiverSignature  String?
+  receiverSignedById String?
+  receiverSignedBy   User?     @relation("RestockReceivers", fields: [receiverSignedById], references: [id])
+  receiverSignedAt   DateTime?
+  overriddenById     String?
+  overriddenBy       User?     @relation("RestockOverrides", fields: [overriddenById], references: [id])
+  overrideSignature  String?
+  overrideAt         DateTime?
+  overrideReason     String?
+  createdAt          DateTime  @default(now())
+}
+
+model ConsignmentReceipt {
+  id           String    @id @default(cuid())
+  warehouseId  String
+  warehouse    Warehouse @relation(fields: [warehouseId], references: [id])
+  receivedById String
+  receivedBy   User      @relation("ConsignmentReceipts", fields: [receivedById], references: [id])
+  deliveryDate DateTime
+  items        Json
+  notes        String?
+  createdAt    DateTime  @default(now())
+}

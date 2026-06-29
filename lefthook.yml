@@ -1,0 +1,10 @@
+pre-commit:
+  parallel: true
+  commands:
+    check:
+      run: pnpm run check:fix
+      stage_fixed: true
+    typecheck:
+      run: pnpm run typecheck
+    test:
+      run: pnpm vitest run --project="server tests"

@@ -6,20 +6,20 @@ export const supportedLanguages = [...languages]
 export type Language = (typeof languages)[number]
 
 type Resource = {
-  common: typeof english
+	common: typeof english
 }
 
 export type Namespace = keyof Resource
 
 export const resources: Record<Language, Resource> = {
-  en: { common: english },
-  es: { common: spanish },
+	en: { common: english },
+	es: { common: spanish },
 }
 
 declare module "i18next" {
-  export interface CustomTypeOptions {
-    defaultNS: "common"
-    fallbackNS: "common"
-    resources: Resource
-  }
+	export interface CustomTypeOptions {
+		defaultNS: "common"
+		fallbackNS: "common"
+		resources: Resource
+	}
 }

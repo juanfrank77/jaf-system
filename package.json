@@ -16,9 +16,11 @@
     "test:ui": "vitest --ui",
     "test:cov": "vitest run --coverage",
     "typecheck": "tsc",
-    "check": "biome check .",
-    "check:fix": "biome check --fix .",
-    "validate": "pnpm run typecheck && pnpm run check && pnpm run test",
+    "check": "biome check app/ prisma/ tests/",
+    "check:fix": "biome check --write app/ prisma/ tests/",
+    "check:unused": "knip",
+    "check:unused:fix": "knip --fix",
+    "validate": "pnpm run typecheck && pnpm run check && pnpm run test && pnpm run check:unused",
     "typegen": "react-router typegen"
   },
   "dependencies": {
@@ -53,6 +55,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.16",
+    "knip": "^5.77.1",
+    "lefthook": "^2.0.12",
     "@react-router/dev": "7.16.0",
     "@tailwindcss/vite": "^4.2.2",
     "@testing-library/react": "^16.3.2",

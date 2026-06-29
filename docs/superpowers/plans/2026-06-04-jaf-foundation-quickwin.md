@@ -439,7 +439,7 @@ async function main() {
   const users = [
     { email: 'supervisor@jaf.com', name: 'Supervisor Test', role: 'SUPERVISOR' as const },
     { email: 'crew@jaf.com', name: 'Crew Test', role: 'CREW' as const },
-    { email: 'idalia@jaf.com', name: 'Idalia (Warehouse)', role: 'WAREHOUSE' as const },
+    { email: 'idalia@jaf.com', name: 'Idamis (Warehouse)', role: 'WAREHOUSE' as const },
     { email: 'lissette@jaf.com', name: 'Lissette (Finance)', role: 'FINANCE' as const },
     { email: 'admin@jaf.com', name: 'Admin', role: 'ADMIN' as const },
   ]
@@ -672,9 +672,9 @@ Follow all steps from v1 Task 6 with those renames applied.
 
 ---
 
-## Task 7: Idalia's Warehouse View + Prep
+## Task 7: Idamis Warehouse View + Prep
 
-*(Same as v1, but change all `db.jafControlDoc` → `db.jafInvoice`. Note: do NOT set `warehouseId` at prep time — it is set at signing.)*
+*(Same as v1, but change all `db.jafControlDoc` → `db.jafInvoice`. Note: do NOT set `warehouseId` at prep time — it is set at signing. Also, change any occurrences of the Idalia name to 'Idamis')*
 
 Follow all steps from v1 Task 7 with those renames applied.
 
@@ -922,7 +922,7 @@ In the JSX, replace the single signature section with:
 
 - [ ] **Step 4: Test dual signature flow manually**
 
-1. Create a doc as supervisor, have Idalia mark PREPPED
+1. Create a doc as supervisor, have Idamis mark PREPPED
 2. Log in as crew or warehouse, go to `/docs/<id>/sign`
 3. Select a warehouse, add a material, draw both signatures, submit
 4. Confirm status = SIGNED, both signatures visible in doc view

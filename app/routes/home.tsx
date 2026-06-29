@@ -1,13 +1,18 @@
-import type { Route } from "./+types/home";
-import { Welcome } from "../welcome/welcome";
+import { useTranslation } from "react-i18next"
+import type { Route } from "./+types/home"
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "New React Router App" },
-    { name: "description", content: "Welcome to React Router!" },
-  ];
+    { title: "JAF Operations" },
+    { name: "description", content: "JAF Operations System" },
+  ]
 }
 
 export default function Home() {
-  return <Welcome />;
+  const { t } = useTranslation()
+  return (
+    <main className="flex min-h-screen items-center justify-center">
+      <h1 className="text-2xl font-bold">{t("hi")}</h1>
+    </main>
+  )
 }

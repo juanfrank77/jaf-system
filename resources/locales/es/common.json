@@ -1,0 +1,17 @@
+{
+  "hi": "¡Hola!",
+  "navigation": {
+    "back": "Volver",
+    "home": "Ir al inicio"
+  },
+  "error": {
+    "500": {
+      "title": "¡Algo salió mal!",
+      "description": "Ocurrió un error inesperado en el servidor."
+    },
+    "404": {
+      "title": "¡Página no encontrada!",
+      "description": "La página que buscas no existe."
+    }
+  }
+}

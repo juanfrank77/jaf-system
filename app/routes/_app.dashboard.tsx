@@ -39,14 +39,24 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 		<div className="space-y-4">
 			<div className="flex items-center justify-between">
 				<h1 className="text-xl font-semibold">Dashboard</h1>
-				{(user.role === "SUPERVISOR" || user.role === "ADMIN") && (
-					<Link
-						to="/docs/new"
-						className="text-sm font-medium text-blue-600 hover:text-blue-800"
-					>
-						+ New Document
-					</Link>
-				)}
+				<div className="flex items-center gap-4">
+					{(user.role === "FINANCE" || user.role === "ADMIN") && (
+						<Link
+							to="/finance/receivables"
+							className="text-sm font-medium text-blue-600 hover:text-blue-800"
+						>
+							Receivables
+						</Link>
+					)}
+					{(user.role === "SUPERVISOR" || user.role === "ADMIN") && (
+						<Link
+							to="/docs/new"
+							className="text-sm font-medium text-blue-600 hover:text-blue-800"
+						>
+							+ New Document
+						</Link>
+					)}
+				</div>
 			</div>
 			{docs.length === 0 && (
 				<p className="text-slate-500 text-sm">No documents yet.</p>

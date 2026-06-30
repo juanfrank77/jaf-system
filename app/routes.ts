@@ -19,6 +19,7 @@ export default [
 		route("docs/:id/field", "routes/_app.docs.$id_.field.tsx"),
 		route("docs/:id/review", "routes/_app.docs.$id_.review.tsx"),
 		route("docs/:id/lc", "routes/_app.docs.$id_.lc.tsx"),
+		route("finance/receivables", "routes/_app.finance.receivables.tsx"),
 	]),
 	route("files/*", "routes/files.$.tsx"),
 	route("api/auth/*", "routes/api.auth.$.tsx"),

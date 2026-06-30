@@ -17,8 +17,9 @@ export default [
 		route("docs/:id/sign", "routes/_app.docs.$id_.sign.tsx"),
 		route("docs/:id/field", "routes/_app.docs.$id_.field.tsx"),
 		route("docs/:id/review", "routes/_app.docs.$id_.review.tsx"),
-		// Tasks 11-15 routes will be added later as those tasks are implemented
+		route("docs/:id/lc", "routes/_app.docs.$id_.lc.tsx"),
 	]),
+	route("files/*", "routes/files.$.tsx"),
 	route("api/auth/*", "routes/api.auth.$.tsx"),
 	route("*", "routes/$.tsx"),
 ] satisfies RouteConfig

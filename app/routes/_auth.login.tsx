@@ -40,36 +40,34 @@ export async function action({ request }: Route.ActionArgs) {
 export default function LoginPage() {
 	const data = useActionData<typeof action>()
 	return (
-		<div className="min-h-screen flex items-center justify-center bg-slate-50">
-			<div className="w-full max-w-sm">
-				<h1 className="text-2xl font-bold mb-6 text-center">JAF Operations</h1>
-				<Form method="post" className="space-y-4">
-					<div>
-						<Label htmlFor="email">Email</Label>
-						<Input
-							id="email"
-							name="email"
-							type="email"
-							required
-							autoComplete="email"
-						/>
-					</div>
-					<div>
-						<Label htmlFor="password">Password</Label>
-						<Input
-							id="password"
-							name="password"
-							type="password"
-							required
-							autoComplete="current-password"
-						/>
-					</div>
-					{data?.error && <p className="text-sm text-red-600">{data.error}</p>}
-					<Button type="submit" className="w-full">
-						Sign In
-					</Button>
-				</Form>
-			</div>
-		</div>
+		<>
+			<h1 className="text-2xl font-bold mb-6 text-center">JAF Operations</h1>
+			<Form method="post" className="space-y-4">
+				<div>
+					<Label htmlFor="email">Email</Label>
+					<Input
+						id="email"
+						name="email"
+						type="email"
+						required
+						autoComplete="email"
+					/>
+				</div>
+				<div>
+					<Label htmlFor="password">Password</Label>
+					<Input
+						id="password"
+						name="password"
+						type="password"
+						required
+						autoComplete="current-password"
+					/>
+				</div>
+				{data?.error && <p className="text-sm text-red-600">{data.error}</p>}
+				<Button type="submit" className="w-full">
+					Sign In
+				</Button>
+			</Form>
+		</>
 	)
 }

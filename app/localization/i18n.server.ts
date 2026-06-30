@@ -1,5 +1,5 @@
 import { RemixI18Next } from "remix-i18next/server"
-import i18n from "~/localization/i18n"
+import i18n from "./i18n"
 import { resources } from "./resource"
 
 const i18next = new RemixI18Next({

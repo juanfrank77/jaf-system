@@ -22,8 +22,13 @@ export async function action({ request }: Route.ActionArgs) {
 			headers: request.headers,
 		})
 		const headers = new Headers()
-		if (result.headers) {
-			result.headers.forEach((v, k) => headers.append(k, v))
+		const resultWithHeaders = result as unknown as {
+			headers?: { forEach: (cb: (v: string, k: string) => void) => void }
+		}
+		if (resultWithHeaders.headers) {
+			resultWithHeaders.headers.forEach((v, k) => {
+				headers.append(k, v)
+			})
 		}
 		throw redirect("/dashboard", { headers })
 	} catch (e) {

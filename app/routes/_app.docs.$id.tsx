@@ -161,6 +161,19 @@ export default function DocView({ loaderData }: Route.ComponentProps) {
 				</Link>
 			)}
 
+			{(user.role === "SUPERVISOR" ||
+				user.role === "FINANCE" ||
+				user.role === "ADMIN") && (
+				<a
+					href={`/docs/${(doc as any).id}/audit-package`}
+					className="block text-center text-sm text-slate-500 hover:text-slate-700 underline mt-2"
+					target="_blank"
+					rel="noreferrer"
+				>
+					Download Audit Package
+				</a>
+			)}
+
 			{auditTrail.length > 0 && (
 				<section className="text-xs text-slate-400 space-y-1 pt-2 border-t">
 					<p className="font-medium text-slate-500">Audit Trail</p>

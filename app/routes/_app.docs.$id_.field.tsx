@@ -53,7 +53,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 		taken.map((t) => [t.serviceCodeId, t.qty]),
 	)
 	for (const item of materialsUsed) {
-		if ((takenMap[item.serviceCodeId] ?? 0) < item.qty) {
+		if (taken.length > 0 && (takenMap[item.serviceCodeId] ?? 0) < item.qty) {
 			return {
 				error: `Cannot use more than taken for service code ${item.serviceCodeId}`,
 			}

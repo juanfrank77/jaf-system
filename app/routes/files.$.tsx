@@ -6,9 +6,13 @@ import type { Route } from "./+types/files.$"
 export async function loader({ request, params }: Route.LoaderArgs) {
 	await requireSession(request)
 	const uploadDir = process.env.UPLOAD_DIR || "/tmp/jaf/uploads"
-	const filePath = path.join(uploadDir, params["*"] ?? "")
+	const resolvedUploadDir = path.resolve(uploadDir)
+	const filePath = path.join(resolvedUploadDir, params["*"] ?? "")
 
-	if (!filePath.startsWith(path.resolve(uploadDir))) {
+	if (
+		filePath !== resolvedUploadDir &&
+		!filePath.startsWith(resolvedUploadDir + path.sep)
+	) {
 		return new Response("Forbidden", { status: 403 })
 	}
 

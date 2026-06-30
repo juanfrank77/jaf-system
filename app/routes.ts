@@ -11,7 +11,8 @@ export default [
 	layout("routes/_app.tsx", [
 		route("dashboard", "routes/_app.dashboard.tsx"),
 		route("admin/catalog", "routes/_app.admin.catalog.tsx"),
-		// Tasks 6-15 routes will be added later as those tasks are implemented
+		route("docs/new", "routes/_app.docs.new.tsx"),
+		// Tasks 7-15 routes will be added later as those tasks are implemented
 	]),
 	route("api/auth/*", "routes/api.auth.$.tsx"),
 	route("*", "routes/$.tsx"),

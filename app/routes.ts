@@ -11,6 +11,7 @@ export default [
 	layout("routes/_app.tsx", [
 		route("dashboard", "routes/_app.dashboard.tsx"),
 		route("admin/catalog", "routes/_app.admin.catalog.tsx"),
+		route("admin/settings", "routes/_app.admin.settings.tsx"),
 		route("docs/new", "routes/_app.docs.new.tsx"),
 		route("docs/:id", "routes/_app.docs.$id.tsx"),
 		route("docs/:id/prep", "routes/_app.docs.$id_.prep.tsx"),

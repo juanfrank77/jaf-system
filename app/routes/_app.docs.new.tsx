@@ -49,41 +49,42 @@ export async function action({ request }: Route.ActionArgs) {
 
 	const controlNumber = await generateControlNumber()
 
-	const doc = await db.jafInvoice.create({
-		data: {
-			controlNumber,
-			status: "CREATED",
-			jobType,
-			jobAddressEstimated,
-			estimatedMaterials,
-			assignedCrewIds,
-			supervisorId: user.id,
-			avisoNumber,
-		},
-	})
-
-	// Notify Idamis (warehouse role users)
 	const warehouse = await db.user.findMany({
 		where: { role: "WAREHOUSE", active: true },
 	})
-	await db.notification.createMany({
-		data: warehouse.map((w) => ({
-			userId: w.id,
-			docId: doc.id,
-			message: `New job ${controlNumber} — ${jobType} at ${jobAddressEstimated}. Please prepare materials.`,
-		})),
+
+	await db.$transaction(async (tx) => {
+		const doc = await tx.jafInvoice.create({
+			data: {
+				controlNumber,
+				status: "CREATED",
+				jobType,
+				jobAddressEstimated,
+				estimatedMaterials,
+				assignedCrewIds,
+				supervisorId: user.id,
+				avisoNumber,
+			},
+		})
+		await tx.auditTrail.create({
+			data: {
+				docId: doc.id,
+				userId: user.id,
+				action: "CREATED",
+				diffJson: { status: { before: null, after: "CREATED" } },
+			},
+		})
+		await tx.notification.createMany({
+			data: warehouse.map((w) => ({
+				userId: w.id,
+				docId: doc.id,
+				message: `New job ${controlNumber} — ${jobType} at ${jobAddressEstimated}. Please prepare materials.`,
+			})),
+		})
+		return doc
 	})
 
-	await db.auditTrail.create({
-		data: {
-			docId: doc.id,
-			userId: user.id,
-			action: "CREATED",
-			diffJson: { status: { before: null, after: "CREATED" } },
-		},
-	})
-
-	throw redirect(`/docs/${doc.id}`)
+	throw redirect(`/docs/${controlNumber}`)
 }
 
 export default function NewDoc({

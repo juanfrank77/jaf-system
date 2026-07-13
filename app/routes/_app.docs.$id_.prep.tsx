@@ -24,31 +24,29 @@ export async function action({ request, params }: Route.ActionArgs) {
 		throw redirect(`/docs/${params.id}`)
 	}
 
-	await db.jafInvoice.update({
-		where: { id: params.id },
-		data: { status: "PREPPED", preppedAt: new Date(), preppedById: user.id },
-	})
-
-	await db.auditTrail.create({
-		data: {
-			docId: params.id,
-			userId: user.id,
-			action: "STATUS_CHANGED",
-			diffJson: { status: { before: "CREATED", after: "PREPPED" } },
-		},
-	})
-
-	// Notify assigned crew
-	const updated = await db.jafInvoice.findUniqueOrThrow({
-		where: { id: params.id },
-	})
-	await db.notification.createMany({
-		data: updated.assignedCrewIds.map((crewId) => ({
-			userId: crewId,
-			docId: params.id,
-			message: `Job ${updated.controlNumber} is prepped and ready for pickup. Please sign at warehouse.`,
-		})),
-	})
+	await db.$transaction([
+		db.jafInvoice.update({
+			where: { id: params.id },
+			data: { status: "PREPPED", preppedAt: new Date(), preppedById: user.id },
+		}),
+		db.auditTrail.create({
+			data: {
+				docId: params.id,
+				userId: user.id,
+				action: "STATUS_CHANGED",
+				diffJson: { status: { before: "CREATED", after: "PREPPED" } },
+			},
+		}),
+		...doc.assignedCrewIds.map((crewId) =>
+			db.notification.create({
+				data: {
+					userId: crewId,
+					docId: params.id,
+					message: `Job ${doc.controlNumber} is prepped and ready for pickup. Please sign at warehouse.`,
+				},
+			}),
+		),
+	] as any)
 
 	throw redirect(`/docs/${params.id}`)
 }

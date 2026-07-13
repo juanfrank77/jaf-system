@@ -111,26 +111,27 @@ export async function action({ request, params }: Route.ActionArgs) {
 		const localPath = path.join(lcDir, `${params.id}-schedule.pdf`)
 		await fs.writeFile(localPath, pdfBytes)
 
-		await db.jafInvoice.update({
-			where: { id: params.id },
-			data: {
-				status: "LC_GENERATED",
-				lcRequestPdfPath: localPath,
-				lcGeneratedAt: new Date(),
-				lcApprovedById: user.id,
-			},
-		})
-
-		await db.auditTrail.create({
-			data: {
-				docId: params.id,
-				userId: user.id,
-				action: "STATUS_CHANGED",
-				diffJson: {
-					status: { before: "CLARO_UPLOADED", after: "LC_GENERATED" },
+		await db.$transaction([
+			db.jafInvoice.update({
+				where: { id: params.id },
+				data: {
+					status: "LC_GENERATED",
+					lcRequestPdfPath: localPath,
+					lcGeneratedAt: new Date(),
+					lcApprovedById: user.id,
 				},
-			},
-		})
+			}),
+			db.auditTrail.create({
+				data: {
+					docId: params.id,
+					userId: user.id,
+					action: "STATUS_CHANGED",
+					diffJson: {
+						status: { before: "CLARO_UPLOADED", after: "LC_GENERATED" },
+					},
+				},
+			}),
+		] as any)
 
 		return new Response(new Uint8Array(pdfBytes), {
 			headers: {

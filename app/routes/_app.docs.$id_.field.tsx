@@ -76,6 +76,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 		if (!validation.valid) return { error: validation.error }
 	}
 
+	const photoPaths: string[] = []
 	if (photos.some((p) => p.size > 0)) {
 		await fs.mkdir(photoDir, { recursive: true })
 		for (const photo of photos) {
@@ -83,45 +84,46 @@ export async function action({ request, params }: Route.ActionArgs) {
 			const filename = `${Date.now()}-${photo.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`
 			const localPath = path.join(photoDir, filename)
 			await fs.writeFile(localPath, Buffer.from(await photo.arrayBuffer()))
-			await db.photo.create({
-				data: { docId: params.id, uploadedById: user.id, localPath },
-			})
+			photoPaths.push(localPath)
 		}
 	}
 
-	await db.jafInvoice.update({
-		where: { id: params.id },
-		data: {
-			status: "FIELD_UPDATED",
-			jobAddressActual,
-			materialsUsed,
-			fieldNotes,
-			completedAt: new Date(),
-		},
-	})
-
-	await db.auditTrail.create({
-		data: {
-			docId: params.id,
-			userId: user.id,
-			action: "STATUS_CHANGED",
-			// before: doc.status (dynamic) — handles both SIGNED→FIELD_UPDATED and CREATED→FIELD_UPDATED
-			diffJson: {
-				status: { before: doc.status, after: "FIELD_UPDATED" },
+	await db.$transaction([
+		...photoPaths.map((localPath) =>
+			db.photo.create({
+				data: { docId: params.id, uploadedById: user.id, localPath },
+			}),
+		),
+		db.jafInvoice.update({
+			where: { id: params.id },
+			data: {
+				status: "FIELD_UPDATED",
 				jobAddressActual,
 				materialsUsed,
+				fieldNotes,
+				completedAt: new Date(),
 			},
-		},
-	})
-
-	// Notify supervisor
-	await db.notification.create({
-		data: {
-			userId: doc.supervisorId,
-			docId: params.id,
-			message: `Job ${doc.controlNumber} marked complete by crew. Ready for your review.`,
-		},
-	})
+		}),
+		db.auditTrail.create({
+			data: {
+				docId: params.id,
+				userId: user.id,
+				action: "STATUS_CHANGED",
+				diffJson: {
+					status: { before: doc.status, after: "FIELD_UPDATED" },
+					jobAddressActual,
+					materialsUsed,
+				},
+			},
+		}),
+		db.notification.create({
+			data: {
+				userId: doc.supervisorId,
+				docId: params.id,
+				message: `Job ${doc.controlNumber} marked complete by crew. Ready for your review.`,
+			},
+		}),
+	] as any)
 
 	throw redirect(`/docs/${params.id}`)
 }

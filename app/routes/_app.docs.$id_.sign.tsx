@@ -69,43 +69,12 @@ export async function action({ request, params }: Route.ActionArgs) {
 		return { error: "Invalid materials data" }
 	}
 
-	await db.jafInvoice.update({
-		where: { id: params.id },
-		data: {
-			status: "SIGNED",
-			warehouseId,
-			materialsTaken,
-			releaseSignature,
-			releasedById: user.id,
-			releaseSignedAt: new Date(),
-			crewSignature,
-			signedById: user.id,
-			signedAt: new Date(),
-		},
-	})
-
-	await db.auditTrail.create({
-		data: {
-			docId: params.id,
-			userId: user.id,
-			action: "STATUS_CHANGED",
-			diffJson: {
-				status: { before: "PREPPED", after: "SIGNED" },
-				warehouseId,
-				materialsTaken,
-			},
-		},
-	})
-
-	const updatedDoc = await db.jafInvoice.findUniqueOrThrow({
-		where: { id: params.id },
-	})
 	const serviceCodes = await db.serviceCode.findMany()
 	const warehouse = await db.warehouse.findUnique({
 		where: { id: warehouseId },
 	})
 	const pdfBytes = await generateWarehouseReceiptPdf(
-		updatedDoc as any,
+		doc as any,
 		serviceCodes as any,
 		warehouse?.name ?? "",
 	)
@@ -114,10 +83,36 @@ export async function action({ request, params }: Route.ActionArgs) {
 	await fs.mkdir(receiptDir, { recursive: true })
 	const receiptPath = path.join(receiptDir, `${params.id}-receipt.pdf`)
 	await fs.writeFile(receiptPath, pdfBytes)
-	await db.jafInvoice.update({
-		where: { id: params.id },
-		data: { warehouseReceiptPath: receiptPath },
-	})
+
+	await db.$transaction([
+		db.jafInvoice.update({
+			where: { id: params.id },
+			data: {
+				status: "SIGNED",
+				warehouseId,
+				materialsTaken,
+				releaseSignature,
+				releasedById: user.id,
+				releaseSignedAt: new Date(),
+				crewSignature,
+				signedById: user.id,
+				signedAt: new Date(),
+				warehouseReceiptPath: receiptPath,
+			},
+		}),
+		db.auditTrail.create({
+			data: {
+				docId: params.id,
+				userId: user.id,
+				action: "STATUS_CHANGED",
+				diffJson: {
+					status: { before: "PREPPED", after: "SIGNED" },
+					warehouseId,
+					materialsTaken,
+				},
+			},
+		}),
+	] as any)
 
 	throw redirect(`/docs/${params.id}`)
 }

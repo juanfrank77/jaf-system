@@ -38,25 +38,27 @@ export async function action({ request, params }: Route.ActionArgs) {
 		const avisoNumber =
 			(form.get("avisoNumber") as string | null)?.trim() || doc.avisoNumber
 		const claroNotes = (form.get("claroNotes") as string | null)?.trim() || null
-		await db.jafInvoice.update({
-			where: { id: params.id },
-			data: {
-				status: "SUPERVISOR_APPROVED",
-				supervisorApprovedAt: new Date(),
-				avisoNumber,
-				claroNotes,
-			},
-		})
-		await db.auditTrail.create({
-			data: {
-				docId: params.id,
-				userId: user.id,
-				action: "STATUS_CHANGED",
-				diffJson: {
-					status: { before: doc.status, after: "SUPERVISOR_APPROVED" },
+		await db.$transaction([
+			db.jafInvoice.update({
+				where: { id: params.id },
+				data: {
+					status: "SUPERVISOR_APPROVED",
+					supervisorApprovedAt: new Date(),
+					avisoNumber,
+					claroNotes,
 				},
-			},
-		})
+			}),
+			db.auditTrail.create({
+				data: {
+					docId: params.id,
+					userId: user.id,
+					action: "STATUS_CHANGED",
+					diffJson: {
+						status: { before: doc.status, after: "SUPERVISOR_APPROVED" },
+					},
+				},
+			}),
+		] as any)
 	}
 
 	if (intent === "upload_claro") {
@@ -72,34 +74,38 @@ export async function action({ request, params }: Route.ActionArgs) {
 		await fs.mkdir(claroDir, { recursive: true })
 		const localPath = path.join(claroDir, `${params.id}-claro.pdf`)
 		await fs.writeFile(localPath, Buffer.from(await claroPdf.arrayBuffer()))
-		await db.jafInvoice.update({
-			where: { id: params.id },
-			data: {
-				status: "CLARO_UPLOADED",
-				claroPdfPath: localPath,
-				claroUploadedAt: new Date(),
-			},
-		})
-		await db.auditTrail.create({
-			data: {
-				docId: params.id,
-				userId: user.id,
-				action: "STATUS_CHANGED",
-				diffJson: {
-					status: { before: "SUPERVISOR_APPROVED", after: "CLARO_UPLOADED" },
-				},
-			},
-		})
 		const finance = await db.user.findMany({
 			where: { role: "FINANCE", active: true },
 		})
-		await db.notification.createMany({
-			data: finance.map((f) => ({
-				userId: f.id,
-				docId: params.id,
-				message: `Job ${doc.controlNumber} Claro work order uploaded. Ready for LC request.`,
-			})),
-		})
+		await db.$transaction([
+			db.jafInvoice.update({
+				where: { id: params.id },
+				data: {
+					status: "CLARO_UPLOADED",
+					claroPdfPath: localPath,
+					claroUploadedAt: new Date(),
+				},
+			}),
+			db.auditTrail.create({
+				data: {
+					docId: params.id,
+					userId: user.id,
+					action: "STATUS_CHANGED",
+					diffJson: {
+						status: { before: "SUPERVISOR_APPROVED", after: "CLARO_UPLOADED" },
+					},
+				},
+			}),
+			...finance.map((f) =>
+				db.notification.create({
+					data: {
+						userId: f.id,
+						docId: params.id,
+						message: `Job ${doc.controlNumber} Claro work order uploaded. Ready for LC request.`,
+					},
+				}),
+			),
+		] as any)
 	}
 
 	throw redirect(`/docs/${params.id}`)

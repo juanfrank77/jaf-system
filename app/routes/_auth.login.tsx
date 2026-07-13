@@ -3,7 +3,15 @@ import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { auth } from "~/lib/auth.server"
+import { checkRateLimit, clearRateLimit } from "~/lib/rate-limit.server"
 import type { Route } from "./+types/_auth.login"
+
+function getClientIp(request: Request) {
+	const forwarded = request.headers.get("x-forwarded-for")
+	if (forwarded) return forwarded.split(",")[0].trim()
+	const cf = request.headers.get("cf-connecting-ip")
+	return cf || "unknown"
+}
 
 export async function loader({ request }: Route.LoaderArgs) {
 	const session = await auth.api.getSession({ headers: request.headers })
@@ -14,6 +22,16 @@ export async function loader({ request }: Route.LoaderArgs) {
 export async function action({ request }: Route.ActionArgs) {
 	const form = await request.formData()
 	const email = form.get("email") as string
+	const clientIp = getClientIp(request)
+	const rateKey = `${clientIp}:${email.toLowerCase()}`
+
+	const { allowed, resetIn } = checkRateLimit(rateKey)
+	if (!allowed) {
+		return {
+			error: `Too many login attempts. Try again in ${Math.ceil(resetIn / 1000)} seconds.`,
+		}
+	}
+
 	const password = form.get("password") as string
 
 	try {
@@ -21,6 +39,7 @@ export async function action({ request }: Route.ActionArgs) {
 			body: { email, password },
 			headers: request.headers,
 		})
+		clearRateLimit(rateKey)
 		const headers = new Headers()
 		const resultWithHeaders = result as unknown as {
 			headers?: { forEach: (cb: (v: string, k: string) => void) => void }

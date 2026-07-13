@@ -43,7 +43,7 @@ const styles = StyleSheet.create({
 	signature: { marginTop: 32, borderTop: "1px solid #ccc", paddingTop: 12 },
 })
 
-export interface ScheduleInvoice {
+interface ScheduleInvoice {
 	invoiceDate: string
 	invoiceNumber: string
 	debtor: string

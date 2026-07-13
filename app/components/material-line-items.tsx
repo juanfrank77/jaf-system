@@ -9,7 +9,7 @@ import {
 	SelectValue,
 } from "~/components/ui/select"
 
-export interface LineItem {
+interface LineItem {
 	serviceCodeId: string
 	qty: number
 }

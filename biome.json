@@ -8,7 +8,7 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"includes": ["**", "!base-stack/**", "!app/welcome/**"]
+		"includes": ["**"]
 	},
 	"formatter": {
 		"enabled": true,

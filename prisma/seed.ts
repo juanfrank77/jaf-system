@@ -1,11 +1,10 @@
+import { PrismaPg } from "@prisma/adapter-pg"
 import { hashPassword } from "better-auth/crypto"
 import { PrismaClient } from "../generated/prisma/client"
 
-// TODO: Prisma 7 requires a driver adapter (e.g. @prisma/adapter-pg or @prisma/adapter-neon).
-// Owner needs to confirm which adapter to use before this runs.
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-expect-error adapter not yet configured — see above TODO
-const db = new PrismaClient()
+const db = new PrismaClient({
+	adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+})
 
 async function main() {
 	const password = await hashPassword("jaf2026!")

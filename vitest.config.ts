@@ -19,9 +19,7 @@ export default defineConfig({
           include: [
             "./**/*.server.test.{ts,tsx}",
             "./**/*.test.{ts,tsx}",
-            "!./**/*.browser.test.{ts,tsx}",
-            "!./base-stack/**",
-          ],
+            "!./**/*.browser.test.{ts,tsx}",          ],
         },
       },
       {
@@ -37,9 +35,7 @@ export default defineConfig({
           include: [
             "./**/*.test.{ts,tsx}",
             "./**/*.browser.test.{ts,tsx}",
-            "!./**/*.server.test.{ts,tsx}",
-            "!./base-stack/**",
-          ],
+            "!./**/*.server.test.{ts,tsx}",          ],
           setupFiles: ["./tests/setup.browser.tsx"],
           name: "browser tests",
           browser: {

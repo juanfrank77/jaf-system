@@ -7,6 +7,7 @@ import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
+import { validateFile } from "~/lib/file-upload.server"
 import { canTransition, requireRole } from "~/lib/permissions.server"
 import type { Route } from "./+types/_app.docs.$id_.field"
 
@@ -68,7 +69,14 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const photos = form.getAll("photos") as File[]
 	const uploadDir = process.env.UPLOAD_DIR || "/tmp/jaf/uploads"
 	const photoDir = path.join(uploadDir, "photos", params.id)
-	if (photos.length > 0 && photos[0].size > 0) {
+
+	for (const photo of photos) {
+		if (photo.size === 0) continue
+		const validation = validateFile(photo, "photo")
+		if (!validation.valid) return { error: validation.error }
+	}
+
+	if (photos.some((p) => p.size > 0)) {
 		await fs.mkdir(photoDir, { recursive: true })
 		for (const photo of photos) {
 			if (photo.size === 0) continue

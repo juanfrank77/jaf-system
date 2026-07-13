@@ -7,6 +7,7 @@ import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
+import { validateFile } from "~/lib/file-upload.server"
 import { canTransition, requireRole } from "~/lib/permissions.server"
 import type { Route } from "./+types/_app.docs.$id_.review"
 
@@ -64,6 +65,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 		const claroPdf = form.get("claroPdf") as File
 		if (!claroPdf || claroPdf.size === 0)
 			return { error: "Please select the Claro PDF to upload" }
+		const validation = validateFile(claroPdf, "pdf")
+		if (!validation.valid) return { error: validation.error }
 		const uploadDir = process.env.UPLOAD_DIR || "/tmp/jaf/uploads"
 		const claroDir = path.join(uploadDir, "claro-pdfs")
 		await fs.mkdir(claroDir, { recursive: true })

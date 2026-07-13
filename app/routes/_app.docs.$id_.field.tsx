@@ -17,6 +17,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	})
 	if (!canTransition(doc.status, "FIELD_UPDATED", user.role))
 		throw redirect(`/docs/${params.id}`)
+	if (user.role === "CREW" && !doc.assignedCrewIds.includes(user.id))
+		throw redirect(`/docs/${params.id}`)
 	const serviceCodes = await db.serviceCode.findMany({
 		where: { active: true },
 	})
@@ -29,6 +31,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 		where: { id: params.id },
 	})
 	if (!canTransition(doc.status, "FIELD_UPDATED", user.role))
+		throw redirect(`/docs/${params.id}`)
+	if (user.role === "CREW" && !doc.assignedCrewIds.includes(user.id))
 		throw redirect(`/docs/${params.id}`)
 
 	const form = await request.formData()

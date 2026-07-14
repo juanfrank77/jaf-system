@@ -59,6 +59,8 @@ model User {
   auditTrail       AuditTrail[]
   photos           Photo[]
   notifications    Notification[]
+
+  @@index([role, active])
 }
 
 model Session {
@@ -181,6 +183,9 @@ model JafInvoice {
   photos     Photo[]
   poLinks    PoLink[]
 
+  @@index([status, lcGeneratedAt])
+  @@index([createdAt])
+  @@index([assignedCrewIds(ops: ArrayOps)], type: Gin)
   @@map("jaf_invoice")
 }
 
@@ -193,6 +198,8 @@ model AuditTrail {
   action    String   // e.g. "STATUS_CHANGED", "FIELD_UPDATED"
   diffJson  Json     // {field, before, after}
   timestamp DateTime   @default(now())
+
+  @@index([docId, timestamp])
 }
 
 model Photo {
@@ -238,6 +245,8 @@ model Notification {
   docId     String?
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
+
+  @@index([userId, read, createdAt])
 }
 
 model SystemSetting {

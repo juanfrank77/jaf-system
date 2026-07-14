@@ -14,6 +14,10 @@ export default defineConfig({
       strategies: 'injectManifest',
       srcDir: 'app',
       filename: 'sw.ts',
+      injectManifest: {
+        globDirectory: 'build/client',
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest,woff2}'],
+      },
       manifest: {
         name: 'JAF Operations',
         short_name: 'JAF',

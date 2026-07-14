@@ -1,16 +1,20 @@
 import { precacheAndRoute } from "workbox-precaching"
 import { registerRoute } from "workbox-routing"
-import { CacheFirst, NetworkFirst } from "workbox-strategies"
+import { CacheFirst, NetworkOnly } from "workbox-strategies"
 
 declare let self: ServiceWorkerGlobalScope
 
 precacheAndRoute(self.__WB_MANIFEST)
 
-// Field update route — NetworkFirst so online updates win, falls back to cache
+// Authenticated field-update pages must never be served from cache. NetworkOnly
+// always hits the network, so a logged-in user is never shown stale HTML out in
+// the field. Scoped to document requests so the page's JS/CSS still cache.
 registerRoute(
-	({ url }) =>
-		url.pathname.startsWith("/docs/") && url.pathname.endsWith("/field"),
-	new NetworkFirst({ cacheName: "field-update-v1" }),
+	({ url, request }) =>
+		request.destination === "document" &&
+		url.pathname.startsWith("/docs/") &&
+		url.pathname.endsWith("/field"),
+	new NetworkOnly(),
 )
 
 // Static assets — cache first

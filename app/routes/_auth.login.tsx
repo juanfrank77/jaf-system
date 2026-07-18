@@ -35,20 +35,12 @@ export async function action({ request }: Route.ActionArgs) {
 	const password = form.get("password") as string
 
 	try {
-		const result = await auth.api.signInEmail({
+		const { headers } = await auth.api.signInEmail({
 			body: { email, password },
 			headers: request.headers,
+			returnHeaders: true,
 		})
 		clearRateLimit(rateKey)
-		const headers = new Headers()
-		const resultWithHeaders = result as unknown as {
-			headers?: { forEach: (cb: (v: string, k: string) => void) => void }
-		}
-		if (resultWithHeaders.headers) {
-			resultWithHeaders.headers.forEach((v, k) => {
-				headers.append(k, v)
-			})
-		}
 		throw redirect("/dashboard", { headers })
 	} catch (e) {
 		if (e instanceof Response) throw e

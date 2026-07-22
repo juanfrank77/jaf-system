@@ -1,7 +1,13 @@
+import path from "node:path"
 import { playwright } from "@vitest/browser-playwright"
 import { defineConfig } from "vitest/config"
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      "~": path.resolve(__dirname, "./app"),
+    },
+  },
   test: {
     globals: true,
     css: true,
@@ -40,6 +46,7 @@ export default defineConfig({
           name: "browser tests",
           browser: {
             enabled: true,
+            headless: true,
             instances: [{ browser: "chromium" }],
             provider: playwright(),
           },

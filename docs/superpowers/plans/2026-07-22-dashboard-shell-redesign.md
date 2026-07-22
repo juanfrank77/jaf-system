@@ -1305,7 +1305,9 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 }
 ```
 
-Per the spec, the old header row's `Receivables` / `+ New Document` links are dropped from the dashboard page entirely — `AppShell`'s rail (Task 7) already surfaces both for the roles that need them, so this avoids duplicating the same links in two places.
+Per the spec, the old header row's `Receivables` / `+ New Document` links are dropped from the dashboard page entirely in favor of `AppShell`'s rail (Task 7).
+
+**Known limitation (accepted, deferred):** the rail is `hidden md:block` (per Global Constraints: "no hamburger/drawer in this pass"), so below the `md` breakpoint these links are not reachable anywhere — not in the rail (hidden by CSS) and no longer in the dashboard body either. This is a real regression from the pre-redesign page, which rendered these links with no responsive hiding. Flagged in the final whole-branch review and consciously deferred rather than fixed in this pass; a follow-up should restore mobile access to primary role actions (e.g. keep them in the dashboard body below `md`, or add a lightweight overflow menu) before this is considered done for phone users.
 
 - [ ] **Step 6: Typecheck**
 

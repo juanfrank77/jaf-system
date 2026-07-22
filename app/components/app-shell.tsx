@@ -26,6 +26,38 @@ function initials(name: string) {
 		.join("")
 }
 
+function NavList({
+	items,
+	onNavigate,
+}: {
+	items: NavItem[]
+	onNavigate?: () => void
+}) {
+	const location = useLocation()
+	return (
+		<nav className="flex flex-col gap-1">
+			{items.map((item) => {
+				const active = location.pathname === item.to
+				return (
+					<Link
+						key={item.to}
+						to={item.to}
+						onClick={onNavigate}
+						className={cn(
+							"rounded-lg px-2.5 py-2 text-sm font-medium text-sidebar-foreground",
+							active
+								? "bg-sidebar-accent text-sidebar-accent-foreground"
+								: "hover:bg-sidebar-accent/60",
+						)}
+					>
+						{item.label}
+					</Link>
+				)
+			})}
+		</nav>
+	)
+}
+
 function AppShell({
 	user,
 	notifications,
@@ -35,7 +67,6 @@ function AppShell({
 	notifications: { id: string }[]
 	children: React.ReactNode
 }) {
-	const location = useLocation()
 	const items = NAV_ITEMS.filter(
 		(item) => !item.roles || item.roles.includes(user.role),
 	)
@@ -83,25 +114,7 @@ function AppShell({
 							{user.name}
 						</div>
 					</div>
-					<nav className="flex flex-col gap-1">
-						{items.map((item) => {
-							const active = location.pathname === item.to
-							return (
-								<Link
-									key={item.to}
-									to={item.to}
-									className={cn(
-										"rounded-lg px-2.5 py-2 text-sm font-medium text-sidebar-foreground",
-										active
-											? "bg-sidebar-accent text-sidebar-accent-foreground"
-											: "hover:bg-sidebar-accent/60",
-									)}
-								>
-									{item.label}
-								</Link>
-							)
-						})}
-					</nav>
+					<NavList items={items} />
 				</aside>
 				<main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:px-8">
 					{children}

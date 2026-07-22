@@ -48,6 +48,15 @@ body {
 	--color-secondary: var(--secondary);
 	--color-primary-foreground: var(--primary-foreground);
 	--color-primary: var(--primary);
+	--color-status-info: var(--status-info);
+	--color-status-info-soft: var(--status-info-soft);
+	--color-status-warn: var(--status-warn);
+	--color-status-warn-soft: var(--status-warn-soft);
+	--color-status-danger: var(--status-danger);
+	--color-status-danger-soft: var(--status-danger-soft);
+	--color-status-danger-line: var(--status-danger-line);
+	--color-status-ok: var(--status-ok);
+	--color-status-ok-soft: var(--status-ok-soft);
 	--color-popover-foreground: var(--popover-foreground);
 	--color-popover: var(--popover);
 	--color-card-foreground: var(--card-foreground);
@@ -70,7 +79,7 @@ body {
 	--card-foreground: oklch(0.145 0 0);
 	--popover: oklch(1 0 0);
 	--popover-foreground: oklch(0.145 0 0);
-	--primary: oklch(0.205 0 0);
+	--primary: #0d5c4f;
 	--primary-foreground: oklch(0.985 0 0);
 	--secondary: oklch(0.97 0 0);
 	--secondary-foreground: oklch(0.205 0 0);
@@ -96,6 +105,15 @@ body {
 	--sidebar-accent-foreground: oklch(0.205 0 0);
 	--sidebar-border: oklch(0.922 0 0);
 	--sidebar-ring: oklch(0.708 0 0);
+	--status-info: #185fa5;
+	--status-info-soft: #e6f1fb;
+	--status-warn: #854f0b;
+	--status-warn-soft: #faeeda;
+	--status-danger: #a32d2d;
+	--status-danger-soft: #fcebeb;
+	--status-danger-line: #f0a5a5;
+	--status-ok: #3b6d11;
+	--status-ok-soft: #eaf3de;
 }
 
 .dark {
@@ -105,7 +123,7 @@ body {
 	--card-foreground: oklch(0.985 0 0);
 	--popover: oklch(0.205 0 0);
 	--popover-foreground: oklch(0.985 0 0);
-	--primary: oklch(0.922 0 0);
+	--primary: #2fae93;
 	--primary-foreground: oklch(0.205 0 0);
 	--secondary: oklch(0.269 0 0);
 	--secondary-foreground: oklch(0.985 0 0);
@@ -130,6 +148,15 @@ body {
 	--sidebar-accent-foreground: oklch(0.985 0 0);
 	--sidebar-border: oklch(1 0 0 / 10%);
 	--sidebar-ring: oklch(0.556 0 0);
+	--status-info: #5fa3e6;
+	--status-info-soft: #142a40;
+	--status-warn: #e0a857;
+	--status-warn-soft: #33260f;
+	--status-danger: #e07a7a;
+	--status-danger-soft: #341818;
+	--status-danger-line: #5a2727;
+	--status-ok: #8fc04f;
+	--status-ok-soft: #1c2913;
 }
 
 @layer base {

@@ -28,5 +28,5 @@ vite.config.ts.*
 
 # local-only planning docs, not for remote
 /docs/jaf-os.html
-/docs/superpowers/plans/2026-07-22-dashboard-shell-redesign.md
-/docs/superpowers/specs/2026-07-22-dashboard-redesign-design.md
+/docs/superpowers/plans/
+/docs/superpowers/specs/

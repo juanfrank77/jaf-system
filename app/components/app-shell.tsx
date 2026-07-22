@@ -66,7 +66,7 @@ function AppShell({
 							</span>
 						)}
 					</button>
-					<Form method="post" action="/api/auth/sign-out">
+					<Form method="post" action="/sign-out">
 						<Button type="submit" variant="ghost" size="sm">
 							Sign out
 						</Button>

@@ -24,5 +24,6 @@ export default [
 	]),
 	route("files/*", "routes/files.$.tsx"),
 	route("api/auth/*", "routes/api.auth.$.tsx"),
+	route("sign-out", "routes/action.sign-out.tsx"),
 	route("*", "routes/$.tsx"),
 ] satisfies RouteConfig

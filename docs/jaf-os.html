@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JAF OS — Disbursement & Invoice Tracking</title>
+<style>
+  :root{
+    --bg:#f0f2f5; --panel:#ffffff; --ink:#1a2230; --muted:#5d6675; --hint:#8b94a3;
+    --line:#e3e7ee; --line2:#cdd4df;
+    --brand:#0d5c4f; --brand-ink:#0a3d34; --brand-soft:#e3f2ee;
+    --info:#185fa5; --info-soft:#e6f1fb;
+    --warn:#854f0b; --warn-soft:#faeeda;
+    --danger:#a32d2d; --danger-soft:#fcebeb; --danger-line:#f0a5a5;
+    --ok:#3b6d11; --ok-soft:#eaf3de;
+    --radius:10px; --radius-lg:14px;
+    --shadow:0 1px 2px rgba(20,30,50,.04), 0 4px 16px rgba(20,30,50,.05);
+    --sans:'Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  }
+  html[data-theme="dark"]{
+    --bg:#10141b; --panel:#1a212c; --ink:#e8ecf2; --muted:#9aa4b3; --hint:#6c7686;
+    --line:#283040; --line2:#384256;
+    --brand:#2fae93; --brand-ink:#7fd9c5; --brand-soft:#15302a;
+    --info:#5fa3e6; --info-soft:#142a40;
+    --warn:#e0a857; --warn-soft:#33260f;
+    --danger:#e07a7a; --danger-soft:#341818; --danger-line:#5a2727;
+    --ok:#8fc04f; --ok-soft:#1c2913;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  button{font-family:inherit;cursor:pointer}
+  input,select{font-family:inherit;font-size:13px;color:var(--ink);background:var(--panel);border:1px solid var(--line2);border-radius:8px;height:34px;padding:0 10px;width:100%}
+  input:focus,select:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+  .num{text-align:center}
+
+  /* top bar */
+  .topbar{position:sticky;top:0;z-index:30;background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;padding:10px 18px}
+  .logo{display:flex;align-items:center;gap:9px;font-weight:700;letter-spacing:-.2px}
+  .logo .mark{width:30px;height:30px;border-radius:8px;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800}
+  .logo small{display:block;font-weight:500;font-size:10px;color:var(--hint);letter-spacing:.04em;text-transform:uppercase}
+  .spacer{flex:1}
+  .toggle{display:flex;border:1px solid var(--line2);border-radius:8px;overflow:hidden}
+  .toggle button{border:0;background:transparent;color:var(--muted);font-size:12px;padding:6px 11px;font-weight:600}
+  .toggle button.on{background:var(--brand);color:#fff}
+
+  /* role rail */
+  .shell{display:flex;min-height:calc(100vh - 51px)}
+  .rail{width:230px;background:var(--panel);border-right:1px solid var(--line);padding:16px 12px;flex-shrink:0}
+  .rail h6{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--hint);margin:6px 8px 10px}
+  .role{display:flex;align-items:center;gap:11px;padding:10px 11px;border-radius:10px;cursor:pointer;margin-bottom:4px;border:1px solid transparent}
+  .role:hover{background:var(--bg)}
+  .role.on{background:var(--brand-soft);border-color:transparent}
+  .role.on .rname{color:var(--brand-ink)}
+  .av{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#fff;flex-shrink:0}
+  .rname{font-weight:600;font-size:13px}
+  .rsub{font-size:11px;color:var(--muted)}
+  .railnote{margin-top:18px;padding:11px;background:var(--bg);border-radius:10px;font-size:11px;color:var(--muted);line-height:1.5}
+
+  /* main */
+  main{flex:1;padding:22px 26px;max-width:880px}
+  .crumb{font-size:11px;color:var(--hint);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+  h1{font-size:21px;margin:0 0 3px;letter-spacing:-.3px}
+  .lede{color:var(--muted);font-size:13.5px;margin:0 0 18px}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-lg);box-shadow:var(--shadow);margin-bottom:16px;overflow:hidden}
+  .card .hd{padding:13px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .card .hd b{font-size:13.5px}
+  .card .bd{padding:16px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .fld label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
+  .mt{margin-top:13px}
+
+  /* alert pills */
+  .pill{display:flex;align-items:center;gap:9px;padding:11px 13px;border-radius:10px;font-size:13px}
+  .pill.info{background:var(--info-soft);color:var(--ink)}
+  .pill.warn{background:var(--warn-soft);color:var(--ink)}
+  .pill.danger{background:var(--danger-soft);color:var(--ink)}
+  .pill.ok{background:var(--ok-soft);color:var(--ink)}
+  .pill .ic{font-size:18px;line-height:1}
+  .pill.info .ic{color:var(--info)} .pill.warn .ic{color:var(--warn)}
+  .pill.danger .ic{color:var(--danger)} .pill.ok .ic{color:var(--ok)}
+
+  /* table */
+  table{width:100%;border-collapse:collapse}
+  thead th{font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--hint);font-weight:600;text-align:center;padding:9px 8px;background:var(--bg);border-bottom:1px solid var(--line)}
+  thead th.l{text-align:left}
+  tbody td{padding:8px;border-bottom:1px solid var(--line);font-size:13px;text-align:center;vertical-align:middle}
+  tbody td.l{text-align:left;font-weight:500}
+  tbody tr:last-child td{border-bottom:0}
+  tbody td input{height:32px;max-width:78px;margin:0 auto}
+  tr.flag td{background:var(--danger-soft)}
+  tr.flag td.l{color:var(--danger)}
+  .muted{color:var(--muted)} .ret{color:var(--info);font-weight:600}
+  .badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px}
+  .badge.ok{background:var(--ok-soft);color:var(--ok)}
+  .badge.bad{background:var(--danger-soft);color:var(--danger)}
+  .badge.wait{background:var(--warn-soft);color:var(--warn)}
+
+  /* signature row */
+  .sig{display:flex;align-items:center;gap:11px;background:var(--bg);border-radius:10px;padding:11px 13px;margin-top:13px}
+  .sig.signed{background:var(--ok-soft)}
+  .sig .av{width:36px;height:36px}
+  .sig .who b{font-size:13px;display:block} .sig .who span{font-size:11.5px;color:var(--muted)}
+
+  /* buttons */
+  .row{display:flex;gap:9px;margin-top:16px}
+  .btn{flex:1;height:40px;border-radius:9px;border:1px solid var(--line2);background:var(--panel);color:var(--ink);font-weight:600;font-size:13px;display:flex;align-items:center;justify-content:center;gap:6px;transition:.12s}
+  .btn:hover{background:var(--bg)}
+  .btn.pri{background:var(--brand);border-color:var(--brand);color:#fff}
+  .btn.pri:hover{filter:brightness(1.06)}
+  .btn.dgr{background:var(--danger);border-color:var(--danger);color:#fff}
+  .btn.dgr:hover{filter:brightness(1.06)}
+  .btn:disabled{opacity:.45;cursor:not-allowed;background:var(--panel);color:var(--muted)}
+  .btn.sm{height:32px;flex:0 0 auto;padding:0 13px;font-size:12px}
+
+  /* photos */
+  .photos{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
+  .ph{aspect-ratio:1;border-radius:9px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--hint);overflow:hidden;position:relative}
+  .ph.add{border:1.5px dashed var(--line2);flex-direction:column;gap:3px;font-size:20px;color:var(--muted);cursor:pointer}
+  .ph.add span{font-size:10px}
+  .ph.filled{background:linear-gradient(135deg,#cfe3dd,#a9cdc2);color:#0a3d34}
+  html[data-theme="dark"] .ph.filled{background:linear-gradient(135deg,#1c4339,#15302a);color:#7fd9c5}
+
+  /* loc */
+  .locbox{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg);border-radius:10px;padding:10px 13px;margin-bottom:14px}
+  .locbox .lt{font-size:11px;color:var(--hint)} .locbox .lv{font-size:13px;font-weight:500}
+  .locbox.confirmed{background:var(--ok-soft)}
+
+  /* admin dash */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow)}
+  .stat .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .stat .v{font-size:26px;font-weight:700;margin-top:3px;letter-spacing:-.5px}
+  .stat .v small{font-size:13px;font-weight:600;color:var(--muted)}
+  .timeline{position:relative;padding-left:22px}
+  .timeline::before{content:'';position:absolute;left:6px;top:4px;bottom:4px;width:2px;background:var(--line)}
+  .ev{position:relative;padding:0 0 16px 6px}
+  .ev::before{content:'';position:absolute;left:-22px;top:2px;width:14px;height:14px;border-radius:50%;background:var(--panel);border:2px solid var(--line2)}
+  .ev.done::before{background:var(--brand);border-color:var(--brand)}
+  .ev.flag::before{background:var(--danger);border-color:var(--danger)}
+  .ev b{font-size:13px} .ev .when{font-size:11px;color:var(--hint);margin-left:6px}
+  .ev p{margin:2px 0 0;font-size:12.5px;color:var(--muted)}
+
+  .hide{display:none!important}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--bg);padding:11px 18px;border-radius:10px;font-size:13px;font-weight:600;opacity:0;transition:.25s;z-index:50;box-shadow:0 8px 30px rgba(0,0,0,.25)}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  @media(max-width:760px){.rail{display:none}main{padding:16px}.grid2{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo"><div class="mark">J</div><div>JAF OS<small data-i="tag">Material &amp; Facturación</small></div></div>
+  <div class="spacer"></div>
+  <div class="toggle" id="lang"><button data-l="es" class="on">ES</button><button data-l="en">EN</button></div>
+  <div class="toggle" id="theme"><button data-t="light" class="on">☀</button><button data-t="dark">☾</button></div>
+</div>
+
+<div class="shell">
+  <aside class="rail">
+    <h6 data-i="roles">Vista por rol</h6>
+    <div class="role on" data-role="sup">
+      <div class="av" style="background:#185fa5">JA</div>
+      <div><div class="rname">Jose Alfaro</div><div class="rsub" data-i="r_sup">Supervisor</div></div>
+    </div>
+    <div class="role" data-role="wh">
+      <div class="av" style="background:#0d5c4f">ID</div>
+      <div><div class="rname">Idamis</div><div class="rsub" data-i="r_wh">Almacén / Despacho</div></div>
+    </div>
+    <div class="role" data-role="crew">
+      <div class="av" style="background:#854f0b">LR</div>
+      <div><div class="rname">L. Rivera</div><div class="rsub" data-i="r_crew">Cuadrilla A</div></div>
+    </div>
+    <div class="role" data-role="admin">
+      <div class="av" style="background:#534ab7">MG</div>
+      <div><div class="rname">Monica García</div><div class="rsub" data-i="r_admin">CEO / Admin</div></div>
+    </div>
+    <div class="railnote" data-i="note">Una sola factura recorre los cuatro roles. Lo que cada quien firma queda registrado.</div>
+  </aside>
+
+  <main id="main"></main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- i18n ---------- */
+const T={
+  es:{tag:"Material y Facturación",roles:"Vista por rol",r_sup:"Supervisor",r_wh:"Almacén / Despacho",r_crew:"Cuadrilla A",r_admin:"CEO / Admin",
+    note:"Una sola factura recorre los cuatro roles. Lo que cada quien firma queda registrado.",
+    sup_crumb:"Supervisor · Nueva orden de Claro",sup_h:"Crear factura JAF",sup_l:"Entró una llamada de Claro. Registre el trabajo y el material que necesita la cuadrilla.",
+    f_order:"N.º de orden Claro",f_type:"Tipo de trabajo",t_inst:"Instalación",t_maint:"Mantenimiento",
+    f_loc:"Ubicación aproximada",f_loc_h:"la cuadrilla confirma en sitio",f_zone:"Zona / Sub-almacén",f_crew:"Cuadrilla asignada",
+    mat_need:"Material que necesita la cuadrilla",col_mat:"Material",col_qty:"Cantidad",addmat:"Agregar material",
+    sup_alert:"Al crear, se envía una alerta a <b>Idamis (Almacén)</b> para preparar el material.",
+    save_draft:"Guardar borrador",create:"Crear factura y avisar al almacén",
+    wh_crumb:"Almacén · Idamis",wh_h:"Preparar material",wh_l:"Confirme lo que preparó para esta factura. Su firma queda al marcar listo.",
+    wh_from:"Solicitud de <b>Jose Alfaro</b> · ",col_ord:"Pedido",col_prep:"Preparado",
+    wh_hint:"Si no hay suficiente en inventario, ajuste lo preparado — el sistema registra la diferencia.",
+    sig_wh:"Idamis — Almacén",sig_wh_s:"Firmará al marcar listo",wh_btn:"Firmar y marcar listo para entrega",signed:"Firmado",
+    crew_crumb:"Cuadrilla A — L. Rivera",crew_h:"Material y trabajo",crew_l:"La orden bajó del supervisor. Registre lo tomado, lo usado y las fotos.",
+    loc_t:"Ubicación — confirmar en sitio",loc_btn:"Confirmar GPS",loc_done:"Ubicación confirmada (GPS)",
+    col_take:"Tomado",col_use:"Usado",col_left:"Sobrante",
+    excess_w:"Tomaron <b>{n} de más</b> en {m} — requiere firma de Idamis.",sign_ex:"Firmar exceso",ex_ok:"Exceso aprobado por Idamis",
+    photos:"Fotos del trabajo terminado",add:"Agregar",
+    ret:"Sobrante regresa al almacén:",save:"Guardar",close:"Cerrar trabajo y firmar",
+    admin_crumb:"CEO / Admin · Vista completa",admin_h:"Factura #JAF-10493",admin_l:"Vista de extremo a extremo. Esto es lo que defiende a JAF en la auditoría de Claro.",
+    s_ord:"Pedido",s_take:"Tomado",s_use:"Usado",s_ret:"Devuelto",s_var:"Variación",
+    tl:"Trazabilidad de la factura",
+    e1:"Supervisor creó la factura",e1p:"Jose Alfaro · orden Claro CLR-884201",
+    e2:"Almacén preparó y firmó",e2p:"Idamis · material preparado contra lo pedido",
+    e3:"Exceso aprobado",e3p:"Idamis firmó 25 ganchos adicionales · motivo: material adicional en sitio",
+    e4:"Cuadrilla recibió y firmó",e4p:"L. Rivera · entrega confirmada",
+    e5:"Trabajo cerrado en sitio",e5p:"Ubicación GPS confirmada · 3 fotos · sobrante devuelto",
+    audit:"Exportar para auditoría",
+    st_var:"Variación material",st_sig:"Firmas",st_ret:"Devuelto almacén",st_status:"Estado",st_open:"Abierta",st_closed:"Cerrada",
+    must:"Falta aprobación de almacén",done_t:"Listo",created_t:"Factura creada y alerta enviada",prepped_t:"Material listo para entrega",closed_t:"Trabajo cerrado y firmado",exported_t:"Exportado para auditoría"},
+  en:{tag:"Material & Invoicing",roles:"Role view",r_sup:"Supervisor",r_wh:"Warehouse / Dispatch",r_crew:"Crew A",r_admin:"CEO / Admin",
+    note:"One invoice travels all four roles. Whatever each person signs is recorded.",
+    sup_crumb:"Supervisor · New Claro order",sup_h:"Create JAF invoice",sup_l:"A Claro call came in. Log the job and the material the crew needs.",
+    f_order:"Claro order #",f_type:"Job type",t_inst:"Installation",t_maint:"Maintenance",
+    f_loc:"Approximate location",f_loc_h:"crew confirms on site",f_zone:"Zone / Sub-warehouse",f_crew:"Assigned crew",
+    mat_need:"Material the crew needs",col_mat:"Material",col_qty:"Quantity",addmat:"Add material",
+    sup_alert:"On create, an alert goes to <b>Idamis (Warehouse)</b> to prep the material.",
+    save_draft:"Save draft",create:"Create invoice & notify warehouse",
+    wh_crumb:"Warehouse · Idamis",wh_h:"Prep material",wh_l:"Confirm what you prepped for this invoice. Your signature is captured on ready.",
+    wh_from:"Request from <b>Jose Alfaro</b> · ",col_ord:"Ordered",col_prep:"Prepped",
+    wh_hint:"If inventory is short, adjust prepped — the system records the difference.",
+    sig_wh:"Idamis — Warehouse",sig_wh_s:"Signs on mark-ready",wh_btn:"Sign & mark ready for handoff",signed:"Signed",
+    crew_crumb:"Crew A — L. Rivera",crew_h:"Material & job",crew_l:"The order came down from the supervisor. Log taken, used and photos.",
+    loc_t:"Location — confirm on site",loc_btn:"Confirm GPS",loc_done:"Location confirmed (GPS)",
+    col_take:"Taken",col_use:"Used",col_left:"Leftover",
+    excess_w:"Took <b>{n} extra</b> on {m} — requires Idamis signature.",sign_ex:"Sign excess",ex_ok:"Excess approved by Idamis",
+    photos:"Completed-job photos",add:"Add",
+    ret:"Leftover returns to warehouse:",save:"Save",close:"Close job & sign",
+    admin_crumb:"CEO / Admin · Full view",admin_h:"Invoice #JAF-10493",admin_l:"End-to-end view. This is what defends JAF at the Claro audit.",
+    s_ord:"Ordered",s_take:"Taken",s_use:"Used",s_ret:"Returned",s_var:"Variance",
+    tl:"Invoice trail",
+    e1:"Supervisor created the invoice",e1p:"Jose Alfaro · Claro order CLR-884201",
+    e2:"Warehouse prepped & signed",e2p:"Idamis · material prepped against ordered",
+    e3:"Excess approved",e3p:"Idamis signed 25 extra hooks · reason: additional material on site",
+    e4:"Crew received & signed",e4p:"L. Rivera · handoff confirmed",
+    e5:"Job closed on site",e5p:"GPS location confirmed · 3 photos · leftover returned",
+    audit:"Export for audit",
+    st_var:"Material variance",st_sig:"Signatures",st_ret:"Returned to wh",st_status:"Status",st_open:"Open",st_closed:"Closed",
+    must:"Warehouse approval required",done_t:"Done",created_t:"Invoice created & alert sent",prepped_t:"Material ready for handoff",closed_t:"Job closed & signed",exported_t:"Exported for audit"}
+};
+let lang="es", role="sup";
+
+/* ---------- shared invoice state ---------- */
+const state={
+  order:"CLR-884201", type:"inst", zone:"San Juan — Zona 3", crew:"Cuadrilla A — L. Rivera",
+  locApprox:"Carr. 176, Cupey, San Juan", locConfirmed:false,
+  created:false, prepped:false, whSigned:false, excessSigned:false, crewSigned:false, closed:false, exported:false,
+  items:[
+    {m:"Cable coaxial RG-6 (m)", ord:300, prep:300, take:300, use:280},
+    {m:"Conectores RG-6",        ord:20,  prep:20,  take:20,  use:18},
+    {m:"Ganchos de montaje",     ord:15,  prep:15,  take:40,  use:34}
+  ],
+  photos:3
+};
+const tt=k=>T[lang][k]||k;
+function toast(msg){const t=document.getElementById('toast');t.innerHTML=msg;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),1900);}
+function excess(it){return Math.max(0,it.take-it.prep);}
+function anyExcess(){return state.items.some(i=>excess(i)>0);}
+
+/* ---------- renderers ---------- */
+function render(){
+  document.querySelectorAll('[data-i]').forEach(e=>{const k=e.getAttribute('data-i');if(T[lang][k])e.innerHTML=T[lang][k];});
+  const m=document.getElementById('main');
+  if(role==='sup')m.innerHTML=supView();
+  else if(role==='wh')m.innerHTML=whView();
+  else if(role==='crew')m.innerHTML=crewView();
+  else m.innerHTML=adminView();
+  wire();
+}
+
+function supView(){
+  const rows=state.items.map((it,i)=>`<div style="display:grid;grid-template-columns:2.4fr 1fr 36px;gap:8px;align-items:center;margin-bottom:8px">
+    <select><option>${it.m}</option></select>
+    <input class="num" value="${it.ord}" data-ord="${i}">
+    <button class="btn sm" style="padding:0;width:36px;height:34px" aria-label="x">✕</button></div>`).join('');
+  return `<div class="crumb" data-i="sup_crumb">${tt('sup_crumb')}</div>
+  <h1>${tt('sup_h')}</h1><p class="lede">${tt('sup_l')}</p>
+  <div class="card"><div class="bd">
+    <div class="grid2">
+      <div class="fld"><label>${tt('f_order')}</label><input value="${state.order}"></div>
+      <div class="fld"><label>${tt('f_type')}</label><select><option>${tt('t_inst')}</option><option>${tt('t_maint')}</option></select></div>
+    </div>
+    <div class="fld mt"><label>${tt('f_loc')} <span class="muted">— ${tt('f_loc_h')}</span></label>
+      <div style="display:flex;gap:8px"><input value="${state.locApprox}"><button class="btn sm">📍 ${tt('loc_btn').replace('GPS','')}</button></div></div>
+    <div class="grid2 mt">
+      <div class="fld"><label>${tt('f_zone')}</label><select><option>San Juan — Zona 3</option><option>Bayamón — Zona 1</option><option>Caguas — Zona 2</option></select></div>
+      <div class="fld"><label>${tt('f_crew')}</label><select><option>Cuadrilla A — L. Rivera</option><option>Cuadrilla B — M. Santos</option></select></div>
+    </div>
+    <div style="border-top:1px solid var(--line);margin:15px 0 13px"></div>
+    <b style="font-size:13px">${tt('mat_need')}</b>
+    <div style="display:grid;grid-template-columns:2.4fr 1fr 36px;gap:8px;font-size:11px;color:var(--hint);margin:10px 0 6px"><div>${tt('col_mat')}</div><div class="num">${tt('col_qty')}</div><div></div></div>
+    ${rows}
+    <button class="btn sm" style="width:100%;margin-top:4px">＋ ${tt('addmat')}</button>
+  </div></div>
+  <div class="pill info"><span class="ic">🔔</span><div>${tt('sup_alert')}</div></div>
+  <div class="row">
+    <button class="btn">${tt('save_draft')}</button>
+    <button class="btn pri" id="doCreate">${tt('create')} →</button>
+  </div>`;
+}
+
+function whView(){
+  const rows=state.items.map((it,i)=>`<tr><td class="l">${it.m}</td>
+    <td class="muted">${it.ord}</td>
+    <td><input class="num" value="${it.prep}" data-prep="${i}"></td></tr>`).join('');
+  const sg=state.whSigned;
+  return `<div class="crumb">${tt('wh_crumb')}</div><h1>${tt('wh_h')}</h1><p class="lede">${tt('wh_l')}</p>
+  <div class="pill info" style="margin-bottom:14px"><span class="ic">🔔</span><div>${tt('wh_from')}#JAF-10493 · Cupey, San Juan</div></div>
+  <div class="card"><table><thead><tr><th class="l">${tt('col_mat')}</th><th>${tt('col_ord')}</th><th>${tt('col_prep')}</th></tr></thead><tbody>${rows}</tbody></table></div>
+  <div class="pill warn" style="margin-bottom:6px"><span class="ic">ℹ</span><div>${tt('wh_hint')}</div></div>
+  <div class="sig ${sg?'signed':''}"><div class="av" style="background:#0d5c4f">ID</div>
+    <div class="who" style="flex:1"><b>${tt('sig_wh')}</b><span>${sg?tt('signed')+' ✓':tt('sig_wh_s')}</span></div>
+    ${sg?'<span class="badge ok">✓ '+tt('signed')+'</span>':'<span style="font-size:22px;color:var(--muted)">✍</span>'}</div>
+  <div class="row"><button class="btn">${tt('save_draft')}</button>
+    <button class="btn pri" id="doPrep" ${sg?'disabled':''}>${sg?tt('done_t')+' ✓':tt('wh_btn')+' →'}</button></div>`;
+}
+
+function crewView(){
+  const rows=state.items.map((it,i)=>{
+    const ex=excess(it), left=it.take-it.use;
+    return `<tr class="${ex>0?'flag':''}"><td class="l">${ex>0?'⚠ ':''}${it.m}</td>
+      <td class="muted">${it.ord}</td>
+      <td><input class="num" value="${it.take}" data-take="${i}" ${ex>0?'style="border-color:var(--danger);color:var(--danger);font-weight:600"':''}></td>
+      <td><input class="num" value="${it.use}" data-use="${i}"></td>
+      <td class="ret">${left} ↩</td></tr>`;
+  }).join('');
+  let exItem=state.items.find(i=>excess(i)>0);
+  const exBlock = exItem ? (state.excessSigned
+    ? `<div class="pill ok" style="margin-bottom:14px"><span class="ic">✓</span><div>${tt('ex_ok')}</div></div>`
+    : `<div class="pill danger" style="margin-bottom:14px"><span class="ic">🔒</span>
+        <div style="flex:1">${tt('excess_w').replace('{n}',excess(exItem)).replace('{m}',exItem.m)}</div>
+        <button class="btn sm dgr" id="signEx">✍ ${tt('sign_ex')}</button></div>`) : '';
+  const ret=state.items.map(i=>`${i.take-i.use} ${i.m.split(' ')[0].toLowerCase()}`).join(' · ');
+  const canClose = !exItem || state.excessSigned;
+  const ph=Array.from({length:state.photos}).map(()=>`<div class="ph filled">▣</div>`).join('')+`<div class="ph add" id="addPhoto">＋<span>${tt('add')}</span></div>`;
+  return `<div class="crumb">${tt('crew_crumb')} · #JAF-10493</div><h1>${tt('crew_h')}</h1><p class="lede">${tt('crew_l')}</p>
+  <div class="locbox ${state.locConfirmed?'confirmed':''}">
+    <div><div class="lt">${tt('loc_t')}</div><div class="lv">${state.locApprox}${state.locConfirmed?' ✓':''}</div></div>
+    <button class="btn sm" id="confLoc" ${state.locConfirmed?'disabled':''}>📍 ${state.locConfirmed?tt('loc_done'):tt('loc_btn')}</button></div>
+  <div class="card"><table>
+    <thead><tr><th class="l">${tt('col_mat')}</th><th>${tt('col_ord')}</th><th>${tt('col_take')}</th><th>${tt('col_use')}</th><th>${tt('col_left')}</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>
+  ${exBlock}
+  <div style="font-size:12px;color:var(--muted);margin-bottom:8px">${tt('photos')}</div>
+  <div class="photos" style="margin-bottom:14px">${ph}</div>
+  <div class="pill info" style="margin-bottom:4px"><span class="ic">↩</span><div>${tt('ret')} <b>${ret}</b></div></div>
+  <div class="row"><button class="btn">${tt('save')}</button>
+    <button class="btn pri" id="doClose" ${canClose?'':'disabled'}>${canClose?tt('close'):tt('must')} ${canClose?'→':'🔒'}</button></div>`;
+}
+
+function adminView(){
+  const totVar=state.items.reduce((s,i)=>s+Math.abs(i.take-i.use),0);
+  const totRet=state.items.reduce((s,i)=>s+(i.take-i.use),0);
+  const sigs=(state.whSigned?1:0)+(state.excessSigned?1:0)+(state.crewSigned?1:0);
+  const rows=state.items.map(i=>{const v=i.take-i.use;return `<tr><td class="l">${i.m}</td>
+    <td class="muted">${i.ord}</td><td>${i.take}</td><td>${i.use}</td><td class="ret">${v}</td>
+    <td>${excess(i)>0?'<span class="badge bad">+'+excess(i)+'</span>':'<span class="badge ok">ok</span>'}</td></tr>`}).join('');
+  const ev=(on,cls,t,p)=>`<div class="ev ${on?(cls||'done'):''}"><b>${t}</b><span class="when">${on?'✓':'—'}</span><p>${p}</p></div>`;
+  return `<div class="crumb">${tt('admin_crumb')}</div><h1>${tt('admin_h')}</h1><p class="lede">${tt('admin_l')}</p>
+  <div class="stats">
+    <div class="stat"><div class="k">${tt('st_var')}</div><div class="v">${totVar} <small>u</small></div></div>
+    <div class="stat"><div class="k">${tt('st_sig')}</div><div class="v">${sigs}<small>/3</small></div></div>
+    <div class="stat"><div class="k">${tt('st_ret')}</div><div class="v">${totRet} <small>u</small></div></div>
+    <div class="stat"><div class="k">${tt('st_status')}</div><div class="v" style="font-size:19px;color:${state.closed?'var(--ok)':'var(--warn)'}">${state.closed?tt('st_closed'):tt('st_open')}</div></div>
+  </div>
+  <div class="card"><div class="hd"><b>#JAF-10493 — ${state.order}</b><span class="badge ${anyExcess()?'wait':'ok'}">${state.zone}</span></div>
+    <table><thead><tr><th class="l">${tt('col_mat')}</th><th>${tt('s_ord')}</th><th>${tt('s_take')}</th><th>${tt('s_use')}</th><th>${tt('s_ret')}</th><th>${tt('s_var')}</th></tr></thead><tbody>${rows}</tbody></table></div>
+  <div class="card"><div class="hd"><b>${tt('tl')}</b></div><div class="bd"><div class="timeline">
+    ${ev(state.created,'done',tt('e1'),tt('e1p'))}
+    ${ev(state.whSigned,'done',tt('e2'),tt('e2p'))}
+    ${ev(state.excessSigned,'flag',tt('e3'),tt('e3p'))}
+    ${ev(state.crewSigned,'done',tt('e4'),tt('e4p'))}
+    ${ev(state.closed,'done',tt('e5'),tt('e5p'))}
+  </div></div></div>
+  <div class="row"><button class="btn pri" id="doExport">📤 ${tt('audit')}</button></div>`;
+}
+
+/* ---------- wiring ---------- */
+function wire(){
+  document.querySelectorAll('[data-prep]').forEach(inp=>inp.addEventListener('input',e=>{state.items[+e.target.dataset.prep].prep=+e.target.value||0;}));
+  document.querySelectorAll('[data-ord]').forEach(inp=>inp.addEventListener('input',e=>{state.items[+e.target.dataset.ord].ord=+e.target.value||0;}));
+  document.querySelectorAll('[data-take]').forEach(inp=>inp.addEventListener('input',e=>{state.items[+e.target.dataset.take].take=+e.target.value||0;render();}));
+  document.querySelectorAll('[data-use]').forEach(inp=>inp.addEventListener('input',e=>{state.items[+e.target.dataset.use].use=+e.target.value||0;render();}));
+  const on=(id,fn)=>{const el=document.getElementById(id);if(el)el.addEventListener('click',fn);};
+  on('doCreate',()=>{state.created=true;toast(tt('created_t'));role='wh';setActiveRole();render();});
+  on('doPrep',()=>{state.whSigned=true;toast(tt('prepped_t'));render();});
+  on('signEx',()=>{state.excessSigned=true;toast(tt('ex_ok'));render();});
+  on('confLoc',()=>{state.locConfirmed=true;render();});
+  on('addPhoto',()=>{state.photos++;render();});
+  on('doClose',()=>{state.crewSigned=true;state.closed=true;toast(tt('closed_t'));role='admin';setActiveRole();render();});
+  on('doExport',()=>{state.exported=true;toast(tt('exported_t'));});
+}
+function setActiveRole(){document.querySelectorAll('.role').forEach(r=>r.classList.toggle('on',r.dataset.role===role));}
+
+document.querySelectorAll('.role').forEach(r=>r.addEventListener('click',()=>{role=r.dataset.role;setActiveRole();render();}));
+document.getElementById('lang').addEventListener('click',e=>{if(e.target.dataset.l){lang=e.target.dataset.l;document.querySelectorAll('#lang button').forEach(b=>b.classList.toggle('on',b.dataset.l===lang));document.documentElement.lang=lang;render();}});
+document.getElementById('theme').addEventListener('click',e=>{if(e.target.dataset.t){document.documentElement.setAttribute('data-theme',e.target.dataset.t);document.querySelectorAll('#theme button').forEach(b=>b.classList.toggle('on',b.dataset.t===e.target.dataset.t));}});
+
+render();
+</script>
+</body>
+</html>

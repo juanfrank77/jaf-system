@@ -1,7 +1,15 @@
+import path from "node:path"
+import tailwindcss from "@tailwindcss/vite"
 import { playwright } from "@vitest/browser-playwright"
 import { defineConfig } from "vitest/config"
 
 export default defineConfig({
+  plugins: [tailwindcss()],
+  resolve: {
+    alias: {
+      "~": path.resolve(__dirname, "./app"),
+    },
+  },
   test: {
     globals: true,
     css: true,
@@ -25,7 +33,7 @@ export default defineConfig({
       {
         extends: true,
         optimizeDeps: {
-          include: ["react/jsx-dev-runtime"],
+          include: ["react/jsx-dev-runtime", "class-variance-authority", "clsx", "tailwind-merge"],
         },
         server: {
           fs: { strict: false },
@@ -40,6 +48,7 @@ export default defineConfig({
           name: "browser tests",
           browser: {
             enabled: true,
+            headless: true,
             instances: [{ browser: "chromium" }],
             provider: playwright(),
           },

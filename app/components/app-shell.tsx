@@ -33,13 +33,15 @@ function initials(name: string) {
 function NavList({
 	items,
 	onNavigate,
+	"aria-label": ariaLabel,
 }: {
 	items: NavItem[]
 	onNavigate?: () => void
+	"aria-label": string
 }) {
 	const location = useLocation()
 	return (
-		<nav className="flex flex-col gap-1">
+		<nav aria-label={ariaLabel} className="flex flex-col gap-1">
 			{items.map((item) => {
 				const active = location.pathname === item.to
 				return (
@@ -130,7 +132,7 @@ function AppShell({
 								{user.name}
 							</div>
 						</div>
-						<NavList items={items} />
+						<NavList items={items} aria-label="Primary" />
 					</aside>
 					<main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:px-8">
 						{children}
@@ -166,7 +168,11 @@ function AppShell({
 							/>
 						</Dialog.Close>
 					</div>
-					<NavList items={items} onNavigate={() => setDrawerOpen(false)} />
+					<NavList
+						items={items}
+						onNavigate={() => setDrawerOpen(false)}
+						aria-label="Primary (mobile)"
+					/>
 				</Dialog.Popup>
 			</Dialog.Portal>
 		</Dialog.Root>

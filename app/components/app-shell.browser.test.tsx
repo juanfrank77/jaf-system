@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react"
 import { userEvent } from "@vitest/browser/context"
+import { Outlet } from "react-router"
 import { describe, expect, it } from "vitest"
 import { AppShell } from "./app-shell"
 
@@ -226,11 +227,14 @@ describe("AppShell", () => {
 							user={{ name: "Jose Alfaro", role: "SUPERVISOR" }}
 							notifications={[]}
 						>
-							<p>content</p>
+							<Outlet />
 						</AppShell>
 					),
+					children: [
+						{ index: true, Component: () => <p>content</p> },
+						{ path: "dashboard", Component: () => <p>dashboard page</p> },
+					],
 				},
-				{ path: "/dashboard", Component: () => <p>dashboard page</p> },
 			],
 		})
 		await userEvent.click(
@@ -240,9 +244,14 @@ describe("AppShell", () => {
 		await userEvent.click(
 			within(drawer).getByRole("link", { name: "Dashboard" }),
 		)
-		expect(
-			screen.queryByRole("dialog", { name: "Navigation" }),
-		).not.toBeInTheDocument()
+		// The popup unmounts only after its CSS exit animation finishes
+		// (base-ui's data-closed animate-out), so give the assertion a beat
+		// instead of asserting the very next microtask.
+		await waitFor(() => {
+			expect(
+				screen.queryByRole("dialog", { name: "Navigation" }),
+			).not.toBeInTheDocument()
+		})
 	})
 
 	it("closes the drawer when the backdrop is clicked", async ({
@@ -275,6 +284,9 @@ describe("AppShell", () => {
 		// 288px-wide drawer, so Playwright reports the drawer as intercepting
 		// the click. Real users click the visible sliver beside the drawer;
 		// this asserts that same interaction.
+		// UserEventClickOptions is typed as an empty interface in
+		// @vitest/browser/context.d.ts, but Playwright's locator.click() does
+		// support `position` at runtime.
 		await userEvent.click(screen.getByTestId("nav-drawer-backdrop"), {
 			position: { x: 320, y: 20 },
 		} as Parameters<typeof userEvent.click>[1])

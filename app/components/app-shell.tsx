@@ -1,24 +1,53 @@
 import { Dialog } from "@base-ui/react/dialog"
-import { Cancel01Icon, Menu01Icon } from "@hugeicons/core-free-icons"
-import { HugeiconsIcon } from "@hugeicons/react"
+import {
+	Cancel01Icon,
+	DashboardSquare01Icon,
+	FileAddIcon,
+	GridViewIcon,
+	Invoice02Icon,
+	Menu01Icon,
+	Settings02Icon,
+} from "@hugeicons/core-free-icons"
+import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react"
 import { useState } from "react"
 import { Form, Link, useLocation } from "react-router"
 import { Button } from "~/components/ui/button"
 import { cn } from "~/lib/utils"
 import type { Role } from "../../generated/prisma/client"
 
-type NavItem = { to: string; label: string; roles?: Role[] }
+type NavItem = {
+	to: string
+	label: string
+	icon: IconSvgElement
+	roles?: Role[]
+}
 
 const NAV_ITEMS: NavItem[] = [
-	{ to: "/dashboard", label: "Dashboard" },
-	{ to: "/docs/new", label: "+ New Document", roles: ["SUPERVISOR", "ADMIN"] },
+	{ to: "/dashboard", label: "Dashboard", icon: DashboardSquare01Icon },
+	{
+		to: "/docs/new",
+		label: "+ New Document",
+		icon: FileAddIcon,
+		roles: ["SUPERVISOR", "ADMIN"],
+	},
 	{
 		to: "/finance/receivables",
 		label: "Receivables",
+		icon: Invoice02Icon,
 		roles: ["FINANCE", "ADMIN"],
 	},
-	{ to: "/admin/settings", label: "Admin Settings", roles: ["ADMIN"] },
-	{ to: "/admin/catalog", label: "Catalog", roles: ["ADMIN"] },
+	{
+		to: "/admin/settings",
+		label: "Admin Settings",
+		icon: Settings02Icon,
+		roles: ["ADMIN"],
+	},
+	{
+		to: "/admin/catalog",
+		label: "Catalog",
+		icon: GridViewIcon,
+		roles: ["ADMIN"],
+	},
 ]
 
 function initials(name: string) {
@@ -50,12 +79,20 @@ function NavList({
 						to={item.to}
 						onClick={onNavigate}
 						className={cn(
-							"rounded-lg px-2.5 py-2 text-sm font-medium text-sidebar-foreground",
+							"flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-sidebar-foreground",
 							active
 								? "bg-sidebar-accent text-sidebar-accent-foreground"
 								: "hover:bg-sidebar-accent/60",
 						)}
 					>
+						<HugeiconsIcon
+							icon={item.icon}
+							strokeWidth={2}
+							className={cn(
+								"size-4 shrink-0",
+								!active && "text-muted-foreground",
+							)}
+						/>
 						{item.label}
 					</Link>
 				)

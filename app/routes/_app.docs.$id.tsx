@@ -25,7 +25,17 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		include: { user: true },
 		orderBy: { timestamp: "asc" },
 	})
-	return { doc, user, serviceCodes, supervisor, assignedCrew, auditTrail }
+	return {
+		doc,
+		user,
+		serviceCodes: serviceCodes.map((c) => ({
+			...c,
+			unitPrice: Number(c.unitPrice),
+		})),
+		supervisor,
+		assignedCrew,
+		auditTrail,
+	}
 }
 
 function nextActionHref(

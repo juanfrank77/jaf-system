@@ -13,7 +13,12 @@ export async function loader({ request }: Route.LoaderArgs) {
 		orderBy: { claroCode: "asc" },
 	})
 
-	return { codes }
+	return {
+		codes: codes.map((code) => ({
+			...code,
+			unitPrice: Number(code.unitPrice),
+		})),
+	}
 }
 
 export async function action({ request }: Route.ActionArgs) {

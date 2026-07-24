@@ -90,6 +90,10 @@ export function MaterialLineItems({
 				return (
 					<div key={item._key} className="flex items-center gap-2">
 						<Select
+							items={serviceCodes.map((c) => ({
+								value: c.id,
+								label: `${c.claroCode} — ${c.name}`,
+							}))}
 							value={item.serviceCodeId}
 							onValueChange={(v) =>
 								updateItem(item._key, { serviceCodeId: v ?? "" })

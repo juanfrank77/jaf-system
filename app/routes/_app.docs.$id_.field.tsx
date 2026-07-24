@@ -23,7 +23,14 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const serviceCodes = await db.serviceCode.findMany({
 		where: { active: true },
 	})
-	return { doc, user, serviceCodes }
+	return {
+		doc,
+		user,
+		serviceCodes: serviceCodes.map((c) => ({
+			...c,
+			unitPrice: Number(c.unitPrice),
+		})),
+	}
 }
 
 export async function action({ request, params }: Route.ActionArgs) {

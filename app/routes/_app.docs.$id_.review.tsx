@@ -21,7 +21,16 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const supervisor = await db.user.findUnique({
 		where: { id: doc.supervisorId },
 	})
-	return { doc, user, serviceCodes, photos, supervisor }
+	return {
+		doc,
+		user,
+		serviceCodes: serviceCodes.map((c) => ({
+			...c,
+			unitPrice: Number(c.unitPrice),
+		})),
+		photos,
+		supervisor,
+	}
 }
 
 export async function action({ request, params }: Route.ActionArgs) {

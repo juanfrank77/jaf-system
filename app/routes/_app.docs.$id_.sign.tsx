@@ -32,7 +32,15 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		where: { active: true },
 	})
 	const warehouses = await db.warehouse.findMany({ where: { active: true } })
-	return { doc, user, serviceCodes, warehouses }
+	return {
+		doc,
+		user,
+		serviceCodes: serviceCodes.map((c) => ({
+			...c,
+			unitPrice: Number(c.unitPrice),
+		})),
+		warehouses,
+	}
 }
 
 export async function action({ request, params }: Route.ActionArgs) {

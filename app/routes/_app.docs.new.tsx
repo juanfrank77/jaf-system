@@ -18,7 +18,14 @@ export async function loader({ request }: Route.LoaderArgs) {
 		where: { role: "CREW", active: true },
 		orderBy: { name: "asc" },
 	})
-	return { user, serviceCodes, crew }
+	return {
+		user,
+		serviceCodes: serviceCodes.map((c) => ({
+			...c,
+			unitPrice: Number(c.unitPrice),
+		})),
+		crew,
+	}
 }
 
 export async function action({ request }: Route.ActionArgs) {

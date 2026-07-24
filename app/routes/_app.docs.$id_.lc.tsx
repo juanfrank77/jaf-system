@@ -25,7 +25,17 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		where: { key: "ivu_rate" },
 	})
 	const ivuRate = parseFloat(ivuSetting?.value ?? "0.115")
-	return { doc, user, serviceCodes, supervisor, poLinks, ivuRate }
+	return {
+		doc,
+		user,
+		serviceCodes: serviceCodes.map((c) => ({
+			...c,
+			unitPrice: Number(c.unitPrice),
+		})),
+		supervisor,
+		poLinks,
+		ivuRate,
+	}
 }
 
 export async function action({ request, params }: Route.ActionArgs) {

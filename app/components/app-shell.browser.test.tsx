@@ -145,7 +145,20 @@ describe("AppShell", () => {
 					Component: () => (
 						<AppShell
 							user={{ name: "Jose Alfaro", role: "SUPERVISOR" }}
-							notifications={[{ id: "1" }, { id: "2" }]}
+							notifications={[
+								{
+									id: "1",
+									message: "Job JAF-2026-1001 is ready for pickup.",
+									docId: "doc-1",
+									createdAt: new Date("2026-07-24T10:00:00Z"),
+								},
+								{
+									id: "2",
+									message: "Job JAF-2026-1002 requires your signature.",
+									docId: null,
+									createdAt: new Date("2026-07-25T08:30:00Z"),
+								},
+							]}
 						>
 							<p>content</p>
 						</AppShell>

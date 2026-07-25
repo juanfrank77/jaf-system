@@ -119,7 +119,12 @@ function AppShell({
 	children,
 }: {
 	user: { name: string; role: Role }
-	notifications: { id: string }[]
+	notifications: {
+		id: string
+		message: string
+		docId: string | null
+		createdAt: Date
+	}[]
 	children: React.ReactNode
 }) {
 	const [drawerOpen, setDrawerOpen] = useState(false)

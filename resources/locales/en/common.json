@@ -16,5 +16,45 @@
       "title": "Page Not Found!",
       "description": "The page you're looking for doesn't exist."
     }
+  },
+  "app_shell": {
+    "nav": {
+      "dashboard": "Dashboard",
+      "new_document": "+ New Document",
+      "receivables": "Receivables",
+      "admin_settings": "Admin Settings",
+      "catalog": "Catalog"
+    },
+    "sign_out": "Sign out",
+    "open_menu": "Open navigation menu",
+    "close_menu": "Close navigation menu",
+    "primary_nav": "Primary",
+    "primary_nav_mobile": "Primary (mobile)",
+    "navigation_dialog": "Navigation"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "no_documents": "No documents yet.",
+    "stat": {
+      "open_documents": "Open documents",
+      "awaiting_warehouse": "Awaiting warehouse",
+      "awaiting_crew": "Awaiting crew",
+      "pending_preps": "Pending preps",
+      "open_jobs": "Open jobs",
+      "awaiting_close": "Awaiting close",
+      "total_documents": "Total documents",
+      "open_receivables": "Open receivables",
+      "awaiting_claro_upload": "Awaiting Claro upload"
+    },
+    "alert": {
+      "awaiting_warehouse_one": "{{count}} document awaiting warehouse",
+      "awaiting_warehouse_other": "{{count}} documents awaiting warehouse",
+      "awaiting_prep_one": "{{count}} document waiting on your prep",
+      "awaiting_prep_other": "{{count}} documents waiting on your prep",
+      "ready_to_close_one": "{{count}} job ready to close",
+      "ready_to_close_other": "{{count}} jobs ready to close",
+      "receivables_open_one": "{{count}} receivable open",
+      "receivables_open_other": "{{count}} receivables open"
+    }
   }
 }

@@ -16,5 +16,45 @@
       "title": "¡Página no encontrada!",
       "description": "La página que buscas no existe."
     }
+  },
+  "app_shell": {
+    "nav": {
+      "dashboard": "Panel",
+      "new_document": "+ Nuevo documento",
+      "receivables": "Cuentas por cobrar",
+      "admin_settings": "Configuración de administrador",
+      "catalog": "Catálogo"
+    },
+    "sign_out": "Cerrar sesión",
+    "open_menu": "Abrir menú de navegación",
+    "close_menu": "Cerrar menú de navegación",
+    "primary_nav": "Principal",
+    "primary_nav_mobile": "Principal (móvil)",
+    "navigation_dialog": "Navegación"
+  },
+  "dashboard": {
+    "title": "Panel",
+    "no_documents": "Aún no hay documentos.",
+    "stat": {
+      "open_documents": "Documentos abiertos",
+      "awaiting_warehouse": "Esperando almacén",
+      "awaiting_crew": "Esperando cuadrilla",
+      "pending_preps": "Preparaciones pendientes",
+      "open_jobs": "Trabajos abiertos",
+      "awaiting_close": "Esperando cierre",
+      "total_documents": "Documentos totales",
+      "open_receivables": "Cuentas por cobrar abiertas",
+      "awaiting_claro_upload": "Esperando carga a Claro"
+    },
+    "alert": {
+      "awaiting_warehouse_one": "{{count}} documento esperando almacén",
+      "awaiting_warehouse_other": "{{count}} documentos esperando almacén",
+      "awaiting_prep_one": "{{count}} documento esperando tu preparación",
+      "awaiting_prep_other": "{{count}} documentos esperando tu preparación",
+      "ready_to_close_one": "{{count}} trabajo listo para cerrar",
+      "ready_to_close_other": "{{count}} trabajos listos para cerrar",
+      "receivables_open_one": "{{count}} cuenta por cobrar abierta",
+      "receivables_open_other": "{{count}} cuentas por cobrar abiertas"
+    }
   }
 }

@@ -10,6 +10,7 @@ import {
 } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react"
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Form, Link, useLocation } from "react-router"
 import { Button } from "~/components/ui/button"
 import { cn } from "~/lib/utils"
@@ -18,34 +19,43 @@ import type { Role } from "../../generated/prisma/client"
 
 type NavItem = {
 	to: string
-	label: string
+	labelKey:
+		| "app_shell.nav.dashboard"
+		| "app_shell.nav.new_document"
+		| "app_shell.nav.receivables"
+		| "app_shell.nav.admin_settings"
+		| "app_shell.nav.catalog"
 	icon: IconSvgElement
 	roles?: Role[]
 }
 
 const NAV_ITEMS: NavItem[] = [
-	{ to: "/dashboard", label: "Dashboard", icon: DashboardSquare01Icon },
+	{
+		to: "/dashboard",
+		labelKey: "app_shell.nav.dashboard",
+		icon: DashboardSquare01Icon,
+	},
 	{
 		to: "/docs/new",
-		label: "+ New Document",
+		labelKey: "app_shell.nav.new_document",
 		icon: FileAddIcon,
 		roles: ["SUPERVISOR", "ADMIN"],
 	},
 	{
 		to: "/finance/receivables",
-		label: "Receivables",
+		labelKey: "app_shell.nav.receivables",
 		icon: Invoice02Icon,
 		roles: ["FINANCE", "ADMIN"],
 	},
 	{
 		to: "/admin/settings",
-		label: "Admin Settings",
+		labelKey: "app_shell.nav.admin_settings",
 		icon: Settings02Icon,
 		roles: ["ADMIN"],
 	},
 	{
 		to: "/admin/catalog",
-		label: "Catalog",
+		labelKey: "app_shell.nav.catalog",
 		icon: GridViewIcon,
 		roles: ["ADMIN"],
 	},
@@ -70,6 +80,7 @@ function NavList({
 	"aria-label": string
 }) {
 	const location = useLocation()
+	const { t } = useTranslation()
 	return (
 		<nav aria-label={ariaLabel} className="flex flex-col gap-1">
 			{items.map((item) => {
@@ -94,7 +105,7 @@ function NavList({
 								!active && "text-muted-foreground",
 							)}
 						/>
-						{item.label}
+						{t(item.labelKey)}
 					</Link>
 				)
 			})}
@@ -112,6 +123,7 @@ function AppShell({
 	children: React.ReactNode
 }) {
 	const [drawerOpen, setDrawerOpen] = useState(false)
+	const { t } = useTranslation()
 	const items = NAV_ITEMS.filter(
 		(item) => !item.roles || item.roles.includes(user.role),
 	)
@@ -122,7 +134,7 @@ function AppShell({
 				<header className="sticky top-0 z-30 flex items-center gap-3.5 border-b border-border bg-card px-4.5 py-2.5">
 					<Dialog.Trigger
 						className="-ml-1.5 flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground md:hidden"
-						aria-label="Open navigation menu"
+						aria-label={t("app_shell.open_menu")}
 					>
 						<HugeiconsIcon
 							icon={Menu01Icon}
@@ -156,7 +168,7 @@ function AppShell({
 						</button>
 						<Form method="post" action="/sign-out">
 							<Button type="submit" variant="ghost" size="sm">
-								Sign out
+								{t("app_shell.sign_out")}
 							</Button>
 						</Form>
 					</div>
@@ -171,7 +183,7 @@ function AppShell({
 								{user.name}
 							</div>
 						</div>
-						<NavList items={items} aria-label="Primary" />
+						<NavList items={items} aria-label={t("app_shell.primary_nav")} />
 					</aside>
 					<main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:px-8">
 						{children}
@@ -184,7 +196,7 @@ function AppShell({
 					className="fixed inset-0 z-40 bg-black/50 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
 				/>
 				<Dialog.Popup
-					aria-label="Navigation"
+					aria-label={t("app_shell.navigation_dialog")}
 					className="fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-sidebar p-3 shadow-xl outline-none data-open:animate-in data-open:slide-in-from-left data-closed:animate-out data-closed:slide-out-to-left"
 				>
 					<div className="mb-2 flex items-center justify-between gap-2.5 rounded-lg px-2.5 py-2">
@@ -197,7 +209,7 @@ function AppShell({
 							</div>
 						</div>
 						<Dialog.Close
-							aria-label="Close navigation menu"
+							aria-label={t("app_shell.close_menu")}
 							className="flex size-8 items-center justify-center rounded-lg text-sidebar-foreground hover:bg-sidebar-accent/60"
 						>
 							<HugeiconsIcon
@@ -210,7 +222,7 @@ function AppShell({
 					<NavList
 						items={items}
 						onNavigate={() => setDrawerOpen(false)}
-						aria-label="Primary (mobile)"
+						aria-label={t("app_shell.primary_nav_mobile")}
 					/>
 				</Dialog.Popup>
 			</Dialog.Portal>

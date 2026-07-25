@@ -13,6 +13,7 @@ import { useState } from "react"
 import { Form, Link, useLocation } from "react-router"
 import { Button } from "~/components/ui/button"
 import { cn } from "~/lib/utils"
+import { LanguageSwitcher } from "~/library/language-switcher"
 import type { Role } from "../../generated/prisma/client"
 
 type NavItem = {
@@ -144,6 +145,7 @@ function AppShell({
 						<span className="rounded-md bg-muted px-2 py-0.5 text-xs font-semibold">
 							{user.role}
 						</span>
+						<LanguageSwitcher />
 						<button type="button" className="relative text-muted-foreground">
 							🔔
 							{notifications.length > 0 && (

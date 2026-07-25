@@ -11,7 +11,6 @@ import {
 import { useChangeLanguage } from "remix-i18next/react"
 import type { Route } from "./+types/root"
 import "./app.css"
-import { LanguageSwitcher } from "./library/language-switcher"
 import i18next, { lngCookie } from "./localization/i18n.server"
 
 export const handle = {
@@ -44,7 +43,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
 				<Links />
 			</head>
 			<body>
-				<LanguageSwitcher />
 				{children}
 				<ScrollRestoration />
 				<Scripts />

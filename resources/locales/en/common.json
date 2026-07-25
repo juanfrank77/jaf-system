@@ -1,5 +1,8 @@
 {
   "hi": "Hello!",
+  "language": {
+    "switcher_label": "Language"
+  },
   "navigation": {
     "back": "Go back",
     "home": "Back to home"

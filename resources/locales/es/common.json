@@ -1,5 +1,8 @@
 {
   "hi": "¡Hola!",
+  "language": {
+    "switcher_label": "Idioma"
+  },
   "navigation": {
     "back": "Volver",
     "home": "Ir al inicio"

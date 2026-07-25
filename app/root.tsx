@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next"
 import {
+	data,
 	isRouteErrorResponse,
 	Links,
 	Meta,
@@ -11,7 +12,7 @@ import { useChangeLanguage } from "remix-i18next/react"
 import type { Route } from "./+types/root"
 import "./app.css"
 import { LanguageSwitcher } from "./library/language-switcher"
-import i18next from "./localization/i18n.server"
+import i18next, { lngCookie } from "./localization/i18n.server"
 
 export const handle = {
 	i18n: "common",
@@ -19,6 +20,16 @@ export const handle = {
 
 export async function loader({ request }: Route.LoaderArgs) {
 	const lang = await i18next.getLocale(request)
+	const url = new URL(request.url)
+	const requestedLang = url.searchParams.get("lng")
+
+	if (requestedLang) {
+		return data(
+			{ lang },
+			{ headers: { "Set-Cookie": await lngCookie.serialize(lang) } },
+		)
+	}
+
 	return { lang }
 }
 

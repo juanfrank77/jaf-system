@@ -4,6 +4,8 @@ import { db } from "~/lib/db.server"
 import { requireSession } from "~/lib/permissions.server"
 import type { Route } from "./+types/_app.dashboard"
 
+export const meta: Route.MetaFunction = () => [{ title: "Dashboard — JAF Ops" }]
+
 export async function loader({ request }: Route.LoaderArgs) {
 	const session = await requireSession(request)
 	const user = await db.user.findUniqueOrThrow({

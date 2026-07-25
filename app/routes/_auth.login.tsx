@@ -13,6 +13,8 @@ function getClientIp(request: Request) {
 	return cf || "unknown"
 }
 
+export const meta: Route.MetaFunction = () => [{ title: "Sign In — JAF Ops" }]
+
 export async function loader({ request }: Route.LoaderArgs) {
 	const session = await auth.api.getSession({ headers: request.headers })
 	if (session) throw redirect("/dashboard")

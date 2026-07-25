@@ -2,6 +2,8 @@ import { useTranslation } from "react-i18next"
 import { data, Link } from "react-router"
 import type { Route } from "./+types/$"
 
+export const meta: Route.MetaFunction = () => [{ title: "Not Found — JAF Ops" }]
+
 export function loader(_: Route.LoaderArgs) {
 	return data(null, { status: 404 })
 }

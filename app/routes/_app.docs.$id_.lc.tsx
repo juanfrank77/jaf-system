@@ -9,6 +9,14 @@ import { generateScheduleAccountsPdf } from "~/lib/pdf/schedule-accounts.server"
 import { canTransition, requireRole } from "~/lib/permissions.server"
 import type { Route } from "./+types/_app.docs.$id_.lc"
 
+export const meta: Route.MetaFunction = ({ data }) => [
+	{
+		title: data
+			? `${data.doc.controlNumber} — LC Request — JAF Ops`
+			: "JAF Ops",
+	},
+]
+
 export async function loader({ request, params }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({

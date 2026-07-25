@@ -4,6 +4,14 @@ import { db } from "~/lib/db.server"
 import { canTransition, requireRole } from "~/lib/permissions.server"
 import type { Route } from "./+types/_app.docs.$id_.prep"
 
+export const meta: Route.MetaFunction = ({ data }) => [
+	{
+		title: data
+			? `${data.doc.controlNumber} — Mark Prepped — JAF Ops`
+			: "JAF Ops",
+	},
+]
+
 export async function loader({ request, params }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["WAREHOUSE", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({

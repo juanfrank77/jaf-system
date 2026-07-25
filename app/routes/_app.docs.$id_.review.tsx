@@ -11,6 +11,14 @@ import { validateFile } from "~/lib/file-upload.server"
 import { canTransition, requireRole } from "~/lib/permissions.server"
 import type { Route } from "./+types/_app.docs.$id_.review"
 
+export const meta: Route.MetaFunction = ({ data }) => [
+	{
+		title: data
+			? `${data.doc.controlNumber} — Supervisor Review — JAF Ops`
+			: "JAF Ops",
+	},
+]
+
 export async function loader({ request, params }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["SUPERVISOR", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({

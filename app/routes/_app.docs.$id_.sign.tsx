@@ -21,6 +21,14 @@ import { generateWarehouseReceiptPdf } from "~/lib/pdf/warehouse-receipt.server"
 import { canTransition, requireRole } from "~/lib/permissions.server"
 import type { Route } from "./+types/_app.docs.$id_.sign"
 
+export const meta: Route.MetaFunction = ({ data }) => [
+	{
+		title: data
+			? `${data.doc.controlNumber} — Capture Signature — JAF Ops`
+			: "JAF Ops",
+	},
+]
+
 export async function loader({ request, params }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["CREW", "WAREHOUSE", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({

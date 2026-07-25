@@ -5,6 +5,10 @@ import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
 import type { Route } from "./+types/_app.finance.receivables"
 
+export const meta: Route.MetaFunction = () => [
+	{ title: "Receivables — JAF Ops" },
+]
+
 export async function loader({ request }: Route.LoaderArgs) {
 	await requireRole(request, ["FINANCE", "ADMIN"])
 	const invoices = await db.jafInvoice.findMany({

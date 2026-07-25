@@ -6,6 +6,10 @@ import { requireRole } from "~/lib/permissions.server"
 import { getIvuRate, setIvuRate } from "~/lib/system-settings.server"
 import type { Route } from "./+types/_app.admin.settings"
 
+export const meta: Route.MetaFunction = () => [
+	{ title: "Admin Settings — JAF Ops" },
+]
+
 export async function loader({ request }: Route.LoaderArgs) {
 	await requireRole(request, ["ADMIN"])
 	const ivuRate = await getIvuRate()

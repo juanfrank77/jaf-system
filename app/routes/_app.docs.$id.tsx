@@ -5,6 +5,10 @@ import { db } from "~/lib/db.server"
 import { requireSession } from "~/lib/permissions.server"
 import type { Route } from "./+types/_app.docs.$id"
 
+export const meta: Route.MetaFunction = ({ data }) => [
+	{ title: data ? `${data.doc.controlNumber} — JAF Ops` : "JAF Ops" },
+]
+
 export async function loader({ request, params }: Route.LoaderArgs) {
 	const session = await requireSession(request)
 	const user = await db.user.findUniqueOrThrow({

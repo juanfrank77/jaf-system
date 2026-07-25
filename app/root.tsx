@@ -17,6 +17,8 @@ export const handle = {
 	i18n: "common",
 }
 
+export const meta: Route.MetaFunction = () => [{ title: "JAF Ops" }]
+
 export async function loader({ request }: Route.LoaderArgs) {
 	const lang = await i18next.getLocale(request)
 	const url = new URL(request.url)

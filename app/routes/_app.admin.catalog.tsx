@@ -6,6 +6,10 @@ import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
 import type { Route } from "./+types/_app.admin.catalog"
 
+export const meta: Route.MetaFunction = () => [
+	{ title: "Service Catalog — JAF Ops" },
+]
+
 export async function loader({ request }: Route.LoaderArgs) {
 	await requireRole(request, ["ADMIN"])
 

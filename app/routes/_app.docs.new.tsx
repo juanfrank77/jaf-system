@@ -8,6 +8,10 @@ import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
 import type { Route } from "./+types/_app.docs.new"
 
+export const meta: Route.MetaFunction = () => [
+	{ title: "New Document — JAF Ops" },
+]
+
 export async function loader({ request }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["SUPERVISOR", "ADMIN"])
 	const serviceCodes = await db.serviceCode.findMany({

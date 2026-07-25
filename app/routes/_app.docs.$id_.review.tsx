@@ -1,5 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { Button } from "~/components/ui/button"
@@ -83,9 +84,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 			throw redirect(`/docs/${params.id}`)
 		const claroPdf = form.get("claroPdf") as File
 		if (!claroPdf || claroPdf.size === 0)
-			return { error: "Please select the Claro PDF to upload" }
+			return { errorKey: "docs_review.errors.pdf_required" }
 		const validation = validateFile(claroPdf, "pdf")
-		if (!validation.valid) return { error: validation.error }
+		if (!validation.valid) return { errorMessage: validation.error }
 		const uploadDir = process.env.UPLOAD_DIR || "/tmp/jaf/uploads"
 		const claroDir = path.join(uploadDir, "claro-pdfs")
 		await fs.mkdir(claroDir, { recursive: true })
@@ -133,6 +134,10 @@ export default function ReviewDoc({
 	actionData,
 }: Route.ComponentProps) {
 	const { doc, serviceCodes, photos, supervisor } = loaderData
+	const { t } = useTranslation()
+	const error = actionData as
+		| { errorKey?: any; errorMessage?: string }
+		| undefined
 	const estimated = (doc.estimatedMaterials as any[]) || []
 	const taken = (doc.materialsTaken as any[]) || []
 	const used = (doc.materialsUsed as any[]) || []
@@ -164,7 +169,7 @@ export default function ReviewDoc({
 
 	return (
 		<div className="space-y-5">
-			<h1 className="text-xl font-semibold">Supervisor Review</h1>
+			<h1 className="text-xl font-semibold">{t("docs_review.title")}</h1>
 			<p className="font-mono text-sm text-slate-500">
 				{(doc as any).controlNumber}
 			</p>
@@ -172,7 +177,9 @@ export default function ReviewDoc({
 			{/* Materials variance */}
 			<div className="grid grid-cols-3 gap-3 text-sm">
 				<div className="bg-white border rounded-lg p-3">
-					<p className="text-xs text-slate-500 mb-1">Estimated</p>
+					<p className="text-xs text-slate-500 mb-1">
+						{t("docs_review.estimated")}
+					</p>
 					<MaterialLineItems
 						serviceCodes={serviceCodes as any}
 						initialItems={estimated}
@@ -180,7 +187,9 @@ export default function ReviewDoc({
 					/>
 				</div>
 				<div className="bg-white border rounded-lg p-3">
-					<p className="text-xs text-slate-500 mb-1">Taken (Signed)</p>
+					<p className="text-xs text-slate-500 mb-1">
+						{t("docs_review.taken")}
+					</p>
 					<MaterialLineItems
 						serviceCodes={serviceCodes as any}
 						initialItems={taken}
@@ -188,7 +197,7 @@ export default function ReviewDoc({
 					/>
 				</div>
 				<div className="bg-white border rounded-lg p-3">
-					<p className="text-xs text-slate-500 mb-1">Used (Field)</p>
+					<p className="text-xs text-slate-500 mb-1">{t("docs_review.used")}</p>
 					<MaterialLineItems
 						serviceCodes={serviceCodes as any}
 						initialItems={used}
@@ -200,18 +209,24 @@ export default function ReviewDoc({
 			{/* Job address comparison */}
 			<div className="bg-white border rounded-lg p-4 text-sm space-y-1">
 				<p>
-					<span className="text-slate-500">Estimated address:</span>{" "}
+					<span className="text-slate-500">
+						{t("docs_review.estimated_address")}:
+					</span>{" "}
 					{(doc as any).jobAddressEstimated}
 				</p>
 				{(doc as any).jobAddressActual && (
 					<p>
-						<span className="text-slate-500">Actual address:</span>{" "}
+						<span className="text-slate-500">
+							{t("docs_review.actual_address")}:
+						</span>{" "}
 						{(doc as any).jobAddressActual}
 					</p>
 				)}
 				{(doc as any).fieldNotes && (
 					<p>
-						<span className="text-slate-500">Field notes:</span>{" "}
+						<span className="text-slate-500">
+							{t("docs_review.field_notes")}:
+						</span>{" "}
 						{(doc as any).fieldNotes}
 					</p>
 				)}
@@ -221,7 +236,7 @@ export default function ReviewDoc({
 			{photoItems.length > 0 && (
 				<div className="bg-white border rounded-lg p-4">
 					<p className="text-sm font-medium mb-2">
-						Job Photos ({photoItems.length})
+						{t("docs_review.job_photos", { count: photoItems.length })}
 					</p>
 					<div className="grid grid-cols-3 gap-2">
 						{photoItems.map((p) => (
@@ -233,7 +248,7 @@ export default function ReviewDoc({
 							>
 								<img
 									src={`/files/photos/${(doc as any).id}/${p.basename}`}
-									alt="Job site"
+									alt={t("docs_review.job_site_alt")}
 									className="w-full h-24 object-cover rounded border"
 								/>
 							</a>
@@ -245,36 +260,43 @@ export default function ReviewDoc({
 			{/* Claro submission helper */}
 			<div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
 				<h2 className="text-sm font-semibold text-blue-900 mb-2">
-					Claro Portal — Submission Data
+					{t("docs_review.claro_helper_title")}
 				</h2>
 				<p className="text-xs text-blue-700 mb-3">
-					Copy this data into Claro's portal to create the work order.
+					{t("docs_review.claro_helper_hint")}
 				</p>
 				<div className="space-y-1 text-sm">
 					<p>
-						<span className="font-medium">Aviso #:</span>{" "}
-						{(doc as any).avisoNumber ?? "— (enter after creating in Claro)"}
+						<span className="font-medium">
+							{t("docs_review.aviso_number")}:
+						</span>{" "}
+						{(doc as any).avisoNumber ?? t("docs_review.aviso_number_missing")}
 					</p>
 					<p>
-						<span className="font-medium">Job Type:</span>{" "}
+						<span className="font-medium">{t("docs_review.job_type")}:</span>{" "}
 						{(doc as any).jobType}
 					</p>
 					<p>
-						<span className="font-medium">Address:</span>{" "}
+						<span className="font-medium">{t("docs_review.address")}:</span>{" "}
 						{(doc as any).jobAddressActual ?? (doc as any).jobAddressEstimated}
 					</p>
 					<p>
-						<span className="font-medium">Supervisor:</span> {supervisor?.name}
+						<span className="font-medium">{t("docs_review.supervisor")}:</span>{" "}
+						{supervisor?.name}
 					</p>
 				</div>
 				{takenItems.length > 0 && (
 					<table className="w-full text-xs mt-3 border-collapse">
 						<thead>
 							<tr className="text-left text-blue-800 border-b border-blue-200">
-								<th className="pb-1">Code</th>
-								<th className="pb-1">Description</th>
-								<th className="pb-1 text-right">Qty</th>
-								<th className="pb-1 text-right">Unit</th>
+								<th className="pb-1">{t("docs_review.table.code")}</th>
+								<th className="pb-1">{t("docs_review.table.description")}</th>
+								<th className="pb-1 text-right">
+									{t("docs_review.table.qty")}
+								</th>
+								<th className="pb-1 text-right">
+									{t("docs_review.table.unit")}
+								</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -299,9 +321,13 @@ export default function ReviewDoc({
 					method="post"
 					className="space-y-3 bg-white border rounded-lg p-4"
 				>
-					<h2 className="font-medium text-sm">Approve Job</h2>
+					<h2 className="font-medium text-sm">
+						{t("docs_review.approve_job_heading")}
+					</h2>
 					<div>
-						<Label htmlFor="avisoNumber">Claro Aviso # (confirm or add)</Label>
+						<Label htmlFor="avisoNumber">
+							{t("docs_review.aviso_number_confirm_label")}
+						</Label>
 						<Input
 							id="avisoNumber"
 							name="avisoNumber"
@@ -309,12 +335,14 @@ export default function ReviewDoc({
 						/>
 					</div>
 					<div>
-						<Label htmlFor="claroNotes">Notes for Lissette</Label>
+						<Label htmlFor="claroNotes">
+							{t("docs_review.notes_for_finance_label")}
+						</Label>
 						<Textarea id="claroNotes" name="claroNotes" rows={2} />
 					</div>
 					<input type="hidden" name="intent" value="approve" />
 					<Button type="submit" className="w-full">
-						Approve
+						{t("docs_review.approve")}
 					</Button>
 				</Form>
 			)}
@@ -325,10 +353,11 @@ export default function ReviewDoc({
 					encType="multipart/form-data"
 					className="space-y-3 bg-white border rounded-lg p-4"
 				>
-					<h2 className="font-medium text-sm">Upload Claro Work Order PDF</h2>
+					<h2 className="font-medium text-sm">
+						{t("docs_review.upload_pdf_heading")}
+					</h2>
 					<p className="text-xs text-slate-500">
-						After creating the work order in Claro's portal, download the PDF
-						and upload it here.
+						{t("docs_review.upload_pdf_hint")}
 					</p>
 					<input type="hidden" name="intent" value="upload_claro" />
 					<Input
@@ -337,10 +366,13 @@ export default function ReviewDoc({
 						accept="application/pdf"
 						required
 					/>
-					{(actionData as any)?.error && (
-						<p className="text-sm text-red-600">{(actionData as any).error}</p>
+					{error?.errorKey && (
+						<p className="text-sm text-red-600">{t(error.errorKey)}</p>
 					)}
-					<Button type="submit">Upload Claro PDF</Button>
+					{error?.errorMessage && (
+						<p className="text-sm text-red-600">{error.errorMessage}</p>
+					)}
+					<Button type="submit">{t("docs_review.upload_pdf_submit")}</Button>
 				</Form>
 			)}
 		</div>

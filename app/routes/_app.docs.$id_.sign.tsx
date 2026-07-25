@@ -1,6 +1,7 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { useRef, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Form, redirect, useSubmit } from "react-router"
 import { MaterialLineItems } from "~/components/material-line-items"
 import {
@@ -66,13 +67,13 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const materialsRaw = form.get("materials") as string
 
 	if (!releaseSignature || releaseSignature === "data:,") {
-		return { error: "Warehouse release signature is required" }
+		return { errorKey: "docs_sign.errors.release_signature_required" }
 	}
 	if (!crewSignature || crewSignature === "data:,") {
-		return { error: "Crew receipt signature is required" }
+		return { errorKey: "docs_sign.errors.crew_signature_required" }
 	}
 	if (!warehouseId) {
-		return { error: "Please select the warehouse" }
+		return { errorKey: "docs_sign.errors.warehouse_required" }
 	}
 
 	let materialsTaken: { serviceCodeId: string; qty: number }[] = []
@@ -82,7 +83,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 				i.serviceCodeId && i.qty > 0,
 		)
 	} catch {
-		return { error: "Invalid materials data" }
+		return { errorKey: "docs_sign.errors.invalid_materials" }
 	}
 
 	const serviceCodes = await db.serviceCode.findMany()
@@ -143,19 +144,20 @@ export default function SignDoc({
 	const [warehouseId, setWarehouseId] = useState("")
 	const [items, setItems] = useState((doc.estimatedMaterials as any[]) || [])
 	const submit = useSubmit()
+	const { t } = useTranslation()
 
 	function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
 		e.preventDefault()
 		if (!warehouseId) {
-			alert("Please select the warehouse.")
+			alert(t("docs_sign.alerts.select_warehouse"))
 			return
 		}
 		if (releaseRef.current?.isEmpty()) {
-			alert("Warehouse release signature is required.")
+			alert(t("docs_sign.alerts.release_signature_required"))
 			return
 		}
 		if (crewRef.current?.isEmpty()) {
-			alert("Crew receipt signature is required.")
+			alert(t("docs_sign.alerts.crew_signature_required"))
 			return
 		}
 		const formData = new FormData(e.currentTarget)
@@ -168,27 +170,24 @@ export default function SignDoc({
 
 	return (
 		<div className="space-y-5">
-			<h1 className="text-xl font-semibold">
-				Warehouse Pickup — Dual Signature
-			</h1>
+			<h1 className="text-xl font-semibold">{t("docs_sign.title")}</h1>
 			<p className="text-sm font-mono text-slate-500">
 				{(doc as any).controlNumber}
 			</p>
 
 			<div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
-				Review materials below. Both warehouse and crew must sign. Once signed,
-				this list is permanently locked.
+				{t("docs_sign.review_notice")}
 			</div>
 
 			<Form method="post" onSubmit={handleSubmit} className="space-y-5">
 				<div>
-					<Label>Warehouse</Label>
+					<Label>{t("docs_sign.warehouse_label")}</Label>
 					<Select
 						value={warehouseId}
 						onValueChange={(v) => setWarehouseId(v ?? "")}
 					>
 						<SelectTrigger className="mt-1">
-							<SelectValue placeholder="Select warehouse..." />
+							<SelectValue placeholder={t("docs_sign.warehouse_placeholder")} />
 						</SelectTrigger>
 						<SelectContent>
 							{warehouses.map((w) => (
@@ -201,7 +200,7 @@ export default function SignDoc({
 				</div>
 
 				<div>
-					<Label>Materials Taken</Label>
+					<Label>{t("docs_sign.materials_taken_label")}</Label>
 					<div className="mt-1">
 						<MaterialLineItems
 							serviceCodes={serviceCodes as any}
@@ -215,10 +214,10 @@ export default function SignDoc({
 				<div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
 					<div>
 						<p className="text-sm font-medium mb-1">
-							1. Warehouse Release Signature
+							{t("docs_sign.release_signature_heading")}
 						</p>
 						<p className="text-xs text-slate-500 mb-2">
-							Person releasing materials signs here
+							{t("docs_sign.release_signature_subtext")}
 						</p>
 						<SignaturePad ref={releaseRef} width={320} height={120} />
 						<button
@@ -226,15 +225,15 @@ export default function SignDoc({
 							onClick={() => releaseRef.current?.clear()}
 							className="text-xs text-slate-400 mt-1 hover:text-slate-600"
 						>
-							Clear
+							{t("docs_sign.clear")}
 						</button>
 					</div>
 					<div>
 						<p className="text-sm font-medium mb-1">
-							2. Crew Receipt Signature
+							{t("docs_sign.crew_signature_heading")}
 						</p>
 						<p className="text-xs text-slate-500 mb-2">
-							Crew member receiving materials signs here
+							{t("docs_sign.crew_signature_subtext")}
 						</p>
 						<SignaturePad ref={crewRef} width={320} height={120} />
 						<button
@@ -242,17 +241,19 @@ export default function SignDoc({
 							onClick={() => crewRef.current?.clear()}
 							className="text-xs text-slate-400 mt-1 hover:text-slate-600"
 						>
-							Clear
+							{t("docs_sign.clear")}
 						</button>
 					</div>
 				</div>
 
-				{(actionData as any)?.error && (
-					<p className="text-sm text-red-600">{(actionData as any).error}</p>
+				{(actionData as any)?.errorKey && (
+					<p className="text-sm text-red-600">
+						{t((actionData as any).errorKey)}
+					</p>
 				)}
 
 				<Button type="submit" className="w-full">
-					Sign & Lock Materials
+					{t("docs_sign.submit")}
 				</Button>
 			</Form>
 		</div>

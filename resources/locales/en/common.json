@@ -32,6 +32,210 @@
     "primary_nav_mobile": "Primary (mobile)",
     "navigation_dialog": "Navigation"
   },
+  "login": {
+    "title": "JAF Operations",
+    "email_label": "Email",
+    "password_label": "Password",
+    "submit": "Sign In",
+    "errors": {
+      "invalid_credentials": "Invalid email or password",
+      "rate_limited_one": "Too many login attempts. Try again in {{count}} second.",
+      "rate_limited_other": "Too many login attempts. Try again in {{count}} seconds."
+    }
+  },
+  "docs_new": {
+    "title": "New JAF Invoice",
+    "job_type_label": "Job Type",
+    "job_address_label": "Job Address (estimated)",
+    "aviso_number_label": "Claro Aviso # (if known)",
+    "assigned_crew_label": "Assigned Crew",
+    "estimated_materials_label": "Estimated Materials",
+    "submit": "Create Document",
+    "errors": {
+      "invalid_materials": "Invalid materials data",
+      "missing_fields": "Job type, address, and at least one crew member are required"
+    }
+  },
+  "docs_view": {
+    "address": "Address",
+    "aviso_number": "Aviso #",
+    "supervisor": "Supervisor",
+    "crew": "Crew",
+    "created": "Created",
+    "estimated_materials": "Estimated Materials",
+    "materials_taken": "Materials Taken (Signed)",
+    "materials_used": "Materials Used (Field)",
+    "crew_signature_alt": "Crew signature",
+    "download_audit_package": "Download Audit Package",
+    "audit_trail": "Audit Trail",
+    "next_action": {
+      "mark_prepped": "Mark as Prepped",
+      "capture_signature": "Capture Crew Signature",
+      "update_from_field": "Update from Field",
+      "review_approve": "Review & Approve",
+      "generate_lc": "Generate LC Request",
+      "default": "Next Action"
+    }
+  },
+  "docs_prep": {
+    "title": "Mark Materials Prepped",
+    "confirm_message": "Confirm that materials for <strong>{{controlNumber}}</strong> have been staged and are ready for crew pickup.",
+    "submit": "Confirm Materials Prepped"
+  },
+  "docs_sign": {
+    "title": "Warehouse Pickup — Dual Signature",
+    "review_notice": "Review materials below. Both warehouse and crew must sign. Once signed, this list is permanently locked.",
+    "warehouse_label": "Warehouse",
+    "warehouse_placeholder": "Select warehouse...",
+    "materials_taken_label": "Materials Taken",
+    "release_signature_heading": "1. Warehouse Release Signature",
+    "release_signature_subtext": "Person releasing materials signs here",
+    "crew_signature_heading": "2. Crew Receipt Signature",
+    "crew_signature_subtext": "Crew member receiving materials signs here",
+    "clear": "Clear",
+    "submit": "Sign & Lock Materials",
+    "alerts": {
+      "select_warehouse": "Please select the warehouse.",
+      "release_signature_required": "Warehouse release signature is required.",
+      "crew_signature_required": "Crew receipt signature is required."
+    },
+    "errors": {
+      "release_signature_required": "Warehouse release signature is required",
+      "crew_signature_required": "Crew receipt signature is required",
+      "warehouse_required": "Please select the warehouse",
+      "invalid_materials": "Invalid materials data"
+    }
+  },
+  "docs_field": {
+    "title": "Field Update",
+    "offline_notice": "<strong>Offline capable.</strong> If you lose connection, your changes save locally and sync when you reconnect.",
+    "actual_address_label": "Actual Job Address",
+    "materials_used_label": "Materials Used",
+    "materials_used_hint": "Cannot exceed what was signed out at warehouse.",
+    "field_notes_label": "Field Notes",
+    "field_notes_placeholder": "Observations, issues, changes...",
+    "photos_label": "Photos",
+    "photos_hint": "Photos are source data for the supervisor's Claro submission — stored on server.",
+    "submit": "Mark Complete",
+    "errors": {
+      "invalid_materials": "Invalid materials data",
+      "exceeds_taken": "Cannot use more than taken for service code {{serviceCodeId}}"
+    }
+  },
+  "docs_review": {
+    "title": "Supervisor Review",
+    "estimated": "Estimated",
+    "taken": "Taken (Signed)",
+    "used": "Used (Field)",
+    "estimated_address": "Estimated address",
+    "actual_address": "Actual address",
+    "field_notes": "Field notes",
+    "job_photos_one": "Job Photos ({{count}})",
+    "job_photos_other": "Job Photos ({{count}})",
+    "job_site_alt": "Job site",
+    "claro_helper_title": "Claro Portal — Submission Data",
+    "claro_helper_hint": "Copy this data into Claro's portal to create the work order.",
+    "aviso_number": "Aviso #",
+    "aviso_number_missing": "— (enter after creating in Claro)",
+    "job_type": "Job Type",
+    "address": "Address",
+    "supervisor": "Supervisor",
+    "table": {
+      "code": "Code",
+      "description": "Description",
+      "qty": "Qty",
+      "unit": "Unit"
+    },
+    "approve_job_heading": "Approve Job",
+    "aviso_number_confirm_label": "Claro Aviso # (confirm or add)",
+    "notes_for_finance_label": "Notes for Lissette",
+    "approve": "Approve",
+    "upload_pdf_heading": "Upload Claro Work Order PDF",
+    "upload_pdf_hint": "After creating the work order in Claro's portal, download the PDF and upload it here.",
+    "upload_pdf_submit": "Upload Claro PDF",
+    "errors": {
+      "pdf_required": "Please select the Claro PDF to upload"
+    }
+  },
+  "docs_lc": {
+    "title": "LC Request — Lissette Review",
+    "ivu_rate": "IVU rate: {{rate}}%",
+    "jaf_invoice": "JAF Invoice",
+    "job": "Job",
+    "address": "Address",
+    "aviso_number": "Aviso #",
+    "supervisor": "Supervisor",
+    "claro_pdf_title": "Claro Work Order PDF",
+    "claro_pdf_iframe_title": "Claro PDF",
+    "no_claro_pdf": "No Claro PDF on file.",
+    "download_acta": "Download Acta de Conformidad (2A)",
+    "generate_schedule": "Generate & Download Schedule of Accounts (2B)",
+    "footer_note": "Generating the Schedule of Accounts marks this document LC_GENERATED. Email the PDF to hs@pbcc.com."
+  },
+  "admin_settings": {
+    "title": "System Settings",
+    "ivu_heading": "IVU Tax Rate",
+    "ivu_description": "Applied to all invoice PDF generation. Enter as decimal (e.g. 0.115 = 11.5%). Current: {{current}}%",
+    "ivu_label": "IVU Rate (decimal)",
+    "saved": "Saved.",
+    "save": "Save",
+    "errors": {
+      "invalid_rate": "IVU rate must be a decimal between 0 and 1 (e.g. 0.115 for 11.5%)"
+    }
+  },
+  "admin_catalog": {
+    "title": "Service Catalog",
+    "add_heading": "Add Service Code",
+    "claro_code_label": "Claro Code *",
+    "name_label": "Name *",
+    "unit_price_label": "Unit Price *",
+    "account_code_label": "Account Code",
+    "dept_label": "Dept",
+    "add_submit": "Add Service Code",
+    "table": {
+      "claro_code": "Claro Code",
+      "name": "Name",
+      "unit_price": "Unit Price",
+      "account_code": "Account Code",
+      "dept": "Dept",
+      "active": "Active",
+      "actions": "Actions"
+    },
+    "yes": "Yes",
+    "no": "No",
+    "deactivate": "Deactivate",
+    "activate": "Activate",
+    "no_codes": "No service codes yet.",
+    "errors": {
+      "required_fields": "claroCode, name, and unitPrice are required.",
+      "id_required": "id is required.",
+      "unknown_intent": "Unknown intent."
+    }
+  },
+  "finance_receivables": {
+    "title": "Receivables",
+    "open_count_one": "{{count}} open",
+    "open_count_other": "{{count}} open",
+    "aviso": "Aviso {{number}}",
+    "age_days": "{{count}}d",
+    "advance_label": "80% Advance (PBCC)",
+    "final_payment_label": "Final Payment (Claro)",
+    "close_entry_label": "Close Entry",
+    "amount_placeholder": "Amount",
+    "record": "Record",
+    "close": "Close",
+    "record_both_first": "Record both payments first",
+    "closed_summary_one": "Closed ({{count}})",
+    "closed_summary_other": "Closed ({{count}})",
+    "closed_on": "Closed {{date}}",
+    "errors": {
+      "invalid_amount": "Invalid amount"
+    }
+  },
+  "material_line_items": {
+    "select_placeholder": "Select service code...",
+    "add_service_code": "+ Add Service Code"
+  },
   "dashboard": {
     "title": "Dashboard",
     "no_documents": "No documents yet.",

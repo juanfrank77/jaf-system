@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import {
@@ -42,6 +43,7 @@ export function MaterialLineItems({
 	readOnly = false,
 	name = "materials",
 }: Props) {
+	const { t } = useTranslation()
 	const [items, setItems] = useState<InternalItem[]>(() =>
 		initialItems.map((item) => ({ ...item, _key: nextKey() })),
 	)
@@ -100,7 +102,9 @@ export function MaterialLineItems({
 							}
 						>
 							<SelectTrigger className="flex-1">
-								<SelectValue placeholder="Select service code..." />
+								<SelectValue
+									placeholder={t("material_line_items.select_placeholder")}
+								/>
 							</SelectTrigger>
 							<SelectContent>
 								{code && (
@@ -138,7 +142,7 @@ export function MaterialLineItems({
 			})}
 			{!readOnly && (
 				<Button type="button" variant="outline" size="sm" onClick={addItem}>
-					+ Add Service Code
+					{t("material_line_items.add_service_code")}
 				</Button>
 			)}
 		</div>

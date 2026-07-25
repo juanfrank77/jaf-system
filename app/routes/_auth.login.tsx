@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next"
 import { Form, redirect, useActionData } from "react-router"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
@@ -30,8 +31,9 @@ export async function action({ request }: Route.ActionArgs) {
 	const { allowed, resetIn } = checkRateLimit(rateKey)
 	if (!allowed) {
 		return {
-			error: `Too many login attempts. Try again in ${Math.ceil(resetIn / 1000)} seconds.`,
-		}
+			errorKey: "login.errors.rate_limited",
+			errorCount: Math.ceil(resetIn / 1000),
+		} as const
 	}
 
 	const password = form.get("password") as string
@@ -46,18 +48,21 @@ export async function action({ request }: Route.ActionArgs) {
 		throw redirect("/dashboard", { headers })
 	} catch (e) {
 		if (e instanceof Response) throw e
-		return { error: "Invalid email or password" }
+		return { errorKey: "login.errors.invalid_credentials" } as const
 	}
 }
 
 export default function LoginPage() {
 	const data = useActionData<typeof action>()
+	const { t } = useTranslation()
 	return (
 		<>
-			<h1 className="text-2xl font-bold mb-6 text-center">JAF Operations</h1>
+			<h1 className="text-2xl font-bold mb-6 text-center">
+				{t("login.title")}
+			</h1>
 			<Form method="post" className="space-y-4">
 				<div>
-					<Label htmlFor="email">Email</Label>
+					<Label htmlFor="email">{t("login.email_label")}</Label>
 					<Input
 						id="email"
 						name="email"
@@ -67,7 +72,7 @@ export default function LoginPage() {
 					/>
 				</div>
 				<div>
-					<Label htmlFor="password">Password</Label>
+					<Label htmlFor="password">{t("login.password_label")}</Label>
 					<Input
 						id="password"
 						name="password"
@@ -76,9 +81,13 @@ export default function LoginPage() {
 						autoComplete="current-password"
 					/>
 				</div>
-				{data?.error && <p className="text-sm text-red-600">{data.error}</p>}
+				{data?.errorKey && (
+					<p className="text-sm text-red-600">
+						{t(data.errorKey, { count: data.errorCount })}
+					</p>
+				)}
 				<Button type="submit" className="w-full">
-					Sign In
+					{t("login.submit")}
 				</Button>
 			</Form>
 		</>

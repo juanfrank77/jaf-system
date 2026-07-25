@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { Button } from "~/components/ui/button"
@@ -49,12 +50,12 @@ export async function action({ request }: Route.ActionArgs) {
 				i.serviceCodeId && i.qty > 0,
 		)
 	} catch {
-		return { error: "Invalid materials data" }
+		return { errorKey: "docs_new.errors.invalid_materials" }
 	}
 
 	if (!jobType || !jobAddressEstimated || assignedCrewIds.length === 0) {
 		return {
-			error: "Job type, address, and at least one crew member are required",
+			errorKey: "docs_new.errors.missing_fields",
 		}
 	}
 
@@ -103,12 +104,13 @@ export default function NewDoc({
 	actionData,
 }: Route.ComponentProps) {
 	const { serviceCodes, crew } = loaderData
+	const { t } = useTranslation()
 	return (
 		<div className="space-y-5">
-			<h1 className="text-xl font-semibold">New JAF Invoice</h1>
+			<h1 className="text-xl font-semibold">{t("docs_new.title")}</h1>
 			<Form method="post" className="space-y-4">
 				<div>
-					<Label htmlFor="jobType">Job Type</Label>
+					<Label htmlFor="jobType">{t("docs_new.job_type_label")}</Label>
 					<Input
 						id="jobType"
 						name="jobType"
@@ -117,7 +119,9 @@ export default function NewDoc({
 					/>
 				</div>
 				<div>
-					<Label htmlFor="jobAddressEstimated">Job Address (estimated)</Label>
+					<Label htmlFor="jobAddressEstimated">
+						{t("docs_new.job_address_label")}
+					</Label>
 					<Input
 						id="jobAddressEstimated"
 						name="jobAddressEstimated"
@@ -126,11 +130,13 @@ export default function NewDoc({
 					/>
 				</div>
 				<div>
-					<Label htmlFor="avisoNumber">Claro Aviso # (if known)</Label>
+					<Label htmlFor="avisoNumber">
+						{t("docs_new.aviso_number_label")}
+					</Label>
 					<Input id="avisoNumber" name="avisoNumber" placeholder="10333185" />
 				</div>
 				<div>
-					<Label>Assigned Crew</Label>
+					<Label>{t("docs_new.assigned_crew_label")}</Label>
 					<div className="space-y-1 mt-1">
 						{crew.map((c) => (
 							<label key={c.id} className="flex items-center gap-2 text-sm">
@@ -141,16 +147,18 @@ export default function NewDoc({
 					</div>
 				</div>
 				<div>
-					<Label>Estimated Materials</Label>
+					<Label>{t("docs_new.estimated_materials_label")}</Label>
 					<div className="mt-1">
 						<MaterialLineItems serviceCodes={serviceCodes as any} />
 					</div>
 				</div>
-				{(actionData as any)?.error && (
-					<p className="text-sm text-red-600">{(actionData as any).error}</p>
+				{(actionData as any)?.errorKey && (
+					<p className="text-sm text-red-600">
+						{t((actionData as any).errorKey)}
+					</p>
 				)}
 				<Button type="submit" className="w-full">
-					Create Document
+					{t("docs_new.submit")}
 				</Button>
 			</Form>
 		</div>

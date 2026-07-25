@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { buttonVariants } from "~/components/ui/button"
@@ -68,18 +69,27 @@ function nextActionHref(
 	return null
 }
 
-function nextActionLabel(status: string): string {
-	if (status === "CREATED") return "Mark as Prepped"
-	if (status === "PREPPED") return "Capture Crew Signature"
-	if (status === "SIGNED") return "Update from Field"
-	if (status === "FIELD_UPDATED") return "Review & Approve"
-	if (status === "CLARO_UPLOADED") return "Generate LC Request"
-	return "Next Action"
+type NextActionLabelKey =
+	| "docs_view.next_action.mark_prepped"
+	| "docs_view.next_action.capture_signature"
+	| "docs_view.next_action.update_from_field"
+	| "docs_view.next_action.review_approve"
+	| "docs_view.next_action.generate_lc"
+	| "docs_view.next_action.default"
+
+function nextActionLabelKey(status: string): NextActionLabelKey {
+	if (status === "CREATED") return "docs_view.next_action.mark_prepped"
+	if (status === "PREPPED") return "docs_view.next_action.capture_signature"
+	if (status === "SIGNED") return "docs_view.next_action.update_from_field"
+	if (status === "FIELD_UPDATED") return "docs_view.next_action.review_approve"
+	if (status === "CLARO_UPLOADED") return "docs_view.next_action.generate_lc"
+	return "docs_view.next_action.default"
 }
 
 export default function DocView({ loaderData }: Route.ComponentProps) {
 	const { doc, user, serviceCodes, supervisor, assignedCrew, auditTrail } =
 		loaderData
+	const { t } = useTranslation()
 	const nextHref = nextActionHref(doc, user.role, user.id)
 	const estimated = (doc.estimatedMaterials as any[]) || []
 	const taken = (doc.materialsTaken as any[]) || []
@@ -99,23 +109,27 @@ export default function DocView({ loaderData }: Route.ComponentProps) {
 
 			<section className="bg-white border rounded-lg p-4 space-y-2 text-sm">
 				<p>
-					<span className="text-slate-500">Address:</span>{" "}
+					<span className="text-slate-500">{t("docs_view.address")}:</span>{" "}
 					{doc.jobAddressActual || doc.jobAddressEstimated}
 				</p>
 				{doc.avisoNumber && (
 					<p>
-						<span className="text-slate-500">Aviso #:</span> {doc.avisoNumber}
+						<span className="text-slate-500">
+							{t("docs_view.aviso_number")}:
+						</span>{" "}
+						{doc.avisoNumber}
 					</p>
 				)}
 				<p>
-					<span className="text-slate-500">Supervisor:</span> {supervisor?.name}
+					<span className="text-slate-500">{t("docs_view.supervisor")}:</span>{" "}
+					{supervisor?.name}
 				</p>
 				<p>
-					<span className="text-slate-500">Crew:</span>{" "}
+					<span className="text-slate-500">{t("docs_view.crew")}:</span>{" "}
 					{assignedCrew.map((c) => c.name).join(", ")}
 				</p>
 				<p>
-					<span className="text-slate-500">Created:</span>{" "}
+					<span className="text-slate-500">{t("docs_view.created")}:</span>{" "}
 					{new Date(doc.createdAt).toLocaleString()}
 				</p>
 			</section>
@@ -123,7 +137,7 @@ export default function DocView({ loaderData }: Route.ComponentProps) {
 			{estimated.length > 0 && (
 				<section className="bg-white border rounded-lg p-4">
 					<h2 className="text-sm font-medium mb-2 text-slate-600">
-						Estimated Materials
+						{t("docs_view.estimated_materials")}
 					</h2>
 					<MaterialLineItems
 						serviceCodes={serviceCodes as any}
@@ -136,7 +150,7 @@ export default function DocView({ loaderData }: Route.ComponentProps) {
 			{taken.length > 0 && (
 				<section className="bg-white border rounded-lg p-4">
 					<h2 className="text-sm font-medium mb-2 text-slate-600">
-						Materials Taken (Signed)
+						{t("docs_view.materials_taken")}
 					</h2>
 					<MaterialLineItems
 						serviceCodes={serviceCodes as any}
@@ -146,7 +160,7 @@ export default function DocView({ loaderData }: Route.ComponentProps) {
 					{doc.crewSignature && (
 						<img
 							src={doc.crewSignature}
-							alt="Crew signature"
+							alt={t("docs_view.crew_signature_alt")}
 							className="mt-3 border rounded max-h-16"
 						/>
 					)}
@@ -156,7 +170,7 @@ export default function DocView({ loaderData }: Route.ComponentProps) {
 			{used.length > 0 && (
 				<section className="bg-white border rounded-lg p-4">
 					<h2 className="text-sm font-medium mb-2 text-slate-600">
-						Materials Used (Field)
+						{t("docs_view.materials_used")}
 					</h2>
 					<MaterialLineItems
 						serviceCodes={serviceCodes as any}
@@ -171,7 +185,7 @@ export default function DocView({ loaderData }: Route.ComponentProps) {
 
 			{nextHref && (
 				<Link to={nextHref} className={buttonVariants({ className: "w-full" })}>
-					{nextActionLabel(doc.status)}
+					{t(nextActionLabelKey(doc.status))}
 				</Link>
 			)}
 
@@ -184,13 +198,15 @@ export default function DocView({ loaderData }: Route.ComponentProps) {
 					target="_blank"
 					rel="noreferrer"
 				>
-					Download Audit Package
+					{t("docs_view.download_audit_package")}
 				</a>
 			)}
 
 			{auditTrail.length > 0 && (
 				<section className="text-xs text-slate-400 space-y-1 pt-2 border-t">
-					<p className="font-medium text-slate-500">Audit Trail</p>
+					<p className="font-medium text-slate-500">
+						{t("docs_view.audit_trail")}
+					</p>
 					{auditTrail.map((a) => (
 						<p key={a.id}>
 							{new Date(a.timestamp).toLocaleString()} — {a.user.name}:{" "}

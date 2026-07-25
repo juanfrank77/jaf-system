@@ -1,5 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { Button } from "~/components/ui/button"
@@ -164,6 +165,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 export default function LcView({ loaderData }: Route.ComponentProps) {
 	const { doc, serviceCodes, poLinks, ivuRate } = loaderData
+	const { t } = useTranslation()
 	const used = (doc.materialsUsed as any[]) || []
 	const claroPdfUrl = doc.claroPdfPath
 		? `/files/claro-pdfs/${(doc as any).id}-claro.pdf`
@@ -171,33 +173,37 @@ export default function LcView({ loaderData }: Route.ComponentProps) {
 
 	return (
 		<div className="space-y-5">
-			<h1 className="text-xl font-semibold">LC Request — Lissette Review</h1>
+			<h1 className="text-xl font-semibold">{t("docs_lc.title")}</h1>
 			<p className="font-mono text-sm text-slate-500">
 				{(doc as any).controlNumber}
 			</p>
 			<p className="text-xs text-slate-400">
-				IVU rate: {(ivuRate * 100).toFixed(1)}%
+				{t("docs_lc.ivu_rate", { rate: (ivuRate * 100).toFixed(1) })}
 			</p>
 
 			<div className="grid grid-cols-2 gap-4">
 				<div className="bg-white border rounded-lg p-4">
-					<h2 className="text-sm font-medium mb-2">JAF Invoice</h2>
+					<h2 className="text-sm font-medium mb-2">
+						{t("docs_lc.jaf_invoice")}
+					</h2>
 					<div className="text-sm space-y-1">
 						<p>
-							<span className="text-slate-500">Job:</span>{" "}
+							<span className="text-slate-500">{t("docs_lc.job")}:</span>{" "}
 							{(doc as any).jobType}
 						</p>
 						<p>
-							<span className="text-slate-500">Address:</span>{" "}
+							<span className="text-slate-500">{t("docs_lc.address")}:</span>{" "}
 							{(doc as any).jobAddressActual ??
 								(doc as any).jobAddressEstimated}
 						</p>
 						<p>
-							<span className="text-slate-500">Aviso #:</span>{" "}
+							<span className="text-slate-500">
+								{t("docs_lc.aviso_number")}:
+							</span>{" "}
 							{(doc as any).avisoNumber ?? "—"}
 						</p>
 						<p>
-							<span className="text-slate-500">Supervisor:</span>{" "}
+							<span className="text-slate-500">{t("docs_lc.supervisor")}:</span>{" "}
 							{(loaderData as any).supervisor?.name}
 						</p>
 					</div>
@@ -210,15 +216,19 @@ export default function LcView({ loaderData }: Route.ComponentProps) {
 					</div>
 				</div>
 				<div className="bg-white border rounded-lg p-4">
-					<h2 className="text-sm font-medium mb-2">Claro Work Order PDF</h2>
+					<h2 className="text-sm font-medium mb-2">
+						{t("docs_lc.claro_pdf_title")}
+					</h2>
 					{claroPdfUrl ? (
 						<iframe
 							src={claroPdfUrl}
 							className="w-full h-64 border rounded"
-							title="Claro PDF"
+							title={t("docs_lc.claro_pdf_iframe_title")}
 						/>
 					) : (
-						<p className="text-sm text-slate-400">No Claro PDF on file.</p>
+						<p className="text-sm text-slate-400">
+							{t("docs_lc.no_claro_pdf")}
+						</p>
 					)}
 				</div>
 			</div>
@@ -227,20 +237,15 @@ export default function LcView({ loaderData }: Route.ComponentProps) {
 				<Form method="post">
 					<input type="hidden" name="intent" value="generate_acta" />
 					<Button type="submit" variant="outline">
-						Download Acta de Conformidad (2A)
+						{t("docs_lc.download_acta")}
 					</Button>
 				</Form>
 				<Form method="post">
 					<input type="hidden" name="intent" value="generate_schedule" />
-					<Button type="submit">
-						Generate &amp; Download Schedule of Accounts (2B)
-					</Button>
+					<Button type="submit">{t("docs_lc.generate_schedule")}</Button>
 				</Form>
 			</div>
-			<p className="text-xs text-slate-400">
-				Generating the Schedule of Accounts marks this document LC_GENERATED.
-				Email the PDF to hs@pbcc.com.
-			</p>
+			<p className="text-xs text-slate-400">{t("docs_lc.footer_note")}</p>
 		</div>
 	)
 }

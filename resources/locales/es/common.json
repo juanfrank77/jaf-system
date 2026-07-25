@@ -32,6 +32,210 @@
     "primary_nav_mobile": "Principal (móvil)",
     "navigation_dialog": "Navegación"
   },
+  "login": {
+    "title": "JAF Operations",
+    "email_label": "Correo electrónico",
+    "password_label": "Contraseña",
+    "submit": "Iniciar sesión",
+    "errors": {
+      "invalid_credentials": "Correo electrónico o contraseña inválidos",
+      "rate_limited_one": "Demasiados intentos de inicio de sesión. Inténtalo de nuevo en {{count}} segundo.",
+      "rate_limited_other": "Demasiados intentos de inicio de sesión. Inténtalo de nuevo en {{count}} segundos."
+    }
+  },
+  "docs_new": {
+    "title": "Nueva factura JAF",
+    "job_type_label": "Tipo de trabajo",
+    "job_address_label": "Dirección del trabajo (estimada)",
+    "aviso_number_label": "# de aviso Claro (si se conoce)",
+    "assigned_crew_label": "Cuadrilla asignada",
+    "estimated_materials_label": "Materiales estimados",
+    "submit": "Crear documento",
+    "errors": {
+      "invalid_materials": "Datos de materiales inválidos",
+      "missing_fields": "Se requieren tipo de trabajo, dirección y al menos un miembro de la cuadrilla"
+    }
+  },
+  "docs_view": {
+    "address": "Dirección",
+    "aviso_number": "# de aviso",
+    "supervisor": "Supervisor",
+    "crew": "Cuadrilla",
+    "created": "Creado",
+    "estimated_materials": "Materiales estimados",
+    "materials_taken": "Materiales retirados (firmado)",
+    "materials_used": "Materiales utilizados (campo)",
+    "crew_signature_alt": "Firma de la cuadrilla",
+    "download_audit_package": "Descargar paquete de auditoría",
+    "audit_trail": "Registro de auditoría",
+    "next_action": {
+      "mark_prepped": "Marcar como preparado",
+      "capture_signature": "Capturar firma de cuadrilla",
+      "update_from_field": "Actualizar desde el campo",
+      "review_approve": "Revisar y aprobar",
+      "generate_lc": "Generar solicitud de LC",
+      "default": "Próxima acción"
+    }
+  },
+  "docs_prep": {
+    "title": "Marcar materiales como preparados",
+    "confirm_message": "Confirma que los materiales de <strong>{{controlNumber}}</strong> han sido preparados y están listos para que la cuadrilla los recoja.",
+    "submit": "Confirmar materiales preparados"
+  },
+  "docs_sign": {
+    "title": "Recogida en almacén — Firma doble",
+    "review_notice": "Revisa los materiales a continuación. Tanto el almacén como la cuadrilla deben firmar. Una vez firmada, esta lista queda bloqueada permanentemente.",
+    "warehouse_label": "Almacén",
+    "warehouse_placeholder": "Selecciona un almacén...",
+    "materials_taken_label": "Materiales retirados",
+    "release_signature_heading": "1. Firma de liberación del almacén",
+    "release_signature_subtext": "La persona que libera los materiales firma aquí",
+    "crew_signature_heading": "2. Firma de recibo de la cuadrilla",
+    "crew_signature_subtext": "El miembro de la cuadrilla que recibe los materiales firma aquí",
+    "clear": "Borrar",
+    "submit": "Firmar y bloquear materiales",
+    "alerts": {
+      "select_warehouse": "Por favor selecciona el almacén.",
+      "release_signature_required": "Se requiere la firma de liberación del almacén.",
+      "crew_signature_required": "Se requiere la firma de recibo de la cuadrilla."
+    },
+    "errors": {
+      "release_signature_required": "Se requiere la firma de liberación del almacén",
+      "crew_signature_required": "Se requiere la firma de recibo de la cuadrilla",
+      "warehouse_required": "Por favor selecciona el almacén",
+      "invalid_materials": "Datos de materiales inválidos"
+    }
+  },
+  "docs_field": {
+    "title": "Actualización de campo",
+    "offline_notice": "<strong>Funciona sin conexión.</strong> Si pierdes la conexión, tus cambios se guardan localmente y se sincronizan al reconectar.",
+    "actual_address_label": "Dirección real del trabajo",
+    "materials_used_label": "Materiales utilizados",
+    "materials_used_hint": "No puede exceder lo entregado en el almacén.",
+    "field_notes_label": "Notas de campo",
+    "field_notes_placeholder": "Observaciones, incidencias, cambios...",
+    "photos_label": "Fotos",
+    "photos_hint": "Las fotos son el respaldo para la presentación a Claro del supervisor — se guardan en el servidor.",
+    "submit": "Marcar como completado",
+    "errors": {
+      "invalid_materials": "Datos de materiales inválidos",
+      "exceeds_taken": "No se puede usar más de lo retirado para el código de servicio {{serviceCodeId}}"
+    }
+  },
+  "docs_review": {
+    "title": "Revisión del supervisor",
+    "estimated": "Estimado",
+    "taken": "Retirado (firmado)",
+    "used": "Utilizado (campo)",
+    "estimated_address": "Dirección estimada",
+    "actual_address": "Dirección real",
+    "field_notes": "Notas de campo",
+    "job_photos_one": "Fotos del trabajo ({{count}})",
+    "job_photos_other": "Fotos del trabajo ({{count}})",
+    "job_site_alt": "Sitio del trabajo",
+    "claro_helper_title": "Portal Claro — Datos de presentación",
+    "claro_helper_hint": "Copia estos datos en el portal de Claro para crear la orden de trabajo.",
+    "aviso_number": "# de aviso",
+    "aviso_number_missing": "— (ingresar después de crearlo en Claro)",
+    "job_type": "Tipo de trabajo",
+    "address": "Dirección",
+    "supervisor": "Supervisor",
+    "table": {
+      "code": "Código",
+      "description": "Descripción",
+      "qty": "Cant.",
+      "unit": "Unidad"
+    },
+    "approve_job_heading": "Aprobar trabajo",
+    "aviso_number_confirm_label": "# de aviso Claro (confirmar o agregar)",
+    "notes_for_finance_label": "Notas para Lissette",
+    "approve": "Aprobar",
+    "upload_pdf_heading": "Cargar PDF de orden de trabajo Claro",
+    "upload_pdf_hint": "Después de crear la orden de trabajo en el portal de Claro, descarga el PDF y súbelo aquí.",
+    "upload_pdf_submit": "Cargar PDF de Claro",
+    "errors": {
+      "pdf_required": "Por favor selecciona el PDF de Claro para cargar"
+    }
+  },
+  "docs_lc": {
+    "title": "Solicitud de LC — Revisión de Lissette",
+    "ivu_rate": "Tasa de IVU: {{rate}}%",
+    "jaf_invoice": "Factura JAF",
+    "job": "Trabajo",
+    "address": "Dirección",
+    "aviso_number": "# de aviso",
+    "supervisor": "Supervisor",
+    "claro_pdf_title": "PDF de orden de trabajo Claro",
+    "claro_pdf_iframe_title": "PDF de Claro",
+    "no_claro_pdf": "No hay PDF de Claro en archivo.",
+    "download_acta": "Descargar Acta de Conformidad (2A)",
+    "generate_schedule": "Generar y descargar Relación de Cuentas (2B)",
+    "footer_note": "Generar la Relación de Cuentas marca este documento como LC_GENERATED. Envía el PDF por correo a hs@pbcc.com."
+  },
+  "admin_settings": {
+    "title": "Configuración del sistema",
+    "ivu_heading": "Tasa de IVU",
+    "ivu_description": "Se aplica a la generación de todos los PDF de facturas. Ingresa como decimal (ej. 0.115 = 11.5%). Actual: {{current}}%",
+    "ivu_label": "Tasa de IVU (decimal)",
+    "saved": "Guardado.",
+    "save": "Guardar",
+    "errors": {
+      "invalid_rate": "La tasa de IVU debe ser un decimal entre 0 y 1 (ej. 0.115 para 11.5%)"
+    }
+  },
+  "admin_catalog": {
+    "title": "Catálogo de servicios",
+    "add_heading": "Agregar código de servicio",
+    "claro_code_label": "Código Claro *",
+    "name_label": "Nombre *",
+    "unit_price_label": "Precio unitario *",
+    "account_code_label": "Código de cuenta",
+    "dept_label": "Departamento",
+    "add_submit": "Agregar código de servicio",
+    "table": {
+      "claro_code": "Código Claro",
+      "name": "Nombre",
+      "unit_price": "Precio unitario",
+      "account_code": "Código de cuenta",
+      "dept": "Departamento",
+      "active": "Activo",
+      "actions": "Acciones"
+    },
+    "yes": "Sí",
+    "no": "No",
+    "deactivate": "Desactivar",
+    "activate": "Activar",
+    "no_codes": "Aún no hay códigos de servicio.",
+    "errors": {
+      "required_fields": "Se requieren código Claro, nombre y precio unitario.",
+      "id_required": "Se requiere el id.",
+      "unknown_intent": "Intención desconocida."
+    }
+  },
+  "finance_receivables": {
+    "title": "Cuentas por cobrar",
+    "open_count_one": "{{count}} abierta",
+    "open_count_other": "{{count}} abiertas",
+    "aviso": "Aviso {{number}}",
+    "age_days": "{{count}}d",
+    "advance_label": "80% Adelanto (PBCC)",
+    "final_payment_label": "Pago final (Claro)",
+    "close_entry_label": "Cerrar entrada",
+    "amount_placeholder": "Cantidad",
+    "record": "Registrar",
+    "close": "Cerrar",
+    "record_both_first": "Registra ambos pagos primero",
+    "closed_summary_one": "Cerrada ({{count}})",
+    "closed_summary_other": "Cerradas ({{count}})",
+    "closed_on": "Cerrada {{date}}",
+    "errors": {
+      "invalid_amount": "Cantidad inválida"
+    }
+  },
+  "material_line_items": {
+    "select_placeholder": "Selecciona un código de servicio...",
+    "add_service_code": "+ Agregar código de servicio"
+  },
   "dashboard": {
     "title": "Panel",
     "no_documents": "Aún no hay documentos.",

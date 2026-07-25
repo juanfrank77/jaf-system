@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next"
 import { Form } from "react-router"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
@@ -23,8 +24,7 @@ export async function action({ request }: Route.ActionArgs) {
 	const rate = parseFloat(rateRaw)
 	if (Number.isNaN(rate) || rate <= 0 || rate >= 1) {
 		return {
-			error:
-				"IVU rate must be a decimal between 0 and 1 (e.g. 0.115 for 11.5%)",
+			errorKey: "admin_settings.errors.invalid_rate",
 		}
 	}
 	await setIvuRate(rate, user.id)
@@ -36,19 +36,23 @@ export default function AdminSettings({
 	actionData,
 }: Route.ComponentProps) {
 	const { ivuRate } = loaderData
+	const { t } = useTranslation()
 	return (
 		<div className="space-y-6 max-w-sm">
-			<h1 className="text-xl font-semibold">System Settings</h1>
+			<h1 className="text-xl font-semibold">{t("admin_settings.title")}</h1>
 
 			<div className="bg-white border rounded-lg p-4 space-y-3">
-				<h2 className="font-medium text-sm">IVU Tax Rate</h2>
+				<h2 className="font-medium text-sm">
+					{t("admin_settings.ivu_heading")}
+				</h2>
 				<p className="text-xs text-slate-500">
-					Applied to all invoice PDF generation. Enter as decimal (e.g. 0.115 =
-					11.5%). Current: {(ivuRate * 100).toFixed(1)}%
+					{t("admin_settings.ivu_description", {
+						current: (ivuRate * 100).toFixed(1),
+					})}
 				</p>
 				<Form method="post" className="space-y-3">
 					<div>
-						<Label htmlFor="ivu_rate">IVU Rate (decimal)</Label>
+						<Label htmlFor="ivu_rate">{t("admin_settings.ivu_label")}</Label>
 						<Input
 							id="ivu_rate"
 							name="ivu_rate"
@@ -60,14 +64,18 @@ export default function AdminSettings({
 							required
 						/>
 					</div>
-					{(actionData as any)?.error && (
-						<p className="text-sm text-red-600">{(actionData as any).error}</p>
+					{(actionData as any)?.errorKey && (
+						<p className="text-sm text-red-600">
+							{t((actionData as any).errorKey)}
+						</p>
 					)}
 					{(actionData as any)?.success && (
-						<p className="text-sm text-green-600">Saved.</p>
+						<p className="text-sm text-green-600">
+							{t("admin_settings.saved")}
+						</p>
 					)}
 					<Button type="submit" size="sm">
-						Save
+						{t("admin_settings.save")}
 					</Button>
 				</Form>
 			</div>

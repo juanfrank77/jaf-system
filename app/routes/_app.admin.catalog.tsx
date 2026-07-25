@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next"
 import { data, redirect } from "react-router"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
@@ -47,7 +48,7 @@ export async function action({ request }: Route.ActionArgs) {
 			!unitPrice.trim()
 		) {
 			return data(
-				{ error: "claroCode, name, and unitPrice are required." },
+				{ errorKey: "admin_catalog.errors.required_fields" },
 				{ status: 400 },
 			)
 		}
@@ -71,7 +72,10 @@ export async function action({ request }: Route.ActionArgs) {
 	if (intent === "toggle") {
 		const id = formData.get("id")
 		if (typeof id !== "string" || !id.trim()) {
-			return data({ error: "id is required." }, { status: 400 })
+			return data(
+				{ errorKey: "admin_catalog.errors.id_required" },
+				{ status: 400 },
+			)
 		}
 
 		const existing = await db.serviceCode.findUniqueOrThrow({
@@ -86,32 +90,42 @@ export async function action({ request }: Route.ActionArgs) {
 		return redirect("/admin/catalog")
 	}
 
-	return data({ error: "Unknown intent." }, { status: 400 })
+	return data(
+		{ errorKey: "admin_catalog.errors.unknown_intent" },
+		{ status: 400 },
+	)
 }
 
 export default function AdminCatalog({ loaderData }: Route.ComponentProps) {
 	const { codes } = loaderData
+	const { t } = useTranslation()
 
 	return (
 		<div className="space-y-8">
-			<h1 className="text-xl font-semibold">Service Catalog</h1>
+			<h1 className="text-xl font-semibold">{t("admin_catalog.title")}</h1>
 
 			{/* Add code form */}
 			<section className="bg-white border rounded-lg p-6 space-y-4">
-				<h2 className="text-base font-medium">Add Service Code</h2>
+				<h2 className="text-base font-medium">
+					{t("admin_catalog.add_heading")}
+				</h2>
 				<form method="post" className="space-y-4">
 					<input type="hidden" name="intent" value="create" />
 					<div className="grid grid-cols-2 gap-4">
 						<div className="space-y-1">
-							<Label htmlFor="claroCode">Claro Code *</Label>
+							<Label htmlFor="claroCode">
+								{t("admin_catalog.claro_code_label")}
+							</Label>
 							<Input id="claroCode" name="claroCode" required />
 						</div>
 						<div className="space-y-1">
-							<Label htmlFor="name">Name *</Label>
+							<Label htmlFor="name">{t("admin_catalog.name_label")}</Label>
 							<Input id="name" name="name" required />
 						</div>
 						<div className="space-y-1">
-							<Label htmlFor="unitPrice">Unit Price *</Label>
+							<Label htmlFor="unitPrice">
+								{t("admin_catalog.unit_price_label")}
+							</Label>
 							<Input
 								id="unitPrice"
 								name="unitPrice"
@@ -122,15 +136,17 @@ export default function AdminCatalog({ loaderData }: Route.ComponentProps) {
 							/>
 						</div>
 						<div className="space-y-1">
-							<Label htmlFor="accountCode">Account Code</Label>
+							<Label htmlFor="accountCode">
+								{t("admin_catalog.account_code_label")}
+							</Label>
 							<Input id="accountCode" name="accountCode" />
 						</div>
 						<div className="space-y-1">
-							<Label htmlFor="dept">Dept</Label>
+							<Label htmlFor="dept">{t("admin_catalog.dept_label")}</Label>
 							<Input id="dept" name="dept" />
 						</div>
 					</div>
-					<Button type="submit">Add Service Code</Button>
+					<Button type="submit">{t("admin_catalog.add_submit")}</Button>
 				</form>
 			</section>
 
@@ -140,25 +156,25 @@ export default function AdminCatalog({ loaderData }: Route.ComponentProps) {
 					<thead className="bg-slate-50 border-b">
 						<tr>
 							<th className="px-4 py-3 text-left font-medium text-slate-600">
-								Claro Code
+								{t("admin_catalog.table.claro_code")}
 							</th>
 							<th className="px-4 py-3 text-left font-medium text-slate-600">
-								Name
+								{t("admin_catalog.table.name")}
 							</th>
 							<th className="px-4 py-3 text-right font-medium text-slate-600">
-								Unit Price
+								{t("admin_catalog.table.unit_price")}
 							</th>
 							<th className="px-4 py-3 text-left font-medium text-slate-600">
-								Account Code
+								{t("admin_catalog.table.account_code")}
 							</th>
 							<th className="px-4 py-3 text-left font-medium text-slate-600">
-								Dept
+								{t("admin_catalog.table.dept")}
 							</th>
 							<th className="px-4 py-3 text-center font-medium text-slate-600">
-								Active
+								{t("admin_catalog.table.active")}
 							</th>
 							<th className="px-4 py-3 text-center font-medium text-slate-600">
-								Actions
+								{t("admin_catalog.table.actions")}
 							</th>
 						</tr>
 					</thead>
@@ -182,7 +198,9 @@ export default function AdminCatalog({ loaderData }: Route.ComponentProps) {
 												: "text-slate-400"
 										}
 									>
-										{code.active ? "Yes" : "No"}
+										{code.active
+											? t("admin_catalog.yes")
+											: t("admin_catalog.no")}
 									</span>
 								</td>
 								<td className="px-4 py-3 text-center">
@@ -190,7 +208,9 @@ export default function AdminCatalog({ loaderData }: Route.ComponentProps) {
 										<input type="hidden" name="intent" value="toggle" />
 										<input type="hidden" name="id" value={code.id} />
 										<Button type="submit" variant="outline" size="sm">
-											{code.active ? "Deactivate" : "Activate"}
+											{code.active
+												? t("admin_catalog.deactivate")
+												: t("admin_catalog.activate")}
 										</Button>
 									</form>
 								</td>
@@ -202,7 +222,7 @@ export default function AdminCatalog({ loaderData }: Route.ComponentProps) {
 									colSpan={7}
 									className="px-4 py-6 text-center text-slate-400 text-sm"
 								>
-									No service codes yet.
+									{t("admin_catalog.no_codes")}
 								</td>
 							</tr>
 						)}

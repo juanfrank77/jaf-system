@@ -1,3 +1,4 @@
+import { Trans, useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { Button } from "~/components/ui/button"
 import { db } from "~/lib/db.server"
@@ -61,16 +62,20 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 export default function PrepDoc({ loaderData }: Route.ComponentProps) {
 	const { doc } = loaderData
+	const { t } = useTranslation()
 	return (
 		<div className="space-y-4">
-			<h1 className="text-xl font-semibold">Mark Materials Prepped</h1>
+			<h1 className="text-xl font-semibold">{t("docs_prep.title")}</h1>
 			<p className="text-sm text-slate-600">
-				Confirm that materials for <strong>{(doc as any).controlNumber}</strong>{" "}
-				have been staged and are ready for crew pickup.
+				<Trans
+					i18nKey="docs_prep.confirm_message"
+					values={{ controlNumber: (doc as any).controlNumber }}
+					components={{ strong: <strong /> }}
+				/>
 			</p>
 			<Form method="post">
 				<Button type="submit" className="w-full">
-					Confirm Materials Prepped
+					{t("docs_prep.submit")}
 				</Button>
 			</Form>
 		</div>

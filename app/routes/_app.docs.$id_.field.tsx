@@ -1,5 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import { Trans, useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { Button } from "~/components/ui/button"
@@ -63,7 +64,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 				i.serviceCodeId && i.qty > 0,
 		)
 	} catch {
-		return { error: "Invalid materials data" }
+		return { errorKey: "docs_field.errors.invalid_materials" }
 	}
 
 	// Enforce materialsUsed <= materialsTaken
@@ -75,7 +76,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 	for (const item of materialsUsed) {
 		if (taken.length > 0 && (takenMap[item.serviceCodeId] ?? 0) < item.qty) {
 			return {
-				error: `Cannot use more than taken for service code ${item.serviceCodeId}`,
+				errorKey: "docs_field.errors.exceeds_taken",
+				errorParams: { serviceCodeId: item.serviceCodeId },
 			}
 		}
 	}
@@ -88,7 +90,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	for (const photo of photos) {
 		if (photo.size === 0) continue
 		const validation = validateFile(photo, "photo")
-		if (!validation.valid) return { error: validation.error }
+		if (!validation.valid) return { errorMessage: validation.error }
 	}
 
 	const photoPaths: string[] = []
@@ -149,22 +151,30 @@ export default function FieldUpdate({
 }: Route.ComponentProps) {
 	const { doc, serviceCodes } = loaderData
 	const taken = (doc.materialsTaken as any[]) || []
+	const { t } = useTranslation()
+	const error = actionData as
+		| { errorKey?: any; errorParams?: any; errorMessage?: string }
+		| undefined
 
 	return (
 		<div className="space-y-5">
 			<div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
-				<strong>Offline capable.</strong> If you lose connection, your changes
-				save locally and sync when you reconnect.
+				<Trans
+					i18nKey="docs_field.offline_notice"
+					components={{ strong: <strong /> }}
+				/>
 			</div>
 
-			<h1 className="text-xl font-semibold">Field Update</h1>
+			<h1 className="text-xl font-semibold">{t("docs_field.title")}</h1>
 			<p className="text-sm font-mono text-slate-500">
 				{(doc as any).controlNumber}
 			</p>
 
 			<Form method="post" encType="multipart/form-data" className="space-y-4">
 				<div>
-					<Label htmlFor="jobAddressActual">Actual Job Address</Label>
+					<Label htmlFor="jobAddressActual">
+						{t("docs_field.actual_address_label")}
+					</Label>
 					<Input
 						id="jobAddressActual"
 						name="jobAddressActual"
@@ -174,9 +184,9 @@ export default function FieldUpdate({
 				</div>
 
 				<div>
-					<Label>Materials Used</Label>
+					<Label>{t("docs_field.materials_used_label")}</Label>
 					<p className="text-xs text-slate-500 mb-1">
-						Cannot exceed what was signed out at warehouse.
+						{t("docs_field.materials_used_hint")}
 					</p>
 					<MaterialLineItems
 						serviceCodes={serviceCodes as any}
@@ -186,17 +196,19 @@ export default function FieldUpdate({
 				</div>
 
 				<div>
-					<Label htmlFor="fieldNotes">Field Notes</Label>
+					<Label htmlFor="fieldNotes">
+						{t("docs_field.field_notes_label")}
+					</Label>
 					<Textarea
 						id="fieldNotes"
 						name="fieldNotes"
 						rows={3}
-						placeholder="Observations, issues, changes..."
+						placeholder={t("docs_field.field_notes_placeholder")}
 					/>
 				</div>
 
 				<div>
-					<Label htmlFor="photos">Photos</Label>
+					<Label htmlFor="photos">{t("docs_field.photos_label")}</Label>
 					<input
 						id="photos"
 						name="photos"
@@ -207,17 +219,21 @@ export default function FieldUpdate({
 						className="block w-full text-sm text-slate-500 mt-1"
 					/>
 					<p className="text-xs text-slate-400 mt-1">
-						Photos are source data for the supervisor's Claro submission —
-						stored on server.
+						{t("docs_field.photos_hint")}
 					</p>
 				</div>
 
-				{(actionData as any)?.error && (
-					<p className="text-sm text-red-600">{(actionData as any).error}</p>
+				{error?.errorKey && (
+					<p className="text-sm text-red-600">
+						{t(error.errorKey, error.errorParams)}
+					</p>
+				)}
+				{error?.errorMessage && (
+					<p className="text-sm text-red-600">{error.errorMessage}</p>
 				)}
 
 				<Button type="submit" className="w-full">
-					Mark Complete
+					{t("docs_field.submit")}
 				</Button>
 			</Form>
 		</div>

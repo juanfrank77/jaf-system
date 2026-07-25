@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next"
 import { Form } from "react-router"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
@@ -50,7 +51,8 @@ export async function action({ request }: Route.ActionArgs) {
 
 	if (intent === "record_advance") {
 		const amount = parseFloat(form.get("advanceAmount") as string)
-		if (isNaN(amount)) return { error: "Invalid amount" }
+		if (isNaN(amount))
+			return { errorKey: "finance_receivables.errors.invalid_amount" }
 		await db.jafInvoice.update({
 			where: { id: docId },
 			data: { advanceReceivedAt: new Date(), advanceAmount: amount },
@@ -67,7 +69,8 @@ export async function action({ request }: Route.ActionArgs) {
 
 	if (intent === "record_final") {
 		const amount = parseFloat(form.get("finalAmount") as string)
-		if (isNaN(amount)) return { error: "Invalid amount" }
+		if (isNaN(amount))
+			return { errorKey: "finance_receivables.errors.invalid_amount" }
 		await db.jafInvoice.update({
 			where: { id: docId },
 			data: { finalPaymentReceivedAt: new Date(), finalPaymentAmount: amount },
@@ -114,19 +117,24 @@ export default function ReceivablesDashboard({
 	actionData,
 }: Route.ComponentProps) {
 	const { rows } = loaderData
+	const { t } = useTranslation()
 	const open = rows.filter((r) => !r.receivableClosedAt)
 	const closed = rows.filter((r) => r.receivableClosedAt)
 
 	return (
 		<div className="space-y-6">
 			<div className="flex items-center justify-between">
-				<h1 className="text-xl font-semibold">Receivables</h1>
-				<p className="text-sm text-slate-500">{open.length} open</p>
+				<h1 className="text-xl font-semibold">
+					{t("finance_receivables.title")}
+				</h1>
+				<p className="text-sm text-slate-500">
+					{t("finance_receivables.open_count", { count: open.length })}
+				</p>
 			</div>
 
-			{(actionData as { error?: string } | null)?.error && (
+			{(actionData as { errorKey?: any } | null)?.errorKey && (
 				<p className="text-sm text-red-600">
-					{(actionData as { error: string }).error}
+					{t((actionData as { errorKey: any }).errorKey)}
 				</p>
 			)}
 
@@ -143,20 +151,24 @@ export default function ReceivablesDashboard({
 								</span>
 								{row.avisoNumber && (
 									<span className="text-xs text-slate-500 ml-2">
-										Aviso {row.avisoNumber}
+										{t("finance_receivables.aviso", {
+											number: row.avisoNumber,
+										})}
 									</span>
 								)}
 								<p className="text-xs text-slate-500">{row.supervisorName}</p>
 							</div>
 							<span className={`text-sm ${AGE_COLOR(row.ageDays)}`}>
-								{row.ageDays}d
+								{t("finance_receivables.age_days", { count: row.ageDays })}
 							</span>
 						</div>
 
 						<div className="grid grid-cols-3 gap-3 text-xs">
 							{/* Advance */}
 							<div className="bg-slate-50 rounded p-2">
-								<p className="text-slate-500 mb-1">80% Advance (PBCC)</p>
+								<p className="text-slate-500 mb-1">
+									{t("finance_receivables.advance_label")}
+								</p>
 								{row.advanceReceivedAt ? (
 									<p className="text-green-700 font-medium">
 										${row.advanceAmount?.toFixed(2)} —{" "}
@@ -170,7 +182,7 @@ export default function ReceivablesDashboard({
 											name="advanceAmount"
 											type="number"
 											step="0.01"
-											placeholder="Amount"
+											placeholder={t("finance_receivables.amount_placeholder")}
 											className="h-7 text-xs w-24"
 										/>
 										<Button
@@ -179,7 +191,7 @@ export default function ReceivablesDashboard({
 											variant="outline"
 											className="h-7 text-xs"
 										>
-											Record
+											{t("finance_receivables.record")}
 										</Button>
 									</Form>
 								)}
@@ -187,7 +199,9 @@ export default function ReceivablesDashboard({
 
 							{/* Final payment */}
 							<div className="bg-slate-50 rounded p-2">
-								<p className="text-slate-500 mb-1">Final Payment (Claro)</p>
+								<p className="text-slate-500 mb-1">
+									{t("finance_receivables.final_payment_label")}
+								</p>
 								{row.finalPaymentReceivedAt ? (
 									<p className="text-green-700 font-medium">
 										${row.finalPaymentAmount?.toFixed(2)} —{" "}
@@ -201,7 +215,7 @@ export default function ReceivablesDashboard({
 											name="finalAmount"
 											type="number"
 											step="0.01"
-											placeholder="Amount"
+											placeholder={t("finance_receivables.amount_placeholder")}
 											className="h-7 text-xs w-24"
 										/>
 										<Button
@@ -210,7 +224,7 @@ export default function ReceivablesDashboard({
 											variant="outline"
 											className="h-7 text-xs"
 										>
-											Record
+											{t("finance_receivables.record")}
 										</Button>
 									</Form>
 								)}
@@ -218,7 +232,9 @@ export default function ReceivablesDashboard({
 
 							{/* Close */}
 							<div className="bg-slate-50 rounded p-2 flex flex-col justify-between">
-								<p className="text-slate-500 mb-1">Close Entry</p>
+								<p className="text-slate-500 mb-1">
+									{t("finance_receivables.close_entry_label")}
+								</p>
 								{row.advanceReceivedAt && row.finalPaymentReceivedAt ? (
 									<Form method="post">
 										<input type="hidden" name="intent" value="close" />
@@ -228,12 +244,12 @@ export default function ReceivablesDashboard({
 											size="sm"
 											className="h-7 text-xs w-full"
 										>
-											Close
+											{t("finance_receivables.close")}
 										</Button>
 									</Form>
 								) : (
 									<p className="text-xs text-slate-400">
-										Record both payments first
+										{t("finance_receivables.record_both_first")}
 									</p>
 								)}
 							</div>
@@ -245,7 +261,9 @@ export default function ReceivablesDashboard({
 			{closed.length > 0 && (
 				<details className="text-sm">
 					<summary className="cursor-pointer text-slate-500">
-						Closed ({closed.length})
+						{t("finance_receivables.closed_summary", {
+							count: closed.length,
+						})}
 					</summary>
 					<div className="mt-2 space-y-1">
 						{closed.map((row) => (
@@ -255,10 +273,11 @@ export default function ReceivablesDashboard({
 							>
 								<span className="font-mono">{row.controlNumber}</span>
 								<span>
-									Closed{" "}
-									{row.receivableClosedAt
-										? new Date(row.receivableClosedAt).toLocaleDateString()
-										: ""}
+									{t("finance_receivables.closed_on", {
+										date: row.receivableClosedAt
+											? new Date(row.receivableClosedAt).toLocaleDateString()
+											: "",
+									})}
 								</span>
 							</div>
 						))}

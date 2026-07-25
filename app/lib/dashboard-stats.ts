@@ -5,11 +5,12 @@ export type DashboardDoc = {
 	receivableClosedAt: Date | null
 }
 
-export type DashboardStat = { label: string; value: number }
+export type DashboardStat = { labelKey: string; value: number }
 
 export type DashboardAlert = {
 	variant: "info" | "warn"
-	message: string
+	key: string
+	count: number
 } | null
 
 const RECEIVABLE_STATUSES: DocStatus[] = [
@@ -35,15 +36,19 @@ export function computeDashboardStats(
 		)
 		return {
 			stats: [
-				{ label: "Open documents", value: open },
-				{ label: "Awaiting warehouse", value: awaitingWarehouse },
-				{ label: "Awaiting crew", value: awaitingCrew },
+				{ labelKey: "dashboard.stat.open_documents", value: open },
+				{
+					labelKey: "dashboard.stat.awaiting_warehouse",
+					value: awaitingWarehouse,
+				},
+				{ labelKey: "dashboard.stat.awaiting_crew", value: awaitingCrew },
 			],
 			alert:
 				awaitingWarehouse > 0
 					? {
 							variant: "info",
-							message: `${awaitingWarehouse} document${awaitingWarehouse === 1 ? "" : "s"} awaiting warehouse`,
+							key: "dashboard.alert.awaiting_warehouse",
+							count: awaitingWarehouse,
 						}
 					: null,
 		}
@@ -52,12 +57,15 @@ export function computeDashboardStats(
 	if (role === "WAREHOUSE") {
 		const pendingPreps = count(docs, (d) => d.status === "CREATED")
 		return {
-			stats: [{ label: "Pending preps", value: pendingPreps }],
+			stats: [
+				{ labelKey: "dashboard.stat.pending_preps", value: pendingPreps },
+			],
 			alert:
 				pendingPreps > 0
 					? {
 							variant: "warn",
-							message: `${pendingPreps} document${pendingPreps === 1 ? "" : "s"} waiting on your prep`,
+							key: "dashboard.alert.awaiting_prep",
+							count: pendingPreps,
 						}
 					: null,
 		}
@@ -71,14 +79,15 @@ export function computeDashboardStats(
 		)
 		return {
 			stats: [
-				{ label: "Open jobs", value: openJobs },
-				{ label: "Awaiting close", value: awaitingClose },
+				{ labelKey: "dashboard.stat.open_jobs", value: openJobs },
+				{ labelKey: "dashboard.stat.awaiting_close", value: awaitingClose },
 			],
 			alert:
 				awaitingClose > 0
 					? {
 							variant: "warn",
-							message: `${awaitingClose} job${awaitingClose === 1 ? "" : "s"} ready to close`,
+							key: "dashboard.alert.ready_to_close",
+							count: awaitingClose,
 						}
 					: null,
 		}
@@ -96,15 +105,22 @@ export function computeDashboardStats(
 	)
 	return {
 		stats: [
-			{ label: "Total documents", value: totalDocs },
-			{ label: "Open receivables", value: openReceivables },
-			{ label: "Awaiting Claro upload", value: awaitingClaroUpload },
+			{ labelKey: "dashboard.stat.total_documents", value: totalDocs },
+			{
+				labelKey: "dashboard.stat.open_receivables",
+				value: openReceivables,
+			},
+			{
+				labelKey: "dashboard.stat.awaiting_claro_upload",
+				value: awaitingClaroUpload,
+			},
 		],
 		alert:
 			openReceivables > 0
 				? {
 						variant: "info",
-						message: `${openReceivables} receivable${openReceivables === 1 ? "" : "s"} open`,
+						key: "dashboard.alert.receivables_open",
+						count: openReceivables,
 					}
 				: null,
 	}

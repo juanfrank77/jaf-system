@@ -16,9 +16,9 @@ describe("computeDashboardStats", () => {
 		]
 		const { stats } = computeDashboardStats("SUPERVISOR", docs)
 		expect(stats).toEqual([
-			{ label: "Open documents", value: 3 },
-			{ label: "Awaiting warehouse", value: 1 },
-			{ label: "Awaiting crew", value: 2 },
+			{ labelKey: "dashboard.stat.open_documents", value: 3 },
+			{ labelKey: "dashboard.stat.awaiting_warehouse", value: 1 },
+			{ labelKey: "dashboard.stat.awaiting_crew", value: 2 },
 		])
 	})
 
@@ -29,17 +29,21 @@ describe("computeDashboardStats", () => {
 		])
 		expect(alert).toEqual({
 			variant: "info",
-			message: "2 documents awaiting warehouse",
+			key: "dashboard.alert.awaiting_warehouse",
+			count: 2,
 		})
 	})
 
 	it("WAREHOUSE: counts pending preps and alerts when > 0", () => {
 		const docs = [doc("CREATED"), doc("CREATED"), doc("SIGNED")]
 		const { stats, alert } = computeDashboardStats("WAREHOUSE", docs)
-		expect(stats).toEqual([{ label: "Pending preps", value: 2 }])
+		expect(stats).toEqual([
+			{ labelKey: "dashboard.stat.pending_preps", value: 2 },
+		])
 		expect(alert).toEqual({
 			variant: "warn",
-			message: "2 documents waiting on your prep",
+			key: "dashboard.alert.awaiting_prep",
+			count: 2,
 		})
 	})
 
@@ -52,10 +56,14 @@ describe("computeDashboardStats", () => {
 		const docs = [doc("SIGNED"), doc("FIELD_UPDATED"), doc("LC_GENERATED")]
 		const { stats, alert } = computeDashboardStats("CREW", docs)
 		expect(stats).toEqual([
-			{ label: "Open jobs", value: 2 },
-			{ label: "Awaiting close", value: 2 },
+			{ labelKey: "dashboard.stat.open_jobs", value: 2 },
+			{ labelKey: "dashboard.stat.awaiting_close", value: 2 },
 		])
-		expect(alert).toEqual({ variant: "warn", message: "2 jobs ready to close" })
+		expect(alert).toEqual({
+			variant: "warn",
+			key: "dashboard.alert.ready_to_close",
+			count: 2,
+		})
 	})
 
 	it("FINANCE: counts total docs, open receivables, awaiting Claro upload", () => {
@@ -67,11 +75,15 @@ describe("computeDashboardStats", () => {
 		]
 		const { stats, alert } = computeDashboardStats("FINANCE", docs)
 		expect(stats).toEqual([
-			{ label: "Total documents", value: 4 },
-			{ label: "Open receivables", value: 2 },
-			{ label: "Awaiting Claro upload", value: 1 },
+			{ labelKey: "dashboard.stat.total_documents", value: 4 },
+			{ labelKey: "dashboard.stat.open_receivables", value: 2 },
+			{ labelKey: "dashboard.stat.awaiting_claro_upload", value: 1 },
 		])
-		expect(alert).toEqual({ variant: "info", message: "2 receivables open" })
+		expect(alert).toEqual({
+			variant: "info",
+			key: "dashboard.alert.receivables_open",
+			count: 2,
+		})
 	})
 
 	it("ADMIN: uses the same computation as FINANCE", () => {

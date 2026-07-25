@@ -7,6 +7,7 @@ export const lngCookie = createCookie("lng", {
 	path: "/",
 	sameSite: "lax",
 	maxAge: 34_560_000,
+	secure: process.env.NODE_ENV === "production",
 })
 
 const i18next = new RemixI18Next({

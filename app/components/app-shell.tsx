@@ -1,4 +1,5 @@
 import { Dialog } from "@base-ui/react/dialog"
+import { Popover } from "@base-ui/react/popover"
 import {
 	Cancel01Icon,
 	DashboardSquare01Icon,
@@ -6,6 +7,7 @@ import {
 	GridViewIcon,
 	Invoice02Icon,
 	Menu01Icon,
+	Notification01Icon,
 	Settings02Icon,
 } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react"
@@ -113,6 +115,110 @@ function NavList({
 	)
 }
 
+function formatRelativeTime(date: Date) {
+	const diffMs = Date.now() - date.getTime()
+	const diffMinutes = Math.round(diffMs / 60000)
+	if (diffMinutes < 1) return "just now"
+	if (diffMinutes < 60) return `${diffMinutes}m ago`
+	const diffHours = Math.round(diffMinutes / 60)
+	if (diffHours < 24) return `${diffHours}h ago`
+	const diffDays = Math.round(diffHours / 24)
+	return `${diffDays}d ago`
+}
+
+function NotificationBell({
+	notifications,
+}: {
+	notifications: {
+		id: string
+		message: string
+		docId: string | null
+		createdAt: Date
+	}[]
+}) {
+	const { t } = useTranslation()
+	const location = useLocation()
+	const redirectTo = `${location.pathname}${location.search}`
+
+	return (
+		<Popover.Root>
+			<Popover.Trigger
+				className="relative text-muted-foreground"
+				aria-label={t("app_shell.notifications.bell_label")}
+			>
+				<HugeiconsIcon
+					icon={Notification01Icon}
+					strokeWidth={2}
+					className="size-5"
+				/>
+				{notifications.length > 0 && (
+					<span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-status-danger text-[10px] text-white">
+						{notifications.length}
+					</span>
+				)}
+			</Popover.Trigger>
+			<Popover.Portal>
+				<Popover.Positioner align="end" sideOffset={8} className="z-40">
+					<Popover.Popup className="w-80 rounded-lg border border-border bg-card p-2 shadow-lg outline-none">
+						<div className="flex items-center justify-between px-2 py-1.5">
+							<span className="text-sm font-semibold text-foreground">
+								{t("app_shell.notifications.title")}
+							</span>
+							{notifications.length > 0 && (
+								<Form method="post" action="/notifications/mark-all-read">
+									<input type="hidden" name="redirectTo" value={redirectTo} />
+									<button
+										type="submit"
+										className="text-xs font-medium text-primary hover:underline"
+									>
+										{t("app_shell.notifications.mark_all_read")}
+									</button>
+								</Form>
+							)}
+						</div>
+						{notifications.length === 0 ? (
+							<p className="px-2 py-3 text-sm text-muted-foreground">
+								{t("app_shell.notifications.empty")}
+							</p>
+						) : (
+							<ul className="flex flex-col">
+								{notifications.map((notification) => (
+									<li key={notification.id}>
+										<Form
+											method="post"
+											action={`/notifications/${notification.id}/read`}
+										>
+											<input
+												type="hidden"
+												name="redirectTo"
+												value={redirectTo}
+											/>
+											<button
+												type="submit"
+												className="w-full rounded-md px-2 py-2 text-left text-sm hover:bg-muted"
+											>
+												<span className="block text-foreground">
+													{notification.message}
+												</span>
+												<span
+													aria-hidden="true"
+													className="block text-xs text-muted-foreground"
+												>
+													{formatRelativeTime(notification.createdAt)}
+												</span>
+											</button>
+										</Form>
+									</li>
+								))}
+							</ul>
+						)}
+					</Popover.Popup>
+				</Popover.Positioner>
+			</Popover.Portal>
+		</Popover.Root>
+	)
+}
+
 function AppShell({
 	user,
 	notifications,
@@ -163,14 +269,7 @@ function AppShell({
 							{user.role}
 						</span>
 						<LanguageSwitcher />
-						<button type="button" className="relative text-muted-foreground">
-							🔔
-							{notifications.length > 0 && (
-								<span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-status-danger text-[10px] text-white">
-									{notifications.length}
-								</span>
-							)}
-						</button>
+						<NotificationBell notifications={notifications} />
 						<Form method="post" action="/sign-out">
 							<Button type="submit" variant="ghost" size="sm">
 								{t("app_shell.sign_out")}

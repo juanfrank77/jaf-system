@@ -169,6 +169,153 @@ describe("AppShell", () => {
 		expect(screen.getByText("2")).toBeInTheDocument()
 	})
 
+	it("opens the notification dropdown and lists unread notifications", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<AppShell
+							user={{ name: "Jose Alfaro", role: "SUPERVISOR" }}
+							notifications={[
+								{
+									id: "1",
+									message: "Job JAF-2026-1001 is ready for pickup.",
+									docId: "doc-1",
+									createdAt: new Date("2026-07-24T10:00:00Z"),
+								},
+							]}
+						>
+							<p>content</p>
+						</AppShell>
+					),
+				},
+			],
+		})
+		await userEvent.click(screen.getByRole("button", { name: "Notifications" }))
+		expect(
+			screen.getByText("Job JAF-2026-1001 is ready for pickup."),
+		).toBeInTheDocument()
+	})
+
+	it("shows an empty state when there are no unread notifications", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<AppShell
+							user={{ name: "Jose Alfaro", role: "SUPERVISOR" }}
+							notifications={[]}
+						>
+							<p>content</p>
+						</AppShell>
+					),
+				},
+			],
+		})
+		await userEvent.click(screen.getByRole("button", { name: "Notifications" }))
+		expect(screen.getByText("No new notifications")).toBeInTheDocument()
+	})
+
+	it("hides mark-all-read when there are no unread notifications", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<AppShell
+							user={{ name: "Jose Alfaro", role: "SUPERVISOR" }}
+							notifications={[]}
+						>
+							<p>content</p>
+						</AppShell>
+					),
+				},
+			],
+		})
+		await userEvent.click(screen.getByRole("button", { name: "Notifications" }))
+		expect(
+			screen.queryByRole("button", { name: "Mark all as read" }),
+		).not.toBeInTheDocument()
+	})
+
+	it("shows mark-all-read when there are unread notifications", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<AppShell
+							user={{ name: "Jose Alfaro", role: "SUPERVISOR" }}
+							notifications={[
+								{
+									id: "1",
+									message: "Job JAF-2026-1001 is ready for pickup.",
+									docId: "doc-1",
+									createdAt: new Date("2026-07-24T10:00:00Z"),
+								},
+							]}
+						>
+							<p>content</p>
+						</AppShell>
+					),
+				},
+			],
+		})
+		await userEvent.click(screen.getByRole("button", { name: "Notifications" }))
+		expect(
+			screen.getByRole("button", { name: "Mark all as read" }),
+		).toBeInTheDocument()
+	})
+
+	it("submits a POST to the per-notification read route with a redirect target", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			props: { initialEntries: ["/dashboard"] },
+			entries: [
+				{
+					path: "/dashboard",
+					Component: () => (
+						<AppShell
+							user={{ name: "Jose Alfaro", role: "SUPERVISOR" }}
+							notifications={[
+								{
+									id: "1",
+									message: "Job JAF-2026-1001 is ready for pickup.",
+									docId: "doc-1",
+									createdAt: new Date("2026-07-24T10:00:00Z"),
+								},
+							]}
+						>
+							<p>content</p>
+						</AppShell>
+					),
+				},
+			],
+		})
+		await userEvent.click(screen.getByRole("button", { name: "Notifications" }))
+		const row = screen.getByRole("button", {
+			name: "Job JAF-2026-1001 is ready for pickup.",
+		})
+		expect(row.closest("form")).toHaveAttribute(
+			"action",
+			"/notifications/1/read",
+		)
+		expect(
+			row.closest("form")?.querySelector('input[name="redirectTo"]'),
+		).toHaveValue("/dashboard")
+	})
+
 	it("shows a hamburger trigger and no drawer content by default", async ({
 		renderStub,
 	}) => {

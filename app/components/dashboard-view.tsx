@@ -50,8 +50,7 @@ function DashboardView({
 					{stats.map((stat) => (
 						<Stat
 							key={stat.labelKey}
-							// @ts-expect-error DashboardStat.labelKey is string, but i18next expects literal keys
-							label={t(stat.labelKey)}
+							label={t(stat.labelKey as never)}
 							value={stat.value}
 						/>
 					))}
@@ -63,8 +62,7 @@ function DashboardView({
 					variant={alert.variant}
 					icon={alert.variant === "warn" ? "⚠" : "🔔"}
 				>
-					{/* @ts-expect-error DashboardAlert.key is string, but i18next expects literal keys */}
-					{t(alert.key, { count: alert.count })}
+					{t(alert.key as never, { count: alert.count })}
 				</Pill>
 			)}
 

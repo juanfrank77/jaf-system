@@ -1,3 +1,5 @@
+import { ChevronRightIcon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 import { Link } from "react-router"
 import { Badge } from "~/components/ui/badge"
 import { Card, CardContent } from "~/components/ui/card"
@@ -75,9 +77,16 @@ function DashboardView({
 								<span className="font-mono text-sm font-medium">
 									{doc.controlNumber}
 								</span>
-								<Badge variant={STATUS_BADGE_VARIANT[doc.status]}>
-									{doc.status.replace(/_/g, " ")}
-								</Badge>
+								<div className="flex items-center gap-2">
+									<Badge variant={STATUS_BADGE_VARIANT[doc.status]}>
+										{doc.status.replace(/_/g, " ")}
+									</Badge>
+									<HugeiconsIcon
+										icon={ChevronRightIcon}
+										strokeWidth={2}
+										className="size-4 shrink-0 text-muted-foreground"
+									/>
+								</div>
 							</div>
 							<p className="mt-1 text-sm text-muted-foreground">
 								{doc.jobType} — {doc.jobAddressEstimated}

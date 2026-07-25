@@ -25,6 +25,12 @@
       "admin_settings": "Configuración de administrador",
       "catalog": "Catálogo"
     },
+    "notifications": {
+      "bell_label": "Notificaciones",
+      "title": "Notificaciones",
+      "empty": "No hay notificaciones nuevas",
+      "mark_all_read": "Marcar todas como leídas"
+    },
     "sign_out": "Cerrar sesión",
     "open_menu": "Abrir menú de navegación",
     "close_menu": "Cerrar menú de navegación",

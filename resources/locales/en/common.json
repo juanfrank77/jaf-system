@@ -25,6 +25,12 @@
       "admin_settings": "Admin Settings",
       "catalog": "Catalog"
     },
+    "notifications": {
+      "bell_label": "Notifications",
+      "title": "Notifications",
+      "empty": "No new notifications",
+      "mark_all_read": "Mark all as read"
+    },
     "sign_out": "Sign out",
     "open_menu": "Open navigation menu",
     "close_menu": "Close navigation menu",

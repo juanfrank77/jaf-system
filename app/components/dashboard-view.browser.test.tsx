@@ -58,6 +58,33 @@ describe("DashboardView", () => {
 		).toBeInTheDocument()
 	})
 
+	it("renders the alert pill in Spanish when the locale is es", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			i18n: { lng: "es" },
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<DashboardView
+							stats={[]}
+							alert={{
+								variant: "warn",
+								key: "dashboard.alert.awaiting_prep",
+								count: 2,
+							}}
+							docs={[]}
+						/>
+					),
+				},
+			],
+		})
+		expect(
+			screen.getByText("2 documentos esperando tu preparación"),
+		).toBeInTheDocument()
+	})
+
 	it("omits the alert pill when null", async ({ renderStub }) => {
 		await renderStub({
 			entries: [

@@ -5,11 +5,28 @@ export type DashboardDoc = {
 	receivableClosedAt: Date | null
 }
 
-export type DashboardStat = { labelKey: string; value: number }
+export type DashboardStatLabelKey =
+	| "dashboard.stat.open_documents"
+	| "dashboard.stat.awaiting_warehouse"
+	| "dashboard.stat.awaiting_crew"
+	| "dashboard.stat.pending_preps"
+	| "dashboard.stat.open_jobs"
+	| "dashboard.stat.awaiting_close"
+	| "dashboard.stat.total_documents"
+	| "dashboard.stat.open_receivables"
+	| "dashboard.stat.awaiting_claro_upload"
+
+export type DashboardAlertKey =
+	| "dashboard.alert.awaiting_warehouse"
+	| "dashboard.alert.awaiting_prep"
+	| "dashboard.alert.ready_to_close"
+	| "dashboard.alert.receivables_open"
+
+export type DashboardStat = { labelKey: DashboardStatLabelKey; value: number }
 
 export type DashboardAlert = {
 	variant: "info" | "warn"
-	key: string
+	key: DashboardAlertKey
 	count: number
 } | null
 

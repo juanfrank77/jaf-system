@@ -50,7 +50,7 @@ function DashboardView({
 					{stats.map((stat) => (
 						<Stat
 							key={stat.labelKey}
-							label={t(stat.labelKey as never)}
+							label={t(stat.labelKey)}
 							value={stat.value}
 						/>
 					))}
@@ -62,7 +62,7 @@ function DashboardView({
 					variant={alert.variant}
 					icon={alert.variant === "warn" ? "⚠" : "🔔"}
 				>
-					{t(alert.key as never, { count: alert.count })}
+					{t(alert.key, { count: alert.count })}
 				</Pill>
 			)}
 

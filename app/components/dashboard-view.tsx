@@ -1,5 +1,6 @@
 import { ChevronRightIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
+import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
 import { Badge } from "~/components/ui/badge"
 import { Card, CardContent } from "~/components/ui/card"
@@ -39,14 +40,20 @@ function DashboardView({
 	alert: DashboardAlert
 	docs: DashboardDocRow[]
 }) {
+	const { t } = useTranslation()
 	return (
 		<div className="space-y-4">
-			<h1 className="text-xl font-semibold">Dashboard</h1>
+			<h1 className="text-xl font-semibold">{t("dashboard.title")}</h1>
 
 			{stats.length > 0 && (
 				<div className="grid grid-cols-2 gap-3 md:grid-cols-4">
 					{stats.map((stat) => (
-						<Stat key={stat.label} label={stat.label} value={stat.value} />
+						<Stat
+							key={stat.labelKey}
+							// @ts-expect-error DashboardStat.labelKey is string, but i18next expects literal keys
+							label={t(stat.labelKey)}
+							value={stat.value}
+						/>
 					))}
 				</div>
 			)}
@@ -56,7 +63,8 @@ function DashboardView({
 					variant={alert.variant}
 					icon={alert.variant === "warn" ? "⚠" : "🔔"}
 				>
-					{alert.message}
+					{/* @ts-expect-error DashboardAlert.key is string, but i18next expects literal keys */}
+					{t(alert.key, { count: alert.count })}
 				</Pill>
 			)}
 
@@ -64,7 +72,7 @@ function DashboardView({
 				<CardContent className="space-y-2 p-3">
 					{docs.length === 0 && (
 						<p className="p-2 text-sm text-muted-foreground">
-							No documents yet.
+							{t("dashboard.no_documents")}
 						</p>
 					)}
 					{docs.map((doc) => (

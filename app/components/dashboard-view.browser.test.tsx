@@ -22,7 +22,7 @@ describe("DashboardView", () => {
 					path: "/",
 					Component: () => (
 						<DashboardView
-							stats={[{ label: "Open documents", value: 3 }]}
+							stats={[{ labelKey: "dashboard.stat.open_documents", value: 3 }]}
 							alert={null}
 							docs={[]}
 						/>
@@ -44,7 +44,8 @@ describe("DashboardView", () => {
 							stats={[]}
 							alert={{
 								variant: "warn",
-								message: "2 documents waiting on your prep",
+								key: "dashboard.alert.awaiting_prep",
+								count: 2,
 							}}
 							docs={[]}
 						/>

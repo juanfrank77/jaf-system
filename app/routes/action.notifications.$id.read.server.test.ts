@@ -79,6 +79,50 @@ describe("POST /notifications/:id/read", () => {
 		expect(result.headers.get("Location")).toBe("/dashboard")
 	})
 
+	it("falls back to /dashboard for a non-relative redirectTo when docId is null", async () => {
+		vi.mocked(requireSession).mockResolvedValue({
+			user: { id: "user-1" },
+		} as any)
+		vi.mocked(db.notification.findUniqueOrThrow).mockResolvedValue({
+			id: "n1",
+			userId: "user-1",
+			docId: null,
+			message: "test",
+			read: false,
+			createdAt: new Date(),
+		} as any)
+		vi.mocked(db.notification.update).mockResolvedValue({} as any)
+
+		const result = await action({
+			request: postRequest("n1", "https://evil.com"),
+			params: { id: "n1" },
+		} as any).catch((r) => r)
+
+		expect(result.headers.get("Location")).toBe("/dashboard")
+	})
+
+	it("falls back to /dashboard for a protocol-relative redirectTo when docId is null", async () => {
+		vi.mocked(requireSession).mockResolvedValue({
+			user: { id: "user-1" },
+		} as any)
+		vi.mocked(db.notification.findUniqueOrThrow).mockResolvedValue({
+			id: "n1",
+			userId: "user-1",
+			docId: null,
+			message: "test",
+			read: false,
+			createdAt: new Date(),
+		} as any)
+		vi.mocked(db.notification.update).mockResolvedValue({} as any)
+
+		const result = await action({
+			request: postRequest("n1", "//evil.com"),
+			params: { id: "n1" },
+		} as any).catch((r) => r)
+
+		expect(result.headers.get("Location")).toBe("/dashboard")
+	})
+
 	it("does not mark another user's notification as read", async () => {
 		vi.mocked(requireSession).mockResolvedValue({
 			user: { id: "user-1" },

@@ -11,6 +11,7 @@ import {
 	Settings02Icon,
 } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react"
+import type { TFunction } from "i18next"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, Link, useLocation } from "react-router"
@@ -115,15 +116,19 @@ function NavList({
 	)
 }
 
-function formatRelativeTime(date: Date) {
+function formatRelativeTime(date: Date, t: TFunction) {
 	const diffMs = Date.now() - date.getTime()
 	const diffMinutes = Math.round(diffMs / 60000)
-	if (diffMinutes < 1) return "just now"
-	if (diffMinutes < 60) return `${diffMinutes}m ago`
+	if (diffMinutes < 1) return t("app_shell.notifications.time.just_now")
+	if (diffMinutes < 60)
+		return t("app_shell.notifications.time.minutes_ago", {
+			count: diffMinutes,
+		})
 	const diffHours = Math.round(diffMinutes / 60)
-	if (diffHours < 24) return `${diffHours}h ago`
+	if (diffHours < 24)
+		return t("app_shell.notifications.time.hours_ago", { count: diffHours })
 	const diffDays = Math.round(diffHours / 24)
-	return `${diffDays}d ago`
+	return t("app_shell.notifications.time.days_ago", { count: diffDays })
 }
 
 function NotificationBell({
@@ -139,9 +144,10 @@ function NotificationBell({
 	const { t } = useTranslation()
 	const location = useLocation()
 	const redirectTo = `${location.pathname}${location.search}`
+	const [notificationsOpen, setNotificationsOpen] = useState(false)
 
 	return (
-		<Popover.Root>
+		<Popover.Root open={notificationsOpen} onOpenChange={setNotificationsOpen}>
 			<Popover.Trigger
 				className="relative text-muted-foreground"
 				aria-label={t("app_shell.notifications.bell_label")}
@@ -195,6 +201,7 @@ function NotificationBell({
 											/>
 											<button
 												type="submit"
+												onClick={() => setNotificationsOpen(false)}
 												className="w-full rounded-md px-2 py-2 text-left text-sm hover:bg-muted"
 											>
 												<span className="block text-foreground">
@@ -204,7 +211,7 @@ function NotificationBell({
 													aria-hidden="true"
 													className="block text-xs text-muted-foreground"
 												>
-													{formatRelativeTime(notification.createdAt)}
+													{formatRelativeTime(notification.createdAt, t)}
 												</span>
 											</button>
 										</Form>

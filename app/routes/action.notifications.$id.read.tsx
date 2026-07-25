@@ -6,7 +6,9 @@ import type { Route } from "./+types/action.notifications.$id.read"
 export async function action({ request, params }: Route.ActionArgs) {
 	const session = await requireSession(request)
 	const formData = await request.formData()
-	const redirectTo = String(formData.get("redirectTo") ?? "/dashboard")
+	const raw = String(formData.get("redirectTo") ?? "/dashboard")
+	const redirectTo =
+		raw.startsWith("/") && !raw.startsWith("//") ? raw : "/dashboard"
 
 	const notification = await db.notification.findUniqueOrThrow({
 		where: { id: params.id },

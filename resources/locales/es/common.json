@@ -29,7 +29,13 @@
       "bell_label": "Notificaciones",
       "title": "Notificaciones",
       "empty": "No hay notificaciones nuevas",
-      "mark_all_read": "Marcar todas como leídas"
+      "mark_all_read": "Marcar todas como leídas",
+      "time": {
+        "just_now": "justo ahora",
+        "minutes_ago": "hace {{count}}m",
+        "hours_ago": "hace {{count}}h",
+        "days_ago": "hace {{count}}d"
+      }
     },
     "sign_out": "Cerrar sesión",
     "open_menu": "Abrir menú de navegación",

@@ -272,9 +272,17 @@ describe("AppShell", () => {
 			],
 		})
 		await userEvent.click(screen.getByRole("button", { name: "Notifications" }))
+		const markAllButton = screen.getByRole("button", {
+			name: "Mark all as read",
+		})
+		expect(markAllButton).toBeInTheDocument()
+		expect(markAllButton.closest("form")).toHaveAttribute(
+			"action",
+			"/notifications/mark-all-read",
+		)
 		expect(
-			screen.getByRole("button", { name: "Mark all as read" }),
-		).toBeInTheDocument()
+			markAllButton.closest("form")?.querySelector('input[name="redirectTo"]'),
+		).toHaveValue("/")
 	})
 
 	it("submits a POST to the per-notification read route with a redirect target", async ({
@@ -314,6 +322,44 @@ describe("AppShell", () => {
 		expect(
 			row.closest("form")?.querySelector('input[name="redirectTo"]'),
 		).toHaveValue("/dashboard")
+	})
+
+	it("closes the notification dropdown when a notification row is clicked", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			props: { initialEntries: ["/dashboard"] },
+			entries: [
+				{
+					path: "/dashboard",
+					Component: () => (
+						<AppShell
+							user={{ name: "Jose Alfaro", role: "SUPERVISOR" }}
+							notifications={[
+								{
+									id: "1",
+									message: "Job JAF-2026-1001 is ready for pickup.",
+									docId: "doc-1",
+									createdAt: new Date("2026-07-24T10:00:00Z"),
+								},
+							]}
+						>
+							<p>content</p>
+						</AppShell>
+					),
+				},
+			],
+		})
+		await userEvent.click(screen.getByRole("button", { name: "Notifications" }))
+		const row = screen.getByRole("button", {
+			name: "Job JAF-2026-1001 is ready for pickup.",
+		})
+		await userEvent.click(row)
+		await waitFor(() => {
+			expect(
+				screen.queryByText("Job JAF-2026-1001 is ready for pickup."),
+			).not.toBeInTheDocument()
+		})
 	})
 
 	it("shows a hamburger trigger and no drawer content by default", async ({

@@ -19,9 +19,6 @@ import { action } from "./action.notifications.mark-all-read"
 function postRequest(redirectTo?: string) {
 	const formData = new FormData()
 	if (redirectTo !== undefined) formData.set("redirectTo", redirectTo)
-	// Non-empty body: an empty FormData body makes Request.formData() throw
-	// ("Failed to fetch") in the chromium browser test project.
-	else formData.set("_", "1")
 	return new Request("http://localhost/notifications/mark-all-read", {
 		method: "POST",
 		body: formData,
@@ -59,6 +56,32 @@ describe("POST /notifications/mark-all-read", () => {
 		const result = await action({ request: postRequest() } as any).catch(
 			(r) => r,
 		)
+
+		expect(result.headers.get("Location")).toBe("/dashboard")
+	})
+
+	it("falls back to /dashboard for a non-relative redirectTo", async () => {
+		vi.mocked(requireSession).mockResolvedValue({
+			user: { id: "user-1" },
+		} as any)
+		vi.mocked(db.notification.updateMany).mockResolvedValue({ count: 0 } as any)
+
+		const result = await action({
+			request: postRequest("https://evil.com"),
+		} as any).catch((r) => r)
+
+		expect(result.headers.get("Location")).toBe("/dashboard")
+	})
+
+	it("falls back to /dashboard for a protocol-relative redirectTo", async () => {
+		vi.mocked(requireSession).mockResolvedValue({
+			user: { id: "user-1" },
+		} as any)
+		vi.mocked(db.notification.updateMany).mockResolvedValue({ count: 0 } as any)
+
+		const result = await action({
+			request: postRequest("//evil.com"),
+		} as any).catch((r) => r)
 
 		expect(result.headers.get("Location")).toBe("/dashboard")
 	})

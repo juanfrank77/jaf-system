@@ -3,9 +3,9 @@ import { db } from "./db.server"
 export async function generateControlNumber(dateStr?: string): Promise<string> {
 	const d = dateStr
 		? new Date(
-				parseInt(dateStr.slice(0, 4)),
-				parseInt(dateStr.slice(5, 7)) - 1,
-				parseInt(dateStr.slice(8, 10)),
+				parseInt(dateStr.slice(0, 4), 10),
+				parseInt(dateStr.slice(5, 7), 10) - 1,
+				parseInt(dateStr.slice(8, 10), 10),
 			)
 		: new Date()
 	const yy = String(d.getFullYear()).slice(2)

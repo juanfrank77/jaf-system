@@ -1,6 +1,6 @@
 import type { DocStatus, Role } from "../../generated/prisma/client"
 
-export type DashboardDoc = {
+type DashboardDoc = {
 	status: DocStatus
 	receivableClosedAt: Date | null
 }

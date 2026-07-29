@@ -9,7 +9,7 @@ import { Stat } from "~/components/ui/stat"
 import type { DashboardAlert, DashboardStat } from "~/lib/dashboard-stats"
 import type { DocStatus } from "../../generated/prisma/client"
 
-export type DashboardDocRow = {
+type DashboardDocRow = {
 	id: string
 	controlNumber: string
 	status: DocStatus

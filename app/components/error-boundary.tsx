@@ -1,48 +1,8 @@
-import { Component, type ErrorInfo, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { isRouteErrorResponse, Link } from "react-router"
 import { Card, CardContent } from "~/components/ui/card"
 
-export interface ErrorBoundaryProps {
-	children: ReactNode
-	onError?: (error: Error, errorInfo: ErrorInfo) => void
-	fallback?: ReactNode
-}
-
-interface ErrorBoundaryState {
-	error: Error | null
-}
-
-export class ErrorBoundary extends Component<
-	ErrorBoundaryProps,
-	ErrorBoundaryState
-> {
-	constructor(props: ErrorBoundaryProps) {
-		super(props)
-		this.state = { error: null }
-	}
-
-	static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-		return { error }
-	}
-
-	override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-		this.props.onError?.(error, errorInfo)
-	}
-
-	override render() {
-		if (this.state.error) {
-			if (this.props.fallback) {
-				return this.props.fallback
-			}
-			return <ErrorFallback error={this.state.error} />
-		}
-
-		return this.props.children
-	}
-}
-
-export interface RouteErrorBoundaryProps {
+interface RouteErrorBoundaryProps {
 	error: unknown
 }
 
@@ -50,11 +10,11 @@ export function RouteErrorBoundary({ error }: RouteErrorBoundaryProps) {
 	return <ErrorFallback error={error} />
 }
 
-export interface ErrorFallbackProps {
+interface ErrorFallbackProps {
 	error?: unknown
 }
 
-export function ErrorFallback({ error }: ErrorFallbackProps) {
+function ErrorFallback({ error }: ErrorFallbackProps) {
 	const { t } = useTranslation()
 	let title = t("error.500.title")
 	let message = t("error.500.description")

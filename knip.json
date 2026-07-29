@@ -3,7 +3,12 @@
   "remix": true,
   "lefthook": true,
   "project": ["**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}"],
-  "ignore": ["app/sw.ts", "app/components/ui/**"],
+  "ignore": [
+    "app/sw.ts",
+    "app/components/ui/**",
+    "scripts/fix-db-url.mjs",
+    "scripts/recreate-db.mjs"
+  ],
   "ignoreDependencies": [
     "@epic-web/client-hints",
     "@fontsource-variable/figtree",

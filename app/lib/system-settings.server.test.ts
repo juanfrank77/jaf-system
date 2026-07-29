@@ -10,7 +10,7 @@ vi.mock("./db.server", () => ({
 }))
 
 import { db } from "./db.server"
-import { getIvuRate, setIvuRate } from "./system-settings.server"
+import { getIvuRate } from "./system-settings.server"
 
 describe("system settings", () => {
 	beforeEach(() => vi.clearAllMocks())

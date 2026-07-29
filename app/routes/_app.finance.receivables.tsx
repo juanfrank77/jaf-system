@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next"
 import { Form } from "react-router"
 import { Button } from "~/components/ui/button"
+import { Card, CardContent } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
@@ -127,7 +128,7 @@ export default function ReceivablesDashboard({
 				<h1 className="text-xl font-semibold">
 					{t("finance_receivables.title")}
 				</h1>
-				<p className="text-sm text-slate-500">
+				<p className="text-sm text-muted-foreground">
 					{t("finance_receivables.open_count", { count: open.length })}
 				</p>
 			</div>
@@ -140,127 +141,138 @@ export default function ReceivablesDashboard({
 
 			<div className="space-y-3">
 				{open.map((row) => (
-					<div
-						key={row.id}
-						className="bg-white border rounded-lg p-4 space-y-3"
-					>
-						<div className="flex items-center justify-between">
-							<div>
-								<span className="font-mono font-medium text-sm">
-									{row.controlNumber}
-								</span>
-								{row.avisoNumber && (
-									<span className="text-xs text-slate-500 ml-2">
-										{t("finance_receivables.aviso", {
-											number: row.avisoNumber,
-										})}
+					<Card key={row.id}>
+						<CardContent className="space-y-4 p-4">
+							<div className="flex items-center justify-between">
+								<div>
+									<span className="font-mono text-sm font-medium">
+										{row.controlNumber}
 									</span>
-								)}
-								<p className="text-xs text-slate-500">{row.supervisorName}</p>
-							</div>
-							<span className={`text-sm ${AGE_COLOR(row.ageDays)}`}>
-								{t("finance_receivables.age_days", { count: row.ageDays })}
-							</span>
-						</div>
-
-						<div className="grid grid-cols-3 gap-3 text-xs">
-							{/* Advance */}
-							<div className="bg-slate-50 rounded p-2">
-								<p className="text-slate-500 mb-1">
-									{t("finance_receivables.advance_label")}
-								</p>
-								{row.advanceReceivedAt ? (
-									<p className="text-green-700 font-medium">
-										${row.advanceAmount?.toFixed(2)} —{" "}
-										{new Date(row.advanceReceivedAt).toLocaleDateString()}
+									{row.avisoNumber && (
+										<span className="ml-2 text-sm text-foreground">
+											{t("finance_receivables.aviso", {
+												number: row.avisoNumber,
+											})}
+										</span>
+									)}
+									<p className="text-sm text-foreground">
+										{row.supervisorName}
 									</p>
-								) : (
-									<Form method="post" className="flex gap-1 mt-1">
-										<input type="hidden" name="intent" value="record_advance" />
-										<input type="hidden" name="docId" value={row.id} />
-										<Input
-											name="advanceAmount"
-											type="number"
-											step="0.01"
-											placeholder={t("finance_receivables.amount_placeholder")}
-											className="h-7 text-xs w-24"
-										/>
-										<Button
-											type="submit"
-											size="sm"
-											variant="outline"
-											className="h-7 text-xs"
-										>
-											{t("finance_receivables.record")}
-										</Button>
-									</Form>
-								)}
+								</div>
+								<span className={`text-sm ${AGE_COLOR(row.ageDays)}`}>
+									{t("finance_receivables.age_days", { count: row.ageDays })}
+								</span>
 							</div>
 
-							{/* Final payment */}
-							<div className="bg-slate-50 rounded p-2">
-								<p className="text-slate-500 mb-1">
-									{t("finance_receivables.final_payment_label")}
-								</p>
-								{row.finalPaymentReceivedAt ? (
-									<p className="text-green-700 font-medium">
-										${row.finalPaymentAmount?.toFixed(2)} —{" "}
-										{new Date(row.finalPaymentReceivedAt).toLocaleDateString()}
+							<div className="grid grid-cols-3 gap-3 text-sm">
+								{/* Advance */}
+								<div className="space-y-2">
+									<p className="text-sm font-medium text-foreground">
+										{t("finance_receivables.advance_label")}
 									</p>
-								) : (
-									<Form method="post" className="flex gap-1 mt-1">
-										<input type="hidden" name="intent" value="record_final" />
-										<input type="hidden" name="docId" value={row.id} />
-										<Input
-											name="finalAmount"
-											type="number"
-											step="0.01"
-											placeholder={t("finance_receivables.amount_placeholder")}
-											className="h-7 text-xs w-24"
-										/>
-										<Button
-											type="submit"
-											size="sm"
-											variant="outline"
-											className="h-7 text-xs"
-										>
-											{t("finance_receivables.record")}
-										</Button>
-									</Form>
-								)}
-							</div>
+									{row.advanceReceivedAt ? (
+										<p className="font-medium text-green-700">
+											${row.advanceAmount?.toFixed(2)} —{" "}
+											{new Date(row.advanceReceivedAt).toLocaleDateString()}
+										</p>
+									) : (
+										<Form method="post" className="flex gap-2">
+											<input
+												type="hidden"
+												name="intent"
+												value="record_advance"
+											/>
+											<input type="hidden" name="docId" value={row.id} />
+											<Input
+												name="advanceAmount"
+												type="number"
+												step="0.01"
+												placeholder={t(
+													"finance_receivables.amount_placeholder",
+												)}
+												className="h-9 w-28 text-sm"
+											/>
+											<Button
+												type="submit"
+												size="sm"
+												variant="outline"
+												className="h-9 text-sm"
+											>
+												{t("finance_receivables.record")}
+											</Button>
+										</Form>
+									)}
+								</div>
 
-							{/* Close */}
-							<div className="bg-slate-50 rounded p-2 flex flex-col justify-between">
-								<p className="text-slate-500 mb-1">
-									{t("finance_receivables.close_entry_label")}
-								</p>
-								{row.advanceReceivedAt && row.finalPaymentReceivedAt ? (
-									<Form method="post">
-										<input type="hidden" name="intent" value="close" />
-										<input type="hidden" name="docId" value={row.id} />
-										<Button
-											type="submit"
-											size="sm"
-											className="h-7 text-xs w-full"
-										>
-											{t("finance_receivables.close")}
-										</Button>
-									</Form>
-								) : (
-									<p className="text-xs text-slate-400">
-										{t("finance_receivables.record_both_first")}
+								{/* Final payment */}
+								<div className="space-y-2">
+									<p className="text-sm font-medium text-foreground">
+										{t("finance_receivables.final_payment_label")}
 									</p>
-								)}
+									{row.finalPaymentReceivedAt ? (
+										<p className="font-medium text-green-700">
+											${row.finalPaymentAmount?.toFixed(2)} —{" "}
+											{new Date(
+												row.finalPaymentReceivedAt,
+											).toLocaleDateString()}
+										</p>
+									) : (
+										<Form method="post" className="flex gap-2">
+											<input type="hidden" name="intent" value="record_final" />
+											<input type="hidden" name="docId" value={row.id} />
+											<Input
+												name="finalAmount"
+												type="number"
+												step="0.01"
+												placeholder={t(
+													"finance_receivables.amount_placeholder",
+												)}
+												className="h-9 w-28 text-sm"
+											/>
+											<Button
+												type="submit"
+												size="sm"
+												variant="outline"
+												className="h-9 text-sm"
+											>
+												{t("finance_receivables.record")}
+											</Button>
+										</Form>
+									)}
+								</div>
+
+								{/* Close */}
+								<div className="flex flex-col justify-between gap-2">
+									<p className="text-sm font-medium text-foreground">
+										{t("finance_receivables.close_entry_label")}
+									</p>
+									{row.advanceReceivedAt && row.finalPaymentReceivedAt ? (
+										<Form method="post">
+											<input type="hidden" name="intent" value="close" />
+											<input type="hidden" name="docId" value={row.id} />
+											<Button
+												type="submit"
+												size="sm"
+												className="h-9 w-full text-sm"
+											>
+												{t("finance_receivables.close")}
+											</Button>
+										</Form>
+									) : (
+										<p className="text-sm text-muted-foreground">
+											{t("finance_receivables.record_both_first")}
+										</p>
+									)}
+								</div>
 							</div>
-						</div>
-					</div>
+						</CardContent>
+					</Card>
 				))}
 			</div>
 
 			{closed.length > 0 && (
 				<details className="text-sm">
-					<summary className="cursor-pointer text-slate-500">
+					<summary className="cursor-pointer text-foreground">
 						{t("finance_receivables.closed_summary", {
 							count: closed.length,
 						})}
@@ -269,7 +281,7 @@ export default function ReceivablesDashboard({
 						{closed.map((row) => (
 							<div
 								key={row.id}
-								className="flex items-center justify-between text-xs text-slate-400 py-1 border-b"
+								className="flex items-center justify-between py-1 text-sm text-foreground border-b"
 							>
 								<span className="font-mono">{row.controlNumber}</span>
 								<span>
@@ -277,6 +289,7 @@ export default function ReceivablesDashboard({
 										date: row.receivableClosedAt
 											? new Date(row.receivableClosedAt).toLocaleDateString()
 											: "",
+										interpolation: { escapeValue: false },
 									})}
 								</span>
 							</div>

@@ -194,7 +194,10 @@ export default function DocView({ loaderData }: Route.ComponentProps) {
 				user.role === "ADMIN") && (
 				<a
 					href={`/docs/${(doc as any).id}/audit-package`}
-					className="block text-center text-sm text-slate-500 hover:text-slate-700 underline mt-2"
+					className={buttonVariants({
+						variant: "outline",
+						className: "mt-2 bg-primary text-primary-foreground",
+					})}
 					target="_blank"
 					rel="noreferrer"
 				>
@@ -203,12 +206,12 @@ export default function DocView({ loaderData }: Route.ComponentProps) {
 			)}
 
 			{auditTrail.length > 0 && (
-				<section className="text-xs text-slate-400 space-y-1 pt-2 border-t">
-					<p className="font-medium text-slate-500">
+				<section className="space-y-2 pt-3 border-t">
+					<p className="text-sm font-semibold text-foreground">
 						{t("docs_view.audit_trail")}
 					</p>
 					{auditTrail.map((a) => (
-						<p key={a.id}>
+						<p className="text-sm text-muted-foreground" key={a.id}>
 							{new Date(a.timestamp).toLocaleString()} — {a.user.name}:{" "}
 							{a.action}
 						</p>

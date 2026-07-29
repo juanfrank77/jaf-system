@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next"
 import { Form } from "react-router"
+import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
@@ -299,4 +300,8 @@ export default function ReceivablesDashboard({
 			)}
 		</div>
 	)
+}
+
+export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
+	return <RouteErrorBoundary error={error} />
 }

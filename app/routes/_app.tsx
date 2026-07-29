@@ -1,5 +1,6 @@
 import { Outlet } from "react-router"
 import { AppShell } from "~/components/app-shell"
+import { RouteErrorBoundary } from "~/components/error-boundary"
 import { db } from "~/lib/db.server"
 import { requireSession } from "~/lib/permissions.server"
 import type { Route } from "./+types/_app"
@@ -24,4 +25,8 @@ export default function AppShellRoute({ loaderData }: Route.ComponentProps) {
 			<Outlet />
 		</AppShell>
 	)
+}
+
+export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
+	return <RouteErrorBoundary error={error} />
 }

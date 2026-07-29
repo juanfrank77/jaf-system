@@ -1,4 +1,5 @@
 import { Outlet } from "react-router"
+import { RouteErrorBoundary } from "~/components/error-boundary"
 import { LanguageSwitcher } from "~/library/language-switcher"
 
 export default function AuthLayout() {
@@ -10,4 +11,8 @@ export default function AuthLayout() {
 			</div>
 		</div>
 	)
+}
+
+export function ErrorBoundary({ error }: { error: unknown }) {
+	return <RouteErrorBoundary error={error} />
 }

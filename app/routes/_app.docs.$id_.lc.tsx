@@ -2,6 +2,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
+import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { Button } from "~/components/ui/button"
 import { db } from "~/lib/db.server"
@@ -248,4 +249,8 @@ export default function LcView({ loaderData }: Route.ComponentProps) {
 			<p className="text-xs text-slate-400">{t("docs_lc.footer_note")}</p>
 		</div>
 	)
+}
+
+export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
+	return <RouteErrorBoundary error={error} />
 }

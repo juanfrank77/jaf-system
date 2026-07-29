@@ -1,5 +1,6 @@
 import { Trans, useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
+import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Button } from "~/components/ui/button"
 import { db } from "~/lib/db.server"
 import { canTransition, requireRole } from "~/lib/permissions.server"
@@ -80,4 +81,8 @@ export default function PrepDoc({ loaderData }: Route.ComponentProps) {
 			</Form>
 		</div>
 	)
+}
+
+export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
+	return <RouteErrorBoundary error={error} />
 }

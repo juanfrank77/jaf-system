@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
+import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { buttonVariants } from "~/components/ui/button"
 import { db } from "~/lib/db.server"
@@ -220,4 +221,8 @@ export default function DocView({ loaderData }: Route.ComponentProps) {
 			)}
 		</div>
 	)
+}
+
+export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
+	return <RouteErrorBoundary error={error} />
 }

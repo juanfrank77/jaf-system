@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
+import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
@@ -163,4 +164,8 @@ export default function NewDoc({
 			</Form>
 		</div>
 	)
+}
+
+export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
+	return <RouteErrorBoundary error={error} />
 }

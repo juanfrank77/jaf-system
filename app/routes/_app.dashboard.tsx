@@ -1,4 +1,5 @@
 import { DashboardView } from "~/components/dashboard-view"
+import { RouteErrorBoundary } from "~/components/error-boundary"
 import { computeDashboardStats } from "~/lib/dashboard-stats"
 import { db } from "~/lib/db.server"
 import { requireSession } from "~/lib/permissions.server"
@@ -31,4 +32,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 export default function Dashboard({ loaderData }: Route.ComponentProps) {
 	const { stats, alert, docs } = loaderData
 	return <DashboardView stats={stats} alert={alert} docs={docs} />
+}
+
+export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
+	return <RouteErrorBoundary error={error} />
 }

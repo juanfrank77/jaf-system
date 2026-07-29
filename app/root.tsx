@@ -1,7 +1,6 @@
 import { useTranslation } from "react-i18next"
 import {
 	data,
-	isRouteErrorResponse,
 	Links,
 	Meta,
 	Outlet,
@@ -9,6 +8,7 @@ import {
 	ScrollRestoration,
 } from "react-router"
 import { useChangeLanguage } from "remix-i18next/react"
+import { RouteErrorBoundary } from "~/components/error-boundary"
 import type { Route } from "./+types/root"
 import "./app.css"
 import i18next, { lngCookie } from "./localization/i18n.server"
@@ -59,31 +59,5 @@ export default function App({ loaderData }: Route.ComponentProps) {
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
-	const { t } = useTranslation()
-	let message = t("error.500.title")
-	let details = t("error.500.description")
-	let stack: string | undefined
-
-	if (isRouteErrorResponse(error)) {
-		message = error.status === 404 ? t("error.404.title") : "Error"
-		details =
-			error.status === 404
-				? t("error.404.description")
-				: error.statusText || details
-	} else if (import.meta.env.DEV && error && error instanceof Error) {
-		details = error.message
-		stack = error.stack
-	}
-
-	return (
-		<main className="container mx-auto p-4 pt-16">
-			<h1>{message}</h1>
-			<p>{details}</p>
-			{stack && (
-				<pre className="w-full overflow-x-auto p-4">
-					<code>{stack}</code>
-				</pre>
-			)}
-		</main>
-	)
+	return <RouteErrorBoundary error={error} />
 }

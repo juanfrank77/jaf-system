@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next"
 import { Form, redirect, useActionData } from "react-router"
+import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
@@ -92,4 +93,8 @@ export default function LoginPage() {
 			</Form>
 		</>
 	)
+}
+
+export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
+	return <RouteErrorBoundary error={error} />
 }

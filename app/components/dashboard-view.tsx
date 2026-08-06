@@ -29,6 +29,7 @@ const STATUS_BADGE_VARIANT: Record<
 	SUPERVISOR_APPROVED: "info",
 	CLARO_UPLOADED: "info",
 	LC_GENERATED: "ok",
+	CANCELLED: "danger",
 }
 
 function DashboardView({

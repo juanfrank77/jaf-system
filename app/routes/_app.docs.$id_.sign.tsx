@@ -21,6 +21,7 @@ import {
 import { db } from "~/lib/db.server"
 import { generateWarehouseReceiptPdf } from "~/lib/pdf/warehouse-receipt.server"
 import { canTransition, requireRole } from "~/lib/permissions.server"
+import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id_.sign"
 
 export const meta: Route.MetaFunction = ({ data }) => [
@@ -47,7 +48,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		user,
 		serviceCodes: serviceCodes.map((c) => ({
 			...c,
-			unitPrice: Number(c.unitPrice),
+			unitPrice: toNumberPrice(c.unitPrice),
 		})),
 		warehouses,
 	}

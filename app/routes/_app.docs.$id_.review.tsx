@@ -11,6 +11,7 @@ import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
 import { validateFile } from "~/lib/file-upload.server"
 import { canTransition, requireRole } from "~/lib/permissions.server"
+import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id_.review"
 
 export const meta: Route.MetaFunction = ({ data }) => [
@@ -36,7 +37,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		user,
 		serviceCodes: serviceCodes.map((c) => ({
 			...c,
-			unitPrice: Number(c.unitPrice),
+			unitPrice: toNumberPrice(c.unitPrice),
 		})),
 		photos,
 		supervisor,

@@ -324,6 +324,19 @@ export default function DocView({
 			)}
 
 			{(user.role === "SUPERVISOR" || user.role === "ADMIN") &&
+				(doc.status === "CREATED" || doc.status === "PREPPED") && (
+					<Link
+						to={`/docs/${(doc as any).id}/edit`}
+						className={buttonVariants({
+							variant: "outline",
+							className: "w-full",
+						})}
+					>
+						{t("docs_view.edit_work_order")}
+					</Link>
+				)}
+
+			{(user.role === "SUPERVISOR" || user.role === "ADMIN") &&
 				doc.status !== "CANCELLED" &&
 				doc.status !== "LC_GENERATED" && (
 					<div className="space-y-3 pt-2 border-t">

@@ -68,6 +68,14 @@
       "missing_fields": "Job type, address, and at least one crew member are required"
     }
   },
+  "docs_edit": {
+    "title": "Edit Work Order",
+    "submit": "Save Changes",
+    "errors": {
+      "invalid_materials": "The materials list could not be read",
+      "missing_fields": "Job type, address, and at least one crew member are required"
+    }
+  },
   "docs_view": {
     "address": "Address",
     "aviso_number": "Aviso #",
@@ -80,6 +88,7 @@
     "crew_signature_alt": "Crew signature",
     "download_audit_package": "Download Audit Package",
     "audit_trail": "Audit Trail",
+    "edit_work_order": "Edit Work Order",
     "cancel_heading": "Cancel Work Order",
     "cancel_placeholder": "Reason for cancellation (required)…",
     "cancel_submit": "Cancel Work Order",

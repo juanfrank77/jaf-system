@@ -68,6 +68,14 @@
       "missing_fields": "Se requieren tipo de trabajo, dirección y al menos un miembro de la cuadrilla"
     }
   },
+  "docs_edit": {
+    "title": "Editar orden de trabajo",
+    "submit": "Guardar cambios",
+    "errors": {
+      "invalid_materials": "No se pudo leer la lista de materiales",
+      "missing_fields": "Se requieren tipo de trabajo, dirección y al menos un miembro de la cuadrilla"
+    }
+  },
   "docs_view": {
     "address": "Dirección",
     "aviso_number": "# de aviso",
@@ -80,6 +88,7 @@
     "crew_signature_alt": "Firma de la cuadrilla",
     "download_audit_package": "Descargar paquete de auditoría",
     "audit_trail": "Registro de auditoría",
+    "edit_work_order": "Editar orden de trabajo",
     "cancel_heading": "Cancelar orden de trabajo",
     "cancel_placeholder": "Razón de la cancelación (obligatorio)…",
     "cancel_submit": "Cancelar orden de trabajo",

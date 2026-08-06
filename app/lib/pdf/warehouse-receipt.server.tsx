@@ -7,6 +7,7 @@ import {
 	Text,
 	View,
 } from "@react-pdf/renderer"
+import { toNumberPrice } from "~/lib/utils"
 
 const styles = StyleSheet.create({
 	page: { padding: 40, fontFamily: "Helvetica", fontSize: 10 },
@@ -71,7 +72,7 @@ export async function generateWarehouseReceiptPdf(
 	let totalAmount = 0
 	const lineItems = doc.materialsTaken.map((item) => {
 		const code = codeMap[item.serviceCodeId]
-		const amount = Number(code?.unitPrice ?? 0) * item.qty
+		const amount = toNumberPrice(code?.unitPrice ?? 0) * item.qty
 		totalAmount += amount
 		return { code, qty: item.qty, amount, serviceCodeId: item.serviceCodeId }
 	})

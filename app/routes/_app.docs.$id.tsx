@@ -5,6 +5,7 @@ import { MaterialLineItems } from "~/components/material-line-items"
 import { buttonVariants } from "~/components/ui/button"
 import { db } from "~/lib/db.server"
 import { requireSession } from "~/lib/permissions.server"
+import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id"
 
 export const meta: Route.MetaFunction = ({ data }) => [
@@ -36,7 +37,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		user,
 		serviceCodes: serviceCodes.map((c) => ({
 			...c,
-			unitPrice: Number(c.unitPrice),
+			unitPrice: toNumberPrice(c.unitPrice),
 		})),
 		supervisor,
 		assignedCrew,

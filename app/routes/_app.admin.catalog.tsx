@@ -6,6 +6,7 @@ import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
+import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.admin.catalog"
 
 export const meta: Route.MetaFunction = () => [
@@ -22,7 +23,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 	return {
 		codes: codes.map((code) => ({
 			...code,
-			unitPrice: Number(code.unitPrice),
+			unitPrice: toNumberPrice(code.unitPrice),
 		})),
 	}
 }
@@ -185,7 +186,7 @@ export default function AdminCatalog({ loaderData }: Route.ComponentProps) {
 								<td className="px-4 py-3 font-mono">{code.claroCode}</td>
 								<td className="px-4 py-3">{code.name}</td>
 								<td className="px-4 py-3 text-right">
-									{Number(code.unitPrice).toFixed(2)}
+									{toNumberPrice(code.unitPrice).toFixed(2)}
 								</td>
 								<td className="px-4 py-3 text-slate-500">
 									{code.accountCode ?? "—"}

@@ -9,6 +9,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "~/components/ui/select"
+import { toNumberPrice } from "~/lib/utils"
 
 interface LineItem {
 	serviceCodeId: string
@@ -84,7 +85,7 @@ export function MaterialLineItems({
 								{item.qty} {code?.unit}
 							</span>
 							<span className="w-20 text-right">
-								${(Number(code?.unitPrice ?? 0) * item.qty).toFixed(2)}
+								${(toNumberPrice(code?.unitPrice) * item.qty).toFixed(2)}
 							</span>
 						</div>
 					)

@@ -18,6 +18,8 @@ enum Role {
   WAREHOUSE
   FINANCE
   ADMIN
+  INSTALLER
+  COMPTOLLER
 }
 
 enum DocStatus {
@@ -28,6 +30,7 @@ enum DocStatus {
   SUPERVISOR_APPROVED
   CLARO_UPLOADED
   LC_GENERATED
+  CANCELLED
 }
 
 model User {
@@ -49,7 +52,8 @@ model User {
   signedInvoices        JafInvoice[]         @relation("SignedDocs")
   overriddenInvoices    JafInvoice[]         @relation("OverriddenDocs")
   lcApprovedInvoices    JafInvoice[]         @relation("LcApprovedDocs")
-  closedReceivables     JafInvoice[]         @relation("ClosedReceivables")
+   closedReceivables     JafInvoice[]         @relation("ClosedReceivables")
+   cancelledInvoices     JafInvoice[]         @relation("CancelledDocs")
   restockRequests       VanRestockRequest[]  @relation("RestockRequests")
   restockReleases       VanRestockRequest[]  @relation("RestockReleases")
   restockReceivers      VanRestockRequest[]  @relation("RestockReceivers")
@@ -153,6 +157,16 @@ model JafInvoice {
   overrideSignature String?
   overrideAt        DateTime?
   overrideReason    String?
+
+  // Cancellation (allowed any time before Finance closes; requires a reason)
+  cancellationReason String?
+  cancelledAt        DateTime?
+  cancelledById      String?
+  cancelledBy        User?    @relation("CancelledDocs", fields: [cancelledById], references: [id])
+
+  // Send-back history: Supervisor→Crew and Finance→Supervisor. Array of
+  // { fromStatus, toStatus, note, byUserId, createdAt } kept for audit.
+  sendBackHistory    Json?
 
   // Crew field update (Step 4)
   jobAddressActual String?

@@ -9,6 +9,7 @@ import { db } from "~/lib/db.server"
 import { generateActaConformidadPdf } from "~/lib/pdf/acta-conformidad.server"
 import { generateScheduleAccountsPdf } from "~/lib/pdf/schedule-accounts.server"
 import { canTransition, requireRole } from "~/lib/permissions.server"
+import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id_.lc"
 
 export const meta: Route.MetaFunction = ({ data }) => [
@@ -40,7 +41,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		user,
 		serviceCodes: serviceCodes.map((c) => ({
 			...c,
-			unitPrice: Number(c.unitPrice),
+			unitPrice: toNumberPrice(c.unitPrice),
 		})),
 		supervisor,
 		poLinks,
@@ -82,7 +83,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 			name: code?.name ?? "",
 			qty: item.qty,
 			unit: code?.unit ?? "SR",
-			unitPrice: Number(code?.unitPrice ?? 0),
+			unitPrice: toNumberPrice(code?.unitPrice ?? 0),
 			accountCode: code?.accountCode,
 		}
 	})

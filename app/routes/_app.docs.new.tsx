@@ -8,6 +8,7 @@ import { Label } from "~/components/ui/label"
 import { generateControlNumber } from "~/lib/control-number.server"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
+import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.new"
 
 export const meta: Route.MetaFunction = () => [
@@ -28,7 +29,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		user,
 		serviceCodes: serviceCodes.map((c) => ({
 			...c,
-			unitPrice: Number(c.unitPrice),
+			unitPrice: toNumberPrice(c.unitPrice),
 		})),
 		crew,
 	}

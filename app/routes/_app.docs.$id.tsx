@@ -336,6 +336,18 @@ export default function DocView({
 					</Link>
 				)}
 
+			{user.role === "ADMIN" && (
+				<Link
+					to={`/admin/docs/${(doc as any).id}`}
+					className={buttonVariants({
+						variant: "outline",
+						className: "w-full mt-2",
+					})}
+				>
+					{t("docs_view.full_history")}
+				</Link>
+			)}
+
 			{(user.role === "SUPERVISOR" || user.role === "ADMIN") &&
 				doc.status !== "CANCELLED" &&
 				doc.status !== "LC_GENERATED" && (

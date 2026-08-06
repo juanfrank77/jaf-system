@@ -76,6 +76,20 @@
       "missing_fields": "Job type, address, and at least one crew member are required"
     }
   },
+  "admin_history": {
+    "timeline_heading": "Event timeline",
+    "no_events": "No events recorded.",
+    "send_backs_heading": "Send-backs",
+    "payments_heading": "Payments",
+    "no_payments": "No payment records.",
+    "documents_heading": "Documents",
+    "warehouse_receipt": "Warehouse receipt (PDF)",
+    "jaf_invoice": "JAF invoice (PDF)",
+    "claro_work_order": "Claro work order (PDF)",
+    "lc_request": "LC request",
+    "materials_heading": "Materials",
+    "back_to_work_order": "Back to work order"
+  },
   "docs_view": {
     "address": "Address",
     "aviso_number": "Aviso #",
@@ -89,6 +103,7 @@
     "download_audit_package": "Download Audit Package",
     "audit_trail": "Audit Trail",
     "edit_work_order": "Edit Work Order",
+    "full_history": "Full History",
     "cancel_heading": "Cancel Work Order",
     "cancel_placeholder": "Reason for cancellation (required)…",
     "cancel_submit": "Cancel Work Order",

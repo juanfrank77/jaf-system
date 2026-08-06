@@ -34,6 +34,14 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const serviceCodes = await db.serviceCode.findMany({
 		where: { active: true },
 	})
+	const sendBackHistory = (doc.sendBackHistory as any[] | null) ?? []
+	const latestSendBack =
+		sendBackHistory.length > 0
+			? sendBackHistory[sendBackHistory.length - 1]
+			: null
+	const sentBy = latestSendBack
+		? await db.user.findUnique({ where: { id: latestSendBack.byUserId } })
+		: null
 	return {
 		doc,
 		user,
@@ -41,6 +49,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			...c,
 			unitPrice: toNumberPrice(c.unitPrice),
 		})),
+		latestSendBack,
+		sentByName: sentBy?.name ?? null,
 	}
 }
 
@@ -151,7 +161,7 @@ export default function FieldUpdate({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { doc, serviceCodes } = loaderData
+	const { doc, serviceCodes, latestSendBack, sentByName } = loaderData
 	const taken = (doc.materialsTaken as any[]) || []
 	const { t } = useTranslation()
 	const error = actionData as
@@ -166,6 +176,20 @@ export default function FieldUpdate({
 					components={{ strong: <strong /> }}
 				/>
 			</div>
+
+			{latestSendBack && (
+				<div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+					<p className="font-medium text-amber-900">
+						{t("docs_field.sent_back_by", {
+							name: sentByName ?? t("docs_field.sent_back_by_unknown"),
+						})}
+					</p>
+					<p className="mt-1 text-amber-800">{latestSendBack.note}</p>
+					<p className="mt-1 text-xs text-amber-700/80">
+						{new Date(latestSendBack.createdAt).toLocaleString()}
+					</p>
+				</div>
+			)}
 
 			<h1 className="text-xl font-semibold">{t("docs_field.title")}</h1>
 			<p className="text-sm font-mono text-slate-500">

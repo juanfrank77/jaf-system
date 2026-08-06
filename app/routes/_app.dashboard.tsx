@@ -26,12 +26,31 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 	const { stats, alert } = computeDashboardStats(user.role, docs)
 
-	return { stats, alert, docs }
+	const pendingReviewDocs =
+		user.role === "SUPERVISOR"
+			? await db.jafInvoice.findMany({
+					where: {
+						supervisorId: user.id,
+						status: "FIELD_UPDATED",
+					},
+					orderBy: { createdAt: "desc" },
+					take: 20,
+				})
+			: []
+
+	return { stats, alert, docs, pendingReviewDocs }
 }
 
 export default function Dashboard({ loaderData }: Route.ComponentProps) {
-	const { stats, alert, docs } = loaderData
-	return <DashboardView stats={stats} alert={alert} docs={docs} />
+	const { stats, alert, docs, pendingReviewDocs } = loaderData
+	return (
+		<DashboardView
+			stats={stats}
+			alert={alert}
+			docs={docs}
+			pendingReviewDocs={pendingReviewDocs}
+		/>
+	)
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {

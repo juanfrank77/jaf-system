@@ -80,6 +80,17 @@
     "crew_signature_alt": "Firma de la cuadrilla",
     "download_audit_package": "Descargar paquete de auditoría",
     "audit_trail": "Registro de auditoría",
+    "cancel_heading": "Cancelar orden de trabajo",
+    "cancel_placeholder": "Razón de la cancelación (obligatorio)…",
+    "cancel_submit": "Cancelar orden de trabajo",
+    "reassign_heading": "Reasignar cuadrilla",
+    "reassign_placeholder": "Selecciona un miembro de la cuadrilla…",
+    "reassign_submit": "Reasignar cuadrilla",
+    "errors": {
+      "cancel_reason_required": "Proporcione una razón para la cancelación.",
+      "reassign_required": "Seleccione un miembro de la cuadrilla.",
+      "reassign_invalid": "El miembro de la cuadrilla seleccionado no es válido."
+    },
     "next_action": {
       "mark_prepped": "Marcar como preparado",
       "capture_signature": "Capturar firma de cuadrilla",
@@ -121,6 +132,8 @@
   "docs_field": {
     "title": "Actualización de campo",
     "offline_notice": "<strong>Funciona sin conexión.</strong> Si pierdes la conexión, tus cambios se guardan localmente y se sincronizan al reconectar.",
+    "sent_back_by": "Devuelto por {{name}}",
+    "sent_back_by_unknown": "tu supervisor",
     "actual_address_label": "Dirección real del trabajo",
     "materials_used_label": "Materiales utilizados",
     "materials_used_hint": "No puede exceder lo entregado en el almacén.",
@@ -165,8 +178,18 @@
     "upload_pdf_heading": "Cargar PDF de orden de trabajo Claro",
     "upload_pdf_hint": "Después de crear la orden de trabajo en el portal de Claro, descarga el PDF y súbelo aquí.",
     "upload_pdf_submit": "Cargar PDF de Claro",
+    "aviso_docs_heading": "Documentos para el aviso de Claro",
+    "download": "Descargar",
+    "not_generated": "No generado",
+    "not_uploaded": "No cargado",
+    "generate_jaf_invoice": "Generar factura JAF (PDF)",
+    "save_aviso": "Guardar aviso",
+    "send_back_heading": "Devolver a la cuadrilla",
+    "send_back_hint": "Agrega una nota explicando qué debe corregir la cuadrilla. El trabajo regresa a la cola de campo de la cuadrilla.",
+    "send_back": "Devolver",
     "errors": {
-      "pdf_required": "Por favor selecciona el PDF de Claro para cargar"
+      "pdf_required": "Por favor selecciona el PDF de Claro para cargar",
+      "send_back_note_required": "Se requiere una nota explicando la devolución."
     }
   },
   "docs_lc": {
@@ -251,10 +274,12 @@
   "dashboard": {
     "title": "Panel",
     "no_documents": "Aún no hay documentos.",
+    "pending_review_heading": "Pendientes de revisión ({{count}})",
     "stat": {
       "open_documents": "Documentos abiertos",
       "awaiting_warehouse": "Esperando almacén",
       "awaiting_crew": "Esperando cuadrilla",
+      "pending_review": "Pendientes de revisión",
       "pending_preps": "Preparaciones pendientes",
       "open_jobs": "Trabajos abiertos",
       "awaiting_close": "Esperando cierre",
@@ -265,6 +290,8 @@
     "alert": {
       "awaiting_warehouse_one": "{{count}} documento esperando almacén",
       "awaiting_warehouse_other": "{{count}} documentos esperando almacén",
+      "pending_review_one": "{{count}} trabajo esperando tu aprobación",
+      "pending_review_other": "{{count}} trabajos esperando tu aprobación",
       "awaiting_prep_one": "{{count}} documento esperando tu preparación",
       "awaiting_prep_other": "{{count}} documentos esperando tu preparación",
       "ready_to_close_one": "{{count}} trabajo listo para cerrar",

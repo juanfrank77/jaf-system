@@ -19,7 +19,29 @@ describe("computeDashboardStats", () => {
 			{ labelKey: "dashboard.stat.open_documents", value: 3 },
 			{ labelKey: "dashboard.stat.awaiting_warehouse", value: 1 },
 			{ labelKey: "dashboard.stat.awaiting_crew", value: 2 },
+			{ labelKey: "dashboard.stat.pending_review", value: 0 },
 		])
+	})
+
+	it("SUPERVISOR: counts pending review and excludes cancelled docs from open", () => {
+		const docs = [
+			doc("CREATED"),
+			doc("FIELD_UPDATED"),
+			doc("FIELD_UPDATED"),
+			doc("CANCELLED"),
+		]
+		const { stats, alert } = computeDashboardStats("SUPERVISOR", docs)
+		expect(stats).toEqual([
+			{ labelKey: "dashboard.stat.open_documents", value: 3 },
+			{ labelKey: "dashboard.stat.awaiting_warehouse", value: 1 },
+			{ labelKey: "dashboard.stat.awaiting_crew", value: 0 },
+			{ labelKey: "dashboard.stat.pending_review", value: 2 },
+		])
+		expect(alert).toEqual({
+			variant: "warn",
+			key: "dashboard.alert.pending_review",
+			count: 2,
+		})
 	})
 
 	it("SUPERVISOR: alerts when documents are awaiting warehouse", () => {

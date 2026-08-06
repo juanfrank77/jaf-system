@@ -33,6 +33,12 @@ enum DocStatus {
   CANCELLED
 }
 
+enum PaymentType {
+  PBCC_ADVANCE
+  CREW_PAYMENT
+  CLARO_FINAL
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -62,9 +68,10 @@ model User {
   systemSettings        SystemSetting[]      @relation("SystemSettings")
   auditTrail       AuditTrail[]
   photos           Photo[]
-  notifications    Notification[]
+   notifications    Notification[]
+   paymentRecords   PaymentRecord[]
 
-  @@index([role, active])
+   @@index([role, active])
 }
 
 model Session {
@@ -125,9 +132,10 @@ model JafInvoice {
   // Supervisor fills at intake
   jobType             String
   jobAddressEstimated String
-  estimatedMaterials  Json
-  assignedCrewIds     String[]
-  supervisorId        String
+   estimatedMaterials  Json
+   assignedCrewIds     String[]
+   crewAssignmentHistory Json?    // [{ userId, assignedById, assignedAt }] — recorded at assignment changes
+   supervisorId        String
   supervisor          User     @relation("SupervisorDocs", fields: [supervisorId], references: [id])
   avisoNumber         String?
   createdAt           DateTime @default(now())
@@ -135,9 +143,10 @@ model JafInvoice {
   // Warehouse prep (Step 2)
   preppedAt   DateTime?
   preppedById String?
-  preppedBy   User?    @relation("PreppedDocs", fields: [preppedById], references: [id])
+   preppedBy   User?    @relation("PreppedDocs", fields: [preppedById], references: [id])
+   prepChangedSincePrep Boolean @default(false)
 
-  // Dual signature at warehouse pickup (Step 3) — materialsTaken locked after this
+   // Dual signature at warehouse pickup (Step 3) — materialsTaken locked after this
   // warehouseId set here, not at prep — crew may pull from a different zone warehouse
   warehouseId      String?
   warehouse        Warehouse? @relation(fields: [warehouseId], references: [id])
@@ -195,12 +204,14 @@ model JafInvoice {
   receivableClosedById   String?
   receivableClosedBy     User?     @relation("ClosedReceivables", fields: [receivableClosedById], references: [id])
 
-  // Generated documents
-  warehouseReceiptPath String?
+   // Generated documents
+   warehouseReceiptPath String?
+   jafInvoicePdfPath    String?    // supervisor-generated JAF invoice (for the Claro Aviso)
 
-  auditTrail AuditTrail[]
-  photos     Photo[]
-  poLinks    PoLink[]
+   auditTrail AuditTrail[]
+   photos     Photo[]
+   poLinks    PoLink[]
+   paymentRecords PaymentRecord[]
 
   @@index([status, lcGeneratedAt])
   @@index([createdAt])
@@ -254,6 +265,22 @@ model PoLink {
   claroPONumber    String
   acceptanceNumber String?
   amount           Decimal?
+}
+
+model PaymentRecord {
+  id           String    @id @default(cuid())
+  jobId        String
+  job          JafInvoice @relation(fields: [jobId], references: [id])
+  type         PaymentType
+  amount       Decimal
+  date         DateTime
+  recordedById String
+  recordedBy   User      @relation(fields: [recordedById], references: [id])
+  note         String?
+  createdAt    DateTime @default(now())
+
+  @@index([jobId, type])
+  @@map("payment_record")
 }
 
 model Notification {

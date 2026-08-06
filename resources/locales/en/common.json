@@ -80,6 +80,17 @@
     "crew_signature_alt": "Crew signature",
     "download_audit_package": "Download Audit Package",
     "audit_trail": "Audit Trail",
+    "cancel_heading": "Cancel Work Order",
+    "cancel_placeholder": "Reason for cancellation (required)…",
+    "cancel_submit": "Cancel Work Order",
+    "reassign_heading": "Reassign Crew",
+    "reassign_placeholder": "Select a crew member…",
+    "reassign_submit": "Reassign Crew",
+    "errors": {
+      "cancel_reason_required": "Please provide a reason for cancellation.",
+      "reassign_required": "Please select a crew member.",
+      "reassign_invalid": "Selected crew member is invalid."
+    },
     "next_action": {
       "mark_prepped": "Mark as Prepped",
       "capture_signature": "Capture Crew Signature",
@@ -121,6 +132,8 @@
   "docs_field": {
     "title": "Field Update",
     "offline_notice": "<strong>Offline capable.</strong> If you lose connection, your changes save locally and sync when you reconnect.",
+    "sent_back_by": "Sent back by {{name}}",
+    "sent_back_by_unknown": "your supervisor",
     "actual_address_label": "Actual Job Address",
     "materials_used_label": "Materials Used",
     "materials_used_hint": "Cannot exceed what was signed out at warehouse.",
@@ -165,8 +178,18 @@
     "upload_pdf_heading": "Upload Claro Work Order PDF",
     "upload_pdf_hint": "After creating the work order in Claro's portal, download the PDF and upload it here.",
     "upload_pdf_submit": "Upload Claro PDF",
+    "aviso_docs_heading": "Documents for Claro Aviso",
+    "download": "Download",
+    "not_generated": "Not generated",
+    "not_uploaded": "Not uploaded",
+    "generate_jaf_invoice": "Generate JAF Invoice PDF",
+    "save_aviso": "Save Aviso #",
+    "send_back_heading": "Send Back to Crew",
+    "send_back_hint": "Add a note explaining what the crew needs to fix. The job returns to the crew's field queue.",
+    "send_back": "Send Back",
     "errors": {
-      "pdf_required": "Please select the Claro PDF to upload"
+      "pdf_required": "Please select the Claro PDF to upload",
+      "send_back_note_required": "A note explaining the send-back is required."
     }
   },
   "docs_lc": {
@@ -251,10 +274,12 @@
   "dashboard": {
     "title": "Dashboard",
     "no_documents": "No documents yet.",
+    "pending_review_heading": "Pending Review ({{count}})",
     "stat": {
       "open_documents": "Open documents",
       "awaiting_warehouse": "Awaiting warehouse",
       "awaiting_crew": "Awaiting crew",
+      "pending_review": "Pending review",
       "pending_preps": "Pending preps",
       "open_jobs": "Open jobs",
       "awaiting_close": "Awaiting close",
@@ -265,6 +290,8 @@
     "alert": {
       "awaiting_warehouse_one": "{{count}} document awaiting warehouse",
       "awaiting_warehouse_other": "{{count}} documents awaiting warehouse",
+      "pending_review_one": "{{count}} job awaiting your approval",
+      "pending_review_other": "{{count}} jobs awaiting your approval",
       "awaiting_prep_one": "{{count}} document waiting on your prep",
       "awaiting_prep_other": "{{count}} documents waiting on your prep",
       "ready_to_close_one": "{{count}} job ready to close",

@@ -76,6 +76,20 @@
       "missing_fields": "Se requieren tipo de trabajo, dirección y al menos un miembro de la cuadrilla"
     }
   },
+  "admin_history": {
+    "timeline_heading": "Línea de tiempo",
+    "no_events": "No se registraron eventos.",
+    "send_backs_heading": "Devoluciones",
+    "payments_heading": "Pagos",
+    "no_payments": "No hay registros de pago.",
+    "documents_heading": "Documentos",
+    "warehouse_receipt": "Recibo de almacén (PDF)",
+    "jaf_invoice": "Factura JAF (PDF)",
+    "claro_work_order": "Orden de trabajo Claro (PDF)",
+    "lc_request": "Solicitud de LC",
+    "materials_heading": "Materiales",
+    "back_to_work_order": "Volver a la orden de trabajo"
+  },
   "docs_view": {
     "address": "Dirección",
     "aviso_number": "# de aviso",
@@ -89,6 +103,7 @@
     "download_audit_package": "Descargar paquete de auditoría",
     "audit_trail": "Registro de auditoría",
     "edit_work_order": "Editar orden de trabajo",
+    "full_history": "Historial completo",
     "cancel_heading": "Cancelar orden de trabajo",
     "cancel_placeholder": "Razón de la cancelación (obligatorio)…",
     "cancel_submit": "Cancelar orden de trabajo",

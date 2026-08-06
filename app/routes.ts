@@ -14,6 +14,7 @@ export default [
 		route("admin/settings", "routes/_app.admin.settings.tsx"),
 		route("docs/new", "routes/_app.docs.new.tsx"),
 		route("docs/:id", "routes/_app.docs.$id.tsx"),
+		route("docs/:id/edit", "routes/_app.docs.$id_.edit.tsx"),
 		route("docs/:id/prep", "routes/_app.docs.$id_.prep.tsx"),
 		route("docs/:id/sign", "routes/_app.docs.$id_.sign.tsx"),
 		route("docs/:id/field", "routes/_app.docs.$id_.field.tsx"),

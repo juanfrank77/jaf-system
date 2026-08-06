@@ -36,10 +36,12 @@ function DashboardView({
 	stats,
 	alert,
 	docs,
+	pendingReviewDocs = [],
 }: {
 	stats: DashboardStat[]
 	alert: DashboardAlert
 	docs: DashboardDocRow[]
+	pendingReviewDocs?: DashboardDocRow[]
 }) {
 	const { t } = useTranslation()
 	return (
@@ -65,6 +67,35 @@ function DashboardView({
 				>
 					{t(alert.key, { count: alert.count })}
 				</Pill>
+			)}
+
+			{pendingReviewDocs.length > 0 && (
+				<div className="space-y-2">
+					<div className="flex items-center justify-between">
+						<h2 className="text-sm font-semibold text-foreground">
+							{t("dashboard.pending_review_heading", {
+								count: pendingReviewDocs.length,
+							})}
+						</h2>
+						<Badge variant="warn">{pendingReviewDocs.length}</Badge>
+					</div>
+					{pendingReviewDocs.map((doc) => (
+						<Link
+							key={doc.id}
+							to={`/docs/${doc.id}/review`}
+							className="block rounded-lg border border-transparent p-2.5 text-sm transition-colors hover:border-border hover:bg-muted/40"
+						>
+							<div className="flex items-center justify-between gap-2">
+								<span className="font-mono font-medium">
+									{doc.controlNumber}
+								</span>
+								<span className="text-muted-foreground truncate">
+									{doc.jobType} — {doc.jobAddressEstimated}
+								</span>
+							</div>
+						</Link>
+					))}
+				</div>
 			)}
 
 			<Card>

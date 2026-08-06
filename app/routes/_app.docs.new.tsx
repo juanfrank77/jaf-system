@@ -78,6 +78,13 @@ export async function action({ request }: Route.ActionArgs) {
 				assignedCrewIds,
 				supervisorId: user.id,
 				avisoNumber,
+				crewAssignmentHistory: JSON.stringify([
+					{
+						userIds: assignedCrewIds,
+						assignedById: user.id,
+						assignedAt: new Date().toISOString(),
+					},
+				]),
 			},
 		})
 		await tx.auditTrail.create({

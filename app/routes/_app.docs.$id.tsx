@@ -1,10 +1,18 @@
 import { useTranslation } from "react-i18next"
-import { Link } from "react-router"
+import { Form, Link, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialLineItems } from "~/components/material-line-items"
-import { buttonVariants } from "~/components/ui/button"
+import { Button, buttonVariants } from "~/components/ui/button"
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "~/components/ui/select"
+import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
-import { requireSession } from "~/lib/permissions.server"
+import { requireRole, requireSession } from "~/lib/permissions.server"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id"
 
@@ -32,6 +40,10 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		include: { user: true },
 		orderBy: { timestamp: "asc" },
 	})
+	const crewOptions = await db.user.findMany({
+		where: { role: "CREW", active: true },
+		orderBy: { name: "asc" },
+	})
 	return {
 		doc,
 		user,
@@ -41,8 +53,115 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		})),
 		supervisor,
 		assignedCrew,
+		crewOptions: crewOptions.map((c) => ({ id: c.id, name: c.name })),
 		auditTrail,
 	}
+}
+
+export async function action({ request, params }: Route.ActionArgs) {
+	const { user } = await requireRole(request, ["SUPERVISOR", "ADMIN"])
+	const doc = await db.jafInvoice.findUniqueOrThrow({
+		where: { id: params.id },
+	})
+	const form = await request.formData()
+	const intent = form.get("intent") as string
+
+	if (intent === "cancel") {
+		const reason = (form.get("reason") as string | null)?.trim() || ""
+		if (!reason) return { errorKey: "docs_view.errors.cancel_reason_required" }
+		if (doc.status === "CANCELLED" || doc.status === "LC_GENERATED")
+			throw redirect(`/docs/${params.id}`)
+		await db.$transaction(async (tx) => {
+			await tx.jafInvoice.update({
+				where: { id: params.id },
+				data: {
+					status: "CANCELLED",
+					cancellationReason: reason,
+					cancelledAt: new Date(),
+					cancelledById: user.id,
+				},
+			})
+			await tx.auditTrail.create({
+				data: {
+					docId: params.id,
+					userId: user.id,
+					action: "DOC_CANCELLED",
+					diffJson: {
+						from: doc.status,
+						to: "CANCELLED",
+						reason,
+					},
+				},
+			})
+			// PRD §1.8 edge: job was already prepped → alert Warehouse to restock.
+			if (doc.preppedAt) {
+				const warehouseUsers = await tx.user.findMany({
+					where: { role: "WAREHOUSE", active: true },
+				})
+				await Promise.all(
+					warehouseUsers.map((w) =>
+						tx.notification.create({
+							data: {
+								userId: w.id,
+								docId: params.id,
+								message: `Job ${doc.controlNumber} cancelled — please restock staged materials.`,
+							},
+						}),
+					),
+				)
+			}
+		})
+		throw redirect(`/docs/${params.id}`)
+	}
+
+	if (intent === "reassign") {
+		const newCrewId = (form.get("crewId") as string | null)?.trim() || ""
+		if (!newCrewId) return { errorKey: "docs_view.errors.reassign_required" }
+		const newCrew = await db.user.findUnique({
+			where: { id: newCrewId },
+		})
+		if (!newCrew || newCrew.role !== "CREW")
+			return { errorKey: "docs_view.errors.reassign_invalid" }
+		if (doc.status === "CANCELLED" || doc.status === "LC_GENERATED")
+			throw redirect(`/docs/${params.id}`)
+		const history = ((doc.crewAssignmentHistory as any[]) || []).concat([
+			{
+				userIds: [newCrewId],
+				assignedById: user.id,
+				assignedAt: new Date().toISOString(),
+			},
+		])
+		await db.$transaction([
+			db.jafInvoice.update({
+				where: { id: params.id },
+				data: {
+					assignedCrewIds: [newCrewId],
+					crewAssignmentHistory: history,
+				},
+			}),
+			db.auditTrail.create({
+				data: {
+					docId: params.id,
+					userId: user.id,
+					action: "CREW_REASSIGNED",
+					diffJson: {
+						from: doc.assignedCrewIds,
+						to: [newCrewId],
+					},
+				},
+			}),
+			db.notification.create({
+				data: {
+					userId: newCrewId,
+					docId: params.id,
+					message: `You have been reassigned to job ${doc.controlNumber}.`,
+				},
+			}),
+		] as any)
+		throw redirect(`/docs/${params.id}`)
+	}
+
+	throw redirect(`/docs/${params.id}`)
 }
 
 function nextActionHref(
@@ -88,9 +207,22 @@ function nextActionLabelKey(status: string): NextActionLabelKey {
 	return "docs_view.next_action.default"
 }
 
-export default function DocView({ loaderData }: Route.ComponentProps) {
-	const { doc, user, serviceCodes, supervisor, assignedCrew, auditTrail } =
-		loaderData
+export default function DocView({
+	loaderData,
+	actionData,
+}: Route.ComponentProps) {
+	const {
+		doc,
+		user,
+		serviceCodes,
+		supervisor,
+		assignedCrew,
+		crewOptions,
+		auditTrail,
+	} = loaderData
+	const error = actionData as
+		| { errorKey?: any; errorMessage?: string }
+		| undefined
 	const { t } = useTranslation()
 	const nextHref = nextActionHref(doc, user.role, user.id)
 	const estimated = (doc.estimatedMaterials as any[]) || []
@@ -190,6 +322,59 @@ export default function DocView({ loaderData }: Route.ComponentProps) {
 					{t(nextActionLabelKey(doc.status))}
 				</Link>
 			)}
+
+			{(user.role === "SUPERVISOR" || user.role === "ADMIN") &&
+				doc.status !== "CANCELLED" &&
+				doc.status !== "LC_GENERATED" && (
+					<div className="space-y-3 pt-2 border-t">
+						<Form method="post" className="space-y-2">
+							<fieldset className="border rounded-lg p-3 space-y-2">
+								<legend className="text-sm font-medium px-1">
+									{t("docs_view.reassign_heading")}
+								</legend>
+								<Select name="crewId" required>
+									<SelectTrigger className="w-full">
+										<SelectValue
+											placeholder={t("docs_view.reassign_placeholder")}
+										/>
+									</SelectTrigger>
+									<SelectContent>
+										{crewOptions.map((c: { id: string; name: string }) => (
+											<SelectItem key={c.id} value={c.id}>
+												{c.name}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+								<input type="hidden" name="intent" value="reassign" />
+								<Button type="submit" variant="outline" size="sm">
+									{t("docs_view.reassign_submit")}
+								</Button>
+							</fieldset>
+						</Form>
+
+						<Form method="post" className="space-y-2">
+							<fieldset className="border rounded-lg p-3 space-y-2">
+								<legend className="text-sm font-medium px-1 text-red-700">
+									{t("docs_view.cancel_heading")}
+								</legend>
+								<Textarea
+									name="reason"
+									placeholder={t("docs_view.cancel_placeholder")}
+									rows={2}
+									required
+								/>
+								<input type="hidden" name="intent" value="cancel" />
+								<Button type="submit" variant="destructive" size="sm">
+									{t("docs_view.cancel_submit")}
+								</Button>
+							</fieldset>
+							{error?.errorKey && (
+								<p className="text-sm text-red-600">{t(error.errorKey)}</p>
+							)}
+						</Form>
+					</div>
+				)}
 
 			{(user.role === "SUPERVISOR" ||
 				user.role === "FINANCE" ||

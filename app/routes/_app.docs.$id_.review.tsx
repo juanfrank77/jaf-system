@@ -10,7 +10,9 @@ import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
 import { validateFile } from "~/lib/file-upload.server"
+import { generateJafInvoicePdf } from "~/lib/pdf/jaf-invoice.server"
 import { canTransition, requireRole } from "~/lib/permissions.server"
+import { getIvuRate } from "~/lib/system-settings.server"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id_.review"
 
@@ -128,6 +130,131 @@ export async function action({ request, params }: Route.ActionArgs) {
 		] as any)
 	}
 
+	if (intent === "generate_jaf_invoice") {
+		if (doc.status !== "FIELD_UPDATED" && doc.status !== "SUPERVISOR_APPROVED")
+			throw redirect(`/docs/${params.id}`)
+
+		const codeMap = Object.fromEntries(
+			(await db.serviceCode.findMany()).map((c) => [c.id, c]),
+		)
+		const used = (doc.materialsUsed as any[]) || []
+		const source: any[] =
+			used.length > 0 ? used : (doc.materialsTaken as any[]) || []
+		const lineItems = source.map((item) => {
+			const code = codeMap[item.serviceCodeId]
+			return {
+				claroCode: code?.claroCode ?? "",
+				name: code?.name ?? "",
+				unit: code?.unit ?? "SR",
+				qty: Number(item.qty) || 0,
+				unitPrice: toNumberPrice(code?.unitPrice),
+			}
+		})
+		if (lineItems.length === 0) throw redirect(`/docs/${params.id}`)
+
+		const ivuRate = await getIvuRate()
+		const invoiceNumber = doc.avisoNumber
+			? `M2026-${doc.avisoNumber}`
+			: `M2026-${doc.controlNumber}`
+		const pdf = await generateJafInvoicePdf({
+			controlNumber: doc.controlNumber,
+			avisoNumber: doc.avisoNumber,
+			jobType: doc.jobType,
+			jobAddress: doc.jobAddressActual ?? doc.jobAddressEstimated,
+			invoiceDate: new Date().toLocaleDateString("en-US"),
+			invoiceNumber,
+			debtor: "PRT/CLARO",
+			lineItems,
+			ivuRate,
+			supervisorName: user.name,
+		})
+		const uploadDir = process.env.UPLOAD_DIR || "/tmp/jaf/uploads"
+		const dir = path.join(uploadDir, "jaf-invoices")
+		await fs.mkdir(dir, { recursive: true })
+		const localPath = path.join(dir, `${params.id}-jaf-invoice.pdf`)
+		await fs.writeFile(localPath, pdf)
+		await db.$transaction([
+			db.jafInvoice.update({
+				where: { id: params.id },
+				data: { jafInvoicePdfPath: localPath },
+			}),
+			db.auditTrail.create({
+				data: {
+					docId: params.id,
+					userId: user.id,
+					action: "JAF_INVOICE_GENERATED",
+					diffJson: { path: localPath },
+				},
+			}),
+		] as any)
+	}
+
+	if (intent === "send_back") {
+		const note = (form.get("note") as string | null)?.trim() || ""
+		if (!note) return { errorKey: "docs_review.errors.send_back_note_required" }
+		if (doc.status !== "FIELD_UPDATED" && doc.status !== "SUPERVISOR_APPROVED")
+			throw redirect(`/docs/${params.id}`)
+
+		const crew = await db.user.findMany({
+			where: { id: { in: doc.assignedCrewIds }, active: true },
+		})
+		const history = ((doc.sendBackHistory as any[]) || []).concat([
+			{
+				fromStatus: doc.status,
+				toStatus: "SIGNED",
+				note,
+				byUserId: user.id,
+				createdAt: new Date().toISOString(),
+			},
+		])
+		await db.$transaction([
+			db.jafInvoice.update({
+				where: { id: params.id },
+				data: { status: "SIGNED", sendBackHistory: history },
+			}),
+			db.auditTrail.create({
+				data: {
+					docId: params.id,
+					userId: user.id,
+					action: "SEND_BACK",
+					diffJson: { from: doc.status, to: "SIGNED", note },
+				},
+			}),
+			...crew.map((c) =>
+				db.notification.create({
+					data: {
+						userId: c.id,
+						docId: params.id,
+						message: `Job ${doc.controlNumber} sent back to you: ${note}`,
+					},
+				}),
+			),
+		] as any)
+	}
+
+	if (intent === "edit_aviso") {
+		// PRD §1.5 step 2: supervisor enters/updates the Aviso # (for the Claro Aviso)
+		// between Supervisor Approved and Claro upload.
+		if (doc.status !== "SUPERVISOR_APPROVED")
+			throw redirect(`/docs/${params.id}`)
+		const avisoNumber =
+			(form.get("avisoNumber") as string | null)?.trim() || null
+		await db.$transaction([
+			db.jafInvoice.update({
+				where: { id: params.id },
+				data: { avisoNumber },
+			}),
+			db.auditTrail.create({
+				data: {
+					docId: params.id,
+					userId: user.id,
+					action: "AVISO_NUMBER_SET",
+					diffJson: { avisoNumber },
+				},
+			}),
+		] as any)
+	}
+
 	throw redirect(`/docs/${params.id}`)
 }
 
@@ -233,6 +360,80 @@ export default function ReviewDoc({
 					</p>
 				)}
 			</div>
+
+			{/* Documents kit for the Claro Aviso (supervisor) */}
+			{(doc.status === "FIELD_UPDATED" || isApproved) && (
+				<div className="bg-white border rounded-lg p-4 space-y-3">
+					<h2 className="text-sm font-medium text-slate-600">
+						{t("docs_review.aviso_docs_heading")}
+					</h2>
+					<ul className="text-sm space-y-1">
+						<li className="flex justify-between">
+							<span>JAF Invoice PDF</span>
+							{doc.jafInvoicePdfPath ? (
+								<a
+									href={`/files/jaf-invoices/${doc.id}-jaf-invoice.pdf`}
+									className="text-primary underline"
+								>
+									{t("docs_review.download")}
+								</a>
+							) : (
+								<span className="text-slate-400">
+									{t("docs_review.not_generated")}
+								</span>
+							)}
+						</li>
+						<li className="flex justify-between">
+							<span>{t("docs_review.aviso_number")}:</span>
+							<span>
+								{doc.avisoNumber || t("docs_review.aviso_number_missing")}
+							</span>
+						</li>
+						<li className="flex justify-between">
+							<span>Claro work-order PDF</span>
+							{doc.claroPdfPath ? (
+								<a
+									href={`/files/claro-pdfs/${doc.id}-claro.pdf`}
+									className="text-primary underline"
+								>
+									{t("docs_review.download")}
+								</a>
+							) : (
+								<span className="text-slate-400">
+									{t("docs_review.not_uploaded")}
+								</span>
+							)}
+						</li>
+					</ul>
+					{doc.status === "SUPERVISOR_APPROVED" && (
+						<Form method="post" className="pt-2 space-y-2">
+							<Label htmlFor="avisoNumberEdit" className="text-xs">
+								{t("docs_review.aviso_number_confirm_label")}
+							</Label>
+							<div className="flex gap-2">
+								<Input
+									id="avisoNumberEdit"
+									name="avisoNumber"
+									defaultValue={doc.avisoNumber || ""}
+									placeholder="10333185"
+								/>
+								<input type="hidden" name="intent" value="edit_aviso" />
+								<Button type="submit" size="sm">
+									{t("docs_review.save_aviso")}
+								</Button>
+							</div>
+						</Form>
+					)}
+					{!doc.jafInvoicePdfPath && used.length > 0 && (
+						<Form method="post">
+							<input type="hidden" name="intent" value="generate_jaf_invoice" />
+							<Button type="submit" variant="outline" size="sm">
+								{t("docs_review.generate_jaf_invoice")}
+							</Button>
+						</Form>
+					)}
+				</div>
+			)}
 
 			{/* Inline photos */}
 			{photoItems.length > 0 && (
@@ -375,6 +576,31 @@ export default function ReviewDoc({
 						<p className="text-sm text-red-600">{error.errorMessage}</p>
 					)}
 					<Button type="submit">{t("docs_review.upload_pdf_submit")}</Button>
+				</Form>
+			)}
+
+			{(doc.status === "FIELD_UPDATED" ||
+				doc.status === "SUPERVISOR_APPROVED") && (
+				<Form
+					method="post"
+					className="space-y-2 bg-white border rounded-lg p-4"
+				>
+					<h2 className="font-medium text-sm">
+						{t("docs_review.send_back_heading")}
+					</h2>
+					<p className="text-xs text-slate-500">
+						{t("docs_review.send_back_hint")}
+					</p>
+					<Textarea name="note" rows={2} required />
+					<input type="hidden" name="intent" value="send_back" />
+					<div className="flex gap-2">
+						<Button type="submit" variant="outline">
+							{t("docs_review.send_back")}
+						</Button>
+					</div>
+					{error?.errorKey && (
+						<p className="text-sm text-red-600">{t(error.errorKey)}</p>
+					)}
 				</Form>
 			)}
 		</div>

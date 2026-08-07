@@ -11,7 +11,12 @@ import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
 import { validateFile } from "~/lib/file-upload.server"
 import { generateJafInvoicePdf } from "~/lib/pdf/jaf-invoice.server"
-import { canTransition, requireRole } from "~/lib/permissions.server"
+import {
+	canTransition,
+	isReviewActionStatus,
+	requireRole,
+} from "~/lib/permissions.server"
+import { getActiveServiceCodes } from "~/lib/service-codes.server"
 import { getIvuRate } from "~/lib/system-settings.server"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id_.review"
@@ -29,7 +34,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
-	const serviceCodes = await db.serviceCode.findMany()
+	const serviceCodes = await getActiveServiceCodes()
 	const photos = await db.photo.findMany({ where: { docId: params.id } })
 	const supervisor = await db.user.findUnique({
 		where: { id: doc.supervisorId },
@@ -131,11 +136,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	if (intent === "generate_jaf_invoice") {
-		if (doc.status !== "FIELD_UPDATED" && doc.status !== "SUPERVISOR_APPROVED")
-			throw redirect(`/docs/${params.id}`)
+		if (!isReviewActionStatus(doc.status)) throw redirect(`/docs/${params.id}`)
 
 		const codeMap = Object.fromEntries(
-			(await db.serviceCode.findMany()).map((c) => [c.id, c]),
+			(await getActiveServiceCodes()).map((c) => [c.id, c]),
 		)
 		const used = (doc.materialsUsed as any[]) || []
 		const source: any[] =
@@ -192,8 +196,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	if (intent === "send_back") {
 		const note = (form.get("note") as string | null)?.trim() || ""
 		if (!note) return { errorKey: "docs_review.errors.send_back_note_required" }
-		if (doc.status !== "FIELD_UPDATED" && doc.status !== "SUPERVISOR_APPROVED")
-			throw redirect(`/docs/${params.id}`)
+		if (!isReviewActionStatus(doc.status)) throw redirect(`/docs/${params.id}`)
 
 		const crew = await db.user.findMany({
 			where: { id: { in: doc.assignedCrewIds }, active: true },

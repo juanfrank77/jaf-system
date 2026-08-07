@@ -46,3 +46,29 @@ export function canTransition(
 	const validFrom = Array.isArray(rule.from) ? rule.from : [rule.from]
 	return validFrom.includes(currentStatus) && rule.roles.includes(role)
 }
+
+export const EDITABLE_STATUSES = ["CREATED", "PREPPED"] as const
+export type EditableStatus = (typeof EDITABLE_STATUSES)[number]
+
+export function isEditableStatus(status: string): status is EditableStatus {
+	return EDITABLE_STATUSES.includes(status as EditableStatus)
+}
+
+export const REVIEW_ACTION_STATUSES = [
+	"FIELD_UPDATED",
+	"SUPERVISOR_APPROVED",
+] as const
+export type ReviewActionStatus = (typeof REVIEW_ACTION_STATUSES)[number]
+
+export function isReviewActionStatus(
+	status: string,
+): status is ReviewActionStatus {
+	return REVIEW_ACTION_STATUSES.includes(status as ReviewActionStatus)
+}
+
+export const TERMINAL_STATUSES = ["CANCELLED", "LC_GENERATED"] as const
+export type TerminalStatus = (typeof TERMINAL_STATUSES)[number]
+
+export function isTerminalStatus(status: string): status is TerminalStatus {
+	return TERMINAL_STATUSES.includes(status as TerminalStatus)
+}

@@ -32,13 +32,10 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 		include: {
-			supervisor: { select: { id: true, name: true } },
-			warehouse: { select: { id: true, name: true } },
 			auditTrail: {
 				include: { user: { select: { id: true, name: true } } },
 				orderBy: { timestamp: "asc" },
 			},
-			photos: { orderBy: { takenAt: "desc" } },
 			paymentRecords: {
 				orderBy: { date: "asc" },
 				include: { recordedBy: { select: { id: true, name: true } } },

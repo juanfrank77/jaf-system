@@ -102,8 +102,12 @@
     "crew_signature_alt": "Crew signature",
     "download_audit_package": "Download Audit Package",
     "audit_trail": "Audit Trail",
-    "edit_work_order": "Edit Work Order",
-    "full_history": "Full History",
+      "edit_work_order": "Edit Work Order",
+      "log_returns": "Log Returns",
+      "missing_materials_heading": "Missing Materials Flagged",
+      "missing_materials_resolution_placeholder": "Resolution note (wait, substitute, or proceed without)...",
+      "missing_materials_resolve": "Resolve Missing Materials",
+      "full_history": "Full History",
     "billing_blocked": "Blocked from Billing",
     "billing_blocked_aviso": "Missing Claro Aviso # — enter it after creating the work order in Claro's portal.",
     "billing_blocked_claro_pdf": "Missing Claro work-order PDF — upload it after creating the work order in Claro's portal.",
@@ -117,7 +121,8 @@
     "errors": {
       "cancel_reason_required": "Please provide a reason for cancellation.",
       "reassign_required": "Please select a crew member.",
-      "reassign_invalid": "Selected crew member is invalid."
+      "reassign_invalid": "Selected crew member is invalid.",
+      "resolution_note_required": "Please provide a resolution note."
     },
     "next_action": {
       "mark_prepped": "Mark as Prepped",
@@ -129,9 +134,57 @@
     }
   },
   "docs_prep": {
-    "title": "Mark Materials Prepped",
+    "title": "Prep Materials",
     "confirm_message": "Confirm that materials for <strong>{{controlNumber}}</strong> have been staged and are ready for crew pickup.",
-    "submit": "Confirm Materials Prepped"
+    "submit": "Mark Prepped",
+    "submit_with_missing": "Save Missing Flags & Notify Supervisor",
+    "missing_flagged_notice": "Missing materials flagged. Supervisor has been notified. The job remains in Pending Preps until resolved.",
+    "estimated_qty": "Estimated Qty",
+    "prepped_qty": "Prepped Qty",
+    "substitute_with": "Substitute With",
+    "substitute_placeholder": "Select substitution...",
+    "missing_flag": "Missing / Out of Stock",
+    "line_notes": "Notes",
+    "line_notes_placeholder": "Substitution reason, damage, etc.",
+    "add_line": "+ Add Line",
+    "missing_count_one": "{{count}} material flagged missing",
+    "missing_count_other": "{{count}} materials flagged missing",
+    "errors": {
+      "invalid_materials": "Invalid materials data"
+    }
+  },
+  "docs_returns": {
+    "title": "Log Returns",
+    "confirm_message": "Log returned materials for <strong>{{controlNumber}}</strong>.",
+    "taken_qty": "Taken Qty",
+    "returned_qty": "Returned Qty",
+    "actual_usage": "Actual usage",
+    "line_notes": "Notes",
+    "line_notes_placeholder": "Damage, restocking notes, etc.",
+    "add_line": "+ Add Line",
+    "submit": "Save Returns",
+    "errors": {
+      "invalid_materials": "Invalid materials data"
+    }
+  },
+  "restock_fulfill": {
+    "title": "Fulfill Restock #{{id}}",
+    "missing_flagged_notice": "Missing items flagged. Request remains open until resolved.",
+    "requested_qty": "Requested Qty",
+    "prepared_qty": "Prepared Qty",
+    "substitute_with": "Substitute With",
+    "substitute_placeholder": "Select substitution...",
+    "missing_flag": "Missing / Out of Stock",
+    "line_notes": "Notes",
+    "line_notes_placeholder": "Substitution reason, damage, etc.",
+    "add_line": "+ Add Line",
+    "missing_count_one": "{{count}} item flagged missing",
+    "missing_count_other": "{{count}} items flagged missing",
+    "submit": "Mark Ready",
+    "submit_with_missing": "Save Missing Flags",
+    "errors": {
+      "invalid_items": "Invalid items data"
+    }
   },
   "docs_sign": {
     "title": "Warehouse Pickup — Dual Signature",
@@ -306,6 +359,14 @@
     "sent_back_heading": "Sent Back ({{count}})",
     "sent_back_badge": "Needs Fix",
     "sent_back_note": "Note: {{note}}",
+    "prepped_awaiting_heading": "Prepped / Awaiting Pickup ({{count}})",
+    "prepped_awaiting_badge": "Ready for pickup",
+    "missing_materials_heading": "Missing Materials ({{count}})",
+    "missing_materials_badge": "Missing stock",
+    "returns_to_log_heading": "Returns to Log ({{count}})",
+    "returns_to_log_badge": "Log returns",
+    "restock_requests_heading": "Restock Requests ({{count}})",
+    "restock_requests_badge": "Restock",
     "aviso_number": "Aviso #",
     "stat": {
       "open_documents": "Open documents",
@@ -313,6 +374,10 @@
       "awaiting_crew": "Awaiting crew",
       "pending_review": "Pending review",
       "pending_preps": "Pending preps",
+      "prepped_awaiting_pickup": "Prepped / awaiting pickup",
+      "missing_materials": "Missing materials",
+      "returns_to_log": "Returns to log",
+      "restock_requests": "Restock requests",
       "open_jobs": "Open jobs",
       "awaiting_close": "Awaiting close",
       "total_documents": "Total documents",
@@ -326,6 +391,8 @@
       "pending_review_other": "{{count}} jobs awaiting your approval",
       "awaiting_prep_one": "{{count}} document waiting on your prep",
       "awaiting_prep_other": "{{count}} documents waiting on your prep",
+      "missing_materials_one": "{{count}} job has missing materials",
+      "missing_materials_other": "{{count}} jobs have missing materials",
       "ready_to_close_one": "{{count}} job ready to close",
       "ready_to_close_other": "{{count}} jobs ready to close",
       "receivables_open_one": "{{count}} receivable open",

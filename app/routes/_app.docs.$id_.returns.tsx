@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import { Trans, useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
@@ -8,7 +8,7 @@ import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
-import { canTransition, requireRole } from "~/lib/permissions.server"
+import { requireRole } from "~/lib/permissions.server"
 import { toNumberPrice } from "~/lib/utils"
 
 interface ReturnLine {
@@ -35,7 +35,7 @@ export async function loader({ request, params }: any) {
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
-	if (!canTransition(doc.status, "SIGNED", user.role))
+	if (!["SIGNED", "FIELD_UPDATED"].includes(doc.status))
 		throw redirect(`/docs/${params.id}`)
 	const serviceCodes = await db.serviceCode.findMany({
 		where: { active: true },
@@ -56,7 +56,7 @@ export async function action({ request, params }: any) {
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
-	if (!canTransition(doc.status, "SIGNED", user.role)) {
+	if (!["SIGNED", "FIELD_UPDATED"].includes(doc.status)) {
 		throw redirect(`/docs/${params.id}`)
 	}
 

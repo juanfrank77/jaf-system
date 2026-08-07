@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
@@ -17,6 +17,7 @@ import {
 import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
+import { useEditableLines } from "~/lib/use-editable-lines"
 import { toNumberPrice } from "~/lib/utils"
 
 interface FulfillLine {
@@ -106,7 +107,13 @@ export default function FulfillRestock({ loaderData, actionData }: any) {
 	const { request: restockRequest, serviceCodes, items } = loaderData
 	const { t } = useTranslation()
 
-	const [lines, setLines] = useState<FulfillLine[]>(() =>
+	const {
+		items: lines,
+		add: pushLine,
+		remove: removeLine,
+		update: updateLine,
+		serialized,
+	} = useEditableLines<FulfillLine>(() =>
 		items.map((m: any) => ({
 			serviceCodeId: m.serviceCodeId || "",
 			requestedQty: m.qty || 1,
@@ -118,26 +125,16 @@ export default function FulfillRestock({ loaderData, actionData }: any) {
 	)
 
 	const addLine = () =>
-		setLines([
-			...lines,
-			{
-				serviceCodeId: "",
-				requestedQty: 1,
-				preparedQty: 1,
-				missing: false,
-				substitutedWith: null,
-				notes: "",
-			},
-		])
-	const removeLine = (index: number) =>
-		setLines(lines.filter((_, i) => i !== index))
-	const updateLine = (index: number, patch: Partial<FulfillLine>) =>
-		setLines(
-			lines.map((line, i) => (i === index ? { ...line, ...patch } : line)),
-		)
+		pushLine({
+			serviceCodeId: "",
+			requestedQty: 1,
+			preparedQty: 1,
+			missing: false,
+			substitutedWith: null,
+			notes: "",
+		})
 
 	const missingCount = lines.filter((l) => l.missing).length
-	const serialized = JSON.stringify(lines)
 
 	return (
 		<div className="space-y-4">

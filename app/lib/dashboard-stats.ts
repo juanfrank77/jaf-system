@@ -102,7 +102,7 @@ export function computeDashboardStats(
 			docs,
 			(d) =>
 				(d.status === "SIGNED" || d.status === "FIELD_UPDATED") &&
-				!(d as any).materialsReturned,
+				(d as any).materialsReturned === null,
 		)
 		return {
 			stats: [

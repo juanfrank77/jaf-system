@@ -4,6 +4,7 @@ import { computeDashboardStats } from "~/lib/dashboard-stats"
 import { db } from "~/lib/db.server"
 import { requireSession } from "~/lib/permissions.server"
 import type { DocStatus, Role } from "../../generated/prisma/client"
+import { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.dashboard"
 
 export const meta: Route.MetaFunction = () => [{ title: "Dashboard — JAF Ops" }]
@@ -84,6 +85,51 @@ export async function loader({ request }: Route.LoaderArgs) {
 			`) as any[])
 			: []
 
+	const warehousePreppedDocs =
+		user.role === "WAREHOUSE"
+			? await db.jafInvoice.findMany({
+					where: { ...buildBaseWhere(user.role, user.id), status: "PREPPED" },
+					orderBy: { createdAt: "desc" },
+					take: 50,
+				})
+			: []
+
+	const warehouseMissingDocs =
+		user.role === "WAREHOUSE"
+			? await db.jafInvoice.findMany({
+					where: {
+						...buildBaseWhere(user.role, user.id),
+						status: "CREATED",
+						prepChangedSincePrep: true,
+					},
+					orderBy: { createdAt: "desc" },
+					take: 50,
+				})
+			: []
+
+	const warehouseReturnsDocs =
+		user.role === "WAREHOUSE"
+			? await db.jafInvoice.findMany({
+					where: {
+						...buildBaseWhere(user.role, user.id),
+						status: { in: ["SIGNED", "FIELD_UPDATED"] },
+						materialsReturned: { equals: Prisma.DbNull },
+					},
+					orderBy: { createdAt: "desc" },
+					take: 50,
+				})
+			: []
+
+	const restockRequests =
+		user.role === "WAREHOUSE"
+			? await db.vanRestockRequest.findMany({
+					where: { status: "REQUESTED" },
+					include: { requestedBy: true, warehouse: true },
+					orderBy: { createdAt: "desc" },
+					take: 50,
+				})
+			: []
+
 	return {
 		stats,
 		alert,
@@ -94,6 +140,10 @@ export async function loader({ request }: Route.LoaderArgs) {
 		selectedStatus,
 		selectedCrew,
 		searchFilter,
+		warehousePreppedDocs,
+		warehouseMissingDocs,
+		warehouseReturnsDocs,
+		restockRequests,
 	}
 }
 
@@ -108,6 +158,10 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 		selectedStatus,
 		selectedCrew,
 		searchFilter,
+		warehousePreppedDocs,
+		warehouseMissingDocs,
+		warehouseReturnsDocs,
+		restockRequests,
 	} = loaderData
 	return (
 		<DashboardView
@@ -120,6 +174,10 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 			selectedStatus={selectedStatus}
 			selectedCrew={selectedCrew}
 			searchFilter={searchFilter}
+			warehousePreppedDocs={warehousePreppedDocs}
+			warehouseMissingDocs={warehouseMissingDocs}
+			warehouseReturnsDocs={warehouseReturnsDocs}
+			restockRequests={restockRequests}
 		/>
 	)
 }

@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest"
 import { computeDashboardStats } from "./dashboard-stats"
 
-const doc = (status: string, receivableClosedAt: Date | null = null) => ({
+const doc = (
+	status: string,
+	receivableClosedAt: Date | null = null,
+	overrides: Record<string, unknown> = {},
+) => ({
 	status: status as never,
 	receivableClosedAt,
+	...overrides,
 })
 
 describe("computeDashboardStats", () => {
@@ -57,10 +62,17 @@ describe("computeDashboardStats", () => {
 	})
 
 	it("WAREHOUSE: counts pending preps and alerts when > 0", () => {
-		const docs = [doc("CREATED"), doc("CREATED"), doc("SIGNED")]
+		const docs = [
+			doc("CREATED"),
+			doc("CREATED"),
+			doc("SIGNED", null, { materialsReturned: null }),
+		]
 		const { stats, alert } = computeDashboardStats("WAREHOUSE", docs)
 		expect(stats).toEqual([
 			{ labelKey: "dashboard.stat.pending_preps", value: 2 },
+			{ labelKey: "dashboard.stat.prepped_awaiting_pickup", value: 0 },
+			{ labelKey: "dashboard.stat.missing_materials", value: 0 },
+			{ labelKey: "dashboard.stat.returns_to_log", value: 1 },
 		])
 		expect(alert).toEqual({
 			variant: "warn",
@@ -70,7 +82,9 @@ describe("computeDashboardStats", () => {
 	})
 
 	it("WAREHOUSE: no alert when nothing is pending", () => {
-		const { alert } = computeDashboardStats("WAREHOUSE", [doc("SIGNED")])
+		const { alert } = computeDashboardStats("WAREHOUSE", [
+			doc("SIGNED", null, { materialsReturned: {} }),
+		])
 		expect(alert).toBeNull()
 	})
 

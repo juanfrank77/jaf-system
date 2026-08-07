@@ -166,6 +166,29 @@ export async function action({ request, params }: Route.ActionArgs) {
 		throw redirect(`/docs/${params.id}`)
 	}
 
+	if (intent === "resolveMissing") {
+		const note = (form.get("resolutionNote") as string | null)?.trim() || ""
+		if (!note) return { errorKey: "docs_view.errors.resolution_note_required" }
+		await db.$transaction([
+			db.jafInvoice.update({
+				where: { id: params.id },
+				data: {
+					prepChangedSincePrep: false,
+					preppedMaterials: (doc.preppedMaterials as any) || null,
+				},
+			}),
+			db.auditTrail.create({
+				data: {
+					docId: params.id,
+					userId: user.id,
+					action: "MISSING_RESOLVED",
+					diffJson: { note },
+				},
+			}),
+		] as any)
+		throw redirect(`/docs/${params.id}`)
+	}
+
 	throw redirect(`/docs/${params.id}`)
 }
 
@@ -375,6 +398,68 @@ export default function DocView({
 						})}
 					>
 						{t("docs_view.edit_work_order")}
+					</Link>
+				)}
+
+			{(user.role === "SUPERVISOR" || user.role === "ADMIN") &&
+				doc.status === "CREATED" &&
+				(doc as any).prepChangedSincePrep && (
+					<div className="space-y-2 pt-2 border-t">
+						<p className="text-sm font-medium text-amber-700">
+							{t("docs_view.missing_materials_heading")}
+						</p>
+						{(() => {
+							const prepped = (doc.preppedMaterials as any[]) || []
+							const missingLines = prepped.filter((l: any) => l.missing)
+							if (missingLines.length === 0) return null
+							return (
+								<div className="space-y-1">
+									{missingLines.map((line: any, idx: number) => {
+										const code = serviceCodes.find(
+											(c: any) => c.id === line.serviceCodeId,
+										)
+										return (
+											<p key={idx} className="text-xs text-slate-600">
+												{code?.claroCode} — {code?.name}:{" "}
+												{line.substitutedWith ? `substituted` : `missing`}
+												{line.notes ? ` (${line.notes})` : ""}
+											</p>
+										)
+									})}
+								</div>
+							)
+						})()}
+						<Form method="post" className="space-y-2">
+							<Textarea
+								name="resolutionNote"
+								placeholder={t(
+									"docs_view.missing_materials_resolution_placeholder",
+								)}
+								rows={2}
+								required
+							/>
+							<input type="hidden" name="intent" value="resolveMissing" />
+							<Button type="submit" variant="outline" className="w-full">
+								{t("docs_view.missing_materials_resolve")}
+							</Button>
+						</Form>
+						{error?.errorKey && (
+							<p className="text-sm text-red-600">{t(error.errorKey)}</p>
+						)}
+					</div>
+				)}
+
+			{(user.role === "WAREHOUSE" || user.role === "ADMIN") &&
+				(doc.status === "SIGNED" || doc.status === "FIELD_UPDATED") &&
+				!(doc as any).materialsReturned && (
+					<Link
+						to={`/docs/${(doc as any).id}/returns`}
+						className={buttonVariants({
+							variant: "outline",
+							className: "w-full",
+						})}
+					>
+						{t("docs_view.log_returns")}
 					</Link>
 				)}
 

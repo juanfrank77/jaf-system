@@ -3,6 +3,8 @@ import type { DocStatus, Role } from "../../generated/prisma/client"
 type DashboardDoc = {
 	status: DocStatus
 	receivableClosedAt: Date | null
+	prepChangedSincePrep?: boolean
+	materialsReturned?: unknown
 }
 
 export type DashboardStatLabelKey =
@@ -11,6 +13,10 @@ export type DashboardStatLabelKey =
 	| "dashboard.stat.awaiting_crew"
 	| "dashboard.stat.pending_review"
 	| "dashboard.stat.pending_preps"
+	| "dashboard.stat.prepped_awaiting_pickup"
+	| "dashboard.stat.missing_materials"
+	| "dashboard.stat.returns_to_log"
+	| "dashboard.stat.restock_requests"
 	| "dashboard.stat.open_jobs"
 	| "dashboard.stat.awaiting_close"
 	| "dashboard.stat.total_documents"
@@ -21,6 +27,7 @@ export type DashboardAlertKey =
 	| "dashboard.alert.awaiting_warehouse"
 	| "dashboard.alert.pending_review"
 	| "dashboard.alert.awaiting_prep"
+	| "dashboard.alert.missing_materials"
 	| "dashboard.alert.ready_to_close"
 	| "dashboard.alert.receivables_open"
 
@@ -86,9 +93,32 @@ export function computeDashboardStats(
 
 	if (role === "WAREHOUSE") {
 		const pendingPreps = count(docs, (d) => d.status === "CREATED")
+		const preppedAwaiting = count(docs, (d) => d.status === "PREPPED")
+		const missingMaterials = count(
+			docs,
+			(d) => d.status === "CREATED" && (d as any).prepChangedSincePrep,
+		)
+		const returnsToLog = count(
+			docs,
+			(d) =>
+				(d.status === "SIGNED" || d.status === "FIELD_UPDATED") &&
+				!(d as any).materialsReturned,
+		)
 		return {
 			stats: [
 				{ labelKey: "dashboard.stat.pending_preps", value: pendingPreps },
+				{
+					labelKey: "dashboard.stat.prepped_awaiting_pickup",
+					value: preppedAwaiting,
+				},
+				{
+					labelKey: "dashboard.stat.missing_materials",
+					value: missingMaterials,
+				},
+				{
+					labelKey: "dashboard.stat.returns_to_log",
+					value: returnsToLog,
+				},
 			],
 			alert:
 				pendingPreps > 0
@@ -97,7 +127,13 @@ export function computeDashboardStats(
 							key: "dashboard.alert.awaiting_prep",
 							count: pendingPreps,
 						}
-					: null,
+					: missingMaterials > 0
+						? {
+								variant: "warn",
+								key: "dashboard.alert.missing_materials",
+								count: missingMaterials,
+							}
+						: null,
 		}
 	}
 

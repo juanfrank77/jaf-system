@@ -6,11 +6,12 @@
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
 	provider = "postgresql"
-	postgresqlExtensions = [pg_trgm]
+	extensions = [pg_trgm]
 }
 
 enum Role {
@@ -146,6 +147,8 @@ model JafInvoice {
   preppedById String?
    preppedBy   User?    @relation("PreppedDocs", fields: [preppedById], references: [id])
    prepChangedSincePrep Boolean @default(false)
+   preppedMaterials  Json?
+   materialsReturned Json?
 
    // Dual signature at warehouse pickup (Step 3) — materialsTaken locked after this
   // warehouseId set here, not at prep — crew may pull from a different zone warehouse

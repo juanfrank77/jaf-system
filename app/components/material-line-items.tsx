@@ -5,7 +5,6 @@ import { Input } from "~/components/ui/input"
 import {
 	Select,
 	SelectContent,
-	SelectItem,
 	SelectTrigger,
 	SelectValue,
 } from "~/components/ui/select"
@@ -37,6 +36,23 @@ interface Props {
 
 let _counter = 0
 const nextKey = () => `item-${(_counter++).toString()}`
+
+function buildDropdownItems(
+	available: ServiceCode[],
+	code: ServiceCode | undefined,
+) {
+	const availableItems = available.map((c) => ({
+		value: c.id,
+		label: `${c.claroCode} — ${c.name}`,
+	}))
+	if (code && !available.find((c) => c.id === code.id)) {
+		availableItems.push({
+			value: code.id,
+			label: `${code.claroCode} — ${code.name}`,
+		})
+	}
+	return availableItems
+}
 
 export function MaterialLineItems({
 	serviceCodes,
@@ -71,6 +87,7 @@ export function MaterialLineItems({
 			<input type="hidden" name={name} value={JSON.stringify(serialized)} />
 			{items.map((item) => {
 				const code = serviceCodes.find((c) => c.id === item.serviceCodeId)
+				const dropdownItems = buildDropdownItems(available, code)
 				if (readOnly) {
 					return (
 						<div
@@ -93,10 +110,7 @@ export function MaterialLineItems({
 				return (
 					<div key={item._key} className="flex items-center gap-2">
 						<Select
-							items={serviceCodes.map((c) => ({
-								value: c.id,
-								label: `${c.claroCode} — ${c.name}`,
-							}))}
+							items={dropdownItems}
 							value={item.serviceCodeId}
 							onValueChange={(v) =>
 								updateItem(item._key, { serviceCodeId: v ?? "" })
@@ -107,18 +121,7 @@ export function MaterialLineItems({
 									placeholder={t("material_line_items.select_placeholder")}
 								/>
 							</SelectTrigger>
-							<SelectContent>
-								{code && (
-									<SelectItem value={code.id}>
-										{code.claroCode} — {code.name}
-									</SelectItem>
-								)}
-								{available.map((c) => (
-									<SelectItem key={c.id} value={c.id}>
-										{c.claroCode} — {c.name}
-									</SelectItem>
-								))}
-							</SelectContent>
+							<SelectContent />
 						</Select>
 						<Input
 							type="number"

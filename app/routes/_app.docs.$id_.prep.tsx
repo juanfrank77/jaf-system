@@ -17,6 +17,7 @@ import {
 import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
 import { canTransition, requireRole } from "~/lib/permissions.server"
+import { useEditableLines } from "~/lib/use-editable-lines"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id_.prep"
 
@@ -71,7 +72,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 	const form = await request.formData()
 	const preppedMaterialsRaw = form.get("preppedMaterials") as string
-	const _hasMissing = form.get("hasMissing") === "true"
 
 	let preppedMaterials: PrepLine[] = []
 	try {
@@ -152,7 +152,13 @@ export default function PrepDoc({
 	const { t } = useTranslation()
 	const estimated = (doc.estimatedMaterials as any[]) || []
 
-	const [lines, setLines] = useState<PrepLine[]>(() =>
+	const {
+		items: lines,
+		add: pushLine,
+		remove: removeLine,
+		update: updateLine,
+		serialized,
+	} = useEditableLines<PrepLine>(() =>
 		estimated.map((m) => ({
 			_key: nextPrepKey(),
 			serviceCodeId: m.serviceCodeId || "",
@@ -165,27 +171,17 @@ export default function PrepDoc({
 	)
 
 	const addLine = () =>
-		setLines([
-			...lines,
-			{
-				_key: nextPrepKey(),
-				serviceCodeId: "",
-				estimatedQty: 1,
-				preppedQty: 1,
-				substitutedWith: null,
-				missing: false,
-				notes: "",
-			},
-		])
-	const removeLine = (index: number) =>
-		setLines(lines.filter((_, i) => i !== index))
-	const updateLine = (index: number, patch: Partial<PrepLine>) =>
-		setLines(
-			lines.map((line, i) => (i === index ? { ...line, ...patch } : line)),
-		)
+		pushLine({
+			_key: nextPrepKey(),
+			serviceCodeId: "",
+			estimatedQty: 1,
+			preppedQty: 1,
+			substitutedWith: null,
+			missing: false,
+			notes: "",
+		})
 
 	const missingCount = lines.filter((l) => l.missing).length
-	const serialized = JSON.stringify(lines)
 
 	return (
 		<div className="space-y-4">

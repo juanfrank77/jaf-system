@@ -9,6 +9,7 @@ import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
+import { useEditableLines } from "~/lib/use-editable-lines"
 import { toNumberPrice } from "~/lib/utils"
 
 interface ReturnLine {
@@ -98,7 +99,13 @@ export default function ReturnsDoc({
 	const { doc, serviceCodes, taken } = loaderData
 	const { t } = useTranslation()
 
-	const [lines, setLines] = useState<ReturnLine[]>(() =>
+	const {
+		items: lines,
+		add: pushLine,
+		remove: removeLine,
+		update: updateLine,
+		serialized,
+	} = useEditableLines<ReturnLine>(() =>
 		taken.map((m: any) => ({
 			serviceCodeId: m.serviceCodeId || "",
 			takenQty: m.qty || 0,
@@ -108,18 +115,12 @@ export default function ReturnsDoc({
 	)
 
 	const addLine = () =>
-		setLines([
-			...lines,
-			{ serviceCodeId: "", takenQty: 0, returnedQty: 0, notes: "" },
-		])
-	const removeLine = (index: number) =>
-		setLines(lines.filter((_, i) => i !== index))
-	const updateLine = (index: number, patch: Partial<ReturnLine>) =>
-		setLines(
-			lines.map((line, i) => (i === index ? { ...line, ...patch } : line)),
-		)
-
-	const serialized = JSON.stringify(lines)
+		pushLine({
+			serviceCodeId: "",
+			takenQty: 0,
+			returnedQty: 0,
+			notes: "",
+		})
 
 	return (
 		<div className="space-y-4">

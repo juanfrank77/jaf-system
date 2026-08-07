@@ -5,9 +5,8 @@ import { MaterialLineItems } from "~/components/material-line-items"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
-import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
-import { requireRole } from "~/lib/permissions.server"
+import { isEditableStatus, requireRole } from "~/lib/permissions.server"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id_.edit"
 
@@ -17,8 +16,6 @@ export const meta: Route.MetaFunction = ({ data }) => [
 	},
 ]
 
-const EDITABLE_STATUSES = ["CREATED", "PREPPED"] as const
-
 export async function loader({ request, params }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["SUPERVISOR", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
@@ -27,8 +24,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			supervisor: { select: { id: true, name: true } },
 		},
 	})
-	if (!EDITABLE_STATUSES.includes(doc.status as never))
-		throw redirect(`/docs/${params.id}`)
+	if (!isEditableStatus(doc.status)) throw redirect(`/docs/${params.id}`)
 
 	const serviceCodes = await db.serviceCode.findMany({
 		where: { active: true },
@@ -36,6 +32,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const crew = await db.user.findMany({
 		where: { role: "CREW", active: true },
 		orderBy: { name: "asc" },
+		take: 100,
 	})
 	return {
 		doc,
@@ -53,8 +50,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
-	if (!EDITABLE_STATUSES.includes(doc.status as never))
-		throw redirect(`/docs/${params.id}`)
+	if (!isEditableStatus(doc.status)) throw redirect(`/docs/${params.id}`)
 
 	const form = await request.formData()
 	const jobType = (form.get("jobType") as string).trim()

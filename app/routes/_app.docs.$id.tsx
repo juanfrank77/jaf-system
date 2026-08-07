@@ -12,7 +12,12 @@ import {
 } from "~/components/ui/select"
 import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
-import { requireRole, requireSession } from "~/lib/permissions.server"
+import {
+	isEditableStatus,
+	isTerminalStatus,
+	requireRole,
+	requireSession,
+} from "~/lib/permissions.server"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id"
 
@@ -43,6 +48,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const crewOptions = await db.user.findMany({
 		where: { role: "CREW", active: true },
 		orderBy: { name: "asc" },
+		take: 100,
+		select: { id: true, name: true },
 	})
 	return {
 		doc,
@@ -69,8 +76,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	if (intent === "cancel") {
 		const reason = (form.get("reason") as string | null)?.trim() || ""
 		if (!reason) return { errorKey: "docs_view.errors.cancel_reason_required" }
-		if (doc.status === "CANCELLED" || doc.status === "LC_GENERATED")
-			throw redirect(`/docs/${params.id}`)
+		if (isTerminalStatus(doc.status)) throw redirect(`/docs/${params.id}`)
 		await db.$transaction(async (tx) => {
 			await tx.jafInvoice.update({
 				where: { id: params.id },
@@ -122,8 +128,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 		})
 		if (!newCrew || newCrew.role !== "CREW")
 			return { errorKey: "docs_view.errors.reassign_invalid" }
-		if (doc.status === "CANCELLED" || doc.status === "LC_GENERATED")
-			throw redirect(`/docs/${params.id}`)
+		if (isTerminalStatus(doc.status)) throw redirect(`/docs/${params.id}`)
 		const history = ((doc.crewAssignmentHistory as any[]) || []).concat([
 			{
 				userIds: [newCrewId],
@@ -361,7 +366,7 @@ export default function DocView({
 			)}
 
 			{(user.role === "SUPERVISOR" || user.role === "ADMIN") &&
-				(doc.status === "CREATED" || doc.status === "PREPPED") && (
+				isEditableStatus(doc.status) && (
 					<Link
 						to={`/docs/${(doc as any).id}/edit`}
 						className={buttonVariants({

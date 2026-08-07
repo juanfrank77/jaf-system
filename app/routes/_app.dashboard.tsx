@@ -31,6 +31,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const crewOptions = await db.user.findMany({
 		where: { role: "CREW", active: true },
 		orderBy: { name: "asc" },
+		take: 100,
 		select: { id: true, name: true },
 	})
 
@@ -72,22 +73,15 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 	const sentBackDocs =
 		user.role === "SUPERVISOR"
-			? await db.jafInvoice
-					.findMany({
-						where: {
-							...buildBaseWhere(user.role, user.id),
-							status: "SIGNED",
-						},
-						orderBy: { createdAt: "desc" },
-						take: 50,
-					})
-					.then((allSigned) =>
-						allSigned.filter(
-							(d) =>
-								Array.isArray(d.sendBackHistory) &&
-								d.sendBackHistory.length > 0,
-						),
-					)
+			? ((await db.$queryRaw`
+				SELECT id, "controlNumber", status, "jobType", "jobAddressEstimated", "createdAt", "sendBackHistory"
+				FROM jaf_invoice
+				WHERE "supervisorId" = ${user.id}
+					AND status = 'SIGNED'
+					AND jsonb_array_length("sendBackHistory") > 0
+				ORDER BY "createdAt" DESC
+				LIMIT 50
+			`) as any[])
 			: []
 
 	return {

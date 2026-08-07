@@ -57,7 +57,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		doc.lcApprovedById,
 		doc.receivableClosedById,
 		...doc.assignedCrewIds,
-		...sendBack.map((s) => s.assignedById),
+		...sendBack.map((s) => s.byUserId),
 	].filter((id): id is string => Boolean(id))
 	const people = await db.user.findMany({
 		where: { id: { in: knownIds } },
@@ -209,7 +209,7 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 						<tbody>
 							{sendBack.map((s: any) => (
 								<tr
-									key={`${s.createdAt}-${s.assignedById}`}
+									key={`${s.createdAt}-${s.byUserId}`}
 									className="border-b last:border-0"
 								>
 									<td className="py-1">
@@ -217,7 +217,7 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 									</td>
 									<td>{s.fromStatus}</td>
 									<td>{s.toStatus}</td>
-									<td>{name(s.assignedById)}</td>
+									<td>{name(s.byUserId)}</td>
 									<td>{s.note}</td>
 								</tr>
 							))}

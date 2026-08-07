@@ -424,7 +424,7 @@ export default function ReviewDoc({
 							</div>
 						</Form>
 					)}
-					{!doc.jafInvoicePdfPath && used.length > 0 && (
+					{!doc.jafInvoicePdfPath && (used.length > 0 || taken.length > 0) && (
 						<Form method="post">
 							<input type="hidden" name="intent" value="generate_jaf_invoice" />
 							<Button type="submit" variant="outline" size="sm">

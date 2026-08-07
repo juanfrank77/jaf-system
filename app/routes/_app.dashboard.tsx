@@ -59,7 +59,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const { stats, alert } = computeDashboardStats(user.role, docs)
 
 	const pendingReviewDocs =
-		user.role === "SUPERVISOR" || user.role === "ADMIN"
+		user.role === "SUPERVISOR"
 			? await db.jafInvoice.findMany({
 					where: {
 						...buildBaseWhere(user.role, user.id),
@@ -71,7 +71,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 			: []
 
 	const sentBackDocs =
-		user.role === "SUPERVISOR" || user.role === "ADMIN"
+		user.role === "SUPERVISOR"
 			? await db.jafInvoice
 					.findMany({
 						where: {

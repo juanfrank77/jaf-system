@@ -134,7 +134,7 @@ model JafInvoice {
   jobAddressEstimated String
    estimatedMaterials  Json
    assignedCrewIds     String[]
-   crewAssignmentHistory Json?    // [{ userId, assignedById, assignedAt }] — recorded at assignment changes
+   crewAssignmentHistory Json?    // [{ userIds, assignedById, assignedAt }] — recorded at assignment changes
    supervisorId        String
   supervisor          User     @relation("SupervisorDocs", fields: [supervisorId], references: [id])
   avisoNumber         String?

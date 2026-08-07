@@ -104,6 +104,10 @@
     "audit_trail": "Audit Trail",
     "edit_work_order": "Edit Work Order",
     "full_history": "Full History",
+    "billing_blocked": "Blocked from Billing",
+    "billing_blocked_aviso": "Missing Claro Aviso # — enter it after creating the work order in Claro's portal.",
+    "billing_blocked_claro_pdf": "Missing Claro work-order PDF — upload it after creating the work order in Claro's portal.",
+    "billing_blocked_hint": "Both the Aviso # and Claro PDF are required before Finance can bill this job.",
     "cancel_heading": "Cancel Work Order",
     "cancel_placeholder": "Reason for cancellation (required)…",
     "cancel_submit": "Cancel Work Order",
@@ -299,6 +303,10 @@
     "title": "Dashboard",
     "no_documents": "No documents yet.",
     "pending_review_heading": "Pending Review ({{count}})",
+    "sent_back_heading": "Sent Back ({{count}})",
+    "sent_back_badge": "Needs Fix",
+    "sent_back_note": "Note: {{note}}",
+    "aviso_number": "Aviso #",
     "stat": {
       "open_documents": "Open documents",
       "awaiting_warehouse": "Awaiting warehouse",
@@ -322,6 +330,24 @@
       "ready_to_close_other": "{{count}} jobs ready to close",
       "receivables_open_one": "{{count}} receivable open",
       "receivables_open_other": "{{count}} receivables open"
+    },
+    "filter": {
+      "heading": "Filters",
+      "status_all": "All statuses",
+      "status_placeholder": "All statuses",
+      "crew_placeholder": "All crews",
+      "search_placeholder": "Search by Aviso # or address…",
+      "clear_all": "Clear filters"
     }
+  },
+  "docs_status": {
+    "created": "Created",
+    "prepped": "Prepped",
+    "signed": "Signed",
+    "field_updated": "Field Updated",
+    "supervisor_approved": "Supervisor Approved",
+    "claro_uploaded": "Claro Uploaded",
+    "lc_generated": "LC Generated",
+    "cancelled": "Cancelled"
   }
 }

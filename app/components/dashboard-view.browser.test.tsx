@@ -11,6 +11,8 @@ const doc = (
 	jobType: "Installation",
 	jobAddressEstimated: "Cupey, San Juan",
 	createdAt: new Date("2026-07-01"),
+	assignedCrewIds: [],
+	sendBackHistory: null,
 	...overrides,
 })
 
@@ -131,5 +133,150 @@ describe("DashboardView", () => {
 			],
 		})
 		expect(screen.getByText("No documents yet.")).toBeInTheDocument()
+	})
+
+	it("renders the Sent Back section with the latest send-back note", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<DashboardView
+							stats={[]}
+							alert={null}
+							docs={[]}
+							sentBackDocs={[
+								doc({
+									id: "sb1",
+									status: "SIGNED",
+									controlNumber: "JAF-10494",
+									sendBackHistory: [
+										{
+											fromStatus: "FIELD_UPDATED",
+											toStatus: "SIGNED",
+											note: "Photo was blurry, please reshoot",
+											byUserId: "sup1",
+											createdAt: "2026-08-06T10:00:00Z",
+										},
+									],
+								}),
+							]}
+						/>
+					),
+				},
+			],
+		})
+		expect(
+			screen.getByText("Sent Back (1)", { exact: false }),
+		).toBeInTheDocument()
+		expect(screen.getByText("Needs Fix")).toBeInTheDocument()
+		expect(
+			screen.getByText(/Photo was blurry, please reshoot/),
+		).toBeInTheDocument()
+	})
+
+	it("does not render the Sent Back section when empty", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<DashboardView
+							stats={[]}
+							alert={null}
+							docs={[]}
+							sentBackDocs={[]}
+						/>
+					),
+				},
+			],
+		})
+		expect(screen.queryByText("Sent Back")).not.toBeInTheDocument()
+	})
+
+	it("renders the Aviso # for documents that have one", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<DashboardView
+							stats={[]}
+							alert={null}
+							docs={[doc({ id: "abc", avisoNumber: "10333185" })]}
+						/>
+					),
+				},
+			],
+		})
+		expect(screen.getByText("Aviso # 10333185")).toBeInTheDocument()
+	})
+
+	it("renders the filter section with status, crew, and search placeholders", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<DashboardView
+							stats={[]}
+							alert={null}
+							docs={[]}
+							crewOptions={[{ id: "crew1", name: "Brigade Alpha" }]}
+						/>
+					),
+				},
+			],
+		})
+		expect(screen.getByText("Filters")).toBeInTheDocument()
+		expect(screen.getByText("All statuses")).toBeInTheDocument()
+		expect(screen.getByText("All crews")).toBeInTheDocument()
+		expect(screen.getByPlaceholderText(/Search by Aviso/)).toBeInTheDocument()
+	})
+
+	it("shows the clear-filters button only when filters are active", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<DashboardView
+							stats={[]}
+							alert={null}
+							docs={[]}
+							crewOptions={[]}
+							selectedStatus="CREATED"
+						/>
+					),
+				},
+			],
+		})
+		expect(screen.getByText("Clear filters")).toBeInTheDocument()
+	})
+
+	it("hides the clear-filters button when no filters are active", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<DashboardView stats={[]} alert={null} docs={[]} crewOptions={[]} />
+					),
+				},
+			],
+		})
+		expect(screen.queryByText("Clear filters")).not.toBeInTheDocument()
 	})
 })

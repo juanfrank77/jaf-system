@@ -229,6 +229,17 @@ export default function DocView({
 	const taken = (doc.materialsTaken as any[]) || []
 	const used = (doc.materialsUsed as any[]) || []
 
+	const APPROVED_STATUSES = [
+		"SUPERVISOR_APPROVED",
+		"CLARO_UPLOADED",
+		"LC_GENERATED",
+	] as const
+	const isApproved = APPROVED_STATUSES.includes(
+		doc.status as (typeof APPROVED_STATUSES)[number],
+	)
+	const missingAviso = isApproved && !doc.avisoNumber
+	const missingClaroPdf = isApproved && !doc.claroPdfPath
+
 	return (
 		<div className="space-y-5">
 			<div className="flex items-center justify-between">
@@ -240,6 +251,32 @@ export default function DocView({
 					{doc.status.replace(/_/g, " ")}
 				</span>
 			</div>
+
+			{(missingAviso || missingClaroPdf) && (
+				<div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-2">
+					<div className="flex items-start gap-3">
+						<span className="text-amber-600 text-lg" aria-hidden>
+							⚠
+						</span>
+						<div className="space-y-1">
+							<p className="font-medium text-amber-900">
+								{t("docs_view.billing_blocked")}
+							</p>
+							<ul className="text-sm text-amber-800 list-disc list-inside">
+								{missingAviso && (
+									<li>{t("docs_view.billing_blocked_aviso")}</li>
+								)}
+								{missingClaroPdf && (
+									<li>{t("docs_view.billing_blocked_claro_pdf")}</li>
+								)}
+							</ul>
+							<p className="text-xs text-amber-700">
+								{t("docs_view.billing_blocked_hint")}
+							</p>
+						</div>
+					</div>
+				</div>
+			)}
 
 			<section className="bg-white border rounded-lg p-4 space-y-2 text-sm">
 				<p>

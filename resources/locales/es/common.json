@@ -104,6 +104,10 @@
     "audit_trail": "Registro de auditoría",
     "edit_work_order": "Editar orden de trabajo",
     "full_history": "Historial completo",
+    "billing_blocked": "Bloqueado para facturación",
+    "billing_blocked_aviso": "Falta # de Aviso Claro — ingréselo después de crear la orden en Claro.",
+    "billing_blocked_claro_pdf": "Falta PDF de orden de trabajo Claro — cárguelo después de crearla en Claro.",
+    "billing_blocked_hint": "Se requieren el # de Aviso y el PDF de Claro antes de que Finanzas pueda facturar este trabajo.",
     "cancel_heading": "Cancelar orden de trabajo",
     "cancel_placeholder": "Razón de la cancelación (obligatorio)…",
     "cancel_submit": "Cancelar orden de trabajo",
@@ -299,6 +303,10 @@
     "title": "Panel",
     "no_documents": "Aún no hay documentos.",
     "pending_review_heading": "Pendientes de revisión ({{count}})",
+    "sent_back_heading": "Devueltos ({{count}})",
+    "sent_back_badge": "Necesita corrección",
+    "sent_back_note": "Nota: {{note}}",
+    "aviso_number": "Aviso #",
     "stat": {
       "open_documents": "Documentos abiertos",
       "awaiting_warehouse": "Esperando almacén",
@@ -322,6 +330,24 @@
       "ready_to_close_other": "{{count}} trabajos listos para cerrar",
       "receivables_open_one": "{{count}} cuenta por cobrar abierta",
       "receivables_open_other": "{{count}} cuentas por cobrar abiertas"
+    },
+    "filter": {
+      "heading": "Filtros",
+      "status_all": "Todos los estados",
+      "status_placeholder": "Todos los estados",
+      "crew_placeholder": "Todas las cuadrillas",
+      "search_placeholder": "Buscar por Aviso # o dirección…",
+      "clear_all": "Limpiar filtros"
     }
+  },
+  "docs_status": {
+    "created": "Creado",
+    "prepped": "Preparado",
+    "signed": "Firmado",
+    "field_updated": "Actualizado en campo",
+    "supervisor_approved": "Aprobado por supervisor",
+    "claro_uploaded": "Cargado a Claro",
+    "lc_generated": "LC generada",
+    "cancelled": "Cancelado"
   }
 }

@@ -12,12 +12,8 @@ import {
 } from "~/components/ui/select"
 import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
-import {
-	isEditableStatus,
-	isTerminalStatus,
-	requireRole,
-	requireSession,
-} from "~/lib/permissions.server"
+import { isEditableStatus, isTerminalStatus } from "~/lib/permissions"
+import { requireRole, requireSession } from "~/lib/permissions.server"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id"
 
@@ -213,8 +209,11 @@ function nextActionHref(
 		(userRole === "SUPERVISOR" || userRole === "ADMIN")
 	)
 		return `/docs/${doc.id}/review`
-	if (doc.status === "CLARO_UPLOADED" && userRole === "FINANCE")
-		return `/docs/${doc.id}/lc`
+	if (
+		(doc.status === "SUPERVISOR_APPROVED" || doc.status === "CLARO_UPLOADED") &&
+		(userRole === "FINANCE" || userRole === "ADMIN")
+	)
+		return `/finance/verify/${doc.id}`
 	return null
 }
 
@@ -223,6 +222,7 @@ type NextActionLabelKey =
 	| "docs_view.next_action.capture_signature"
 	| "docs_view.next_action.update_from_field"
 	| "docs_view.next_action.review_approve"
+	| "docs_view.next_action.verify_for_finance"
 	| "docs_view.next_action.generate_lc"
 	| "docs_view.next_action.default"
 
@@ -231,6 +231,8 @@ function nextActionLabelKey(status: string): NextActionLabelKey {
 	if (status === "PREPPED") return "docs_view.next_action.capture_signature"
 	if (status === "SIGNED") return "docs_view.next_action.update_from_field"
 	if (status === "FIELD_UPDATED") return "docs_view.next_action.review_approve"
+	if (status === "SUPERVISOR_APPROVED")
+		return "docs_view.next_action.verify_for_finance"
 	if (status === "CLARO_UPLOADED") return "docs_view.next_action.generate_lc"
 	return "docs_view.next_action.default"
 }

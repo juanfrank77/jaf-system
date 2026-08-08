@@ -20,7 +20,8 @@ import {
 } from "~/components/ui/select"
 import { db } from "~/lib/db.server"
 import { generateWarehouseReceiptPdf } from "~/lib/pdf/warehouse-receipt.server"
-import { canTransition, requireRole } from "~/lib/permissions.server"
+import { canTransition } from "~/lib/permissions"
+import { requireRole } from "~/lib/permissions.server"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id_.sign"
 

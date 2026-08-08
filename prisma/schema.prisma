@@ -59,9 +59,10 @@ model User {
   releasedInvoices      JafInvoice[]         @relation("ReleasedDocs")
   signedInvoices        JafInvoice[]         @relation("SignedDocs")
   overriddenInvoices    JafInvoice[]         @relation("OverriddenDocs")
-  lcApprovedInvoices    JafInvoice[]         @relation("LcApprovedDocs")
-   closedReceivables     JafInvoice[]         @relation("ClosedReceivables")
-   cancelledInvoices     JafInvoice[]         @relation("CancelledDocs")
+   lcApprovedInvoices    JafInvoice[]         @relation("LcApprovedDocs")
+   financeVerifiedInvoices JafInvoice[]       @relation("FinanceVerifiedDocs")
+    closedReceivables     JafInvoice[]         @relation("ClosedReceivables")
+    cancelledInvoices     JafInvoice[]         @relation("CancelledDocs")
   restockRequests       VanRestockRequest[]  @relation("RestockRequests")
   restockReleases       VanRestockRequest[]  @relation("RestockReleases")
   restockReceivers      VanRestockRequest[]  @relation("RestockReceivers")
@@ -193,20 +194,31 @@ model JafInvoice {
   claroPdfPath         String?
   claroUploadedAt      DateTime?
 
-  // Lissette generates LC (Step 6)
-  lcRequestPdfPath String?
-  lcGeneratedAt    DateTime?
-  lcApprovedById   String?
-  lcApprovedBy     User?     @relation("LcApprovedDocs", fields: [lcApprovedById], references: [id])
+   // Lissette generates LC (Step 6)
+   lcRequestPdfPath String?
+   lcGeneratedAt    DateTime?
+   lcApprovedById   String?
+   lcApprovedBy     User?     @relation("LcApprovedDocs", fields: [lcApprovedById], references: [id])
 
-  // Payment tracking (receivables dashboard)
-  advanceReceivedAt      DateTime?
-  advanceAmount          Decimal?
-  finalPaymentReceivedAt DateTime?
-  finalPaymentAmount     Decimal?
-  receivableClosedAt     DateTime?
-  receivableClosedById   String?
-  receivableClosedBy     User?     @relation("ClosedReceivables", fields: [receivableClosedById], references: [id])
+   // Finance pipeline (Phase 2)
+   financeVerifiedAt      DateTime?
+   financeVerifiedById    String?
+   financeVerifiedBy      User?      @relation("FinanceVerifiedDocs", fields: [financeVerifiedById], references: [id])
+   financeSendBackNotes   Json?      // [{ note, byUserId, createdAt }] — Finance→Supervisor Aviso issues
+   pbccRequestPdfPath     String?
+   pbccRequestSentAt      DateTime?
+   karmenCopySentAt       DateTime?
+   finalClaroDocPath      String?
+   finalClaroUploadedAt   DateTime?
+
+   // Payment tracking (receivables dashboard)
+   advanceReceivedAt      DateTime?
+   advanceAmount          Decimal?
+   finalPaymentReceivedAt DateTime?
+   finalPaymentAmount     Decimal?
+   receivableClosedAt     DateTime?
+   receivableClosedById   String?
+   receivableClosedBy     User?     @relation("ClosedReceivables", fields: [receivableClosedById], references: [id])
 
    // Generated documents
    warehouseReceiptPath String?
@@ -218,6 +230,7 @@ model JafInvoice {
    paymentRecords PaymentRecord[]
 
   @@index([status, lcGeneratedAt])
+  @@index([status, financeVerifiedAt, pbccRequestSentAt, advanceReceivedAt])
   @@index([createdAt])
   @@index([assignedCrewIds(ops: ArrayOps)], type: Gin)
   @@index([avisoNumber(ops: raw("gin_trgm_ops"))], type: Gin)

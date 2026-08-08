@@ -21,7 +21,7 @@
     "nav": {
       "dashboard": "Dashboard",
       "new_document": "+ New Document",
-      "receivables": "Receivables",
+      "receivables": "Finance Pipeline",
       "admin_settings": "Admin Settings",
       "catalog": "Catalog"
     },
@@ -129,6 +129,7 @@
       "capture_signature": "Capture Crew Signature",
       "update_from_field": "Update from Field",
       "review_approve": "Review & Approve",
+      "verify_for_finance": "Verify for Finance",
       "generate_lc": "Generate LC Request",
       "default": "Next Action"
     }
@@ -329,23 +330,99 @@
     }
   },
   "finance_receivables": {
-    "title": "Receivables",
-    "open_count_one": "{{count}} open",
-    "open_count_other": "{{count}} open",
+    "title": "Finance Pipeline",
+    "total_open_one": "{{count}} job",
+    "total_open_other": "{{count}} jobs",
     "aviso": "Aviso {{number}}",
     "age_days": "{{count}}d",
-    "advance_label": "80% Advance (PBCC)",
-    "final_payment_label": "Final Payment (Claro)",
-    "close_entry_label": "Close Entry",
-    "amount_placeholder": "Amount",
-    "record": "Record",
+    "amount_label": "Amount",
+    "missing_docs": "Missing Aviso # or Claro PDF",
+    "verify": "Verify",
+    "generate_pbcc": "Generate PBCC Request",
+    "upload_final_doc": "Upload Final Doc",
+    "record_po": "Record PO",
+    "record_advance": "Record 80%",
+    "advance_placeholder": "80% amount",
+    "record_final": "Record final",
+    "final_placeholder": "Final amount",
     "close": "Close",
-    "record_both_first": "Record both payments first",
-    "closed_summary_one": "Closed ({{count}})",
-    "closed_summary_other": "Closed ({{count}})",
-    "closed_on": "Closed {{date}}",
     "errors": {
-      "invalid_amount": "Invalid amount"
+      "invalid_amount": "Invalid amount",
+      "record_both_first": "Record both payments before closing"
+    }
+  },
+  "finance": {
+    "stage": {
+      "to_verify": "To Verify",
+      "pbcc_request_pending": "PBCC Request Pending",
+      "waiting_pbcc_funding": "Waiting PBCC Funding",
+      "waiting_claro_po": "Waiting Claro PO",
+      "po_received_upload": "PO Received / Upload",
+      "in_claro_queue": "In Claro Queue",
+      "ready_to_close": "Ready to Close",
+      "closed": "Closed"
+    }
+  },
+  "finance_verify": {
+    "title": "Verify Aviso vs. Invoice",
+    "amount": "Invoice amount",
+    "ivu_rate": "IVU rate: {{rate}}%",
+    "billing_blocked": "Cannot verify — billing documents incomplete",
+    "blocked_aviso": "Missing Claro Aviso #",
+    "blocked_claro_pdf": "Missing Claro work-order PDF",
+    "jaf_invoice": "JAF Invoice",
+    "download": "Download",
+    "job_type": "Job Type",
+    "address": "Address",
+    "aviso_number": "Aviso #",
+    "supervisor": "Supervisor",
+    "claro_work_order": "Claro Work Order",
+    "claro_pdf_title": "Claro PDF",
+    "no_claro_pdf": "No Claro PDF on file.",
+    "previous_send_backs": "Previous Finance Send-backs",
+    "verify_note_placeholder": "Optional verification note…",
+    "mark_verified": "Mark Verified",
+    "cannot_verify_hint": "The supervisor must add the Aviso # and upload the Claro PDF before verification.",
+    "send_back_placeholder": "Explain the Aviso issue to the supervisor…",
+    "send_back": "Send Back to Supervisor",
+    "back": "Back to pipeline",
+    "errors": {
+      "note_required": "A send-back note is required."
+    }
+  },
+  "finance_pbcc": {
+    "title": "PBCC Payment Request",
+    "job_type": "Job Type",
+    "address": "Address",
+    "aviso_number": "Aviso #",
+    "amount": "Invoice amount",
+    "advance": "PBCC advance (80%)",
+    "ivu_rate": "IVU rate: {{rate}}%",
+    "hint": "Generating this PDF saves the request, marks it sent, and sends a copy to the Comptroller.",
+    "generate_and_download": "Generate & Download PBCC Request"
+  },
+  "finance_po": {
+    "title": "Claro PO & Final Document",
+    "job_type": "Job Type",
+    "address": "Address",
+    "amount": "Invoice amount",
+    "ivu_rate": "IVU rate: {{rate}}%",
+    "recorded_pos": "Recorded POs",
+    "record_po_heading": "Record Claro PO",
+    "po_number_label": "Claro PO #",
+    "po_date_label": "PO Date",
+    "po_pdf_label": "PO PDF (optional)",
+    "record_po": "Record PO",
+    "generate_final_doc_heading": "Generate Final Claro Document",
+    "generate_final_doc_hint": "Generate the signed-upload PDF for Claro's portal.",
+    "generate_final_doc": "Generate Final Document",
+    "final_doc_heading": "Final Claro Document",
+    "final_doc_hint": "Sign this PDF and upload it to Claro's portal.",
+    "download_final_doc": "Download final document",
+    "uploaded_on": "Uploaded on {{date}}",
+    "errors": {
+      "po_number_required": "PO number is required.",
+      "record_po_first": "Record a PO before generating the final document."
     }
   },
   "material_line_items": {

@@ -21,7 +21,7 @@
     "nav": {
       "dashboard": "Panel",
       "new_document": "+ Nuevo documento",
-      "receivables": "Cuentas por cobrar",
+      "receivables": "Pipeline de Finanzas",
       "admin_settings": "Configuración de administrador",
       "catalog": "Catálogo"
     },
@@ -129,6 +129,7 @@
       "capture_signature": "Capturar firma de cuadrilla",
       "update_from_field": "Actualizar desde el campo",
       "review_approve": "Revisar y aprobar",
+      "verify_for_finance": "Verificar para Finanzas",
       "generate_lc": "Generar solicitud de LC",
       "default": "Próxima acción"
     }
@@ -329,23 +330,99 @@
     }
   },
   "finance_receivables": {
-    "title": "Cuentas por cobrar",
-    "open_count_one": "{{count}} abierta",
-    "open_count_other": "{{count}} abiertas",
+    "title": "Pipeline de Finanzas",
+    "total_open_one": "{{count}} trabajo",
+    "total_open_other": "{{count}} trabajos",
     "aviso": "Aviso {{number}}",
     "age_days": "{{count}}d",
-    "advance_label": "80% Adelanto (PBCC)",
-    "final_payment_label": "Pago final (Claro)",
-    "close_entry_label": "Cerrar entrada",
-    "amount_placeholder": "Cantidad",
-    "record": "Registrar",
+    "amount_label": "Monto",
+    "missing_docs": "Falta Aviso # o PDF de Claro",
+    "verify": "Verificar",
+    "generate_pbcc": "Generar solicitud PBCC",
+    "upload_final_doc": "Cargar documento final",
+    "record_po": "Registrar PO",
+    "record_advance": "Registrar 80%",
+    "advance_placeholder": "Monto del 80%",
+    "record_final": "Registrar final",
+    "final_placeholder": "Monto final",
     "close": "Cerrar",
-    "record_both_first": "Registra ambos pagos primero",
-    "closed_summary_one": "Cerrada ({{count}})",
-    "closed_summary_other": "Cerradas ({{count}})",
-    "closed_on": "Cerrada {{date}}",
     "errors": {
-      "invalid_amount": "Cantidad inválida"
+      "invalid_amount": "Cantidad inválida",
+      "record_both_first": "Registra ambos pagos antes de cerrar"
+    }
+  },
+  "finance": {
+    "stage": {
+      "to_verify": "Por verificar",
+      "pbcc_request_pending": "Solicitud PBCC pendiente",
+      "waiting_pbcc_funding": "Esperando fondos PBCC",
+      "waiting_claro_po": "Esperando PO de Claro",
+      "po_received_upload": "PO recibido / cargar",
+      "in_claro_queue": "En cola de Claro",
+      "ready_to_close": "Listo para cerrar",
+      "closed": "Cerrado"
+    }
+  },
+  "finance_verify": {
+    "title": "Verificar Aviso vs. Factura",
+    "amount": "Monto de factura",
+    "ivu_rate": "Tasa de IVU: {{rate}}%",
+    "billing_blocked": "No se puede verificar — documentos de facturación incompletos",
+    "blocked_aviso": "Falta # de Aviso Claro",
+    "blocked_claro_pdf": "Falta PDF de orden de trabajo Claro",
+    "jaf_invoice": "Factura JAF",
+    "download": "Descargar",
+    "job_type": "Tipo de trabajo",
+    "address": "Dirección",
+    "aviso_number": "Aviso #",
+    "supervisor": "Supervisor",
+    "claro_work_order": "Orden de trabajo Claro",
+    "claro_pdf_title": "PDF de Claro",
+    "no_claro_pdf": "No hay PDF de Claro en archivo.",
+    "previous_send_backs": "Devoluciones previas de Finanzas",
+    "verify_note_placeholder": "Nota de verificación opcional…",
+    "mark_verified": "Marcar verificado",
+    "cannot_verify_hint": "El supervisor debe agregar el Aviso # y cargar el PDF de Claro antes de verificar.",
+    "send_back_placeholder": "Explica el problema del Aviso al supervisor…",
+    "send_back": "Devolver al supervisor",
+    "back": "Volver al pipeline",
+    "errors": {
+      "note_required": "Se requiere una nota de devolución."
+    }
+  },
+  "finance_pbcc": {
+    "title": "Solicitud de pago PBCC",
+    "job_type": "Tipo de trabajo",
+    "address": "Dirección",
+    "aviso_number": "Aviso #",
+    "amount": "Monto de factura",
+    "advance": "Adelanto PBCC (80%)",
+    "ivu_rate": "Tasa de IVU: {{rate}}%",
+    "hint": "Generar este PDF guarda la solicitud, la marca como enviada y envía una copia a la Contralora.",
+    "generate_and_download": "Generar y descargar solicitud PBCC"
+  },
+  "finance_po": {
+    "title": "PO de Claro y documento final",
+    "job_type": "Tipo de trabajo",
+    "address": "Dirección",
+    "amount": "Monto de factura",
+    "ivu_rate": "Tasa de IVU: {{rate}}%",
+    "recorded_pos": "POs registrados",
+    "record_po_heading": "Registrar PO de Claro",
+    "po_number_label": "PO de Claro #",
+    "po_date_label": "Fecha del PO",
+    "po_pdf_label": "PDF del PO (opcional)",
+    "record_po": "Registrar PO",
+    "generate_final_doc_heading": "Generar documento final de Claro",
+    "generate_final_doc_hint": "Genera el PDF de firma-carga para el portal de Claro.",
+    "generate_final_doc": "Generar documento final",
+    "final_doc_heading": "Documento final de Claro",
+    "final_doc_hint": "Firma este PDF y cárgalo al portal de Claro.",
+    "download_final_doc": "Descargar documento final",
+    "uploaded_on": "Cargado el {{date}}",
+    "errors": {
+      "po_number_required": "Se requiere el número de PO.",
+      "record_po_first": "Registra un PO antes de generar el documento final."
     }
   },
   "material_line_items": {

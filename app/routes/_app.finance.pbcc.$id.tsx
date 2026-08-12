@@ -7,7 +7,10 @@ import { Button } from "~/components/ui/button"
 import { db } from "~/lib/db.server"
 import {
 	computeFinanceStage,
+	financeLineItems,
 	invoiceTotalUsed,
+	isMissingAviso,
+	isMissingClaroPdf,
 } from "~/lib/finance-pipeline.server"
 import { generatePbccRequestPdf } from "~/lib/pdf/pbcc-request.server"
 import { requireRole } from "~/lib/permissions.server"
@@ -55,23 +58,14 @@ export async function action({ request, params }: Route.ActionArgs) {
 	if (stage !== "PBCC_REQUEST_PENDING") {
 		throw redirect(`/finance/receivables`)
 	}
+	if (isMissingAviso(doc) || isMissingClaroPdf(doc)) {
+		throw redirect(`/finance/receivables`)
+	}
 
 	const serviceCodes = await db.serviceCode.findMany()
 	const codeMap = Object.fromEntries(serviceCodes.map((c) => [c.id, c]))
 	const ivuRate = await getIvuRate()
-	const used = (doc.materialsUsed as any[]) || []
-	const source = used.length > 0 ? used : (doc.materialsTaken as any[]) || []
-	const lineItems = source.map((item) => {
-		const code = codeMap[item.serviceCodeId]
-		return {
-			claroCode: code?.claroCode ?? "",
-			name: code?.name ?? "",
-			qty: Number(item.qty) || 0,
-			unit: code?.unit ?? "SR",
-			unitPrice: toNumberPrice(code?.unitPrice),
-			accountCode: code?.accountCode,
-		}
-	})
+	const lineItems = financeLineItems(doc, codeMap)
 
 	const uploadDir = process.env.UPLOAD_DIR || "/tmp/jaf/uploads"
 	const pbccDir = path.join(uploadDir, "pbcc-requests")

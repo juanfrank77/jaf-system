@@ -17,6 +17,9 @@ import { requireRole, requireSession } from "~/lib/permissions.server"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id"
 
+let _missingCounter = 0
+const nextMissingKey = () => `missing-${(_missingCounter++).toString()}`
+
 export const meta: Route.MetaFunction = ({ data }) => [
 	{ title: data ? `${data.doc.controlNumber} — JAF Ops` : "JAF Ops" },
 ]
@@ -412,7 +415,12 @@ export default function DocView({
 						</p>
 						{(() => {
 							const prepped = (doc.preppedMaterials as any[]) || []
-							const missingLines = prepped.filter((l: any) => l.missing)
+							const missingLines = prepped
+								.filter((l: any) => l.missing)
+								.map((line: any) => ({
+									...line,
+									_key: `missing-${(_missingCounter++).toString()}`,
+								}))
 							if (missingLines.length === 0) return null
 							return (
 								<div className="space-y-1">
@@ -425,6 +433,7 @@ export default function DocView({
 												key={line._key ?? line.serviceCodeId}
 												className="text-xs text-slate-600"
 											>
+											<p key={line._key} className="text-xs text-slate-600">
 												{code?.claroCode} — {code?.name}:{" "}
 												{line.substitutedWith ? `substituted` : `missing`}
 												{line.notes ? ` (${line.notes})` : ""}

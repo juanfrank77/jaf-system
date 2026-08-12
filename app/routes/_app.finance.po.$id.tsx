@@ -10,6 +10,7 @@ import { db } from "~/lib/db.server"
 import { validateFile } from "~/lib/file-upload.server"
 import {
 	computeFinanceStage,
+	financeLineItems,
 	invoiceTotalUsed,
 } from "~/lib/finance-pipeline.server"
 import { generateFinalClaroDocPdf } from "~/lib/pdf/final-claro-doc.server"
@@ -105,18 +106,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 		const serviceCodes = await db.serviceCode.findMany()
 		const codeMap = Object.fromEntries(serviceCodes.map((c) => [c.id, c]))
 		const ivuRate = await getIvuRate()
-		const used = (doc.materialsUsed as any[]) || []
-		const source = used.length > 0 ? used : (doc.materialsTaken as any[]) || []
-		const lineItems = source.map((item) => {
-			const code = codeMap[item.serviceCodeId]
-			return {
-				claroCode: code?.claroCode ?? "",
-				name: code?.name ?? "",
-				qty: Number(item.qty) || 0,
-				unit: code?.unit ?? "SR",
-				unitPrice: toNumberPrice(code?.unitPrice),
-			}
-		})
+		const lineItems = financeLineItems(doc, codeMap)
 
 		const today = new Date().toLocaleDateString("en-US")
 		const invoiceNumber = doc.avisoNumber

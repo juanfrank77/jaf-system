@@ -1,4 +1,4 @@
-import type { JafInvoice } from "../../generated/prisma/client"
+import type { DocStatus, JafInvoice } from "../../generated/prisma/client"
 import {
 	FINANCE_STAGES,
 	type FinanceStage,
@@ -65,6 +65,7 @@ export function stageAnchorDate(
 		| "pbccRequestSentAt"
 		| "advanceReceivedAt"
 		| "finalClaroUploadedAt"
+		| "finalPaymentReceivedAt"
 		| "receivableClosedAt"
 	>,
 	stage: FinanceStage,
@@ -83,6 +84,7 @@ export function stageAnchorDate(
 		case "IN_CLARO_QUEUE":
 			return invoice.finalClaroUploadedAt
 		case "READY_TO_CLOSE":
+			return invoice.finalPaymentReceivedAt
 		case "CLOSED":
 			return invoice.receivableClosedAt
 	}
@@ -96,6 +98,7 @@ export function daysInStage(
 		| "pbccRequestSentAt"
 		| "advanceReceivedAt"
 		| "finalClaroUploadedAt"
+		| "finalPaymentReceivedAt"
 		| "receivableClosedAt"
 	>,
 	stage: FinanceStage,
@@ -147,4 +150,48 @@ export type FinancePipelineRow = {
 	missingClaroPdf: boolean
 	advanceAmount: number | null
 	finalPaymentAmount: number | null
+}
+
+export const FINANCEABLE_STATUSES: DocStatus[] = [
+	"SUPERVISOR_APPROVED",
+	"CLARO_UPLOADED",
+	"LC_GENERATED",
+]
+
+type FinanceLineItem = {
+	claroCode: string
+	name: string
+	qty: number
+	unit: string
+	unitPrice: number
+	accountCode?: string | null
+}
+
+export function financeLineItems(
+	invoice: Pick<JafInvoice, "materialsUsed" | "materialsTaken">,
+	codeMap: Record<
+		string,
+		{
+			claroCode?: string
+			name?: string
+			unit?: string
+			unitPrice: unknown
+			accountCode?: string | null
+		}
+	>,
+): FinanceLineItem[] {
+	const used = (invoice.materialsUsed as any[]) || []
+	const source =
+		used.length > 0 ? used : (invoice.materialsTaken as any[]) || []
+	return source.map((item) => {
+		const code = codeMap[item.serviceCodeId]
+		return {
+			claroCode: code?.claroCode ?? "",
+			name: code?.name ?? "",
+			qty: Number(item.qty) || 0,
+			unit: code?.unit ?? "SR",
+			unitPrice: toNumberPrice(code?.unitPrice),
+			accountCode: code?.accountCode,
+		}
+	})
 }

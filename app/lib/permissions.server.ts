@@ -12,16 +12,6 @@ import {
 	TERMINAL_STATUSES,
 } from "./permissions"
 
-export {
-	canTransition,
-	EDITABLE_STATUSES,
-	isEditableStatus,
-	isReviewActionStatus,
-	isTerminalStatus,
-	REVIEW_ACTION_STATUSES,
-	TERMINAL_STATUSES,
-}
-
 // Re-export pure, client-safe status functions so they can be used
 // in both server-side code and client-side components without
 // pulling in server-only dependencies.

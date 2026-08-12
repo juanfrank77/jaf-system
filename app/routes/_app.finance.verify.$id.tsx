@@ -5,9 +5,9 @@ import { MaterialLineItems } from "~/components/material-line-items"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
-import type { FinanceStage } from "~/lib/finance-pipeline"
 import {
 	computeFinanceStage,
+	FINANCEABLE_STATUSES,
 	invoiceTotalUsed,
 	isMissingAviso,
 	isMissingClaroPdf,
@@ -31,12 +31,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		where: { id: params.id },
 		include: { supervisor: true, poLinks: true },
 	})
-	const financeableStatuses = [
-		"SUPERVISOR_APPROVED",
-		"CLARO_UPLOADED",
-		"LC_GENERATED",
-	]
-	if (!financeableStatuses.includes(doc.status)) {
+	if (!FINANCEABLE_STATUSES.includes(doc.status)) {
 		throw redirect(`/docs/${params.id}`)
 	}
 
@@ -74,6 +69,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const intent = form.get("intent") as string
 
 	if (intent === "verify") {
+		if (isMissingAviso(doc) || isMissingClaroPdf(doc)) {
+			return { errorKey: "finance_verify.billing_blocked" }
+		}
 		const note = (form.get("note") as string | null)?.trim() || null
 		await db.$transaction([
 			db.jafInvoice.update({

@@ -14,6 +14,7 @@ import {
 import {
 	computeFinanceStage,
 	daysInStage,
+	FINANCEABLE_STATUSES,
 	type FinancePipelineRow,
 	financeStageAlertDays,
 	invoiceTotalUsed,
@@ -23,17 +24,10 @@ import {
 import { requireRole } from "~/lib/permissions.server"
 import { getIvuRate } from "~/lib/system-settings.server"
 import { formatMoney, toNumberPrice } from "~/lib/utils"
-import type { DocStatus } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.finance.receivables"
 
 export const meta: Route.MetaFunction = () => [
 	{ title: "Finance Pipeline — JAF Ops" },
-]
-
-const FINANCEABLE_STATUSES: DocStatus[] = [
-	"SUPERVISOR_APPROVED",
-	"CLARO_UPLOADED",
-	"LC_GENERATED",
 ]
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -84,19 +78,14 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const filtered = stageFilter
 		? rows.filter((r) => r.stage === stageFilter)
 		: rows
-	const totals = FINANCE_STAGES.reduce<
-		Record<FinanceStage, { count: number; amount: number }>
-	>(
-		(acc, stage) => {
-			const stageRows = rows.filter((r) => r.stage === stage)
-			acc[stage] = {
-				count: stageRows.length,
-				amount: stageRows.reduce((sum, r) => sum + r.amount, 0),
-			}
-			return acc
-		},
-		{} as Record<FinanceStage, { count: number; amount: number }>,
-	)
+	// Single pass for per-stage totals (previously re-scanned the full list once
+	// per stage).
+	const totals = {} as Record<FinanceStage, { count: number; amount: number }>
+	for (const stage of FINANCE_STAGES) totals[stage] = { count: 0, amount: 0 }
+	for (const r of rows) {
+		totals[r.stage].count += 1
+		totals[r.stage].amount += r.amount
+	}
 
 	return { rows: filtered, totals, stageFilter, ivuRate }
 }

@@ -416,12 +416,15 @@ export default function DocView({
 							if (missingLines.length === 0) return null
 							return (
 								<div className="space-y-1">
-									{missingLines.map((line: any, idx: number) => {
+									{missingLines.map((line: any) => {
 										const code = serviceCodes.find(
 											(c: any) => c.id === line.serviceCodeId,
 										)
 										return (
-											<p key={idx} className="text-xs text-slate-600">
+											<p
+												key={line._key ?? line.serviceCodeId}
+												className="text-xs text-slate-600"
+											>
 												{code?.claroCode} — {code?.name}:{" "}
 												{line.substitutedWith ? `substituted` : `missing`}
 												{line.notes ? ` (${line.notes})` : ""}

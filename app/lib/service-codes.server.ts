@@ -28,7 +28,3 @@ export async function getActiveServiceCodes(): Promise<ServiceCode[]> {
 	cache = { data: codes, ts: now }
 	return codes
 }
-
-export function invalidateServiceCodeCache() {
-	cache = null
-}

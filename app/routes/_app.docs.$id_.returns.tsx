@@ -13,11 +13,15 @@ import { useEditableLines } from "~/lib/use-editable-lines"
 import { toNumberPrice } from "~/lib/utils"
 
 interface ReturnLine {
+	_key: string
 	serviceCodeId: string
 	takenQty: number
 	returnedQty: number
 	notes: string
 }
+
+let _returnCounter = 0
+const nextReturnKey = () => `return-${(_returnCounter++).toString()}`
 
 export const meta = ({
 	data,
@@ -107,6 +111,7 @@ export default function ReturnsDoc({
 		serialized,
 	} = useEditableLines<ReturnLine>(() =>
 		taken.map((m: any) => ({
+			_key: nextReturnKey(),
 			serviceCodeId: m.serviceCodeId || "",
 			takenQty: m.qty || 0,
 			returnedQty: 0,
@@ -116,6 +121,7 @@ export default function ReturnsDoc({
 
 	const addLine = () =>
 		pushLine({
+			_key: nextReturnKey(),
 			serviceCodeId: "",
 			takenQty: 0,
 			returnedQty: 0,
@@ -144,7 +150,7 @@ export default function ReturnsDoc({
 					)
 
 					return (
-						<div key={index} className="border rounded-lg p-3 space-y-2">
+						<div key={line._key} className="border rounded-lg p-3 space-y-2">
 							<div className="flex items-center gap-2">
 								<MaterialLineItems
 									serviceCodes={serviceCodes as any}

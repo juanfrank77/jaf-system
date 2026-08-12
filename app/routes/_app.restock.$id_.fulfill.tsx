@@ -21,6 +21,7 @@ import { useEditableLines } from "~/lib/use-editable-lines"
 import { toNumberPrice } from "~/lib/utils"
 
 interface FulfillLine {
+	_key: string
 	serviceCodeId: string
 	requestedQty: number
 	preparedQty: number
@@ -28,6 +29,9 @@ interface FulfillLine {
 	substitutedWith: string | null
 	notes: string
 }
+
+let _fulfillCounter = 0
+const nextFulfillKey = () => `fulfill-${(_fulfillCounter++).toString()}`
 
 export const meta = ({ data }: { data?: { request: { id: string } } }) => [
 	{
@@ -115,6 +119,7 @@ export default function FulfillRestock({ loaderData, actionData }: any) {
 		serialized,
 	} = useEditableLines<FulfillLine>(() =>
 		items.map((m: any) => ({
+			_key: nextFulfillKey(),
 			serviceCodeId: m.serviceCodeId || "",
 			requestedQty: m.qty || 1,
 			preparedQty: m.qty || 1,
@@ -126,6 +131,7 @@ export default function FulfillRestock({ loaderData, actionData }: any) {
 
 	const addLine = () =>
 		pushLine({
+			_key: nextFulfillKey(),
 			serviceCodeId: "",
 			requestedQty: 1,
 			preparedQty: 1,
@@ -166,7 +172,7 @@ export default function FulfillRestock({ loaderData, actionData }: any) {
 					)
 
 					return (
-						<div key={index} className="border rounded-lg p-3 space-y-2">
+						<div key={line._key} className="border rounded-lg p-3 space-y-2">
 							<div className="flex items-center gap-2">
 								<MaterialLineItems
 									serviceCodes={serviceCodes as any}

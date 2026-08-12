@@ -31,7 +31,11 @@ export const meta: Route.MetaFunction = () => [
 ]
 
 export async function loader({ request }: Route.LoaderArgs) {
-	await requireRole(request, ["FINANCE", "ADMIN"])
+	const { user } = await requireRole(request, [
+		"FINANCE",
+		"COMPTROLLER",
+		"ADMIN",
+	])
 	const url = new URL(request.url)
 	const stageFilter = url.searchParams.get("stage") as FinanceStage | null
 
@@ -87,14 +91,24 @@ export async function loader({ request }: Route.LoaderArgs) {
 		totals[r.stage].amount += r.amount
 	}
 
-	return { rows: filtered, totals, stageFilter, ivuRate }
+	return { rows: filtered, totals, stageFilter, ivuRate, user }
 }
 
 export async function action({ request }: Route.ActionArgs) {
-	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])
+	const { user } = await requireRole(request, [
+		"FINANCE",
+		"COMPTROLLER",
+		"ADMIN",
+	])
 	const form = await request.formData()
 	const intent = form.get("intent") as string
 	const docId = form.get("docId") as string
+
+	if (intent === "record_advance" || intent === "record_final") {
+		if (!["COMPTROLLER", "ADMIN"].includes(user.role)) {
+			return { errorKey: "finance_receivables.errors.payment_role_required" }
+		}
+	}
 
 	if (intent === "record_advance") {
 		const amount = parseFloat(form.get("advanceAmount") as string)
@@ -188,9 +202,10 @@ export default function FinancePipeline({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { rows, totals, stageFilter } = loaderData
+	const { rows, totals, stageFilter, user } = loaderData
 	const { t } = useTranslation()
 	const error = actionData as { errorKey?: string } | null
+	const canRecordPayment = user.role === "COMPTROLLER" || user.role === "ADMIN"
 
 	return (
 		<div className="space-y-6">
@@ -332,50 +347,64 @@ export default function FinancePipeline({
 								{(row.stage === "WAITING_PBCC_FUNDING" ||
 									row.stage === "IN_CLARO_QUEUE") && (
 									<div className="flex items-center gap-2">
-										<Form method="post" className="flex gap-2">
-											<input
-												type="hidden"
-												name="intent"
-												value="record_advance"
-											/>
-											<input type="hidden" name="docId" value={row.id} />
-											<Input
-												name="advanceAmount"
-												type="number"
-												step="0.01"
-												placeholder={t(
-													"finance_receivables.advance_placeholder",
-												)}
-												className="h-8 w-28 text-sm"
-											/>
-											<Button
-												type="submit"
-												size="sm"
-												variant="outline"
-												className="h-8 text-sm"
-											>
-												{t("finance_receivables.record_advance")}
-											</Button>
-										</Form>
-										<Form method="post" className="flex gap-2">
-											<input type="hidden" name="intent" value="record_final" />
-											<input type="hidden" name="docId" value={row.id} />
-											<Input
-												name="finalAmount"
-												type="number"
-												step="0.01"
-												placeholder={t("finance_receivables.final_placeholder")}
-												className="h-8 w-28 text-sm"
-											/>
-											<Button
-												type="submit"
-												size="sm"
-												variant="outline"
-												className="h-8 text-sm"
-											>
-												{t("finance_receivables.record_final")}
-											</Button>
-										</Form>
+										{canRecordPayment ? (
+											<>
+												<Form method="post" className="flex gap-2">
+													<input
+														type="hidden"
+														name="intent"
+														value="record_advance"
+													/>
+													<input type="hidden" name="docId" value={row.id} />
+													<Input
+														name="advanceAmount"
+														type="number"
+														step="0.01"
+														placeholder={t(
+															"finance_receivables.advance_placeholder",
+														)}
+														className="h-8 w-28 text-sm"
+													/>
+													<Button
+														type="submit"
+														size="sm"
+														variant="outline"
+														className="h-8 text-sm"
+													>
+														{t("finance_receivables.record_advance")}
+													</Button>
+												</Form>
+												<Form method="post" className="flex gap-2">
+													<input
+														type="hidden"
+														name="intent"
+														value="record_final"
+													/>
+													<input type="hidden" name="docId" value={row.id} />
+													<Input
+														name="finalAmount"
+														type="number"
+														step="0.01"
+														placeholder={t(
+															"finance_receivables.final_placeholder",
+														)}
+														className="h-8 w-28 text-sm"
+													/>
+													<Button
+														type="submit"
+														size="sm"
+														variant="outline"
+														className="h-8 text-sm"
+													>
+														{t("finance_receivables.record_final")}
+													</Button>
+												</Form>
+											</>
+										) : (
+											<span className="text-xs text-muted-foreground">
+												{t("finance_receivables.waiting_for_payment")}
+											</span>
+										)}
 									</div>
 								)}
 							</div>

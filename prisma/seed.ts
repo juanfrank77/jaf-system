@@ -52,6 +52,11 @@ async function main() {
 			name: "Finance",
 			role: "FINANCE" as const,
 		},
+		{
+			email: "comptroller@jafcom.net",
+			name: "Comptroller",
+			role: "COMPTROLLER" as const,
+		},
 		{ email: "admin@jafcom.net", name: "Admin", role: "ADMIN" as const },
 	]
 

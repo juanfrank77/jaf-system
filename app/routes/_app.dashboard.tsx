@@ -1,3 +1,4 @@
+import { redirect } from "react-router"
 import { DashboardView } from "~/components/dashboard-view"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { computeDashboardStats } from "~/lib/dashboard-stats"
@@ -20,6 +21,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const user = await db.user.findUniqueOrThrow({
 		where: { id: session.user.id },
 	})
+
+	if (user.role === "COMPTROLLER") throw redirect("/comptroller")
 
 	const url = new URL(request.url)
 	const statusFilter = url.searchParams.get("status")

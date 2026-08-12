@@ -94,7 +94,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	await fs.writeFile(localPath, pdfBytes)
 
 	const comptrollers = await db.user.findMany({
-		where: { role: "COMPTOLLER", active: true },
+		where: { role: "COMPTROLLER", active: true },
 	})
 
 	await db.$transaction([

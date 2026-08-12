@@ -429,10 +429,6 @@ export default function DocView({
 											(c: any) => c.id === line.serviceCodeId,
 										)
 										return (
-											<p
-												key={line._key ?? line.serviceCodeId}
-												className="text-xs text-slate-600"
-											>
 											<p key={line._key} className="text-xs text-slate-600">
 												{code?.claroCode} — {code?.name}:{" "}
 												{line.substitutedWith ? `substituted` : `missing`}

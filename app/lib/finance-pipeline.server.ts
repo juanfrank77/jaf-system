@@ -1,0 +1,197 @@
+import type { DocStatus, JafInvoice } from "../../generated/prisma/client"
+import {
+	FINANCE_STAGES,
+	type FinanceStage,
+	type FinanceStageLabelKey,
+	financeStageLabelKey,
+} from "./finance-pipeline"
+import { toNumberPrice } from "./utils"
+
+export {
+	FINANCE_STAGES,
+	type FinanceStage,
+	type FinanceStageLabelKey,
+	financeStageLabelKey,
+}
+
+export const financeStageAlertDays = (stage: FinanceStage): number | null => {
+	switch (stage) {
+		case "WAITING_CLARO_PO":
+			return 180
+		case "IN_CLARO_QUEUE":
+			return 180
+		default:
+			return null
+	}
+}
+
+export function computeFinanceStage(
+	invoice: Pick<
+		JafInvoice,
+		| "status"
+		| "receivableClosedAt"
+		| "advanceReceivedAt"
+		| "finalPaymentReceivedAt"
+		| "finalClaroUploadedAt"
+		| "pbccRequestSentAt"
+		| "financeVerifiedAt"
+	>,
+	hasPoLinks: boolean,
+): FinanceStage | null {
+	// Finance only cares about jobs that have reached supervisor approval.
+	const financeableStatuses = [
+		"SUPERVISOR_APPROVED",
+		"CLARO_UPLOADED",
+		"LC_GENERATED",
+	]
+	if (!financeableStatuses.includes(invoice.status)) return null
+
+	if (invoice.receivableClosedAt) return "CLOSED"
+	if (invoice.advanceReceivedAt && invoice.finalPaymentReceivedAt)
+		return "READY_TO_CLOSE"
+	if (invoice.finalClaroUploadedAt) return "IN_CLARO_QUEUE"
+	if (hasPoLinks) return "PO_RECEIVED_UPLOAD"
+	if (invoice.advanceReceivedAt) return "WAITING_CLARO_PO"
+	if (invoice.pbccRequestSentAt) return "WAITING_PBCC_FUNDING"
+	if (invoice.financeVerifiedAt) return "PBCC_REQUEST_PENDING"
+	return "TO_VERIFY"
+}
+
+export function stageAnchorDate(
+	invoice: Pick<
+		JafInvoice,
+		| "supervisorApprovedAt"
+		| "financeVerifiedAt"
+		| "pbccRequestSentAt"
+		| "advanceReceivedAt"
+		| "finalClaroUploadedAt"
+		| "finalPaymentReceivedAt"
+		| "receivableClosedAt"
+	>,
+	stage: FinanceStage,
+): Date | null {
+	switch (stage) {
+		case "TO_VERIFY":
+			return invoice.supervisorApprovedAt
+		case "PBCC_REQUEST_PENDING":
+			return invoice.financeVerifiedAt
+		case "WAITING_PBCC_FUNDING":
+			return invoice.pbccRequestSentAt
+		case "WAITING_CLARO_PO":
+			return invoice.advanceReceivedAt
+		case "PO_RECEIVED_UPLOAD":
+			return invoice.advanceReceivedAt
+		case "IN_CLARO_QUEUE":
+			return invoice.finalClaroUploadedAt
+		case "READY_TO_CLOSE":
+			return invoice.finalPaymentReceivedAt
+		case "CLOSED":
+			return invoice.receivableClosedAt
+	}
+}
+
+export function daysInStage(
+	invoice: Pick<
+		JafInvoice,
+		| "supervisorApprovedAt"
+		| "financeVerifiedAt"
+		| "pbccRequestSentAt"
+		| "advanceReceivedAt"
+		| "finalClaroUploadedAt"
+		| "finalPaymentReceivedAt"
+		| "receivableClosedAt"
+	>,
+	stage: FinanceStage,
+): number {
+	const anchor = stageAnchorDate(invoice, stage)
+	if (!anchor) return 0
+	return Math.floor((Date.now() - new Date(anchor).getTime()) / 86400000)
+}
+
+export function invoiceTotalUsed(
+	invoice: Pick<JafInvoice, "materialsUsed" | "materialsTaken">,
+	codeMap: Record<string, { unitPrice: number }>,
+	ivuRate: number,
+): number {
+	const used = (invoice.materialsUsed as any[]) || []
+	const source =
+		used.length > 0 ? used : (invoice.materialsTaken as any[]) || []
+	const subtotal = source.reduce((sum, item) => {
+		const price = toNumberPrice(codeMap[item.serviceCodeId]?.unitPrice)
+		return sum + Number(item.qty || 0) * price
+	}, 0)
+	return subtotal + subtotal * ivuRate
+}
+
+export function isMissingAviso(
+	invoice: Pick<JafInvoice, "avisoNumber">,
+): boolean {
+	return !invoice.avisoNumber || invoice.avisoNumber.trim() === ""
+}
+
+export function isMissingClaroPdf(
+	invoice: Pick<JafInvoice, "claroPdfPath">,
+): boolean {
+	return !invoice.claroPdfPath || invoice.claroPdfPath.trim() === ""
+}
+
+export type FinancePipelineRow = {
+	id: string
+	controlNumber: string
+	avisoNumber: string | null
+	supervisorName: string
+	jobType: string
+	stage: FinanceStage
+	ageDays: number
+	alertDays: number | null
+	isAlert: boolean
+	amount: number
+	missingAviso: boolean
+	missingClaroPdf: boolean
+	advanceAmount: number | null
+	finalPaymentAmount: number | null
+}
+
+export const FINANCEABLE_STATUSES: DocStatus[] = [
+	"SUPERVISOR_APPROVED",
+	"CLARO_UPLOADED",
+	"LC_GENERATED",
+]
+
+type FinanceLineItem = {
+	claroCode: string
+	name: string
+	qty: number
+	unit: string
+	unitPrice: number
+	accountCode?: string | null
+}
+
+export function financeLineItems(
+	invoice: Pick<JafInvoice, "materialsUsed" | "materialsTaken">,
+	codeMap: Record<
+		string,
+		{
+			claroCode?: string
+			name?: string
+			unit?: string
+			unitPrice: unknown
+			accountCode?: string | null
+		}
+	>,
+): FinanceLineItem[] {
+	const used = (invoice.materialsUsed as any[]) || []
+	const source =
+		used.length > 0 ? used : (invoice.materialsTaken as any[]) || []
+	return source.map((item) => {
+		const code = codeMap[item.serviceCodeId]
+		return {
+			claroCode: code?.claroCode ?? "",
+			name: code?.name ?? "",
+			qty: Number(item.qty) || 0,
+			unit: code?.unit ?? "SR",
+			unitPrice: toNumberPrice(code?.unitPrice),
+			accountCode: code?.accountCode,
+		}
+	})
+}

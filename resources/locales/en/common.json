@@ -8,22 +8,23 @@
 		"home": "Back to home"
 	},
 	"error": {
-		"500": {
-			"title": "Something went wrong!",
-			"description": "An unexpected error occurred on the server."
-		},
 		"404": {
 			"title": "Page Not Found!",
 			"description": "The page you're looking for doesn't exist."
+		},
+		"500": {
+			"title": "Something went wrong!",
+			"description": "An unexpected error occurred on the server."
 		}
 	},
 	"app_shell": {
 		"nav": {
 			"dashboard": "Dashboard",
 			"new_document": "+ New Document",
-			"receivables": "Receivables",
+			"receivables": "Finance Pipeline",
 			"admin_settings": "Admin Settings",
-			"catalog": "Catalog"
+			"catalog": "Catalog",
+			"comptroller": "Comptroller"
 		},
 		"notifications": {
 			"bell_label": "Notifications",
@@ -129,6 +130,7 @@
 			"capture_signature": "Capture Crew Signature",
 			"update_from_field": "Update from Field",
 			"review_approve": "Review & Approve",
+			"verify_for_finance": "Verify for Finance",
 			"generate_lc": "Generate LC Request",
 			"default": "Next Action"
 		}
@@ -329,23 +331,101 @@
 		}
 	},
 	"finance_receivables": {
-		"title": "Receivables",
-		"open_count_one": "{{count}} open",
-		"open_count_other": "{{count}} open",
+		"title": "Finance Pipeline",
+		"total_open_one": "{{count}} job",
+		"total_open_other": "{{count}} jobs",
 		"aviso": "Aviso {{number}}",
 		"age_days": "{{count}}d",
-		"advance_label": "80% Advance (PBCC)",
-		"final_payment_label": "Final Payment (Claro)",
-		"close_entry_label": "Close Entry",
-		"amount_placeholder": "Amount",
-		"record": "Record",
+		"amount_label": "Amount",
+		"missing_docs": "Missing Aviso # or Claro PDF",
+		"verify": "Verify",
+		"generate_pbcc": "Generate PBCC Request",
+		"upload_final_doc": "Upload Final Doc",
+		"record_po": "Record PO",
+		"record_advance": "Record 80%",
+		"advance_placeholder": "80% amount",
+		"record_final": "Record final",
+		"final_placeholder": "Final amount",
 		"close": "Close",
-		"record_both_first": "Record both payments first",
-		"closed_summary_one": "Closed ({{count}})",
-		"closed_summary_other": "Closed ({{count}})",
-		"closed_on": "Closed {{date}}",
 		"errors": {
-			"invalid_amount": "Invalid amount"
+			"invalid_amount": "Invalid amount",
+			"record_both_first": "Record both payments before closing",
+			"payment_role_required": "Only the comptroller can record payments."
+		},
+		"waiting_for_payment": "Waiting for comptroller entry"
+	},
+	"finance": {
+		"stage": {
+			"to_verify": "To Verify",
+			"pbcc_request_pending": "PBCC Request Pending",
+			"waiting_pbcc_funding": "Waiting PBCC Funding",
+			"waiting_claro_po": "Waiting Claro PO",
+			"po_received_upload": "PO Received / Upload",
+			"in_claro_queue": "In Claro Queue",
+			"ready_to_close": "Ready to Close",
+			"closed": "Closed"
+		}
+	},
+	"finance_verify": {
+		"title": "Verify Aviso vs. Invoice",
+		"amount": "Invoice amount",
+		"ivu_rate": "IVU rate: {{rate}}%",
+		"billing_blocked": "Cannot verify — billing documents incomplete",
+		"blocked_aviso": "Missing Claro Aviso #",
+		"blocked_claro_pdf": "Missing Claro work-order PDF",
+		"jaf_invoice": "JAF Invoice",
+		"download": "Download",
+		"job_type": "Job Type",
+		"address": "Address",
+		"aviso_number": "Aviso #",
+		"supervisor": "Supervisor",
+		"claro_work_order": "Claro Work Order",
+		"claro_pdf_title": "Claro PDF",
+		"no_claro_pdf": "No Claro PDF on file.",
+		"previous_send_backs": "Previous Finance Send-backs",
+		"verify_note_placeholder": "Optional verification note…",
+		"mark_verified": "Mark Verified",
+		"cannot_verify_hint": "The supervisor must add the Aviso # and upload the Claro PDF before verification.",
+		"send_back_placeholder": "Explain the Aviso issue to the supervisor…",
+		"send_back": "Send Back to Supervisor",
+		"back": "Back to pipeline",
+		"errors": {
+			"note_required": "A send-back note is required."
+		}
+	},
+	"finance_pbcc": {
+		"title": "PBCC Payment Request",
+		"job_type": "Job Type",
+		"address": "Address",
+		"aviso_number": "Aviso #",
+		"amount": "Invoice amount",
+		"advance": "PBCC advance (80%)",
+		"ivu_rate": "IVU rate: {{rate}}%",
+		"hint": "Generating this PDF saves the request, marks it sent, and sends a copy to the Comptroller.",
+		"generate_and_download": "Generate & Download PBCC Request"
+	},
+	"finance_po": {
+		"title": "Claro PO & Final Document",
+		"job_type": "Job Type",
+		"address": "Address",
+		"amount": "Invoice amount",
+		"ivu_rate": "IVU rate: {{rate}}%",
+		"recorded_pos": "Recorded POs",
+		"record_po_heading": "Record Claro PO",
+		"po_number_label": "Claro PO #",
+		"po_date_label": "PO Date",
+		"po_pdf_label": "PO PDF (optional)",
+		"record_po": "Record PO",
+		"generate_final_doc_heading": "Generate Final Claro Document",
+		"generate_final_doc_hint": "Generate the signed-upload PDF for Claro's portal.",
+		"generate_final_doc": "Generate Final Document",
+		"final_doc_heading": "Final Claro Document",
+		"final_doc_hint": "Sign this PDF and upload it to Claro's portal.",
+		"download_final_doc": "Download final document",
+		"uploaded_on": "Uploaded on {{date}}",
+		"errors": {
+			"po_number_required": "PO number is required.",
+			"record_po_first": "Record a PO before generating the final document."
 		}
 	},
 	"material_line_items": {
@@ -416,5 +496,92 @@
 		"claro_uploaded": "Claro Uploaded",
 		"lc_generated": "LC Generated",
 		"cancelled": "Cancelled"
+	},
+	"comptroller_dashboard": {
+		"title": "Comptroller",
+		"role_label": "Comptroller",
+		"stat": {
+			"incoming_docs": "Incoming docs",
+			"unread_docs_one": "{{count}} unread",
+			"unread_docs_other": "{{count}} unread",
+			"awaiting_funds": "Awaiting funds",
+			"crews_to_pay": "Crews to pay"
+		},
+		"incoming_docs_heading": "Incoming Documents",
+		"no_incoming_docs": "No incoming documents yet.",
+		"unread_badge": "Unread",
+		"sent_on": "Sent on {{date}}",
+		"download_pbcc": "Download PBCC request",
+		"mark_read": "Mark read",
+		"awaiting_advance_heading": "Awaiting PBCC Advance (80%)",
+		"no_awaiting_advance": "No jobs waiting for PBCC advance.",
+		"awaiting_funds_badge": "Awaiting funds",
+		"expected_advance": "Expected advance: {{amount}}",
+		"awaiting_final_heading": "Awaiting Claro Final Payment",
+		"no_awaiting_final": "No jobs waiting for final payment.",
+		"awaiting_final_badge": "Awaiting final payment",
+		"invoice_amount": "Invoice amount: {{amount}}",
+		"crews_to_pay_heading": "Crews to Pay",
+		"no_crews_to_pay": "No crews waiting for payment.",
+		"crew_unpaid_badge": "Crew unpaid",
+		"advance_received": "Advance received: {{amount}}",
+		"crew_label": "Crew"
+	},
+	"comptroller_detail": {
+		"title": "Comptroller Job Detail",
+		"unread_badge": "Unread",
+		"back": "Back to comptroller dashboard",
+		"job_type": "Job type",
+		"address": "Address",
+		"supervisor": "Supervisor",
+		"current_crew": "Current crew",
+		"invoice_amount": "Invoice amount",
+		"expected_advance": "Expected PBCC advance (80%)",
+		"advance_status": "PBCC advance",
+		"final_status": "Claro final payment",
+		"crew_payment_status": "Crew payment",
+		"status_recorded": "Recorded",
+		"status_pending": "Pending",
+		"incoming_doc_heading": "Incoming PBCC Request",
+		"sent_on": "Sent on {{date}}",
+		"download_pbcc": "Download PBCC request",
+		"record_advance_heading": "Record PBCC Advance",
+		"date_label": "Date",
+		"amount_label": "Amount",
+		"record_advance_submit": "Record advance",
+		"advance_recorded": "Advance of {{amount}} recorded on {{date}}",
+		"record_crew_payment_heading": "Record Crew Payment",
+		"crew_payment_recorded": "Crew payment recorded.",
+		"record_crew_payment_submit": "Record crew payment",
+		"note_label": "Note",
+		"note_placeholder": "Optional note…",
+		"crew_amount_placeholder": "Crew payment amount",
+		"record_final_heading": "Record Claro Final Payment",
+		"record_final_submit": "Record final payment",
+		"final_recorded": "Final payment of {{amount}} recorded on {{date}}",
+		"final_amount_placeholder": "Final payment amount",
+		"crew_history_heading": "Crew Assignment History",
+		"crew_history_assigned": "Assigned on {{date}} by {{by}}",
+		"payment_records_heading": "Payment Records",
+		"no_payment_records": "No payment records yet.",
+		"table": {
+			"date": "Date",
+			"type": "Type",
+			"amount": "Amount",
+			"recorded_by": "Recorded by",
+			"note": "Note"
+		},
+		"errors": {
+			"invalid_amount": "Enter a valid positive amount.",
+			"invalid_date": "Enter a valid date.",
+			"advance_already_recorded": "PBCC advance has already been recorded for this job.",
+			"final_already_recorded": "Claro final payment has already been recorded for this job.",
+			"unknown_intent": "Unknown action."
+		},
+		"success": {
+			"advance_recorded": "PBCC advance recorded. Finance has been notified.",
+			"final_recorded": "Claro final payment recorded. Close entry is unlocked.",
+			"crew_payment_recorded": "Crew payment recorded."
+		}
 	}
 }

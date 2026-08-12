@@ -12,14 +12,13 @@ import {
 } from "~/components/ui/select"
 import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
-import { isEditableStatus } from "~/lib/doc-status"
-import {
-	isTerminalStatus,
-	requireRole,
-	requireSession,
-} from "~/lib/permissions.server"
+import { isEditableStatus, isTerminalStatus } from "~/lib/permissions"
+import { requireRole, requireSession } from "~/lib/permissions.server"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id"
+
+let _missingCounter = 0
+const nextMissingKey = () => `missing-${(_missingCounter++).toString()}`
 
 export const meta: Route.MetaFunction = ({ data }) => [
 	{ title: data ? `${data.doc.controlNumber} — JAF Ops` : "JAF Ops" },
@@ -213,8 +212,11 @@ function nextActionHref(
 		(userRole === "SUPERVISOR" || userRole === "ADMIN")
 	)
 		return `/docs/${doc.id}/review`
-	if (doc.status === "CLARO_UPLOADED" && userRole === "FINANCE")
-		return `/docs/${doc.id}/lc`
+	if (
+		(doc.status === "SUPERVISOR_APPROVED" || doc.status === "CLARO_UPLOADED") &&
+		(userRole === "FINANCE" || userRole === "ADMIN")
+	)
+		return `/finance/verify/${doc.id}`
 	return null
 }
 
@@ -223,6 +225,7 @@ type NextActionLabelKey =
 	| "docs_view.next_action.capture_signature"
 	| "docs_view.next_action.update_from_field"
 	| "docs_view.next_action.review_approve"
+	| "docs_view.next_action.verify_for_finance"
 	| "docs_view.next_action.generate_lc"
 	| "docs_view.next_action.default"
 
@@ -231,6 +234,8 @@ function nextActionLabelKey(status: string): NextActionLabelKey {
 	if (status === "PREPPED") return "docs_view.next_action.capture_signature"
 	if (status === "SIGNED") return "docs_view.next_action.update_from_field"
 	if (status === "FIELD_UPDATED") return "docs_view.next_action.review_approve"
+	if (status === "SUPERVISOR_APPROVED")
+		return "docs_view.next_action.verify_for_finance"
 	if (status === "CLARO_UPLOADED") return "docs_view.next_action.generate_lc"
 	return "docs_view.next_action.default"
 }
@@ -410,7 +415,12 @@ export default function DocView({
 						</p>
 						{(() => {
 							const prepped = (doc.preppedMaterials as any[]) || []
-							const missingLines = prepped.filter((l: any) => l.missing)
+							const missingLines = prepped
+								.filter((l: any) => l.missing)
+								.map((line: any) => ({
+									...line,
+									_key: `missing-${(_missingCounter++).toString()}`,
+								}))
 							if (missingLines.length === 0) return null
 							return (
 								<div className="space-y-1">
@@ -419,10 +429,7 @@ export default function DocView({
 											(c: any) => c.id === line.serviceCodeId,
 										)
 										return (
-											<p
-												key={line._key ?? line.serviceCodeId}
-												className="text-xs text-slate-600"
-											>
+											<p key={line._key} className="text-xs text-slate-600">
 												{code?.claroCode} — {code?.name}:{" "}
 												{line.substitutedWith ? `substituted` : `missing`}
 												{line.notes ? ` (${line.notes})` : ""}

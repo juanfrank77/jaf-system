@@ -8,22 +8,23 @@
 		"home": "Ir al inicio"
 	},
 	"error": {
-		"500": {
-			"title": "¡Algo salió mal!",
-			"description": "Ocurrió un error inesperado en el servidor."
-		},
 		"404": {
 			"title": "¡Página no encontrada!",
 			"description": "La página que buscas no existe."
+		},
+		"500": {
+			"title": "¡Algo salió mal!",
+			"description": "Ocurrió un error inesperado en el servidor."
 		}
 	},
 	"app_shell": {
 		"nav": {
 			"dashboard": "Panel",
 			"new_document": "+ Nuevo documento",
-			"receivables": "Cuentas por cobrar",
+			"receivables": "Pipeline de Finanzas",
 			"admin_settings": "Configuración de administrador",
-			"catalog": "Catálogo"
+			"catalog": "Catálogo",
+			"comptroller": "Contraloría"
 		},
 		"notifications": {
 			"bell_label": "Notificaciones",
@@ -129,6 +130,7 @@
 			"capture_signature": "Capturar firma de cuadrilla",
 			"update_from_field": "Actualizar desde el campo",
 			"review_approve": "Revisar y aprobar",
+			"verify_for_finance": "Verificar para Finanzas",
 			"generate_lc": "Generar solicitud de LC",
 			"default": "Próxima acción"
 		}
@@ -329,23 +331,101 @@
 		}
 	},
 	"finance_receivables": {
-		"title": "Cuentas por cobrar",
-		"open_count_one": "{{count}} abierta",
-		"open_count_other": "{{count}} abiertas",
+		"title": "Pipeline de Finanzas",
+		"total_open_one": "{{count}} trabajo",
+		"total_open_other": "{{count}} trabajos",
 		"aviso": "Aviso {{number}}",
 		"age_days": "{{count}}d",
-		"advance_label": "80% Adelanto (PBCC)",
-		"final_payment_label": "Pago final (Claro)",
-		"close_entry_label": "Cerrar entrada",
-		"amount_placeholder": "Cantidad",
-		"record": "Registrar",
+		"amount_label": "Monto",
+		"missing_docs": "Falta Aviso # o PDF de Claro",
+		"verify": "Verificar",
+		"generate_pbcc": "Generar solicitud PBCC",
+		"upload_final_doc": "Cargar documento final",
+		"record_po": "Registrar PO",
+		"record_advance": "Registrar 80%",
+		"advance_placeholder": "Monto del 80%",
+		"record_final": "Registrar final",
+		"final_placeholder": "Monto final",
 		"close": "Cerrar",
-		"record_both_first": "Registra ambos pagos primero",
-		"closed_summary_one": "Cerrada ({{count}})",
-		"closed_summary_other": "Cerradas ({{count}})",
-		"closed_on": "Cerrada {{date}}",
 		"errors": {
-			"invalid_amount": "Cantidad inválida"
+			"invalid_amount": "Cantidad inválida",
+			"record_both_first": "Registra ambos pagos antes de cerrar",
+			"payment_role_required": "Solo la contralora puede registrar pagos."
+		},
+		"waiting_for_payment": "Esperando registro de contraloría"
+	},
+	"finance": {
+		"stage": {
+			"to_verify": "Por verificar",
+			"pbcc_request_pending": "Solicitud PBCC pendiente",
+			"waiting_pbcc_funding": "Esperando fondos PBCC",
+			"waiting_claro_po": "Esperando PO de Claro",
+			"po_received_upload": "PO recibido / cargar",
+			"in_claro_queue": "En cola de Claro",
+			"ready_to_close": "Listo para cerrar",
+			"closed": "Cerrado"
+		}
+	},
+	"finance_verify": {
+		"title": "Verificar Aviso vs. Factura",
+		"amount": "Monto de factura",
+		"ivu_rate": "Tasa de IVU: {{rate}}%",
+		"billing_blocked": "No se puede verificar — documentos de facturación incompletos",
+		"blocked_aviso": "Falta # de Aviso Claro",
+		"blocked_claro_pdf": "Falta PDF de orden de trabajo Claro",
+		"jaf_invoice": "Factura JAF",
+		"download": "Descargar",
+		"job_type": "Tipo de trabajo",
+		"address": "Dirección",
+		"aviso_number": "Aviso #",
+		"supervisor": "Supervisor",
+		"claro_work_order": "Orden de trabajo Claro",
+		"claro_pdf_title": "PDF de Claro",
+		"no_claro_pdf": "No hay PDF de Claro en archivo.",
+		"previous_send_backs": "Devoluciones previas de Finanzas",
+		"verify_note_placeholder": "Nota de verificación opcional…",
+		"mark_verified": "Marcar verificado",
+		"cannot_verify_hint": "El supervisor debe agregar el Aviso # y cargar el PDF de Claro antes de verificar.",
+		"send_back_placeholder": "Explica el problema del Aviso al supervisor…",
+		"send_back": "Devolver al supervisor",
+		"back": "Volver al pipeline",
+		"errors": {
+			"note_required": "Se requiere una nota de devolución."
+		}
+	},
+	"finance_pbcc": {
+		"title": "Solicitud de pago PBCC",
+		"job_type": "Tipo de trabajo",
+		"address": "Dirección",
+		"aviso_number": "Aviso #",
+		"amount": "Monto de factura",
+		"advance": "Adelanto PBCC (80%)",
+		"ivu_rate": "Tasa de IVU: {{rate}}%",
+		"hint": "Generar este PDF guarda la solicitud, la marca como enviada y envía una copia a la Contralora.",
+		"generate_and_download": "Generar y descargar solicitud PBCC"
+	},
+	"finance_po": {
+		"title": "PO de Claro y documento final",
+		"job_type": "Tipo de trabajo",
+		"address": "Dirección",
+		"amount": "Monto de factura",
+		"ivu_rate": "Tasa de IVU: {{rate}}%",
+		"recorded_pos": "POs registrados",
+		"record_po_heading": "Registrar PO de Claro",
+		"po_number_label": "PO de Claro #",
+		"po_date_label": "Fecha del PO",
+		"po_pdf_label": "PDF del PO (opcional)",
+		"record_po": "Registrar PO",
+		"generate_final_doc_heading": "Generar documento final de Claro",
+		"generate_final_doc_hint": "Genera el PDF de firma-carga para el portal de Claro.",
+		"generate_final_doc": "Generar documento final",
+		"final_doc_heading": "Documento final de Claro",
+		"final_doc_hint": "Firma este PDF y cárgalo al portal de Claro.",
+		"download_final_doc": "Descargar documento final",
+		"uploaded_on": "Cargado el {{date}}",
+		"errors": {
+			"po_number_required": "Se requiere el número de PO.",
+			"record_po_first": "Registra un PO antes de generar el documento final."
 		}
 	},
 	"material_line_items": {
@@ -416,5 +496,92 @@
 		"claro_uploaded": "Cargado a Claro",
 		"lc_generated": "LC generada",
 		"cancelled": "Cancelado"
+	},
+	"comptroller_dashboard": {
+		"title": "Contraloría",
+		"role_label": "Contraloría",
+		"stat": {
+			"incoming_docs": "Documentos entrantes",
+			"unread_docs_one": "{{count}} sin leer",
+			"unread_docs_other": "{{count}} sin leer",
+			"awaiting_funds": "Fondos pendientes",
+			"crews_to_pay": "Cuadrillas por pagar"
+		},
+		"incoming_docs_heading": "Documentos entrantes",
+		"no_incoming_docs": "Aún no hay documentos entrantes.",
+		"unread_badge": "Sin leer",
+		"sent_on": "Enviado el {{date}}",
+		"download_pbcc": "Descargar solicitud PBCC",
+		"mark_read": "Marcar como leído",
+		"awaiting_advance_heading": "Esperando adelanto PBCC (80%)",
+		"no_awaiting_advance": "No hay trabajos esperando adelanto PBCC.",
+		"awaiting_funds_badge": "Esperando fondos",
+		"expected_advance": "Adelanto esperado: {{amount}}",
+		"awaiting_final_heading": "Esperando pago final de Claro",
+		"no_awaiting_final": "No hay trabajos esperando pago final.",
+		"awaiting_final_badge": "Esperando pago final",
+		"invoice_amount": "Monto de factura: {{amount}}",
+		"crews_to_pay_heading": "Cuadrillas por pagar",
+		"no_crews_to_pay": "No hay cuadrillas esperando pago.",
+		"crew_unpaid_badge": "Cuadrilla sin pagar",
+		"advance_received": "Adelanto recibido: {{amount}}",
+		"crew_label": "Cuadrilla"
+	},
+	"comptroller_detail": {
+		"title": "Detalle del trabajo — Contraloría",
+		"unread_badge": "Sin leer",
+		"back": "Volver al panel de contraloría",
+		"job_type": "Tipo de trabajo",
+		"address": "Dirección",
+		"supervisor": "Supervisor",
+		"current_crew": "Cuadrilla actual",
+		"invoice_amount": "Monto de factura",
+		"expected_advance": "Adelanto PBCC esperado (80%)",
+		"advance_status": "Adelanto PBCC",
+		"final_status": "Pago final de Claro",
+		"crew_payment_status": "Pago de cuadrilla",
+		"status_recorded": "Registrado",
+		"status_pending": "Pendiente",
+		"incoming_doc_heading": "Solicitud PBCC entrante",
+		"sent_on": "Enviado el {{date}}",
+		"download_pbcc": "Descargar solicitud PBCC",
+		"record_advance_heading": "Registrar adelanto PBCC",
+		"date_label": "Fecha",
+		"amount_label": "Monto",
+		"record_advance_submit": "Registrar adelanto",
+		"advance_recorded": "Adelanto de {{amount}} registrado el {{date}}",
+		"record_crew_payment_heading": "Registrar pago de cuadrilla",
+		"crew_payment_recorded": "Pago de cuadrilla registrado.",
+		"record_crew_payment_submit": "Registrar pago de cuadrilla",
+		"note_label": "Nota",
+		"note_placeholder": "Nota opcional…",
+		"crew_amount_placeholder": "Monto del pago a cuadrilla",
+		"record_final_heading": "Registrar pago final de Claro",
+		"record_final_submit": "Registrar pago final",
+		"final_recorded": "Pago final de {{amount}} registrado el {{date}}",
+		"final_amount_placeholder": "Monto del pago final",
+		"crew_history_heading": "Historial de asignación de cuadrilla",
+		"crew_history_assigned": "Asignado el {{date}} por {{by}}",
+		"payment_records_heading": "Registros de pago",
+		"no_payment_records": "Aún no hay registros de pago.",
+		"table": {
+			"date": "Fecha",
+			"type": "Tipo",
+			"amount": "Monto",
+			"recorded_by": "Registrado por",
+			"note": "Nota"
+		},
+		"errors": {
+			"invalid_amount": "Ingresa un monto positivo válido.",
+			"invalid_date": "Ingresa una fecha válida.",
+			"advance_already_recorded": "El adelanto PBCC ya fue registrado para este trabajo.",
+			"final_already_recorded": "El pago final de Claro ya fue registrado para este trabajo.",
+			"unknown_intent": "Acción desconocida."
+		},
+		"success": {
+			"advance_recorded": "Adelanto PBCC registrado. Finanzas ha sido notificado.",
+			"final_recorded": "Pago final de Claro registrado. El cierre está desbloqueado.",
+			"crew_payment_recorded": "Pago de cuadrilla registrado."
+		}
 	}
 }

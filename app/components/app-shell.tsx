@@ -9,6 +9,7 @@ import {
 	Menu01Icon,
 	Notification01Icon,
 	Settings02Icon,
+	Wallet01Icon,
 } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react"
 import type { TFunction } from "i18next"
@@ -28,6 +29,7 @@ type NavItem = {
 		| "app_shell.nav.receivables"
 		| "app_shell.nav.admin_settings"
 		| "app_shell.nav.catalog"
+		| "app_shell.nav.comptroller"
 	icon: IconSvgElement
 	roles?: Role[]
 }
@@ -61,6 +63,12 @@ const NAV_ITEMS: NavItem[] = [
 		labelKey: "app_shell.nav.catalog",
 		icon: GridViewIcon,
 		roles: ["ADMIN"],
+	},
+	{
+		to: "/comptroller",
+		labelKey: "app_shell.nav.comptroller",
+		icon: Wallet01Icon,
+		roles: ["COMPTROLLER", "ADMIN"],
 	},
 ]
 

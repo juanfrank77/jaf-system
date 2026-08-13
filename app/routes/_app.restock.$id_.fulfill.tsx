@@ -1,4 +1,3 @@
-import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
@@ -42,12 +41,12 @@ export const meta = ({ data }: { data?: { request: { id: string } } }) => [
 ]
 
 export async function loader({ request, params }: any) {
-	const { user } = await requireRole(request, ["WAREHOUSE", "ADMIN"])
+	await requireRole(request, ["WAREHOUSE", "ADMIN"])
 	const restockRequest = await db.vanRestockRequest.findUniqueOrThrow({
 		where: { id: params.id },
 		include: { requestedBy: true, warehouse: true },
 	})
-	if (restockRequest.status !== "REQUESTED") {
+	if (!["REQUESTED", "APPROVED"].includes(restockRequest.status)) {
 		throw redirect(`/dashboard`)
 	}
 	const serviceCodes = await db.serviceCode.findMany({
@@ -65,17 +64,16 @@ export async function loader({ request, params }: any) {
 }
 
 export async function action({ request, params }: any) {
-	const { user } = await requireRole(request, ["WAREHOUSE", "ADMIN"])
+	await requireRole(request, ["WAREHOUSE", "ADMIN"])
 	const restockRequest = await db.vanRestockRequest.findUniqueOrThrow({
 		where: { id: params.id },
 	})
-	if (restockRequest.status !== "REQUESTED") {
+	if (!["REQUESTED", "APPROVED"].includes(restockRequest.status)) {
 		throw redirect(`/dashboard`)
 	}
 
 	const form = await request.formData()
 	const fulfillItemsRaw = form.get("fulfillItems") as string
-	const hasMissing = form.get("hasMissing") === "true"
 
 	let fulfillItems: FulfillLine[] = []
 	try {
@@ -160,9 +158,6 @@ export default function FulfillRestock({ loaderData, actionData }: any) {
 
 			<div className="space-y-3">
 				{lines.map((line, index) => {
-					const code = serviceCodes.find(
-						(c: any) => c.id === line.serviceCodeId,
-					)
 					const substitutionOptions = serviceCodes.filter(
 						(c: any) =>
 							c.id !== line.serviceCodeId &&

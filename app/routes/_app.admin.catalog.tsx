@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { data, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
@@ -92,6 +93,47 @@ export async function action({ request }: Route.ActionArgs) {
 		return redirect("/admin/catalog")
 	}
 
+	if (intent === "update") {
+		const id = formData.get("id")
+		const claroCode = formData.get("claroCode")
+		const name = formData.get("name")
+		const unitPrice = formData.get("unitPrice")
+		const accountCode = formData.get("accountCode")
+		const dept = formData.get("dept")
+
+		if (
+			typeof id !== "string" ||
+			!id.trim() ||
+			typeof claroCode !== "string" ||
+			!claroCode.trim() ||
+			typeof name !== "string" ||
+			!name.trim() ||
+			typeof unitPrice !== "string" ||
+			!unitPrice.trim()
+		) {
+			return data(
+				{ errorKey: "admin_catalog.errors.required_fields" },
+				{ status: 400 },
+			)
+		}
+
+		await db.serviceCode.update({
+			where: { id },
+			data: {
+				claroCode: claroCode.trim(),
+				name: name.trim(),
+				unitPrice: Number.parseFloat(unitPrice),
+				accountCode:
+					typeof accountCode === "string" && accountCode.trim()
+						? accountCode.trim()
+						: null,
+				dept: typeof dept === "string" && dept.trim() ? dept.trim() : null,
+			},
+		})
+
+		return redirect("/admin/catalog")
+	}
+
 	return data(
 		{ errorKey: "admin_catalog.errors.unknown_intent" },
 		{ status: 400 },
@@ -101,6 +143,7 @@ export async function action({ request }: Route.ActionArgs) {
 export default function AdminCatalog({ loaderData }: Route.ComponentProps) {
 	const { codes } = loaderData
 	const { t } = useTranslation()
+	const [editingId, setEditingId] = useState<string | null>(null)
 
 	return (
 		<div className="space-y-8">
@@ -181,43 +224,133 @@ export default function AdminCatalog({ loaderData }: Route.ComponentProps) {
 						</tr>
 					</thead>
 					<tbody className="divide-y">
-						{codes.map((code) => (
-							<tr key={code.id} className="hover:bg-slate-50">
-								<td className="px-4 py-3 font-mono">{code.claroCode}</td>
-								<td className="px-4 py-3">{code.name}</td>
-								<td className="px-4 py-3 text-right">
-									{toNumberPrice(code.unitPrice).toFixed(2)}
-								</td>
-								<td className="px-4 py-3 text-slate-500">
-									{code.accountCode ?? "—"}
-								</td>
-								<td className="px-4 py-3 text-slate-500">{code.dept ?? "—"}</td>
-								<td className="px-4 py-3 text-center">
-									<span
-										className={
-											code.active
-												? "text-green-600 font-medium"
-												: "text-slate-400"
-										}
-									>
-										{code.active
-											? t("admin_catalog.yes")
-											: t("admin_catalog.no")}
-									</span>
-								</td>
-								<td className="px-4 py-3 text-center">
-									<form method="post">
-										<input type="hidden" name="intent" value="toggle" />
-										<input type="hidden" name="id" value={code.id} />
-										<Button type="submit" variant="outline" size="sm">
+						{codes.map((code) =>
+							editingId === code.id ? (
+								<tr key={code.id} className="bg-slate-50">
+									<td className="px-4 py-3">
+										<Input
+											name="claroCode"
+											defaultValue={code.claroCode}
+											form={`edit-form-${code.id}`}
+											required
+										/>
+									</td>
+									<td className="px-4 py-3">
+										<Input
+											name="name"
+											defaultValue={code.name}
+											form={`edit-form-${code.id}`}
+											required
+										/>
+									</td>
+									<td className="px-4 py-3">
+										<Input
+											name="unitPrice"
+											type="number"
+											step="0.01"
+											min="0"
+											defaultValue={toNumberPrice(code.unitPrice)}
+											form={`edit-form-${code.id}`}
+											required
+										/>
+									</td>
+									<td className="px-4 py-3">
+										<Input
+											name="accountCode"
+											defaultValue={code.accountCode ?? ""}
+											form={`edit-form-${code.id}`}
+										/>
+									</td>
+									<td className="px-4 py-3">
+										<Input
+											name="dept"
+											defaultValue={code.dept ?? ""}
+											form={`edit-form-${code.id}`}
+										/>
+									</td>
+									<td className="px-4 py-3 text-center">
+										<span
+											className={
+												code.active
+													? "text-green-600 font-medium"
+													: "text-slate-400"
+											}
+										>
 											{code.active
-												? t("admin_catalog.deactivate")
-												: t("admin_catalog.activate")}
-										</Button>
-									</form>
-								</td>
-							</tr>
-						))}
+												? t("admin_catalog.yes")
+												: t("admin_catalog.no")}
+										</span>
+									</td>
+									<td className="px-4 py-3 text-center">
+										<div className="flex items-center justify-center gap-2">
+											<form method="post" id={`edit-form-${code.id}`}>
+												<input type="hidden" name="intent" value="update" />
+												<input type="hidden" name="id" value={code.id} />
+												<Button type="submit" size="sm">
+													{t("admin_catalog.save")}
+												</Button>
+											</form>
+											<Button
+												type="button"
+												variant="ghost"
+												size="sm"
+												onClick={() => setEditingId(null)}
+											>
+												{t("admin_catalog.cancel")}
+											</Button>
+										</div>
+									</td>
+								</tr>
+							) : (
+								<tr key={code.id} className="hover:bg-slate-50">
+									<td className="px-4 py-3 font-mono">{code.claroCode}</td>
+									<td className="px-4 py-3">{code.name}</td>
+									<td className="px-4 py-3 text-right">
+										{toNumberPrice(code.unitPrice).toFixed(2)}
+									</td>
+									<td className="px-4 py-3 text-slate-500">
+										{code.accountCode ?? "—"}
+									</td>
+									<td className="px-4 py-3 text-slate-500">
+										{code.dept ?? "—"}
+									</td>
+									<td className="px-4 py-3 text-center">
+										<span
+											className={
+												code.active
+													? "text-green-600 font-medium"
+													: "text-slate-400"
+											}
+										>
+											{code.active
+												? t("admin_catalog.yes")
+												: t("admin_catalog.no")}
+										</span>
+									</td>
+									<td className="px-4 py-3 text-center">
+										<div className="flex items-center justify-center gap-2">
+											<form method="post">
+												<input type="hidden" name="intent" value="toggle" />
+												<input type="hidden" name="id" value={code.id} />
+												<Button type="submit" variant="outline" size="sm">
+													{code.active
+														? t("admin_catalog.deactivate")
+														: t("admin_catalog.activate")}
+												</Button>
+											</form>
+											<Button
+												type="button"
+												variant="outline"
+												size="sm"
+												onClick={() => setEditingId(code.id)}
+											>
+												{t("admin_catalog.edit")}
+											</Button>
+										</div>
+									</td>
+								</tr>
+							),
+						)}
 						{codes.length === 0 && (
 							<tr>
 								<td

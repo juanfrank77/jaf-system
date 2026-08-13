@@ -5,7 +5,12 @@ import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { requireRole } from "~/lib/permissions.server"
-import { getIvuRate, setIvuRate } from "~/lib/system-settings.server"
+import {
+	getAgingAlertDays,
+	getIvuRate,
+	setAgingAlertDays,
+	setIvuRate,
+} from "~/lib/system-settings.server"
 import type { Route } from "./+types/_app.admin.settings"
 
 export const meta: Route.MetaFunction = () => [
@@ -14,30 +19,58 @@ export const meta: Route.MetaFunction = () => [
 
 export async function loader({ request }: Route.LoaderArgs) {
 	await requireRole(request, ["ADMIN"])
-	const ivuRate = await getIvuRate()
-	return { ivuRate }
+	const [ivuRate, agingAlertDays] = await Promise.all([
+		getIvuRate(),
+		getAgingAlertDays(),
+	])
+	return { ivuRate, agingAlertDays }
 }
 
 export async function action({ request }: Route.ActionArgs) {
 	const { user } = await requireRole(request, ["ADMIN"])
 	const form = await request.formData()
-	const rateRaw = form.get("ivu_rate") as string
-	const rate = parseFloat(rateRaw)
-	if (Number.isNaN(rate) || rate <= 0 || rate >= 1) {
-		return {
-			errorKey: "admin_settings.errors.invalid_rate",
+	const intent = form.get("intent")
+
+	if (intent === "ivu") {
+		const rateRaw = form.get("ivu_rate") as string
+		const rate = parseFloat(rateRaw)
+		if (Number.isNaN(rate) || rate <= 0 || rate >= 1) {
+			return {
+				errorKey: "admin_settings.errors.invalid_rate",
+			}
 		}
+		await setIvuRate(rate, user.id)
+		return { success: true }
 	}
-	await setIvuRate(rate, user.id)
-	return { success: true }
+
+	if (intent === "aging") {
+		const daysRaw = form.get("aging_alert_days") as string
+		const days = Number.parseInt(daysRaw, 10)
+		if (Number.isNaN(days) || days <= 0) {
+			return {
+				errorKey: "admin_settings.errors.invalid_aging_days",
+			}
+		}
+		await setAgingAlertDays(days, user.id)
+		return { successAging: true }
+	}
+
+	return { errorKey: "admin_settings.errors.unknown_intent" }
 }
 
 export default function AdminSettings({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { ivuRate } = loaderData
+	const { ivuRate, agingAlertDays } = loaderData
 	const { t } = useTranslation()
+	const error =
+		actionData && "errorKey" in actionData ? actionData.errorKey : null
+	const success =
+		actionData && "success" in actionData ? actionData.success : null
+	const successAging =
+		actionData && "successAging" in actionData ? actionData.successAging : null
+
 	return (
 		<div className="space-y-6 max-w-sm">
 			<h1 className="text-xl font-semibold">{t("admin_settings.title")}</h1>
@@ -52,6 +85,7 @@ export default function AdminSettings({
 					})}
 				</p>
 				<Form method="post" className="space-y-3">
+					<input type="hidden" name="intent" value="ivu" />
 					<div>
 						<Label htmlFor="ivu_rate">{t("admin_settings.ivu_label")}</Label>
 						<Input
@@ -65,12 +99,45 @@ export default function AdminSettings({
 							required
 						/>
 					</div>
-					{(actionData as any)?.errorKey && (
-						<p className="text-sm text-red-600">
-							{t((actionData as any).errorKey)}
+					{error && <p className="text-sm text-red-600">{t(error as any)}</p>}
+					{success && (
+						<p className="text-sm text-green-600">
+							{t("admin_settings.saved")}
 						</p>
 					)}
-					{(actionData as any)?.success && (
+					<Button type="submit" size="sm">
+						{t("admin_settings.save")}
+					</Button>
+				</Form>
+			</div>
+
+			<div className="bg-white border rounded-lg p-4 space-y-3">
+				<h2 className="font-medium text-sm">
+					{t("admin_settings.aging_heading")}
+				</h2>
+				<p className="text-xs text-slate-500">
+					{t("admin_settings.aging_description", {
+						current: agingAlertDays,
+					})}
+				</p>
+				<Form method="post" className="space-y-3">
+					<input type="hidden" name="intent" value="aging" />
+					<div>
+						<Label htmlFor="aging_alert_days">
+							{t("admin_settings.aging_label")}
+						</Label>
+						<Input
+							id="aging_alert_days"
+							name="aging_alert_days"
+							type="number"
+							step="1"
+							min="1"
+							defaultValue={agingAlertDays}
+							required
+						/>
+					</div>
+					{error && <p className="text-sm text-red-600">{t(error as any)}</p>}
+					{successAging && (
 						<p className="text-sm text-green-600">
 							{t("admin_settings.saved")}
 						</p>

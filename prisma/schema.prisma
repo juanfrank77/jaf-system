@@ -67,6 +67,8 @@ model User {
   restockReleases       VanRestockRequest[]  @relation("RestockReleases")
   restockReceivers      VanRestockRequest[]  @relation("RestockReceivers")
   restockOverrides      VanRestockRequest[]  @relation("RestockOverrides")
+  restockApprovals      VanRestockRequest[]  @relation("RestockApprovals")
+  installedVan          Van?                 @relation("VanInstaller")
   consignmentReceipts   ConsignmentReceipt[] @relation("ConsignmentReceipts")
   systemSettings        SystemSetting[]      @relation("SystemSettings")
   auditTrail       AuditTrail[]
@@ -324,6 +326,30 @@ model SystemSetting {
 }
 
 // Module 1 tables — schema defined now, routes built later
+model Brigade {
+  id        String   @id @default(cuid())
+  name      String
+  memberIds String[]
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active])
+}
+
+model Van {
+  id                  String   @id @default(cuid())
+  name                String
+  installerId         String?  @unique
+  installer           User?    @relation("VanInstaller", fields: [installerId], references: [id])
+  standardStockLevels Json     // [{ serviceCodeId, qty }]
+  active              Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([active])
+}
+
 model VanRestockRequest {
   id                 String    @id @default(cuid())
   requestedById      String
@@ -331,11 +357,16 @@ model VanRestockRequest {
   warehouseId        String
   warehouse          Warehouse @relation(fields: [warehouseId], references: [id])
   items              Json
+  // REQUESTED | PENDING_APPROVAL | APPROVED | DENIED | READY | FULFILLED
   status             String    @default("REQUESTED")
+  requiresApproval   Boolean   @default(false)
+  approvedById       String?
+  approvedBy         User?     @relation("RestockApprovals", fields: [approvedById], references: [id])
+  approvalNote       String?
+  deniedReason       String?
   releaseSignature   String?
   releasedById       String?
   releasedBy         User?     @relation("RestockReleases", fields: [releasedById], references: [id])
-  releaseSignedAt    DateTime?
   receiverSignature  String?
   receiverSignedById String?
   receiverSignedBy   User?     @relation("RestockReceivers", fields: [receiverSignedById], references: [id])

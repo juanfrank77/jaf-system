@@ -24,6 +24,10 @@
 			"receivables": "Pipeline de Finanzas",
 			"admin_settings": "Configuración de administrador",
 			"catalog": "Catálogo",
+			"admin_users": "Usuarios",
+			"admin_crews": "Cuadrillas",
+			"admin_vans": "Vans",
+			"admin_restock": "Aprobaciones de reabastecimiento",
 			"comptroller": "Contraloría"
 		},
 		"notifications": {
@@ -295,10 +299,15 @@
 		"ivu_heading": "Tasa de IVU",
 		"ivu_description": "Se aplica a la generación de todos los PDF de facturas. Ingresa como decimal (ej. 0.115 = 11.5%). Actual: {{current}}%",
 		"ivu_label": "Tasa de IVU (decimal)",
+		"aging_heading": "Umbral de alerta de antigüedad",
+		"aging_description": "Los documentos más antiguos que esta cantidad de días en etapas clave de finanzas generarán alertas de antigüedad. Actual: {{current}} días",
+		"aging_label": "Días de alerta de antigüedad",
 		"saved": "Guardado.",
 		"save": "Guardar",
 		"errors": {
-			"invalid_rate": "La tasa de IVU debe ser un decimal entre 0 y 1 (ej. 0.115 para 11.5%)"
+			"invalid_rate": "La tasa de IVU debe ser un decimal entre 0 y 1 (ej. 0.115 para 11.5%)",
+			"invalid_aging_days": "Los días de alerta de antigüedad deben ser un número entero positivo.",
+			"unknown_intent": "Acción desconocida."
 		}
 	},
 	"admin_catalog": {
@@ -310,6 +319,9 @@
 		"account_code_label": "Código de cuenta",
 		"dept_label": "Departamento",
 		"add_submit": "Agregar código de servicio",
+		"edit": "Editar",
+		"save": "Guardar",
+		"cancel": "Cancelar",
 		"table": {
 			"claro_code": "Código Claro",
 			"name": "Nombre",
@@ -328,6 +340,134 @@
 			"required_fields": "Se requieren código Claro, nombre y precio unitario.",
 			"id_required": "Se requiere el id.",
 			"unknown_intent": "Intención desconocida."
+		}
+	},
+	"admin_users": {
+		"title": "Usuarios y cuentas",
+		"add_heading": "Crear usuario",
+		"name_label": "Nombre *",
+		"email_label": "Correo electrónico *",
+		"role_label": "Rol *",
+		"role_placeholder": "Selecciona rol…",
+		"temp_password_label": "Contraseña temporal *",
+		"add_submit": "Crear usuario",
+		"update_role": "Actualizar rol",
+		"deactivate": "Desactivar",
+		"activate": "Activar",
+		"reset_password": "Restablecer contraseña",
+		"reset_password_notice": "Contraseña temporal generada. Compártela de forma segura con el usuario.",
+		"dismiss": "Descartar",
+		"yes": "Sí",
+		"no": "No",
+		"table": {
+			"name": "Nombre",
+			"email": "Correo electrónico",
+			"role": "Rol",
+			"active": "Activo",
+			"actions": "Acciones"
+		},
+		"role": {
+			"supervisor": "Supervisor",
+			"warehouse": "Almacén",
+			"crew": "Cuadrilla",
+			"installer": "Instalador",
+			"finance": "Finanzas",
+			"comptroller": "Contraloría",
+			"admin": "Administrador"
+		},
+		"no_users": "No se encontraron usuarios.",
+		"errors": {
+			"create_invalid": "Se requieren nombre, correo válido, rol y una contraseña de al menos 8 caracteres.",
+			"email_exists": "Ya existe un usuario con este correo electrónico.",
+			"id_required": "Se requiere el id del usuario.",
+			"no_account": "No se encontró una cuenta de credenciales para este usuario.",
+			"cannot_deactivate_self": "No puedes desactivar tu propia cuenta.",
+			"cannot_change_own_role": "No puedes cambiar tu propio rol.",
+			"update_invalid": "Se requieren id de usuario y rol válidos.",
+			"unknown_intent": "Acción desconocida."
+		}
+	},
+	"admin_crews": {
+		"title": "Cuadrillas y personal — Brigadas",
+		"add_heading": "Agregar brigada",
+		"name_label": "Nombre de brigada *",
+		"members_label": "Miembros",
+		"active_label": "Activa",
+		"active": "activo",
+		"inactive": "inactivo",
+		"add_submit": "Agregar brigada",
+		"edit": "Editar",
+		"save": "Guardar",
+		"deactivate": "Desactivar",
+		"activate": "Activar",
+		"yes": "Sí",
+		"no": "No",
+		"table": {
+			"name": "Nombre",
+			"members": "Miembros",
+			"active": "Activa",
+			"actions": "Acciones"
+		},
+		"no_members": "Sin miembros",
+		"no_crews": "Aún no hay brigadas.",
+		"errors": {
+			"invalid_fields": "Se requieren nombre de brigada válido y lista de miembros.",
+			"id_required": "Se requiere el id de la brigada.",
+			"unknown_intent": "Acción desconocida."
+		}
+	},
+	"admin_vans": {
+		"title": "Cuadrillas y personal — Vans",
+		"add_heading": "Agregar van",
+		"name_label": "Nombre / número de van *",
+		"installer_label": "Instalador asignado",
+		"installer_placeholder": "Sin asignar",
+		"stock_levels_label": "Niveles estándar de stock (niveles par)",
+		"active_label": "Activa",
+		"inactive": "inactivo",
+		"unassigned": "Sin asignar",
+		"no_stock_levels": "Sin niveles de stock",
+		"add_submit": "Agregar van",
+		"edit": "Editar",
+		"save": "Guardar",
+		"deactivate": "Desactivar",
+		"activate": "Activar",
+		"yes": "Sí",
+		"no": "No",
+		"table": {
+			"name": "Van",
+			"installer": "Instalador",
+			"stock_levels": "Niveles par",
+			"active": "Activa",
+			"actions": "Acciones"
+		},
+		"no_vans": "Aún no hay vans.",
+		"errors": {
+			"invalid_name": "Se requiere el nombre de la van.",
+			"id_required": "Se requiere el id de la van.",
+			"unknown_intent": "Acción desconocida."
+		}
+	},
+	"admin_restock": {
+		"title": "Aprobaciones de reabastecimiento",
+		"pending_heading": "Pendientes de aprobación ({{count}})",
+		"history_heading": "Historial de decisiones",
+		"no_pending": "No hay solicitudes pendientes.",
+		"no_history": "No hay decisiones previas.",
+		"no_items": "Sin artículos",
+		"total": "Total estimado",
+		"exceeds_badge": "Excede nivel par",
+		"approval_note_label": "Nota de aprobación (opcional)",
+		"approval_note_placeholder": "Razón de aprobación…",
+		"approve": "Aprobar",
+		"deny_reason_label": "Razón de denegación *",
+		"deny_reason_placeholder": "Razón de denegación…",
+		"deny": "Denegar",
+		"decided_by": "Decidido por {{name}}.",
+		"errors": {
+			"id_required": "Se requiere el id de la solicitud.",
+			"reason_required": "Se requiere una razón de denegación.",
+			"unknown_intent": "Acción desconocida."
 		}
 	},
 	"finance_receivables": {

@@ -24,6 +24,10 @@
 			"receivables": "Finance Pipeline",
 			"admin_settings": "Admin Settings",
 			"catalog": "Catalog",
+			"admin_users": "Users",
+			"admin_crews": "Crews",
+			"admin_vans": "Vans",
+			"admin_restock": "Restock Sign-offs",
 			"comptroller": "Comptroller"
 		},
 		"notifications": {
@@ -295,10 +299,15 @@
 		"ivu_heading": "IVU Tax Rate",
 		"ivu_description": "Applied to all invoice PDF generation. Enter as decimal (e.g. 0.115 = 11.5%). Current: {{current}}%",
 		"ivu_label": "IVU Rate (decimal)",
+		"aging_heading": "Aging Alert Threshold",
+		"aging_description": "Documents older than this many days in key finance stages will trigger aging alerts. Current: {{current}} days",
+		"aging_label": "Aging Alert Days",
 		"saved": "Saved.",
 		"save": "Save",
 		"errors": {
-			"invalid_rate": "IVU rate must be a decimal between 0 and 1 (e.g. 0.115 for 11.5%)"
+			"invalid_rate": "IVU rate must be a decimal between 0 and 1 (e.g. 0.115 for 11.5%)",
+			"invalid_aging_days": "Aging alert days must be a positive whole number.",
+			"unknown_intent": "Unknown action."
 		}
 	},
 	"admin_catalog": {
@@ -310,6 +319,9 @@
 		"account_code_label": "Account Code",
 		"dept_label": "Dept",
 		"add_submit": "Add Service Code",
+		"edit": "Edit",
+		"save": "Save",
+		"cancel": "Cancel",
 		"table": {
 			"claro_code": "Claro Code",
 			"name": "Name",
@@ -328,6 +340,134 @@
 			"required_fields": "claroCode, name, and unitPrice are required.",
 			"id_required": "id is required.",
 			"unknown_intent": "Unknown intent."
+		}
+	},
+	"admin_users": {
+		"title": "Users & Accounts",
+		"add_heading": "Create User",
+		"name_label": "Name *",
+		"email_label": "Email *",
+		"role_label": "Role *",
+		"role_placeholder": "Select role…",
+		"temp_password_label": "Temporary Password *",
+		"add_submit": "Create User",
+		"update_role": "Update Role",
+		"deactivate": "Deactivate",
+		"activate": "Activate",
+		"reset_password": "Reset Password",
+		"reset_password_notice": "Temporary password generated. Share it securely with the user.",
+		"dismiss": "Dismiss",
+		"yes": "Yes",
+		"no": "No",
+		"table": {
+			"name": "Name",
+			"email": "Email",
+			"role": "Role",
+			"active": "Active",
+			"actions": "Actions"
+		},
+		"role": {
+			"supervisor": "Supervisor",
+			"warehouse": "Warehouse",
+			"crew": "Brigade Crew",
+			"installer": "Installer",
+			"finance": "Finance",
+			"comptroller": "Comptroller",
+			"admin": "Admin"
+		},
+		"no_users": "No users found.",
+		"errors": {
+			"create_invalid": "Name, valid email, role, and a password of at least 8 characters are required.",
+			"email_exists": "A user with this email already exists.",
+			"id_required": "User id is required.",
+			"no_account": "No credential account found for this user.",
+			"cannot_deactivate_self": "You cannot deactivate your own account.",
+			"cannot_change_own_role": "You cannot change your own role.",
+			"update_invalid": "Valid user id and role are required.",
+			"unknown_intent": "Unknown action."
+		}
+	},
+	"admin_crews": {
+		"title": "Crews & Personnel — Brigades",
+		"add_heading": "Add Brigade",
+		"name_label": "Brigade Name *",
+		"members_label": "Members",
+		"active_label": "Active",
+		"active": "active",
+		"inactive": "inactive",
+		"add_submit": "Add Brigade",
+		"edit": "Edit",
+		"save": "Save",
+		"deactivate": "Deactivate",
+		"activate": "Activate",
+		"yes": "Yes",
+		"no": "No",
+		"table": {
+			"name": "Name",
+			"members": "Members",
+			"active": "Active",
+			"actions": "Actions"
+		},
+		"no_members": "No members",
+		"no_crews": "No brigades yet.",
+		"errors": {
+			"invalid_fields": "Valid brigade name and member list are required.",
+			"id_required": "Brigade id is required.",
+			"unknown_intent": "Unknown action."
+		}
+	},
+	"admin_vans": {
+		"title": "Crews & Personnel — Vans",
+		"add_heading": "Add Van",
+		"name_label": "Van Name / Number *",
+		"installer_label": "Assigned Installer",
+		"installer_placeholder": "Unassigned",
+		"stock_levels_label": "Standard Stock Levels (par levels)",
+		"active_label": "Active",
+		"inactive": "inactive",
+		"unassigned": "Unassigned",
+		"no_stock_levels": "No stock levels set",
+		"add_submit": "Add Van",
+		"edit": "Edit",
+		"save": "Save",
+		"deactivate": "Deactivate",
+		"activate": "Activate",
+		"yes": "Yes",
+		"no": "No",
+		"table": {
+			"name": "Van",
+			"installer": "Installer",
+			"stock_levels": "Par Levels",
+			"active": "Active",
+			"actions": "Actions"
+		},
+		"no_vans": "No vans yet.",
+		"errors": {
+			"invalid_name": "Van name is required.",
+			"id_required": "Van id is required.",
+			"unknown_intent": "Unknown action."
+		}
+	},
+	"admin_restock": {
+		"title": "Restock Sign-offs",
+		"pending_heading": "Pending Approval ({{count}})",
+		"history_heading": "Decision History",
+		"no_pending": "No requests awaiting approval.",
+		"no_history": "No past decisions.",
+		"no_items": "No items",
+		"total": "Estimated total",
+		"exceeds_badge": "Exceeds par level",
+		"approval_note_label": "Approval note (optional)",
+		"approval_note_placeholder": "Reason for approval…",
+		"approve": "Approve",
+		"deny_reason_label": "Denial reason *",
+		"deny_reason_placeholder": "Reason for denial…",
+		"deny": "Deny",
+		"decided_by": "Decided by {{name}}.",
+		"errors": {
+			"id_required": "Request id is required.",
+			"reason_required": "A denial reason is required.",
+			"unknown_intent": "Unknown action."
 		}
 	},
 	"finance_receivables": {

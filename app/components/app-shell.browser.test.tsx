@@ -135,6 +135,18 @@ describe("AppShell", () => {
 		expect(
 			screen.getByRole("link", { name: "Catalog", hidden: true }),
 		).toBeInTheDocument()
+		expect(
+			screen.getByRole("link", { name: "Users", hidden: true }),
+		).toBeInTheDocument()
+		expect(
+			screen.getByRole("link", { name: "Crews", hidden: true }),
+		).toBeInTheDocument()
+		expect(
+			screen.getByRole("link", { name: "Vans", hidden: true }),
+		).toBeInTheDocument()
+		expect(
+			screen.getByRole("link", { name: "Restock Sign-offs", hidden: true }),
+		).toBeInTheDocument()
 	})
 
 	it("shows the unread notification count", async ({ renderStub }) => {

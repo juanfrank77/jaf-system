@@ -8,7 +8,11 @@ import {
 	Invoice02Icon,
 	Menu01Icon,
 	Notification01Icon,
+	PackageIcon,
 	Settings02Icon,
+	TruckDeliveryIcon,
+	UserGroup03Icon,
+	UserIcon,
 	Wallet01Icon,
 } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react"
@@ -30,6 +34,10 @@ type NavItem = {
 		| "app_shell.nav.admin_settings"
 		| "app_shell.nav.catalog"
 		| "app_shell.nav.comptroller"
+		| "app_shell.nav.admin_users"
+		| "app_shell.nav.admin_crews"
+		| "app_shell.nav.admin_vans"
+		| "app_shell.nav.admin_restock"
 	icon: IconSvgElement
 	roles?: Role[]
 }
@@ -62,6 +70,30 @@ const NAV_ITEMS: NavItem[] = [
 		to: "/admin/catalog",
 		labelKey: "app_shell.nav.catalog",
 		icon: GridViewIcon,
+		roles: ["ADMIN"],
+	},
+	{
+		to: "/admin/users",
+		labelKey: "app_shell.nav.admin_users",
+		icon: UserIcon,
+		roles: ["ADMIN"],
+	},
+	{
+		to: "/admin/crews",
+		labelKey: "app_shell.nav.admin_crews",
+		icon: UserGroup03Icon,
+		roles: ["ADMIN"],
+	},
+	{
+		to: "/admin/vans",
+		labelKey: "app_shell.nav.admin_vans",
+		icon: TruckDeliveryIcon,
+		roles: ["ADMIN"],
+	},
+	{
+		to: "/admin/restock",
+		labelKey: "app_shell.nav.admin_restock",
+		icon: PackageIcon,
 		roles: ["ADMIN"],
 	},
 	{

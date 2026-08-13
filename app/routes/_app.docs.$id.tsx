@@ -12,6 +12,10 @@ import {
 } from "~/components/ui/select"
 import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
+import {
+	type AddressCorrection,
+	formatTimeOnSite,
+} from "~/lib/field-update-helpers"
 import { isEditableStatus, isTerminalStatus } from "~/lib/permissions"
 import { requireRole, requireSession } from "~/lib/permissions.server"
 import { toNumberPrice } from "~/lib/utils"
@@ -261,6 +265,9 @@ export default function DocView({
 	const estimated = (doc.estimatedMaterials as any[]) || []
 	const taken = (doc.materialsTaken as any[]) || []
 	const used = (doc.materialsUsed as any[]) || []
+	const corrections =
+		(doc.addressCorrections as AddressCorrection[] | null) || []
+	const gps = doc.gpsCoordinates as { lat: number; lng: number } | null
 
 	const APPROVED_STATUSES = [
 		"SUPERVISOR_APPROVED",
@@ -315,7 +322,38 @@ export default function DocView({
 				<p>
 					<span className="text-slate-500">{t("docs_view.address")}:</span>{" "}
 					{doc.jobAddressActual || doc.jobAddressEstimated}
+					{gps && (
+						<span className="ml-1 text-slate-400">
+							({gps.lat.toFixed(4)}, {gps.lng.toFixed(4)})
+						</span>
+					)}
 				</p>
+				{corrections.length > 0 && (
+					<div className="pt-2 border-t">
+						<p className="text-slate-500 text-xs mb-1">
+							{t("docs_view.address_corrections")}
+						</p>
+						<ul className="space-y-1">
+							{corrections.map((c) => (
+								<li
+									key={`${c.original}-${c.corrected}-${c.correctedAt}`}
+									className="text-xs"
+								>
+									<span className="line-through text-slate-400">
+										{c.original}
+									</span>
+									{" → "}
+									<span className="font-medium">{c.corrected}</span>
+									{c.gps && (
+										<span className="ml-1 text-slate-400">
+											({c.gps.lat.toFixed(4)}, {c.gps.lng.toFixed(4)})
+										</span>
+									)}
+								</li>
+							))}
+						</ul>
+					</div>
+				)}
 				{doc.avisoNumber && (
 					<p>
 						<span className="text-slate-500">
@@ -372,7 +410,7 @@ export default function DocView({
 			)}
 
 			{used.length > 0 && (
-				<section className="bg-white border rounded-lg p-4">
+				<section className="bg-white border rounded-lg p-4 space-y-3">
 					<h2 className="text-sm font-medium mb-2 text-slate-600">
 						{t("docs_view.materials_used")}
 					</h2>
@@ -381,8 +419,28 @@ export default function DocView({
 						initialItems={used}
 						readOnly
 					/>
+					{doc.startedAt && doc.endedAt && (
+						<p className="text-sm text-slate-600">
+							<span className="text-slate-500">
+								{t("docs_view.time_on_site")}:
+							</span>{" "}
+							{formatTimeOnSite(doc.startedAt, doc.endedAt)}
+						</p>
+					)}
 					{doc.fieldNotes && (
-						<p className="text-sm text-slate-600 mt-2">{doc.fieldNotes}</p>
+						<p className="text-sm text-slate-600">{doc.fieldNotes}</p>
+					)}
+					{doc.completionSignature && (
+						<div>
+							<p className="text-xs text-slate-500 mb-1">
+								{t("docs_view.completion_signature")}
+							</p>
+							<img
+								src={doc.completionSignature}
+								alt={t("docs_view.completion_signature_alt")}
+								className="border rounded max-h-16"
+							/>
+						</div>
 					)}
 				</section>
 			)}

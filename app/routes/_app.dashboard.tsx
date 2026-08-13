@@ -1,8 +1,10 @@
+import { useEffect } from "react"
 import { redirect } from "react-router"
 import { DashboardView } from "~/components/dashboard-view"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { computeDashboardStats } from "~/lib/dashboard-stats"
 import { db } from "~/lib/db.server"
+import { cacheJobs } from "~/lib/offline-store"
 import { requireSession } from "~/lib/permissions.server"
 import type { DocStatus, Role } from "../../generated/prisma/client"
 import { Prisma } from "../../generated/prisma/client"
@@ -123,6 +125,56 @@ export async function loader({ request }: Route.LoaderArgs) {
 				})
 			: []
 
+	const crewPreppedDocs =
+		user.role === "CREW"
+			? await db.jafInvoice.findMany({
+					where: {
+						...buildBaseWhere(user.role, user.id),
+						status: "PREPPED",
+					},
+					orderBy: { createdAt: "desc" },
+					take: 50,
+				})
+			: []
+
+	const crewInFieldDocs =
+		user.role === "CREW"
+			? ((await db.$queryRaw`
+				SELECT id, "controlNumber", status, "jobType", "jobAddressEstimated", "createdAt", "sendBackHistory"
+				FROM jaf_invoice
+				WHERE "assignedCrewIds" @> ARRAY[${user.id}]::text[]
+					AND status = 'SIGNED'
+					AND ("sendBackHistory" IS NULL OR jsonb_array_length("sendBackHistory") = 0)
+				ORDER BY "createdAt" DESC
+				LIMIT 50
+			`) as any[])
+			: []
+
+	const crewSentBackDocs =
+		user.role === "CREW"
+			? ((await db.$queryRaw`
+				SELECT id, "controlNumber", status, "jobType", "jobAddressEstimated", "createdAt", "sendBackHistory"
+				FROM jaf_invoice
+				WHERE "assignedCrewIds" @> ARRAY[${user.id}]::text[]
+					AND status = 'SIGNED'
+					AND jsonb_array_length("sendBackHistory") > 0
+				ORDER BY "createdAt" DESC
+				LIMIT 50
+			`) as any[])
+			: []
+
+	const crewSubmittedDocs =
+		user.role === "CREW"
+			? await db.jafInvoice.findMany({
+					where: {
+						...buildBaseWhere(user.role, user.id),
+						status: "FIELD_UPDATED",
+					},
+					orderBy: { createdAt: "desc" },
+					take: 50,
+				})
+			: []
+
 	const restockRequests =
 		user.role === "WAREHOUSE"
 			? await db.vanRestockRequest.findMany({
@@ -146,6 +198,10 @@ export async function loader({ request }: Route.LoaderArgs) {
 		warehousePreppedDocs,
 		warehouseMissingDocs,
 		warehouseReturnsDocs,
+		crewPreppedDocs,
+		crewInFieldDocs,
+		crewSentBackDocs,
+		crewSubmittedDocs,
 		restockRequests,
 	}
 }
@@ -164,8 +220,43 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 		warehousePreppedDocs,
 		warehouseMissingDocs,
 		warehouseReturnsDocs,
+		crewPreppedDocs,
+		crewInFieldDocs,
+		crewSentBackDocs,
+		crewSubmittedDocs,
 		restockRequests,
 	} = loaderData
+
+	useEffect(() => {
+		if (typeof window === "undefined") return
+		const allDocs = [
+			...docs,
+			...crewPreppedDocs,
+			...crewInFieldDocs,
+			...crewSentBackDocs,
+			...crewSubmittedDocs,
+		]
+		cacheJobs(
+			allDocs.map((d) => ({
+				id: d.id,
+				controlNumber: d.controlNumber,
+				status: d.status,
+				jobType: d.jobType,
+				jobAddressEstimated: d.jobAddressEstimated,
+				assignedCrewIds: d.assignedCrewIds || [],
+				sendBackHistory: d.sendBackHistory,
+				avisoNumber: d.avisoNumber,
+				updatedAt: new Date().toISOString(),
+			})),
+		).catch(() => {})
+	}, [
+		docs,
+		crewPreppedDocs,
+		crewInFieldDocs,
+		crewSentBackDocs,
+		crewSubmittedDocs,
+	])
+
 	return (
 		<DashboardView
 			stats={stats}
@@ -180,6 +271,10 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 			warehousePreppedDocs={warehousePreppedDocs}
 			warehouseMissingDocs={warehouseMissingDocs}
 			warehouseReturnsDocs={warehouseReturnsDocs}
+			crewPreppedDocs={crewPreppedDocs}
+			crewInFieldDocs={crewInFieldDocs}
+			crewSentBackDocs={crewSentBackDocs}
+			crewSubmittedDocs={crewSubmittedDocs}
 			restockRequests={restockRequests}
 		/>
 	)

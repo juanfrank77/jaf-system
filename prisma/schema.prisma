@@ -58,6 +58,7 @@ model User {
   preppedInvoices       JafInvoice[]         @relation("PreppedDocs")
   releasedInvoices      JafInvoice[]         @relation("ReleasedDocs")
   signedInvoices        JafInvoice[]         @relation("SignedDocs")
+  completedInvoices     JafInvoice[]         @relation("CompletedDocs")
   overriddenInvoices    JafInvoice[]         @relation("OverriddenDocs")
    lcApprovedInvoices    JafInvoice[]         @relation("LcApprovedDocs")
    financeVerifiedInvoices JafInvoice[]       @relation("FinanceVerifiedDocs")
@@ -184,11 +185,20 @@ model JafInvoice {
   // { fromStatus, toStatus, note, byUserId, createdAt } kept for audit.
   sendBackHistory    Json?
 
-  // Crew field update (Step 4)
-  jobAddressActual String?
-  materialsUsed    Json?
-  fieldNotes       String?
-  completedAt      DateTime?
+   // Crew field update (Step 4)
+   jobAddressActual String?
+   addressCorrections Json?    // [{ original, corrected, correctedById, correctedAt, gps? }]
+   gpsCoordinates   Json?     // { lat, lng, accuracy, capturedAt }
+   materialsUsed    Json?
+   fieldNotes       String?
+   startedAt        DateTime? // time on site start
+   endedAt          DateTime? // time on site end
+   completionSignature String? // base64 — crew lead signs completion
+   completedById    String?
+   completedBy      User?     @relation("CompletedDocs", fields: [completedById], references: [id])
+   completionSignedAt DateTime?
+   completedAt      DateTime?
+   fieldSubmittedAt DateTime?
 
   // Supervisor approval + Claro submission (Step 5)
   supervisorApprovedAt DateTime?

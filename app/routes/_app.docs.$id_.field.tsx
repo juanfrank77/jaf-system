@@ -1,14 +1,28 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import { useRef, useState } from "react"
 import { Trans, useTranslation } from "react-i18next"
-import { Form, redirect } from "react-router"
+import { Form, redirect, useSubmit } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialLineItems } from "~/components/material-line-items"
+import {
+	SignaturePad,
+	type SignaturePadHandle,
+} from "~/components/signature-pad"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
+import { useOnline } from "~/hooks/use-online"
 import { db } from "~/lib/db.server"
+import { queueFieldUpdate } from "~/lib/field-sync"
+import {
+	type AddressCorrection,
+	buildAddressCorrection,
+	formatTimeOnSite,
+	mergeAddressCorrections,
+	parseGpsCoordinates,
+} from "~/lib/field-update-helpers"
 import { validateFile } from "~/lib/file-upload.server"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
@@ -69,6 +83,14 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const jobAddressActual = (form.get("jobAddressActual") as string).trim()
 	const fieldNotes = (form.get("fieldNotes") as string | null)?.trim() || null
 	const materialsRaw = form.get("materialsUsed") as string
+	const completionSignature = form.get("completionSignature") as string
+	const startedAtRaw = form.get("startedAt") as string | null
+	const endedAtRaw = form.get("endedAt") as string | null
+	const gpsRaw = form.get("gpsCoordinates") as string | null
+
+	if (!completionSignature || completionSignature === "data:,") {
+		return { errorKey: "docs_field.errors.completion_signature_required" }
+	}
 
 	let materialsUsed: { serviceCodeId: string; qty: number }[] = []
 	try {
@@ -118,6 +140,21 @@ export async function action({ request, params }: Route.ActionArgs) {
 		}
 	}
 
+	// Address correction history
+	const previousActual = doc.jobAddressActual || doc.jobAddressEstimated
+	const addressCorrections = mergeAddressCorrections({
+		existing: doc.addressCorrections as AddressCorrection[] | null,
+		correction: buildAddressCorrection({
+			original: previousActual,
+			corrected: jobAddressActual,
+			correctedById: user.id,
+			gps: parseGpsCoordinates(gpsRaw),
+		}),
+	})
+
+	const startedAt = startedAtRaw ? new Date(startedAtRaw) : undefined
+	const endedAt = endedAtRaw ? new Date(endedAtRaw) : undefined
+
 	await db.$transaction([
 		...photoPaths.map((localPath) =>
 			db.photo.create({
@@ -129,9 +166,17 @@ export async function action({ request, params }: Route.ActionArgs) {
 			data: {
 				status: "FIELD_UPDATED",
 				jobAddressActual,
+				addressCorrections,
+				gpsCoordinates: parseGpsCoordinates(gpsRaw),
 				materialsUsed,
 				fieldNotes,
+				startedAt,
+				endedAt,
+				completionSignature,
+				completedById: user.id,
+				completionSignedAt: new Date(),
 				completedAt: new Date(),
+				fieldSubmittedAt: new Date(),
 			},
 		}),
 		db.auditTrail.create({
@@ -143,6 +188,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 					status: { before: doc.status, after: "FIELD_UPDATED" },
 					jobAddressActual,
 					materialsUsed,
+					startedAt: startedAtRaw,
+					endedAt: endedAtRaw,
 				},
 			},
 		}),
@@ -164,10 +211,103 @@ export default function FieldUpdate({
 }: Route.ComponentProps) {
 	const { doc, serviceCodes, latestSendBack, sentByName } = loaderData
 	const taken = (doc.materialsTaken as any[]) || []
+	const corrections =
+		(doc.addressCorrections as AddressCorrection[] | null) || []
 	const { t } = useTranslation()
 	const error = actionData as
 		| { errorKey?: any; errorParams?: any; errorMessage?: string }
 		| undefined
+	const online = useOnline()
+	const submit = useSubmit()
+	const [queued, setQueued] = useState(false)
+
+	const signatureRef = useRef<SignaturePadHandle>(null)
+	const [startedAt, setStartedAt] = useState<string | null>(
+		(doc.startedAt ? new Date(doc.startedAt).toISOString() : null) ??
+			new Date().toISOString(),
+	)
+	const [endedAt, setEndedAt] = useState<string | null>(
+		doc.endedAt ? new Date(doc.endedAt).toISOString() : null,
+	)
+	const [gpsCoordinates, setGpsCoordinates] = useState<string | null>(
+		doc.gpsCoordinates ? JSON.stringify(doc.gpsCoordinates) : null,
+	)
+	const [gpsError, setGpsError] = useState<string | null>(null)
+
+	function handleCaptureGps() {
+		setGpsError(null)
+		if (!navigator.geolocation) {
+			setGpsError(t("docs_field.gps_not_supported"))
+			return
+		}
+		navigator.geolocation.getCurrentPosition(
+			(position) => {
+				setGpsCoordinates(
+					JSON.stringify({
+						lat: position.coords.latitude,
+						lng: position.coords.longitude,
+						accuracy: position.coords.accuracy,
+						capturedAt: new Date().toISOString(),
+					}),
+				)
+			},
+			(err) => {
+				setGpsError(t("docs_field.gps_error", { code: err.code }))
+			},
+		)
+	}
+
+	function handleStart() {
+		setStartedAt(new Date().toISOString())
+	}
+
+	function handleStop() {
+		setEndedAt(new Date().toISOString())
+	}
+
+	const timeOnSite = formatTimeOnSite(startedAt, endedAt)
+
+	async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+		e.preventDefault()
+		const form = e.currentTarget
+		const signature = signatureRef.current?.toDataURL()
+		if (!signature || signature === "data:,") {
+			alert(t("docs_field.errors.completion_signature_required"))
+			return
+		}
+
+		const formData = new FormData(form)
+		formData.set("completionSignature", signature)
+
+		if (online) {
+			submit(formData, { method: "post", encType: "multipart/form-data" })
+			return
+		}
+
+		// Offline: queue the field update.
+		const photos: { name: string; base64: string; type: string }[] = []
+		const fileInputs = formData.getAll("photos") as File[]
+		for (const file of fileInputs) {
+			if (file.size === 0) continue
+			photos.push({
+				name: file.name,
+				type: file.type,
+				base64: await fileToBase64(file),
+			})
+		}
+
+		await queueFieldUpdate(doc.id, {
+			jobAddressActual: (formData.get("jobAddressActual") as string).trim(),
+			fieldNotes: (formData.get("fieldNotes") as string | null)?.trim() || null,
+			materialsUsed: formData.get("materialsUsed") as string,
+			completionSignature: signature,
+			startedAt: (formData.get("startedAt") as string) || null,
+			endedAt: (formData.get("endedAt") as string) || null,
+			gpsCoordinates: (formData.get("gpsCoordinates") as string) || null,
+			photos,
+		})
+		setQueued(true)
+	}
 
 	return (
 		<div className="space-y-5">
@@ -197,7 +337,49 @@ export default function FieldUpdate({
 				{(doc as any).controlNumber}
 			</p>
 
-			<Form method="post" encType="multipart/form-data" className="space-y-4">
+			{corrections.length > 0 && (
+				<div className="bg-slate-50 border rounded-lg p-3 text-sm space-y-2">
+					<p className="font-medium text-slate-700">
+						{t("docs_field.address_history_heading")}
+					</p>
+					<ul className="space-y-1">
+						{corrections.map((c) => (
+							<li
+								key={`${c.original}-${c.corrected}-${c.correctedAt}`}
+								className="text-xs text-slate-600"
+							>
+								<span className="line-through">{c.original}</span>
+								{" → "}
+								<span className="font-medium">{c.corrected}</span>
+								{c.gps && (
+									<span className="ml-1 text-slate-400">
+										({c.gps.lat.toFixed(4)}, {c.gps.lng.toFixed(4)})
+									</span>
+								)}
+							</li>
+						))}
+					</ul>
+				</div>
+			)}
+
+			{queued && (
+				<div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
+					{t("docs_field.queued_message")}
+				</div>
+			)}
+
+			{!online && !queued && (
+				<div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+					{t("docs_field.offline_submit_notice")}
+				</div>
+			)}
+
+			<Form
+				method="post"
+				encType="multipart/form-data"
+				className="space-y-4"
+				onSubmit={handleSubmit}
+			>
 				<div>
 					<Label htmlFor="jobAddressActual">
 						{t("docs_field.actual_address_label")}
@@ -205,9 +387,65 @@ export default function FieldUpdate({
 					<Input
 						id="jobAddressActual"
 						name="jobAddressActual"
-						defaultValue={(doc as any).jobAddressEstimated}
+						defaultValue={doc.jobAddressActual || doc.jobAddressEstimated}
 						required
 					/>
+				</div>
+
+				<div>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						onClick={handleCaptureGps}
+						disabled={!!gpsCoordinates}
+					>
+						{gpsCoordinates
+							? t("docs_field.gps_captured")
+							: t("docs_field.gps_capture")}
+					</Button>
+					{gpsError && <p className="text-xs text-red-600 mt-1">{gpsError}</p>}
+					{gpsCoordinates && (
+						<p className="text-xs text-slate-500 mt-1">
+							{t("docs_field.gps_saved")}
+						</p>
+					)}
+					<input
+						type="hidden"
+						name="gpsCoordinates"
+						value={gpsCoordinates ?? ""}
+					/>
+				</div>
+
+				<div className="border rounded-lg p-3 space-y-2">
+					<Label>{t("docs_field.time_on_site_label")}</Label>
+					<div className="flex items-center gap-2">
+						<input type="hidden" name="startedAt" value={startedAt ?? ""} />
+						<input type="hidden" name="endedAt" value={endedAt ?? ""} />
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							onClick={handleStart}
+							disabled={!!startedAt}
+						>
+							{t("docs_field.start_timer")}
+						</Button>
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							onClick={handleStop}
+							disabled={!startedAt || !!endedAt}
+						>
+							{t("docs_field.stop_timer")}
+						</Button>
+						{timeOnSite && (
+							<span className="text-sm font-medium text-slate-700">
+								{t("docs_field.time_on_site_value", { duration: timeOnSite })}
+							</span>
+						)}
+					</div>
 				</div>
 
 				<div>
@@ -231,6 +469,7 @@ export default function FieldUpdate({
 						name="fieldNotes"
 						rows={3}
 						placeholder={t("docs_field.field_notes_placeholder")}
+						defaultValue={doc.fieldNotes ?? ""}
 					/>
 				</div>
 
@@ -250,6 +489,21 @@ export default function FieldUpdate({
 					</p>
 				</div>
 
+				<div className="border rounded-lg p-3 space-y-2">
+					<Label>{t("docs_field.completion_signature_label")}</Label>
+					<p className="text-xs text-slate-500">
+						{t("docs_field.completion_signature_hint")}
+					</p>
+					<SignaturePad ref={signatureRef} width={320} height={120} />
+					<button
+						type="button"
+						onClick={() => signatureRef.current?.clear()}
+						className="text-xs text-slate-400 hover:text-slate-600"
+					>
+						{t("docs_field.clear_signature")}
+					</button>
+				</div>
+
 				{error?.errorKey && (
 					<p className="text-sm text-red-600">
 						{t(error.errorKey, error.errorParams)}
@@ -260,11 +514,20 @@ export default function FieldUpdate({
 				)}
 
 				<Button type="submit" className="w-full">
-					{t("docs_field.submit")}
+					{online ? t("docs_field.submit") : t("docs_field.save_offline")}
 				</Button>
 			</Form>
 		</div>
 	)
+}
+
+function fileToBase64(file: File): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const reader = new FileReader()
+		reader.onload = () => resolve(String(reader.result))
+		reader.onerror = reject
+		reader.readAsDataURL(file)
+	})
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {

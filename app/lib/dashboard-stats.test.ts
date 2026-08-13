@@ -88,17 +88,48 @@ describe("computeDashboardStats", () => {
 		expect(alert).toBeNull()
 	})
 
-	it("CREW: counts open jobs and jobs awaiting close", () => {
-		const docs = [doc("SIGNED"), doc("FIELD_UPDATED"), doc("LC_GENERATED")]
+	it("CREW: counts open jobs and grouped My Jobs states", () => {
+		const docs = [
+			doc("PREPPED"),
+			doc("SIGNED"),
+			doc("SIGNED", null, { sendBackHistory: [{ note: "fix photo" }] }),
+			doc("FIELD_UPDATED"),
+			doc("LC_GENERATED"),
+			doc("CANCELLED"),
+		]
 		const { stats, alert } = computeDashboardStats("CREW", docs)
 		expect(stats).toEqual([
-			{ labelKey: "dashboard.stat.open_jobs", value: 2 },
-			{ labelKey: "dashboard.stat.awaiting_close", value: 2 },
+			{ labelKey: "dashboard.stat.open_jobs", value: 4 },
+			{ labelKey: "dashboard.stat.ready_for_pickup", value: 1 },
+			{ labelKey: "dashboard.stat.in_the_field", value: 1 },
+			{ labelKey: "dashboard.stat.sent_back", value: 1 },
+			{ labelKey: "dashboard.stat.submitted", value: 1 },
 		])
 		expect(alert).toEqual({
 			variant: "warn",
-			key: "dashboard.alert.ready_to_close",
-			count: 2,
+			key: "dashboard.alert.sent_back",
+			count: 1,
+		})
+	})
+
+	it("CREW: alerts submitted jobs when no send-backs", () => {
+		const { alert } = computeDashboardStats("CREW", [
+			doc("FIELD_UPDATED"),
+			doc("SIGNED"),
+		])
+		expect(alert).toEqual({
+			variant: "info",
+			key: "dashboard.alert.submitted",
+			count: 1,
+		})
+	})
+
+	it("CREW: alerts ready for pickup when no active field jobs", () => {
+		const { alert } = computeDashboardStats("CREW", [doc("PREPPED")])
+		expect(alert).toEqual({
+			variant: "info",
+			key: "dashboard.alert.ready_for_pickup",
+			count: 1,
 		})
 	})
 

@@ -9,6 +9,7 @@ import {
 } from "react-router"
 import { useChangeLanguage } from "remix-i18next/react"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { SyncManager } from "~/components/sync-manager"
 import type { Route } from "./+types/root"
 import "./app.css"
 import i18next, { lngCookie } from "./localization/i18n.server"
@@ -55,7 +56,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App({ loaderData }: Route.ComponentProps) {
 	useChangeLanguage(loaderData.lang)
-	return <Outlet />
+	return (
+		<>
+			<SyncManager />
+			<Outlet />
+		</>
+	)
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {

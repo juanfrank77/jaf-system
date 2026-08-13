@@ -24,6 +24,7 @@ import { Button } from "~/components/ui/button"
 import { cn } from "~/lib/utils"
 import { LanguageSwitcher } from "~/library/language-switcher"
 import type { Role } from "../../generated/prisma/client"
+import { OfflineIndicator } from "./offline-indicator"
 
 type NavItem = {
 	to: string
@@ -311,6 +312,7 @@ function AppShell({
 					</Link>
 					<div className="flex-1" />
 					<div className="flex items-center gap-3 text-sm text-muted-foreground">
+						<OfflineIndicator />
 						<span className="font-medium text-foreground">{user.name}</span>
 						<span className="rounded-md bg-muted px-2 py-0.5 text-xs font-semibold">
 							{user.role}

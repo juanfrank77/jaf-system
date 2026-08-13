@@ -104,6 +104,10 @@ function DashboardView({
 	warehousePreppedDocs = [],
 	warehouseMissingDocs = [],
 	warehouseReturnsDocs = [],
+	crewPreppedDocs = [],
+	crewInFieldDocs = [],
+	crewSentBackDocs = [],
+	crewSubmittedDocs = [],
 	restockRequests = [],
 }: {
 	stats: DashboardStat[]
@@ -118,6 +122,10 @@ function DashboardView({
 	warehousePreppedDocs?: DashboardDocRow[]
 	warehouseMissingDocs?: DashboardDocRow[]
 	warehouseReturnsDocs?: DashboardDocRow[]
+	crewPreppedDocs?: DashboardDocRow[]
+	crewInFieldDocs?: DashboardDocRow[]
+	crewSentBackDocs?: DashboardDocRow[]
+	crewSubmittedDocs?: DashboardDocRow[]
 	restockRequests?: RestockRequestRow[]
 }) {
 	const { t } = useTranslation()
@@ -328,6 +336,140 @@ function DashboardView({
 							</Link>
 						)
 					})}
+				</div>
+			)}
+
+			{crewPreppedDocs.length > 0 && (
+				<div className="space-y-2">
+					<div className="flex items-center justify-between">
+						<h2 className="text-sm font-semibold text-foreground">
+							{t("dashboard.ready_for_pickup_heading", {
+								count: crewPreppedDocs.length,
+							})}
+						</h2>
+						<Badge variant="info">{crewPreppedDocs.length}</Badge>
+					</div>
+					{crewPreppedDocs.map((doc) => (
+						<Link
+							key={doc.id}
+							to={`/docs/${doc.id}/sign`}
+							className="block rounded-lg border border-transparent p-2.5 text-sm transition-colors hover:border-border hover:bg-muted/40"
+						>
+							<div className="flex items-center justify-between gap-2">
+								<span className="font-mono font-medium">
+									{doc.controlNumber}
+								</span>
+								<Badge variant="info">
+									{t("dashboard.ready_for_pickup_badge")}
+								</Badge>
+							</div>
+							<p className="mt-1 text-xs text-muted-foreground/70">
+								{doc.jobType} — {doc.jobAddressEstimated}
+							</p>
+						</Link>
+					))}
+				</div>
+			)}
+
+			{crewInFieldDocs.length > 0 && (
+				<div className="space-y-2">
+					<div className="flex items-center justify-between">
+						<h2 className="text-sm font-semibold text-foreground">
+							{t("dashboard.in_the_field_heading", {
+								count: crewInFieldDocs.length,
+							})}
+						</h2>
+						<Badge variant="warn">{crewInFieldDocs.length}</Badge>
+					</div>
+					{crewInFieldDocs.map((doc) => (
+						<Link
+							key={doc.id}
+							to={`/docs/${doc.id}/field`}
+							className="block rounded-lg border border-transparent p-2.5 text-sm transition-colors hover:border-border hover:bg-muted/40"
+						>
+							<div className="flex items-center justify-between gap-2">
+								<span className="font-mono font-medium">
+									{doc.controlNumber}
+								</span>
+								<Badge variant="warn">
+									{t("dashboard.in_the_field_badge")}
+								</Badge>
+							</div>
+							<p className="mt-1 text-xs text-muted-foreground/70">
+								{doc.jobType} — {doc.jobAddressEstimated}
+							</p>
+						</Link>
+					))}
+				</div>
+			)}
+
+			{crewSentBackDocs.length > 0 && (
+				<div className="space-y-2">
+					<div className="flex items-center justify-between">
+						<h2 className="text-sm font-semibold text-foreground">
+							{t("dashboard.crew_sent_back_heading", {
+								count: crewSentBackDocs.length,
+							})}
+						</h2>
+						<Badge variant="warn">{crewSentBackDocs.length}</Badge>
+					</div>
+					{crewSentBackDocs.map((doc) => {
+						const latest = latestSendBack(doc)
+						return (
+							<Link
+								key={doc.id}
+								to={`/docs/${doc.id}/field`}
+								className="block rounded-lg border border-transparent p-2.5 text-sm transition-colors hover:border-border hover:bg-muted/40"
+							>
+								<div className="flex items-center justify-between gap-2">
+									<span className="font-mono font-medium">
+										{doc.controlNumber}
+									</span>
+									<Badge variant="warn">{t("dashboard.sent_back_badge")}</Badge>
+								</div>
+								{latest && (
+									<p className="mt-1 text-xs text-slate-600 line-clamp-2">
+										{t("dashboard.sent_back_note", {
+											note: latest.note,
+										})}
+									</p>
+								)}
+								<p className="mt-1 text-xs text-muted-foreground/70">
+									{doc.jobType} — {doc.jobAddressEstimated}
+								</p>
+							</Link>
+						)
+					})}
+				</div>
+			)}
+
+			{crewSubmittedDocs.length > 0 && (
+				<div className="space-y-2">
+					<div className="flex items-center justify-between">
+						<h2 className="text-sm font-semibold text-foreground">
+							{t("dashboard.submitted_heading", {
+								count: crewSubmittedDocs.length,
+							})}
+						</h2>
+						<Badge variant="info">{crewSubmittedDocs.length}</Badge>
+					</div>
+					{crewSubmittedDocs.map((doc) => (
+						<Link
+							key={doc.id}
+							to={`/docs/${doc.id}`}
+							className="block rounded-lg border border-transparent p-2.5 text-sm transition-colors hover:border-border hover:bg-muted/40"
+						>
+							<div className="flex items-center justify-between gap-2">
+								<span className="font-mono font-medium">
+									{doc.controlNumber}
+								</span>
+								<Badge variant="info">{t("dashboard.submitted_badge")}</Badge>
+							</div>
+							<p className="mt-1 text-xs text-muted-foreground/70">
+								{doc.jobType} — {doc.jobAddressEstimated}
+							</p>
+						</Link>
+					))}
 				</div>
 			)}
 

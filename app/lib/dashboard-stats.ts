@@ -19,6 +19,10 @@ export type DashboardStatLabelKey =
 	| "dashboard.stat.restock_requests"
 	| "dashboard.stat.open_jobs"
 	| "dashboard.stat.awaiting_close"
+	| "dashboard.stat.ready_for_pickup"
+	| "dashboard.stat.in_the_field"
+	| "dashboard.stat.sent_back"
+	| "dashboard.stat.submitted"
 	| "dashboard.stat.total_documents"
 	| "dashboard.stat.open_receivables"
 	| "dashboard.stat.awaiting_claro_upload"
@@ -29,6 +33,10 @@ export type DashboardAlertKey =
 	| "dashboard.alert.awaiting_prep"
 	| "dashboard.alert.missing_materials"
 	| "dashboard.alert.ready_to_close"
+	| "dashboard.alert.ready_for_pickup"
+	| "dashboard.alert.jobs_in_field"
+	| "dashboard.alert.sent_back"
+	| "dashboard.alert.submitted"
 	| "dashboard.alert.receivables_open"
 
 export type DashboardStat = { labelKey: DashboardStatLabelKey; value: number }
@@ -138,24 +146,64 @@ export function computeDashboardStats(
 	}
 
 	if (role === "CREW") {
-		const openJobs = count(docs, (d) => d.status !== "LC_GENERATED")
-		const awaitingClose = count(
+		const openJobs = count(
 			docs,
-			(d) => d.status === "SIGNED" || d.status === "FIELD_UPDATED",
+			(d) => d.status !== "LC_GENERATED" && d.status !== "CANCELLED",
 		)
+		const readyForPickup = count(docs, (d) => d.status === "PREPPED")
+		const inTheField = count(
+			docs,
+			(d) =>
+				d.status === "SIGNED" &&
+				(!Array.isArray((d as any).sendBackHistory) ||
+					(Array.isArray((d as any).sendBackHistory) &&
+						(d as any).sendBackHistory.length === 0)),
+		)
+		const sendBackHistory = (d: DashboardDoc) =>
+			Array.isArray((d as any).sendBackHistory)
+				? ((d as any).sendBackHistory as unknown[])
+				: []
+		const sentBack = count(
+			docs,
+			(d) => d.status === "SIGNED" && sendBackHistory(d).length > 0,
+		)
+		const submitted = count(docs, (d) => d.status === "FIELD_UPDATED")
+		const awaitingClose = inTheField + sentBack + submitted
+		const alert =
+			sentBack > 0
+				? {
+						variant: "warn" as const,
+						key: "dashboard.alert.sent_back" as const,
+						count: sentBack,
+					}
+				: submitted > 0
+					? {
+							variant: "info" as const,
+							key: "dashboard.alert.submitted" as const,
+							count: submitted,
+						}
+					: readyForPickup > 0
+						? {
+								variant: "info" as const,
+								key: "dashboard.alert.ready_for_pickup" as const,
+								count: readyForPickup,
+							}
+						: inTheField > 0
+							? {
+									variant: "warn" as const,
+									key: "dashboard.alert.jobs_in_field" as const,
+									count: inTheField,
+								}
+							: null
 		return {
 			stats: [
 				{ labelKey: "dashboard.stat.open_jobs", value: openJobs },
-				{ labelKey: "dashboard.stat.awaiting_close", value: awaitingClose },
+				{ labelKey: "dashboard.stat.ready_for_pickup", value: readyForPickup },
+				{ labelKey: "dashboard.stat.in_the_field", value: inTheField },
+				{ labelKey: "dashboard.stat.sent_back", value: sentBack },
+				{ labelKey: "dashboard.stat.submitted", value: submitted },
 			],
-			alert:
-				awaitingClose > 0
-					? {
-							variant: "warn",
-							key: "dashboard.alert.ready_to_close",
-							count: awaitingClose,
-						}
-					: null,
+			alert,
 		}
 	}
 

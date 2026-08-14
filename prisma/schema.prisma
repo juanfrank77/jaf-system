@@ -92,6 +92,9 @@ model Session {
   ipAddress String?
   userAgent String?
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Account {
@@ -109,6 +112,9 @@ model Account {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([providerId, accountId])
+  @@index([userId])
 }
 
 model Verification {
@@ -118,6 +124,9 @@ model Verification {
   expiresAt  DateTime
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@index([value])
 }
 
 model Warehouse {
@@ -130,6 +139,8 @@ model Warehouse {
   invoices             JafInvoice[]
   vanRestockRequests   VanRestockRequest[]
   consignmentReceipts  ConsignmentReceipt[]
+
+  @@index([active])
 }
 
 model JafInvoice {
@@ -273,6 +284,8 @@ model Photo {
   uploadedBy   User     @relation(fields: [uploadedById], references: [id])
   localPath    String   // /var/jaf/uploads/photos/<docId>/<filename>
   takenAt      DateTime @default(now())
+
+  @@index([docId])
 }
 
 model ServiceCode {
@@ -298,6 +311,9 @@ model PoLink {
   claroPONumber    String
   acceptanceNumber String?
   amount           Decimal?
+  createdAt        DateTime @default(now())
+
+  @@index([docId])
 }
 
 model PaymentRecord {
@@ -392,6 +408,10 @@ model VanRestockRequest {
   overrideAt         DateTime?
   overrideReason     String?
   createdAt          DateTime  @default(now())
+
+  @@index([status, createdAt])
+  @@index([requestedById, createdAt])
+  @@index([warehouseId, createdAt])
 }
 
 model InstallLog {

@@ -83,26 +83,26 @@ export async function action({ request }: Route.ActionArgs) {
 		)
 	}
 
-	const transactions = await db.vanInventoryTransaction.findMany({
-		where: { vanId: van.id },
-	})
-	const inventory = computeVanInventory(
-		transactions.map((t) => ({
-			serviceCodeId: t.serviceCodeId,
-			qty: t.qty,
-			type: t.type,
-		})),
-	)
-	let discrepancyFlagged = false
-	for (const item of items) {
-		const onHand = inventory.get(item.serviceCodeId) ?? 0
-		if (onHand < item.qty) {
-			discrepancyFlagged = true
-			break
-		}
-	}
-
 	await db.$transaction(async (tx) => {
+		await tx.$queryRaw`SELECT id FROM "Van" WHERE id = ${van.id} FOR UPDATE`
+		const transactions = await tx.vanInventoryTransaction.findMany({
+			where: { vanId: van.id },
+		})
+		const inventory = computeVanInventory(
+			transactions.map((t) => ({
+				serviceCodeId: t.serviceCodeId,
+				qty: t.qty,
+				type: t.type,
+			})),
+		)
+		let discrepancyFlagged = false
+		for (const item of items) {
+			const onHand = inventory.get(item.serviceCodeId) ?? 0
+			if (onHand < item.qty) {
+				discrepancyFlagged = true
+				break
+			}
+		}
 		const log = await tx.installLog.create({
 			data: {
 				installerId: user.id,

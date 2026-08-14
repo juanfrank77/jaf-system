@@ -1,0 +1,109 @@
+import { beforeEach, describe, expect, it, vi } from "vitest"
+
+vi.mock("~/lib/db.server", () => ({
+	db: {
+		van: {
+			findUnique: vi.fn(),
+		},
+		vanRestockRequest: {
+			create: vi.fn(),
+		},
+		vanInventoryTransaction: {
+			findMany: vi.fn(),
+		},
+		user: {
+			findMany: vi.fn(),
+		},
+		notification: {
+			create: vi.fn(),
+		},
+		$transaction: vi.fn(async (ops: any[]) => {
+			for (const op of ops) {
+				if (typeof op === "function") {
+					await op({
+						vanRestockRequest: { create: vi.fn() },
+						notification: { create: vi.fn() },
+					})
+				}
+			}
+		}),
+	},
+}))
+
+vi.mock("~/lib/permissions.server", () => ({
+	requireRole: vi.fn(),
+}))
+
+import { db } from "~/lib/db.server"
+import { requireRole } from "~/lib/permissions.server"
+import { action } from "./_app.installer.restock"
+
+function formRequest(form: FormData) {
+	return new Request("http://localhost/installer/restock", {
+		method: "POST",
+		body: form,
+	})
+}
+
+describe("POST /installer/restock", () => {
+	beforeEach(() => vi.clearAllMocks())
+
+	function baseVan(standard = 5) {
+		return {
+			id: "van-1",
+			name: "Van 1",
+			standardStockLevels: [{ serviceCodeId: "sc-1", qty: standard }],
+		}
+	}
+
+	it("creates a within-standard request straight to REQUESTED", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "installer-1", role: "INSTALLER" },
+			session: {},
+		} as any)
+		vi.mocked(db.van.findUnique).mockResolvedValue(baseVan() as any)
+		vi.mocked(db.vanInventoryTransaction.findMany).mockResolvedValue([])
+		vi.mocked(db.user.findMany).mockResolvedValue([])
+		vi.mocked(db.$transaction).mockResolvedValue(undefined as any)
+
+		const form = new FormData()
+		form.set("warehouseId", "wh-1")
+		form.set("items", JSON.stringify([{ serviceCodeId: "sc-1", qty: 3 }]))
+
+		const result = await action({
+			request: formRequest(form),
+			params: {},
+		} as any).catch((r: any) => r)
+
+		expect(result.status).toBe(302)
+		expect(db.vanRestockRequest.create).toHaveBeenCalled()
+		const createCall = vi.mocked(db.vanRestockRequest.create).mock.calls[0][0]
+		expect(createCall.data.status).toBe("REQUESTED")
+		expect(createCall.data.requiresApproval).toBe(false)
+	})
+
+	it("creates an above-standard request as PENDING_APPROVAL", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "installer-1", role: "INSTALLER" },
+			session: {},
+		} as any)
+		vi.mocked(db.van.findUnique).mockResolvedValue(baseVan() as any)
+		vi.mocked(db.vanInventoryTransaction.findMany).mockResolvedValue([])
+		vi.mocked(db.user.findMany).mockResolvedValue([])
+		vi.mocked(db.$transaction).mockResolvedValue(undefined as any)
+
+		const form = new FormData()
+		form.set("warehouseId", "wh-1")
+		form.set("items", JSON.stringify([{ serviceCodeId: "sc-1", qty: 6 }]))
+
+		const result = await action({
+			request: formRequest(form),
+			params: {},
+		} as any).catch((r: any) => r)
+
+		expect(result.status).toBe(302)
+		const createCall = vi.mocked(db.vanRestockRequest.create).mock.calls[0][0]
+		expect(createCall.data.status).toBe("PENDING_APPROVAL")
+		expect(createCall.data.requiresApproval).toBe(true)
+	})
+})

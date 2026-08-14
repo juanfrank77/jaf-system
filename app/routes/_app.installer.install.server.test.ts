@@ -22,9 +22,13 @@ vi.mock("~/lib/db.server", () => ({
 			if (typeof fn === "function") {
 				return fn({
 					installLog: { create: vi.fn(() => ({ id: "log-1" })) },
-					vanInventoryTransaction: { create: vi.fn() },
+					vanInventoryTransaction: {
+						findMany: vi.fn(),
+						create: vi.fn(),
+					},
 					notification: { create: vi.fn() },
 					user: { findMany: vi.fn(() => []) },
+					$queryRaw: vi.fn(),
 				})
 			}
 		}),
@@ -63,17 +67,22 @@ describe("POST /installer/install", () => {
 			session: {},
 		} as any)
 		vi.mocked(db.van.findUnique).mockResolvedValue(baseVan() as any)
-		vi.mocked(db.vanInventoryTransaction.findMany).mockResolvedValue([
-			{ serviceCodeId: "sc-1", qty: 5, type: "RESTOCK" },
-		] as any)
 		vi.mocked(db.$transaction).mockImplementation(async (fn: any) => {
 			return fn({
 				installLog: {
 					create: vi.fn(() => ({ id: "log-1" })),
 				},
-				vanInventoryTransaction: { create: vi.fn() },
+				vanInventoryTransaction: {
+					findMany: vi
+						.fn()
+						.mockResolvedValue([
+							{ serviceCodeId: "sc-1", qty: 5, type: "RESTOCK" },
+						] as any),
+					create: vi.fn(),
+				},
 				notification: { create: vi.fn() },
 				user: { findMany: vi.fn(() => []) },
+				$queryRaw: vi.fn(),
 			})
 		})
 
@@ -97,17 +106,22 @@ describe("POST /installer/install", () => {
 			session: {},
 		} as any)
 		vi.mocked(db.van.findUnique).mockResolvedValue(baseVan() as any)
-		vi.mocked(db.vanInventoryTransaction.findMany).mockResolvedValue([
-			{ serviceCodeId: "sc-1", qty: 1, type: "RESTOCK" },
-		] as any)
 
 		const createLog = vi.fn(() => ({ id: "log-1" }))
 		vi.mocked(db.$transaction).mockImplementation(async (fn: any) => {
 			return fn({
 				installLog: { create: createLog },
-				vanInventoryTransaction: { create: vi.fn() },
+				vanInventoryTransaction: {
+					findMany: vi
+						.fn()
+						.mockResolvedValue([
+							{ serviceCodeId: "sc-1", qty: 1, type: "RESTOCK" },
+						] as any),
+					create: vi.fn(),
+				},
 				notification: { create: vi.fn() },
 				user: { findMany: vi.fn().mockResolvedValue([]) },
+				$queryRaw: vi.fn(),
 			})
 		})
 

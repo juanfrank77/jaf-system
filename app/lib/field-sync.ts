@@ -2,7 +2,6 @@ import {
 	type CachedJob,
 	type QueuedAction,
 	queueAction,
-	removeQueuedAction,
 	type SyncConflict,
 } from "./offline-store"
 
@@ -101,8 +100,4 @@ function base64ToBlob(base64: string, type: string): Blob {
 		ia[i] = byteString.charCodeAt(i)
 	}
 	return new Blob([ab], { type })
-}
-
-export async function removeFieldUpdateAction(id: string): Promise<void> {
-	await removeQueuedAction(id)
 }

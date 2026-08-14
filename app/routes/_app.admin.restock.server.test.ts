@@ -102,10 +102,10 @@ describe("POST /admin/restock", () => {
 		form.set("id", "req-1")
 		form.set("reason", "")
 
-		const result = await action({
+		const result = (await action({
 			request: formRequest(form),
 			params: {},
-		} as any)
+		} as any)) as { init: { status: number }; data: { errorKey: string } }
 
 		expect(result.init.status).toBe(400)
 		expect(result.data).toEqual({

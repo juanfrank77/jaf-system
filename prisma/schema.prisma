@@ -69,9 +69,11 @@ model User {
   restockReceivers      VanRestockRequest[]  @relation("RestockReceivers")
   restockOverrides      VanRestockRequest[]  @relation("RestockOverrides")
   restockApprovals      VanRestockRequest[]  @relation("RestockApprovals")
-  installedVan          Van?                 @relation("VanInstaller")
-  consignmentReceipts   ConsignmentReceipt[] @relation("ConsignmentReceipts")
-  systemSettings        SystemSetting[]      @relation("SystemSettings")
+   installedVan          Van?                 @relation("VanInstaller")
+   installLogs           InstallLog[]         @relation("InstallerLogs")
+   inventoryTransactions VanInventoryTransaction[] @relation("InventoryTransactions")
+   consignmentReceipts   ConsignmentReceipt[] @relation("ConsignmentReceipts")
+   systemSettings        SystemSetting[]      @relation("SystemSettings")
   auditTrail       AuditTrail[]
   photos           Photo[]
    notifications    Notification[]
@@ -357,6 +359,9 @@ model Van {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
+  inventoryTransactions VanInventoryTransaction[]
+  installLogs           InstallLog[]
+
   @@index([active])
 }
 
@@ -387,6 +392,43 @@ model VanRestockRequest {
   overrideAt         DateTime?
   overrideReason     String?
   createdAt          DateTime  @default(now())
+}
+
+model InstallLog {
+  id                String   @id @default(cuid())
+  installerId       String
+  installer         User     @relation("InstallerLogs", fields: [installerId], references: [id])
+  vanId             String
+  van               Van      @relation(fields: [vanId], references: [id])
+  claroJobReference String
+  serviceType       String   // CABLE_TV | WIFI | PHONE | OTHER
+  date              DateTime
+  materialsUsed     Json     // [{ serviceCodeId, qty }]
+  notes             String?
+  discrepancyFlagged Boolean @default(false)
+  createdAt         DateTime @default(now())
+
+  @@index([installerId, date])
+  @@index([vanId, date])
+  @@map("install_log")
+}
+
+model VanInventoryTransaction {
+  id            String   @id @default(cuid())
+  vanId         String
+  van           Van      @relation(fields: [vanId], references: [id])
+  serviceCodeId String
+  qty           Int      // positive for restock, negative for use/adjustment
+  type          String   // RESTOCK | INSTALL | ADJUSTMENT
+  referenceId   String?  // restock request id or install log id
+  note          String?
+  createdById   String
+  createdBy     User     @relation("InventoryTransactions", fields: [createdById], references: [id])
+  createdAt     DateTime @default(now())
+
+  @@index([vanId, serviceCodeId])
+  @@index([type, createdAt])
+  @@map("van_inventory_transaction")
 }
 
 model ConsignmentReceipt {

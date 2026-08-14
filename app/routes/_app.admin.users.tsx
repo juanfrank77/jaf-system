@@ -235,7 +235,7 @@ export default function AdminUsers({
 								<SelectContent>
 									{roles.map((r) => (
 										<SelectItem key={r.value} value={r.value}>
-											{t(r.labelKey)}
+											{t(r.labelKey as any)}
 										</SelectItem>
 									))}
 								</SelectContent>
@@ -315,7 +315,7 @@ export default function AdminUsers({
 											<SelectContent>
 												{roles.map((r) => (
 													<SelectItem key={r.value} value={r.value}>
-														{t(r.labelKey)}
+														{t(r.labelKey as any)}
 													</SelectItem>
 												))}
 											</SelectContent>

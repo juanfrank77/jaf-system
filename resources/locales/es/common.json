@@ -28,6 +28,7 @@
 			"admin_crews": "Cuadrillas",
 			"admin_vans": "Vans",
 			"admin_restock": "Aprobaciones de reabastecimiento",
+			"installer": "Instalador",
 			"comptroller": "Contraloría"
 		},
 		"notifications": {
@@ -767,6 +768,89 @@
 			"advance_recorded": "Adelanto PBCC registrado. Finanzas ha sido notificado.",
 			"final_recorded": "Pago final de Claro registrado. El cierre está desbloqueado.",
 			"crew_payment_recorded": "Pago de cuadrilla registrado."
+		}
+	},
+	"installer": {
+		"title": "Portal de Instalador",
+		"no_van": "No estás asignado a una van. Contacta a un administrador.",
+		"request_restock": "Solicitar reabastecimiento",
+		"log_install": "Registrar instalación",
+		"adjust_stock": "Ajustar stock",
+		"my_van_heading": "Mi Van",
+		"no_inventory": "Aún no hay inventario registrado.",
+		"low_stock": "Bajo",
+		"ready_for_pickup_heading": "Listo para recoger ({{count}})",
+		"restock_requests_heading": "Mis solicitudes de reabastecimiento",
+		"no_restock_requests": "No hay solicitudes de reabastecimiento activas.",
+		"installs_heading": "Mis instalaciones",
+		"no_installs": "Aún no hay instalaciones registradas.",
+		"discrepancy": "Discrepancia"
+	},
+	"installer_restock": {
+		"title": "Solicitar reabastecimiento",
+		"warehouse_label": "Almacén",
+		"warehouse_placeholder": "Selecciona un almacén…",
+		"items_label": "Artículos",
+		"item_placeholder": "Selecciona un producto…",
+		"add_item": "+ Agregar artículo",
+		"submit": "Enviar solicitud de reabastecimiento",
+		"errors": {
+			"no_van": "Debes estar asignado a una van para solicitar reabastecimiento.",
+			"warehouse_required": "Por favor selecciona un almacén.",
+			"invalid_items": "Datos de artículos inválidos.",
+			"items_required": "Agrega al menos un artículo."
+		}
+	},
+	"installer_install": {
+		"title": "Registrar instalación",
+		"claro_ref_label": "# de referencia del trabajo Claro",
+		"claro_ref_placeholder": "ej. 12345678",
+		"service_type_label": "Tipo de servicio",
+		"service_type_placeholder": "Selecciona un tipo de servicio…",
+		"service_type": {
+			"cable_tv": "Cable TV",
+			"wifi": "WiFi",
+			"phone": "Teléfono",
+			"other": "Otro"
+		},
+		"date_label": "Fecha",
+		"materials_label": "Materiales utilizados",
+		"material_placeholder": "Selecciona un material…",
+		"add_material": "+ Agregar material",
+		"notes_label": "Notas",
+		"notes_placeholder": "Detalles opcionales sobre la instalación…",
+		"submit": "Registrar instalación",
+		"errors": {
+			"no_van": "Debes estar asignado a una van para registrar una instalación.",
+			"missing_fields": "Se requieren referencia Claro, tipo de servicio y fecha.",
+			"invalid_items": "Datos de materiales inválidos.",
+			"invalid_date": "Ingresa una fecha válida."
+		}
+	},
+	"installer_adjust": {
+		"title": "Ajustar stock de van",
+		"material_label": "Material",
+		"material_placeholder": "Selecciona un material…",
+		"qty_label": "Cantidad dañada / perdida",
+		"qty_placeholder": "¿Cuántos?",
+		"note_label": "Razón",
+		"note_placeholder": "Explica qué pasó…",
+		"submit": "Reportar ajuste",
+		"errors": {
+			"no_van": "Debes estar asignado a una van para ajustar stock.",
+			"invalid_fields": "Selecciona un material e ingresa una cantidad positiva.",
+			"note_required": "Se requiere una razón."
+		}
+	},
+	"restock_pickup": {
+		"title": "Recogida de reabastecimiento #{{id}}",
+		"items_heading": "Artículos para recoger",
+		"signature_label": "Firma del instalador",
+		"signature_hint": "Firma aquí para confirmar la recepción de los artículos.",
+		"clear": "Borrar",
+		"submit": "Confirmar recogida",
+		"errors": {
+			"signature_required": "Se requiere la firma."
 		}
 	}
 }

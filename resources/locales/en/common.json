@@ -28,6 +28,7 @@
 			"admin_crews": "Crews",
 			"admin_vans": "Vans",
 			"admin_restock": "Restock Sign-offs",
+			"installer": "Installer",
 			"comptroller": "Comptroller"
 		},
 		"notifications": {
@@ -767,6 +768,89 @@
 			"advance_recorded": "PBCC advance recorded. Finance has been notified.",
 			"final_recorded": "Claro final payment recorded. Close entry is unlocked.",
 			"crew_payment_recorded": "Crew payment recorded."
+		}
+	},
+	"installer": {
+		"title": "Installer Portal",
+		"no_van": "You are not assigned to a van. Contact an administrator.",
+		"request_restock": "Request Restock",
+		"log_install": "Log Install",
+		"adjust_stock": "Adjust Stock",
+		"my_van_heading": "My Van",
+		"no_inventory": "No inventory tracked yet.",
+		"low_stock": "Low",
+		"ready_for_pickup_heading": "Ready for Pickup ({{count}})",
+		"restock_requests_heading": "My Restock Requests",
+		"no_restock_requests": "No active restock requests.",
+		"installs_heading": "My Installs",
+		"no_installs": "No installs logged yet.",
+		"discrepancy": "Discrepancy"
+	},
+	"installer_restock": {
+		"title": "Request Restock",
+		"warehouse_label": "Warehouse",
+		"warehouse_placeholder": "Select warehouse…",
+		"items_label": "Items",
+		"item_placeholder": "Select product…",
+		"add_item": "+ Add Item",
+		"submit": "Submit Restock Request",
+		"errors": {
+			"no_van": "You must be assigned to a van to request restock.",
+			"warehouse_required": "Please select a warehouse.",
+			"invalid_items": "Invalid items data.",
+			"items_required": "Add at least one item."
+		}
+	},
+	"installer_install": {
+		"title": "Log Install",
+		"claro_ref_label": "Claro Job Reference #",
+		"claro_ref_placeholder": "e.g. 12345678",
+		"service_type_label": "Service Type",
+		"service_type_placeholder": "Select service type…",
+		"service_type": {
+			"cable_tv": "Cable TV",
+			"wifi": "WiFi",
+			"phone": "Phone",
+			"other": "Other"
+		},
+		"date_label": "Date",
+		"materials_label": "Materials Used",
+		"material_placeholder": "Select material…",
+		"add_material": "+ Add Material",
+		"notes_label": "Notes",
+		"notes_placeholder": "Optional details about the install…",
+		"submit": "Log Install",
+		"errors": {
+			"no_van": "You must be assigned to a van to log an install.",
+			"missing_fields": "Claro reference, service type, and date are required.",
+			"invalid_items": "Invalid materials data.",
+			"invalid_date": "Enter a valid date."
+		}
+	},
+	"installer_adjust": {
+		"title": "Adjust Van Stock",
+		"material_label": "Material",
+		"material_placeholder": "Select material…",
+		"qty_label": "Quantity Damaged / Lost",
+		"qty_placeholder": "How many?",
+		"note_label": "Reason",
+		"note_placeholder": "Explain what happened…",
+		"submit": "Report Adjustment",
+		"errors": {
+			"no_van": "You must be assigned to a van to adjust stock.",
+			"invalid_fields": "Select a material and enter a positive quantity.",
+			"note_required": "A reason is required."
+		}
+	},
+	"restock_pickup": {
+		"title": "Restock Pickup #{{id}}",
+		"items_heading": "Items to Pick Up",
+		"signature_label": "Installer Signature",
+		"signature_hint": "Sign here to confirm receipt of restocked items.",
+		"clear": "Clear",
+		"submit": "Confirm Pickup",
+		"errors": {
+			"signature_required": "Signature is required."
 		}
 	}
 }

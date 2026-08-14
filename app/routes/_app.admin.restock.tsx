@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next"
 import { useTranslation } from "react-i18next"
 import { data, Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
@@ -205,7 +206,7 @@ function RestockRequestRow({
 		name: string
 		unitPrice: unknown
 	}[]
-	t: (key: string, options?: Record<string, unknown>) => string
+	t: TFunction<"common", undefined>
 	history?: boolean
 }) {
 	const items = (request.items as RestockItem[]) || []

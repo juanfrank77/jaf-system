@@ -143,11 +143,12 @@ describe("POST /docs/:id/field", () => {
 			"data:image/png;base64,abc",
 		)
 		expect(updateCall.data.completedById).toBe("crew-1")
-		expect(updateCall.data.addressCorrections).toHaveLength(1)
-		expect(updateCall.data.addressCorrections[0].original).toBe(
+		const corrections = updateCall.data.addressCorrections as unknown[]
+		expect(corrections).toHaveLength(1)
+		expect((corrections[0] as { original: string }).original).toBe(
 			"Cupey, San Juan",
 		)
-		expect(updateCall.data.addressCorrections[0].corrected).toBe(
+		expect((corrections[0] as { corrected: string }).corrected).toBe(
 			"123 Calle Sol, Cupey",
 		)
 		expect(updateCall.data.gpsCoordinates).toMatchObject({

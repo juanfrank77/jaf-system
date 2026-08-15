@@ -331,6 +331,7 @@ model PaymentRecord {
   createdAt    DateTime @default(now())
 
   @@index([jobId, type])
+  @@unique([jobId, type])
   @@map("payment_record")
 }
 

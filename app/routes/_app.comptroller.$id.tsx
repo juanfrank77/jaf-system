@@ -155,6 +155,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	if (intent === "record_advance") {
+		if (doc.advanceReceivedAt) {
+			return { errorKey: "comptroller_detail.errors.advance_already_recorded" }
+		}
+
 		const [serviceCodes, ivuRate] = await Promise.all([
 			db.serviceCode.findMany(),
 			getIvuRate(),
@@ -168,27 +172,14 @@ export async function action({ request, params }: Route.ActionArgs) {
 		const amount = invoiceTotalUsed(doc, codeMap, ivuRate)
 		const expectedAdvance = amount * 0.8
 
-		const updated = await db.$transaction([
-			db.jafInvoice.updateMany({
-				where: { id: docId, advanceReceivedAt: null },
+		await db.$transaction([
+			db.jafInvoice.update({
+				where: { id: docId },
 				data: {
 					advanceReceivedAt: parsedDate,
 					advanceAmount: parsedAmount,
 				},
 			}),
-		])
-		if (updated[0].count === 0) {
-			return { errorKey: "comptroller_detail.errors.advance_already_recorded" }
-		}
-
-		const discrepancy = Math.abs(parsedAmount - expectedAdvance) > 0.01
-		const message = discrepancy
-			? `PBCC advance for ${doc.controlNumber} was ${formatMoney(
-					parsedAmount,
-				)} (expected ${formatMoney(expectedAdvance)}).`
-			: `PBCC advance of ${formatMoney(parsedAmount)} recorded for ${doc.controlNumber}.`
-
-		await db.$transaction([
 			db.paymentRecord.create({
 				data: {
 					jobId: docId,
@@ -206,7 +197,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 					diffJson: {
 						amount: parsedAmount,
 						expected: expectedAdvance,
-						discrepancy,
+						discrepancy: Math.abs(parsedAmount - expectedAdvance) > 0.01,
 					},
 				},
 			}),
@@ -215,7 +206,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 					data: {
 						userId: u.id,
 						docId,
-						message,
+						message:
+							Math.abs(parsedAmount - expectedAdvance) > 0.01
+								? `PBCC advance for ${doc.controlNumber} was ${formatMoney(parsedAmount)} (expected ${formatMoney(expectedAdvance)}).`
+								: `PBCC advance of ${formatMoney(parsedAmount)} recorded for ${doc.controlNumber}.`,
 					},
 				}),
 			),
@@ -224,16 +218,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	if (intent === "record_final") {
-		const updated = await db.$transaction([
-			db.jafInvoice.updateMany({
-				where: { id: docId, finalPaymentReceivedAt: null },
-				data: {
-					finalPaymentReceivedAt: parsedDate,
-					finalPaymentAmount: parsedAmount,
-				},
-			}),
-		])
-		if (updated[0].count === 0) {
+		if (doc.finalPaymentReceivedAt) {
 			return { errorKey: "comptroller_detail.errors.final_already_recorded" }
 		}
 
@@ -242,6 +227,13 @@ export async function action({ request, params }: Route.ActionArgs) {
 		)} recorded for ${doc.controlNumber}. Close entry is now unlocked.`
 
 		await db.$transaction([
+			db.jafInvoice.update({
+				where: { id: docId },
+				data: {
+					finalPaymentReceivedAt: parsedDate,
+					finalPaymentAmount: parsedAmount,
+				},
+			}),
 			db.paymentRecord.create({
 				data: {
 					jobId: docId,

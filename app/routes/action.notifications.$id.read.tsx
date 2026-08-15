@@ -22,7 +22,5 @@ export async function action({ request, params }: Route.ActionArgs) {
 		data: { read: true },
 	})
 
-	throw redirect(
-		notification.docId ? `/docs/${notification.docId}` : redirectTo,
-	)
+	throw redirect(redirectTo)
 }

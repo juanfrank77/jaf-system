@@ -29,7 +29,35 @@ function postRequest(id: string, redirectTo = "/dashboard") {
 describe("POST /notifications/:id/read", () => {
 	beforeEach(() => vi.clearAllMocks())
 
-	it("marks the notification read and redirects to the doc when docId is set", async () => {
+	it("redirects to redirectTo even when docId is set", async () => {
+		vi.mocked(requireSession).mockResolvedValue({
+			user: { id: "user-1" },
+		} as any)
+		vi.mocked(db.notification.findUniqueOrThrow).mockResolvedValue({
+			id: "n1",
+			userId: "user-1",
+			docId: "doc-1",
+			message: "test",
+			read: false,
+			createdAt: new Date(),
+		} as any)
+		vi.mocked(db.notification.update).mockResolvedValue({} as any)
+
+		const result = await action({
+			request: postRequest("n1", "/comptroller"),
+			params: { id: "n1" },
+		} as any).catch((r) => r)
+
+		expect(result).toBeInstanceOf(Response)
+		expect(result.status).toBe(302)
+		expect(result.headers.get("Location")).toBe("/comptroller")
+		expect(db.notification.update).toHaveBeenCalledWith({
+			where: { id: "n1" },
+			data: { read: true },
+		})
+	})
+
+	it("falls back to /dashboard for redirectTo when docId is set but no explicit redirect provided", async () => {
 		vi.mocked(requireSession).mockResolvedValue({
 			user: { id: "user-1" },
 		} as any)
@@ -48,13 +76,7 @@ describe("POST /notifications/:id/read", () => {
 			params: { id: "n1" },
 		} as any).catch((r) => r)
 
-		expect(result).toBeInstanceOf(Response)
-		expect(result.status).toBe(302)
-		expect(result.headers.get("Location")).toBe("/docs/doc-1")
-		expect(db.notification.update).toHaveBeenCalledWith({
-			where: { id: "n1" },
-			data: { read: true },
-		})
+		expect(result.headers.get("Location")).toBe("/dashboard")
 	})
 
 	it("redirects to redirectTo when docId is null", async () => {

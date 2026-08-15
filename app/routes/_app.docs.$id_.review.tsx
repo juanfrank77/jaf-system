@@ -62,6 +62,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 		const avisoNumber =
 			(form.get("avisoNumber") as string | null)?.trim() || doc.avisoNumber
 		const claroNotes = (form.get("claroNotes") as string | null)?.trim() || null
+		const finance = await db.user.findMany({
+			where: { role: "FINANCE", active: true },
+		})
 		await db.$transaction([
 			db.jafInvoice.update({
 				where: { id: params.id },
@@ -82,6 +85,15 @@ export async function action({ request, params }: Route.ActionArgs) {
 					},
 				},
 			}),
+			...finance.map((f) =>
+				db.notification.create({
+					data: {
+						userId: f.id,
+						docId: params.id,
+						message: `Job ${doc.controlNumber} has been supervisor approved and is ready for finance review.`,
+					},
+				}),
+			),
 		] as any)
 	}
 

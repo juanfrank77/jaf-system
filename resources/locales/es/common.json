@@ -761,6 +761,8 @@
 			"recorded_by": "Registrado por",
 			"note": "Nota"
 		},
+		"discrepancy_badge": "Discrepancia",
+		"discrepancy_notice": "El monto real difiere del esperado {{expected}}.",
 		"errors": {
 			"invalid_amount": "Ingresa un monto positivo válido.",
 			"invalid_date": "Ingresa una fecha válida.",

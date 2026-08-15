@@ -761,6 +761,8 @@
 			"recorded_by": "Recorded by",
 			"note": "Note"
 		},
+		"discrepancy_badge": "Discrepancy",
+		"discrepancy_notice": "Actual amount differs from expected {{expected}}.",
 		"errors": {
 			"invalid_amount": "Enter a valid positive amount.",
 			"invalid_date": "Enter a valid date.",

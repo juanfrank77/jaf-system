@@ -36,10 +36,12 @@ type IncomingDocRow = JobRow & {
 type AwaitingAdvanceRow = JobRow & {
 	expectedAdvance: number
 	pbccRequestSentAt: Date
+	ageDays: number
 }
 
 type AwaitingFinalRow = JobRow & {
 	finalClaroUploadedAt: Date
+	ageDays: number
 }
 
 type CrewToPayRow = JobRow & {
@@ -176,11 +178,25 @@ export async function loader({ request }: Route.LoaderArgs) {
 		...toRow(d),
 		expectedAdvance: toRow(d).amount * 0.8,
 		pbccRequestSentAt: d.pbccRequestSentAt ?? new Date(),
+		ageDays: Math.floor(
+			(Date.now() - new Date(d.pbccRequestSentAt ?? new Date()).getTime()) /
+				1000 /
+				60 /
+				60 /
+				24,
+		),
 	}))
 
 	const awaitingFinal: AwaitingFinalRow[] = awaitingFinalRaw.map((d) => ({
 		...toRow(d),
 		finalClaroUploadedAt: d.finalClaroUploadedAt ?? new Date(),
+		ageDays: Math.floor(
+			(Date.now() - new Date(d.finalClaroUploadedAt ?? new Date()).getTime()) /
+				1000 /
+				60 /
+				60 /
+				24,
+		),
 	}))
 
 	const crewsToPay: CrewToPayRow[] = crewsToPayRaw.map((d) => ({
@@ -390,9 +406,14 @@ export default function ComptrollerDashboard({
 											>
 												{job.controlNumber}
 											</Link>
-											<Badge variant="info">
-												{t("comptroller_dashboard.awaiting_funds_badge")}
-											</Badge>
+											<div className="flex items-center gap-2">
+												<span className="text-xs text-muted-foreground">
+													{job.ageDays}d
+												</span>
+												<Badge variant="warn">
+													{t("comptroller_dashboard.awaiting_funds_badge")}
+												</Badge>
+											</div>
 										</div>
 										<p className="text-sm text-muted-foreground truncate">
 											{job.jobType} — {job.jobAddressEstimated}
@@ -427,9 +448,14 @@ export default function ComptrollerDashboard({
 											>
 												{job.controlNumber}
 											</Link>
-											<Badge variant="info">
-												{t("comptroller_dashboard.awaiting_final_badge")}
-											</Badge>
+											<div className="flex items-center gap-2">
+												<span className="text-xs text-muted-foreground">
+													{job.ageDays}d
+												</span>
+												<Badge variant="warn">
+													{t("comptroller_dashboard.awaiting_final_badge")}
+												</Badge>
+											</div>
 										</div>
 										<p className="text-sm text-muted-foreground truncate">
 											{job.jobType} — {job.jobAddressEstimated}

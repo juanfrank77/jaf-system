@@ -106,6 +106,10 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const advanceReceived = !!doc.advanceReceivedAt
 	const finalReceived = !!doc.finalPaymentReceivedAt
 	const crewPaid = doc.paymentRecords.some((p) => p.type === "CREW_PAYMENT")
+	const hasAdvanceDiscrepancy =
+		advanceReceived && doc.advanceAmount != null
+			? Math.abs(Number(doc.advanceAmount) - expectedAdvance) > 0.01
+			: false
 
 	const unreadNotification = await db.notification.findFirst({
 		where: { userId: user.id, docId: doc.id, read: false },
@@ -120,6 +124,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		advanceReceived,
 		finalReceived,
 		crewPaid,
+		hasAdvanceDiscrepancy,
 		currentCrewNames,
 		historyWithNames,
 		unreadNotificationId: unreadNotification?.id ?? null,
@@ -331,6 +336,7 @@ export default function ComptrollerDetail({
 		advanceReceived,
 		finalReceived,
 		crewPaid,
+		hasAdvanceDiscrepancy,
 		currentCrewNames,
 		historyWithNames,
 		unreadNotificationId,
@@ -479,16 +485,32 @@ export default function ComptrollerDetail({
 			<div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
 				<Card className={cn(advanceReceived && "opacity-75")}>
 					<CardContent className="space-y-3 p-4">
-						<h2 className="text-sm font-semibold">
-							{t("comptroller_detail.record_advance_heading")}
-						</h2>
+						<div className="flex items-center justify-between gap-2">
+							<h2 className="text-sm font-semibold">
+								{t("comptroller_detail.record_advance_heading")}
+							</h2>
+							{hasAdvanceDiscrepancy && (
+								<Badge variant="warn">
+									{t("comptroller_detail.discrepancy_badge")}
+								</Badge>
+							)}
+						</div>
 						{advanceReceived ? (
-							<p className="text-sm text-muted-foreground">
-								{t("comptroller_detail.advance_recorded", {
-									amount: formatMoney(doc.advanceAmount ?? 0),
-									date: new Date(doc.advanceReceivedAt!).toLocaleDateString(),
-								})}
-							</p>
+							<div className="space-y-1 text-sm">
+								<p className="text-muted-foreground">
+									{t("comptroller_detail.advance_recorded", {
+										amount: formatMoney(doc.advanceAmount ?? 0),
+										date: new Date(doc.advanceReceivedAt!).toLocaleDateString(),
+									})}
+								</p>
+								{hasAdvanceDiscrepancy && (
+									<p className="text-xs text-red-700">
+										{t("comptroller_detail.discrepancy_notice", {
+											expected: formatMoney(expectedAdvance),
+										})}
+									</p>
+								)}
+							</div>
 						) : (
 							<Form method="post" className="space-y-3">
 								<input type="hidden" name="intent" value="record_advance" />

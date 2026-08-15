@@ -3,6 +3,7 @@ import { Form, Link, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { Button, buttonVariants } from "~/components/ui/button"
+import { Input } from "~/components/ui/input"
 import {
 	Select,
 	SelectContent,
@@ -192,6 +193,26 @@ export async function action({ request, params }: Route.ActionArgs) {
 		throw redirect(`/docs/${params.id}`)
 	}
 
+	if (intent === "edit_aviso") {
+		const avisoNumber =
+			(form.get("avisoNumber") as string | null)?.trim() || null
+		await db.$transaction([
+			db.jafInvoice.update({
+				where: { id: params.id },
+				data: { avisoNumber },
+			}),
+			db.auditTrail.create({
+				data: {
+					docId: params.id,
+					userId: user.id,
+					action: "AVISO_NUMBER_SET",
+					diffJson: { avisoNumber },
+				},
+			}),
+		] as any)
+		throw redirect(`/docs/${params.id}`)
+	}
+
 	throw redirect(`/docs/${params.id}`)
 }
 
@@ -362,6 +383,23 @@ export default function DocView({
 						{doc.avisoNumber}
 					</p>
 				)}
+				{(user.role === "SUPERVISOR" || user.role === "ADMIN") &&
+					doc.status !== "CANCELLED" &&
+					doc.status !== "LC_GENERATED" && (
+						<Form method="post" className="flex items-center gap-2">
+							<Input
+								type="text"
+								name="avisoNumber"
+								defaultValue={doc.avisoNumber || ""}
+								placeholder="10333185"
+								className="h-8 w-40"
+							/>
+							<input type="hidden" name="intent" value="edit_aviso" />
+							<Button type="submit" size="sm" variant="outline">
+								Save Aviso #
+							</Button>
+						</Form>
+					)}
 				<p>
 					<span className="text-slate-500">{t("docs_view.supervisor")}:</span>{" "}
 					{supervisor?.name}

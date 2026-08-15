@@ -245,10 +245,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	if (intent === "edit_aviso") {
-		// PRD §1.5 step 2: supervisor enters/updates the Aviso # (for the Claro Aviso)
-		// between Supervisor Approved and Claro upload.
-		if (doc.status !== "SUPERVISOR_APPROVED")
-			throw redirect(`/docs/${params.id}`)
+		// PRD §1.5: supervisor can enter/update the Aviso # at any point.
 		const avisoNumber =
 			(form.get("avisoNumber") as string | null)?.trim() || null
 		await db.$transaction([
@@ -265,6 +262,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 				},
 			}),
 		] as any)
+		throw redirect(`/docs/${params.id}`)
 	}
 
 	throw redirect(`/docs/${params.id}`)

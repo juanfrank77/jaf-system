@@ -40,7 +40,7 @@ export const meta: Route.MetaFunction = () => [
 ]
 
 export async function loader({ request }: Route.LoaderArgs) {
-	await requireRole(request, ["ADMIN"])
+	await requireRole(request, ["ADMIN", "SUPERVISOR"])
 
 	const [requests, vans, serviceCodes] = await Promise.all([
 		db.vanRestockRequest.findMany({

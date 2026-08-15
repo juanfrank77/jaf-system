@@ -29,7 +29,7 @@ export function isTerminalStatus(status: string): status is TerminalStatus {
 // State machine: which transitions are allowed
 const TRANSITIONS: Record<string, { from: string | string[]; roles: Role[] }> =
 	{
-		PREPPED: { from: "CREATED", roles: ["WAREHOUSE", "ADMIN"] },
+		PREPPED: { from: ["CREATED", "PREPPED"], roles: ["WAREHOUSE", "ADMIN"] },
 		SIGNED: { from: "PREPPED", roles: ["CREW", "WAREHOUSE", "ADMIN"] },
 		// FIELD_UPDATED accepts from 'SIGNED' (warehouse path) OR CREATED (van bypass path)
 		FIELD_UPDATED: { from: ["SIGNED", "CREATED"], roles: ["CREW", "ADMIN"] },

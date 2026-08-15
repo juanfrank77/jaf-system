@@ -104,7 +104,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 			? await db.jafInvoice.findMany({
 					where: {
 						...buildBaseWhere(user.role, user.id),
-						status: "CREATED",
+						status: { in: ["CREATED", "PREPPED"] },
 						prepChangedSincePrep: true,
 					},
 					orderBy: { createdAt: "desc" },

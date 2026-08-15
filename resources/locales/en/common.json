@@ -766,6 +766,8 @@
 			"invalid_date": "Enter a valid date.",
 			"advance_already_recorded": "PBCC advance has already been recorded for this job.",
 			"final_already_recorded": "Claro final payment has already been recorded for this job.",
+			"amount_exceeds_invoice_total": "Crew payment cannot exceed the invoice total.",
+			"crew_payment_already_recorded": "Crew payment has already been recorded for this job.",
 			"unknown_intent": "Unknown action."
 		},
 		"success": {

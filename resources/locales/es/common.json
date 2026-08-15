@@ -766,6 +766,8 @@
 			"invalid_date": "Ingresa una fecha válida.",
 			"advance_already_recorded": "El adelanto PBCC ya fue registrado para este trabajo.",
 			"final_already_recorded": "El pago final de Claro ya fue registrado para este trabajo.",
+			"amount_exceeds_invoice_total": "El pago de cuadrilla no puede exceder el monto total de la factura.",
+			"crew_payment_already_recorded": "El pago de cuadrilla ya fue registrado para este trabajo.",
 			"unknown_intent": "Acción desconocida."
 		},
 		"success": {

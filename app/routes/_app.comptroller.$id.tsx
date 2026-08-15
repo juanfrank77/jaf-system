@@ -137,16 +137,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 		include: { supervisor: { select: { name: true } } },
 	})
 
-	const [serviceCodes, ivuRate] = await Promise.all([
-		db.serviceCode.findMany(),
-		getIvuRate(),
-	])
-	const codeMap = Object.fromEntries(
-		serviceCodes.map((c) => [c.id, { unitPrice: toNumberPrice(c.unitPrice) }]),
-	)
-	const amount = invoiceTotalUsed(doc, codeMap, ivuRate)
-	const expectedAdvance = amount * 0.8
-
 	const financeUsers = await db.user.findMany({
 		where: { role: "FINANCE", active: true },
 		select: { id: true },
@@ -165,7 +155,29 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	if (intent === "record_advance") {
-		if (doc.advanceReceivedAt) {
+		const [serviceCodes, ivuRate] = await Promise.all([
+			db.serviceCode.findMany(),
+			getIvuRate(),
+		])
+		const codeMap = Object.fromEntries(
+			serviceCodes.map((c) => [
+				c.id,
+				{ unitPrice: toNumberPrice(c.unitPrice) },
+			]),
+		)
+		const amount = invoiceTotalUsed(doc, codeMap, ivuRate)
+		const expectedAdvance = amount * 0.8
+
+		const updated = await db.$transaction([
+			db.jafInvoice.updateMany({
+				where: { id: docId, advanceReceivedAt: null },
+				data: {
+					advanceReceivedAt: parsedDate,
+					advanceAmount: parsedAmount,
+				},
+			}),
+		])
+		if (updated[0].count === 0) {
 			return { errorKey: "comptroller_detail.errors.advance_already_recorded" }
 		}
 
@@ -177,13 +189,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 			: `PBCC advance of ${formatMoney(parsedAmount)} recorded for ${doc.controlNumber}.`
 
 		await db.$transaction([
-			db.jafInvoice.update({
-				where: { id: docId },
-				data: {
-					advanceReceivedAt: parsedDate,
-					advanceAmount: parsedAmount,
-				},
-			}),
 			db.paymentRecord.create({
 				data: {
 					jobId: docId,
@@ -219,7 +224,16 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	if (intent === "record_final") {
-		if (doc.finalPaymentReceivedAt) {
+		const updated = await db.$transaction([
+			db.jafInvoice.updateMany({
+				where: { id: docId, finalPaymentReceivedAt: null },
+				data: {
+					finalPaymentReceivedAt: parsedDate,
+					finalPaymentAmount: parsedAmount,
+				},
+			}),
+		])
+		if (updated[0].count === 0) {
 			return { errorKey: "comptroller_detail.errors.final_already_recorded" }
 		}
 
@@ -228,13 +242,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 		)} recorded for ${doc.controlNumber}. Close entry is now unlocked.`
 
 		await db.$transaction([
-			db.jafInvoice.update({
-				where: { id: docId },
-				data: {
-					finalPaymentReceivedAt: parsedDate,
-					finalPaymentAmount: parsedAmount,
-				},
-			}),
 			db.paymentRecord.create({
 				data: {
 					jobId: docId,
@@ -267,6 +274,34 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 	if (intent === "record_crew_payment") {
 		const note = (form.get("note") as string | null)?.trim() || null
+
+		const [serviceCodes, ivuRate] = await Promise.all([
+			db.serviceCode.findMany(),
+			getIvuRate(),
+		])
+		const codeMap = Object.fromEntries(
+			serviceCodes.map((c) => [
+				c.id,
+				{ unitPrice: toNumberPrice(c.unitPrice) },
+			]),
+		)
+		const amount = invoiceTotalUsed(doc, codeMap, ivuRate)
+
+		if (parsedAmount > amount) {
+			return {
+				errorKey: "comptroller_detail.errors.amount_exceeds_invoice_total",
+			}
+		}
+
+		const existingCrewPayment = await db.paymentRecord.findFirst({
+			where: { jobId: docId, type: "CREW_PAYMENT" },
+		})
+		if (existingCrewPayment) {
+			return {
+				errorKey: "comptroller_detail.errors.crew_payment_already_recorded",
+			}
+		}
+
 		await db.$transaction([
 			db.paymentRecord.create({
 				data: {

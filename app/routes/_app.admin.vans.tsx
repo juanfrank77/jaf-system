@@ -86,7 +86,33 @@ export async function action({ request }: Route.ActionArgs) {
 		}
 
 		if (intent === "update" && typeof id === "string" && id.trim()) {
-			await db.van.update({ where: { id }, data: dataPayload })
+			const existing = await db.van.findUnique({ where: { id } })
+			const existingLevels = (
+				(existing?.standardStockLevels as StockLevel[]) || []
+			).filter(Boolean) as StockLevel[]
+			const mergedMap = new Map<string, number>(
+				existingLevels.map((level) => [level.serviceCodeId, level.qty]),
+			)
+			for (const level of stockLevels) {
+				mergedMap.set(level.serviceCodeId, level.qty)
+			}
+			const mergedLevels = existingLevels
+				.map((level) => ({
+					serviceCodeId: level.serviceCodeId,
+					qty: mergedMap.get(level.serviceCodeId) ?? 0,
+				}))
+				.concat(
+					Array.from(mergedMap.entries())
+						.filter(
+							([serviceCodeId]) =>
+								!existingLevels.some((l) => l.serviceCodeId === serviceCodeId),
+						)
+						.map(([serviceCodeId, qty]) => ({ serviceCodeId, qty })),
+				)
+			await db.van.update({
+				where: { id },
+				data: { ...dataPayload, standardStockLevels: mergedLevels as any },
+			})
 		} else {
 			await db.van.create({ data: dataPayload })
 		}

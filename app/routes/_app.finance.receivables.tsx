@@ -49,6 +49,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		where: { status: { in: FINANCEABLE_STATUSES } },
 		include: { supervisor: true, poLinks: { orderBy: { id: "asc" } } },
 		orderBy: { supervisorApprovedAt: "asc" },
+		take: 200,
 	})
 
 	const rows: FinancePipelineRow[] = invoices.map((inv) => {

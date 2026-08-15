@@ -32,6 +32,7 @@ export default [
 		route("docs/:id/review", "routes/_app.docs.$id_.review.tsx"),
 		route("docs/:id/lc", "routes/_app.docs.$id_.lc.tsx"),
 		route("docs/:id/audit-package", "routes/_app.docs.$id_.audit-package.tsx"),
+		route("docs/:id/returns", "routes/_app.docs.$id_.returns.tsx"),
 		route("finance/receivables", "routes/_app.finance.receivables.tsx"),
 		route("finance/verify/:id", "routes/_app.finance.verify.$id.tsx"),
 		route("finance/pbcc/:id", "routes/_app.finance.pbcc.$id.tsx"),

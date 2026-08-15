@@ -175,7 +175,8 @@
 		"add_line": "+ Add Line",
 		"submit": "Save Returns",
 		"errors": {
-			"invalid_materials": "Invalid materials data"
+			"invalid_materials": "Invalid materials data",
+			"invalid_service_codes": "One or more selected products are no longer available."
 		}
 	},
 	"restock_fulfill": {
@@ -194,7 +195,8 @@
 		"submit": "Mark Ready",
 		"submit_with_missing": "Save Missing Flags",
 		"errors": {
-			"invalid_items": "Invalid items data"
+			"invalid_items": "Invalid items data",
+			"invalid_service_codes": "One or more selected products are no longer available."
 		}
 	},
 	"docs_sign": {
@@ -798,6 +800,7 @@
 			"no_van": "You must be assigned to a van to request restock.",
 			"warehouse_required": "Please select a warehouse.",
 			"invalid_items": "Invalid items data.",
+			"invalid_service_codes": "One or more selected products are no longer available.",
 			"items_required": "Add at least one item."
 		}
 	},
@@ -824,6 +827,7 @@
 			"no_van": "You must be assigned to a van to log an install.",
 			"missing_fields": "Claro reference, service type, and date are required.",
 			"invalid_items": "Invalid materials data.",
+			"invalid_service_codes": "One or more selected products are no longer available.",
 			"invalid_date": "Enter a valid date."
 		}
 	},
@@ -839,6 +843,7 @@
 		"errors": {
 			"no_van": "You must be assigned to a van to adjust stock.",
 			"invalid_fields": "Select a material and enter a positive quantity.",
+			"invalid_service_code": "The selected product is no longer available.",
 			"note_required": "A reason is required."
 		}
 	},

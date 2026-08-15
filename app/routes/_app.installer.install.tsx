@@ -75,6 +75,24 @@ export async function action({ request }: Route.ActionArgs) {
 		)
 	}
 
+	const uniqueServiceCodeIds = Array.from(
+		new Set(items.map((i) => i.serviceCodeId)),
+	)
+	const validServiceCodes = await db.serviceCode.findMany({
+		where: { id: { in: uniqueServiceCodeIds }, active: true },
+		select: { id: true },
+	})
+	const validServiceCodeSet = new Set(validServiceCodes.map((c) => c.id))
+	const invalidServiceCodes = uniqueServiceCodeIds.filter(
+		(id) => !validServiceCodeSet.has(id),
+	)
+	if (invalidServiceCodes.length > 0) {
+		return data(
+			{ errorKey: "installer_install.errors.invalid_service_codes" },
+			{ status: 400 },
+		)
+	}
+
 	const date = new Date(dateRaw)
 	if (Number.isNaN(date.getTime())) {
 		return data(
@@ -85,14 +103,19 @@ export async function action({ request }: Route.ActionArgs) {
 
 	await db.$transaction(async (tx) => {
 		await tx.$queryRaw`SELECT id FROM "Van" WHERE id = ${van.id} FOR UPDATE`
-		const transactions = await tx.vanInventoryTransaction.findMany({
-			where: { vanId: van.id },
-		})
+		const transactions = await tx.$queryRaw<
+			{ serviceCodeId: string; qty: number }[]
+		>`
+			SELECT serviceCodeId, SUM(qty) as qty
+			FROM "VanInventoryTransaction"
+			WHERE vanId = ${van.id}
+			GROUP BY serviceCodeId
+		`
 		const inventory = computeVanInventory(
 			transactions.map((t) => ({
 				serviceCodeId: t.serviceCodeId,
 				qty: t.qty,
-				type: t.type,
+				type: "INSTALL",
 			})),
 		)
 		let discrepancyFlagged = false
@@ -115,19 +138,17 @@ export async function action({ request }: Route.ActionArgs) {
 				discrepancyFlagged,
 			},
 		})
-		for (const item of items) {
-			await tx.vanInventoryTransaction.create({
-				data: {
-					vanId: van.id,
-					serviceCodeId: item.serviceCodeId,
-					qty: -item.qty,
-					type: "INSTALL",
-					referenceId: log.id,
-					createdById: user.id,
-					note: `Install ${claroJobReference}`,
-				},
-			})
-		}
+		await tx.vanInventoryTransaction.createMany({
+			data: items.map((item) => ({
+				vanId: van.id,
+				serviceCodeId: item.serviceCodeId,
+				qty: -item.qty,
+				type: "INSTALL",
+				referenceId: log.id,
+				createdById: user.id,
+				note: `Install ${claroJobReference}`,
+			})),
+		})
 		if (discrepancyFlagged) {
 			const warehouseUsers = await tx.user.findMany({
 				where: { role: { in: ["WAREHOUSE", "ADMIN"] }, active: true },

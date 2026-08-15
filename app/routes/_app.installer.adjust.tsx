@@ -58,6 +58,17 @@ export async function action({ request }: Route.ActionArgs) {
 		)
 	}
 
+	const [validServiceCode] = await db.serviceCode.findMany({
+		where: { id: serviceCodeId, active: true },
+		select: { id: true },
+	})
+	if (!validServiceCode) {
+		return data(
+			{ errorKey: "installer_adjust.errors.invalid_service_code" },
+			{ status: 400 },
+		)
+	}
+
 	const warehouseUsers = await db.user.findMany({
 		where: { role: { in: ["WAREHOUSE", "ADMIN"] }, active: true },
 	})

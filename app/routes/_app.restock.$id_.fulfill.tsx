@@ -82,6 +82,23 @@ export async function action({ request, params }: any) {
 		return { errorKey: "restock_fulfill.errors.invalid_items" }
 	}
 
+	const uniqueServiceCodeIds = Array.from(
+		new Set(fulfillItems.map((i) => i.serviceCodeId).filter(Boolean)),
+	)
+	if (uniqueServiceCodeIds.length > 0) {
+		const validServiceCodes = await db.serviceCode.findMany({
+			where: { id: { in: uniqueServiceCodeIds }, active: true },
+			select: { id: true },
+		})
+		const validServiceCodeSet = new Set(validServiceCodes.map((c) => c.id))
+		const invalidServiceCodes = uniqueServiceCodeIds.filter(
+			(id) => !validServiceCodeSet.has(id),
+		)
+		if (invalidServiceCodes.length > 0) {
+			return { errorKey: "restock_fulfill.errors.invalid_service_codes" }
+		}
+	}
+
 	const hasAnyMissing = fulfillItems.some((line) => line.missing)
 
 	if (hasAnyMissing) {

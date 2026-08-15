@@ -69,6 +69,24 @@ export async function action({ request }: Route.ActionArgs) {
 		)
 	}
 
+	const uniqueServiceCodeIds = Array.from(
+		new Set(items.map((i) => i.serviceCodeId)),
+	)
+	const validServiceCodes = await db.serviceCode.findMany({
+		where: { id: { in: uniqueServiceCodeIds }, active: true },
+		select: { id: true },
+	})
+	const validServiceCodeSet = new Set(validServiceCodes.map((c) => c.id))
+	const invalidServiceCodes = uniqueServiceCodeIds.filter(
+		(id) => !validServiceCodeSet.has(id),
+	)
+	if (invalidServiceCodes.length > 0) {
+		return data(
+			{ errorKey: "installer_restock.errors.invalid_service_codes" },
+			{ status: 400 },
+		)
+	}
+
 	if (items.length === 0) {
 		return data(
 			{ errorKey: "installer_restock.errors.items_required" },
@@ -76,15 +94,20 @@ export async function action({ request }: Route.ActionArgs) {
 		)
 	}
 
-	const transactions = await db.vanInventoryTransaction.findMany({
-		where: { vanId: van.id },
-	})
+	const transactions = await db.$queryRaw<
+		{ serviceCodeId: string; qty: number }[]
+	>`
+		SELECT serviceCodeId, SUM(qty) as qty
+		FROM "VanInventoryTransaction"
+		WHERE vanId = ${van.id}
+		GROUP BY serviceCodeId
+	`
 	const { requiresApproval } = evaluateRestockApproval(
 		items,
 		transactions.map((t) => ({
 			serviceCodeId: t.serviceCodeId,
 			qty: t.qty,
-			type: t.type,
+			type: "RESTOCK",
 		})),
 		(van.standardStockLevels as StockLevel[]) || [],
 	)

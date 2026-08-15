@@ -5,11 +5,11 @@ vi.mock("~/lib/db.server", () => ({
 		van: {
 			findUnique: vi.fn(),
 		},
+		serviceCode: {
+			findMany: vi.fn(),
+		},
 		vanRestockRequest: {
 			create: vi.fn(),
-		},
-		vanInventoryTransaction: {
-			findMany: vi.fn(),
 		},
 		user: {
 			findMany: vi.fn(),
@@ -17,6 +17,7 @@ vi.mock("~/lib/db.server", () => ({
 		notification: {
 			create: vi.fn(),
 		},
+		$queryRaw: vi.fn(),
 		$transaction: vi.fn(async (ops: any[]) => {
 			for (const op of ops) {
 				if (typeof op === "function") {
@@ -62,7 +63,12 @@ describe("POST /installer/restock", () => {
 			session: {},
 		} as any)
 		vi.mocked(db.van.findUnique).mockResolvedValue(baseVan() as any)
-		vi.mocked(db.vanInventoryTransaction.findMany).mockResolvedValue([])
+		vi.mocked(db.serviceCode.findMany).mockResolvedValue([
+			{ id: "sc-1" },
+		] as any)
+		vi.mocked(db.$queryRaw).mockResolvedValue([
+			{ serviceCodeId: "sc-1", qty: 0 },
+		] as any)
 		vi.mocked(db.user.findMany).mockResolvedValue([])
 		vi.mocked(db.$transaction).mockResolvedValue(undefined as any)
 
@@ -88,7 +94,12 @@ describe("POST /installer/restock", () => {
 			session: {},
 		} as any)
 		vi.mocked(db.van.findUnique).mockResolvedValue(baseVan() as any)
-		vi.mocked(db.vanInventoryTransaction.findMany).mockResolvedValue([])
+		vi.mocked(db.serviceCode.findMany).mockResolvedValue([
+			{ id: "sc-1" },
+		] as any)
+		vi.mocked(db.$queryRaw).mockResolvedValue([
+			{ serviceCodeId: "sc-1", qty: 0 },
+		] as any)
 		vi.mocked(db.user.findMany).mockResolvedValue([])
 		vi.mocked(db.$transaction).mockResolvedValue(undefined as any)
 
@@ -105,5 +116,31 @@ describe("POST /installer/restock", () => {
 		const createCall = vi.mocked(db.vanRestockRequest.create).mock.calls[0][0]
 		expect(createCall.data.status).toBe("PENDING_APPROVAL")
 		expect(createCall.data.requiresApproval).toBe(true)
+	})
+
+	it("rejects restock when service code does not exist", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "installer-1", role: "INSTALLER" },
+			session: {},
+		} as any)
+		vi.mocked(db.van.findUnique).mockResolvedValue(baseVan() as any)
+		vi.mocked(db.serviceCode.findMany).mockResolvedValue([])
+		vi.mocked(db.$queryRaw).mockResolvedValue([])
+		vi.mocked(db.user.findMany).mockResolvedValue([])
+		vi.mocked(db.$transaction).mockResolvedValue(undefined as any)
+
+		const form = new FormData()
+		form.set("warehouseId", "wh-1")
+		form.set("items", JSON.stringify([{ serviceCodeId: "bad-code", qty: 3 }]))
+
+		const result = await action({
+			request: formRequest(form),
+			params: {},
+		} as any)
+
+		expect((result as any).init?.status).toBe(400)
+		expect((result as any).data.errorKey).toBe(
+			"installer_restock.errors.invalid_service_codes",
+		)
 	})
 })

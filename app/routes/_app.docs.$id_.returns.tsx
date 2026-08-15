@@ -75,6 +75,23 @@ export async function action({ request, params }: any) {
 		return { errorKey: "docs_returns.errors.invalid_materials" }
 	}
 
+	const uniqueServiceCodeIds = Array.from(
+		new Set(materialsReturned.map((i) => i.serviceCodeId).filter(Boolean)),
+	)
+	if (uniqueServiceCodeIds.length > 0) {
+		const validServiceCodes = await db.serviceCode.findMany({
+			where: { id: { in: uniqueServiceCodeIds }, active: true },
+			select: { id: true },
+		})
+		const validServiceCodeSet = new Set(validServiceCodes.map((c) => c.id))
+		const invalidServiceCodes = uniqueServiceCodeIds.filter(
+			(id) => !validServiceCodeSet.has(id),
+		)
+		if (invalidServiceCodes.length > 0) {
+			return { errorKey: "docs_returns.errors.invalid_service_codes" }
+		}
+	}
+
 	await db.$transaction([
 		db.jafInvoice.update({
 			where: { id: params.id },

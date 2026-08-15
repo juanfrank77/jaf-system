@@ -5,9 +5,12 @@ vi.mock("~/lib/db.server", () => ({
 		van: {
 			findUnique: vi.fn(),
 		},
+		serviceCode: {
+			findMany: vi.fn(),
+		},
 		vanInventoryTransaction: {
 			findMany: vi.fn(),
-			create: vi.fn(),
+			createMany: vi.fn(),
 		},
 		installLog: {
 			create: vi.fn(),
@@ -24,7 +27,7 @@ vi.mock("~/lib/db.server", () => ({
 					installLog: { create: vi.fn(() => ({ id: "log-1" })) },
 					vanInventoryTransaction: {
 						findMany: vi.fn(),
-						create: vi.fn(),
+						createMany: vi.fn(),
 					},
 					notification: { create: vi.fn() },
 					user: { findMany: vi.fn(() => []) },
@@ -67,6 +70,9 @@ describe("POST /installer/install", () => {
 			session: {},
 		} as any)
 		vi.mocked(db.van.findUnique).mockResolvedValue(baseVan() as any)
+		vi.mocked(db.serviceCode.findMany).mockResolvedValue([
+			{ id: "sc-1" },
+		] as any)
 		vi.mocked(db.$transaction).mockImplementation(async (fn: any) => {
 			return fn({
 				installLog: {
@@ -78,11 +84,13 @@ describe("POST /installer/install", () => {
 						.mockResolvedValue([
 							{ serviceCodeId: "sc-1", qty: 5, type: "RESTOCK" },
 						] as any),
-					create: vi.fn(),
+					createMany: vi.fn(),
 				},
 				notification: { create: vi.fn() },
 				user: { findMany: vi.fn(() => []) },
-				$queryRaw: vi.fn(),
+				$queryRaw: vi
+					.fn()
+					.mockResolvedValue([{ serviceCodeId: "sc-1", qty: 5 }]),
 			})
 		})
 
@@ -106,6 +114,9 @@ describe("POST /installer/install", () => {
 			session: {},
 		} as any)
 		vi.mocked(db.van.findUnique).mockResolvedValue(baseVan() as any)
+		vi.mocked(db.serviceCode.findMany).mockResolvedValue([
+			{ id: "sc-1" },
+		] as any)
 
 		const createLog = vi.fn(() => ({ id: "log-1" }))
 		vi.mocked(db.$transaction).mockImplementation(async (fn: any) => {
@@ -117,11 +128,13 @@ describe("POST /installer/install", () => {
 						.mockResolvedValue([
 							{ serviceCodeId: "sc-1", qty: 1, type: "RESTOCK" },
 						] as any),
-					create: vi.fn(),
+					createMany: vi.fn(),
 				},
 				notification: { create: vi.fn() },
 				user: { findMany: vi.fn().mockResolvedValue([]) },
-				$queryRaw: vi.fn(),
+				$queryRaw: vi
+					.fn()
+					.mockResolvedValue([{ serviceCodeId: "sc-1", qty: 1 }]),
 			})
 		})
 
@@ -141,5 +154,30 @@ describe("POST /installer/install", () => {
 		const data = (firstCall[0] as { data: { discrepancyFlagged: boolean } })
 			.data
 		expect(data.discrepancyFlagged).toBe(true)
+	})
+
+	it("rejects install when service code does not exist", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "installer-1", role: "INSTALLER" },
+			session: {},
+		} as any)
+		vi.mocked(db.van.findUnique).mockResolvedValue(baseVan() as any)
+		vi.mocked(db.serviceCode.findMany).mockResolvedValue([])
+
+		const form = new FormData()
+		form.set("claroJobReference", "12345678")
+		form.set("serviceType", "WIFI")
+		form.set("date", "2026-08-13")
+		form.set("items", JSON.stringify([{ serviceCodeId: "bad-code", qty: 2 }]))
+
+		const result = await action({
+			request: formRequest(form),
+			params: {},
+		} as any)
+
+		expect((result as any).init?.status).toBe(400)
+		expect((result as any).data.errorKey).toBe(
+			"installer_install.errors.invalid_service_codes",
+		)
 	})
 })

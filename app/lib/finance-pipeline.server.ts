@@ -39,12 +39,7 @@ export function computeFinanceStage(
 	hasPoLinks: boolean,
 ): FinanceStage | null {
 	// Finance only cares about jobs that have reached supervisor approval.
-	const financeableStatuses = [
-		"SUPERVISOR_APPROVED",
-		"CLARO_UPLOADED",
-		"LC_GENERATED",
-	]
-	if (!financeableStatuses.includes(invoice.status)) return null
+	if (!FINANCEABLE_STATUSES.includes(invoice.status)) return null
 
 	if (invoice.receivableClosedAt) return "CLOSED"
 	if (invoice.advanceReceivedAt && invoice.finalPaymentReceivedAt)

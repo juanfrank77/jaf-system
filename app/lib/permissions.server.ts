@@ -11,7 +11,7 @@ export {
 	isEditableStatus,
 	isReviewActionStatus,
 	isTerminalStatus,
-} from "./doc-status"
+} from "./permissions"
 
 export async function requireSession(request: Request) {
 	const session = await auth.api.getSession({ headers: request.headers })

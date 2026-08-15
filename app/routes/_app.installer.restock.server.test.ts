@@ -9,6 +9,7 @@ vi.mock("~/lib/db.server", () => ({
 			findMany: vi.fn(),
 		},
 		vanRestockRequest: {
+			findMany: vi.fn(),
 			create: vi.fn(),
 		},
 		user: {
@@ -69,6 +70,10 @@ describe("POST /installer/restock", () => {
 		vi.mocked(db.$queryRaw).mockResolvedValue([
 			{ serviceCodeId: "sc-1", qty: 0 },
 		] as any)
+		vi.mocked(db.vanRestockRequest.findMany).mockResolvedValue([])
+		vi.mocked(db.vanRestockRequest.create).mockResolvedValue({
+			id: "req-1",
+		} as any)
 		vi.mocked(db.user.findMany).mockResolvedValue([])
 		vi.mocked(db.$transaction).mockResolvedValue(undefined as any)
 
@@ -100,6 +105,10 @@ describe("POST /installer/restock", () => {
 		vi.mocked(db.$queryRaw).mockResolvedValue([
 			{ serviceCodeId: "sc-1", qty: 0 },
 		] as any)
+		vi.mocked(db.vanRestockRequest.findMany).mockResolvedValue([])
+		vi.mocked(db.vanRestockRequest.create).mockResolvedValue({
+			id: "req-1",
+		} as any)
 		vi.mocked(db.user.findMany).mockResolvedValue([])
 		vi.mocked(db.$transaction).mockResolvedValue(undefined as any)
 

@@ -102,17 +102,49 @@ export async function action({ request }: Route.ActionArgs) {
 		WHERE vanId = ${van.id}
 		GROUP BY serviceCodeId
 	`
-	const { requiresApproval } = evaluateRestockApproval(
-		items,
-		transactions.map((t) => ({
+
+	const [pendingRequests] = await Promise.all([
+		db.vanRestockRequest.findMany({
+			where: {
+				requestedById: user.id,
+				status: { in: ["REQUESTED", "PENDING_APPROVAL", "APPROVED"] },
+			},
+			select: { items: true },
+		}),
+	])
+
+	const pendingItems = (
+		pendingRequests as { items: { serviceCodeId: string; qty: number }[] }[]
+	).flatMap((r) =>
+		(r.items || []).map((i) => ({ ...i, type: "RESTOCK" as const })),
+	)
+
+	const allTransactions = [
+		...transactions.map((t) => ({
 			serviceCodeId: t.serviceCodeId,
 			qty: t.qty,
-			type: "RESTOCK",
+			type: "RESTOCK" as const,
 		})),
+		...pendingItems,
+	]
+
+	const { requiresApproval } = evaluateRestockApproval(
+		items,
+		allTransactions,
 		(van.standardStockLevels as StockLevel[]) || [],
 	)
 
 	const status = requiresApproval ? "PENDING_APPROVAL" : "REQUESTED"
+
+	const restockRequest = await db.vanRestockRequest.create({
+		data: {
+			requestedById: user.id,
+			warehouseId,
+			items,
+			status,
+			requiresApproval,
+		},
+	})
 
 	const recipients = await db.user.findMany({
 		where: {
@@ -121,19 +153,10 @@ export async function action({ request }: Route.ActionArgs) {
 		},
 	})
 	const message = requiresApproval
-		? `Restock request #... from ${van.name} requires approval.`
-		: `New restock request from ${van.name} is ready to fulfill.`
+		? `Restock request #${restockRequest.id.slice(-6)} from ${van.name} requires approval.`
+		: `New restock request #${restockRequest.id.slice(-6)} from ${van.name} is ready to fulfill.`
 
 	await db.$transaction([
-		db.vanRestockRequest.create({
-			data: {
-				requestedById: user.id,
-				warehouseId,
-				items,
-				status,
-				requiresApproval,
-			},
-		}),
 		...recipients.map((u: { id: string }) =>
 			db.notification.create({
 				data: { userId: u.id, message },

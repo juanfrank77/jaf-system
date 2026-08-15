@@ -67,6 +67,7 @@ export async function action({ request, params }: any) {
 	await requireRole(request, ["WAREHOUSE", "ADMIN"])
 	const restockRequest = await db.vanRestockRequest.findUniqueOrThrow({
 		where: { id: params.id },
+		include: { warehouse: true },
 	})
 	if (!["REQUESTED", "APPROVED"].includes(restockRequest.status)) {
 		throw redirect(`/dashboard`)
@@ -116,6 +117,13 @@ export async function action({ request, params }: any) {
 		data: {
 			status: "READY",
 			items: fulfillItems as any,
+		},
+	})
+
+	await db.notification.create({
+		data: {
+			userId: restockRequest.requestedById,
+			message: `Restock request #${params.id.slice(-6)} is ready for pickup at ${restockRequest.warehouse?.name ?? "warehouse"}.`,
 		},
 	})
 

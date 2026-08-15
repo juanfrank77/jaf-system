@@ -51,6 +51,32 @@ describe("van-inventory helpers", () => {
 			expect(result.requiresApproval).toBe(true)
 			expect(result.reasons).toContain("sc-1")
 		})
+
+		it("accounts for pending requests when evaluating approval", () => {
+			const result = evaluateRestockApproval(
+				[{ serviceCodeId: "sc-1", qty: 4 }],
+				[
+					{ serviceCodeId: "sc-1", qty: 2, type: "RESTOCK" },
+					{ serviceCodeId: "sc-1", qty: 5, type: "RESTOCK" },
+				],
+				[{ serviceCodeId: "sc-1", qty: 10 }],
+			)
+			expect(result.requiresApproval).toBe(true)
+			expect(result.reasons).toContain("sc-1")
+		})
+
+		it("does not require approval when pending requests keep total at or below par", () => {
+			const result = evaluateRestockApproval(
+				[{ serviceCodeId: "sc-1", qty: 3 }],
+				[
+					{ serviceCodeId: "sc-1", qty: 2, type: "RESTOCK" },
+					{ serviceCodeId: "sc-1", qty: 3, type: "RESTOCK" },
+				],
+				[{ serviceCodeId: "sc-1", qty: 10 }],
+			)
+			expect(result.requiresApproval).toBe(false)
+			expect(result.reasons).toHaveLength(0)
+		})
 	})
 
 	describe("buildInventoryComparison", () => {

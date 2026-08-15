@@ -69,6 +69,7 @@ export function stageAnchorDate(
 		| "receivableClosedAt"
 	>,
 	stage: FinanceStage,
+	poDate: Date | null | undefined,
 ): Date | null {
 	switch (stage) {
 		case "TO_VERIFY":
@@ -80,7 +81,7 @@ export function stageAnchorDate(
 		case "WAITING_CLARO_PO":
 			return invoice.advanceReceivedAt
 		case "PO_RECEIVED_UPLOAD":
-			return invoice.advanceReceivedAt
+			return poDate ?? null
 		case "IN_CLARO_QUEUE":
 			return invoice.finalClaroUploadedAt
 		case "READY_TO_CLOSE":
@@ -102,8 +103,9 @@ export function daysInStage(
 		| "receivableClosedAt"
 	>,
 	stage: FinanceStage,
+	poDate: Date | null | undefined,
 ): number {
-	const anchor = stageAnchorDate(invoice, stage)
+	const anchor = stageAnchorDate(invoice, stage, poDate)
 	if (!anchor) return 0
 	return Math.floor((Date.now() - new Date(anchor).getTime()) / 86400000)
 }

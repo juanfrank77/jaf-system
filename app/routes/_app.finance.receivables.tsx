@@ -56,7 +56,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 			inv,
 			inv.poLinks.length > 0,
 		) as FinanceStage
-		const ageDays = daysInStage(inv, stage)
+		const poDate = inv.poLinks[0]?.poDate ?? null
+		const ageDays = daysInStage(inv, stage, poDate)
 		const alertDays = financeStageAlertDays(stage)
 		const isAlert = alertDays !== null && ageDays > alertDays
 		return {
@@ -78,6 +79,43 @@ export async function loader({ request }: Route.LoaderArgs) {
 				: null,
 		}
 	})
+
+	const alertRows = rows.filter((r) => r.isAlert)
+	if (alertRows.length > 0) {
+		const adminUsers = await db.user.findMany({
+			where: { role: "ADMIN", active: true },
+			select: { id: true },
+		})
+
+		const existingNotifications = await db.notification.findMany({
+			where: {
+				userId: { in: adminUsers.map((u) => u.id) },
+				docId: { in: alertRows.map((r) => r.id) },
+				read: false,
+			},
+			select: { userId: true, docId: true },
+		})
+
+		const notifiedPairs = new Set(
+			existingNotifications.map((n) => `${n.userId}:${n.docId}`),
+		)
+
+		const notificationsToCreate = adminUsers.flatMap((admin) =>
+			alertRows
+				.filter((r) => !notifiedPairs.has(`${admin.id}:${r.id}`))
+				.map((r) => ({
+					userId: admin.id,
+					docId: r.id,
+					message: `Aging alert: job ${r.controlNumber} has been in stage ${r.stage.replace(/_/g, " ")} for ${r.ageDays} days (threshold: ${r.alertDays} days).`,
+				})),
+		)
+
+		if (notificationsToCreate.length > 0) {
+			await db.notification.createMany({
+				data: notificationsToCreate,
+			})
+		}
+	}
 
 	const filtered = stageFilter
 		? rows.filter((r) => r.stage === stageFilter)

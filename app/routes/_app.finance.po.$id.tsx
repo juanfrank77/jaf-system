@@ -66,7 +66,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 	if (intent === "record_po") {
 		const poNumber = (form.get("poNumber") as string | null)?.trim() || ""
-		const poDate = (form.get("poDate") as string | null)?.trim() || null
+		const poDateRaw = (form.get("poDate") as string | null)?.trim() || null
 		const poPdf = form.get("poPdf") as File
 		if (!poNumber) return { errorKey: "finance_po.errors.po_number_required" }
 
@@ -80,11 +80,14 @@ export async function action({ request, params }: Route.ActionArgs) {
 			await fs.writeFile(poPdfPath, Buffer.from(await poPdf.arrayBuffer()))
 		}
 
+		const poDate = poDateRaw ? new Date(`${poDateRaw}T00:00:00`) : null
+
 		await db.$transaction([
 			db.poLink.create({
 				data: {
 					docId: params.id,
 					claroPONumber: poNumber,
+					poDate,
 					amount: null,
 				},
 			}),
@@ -93,7 +96,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 					docId: params.id,
 					userId: user.id,
 					action: "PO_RECORDED",
-					diffJson: { poNumber, poDate, poPdfPath },
+					diffJson: { poNumber, poDate: poDateRaw, poPdfPath },
 				},
 			}),
 		])

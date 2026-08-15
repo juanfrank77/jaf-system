@@ -41,6 +41,7 @@ const renderStub = async (args?: {
 			id: "root",
 			path: "/",
 			children: args?.entries ?? [],
+			HydrateFallback: () => <p>hydrating</p>,
 			Component: () => (
 				<div data-testid="root">
 					<I18nextProvider i18n={instance}>

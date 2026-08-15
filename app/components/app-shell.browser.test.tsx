@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react"
-import { userEvent } from "@vitest/browser/context"
 import { Outlet } from "react-router"
 import { describe, expect, it } from "vitest"
+import { userEvent } from "vitest/browser"
 import { AppShell } from "./app-shell"
 
 describe("AppShell", () => {
@@ -359,6 +359,11 @@ describe("AppShell", () => {
 							<p>content</p>
 						</AppShell>
 					),
+				},
+				{
+					path: "/notifications/1/read",
+					action: async () => new Response(null, { status: 200 }),
+					Component: () => null,
 				},
 			],
 		})

@@ -379,7 +379,8 @@
 		"deactivate": "Desactivar",
 		"activate": "Activar",
 		"reset_password": "Restablecer contraseña",
-		"reset_password_notice": "Contraseña temporal generada. Compártela de forma segura con el usuario.",
+		"reset_password_notice": "Contraseña restablecida exitosamente.",
+		"reset_password_detail": "Entrega la nueva contraseña al usuario por un canal seguro externo.",
 		"dismiss": "Descartar",
 		"yes": "Sí",
 		"no": "No",
@@ -491,6 +492,7 @@
 		"errors": {
 			"id_required": "Se requiere el id de la solicitud.",
 			"reason_required": "Se requiere una razón de denegación.",
+			"invalid_status": "Esta solicitud no está pendiente de aprobación.",
 			"unknown_intent": "Acción desconocida."
 		}
 	},

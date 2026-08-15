@@ -379,7 +379,8 @@
 		"deactivate": "Deactivate",
 		"activate": "Activate",
 		"reset_password": "Reset Password",
-		"reset_password_notice": "Temporary password generated. Share it securely with the user.",
+		"reset_password_notice": "Password has been reset successfully.",
+		"reset_password_detail": "Deliver the new password to the user through a secure out-of-band channel.",
 		"dismiss": "Dismiss",
 		"yes": "Yes",
 		"no": "No",
@@ -491,6 +492,7 @@
 		"errors": {
 			"id_required": "Request id is required.",
 			"reason_required": "A denial reason is required.",
+			"invalid_status": "This request is not pending approval.",
 			"unknown_intent": "Unknown action."
 		}
 	},

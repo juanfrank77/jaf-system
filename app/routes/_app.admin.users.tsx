@@ -1,5 +1,4 @@
 import { hashPassword } from "better-auth/crypto"
-import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { data, Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
@@ -156,7 +155,7 @@ export async function action({ request }: Route.ActionArgs) {
 			where: { id: account.id },
 			data: { password: passwordHash },
 		})
-		return { tempPassword }
+		return { resetSuccess: true }
 	}
 
 	if (intent === "updateRole") {
@@ -201,9 +200,12 @@ export default function AdminUsers({
 		roles: typeof ROLES
 	}
 	const { t } = useTranslation()
-	const [resetPassword, setResetPassword] = useState<string | null>(null)
 	const error =
 		actionData && "errorKey" in actionData ? actionData.errorKey : null
+	const resetSuccess =
+		actionData && "resetSuccess" in actionData
+			? (actionData.resetSuccess as boolean)
+			: false
 
 	return (
 		<div className="space-y-8">
@@ -259,19 +261,19 @@ export default function AdminUsers({
 				</Form>
 			</section>
 
-			{resetPassword && (
+			{resetSuccess && (
 				<div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
 					<p className="font-medium">
 						{t("admin_users.reset_password_notice")}
 					</p>
-					<code className="mt-1 block font-mono text-base">
-						{resetPassword}
-					</code>
+					<p className="mt-1">{t("admin_users.reset_password_detail")}</p>
 					<Button
 						variant="ghost"
 						size="sm"
 						className="mt-2"
-						onClick={() => setResetPassword(null)}
+						onClick={() => {
+							/* actionData clears on next action */
+						}}
 					>
 						{t("admin_users.dismiss")}
 					</Button>

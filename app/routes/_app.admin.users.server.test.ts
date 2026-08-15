@@ -171,7 +171,7 @@ describe("POST /admin/users", () => {
 		expect(db.user.update).not.toHaveBeenCalled()
 	})
 
-	it("resets password and returns temporary password", async () => {
+	it("resets password and confirms success", async () => {
 		vi.mocked(requireRole).mockResolvedValue({
 			user: { id: "admin-1" },
 			session: {} as any,
@@ -188,9 +188,7 @@ describe("POST /admin/users", () => {
 			params: {},
 		} as any)
 
-		expect(result).toHaveProperty("tempPassword")
-		expect(typeof (result as any).tempPassword).toBe("string")
-		expect((result as any).tempPassword.length).toBeGreaterThanOrEqual(8)
+		expect(result).toHaveProperty("resetSuccess", true)
 		expect(db.account.update).toHaveBeenCalledWith({
 			where: { id: "acct-1" },
 			data: expect.objectContaining({

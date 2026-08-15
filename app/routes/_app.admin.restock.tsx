@@ -89,6 +89,15 @@ export async function action({ request }: Route.ActionArgs) {
 
 	if (intent === "approve") {
 		const note = (form.get("note") as string | null)?.trim() || null
+		const existing = await db.vanRestockRequest.findUniqueOrThrow({
+			where: { id },
+		})
+		if (existing.status !== "PENDING_APPROVAL") {
+			return data(
+				{ errorKey: "admin_restock.errors.invalid_status" },
+				{ status: 400 },
+			)
+		}
 		await db.vanRestockRequest.update({
 			where: { id },
 			data: {
@@ -106,6 +115,15 @@ export async function action({ request }: Route.ActionArgs) {
 		if (!reason) {
 			return data(
 				{ errorKey: "admin_restock.errors.reason_required" },
+				{ status: 400 },
+			)
+		}
+		const existing = await db.vanRestockRequest.findUniqueOrThrow({
+			where: { id },
+		})
+		if (existing.status !== "PENDING_APPROVAL") {
+			return data(
+				{ errorKey: "admin_restock.errors.invalid_status" },
 				{ status: 400 },
 			)
 		}

@@ -4,6 +4,7 @@ vi.mock("~/lib/db.server", () => ({
 	db: {
 		vanRestockRequest: {
 			findMany: vi.fn(),
+			findUniqueOrThrow: vi.fn(),
 			update: vi.fn(),
 		},
 		van: {
@@ -38,6 +39,10 @@ describe("POST /admin/restock", () => {
 			user: { id: "admin-1" },
 			session: {},
 		} as any)
+		vi.mocked(db.vanRestockRequest.findUniqueOrThrow).mockResolvedValue({
+			id: "req-1",
+			status: "PENDING_APPROVAL",
+		} as any)
 		vi.mocked(db.vanRestockRequest.update).mockResolvedValue({} as any)
 
 		const form = new FormData()
@@ -67,6 +72,10 @@ describe("POST /admin/restock", () => {
 			user: { id: "admin-1" },
 			session: {},
 		} as any)
+		vi.mocked(db.vanRestockRequest.findUniqueOrThrow).mockResolvedValue({
+			id: "req-1",
+			status: "PENDING_APPROVAL",
+		} as any)
 		vi.mocked(db.vanRestockRequest.update).mockResolvedValue({} as any)
 
 		const form = new FormData()
@@ -89,6 +98,60 @@ describe("POST /admin/restock", () => {
 				deniedReason: "Exceeds budget",
 			},
 		})
+	})
+
+	it("rejects approve when request is not pending approval", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "admin-1" },
+			session: {},
+		} as any)
+		vi.mocked(db.vanRestockRequest.findUniqueOrThrow).mockResolvedValue({
+			id: "req-1",
+			status: "APPROVED",
+		} as any)
+
+		const form = new FormData()
+		form.set("intent", "approve")
+		form.set("id", "req-1")
+		form.set("note", "Approved for emergency")
+
+		const result = (await action({
+			request: formRequest(form),
+			params: {},
+		} as any)) as { init: { status: number }; data: { errorKey: string } }
+
+		expect(result.init.status).toBe(400)
+		expect(result.data).toEqual({
+			errorKey: "admin_restock.errors.invalid_status",
+		})
+		expect(db.vanRestockRequest.update).not.toHaveBeenCalled()
+	})
+
+	it("rejects deny when request is not pending approval", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "admin-1" },
+			session: {},
+		} as any)
+		vi.mocked(db.vanRestockRequest.findUniqueOrThrow).mockResolvedValue({
+			id: "req-1",
+			status: "REQUESTED",
+		} as any)
+
+		const form = new FormData()
+		form.set("intent", "deny")
+		form.set("id", "req-1")
+		form.set("reason", "Exceeds budget")
+
+		const result = (await action({
+			request: formRequest(form),
+			params: {},
+		} as any)) as { init: { status: number }; data: { errorKey: string } }
+
+		expect(result.init.status).toBe(400)
+		expect(result.data).toEqual({
+			errorKey: "admin_restock.errors.invalid_status",
+		})
+		expect(db.vanRestockRequest.update).not.toHaveBeenCalled()
 	})
 
 	it("requires a reason for denial", async () => {

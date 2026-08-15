@@ -13,7 +13,8 @@ export type FieldUpdatePayload = {
 	startedAt?: string | null
 	endedAt?: string | null
 	gpsCoordinates?: string | null
-	photos?: { name: string; base64: string; type: string }[]
+	photosBefore?: { name: string; base64: string; type: string }[]
+	photosAfter?: { name: string; base64: string; type: string }[]
 }
 
 export async function queueFieldUpdate(
@@ -56,10 +57,17 @@ export async function syncFieldUpdate(
 	if (payload.endedAt) formData.set("endedAt", payload.endedAt)
 	if (payload.gpsCoordinates)
 		formData.set("gpsCoordinates", payload.gpsCoordinates)
-	for (const photo of payload.photos ?? []) {
+	for (const photo of payload.photosBefore ?? []) {
 		const blob = base64ToBlob(photo.base64, photo.type)
 		formData.append(
-			"photos",
+			"photosBefore",
+			new File([blob], photo.name, { type: photo.type }),
+		)
+	}
+	for (const photo of payload.photosAfter ?? []) {
+		const blob = base64ToBlob(photo.base64, photo.type)
+		formData.append(
+			"photosAfter",
 			new File([blob], photo.name, { type: photo.type }),
 		)
 	}
@@ -68,10 +76,30 @@ export async function syncFieldUpdate(
 		const response = await fetch(`/docs/${action.docId}/field`, {
 			method: "POST",
 			body: formData,
+			headers: { "X-Offline-Sync": "true" },
 		})
+
+		if (response.status === 409) {
+			const body = (await response.json().catch(() => ({}))) as {
+				conflict?: string
+			}
+			return {
+				ok: false,
+				conflict: {
+					type: body.conflict === "CANCELLED" ? "CANCELLED" : "REASSIGNED",
+					docId: action.docId,
+					message:
+						body.conflict === "CANCELLED"
+							? "This job was cancelled while you were offline."
+							: "This job was reassigned or modified while you were offline.",
+				},
+			}
+		}
+
 		if (response.redirected || response.ok) {
 			return { ok: true }
 		}
+
 		const text = await response.text()
 		if (text.includes("reassign") || text.includes("cancelled")) {
 			return {

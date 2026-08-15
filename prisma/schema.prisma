@@ -41,6 +41,11 @@ enum PaymentType {
   CLARO_FINAL
 }
 
+enum PhotoTag {
+  BEFORE
+  AFTER
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -278,13 +283,14 @@ model AuditTrail {
 }
 
 model Photo {
-  id           String   @id @default(cuid())
+  id           String      @id @default(cuid())
   docId        String
-  doc          JafInvoice @relation(fields: [docId], references: [id])
+  doc          JafInvoice  @relation(fields: [docId], references: [id])
   uploadedById String
-  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
-  localPath    String   // /var/jaf/uploads/photos/<docId>/<filename>
-  takenAt      DateTime @default(now())
+  uploadedBy   User        @relation(fields: [uploadedById], references: [id])
+  localPath    String      // /var/jaf/uploads/photos/<docId>/<filename>
+  takenAt      DateTime    @default(now())
+  tag          PhotoTag?
 
   @@index([docId])
 }

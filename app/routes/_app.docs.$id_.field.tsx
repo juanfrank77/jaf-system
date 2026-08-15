@@ -2,7 +2,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { useRef, useState } from "react"
 import { Trans, useTranslation } from "react-i18next"
-import { Form, redirect, useSubmit } from "react-router"
+import { data, Form, redirect, useSubmit } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialLineItems } from "~/components/material-line-items"
 import {
@@ -74,10 +74,21 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
-	if (!canTransition(doc.status, "FIELD_UPDATED", user.role))
+	if (!canTransition(doc.status, "FIELD_UPDATED", user.role)) {
+		if (request.headers.get("X-Offline-Sync") === "true") {
+			return data(
+				{ conflict: doc.status === "CANCELLED" ? "CANCELLED" : "REASSIGNED" },
+				{ status: 409 },
+			)
+		}
 		throw redirect(`/docs/${params.id}`)
-	if (user.role === "CREW" && !doc.assignedCrewIds.includes(user.id))
+	}
+	if (user.role === "CREW" && !doc.assignedCrewIds.includes(user.id)) {
+		if (request.headers.get("X-Offline-Sync") === "true") {
+			return data({ conflict: "REASSIGNED" }, { status: 409 })
+		}
 		throw redirect(`/docs/${params.id}`)
+	}
 
 	const form = await request.formData()
 	const jobAddressActual = (form.get("jobAddressActual") as string).trim()
@@ -118,25 +129,31 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	// Handle photo uploads
-	const photos = form.getAll("photos") as File[]
+	const photosBefore = form.getAll("photosBefore") as File[]
+	const photosAfter = form.getAll("photosAfter") as File[]
 	const uploadDir = process.env.UPLOAD_DIR || "/tmp/jaf/uploads"
 	const photoDir = path.join(uploadDir, "photos", params.id)
 
-	for (const photo of photos) {
-		if (photo.size === 0) continue
-		const validation = validateFile(photo, "photo")
+	const allPhotos = [
+		...photosBefore.map((file) => ({ file, tag: "BEFORE" as const })),
+		...photosAfter.map((file) => ({ file, tag: "AFTER" as const })),
+	]
+
+	for (const { file } of allPhotos) {
+		if (file.size === 0) continue
+		const validation = validateFile(file, "photo")
 		if (!validation.valid) return { errorMessage: validation.error }
 	}
 
-	const photoPaths: string[] = []
-	if (photos.some((p) => p.size > 0)) {
+	const photoPaths: { path: string; tag: "BEFORE" | "AFTER" }[] = []
+	if (allPhotos.some((p) => p.file.size > 0)) {
 		await fs.mkdir(photoDir, { recursive: true })
-		for (const photo of photos) {
-			if (photo.size === 0) continue
-			const filename = `${Date.now()}-${photo.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`
+		for (const { file, tag } of allPhotos) {
+			if (file.size === 0) continue
+			const filename = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`
 			const localPath = path.join(photoDir, filename)
-			await fs.writeFile(localPath, Buffer.from(await photo.arrayBuffer()))
-			photoPaths.push(localPath)
+			await fs.writeFile(localPath, Buffer.from(await file.arrayBuffer()))
+			photoPaths.push({ path: localPath, tag })
 		}
 	}
 
@@ -156,9 +173,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const endedAt = endedAtRaw ? new Date(endedAtRaw) : undefined
 
 	await db.$transaction([
-		...photoPaths.map((localPath) =>
+		...photoPaths.map(({ path, tag }) =>
 			db.photo.create({
-				data: { docId: params.id, uploadedById: user.id, localPath },
+				data: { docId: params.id, uploadedById: user.id, localPath: path, tag },
 			}),
 		),
 		db.jafInvoice.update({
@@ -285,11 +302,21 @@ export default function FieldUpdate({
 		}
 
 		// Offline: queue the field update.
-		const photos: { name: string; base64: string; type: string }[] = []
-		const fileInputs = formData.getAll("photos") as File[]
-		for (const file of fileInputs) {
+		const photosBefore: { name: string; base64: string; type: string }[] = []
+		const photosAfter: { name: string; base64: string; type: string }[] = []
+		const beforeInputs = formData.getAll("photosBefore") as File[]
+		const afterInputs = formData.getAll("photosAfter") as File[]
+		for (const file of beforeInputs) {
 			if (file.size === 0) continue
-			photos.push({
+			photosBefore.push({
+				name: file.name,
+				type: file.type,
+				base64: await fileToBase64(file),
+			})
+		}
+		for (const file of afterInputs) {
+			if (file.size === 0) continue
+			photosAfter.push({
 				name: file.name,
 				type: file.type,
 				base64: await fileToBase64(file),
@@ -304,7 +331,8 @@ export default function FieldUpdate({
 			startedAt: (formData.get("startedAt") as string) || null,
 			endedAt: (formData.get("endedAt") as string) || null,
 			gpsCoordinates: (formData.get("gpsCoordinates") as string) || null,
-			photos,
+			photosBefore,
+			photosAfter,
 		})
 		setQueued(true)
 	}
@@ -474,19 +502,34 @@ export default function FieldUpdate({
 				</div>
 
 				<div>
-					<Label htmlFor="photos">{t("docs_field.photos_label")}</Label>
+					<Label>{t("docs_field.photos_before_label")}</Label>
+					<p className="text-xs text-slate-500 mb-1">
+						{t("docs_field.photos_before_hint")}
+					</p>
 					<input
-						id="photos"
-						name="photos"
+						id="photosBefore"
+						name="photosBefore"
 						type="file"
 						accept="image/*"
 						multiple
 						capture="environment"
 						className="block w-full text-sm text-slate-500 mt-1"
 					/>
-					<p className="text-xs text-slate-400 mt-1">
-						{t("docs_field.photos_hint")}
+				</div>
+				<div>
+					<Label>{t("docs_field.photos_after_label")}</Label>
+					<p className="text-xs text-slate-500 mb-1">
+						{t("docs_field.photos_after_hint")}
 					</p>
+					<input
+						id="photosAfter"
+						name="photosAfter"
+						type="file"
+						accept="image/*"
+						multiple
+						capture="environment"
+						className="block w-full text-sm text-slate-500 mt-1"
+					/>
 				</div>
 
 				<div className="border rounded-lg p-3 space-y-2">

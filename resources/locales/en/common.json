@@ -806,6 +806,9 @@
 		"item_placeholder": "Select product…",
 		"add_item": "+ Add Item",
 		"submit": "Submit Restock Request",
+		"save_offline": "Save for later sync",
+		"queued_message": "Restock request saved. It will sync automatically when you reconnect.",
+		"offline_submit_notice": "You are offline. Tap Save for later sync and the request will upload when you have signal.",
 		"errors": {
 			"no_van": "You must be assigned to a van to request restock.",
 			"warehouse_required": "Please select a warehouse.",
@@ -833,6 +836,9 @@
 		"notes_label": "Notes",
 		"notes_placeholder": "Optional details about the install…",
 		"submit": "Log Install",
+		"save_offline": "Save for later sync",
+		"queued_message": "Install log saved. It will sync automatically when you reconnect.",
+		"offline_submit_notice": "You are offline. Tap Save for later sync and the log will upload when you have signal.",
 		"errors": {
 			"no_van": "You must be assigned to a van to log an install.",
 			"missing_fields": "Claro reference, service type, and date are required.",

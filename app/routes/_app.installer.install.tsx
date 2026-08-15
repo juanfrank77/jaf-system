@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { data, Form, redirect } from "react-router"
+import { data, Form, redirect, useSubmit } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
@@ -13,7 +13,9 @@ import {
 	SelectValue,
 } from "~/components/ui/select"
 import { Textarea } from "~/components/ui/textarea"
+import { useOnline } from "~/hooks/use-online"
 import { db } from "~/lib/db.server"
+import { queueInstallerInstall } from "~/lib/installer-sync"
 import { requireRole } from "~/lib/permissions.server"
 import { computeVanInventory } from "~/lib/van-inventory"
 import type { Route } from "./+types/_app.installer.install"
@@ -101,6 +103,12 @@ export async function action({ request }: Route.ActionArgs) {
 		)
 	}
 
+	if (request.headers.get("X-Offline-Sync") === "true") {
+		if (!van.active) {
+			return data({ conflict: "VAN_INACTIVE" }, { status: 409 })
+		}
+	}
+
 	await db.$transaction(async (tx) => {
 		await tx.$queryRaw`SELECT id FROM "Van" WHERE id = ${van.id} FOR UPDATE`
 		const transactions = await tx.$queryRaw<
@@ -177,6 +185,9 @@ export default function LogInstall({
 		actionData && "errorKey" in actionData
 			? (actionData.errorKey as string)
 			: null
+	const online = useOnline()
+	const submit = useSubmit()
+	const [queued, setQueued] = useState(false)
 
 	const [lines, setLines] = useState<
 		{ _key: string; serviceCodeId: string; qty: number }[]
@@ -203,7 +214,51 @@ export default function LogInstall({
 
 			{errorKey && <p className="text-sm text-red-600">{t(errorKey as any)}</p>}
 
-			<Form method="post" className="space-y-4">
+			{queued && (
+				<div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
+					{t("installer_install.queued_message")}
+				</div>
+			)}
+
+			{!online && !queued && (
+				<div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+					{t("installer_install.offline_submit_notice")}
+				</div>
+			)}
+
+			<Form
+				method="post"
+				className="space-y-4"
+				onSubmit={(e) => {
+					if (!online) {
+						e.preventDefault()
+						const form = e.currentTarget
+						const formData = new FormData(form)
+						const claroJobReference =
+							(formData.get("claroJobReference") as string)?.trim() || ""
+						const serviceType = (formData.get("serviceType") as string) || ""
+						const dateRaw = formData.get("date") as string
+						const itemsRaw = formData.get("items") as string
+						const notes =
+							(formData.get("notes") as string | null)?.trim() || null
+						let items: { serviceCodeId: string; qty: number }[] = []
+						try {
+							items = JSON.parse(itemsRaw).filter(
+								(i: any) => i.serviceCodeId && i.qty > 0,
+							)
+						} catch {
+							// ignore, validation happens on sync
+						}
+						queueInstallerInstall({
+							claroJobReference,
+							serviceType,
+							date: dateRaw,
+							items,
+							notes,
+						}).then(() => setQueued(true))
+					}
+				}}
+			>
 				<div>
 					<Label htmlFor="claroJobReference">
 						{t("installer_install.claro_ref_label")}
@@ -327,7 +382,9 @@ export default function LogInstall({
 				</div>
 
 				<Button type="submit" className="w-full">
-					{t("installer_install.submit")}
+					{online
+						? t("installer_install.submit")
+						: t("installer_install.save_offline")}
 				</Button>
 			</Form>
 		</div>

@@ -5,8 +5,8 @@ const QUEUE_STORE = "queue"
 
 export type QueuedAction = {
 	id: string
-	docId: string
-	action: "FIELD_UPDATE"
+	docId?: string
+	action: "FIELD_UPDATE" | "INSTALLER_RESTOCK" | "INSTALLER_INSTALL"
 	payload: Record<string, unknown>
 	createdAt: string
 }
@@ -128,8 +128,13 @@ export async function removeQueuedAction(id: string): Promise<void> {
 }
 
 export type SyncConflict = {
-	type: "REASSIGNED" | "CANCELLED"
-	docId: string
+	type:
+		| "REASSIGNED"
+		| "CANCELLED"
+		| "VAN_INACTIVE"
+		| "WAREHOUSE_INACTIVE"
+		| "INVALID_STATE"
+	docId?: string
 	message: string
 }
 

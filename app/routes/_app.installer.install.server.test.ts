@@ -180,4 +180,39 @@ describe("POST /installer/install", () => {
 			"installer_install.errors.invalid_service_codes",
 		)
 	})
+
+	it("returns 409 when van is inactive during offline sync", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "installer-1", role: "INSTALLER" },
+			session: {},
+		} as any)
+		vi.mocked(db.van.findUnique).mockResolvedValue({
+			id: "van-1",
+			name: "Van 1",
+			active: false,
+		} as any)
+		vi.mocked(db.serviceCode.findMany).mockResolvedValue([
+			{ id: "sc-1" },
+		] as any)
+
+		const form = new FormData()
+		form.set("claroJobReference", "12345678")
+		form.set("serviceType", "WIFI")
+		form.set("date", "2026-08-13")
+		form.set("items", JSON.stringify([{ serviceCodeId: "sc-1", qty: 2 }]))
+
+		const request = new Request("http://localhost/installer/install", {
+			method: "POST",
+			body: form,
+			headers: { "X-Offline-Sync": "true" },
+		})
+
+		const result = (await action({
+			request,
+			params: {},
+		} as any)) as { init: { status: number }; data: { conflict: string } }
+
+		expect(result.init.status).toBe(409)
+		expect(result.data).toEqual({ conflict: "VAN_INACTIVE" })
+	})
 })

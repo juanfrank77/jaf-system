@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { data, Form, redirect } from "react-router"
+import { data, Form, redirect, useSubmit } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
@@ -12,7 +12,9 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "~/components/ui/select"
+import { useOnline } from "~/hooks/use-online"
 import { db } from "~/lib/db.server"
+import { queueInstallerRestock } from "~/lib/installer-sync"
 import { requireRole } from "~/lib/permissions.server"
 import { evaluateRestockApproval, type StockLevel } from "~/lib/van-inventory"
 import type { Route } from "./+types/_app.installer.restock"
@@ -92,6 +94,18 @@ export async function action({ request }: Route.ActionArgs) {
 			{ errorKey: "installer_restock.errors.items_required" },
 			{ status: 400 },
 		)
+	}
+
+	if (request.headers.get("X-Offline-Sync") === "true") {
+		if (!van.active) {
+			return data({ conflict: "VAN_INACTIVE" }, { status: 409 })
+		}
+		const warehouse = await db.warehouse.findUnique({
+			where: { id: warehouseId },
+		})
+		if (!warehouse || !warehouse.active) {
+			return data({ conflict: "WAREHOUSE_INACTIVE" }, { status: 409 })
+		}
 	}
 
 	const transactions = await db.$queryRaw<
@@ -177,6 +191,9 @@ export default function RequestRestock({
 		actionData && "errorKey" in actionData
 			? (actionData.errorKey as string)
 			: null
+	const online = useOnline()
+	const submit = useSubmit()
+	const [queued, setQueued] = useState(false)
 
 	const [lines, setLines] = useState<
 		{ _key: string; serviceCodeId: string; qty: number }[]
@@ -203,7 +220,43 @@ export default function RequestRestock({
 
 			{errorKey && <p className="text-sm text-red-600">{t(errorKey as any)}</p>}
 
-			<Form method="post" className="space-y-4">
+			{queued && (
+				<div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
+					{t("installer_restock.queued_message")}
+				</div>
+			)}
+
+			{!online && !queued && (
+				<div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+					{t("installer_restock.offline_submit_notice")}
+				</div>
+			)}
+
+			<Form
+				method="post"
+				className="space-y-4"
+				onSubmit={(e) => {
+					if (!online) {
+						e.preventDefault()
+						const form = e.currentTarget
+						const formData = new FormData(form)
+						const warehouseId =
+							(formData.get("warehouseId") as string | null)?.trim() || ""
+						const itemsRaw = formData.get("items") as string
+						let items: { serviceCodeId: string; qty: number }[] = []
+						try {
+							items = JSON.parse(itemsRaw).filter(
+								(i: any) => i.serviceCodeId && i.qty > 0,
+							)
+						} catch {
+							// ignore, validation happens on sync
+						}
+						queueInstallerRestock({ warehouseId, items }).then(() =>
+							setQueued(true),
+						)
+					}
+				}}
+			>
 				<div>
 					<Label htmlFor="warehouseId">
 						{t("installer_restock.warehouse_label")}
@@ -290,7 +343,9 @@ export default function RequestRestock({
 				</div>
 
 				<Button type="submit" className="w-full">
-					{t("installer_restock.submit")}
+					{online
+						? t("installer_restock.submit")
+						: t("installer_restock.save_offline")}
 				</Button>
 			</Form>
 		</div>

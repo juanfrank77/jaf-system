@@ -43,6 +43,13 @@ export async function syncFieldUpdate(
 		}
 	}
 
+	if (!action.docId) {
+		return {
+			ok: false,
+			error: "Missing docId for field update sync",
+		}
+	}
+
 	// Conflict rule: reassignment blocks stale submit. We approximate by checking
 	// whether the cached job's assigned crew ids are still present server-side.
 	// The server will also enforce this, but we pre-check for a clear message.

@@ -5,6 +5,9 @@ vi.mock("~/lib/db.server", () => ({
 		van: {
 			findUnique: vi.fn(),
 		},
+		warehouse: {
+			findUnique: vi.fn(),
+		},
 		serviceCode: {
 			findMany: vi.fn(),
 		},
@@ -151,5 +154,75 @@ describe("POST /installer/restock", () => {
 		expect((result as any).data.errorKey).toBe(
 			"installer_restock.errors.invalid_service_codes",
 		)
+	})
+
+	it("returns 409 when van is inactive during offline sync", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "installer-1", role: "INSTALLER" },
+			session: {},
+		} as any)
+		vi.mocked(db.van.findUnique).mockResolvedValue({
+			id: "van-1",
+			name: "Van 1",
+			active: false,
+		} as any)
+		vi.mocked(db.serviceCode.findMany).mockResolvedValue([
+			{ id: "sc-1" },
+		] as any)
+
+		const form = new FormData()
+		form.set("warehouseId", "wh-1")
+		form.set("items", JSON.stringify([{ serviceCodeId: "sc-1", qty: 3 }]))
+
+		const request = new Request("http://localhost/installer/restock", {
+			method: "POST",
+			body: form,
+			headers: { "X-Offline-Sync": "true" },
+		})
+
+		const result = (await action({
+			request,
+			params: {},
+		} as any)) as { init: { status: number }; data: { conflict: string } }
+
+		expect(result.init.status).toBe(409)
+		expect(result.data).toEqual({ conflict: "VAN_INACTIVE" })
+	})
+
+	it("returns 409 when warehouse is inactive during offline sync", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "installer-1", role: "INSTALLER" },
+			session: {},
+		} as any)
+		vi.mocked(db.van.findUnique).mockResolvedValue({
+			id: "van-1",
+			name: "Van 1",
+			active: true,
+		} as any)
+		vi.mocked(db.warehouse.findUnique).mockResolvedValue({
+			id: "wh-1",
+			active: false,
+		} as any)
+		vi.mocked(db.serviceCode.findMany).mockResolvedValue([
+			{ id: "sc-1" },
+		] as any)
+
+		const form = new FormData()
+		form.set("warehouseId", "wh-1")
+		form.set("items", JSON.stringify([{ serviceCodeId: "sc-1", qty: 3 }]))
+
+		const request = new Request("http://localhost/installer/restock", {
+			method: "POST",
+			body: form,
+			headers: { "X-Offline-Sync": "true" },
+		})
+
+		const result = (await action({
+			request,
+			params: {},
+		} as any)) as { init: { status: number }; data: { conflict: string } }
+
+		expect(result.init.status).toBe(409)
+		expect(result.data).toEqual({ conflict: "WAREHOUSE_INACTIVE" })
 	})
 })

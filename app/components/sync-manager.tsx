@@ -1,6 +1,7 @@
 import { useEffect } from "react"
 import { useOnline } from "~/hooks/use-online"
 import { syncFieldUpdate } from "~/lib/field-sync"
+import { syncInstallerActions } from "~/lib/installer-sync"
 import {
 	type CachedJob,
 	getCachedJob,
@@ -15,24 +16,36 @@ export function SyncManager() {
 		if (!online || typeof window === "undefined") return
 
 		async function runSync() {
-			await syncQueuedActions({
-				async syncOne(action) {
-					const cached = await getCachedJob(action.docId)
-					if (!cached) {
-						// We don't have a cached copy to check conflicts; attempt anyway.
-						return syncFieldUpdate(action, {
-							id: action.docId,
-							controlNumber: "",
-							status: "SIGNED",
-							jobType: "",
-							jobAddressEstimated: "",
-							assignedCrewIds: [],
-							updatedAt: new Date().toISOString(),
-						} satisfies CachedJob)
-					}
-					return syncFieldUpdate(action, cached)
-				},
-			})
+			const actions = await getQueuedActions()
+			const hasFieldUpdates = actions.some((a) => a.action === "FIELD_UPDATE")
+			const hasInstallerActions = actions.some(
+				(a) =>
+					a.action === "INSTALLER_RESTOCK" || a.action === "INSTALLER_INSTALL",
+			)
+
+			if (hasFieldUpdates) {
+				await syncQueuedActions({
+					async syncOne(action) {
+						const cached = await getCachedJob(action.docId ?? "")
+						if (!cached) {
+							return syncFieldUpdate(action, {
+								id: action.docId ?? "",
+								controlNumber: "",
+								status: "SIGNED",
+								jobType: "",
+								jobAddressEstimated: "",
+								assignedCrewIds: [],
+								updatedAt: new Date().toISOString(),
+							} satisfies CachedJob)
+						}
+						return syncFieldUpdate(action, cached)
+					},
+				})
+			}
+
+			if (hasInstallerActions) {
+				await syncInstallerActions()
+			}
 		}
 
 		runSync()

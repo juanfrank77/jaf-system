@@ -806,6 +806,9 @@
 		"item_placeholder": "Selecciona un producto…",
 		"add_item": "+ Agregar artículo",
 		"submit": "Enviar solicitud de reabastecimiento",
+		"save_offline": "Guardar para sincronizar después",
+		"queued_message": "Solicitud de reabastecimiento guardada. Se sincronizará automáticamente al reconectar.",
+		"offline_submit_notice": "Estás sin conexión. Toca Guardar para sincronizar después y la solicitud se subirá cuando tengas señal.",
 		"errors": {
 			"no_van": "Debes estar asignado a una van para solicitar reabastecimiento.",
 			"warehouse_required": "Por favor selecciona un almacén.",
@@ -833,6 +836,9 @@
 		"notes_label": "Notas",
 		"notes_placeholder": "Detalles opcionales sobre la instalación…",
 		"submit": "Registrar instalación",
+		"save_offline": "Guardar para sincronizar después",
+		"queued_message": "Registro de instalación guardado. Se sincronizará automáticamente al reconectar.",
+		"offline_submit_notice": "Estás sin conexión. Toca Guardar para sincronizar después y el registro se subirá cuando tengas señal.",
 		"errors": {
 			"no_van": "Debes estar asignado a una van para registrar una instalación.",
 			"missing_fields": "Se requieren referencia Claro, tipo de servicio y fecha.",

@@ -256,6 +256,7 @@ model JafInvoice {
 
   @@index([status, lcGeneratedAt])
   @@index([status, financeVerifiedAt, pbccRequestSentAt, advanceReceivedAt])
+  @@index([status, createdAt])
   @@index([createdAt])
   @@index([assignedCrewIds(ops: ArrayOps)], type: Gin)
   @@index([avisoNumber(ops: raw("gin_trgm_ops"))], type: Gin)
@@ -310,6 +311,7 @@ model PoLink {
   doc              JafInvoice @relation(fields: [docId], references: [id])
   claroPONumber    String
   acceptanceNumber String?
+  poDate           DateTime?
   amount           Decimal?
   createdAt        DateTime @default(now())
 

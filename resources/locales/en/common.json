@@ -290,6 +290,9 @@
 		"aviso_number_confirm_label": "Claro Aviso # (confirm or add)",
 		"notes_for_finance_label": "Notes for Lissette",
 		"approve": "Approve",
+		"send_to_finance_heading": "Send to Finance",
+		"send_to_finance_hint": "This will notify the Finance team to begin verification and billing.",
+		"send_to_finance": "Send to Finance",
 		"upload_pdf_heading": "Upload Claro Work Order PDF",
 		"upload_pdf_hint": "After creating the work order in Claro's portal, download the PDF and upload it here.",
 		"upload_pdf_submit": "Upload Claro PDF",
@@ -672,6 +675,7 @@
 			"status_all": "All statuses",
 			"status_placeholder": "All statuses",
 			"crew_placeholder": "All crews",
+			"job_type_placeholder": "All job types",
 			"search_placeholder": "Search by Aviso # or address…",
 			"clear_all": "Clear filters"
 		}

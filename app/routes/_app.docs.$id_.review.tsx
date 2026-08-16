@@ -62,9 +62,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 		const avisoNumber =
 			(form.get("avisoNumber") as string | null)?.trim() || doc.avisoNumber
 		const claroNotes = (form.get("claroNotes") as string | null)?.trim() || null
-		const finance = await db.user.findMany({
-			where: { role: "FINANCE", active: true },
-		})
 		await db.$transaction([
 			db.jafInvoice.update({
 				where: { id: params.id },
@@ -85,12 +82,36 @@ export async function action({ request, params }: Route.ActionArgs) {
 					},
 				},
 			}),
+		] as any)
+	}
+
+	if (intent === "send_to_finance") {
+		if (doc.status !== "SUPERVISOR_APPROVED")
+			throw redirect(`/docs/${params.id}`)
+		const existing = await db.auditTrail.findFirst({
+			where: { docId: params.id, action: "SENT_TO_FINANCE" },
+			select: { id: true },
+		})
+		if (existing) throw redirect(`/docs/${params.id}`)
+
+		const finance = await db.user.findMany({
+			where: { role: "FINANCE", active: true },
+		})
+		await db.$transaction([
+			db.auditTrail.create({
+				data: {
+					docId: params.id,
+					userId: user.id,
+					action: "SENT_TO_FINANCE",
+					diffJson: { sentAt: new Date().toISOString() },
+				},
+			}),
 			...finance.map((f) =>
 				db.notification.create({
 					data: {
 						userId: f.id,
 						docId: params.id,
-						message: `Job ${doc.controlNumber} has been supervisor approved and is ready for finance review.`,
+						message: `Job ${doc.controlNumber} has been sent to finance for review.`,
 					},
 				}),
 			),
@@ -529,7 +550,7 @@ export default function ReviewDoc({
 				)}
 			</div>
 
-			{!isApproved && (
+			{doc.status === "FIELD_UPDATED" && (
 				<Form
 					method="post"
 					className="space-y-3 bg-white border rounded-lg p-4"
@@ -556,6 +577,24 @@ export default function ReviewDoc({
 					<input type="hidden" name="intent" value="approve" />
 					<Button type="submit" className="w-full">
 						{t("docs_review.approve")}
+					</Button>
+				</Form>
+			)}
+
+			{doc.status === "SUPERVISOR_APPROVED" && (
+				<Form
+					method="post"
+					className="space-y-3 bg-white border rounded-lg p-4"
+				>
+					<h2 className="font-medium text-sm">
+						{t("docs_review.send_to_finance_heading")}
+					</h2>
+					<p className="text-xs text-slate-500">
+						{t("docs_review.send_to_finance_hint")}
+					</p>
+					<input type="hidden" name="intent" value="send_to_finance" />
+					<Button type="submit" className="w-full">
+						{t("docs_review.send_to_finance")}
 					</Button>
 				</Form>
 			)}

@@ -290,6 +290,9 @@
 		"aviso_number_confirm_label": "# de aviso Claro (confirmar o agregar)",
 		"notes_for_finance_label": "Notas para Lissette",
 		"approve": "Aprobar",
+		"send_to_finance_heading": "Enviar a Finanzas",
+		"send_to_finance_hint": "Esto notificará al equipo de Finanzas para comenzar la verificación y facturación.",
+		"send_to_finance": "Enviar a Finanzas",
 		"upload_pdf_heading": "Cargar PDF de orden de trabajo Claro",
 		"upload_pdf_hint": "Después de crear la orden de trabajo en el portal de Claro, descarga el PDF y súbelo aquí.",
 		"upload_pdf_submit": "Cargar PDF de Claro",
@@ -672,6 +675,7 @@
 			"status_all": "Todos los estados",
 			"status_placeholder": "Todos los estados",
 			"crew_placeholder": "Todas las cuadrillas",
+			"job_type_placeholder": "Todos los tipos de trabajo",
 			"search_placeholder": "Buscar por Aviso # o dirección…",
 			"clear_all": "Limpiar filtros"
 		}

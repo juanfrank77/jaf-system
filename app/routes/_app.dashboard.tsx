@@ -29,16 +29,24 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const url = new URL(request.url)
 	const statusFilter = url.searchParams.get("status")
 	const crewFilter = url.searchParams.get("crew")
+	const jobTypeFilter = url.searchParams.get("jobType")
 	const searchFilter = url.searchParams.get("search")?.trim() || ""
 
 	const selectedStatus = statusFilter ? (statusFilter as DocStatus) : null
 	const selectedCrew = crewFilter || null
+	const selectedJobType = jobTypeFilter || null
 
 	const crewOptions = await db.user.findMany({
 		where: { role: "CREW", active: true },
 		orderBy: { name: "asc" },
 		take: 100,
 		select: { id: true, name: true },
+	})
+
+	const jobTypeOptions = await db.jafInvoice.findMany({
+		select: { jobType: true },
+		distinct: ["jobType"],
+		orderBy: { jobType: "asc" },
 	})
 
 	const baseWhere = buildBaseWhere(user.role, user.id)
@@ -49,6 +57,9 @@ export async function loader({ request }: Route.LoaderArgs) {
 	}
 	if (selectedCrew && user.role === "SUPERVISOR") {
 		where.assignedCrewIds = { has: selectedCrew }
+	}
+	if (selectedJobType) {
+		where.jobType = selectedJobType
 	}
 	if (searchFilter) {
 		where.OR = [
@@ -192,8 +203,12 @@ export async function loader({ request }: Route.LoaderArgs) {
 		pendingReviewDocs,
 		sentBackDocs,
 		crewOptions,
+		jobTypeOptions: jobTypeOptions
+			.map((o) => o.jobType)
+			.filter(Boolean) as string[],
 		selectedStatus,
 		selectedCrew,
+		selectedJobType,
 		searchFilter,
 		warehousePreppedDocs,
 		warehouseMissingDocs,
@@ -214,8 +229,10 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 		pendingReviewDocs,
 		sentBackDocs,
 		crewOptions,
+		jobTypeOptions,
 		selectedStatus,
 		selectedCrew,
+		selectedJobType,
 		searchFilter,
 		warehousePreppedDocs,
 		warehouseMissingDocs,
@@ -265,8 +282,10 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 			pendingReviewDocs={pendingReviewDocs}
 			sentBackDocs={sentBackDocs}
 			crewOptions={crewOptions}
+			jobTypeOptions={jobTypeOptions}
 			selectedStatus={selectedStatus}
 			selectedCrew={selectedCrew}
+			selectedJobType={selectedJobType}
 			searchFilter={searchFilter}
 			warehousePreppedDocs={warehousePreppedDocs}
 			warehouseMissingDocs={warehouseMissingDocs}

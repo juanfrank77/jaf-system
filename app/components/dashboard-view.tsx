@@ -45,6 +45,8 @@ type DashboardDocRow = {
 
 type CrewOption = { id: string; name: string }
 
+type JobTypeOption = string
+
 type RestockRequestRow = {
 	id: string
 	status: string
@@ -98,8 +100,10 @@ function DashboardView({
 	pendingReviewDocs = [],
 	sentBackDocs = [],
 	crewOptions = [],
+	jobTypeOptions = [],
 	selectedStatus = null,
 	selectedCrew = null,
+	selectedJobType = null,
 	searchFilter = "",
 	warehousePreppedDocs = [],
 	warehouseMissingDocs = [],
@@ -116,8 +120,10 @@ function DashboardView({
 	pendingReviewDocs?: DashboardDocRow[]
 	sentBackDocs?: DashboardDocRow[]
 	crewOptions?: CrewOption[]
+	jobTypeOptions?: JobTypeOption[]
 	selectedStatus?: string | null
 	selectedCrew?: string | null
+	selectedJobType?: string | null
 	searchFilter?: string
 	warehousePreppedDocs?: DashboardDocRow[]
 	warehouseMissingDocs?: DashboardDocRow[]
@@ -131,7 +137,8 @@ function DashboardView({
 	const { t } = useTranslation()
 	const location = useLocation()
 
-	const hasActiveFilters = !!selectedStatus || !!selectedCrew || !!searchFilter
+	const hasActiveFilters =
+		!!selectedStatus || !!selectedCrew || !!selectedJobType || !!searchFilter
 
 	const latestSendBack = (doc: DashboardDocRow): SendBackEntry | null => {
 		const raw = doc.sendBackHistory
@@ -219,9 +226,34 @@ function DashboardView({
 						</SelectContent>
 					</Select>
 
+					<Select
+						value={selectedJobType || ""}
+						onValueChange={(v) => {
+							const params = new URLSearchParams(location.search)
+							if (v) params.set("jobType", v)
+							else params.delete("jobType")
+							const query = params.toString()
+							window.location.href = `${location.pathname}${query ? `?${query}` : ""}`
+						}}
+						disabled={!(jobTypeOptions && jobTypeOptions.length > 0)}
+					>
+						<SelectTrigger className="w-full">
+							<SelectValue
+								placeholder={t("dashboard.filter.job_type_placeholder")}
+							/>
+						</SelectTrigger>
+						<SelectContent>
+							{(jobTypeOptions || []).map((jt) => (
+								<SelectItem key={jt} value={jt}>
+									{jt}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+
 					<form
 						method="get"
-						className="relative sm:col-span-2"
+						className="relative"
 						onSubmit={(e) => {
 							e.preventDefault()
 							const formData = new FormData(e.currentTarget)

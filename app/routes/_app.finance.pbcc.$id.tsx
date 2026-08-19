@@ -5,6 +5,7 @@ import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Button } from "~/components/ui/button"
 import { db } from "~/lib/db.server"
+import { sendInternalEmail } from "~/lib/email.server"
 import {
 	computeFinanceStage,
 	financeLineItems,
@@ -13,8 +14,9 @@ import {
 	isMissingClaroPdf,
 } from "~/lib/finance-pipeline.server"
 import { generatePbccRequestPdf } from "~/lib/pdf/pbcc-request.server"
+import { isTerminalStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
-import { getIvuRate } from "~/lib/system-settings.server"
+import { getIvuRate, getLcPbccAdvanceRate } from "~/lib/system-settings.server"
 import { formatMoney, toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.finance.pbcc.$id"
 
@@ -30,9 +32,20 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
-		include: { supervisor: true, poLinks: true },
+		include: {
+			supervisor: true,
+			poLinks: true,
+			paymentRecords: { select: { type: true } },
+		},
 	})
-	const stage = computeFinanceStage(doc, doc.poLinks.length > 0)
+	if (isTerminalStatus(doc.status)) {
+		throw redirect("/finance/receivables")
+	}
+	const stage = computeFinanceStage(
+		doc,
+		doc.poLinks.length > 0,
+		doc.paymentRecords,
+	)
 	if (stage !== "PBCC_REQUEST_PENDING") {
 		throw redirect(`/finance/receivables`)
 	}
@@ -43,18 +56,36 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			{ ...c, unitPrice: toNumberPrice(c.unitPrice) },
 		]),
 	)
-	const ivuRate = await getIvuRate()
+	const [ivuRate, lcPbccAdvanceRate] = await Promise.all([
+		getIvuRate(),
+		getLcPbccAdvanceRate(),
+	])
 	const amount = invoiceTotalUsed(doc, codeMap, ivuRate)
-	return { doc, user, serviceCodes, amount, ivuRate }
+	return { doc, user, serviceCodes, amount, ivuRate, lcPbccAdvanceRate }
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
 	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
-		include: { supervisor: true, poLinks: true },
+		include: {
+			supervisor: true,
+			poLinks: true,
+			paymentRecords: { select: { type: true } },
+		},
 	})
-	const stage = computeFinanceStage(doc, doc.poLinks.length > 0)
+	if (isTerminalStatus(doc.status)) {
+		return { errorKey: "finance_pbcc.errors.terminal_status" }
+	}
+	const form = await request.formData()
+	const intent = form.get("intent")
+	if (intent !== "generate_pbcc")
+		return { errorKey: "finance_pbcc.errors.unknown_intent" }
+	const stage = computeFinanceStage(
+		doc,
+		doc.poLinks.length > 0,
+		doc.paymentRecords,
+	)
 	if (stage !== "PBCC_REQUEST_PENDING") {
 		throw redirect(`/finance/receivables`)
 	}
@@ -64,7 +95,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 	const serviceCodes = await db.serviceCode.findMany()
 	const codeMap = Object.fromEntries(serviceCodes.map((c) => [c.id, c]))
-	const ivuRate = await getIvuRate()
+	const [ivuRate, lcPbccAdvanceRate] = await Promise.all([
+		getIvuRate(),
+		getLcPbccAdvanceRate(),
+	])
 	const lineItems = financeLineItems(doc, codeMap)
 
 	const uploadDir = process.env.UPLOAD_DIR || "/tmp/jaf/uploads"
@@ -88,6 +122,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 		ivuRate,
 		supervisorName: doc.supervisor?.name ?? "",
 		requestDate: today,
+		lcPbccAdvanceRate,
 	})
 
 	const localPath = path.join(pbccDir, `${params.id}-pbcc-request.pdf`)
@@ -95,6 +130,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 	const comptrollers = await db.user.findMany({
 		where: { role: "COMPTROLLER", active: true },
+		select: { id: true, email: true },
 	})
 
 	await db.$transaction([
@@ -124,6 +160,13 @@ export async function action({ request, params }: Route.ActionArgs) {
 			}),
 		),
 	])
+	await sendInternalEmail({
+		docId: params.id,
+		actorId: user.id,
+		recipients: comptrollers.map((recipient) => recipient.email),
+		subject: `PBCC payment request generated: ${doc.controlNumber}`,
+		context: "PBCC_REQUEST_GENERATED",
+	})
 
 	return new Response(new Uint8Array(pdfBytes), {
 		headers: {
@@ -134,7 +177,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 }
 
 export default function PbccRequest({ loaderData }: Route.ComponentProps) {
-	const { doc, amount, ivuRate } = loaderData
+	const { doc, amount, ivuRate, lcPbccAdvanceRate } = loaderData
 	const { t } = useTranslation()
 
 	return (
@@ -162,8 +205,13 @@ export default function PbccRequest({ loaderData }: Route.ComponentProps) {
 					{formatMoney(amount)}
 				</p>
 				<p>
-					<span className="text-slate-500">{t("finance_pbcc.advance")}:</span>{" "}
-					{formatMoney(amount * 0.8)}
+					<span className="text-slate-500">
+						{t("finance_pbcc.advance", {
+							rate: (lcPbccAdvanceRate * 100).toFixed(1),
+						})}
+						:
+					</span>{" "}
+					{formatMoney(amount * lcPbccAdvanceRate)}
 				</p>
 				<p className="text-xs text-slate-400">
 					{t("finance_pbcc.ivu_rate", { rate: (ivuRate * 100).toFixed(1) })}
@@ -173,6 +221,7 @@ export default function PbccRequest({ loaderData }: Route.ComponentProps) {
 			<p className="text-sm text-muted-foreground">{t("finance_pbcc.hint")}</p>
 
 			<Form method="post">
+				<input type="hidden" name="intent" value="generate_pbcc" />
 				<Button type="submit">{t("finance_pbcc.generate_and_download")}</Button>
 			</Form>
 		</div>

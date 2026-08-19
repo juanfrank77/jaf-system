@@ -7,6 +7,7 @@ import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
+import { sendInternalEmail } from "~/lib/email.server"
 import {
 	checkAmountTolerance,
 	computeFinanceStage,
@@ -16,6 +17,7 @@ import {
 	isMissingAviso,
 	isMissingClaroPdf,
 } from "~/lib/finance-pipeline.server"
+import { isTerminalStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import { cn, formatMoney } from "~/lib/utils"
 import type { Route } from "./+types/_app.finance.verify.$id"
@@ -32,7 +34,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
-		include: { supervisor: true, poLinks: true },
+		include: {
+			supervisor: true,
+			poLinks: true,
+			paymentRecords: { select: { type: true } },
+		},
 	})
 	if (!FINANCEABLE_STATUSES.includes(doc.status)) {
 		throw redirect(`/docs/${params.id}`)
@@ -40,7 +46,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
 	const { serviceCodes, codeMap, ivuRate, tolerance } =
 		await fetchInvoiceTotalContext()
-	const stage = computeFinanceStage(doc, doc.poLinks.length > 0)
+	const stage = computeFinanceStage(
+		doc,
+		doc.poLinks.length > 0,
+		doc.paymentRecords,
+	)
 	const amount = invoiceTotalUsed(doc, codeMap, ivuRate)
 
 	return {
@@ -61,10 +71,26 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
-		include: { supervisor: true },
+		include: {
+			supervisor: true,
+			poLinks: true,
+			paymentRecords: { select: { type: true } },
+		},
 	})
+	if (isTerminalStatus(doc.status)) {
+		return { errorKey: "finance_verify.errors.terminal_status" }
+	}
 	const form = await request.formData()
 	const intent = form.get("intent") as string
+	if (intent !== "verify" && intent !== "send_back")
+		return { errorKey: "finance_verify.errors.unknown_intent" }
+	const stage = computeFinanceStage(
+		doc,
+		doc.poLinks.length > 0,
+		doc.paymentRecords,
+	)
+	if (stage !== "TO_VERIFY")
+		return { errorKey: "finance_verify.errors.invalid_stage" }
 
 	if (intent === "verify") {
 		if (isMissingAviso(doc) || isMissingClaroPdf(doc)) {
@@ -158,6 +184,13 @@ export async function action({ request, params }: Route.ActionArgs) {
 				},
 			}),
 		])
+		await sendInternalEmail({
+			docId: params.id,
+			actorId: user.id,
+			recipients: doc.supervisor?.email ? [doc.supervisor.email] : [],
+			subject: `Finance returned job ${doc.controlNumber}`,
+			context: "FINANCE_SEND_BACK",
+		})
 		throw redirect(`/finance/receivables`)
 	}
 
@@ -199,7 +232,11 @@ export default function FinanceVerify({
 		? `/files/jaf-invoices/${doc.id}-jaf-invoice.pdf`
 		: null
 
-	const cannotVerify = missingAviso || missingClaroPdf
+	const cannotVerify =
+		missingAviso ||
+		missingClaroPdf ||
+		stage !== "TO_VERIFY" ||
+		doc.status === "LC_REQUEST_GENERATED"
 
 	return (
 		<div className="space-y-5">
@@ -346,65 +383,68 @@ export default function FinanceVerify({
 				</div>
 			)}
 
-			<div className="flex flex-wrap items-start gap-4">
-				<Form method="post" className="space-y-3">
-					<input type="hidden" name="intent" value="verify" />
-					<div>
-						<Label htmlFor="avisoAmount">
-							{t("finance_verify.aviso_amount_label")}
-						</Label>
-						<Input
-							id="avisoAmount"
-							name="avisoAmount"
-							type="number"
-							step="0.01"
-							min="0"
-							defaultValue={actionData?.avisoAmount ?? ""}
-							placeholder={t("finance_verify.aviso_amount_placeholder")}
-							className="mt-1"
-							required
-						/>
-						<p className="text-xs text-slate-500 mt-1">
-							{t("finance_verify.aviso_amount_hint")}
-						</p>
-					</div>
-					<div>
+			{stage === "TO_VERIFY" && doc.status !== "LC_REQUEST_GENERATED" && (
+				<div className="flex flex-wrap items-start gap-4">
+					<Form method="post" className="space-y-3">
+						<input type="hidden" name="intent" value="verify" />
+						<div>
+							<Label htmlFor="avisoAmount">
+								{t("finance_verify.aviso_amount_label")}
+							</Label>
+							<Input
+								id="avisoAmount"
+								name="avisoAmount"
+								type="number"
+								step="0.01"
+								min="0"
+								defaultValue={actionData?.avisoAmount ?? ""}
+								placeholder={t("finance_verify.aviso_amount_placeholder")}
+								className="mt-1"
+								required
+							/>
+							<p className="text-xs text-slate-500 mt-1">
+								{t("finance_verify.aviso_amount_hint")}
+							</p>
+						</div>
 						<Textarea
 							name="note"
 							rows={2}
 							placeholder={t("finance_verify.verify_note_placeholder")}
 						/>
-					</div>
-					<Button type="submit" disabled={cannotVerify}>
-						{t("finance_verify.mark_verified")}
-					</Button>
-					{cannotVerify && (
-						<p className="text-sm text-amber-700">
-							{t("finance_verify.cannot_verify_hint")}
-						</p>
-					)}
-				</Form>
-
-				<Form method="post" className="space-y-3">
-					<input type="hidden" name="intent" value="send_back" />
-					<div>
+						<Button type="submit" disabled={cannotVerify}>
+							{t("finance_verify.mark_verified")}
+						</Button>
+						{cannotVerify && (
+							<p className="text-sm text-amber-700">
+								{t("finance_verify.cannot_verify_hint")}
+							</p>
+						)}
+					</Form>
+					<Form method="post" className="space-y-3">
+						<input type="hidden" name="intent" value="send_back" />
 						<Textarea
 							name="note"
 							rows={2}
 							required
 							placeholder={t("finance_verify.send_back_placeholder")}
 						/>
-					</div>
-					<Button type="submit" variant="outline">
-						{t("finance_verify.send_back")}
-					</Button>
-					{error?.errorKey &&
-						error.errorKey !== "finance_verify.errors.amount_mismatch" && (
-							<p className="text-sm text-red-600">{t(error.errorKey as any)}</p>
-						)}
-				</Form>
-			</div>
-
+						<Button type="submit" variant="outline">
+							{t("finance_verify.send_back")}
+						</Button>
+						{error?.errorKey &&
+							error.errorKey !== "finance_verify.errors.amount_mismatch" && (
+								<p className="text-sm text-red-600">
+									{t(error.errorKey as any)}
+								</p>
+							)}
+					</Form>
+				</div>
+			)}
+			{stage !== "TO_VERIFY" && (
+				<p className="text-sm text-muted-foreground">
+					{t("finance_verify.errors.invalid_stage")}
+				</p>
+			)}
 			<a
 				href={`/finance/receivables`}
 				className={buttonVariants({ variant: "ghost", size: "sm" })}

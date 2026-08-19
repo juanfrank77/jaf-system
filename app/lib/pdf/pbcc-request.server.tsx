@@ -70,6 +70,7 @@ export interface PbccRequestParams {
 	ivuRate: number
 	supervisorName: string
 	requestDate: string
+	lcPbccAdvanceRate: number
 }
 
 export async function generatePbccRequestPdf(
@@ -178,7 +179,8 @@ export async function generatePbccRequestPdf(
 						</View>
 						<View style={styles.totalRow}>
 							<Text style={styles.bold}>
-								PBCC Advance (80%): ${(total * 0.8).toFixed(2)}
+								PBCC Advance ({(params.lcPbccAdvanceRate * 100).toFixed(1)}%): $
+								{(total * params.lcPbccAdvanceRate).toFixed(2)}
 							</Text>
 						</View>
 					</View>

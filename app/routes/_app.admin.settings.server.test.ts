@@ -11,6 +11,8 @@ vi.mock("~/lib/system-settings.server", () => ({
 	setAgingAlertDays: vi.fn(),
 	getAvisoAmountTolerance: vi.fn(),
 	setAvisoAmountTolerance: vi.fn(),
+	getLcPbccAdvanceRate: vi.fn(),
+	setLcPbccAdvanceRate: vi.fn(),
 }))
 
 import { requireRole } from "~/lib/permissions.server"
@@ -18,9 +20,11 @@ import {
 	getAgingAlertDays,
 	getAvisoAmountTolerance,
 	getIvuRate,
+	getLcPbccAdvanceRate,
 	setAgingAlertDays,
 	setAvisoAmountTolerance,
 	setIvuRate,
+	setLcPbccAdvanceRate,
 } from "~/lib/system-settings.server"
 import { action, loader } from "./_app.admin.settings"
 
@@ -42,6 +46,7 @@ describe("GET /admin/settings", () => {
 		vi.mocked(getIvuRate).mockResolvedValue(0.115)
 		vi.mocked(getAgingAlertDays).mockResolvedValue(30)
 		vi.mocked(getAvisoAmountTolerance).mockResolvedValue(0.01)
+		vi.mocked(getLcPbccAdvanceRate).mockResolvedValue(0.8)
 
 		const result = await loader({
 			request: new Request("http://localhost/admin/settings"),
@@ -52,6 +57,7 @@ describe("GET /admin/settings", () => {
 			ivuRate: 0.115,
 			agingAlertDays: 30,
 			avisoAmountTolerance: 0.01,
+			lcPbccAdvanceRate: 0.8,
 		})
 	})
 })
@@ -175,5 +181,38 @@ describe("POST /admin/settings", () => {
 			errorKey: "admin_settings.errors.invalid_tolerance",
 		})
 		expect(setAvisoAmountTolerance).not.toHaveBeenCalled()
+	})
+	it("updates LC/PBCC advance rate", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "admin-1" },
+			session: {},
+		} as any)
+		const form = new FormData()
+		form.set("intent", "lc_pbcc_advance")
+		form.set("lc_pbcc_advance_rate", "0.75")
+		const result = await action({
+			request: formRequest(form),
+			params: {},
+		} as any)
+		expect(setLcPbccAdvanceRate).toHaveBeenCalledWith(0.75, "admin-1")
+		expect(result).toEqual({ successLcPbccAdvance: true })
+	})
+
+	it("rejects an invalid LC/PBCC advance rate", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "admin-1" },
+			session: {},
+		} as any)
+		const form = new FormData()
+		form.set("intent", "lc_pbcc_advance")
+		form.set("lc_pbcc_advance_rate", "1.1")
+		const result = await action({
+			request: formRequest(form),
+			params: {},
+		} as any)
+		expect(result).toEqual({
+			errorKey: "admin_settings.errors.invalid_lc_pbcc_rate",
+		})
+		expect(setLcPbccAdvanceRate).not.toHaveBeenCalled()
 	})
 })

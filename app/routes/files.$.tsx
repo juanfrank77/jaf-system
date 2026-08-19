@@ -1,6 +1,7 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { db } from "~/lib/db.server"
+import { isComptrollerEnabled } from "~/lib/features.server"
 import { requireSession } from "~/lib/permissions.server"
 import type { Route } from "./+types/files.$"
 
@@ -41,8 +42,12 @@ function canAccessDoc(
 	if (userRole === "CREW") return doc.assignedCrewIds.includes(userId)
 	if (userRole === "WAREHOUSE")
 		return WAREHOUSE_STATUSES.includes(doc.status as any)
-	if (userRole === "FINANCE" || userRole === "COMPTROLLER")
+	if (userRole === "FINANCE")
 		return FINANCEABLE_STATUSES.includes(doc.status as any)
+	if (userRole === "COMPTROLLER") {
+		if (!isComptrollerEnabled()) return false
+		return FINANCEABLE_STATUSES.includes(doc.status as any)
+	}
 	return false
 }
 

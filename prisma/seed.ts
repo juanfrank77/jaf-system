@@ -6,6 +6,7 @@ import { hashPassword } from "better-auth/crypto"
 import { generateClaroNoticePdf } from "../app/lib/pdf/claro-notice.server"
 import { generateScheduleAccountsPdf } from "../app/lib/pdf/schedule-accounts.server"
 import { generateWarehouseReceiptPdf } from "../app/lib/pdf/warehouse-receipt.server"
+import { DEFAULT_LC_PBCC_ADVANCE_RATE } from "../app/lib/system-settings.server"
 import { PrismaClient } from "../generated/prisma/client"
 
 const db = new PrismaClient({
@@ -297,7 +298,7 @@ async function main() {
 			claroNotes: "Approved for Claro submission.",
 			poNumber: "4500911842",
 			acceptanceNumber: "AC-2026-0041",
-			advanceAmount: undefined, // computed as 80% of total below
+			advanceAmount: undefined, // computed from the default LC/PBCC rate below
 			createdDaysAgo: 25,
 			hasPhoto: true,
 		},
@@ -425,7 +426,8 @@ async function main() {
 
 		if (def.status === "LC_REQUEST_GENERATED" && def.materialsUsed) {
 			const total = amountOf(def.materialsUsed)
-			const advanceAmount = Math.round(total * 0.8 * 100) / 100
+			const advanceAmount =
+				Math.round(total * DEFAULT_LC_PBCC_ADVANCE_RATE * 100) / 100
 			const finalPaymentAmount = Math.round((total - advanceAmount) * 100) / 100
 
 			const lcRequestPdfPath = path.join(
@@ -433,6 +435,7 @@ async function main() {
 				`${def.controlNumber}-schedule.pdf`,
 			)
 			const pdf = await generateScheduleAccountsPdf({
+				advancePercent: DEFAULT_LC_PBCC_ADVANCE_RATE * 100,
 				invoices: [
 					{
 						invoiceDate: daysAgo(def.createdDaysAgo - 6).toLocaleDateString(
@@ -461,6 +464,39 @@ async function main() {
 				lcUpdate.receivableClosedById = finance.id
 			}
 			await db.jafInvoice.update({ where: { id: invoice.id }, data: lcUpdate })
+
+			await db.paymentRecord.upsert({
+				where: { jobId_type: { jobId: invoice.id, type: "PBCC_ADVANCE" } },
+				update: {
+					amount: advanceAmount,
+					date: daysAgo(def.createdDaysAgo - 7),
+					recordedById: finance.id,
+				},
+				create: {
+					jobId: invoice.id,
+					type: "PBCC_ADVANCE",
+					amount: advanceAmount,
+					date: daysAgo(def.createdDaysAgo - 7),
+					recordedById: finance.id,
+				},
+			})
+			if (def.closed) {
+				await db.paymentRecord.upsert({
+					where: { jobId_type: { jobId: invoice.id, type: "CLARO_FINAL" } },
+					update: {
+						amount: finalPaymentAmount,
+						date: daysAgo(1),
+						recordedById: finance.id,
+					},
+					create: {
+						jobId: invoice.id,
+						type: "CLARO_FINAL",
+						amount: finalPaymentAmount,
+						date: daysAgo(1),
+						recordedById: finance.id,
+					},
+				})
+			}
 
 			await db.poLink.deleteMany({ where: { docId: invoice.id } })
 			await db.poLink.create({

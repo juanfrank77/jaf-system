@@ -7,6 +7,7 @@ import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { db } from "~/lib/db.server"
+import { sendInternalEmail } from "~/lib/email.server"
 import { validateFile } from "~/lib/file-upload.server"
 import {
 	checkAmountTolerance,
@@ -16,6 +17,7 @@ import {
 	invoiceTotalUsed,
 } from "~/lib/finance-pipeline.server"
 import { generateFinalClaroDocPdf } from "~/lib/pdf/final-claro-doc.server"
+import { isTerminalStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import { getIvuRate } from "~/lib/system-settings.server"
 import { formatMoney } from "~/lib/utils"
@@ -33,9 +35,20 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
-		include: { supervisor: true, poLinks: true },
+		include: {
+			supervisor: true,
+			poLinks: true,
+			paymentRecords: { select: { type: true } },
+		},
 	})
-	const stage = computeFinanceStage(doc, doc.poLinks.length > 0)
+	if (isTerminalStatus(doc.status)) {
+		throw redirect("/finance/receivables")
+	}
+	const stage = computeFinanceStage(
+		doc,
+		doc.poLinks.length > 0,
+		doc.paymentRecords,
+	)
 	if (stage !== "WAITING_CLARO_PO" && stage !== "PO_RECEIVED_UPLOAD") {
 		throw redirect(`/finance/receivables`)
 	}
@@ -48,15 +61,32 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
-		include: { supervisor: true, poLinks: true },
+		include: {
+			supervisor: true,
+			poLinks: true,
+			paymentRecords: { select: { type: true } },
+		},
 	})
-	const stage = computeFinanceStage(doc, doc.poLinks.length > 0)
+	if (isTerminalStatus(doc.status)) {
+		return { errorKey: "finance_po.errors.terminal_status" }
+	}
+	const stage = computeFinanceStage(
+		doc,
+		doc.poLinks.length > 0,
+		doc.paymentRecords,
+	)
 	if (stage !== "WAITING_CLARO_PO" && stage !== "PO_RECEIVED_UPLOAD") {
 		throw redirect(`/finance/receivables`)
 	}
 
 	const form = await request.formData()
 	const intent = form.get("intent") as string
+	if (intent !== "record_po" && intent !== "generate_final_doc")
+		return { errorKey: "finance_po.errors.unknown_intent" }
+	if (intent === "record_po" && stage !== "WAITING_CLARO_PO")
+		return { errorKey: "finance_po.errors.record_po_stage" }
+	if (intent === "generate_final_doc" && stage !== "PO_RECEIVED_UPLOAD")
+		return { errorKey: "finance_po.errors.generate_final_stage" }
 	const uploadDir = process.env.UPLOAD_DIR || "/tmp/jaf/uploads"
 
 	if (intent === "record_po") {
@@ -132,6 +162,15 @@ export async function action({ request, params }: Route.ActionArgs) {
 					]
 				: []),
 		])
+		if (mismatch) {
+			await sendInternalEmail({
+				docId: params.id,
+				actorId: user.id,
+				recipients: doc.supervisor?.email ? [doc.supervisor.email] : [],
+				subject: `PO discrepancy: ${doc.controlNumber}`,
+				context: "PO_AMOUNT_MISMATCH",
+			})
+		}
 	}
 
 	if (intent === "generate_final_doc") {

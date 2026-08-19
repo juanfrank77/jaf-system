@@ -9,9 +9,11 @@ import {
 	getAgingAlertDays,
 	getAvisoAmountTolerance,
 	getIvuRate,
+	getLcPbccAdvanceRate,
 	setAgingAlertDays,
 	setAvisoAmountTolerance,
 	setIvuRate,
+	setLcPbccAdvanceRate,
 } from "~/lib/system-settings.server"
 import { formatMoney } from "~/lib/utils"
 import type { Route } from "./+types/_app.admin.settings"
@@ -22,12 +24,14 @@ export const meta: Route.MetaFunction = () => [
 
 export async function loader({ request }: Route.LoaderArgs) {
 	await requireRole(request, ["ADMIN"])
-	const [ivuRate, agingAlertDays, avisoAmountTolerance] = await Promise.all([
-		getIvuRate(),
-		getAgingAlertDays(),
-		getAvisoAmountTolerance(),
-	])
-	return { ivuRate, agingAlertDays, avisoAmountTolerance }
+	const [ivuRate, agingAlertDays, avisoAmountTolerance, lcPbccAdvanceRate] =
+		await Promise.all([
+			getIvuRate(),
+			getAgingAlertDays(),
+			getAvisoAmountTolerance(),
+			getLcPbccAdvanceRate(),
+		])
+	return { ivuRate, agingAlertDays, avisoAmountTolerance, lcPbccAdvanceRate }
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -45,6 +49,21 @@ export async function action({ request }: Route.ActionArgs) {
 		}
 		await setIvuRate(rate, user.id)
 		return { success: true }
+	}
+
+	if (intent === "lc_pbcc_advance") {
+		const rateRaw = form.get("lc_pbcc_advance_rate") as string
+		const rate = Number(rateRaw)
+		if (
+			!/^\d+(\.\d+)?$/.test(rateRaw) ||
+			!Number.isFinite(rate) ||
+			rate <= 0 ||
+			rate > 1
+		) {
+			return { errorKey: "admin_settings.errors.invalid_lc_pbcc_rate" }
+		}
+		await setLcPbccAdvanceRate(rate, user.id)
+		return { successLcPbccAdvance: true }
 	}
 
 	if (intent === "aging") {
@@ -85,12 +104,17 @@ export default function AdminSettings({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { ivuRate, agingAlertDays, avisoAmountTolerance } = loaderData
+	const { ivuRate, agingAlertDays, avisoAmountTolerance, lcPbccAdvanceRate } =
+		loaderData
 	const { t } = useTranslation()
 	const error =
 		actionData && "errorKey" in actionData ? actionData.errorKey : null
 	const success =
 		actionData && "success" in actionData ? actionData.success : null
+	const successLcPbccAdvance =
+		actionData && "successLcPbccAdvance" in actionData
+			? actionData.successLcPbccAdvance
+			: null
 	const successAging =
 		actionData && "successAging" in actionData ? actionData.successAging : null
 	const successTolerance =
@@ -128,6 +152,44 @@ export default function AdminSettings({
 					</div>
 					{error && <p className="text-sm text-red-600">{t(error as any)}</p>}
 					{success && (
+						<p className="text-sm text-green-600">
+							{t("admin_settings.saved")}
+						</p>
+					)}
+					<Button type="submit" size="sm">
+						{t("admin_settings.save")}
+					</Button>
+				</Form>
+			</div>
+
+			<div className="bg-white border rounded-lg p-4 space-y-3">
+				<h2 className="font-medium text-sm">
+					{t("admin_settings.lc_pbcc_heading")}
+				</h2>
+				<p className="text-xs text-slate-500">
+					{t("admin_settings.lc_pbcc_description", {
+						current: (lcPbccAdvanceRate * 100).toFixed(1),
+					})}
+				</p>
+				<Form method="post" className="space-y-3">
+					<input type="hidden" name="intent" value="lc_pbcc_advance" />
+					<div>
+						<Label htmlFor="lc_pbcc_advance_rate">
+							{t("admin_settings.lc_pbcc_label")}
+						</Label>
+						<Input
+							id="lc_pbcc_advance_rate"
+							name="lc_pbcc_advance_rate"
+							type="number"
+							step="0.01"
+							min="0.01"
+							max="1"
+							defaultValue={lcPbccAdvanceRate}
+							required
+						/>
+					</div>
+					{error && <p className="text-sm text-red-600">{t(error as any)}</p>}
+					{successLcPbccAdvance && (
 						<p className="text-sm text-green-600">
 							{t("admin_settings.saved")}
 						</p>

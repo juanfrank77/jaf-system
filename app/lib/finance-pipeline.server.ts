@@ -37,15 +37,31 @@ export async function fetchInvoiceTotalContext(): Promise<{
 	return { serviceCodes, codeMap, ivuRate, tolerance }
 }
 
-export const financeStageAlertDays = (stage: FinanceStage): number | null => {
+export const financeStageAlertDays = (
+	stage: FinanceStage,
+	agingAlertDays: number,
+): number | null => {
 	switch (stage) {
 		case "WAITING_CLARO_PO":
-			return 180
+			return agingAlertDays
 		case "IN_CLARO_QUEUE":
-			return 180
+			return agingAlertDays
 		default:
 			return null
 	}
+}
+
+type FinancePayment = {
+	type: string
+	date?: Date | null
+	amount?: unknown
+}
+
+function hasFinancePayment(
+	paymentRecords: readonly FinancePayment[],
+	type: "PBCC_ADVANCE" | "CLARO_FINAL",
+): boolean {
+	return paymentRecords.some((payment) => payment.type === type)
 }
 
 export function computeFinanceStage(
@@ -60,22 +76,27 @@ export function computeFinanceStage(
 		| "financeVerifiedAt"
 	>,
 	hasPoLinks: boolean,
+	paymentRecords: readonly FinancePayment[],
 ): FinanceStage | null {
 	// Finance only cares about jobs that have reached supervisor approval.
 	if (!FINANCEABLE_STATUSES.includes(invoice.status)) return null
 
 	if (invoice.receivableClosedAt) return "CLOSED"
-	if (invoice.advanceReceivedAt && invoice.finalPaymentReceivedAt)
+	if (
+		hasFinancePayment(paymentRecords, "PBCC_ADVANCE") &&
+		hasFinancePayment(paymentRecords, "CLARO_FINAL")
+	)
 		return "READY_TO_CLOSE"
 	if (invoice.finalClaroUploadedAt) return "IN_CLARO_QUEUE"
 	if (hasPoLinks) return "PO_RECEIVED_UPLOAD"
-	if (invoice.advanceReceivedAt) return "WAITING_CLARO_PO"
+	if (hasFinancePayment(paymentRecords, "PBCC_ADVANCE"))
+		return "WAITING_CLARO_PO"
 	if (invoice.pbccRequestSentAt) return "WAITING_PBCC_FUNDING"
 	if (invoice.financeVerifiedAt) return "PBCC_REQUEST_PENDING"
 	return "TO_VERIFY"
 }
 
-export function stageAnchorDate(
+function stageAnchorDate(
 	invoice: Pick<
 		JafInvoice,
 		| "supervisorApprovedAt"
@@ -88,6 +109,7 @@ export function stageAnchorDate(
 	>,
 	stage: FinanceStage,
 	poDate: Date | null | undefined,
+	paymentRecords: readonly FinancePayment[] = [],
 ): Date | null {
 	switch (stage) {
 		case "TO_VERIFY":
@@ -97,13 +119,19 @@ export function stageAnchorDate(
 		case "WAITING_PBCC_FUNDING":
 			return invoice.pbccRequestSentAt
 		case "WAITING_CLARO_PO":
-			return invoice.advanceReceivedAt
+			return (
+				paymentRecords.find((payment) => payment.type === "PBCC_ADVANCE")
+					?.date ?? invoice.advanceReceivedAt
+			)
 		case "PO_RECEIVED_UPLOAD":
 			return poDate ?? null
 		case "IN_CLARO_QUEUE":
 			return invoice.finalClaroUploadedAt
 		case "READY_TO_CLOSE":
-			return invoice.finalPaymentReceivedAt
+			return (
+				paymentRecords.find((payment) => payment.type === "CLARO_FINAL")
+					?.date ?? invoice.finalPaymentReceivedAt
+			)
 		case "CLOSED":
 			return invoice.receivableClosedAt
 	}
@@ -122,8 +150,9 @@ export function daysInStage(
 	>,
 	stage: FinanceStage,
 	poDate: Date | null | undefined,
+	paymentRecords: readonly FinancePayment[] = [],
 ): number {
-	const anchor = stageAnchorDate(invoice, stage, poDate)
+	const anchor = stageAnchorDate(invoice, stage, poDate, paymentRecords)
 	if (!anchor) return 0
 	return Math.floor((Date.now() - new Date(anchor).getTime()) / 86400000)
 }
@@ -169,6 +198,7 @@ export function checkAmountTolerance(
 
 export type FinancePipelineRow = {
 	id: string
+	status: DocStatus
 	controlNumber: string
 	avisoNumber: string | null
 	supervisorName: string

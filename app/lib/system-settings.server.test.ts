@@ -13,8 +13,10 @@ import { db } from "./db.server"
 import {
 	getAgingAlertDays,
 	getIvuRate,
+	getLcPbccAdvanceRate,
 	setAgingAlertDays,
 	setIvuRate,
+	setLcPbccAdvanceRate,
 } from "./system-settings.server"
 
 describe("system settings", () => {
@@ -73,6 +75,31 @@ describe("system settings", () => {
 			where: { key: "aging_alert_days" },
 			update: { value: "60", updatedById: "admin-1" },
 			create: { key: "aging_alert_days", value: "60", updatedById: "admin-1" },
+		})
+	})
+	it("getLcPbccAdvanceRate defaults to 0.8 when missing", async () => {
+		vi.mocked(db.systemSetting.findUnique).mockResolvedValue(null)
+		await expect(getLcPbccAdvanceRate()).resolves.toBe(0.8)
+	})
+
+	it("getLcPbccAdvanceRate rejects invalid settings", async () => {
+		vi.mocked(db.systemSetting.findUnique).mockResolvedValue({
+			value: "1.2",
+		} as any)
+		await expect(getLcPbccAdvanceRate()).resolves.toBe(0.8)
+	})
+
+	it("setLcPbccAdvanceRate upserts the setting", async () => {
+		vi.mocked(db.systemSetting.upsert).mockResolvedValue({} as any)
+		await setLcPbccAdvanceRate(0.75, "admin-1")
+		expect(db.systemSetting.upsert).toHaveBeenCalledWith({
+			where: { key: "lc_pbcc_advance_rate" },
+			update: { value: "0.75", updatedById: "admin-1" },
+			create: {
+				key: "lc_pbcc_advance_rate",
+				value: "0.75",
+				updatedById: "admin-1",
+			},
 		})
 	})
 })

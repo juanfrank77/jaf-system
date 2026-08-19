@@ -1,5 +1,7 @@
 import { db } from "./db.server"
 
+export const DEFAULT_LC_PBCC_ADVANCE_RATE = 0.8
+
 export async function getIvuRate(): Promise<number> {
 	const setting = await db.systemSetting.findUnique({
 		where: { key: "ivu_rate" },
@@ -65,5 +67,28 @@ export async function setAvisoAmountTolerance(
 			value: String(tolerance),
 			updatedById,
 		},
+	})
+}
+
+export async function getLcPbccAdvanceRate(): Promise<number> {
+	const setting = await db.systemSetting.findUnique({
+		where: { key: "lc_pbcc_advance_rate" },
+	})
+	const parsed = Number(setting?.value ?? DEFAULT_LC_PBCC_ADVANCE_RATE)
+	if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 1)
+		return DEFAULT_LC_PBCC_ADVANCE_RATE
+	return parsed
+}
+
+export async function setLcPbccAdvanceRate(
+	rate: number,
+	updatedById: string,
+): Promise<void> {
+	if (!Number.isFinite(rate) || rate <= 0 || rate > 1)
+		throw new Error("LC/PBCC advance rate must be greater than 0 and at most 1")
+	await db.systemSetting.upsert({
+		where: { key: "lc_pbcc_advance_rate" },
+		update: { value: String(rate), updatedById },
+		create: { key: "lc_pbcc_advance_rate", value: String(rate), updatedById },
 	})
 }

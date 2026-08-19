@@ -360,10 +360,15 @@
 		"save": "Save",
 		"errors": {
 			"invalid_rate": "IVU rate must be a decimal between 0 and 1 (e.g. 0.115 for 11.5%)",
+
 			"invalid_aging_days": "Aging alert days must be a positive whole number.",
 			"invalid_tolerance": "Tolerance must be a non-negative number.",
-			"unknown_intent": "Unknown action."
-		}
+			"unknown_intent": "Unknown action.",
+			"invalid_lc_pbcc_rate": "Enter a rate greater than 0 and no greater than 1."
+		},
+		"lc_pbcc_heading": "LC/PBCC advance rate",
+		"lc_pbcc_description": "PBCC advance is currently {current}% of the verified invoice total. Keep IVU separate.",
+		"lc_pbcc_label": "Advance rate (decimal)"
 	},
 	"admin_catalog": {
 		"title": "Service Catalog",
@@ -540,15 +545,24 @@
 		"generate_pbcc": "Generate PBCC Request",
 		"upload_final_doc": "Upload Final Doc",
 		"record_po": "Record PO",
-		"record_advance": "Record 80%",
-		"advance_placeholder": "80% amount",
+		"record_advance": "Record advance",
+		"advance_placeholder": "Advance amount",
+		"payment_date": "Payment date",
+		"payment_note": "Payment note",
 		"record_final": "Record final",
 		"final_placeholder": "Final amount",
 		"close": "Close",
 		"errors": {
 			"invalid_amount": "Invalid amount",
 			"record_both_first": "Record both payments before closing",
-			"payment_role_required": "Only the comptroller can record payments."
+			"payment_role_required": "Only an authorized Finance or Comptroller user can record payments.",
+			"invalid_stage": "This action is not available at the current finance stage.",
+			"invalid_payment": "Enter a valid positive amount and payment date.",
+			"advance_already_recorded": "The PBCC advance is already recorded.",
+			"final_already_recorded": "The final payment is already recorded.",
+			"close_role_required": "Only Finance or Admin can close a receivable.",
+			"already_closed": "This receivable is already closed.",
+			"unknown_intent": "Unknown action."
 		},
 		"waiting_for_payment": "Waiting for comptroller entry"
 	},
@@ -596,7 +610,9 @@
 		"errors": {
 			"note_required": "A send-back note is required.",
 			"invalid_aviso_amount": "Enter a valid Aviso amount.",
-			"amount_mismatch": "Aviso amount differs from invoice total by {{difference}} (tolerance: {{tolerance}})."
+			"amount_mismatch": "Aviso amount differs from invoice total by {{difference}} (tolerance: {{tolerance}}).",
+			"invalid_stage": "This job is not at the Verify stage.",
+			"terminal_status": "This job is no longer editable."
 		}
 	},
 	"finance_pbcc": {
@@ -605,10 +621,14 @@
 		"address": "Address",
 		"aviso_number": "Aviso #",
 		"amount": "Invoice amount",
-		"advance": "PBCC advance (80%)",
+		"advance": "PBCC advance ({{rate}}%)",
 		"ivu_rate": "IVU rate: {{rate}}%",
 		"hint": "Generating this PDF saves the request, marks it sent, and sends a copy to the Comptroller.",
-		"generate_and_download": "Generate & Download PBCC Request"
+		"generate_and_download": "Generate & Download PBCC Request",
+		"errors": {
+			"unknown_intent": "Unknown action.",
+			"terminal_status": "This job is no longer editable."
+		}
 	},
 	"finance_po": {
 		"title": "Claro PO & Final Document",
@@ -636,7 +656,8 @@
 		"errors": {
 			"po_number_required": "PO number is required.",
 			"invalid_po_amount": "Enter a valid non-negative PO amount.",
-			"record_po_first": "Record a PO before generating the final document."
+			"record_po_first": "Record a PO before generating the final document.",
+			"terminal_status": "This job is no longer editable."
 		}
 	},
 	"material_line_items": {
@@ -754,7 +775,7 @@
 		"sent_on": "Sent on {{date}}",
 		"download_pbcc": "Download PBCC request",
 		"mark_read": "Mark read",
-		"awaiting_advance_heading": "Awaiting PBCC Advance (80%)",
+		"awaiting_advance_heading": "Awaiting PBCC Advance ({{rate}}%)",
 		"no_awaiting_advance": "No jobs waiting for PBCC advance.",
 		"awaiting_funds_badge": "Awaiting funds",
 		"expected_advance": "Expected advance: {{amount}}",
@@ -777,7 +798,7 @@
 		"supervisor": "Supervisor",
 		"current_crew": "Current crew",
 		"invoice_amount": "Invoice amount",
-		"expected_advance": "Expected PBCC advance (80%)",
+		"expected_advance": "Expected PBCC advance ({{rate}}%)",
 		"advance_status": "PBCC advance",
 		"final_status": "Claro final payment",
 		"crew_payment_status": "Crew payment",
@@ -788,6 +809,7 @@
 		"download_pbcc": "Download PBCC request",
 		"record_advance_heading": "Record PBCC Advance",
 		"date_label": "Date",
+		"payment_note_label": "Payment note",
 		"amount_label": "Amount",
 		"record_advance_submit": "Record advance",
 		"advance_recorded": "Advance of {{amount}} recorded on {{date}}",

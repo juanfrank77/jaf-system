@@ -53,10 +53,10 @@ interface ScheduleInvoice {
 
 export async function generateScheduleAccountsPdf(params: {
 	invoices: ScheduleInvoice[]
-	advancePercent?: number
+	advancePercent: number
 	agentName?: string
 }): Promise<Buffer> {
-	const { invoices, advancePercent = 80, agentName = "Monica" } = params
+	const { invoices, advancePercent, agentName = "Monica" } = params
 	const total = invoices.reduce((sum, i) => sum + i.amount, 0)
 	const advance = total * (advancePercent / 100)
 

@@ -10,6 +10,7 @@ import { generateActaConformidadPdf } from "~/lib/pdf/acta-conformidad.server"
 import { generateScheduleAccountsPdf } from "~/lib/pdf/schedule-accounts.server"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
+import { getIvuRate, getLcPbccAdvanceRate } from "~/lib/system-settings.server"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id_.lc"
 
@@ -33,10 +34,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		where: { id: doc.supervisorId },
 	})
 	const poLinks = await db.poLink.findMany({ where: { docId: params.id } })
-	const ivuSetting = await db.systemSetting.findUnique({
-		where: { key: "ivu_rate" },
-	})
-	const ivuRate = parseFloat(ivuSetting?.value ?? "0.115")
+	const ivuRate = await getIvuRate()
 	return {
 		doc,
 		user,
@@ -118,7 +116,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 		const subtotal = lineItems.reduce((sum, i) => sum + i.qty * i.unitPrice, 0)
 		const amount = subtotal + subtotal * ivuRate
 
+		const lcPbccAdvanceRate = await getLcPbccAdvanceRate()
 		const pdfBytes = await generateScheduleAccountsPdf({
+			advancePercent: lcPbccAdvanceRate * 100,
 			invoices: [
 				{
 					invoiceDate: today,
@@ -167,7 +167,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 }
 
 export default function LcView({ loaderData }: Route.ComponentProps) {
-	const { doc, serviceCodes, poLinks, ivuRate } = loaderData
+	const { doc, serviceCodes, ivuRate } = loaderData
 	const { t } = useTranslation()
 	const used = (doc.materialsUsed as any[]) || []
 	const claroPdfUrl = doc.claroPdfPath

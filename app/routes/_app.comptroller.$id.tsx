@@ -8,13 +8,20 @@ import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
+import { sendInternalEmail } from "~/lib/email.server"
 import { isComptrollerEnabled } from "~/lib/features.server"
 import {
+	computeFinanceStage,
 	FINANCEABLE_STATUSES,
 	invoiceTotalUsed,
 } from "~/lib/finance-pipeline.server"
+import {
+	parsePaymentDate,
+	paymentForType,
+	recordReceivablePayment,
+} from "~/lib/payment-records.server"
 import { requireRole } from "~/lib/permissions.server"
-import { getIvuRate } from "~/lib/system-settings.server"
+import { getIvuRate, getLcPbccAdvanceRate } from "~/lib/system-settings.server"
 import { cn, formatMoney, toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.comptroller.$id"
 
@@ -25,21 +32,6 @@ export const meta: Route.MetaFunction = ({ data }) => [
 			: "JAF Ops",
 	},
 ]
-
-function parseLocalDate(value: string): Date | null {
-	if (!value) return null
-	const [year, month, day] = value.split("-").map(Number)
-	if (
-		Number.isNaN(year) ||
-		Number.isNaN(month) ||
-		Number.isNaN(day) ||
-		month < 1 ||
-		month > 12
-	) {
-		return null
-	}
-	return new Date(year, month - 1, day)
-}
 
 type AssignmentHistoryEntry = {
 	userIds: string[]
@@ -62,21 +54,25 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		},
 	})
 
-	if (!FINANCEABLE_STATUSES.includes(doc.status)) {
+	if (
+		!FINANCEABLE_STATUSES.includes(doc.status) ||
+		doc.status === "LC_REQUEST_GENERATED"
+	) {
 		throw new Response("Job is not in the receivables pipeline", {
 			status: 404,
 		})
 	}
 
-	const [serviceCodes, ivuRate] = await Promise.all([
+	const [serviceCodes, ivuRate, lcPbccAdvanceRate] = await Promise.all([
 		db.serviceCode.findMany(),
 		getIvuRate(),
+		getLcPbccAdvanceRate(),
 	])
 	const codeMap = Object.fromEntries(
 		serviceCodes.map((c) => [c.id, { unitPrice: toNumberPrice(c.unitPrice) }]),
 	)
 	const amount = invoiceTotalUsed(doc, codeMap, ivuRate)
-	const expectedAdvance = amount * 0.8
+	const expectedAdvance = amount * lcPbccAdvanceRate
 
 	const crewIds = new Set<string>(doc.assignedCrewIds)
 	const history =
@@ -105,12 +101,19 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		assignedAt: entry.assignedAt ? new Date(entry.assignedAt) : null,
 	}))
 
-	const advanceReceived = !!doc.advanceReceivedAt
-	const finalReceived = !!doc.finalPaymentReceivedAt
+	const stage = computeFinanceStage(
+		doc,
+		doc.poLinks.length > 0,
+		doc.paymentRecords,
+	)
+	const advancePayment = paymentForType(doc.paymentRecords, "PBCC_ADVANCE")
+	const finalPayment = paymentForType(doc.paymentRecords, "CLARO_FINAL")
+	const advanceReceived = !!advancePayment
+	const finalReceived = !!finalPayment
 	const crewPaid = doc.paymentRecords.some((p) => p.type === "CREW_PAYMENT")
 	const hasAdvanceDiscrepancy =
-		advanceReceived && doc.advanceAmount != null
-			? Math.abs(Number(doc.advanceAmount) - expectedAdvance) > 0.01
+		advanceReceived && advancePayment?.amount != null
+			? Math.abs(Number(advancePayment?.amount) - expectedAdvance) > 0.01
 			: false
 
 	const unreadNotification = await db.notification.findFirst({
@@ -123,6 +126,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		doc,
 		amount,
 		expectedAdvance,
+		lcPbccAdvanceRate,
+		stage,
 		advanceReceived,
 		finalReceived,
 		crewPaid,
@@ -138,194 +143,187 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const { user } = await requireRole(request, ["COMPTROLLER", "ADMIN"])
 	const form = await request.formData()
 	const intent = form.get("intent") as string
-	const docId = params.id
+	if (
+		!["record_advance", "record_final", "record_crew_payment"].includes(intent)
+	) {
+		return { errorKey: "comptroller_detail.errors.unknown_intent" }
+	}
 
 	const doc = await db.jafInvoice.findUniqueOrThrow({
-		where: { id: docId },
-		include: { supervisor: { select: { name: true } } },
+		where: { id: params.id },
+		include: {
+			supervisor: { select: { name: true } },
+			paymentRecords: { select: { type: true, amount: true, date: true } },
+			poLinks: true,
+		},
 	})
-
+	if (
+		!FINANCEABLE_STATUSES.includes(doc.status) ||
+		doc.status === "LC_REQUEST_GENERATED"
+	) {
+		return { errorKey: "comptroller_detail.errors.invalid_stage" }
+	}
+	const stage = computeFinanceStage(
+		doc,
+		doc.poLinks.length > 0,
+		doc.paymentRecords,
+	)
+	const advancePayment = paymentForType(doc.paymentRecords, "PBCC_ADVANCE")
 	const financeUsers = await db.user.findMany({
 		where: { role: "FINANCE", active: true },
-		select: { id: true },
+		select: { id: true, email: true },
 	})
 
-	const rawAmount = form.get("amount") as string
-	const parsedAmount = Number.parseFloat(rawAmount)
-	if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
-		return { errorKey: "comptroller_detail.errors.invalid_amount" }
-	}
-
-	const rawDate = form.get("date") as string
-	const parsedDate = parseLocalDate(rawDate)
-	if (!parsedDate) {
-		return { errorKey: "comptroller_detail.errors.invalid_date" }
-	}
-
-	if (intent === "record_advance") {
-		if (doc.advanceReceivedAt) {
-			return { errorKey: "comptroller_detail.errors.advance_already_recorded" }
+	if (intent === "record_advance" || intent === "record_final") {
+		const expectedStage =
+			intent === "record_advance" ? "WAITING_PBCC_FUNDING" : "IN_CLARO_QUEUE"
+		if (stage !== expectedStage)
+			return { errorKey: "comptroller_detail.errors.invalid_stage" }
+		const parsedAmount = Number.parseFloat(String(form.get("amount") ?? ""))
+		const parsedDate = parsePaymentDate(String(form.get("date") ?? ""))
+		if (!Number.isFinite(parsedAmount) || parsedAmount <= 0)
+			return { errorKey: "comptroller_detail.errors.invalid_amount" }
+		if (!parsedDate)
+			return { errorKey: "comptroller_detail.errors.invalid_date" }
+		const note = (form.get("paymentNote") as string | null)?.trim() || null
+		let auditDiff: Record<string, unknown> | undefined
+		let message: string
+		if (intent === "record_advance") {
+			const [serviceCodes, ivuRate, lcPbccAdvanceRate] = await Promise.all([
+				db.serviceCode.findMany(),
+				getIvuRate(),
+				getLcPbccAdvanceRate(),
+			])
+			const codeMap = Object.fromEntries(
+				serviceCodes.map((c) => [
+					c.id,
+					{ unitPrice: toNumberPrice(c.unitPrice) },
+				]),
+			)
+			const expectedAdvance =
+				invoiceTotalUsed(doc, codeMap, ivuRate) * lcPbccAdvanceRate
+			const discrepancy = Math.abs(parsedAmount - expectedAdvance) > 0.01
+			auditDiff = { expected: expectedAdvance, discrepancy }
+			message = discrepancy
+				? "PBCC advance for " +
+					doc.controlNumber +
+					" was " +
+					formatMoney(parsedAmount) +
+					" (expected " +
+					formatMoney(expectedAdvance) +
+					")."
+				: "PBCC advance of " +
+					formatMoney(parsedAmount) +
+					" recorded for " +
+					doc.controlNumber +
+					"."
+		} else {
+			message =
+				"Claro final payment of " +
+				formatMoney(parsedAmount) +
+				" recorded for " +
+				doc.controlNumber +
+				"."
 		}
-
-		const [serviceCodes, ivuRate] = await Promise.all([
-			db.serviceCode.findMany(),
-			getIvuRate(),
-		])
-		const codeMap = Object.fromEntries(
-			serviceCodes.map((c) => [
-				c.id,
-				{ unitPrice: toNumberPrice(c.unitPrice) },
-			]),
-		)
-		const amount = invoiceTotalUsed(doc, codeMap, ivuRate)
-		const expectedAdvance = amount * 0.8
-
-		await db.$transaction([
-			db.jafInvoice.update({
-				where: { id: docId },
-				data: {
-					advanceReceivedAt: parsedDate,
-					advanceAmount: parsedAmount,
-				},
-			}),
-			db.paymentRecord.create({
-				data: {
-					jobId: docId,
-					type: "PBCC_ADVANCE",
-					amount: parsedAmount,
-					date: parsedDate,
-					recordedById: user.id,
-				},
-			}),
-			db.auditTrail.create({
-				data: {
-					docId,
-					userId: user.id,
-					action: "ADVANCE_RECEIVED",
-					diffJson: {
-						amount: parsedAmount,
-						expected: expectedAdvance,
-						discrepancy: Math.abs(parsedAmount - expectedAdvance) > 0.01,
-					},
-				},
-			}),
-			...financeUsers.map((u) =>
-				db.notification.create({
-					data: {
-						userId: u.id,
-						docId,
-						message:
-							Math.abs(parsedAmount - expectedAdvance) > 0.01
-								? `PBCC advance for ${doc.controlNumber} was ${formatMoney(parsedAmount)} (expected ${formatMoney(expectedAdvance)}).`
-								: `PBCC advance of ${formatMoney(parsedAmount)} recorded for ${doc.controlNumber}.`,
-					},
-				}),
-			),
-		])
-		return { successKey: "comptroller_detail.success.advance_recorded" }
-	}
-
-	if (intent === "record_final") {
-		if (doc.finalPaymentReceivedAt) {
-			return { errorKey: "comptroller_detail.errors.final_already_recorded" }
-		}
-
-		const message = `Claro final payment of ${formatMoney(
-			parsedAmount,
-		)} recorded for ${doc.controlNumber}. Close entry is now unlocked.`
-
-		await db.$transaction([
-			db.jafInvoice.update({
-				where: { id: docId },
-				data: {
-					finalPaymentReceivedAt: parsedDate,
-					finalPaymentAmount: parsedAmount,
-				},
-			}),
-			db.paymentRecord.create({
-				data: {
-					jobId: docId,
-					type: "CLARO_FINAL",
-					amount: parsedAmount,
-					date: parsedDate,
-					recordedById: user.id,
-				},
-			}),
-			db.auditTrail.create({
-				data: {
-					docId,
-					userId: user.id,
-					action: "FINAL_PAYMENT_RECEIVED",
-					diffJson: { amount: parsedAmount },
-				},
-			}),
-			...financeUsers.map((u) =>
-				db.notification.create({
-					data: {
-						userId: u.id,
-						docId,
-						message,
-					},
-				}),
-			),
-		])
-		return { successKey: "comptroller_detail.success.final_recorded" }
-	}
-
-	if (intent === "record_crew_payment") {
-		const note = (form.get("note") as string | null)?.trim() || null
-
-		const [serviceCodes, ivuRate] = await Promise.all([
-			db.serviceCode.findMany(),
-			getIvuRate(),
-		])
-		const codeMap = Object.fromEntries(
-			serviceCodes.map((c) => [
-				c.id,
-				{ unitPrice: toNumberPrice(c.unitPrice) },
-			]),
-		)
-		const amount = invoiceTotalUsed(doc, codeMap, ivuRate)
-
-		if (parsedAmount > amount) {
-			return {
-				errorKey: "comptroller_detail.errors.amount_exceeds_invoice_total",
-			}
-		}
-
-		const existingCrewPayment = await db.paymentRecord.findFirst({
-			where: { jobId: docId, type: "CREW_PAYMENT" },
+		const result = await recordReceivablePayment({
+			jobId: doc.id,
+			type: intent === "record_advance" ? "PBCC_ADVANCE" : "CLARO_FINAL",
+			amount: parsedAmount,
+			date: parsedDate,
+			note,
+			actorId: user.id,
+			auditDiff,
 		})
-		if (existingCrewPayment) {
+		if (result.duplicate) {
 			return {
-				errorKey: "comptroller_detail.errors.crew_payment_already_recorded",
+				errorKey:
+					intent === "record_advance"
+						? "comptroller_detail.errors.advance_already_recorded"
+						: "comptroller_detail.errors.final_already_recorded",
 			}
 		}
-
-		await db.$transaction([
-			db.paymentRecord.create({
-				data: {
-					jobId: docId,
-					type: "CREW_PAYMENT",
-					amount: parsedAmount,
-					date: parsedDate,
-					recordedById: user.id,
-					note,
-				},
-			}),
-			db.auditTrail.create({
-				data: {
-					docId,
-					userId: user.id,
-					action: "CREW_PAYMENT_RECORDED",
-					diffJson: { amount: parsedAmount, note },
-				},
-			}),
-		])
-		return { successKey: "comptroller_detail.success.crew_payment_recorded" }
+		await db.notification.createMany({
+			data: financeUsers.map((recipient) => ({
+				userId: recipient.id,
+				docId: doc.id,
+				message,
+			})),
+		})
+		await sendInternalEmail({
+			docId: doc.id,
+			actorId: user.id,
+			recipients: financeUsers.map((recipient) => recipient.email),
+			subject: message,
+			context:
+				intent === "record_advance"
+					? "PBCC_ADVANCE_RECEIVED"
+					: "CLARO_FINAL_RECEIVED",
+		})
+		return {
+			successKey:
+				intent === "record_advance"
+					? "comptroller_detail.success.advance_recorded"
+					: "comptroller_detail.success.final_recorded",
+		}
 	}
 
-	return { errorKey: "comptroller_detail.errors.unknown_intent" }
+	if (
+		!advancePayment ||
+		![
+			"WAITING_CLARO_PO",
+			"PO_RECEIVED_UPLOAD",
+			"IN_CLARO_QUEUE",
+			"READY_TO_CLOSE",
+		].includes(stage ?? "")
+	) {
+		return { errorKey: "comptroller_detail.errors.invalid_stage" }
+	}
+	const parsedAmount = Number.parseFloat(String(form.get("amount") ?? ""))
+	const parsedDate = parsePaymentDate(String(form.get("date") ?? ""))
+	if (!Number.isFinite(parsedAmount) || parsedAmount <= 0)
+		return { errorKey: "comptroller_detail.errors.invalid_amount" }
+	if (!parsedDate) return { errorKey: "comptroller_detail.errors.invalid_date" }
+	const note = (form.get("note") as string | null)?.trim() || null
+	const [serviceCodes, ivuRate] = await Promise.all([
+		db.serviceCode.findMany(),
+		getIvuRate(),
+	])
+	const codeMap = Object.fromEntries(
+		serviceCodes.map((c) => [c.id, { unitPrice: toNumberPrice(c.unitPrice) }]),
+	)
+	const amount = invoiceTotalUsed(doc, codeMap, ivuRate)
+	if (parsedAmount > amount)
+		return {
+			errorKey: "comptroller_detail.errors.amount_exceeds_invoice_total",
+		}
+	const existingCrewPayment = await db.paymentRecord.findFirst({
+		where: { jobId: doc.id, type: "CREW_PAYMENT" },
+	})
+	if (existingCrewPayment)
+		return {
+			errorKey: "comptroller_detail.errors.crew_payment_already_recorded",
+		}
+	await db.$transaction([
+		db.paymentRecord.create({
+			data: {
+				jobId: doc.id,
+				type: "CREW_PAYMENT",
+				amount: parsedAmount,
+				date: parsedDate,
+				recordedById: user.id,
+				note,
+			},
+		}),
+		db.auditTrail.create({
+			data: {
+				docId: doc.id,
+				userId: user.id,
+				action: "CREW_PAYMENT_RECORDED",
+				diffJson: { amount: parsedAmount, note },
+			},
+		}),
+	])
+	return { successKey: "comptroller_detail.success.crew_payment_recorded" }
 }
 
 export default function ComptrollerDetail({
@@ -336,6 +334,8 @@ export default function ComptrollerDetail({
 		doc,
 		amount,
 		expectedAdvance,
+		lcPbccAdvanceRate,
+		stage,
 		advanceReceived,
 		finalReceived,
 		crewPaid,
@@ -349,6 +349,8 @@ export default function ComptrollerDetail({
 	const success = actionData as { successKey?: string } | null
 
 	const today = new Date().toISOString().slice(0, 10)
+	const advancePayment = paymentForType(doc.paymentRecords, "PBCC_ADVANCE")
+	const finalPayment = paymentForType(doc.paymentRecords, "CLARO_FINAL")
 
 	const pbccUrl = doc.pbccRequestPdfPath
 		? `/files/pbcc-requests/${doc.id}-pbcc-request.pdf`
@@ -426,7 +428,10 @@ export default function ComptrollerDetail({
 						</p>
 						<p>
 							<span className="text-slate-500">
-								{t("comptroller_detail.expected_advance")}:
+								{t("comptroller_detail.expected_advance", {
+									rate: (lcPbccAdvanceRate * 100).toFixed(1),
+								})}
+								:
 							</span>{" "}
 							{formatMoney(expectedAdvance)}
 						</p>
@@ -502,8 +507,10 @@ export default function ComptrollerDetail({
 							<div className="space-y-1 text-sm">
 								<p className="text-muted-foreground">
 									{t("comptroller_detail.advance_recorded", {
-										amount: formatMoney(doc.advanceAmount ?? 0),
-										date: new Date(doc.advanceReceivedAt!).toLocaleDateString(),
+										amount: formatMoney(Number(advancePayment?.amount ?? 0)),
+										date: new Date(
+											advancePayment?.date ?? new Date(),
+										).toLocaleDateString(),
 									})}
 								</p>
 								{hasAdvanceDiscrepancy && (
@@ -514,7 +521,7 @@ export default function ComptrollerDetail({
 									</p>
 								)}
 							</div>
-						) : (
+						) : stage === "WAITING_PBCC_FUNDING" ? (
 							<Form method="post" className="space-y-3">
 								<input type="hidden" name="intent" value="record_advance" />
 								<div className="space-y-1">
@@ -542,11 +549,18 @@ export default function ComptrollerDetail({
 										required
 									/>
 								</div>
+								<div className="space-y-1">
+									<Label htmlFor="advance-note">
+										{t("comptroller_detail.payment_note_label")}
+									</Label>
+									<Input id="advance-note" name="paymentNote" />
+								</div>
+								\n
 								<Button type="submit" size="sm">
-									{t("comptroller_detail.record_advance_submit")}
+									\n {t("comptroller_detail.record_advance_submit")}
 								</Button>
 							</Form>
-						)}
+						) : null}
 					</CardContent>
 				</Card>
 
@@ -620,13 +634,13 @@ export default function ComptrollerDetail({
 						{finalReceived ? (
 							<p className="text-sm text-muted-foreground">
 								{t("comptroller_detail.final_recorded", {
-									amount: formatMoney(doc.finalPaymentAmount ?? 0),
+									amount: formatMoney(Number(finalPayment?.amount ?? 0)),
 									date: new Date(
-										doc.finalPaymentReceivedAt!,
+										finalPayment?.date ?? new Date(),
 									).toLocaleDateString(),
 								})}
 							</p>
-						) : (
+						) : stage === "IN_CLARO_QUEUE" ? (
 							<Form method="post" className="space-y-3">
 								<input type="hidden" name="intent" value="record_final" />
 								<div className="space-y-1">
@@ -656,11 +670,18 @@ export default function ComptrollerDetail({
 										required
 									/>
 								</div>
+								<div className="space-y-1">
+									<Label htmlFor="final-note">
+										{t("comptroller_detail.payment_note_label")}
+									</Label>
+									<Input id="final-note" name="paymentNote" />
+								</div>
+								\n
 								<Button type="submit" size="sm">
-									{t("comptroller_detail.record_final_submit")}
+									\n {t("comptroller_detail.record_final_submit")}
 								</Button>
 							</Form>
-						)}
+						) : null}
 					</CardContent>
 				</Card>
 			</div>

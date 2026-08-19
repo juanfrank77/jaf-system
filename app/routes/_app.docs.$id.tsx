@@ -44,6 +44,12 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const assignedCrew = await db.user.findMany({
 		where: { id: { in: doc.assignedCrewIds } },
 	})
+	if (
+		doc.status === "LC_REQUEST_GENERATED" &&
+		!["FINANCE", "ADMIN"].includes(user.role)
+	) {
+		throw new Response("Not Found", { status: 404 })
+	}
 	const auditTrail = await db.auditTrail.findMany({
 		where: { docId: doc.id },
 		include: { user: true },

@@ -6,13 +6,11 @@ import { Button, buttonVariants } from "~/components/ui/button"
 import { Card, CardContent } from "~/components/ui/card"
 import { db } from "~/lib/db.server"
 import { isComptrollerEnabled } from "~/lib/features.server"
-import {
-	FINANCEABLE_STATUSES,
-	invoiceTotalUsed,
-} from "~/lib/finance-pipeline.server"
+import { invoiceTotalUsed } from "~/lib/finance-pipeline.server"
 import { requireRole } from "~/lib/permissions.server"
-import { getIvuRate } from "~/lib/system-settings.server"
+import { getIvuRate, getLcPbccAdvanceRate } from "~/lib/system-settings.server"
 import { cn, formatMoney, toNumberPrice } from "~/lib/utils"
+import type { DocStatus } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.comptroller"
 
 export const meta: Route.MetaFunction = () => [
@@ -55,9 +53,10 @@ export async function loader({ request }: Route.LoaderArgs) {
 	if (!isComptrollerEnabled()) throw data(null, { status: 404 })
 	const { user } = await requireRole(request, ["COMPTROLLER", "ADMIN"])
 
-	const [serviceCodes, ivuRate] = await Promise.all([
+	const [serviceCodes, ivuRate, lcPbccAdvanceRate] = await Promise.all([
 		db.serviceCode.findMany(),
 		getIvuRate(),
+		getLcPbccAdvanceRate(),
 	])
 	const codeMap = Object.fromEntries(
 		serviceCodes.map((c) => [c.id, { unitPrice: toNumberPrice(c.unitPrice) }]),
@@ -72,10 +71,17 @@ export async function loader({ request }: Route.LoaderArgs) {
 		materialsTaken: true,
 	} as const
 
+	const comptrollerStatuses: DocStatus[] = [
+		"SUPERVISOR_APPROVED",
+		"CLARO_UPLOADED",
+	]
 	const [incomingRaw, awaitingAdvanceRaw, awaitingFinalRaw, crewsToPayRaw] =
 		await Promise.all([
 			db.jafInvoice.findMany({
-				where: { pbccRequestSentAt: { not: null } },
+				where: {
+					status: { in: comptrollerStatuses },
+					pbccRequestSentAt: { not: null },
+				},
 				orderBy: { karmenCopySentAt: "desc" },
 				take: 100,
 				select: {
@@ -87,9 +93,9 @@ export async function loader({ request }: Route.LoaderArgs) {
 			}),
 			db.jafInvoice.findMany({
 				where: {
-					status: { in: FINANCEABLE_STATUSES },
+					status: { in: comptrollerStatuses },
 					pbccRequestSentAt: { not: null },
-					advanceReceivedAt: null,
+					paymentRecords: { none: { type: "PBCC_ADVANCE" } },
 					receivableClosedAt: null,
 				},
 				orderBy: { pbccRequestSentAt: "asc" },
@@ -101,9 +107,9 @@ export async function loader({ request }: Route.LoaderArgs) {
 			}),
 			db.jafInvoice.findMany({
 				where: {
-					status: { in: FINANCEABLE_STATUSES },
+					status: { in: comptrollerStatuses },
 					finalClaroUploadedAt: { not: null },
-					finalPaymentReceivedAt: null,
+					paymentRecords: { none: { type: "CLARO_FINAL" } },
 					receivableClosedAt: null,
 				},
 				orderBy: { finalClaroUploadedAt: "asc" },
@@ -115,17 +121,22 @@ export async function loader({ request }: Route.LoaderArgs) {
 			}),
 			db.jafInvoice.findMany({
 				where: {
-					status: { in: FINANCEABLE_STATUSES },
-					advanceReceivedAt: { not: null },
-					paymentRecords: { none: { type: "CREW_PAYMENT" } },
+					status: { in: comptrollerStatuses },
+					AND: [
+						{ paymentRecords: { some: { type: "PBCC_ADVANCE" } } },
+						{ paymentRecords: { none: { type: "CREW_PAYMENT" } } },
+					],
 					receivableClosedAt: null,
 				},
 				orderBy: { advanceReceivedAt: "asc" },
 				take: 100,
 				select: {
 					...selectAmountFields,
-					advanceAmount: true,
 					assignedCrewIds: true,
+					paymentRecords: {
+						where: { type: "PBCC_ADVANCE" },
+						select: { amount: true },
+					},
 				},
 			}),
 		])
@@ -178,7 +189,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 	const awaitingAdvance: AwaitingAdvanceRow[] = awaitingAdvanceRaw.map((d) => ({
 		...toRow(d),
-		expectedAdvance: toRow(d).amount * 0.8,
+		expectedAdvance: toRow(d).amount * lcPbccAdvanceRate,
 		pbccRequestSentAt: d.pbccRequestSentAt ?? new Date(),
 		ageDays: Math.floor(
 			(Date.now() - new Date(d.pbccRequestSentAt ?? new Date()).getTime()) /
@@ -203,7 +214,9 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 	const crewsToPay: CrewToPayRow[] = crewsToPayRaw.map((d) => ({
 		...toRow(d),
-		advanceAmount: d.advanceAmount ? Number(d.advanceAmount) : null,
+		advanceAmount: d.paymentRecords[0]?.amount
+			? Number(d.paymentRecords[0].amount)
+			: null,
 		assignedCrewIds: d.assignedCrewIds,
 		crewNames: d.assignedCrewIds.map(
 			(id) => crewNameMap.get(id) ?? id.slice(-6),
@@ -219,6 +232,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		awaitingFinal,
 		crewsToPay,
 		unreadCount,
+		lcPbccAdvanceRate,
 		awaitingFundsCount,
 	}
 }
@@ -265,6 +279,7 @@ export default function ComptrollerDashboard({
 		crewsToPay,
 		unreadCount,
 		awaitingFundsCount,
+		lcPbccAdvanceRate,
 	} = loaderData
 	const { t } = useTranslation()
 
@@ -389,7 +404,9 @@ export default function ComptrollerDashboard({
 
 			<div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
 				<SectionCard
-					title={t("comptroller_dashboard.awaiting_advance_heading")}
+					title={t("comptroller_dashboard.awaiting_advance_heading", {
+						rate: (lcPbccAdvanceRate * 100).toFixed(1),
+					})}
 					count={
 						awaitingAdvance.length > 0 ? awaitingAdvance.length : undefined
 					}

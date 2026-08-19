@@ -362,8 +362,12 @@
 			"invalid_rate": "La tasa de IVU debe ser un decimal entre 0 y 1 (ej. 0.115 para 11.5%)",
 			"invalid_aging_days": "Los días de alerta de antigüedad deben ser un número entero positivo.",
 			"invalid_tolerance": "La tolerancia debe ser un número no negativo.",
-			"unknown_intent": "Acción desconocida."
-		}
+			"unknown_intent": "Acción desconocida.",
+			"invalid_lc_pbcc_rate": "Ingrese una tasa mayor que 0 y no mayor que 1."
+		},
+		"lc_pbcc_heading": "Tasa de anticipo LC/PBCC",
+		"lc_pbcc_description": "El anticipo de PBCC es actualmente {current}% del total de factura verificado. IVU se mantiene separado.",
+		"lc_pbcc_label": "Tasa de anticipo (decimal)"
 	},
 	"admin_catalog": {
 		"title": "Catálogo de servicios",
@@ -540,15 +544,24 @@
 		"generate_pbcc": "Generar solicitud PBCC",
 		"upload_final_doc": "Cargar documento final",
 		"record_po": "Registrar PO",
-		"record_advance": "Registrar 80%",
-		"advance_placeholder": "Monto del 80%",
+		"record_advance": "Registrar anticipo",
+		"advance_placeholder": "Monto del anticipo",
+		"payment_date": "Fecha del pago",
+		"payment_note": "Nota del pago",
 		"record_final": "Registrar final",
 		"final_placeholder": "Monto final",
 		"close": "Cerrar",
 		"errors": {
 			"invalid_amount": "Cantidad inválida",
 			"record_both_first": "Registra ambos pagos antes de cerrar",
-			"payment_role_required": "Solo la contralora puede registrar pagos."
+			"payment_role_required": "Solo Finanzas, Contraloría o Administración pueden registrar pagos.",
+			"invalid_stage": "Esta acción no está disponible en la etapa financiera actual.",
+			"invalid_payment": "Ingrese un monto positivo y una fecha de pago válidos.",
+			"advance_already_recorded": "El anticipo PBCC ya está registrado.",
+			"final_already_recorded": "El pago final ya está registrado.",
+			"close_role_required": "Solo Finanzas o Administración pueden cerrar una cuenta por cobrar.",
+			"already_closed": "Esta cuenta por cobrar ya está cerrada.",
+			"unknown_intent": "Acción desconocida."
 		},
 		"waiting_for_payment": "Esperando registro de contraloría"
 	},
@@ -596,7 +609,9 @@
 		"errors": {
 			"note_required": "Se requiere una nota de devolución.",
 			"invalid_aviso_amount": "Ingresa un monto de Aviso válido.",
-			"amount_mismatch": "El monto del Aviso difiere del total de la factura por {{difference}} (tolerancia: {{tolerance}})."
+			"amount_mismatch": "El monto del Aviso difiere del total de la factura por {{difference}} (tolerancia: {{tolerance}}).",
+			"invalid_stage": "Este trabajo no está en la etapa de verificación.",
+			"terminal_status": "Este trabajo ya no es editable."
 		}
 	},
 	"finance_pbcc": {
@@ -605,10 +620,14 @@
 		"address": "Dirección",
 		"aviso_number": "Aviso #",
 		"amount": "Monto de factura",
-		"advance": "Adelanto PBCC (80%)",
+		"advance": "Adelanto PBCC ({{rate}}%)",
 		"ivu_rate": "Tasa de IVU: {{rate}}%",
 		"hint": "Generar este PDF guarda la solicitud, la marca como enviada y envía una copia a la Contralora.",
-		"generate_and_download": "Generar y descargar solicitud PBCC"
+		"generate_and_download": "Generar y descargar solicitud PBCC",
+		"errors": {
+			"unknown_intent": "Acción desconocida.",
+			"terminal_status": "Este trabajo ya no es editable."
+		}
 	},
 	"finance_po": {
 		"title": "PO de Claro y documento final",
@@ -636,7 +655,8 @@
 		"errors": {
 			"po_number_required": "Se requiere el número de PO.",
 			"invalid_po_amount": "Ingresa un monto de PO válido y no negativo.",
-			"record_po_first": "Registra un PO antes de generar el documento final."
+			"record_po_first": "Registra un PO antes de generar el documento final.",
+			"terminal_status": "Este trabajo ya no es editable."
 		}
 	},
 	"material_line_items": {
@@ -754,7 +774,7 @@
 		"sent_on": "Enviado el {{date}}",
 		"download_pbcc": "Descargar solicitud PBCC",
 		"mark_read": "Marcar como leído",
-		"awaiting_advance_heading": "Esperando adelanto PBCC (80%)",
+		"awaiting_advance_heading": "Esperando adelanto PBCC ({{rate}}%)",
 		"no_awaiting_advance": "No hay trabajos esperando adelanto PBCC.",
 		"awaiting_funds_badge": "Esperando fondos",
 		"expected_advance": "Adelanto esperado: {{amount}}",
@@ -777,7 +797,7 @@
 		"supervisor": "Supervisor",
 		"current_crew": "Cuadrilla actual",
 		"invoice_amount": "Monto de factura",
-		"expected_advance": "Adelanto PBCC esperado (80%)",
+		"expected_advance": "Adelanto PBCC esperado ({{rate}}%)",
 		"advance_status": "Adelanto PBCC",
 		"final_status": "Pago final de Claro",
 		"crew_payment_status": "Pago de cuadrilla",
@@ -788,6 +808,7 @@
 		"download_pbcc": "Descargar solicitud PBCC",
 		"record_advance_heading": "Registrar adelanto PBCC",
 		"date_label": "Fecha",
+		"payment_note_label": "Nota del pago",
 		"amount_label": "Monto",
 		"record_advance_submit": "Registrar adelanto",
 		"advance_recorded": "Adelanto de {{amount}} registrado el {{date}}",

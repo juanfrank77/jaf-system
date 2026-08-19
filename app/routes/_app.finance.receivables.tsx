@@ -6,6 +6,8 @@ import { Button, buttonVariants } from "~/components/ui/button"
 import { Card, CardContent } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
 import { db } from "~/lib/db.server"
+import { sendInternalEmail } from "~/lib/email.server"
+import { isComptrollerEnabled } from "~/lib/features.server"
 import {
 	FINANCE_STAGES,
 	type FinanceStage,
@@ -23,8 +25,15 @@ import {
 	isMissingAviso,
 	isMissingClaroPdf,
 } from "~/lib/finance-pipeline.server"
+import {
+	parsePaymentDate,
+	paymentForType,
+	recordReceivablePayment,
+} from "~/lib/payment-records.server"
 import { requireRole } from "~/lib/permissions.server"
+import { getAgingAlertDays } from "~/lib/system-settings.server"
 import { formatMoney } from "~/lib/utils"
+import type { DocStatus } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.finance.receivables"
 
 export const meta: Route.MetaFunction = () => [
@@ -37,14 +46,27 @@ export async function loader({ request }: Route.LoaderArgs) {
 		"COMPTROLLER",
 		"ADMIN",
 	])
+	if (user.role === "COMPTROLLER" && !isComptrollerEnabled())
+		throw new Response("Not found", { status: 404 })
 	const url = new URL(request.url)
 	const stageFilter = url.searchParams.get("stage") as FinanceStage | null
 
-	const { codeMap, ivuRate, tolerance } = await fetchInvoiceTotalContext()
+	const [{ codeMap, ivuRate, tolerance }, agingAlertDays] = await Promise.all([
+		fetchInvoiceTotalContext(),
+		getAgingAlertDays(),
+	])
 
+	const financeStatuses: DocStatus[] =
+		user.role === "COMPTROLLER"
+			? ["SUPERVISOR_APPROVED", "CLARO_UPLOADED"]
+			: FINANCEABLE_STATUSES
 	const invoices = await db.jafInvoice.findMany({
-		where: { status: { in: FINANCEABLE_STATUSES } },
-		include: { supervisor: true, poLinks: { orderBy: { id: "asc" } } },
+		where: { status: { in: financeStatuses } },
+		include: {
+			supervisor: true,
+			poLinks: { orderBy: { id: "asc" } },
+			paymentRecords: { select: { type: true, amount: true, date: true } },
+		},
 		orderBy: { supervisorApprovedAt: "asc" },
 		take: 200,
 	})
@@ -53,10 +75,13 @@ export async function loader({ request }: Route.LoaderArgs) {
 		const stage = computeFinanceStage(
 			inv,
 			inv.poLinks.length > 0,
+			inv.paymentRecords,
 		) as FinanceStage
 		const poDate = inv.poLinks[0]?.poDate ?? null
-		const ageDays = daysInStage(inv, stage, poDate)
-		const alertDays = financeStageAlertDays(stage)
+		const advancePayment = paymentForType(inv.paymentRecords, "PBCC_ADVANCE")
+		const finalPayment = paymentForType(inv.paymentRecords, "CLARO_FINAL")
+		const ageDays = daysInStage(inv, stage, poDate, inv.paymentRecords)
+		const alertDays = financeStageAlertDays(stage, agingAlertDays)
 		const isAlert = alertDays !== null && ageDays > alertDays
 		const amount = invoiceTotalUsed(inv, codeMap, ivuRate)
 		const poLink = inv.poLinks[0] ?? null
@@ -67,6 +92,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 				false
 		return {
 			id: inv.id,
+			status: inv.status,
 			controlNumber: inv.controlNumber,
 			avisoNumber: inv.avisoNumber,
 			supervisorName: inv.supervisor?.name ?? "—",
@@ -78,10 +104,10 @@ export async function loader({ request }: Route.LoaderArgs) {
 			amount,
 			missingAviso: isMissingAviso(inv),
 			missingClaroPdf: isMissingClaroPdf(inv),
-			advanceAmount: inv.advanceAmount ? Number(inv.advanceAmount) : null,
-			finalPaymentAmount: inv.finalPaymentAmount
-				? Number(inv.finalPaymentAmount)
-				: null,
+			advanceAmount:
+				advancePayment?.amount != null ? Number(advancePayment.amount) : null,
+			finalPaymentAmount:
+				finalPayment?.amount != null ? Number(finalPayment.amount) : null,
 			poMismatch,
 			poAmount,
 		}
@@ -136,7 +162,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		totals[r.stage].amount += r.amount
 	}
 
-	return { rows: filtered, totals, stageFilter, ivuRate, user }
+	return { rows: filtered, totals, stageFilter, ivuRate, user, agingAlertDays }
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -145,81 +171,117 @@ export async function action({ request }: Route.ActionArgs) {
 		"COMPTROLLER",
 		"ADMIN",
 	])
+	if (user.role === "COMPTROLLER" && !isComptrollerEnabled())
+		throw new Response("Not found", { status: 404 })
 	const form = await request.formData()
 	const intent = form.get("intent") as string
 	const docId = form.get("docId") as string
 
 	if (intent === "record_advance" || intent === "record_final") {
-		if (!["COMPTROLLER", "ADMIN"].includes(user.role)) {
-			return { errorKey: "finance_receivables.errors.payment_role_required" }
-		}
-	}
-
-	if (intent === "record_advance") {
-		const amount = parseFloat(form.get("advanceAmount") as string)
-		if (Number.isNaN(amount))
-			return { errorKey: "finance_receivables.errors.invalid_amount" }
-		await db.$transaction([
-			db.jafInvoice.update({
-				where: { id: docId },
-				data: { advanceReceivedAt: new Date(), advanceAmount: amount },
-			}),
-			db.auditTrail.create({
-				data: {
-					docId,
-					userId: user.id,
-					action: "ADVANCE_RECEIVED",
-					diffJson: { advanceAmount: amount },
-				},
-			}),
-		])
-	}
-
-	if (intent === "record_final") {
-		const amount = parseFloat(form.get("finalAmount") as string)
-		if (Number.isNaN(amount))
-			return { errorKey: "finance_receivables.errors.invalid_amount" }
-		await db.$transaction([
-			db.jafInvoice.update({
-				where: { id: docId },
-				data: {
-					finalPaymentReceivedAt: new Date(),
-					finalPaymentAmount: amount,
-				},
-			}),
-			db.auditTrail.create({
-				data: {
-					docId,
-					userId: user.id,
-					action: "FINAL_PAYMENT_RECEIVED",
-					diffJson: { finalPaymentAmount: amount },
-				},
-			}),
-		])
+		const doc = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: docId },
+			include: { poLinks: true, paymentRecords: { select: { type: true } } },
+		})
+		if (doc.status === "LC_REQUEST_GENERATED")
+			return { errorKey: "finance_receivables.errors.invalid_stage" }
+		const stage = computeFinanceStage(
+			doc,
+			doc.poLinks.length > 0,
+			doc.paymentRecords,
+		)
+		const expectedStage =
+			intent === "record_advance" ? "WAITING_PBCC_FUNDING" : "IN_CLARO_QUEUE"
+		if (stage !== expectedStage)
+			return { errorKey: "finance_receivables.errors.invalid_stage" }
+		const amount = Number(
+			form.get(intent === "record_advance" ? "advanceAmount" : "finalAmount"),
+		)
+		const date = parsePaymentDate(form.get("paymentDate") as string | null)
+		const note = (form.get("paymentNote") as string | null)?.trim() || null
+		if (!Number.isFinite(amount) || amount <= 0 || !date)
+			return { errorKey: "finance_receivables.errors.invalid_payment" }
+		const result = await recordReceivablePayment({
+			jobId: docId,
+			type: intent === "record_advance" ? "PBCC_ADVANCE" : "CLARO_FINAL",
+			amount,
+			date,
+			note,
+			actorId: user.id,
+		})
+		if (result.duplicate)
+			return {
+				errorKey:
+					intent === "record_advance"
+						? "finance_receivables.errors.advance_already_recorded"
+						: "finance_receivables.errors.final_already_recorded",
+			}
+		const financeUsers = await db.user.findMany({
+			where: { role: "FINANCE", active: true },
+			select: { id: true, email: true },
+		})
+		const label =
+			intent === "record_advance" ? "PBCC advance" : "Claro final payment"
+		await db.notification.createMany({
+			data: financeUsers.map((recipient) => ({
+				userId: recipient.id,
+				docId,
+				message: `${label} recorded for ${doc.controlNumber}.`,
+			})),
+		})
+		await sendInternalEmail({
+			docId,
+			actorId: user.id,
+			recipients: financeUsers.map((recipient) => recipient.email),
+			subject: `${label}: ${doc.controlNumber}`,
+			context: "RECEIVABLE_PAYMENT",
+		})
+		return null
 	}
 
 	if (intent === "close") {
-		const doc = await db.jafInvoice.findUniqueOrThrow({ where: { id: docId } })
-		if (!doc.advanceReceivedAt || !doc.finalPaymentReceivedAt) {
+		if (user.role !== "FINANCE" && user.role !== "ADMIN")
+			return { errorKey: "finance_receivables.errors.close_role_required" }
+		const doc = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: docId },
+			include: { poLinks: true, paymentRecords: { select: { type: true } } },
+		})
+		if (doc.status === "LC_REQUEST_GENERATED")
+			return { errorKey: "finance_receivables.errors.invalid_stage" }
+		if (doc.receivableClosedAt)
+			return { errorKey: "finance_receivables.errors.already_closed" }
+		const stage = computeFinanceStage(
+			doc,
+			doc.poLinks.length > 0,
+			doc.paymentRecords,
+		)
+		if (stage !== "READY_TO_CLOSE")
 			return { errorKey: "finance_receivables.errors.record_both_first" }
-		}
-		await db.$transaction([
-			db.jafInvoice.update({
-				where: { id: docId },
-				data: { receivableClosedAt: new Date(), receivableClosedById: user.id },
-			}),
-			db.auditTrail.create({
+		const closedAt = new Date()
+		const updated = await db.$transaction(async (tx) => {
+			const result = await tx.jafInvoice.updateMany({
+				where: { id: docId, receivableClosedAt: null },
+				data: { receivableClosedAt: closedAt, receivableClosedById: user.id },
+			})
+			if (result.count !== 1) return false
+			await tx.auditTrail.create({
 				data: {
 					docId,
 					userId: user.id,
 					action: "RECEIVABLE_CLOSED",
-					diffJson: {},
+					diffJson: {
+						source: "receivableClosedAt",
+						paymentTypes: ["PBCC_ADVANCE", "CLARO_FINAL"],
+					},
 				},
-			}),
-		])
+			})
+			return true
+		})
+		if (!updated)
+			return { errorKey: "finance_receivables.errors.already_closed" }
+		return null
 	}
 
-	return null
+	return { errorKey: "finance_receivables.errors.unknown_intent" }
 }
 
 const AGE_COLOR = (days: number, isAlert: boolean) => {
@@ -250,7 +312,10 @@ export default function FinancePipeline({
 	const { rows, totals, stageFilter, user } = loaderData
 	const { t } = useTranslation()
 	const error = actionData as { errorKey?: string } | null
-	const canRecordPayment = user.role === "COMPTROLLER" || user.role === "ADMIN"
+	const canRecordPayment = ["FINANCE", "COMPTROLLER", "ADMIN"].includes(
+		user.role,
+	)
+	const today = new Date().toISOString().slice(0, 10)
 
 	return (
 		<div className="space-y-6">
@@ -345,121 +410,205 @@ export default function FinancePipeline({
 								)}
 							</div>
 
-							<div className="flex flex-wrap items-center gap-2">
-								<Link
-									to={`/finance/verify/${row.id}`}
-									className={buttonVariants({
-										variant: "outline",
-										size: "sm",
-									})}
-								>
-									{t("finance_receivables.verify")}
-								</Link>
+							{row.status !== "LC_REQUEST_GENERATED" && (
+								<div className="flex flex-wrap items-center gap-2">
+									{row.stage === "TO_VERIFY" && (
+										<Link
+											to={`/finance/verify/${row.id}`}
+											className={buttonVariants({
+												variant: "outline",
+												size: "sm",
+											})}
+										>
+											{t("finance_receivables.verify")}
+										</Link>
+									)}
 
-								{row.stage === "PBCC_REQUEST_PENDING" && (
-									<Link
-										to={`/finance/pbcc/${row.id}`}
-										className={buttonVariants({ size: "sm" })}
-									>
-										{t("finance_receivables.generate_pbcc")}
-									</Link>
-								)}
+									{row.stage === "PBCC_REQUEST_PENDING" && (
+										<Link
+											to={`/finance/pbcc/${row.id}`}
+											className={buttonVariants({ size: "sm" })}
+										>
+											{t("finance_receivables.generate_pbcc")}
+										</Link>
+									)}
 
-								{row.stage === "PO_RECEIVED_UPLOAD" && (
-									<Link
-										to={`/finance/po/${row.id}`}
-										className={buttonVariants({ size: "sm" })}
-									>
-										{t("finance_receivables.upload_final_doc")}
-									</Link>
-								)}
+									{row.stage === "PO_RECEIVED_UPLOAD" && (
+										<Link
+											to={`/finance/po/${row.id}`}
+											className={buttonVariants({ size: "sm" })}
+										>
+											{t("finance_receivables.upload_final_doc")}
+										</Link>
+									)}
 
-								{row.stage === "READY_TO_CLOSE" && (
-									<Form method="post" className="inline">
-										<input type="hidden" name="intent" value="close" />
-										<input type="hidden" name="docId" value={row.id} />
-										<Button type="submit" size="sm">
-											{t("finance_receivables.close")}
-										</Button>
-									</Form>
-								)}
+									{row.stage === "READY_TO_CLOSE" && (
+										<Form method="post" className="inline">
+											<input type="hidden" name="intent" value="close" />
+											<input type="hidden" name="docId" value={row.id} />
+											<Button type="submit" size="sm">
+												{t("finance_receivables.close")}
+											</Button>
+										</Form>
+									)}
 
-								{row.stage === "WAITING_CLARO_PO" && (
-									<Link
-										to={`/finance/po/${row.id}`}
-										className={buttonVariants({
-											variant: "outline",
-											size: "sm",
-										})}
-									>
-										{t("finance_receivables.record_po")}
-									</Link>
-								)}
+									{row.stage === "WAITING_CLARO_PO" && (
+										<Link
+											to={`/finance/po/${row.id}`}
+											className={buttonVariants({
+												variant: "outline",
+												size: "sm",
+											})}
+										>
+											{t("finance_receivables.record_po")}
+										</Link>
+									)}
 
-								{(row.stage === "WAITING_PBCC_FUNDING" ||
-									row.stage === "IN_CLARO_QUEUE") && (
-									<div className="flex items-center gap-2">
-										{canRecordPayment ? (
-											<>
-												<Form method="post" className="flex gap-2">
-													<input
-														type="hidden"
-														name="intent"
-														value="record_advance"
-													/>
-													<input type="hidden" name="docId" value={row.id} />
-													<Input
-														name="advanceAmount"
-														type="number"
-														step="0.01"
-														placeholder={t(
-															"finance_receivables.advance_placeholder",
-														)}
-														className="h-8 w-28 text-sm"
-													/>
-													<Button
-														type="submit"
-														size="sm"
-														variant="outline"
-														className="h-8 text-sm"
-													>
-														{t("finance_receivables.record_advance")}
-													</Button>
-												</Form>
-												<Form method="post" className="flex gap-2">
-													<input
-														type="hidden"
-														name="intent"
-														value="record_final"
-													/>
-													<input type="hidden" name="docId" value={row.id} />
-													<Input
-														name="finalAmount"
-														type="number"
-														step="0.01"
-														placeholder={t(
-															"finance_receivables.final_placeholder",
-														)}
-														className="h-8 w-28 text-sm"
-													/>
-													<Button
-														type="submit"
-														size="sm"
-														variant="outline"
-														className="h-8 text-sm"
-													>
-														{t("finance_receivables.record_final")}
-													</Button>
-												</Form>
-											</>
-										) : (
+									{canRecordPayment && row.stage === "WAITING_PBCC_FUNDING" && (
+										<Form
+											method="post"
+											className="flex flex-wrap items-end gap-2"
+										>
+											<input
+												type="hidden"
+												name="intent"
+												value="record_advance"
+											/>
+											<input type="hidden" name="docId" value={row.id} />
+											<div>
+												<label
+													htmlFor={`advance-amount-${row.id}`}
+													className="text-xs text-muted-foreground"
+												>
+													{t("finance_receivables.amount_label")}
+												</label>
+												<Input
+													id={`advance-amount-${row.id}`}
+													name="advanceAmount"
+													type="number"
+													step="0.01"
+													min="0.01"
+													placeholder={t(
+														"finance_receivables.advance_placeholder",
+													)}
+													className="h-8 w-28 text-sm"
+													required
+												/>
+											</div>
+											<div>
+												<label
+													htmlFor={`advance-date-${row.id}`}
+													className="text-xs text-muted-foreground"
+												>
+													{t("finance_receivables.payment_date")}
+												</label>
+												<Input
+													id={`advance-date-${row.id}`}
+													name="paymentDate"
+													type="date"
+													defaultValue={today}
+													className="h-8 text-sm"
+													required
+												/>
+											</div>
+											<div>
+												<label
+													htmlFor={`advance-note-${row.id}`}
+													className="text-xs text-muted-foreground"
+												>
+													{t("finance_receivables.payment_note")}
+												</label>
+												<Input
+													id={`advance-note-${row.id}`}
+													name="paymentNote"
+													className="h-8 w-36 text-sm"
+												/>
+											</div>
+											<Button
+												type="submit"
+												size="sm"
+												variant="outline"
+												className="h-8"
+											>
+												{t("finance_receivables.record_advance")}
+											</Button>
+										</Form>
+									)}
+									{canRecordPayment && row.stage === "IN_CLARO_QUEUE" && (
+										<Form
+											method="post"
+											className="flex flex-wrap items-end gap-2"
+										>
+											<input type="hidden" name="intent" value="record_final" />
+											<input type="hidden" name="docId" value={row.id} />
+											<div>
+												<label
+													htmlFor={`final-amount-${row.id}`}
+													className="text-xs text-muted-foreground"
+												>
+													{t("finance_receivables.amount_label")}
+												</label>
+												<Input
+													id={`final-amount-${row.id}`}
+													name="finalAmount"
+													type="number"
+													step="0.01"
+													min="0.01"
+													placeholder={t(
+														"finance_receivables.final_placeholder",
+													)}
+													className="h-8 w-28 text-sm"
+													required
+												/>
+											</div>
+											<div>
+												<label
+													htmlFor={`final-date-${row.id}`}
+													className="text-xs text-muted-foreground"
+												>
+													{t("finance_receivables.payment_date")}
+												</label>
+												<Input
+													id={`final-date-${row.id}`}
+													name="paymentDate"
+													type="date"
+													defaultValue={today}
+													className="h-8 text-sm"
+													required
+												/>
+											</div>
+											<div>
+												<label
+													htmlFor={`final-note-${row.id}`}
+													className="text-xs text-muted-foreground"
+												>
+													{t("finance_receivables.payment_note")}
+												</label>
+												<Input
+													id={`final-note-${row.id}`}
+													name="paymentNote"
+													className="h-8 w-36 text-sm"
+												/>
+											</div>
+											<Button
+												type="submit"
+												size="sm"
+												variant="outline"
+												className="h-8"
+											>
+												{t("finance_receivables.record_final")}
+											</Button>
+										</Form>
+									)}
+									{!canRecordPayment &&
+										(row.stage === "WAITING_PBCC_FUNDING" ||
+											row.stage === "IN_CLARO_QUEUE") && (
 											<span className="text-xs text-muted-foreground">
 												{t("finance_receivables.waiting_for_payment")}
 											</span>
 										)}
-									</div>
-								)}
-							</div>
+								</div>
+							)}
 						</CardContent>
 					</Card>
 				))}

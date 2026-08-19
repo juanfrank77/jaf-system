@@ -29,6 +29,8 @@ import { requireRole } from "~/lib/permissions.server"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id_.field"
 
+type MaterialLine = { serviceCodeId: string; qty: number }
+
 export const meta: Route.MetaFunction = ({ data }) => [
 	{
 		title: data
@@ -36,6 +38,26 @@ export const meta: Route.MetaFunction = ({ data }) => [
 			: "JAF Ops",
 	},
 ]
+
+function buildQuantityDiscrepancies(
+	taken: MaterialLine[],
+	used: MaterialLine[],
+): { serviceCodeId: string; takenQty: number; usedQty: number }[] {
+	const takenMap = Object.fromEntries(
+		taken.map((t) => [t.serviceCodeId, t.qty]),
+	)
+	const usedMap = Object.fromEntries(used.map((u) => [u.serviceCodeId, u.qty]))
+	const allIds = Array.from(
+		new Set([...Object.keys(takenMap), ...Object.keys(usedMap)]),
+	)
+	return allIds
+		.map((serviceCodeId) => {
+			const takenQty = takenMap[serviceCodeId] ?? 0
+			const usedQty = usedMap[serviceCodeId] ?? 0
+			return { serviceCodeId, takenQty, usedQty }
+		})
+		.filter((d) => d.takenQty !== d.usedQty)
+}
 
 export async function loader({ request, params }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["CREW", "ADMIN"])
@@ -91,8 +113,12 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	const form = await request.formData()
+	// Signed quantities are immutable after pickup. Ignore any attempt to overwrite them.
+	form.delete("materialsTaken")
 	const jobAddressActual = (form.get("jobAddressActual") as string).trim()
 	const fieldNotes = (form.get("fieldNotes") as string | null)?.trim() || null
+	const discrepancyNote =
+		(form.get("discrepancyNote") as string | null)?.trim() || null
 	const materialsRaw = form.get("materialsUsed") as string
 	const completionSignature = form.get("completionSignature") as string
 	const startedAtRaw = form.get("startedAt") as string | null
@@ -103,29 +129,21 @@ export async function action({ request, params }: Route.ActionArgs) {
 		return { errorKey: "docs_field.errors.completion_signature_required" }
 	}
 
-	let materialsUsed: { serviceCodeId: string; qty: number }[] = []
+	let materialsUsed: MaterialLine[] = []
 	try {
 		materialsUsed = JSON.parse(materialsRaw).filter(
-			(i: { serviceCodeId: string; qty: number }) =>
-				i.serviceCodeId && i.qty > 0,
+			(i: MaterialLine) => i.serviceCodeId && i.qty > 0,
 		)
 	} catch {
 		return { errorKey: "docs_field.errors.invalid_materials" }
 	}
 
-	// Enforce materialsUsed <= materialsTaken
-	const taken =
-		(doc.materialsTaken as { serviceCodeId: string; qty: number }[]) || []
-	const takenMap = Object.fromEntries(
-		taken.map((t) => [t.serviceCodeId, t.qty]),
-	)
-	for (const item of materialsUsed) {
-		if (taken.length > 0 && (takenMap[item.serviceCodeId] ?? 0) < item.qty) {
-			return {
-				errorKey: "docs_field.errors.exceeds_taken",
-				errorParams: { serviceCodeId: item.serviceCodeId },
-			}
-		}
+	const taken = (doc.materialsTaken as MaterialLine[] | null) ?? []
+
+	const quantityDiscrepancies = buildQuantityDiscrepancies(taken, materialsUsed)
+	const hasQuantityDiscrepancy = quantityDiscrepancies.length > 0
+	if (hasQuantityDiscrepancy && !discrepancyNote) {
+		return { errorKey: "docs_field.errors.discrepancy_note_required" }
 	}
 
 	// Handle photo uploads
@@ -172,7 +190,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const startedAt = startedAtRaw ? new Date(startedAtRaw) : undefined
 	const endedAt = endedAtRaw ? new Date(endedAtRaw) : undefined
 
-	await db.$transaction([
+	const ops: any[] = [
 		...photoPaths.map(({ path, tag }) =>
 			db.photo.create({
 				data: { docId: params.id, uploadedById: user.id, localPath: path, tag },
@@ -217,7 +235,26 @@ export async function action({ request, params }: Route.ActionArgs) {
 				message: `Job ${doc.controlNumber} marked complete by crew. Ready for your review.`,
 			},
 		}),
-	] as any)
+	]
+
+	if (hasQuantityDiscrepancy) {
+		ops.push(
+			db.auditTrail.create({
+				data: {
+					docId: params.id,
+					userId: user.id,
+					action: "QUANTITY_DISCREPANCY",
+					diffJson: {
+						discrepancies: quantityDiscrepancies,
+						note: discrepancyNote,
+						blocksFinance: false,
+					},
+				},
+			}),
+		)
+	}
+
+	await db.$transaction(ops)
 
 	throw redirect(`/docs/${params.id}`)
 }
@@ -228,6 +265,8 @@ export default function FieldUpdate({
 }: Route.ComponentProps) {
 	const { doc, serviceCodes, latestSendBack, sentByName } = loaderData
 	const taken = (doc.materialsTaken as any[]) || []
+	const used = (doc.materialsUsed as any[]) || []
+	const estimated = (doc.estimatedMaterials as any[]) || []
 	const corrections =
 		(doc.addressCorrections as AddressCorrection[] | null) || []
 	const { t } = useTranslation()
@@ -326,6 +365,8 @@ export default function FieldUpdate({
 		await queueFieldUpdate(doc.id, {
 			jobAddressActual: (formData.get("jobAddressActual") as string).trim(),
 			fieldNotes: (formData.get("fieldNotes") as string | null)?.trim() || null,
+			discrepancyNote:
+				(formData.get("discrepancyNote") as string | null)?.trim() || null,
 			materialsUsed: formData.get("materialsUsed") as string,
 			completionSignature: signature,
 			startedAt: (formData.get("startedAt") as string) || null,
@@ -476,15 +517,53 @@ export default function FieldUpdate({
 					</div>
 				</div>
 
-				<div>
+				<div className="border rounded-lg p-3 space-y-3">
 					<Label>{t("docs_field.materials_used_label")}</Label>
-					<p className="text-xs text-slate-500 mb-1">
+					<p className="text-xs text-slate-500">
 						{t("docs_field.materials_used_hint")}
 					</p>
-					<MaterialLineItems
-						serviceCodes={serviceCodes as any}
-						initialItems={taken}
-						name="materialsUsed"
+					{taken.length > 0 && (
+						<div className="bg-slate-50 rounded p-2">
+							<p className="text-xs font-medium text-slate-600 mb-1">
+								{t("docs_field.taken_reference_label")}
+							</p>
+							<MaterialLineItems
+								serviceCodes={serviceCodes as any}
+								initialItems={taken}
+								readOnly
+							/>
+						</div>
+					)}
+					<div>
+						<p className="text-xs font-medium text-slate-600 mb-1">
+							{t("docs_field.used_entry_label")}
+						</p>
+						<MaterialLineItems
+							serviceCodes={serviceCodes as any}
+							initialItems={used.length > 0 ? used : taken}
+							name="materialsUsed"
+						/>
+					</div>
+					{estimated.length > 0 && (
+						<p className="text-xs text-slate-500">
+							{t("docs_field.ordered_vs_installed_hint")}
+						</p>
+					)}
+				</div>
+
+				<div>
+					<Label htmlFor="discrepancyNote">
+						{t("docs_field.discrepancy_note_label")}
+					</Label>
+					<p className="text-xs text-slate-500 mb-1">
+						{t("docs_field.discrepancy_note_hint")}
+					</p>
+					<Textarea
+						id="discrepancyNote"
+						name="discrepancyNote"
+						rows={2}
+						placeholder={t("docs_field.discrepancy_note_placeholder")}
+						defaultValue=""
 					/>
 				</div>
 

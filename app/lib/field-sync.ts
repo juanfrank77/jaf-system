@@ -8,6 +8,7 @@ import {
 export type FieldUpdatePayload = {
 	jobAddressActual: string
 	fieldNotes?: string | null
+	discrepancyNote?: string | null
 	materialsUsed: string
 	completionSignature: string
 	startedAt?: string | null
@@ -58,6 +59,8 @@ export async function syncFieldUpdate(
 	const formData = new FormData()
 	formData.set("jobAddressActual", payload.jobAddressActual)
 	if (payload.fieldNotes) formData.set("fieldNotes", payload.fieldNotes)
+	if (payload.discrepancyNote)
+		formData.set("discrepancyNote", payload.discrepancyNote)
 	formData.set("materialsUsed", payload.materialsUsed)
 	formData.set("completionSignature", payload.completionSignature)
 	if (payload.startedAt) formData.set("startedAt", payload.startedAt)

@@ -25,6 +25,8 @@ import { requireRole } from "~/lib/permissions.server"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id_.sign"
 
+type MaterialLine = { serviceCodeId: string; qty: number }
+
 export const meta: Route.MetaFunction = ({ data }) => [
 	{
 		title: data
@@ -44,6 +46,14 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		where: { active: true },
 	})
 	const warehouses = await db.warehouse.findMany({ where: { active: true } })
+	const warehouseUsers = await db.user.findMany({
+		where: { role: "WAREHOUSE", active: true },
+		orderBy: { name: "asc" },
+	})
+	const crewUsers = await db.user.findMany({
+		where: { role: "CREW", active: true },
+		orderBy: { name: "asc" },
+	})
 	return {
 		doc,
 		user,
@@ -52,7 +62,34 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			unitPrice: toNumberPrice(c.unitPrice),
 		})),
 		warehouses,
+		warehouseUsers,
+		crewUsers,
 	}
+}
+
+function buildOverages(
+	materialsTaken: MaterialLine[],
+	estimatedMaterials: MaterialLine[],
+): { serviceCodeId: string; estimatedQty: number; takenQty: number }[] {
+	const estimatedMap = Object.fromEntries(
+		estimatedMaterials.map((e) => [e.serviceCodeId, e.qty]),
+	)
+	const overages: {
+		serviceCodeId: string
+		estimatedQty: number
+		takenQty: number
+	}[] = []
+	for (const taken of materialsTaken) {
+		const estimatedQty = estimatedMap[taken.serviceCodeId] ?? 0
+		if (taken.qty > estimatedQty) {
+			overages.push({
+				serviceCodeId: taken.serviceCodeId,
+				estimatedQty,
+				takenQty: taken.qty,
+			})
+		}
+	}
+	return overages
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
@@ -67,34 +104,68 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const releaseSignature = form.get("releaseSignature") as string
 	const crewSignature = form.get("crewSignature") as string
 	const warehouseId = form.get("warehouseId") as string
+	const releasedById = form.get("releasedById") as string
+	const signedById = form.get("signedById") as string
 	const materialsRaw = form.get("materials") as string
 
+	if (!warehouseId) {
+		return { errorKey: "docs_sign.errors.warehouse_required" }
+	}
+	if (!releasedById) {
+		return { errorKey: "docs_sign.errors.release_signer_required" }
+	}
+	if (!signedById) {
+		return { errorKey: "docs_sign.errors.crew_signer_required" }
+	}
 	if (!releaseSignature || releaseSignature === "data:,") {
 		return { errorKey: "docs_sign.errors.release_signature_required" }
 	}
 	if (!crewSignature || crewSignature === "data:,") {
 		return { errorKey: "docs_sign.errors.crew_signature_required" }
 	}
-	if (!warehouseId) {
-		return { errorKey: "docs_sign.errors.warehouse_required" }
-	}
 
-	let materialsTaken: { serviceCodeId: string; qty: number }[] = []
+	let materialsTaken: MaterialLine[] = []
 	try {
 		materialsTaken = JSON.parse(materialsRaw).filter(
-			(i: { serviceCodeId: string; qty: number }) =>
-				i.serviceCodeId && i.qty > 0,
+			(i: MaterialLine) => i.serviceCodeId && i.qty > 0,
 		)
 	} catch {
 		return { errorKey: "docs_sign.errors.invalid_materials" }
 	}
 
+	// Signer identity validation
+	const [releaseSigner, crewSigner, warehouse] = await Promise.all([
+		db.user.findFirst({
+			where: { id: releasedById, role: "WAREHOUSE", active: true },
+		}),
+		db.user.findFirst({
+			where: { id: signedById, role: "CREW", active: true },
+		}),
+		db.warehouse.findUnique({ where: { id: warehouseId } }),
+	])
+	if (!releaseSigner) {
+		return { errorKey: "docs_sign.errors.release_signer_invalid" }
+	}
+	if (!crewSigner) {
+		return { errorKey: "docs_sign.errors.crew_signer_invalid" }
+	}
+
+	// Permanently lock: refuse to overwrite an existing signed materials record.
+	const existingTaken = (doc.materialsTaken as MaterialLine[] | null) ?? []
+	if (existingTaken.length > 0) {
+		return { errorKey: "docs_sign.errors.already_signed" }
+	}
+
 	const serviceCodes = await db.serviceCode.findMany()
-	const warehouse = await db.warehouse.findUnique({
-		where: { id: warehouseId },
-	})
 	const pdfBytes = await generateWarehouseReceiptPdf(
-		doc as any,
+		{
+			...(doc as any),
+			materialsTaken,
+			releaseSignature,
+			crewSignature,
+			releaseSignerName: releaseSigner.name,
+			crewSignerName: crewSigner.name,
+		},
 		serviceCodes as any,
 		warehouse?.name ?? "",
 	)
@@ -104,35 +175,82 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const receiptPath = path.join(receiptDir, `${params.id}-receipt.pdf`)
 	await fs.writeFile(receiptPath, pdfBytes)
 
-	await db.$transaction([
-		db.jafInvoice.update({
-			where: { id: params.id },
-			data: {
-				status: "SIGNED",
+	const estimatedMaterials =
+		(doc.estimatedMaterials as MaterialLine[] | null) ?? []
+	const overages = buildOverages(materialsTaken, estimatedMaterials)
+	const hasOverage = overages.length > 0
+
+	const statusChangeAudit = db.auditTrail.create({
+		data: {
+			docId: params.id,
+			userId: user.id,
+			action: "STATUS_CHANGED",
+			diffJson: {
+				status: { before: doc.status, after: "SIGNED" },
 				warehouseId,
+				releasedById,
+				signedById,
 				materialsTaken,
-				releaseSignature,
-				releasedById: user.id,
-				releaseSignedAt: new Date(),
-				crewSignature,
-				signedById: user.id,
-				signedAt: new Date(),
-				warehouseReceiptPath: receiptPath,
 			},
-		}),
-		db.auditTrail.create({
-			data: {
-				docId: params.id,
-				userId: user.id,
-				action: "STATUS_CHANGED",
-				diffJson: {
-					status: { before: "PREPPED", after: "SIGNED" },
-					warehouseId,
-					materialsTaken,
+		},
+	})
+
+	const updateInvoice = db.jafInvoice.update({
+		where: { id: params.id },
+		data: {
+			status: "SIGNED",
+			warehouseId,
+			materialsTaken,
+			releaseSignature,
+			releasedById,
+			releaseSignedAt: new Date(),
+			crewSignature,
+			signedById,
+			signedAt: new Date(),
+			warehouseReceiptPath: receiptPath,
+		},
+	})
+
+	const ops: any[] = [updateInvoice, statusChangeAudit]
+
+	if (hasOverage) {
+		ops.push(
+			db.auditTrail.create({
+				data: {
+					docId: params.id,
+					userId: user.id,
+					action: "MATERIAL_OVERAGE",
+					diffJson: {
+						overages,
+						estimatedMaterials,
+						materialsTaken,
+						threshold: 0,
+					},
 				},
+			}),
+		)
+
+		const notifyUsers = await db.user.findMany({
+			where: {
+				active: true,
+				OR: [{ id: doc.supervisorId }, { role: "ADMIN" }],
 			},
-		}),
-	] as any)
+			select: { id: true },
+		})
+		ops.push(
+			...notifyUsers.map((u) =>
+				db.notification.create({
+					data: {
+						userId: u.id,
+						docId: params.id,
+						message: `Job ${doc.controlNumber} was signed with material overage. Review the quantities.`,
+					},
+				}),
+			),
+		)
+	}
+
+	await db.$transaction(ops)
 
 	throw redirect(`/docs/${params.id}`)
 }
@@ -141,10 +259,19 @@ export default function SignDoc({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { doc, serviceCodes, warehouses } = loaderData
+	const { doc, serviceCodes, warehouses, warehouseUsers, crewUsers, user } =
+		loaderData
 	const releaseRef = useRef<SignaturePadHandle>(null)
 	const crewRef = useRef<SignaturePadHandle>(null)
-	const [warehouseId, setWarehouseId] = useState("")
+	const [warehouseId, setWarehouseId] = useState(
+		doc.warehouseId ?? (warehouses[0]?.id || ""),
+	)
+	const [releasedById, setReleasedById] = useState(
+		user.role === "WAREHOUSE" ? user.id : "",
+	)
+	const [signedById, setSignedById] = useState(
+		user.role === "CREW" ? user.id : "",
+	)
 	const [items, setItems] = useState((doc.estimatedMaterials as any[]) || [])
 	const submit = useSubmit()
 	const { t } = useTranslation()
@@ -153,6 +280,14 @@ export default function SignDoc({
 		e.preventDefault()
 		if (!warehouseId) {
 			alert(t("docs_sign.alerts.select_warehouse"))
+			return
+		}
+		if (!releasedById) {
+			alert(t("docs_sign.alerts.release_signer_required"))
+			return
+		}
+		if (!signedById) {
+			alert(t("docs_sign.alerts.crew_signer_required"))
 			return
 		}
 		if (releaseRef.current?.isEmpty()) {
@@ -168,6 +303,8 @@ export default function SignDoc({
 		formData.set("crewSignature", crewRef.current!.toDataURL())
 		formData.set("materials", JSON.stringify(items))
 		formData.set("warehouseId", warehouseId)
+		formData.set("releasedById", releasedById)
+		formData.set("signedById", signedById)
 		submit(formData, { method: "post" })
 	}
 
@@ -215,13 +352,35 @@ export default function SignDoc({
 				</div>
 
 				<div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-					<div>
-						<p className="text-sm font-medium mb-1">
-							{t("docs_sign.release_signature_heading")}
-						</p>
-						<p className="text-xs text-slate-500 mb-2">
-							{t("docs_sign.release_signature_subtext")}
-						</p>
+					<div className="border rounded-lg p-3 space-y-3">
+						<div>
+							<p className="text-sm font-medium mb-1">
+								{t("docs_sign.release_signature_heading")}
+							</p>
+							<p className="text-xs text-slate-500 mb-2">
+								{t("docs_sign.release_signature_subtext")}
+							</p>
+							<Label className="text-xs text-slate-500">
+								{t("docs_sign.release_signer_label")}
+							</Label>
+							<Select
+								value={releasedById}
+								onValueChange={(v) => setReleasedById(v ?? "")}
+							>
+								<SelectTrigger className="mt-1">
+									<SelectValue
+										placeholder={t("docs_sign.release_signer_placeholder")}
+									/>
+								</SelectTrigger>
+								<SelectContent>
+									{warehouseUsers.map((u) => (
+										<SelectItem key={u.id} value={u.id}>
+											{u.name}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
 						<SignaturePad ref={releaseRef} width={320} height={120} />
 						<button
 							type="button"
@@ -231,13 +390,36 @@ export default function SignDoc({
 							{t("docs_sign.clear")}
 						</button>
 					</div>
-					<div>
-						<p className="text-sm font-medium mb-1">
-							{t("docs_sign.crew_signature_heading")}
-						</p>
-						<p className="text-xs text-slate-500 mb-2">
-							{t("docs_sign.crew_signature_subtext")}
-						</p>
+
+					<div className="border rounded-lg p-3 space-y-3">
+						<div>
+							<p className="text-sm font-medium mb-1">
+								{t("docs_sign.crew_signature_heading")}
+							</p>
+							<p className="text-xs text-slate-500 mb-2">
+								{t("docs_sign.crew_signature_subtext")}
+							</p>
+							<Label className="text-xs text-slate-500">
+								{t("docs_sign.crew_signer_label")}
+							</Label>
+							<Select
+								value={signedById}
+								onValueChange={(v) => setSignedById(v ?? "")}
+							>
+								<SelectTrigger className="mt-1">
+									<SelectValue
+										placeholder={t("docs_sign.crew_signer_placeholder")}
+									/>
+								</SelectTrigger>
+								<SelectContent>
+									{crewUsers.map((u) => (
+										<SelectItem key={u.id} value={u.id}>
+											{u.name}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
 						<SignaturePad ref={crewRef} width={320} height={120} />
 						<button
 							type="button"

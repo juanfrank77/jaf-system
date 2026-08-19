@@ -66,13 +66,36 @@ export async function action({ request, params }: any) {
 	}
 
 	const form = await request.formData()
+	// Signed quantities are immutable after pickup. Ignore any attempt to overwrite them.
+	form.delete("materialsTaken")
 	const materialsReturnedRaw = form.get("materialsReturned") as string
+	const returnNote = (form.get("returnNote") as string | null)?.trim() || null
 
 	let materialsReturned: ReturnLine[] = []
 	try {
 		materialsReturned = JSON.parse(materialsReturnedRaw)
 	} catch {
 		return { errorKey: "docs_returns.errors.invalid_materials" }
+	}
+
+	const taken = (doc.materialsTaken as any[]) || []
+	const takenMap = Object.fromEntries(
+		taken.map((t) => [t.serviceCodeId, t.qty]),
+	)
+
+	for (const line of materialsReturned) {
+		if (!line.serviceCodeId) {
+			return { errorKey: "docs_returns.errors.invalid_materials" }
+		}
+		const takenQty = takenMap[line.serviceCodeId] ?? 0
+		if (line.returnedQty > takenQty) {
+			return {
+				errorKey: "docs_returns.errors.return_exceeds_taken",
+				errorParams: { serviceCodeId: line.serviceCodeId },
+			}
+		}
+		// Preserve the actual signed-out quantity even if the client sent a different value.
+		line.takenQty = takenQty
 	}
 
 	const uniqueServiceCodeIds = Array.from(
@@ -102,7 +125,13 @@ export async function action({ request, params }: any) {
 				docId: params.id,
 				userId: user.id,
 				action: "RETURNS_LOGGED",
-				diffJson: { materialsReturned } as any,
+				diffJson: {
+					materialsReturned: materialsReturned as any,
+					returnNote,
+					shortage: materialsReturned.some(
+						(line) => line.returnedQty < line.takenQty,
+					),
+				} as any,
 			},
 		}),
 	] as any)
@@ -115,7 +144,7 @@ export default function ReturnsDoc({
 	actionData,
 }: {
 	loaderData: { doc: any; serviceCodes: any[]; taken: any[] }
-	actionData?: { errorKey?: string }
+	actionData?: { errorKey?: string; errorParams?: Record<string, string> }
 }) {
 	const { doc, serviceCodes, taken } = loaderData
 	const { t } = useTranslation()
@@ -197,12 +226,8 @@ export default function ReturnsDoc({
 										type="number"
 										min={0}
 										value={line.takenQty}
-										onChange={(e) =>
-											updateLine(index, {
-												takenQty: parseInt(e.target.value, 10) || 0,
-											})
-										}
-										className="mt-1"
+										disabled
+										className="mt-1 bg-slate-50"
 									/>
 								</div>
 								<div>
@@ -250,14 +275,26 @@ export default function ReturnsDoc({
 
 			<Form method="post" className="space-y-2">
 				<input type="hidden" name="materialsReturned" value={serialized} />
+				<div>
+					<Label htmlFor="returnNote">
+						{t("docs_returns.return_note_label")}
+					</Label>
+					<Textarea
+						id="returnNote"
+						name="returnNote"
+						rows={2}
+						placeholder={t("docs_returns.return_note_placeholder")}
+						className="mt-1"
+					/>
+				</div>
 				<Button type="submit" className="w-full">
 					{t("docs_returns.submit")}
 				</Button>
 			</Form>
 
-			{(actionData as any)?.errorKey && (
+			{actionData?.errorKey && (
 				<p className="text-sm text-red-600">
-					{t((actionData as any).errorKey)}
+					{t(actionData.errorKey as any, actionData.errorParams)}
 				</p>
 			)}
 		</div>

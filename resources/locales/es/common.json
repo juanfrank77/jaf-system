@@ -172,11 +172,14 @@
 		"actual_usage": "Uso real",
 		"line_notes": "Notas",
 		"line_notes_placeholder": "Daño, notas de reabastecimiento, etc.",
+		"return_note_label": "Nota de devolución / faltante",
+		"return_note_placeholder": "Describe cualquier faltante, daño o problema de reabastecimiento...",
 		"add_line": "+ Agregar línea",
 		"submit": "Guardar devoluciones",
 		"errors": {
 			"invalid_materials": "Datos de materiales inválidos",
-			"invalid_service_codes": "Uno o más productos seleccionados ya no están disponibles."
+			"invalid_service_codes": "Uno o más productos seleccionados ya no están disponibles.",
+			"return_exceeds_taken": "No se puede devolver más de lo retirado para el código de servicio {{serviceCodeId}}"
 		}
 	},
 	"restock_fulfill": {
@@ -206,13 +209,19 @@
 		"warehouse_placeholder": "Selecciona un almacén...",
 		"materials_taken_label": "Materiales retirados",
 		"release_signature_heading": "1. Firma de liberación del almacén",
-		"release_signature_subtext": "La persona que libera los materiales firma aquí",
+		"release_signature_subtext": "La persona del almacén que libera los materiales firma aquí",
+		"release_signer_label": "Firmante del almacén",
+		"release_signer_placeholder": "Selecciona firmante del almacén...",
 		"crew_signature_heading": "2. Firma de recibo de la cuadrilla",
 		"crew_signature_subtext": "El miembro de la cuadrilla que recibe los materiales firma aquí",
+		"crew_signer_label": "Firmante de la cuadrilla",
+		"crew_signer_placeholder": "Selecciona firmante de la cuadrilla...",
 		"clear": "Borrar",
 		"submit": "Firmar y bloquear materiales",
 		"alerts": {
 			"select_warehouse": "Por favor selecciona el almacén.",
+			"release_signer_required": "Por favor selecciona el firmante del almacén.",
+			"crew_signer_required": "Por favor selecciona el firmante de la cuadrilla.",
 			"release_signature_required": "Se requiere la firma de liberación del almacén.",
 			"crew_signature_required": "Se requiere la firma de recibo de la cuadrilla."
 		},
@@ -220,6 +229,11 @@
 			"release_signature_required": "Se requiere la firma de liberación del almacén",
 			"crew_signature_required": "Se requiere la firma de recibo de la cuadrilla",
 			"warehouse_required": "Por favor selecciona el almacén",
+			"release_signer_required": "Por favor selecciona el firmante del almacén",
+			"crew_signer_required": "Por favor selecciona el firmante de la cuadrilla",
+			"release_signer_invalid": "El firmante del almacén seleccionado no es válido",
+			"crew_signer_invalid": "El firmante de la cuadrilla seleccionado no es válido",
+			"already_signed": "Los materiales ya están firmados y bloqueados",
 			"invalid_materials": "Datos de materiales inválidos"
 		}
 	},
@@ -241,6 +255,12 @@
 		"time_on_site_value": "Tiempo en sitio: {{duration}}",
 		"materials_used_label": "Materiales utilizados",
 		"materials_used_hint": "No puede exceder lo entregado en el almacén.",
+		"taken_reference_label": "Retirado (firmado)",
+		"used_entry_label": "Instalado",
+		"ordered_vs_installed_hint": "La diferencia entre pedido e instalado es solo informativa.",
+		"discrepancy_note_label": "Nota de discrepancia de cantidad",
+		"discrepancy_note_hint": "Obligatoria cuando las cantidades instaladas difieren de lo firmado en salida.",
+		"discrepancy_note_placeholder": "Explica por qué las cantidades instaladas difieren de lo firmado en salida...",
 		"field_notes_label": "Notas de campo",
 		"field_notes_placeholder": "Observaciones, incidencias, cambios...",
 		"photos_label": "Fotos",
@@ -258,7 +278,7 @@
 		"offline_submit_notice": "Estás sin conexión. Toca Guardar para sincronizar después y la actualización se subirá cuando tengas señal.",
 		"errors": {
 			"invalid_materials": "Datos de materiales inválidos",
-			"exceeds_taken": "No se puede usar más de lo retirado para el código de servicio {{serviceCodeId}}",
+			"discrepancy_note_required": "Se requiere una nota de discrepancia cuando las cantidades instaladas difieren de lo firmado en salida.",
 			"completion_signature_required": "Se requiere la firma de completado."
 		}
 	},
@@ -670,13 +690,18 @@
 			"receivables_open_one": "{{count}} cuenta por cobrar abierta",
 			"receivables_open_other": "{{count}} cuentas por cobrar abiertas"
 		},
+		"signal": {
+			"overage": "Exceso",
+			"discrepancy": "Diferencia de cantidad",
+			"shortage": "Faltante / devolución"
+		},
 		"filter": {
 			"heading": "Filtros",
 			"status_all": "Todos los estados",
 			"status_placeholder": "Todos los estados",
 			"crew_placeholder": "Todas las cuadrillas",
 			"job_type_placeholder": "Todos los tipos de trabajo",
-			"search_placeholder": "Buscar por Aviso # o dirección…",
+			"search_placeholder": "Buscar por # Aviso o dirección…",
 			"clear_all": "Limpiar filtros"
 		}
 	},

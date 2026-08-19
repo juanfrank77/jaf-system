@@ -58,6 +58,8 @@ export async function generateWarehouseReceiptPdf(
 		releaseSignature?: string | null
 		crewSignature?: string | null
 		signedAt?: Date | null
+		releaseSignerName?: string | null
+		crewSignerName?: string | null
 	},
 	serviceCodes: {
 		id: string
@@ -141,7 +143,7 @@ export async function generateWarehouseReceiptPdf(
 					<View style={{ flexDirection: "row", gap: 24 }}>
 						<View style={{ flex: 1 }}>
 							<Text style={{ marginBottom: 4, fontSize: 9 }}>
-								Warehouse Release:
+								Warehouse Release — {doc.releaseSignerName ?? warehouseName}
 							</Text>
 							{doc.releaseSignature ? (
 								<Image
@@ -151,11 +153,12 @@ export async function generateWarehouseReceiptPdf(
 							) : null}
 							<Text style={{ marginTop: 2, fontSize: 8, color: "#666" }}>
 								{warehouseName}
+								{doc.releaseSignerName ? ` / ${doc.releaseSignerName}` : ""}
 							</Text>
 						</View>
 						<View style={{ flex: 1 }}>
 							<Text style={{ marginBottom: 4, fontSize: 9 }}>
-								Crew Receipt:
+								Crew Receipt — {doc.crewSignerName ?? "Crew"}
 							</Text>
 							{doc.crewSignature ? (
 								<Image
@@ -164,7 +167,10 @@ export async function generateWarehouseReceiptPdf(
 								/>
 							) : null}
 							<Text style={{ marginTop: 2, fontSize: 8, color: "#666" }}>
-								{doc.signedAt ? new Date(doc.signedAt).toLocaleString() : ""}
+								{doc.crewSignerName ?? ""}
+								{doc.signedAt
+									? ` / ${new Date(doc.signedAt).toLocaleString()}`
+									: ""}
 							</Text>
 						</View>
 					</View>

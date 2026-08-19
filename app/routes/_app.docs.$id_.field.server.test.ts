@@ -116,6 +116,7 @@ describe("POST /docs/:id/field", () => {
 			"materialsUsed",
 			JSON.stringify([{ serviceCodeId: "sc-1", qty: 3 }]),
 		)
+		form.set("discrepancyNote", "Used fewer than taken due to site conditions")
 		form.set("completionSignature", "data:image/png;base64,abc")
 		form.set("startedAt", "2026-08-13T12:00:00.000Z")
 		form.set("endedAt", "2026-08-13T13:30:00.000Z")
@@ -159,7 +160,7 @@ describe("POST /docs/:id/field", () => {
 		expect(updateCall.data.endedAt).toBeInstanceOf(Date)
 	})
 
-	it("rejects materials used greater than taken", async () => {
+	it("requires a discrepancy note when installed quantity differs from taken", async () => {
 		vi.mocked(requireRole).mockResolvedValue({
 			user: { id: "crew-1", role: "CREW" },
 			session: {},
@@ -182,9 +183,44 @@ describe("POST /docs/:id/field", () => {
 		} as any)
 
 		expect(result).toEqual({
-			errorKey: "docs_field.errors.exceeds_taken",
-			errorParams: { serviceCodeId: "sc-1" },
+			errorKey: "docs_field.errors.discrepancy_note_required",
 		})
 		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("accepts installed quantity greater than taken with a discrepancy note", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "crew-1", role: "CREW" },
+			session: {},
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			baseDoc() as any,
+		)
+		vi.mocked(db.$transaction).mockResolvedValue(undefined as any)
+
+		const form = new FormData()
+		form.set("jobAddressActual", "123 Calle Sol")
+		form.set(
+			"materialsUsed",
+			JSON.stringify([{ serviceCodeId: "sc-1", qty: 10 }]),
+		)
+		form.set("discrepancyNote", "Extra materials needed on site")
+		form.set("completionSignature", "data:image/png;base64,abc")
+
+		const result = await action({
+			request: formRequest(form),
+			params: { id: "doc-1" },
+		} as any).catch((r: any) => r)
+
+		expect(result.status).toBe(302)
+		expect(db.jafInvoice.update).toHaveBeenCalled()
+		const auditCalls = vi.mocked(db.auditTrail.create).mock.calls
+		const discrepancyAudit = auditCalls.find(
+			(call) => call[0].data.action === "QUANTITY_DISCREPANCY",
+		)
+		expect(discrepancyAudit).toBeDefined()
+		expect(discrepancyAudit?.[0].data.diffJson).toMatchObject({
+			blocksFinance: false,
+		})
 	})
 })

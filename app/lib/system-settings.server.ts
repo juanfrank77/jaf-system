@@ -36,3 +36,34 @@ export async function setAgingAlertDays(
 		create: { key: "aging_alert_days", value: String(days), updatedById },
 	})
 }
+
+export async function getAvisoAmountTolerance(): Promise<number> {
+	const setting = await db.systemSetting.findUnique({
+		where: { key: "aviso_amount_tolerance" },
+	})
+	const parsed = Number(setting?.value ?? "0.01")
+	const MAX_TOLERANCE = 1_000_000
+	if (
+		Number.isNaN(parsed) ||
+		!Number.isFinite(parsed) ||
+		parsed < 0 ||
+		parsed > MAX_TOLERANCE
+	)
+		return 0.01
+	return parsed
+}
+
+export async function setAvisoAmountTolerance(
+	tolerance: number,
+	updatedById: string,
+): Promise<void> {
+	await db.systemSetting.upsert({
+		where: { key: "aviso_amount_tolerance" },
+		update: { value: String(tolerance), updatedById },
+		create: {
+			key: "aviso_amount_tolerance",
+			value: String(tolerance),
+			updatedById,
+		},
+	})
+}

@@ -9,13 +9,17 @@ vi.mock("~/lib/system-settings.server", () => ({
 	setIvuRate: vi.fn(),
 	getAgingAlertDays: vi.fn(),
 	setAgingAlertDays: vi.fn(),
+	getAvisoAmountTolerance: vi.fn(),
+	setAvisoAmountTolerance: vi.fn(),
 }))
 
 import { requireRole } from "~/lib/permissions.server"
 import {
 	getAgingAlertDays,
+	getAvisoAmountTolerance,
 	getIvuRate,
 	setAgingAlertDays,
+	setAvisoAmountTolerance,
 	setIvuRate,
 } from "~/lib/system-settings.server"
 import { action, loader } from "./_app.admin.settings"
@@ -37,13 +41,18 @@ describe("GET /admin/settings", () => {
 		} as any)
 		vi.mocked(getIvuRate).mockResolvedValue(0.115)
 		vi.mocked(getAgingAlertDays).mockResolvedValue(30)
+		vi.mocked(getAvisoAmountTolerance).mockResolvedValue(0.01)
 
 		const result = await loader({
 			request: new Request("http://localhost/admin/settings"),
 			params: {},
 		} as any)
 
-		expect(result).toEqual({ ivuRate: 0.115, agingAlertDays: 30 })
+		expect(result).toEqual({
+			ivuRate: 0.115,
+			agingAlertDays: 30,
+			avisoAmountTolerance: 0.01,
+		})
 	})
 })
 
@@ -126,5 +135,45 @@ describe("POST /admin/settings", () => {
 			errorKey: "admin_settings.errors.invalid_aging_days",
 		})
 		expect(setAgingAlertDays).not.toHaveBeenCalled()
+	})
+
+	it("updates aviso amount tolerance", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "admin-1" },
+			session: {},
+		} as any)
+
+		const form = new FormData()
+		form.set("intent", "tolerance")
+		form.set("aviso_amount_tolerance", "0.05")
+
+		const result = await action({
+			request: formRequest(form),
+			params: {},
+		} as any)
+
+		expect(setAvisoAmountTolerance).toHaveBeenCalledWith(0.05, "admin-1")
+		expect(result).toEqual({ successTolerance: true })
+	})
+
+	it("rejects invalid aviso amount tolerance", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "admin-1" },
+			session: {},
+		} as any)
+
+		const form = new FormData()
+		form.set("intent", "tolerance")
+		form.set("aviso_amount_tolerance", "-1")
+
+		const result = await action({
+			request: formRequest(form),
+			params: {},
+		} as any)
+
+		expect(result).toEqual({
+			errorKey: "admin_settings.errors.invalid_tolerance",
+		})
+		expect(setAvisoAmountTolerance).not.toHaveBeenCalled()
 	})
 })

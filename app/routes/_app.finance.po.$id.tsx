@@ -9,14 +9,16 @@ import { Label } from "~/components/ui/label"
 import { db } from "~/lib/db.server"
 import { validateFile } from "~/lib/file-upload.server"
 import {
+	checkAmountTolerance,
 	computeFinanceStage,
+	fetchInvoiceTotalContext,
 	financeLineItems,
 	invoiceTotalUsed,
 } from "~/lib/finance-pipeline.server"
 import { generateFinalClaroDocPdf } from "~/lib/pdf/final-claro-doc.server"
 import { requireRole } from "~/lib/permissions.server"
 import { getIvuRate } from "~/lib/system-settings.server"
-import { formatMoney, toNumberPrice } from "~/lib/utils"
+import { formatMoney } from "~/lib/utils"
 import type { Route } from "./+types/_app.finance.po.$id"
 
 export const meta: Route.MetaFunction = ({ data }) => [
@@ -37,14 +39,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	if (stage !== "WAITING_CLARO_PO" && stage !== "PO_RECEIVED_UPLOAD") {
 		throw redirect(`/finance/receivables`)
 	}
-	const serviceCodes = await db.serviceCode.findMany()
-	const codeMap = Object.fromEntries(
-		serviceCodes.map((c) => [
-			c.id,
-			{ ...c, unitPrice: toNumberPrice(c.unitPrice) },
-		]),
-	)
-	const ivuRate = await getIvuRate()
+	const { codeMap, ivuRate } = await fetchInvoiceTotalContext()
 	const amount = invoiceTotalUsed(doc, codeMap, ivuRate)
 	return { doc, user, amount, ivuRate }
 }
@@ -68,19 +63,38 @@ export async function action({ request, params }: Route.ActionArgs) {
 		const poNumber = (form.get("poNumber") as string | null)?.trim() || ""
 		const poDateRaw = (form.get("poDate") as string | null)?.trim() || null
 		const poPdf = form.get("poPdf") as File
+		const poAmountRaw = (form.get("poAmount") as string | null)?.trim() || ""
 		if (!poNumber) return { errorKey: "finance_po.errors.po_number_required" }
 
 		let poPdfPath: string | null = null
+		let poPdfRelativePath: string | null = null
 		if (poPdf && poPdf.size > 0) {
 			const validation = validateFile(poPdf, "pdf")
 			if (!validation.valid) return { errorMessage: validation.error }
 			const poDir = path.join(uploadDir, "po-docs")
 			await fs.mkdir(poDir, { recursive: true })
-			poPdfPath = path.join(poDir, `${params.id}-po.pdf`)
+			poPdfRelativePath = `po-docs/${params.id}-po.pdf`
+			poPdfPath = path.join(uploadDir, poPdfRelativePath)
 			await fs.writeFile(poPdfPath, Buffer.from(await poPdf.arrayBuffer()))
 		}
 
 		const poDate = poDateRaw ? new Date(`${poDateRaw}T00:00:00`) : null
+		const poAmount = poAmountRaw ? Number(poAmountRaw) : null
+		if (
+			poAmount !== null &&
+			(!/^\d+(\.\d+)?$/.test(poAmountRaw) ||
+				Number.isNaN(poAmount) ||
+				!Number.isFinite(poAmount) ||
+				poAmount < 0)
+		) {
+			return { errorKey: "finance_po.errors.invalid_po_amount" }
+		}
+
+		const { codeMap, ivuRate, tolerance } = await fetchInvoiceTotalContext()
+		const invoiceTotal = invoiceTotalUsed(doc, codeMap, ivuRate)
+		const mismatch =
+			poAmount !== null &&
+			!checkAmountTolerance(invoiceTotal, poAmount, tolerance).withinTolerance
 
 		await db.$transaction([
 			db.poLink.create({
@@ -88,7 +102,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 					docId: params.id,
 					claroPONumber: poNumber,
 					poDate,
-					amount: null,
+					amount: poAmount,
 				},
 			}),
 			db.auditTrail.create({
@@ -96,9 +110,27 @@ export async function action({ request, params }: Route.ActionArgs) {
 					docId: params.id,
 					userId: user.id,
 					action: "PO_RECORDED",
-					diffJson: { poNumber, poDate: poDateRaw, poPdfPath },
+					diffJson: {
+						poNumber,
+						poDate: poDateRaw,
+						poPdfPath: poPdfRelativePath,
+						poAmount,
+						invoiceTotal,
+						mismatch,
+					},
 				},
 			}),
+			...(mismatch
+				? [
+						db.notification.create({
+							data: {
+								userId: doc.supervisorId,
+								docId: params.id,
+								message: `PO amount ${formatMoney(poAmount)} for job ${doc.controlNumber} differs from invoice total ${formatMoney(invoiceTotal)}.`,
+							},
+						}),
+					]
+				: []),
 		])
 	}
 
@@ -208,7 +240,7 @@ export default function FinancePo({
 					{poLinks.map((po) => (
 						<div key={po.id} className="flex justify-between">
 							<span>{po.claroPONumber}</span>
-							{po.amount && <span>{formatMoney(po.amount)}</span>}
+							<span>{formatMoney(Number(po.amount ?? 0))}</span>
 						</div>
 					))}
 				</div>
@@ -239,6 +271,20 @@ export default function FinancePo({
 						<div className="space-y-1">
 							<Label htmlFor="poDate">{t("finance_po.po_date_label")}</Label>
 							<Input id="poDate" name="poDate" type="date" />
+						</div>
+						<div className="space-y-1">
+							<Label htmlFor="poAmount">{t("finance_po.amount_label")}</Label>
+							<Input
+								id="poAmount"
+								name="poAmount"
+								type="number"
+								step="0.01"
+								min="0"
+								placeholder={t("finance_po.amount_placeholder")}
+							/>
+							<p className="text-xs text-slate-500">
+								{t("finance_po.amount_hint")}
+							</p>
 						</div>
 					</div>
 					<div className="space-y-1">

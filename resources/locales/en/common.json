@@ -353,11 +353,15 @@
 		"aging_heading": "Aging Alert Threshold",
 		"aging_description": "Documents older than this many days in key finance stages will trigger aging alerts. Current: {{current}} days",
 		"aging_label": "Aging Alert Days",
+		"tolerance_heading": "Aviso Amount Tolerance",
+		"tolerance_description": "Amount differences between the Aviso and JAF invoice within this absolute value are allowed. Differences above this block Finance verification. Current: {{current}}",
+		"tolerance_label": "Aviso Amount Tolerance ($)",
 		"saved": "Saved.",
 		"save": "Save",
 		"errors": {
 			"invalid_rate": "IVU rate must be a decimal between 0 and 1 (e.g. 0.115 for 11.5%)",
 			"invalid_aging_days": "Aging alert days must be a positive whole number.",
+			"invalid_tolerance": "Tolerance must be a non-negative number.",
 			"unknown_intent": "Unknown action."
 		}
 	},
@@ -530,6 +534,7 @@
 		"aviso": "Aviso {{number}}",
 		"age_days": "{{count}}d",
 		"amount_label": "Amount",
+		"po_mismatch": "PO mismatch: {{poAmount}}",
 		"missing_docs": "Missing Aviso # or Claro PDF",
 		"verify": "Verify",
 		"generate_pbcc": "Generate PBCC Request",
@@ -563,6 +568,7 @@
 		"title": "Verify Aviso vs. Invoice",
 		"amount": "Invoice amount",
 		"ivu_rate": "IVU rate: {{rate}}%",
+		"tolerance": "Allowed tolerance: {{tolerance}}",
 		"billing_blocked": "Cannot verify — billing documents incomplete",
 		"blocked_aviso": "Missing Claro Aviso #",
 		"blocked_claro_pdf": "Missing Claro work-order PDF",
@@ -576,14 +582,21 @@
 		"claro_pdf_title": "Claro PDF",
 		"no_claro_pdf": "No Claro PDF on file.",
 		"previous_send_backs": "Previous Finance Send-backs",
+		"aviso_amount_label": "Aviso total (from document)",
+		"aviso_amount_hint": "Enter the total amount shown on the Aviso document.",
+		"aviso_amount_placeholder": "0.00",
 		"verify_note_placeholder": "Optional verification note…",
 		"mark_verified": "Mark Verified",
 		"cannot_verify_hint": "The supervisor must add the Aviso # and upload the Claro PDF before verification.",
 		"send_back_placeholder": "Explain the Aviso issue to the supervisor…",
 		"send_back": "Send Back to Supervisor",
 		"back": "Back to pipeline",
+		"amount_mismatch": "Aviso amount differs from invoice total by {{difference}} (tolerance: {{tolerance}}).",
+		"amount_mismatch_detail": "Aviso: {{avisoAmount}} vs Invoice: {{invoiceTotal}}.",
 		"errors": {
-			"note_required": "A send-back note is required."
+			"note_required": "A send-back note is required.",
+			"invalid_aviso_amount": "Enter a valid Aviso amount.",
+			"amount_mismatch": "Aviso amount differs from invoice total by {{difference}} (tolerance: {{tolerance}})."
 		}
 	},
 	"finance_pbcc": {
@@ -608,7 +621,11 @@
 		"po_number_label": "Claro PO #",
 		"po_date_label": "PO Date",
 		"po_pdf_label": "PO PDF (optional)",
+		"amount_label": "PO Amount",
+		"amount_hint": "Enter the actual amount received from Claro.",
+		"amount_placeholder": "0.00",
 		"record_po": "Record PO",
+		"po_mismatch_warning": "PO amount {{poAmount}} differs from invoice total {{invoiceAmount}}. This does not block progression.",
 		"generate_final_doc_heading": "Generate Final Claro Document",
 		"generate_final_doc_hint": "Generate the signed-upload PDF for Claro's portal.",
 		"generate_final_doc": "Generate Final Document",
@@ -618,6 +635,7 @@
 		"uploaded_on": "Uploaded on {{date}}",
 		"errors": {
 			"po_number_required": "PO number is required.",
+			"invalid_po_amount": "Enter a valid non-negative PO amount.",
 			"record_po_first": "Record a PO before generating the final document."
 		}
 	},

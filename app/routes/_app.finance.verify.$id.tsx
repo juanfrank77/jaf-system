@@ -3,18 +3,21 @@ import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { Button, buttonVariants } from "~/components/ui/button"
+import { Input } from "~/components/ui/input"
+import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
 import {
+	checkAmountTolerance,
 	computeFinanceStage,
 	FINANCEABLE_STATUSES,
+	fetchInvoiceTotalContext,
 	invoiceTotalUsed,
 	isMissingAviso,
 	isMissingClaroPdf,
 } from "~/lib/finance-pipeline.server"
 import { requireRole } from "~/lib/permissions.server"
-import { getIvuRate } from "~/lib/system-settings.server"
-import { cn, formatMoney, toNumberPrice } from "~/lib/utils"
+import { cn, formatMoney } from "~/lib/utils"
 import type { Route } from "./+types/_app.finance.verify.$id"
 
 export const meta: Route.MetaFunction = ({ data }) => [
@@ -35,14 +38,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		throw redirect(`/docs/${params.id}`)
 	}
 
-	const serviceCodes = await db.serviceCode.findMany()
-	const codeMap = Object.fromEntries(
-		serviceCodes.map((c) => [
-			c.id,
-			{ ...c, unitPrice: toNumberPrice(c.unitPrice) },
-		]),
-	)
-	const ivuRate = await getIvuRate()
+	const { serviceCodes, codeMap, ivuRate, tolerance } =
+		await fetchInvoiceTotalContext()
 	const stage = computeFinanceStage(doc, doc.poLinks.length > 0)
 	const amount = invoiceTotalUsed(doc, codeMap, ivuRate)
 
@@ -53,6 +50,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		stage,
 		amount,
 		ivuRate,
+		tolerance,
 		missingAviso: isMissingAviso(doc),
 		missingClaroPdf: isMissingClaroPdf(doc),
 		sendBackNotes: (doc.financeSendBackNotes as any[]) || [],
@@ -72,6 +70,32 @@ export async function action({ request, params }: Route.ActionArgs) {
 		if (isMissingAviso(doc) || isMissingClaroPdf(doc)) {
 			return { errorKey: "finance_verify.billing_blocked" }
 		}
+		const avisoAmountRaw = (form.get("avisoAmount") as string | null)?.trim()
+		const avisoAmount = avisoAmountRaw ? Number(avisoAmountRaw) : NaN
+		if (
+			!avisoAmountRaw ||
+			Number.isNaN(avisoAmount) ||
+			!Number.isFinite(avisoAmount) ||
+			avisoAmount < 0
+		) {
+			return { errorKey: "finance_verify.errors.invalid_aviso_amount" }
+		}
+		const { codeMap, ivuRate, tolerance } = await fetchInvoiceTotalContext()
+		const invoiceTotal = invoiceTotalUsed(doc, codeMap, ivuRate)
+		const { withinTolerance, difference } = checkAmountTolerance(
+			invoiceTotal,
+			avisoAmount,
+			tolerance,
+		)
+		if (!withinTolerance) {
+			return {
+				errorKey: "finance_verify.errors.amount_mismatch",
+				avisoAmount: avisoAmountRaw,
+				invoiceTotal,
+				difference,
+				tolerance,
+			}
+		}
 		const note = (form.get("note") as string | null)?.trim() || null
 		await db.$transaction([
 			db.jafInvoice.update({
@@ -86,7 +110,13 @@ export async function action({ request, params }: Route.ActionArgs) {
 					docId: params.id,
 					userId: user.id,
 					action: "FINANCE_VERIFIED",
-					diffJson: { note },
+					diffJson: {
+						note,
+						avisoAmount,
+						invoiceTotal,
+						difference,
+						withinTolerance: true,
+					},
 				},
 			}),
 		])
@@ -144,12 +174,21 @@ export default function FinanceVerify({
 		stage,
 		amount,
 		ivuRate,
+		tolerance,
 		missingAviso,
 		missingClaroPdf,
 		sendBackNotes,
 	} = loaderData
 	const { t } = useTranslation()
-	const error = actionData as { errorKey?: string } | null
+	const error = actionData as
+		| {
+				errorKey?: any
+				avisoAmount?: string
+				invoiceTotal?: number
+				difference?: number
+				tolerance?: number
+		  }
+		| undefined
 	const used = (doc.materialsUsed as any[]) || []
 	const taken = (doc.materialsTaken as any[]) || []
 	const source = used.length > 0 ? used : taken
@@ -189,6 +228,9 @@ export default function FinanceVerify({
 				<p>
 					{t("finance_verify.ivu_rate", { rate: (ivuRate * 100).toFixed(1) })}
 				</p>
+				<p className="text-xs text-slate-500">
+					{t("finance_verify.tolerance", { tolerance: formatMoney(tolerance) })}
+				</p>
 			</div>
 
 			{(missingAviso || missingClaroPdf) && (
@@ -202,6 +244,23 @@ export default function FinanceVerify({
 							<li>{t("finance_verify.blocked_claro_pdf")}</li>
 						)}
 					</ul>
+				</div>
+			)}
+
+			{error?.errorKey === "finance_verify.errors.amount_mismatch" && (
+				<div className="bg-red-50 border border-red-200 rounded-lg p-4">
+					<p className="font-medium text-red-900">
+						{t("finance_verify.amount_mismatch", {
+							difference: formatMoney(error.difference ?? 0),
+							tolerance: formatMoney(error.tolerance ?? 0),
+						})}
+					</p>
+					<p className="text-sm text-red-800 mt-1">
+						{t("finance_verify.amount_mismatch_detail", {
+							avisoAmount: formatMoney(Number(error.avisoAmount ?? 0)),
+							invoiceTotal: formatMoney(error.invoiceTotal ?? 0),
+						})}
+					</p>
 				</div>
 			)}
 
@@ -291,6 +350,25 @@ export default function FinanceVerify({
 				<Form method="post" className="space-y-3">
 					<input type="hidden" name="intent" value="verify" />
 					<div>
+						<Label htmlFor="avisoAmount">
+							{t("finance_verify.aviso_amount_label")}
+						</Label>
+						<Input
+							id="avisoAmount"
+							name="avisoAmount"
+							type="number"
+							step="0.01"
+							min="0"
+							defaultValue={actionData?.avisoAmount ?? ""}
+							placeholder={t("finance_verify.aviso_amount_placeholder")}
+							className="mt-1"
+							required
+						/>
+						<p className="text-xs text-slate-500 mt-1">
+							{t("finance_verify.aviso_amount_hint")}
+						</p>
+					</div>
+					<div>
 						<Textarea
 							name="note"
 							rows={2}
@@ -320,9 +398,10 @@ export default function FinanceVerify({
 					<Button type="submit" variant="outline">
 						{t("finance_verify.send_back")}
 					</Button>
-					{error?.errorKey && (
-						<p className="text-sm text-red-600">{t(error.errorKey as any)}</p>
-					)}
+					{error?.errorKey &&
+						error.errorKey !== "finance_verify.errors.amount_mismatch" && (
+							<p className="text-sm text-red-600">{t(error.errorKey as any)}</p>
+						)}
 				</Form>
 			</div>
 

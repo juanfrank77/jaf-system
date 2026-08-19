@@ -7,10 +7,13 @@ import { Label } from "~/components/ui/label"
 import { requireRole } from "~/lib/permissions.server"
 import {
 	getAgingAlertDays,
+	getAvisoAmountTolerance,
 	getIvuRate,
 	setAgingAlertDays,
+	setAvisoAmountTolerance,
 	setIvuRate,
 } from "~/lib/system-settings.server"
+import { formatMoney } from "~/lib/utils"
 import type { Route } from "./+types/_app.admin.settings"
 
 export const meta: Route.MetaFunction = () => [
@@ -19,11 +22,12 @@ export const meta: Route.MetaFunction = () => [
 
 export async function loader({ request }: Route.LoaderArgs) {
 	await requireRole(request, ["ADMIN"])
-	const [ivuRate, agingAlertDays] = await Promise.all([
+	const [ivuRate, agingAlertDays, avisoAmountTolerance] = await Promise.all([
 		getIvuRate(),
 		getAgingAlertDays(),
+		getAvisoAmountTolerance(),
 	])
-	return { ivuRate, agingAlertDays }
+	return { ivuRate, agingAlertDays, avisoAmountTolerance }
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -55,6 +59,25 @@ export async function action({ request }: Route.ActionArgs) {
 		return { successAging: true }
 	}
 
+	if (intent === "tolerance") {
+		const toleranceRaw = form.get("aviso_amount_tolerance") as string
+		const tolerance = Number(toleranceRaw)
+		const MAX_TOLERANCE = 1_000_000
+		if (
+			!/^\d+(\.\d+)?$/.test(toleranceRaw) ||
+			Number.isNaN(tolerance) ||
+			!Number.isFinite(tolerance) ||
+			tolerance < 0 ||
+			tolerance > MAX_TOLERANCE
+		) {
+			return {
+				errorKey: "admin_settings.errors.invalid_tolerance",
+			}
+		}
+		await setAvisoAmountTolerance(tolerance, user.id)
+		return { successTolerance: true }
+	}
+
 	return { errorKey: "admin_settings.errors.unknown_intent" }
 }
 
@@ -62,7 +85,7 @@ export default function AdminSettings({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { ivuRate, agingAlertDays } = loaderData
+	const { ivuRate, agingAlertDays, avisoAmountTolerance } = loaderData
 	const { t } = useTranslation()
 	const error =
 		actionData && "errorKey" in actionData ? actionData.errorKey : null
@@ -70,6 +93,10 @@ export default function AdminSettings({
 		actionData && "success" in actionData ? actionData.success : null
 	const successAging =
 		actionData && "successAging" in actionData ? actionData.successAging : null
+	const successTolerance =
+		actionData && "successTolerance" in actionData
+			? actionData.successTolerance
+			: null
 
 	return (
 		<div className="space-y-6 max-w-sm">
@@ -138,6 +165,43 @@ export default function AdminSettings({
 					</div>
 					{error && <p className="text-sm text-red-600">{t(error as any)}</p>}
 					{successAging && (
+						<p className="text-sm text-green-600">
+							{t("admin_settings.saved")}
+						</p>
+					)}
+					<Button type="submit" size="sm">
+						{t("admin_settings.save")}
+					</Button>
+				</Form>
+			</div>
+
+			<div className="bg-white border rounded-lg p-4 space-y-3">
+				<h2 className="font-medium text-sm">
+					{t("admin_settings.tolerance_heading")}
+				</h2>
+				<p className="text-xs text-slate-500">
+					{t("admin_settings.tolerance_description", {
+						current: formatMoney(avisoAmountTolerance),
+					})}
+				</p>
+				<Form method="post" className="space-y-3">
+					<input type="hidden" name="intent" value="tolerance" />
+					<div>
+						<Label htmlFor="aviso_amount_tolerance">
+							{t("admin_settings.tolerance_label")}
+						</Label>
+						<Input
+							id="aviso_amount_tolerance"
+							name="aviso_amount_tolerance"
+							type="number"
+							step="0.01"
+							min="0"
+							defaultValue={avisoAmountTolerance}
+							required
+						/>
+					</div>
+					{error && <p className="text-sm text-red-600">{t(error as any)}</p>}
+					{successTolerance && (
 						<p className="text-sm text-green-600">
 							{t("admin_settings.saved")}
 						</p>

@@ -1,10 +1,16 @@
-import type { DocStatus, JafInvoice } from "../../generated/prisma/client"
+import type {
+	DocStatus,
+	JafInvoice,
+	ServiceCode,
+} from "../../generated/prisma/client"
+import { db } from "./db.server"
 import {
 	FINANCE_STAGES,
 	type FinanceStage,
 	type FinanceStageLabelKey,
 	financeStageLabelKey,
 } from "./finance-pipeline"
+import { getAvisoAmountTolerance, getIvuRate } from "./system-settings.server"
 import { toNumberPrice } from "./utils"
 
 export {
@@ -12,6 +18,23 @@ export {
 	type FinanceStage,
 	type FinanceStageLabelKey,
 	financeStageLabelKey,
+}
+
+export async function fetchInvoiceTotalContext(): Promise<{
+	serviceCodes: ServiceCode[]
+	codeMap: Record<string, { unitPrice: number }>
+	ivuRate: number
+	tolerance: number
+}> {
+	const serviceCodes = await db.serviceCode.findMany()
+	const codeMap = Object.fromEntries(
+		serviceCodes.map((c) => [c.id, { unitPrice: toNumberPrice(c.unitPrice) }]),
+	)
+	const [ivuRate, tolerance] = await Promise.all([
+		getIvuRate(),
+		getAvisoAmountTolerance(),
+	])
+	return { serviceCodes, codeMap, ivuRate, tolerance }
 }
 
 export const financeStageAlertDays = (stage: FinanceStage): number | null => {
@@ -132,6 +155,18 @@ export function isMissingClaroPdf(
 	return !invoice.claroPdfPath || invoice.claroPdfPath.trim() === ""
 }
 
+export function checkAmountTolerance(
+	invoiceTotal: number,
+	avisoAmount: number,
+	tolerance: number,
+): { withinTolerance: boolean; difference: number } {
+	const difference = Math.abs(invoiceTotal - avisoAmount)
+	return {
+		withinTolerance: difference <= tolerance,
+		difference,
+	}
+}
+
 export type FinancePipelineRow = {
 	id: string
 	controlNumber: string
@@ -147,6 +182,8 @@ export type FinancePipelineRow = {
 	missingClaroPdf: boolean
 	advanceAmount: number | null
 	finalPaymentAmount: number | null
+	poMismatch: boolean
+	poAmount: number | null
 }
 
 export const FINANCEABLE_STATUSES: DocStatus[] = [

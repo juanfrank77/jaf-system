@@ -12,18 +12,19 @@ import {
 	financeStageLabelKey,
 } from "~/lib/finance-pipeline"
 import {
+	checkAmountTolerance,
 	computeFinanceStage,
 	daysInStage,
 	FINANCEABLE_STATUSES,
 	type FinancePipelineRow,
+	fetchInvoiceTotalContext,
 	financeStageAlertDays,
 	invoiceTotalUsed,
 	isMissingAviso,
 	isMissingClaroPdf,
 } from "~/lib/finance-pipeline.server"
 import { requireRole } from "~/lib/permissions.server"
-import { getIvuRate } from "~/lib/system-settings.server"
-import { formatMoney, toNumberPrice } from "~/lib/utils"
+import { formatMoney } from "~/lib/utils"
 import type { Route } from "./+types/_app.finance.receivables"
 
 export const meta: Route.MetaFunction = () => [
@@ -39,11 +40,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const url = new URL(request.url)
 	const stageFilter = url.searchParams.get("stage") as FinanceStage | null
 
-	const serviceCodes = await db.serviceCode.findMany()
-	const codeMap = Object.fromEntries(
-		serviceCodes.map((c) => [c.id, { unitPrice: toNumberPrice(c.unitPrice) }]),
-	)
-	const ivuRate = await getIvuRate()
+	const { codeMap, ivuRate, tolerance } = await fetchInvoiceTotalContext()
 
 	const invoices = await db.jafInvoice.findMany({
 		where: { status: { in: FINANCEABLE_STATUSES } },
@@ -61,6 +58,13 @@ export async function loader({ request }: Route.LoaderArgs) {
 		const ageDays = daysInStage(inv, stage, poDate)
 		const alertDays = financeStageAlertDays(stage)
 		const isAlert = alertDays !== null && ageDays > alertDays
+		const amount = invoiceTotalUsed(inv, codeMap, ivuRate)
+		const poLink = inv.poLinks[0] ?? null
+		const poAmount = poLink?.amount ? Number(poLink.amount) : null
+		const poMismatch =
+			poAmount !== null &&
+			checkAmountTolerance(amount, poAmount, tolerance).withinTolerance ===
+				false
 		return {
 			id: inv.id,
 			controlNumber: inv.controlNumber,
@@ -71,13 +75,15 @@ export async function loader({ request }: Route.LoaderArgs) {
 			ageDays,
 			alertDays,
 			isAlert,
-			amount: invoiceTotalUsed(inv, codeMap, ivuRate),
+			amount,
 			missingAviso: isMissingAviso(inv),
 			missingClaroPdf: isMissingClaroPdf(inv),
 			advanceAmount: inv.advanceAmount ? Number(inv.advanceAmount) : null,
 			finalPaymentAmount: inv.finalPaymentAmount
 				? Number(inv.finalPaymentAmount)
 				: null,
+			poMismatch,
+			poAmount,
 		}
 	})
 
@@ -325,6 +331,13 @@ export default function FinancePipeline({
 									{t("finance_receivables.amount_label")}:{" "}
 									{formatMoney(row.amount)}
 								</span>
+								{row.poMismatch && row.poAmount !== null && (
+									<span className="text-amber-700">
+										{t("finance_receivables.po_mismatch", {
+											poAmount: formatMoney(row.poAmount),
+										})}
+									</span>
+								)}
 								{(row.missingAviso || row.missingClaroPdf) && (
 									<span className="text-amber-700">
 										{t("finance_receivables.missing_docs")}

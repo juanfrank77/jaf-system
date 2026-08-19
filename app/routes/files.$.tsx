@@ -7,7 +7,7 @@ import type { Route } from "./+types/files.$"
 const FINANCEABLE_STATUSES = [
 	"SUPERVISOR_APPROVED",
 	"CLARO_UPLOADED",
-	"LC_GENERATED",
+	"LC_REQUEST_GENERATED",
 ] as const
 
 const WAREHOUSE_STATUSES = [

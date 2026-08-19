@@ -323,7 +323,7 @@
 		"no_claro_pdf": "No hay PDF de Claro en archivo.",
 		"download_acta": "Descargar Acta de Conformidad (2A)",
 		"generate_schedule": "Generar y descargar Relación de Cuentas (2B)",
-		"footer_note": "Generar la Relación de Cuentas marca este documento como LC_GENERATED. Envía el PDF por correo a hs@pbcc.com."
+		"footer_note": "Generar la Relación de Cuentas marca este documento como LC solicitada. Envía el PDF por correo a hs@pbcc.com."
 	},
 	"admin_settings": {
 		"title": "Configuración del sistema",
@@ -687,7 +687,7 @@
 		"field_updated": "Actualizado en campo",
 		"supervisor_approved": "Aprobado por supervisor",
 		"claro_uploaded": "Cargado a Claro",
-		"lc_generated": "LC generada",
+		"lc_request_generated": "LC solicitada",
 		"cancelled": "Cancelado"
 	},
 	"offline_indicator": {

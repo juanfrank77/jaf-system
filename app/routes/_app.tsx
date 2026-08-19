@@ -2,6 +2,7 @@ import { Outlet } from "react-router"
 import { AppShell } from "~/components/app-shell"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { db } from "~/lib/db.server"
+import { isComptrollerEnabled } from "~/lib/features.server"
 import { requireSession } from "~/lib/permissions.server"
 import type { Route } from "./+types/_app"
 
@@ -15,13 +16,21 @@ export async function loader({ request }: Route.LoaderArgs) {
 		orderBy: { createdAt: "desc" },
 		take: 10,
 	})
-	return { user: { name: user.name, role: user.role }, notifications }
+	return {
+		user: { name: user.name, role: user.role },
+		notifications,
+		comptrollerEnabled: isComptrollerEnabled(),
+	}
 }
 
 export default function AppShellRoute({ loaderData }: Route.ComponentProps) {
-	const { user, notifications } = loaderData
+	const { user, notifications, comptrollerEnabled } = loaderData
 	return (
-		<AppShell user={user} notifications={notifications}>
+		<AppShell
+			user={user}
+			notifications={notifications}
+			comptrollerEnabled={comptrollerEnabled}
+		>
 			<Outlet />
 		</AppShell>
 	)

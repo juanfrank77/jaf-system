@@ -304,7 +304,7 @@ export default function ReviewDoc({
 	const isApproved = [
 		"SUPERVISOR_APPROVED",
 		"CLARO_UPLOADED",
-		"LC_GENERATED",
+		"LC_REQUEST_GENERATED",
 	].includes(doc.status)
 
 	// Build Claro submission helper data

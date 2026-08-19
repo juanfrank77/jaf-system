@@ -50,7 +50,7 @@ export type DashboardAlert = {
 const RECEIVABLE_STATUSES: DocStatus[] = [
 	"SUPERVISOR_APPROVED",
 	"CLARO_UPLOADED",
-	"LC_GENERATED",
+	"LC_REQUEST_GENERATED",
 ]
 
 function count(docs: DashboardDoc[], pred: (d: DashboardDoc) => boolean) {
@@ -64,7 +64,7 @@ export function computeDashboardStats(
 	if (role === "SUPERVISOR") {
 		const open = count(
 			docs,
-			(d) => d.status !== "LC_GENERATED" && d.status !== "CANCELLED",
+			(d) => d.status !== "LC_REQUEST_GENERATED" && d.status !== "CANCELLED",
 		)
 		const awaitingWarehouse = count(docs, (d) => d.status === "CREATED")
 		const awaitingCrew = count(
@@ -148,7 +148,7 @@ export function computeDashboardStats(
 	if (role === "CREW") {
 		const openJobs = count(
 			docs,
-			(d) => d.status !== "LC_GENERATED" && d.status !== "CANCELLED",
+			(d) => d.status !== "LC_REQUEST_GENERATED" && d.status !== "CANCELLED",
 		)
 		const readyForPickup = count(docs, (d) => d.status === "PREPPED")
 		const inTheField = count(

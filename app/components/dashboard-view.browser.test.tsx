@@ -110,7 +110,7 @@ describe("DashboardView", () => {
 						<DashboardView
 							stats={[]}
 							alert={null}
-							docs={[doc({ id: "abc", status: "LC_GENERATED" })]}
+							docs={[doc({ id: "abc", status: "LC_REQUEST_GENERATED" })]}
 						/>
 					),
 				},
@@ -118,7 +118,7 @@ describe("DashboardView", () => {
 		})
 		const link = screen.getByRole("link", { name: /JAF-10493/ })
 		expect(link).toHaveAttribute("href", "/docs/abc")
-		expect(screen.getByText("LC GENERATED")).toBeInTheDocument()
+		expect(screen.getByText("LC REQUEST GENERATED")).toBeInTheDocument()
 	})
 
 	it("shows an empty state when there are no documents", async ({

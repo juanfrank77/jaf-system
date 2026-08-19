@@ -74,6 +74,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
+	if (isTerminalStatus(doc.status)) throw redirect(`/docs/${params.id}`)
 	const form = await request.formData()
 	const intent = form.get("intent") as string
 
@@ -293,7 +294,7 @@ export default function DocView({
 	const APPROVED_STATUSES = [
 		"SUPERVISOR_APPROVED",
 		"CLARO_UPLOADED",
-		"LC_GENERATED",
+		"LC_REQUEST_GENERATED",
 	] as const
 	const isApproved = APPROVED_STATUSES.includes(
 		doc.status as (typeof APPROVED_STATUSES)[number],
@@ -384,8 +385,7 @@ export default function DocView({
 					</p>
 				)}
 				{(user.role === "SUPERVISOR" || user.role === "ADMIN") &&
-					doc.status !== "CANCELLED" &&
-					doc.status !== "LC_GENERATED" && (
+					!isTerminalStatus(doc.status) && (
 						<Form method="post" className="flex items-center gap-2">
 							<Input
 								type="text"
@@ -582,8 +582,7 @@ export default function DocView({
 			)}
 
 			{(user.role === "SUPERVISOR" || user.role === "ADMIN") &&
-				doc.status !== "CANCELLED" &&
-				doc.status !== "LC_GENERATED" && (
+				!isTerminalStatus(doc.status) && (
 					<div className="space-y-3 pt-2 border-t">
 						<Form method="post" className="space-y-2">
 							<fieldset className="border rounded-lg p-3 space-y-2">

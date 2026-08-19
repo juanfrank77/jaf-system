@@ -17,7 +17,7 @@ describe("computeDashboardStats", () => {
 			doc("CREATED"),
 			doc("PREPPED"),
 			doc("SIGNED"),
-			doc("LC_GENERATED"),
+			doc("LC_REQUEST_GENERATED"),
 		]
 		const { stats } = computeDashboardStats("SUPERVISOR", docs)
 		expect(stats).toEqual([
@@ -94,7 +94,7 @@ describe("computeDashboardStats", () => {
 			doc("SIGNED"),
 			doc("SIGNED", null, { sendBackHistory: [{ note: "fix photo" }] }),
 			doc("FIELD_UPDATED"),
-			doc("LC_GENERATED"),
+			doc("LC_REQUEST_GENERATED"),
 			doc("CANCELLED"),
 		]
 		const { stats, alert } = computeDashboardStats("CREW", docs)
@@ -137,7 +137,7 @@ describe("computeDashboardStats", () => {
 		const docs = [
 			doc("SUPERVISOR_APPROVED"),
 			doc("CLARO_UPLOADED"),
-			doc("LC_GENERATED", new Date("2026-01-01")),
+			doc("LC_REQUEST_GENERATED", new Date("2026-01-01")),
 			doc("CREATED"),
 		]
 		const { stats, alert } = computeDashboardStats("FINANCE", docs)

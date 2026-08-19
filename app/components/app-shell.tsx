@@ -277,6 +277,7 @@ function NotificationBell({
 function AppShell({
 	user,
 	notifications,
+	comptrollerEnabled,
 	children,
 }: {
 	user: { name: string; role: Role }
@@ -286,13 +287,15 @@ function AppShell({
 		docId: string | null
 		createdAt: Date
 	}[]
+	comptrollerEnabled?: boolean
 	children: React.ReactNode
 }) {
 	const [drawerOpen, setDrawerOpen] = useState(false)
 	const { t } = useTranslation()
-	const items = NAV_ITEMS.filter(
-		(item) => !item.roles || item.roles.includes(user.role),
-	)
+	const items = NAV_ITEMS.filter((item) => {
+		if (item.to.startsWith("/comptroller") && !comptrollerEnabled) return false
+		return !item.roles || item.roles.includes(user.role)
+	})
 
 	return (
 		<Dialog.Root open={drawerOpen} onOpenChange={setDrawerOpen}>

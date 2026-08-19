@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next"
-import { Form, Link } from "react-router"
+import { data, Form, Link } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Badge } from "~/components/ui/badge"
 import { Button, buttonVariants } from "~/components/ui/button"
@@ -8,6 +8,7 @@ import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
+import { isComptrollerEnabled } from "~/lib/features.server"
 import {
 	FINANCEABLE_STATUSES,
 	invoiceTotalUsed,
@@ -47,6 +48,7 @@ type AssignmentHistoryEntry = {
 }
 
 export async function loader({ request, params }: Route.LoaderArgs) {
+	if (!isComptrollerEnabled()) throw data(null, { status: 404 })
 	const { user } = await requireRole(request, ["COMPTROLLER", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
@@ -132,6 +134,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
+	if (!isComptrollerEnabled()) throw data(null, { status: 404 })
 	const { user } = await requireRole(request, ["COMPTROLLER", "ADMIN"])
 	const form = await request.formData()
 	const intent = form.get("intent") as string

@@ -323,7 +323,7 @@
 		"no_claro_pdf": "No Claro PDF on file.",
 		"download_acta": "Download Acta de Conformidad (2A)",
 		"generate_schedule": "Generate & Download Schedule of Accounts (2B)",
-		"footer_note": "Generating the Schedule of Accounts marks this document LC_GENERATED. Email the PDF to hs@pbcc.com."
+		"footer_note": "Generating the Schedule of Accounts marks this document as LC Request Generated. Email the PDF to hs@pbcc.com."
 	},
 	"admin_settings": {
 		"title": "System Settings",
@@ -687,7 +687,7 @@
 		"field_updated": "Field Updated",
 		"supervisor_approved": "Supervisor Approved",
 		"claro_uploaded": "Claro Uploaded",
-		"lc_generated": "LC Generated",
+		"lc_request_generated": "LC Request Generated",
 		"cancelled": "Cancelled"
 	},
 	"offline_indicator": {

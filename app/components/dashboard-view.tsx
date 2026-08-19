@@ -66,7 +66,7 @@ const STATUS_BADGE_VARIANT: Record<
 	FIELD_UPDATED: "warn",
 	SUPERVISOR_APPROVED: "info",
 	CLARO_UPLOADED: "info",
-	LC_GENERATED: "ok",
+	LC_REQUEST_GENERATED: "ok",
 	CANCELLED: "danger",
 }
 
@@ -78,7 +78,7 @@ type StatusLabelKey =
 	| "docs_status.field_updated"
 	| "docs_status.supervisor_approved"
 	| "docs_status.claro_uploaded"
-	| "docs_status.lc_generated"
+	| "docs_status.lc_request_generated"
 	| "docs_status.cancelled"
 
 const STATUS_OPTIONS: { value: string; labelKey: StatusLabelKey }[] = [
@@ -89,7 +89,10 @@ const STATUS_OPTIONS: { value: string; labelKey: StatusLabelKey }[] = [
 	{ value: "FIELD_UPDATED", labelKey: "docs_status.field_updated" },
 	{ value: "SUPERVISOR_APPROVED", labelKey: "docs_status.supervisor_approved" },
 	{ value: "CLARO_UPLOADED", labelKey: "docs_status.claro_uploaded" },
-	{ value: "LC_GENERATED", labelKey: "docs_status.lc_generated" },
+	{
+		value: "LC_REQUEST_GENERATED",
+		labelKey: "docs_status.lc_request_generated",
+	},
 	{ value: "CANCELLED", labelKey: "docs_status.cancelled" },
 ]
 

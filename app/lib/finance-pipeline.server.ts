@@ -152,7 +152,7 @@ export type FinancePipelineRow = {
 export const FINANCEABLE_STATUSES: DocStatus[] = [
 	"SUPERVISOR_APPROVED",
 	"CLARO_UPLOADED",
-	"LC_GENERATED",
+	"LC_REQUEST_GENERATED",
 ]
 
 type FinanceLineItem = {

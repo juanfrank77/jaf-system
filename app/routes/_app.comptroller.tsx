@@ -1,10 +1,11 @@
 import { useTranslation } from "react-i18next"
-import { Form, Link } from "react-router"
+import { data, Form, Link } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Badge } from "~/components/ui/badge"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { Card, CardContent } from "~/components/ui/card"
 import { db } from "~/lib/db.server"
+import { isComptrollerEnabled } from "~/lib/features.server"
 import {
 	FINANCEABLE_STATUSES,
 	invoiceTotalUsed,
@@ -51,6 +52,7 @@ type CrewToPayRow = JobRow & {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
+	if (!isComptrollerEnabled()) throw data(null, { status: 404 })
 	const { user } = await requireRole(request, ["COMPTROLLER", "ADMIN"])
 
 	const [serviceCodes, ivuRate] = await Promise.all([

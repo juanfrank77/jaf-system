@@ -17,7 +17,7 @@ const STATUS_BADGE_VARIANT: Record<string, "ok" | "warn" | "danger" | "info"> =
 		FIELD_UPDATED: "warn",
 		SUPERVISOR_APPROVED: "ok",
 		CLARO_UPLOADED: "ok",
-		LC_GENERATED: "ok",
+		LC_REQUEST_GENERATED: "ok",
 		CANCELLED: "danger",
 	}
 

@@ -4,6 +4,7 @@ import { DashboardView } from "~/components/dashboard-view"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { computeDashboardStats } from "~/lib/dashboard-stats"
 import { db } from "~/lib/db.server"
+import { isComptrollerEnabled } from "~/lib/features.server"
 import { cacheJobs } from "~/lib/offline-store"
 import { requireSession } from "~/lib/permissions.server"
 import type { DocStatus, Role } from "../../generated/prisma/client"
@@ -24,7 +25,9 @@ export async function loader({ request }: Route.LoaderArgs) {
 		where: { id: session.user.id },
 	})
 
-	if (user.role === "COMPTROLLER") throw redirect("/comptroller")
+	if (user.role === "COMPTROLLER") {
+		throw redirect(isComptrollerEnabled() ? "/comptroller" : "/dashboard")
+	}
 
 	const url = new URL(request.url)
 	const statusFilter = url.searchParams.get("status")
@@ -74,7 +77,13 @@ export async function loader({ request }: Route.LoaderArgs) {
 		take: 50,
 	})
 
-	const { stats, alert } = computeDashboardStats(user.role, docs)
+	// LC_REQUEST_GENERATED is Finance/Admin-only in all projections.
+	const visibleDocs =
+		user.role === "FINANCE" || user.role === "ADMIN"
+			? docs
+			: docs.filter((d) => d.status !== "LC_REQUEST_GENERATED")
+
+	const { stats, alert } = computeDashboardStats(user.role, visibleDocs)
 
 	const pendingReviewDocs =
 		user.role === "SUPERVISOR"
@@ -199,7 +208,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 	return {
 		stats,
 		alert,
-		docs,
+		docs: visibleDocs,
 		pendingReviewDocs,
 		sentBackDocs,
 		crewOptions,

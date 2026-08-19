@@ -19,7 +19,7 @@ export function isReviewActionStatus(
 	return REVIEW_ACTION_STATUSES.includes(status as ReviewActionStatus)
 }
 
-export const TERMINAL_STATUSES = ["CANCELLED", "LC_GENERATED"] as const
+export const TERMINAL_STATUSES = ["CANCELLED", "LC_REQUEST_GENERATED"] as const
 export type TerminalStatus = (typeof TERMINAL_STATUSES)[number]
 
 export function isTerminalStatus(status: string): status is TerminalStatus {
@@ -40,7 +40,10 @@ const TRANSITIONS: Record<string, { from: string | string[]; roles: Role[] }> =
 			from: "SUPERVISOR_APPROVED",
 			roles: ["SUPERVISOR", "ADMIN"],
 		},
-		LC_GENERATED: { from: "CLARO_UPLOADED", roles: ["FINANCE", "ADMIN"] },
+		LC_REQUEST_GENERATED: {
+			from: "CLARO_UPLOADED",
+			roles: ["FINANCE", "ADMIN"],
+		},
 	}
 
 export function canTransition(

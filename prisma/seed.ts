@@ -188,7 +188,7 @@ async function main() {
 			| "FIELD_UPDATED"
 			| "SUPERVISOR_APPROVED"
 			| "CLARO_UPLOADED"
-			| "LC_GENERATED"
+			| "LC_REQUEST_GENERATED"
 		jobType: string
 		jobAddressEstimated: string
 		jobAddressActual?: string
@@ -284,7 +284,7 @@ async function main() {
 		},
 		{
 			controlNumber: "JAF-2026-1007",
-			status: "LC_GENERATED",
+			status: "LC_REQUEST_GENERATED",
 			jobType: "Transfer Attach — Messenger Cable",
 			jobAddressEstimated: "PR-2 KM 130.8, Hatillo",
 			jobAddressActual: "PR-2 KM 130.8, Hatillo",
@@ -303,7 +303,7 @@ async function main() {
 		},
 		{
 			controlNumber: "JAF-2026-1008",
-			status: "LC_GENERATED",
+			status: "LC_REQUEST_GENERATED",
 			jobType: "Pole Removal — Transfer & Cable Removal",
 			jobAddressEstimated: "PR-2 KM 142.3, Mayagüez",
 			jobAddressActual: "PR-2 KM 142.3, Mayagüez",
@@ -423,7 +423,7 @@ async function main() {
 			})
 		}
 
-		if (def.status === "LC_GENERATED" && def.materialsUsed) {
+		if (def.status === "LC_REQUEST_GENERATED" && def.materialsUsed) {
 			const total = amountOf(def.materialsUsed)
 			const advanceAmount = Math.round(total * 0.8 * 100) / 100
 			const finalPaymentAmount = Math.round((total - advanceAmount) * 100) / 100
@@ -481,7 +481,7 @@ async function main() {
 			"FIELD_UPDATED",
 			"SUPERVISOR_APPROVED",
 			"CLARO_UPLOADED",
-			"LC_GENERATED",
+			"LC_REQUEST_GENERATED",
 		] as const
 		const reached = STAGE_ORDER.slice(0, STAGE_ORDER.indexOf(def.status) + 1)
 		await db.auditTrail.deleteMany({ where: { docId: invoice.id } })
@@ -495,7 +495,7 @@ async function main() {
 							? crew.id
 							: stage === "SUPERVISOR_APPROVED" || stage === "CLARO_UPLOADED"
 								? supervisor.id
-								: stage === "LC_GENERATED"
+								: stage === "LC_REQUEST_GENERATED"
 									? finance.id
 									: supervisor.id,
 				action: i === 0 ? "DOC_CREATED" : "STATUS_CHANGED",

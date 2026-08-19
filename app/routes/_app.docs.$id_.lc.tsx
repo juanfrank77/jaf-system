@@ -26,7 +26,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
-	if (!canTransition(doc.status, "LC_GENERATED", user.role))
+	if (!canTransition(doc.status, "LC_REQUEST_GENERATED", user.role))
 		throw redirect(`/docs/${params.id}`)
 	const serviceCodes = await db.serviceCode.findMany()
 	const supervisor = await db.user.findUnique({
@@ -55,7 +55,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
-	if (!canTransition(doc.status, "LC_GENERATED", user.role))
+	if (!canTransition(doc.status, "LC_REQUEST_GENERATED", user.role))
 		throw redirect(`/docs/${params.id}`)
 
 	const form = await request.formData()
@@ -137,7 +137,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 			db.jafInvoice.update({
 				where: { id: params.id },
 				data: {
-					status: "LC_GENERATED",
+					status: "LC_REQUEST_GENERATED",
 					lcRequestPdfPath: localPath,
 					lcGeneratedAt: new Date(),
 					lcApprovedById: user.id,
@@ -149,7 +149,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 					userId: user.id,
 					action: "STATUS_CHANGED",
 					diffJson: {
-						status: { before: "CLARO_UPLOADED", after: "LC_GENERATED" },
+						status: { before: "CLARO_UPLOADED", after: "LC_REQUEST_GENERATED" },
 					},
 				},
 			}),

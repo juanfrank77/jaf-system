@@ -8,6 +8,7 @@ type DashboardDoc = {
 	receivableClosedAt: Date | null
 	prepChangedSincePrep?: boolean
 	materialsReturned?: unknown
+	sendBackHistory?: unknown
 	estimatedMaterials?: unknown
 	materialsTaken?: unknown
 	materialsUsed?: unknown
@@ -177,9 +178,16 @@ function computeMaterialSignals(docs: DashboardDoc[]) {
 			}
 		}
 		if (taken.length && used.length) {
-			const takenMap = Object.fromEntries(taken.map((t) => [t.serviceCodeId, t.qty]))
-			const usedMap = Object.fromEntries(used.map((u) => [u.serviceCodeId, u.qty]))
-			const allIds = new Set([...Object.keys(takenMap), ...Object.keys(usedMap)])
+			const takenMap = Object.fromEntries(
+				taken.map((t) => [t.serviceCodeId, t.qty]),
+			)
+			const usedMap = Object.fromEntries(
+				used.map((u) => [u.serviceCodeId, u.qty]),
+			)
+			const allIds = new Set([
+				...Object.keys(takenMap),
+				...Object.keys(usedMap),
+			])
 			for (const id of allIds) {
 				if ((takenMap[id] ?? 0) !== (usedMap[id] ?? 0)) {
 					discrepancy++
@@ -205,7 +213,11 @@ function computeMaterialSignals(docs: DashboardDoc[]) {
 export function computeDashboardStats(
 	role: Role,
 	docs: DashboardDoc[],
-): { stats: DashboardStat[]; alert: DashboardAlert; explainer: DashboardExplainer } {
+): {
+	stats: DashboardStat[]
+	alert: DashboardAlert
+	explainer: DashboardExplainer
+} {
 	if (role === "SUPERVISOR") {
 		const open = count(
 			docs,
@@ -232,15 +244,24 @@ export function computeDashboardStats(
 				},
 				{ labelKey: "dashboard.stat.awaiting_crew", value: awaitingCrew },
 				{ labelKey: "dashboard.stat.pending_review", value: pendingReview },
-				{ labelKey: "dashboard.stat.stage_awaiting_warehouse", value: awaitingWarehouse },
+				{
+					labelKey: "dashboard.stat.stage_awaiting_warehouse",
+					value: awaitingWarehouse,
+				},
 				{ labelKey: "dashboard.stat.stage_awaiting_crew", value: awaitingCrew },
-				{ labelKey: "dashboard.stat.stage_pending_review", value: pendingReview },
+				{
+					labelKey: "dashboard.stat.stage_pending_review",
+					value: pendingReview,
+				},
 				{ labelKey: "dashboard.stat.stage_in_finance", value: 0 },
 				{ labelKey: "dashboard.stat.discrepancy_count", value: discrepancy },
 				{ labelKey: "dashboard.stat.shortage_count", value: shortage },
 				{ labelKey: "dashboard.stat.overage_count", value: overage },
 				{ labelKey: "dashboard.stat.aging_oldest_days", value: oldestOpenDays },
-				{ labelKey: "dashboard.stat.aging_po_wait_count", value: aging.poWaitCount },
+				{
+					labelKey: "dashboard.stat.aging_po_wait_count",
+					value: aging.poWaitCount,
+				},
 				{ labelKey: "dashboard.stat.aging_claro_wait_count", value: 0 },
 			],
 			alert:
@@ -271,13 +292,13 @@ export function computeDashboardStats(
 		const preppedAwaiting = count(docs, (d) => d.status === "PREPPED")
 		const missingMaterials = count(
 			docs,
-			(d) => d.status === "CREATED" && (d as any).prepChangedSincePrep,
+			(d) => d.status === "CREATED" && !!d.prepChangedSincePrep,
 		)
 		const returnsToLog = count(
 			docs,
 			(d) =>
 				(d.status === "SIGNED" || d.status === "FIELD_UPDATED") &&
-				(d as any).materialsReturned === null,
+				d.materialsReturned === null,
 		)
 		const { discrepancy, shortage, overage } = computeMaterialSignals(docs)
 		return {
@@ -295,7 +316,10 @@ export function computeDashboardStats(
 					labelKey: "dashboard.stat.returns_to_log",
 					value: returnsToLog,
 				},
-				{ labelKey: "dashboard.stat.stage_awaiting_warehouse", value: pendingPreps },
+				{
+					labelKey: "dashboard.stat.stage_awaiting_warehouse",
+					value: pendingPreps,
+				},
 				{ labelKey: "dashboard.stat.stage_awaiting_crew", value: 0 },
 				{ labelKey: "dashboard.stat.stage_pending_review", value: 0 },
 				{ labelKey: "dashboard.stat.stage_in_finance", value: 0 },
@@ -336,14 +360,11 @@ export function computeDashboardStats(
 			docs,
 			(d) =>
 				d.status === "SIGNED" &&
-				(!Array.isArray((d as any).sendBackHistory) ||
-					(Array.isArray((d as any).sendBackHistory) &&
-						(d as any).sendBackHistory.length === 0)),
+				(!Array.isArray(d.sendBackHistory) ||
+					(Array.isArray(d.sendBackHistory) && d.sendBackHistory.length === 0)),
 		)
-		const sendBackHistory = (d: DashboardDoc) =>
-			Array.isArray((d as any).sendBackHistory)
-				? ((d as any).sendBackHistory as unknown[])
-				: []
+		const sendBackHistory = (d: DashboardDoc): unknown[] =>
+			Array.isArray(d.sendBackHistory) ? d.sendBackHistory : []
 		const sentBack = count(
 			docs,
 			(d) => d.status === "SIGNED" && sendBackHistory(d).length > 0,
@@ -384,7 +405,10 @@ export function computeDashboardStats(
 				{ labelKey: "dashboard.stat.sent_back", value: sentBack },
 				{ labelKey: "dashboard.stat.submitted", value: submitted },
 				{ labelKey: "dashboard.stat.stage_awaiting_warehouse", value: 0 },
-				{ labelKey: "dashboard.stat.stage_awaiting_crew", value: readyForPickup },
+				{
+					labelKey: "dashboard.stat.stage_awaiting_crew",
+					value: readyForPickup,
+				},
 				{ labelKey: "dashboard.stat.stage_pending_review", value: 0 },
 				{ labelKey: "dashboard.stat.stage_in_finance", value: 0 },
 				{ labelKey: "dashboard.stat.discrepancy_count", value: discrepancy },
@@ -480,16 +504,31 @@ export function computeDashboardStats(
 				labelKey: "dashboard.stat.awaiting_claro_upload",
 				value: awaitingClaroUpload,
 			},
-			{ labelKey: "dashboard.stat.stage_awaiting_warehouse", value: stageAwaitingWarehouse },
-			{ labelKey: "dashboard.stat.stage_awaiting_crew", value: stageAwaitingCrew },
-			{ labelKey: "dashboard.stat.stage_pending_review", value: stagePendingReview },
+			{
+				labelKey: "dashboard.stat.stage_awaiting_warehouse",
+				value: stageAwaitingWarehouse,
+			},
+			{
+				labelKey: "dashboard.stat.stage_awaiting_crew",
+				value: stageAwaitingCrew,
+			},
+			{
+				labelKey: "dashboard.stat.stage_pending_review",
+				value: stagePendingReview,
+			},
 			{ labelKey: "dashboard.stat.stage_in_finance", value: stageInFinance },
 			{ labelKey: "dashboard.stat.discrepancy_count", value: discrepancy },
 			{ labelKey: "dashboard.stat.shortage_count", value: shortage },
 			{ labelKey: "dashboard.stat.overage_count", value: overage },
 			{ labelKey: "dashboard.stat.aging_oldest_days", value: aging.oldestDays },
-			{ labelKey: "dashboard.stat.aging_po_wait_count", value: aging.poWaitCount },
-			{ labelKey: "dashboard.stat.aging_claro_wait_count", value: aging.claroWaitCount },
+			{
+				labelKey: "dashboard.stat.aging_po_wait_count",
+				value: aging.poWaitCount,
+			},
+			{
+				labelKey: "dashboard.stat.aging_claro_wait_count",
+				value: aging.claroWaitCount,
+			},
 		],
 		alert:
 			openReceivables > 0

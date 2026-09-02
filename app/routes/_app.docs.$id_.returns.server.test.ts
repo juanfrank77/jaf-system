@@ -181,7 +181,10 @@ describe("POST /docs/:id/returns", () => {
 		] as any)
 
 		const form = new FormData()
-		form.set("materialsTaken", JSON.stringify([{ serviceCodeId: "sc-1", qty: 99 }]))
+		form.set(
+			"materialsTaken",
+			JSON.stringify([{ serviceCodeId: "sc-1", qty: 99 }]),
+		)
 		form.set(
 			"materialsReturned",
 			JSON.stringify([

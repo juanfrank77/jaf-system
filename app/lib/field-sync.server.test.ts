@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-
 import { type FieldUpdatePayload, syncFieldUpdate } from "./field-sync"
+import type { CachedJob } from "./offline-store"
 
 const originalFetch = globalThis.fetch
 
@@ -17,7 +17,7 @@ function basePayload(
 
 function baseCachedJob(
 	overrides: { status?: string; assignedCrewIds?: string[] } = {},
-): any {
+): CachedJob {
 	return {
 		id: "doc-1",
 		controlNumber: "JAF-1001",
@@ -44,7 +44,7 @@ describe("syncFieldUpdate", () => {
 			redirected: false,
 			ok: true,
 			status: 200,
-		} as any)
+		} as Response)
 
 		const result = await syncFieldUpdate(
 			{
@@ -74,7 +74,7 @@ describe("syncFieldUpdate", () => {
 			status: 409,
 			json: async () => ({ conflict: "CANCELLED" }),
 			text: async () => "{}",
-		} as any)
+		} as Response)
 
 		const result = await syncFieldUpdate(
 			{
@@ -104,7 +104,7 @@ describe("syncFieldUpdate", () => {
 			status: 409,
 			json: async () => ({ conflict: "REASSIGNED" }),
 			text: async () => "{}",
-		} as any)
+		} as Response)
 
 		const result = await syncFieldUpdate(
 			{
@@ -134,7 +134,7 @@ describe("syncFieldUpdate", () => {
 			status: 409,
 			json: async () => ({}),
 			text: async () => "{}",
-		} as any)
+		} as Response)
 
 		const result = await syncFieldUpdate(
 			{
@@ -183,7 +183,7 @@ describe("syncFieldUpdate", () => {
 			ok: false,
 			status: 500,
 			text: async () => "Server error",
-		} as any)
+		} as Response)
 
 		const result = await syncFieldUpdate(
 			{

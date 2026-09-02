@@ -176,6 +176,8 @@
 		"return_note_placeholder": "Describe any shortage, damage, or restocking issue...",
 		"add_line": "+ Add Line",
 		"submit": "Save Returns",
+		"crew_reported_hint": "Crew reported {{usedQty}} used; expected return is {{expectedReturnQty}}.",
+		"discrepancy_warning": "Return qty differs from crew-reported usage.",
 		"errors": {
 			"invalid_materials": "Invalid materials data",
 			"invalid_service_codes": "One or more selected products are no longer available.",

@@ -83,7 +83,10 @@ export async function loader({ request }: Route.LoaderArgs) {
 			? docs
 			: docs.filter((d) => d.status !== "LC_REQUEST_GENERATED")
 
-	const { stats, alert, explainer } = computeDashboardStats(user.role, visibleDocs)
+	const { stats, alert, explainer } = computeDashboardStats(
+		user.role,
+		visibleDocs,
+	)
 
 	const pendingReviewDocs =
 		user.role === "SUPERVISOR"
@@ -207,7 +210,15 @@ export async function loader({ request }: Route.LoaderArgs) {
 				? await db.vanRestockRequest.findMany({
 						where: {
 							requestedById: user.id,
-							status: { in: ["REQUESTED", "PENDING_APPROVAL", "APPROVED", "READY", "FULFILLED"] },
+							status: {
+								in: [
+									"REQUESTED",
+									"PENDING_APPROVAL",
+									"APPROVED",
+									"READY",
+									"FULFILLED",
+								],
+							},
 						},
 						include: { requestedBy: true, warehouse: true },
 						orderBy: { createdAt: "desc" },

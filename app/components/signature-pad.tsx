@@ -12,18 +12,26 @@ interface Props {
 	className?: string
 }
 
+interface SignaturePadInstance {
+	off(): void
+	toDataURL(type?: string): string
+	isEmpty(): boolean
+	clear(): void
+}
+
 export const SignaturePad = forwardRef<SignaturePadHandle, Props>(
 	function SignaturePad({ width = 400, height = 150, className }, ref) {
 		const canvasRef = useRef<HTMLCanvasElement>(null)
-		const padRef = useRef<any>(null)
+		const padRef = useRef<SignaturePadInstance | null>(null)
 
 		useEffect(() => {
-			if (!canvasRef.current) return
+			const canvas = canvasRef.current
+			if (!canvas) return
 			import("signature_pad").then(({ default: SP }) => {
-				padRef.current = new SP(canvasRef.current!, {
+				padRef.current = new SP(canvas, {
 					backgroundColor: "rgb(255,255,255)",
 					penColor: "rgb(0,0,0)",
-				})
+				}) as SignaturePadInstance
 			})
 			return () => padRef.current?.off()
 		}, [])

@@ -95,7 +95,9 @@ describe("DashboardView", () => {
 			entries: [
 				{
 					path: "/",
-					Component: () => <DashboardView stats={[]} alert={null} explainer={null} docs={[]} />,
+					Component: () => (
+						<DashboardView stats={[]} alert={null} explainer={null} docs={[]} />
+					),
 				},
 			],
 		})
@@ -132,7 +134,9 @@ describe("DashboardView", () => {
 			entries: [
 				{
 					path: "/",
-					Component: () => <DashboardView stats={[]} alert={null} explainer={null} docs={[]} />,
+					Component: () => (
+						<DashboardView stats={[]} alert={null} explainer={null} docs={[]} />
+					),
 				},
 			],
 		})
@@ -189,7 +193,15 @@ describe("DashboardView", () => {
 			entries: [
 				{
 					path: "/",
-					Component: () => <DashboardView stats={[]} alert={null} explainer={null} docs={[]} sentBackDocs={[]} />,
+					Component: () => (
+						<DashboardView
+							stats={[]}
+							alert={null}
+							explainer={null}
+							docs={[]}
+							sentBackDocs={[]}
+						/>
+					),
 				},
 			],
 		})
@@ -272,7 +284,15 @@ describe("DashboardView", () => {
 			entries: [
 				{
 					path: "/",
-					Component: () => <DashboardView stats={[]} alert={null} explainer={null} docs={[]} crewOptions={[]} />,
+					Component: () => (
+						<DashboardView
+							stats={[]}
+							alert={null}
+							explainer={null}
+							docs={[]}
+							crewOptions={[]}
+						/>
+					),
 				},
 			],
 		})

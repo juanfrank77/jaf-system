@@ -13,8 +13,8 @@ import {
 	SelectValue,
 } from "~/components/ui/select"
 import { db } from "~/lib/db.server"
-import { appendVanAssignmentHistory } from "~/lib/van-history"
 import { requireRole } from "~/lib/permissions.server"
+import { appendVanAssignmentHistory } from "~/lib/van-history"
 import type { Route } from "./+types/_app.admin.vans"
 
 type StockLevel = {
@@ -300,7 +300,9 @@ export default function AdminVans({
 												van={van}
 												installers={installers}
 												serviceCodes={serviceCodes}
-												history={(van.vanAssignmentHistory as any[] | undefined) || []}
+												history={
+													(van.vanAssignmentHistory as any[] | undefined) || []
+												}
 											/>
 										</div>
 									</td>
@@ -428,14 +430,20 @@ function EditVanDialog({
 							{t("admin_vans.history_heading")}
 						</p>
 						<ul className="space-y-1 text-xs text-slate-600">
-							{history.map((entry, idx) => {
-								const installer = installers.find((u) => u.id === entry.installerId)
+							{history.map((entry) => {
+								const installer = installers.find(
+									(u) => u.id === entry.installerId,
+								)
 								const fromInstaller = entry.from
-									? installers.find((u) => u.id === entry.from)?.name ?? entry.from
+									? (installers.find((u) => u.id === entry.from)?.name ??
+										entry.from)
 									: t("admin_vans.unassigned")
 								return (
-									<li key={idx}>
-										{installer?.name ?? t("admin_vans.unassigned")} — from {fromInstaller} on {new Date(entry.to).toLocaleString()}
+									<li
+										key={`${entry.installerId ?? "null"}-${entry.from ?? "null"}-${entry.to}`}
+									>
+										{installer?.name ?? t("admin_vans.unassigned")} — from{" "}
+										{fromInstaller} on {new Date(entry.to).toLocaleString()}
 									</li>
 								)
 							})}

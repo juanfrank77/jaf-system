@@ -27,8 +27,8 @@ function createMockIdb() {
 			source: null as unknown,
 			transaction: null as IDBTransaction | null,
 			readyState: "done" as const,
-			onerror: null as ((this: IDBRequest<T>, ev: Event) => any) | null,
-			onsuccess: null as ((this: IDBRequest<T>, ev: Event) => any) | null,
+			onerror: null as ((this: IDBRequest<T>, ev: Event) => unknown) | null,
+			onsuccess: null as ((this: IDBRequest<T>, ev: Event) => unknown) | null,
 			addEventListener: (type: string, listener: (event: Event) => void) => {
 				if (!listeners[type]) listeners[type] = []
 				listeners[type].push(listener)
@@ -94,9 +94,10 @@ function createMockIdb() {
 					return null
 				},
 				set onsuccess(value:
-					| ((this: IDBOpenDBRequest, ev: Event) => any)
+					| ((this: IDBOpenDBRequest, ev: Event) => unknown)
 					| null,) {
 					queueMicrotask(() =>
+						// biome-ignore lint/suspicious/noExplicitAny: test mock
 						value?.call(request as any, new Event("success")),
 					)
 				},

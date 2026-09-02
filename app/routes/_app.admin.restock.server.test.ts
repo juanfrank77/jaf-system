@@ -165,7 +165,9 @@ describe("POST /admin/restock", () => {
 	})
 
 	it("rejects non-authorized role for restock actions", async () => {
-		vi.mocked(requireRole).mockRejectedValue(new Response(null, { status: 302 }))
+		vi.mocked(requireRole).mockRejectedValue(
+			new Response(null, { status: 302 }),
+		)
 
 		const form = new FormData()
 		form.set("intent", "approve")

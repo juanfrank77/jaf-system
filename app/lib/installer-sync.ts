@@ -147,8 +147,7 @@ export async function syncInstallerActions(): Promise<{
 	conflicts: SyncConflict[]
 	errors: string[]
 }> {
-	const { getQueuedActions, removeQueuedAction, syncQueuedActions } =
-		await import("./offline-store")
+	const { syncQueuedActions } = await import("./offline-store")
 
 	return syncQueuedActions({
 		async syncOne(action) {

@@ -62,7 +62,7 @@ describe("POST /admin/vans", () => {
 		const result = await action({
 			request: formRequest(form),
 			params: {},
-		} as any).catch((r) => { console.log('CAUGHT', r); return r; })
+		} as any).catch((r) => r)
 
 		expect(result.status).toBe(302)
 		expect(db.van.create).toHaveBeenCalledWith({
@@ -93,7 +93,7 @@ describe("POST /admin/vans", () => {
 		const result = await action({
 			request: formRequest(form),
 			params: {},
-		} as any).catch((r) => { console.log('CAUGHT', r); return r; })
+		} as any).catch((r) => r)
 
 		expect(result.status).toBe(302)
 		expect(db.van.create).toHaveBeenCalledWith({
@@ -121,7 +121,7 @@ describe("POST /admin/vans", () => {
 		const result = await action({
 			request: formRequest(form),
 			params: {},
-		} as any).catch((r) => { console.log('CAUGHT', r); return r; })
+		} as any).catch((r) => r)
 
 		expect(result.status).toBe(302)
 		expect(db.van.update).toHaveBeenCalledWith({
@@ -156,7 +156,7 @@ describe("POST /admin/vans", () => {
 		const result = await action({
 			request: formRequest(form),
 			params: {},
-		} as any).catch((r) => { console.log('CAUGHT', r); return r; })
+		} as any).catch((r) => r)
 
 		expect(result.status).toBe(302)
 		expect(db.van.update).toHaveBeenCalledWith(
@@ -196,7 +196,7 @@ describe("POST /admin/vans", () => {
 		const result = await action({
 			request: formRequest(form),
 			params: {},
-		} as any).catch((r) => { console.log('CAUGHT', r); return r; })
+		} as any).catch((r) => r)
 
 		expect(result.status).toBe(302)
 		const updateCall = (db.van.update as any).mock.calls[0][0]
@@ -247,7 +247,7 @@ describe("POST /admin/vans", () => {
 		const result = await action({
 			request: formRequest(form),
 			params: {},
-		} as any).catch((r) => { console.log('CAUGHT', r); return r; })
+		} as any).catch((r) => r)
 
 		expect(result.status).toBe(302)
 		const updateCall = (db.van.update as any).mock.calls[0][0]
@@ -283,7 +283,7 @@ describe("POST /admin/vans", () => {
 		const result = await action({
 			request: formRequest(form),
 			params: {},
-		} as any).catch((r) => { console.log('CAUGHT', r); return r; })
+		} as any).catch((r) => r)
 
 		expect(result.status).toBe(302)
 		const updateCall = (db.van.update as any).mock.calls[0][0]

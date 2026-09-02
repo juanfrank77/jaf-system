@@ -47,7 +47,9 @@ export async function loader({ request, params }: any) {
 	})
 	const taken = (doc.materialsTaken as any[]) || []
 	const existingReturns = (doc.materialsReturned as ReturnLine[] | null) || null
-	const materialsUsed = (doc.materialsUsed as { serviceCodeId: string; qty: number }[] | null) || null
+	const materialsUsed =
+		(doc.materialsUsed as { serviceCodeId: string; qty: number }[] | null) ||
+		null
 	return {
 		doc,
 		serviceCodes: serviceCodes.map((c) => ({
@@ -189,7 +191,8 @@ export default function ReturnsDoc({
 	}
 	actionData?: { errorKey?: string; errorParams?: Record<string, string> }
 }) {
-	const { doc, serviceCodes, taken, existingReturns, materialsUsed } = loaderData
+	const { doc, serviceCodes, taken, existingReturns, materialsUsed } =
+		loaderData
 	const { t } = useTranslation()
 
 	const {
@@ -232,9 +235,9 @@ export default function ReturnsDoc({
 						0,
 					)
 					const usedQty = materialsUsed
-						? (materialsUsed as any[]).find(
+						? ((materialsUsed as any[]).find(
 								(u: any) => u.serviceCodeId === line.serviceCodeId,
-							)?.qty ?? null
+							)?.qty ?? null)
 						: null
 					const expectedReturnQty =
 						usedQty != null ? Math.max(0, (line.takenQty || 0) - usedQty) : null

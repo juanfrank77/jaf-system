@@ -176,6 +176,8 @@
 		"return_note_placeholder": "Describe cualquier faltante, da\u00f1o o problema de reabastecimiento...",
 		"add_line": "+ Agregar l\u00ednea",
 		"submit": "Guardar devoluciones",
+		"crew_reported_hint": "La cuadrilla report\u00f3 {{usedQty}} usados; se espera devolver {{expectedReturnQty}}.",
+		"discrepancy_warning": "La cantidad devuelta difiere del uso reportado por la cuadrilla.",
 		"errors": {
 			"invalid_materials": "Datos de materiales inv\u00e1lidos",
 			"invalid_service_codes": "Uno o m\u00e1s productos seleccionados ya no est\u00e1n disponibles.",

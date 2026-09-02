@@ -54,7 +54,7 @@ function openDb(): Promise<IDBDatabase> {
 	return dbPromise
 }
 
-function withStore<T>(
+function withStore<_T>(
 	storeName: string,
 	mode: IDBTransactionMode,
 ): Promise<IDBObjectStore> {

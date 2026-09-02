@@ -41,11 +41,14 @@ function canAccessDoc(
 	if (userRole === "SUPERVISOR") return doc.supervisorId === userId
 	if (userRole === "CREW") return doc.assignedCrewIds.includes(userId)
 	if (userRole === "WAREHOUSE")
+		// biome-ignore lint/suspicious/noExplicitAny: status narrowed below
 		return WAREHOUSE_STATUSES.includes(doc.status as any)
 	if (userRole === "FINANCE")
+		// biome-ignore lint/suspicious/noExplicitAny: status narrowed below
 		return FINANCEABLE_STATUSES.includes(doc.status as any)
 	if (userRole === "COMPTROLLER") {
 		if (!isComptrollerEnabled()) return false
+		// biome-ignore lint/suspicious/noExplicitAny: status narrowed below
 		return FINANCEABLE_STATUSES.includes(doc.status as any)
 	}
 	return false

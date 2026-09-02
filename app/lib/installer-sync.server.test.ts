@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import {
-	syncInstallerActions,
-	syncInstallerInstall,
-	syncInstallerRestock,
-} from "./installer-sync"
+import { syncInstallerInstall, syncInstallerRestock } from "./installer-sync"
 
 const originalFetch = globalThis.fetch
 
@@ -41,6 +37,7 @@ describe("installer-sync", () => {
 				redirected: false,
 				ok: true,
 				status: 200,
+				// biome-ignore lint/suspicious/noExplicitAny: test mock
 			} as any)
 
 			const result = await syncInstallerRestock({
@@ -68,6 +65,7 @@ describe("installer-sync", () => {
 				status: 409,
 				json: async () => ({ conflict: "VAN_INACTIVE" }),
 				text: async () => "{}",
+				// biome-ignore lint/suspicious/noExplicitAny: test mock
 			} as any)
 
 			const result = await syncInstallerRestock({
@@ -95,6 +93,7 @@ describe("installer-sync", () => {
 				status: 409,
 				json: async () => ({ conflict: "WAREHOUSE_INACTIVE" }),
 				text: async () => "{}",
+				// biome-ignore lint/suspicious/noExplicitAny: test mock
 			} as any)
 
 			const result = await syncInstallerRestock({
@@ -138,6 +137,7 @@ describe("installer-sync", () => {
 				redirected: false,
 				ok: true,
 				status: 200,
+				// biome-ignore lint/suspicious/noExplicitAny: test mock
 			} as any)
 
 			const result = await syncInstallerInstall({
@@ -165,6 +165,7 @@ describe("installer-sync", () => {
 				status: 409,
 				json: async () => ({ conflict: "VAN_INACTIVE" }),
 				text: async () => "{}",
+				// biome-ignore lint/suspicious/noExplicitAny: test mock
 			} as any)
 
 			const result = await syncInstallerInstall({
@@ -191,6 +192,7 @@ describe("installer-sync", () => {
 				ok: false,
 				status: 500,
 				text: async () => "Server error",
+				// biome-ignore lint/suspicious/noExplicitAny: test mock
 			} as any)
 
 			const result = await syncInstallerInstall({

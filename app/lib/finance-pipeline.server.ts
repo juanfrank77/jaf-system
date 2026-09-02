@@ -57,6 +57,11 @@ type FinancePayment = {
 	amount?: unknown
 }
 
+type MaterialItem = {
+	serviceCodeId: string
+	qty: number
+}
+
 function hasFinancePayment(
 	paymentRecords: readonly FinancePayment[],
 	type: "PBCC_ADVANCE" | "CLARO_FINAL",
@@ -162,9 +167,9 @@ export function invoiceTotalUsed(
 	codeMap: Record<string, { unitPrice: number }>,
 	ivuRate: number,
 ): number {
-	const used = (invoice.materialsUsed as any[]) || []
+	const used = (invoice.materialsUsed as MaterialItem[]) || []
 	const source =
-		used.length > 0 ? used : (invoice.materialsTaken as any[]) || []
+		used.length > 0 ? used : (invoice.materialsTaken as MaterialItem[]) || []
 	const subtotal = source.reduce((sum, item) => {
 		const price = toNumberPrice(codeMap[item.serviceCodeId]?.unitPrice)
 		return sum + Number(item.qty || 0) * price
@@ -244,9 +249,9 @@ export function financeLineItems(
 		}
 	>,
 ): FinanceLineItem[] {
-	const used = (invoice.materialsUsed as any[]) || []
+	const used = (invoice.materialsUsed as MaterialItem[]) || []
 	const source =
-		used.length > 0 ? used : (invoice.materialsTaken as any[]) || []
+		used.length > 0 ? used : (invoice.materialsTaken as MaterialItem[]) || []
 	return source.map((item) => {
 		const code = codeMap[item.serviceCodeId]
 		return {

@@ -27,7 +27,7 @@ describe("files loader access control", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
 		mocks.isComptrollerEnabled.mockReturnValue(true)
-		mocks.requireSession.mockResolvedValue({ user: { id: "user-1" } } as any)
+		mocks.requireSession.mockResolvedValue({ user: { id: "user-1" } })
 		mocks.db.user.findUniqueOrThrow.mockResolvedValue({
 			id: "user-1",
 			role: "COMPTROLLER",
@@ -41,11 +41,13 @@ describe("files loader access control", () => {
 			status: "LC_REQUEST_GENERATED",
 			supervisorId: "sup-1",
 			assignedCrewIds: [],
+			// biome-ignore lint/suspicious/noExplicitAny: test mock
 		} as any)
 
 		const result = await loader({
 			request: requestFor("/files/jaf-invoices/job-1-jaf-invoice.pdf"),
 			params: { "*": "jaf-invoices/job-1-jaf-invoice.pdf" },
+			// biome-ignore lint/suspicious/noExplicitAny: test mock
 		} as any)
 
 		expect(result.status).not.toBe(403)
@@ -58,11 +60,13 @@ describe("files loader access control", () => {
 			status: "LC_REQUEST_GENERATED",
 			supervisorId: "sup-1",
 			assignedCrewIds: [],
+			// biome-ignore lint/suspicious/noExplicitAny: test mock
 		} as any)
 
 		const result = await loader({
 			request: requestFor("/files/jaf-invoices/job-1-jaf-invoice.pdf"),
 			params: { "*": "jaf-invoices/job-1-jaf-invoice.pdf" },
+			// biome-ignore lint/suspicious/noExplicitAny: test mock
 		} as any)
 
 		expect(result.status).toBe(403)
@@ -79,11 +83,13 @@ describe("files loader access control", () => {
 			status: "LC_REQUEST_GENERATED",
 			supervisorId: "sup-1",
 			assignedCrewIds: [],
+			// biome-ignore lint/suspicious/noExplicitAny: test mock
 		} as any)
 
 		const result = await loader({
 			request: requestFor("/files/jaf-invoices/job-1-jaf-invoice.pdf"),
 			params: { "*": "jaf-invoices/job-1-jaf-invoice.pdf" },
+			// biome-ignore lint/suspicious/noExplicitAny: test mock
 		} as any)
 
 		expect(result.status).not.toBe(403)
@@ -99,6 +105,7 @@ describe("files loader access control", () => {
 		const result = await loader({
 			request: requestFor("/files/jaf-invoices/job-1-jaf-invoice.pdf"),
 			params: { "*": "jaf-invoices/job-1-jaf-invoice.pdf" },
+			// biome-ignore lint/suspicious/noExplicitAny: test mock
 		} as any)
 
 		expect(result.status).not.toBe(403)

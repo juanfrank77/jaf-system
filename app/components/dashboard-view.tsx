@@ -20,7 +20,11 @@ import {
 	SelectValue,
 } from "~/components/ui/select"
 import { Stat } from "~/components/ui/stat"
-import type { DashboardAlert, DashboardExplainer, DashboardStat } from "~/lib/dashboard-stats"
+import type {
+	DashboardAlert,
+	DashboardExplainer,
+	DashboardStat,
+} from "~/lib/dashboard-stats"
 import type { DocStatus } from "../../generated/prisma/client"
 
 type SendBackEntry = {
@@ -364,9 +368,7 @@ function DashboardView({
 				</Pill>
 			)}
 			{explainer && (
-				<p className="text-xs text-muted-foreground">
-					{t(explainer.labelKey)}
-				</p>
+				<p className="text-xs text-muted-foreground">{t(explainer.labelKey)}</p>
 			)}
 
 			{pendingReviewDocs.length > 0 && (

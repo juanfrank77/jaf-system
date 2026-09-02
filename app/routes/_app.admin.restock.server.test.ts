@@ -13,6 +13,9 @@ vi.mock("~/lib/db.server", () => ({
 		serviceCode: {
 			findMany: vi.fn(),
 		},
+		auditTrail: {
+			create: vi.fn(),
+		},
 	},
 }))
 
@@ -67,9 +70,9 @@ describe("POST /admin/restock", () => {
 		})
 	})
 
-	it("denies a restock request with a reason", async () => {
+	it("allows SUPERVISOR to approve a restock request", async () => {
 		vi.mocked(requireRole).mockResolvedValue({
-			user: { id: "admin-1" },
+			user: { id: "super-1", role: "SUPERVISOR" },
 			session: {},
 		} as any)
 		vi.mocked(db.vanRestockRequest.findUniqueOrThrow).mockResolvedValue({
@@ -77,11 +80,59 @@ describe("POST /admin/restock", () => {
 			status: "PENDING_APPROVAL",
 		} as any)
 		vi.mocked(db.vanRestockRequest.update).mockResolvedValue({} as any)
+		vi.mocked(db.auditTrail.create).mockResolvedValue({} as any)
+
+		const form = new FormData()
+		form.set("intent", "approve")
+		form.set("id", "req-1")
+		form.set("note", "Supervisor approved")
+
+		const result = await action({
+			request: formRequest(form),
+			params: {},
+		} as any).catch((r) => r)
+
+		expect(result.status).toBe(302)
+		expect(db.vanRestockRequest.update).toHaveBeenCalledWith({
+			where: { id: "req-1" },
+			data: {
+				status: "APPROVED",
+				requiresApproval: true,
+				approvedById: "super-1",
+				approvalNote: "Supervisor approved",
+			},
+		})
+		expect(db.auditTrail.create).toHaveBeenCalledWith({
+			data: {
+				docId: "req-1",
+				userId: "super-1",
+				action: "RESTOCK_APPROVED",
+				diffJson: {
+					requestId: "req-1",
+					note: "Supervisor approved",
+					approverId: "super-1",
+					approverRole: "SUPERVISOR",
+				},
+			},
+		})
+	})
+
+	it("allows SUPERVISOR to deny a restock request with a reason", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "super-1", role: "SUPERVISOR" },
+			session: {},
+		} as any)
+		vi.mocked(db.vanRestockRequest.findUniqueOrThrow).mockResolvedValue({
+			id: "req-1",
+			status: "PENDING_APPROVAL",
+		} as any)
+		vi.mocked(db.vanRestockRequest.update).mockResolvedValue({} as any)
+		vi.mocked(db.auditTrail.create).mockResolvedValue({} as any)
 
 		const form = new FormData()
 		form.set("intent", "deny")
 		form.set("id", "req-1")
-		form.set("reason", "Exceeds budget")
+		form.set("reason", "Out of stock")
 
 		const result = await action({
 			request: formRequest(form),
@@ -94,10 +145,40 @@ describe("POST /admin/restock", () => {
 			data: {
 				status: "DENIED",
 				requiresApproval: true,
-				approvedById: "admin-1",
-				deniedReason: "Exceeds budget",
+				approvedById: "super-1",
+				deniedReason: "Out of stock",
 			},
 		})
+		expect(db.auditTrail.create).toHaveBeenCalledWith({
+			data: {
+				docId: "req-1",
+				userId: "super-1",
+				action: "RESTOCK_DENIED",
+				diffJson: {
+					requestId: "req-1",
+					reason: "Out of stock",
+					approverId: "super-1",
+					approverRole: "SUPERVISOR",
+				},
+			},
+		})
+	})
+
+	it("rejects non-authorized role for restock actions", async () => {
+		vi.mocked(requireRole).mockRejectedValue(new Response(null, { status: 302 }))
+
+		const form = new FormData()
+		form.set("intent", "approve")
+		form.set("id", "req-1")
+
+		const result = (await action({
+			request: formRequest(form),
+			params: {},
+		} as any).catch((r: unknown) => r as Response)) as Response
+
+		expect(result.status).toBe(302)
+		expect(db.vanRestockRequest.update).not.toHaveBeenCalled()
+		expect(db.auditTrail.create).not.toHaveBeenCalled()
 	})
 
 	it("rejects approve when request is not pending approval", async () => {

@@ -75,7 +75,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request }: Route.ActionArgs) {
-	const { user } = await requireRole(request, ["ADMIN"])
+	const { user } = await requireRole(request, ["ADMIN", "SUPERVISOR"])
 	const form = await request.formData()
 	const intent = form.get("intent")
 	const id = form.get("id")
@@ -98,13 +98,26 @@ export async function action({ request }: Route.ActionArgs) {
 				{ status: 400 },
 			)
 		}
-		await db.vanRestockRequest.update({
+		const updated = await db.vanRestockRequest.update({
 			where: { id },
 			data: {
 				status: "APPROVED",
 				requiresApproval: true,
 				approvedById: user.id,
 				approvalNote: note,
+			},
+		})
+		await db.auditTrail.create({
+			data: {
+				docId: id,
+				userId: user.id,
+				action: "RESTOCK_APPROVED",
+				diffJson: {
+					requestId: id,
+					note,
+					approverId: user.id,
+					approverRole: user.role,
+				},
 			},
 		})
 		return redirect("/admin/restock")
@@ -127,13 +140,26 @@ export async function action({ request }: Route.ActionArgs) {
 				{ status: 400 },
 			)
 		}
-		await db.vanRestockRequest.update({
+		const updated = await db.vanRestockRequest.update({
 			where: { id },
 			data: {
 				status: "DENIED",
 				requiresApproval: true,
 				approvedById: user.id,
 				deniedReason: reason,
+			},
+		})
+		await db.auditTrail.create({
+			data: {
+				docId: id,
+				userId: user.id,
+				action: "RESTOCK_DENIED",
+				diffJson: {
+					requestId: id,
+					reason,
+					approverId: user.id,
+					approverRole: user.role,
+				},
 			},
 		})
 		return redirect("/admin/restock")

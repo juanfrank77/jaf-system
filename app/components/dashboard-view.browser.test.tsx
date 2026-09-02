@@ -26,6 +26,7 @@ describe("DashboardView", () => {
 						<DashboardView
 							stats={[{ labelKey: "dashboard.stat.open_documents", value: 3 }]}
 							alert={null}
+							explainer={null}
 							docs={[]}
 						/>
 					),
@@ -49,6 +50,7 @@ describe("DashboardView", () => {
 								key: "dashboard.alert.awaiting_prep",
 								count: 2,
 							}}
+							explainer={null}
 							docs={[]}
 						/>
 					),
@@ -76,6 +78,7 @@ describe("DashboardView", () => {
 								key: "dashboard.alert.awaiting_prep",
 								count: 2,
 							}}
+							explainer={null}
 							docs={[]}
 						/>
 					),
@@ -92,7 +95,7 @@ describe("DashboardView", () => {
 			entries: [
 				{
 					path: "/",
-					Component: () => <DashboardView stats={[]} alert={null} docs={[]} />,
+					Component: () => <DashboardView stats={[]} alert={null} explainer={null} docs={[]} />,
 				},
 			],
 		})
@@ -110,6 +113,7 @@ describe("DashboardView", () => {
 						<DashboardView
 							stats={[]}
 							alert={null}
+							explainer={null}
 							docs={[doc({ id: "abc", status: "LC_REQUEST_GENERATED" })]}
 						/>
 					),
@@ -128,7 +132,7 @@ describe("DashboardView", () => {
 			entries: [
 				{
 					path: "/",
-					Component: () => <DashboardView stats={[]} alert={null} docs={[]} />,
+					Component: () => <DashboardView stats={[]} alert={null} explainer={null} docs={[]} />,
 				},
 			],
 		})
@@ -146,6 +150,7 @@ describe("DashboardView", () => {
 						<DashboardView
 							stats={[]}
 							alert={null}
+							explainer={null}
 							docs={[]}
 							sentBackDocs={[
 								doc({
@@ -184,14 +189,7 @@ describe("DashboardView", () => {
 			entries: [
 				{
 					path: "/",
-					Component: () => (
-						<DashboardView
-							stats={[]}
-							alert={null}
-							docs={[]}
-							sentBackDocs={[]}
-						/>
-					),
+					Component: () => <DashboardView stats={[]} alert={null} explainer={null} docs={[]} sentBackDocs={[]} />,
 				},
 			],
 		})
@@ -209,6 +207,7 @@ describe("DashboardView", () => {
 						<DashboardView
 							stats={[]}
 							alert={null}
+							explainer={null}
 							docs={[doc({ id: "abc", avisoNumber: "10333185" })]}
 						/>
 					),
@@ -229,6 +228,7 @@ describe("DashboardView", () => {
 						<DashboardView
 							stats={[]}
 							alert={null}
+							explainer={null}
 							docs={[]}
 							crewOptions={[{ id: "crew1", name: "Brigade Alpha" }]}
 						/>
@@ -253,6 +253,7 @@ describe("DashboardView", () => {
 						<DashboardView
 							stats={[]}
 							alert={null}
+							explainer={null}
 							docs={[]}
 							crewOptions={[]}
 							selectedStatus="CREATED"
@@ -271,9 +272,7 @@ describe("DashboardView", () => {
 			entries: [
 				{
 					path: "/",
-					Component: () => (
-						<DashboardView stats={[]} alert={null} docs={[]} crewOptions={[]} />
-					),
+					Component: () => <DashboardView stats={[]} alert={null} explainer={null} docs={[]} crewOptions={[]} />,
 				},
 			],
 		})
@@ -289,6 +288,7 @@ describe("DashboardView", () => {
 						<DashboardView
 							stats={[]}
 							alert={null}
+							explainer={null}
 							docs={[]}
 							crewPreppedDocs={[doc({ id: "prepped", status: "PREPPED" })]}
 							crewInFieldDocs={[doc({ id: "field", status: "SIGNED" })]}

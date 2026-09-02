@@ -119,14 +119,14 @@
 		"missing_materials_resolve": "Resolve Missing Materials",
 		"full_history": "Full History",
 		"billing_blocked": "Blocked from Billing",
-		"billing_blocked_aviso": "Missing Claro Aviso # — enter it after creating the work order in Claro's portal.",
-		"billing_blocked_claro_pdf": "Missing Claro work-order PDF — upload it after creating the work order in Claro's portal.",
+		"billing_blocked_aviso": "Missing Claro Aviso # \u2014 enter it after creating the work order in Claro's portal.",
+		"billing_blocked_claro_pdf": "Missing Claro work-order PDF \u2014 upload it after creating the work order in Claro's portal.",
 		"billing_blocked_hint": "Both the Aviso # and Claro PDF are required before Finance can bill this job.",
 		"cancel_heading": "Cancel Work Order",
-		"cancel_placeholder": "Reason for cancellation (required)…",
+		"cancel_placeholder": "Reason for cancellation (required)\u2026",
 		"cancel_submit": "Cancel Work Order",
 		"reassign_heading": "Reassign Crew",
-		"reassign_placeholder": "Select a crew member…",
+		"reassign_placeholder": "Select a crew member\u2026",
 		"reassign_submit": "Reassign Crew",
 		"errors": {
 			"cancel_reason_required": "Please provide a reason for cancellation.",
@@ -203,7 +203,7 @@
 		}
 	},
 	"docs_sign": {
-		"title": "Warehouse Pickup — Dual Signature",
+		"title": "Warehouse Pickup \u2014 Dual Signature",
 		"review_notice": "Review materials below. Both warehouse and crew must sign. Once signed, this list is permanently locked.",
 		"warehouse_label": "Warehouse",
 		"warehouse_placeholder": "Select warehouse...",
@@ -264,7 +264,7 @@
 		"field_notes_label": "Field Notes",
 		"field_notes_placeholder": "Observations, issues, changes...",
 		"photos_label": "Photos",
-		"photos_hint": "Photos are source data for the supervisor's Claro submission — stored on server.",
+		"photos_hint": "Photos are source data for the supervisor's Claro submission \u2014 stored on server.",
 		"photos_before_label": "Before Photos",
 		"photos_before_hint": "Photos taken before work began.",
 		"photos_after_label": "After Photos",
@@ -293,10 +293,10 @@
 		"job_photos_one": "Job Photos ({{count}})",
 		"job_photos_other": "Job Photos ({{count}})",
 		"job_site_alt": "Job site",
-		"claro_helper_title": "Claro Portal — Submission Data",
+		"claro_helper_title": "Claro Portal \u2014 Submission Data",
 		"claro_helper_hint": "Copy this data into Claro's portal to create the work order.",
 		"aviso_number": "Aviso #",
-		"aviso_number_missing": "— (enter after creating in Claro)",
+		"aviso_number_missing": "\u2014 (enter after creating in Claro)",
 		"job_type": "Job Type",
 		"address": "Address",
 		"supervisor": "Supervisor",
@@ -331,7 +331,7 @@
 		}
 	},
 	"docs_lc": {
-		"title": "LC Request — Lissette Review",
+		"title": "LC Request \u2014 Lissette Review",
 		"ivu_rate": "IVU rate: {{rate}}%",
 		"jaf_invoice": "JAF Invoice",
 		"job": "Job",
@@ -360,7 +360,6 @@
 		"save": "Save",
 		"errors": {
 			"invalid_rate": "IVU rate must be a decimal between 0 and 1 (e.g. 0.115 for 11.5%)",
-
 			"invalid_aging_days": "Aging alert days must be a positive whole number.",
 			"invalid_tolerance": "Tolerance must be a non-negative number.",
 			"unknown_intent": "Unknown action.",
@@ -408,7 +407,7 @@
 		"name_label": "Name *",
 		"email_label": "Email *",
 		"role_label": "Role *",
-		"role_placeholder": "Select role…",
+		"role_placeholder": "Select role\u2026",
 		"temp_password_label": "Temporary Password *",
 		"add_submit": "Create User",
 		"update_role": "Update Role",
@@ -449,7 +448,7 @@
 		}
 	},
 	"admin_crews": {
-		"title": "Crews & Personnel — Brigades",
+		"title": "Crews & Personnel \u2014 Brigades",
 		"add_heading": "Add Brigade",
 		"name_label": "Brigade Name *",
 		"members_label": "Members",
@@ -478,7 +477,7 @@
 		}
 	},
 	"admin_vans": {
-		"title": "Crews & Personnel — Vans",
+		"title": "Crews & Personnel \u2014 Vans",
 		"add_heading": "Add Van",
 		"name_label": "Van Name / Number *",
 		"installer_label": "Assigned Installer",
@@ -507,7 +506,8 @@
 			"invalid_name": "Van name is required.",
 			"id_required": "Van id is required.",
 			"unknown_intent": "Unknown action."
-		}
+		},
+		"history_heading": "Assignment history"
 	},
 	"admin_restock": {
 		"title": "Restock Sign-offs",
@@ -519,10 +519,10 @@
 		"total": "Estimated total",
 		"exceeds_badge": "Exceeds par level",
 		"approval_note_label": "Approval note (optional)",
-		"approval_note_placeholder": "Reason for approval…",
+		"approval_note_placeholder": "Reason for approval\u2026",
 		"approve": "Approve",
 		"deny_reason_label": "Denial reason *",
-		"deny_reason_placeholder": "Reason for denial…",
+		"deny_reason_placeholder": "Reason for denial\u2026",
 		"deny": "Deny",
 		"decided_by": "Decided by {{name}}.",
 		"errors": {
@@ -583,7 +583,7 @@
 		"amount": "Invoice amount",
 		"ivu_rate": "IVU rate: {{rate}}%",
 		"tolerance": "Allowed tolerance: {{tolerance}}",
-		"billing_blocked": "Cannot verify — billing documents incomplete",
+		"billing_blocked": "Cannot verify \u2014 billing documents incomplete",
 		"blocked_aviso": "Missing Claro Aviso #",
 		"blocked_claro_pdf": "Missing Claro work-order PDF",
 		"jaf_invoice": "JAF Invoice",
@@ -599,10 +599,10 @@
 		"aviso_amount_label": "Aviso total (from document)",
 		"aviso_amount_hint": "Enter the total amount shown on the Aviso document.",
 		"aviso_amount_placeholder": "0.00",
-		"verify_note_placeholder": "Optional verification note…",
+		"verify_note_placeholder": "Optional verification note\u2026",
 		"mark_verified": "Mark Verified",
 		"cannot_verify_hint": "The supervisor must add the Aviso # and upload the Claro PDF before verification.",
-		"send_back_placeholder": "Explain the Aviso issue to the supervisor…",
+		"send_back_placeholder": "Explain the Aviso issue to the supervisor\u2026",
 		"send_back": "Send Back to Supervisor",
 		"back": "Back to pipeline",
 		"amount_mismatch": "Aviso amount differs from invoice total by {{difference}} (tolerance: {{tolerance}}).",
@@ -705,7 +705,17 @@
 			"submitted": "Submitted",
 			"total_documents": "Total documents",
 			"open_receivables": "Open receivables",
-			"awaiting_claro_upload": "Awaiting Claro upload"
+			"awaiting_claro_upload": "Awaiting Claro upload",
+			"stage_awaiting_warehouse": "Stage: awaiting warehouse",
+			"stage_awaiting_crew": "Stage: awaiting crew",
+			"stage_pending_review": "Stage: pending review",
+			"stage_in_finance": "Stage: in finance",
+			"discrepancy_count": "Qty discrepancies",
+			"shortage_count": "Shortages",
+			"overage_count": "Overages",
+			"aging_oldest_days": "Oldest open (days)",
+			"aging_po_wait_count": "PO wait > 180d",
+			"aging_claro_wait_count": "Claro wait > 180d"
 		},
 		"alert": {
 			"awaiting_warehouse_one": "{{count}} document awaiting warehouse",
@@ -734,14 +744,37 @@
 			"discrepancy": "Qty discrepancy",
 			"shortage": "Shortage / return"
 		},
+		"action": {
+			"review_signal": "Tap card to review →"
+		},
 		"filter": {
 			"heading": "Filters",
 			"status_all": "All statuses",
 			"status_placeholder": "All statuses",
 			"crew_placeholder": "All crews",
 			"job_type_placeholder": "All job types",
-			"search_placeholder": "Search by Aviso # or address…",
+			"search_placeholder": "Search by Aviso # or address\u2026",
 			"clear_all": "Clear filters"
+		},
+		"explainer": {
+			"supervisor_needs_review": "Needs supervisor review",
+			"supervisor_awaiting_warehouse": "Awaiting warehouse prep",
+			"supervisor_no_actions": "No actions pending",
+			"warehouse_needs_prep": "Prep and stage materials",
+			"warehouse_missing_materials": "Resolve missing materials",
+			"warehouse_no_actions": "No actions pending",
+			"crew_sent_back": "Fix and resubmit",
+			"crew_awaiting_review": "Awaiting supervisor review",
+			"crew_ready_for_pickup": "Pick up and sign",
+			"crew_in_field": "Update field status",
+			"crew_no_actions": "No actions pending",
+			"finance_open_receivables": "Process open receivables",
+			"finance_awaiting_claro": "Awaiting Claro upload",
+			"finance_no_actions": "No actions pending",
+			"finance_aging_alert": "Aging alert: review long-wait receivables",
+			"installer_awaiting_warehouse": "Awaiting warehouse action",
+			"installer_awaiting_pickup": "Pick up ready restock",
+			"installer_no_actions": "No installer actions pending"
 		}
 	},
 	"docs_status": {
@@ -755,7 +788,7 @@
 		"cancelled": "Cancelled"
 	},
 	"offline_indicator": {
-		"offline": "Offline — changes will sync when you reconnect",
+		"offline": "Offline \u2014 changes will sync when you reconnect",
 		"sync_pending_one": "{{count}} change pending sync",
 		"sync_pending_other": "{{count}} changes pending sync"
 	},
@@ -817,7 +850,7 @@
 		"crew_payment_recorded": "Crew payment recorded.",
 		"record_crew_payment_submit": "Record crew payment",
 		"note_label": "Note",
-		"note_placeholder": "Optional note…",
+		"note_placeholder": "Optional note\u2026",
 		"crew_amount_placeholder": "Crew payment amount",
 		"record_final_heading": "Record Claro Final Payment",
 		"record_final_submit": "Record final payment",
@@ -870,9 +903,9 @@
 	"installer_restock": {
 		"title": "Request Restock",
 		"warehouse_label": "Warehouse",
-		"warehouse_placeholder": "Select warehouse…",
+		"warehouse_placeholder": "Select warehouse\u2026",
 		"items_label": "Items",
-		"item_placeholder": "Select product…",
+		"item_placeholder": "Select product\u2026",
 		"add_item": "+ Add Item",
 		"submit": "Submit Restock Request",
 		"save_offline": "Save for later sync",
@@ -891,7 +924,7 @@
 		"claro_ref_label": "Claro Job Reference #",
 		"claro_ref_placeholder": "e.g. 12345678",
 		"service_type_label": "Service Type",
-		"service_type_placeholder": "Select service type…",
+		"service_type_placeholder": "Select service type\u2026",
 		"service_type": {
 			"cable_tv": "Cable TV",
 			"wifi": "WiFi",
@@ -900,10 +933,10 @@
 		},
 		"date_label": "Date",
 		"materials_label": "Materials Used",
-		"material_placeholder": "Select material…",
+		"material_placeholder": "Select material\u2026",
 		"add_material": "+ Add Material",
 		"notes_label": "Notes",
-		"notes_placeholder": "Optional details about the install…",
+		"notes_placeholder": "Optional details about the install\u2026",
 		"submit": "Log Install",
 		"save_offline": "Save for later sync",
 		"queued_message": "Install log saved. It will sync automatically when you reconnect.",
@@ -919,11 +952,11 @@
 	"installer_adjust": {
 		"title": "Adjust Van Stock",
 		"material_label": "Material",
-		"material_placeholder": "Select material…",
+		"material_placeholder": "Select material\u2026",
 		"qty_label": "Quantity Damaged / Lost",
 		"qty_placeholder": "How many?",
 		"note_label": "Reason",
-		"note_placeholder": "Explain what happened…",
+		"note_placeholder": "Explain what happened\u2026",
 		"submit": "Report Adjustment",
 		"errors": {
 			"no_van": "You must be assigned to a van to adjust stock.",

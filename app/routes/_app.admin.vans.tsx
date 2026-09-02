@@ -13,6 +13,7 @@ import {
 	SelectValue,
 } from "~/components/ui/select"
 import { db } from "~/lib/db.server"
+import { appendVanAssignmentHistory } from "~/lib/van-history"
 import { requireRole } from "~/lib/permissions.server"
 import type { Route } from "./+types/_app.admin.vans"
 
@@ -47,7 +48,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request }: Route.ActionArgs) {
-	await requireRole(request, ["ADMIN"])
+	const { user } = await requireRole(request, ["ADMIN"])
 	const form = await request.formData()
 	const intent = form.get("intent")
 
@@ -109,6 +110,9 @@ export async function action({ request }: Route.ActionArgs) {
 						)
 						.map(([serviceCodeId, qty]) => ({ serviceCodeId, qty })),
 				)
+			if (dataPayload.installerId !== existing?.installerId) {
+				await appendVanAssignmentHistory(id, dataPayload.installerId, user.id)
+			}
 			await db.van.update({
 				where: { id },
 				data: { ...dataPayload, standardStockLevels: mergedLevels as any },
@@ -149,6 +153,7 @@ export default function AdminVans({
 			installerId: string | null
 			standardStockLevels: unknown
 			active: boolean
+			vanAssignmentHistory?: unknown
 		}[]
 		installers: InstallerUser[]
 		serviceCodes: ServiceCodeOption[]
@@ -295,6 +300,7 @@ export default function AdminVans({
 												van={van}
 												installers={installers}
 												serviceCodes={serviceCodes}
+												history={(van.vanAssignmentHistory as any[] | undefined) || []}
 											/>
 										</div>
 									</td>
@@ -322,6 +328,7 @@ function EditVanDialog({
 	van,
 	installers,
 	serviceCodes,
+	history = [],
 }: {
 	van: {
 		id: string
@@ -329,9 +336,11 @@ function EditVanDialog({
 		installerId: string | null
 		standardStockLevels: unknown
 		active: boolean
+		vanAssignmentHistory?: unknown
 	}
 	installers: InstallerUser[]
 	serviceCodes: ServiceCodeOption[]
+	history?: { installerId: string | null; from: string | null; to: string }[]
 }) {
 	const { t } = useTranslation()
 	const levels = (van.standardStockLevels as StockLevel[]) || []
@@ -413,6 +422,26 @@ function EditVanDialog({
 				<Button type="submit" size="sm">
 					{t("admin_vans.save")}
 				</Button>
+				{history.length > 0 && (
+					<div className="mt-4 space-y-1">
+						<p className="text-xs font-medium text-slate-500">
+							{t("admin_vans.history_heading")}
+						</p>
+						<ul className="space-y-1 text-xs text-slate-600">
+							{history.map((entry, idx) => {
+								const installer = installers.find((u) => u.id === entry.installerId)
+								const fromInstaller = entry.from
+									? installers.find((u) => u.id === entry.from)?.name ?? entry.from
+									: t("admin_vans.unassigned")
+								return (
+									<li key={idx}>
+										{installer?.name ?? t("admin_vans.unassigned")} — from {fromInstaller} on {new Date(entry.to).toLocaleString()}
+									</li>
+								)
+							})}
+						</ul>
+					</div>
+				)}
 			</Form>
 		</details>
 	)

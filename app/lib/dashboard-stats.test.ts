@@ -7,9 +7,13 @@ const doc = (
 	overrides: Record<string, unknown> = {},
 ) => ({
 	status: status as never,
+	createdAt: new Date(),
 	receivableClosedAt,
 	...overrides,
 })
+
+const dayAgo = (days: number) =>
+	new Date(Date.now() - days * 24 * 60 * 60 * 1000)
 
 describe("computeDashboardStats", () => {
 	it("SUPERVISOR: counts open docs and docs awaiting warehouse/crew", () => {
@@ -19,12 +23,22 @@ describe("computeDashboardStats", () => {
 			doc("SIGNED"),
 			doc("LC_REQUEST_GENERATED"),
 		]
-		const { stats } = computeDashboardStats("SUPERVISOR", docs)
+		const { stats, explainer } = computeDashboardStats("SUPERVISOR", docs)
 		expect(stats).toEqual([
 			{ labelKey: "dashboard.stat.open_documents", value: 3 },
 			{ labelKey: "dashboard.stat.awaiting_warehouse", value: 1 },
 			{ labelKey: "dashboard.stat.awaiting_crew", value: 2 },
 			{ labelKey: "dashboard.stat.pending_review", value: 0 },
+			{ labelKey: "dashboard.stat.stage_awaiting_warehouse", value: 1 },
+			{ labelKey: "dashboard.stat.stage_awaiting_crew", value: 2 },
+			{ labelKey: "dashboard.stat.stage_pending_review", value: 0 },
+			{ labelKey: "dashboard.stat.stage_in_finance", value: 0 },
+			{ labelKey: "dashboard.stat.discrepancy_count", value: 0 },
+			{ labelKey: "dashboard.stat.shortage_count", value: 0 },
+			{ labelKey: "dashboard.stat.overage_count", value: 0 },
+			{ labelKey: "dashboard.stat.aging_oldest_days", value: 0 },
+			{ labelKey: "dashboard.stat.aging_po_wait_count", value: 0 },
+			{ labelKey: "dashboard.stat.aging_claro_wait_count", value: 0 },
 		])
 	})
 
@@ -35,12 +49,22 @@ describe("computeDashboardStats", () => {
 			doc("FIELD_UPDATED"),
 			doc("CANCELLED"),
 		]
-		const { stats, alert } = computeDashboardStats("SUPERVISOR", docs)
+		const { stats, alert, explainer } = computeDashboardStats("SUPERVISOR", docs)
 		expect(stats).toEqual([
 			{ labelKey: "dashboard.stat.open_documents", value: 3 },
 			{ labelKey: "dashboard.stat.awaiting_warehouse", value: 1 },
 			{ labelKey: "dashboard.stat.awaiting_crew", value: 0 },
 			{ labelKey: "dashboard.stat.pending_review", value: 2 },
+			{ labelKey: "dashboard.stat.stage_awaiting_warehouse", value: 1 },
+			{ labelKey: "dashboard.stat.stage_awaiting_crew", value: 0 },
+			{ labelKey: "dashboard.stat.stage_pending_review", value: 2 },
+			{ labelKey: "dashboard.stat.stage_in_finance", value: 0 },
+			{ labelKey: "dashboard.stat.discrepancy_count", value: 0 },
+			{ labelKey: "dashboard.stat.shortage_count", value: 0 },
+			{ labelKey: "dashboard.stat.overage_count", value: 0 },
+			{ labelKey: "dashboard.stat.aging_oldest_days", value: 0 },
+			{ labelKey: "dashboard.stat.aging_po_wait_count", value: 0 },
+			{ labelKey: "dashboard.stat.aging_claro_wait_count", value: 0 },
 		])
 		expect(alert).toEqual({
 			variant: "warn",
@@ -67,12 +91,19 @@ describe("computeDashboardStats", () => {
 			doc("CREATED"),
 			doc("SIGNED", null, { materialsReturned: null }),
 		]
-		const { stats, alert } = computeDashboardStats("WAREHOUSE", docs)
+		const { stats, alert, explainer } = computeDashboardStats("WAREHOUSE", docs)
 		expect(stats).toEqual([
 			{ labelKey: "dashboard.stat.pending_preps", value: 2 },
 			{ labelKey: "dashboard.stat.prepped_awaiting_pickup", value: 0 },
 			{ labelKey: "dashboard.stat.missing_materials", value: 0 },
 			{ labelKey: "dashboard.stat.returns_to_log", value: 1 },
+			{ labelKey: "dashboard.stat.stage_awaiting_warehouse", value: 2 },
+			{ labelKey: "dashboard.stat.stage_awaiting_crew", value: 0 },
+			{ labelKey: "dashboard.stat.stage_pending_review", value: 0 },
+			{ labelKey: "dashboard.stat.stage_in_finance", value: 0 },
+			{ labelKey: "dashboard.stat.discrepancy_count", value: 0 },
+			{ labelKey: "dashboard.stat.shortage_count", value: 0 },
+			{ labelKey: "dashboard.stat.overage_count", value: 0 },
 		])
 		expect(alert).toEqual({
 			variant: "warn",
@@ -97,13 +128,20 @@ describe("computeDashboardStats", () => {
 			doc("LC_REQUEST_GENERATED"),
 			doc("CANCELLED"),
 		]
-		const { stats, alert } = computeDashboardStats("CREW", docs)
+		const { stats, alert, explainer } = computeDashboardStats("CREW", docs)
 		expect(stats).toEqual([
 			{ labelKey: "dashboard.stat.open_jobs", value: 4 },
 			{ labelKey: "dashboard.stat.ready_for_pickup", value: 1 },
 			{ labelKey: "dashboard.stat.in_the_field", value: 1 },
 			{ labelKey: "dashboard.stat.sent_back", value: 1 },
 			{ labelKey: "dashboard.stat.submitted", value: 1 },
+			{ labelKey: "dashboard.stat.stage_awaiting_warehouse", value: 0 },
+			{ labelKey: "dashboard.stat.stage_awaiting_crew", value: 1 },
+			{ labelKey: "dashboard.stat.stage_pending_review", value: 0 },
+			{ labelKey: "dashboard.stat.stage_in_finance", value: 0 },
+			{ labelKey: "dashboard.stat.discrepancy_count", value: 0 },
+			{ labelKey: "dashboard.stat.shortage_count", value: 0 },
+			{ labelKey: "dashboard.stat.overage_count", value: 0 },
 		])
 		expect(alert).toEqual({
 			variant: "warn",
@@ -125,7 +163,7 @@ describe("computeDashboardStats", () => {
 	})
 
 	it("CREW: alerts ready for pickup when no active field jobs", () => {
-		const { alert } = computeDashboardStats("CREW", [doc("PREPPED")])
+		const { alert, explainer } = computeDashboardStats("CREW", [doc("PREPPED")])
 		expect(alert).toEqual({
 			variant: "info",
 			key: "dashboard.alert.ready_for_pickup",
@@ -140,11 +178,21 @@ describe("computeDashboardStats", () => {
 			doc("LC_REQUEST_GENERATED", new Date("2026-01-01")),
 			doc("CREATED"),
 		]
-		const { stats, alert } = computeDashboardStats("FINANCE", docs)
+		const { stats, alert, explainer } = computeDashboardStats("FINANCE", docs)
 		expect(stats).toEqual([
 			{ labelKey: "dashboard.stat.total_documents", value: 4 },
 			{ labelKey: "dashboard.stat.open_receivables", value: 2 },
 			{ labelKey: "dashboard.stat.awaiting_claro_upload", value: 1 },
+			{ labelKey: "dashboard.stat.stage_awaiting_warehouse", value: 1 },
+			{ labelKey: "dashboard.stat.stage_awaiting_crew", value: 0 },
+			{ labelKey: "dashboard.stat.stage_pending_review", value: 0 },
+			{ labelKey: "dashboard.stat.stage_in_finance", value: 3 },
+			{ labelKey: "dashboard.stat.discrepancy_count", value: 0 },
+			{ labelKey: "dashboard.stat.shortage_count", value: 0 },
+			{ labelKey: "dashboard.stat.overage_count", value: 0 },
+			{ labelKey: "dashboard.stat.aging_oldest_days", value: 0 },
+			{ labelKey: "dashboard.stat.aging_po_wait_count", value: 0 },
+			{ labelKey: "dashboard.stat.aging_claro_wait_count", value: 0 },
 		])
 		expect(alert).toEqual({
 			variant: "info",
@@ -162,5 +210,62 @@ describe("computeDashboardStats", () => {
 
 	it("returns no alert when the doc list is empty", () => {
 		expect(computeDashboardStats("SUPERVISOR", []).alert).toBeNull()
+	expect(computeDashboardStats("SUPERVISOR", []).explainer).toEqual({ labelKey: "dashboard.explainer.supervisor_no_actions" })
+	})
+
+	it("INSTALLER: surfaces ready-for-pickup stat and explainer", () => {
+		const docs = [doc("PREPPED"), doc("PREPPED")]
+		const { stats, explainer, alert } = computeDashboardStats("INSTALLER", docs)
+		expect(alert).toEqual({
+			variant: "info",
+			key: "dashboard.alert.ready_for_pickup",
+			count: 2,
+		})
+		expect(explainer).toEqual({
+			labelKey: "dashboard.explainer.installer_awaiting_pickup",
+		})
+		expect(stats).toContainEqual({
+			labelKey: "dashboard.stat.ready_for_pickup",
+			value: 2,
+		})
+	})
+
+	it("INSTALLER: no_actions when there are no open jobs", () => {
+		const { explainer, alert } = computeDashboardStats("INSTALLER", [
+			doc("CANCELLED"),
+		])
+		expect(alert).toBeNull()
+		expect(explainer).toEqual({
+			labelKey: "dashboard.explainer.installer_no_actions",
+		})
+	})
+
+	it("FINANCE: emits PO aging count when a CLARO_UPLOADED job is older than 180 days", () => {
+		const docs = [
+			doc("CLARO_UPLOADED", null, { claroUploadedAt: dayAgo(200) }),
+		]
+		const { stats, explainer } = computeDashboardStats("FINANCE", docs)
+		expect(stats).toContainEqual({
+			labelKey: "dashboard.stat.aging_po_wait_count",
+			value: 1,
+		})
+		expect(stats).toContainEqual({
+			labelKey: "dashboard.stat.aging_oldest_days",
+			value: 200,
+		})
+		expect(explainer).toEqual({
+			labelKey: "dashboard.explainer.finance_aging_alert",
+		})
+	})
+
+	it("FINANCE: ignores CLARO_UPLOADED docs inside the threshold", () => {
+		const docs = [
+			doc("CLARO_UPLOADED", null, { claroUploadedAt: dayAgo(10) }),
+		]
+		const { stats } = computeDashboardStats("FINANCE", docs)
+		expect(stats).toContainEqual({
+			labelKey: "dashboard.stat.aging_po_wait_count",
+			value: 0,
+		})
 	})
 })

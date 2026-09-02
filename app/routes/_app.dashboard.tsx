@@ -83,7 +83,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 			? docs
 			: docs.filter((d) => d.status !== "LC_REQUEST_GENERATED")
 
-	const { stats, alert } = computeDashboardStats(user.role, visibleDocs)
+	const { stats, alert, explainer } = computeDashboardStats(user.role, visibleDocs)
 
 	const pendingReviewDocs =
 		user.role === "SUPERVISOR"
@@ -203,7 +203,17 @@ export async function loader({ request }: Route.LoaderArgs) {
 					orderBy: { createdAt: "desc" },
 					take: 50,
 				})
-			: []
+			: user.role === "INSTALLER"
+				? await db.vanRestockRequest.findMany({
+						where: {
+							requestedById: user.id,
+							status: { in: ["REQUESTED", "PENDING_APPROVAL", "APPROVED", "READY", "FULFILLED"] },
+						},
+						include: { requestedBy: true, warehouse: true },
+						orderBy: { createdAt: "desc" },
+						take: 50,
+					})
+				: []
 
 	return {
 		stats,
@@ -251,7 +261,8 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 		crewSentBackDocs,
 		crewSubmittedDocs,
 		restockRequests,
-	} = loaderData
+	} = loaderData as any
+	const explainer = (loaderData as any).explainer
 
 	useEffect(() => {
 		if (typeof window === "undefined") return
@@ -287,6 +298,7 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 		<DashboardView
 			stats={stats}
 			alert={alert}
+			explainer={explainer}
 			docs={docs}
 			pendingReviewDocs={pendingReviewDocs}
 			sentBackDocs={sentBackDocs}

@@ -20,7 +20,7 @@ import {
 	SelectValue,
 } from "~/components/ui/select"
 import { Stat } from "~/components/ui/stat"
-import type { DashboardAlert, DashboardStat } from "~/lib/dashboard-stats"
+import type { DashboardAlert, DashboardExplainer, DashboardStat } from "~/lib/dashboard-stats"
 import type { DocStatus } from "../../generated/prisma/client"
 
 type SendBackEntry = {
@@ -156,6 +156,7 @@ const STATUS_OPTIONS: { value: string; labelKey: StatusLabelKey }[] = [
 function DashboardView({
 	stats,
 	alert,
+	explainer,
 	docs,
 	pendingReviewDocs = [],
 	sentBackDocs = [],
@@ -176,6 +177,7 @@ function DashboardView({
 }: {
 	stats: DashboardStat[]
 	alert: DashboardAlert
+	explainer: DashboardExplainer
 	docs: DashboardDocRow[]
 	pendingReviewDocs?: DashboardDocRow[]
 	sentBackDocs?: DashboardDocRow[]
@@ -360,6 +362,11 @@ function DashboardView({
 				>
 					{t(alert.key, { count: alert.count })}
 				</Pill>
+			)}
+			{explainer && (
+				<p className="text-xs text-muted-foreground">
+					{t(explainer.labelKey)}
+				</p>
 			)}
 
 			{pendingReviewDocs.length > 0 && (
@@ -730,7 +737,7 @@ function DashboardView({
 									{doc.jobType} — {doc.jobAddressEstimated}
 								</p>
 								{(overage || discrepancy || shortage) && (
-									<div className="mt-2 flex flex-wrap gap-1">
+									<div className="mt-2 flex flex-wrap items-center gap-1">
 										{overage && (
 											<Badge variant="danger" className="text-xs">
 												{t("dashboard.signal.overage")}
@@ -746,6 +753,9 @@ function DashboardView({
 												{t("dashboard.signal.shortage")}
 											</Badge>
 										)}
+										<span className="ml-1 text-xs font-medium text-primary">
+											{t("dashboard.action.review_signal")}
+										</span>
 									</div>
 								)}
 								{doc.avisoNumber && (

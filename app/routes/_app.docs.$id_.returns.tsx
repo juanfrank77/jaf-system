@@ -46,6 +46,8 @@ export async function loader({ request, params }: any) {
 		where: { active: true },
 	})
 	const taken = (doc.materialsTaken as any[]) || []
+	const existingReturns = (doc.materialsReturned as ReturnLine[] | null) || null
+	const materialsUsed = (doc.materialsUsed as { serviceCodeId: string; qty: number }[] | null) || null
 	return {
 		doc,
 		serviceCodes: serviceCodes.map((c) => ({
@@ -53,6 +55,8 @@ export async function loader({ request, params }: any) {
 			unitPrice: toNumberPrice(c.unitPrice),
 		})),
 		taken,
+		existingReturns,
+		materialsUsed,
 	}
 }
 
@@ -139,14 +143,53 @@ export async function action({ request, params }: any) {
 	throw redirect(`/docs/${params.id}`)
 }
 
+function buildInitialReturnLines(
+	taken: any[],
+	existingReturns: ReturnLine[] | null,
+	materialsUsed: { serviceCodeId: string; qty: number }[] | null,
+): ReturnLine[] {
+	const usedMap = Object.fromEntries(
+		(materialsUsed || []).map((u) => [u.serviceCodeId, u.qty]),
+	)
+
+	if (existingReturns && existingReturns.length > 0) {
+		return existingReturns.map((line) => ({
+			_key: nextReturnKey(),
+			serviceCodeId: line.serviceCodeId || "",
+			takenQty: line.takenQty || 0,
+			returnedQty: typeof line.returnedQty === "number" ? line.returnedQty : 0,
+			notes: line.notes || "",
+		}))
+	}
+
+	return taken.map((m: any) => {
+		const takenQty = m.qty || 0
+		const usedQty = usedMap[m.serviceCodeId] ?? 0
+		const returnedQty = Math.max(0, takenQty - usedQty)
+		return {
+			_key: nextReturnKey(),
+			serviceCodeId: m.serviceCodeId || "",
+			takenQty,
+			returnedQty,
+			notes: "",
+		}
+	})
+}
+
 export default function ReturnsDoc({
 	loaderData,
 	actionData,
 }: {
-	loaderData: { doc: any; serviceCodes: any[]; taken: any[] }
+	loaderData: {
+		doc: any
+		serviceCodes: any[]
+		taken: any[]
+		existingReturns: ReturnLine[] | null
+		materialsUsed: { serviceCodeId: string; qty: number }[] | null
+	}
 	actionData?: { errorKey?: string; errorParams?: Record<string, string> }
 }) {
-	const { doc, serviceCodes, taken } = loaderData
+	const { doc, serviceCodes, taken, existingReturns, materialsUsed } = loaderData
 	const { t } = useTranslation()
 
 	const {
@@ -156,13 +199,7 @@ export default function ReturnsDoc({
 		update: updateLine,
 		serialized,
 	} = useEditableLines<ReturnLine>(() =>
-		taken.map((m: any) => ({
-			_key: nextReturnKey(),
-			serviceCodeId: m.serviceCodeId || "",
-			takenQty: m.qty || 0,
-			returnedQty: 0,
-			notes: "",
-		})),
+		buildInitialReturnLines(taken, existingReturns, materialsUsed),
 	)
 
 	const addLine = () =>
@@ -194,6 +231,15 @@ export default function ReturnsDoc({
 						(line.takenQty || 0) - (line.returnedQty || 0),
 						0,
 					)
+					const usedQty = materialsUsed
+						? (materialsUsed as any[]).find(
+								(u: any) => u.serviceCodeId === line.serviceCodeId,
+							)?.qty ?? null
+						: null
+					const expectedReturnQty =
+						usedQty != null ? Math.max(0, (line.takenQty || 0) - usedQty) : null
+					const differsFromCrewReport =
+						expectedReturnQty != null && line.returnedQty !== expectedReturnQty
 
 					return (
 						<div key={line._key} className="border rounded-lg p-3 space-y-2">
@@ -245,6 +291,19 @@ export default function ReturnsDoc({
 										}
 										className="mt-1"
 									/>
+									{expectedReturnQty != null && (
+										<p className="mt-1 text-xs text-slate-500">
+											{t("docs_returns.crew_reported_hint", {
+												usedQty,
+												expectedReturnQty,
+											})}
+										</p>
+									)}
+									{differsFromCrewReport && (
+										<p className="mt-1 text-xs font-medium text-amber-600">
+											{t("docs_returns.discrepancy_warning")}
+										</p>
+									)}
 								</div>
 							</div>
 

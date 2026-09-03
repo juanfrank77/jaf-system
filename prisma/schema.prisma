@@ -46,6 +46,11 @@ enum PhotoTag {
   AFTER
 }
 
+enum CatalogKind {
+  SERVICE
+  MATERIAL
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -67,8 +72,10 @@ model User {
   overriddenInvoices    JafInvoice[]         @relation("OverriddenDocs")
    lcApprovedInvoices    JafInvoice[]         @relation("LcApprovedDocs")
    financeVerifiedInvoices JafInvoice[]       @relation("FinanceVerifiedDocs")
-    closedReceivables     JafInvoice[]         @relation("ClosedReceivables")
-    cancelledInvoices     JafInvoice[]         @relation("CancelledDocs")
+    closedReceivables     JafInvoice[]        @relation("ClosedReceivables")
+    cancelledInvoices     JafInvoice[]        @relation("CancelledDocs")
+    supervisedBrigades    Brigade[]           @relation("BrigadeSupervisor")
+    releasedToFinanceInvoices JafInvoice[]    @relation("ReleasedToFinanceDocs")
   restockRequests       VanRestockRequest[]  @relation("RestockRequests")
   restockReleases       VanRestockRequest[]  @relation("RestockReleases")
   restockReceivers      VanRestockRequest[]  @relation("RestockReceivers")
@@ -253,7 +260,26 @@ model JafInvoice {
    // Generated documents
    warehouseReceiptPath String?
    jafInvoicePdfPath    String?    // supervisor-generated JAF invoice (for the Claro Aviso)
+   
+   // Phase 3 - supervisor layer
+   brigadeId              String?
+   brigade                Brigade?  @relation(fields: [brigadeId], references: [id])
+   jobDescription         String?
+   serviceLines           Json?     // [{ serviceCodeId, claroCode, accountCode, name, qty }] ordered at intake
+   installedServiceLines  Json?     // same shape, crew's installed qty
+   jafInvoiceGeneratedAt  DateTime?
+   jafInvoiceLines        Json?     // [{ serviceCodeId, claroCode, accountCode, name, unit, qty, unitPrice, lineAmount }]
+   jafInvoiceLineTotal    Decimal?  // pre-IVU line sum
+   avisoDocPath           String?   // uploaded Aviso PDF (distinct from claroPdfPath)
+   avisoLines             Json?     // [{ serviceCodeId, claroCode, qty, unitPrice, lineAmount }]
+   avisoLineTotal         Decimal?
+   avisoMatchedAt         DateTime? // set only when the amount gate passes
+   contractorAccountCode  String?   // copied from Brigade.code at sub-contractor signature
+   releasedToFinanceAt    DateTime?
+   releasedToFinanceById  String?
+   releasedToFinanceBy    User?     @relation("ReleasedToFinanceDocs", fields: [releasedToFinanceById], references: [id])
 
+   preCertSheets PreCertSheet[]
    auditTrail AuditTrail[]
    photos     Photo[]
    poLinks    PoLink[]
@@ -263,6 +289,8 @@ model JafInvoice {
   @@index([status, financeVerifiedAt, pbccRequestSentAt, advanceReceivedAt])
   @@index([status, createdAt])
   @@index([createdAt])
+  @@index([brigadeId])
+  @@index([releasedToFinanceAt])
   @@index([assignedCrewIds(ops: ArrayOps)], type: Gin)
   @@index([avisoNumber(ops: raw("gin_trgm_ops"))], type: Gin)
   @@index([jobAddressEstimated(ops: raw("gin_trgm_ops"))], type: Gin)
@@ -296,19 +324,28 @@ model Photo {
 }
 
 model ServiceCode {
-  id            String  @id @default(cuid())
-  claroCode     String  @unique // e.g. "34006428"
-  name          String          // e.g. "REMOCION MENSAJERO"
-  description   String?
-  unit          String  @default("SR")
-  unitPrice     Decimal
-  accountCode   String?
-  subAct        String?
-  dept          String?
-  profitCenter  String?
-  act           String?
-  costCenterCode String?
-  active        Boolean @default(true)
+  id                String      @id @default(cuid())
+  claroCode         String      @unique // e.g. "34006428"
+  name              String          // catalog description,  e.g. "TRANSFER STITCH DE POSTESMC"
+  description       String?
+  kind              CatalogKind @default(MATERIAL)
+  unit              String      // EA, FT, SQFT, TRAMO (SPAN); null when the catalog has none
+  unitPrice         Decimal     // = jaf_price (what JAF      invoices Claro)
+  claroBasePrice    Decimal?
+  upliftFactor      Decimal?
+  contractorPrice   Decimal?
+  contractorFactor  Decimal?
+  PriceListRevision String?
+  effectiveFrom     DateTime?
+  accountCode       String?
+  subAct            String?
+  dept              String?
+  profitCenter      String?
+  act               String?
+  costCenterCode    String?
+  active            Boolean     @default(true)
+
+  @@index([kind, active])
 }
 
 model PoLink {
@@ -322,6 +359,40 @@ model PoLink {
   createdAt        DateTime @default(now())
 
   @@index([docId])
+}
+
+model PreCertSheet {
+  id                    String     @id @default(cuid())
+  docId                 String
+  doc                   JafInvoice @relation(fields: [docId], references: [id])
+  version               Int
+  supersededAt          DateTime?  // null = active sheet
+  avisoNumber           String?
+  certifiedAddress      String
+  title                 String
+  issuedOn              DateTime   // "Fecha": the field update date
+  lines                 Json       // PreCertLine[] — see app/lib/service-lines.ts
+  priceListRevision     String?
+  total                 Decimal
+  sigSupervisorUserId   String?
+  sigSupervisorName     String?
+  sigSupervisorImage    String?    // base64 data URL
+  sigSupervisorAt       DateTime?
+  sigSubcontractorCode  String?    // brigade code
+  sigSubcontractorName  String?
+  sigSubcontractorImage String?
+  sigSubcontractorAt    DateTime?
+  sigClaroName          String?
+  sigClaroImage         String?
+  sigClaroScanPath      String?
+  sigClaroAt            DateTime?
+  pdfPath               String?
+  issuedAt              DateTime   @default(now())
+  issuedById            String
+
+  @@unique([docId, version])
+  @@index([docId, supersededAt])
+  @@map("pre_cert_sheet")
 }
 
 model PaymentRecord {
@@ -364,14 +435,23 @@ model SystemSetting {
 
 // Module 1 tables — schema defined now, routes built later
 model Brigade {
-  id        String   @id @default(cuid())
-  name      String
-  memberIds String[]
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  name         String
+  code         String?  @unique // Carmen's contractor/payroll number, e.g. "204"
+  area         String?          // CENTRAL, METRO, NORTE, OESTE, SUR
+  supervisorId String?
+  supervisor   User?    @relation("BrigadeSupervisor", fields: [supervisorId], references: [id])
+  leadName     String?
+  phone        String?
+  memberIds    String[]
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  invoices JafInvoice[]
 
   @@index([active])
+  @@index([supervisorId])
 }
 
 model Van {

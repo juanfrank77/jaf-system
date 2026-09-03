@@ -375,14 +375,15 @@ model Brigade {
 }
 
 model Van {
-  id                  String   @id @default(cuid())
-  name                String
-  installerId         String?  @unique
-  installer           User?    @relation("VanInstaller", fields: [installerId], references: [id])
-  standardStockLevels Json     // [{ serviceCodeId, qty }]
-  active              Boolean  @default(true)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                      String   @id @default(cuid())
+  name                    String
+  installerId             String?  @unique
+  installer               User?    @relation("VanInstaller", fields: [installerId], references: [id])
+  standardStockLevels     Json     // [{ serviceCodeId, qty }]
+  active                  Boolean  @default(true)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  vanAssignmentHistory    Json?    // [{ installerId, from, to }] — append-only
 
   inventoryTransactions VanInventoryTransaction[]
   installLogs           InstallLog[]

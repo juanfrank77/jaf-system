@@ -10,6 +10,7 @@ vi.mock("~/lib/db.server", () => ({
 			findMany: vi.fn(),
 		},
 		auditTrail: { findMany: vi.fn() },
+		preCertSheet: { findFirst: vi.fn(() => Promise.resolve(null)) },
 	},
 }))
 

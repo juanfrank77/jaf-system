@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next"
 import { Form, Link, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialLineItems } from "~/components/material-line-items"
+import { StepRail } from "~/components/step-rail"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import {
@@ -21,6 +22,7 @@ import {
 } from "~/lib/field-update-helpers"
 import { isEditableStatus, isTerminalStatus } from "~/lib/permissions"
 import { requireRole, requireSession } from "~/lib/permissions.server"
+import { deriveSupervisorStage } from "~/lib/supervisor-stage"
 import { toNumberPrice } from "~/lib/utils"
 import { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id"
@@ -83,6 +85,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		take: 100,
 		select: { id: true, name: true },
 	})
+	const sheet = await db.preCertSheet.findFirst({
+		where: { docId: doc.id, supersededAt: null },
+		orderBy: { version: "desc" },
+		select: { sigSupervisorAt: true, sigSubcontractorAt: true },
+	})
 	return {
 		doc,
 		user,
@@ -94,6 +101,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		assignedCrew,
 		crewOptions: crewOptions.map((c) => ({ id: c.id, name: c.name })),
 		auditTrail,
+		stage: deriveSupervisorStage(doc, sheet),
 	}
 }
 
@@ -272,6 +280,12 @@ function nextActionHref(
 		return `/docs/${doc.id}/review`
 	if (
 		(doc.status === "SUPERVISOR_APPROVED" || doc.status === "CLARO_UPLOADED") &&
+		(userRole === "SUPERVISOR" || userRole === "ADMIN") &&
+		!doc.releasedToFinanceAt
+	)
+		return `/docs/${doc.id}/review`
+	if (
+		(doc.status === "SUPERVISOR_APPROVED" || doc.status === "CLARO_UPLOADED") &&
 		(userRole === "FINANCE" || userRole === "ADMIN")
 	)
 		return `/finance/verify/${doc.id}`
@@ -285,16 +299,24 @@ type NextActionLabelKey =
 	| "docs_view.next_action.review_approve"
 	| "docs_view.next_action.verify_for_finance"
 	| "docs_view.next_action.generate_lc"
+	| "docs_view.next_action.continue_review"
 	| "docs_view.next_action.default"
 
-function nextActionLabelKey(status: string): NextActionLabelKey {
+function nextActionLabelKey(
+	status: string,
+	userRole: string,
+): NextActionLabelKey {
 	if (status === "CREATED") return "docs_view.next_action.mark_prepped"
 	if (status === "PREPPED") return "docs_view.next_action.capture_signature"
 	if (status === "SIGNED") return "docs_view.next_action.update_from_field"
 	if (status === "FIELD_UPDATED") return "docs_view.next_action.review_approve"
-	if (status === "SUPERVISOR_APPROVED")
-		return "docs_view.next_action.verify_for_finance"
-	if (status === "CLARO_UPLOADED") return "docs_view.next_action.generate_lc"
+	if (status === "SUPERVISOR_APPROVED" || status === "CLARO_UPLOADED") {
+		if (userRole === "SUPERVISOR" || userRole === "ADMIN")
+			return "docs_view.next_action.continue_review"
+		if (status === "SUPERVISOR_APPROVED")
+			return "docs_view.next_action.verify_for_finance"
+		return "docs_view.next_action.generate_lc"
+	}
 	return "docs_view.next_action.default"
 }
 
@@ -310,6 +332,7 @@ export default function DocView({
 		assignedCrew,
 		crewOptions,
 		auditTrail,
+		stage,
 	} = loaderData
 	const error = actionData as
 		| { errorKey?: string; errorMessage?: string }
@@ -336,6 +359,9 @@ export default function DocView({
 
 	return (
 		<div className="space-y-5">
+			{(user.role === "SUPERVISOR" || user.role === "ADMIN") && (
+				<StepRail stage={stage} />
+			)}
 			<div className="flex items-center justify-between">
 				<div>
 					<h1 className="font-mono font-bold text-lg">{doc.controlNumber}</h1>
@@ -517,7 +543,7 @@ export default function DocView({
 
 			{nextHref && (
 				<Link to={nextHref} className={buttonVariants({ className: "w-full" })}>
-					{t(nextActionLabelKey(doc.status))}
+					{t(nextActionLabelKey(doc.status, user.role))}
 				</Link>
 			)}
 

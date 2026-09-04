@@ -805,3 +805,120 @@ describe("review: pre-cert sheet", () => {
 		})
 	})
 })
+
+describe("review: release_to_finance", () => {
+	const ready = {
+		...approvedDoc,
+		status: "CLARO_UPLOADED",
+		avisoNumber: "10353961",
+		jafInvoiceGeneratedAt: new Date(),
+		jafInvoiceLineTotal: 586.37,
+		avisoDocPath: "/x/aviso.pdf",
+		avisoLines: [
+			{
+				serviceCodeId: "c1",
+				claroCode: "34006301",
+				qty: 5,
+				unitPrice: 42.343,
+				lineAmount: 211.72,
+			},
+		],
+		avisoMatchedAt: new Date(),
+		contractorAccountCode: "204",
+	}
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1", role: "SUPERVISOR", name: "E" },
+			session: {},
+		} as any)
+		vi.mocked(db.user.findMany).mockResolvedValue([{ id: "fin-1" }] as any)
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
+			id: "b1",
+			name: "JESUS MARTINEZ",
+			code: "204",
+			leadName: "Jesús Martínez",
+		} as any)
+		vi.mocked(db.photo.findMany).mockResolvedValue([
+			{ tag: "BEFORE" },
+			{ tag: "AFTER" },
+		] as any)
+		vi.mocked(db.preCertSheet.findFirst).mockResolvedValue({
+			id: "s1",
+			sigSupervisorAt: new Date(),
+			sigSubcontractorAt: new Date(),
+			sigClaroAt: null,
+		} as any)
+	})
+
+	it("releases when all seven conditions hold and notifies Finance", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(ready as any)
+		const res = await action({
+			request: post(intent("release_to_finance")),
+			params: { id: "doc-1" },
+		} as any).catch((r) => r)
+		expect(res.status).toBe(302)
+		expect(db.jafInvoice.update).toHaveBeenCalledWith({
+			where: { id: "doc-1" },
+			data: {
+				releasedToFinanceAt: expect.any(Date),
+				releasedToFinanceById: "sup-1",
+			},
+		})
+		expect(db.notification.create).toHaveBeenCalledWith({
+			data: {
+				userId: "fin-1",
+				docId: "doc-1",
+				message:
+					"MAINT-260903-001 · Aviso 10353961 · Jesús Martínez · $586.37 — ready for payment request",
+			},
+		})
+	})
+
+	it("refuses when a photo is missing and reports which condition failed", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(ready as any)
+		vi.mocked(db.photo.findMany).mockResolvedValue([{ tag: "BEFORE" }] as any)
+		const res = await action({
+			request: post(intent("release_to_finance")),
+			params: { id: "doc-1" },
+		} as any)
+		expect(res).toMatchObject({
+			errorKey: "docs_review.errors.release_blocked",
+		})
+		expect(
+			res.conditions?.find((c: { key: string }) => c.key === "photos")?.ok,
+		).toBe(false)
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("does not gate on the Claro signature", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(ready as any)
+		const res = await action({
+			request: post(intent("release_to_finance")),
+			params: { id: "doc-1" },
+		} as any).catch((r) => r)
+		expect(res.status).toBe(302)
+	})
+
+	it("is idempotent", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...ready,
+			releasedToFinanceAt: new Date(),
+		} as any)
+		await action({
+			request: post(intent("release_to_finance")),
+			params: { id: "doc-1" },
+		} as any).catch(() => {})
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("send_to_finance no longer exists", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(ready as any)
+		await action({
+			request: post(intent("send_to_finance")),
+			params: { id: "doc-1" },
+		} as any).catch(() => {})
+		expect(db.auditTrail.create).not.toHaveBeenCalled()
+		expect(db.notification.create).not.toHaveBeenCalled()
+	})
+})

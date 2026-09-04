@@ -151,6 +151,7 @@
 			"review_approve": "Revisar y aprobar",
 			"verify_for_finance": "Verificar para Finanzas",
 			"generate_lc": "Generar solicitud de LC",
+			"continue_review": "Continuar pasos del supervisor",
 			"default": "Próxima acción"
 		}
 	},
@@ -355,8 +356,59 @@
 			"precert_locked": "La hoja está firmada. Regenérela para cambiar cantidades.",
 			"precert_edit_reason_required": "Se requiere una razón para cambiar una cantidad certificada.",
 			"signature_required": "Se requiere una firma.",
-			"contractor_code_required": "Esta brigada no tiene código de contratista. Ingréselo para firmar."
+			"contractor_code_required": "Esta brigada no tiene código de contratista. Ingréselo para firmar.",
+			"release_blocked": "El paquete está incompleto. Vea la lista de condiciones."
 		}
+	},
+	"step_rail": {
+		"aria": "Progreso de la orden",
+		"intake": "Creación",
+		"warehouse": "Almacén",
+		"field": "Campo",
+		"approve": "Aprobar",
+		"invoice": "Factura JAF",
+		"aviso": "Aviso y cotejo",
+		"precert": "Hoja pre-cert.",
+		"release": "Liberar",
+		"released": "En Finanzas"
+	},
+	"docs_review_steps": {
+		"approve_heading": "Paso A — Trabajo de campo",
+		"invoice_heading": "Paso B — Factura JAF, de cantidades instaladas",
+		"unit_price": "Unitario (JAF)",
+		"line_amount": "Línea",
+		"line_sum_pre_ivu": "Suma de líneas (antes de IVU)",
+		"regenerate_invoice": "Regenerar factura",
+		"aviso_heading": "Paso C — Aviso y cotejo",
+		"aviso_hint": "Cree el Aviso en Claro a partir de la factura, luego ingrese el número, suba el documento y capture sus líneas.",
+		"aviso_pdf_label": "Documento del Aviso (PDF)",
+		"charged_qty": "Cant. cobrada",
+		"aviso_unit_price": "Precio unitario Aviso",
+		"line_note_hint": "Requerida solo si una cantidad cobrada difiere de la instalada.",
+		"save_aviso": "Guardar Aviso y cotejar",
+		"amount_match_ok": "Cotejo de monto aprobado — Aviso {{total}}",
+		"amount_match_blocked": "Bloqueado: Aviso {{aviso}} ≠ factura {{invoice}}. Corrija el Aviso en Claro y vuelva a guardar.",
+		"claro_pdf_optional": "PDF de orden de trabajo Claro (opcional, distinto del Aviso)"
+	},
+	"release": {
+		"heading": "Paso E — Liberar a Finanzas",
+		"button": "Liberar paquete a Finanzas",
+		"released_at": "Liberado a Finanzas el {{date}}",
+		"match": "Coincide",
+		"mismatch": "Difiere",
+		"col_ordered": "Ordenado",
+		"col_installed": "Instalado",
+		"col_certified": "Certificado",
+		"col_charged": "Cobrado",
+		"claro_not_captured": "Aceptación de campo de Claro no capturada",
+		"condition.approved": "Trabajo de campo aprobado",
+		"condition.invoice": "Factura JAF generada",
+		"condition.aviso": "Aviso # ingresado, documento subido, líneas capturadas",
+		"condition.amount_match": "Cotejo de monto aprobado (bloqueo duro)",
+		"condition.photos": "Fotos de antes y después presentes",
+		"condition.precert_signed": "Hoja pre-cert firmada — supervisor + sub-contratista",
+		"condition.contractor_code": "Cuenta de contratista resuelta",
+		"condition.claro_badge": "Aceptación de campo de Claro — solo insignia, no condición"
 	},
 	"precert": {
 		"heading": "Step D — Hoja de Pre-Certificación Contratista",

@@ -151,6 +151,7 @@
 			"review_approve": "Review & Approve",
 			"verify_for_finance": "Verify for Finance",
 			"generate_lc": "Generate LC Request",
+			"continue_review": "Continue supervisor steps",
 			"default": "Next Action"
 		}
 	},
@@ -355,8 +356,59 @@
 			"precert_locked": "The sheet is signed. Regenerate it to change quantities.",
 			"precert_edit_reason_required": "A reason is required to change a certified quantity.",
 			"signature_required": "A signature is required.",
-			"contractor_code_required": "This crew has no contractor code. Enter it to sign."
+			"contractor_code_required": "This crew has no contractor code. Enter it to sign.",
+			"release_blocked": "The packet is incomplete. See the checklist."
 		}
+	},
+	"step_rail": {
+		"aria": "Work order progress",
+		"intake": "Intake",
+		"warehouse": "Warehouse",
+		"field": "Field",
+		"approve": "Approve",
+		"invoice": "JAF invoice",
+		"aviso": "Aviso & match",
+		"precert": "Pre-cert sheet",
+		"release": "Release",
+		"released": "In Finance"
+	},
+	"docs_review_steps": {
+		"approve_heading": "Step A — Field work",
+		"invoice_heading": "Step B — JAF invoice, from installed quantities",
+		"unit_price": "Unit (JAF)",
+		"line_amount": "Line",
+		"line_sum_pre_ivu": "Line sum (pre-IVU)",
+		"regenerate_invoice": "Regenerate invoice",
+		"aviso_heading": "Step C — Aviso & match",
+		"aviso_hint": "Create the Aviso in Claro from the invoice above, then enter its number, upload the document and capture its lines.",
+		"aviso_pdf_label": "Aviso document (PDF)",
+		"charged_qty": "Charged qty",
+		"aviso_unit_price": "Aviso unit price",
+		"line_note_hint": "Required only when a charged quantity differs from the installed quantity.",
+		"save_aviso": "Save Aviso and run match",
+		"amount_match_ok": "Amount match passed — Aviso {{total}}",
+		"amount_match_blocked": "Blocked: Aviso {{aviso}} ≠ invoice {{invoice}}. Correct the Aviso in Claro and re-save.",
+		"claro_pdf_optional": "Claro work-order PDF (optional, separate from the Aviso)"
+	},
+	"release": {
+		"heading": "Step E — Release to Finance",
+		"button": "Release packet to Finance",
+		"released_at": "Released to Finance on {{date}}",
+		"match": "Match",
+		"mismatch": "Differs",
+		"col_ordered": "Ordered",
+		"col_installed": "Installed",
+		"col_certified": "Certified",
+		"col_charged": "Charged",
+		"claro_not_captured": "Claro acceptance not captured",
+		"condition.approved": "Field work approved",
+		"condition.invoice": "JAF invoice generated",
+		"condition.aviso": "Aviso # entered, document uploaded, lines captured",
+		"condition.amount_match": "Amount match green (hard gate)",
+		"condition.photos": "Before and after photos present",
+		"condition.precert_signed": "Pre-cert sheet signed — supervisor + sub-contractor",
+		"condition.contractor_code": "Contractor account resolved",
+		"condition.claro_badge": "Claro field acceptance — badge only, not a release condition"
 	},
 	"precert": {
 		"heading": "Step D — Hoja de Pre-Certificación Contratista",

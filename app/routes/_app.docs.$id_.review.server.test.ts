@@ -1,0 +1,224 @@
+import { beforeEach, describe, expect, it, vi } from "vitest"
+
+vi.mock("~/lib/db.server", () => ({
+	db: {
+		jafInvoice: { findUniqueOrThrow: vi.fn(), update: vi.fn() },
+		auditTrail: { create: vi.fn(), findFirst: vi.fn() },
+		notification: { create: vi.fn(), createMany: vi.fn() },
+		user: { findMany: vi.fn(), findUnique: vi.fn() },
+		photo: { findMany: vi.fn() },
+		brigade: { findUnique: vi.fn(), update: vi.fn() },
+		preCertSheet: {
+			findFirst: vi.fn(),
+			findMany: vi.fn(),
+			create: vi.fn(),
+			update: vi.fn(),
+			updateMany: vi.fn(),
+		},
+		$transaction: vi.fn(async (ops: any) =>
+			typeof ops === "function" ? ops({}) : Promise.all(ops),
+		),
+	},
+}))
+vi.mock("~/lib/permissions.server", () => ({ requireRole: vi.fn() }))
+vi.mock("~/lib/service-codes.server", () => ({
+	getActiveServiceCodes: vi.fn(),
+}))
+vi.mock("~/lib/system-settings.server", () => ({
+	getIvuRate: vi.fn(),
+	getAvisoAmountTolerance: vi.fn(),
+}))
+vi.mock("~/lib/uploads.server", () => ({
+	saveBuffer: vi.fn(),
+	saveUpload: vi.fn(),
+}))
+vi.mock("~/lib/pdf/jaf-invoice.server", () => ({
+	generateJafInvoicePdf: vi.fn(),
+}))
+vi.mock("~/lib/pdf/pre-cert-sheet.server", () => ({
+	generatePreCertSheetPdf: vi.fn(),
+}))
+
+import { db } from "~/lib/db.server"
+import { generateJafInvoicePdf } from "~/lib/pdf/jaf-invoice.server"
+import { requireRole } from "~/lib/permissions.server"
+import { getActiveServiceCodes } from "~/lib/service-codes.server"
+import {
+	getAvisoAmountTolerance,
+	getIvuRate,
+} from "~/lib/system-settings.server"
+import { saveBuffer } from "~/lib/uploads.server"
+import { action } from "./_app.docs.$id_.review"
+
+const CATALOG = [
+	{
+		id: "c1",
+		claroCode: "34006301",
+		name: "TRANSFER ATTCH DE POSTESMC",
+		accountCode: "610",
+		unit: "EA",
+		unitPrice: "42.3430",
+		contractorFactor: "0.65",
+		priceListRevision: "REV 2023-04-21",
+	},
+	{
+		id: "c2",
+		claroCode: "34007030",
+		name: "REMOCION DE LINEA BAJANTEMO",
+		accountCode: "6102",
+		unit: "EA",
+		unitPrice: "13.8115",
+		contractorFactor: "0.65",
+		priceListRevision: "REV 2023-04-21",
+	},
+]
+const INSTALLED = [
+	{
+		serviceCodeId: "c1",
+		claroCode: "34006301",
+		accountCode: "610",
+		name: "TRANSFER ATTCH DE POSTESMC",
+		qty: 5,
+	},
+	{
+		serviceCodeId: "c2",
+		claroCode: "34007030",
+		accountCode: "6102",
+		name: "REMOCION DE LINEA BAJANTEMO",
+		qty: 2,
+	},
+]
+
+function post(form: FormData) {
+	return new Request("http://localhost/docs/doc-1/review", {
+		method: "POST",
+		body: form,
+	})
+}
+function intent(name: string, extra: Record<string, string> = {}) {
+	const f = new FormData()
+	f.set("intent", name)
+	for (const [k, v] of Object.entries(extra)) f.set(k, v)
+	return f
+}
+
+const approvedDoc = {
+	id: "doc-1",
+	controlNumber: "MAINT-260903-001",
+	status: "SUPERVISOR_APPROVED",
+	supervisorId: "sup-1",
+	brigadeId: "b1",
+	jobType: "Mantenimiento",
+	jobDescription: "Transf. attachments",
+	jobAddressEstimated: "CAM 906",
+	jobAddressActual: "CAM 906, Yabucoa",
+	avisoNumber: null,
+	serviceLines: INSTALLED,
+	installedServiceLines: INSTALLED,
+	materialsUsed: [],
+	materialsTaken: [],
+	supervisorApprovedAt: new Date(),
+	jafInvoiceGeneratedAt: null,
+	jafInvoiceLines: null,
+	jafInvoiceLineTotal: null,
+	avisoDocPath: null,
+	avisoLines: null,
+	avisoLineTotal: null,
+	avisoMatchedAt: null,
+	contractorAccountCode: null,
+	releasedToFinanceAt: null,
+	fieldSubmittedAt: new Date("2026-08-26T20:12:00Z"),
+	assignedCrewIds: ["crew-1"],
+}
+
+describe("review: generate_jaf_invoice", () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1", role: "SUPERVISOR", name: "Edgard Ocasio" },
+			session: {},
+		} as any)
+		vi.mocked(getActiveServiceCodes).mockResolvedValue(CATALOG as any)
+		vi.mocked(getIvuRate).mockResolvedValue(0.115)
+		vi.mocked(getAvisoAmountTolerance).mockResolvedValue(0.01)
+		vi.mocked(generateJafInvoicePdf).mockResolvedValue(Buffer.from("pdf"))
+		vi.mocked(saveBuffer).mockResolvedValue(
+			"/uploads/jaf-invoices/doc-1-jaf-invoice.pdf",
+		)
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
+			id: "b1",
+			name: "JESUS MARTINEZ",
+			code: "204",
+		} as any)
+	})
+
+	it("prices installed service lines from the catalog and pins them on the doc", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			approvedDoc as any,
+		)
+		await action({
+			request: post(intent("generate_jaf_invoice")),
+			params: { id: "doc-1" },
+		} as any).catch(() => {})
+		expect(db.jafInvoice.update).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({
+					jafInvoiceLineTotal: 239.34,
+					jafInvoicePdfPath: "/uploads/jaf-invoices/doc-1-jaf-invoice.pdf",
+					jafInvoiceGeneratedAt: expect.any(Date),
+					jafInvoiceLines: [
+						expect.objectContaining({
+							claroCode: "34006301",
+							qty: 5,
+							unitPrice: 42.343,
+							lineAmount: 211.72,
+						}),
+						expect.objectContaining({
+							claroCode: "34007030",
+							qty: 2,
+							unitPrice: 13.8115,
+							lineAmount: 27.62,
+						}),
+					],
+				}),
+			}),
+		)
+		const pdfArgs = vi.mocked(generateJafInvoicePdf).mock.calls[0][0]
+		expect(pdfArgs.contractorShare).toEqual({
+			factor: 0.65,
+			amount: 155.57,
+			retention: 15.56,
+			net: 140.01,
+			brigadeName: "JESUS MARTINEZ",
+		})
+	})
+
+	it("refuses when there are no installed service lines", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...approvedDoc,
+			installedServiceLines: [],
+		} as any)
+		const res = await action({
+			request: post(intent("generate_jaf_invoice")),
+			params: { id: "doc-1" },
+		} as any)
+		expect(res).toEqual({
+			errorKey: "docs_review.errors.installed_lines_required",
+		})
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("refuses regeneration after the aviso matched", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...approvedDoc,
+			jafInvoiceGeneratedAt: new Date(),
+			avisoMatchedAt: new Date(),
+		} as any)
+		const res = await action({
+			request: post(intent("generate_jaf_invoice")),
+			params: { id: "doc-1" },
+		} as any).catch((r) => r)
+		expect(res.status).toBe(302)
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+})

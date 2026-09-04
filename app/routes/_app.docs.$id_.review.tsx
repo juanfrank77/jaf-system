@@ -1,4 +1,3 @@
-import fs from "node:fs/promises"
 import path from "node:path"
 import type { ParseKeys } from "i18next"
 import type { ComponentProps } from "react"
@@ -16,7 +15,14 @@ import { generateJafInvoicePdf } from "~/lib/pdf/jaf-invoice.server"
 import { canTransition, isReviewActionStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import { getActiveServiceCodes } from "~/lib/service-codes.server"
+import {
+	buildInvoiceLines,
+	round2,
+	type ServiceLine,
+	sumLines,
+} from "~/lib/service-lines"
 import { getIvuRate } from "~/lib/system-settings.server"
+import { saveBuffer, saveUpload } from "~/lib/uploads.server"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id_.review"
 
@@ -75,6 +81,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 	if (intent === "approve") {
 		if (!canTransition(doc.status, "SUPERVISOR_APPROVED", user.role))
 			throw redirect(`/docs/${params.id}`)
+		const ordered = (doc.serviceLines as ServiceLine[] | null) ?? []
+		const installed = (doc.installedServiceLines as ServiceLine[] | null) ?? []
+		if (ordered.length > 0 && installed.length === 0)
+			return { errorKey: "docs_review.errors.installed_lines_required" }
 		const avisoNumber =
 			(form.get("avisoNumber") as string | null)?.trim() || doc.avisoNumber
 		const claroNotes = (form.get("claroNotes") as string | null)?.trim() || null
@@ -142,11 +152,11 @@ export async function action({ request, params }: Route.ActionArgs) {
 			return { errorKey: "docs_review.errors.pdf_required" }
 		const validation = validateFile(claroPdf, "pdf")
 		if (!validation.valid) return { errorMessage: validation.error }
-		const uploadDir = process.env.UPLOAD_DIR || "/tmp/jaf/uploads"
-		const claroDir = path.join(uploadDir, "claro-pdfs")
-		await fs.mkdir(claroDir, { recursive: true })
-		const localPath = path.join(claroDir, `${params.id}-claro.pdf`)
-		await fs.writeFile(localPath, Buffer.from(await claroPdf.arrayBuffer()))
+		const localPath = await saveUpload(
+			"claro-pdfs",
+			`${params.id}-claro.pdf`,
+			claroPdf,
+		)
 		const finance = await db.user.findMany({
 			where: { role: "FINANCE", active: true },
 		})
@@ -182,29 +192,38 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	if (intent === "generate_jaf_invoice") {
-		if (!isReviewActionStatus(doc.status)) throw redirect(`/docs/${params.id}`)
+		if (!isReviewActionStatus(doc.status) && doc.status !== "CLARO_UPLOADED")
+			throw redirect(`/docs/${params.id}`)
+		if (doc.avisoMatchedAt) throw redirect(`/docs/${params.id}/review`)
 
-		const codeMap = Object.fromEntries(
-			(await getActiveServiceCodes()).map((c) => [c.id, c]),
-		)
-		const used = (doc.materialsUsed as unknown as MaterialLine[]) || []
-		const source: MaterialLine[] =
-			used.length > 0
-				? used
-				: (doc.materialsTaken as unknown as MaterialLine[]) || []
-		const lineItems = source.map((item) => {
-			const code = codeMap[item.serviceCodeId]
-			return {
-				claroCode: code?.claroCode ?? "",
-				name: code?.name ?? "",
-				unit: code?.unit ?? "SR",
-				qty: Number(item.qty) || 0,
-				unitPrice: toNumberPrice(code?.unitPrice),
-			}
-		})
-		if (lineItems.length === 0) throw redirect(`/docs/${params.id}`)
+		const catalog = await getActiveServiceCodes()
+		const codeMap = Object.fromEntries(catalog.map((c) => [c.id, c]))
+		const installed = (doc.installedServiceLines as ServiceLine[] | null) ?? []
+		const lines = buildInvoiceLines(installed, codeMap)
+		if (lines.length === 0)
+			return { errorKey: "docs_review.errors.installed_lines_required" }
 
+		const lineTotal = sumLines(lines)
 		const ivuRate = await getIvuRate()
+		const factors = installed.map((l) =>
+			toNumberPrice(codeMap[l.serviceCodeId]?.contractorFactor),
+		)
+		const factor = factors.find((f) => f > 0) ?? 0.65
+		const contractorAmount = round2(
+			lines.reduce(
+				(s, l) =>
+					s +
+					l.lineAmount *
+						(toNumberPrice(codeMap[l.serviceCodeId]?.contractorFactor) ||
+							factor),
+				0,
+			),
+		)
+		const retention = round2(contractorAmount * 0.1)
+		const brigade = doc.brigadeId
+			? await db.brigade.findUnique({ where: { id: doc.brigadeId } })
+			: null
+
 		const invoiceNumber = doc.avisoNumber
 			? `M2026-${doc.avisoNumber}`
 			: `M2026-${doc.controlNumber}`
@@ -216,29 +235,49 @@ export async function action({ request, params }: Route.ActionArgs) {
 			invoiceDate: new Date().toLocaleDateString("en-US"),
 			invoiceNumber,
 			debtor: "PRT/CLARO",
-			lineItems,
+			lineItems: lines.map((l) => ({
+				claroCode: l.claroCode,
+				name: l.name,
+				qty: l.qty,
+				unit: l.unit ?? "",
+				unitPrice: l.unitPrice,
+				accountCode: l.accountCode,
+			})),
 			ivuRate,
 			supervisorName: user.name,
+			contractorShare: {
+				factor,
+				amount: contractorAmount,
+				retention,
+				net: round2(contractorAmount - retention),
+				brigadeName: brigade?.name ?? null,
+			},
 		})
-		const uploadDir = process.env.UPLOAD_DIR || "/tmp/jaf/uploads"
-		const dir = path.join(uploadDir, "jaf-invoices")
-		await fs.mkdir(dir, { recursive: true })
-		const localPath = path.join(dir, `${params.id}-jaf-invoice.pdf`)
-		await fs.writeFile(localPath, pdf)
+		const localPath = await saveBuffer(
+			"jaf-invoices",
+			`${params.id}-jaf-invoice.pdf`,
+			pdf,
+		)
 		await db.$transaction([
 			db.jafInvoice.update({
 				where: { id: params.id },
-				data: { jafInvoicePdfPath: localPath },
+				data: {
+					jafInvoicePdfPath: localPath,
+					jafInvoiceLines: lines,
+					jafInvoiceLineTotal: lineTotal,
+					jafInvoiceGeneratedAt: new Date(),
+				},
 			}),
 			db.auditTrail.create({
 				data: {
 					docId: params.id,
 					userId: user.id,
 					action: "JAF_INVOICE_GENERATED",
-					diffJson: { path: localPath },
+					diffJson: { path: localPath, lineTotal, lines },
 				},
 			}),
 		])
+		throw redirect(`/docs/${params.id}/review`)
 	}
 
 	if (intent === "send_back") {
@@ -471,14 +510,22 @@ export default function ReviewDoc({
 							</div>
 						</Form>
 					)}
-					{!doc.jafInvoicePdfPath && (used.length > 0 || taken.length > 0) && (
-						<Form method="post">
-							<input type="hidden" name="intent" value="generate_jaf_invoice" />
-							<Button type="submit" variant="outline" size="sm">
-								{t("docs_review.generate_jaf_invoice")}
-							</Button>
-						</Form>
-					)}
+					{!doc.jafInvoicePdfPath &&
+						(used.length > 0 ||
+							taken.length > 0 ||
+							((doc.installedServiceLines as ServiceLine[] | null)?.length ??
+								0) > 0) && (
+							<Form method="post">
+								<input
+									type="hidden"
+									name="intent"
+									value="generate_jaf_invoice"
+								/>
+								<Button type="submit" variant="outline" size="sm">
+									{t("docs_review.generate_jaf_invoice")}
+								</Button>
+							</Form>
+						)}
 				</div>
 			)}
 

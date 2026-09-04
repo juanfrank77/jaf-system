@@ -342,7 +342,8 @@
 		"send_back": "Send Back",
 		"errors": {
 			"pdf_required": "Please select the Claro PDF to upload",
-			"send_back_note_required": "A note explaining the send-back is required."
+			"send_back_note_required": "A note explaining the send-back is required.",
+			"installed_lines_required": "The crew has not recorded installed quantities per service code."
 		}
 	},
 	"docs_lc": {

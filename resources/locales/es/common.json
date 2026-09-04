@@ -342,7 +342,8 @@
 		"send_back": "Devolver",
 		"errors": {
 			"pdf_required": "Por favor selecciona el PDF de Claro para cargar",
-			"send_back_note_required": "Se requiere una nota explicando la devolución."
+			"send_back_note_required": "Se requiere una nota explicando la devolución.",
+			"installed_lines_required": "La brigada no registró cantidades instaladas por código de servicio."
 		}
 	},
 	"docs_lc": {

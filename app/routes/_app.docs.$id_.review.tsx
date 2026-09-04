@@ -12,13 +12,16 @@ import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
 import { validateFile } from "~/lib/file-upload.server"
 import { generateJafInvoicePdf } from "~/lib/pdf/jaf-invoice.server"
+import { generatePreCertSheetPdf } from "~/lib/pdf/pre-cert-sheet.server"
 import { canTransition, isReviewActionStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import { getActiveServiceCodes } from "~/lib/service-codes.server"
 import {
 	type AvisoLine,
 	buildInvoiceLines,
+	buildPreCertLines,
 	type InvoiceLine,
+	type PreCertLine,
 	parseAvisoLines,
 	round2,
 	type ServiceLine,
@@ -31,7 +34,7 @@ import {
 } from "~/lib/system-settings.server"
 import { saveBuffer, saveUpload } from "~/lib/uploads.server"
 import { toNumberPrice } from "~/lib/utils"
-import type { Prisma } from "../../generated/prisma/client"
+import type { PreCertSheet, Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id_.review"
 
 type MaterialLine = { serviceCodeId: string; qty: number }
@@ -47,6 +50,52 @@ type SendBackHistoryEntry = {
 type MaterialServiceCode = ComponentProps<
 	typeof MaterialLineItems
 >["serviceCodes"][number]
+
+async function renderPreCert(
+	sheet: PreCertSheet,
+	docId: string,
+): Promise<string> {
+	const pdf = await generatePreCertSheetPdf({
+		avisoNumber: sheet.avisoNumber,
+		issuedOn: sheet.issuedOn,
+		title: sheet.title,
+		certifiedAddress: sheet.certifiedAddress,
+		lines: sheet.lines as PreCertLine[],
+		total: toNumberPrice(sheet.total),
+		sigSupervisor: sheet.sigSupervisorName
+			? {
+					name: sheet.sigSupervisorName,
+					image: sheet.sigSupervisorImage,
+					at: sheet.sigSupervisorAt,
+				}
+			: null,
+		sigSubcontractor: sheet.sigSubcontractorName
+			? {
+					name: sheet.sigSubcontractorName,
+					code: sheet.sigSubcontractorCode,
+					image: sheet.sigSubcontractorImage,
+					at: sheet.sigSubcontractorAt,
+				}
+			: null,
+		sigClaro: sheet.sigClaroAt
+			? {
+					name: sheet.sigClaroName,
+					image: sheet.sigClaroImage,
+					at: sheet.sigClaroAt,
+				}
+			: null,
+	})
+	return saveBuffer("precert", `${docId}-v${sheet.version}.pdf`, pdf)
+}
+
+const activeSheet = (docId: string) =>
+	db.preCertSheet.findFirst({
+		where: { docId, supersededAt: null },
+		orderBy: { version: "desc" },
+	})
+
+const isSig = (v: unknown) =>
+	typeof v === "string" && v.startsWith("data:image") && v !== "data:,"
 
 export const meta: Route.MetaFunction = ({ data }) => [
 	{
@@ -430,6 +479,244 @@ export async function action({ request, params }: Route.ActionArgs) {
 				}),
 			)
 		await db.$transaction(ops)
+		throw redirect(`/docs/${params.id}/review`)
+	}
+
+	if (intent === "generate_precert") {
+		if (!doc.avisoMatchedAt)
+			return { errorKey: "docs_review.errors.aviso_match_required" }
+		if (doc.releasedToFinanceAt) throw redirect(`/docs/${params.id}/review`)
+		const catalog = await getActiveServiceCodes()
+		const codeMap = Object.fromEntries(catalog.map((c) => [c.id, c]))
+		const installed = (doc.installedServiceLines as ServiceLine[] | null) ?? []
+		const lines = buildPreCertLines(installed, codeMap)
+		if (lines.length === 0)
+			return { errorKey: "docs_review.errors.installed_lines_required" }
+		const previous = await activeSheet(params.id)
+		if (previous)
+			await db.preCertSheet.update({
+				where: { id: previous.id },
+				data: { supersededAt: new Date() },
+			})
+		const revision =
+			codeMap[installed[0].serviceCodeId]?.priceListRevision ?? null
+		const created = await db.preCertSheet.create({
+			data: {
+				docId: params.id,
+				version: (previous?.version ?? 0) + 1,
+				avisoNumber: doc.avisoNumber,
+				certifiedAddress: doc.jobAddressActual ?? doc.jobAddressEstimated,
+				title: doc.jobDescription ?? doc.jobType,
+				issuedOn: doc.fieldSubmittedAt ?? new Date(),
+				lines,
+				priceListRevision: revision,
+				total: sumLines(lines),
+				issuedById: user.id,
+			},
+		})
+		const pdfPath = await renderPreCert(
+			{ ...created, lines, total: sumLines(lines) } as unknown as PreCertSheet,
+			params.id,
+		)
+		await db.$transaction([
+			db.preCertSheet.update({ where: { id: created.id }, data: { pdfPath } }),
+			db.auditTrail.create({
+				data: {
+					docId: params.id,
+					userId: user.id,
+					action: "PRECERT_GENERATED",
+					diffJson: {
+						version: created.version,
+						supersedes: previous?.version ?? null,
+					},
+				},
+			}),
+		] as unknown as Prisma.PrismaPromise<unknown>[])
+		throw redirect(`/docs/${params.id}/review`)
+	}
+
+	if (intent === "edit_precert_qty") {
+		const sheet = await activeSheet(params.id)
+		if (!sheet) return { errorKey: "docs_review.errors.precert_required" }
+		if (sheet.sigSupervisorAt)
+			return { errorKey: "docs_review.errors.precert_locked" }
+		const reason = (form.get("reason") as string | null)?.trim() || ""
+		if (!reason)
+			return { errorKey: "docs_review.errors.precert_edit_reason_required" }
+		const serviceCodeId = form.get("serviceCodeId") as string
+		const certifiedQty = Math.max(
+			0,
+			Number.parseInt((form.get("certifiedQty") as string) || "0", 10) || 0,
+		)
+		const lines = (sheet.lines as PreCertLine[]).map((l) =>
+			l.serviceCodeId === serviceCodeId
+				? {
+						...l,
+						certifiedQty,
+						editReason: reason,
+						lineAmount: round2(certifiedQty * l.unitPrice),
+					}
+				: l,
+		)
+		const total = sumLines(lines)
+		const pdfPath = await renderPreCert(
+			{ ...sheet, lines, total } as unknown as PreCertSheet,
+			params.id,
+		)
+		await db.$transaction([
+			db.preCertSheet.update({
+				where: { id: sheet.id },
+				data: { lines, total, pdfPath },
+			}),
+			db.auditTrail.create({
+				data: {
+					docId: params.id,
+					userId: user.id,
+					action: "PRECERT_QTY_EDITED",
+					diffJson: { serviceCodeId, certifiedQty, reason },
+				},
+			}),
+		] as unknown as Prisma.PrismaPromise<unknown>[])
+		throw redirect(`/docs/${params.id}/review`)
+	}
+
+	if (intent === "sign_precert_supervisor") {
+		const sheet = await activeSheet(params.id)
+		if (!sheet) return { errorKey: "docs_review.errors.precert_required" }
+		const signature = form.get("signature")
+		if (!isSig(signature))
+			return { errorKey: "docs_review.errors.signature_required" }
+		const data = {
+			sigSupervisorUserId: user.id,
+			sigSupervisorName: user.name,
+			sigSupervisorImage: signature as string,
+			sigSupervisorAt: new Date(),
+		}
+		const pdfPath = await renderPreCert(
+			{ ...sheet, ...data } as unknown as PreCertSheet,
+			params.id,
+		)
+		await db.$transaction([
+			db.preCertSheet.update({
+				where: { id: sheet.id },
+				data: { ...data, pdfPath },
+			}),
+			db.auditTrail.create({
+				data: {
+					docId: params.id,
+					userId: user.id,
+					action: "PRECERT_SIGNED",
+					diffJson: { role: "SUPERVISOR", version: sheet.version },
+				},
+			}),
+		] as unknown as Prisma.PrismaPromise<unknown>[])
+		throw redirect(`/docs/${params.id}/review`)
+	}
+
+	if (intent === "sign_precert_subcontractor") {
+		const sheet = await activeSheet(params.id)
+		if (!sheet) return { errorKey: "docs_review.errors.precert_required" }
+		const signature = form.get("signature")
+		if (!isSig(signature))
+			return { errorKey: "docs_review.errors.signature_required" }
+		const brigade = doc.brigadeId
+			? await db.brigade.findUnique({ where: { id: doc.brigadeId } })
+			: null
+		const typedCode =
+			(form.get("contractorCode") as string | null)?.trim() || null
+		const code = brigade?.code ?? typedCode
+		if (!code)
+			return { errorKey: "docs_review.errors.contractor_code_required" }
+		const signerName =
+			(form.get("signerName") as string | null)?.trim() ||
+			brigade?.leadName ||
+			brigade?.name ||
+			""
+		if (brigade && !brigade.code)
+			await db.brigade.update({ where: { id: brigade.id }, data: { code } })
+		const data = {
+			sigSubcontractorCode: code,
+			sigSubcontractorName: signerName,
+			sigSubcontractorImage: signature as string,
+			sigSubcontractorAt: new Date(),
+		}
+		const pdfPath = await renderPreCert(
+			{ ...sheet, ...data } as unknown as PreCertSheet,
+			params.id,
+		)
+		await db.$transaction([
+			db.preCertSheet.update({
+				where: { id: sheet.id },
+				data: { ...data, pdfPath },
+			}),
+			db.jafInvoice.update({
+				where: { id: params.id },
+				data: { contractorAccountCode: code },
+			}),
+			db.auditTrail.create({
+				data: {
+					docId: params.id,
+					userId: user.id,
+					action: "PRECERT_SIGNED",
+					diffJson: {
+						role: "SUBCONTRACTOR",
+						code,
+						signerName,
+						version: sheet.version,
+					},
+				},
+			}),
+		] as unknown as Prisma.PrismaPromise<unknown>[])
+		throw redirect(`/docs/${params.id}/review`)
+	}
+
+	if (intent === "sign_precert_claro") {
+		const sheet = await activeSheet(params.id)
+		if (!sheet) return { errorKey: "docs_review.errors.precert_required" }
+		const signature = form.get("signature")
+		const scan = form.get("scan")
+		const signerName = (form.get("signerName") as string | null)?.trim() || null
+		let sigClaroScanPath: string | null = null
+		if (scan instanceof File && scan.size > 0) {
+			const v = validateFile(scan, "file")
+			if (!v.valid) return { errorMessage: v.error }
+			const ext = scan.name.toLowerCase().match(/\.[^.]+$/)?.[0] || ".jpg"
+			sigClaroScanPath = await saveUpload(
+				"precert",
+				`${params.id}-claro-scan${ext}`,
+				scan,
+			)
+		}
+		if (!isSig(signature) && !sigClaroScanPath)
+			return { errorKey: "docs_review.errors.signature_required" }
+		const data = {
+			sigClaroName: signerName,
+			sigClaroImage: isSig(signature) ? (signature as string) : null,
+			sigClaroScanPath,
+			sigClaroAt: new Date(),
+		}
+		const pdfPath = await renderPreCert(
+			{ ...sheet, ...data } as unknown as PreCertSheet,
+			params.id,
+		)
+		await db.$transaction([
+			db.preCertSheet.update({
+				where: { id: sheet.id },
+				data: { ...data, pdfPath },
+			}),
+			db.auditTrail.create({
+				data: {
+					docId: params.id,
+					userId: user.id,
+					action: "PRECERT_SIGNED",
+					diffJson: {
+						role: "CLARO",
+						scanned: !!sigClaroScanPath,
+						version: sheet.version,
+					},
+				},
+			}),
+		] as unknown as Prisma.PrismaPromise<unknown>[])
 		throw redirect(`/docs/${params.id}/review`)
 	}
 

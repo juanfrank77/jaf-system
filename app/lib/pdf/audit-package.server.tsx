@@ -64,7 +64,7 @@ interface AuditDoc {
 }
 
 interface ServiceCodeMap {
-	[id: string]: { claroCode: string; name: string; unit: string }
+	[id: string]: { claroCode: string; name: string; unit: string | null }
 }
 
 export async function generateAuditPackagePdf(

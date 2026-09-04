@@ -243,7 +243,7 @@ export function financeLineItems(
 		{
 			claroCode?: string
 			name?: string
-			unit?: string
+			unit?: string | null
 			unitPrice: unknown
 			accountCode?: string | null
 		}

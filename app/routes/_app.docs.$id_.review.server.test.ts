@@ -41,6 +41,7 @@ vi.mock("~/lib/pdf/pre-cert-sheet.server", () => ({
 
 import { db } from "~/lib/db.server"
 import { generateJafInvoicePdf } from "~/lib/pdf/jaf-invoice.server"
+import { generatePreCertSheetPdf } from "~/lib/pdf/pre-cert-sheet.server"
 import { requireRole } from "~/lib/permissions.server"
 import { getActiveServiceCodes } from "~/lib/service-codes.server"
 import {
@@ -458,5 +459,349 @@ describe("review: save_aviso", () => {
 			params: { id: "doc-1" },
 		} as any)
 		expect(res).toEqual({ errorKey: "docs_review.errors.invoice_required" })
+	})
+})
+
+describe("review: pre-cert sheet", () => {
+	const matched = {
+		...approvedDoc,
+		status: "CLARO_UPLOADED",
+		avisoNumber: "10353961",
+		jafInvoiceGeneratedAt: new Date(),
+		jafInvoiceLines: [],
+		jafInvoiceLineTotal: 239.34,
+		avisoDocPath: "/x/aviso.pdf",
+		avisoLines: [
+			{
+				serviceCodeId: "c1",
+				claroCode: "34006301",
+				qty: 5,
+				unitPrice: 42.343,
+				lineAmount: 211.72,
+			},
+		],
+		avisoLineTotal: 239.34,
+		avisoMatchedAt: new Date(),
+	}
+	const sig = "data:image/png;base64,iVBORw0KGgo="
+
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1", role: "SUPERVISOR", name: "Edgard Ocasio" },
+			session: {},
+		} as any)
+		vi.mocked(getActiveServiceCodes).mockResolvedValue(CATALOG as any)
+		vi.mocked(generatePreCertSheetPdf).mockResolvedValue(Buffer.from("pdf"))
+		vi.mocked(saveBuffer).mockResolvedValue("/uploads/precert/doc-1-v1.pdf")
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
+			id: "b1",
+			name: "JESUS MARTINEZ",
+			code: "204",
+			leadName: "Jesús Martínez",
+		} as any)
+		vi.mocked(db.preCertSheet.create).mockResolvedValue({
+			id: "sheet-1",
+			version: 1,
+		} as any)
+	})
+
+	it("generates version 1 from installed lines with pinned prices", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(matched as any)
+		vi.mocked(db.preCertSheet.findFirst).mockResolvedValue(null)
+		await action({
+			request: post(intent("generate_precert")),
+			params: { id: "doc-1" },
+		} as any).catch(() => {})
+		expect(db.preCertSheet.create).toHaveBeenCalledWith({
+			data: expect.objectContaining({
+				docId: "doc-1",
+				version: 1,
+				avisoNumber: "10353961",
+				certifiedAddress: "CAM 906, Yabucoa",
+				title: "Transf. attachments",
+				issuedOn: matched.fieldSubmittedAt,
+				priceListRevision: "REV 2023-04-21",
+				total: 239.34,
+				issuedById: "sup-1",
+				lines: [
+					expect.objectContaining({
+						claroCode: "34006301",
+						installedQty: 5,
+						certifiedQty: 5,
+						unitPrice: 42.343,
+						lineAmount: 211.72,
+					}),
+					expect.objectContaining({
+						claroCode: "34007030",
+						installedQty: 2,
+						certifiedQty: 2,
+						lineAmount: 27.62,
+					}),
+				],
+			}),
+		})
+	})
+
+	it("supersedes the previous version on regenerate", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(matched as any)
+		vi.mocked(db.preCertSheet.findFirst).mockResolvedValue({
+			id: "sheet-1",
+			version: 1,
+		} as any)
+		await action({
+			request: post(intent("generate_precert")),
+			params: { id: "doc-1" },
+		} as any).catch(() => {})
+		expect(db.preCertSheet.update).toHaveBeenCalledWith({
+			where: { id: "sheet-1" },
+			data: { supersededAt: expect.any(Date) },
+		})
+		expect(db.preCertSheet.create).toHaveBeenCalledWith({
+			data: expect.objectContaining({ version: 2 }),
+		})
+	})
+
+	it("refuses generation before the aviso matched", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...matched,
+			avisoMatchedAt: null,
+		} as any)
+		const res = await action({
+			request: post(intent("generate_precert")),
+			params: { id: "doc-1" },
+		} as any)
+		expect(res).toEqual({
+			errorKey: "docs_review.errors.aviso_match_required",
+		})
+	})
+
+	it("edits a certified quantity with a reason, before the supervisor signs", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(matched as any)
+		vi.mocked(db.preCertSheet.findFirst).mockResolvedValue({
+			id: "sheet-1",
+			version: 1,
+			sigSupervisorAt: null,
+			avisoNumber: "10353961",
+			issuedOn: new Date(),
+			title: "T",
+			certifiedAddress: "A",
+			lines: [
+				{
+					serviceCodeId: "c1",
+					claroCode: "34006301",
+					accountCode: "610",
+					description: "T",
+					installedQty: 5,
+					certifiedQty: 5,
+					unit: "EA",
+					unitPrice: 42.343,
+					lineAmount: 211.72,
+				},
+			],
+		} as any)
+		await action({
+			request: post(
+				intent("edit_precert_qty", {
+					serviceCodeId: "c1",
+					certifiedQty: "4",
+					reason: "Claro accepted 4",
+				}),
+			),
+			params: { id: "doc-1" },
+		} as any).catch(() => {})
+		expect(db.preCertSheet.update).toHaveBeenCalledWith({
+			where: { id: "sheet-1" },
+			data: expect.objectContaining({
+				total: 169.37,
+				lines: [
+					expect.objectContaining({
+						certifiedQty: 4,
+						editReason: "Claro accepted 4",
+						lineAmount: 169.37,
+					}),
+				],
+			}),
+		})
+	})
+
+	it("requires a reason to edit and refuses after the supervisor signed", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(matched as any)
+		vi.mocked(db.preCertSheet.findFirst).mockResolvedValue({
+			id: "sheet-1",
+			sigSupervisorAt: null,
+			lines: [],
+		} as any)
+		expect(
+			await action({
+				request: post(
+					intent("edit_precert_qty", {
+						serviceCodeId: "c1",
+						certifiedQty: "4",
+					}),
+				),
+				params: { id: "doc-1" },
+			} as any),
+		).toEqual({
+			errorKey: "docs_review.errors.precert_edit_reason_required",
+		})
+		vi.mocked(db.preCertSheet.findFirst).mockResolvedValue({
+			id: "sheet-1",
+			sigSupervisorAt: new Date(),
+			lines: [],
+		} as any)
+		expect(
+			await action({
+				request: post(
+					intent("edit_precert_qty", {
+						serviceCodeId: "c1",
+						certifiedQty: "4",
+						reason: "x",
+					}),
+				),
+				params: { id: "doc-1" },
+			} as any),
+		).toEqual({ errorKey: "docs_review.errors.precert_locked" })
+	})
+
+	it("supervisor signature stores login identity", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(matched as any)
+		vi.mocked(db.preCertSheet.findFirst).mockResolvedValue({
+			id: "sheet-1",
+			lines: [],
+			avisoNumber: "1",
+			issuedOn: new Date(),
+			title: "T",
+			certifiedAddress: "A",
+			total: 1,
+		} as any)
+		await action({
+			request: post(intent("sign_precert_supervisor", { signature: sig })),
+			params: { id: "doc-1" },
+		} as any).catch(() => {})
+		expect(db.preCertSheet.update).toHaveBeenCalledWith({
+			where: { id: "sheet-1" },
+			data: expect.objectContaining({
+				sigSupervisorUserId: "sup-1",
+				sigSupervisorName: "Edgard Ocasio",
+				sigSupervisorImage: sig,
+				sigSupervisorAt: expect.any(Date),
+			}),
+		})
+	})
+
+	it("sub-contractor signature copies the brigade code onto the job", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(matched as any)
+		vi.mocked(db.preCertSheet.findFirst).mockResolvedValue({
+			id: "sheet-1",
+			lines: [],
+			avisoNumber: "1",
+			issuedOn: new Date(),
+			title: "T",
+			certifiedAddress: "A",
+			total: 1,
+		} as any)
+		await action({
+			request: post(
+				intent("sign_precert_subcontractor", {
+					signature: sig,
+					signerName: "Jesús Martínez",
+				}),
+			),
+			params: { id: "doc-1" },
+		} as any).catch(() => {})
+		expect(db.preCertSheet.update).toHaveBeenCalledWith({
+			where: { id: "sheet-1" },
+			data: expect.objectContaining({
+				sigSubcontractorCode: "204",
+				sigSubcontractorName: "Jesús Martínez",
+				sigSubcontractorImage: sig,
+			}),
+		})
+		expect(db.jafInvoice.update).toHaveBeenCalledWith({
+			where: { id: "doc-1" },
+			data: { contractorAccountCode: "204" },
+		})
+	})
+
+	it("sub-contractor signature saves a typed code when the brigade has none", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(matched as any)
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
+			id: "b1",
+			name: "ZARIEL GARAY",
+			code: null,
+			leadName: "Zariel Garay",
+		} as any)
+		vi.mocked(db.preCertSheet.findFirst).mockResolvedValue({
+			id: "sheet-1",
+			lines: [],
+			avisoNumber: "1",
+			issuedOn: new Date(),
+			title: "T",
+			certifiedAddress: "A",
+			total: 1,
+		} as any)
+		expect(
+			await action({
+				request: post(
+					intent("sign_precert_subcontractor", {
+						signature: sig,
+						signerName: "Z",
+					}),
+				),
+				params: { id: "doc-1" },
+			} as any),
+		).toEqual({ errorKey: "docs_review.errors.contractor_code_required" })
+		await action({
+			request: post(
+				intent("sign_precert_subcontractor", {
+					signature: sig,
+					signerName: "Z",
+					contractorCode: "274",
+				}),
+			),
+			params: { id: "doc-1" },
+		} as any).catch(() => {})
+		expect(db.brigade.update).toHaveBeenCalledWith({
+			where: { id: "b1" },
+			data: { code: "274" },
+		})
+		expect(db.jafInvoice.update).toHaveBeenCalledWith({
+			where: { id: "doc-1" },
+			data: { contractorAccountCode: "274" },
+		})
+	})
+
+	it("claro signature accepts an uploaded scan instead of a drawing", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(matched as any)
+		vi.mocked(db.preCertSheet.findFirst).mockResolvedValue({
+			id: "sheet-1",
+			lines: [],
+			avisoNumber: "1",
+			issuedOn: new Date(),
+			title: "T",
+			certifiedAddress: "A",
+			total: 1,
+		} as any)
+		vi.mocked(saveUpload).mockResolvedValue(
+			"/uploads/precert/doc-1-claro-scan.jpg",
+		)
+		const form = intent("sign_precert_claro", { signerName: "Sup. Claro" })
+		form.set(
+			"scan",
+			new File([Buffer.from("jpg")], "scan.jpg", { type: "image/jpeg" }),
+		)
+		await action({
+			request: post(form),
+			params: { id: "doc-1" },
+		} as any).catch(() => {})
+		expect(db.preCertSheet.update).toHaveBeenCalledWith({
+			where: { id: "sheet-1" },
+			data: expect.objectContaining({
+				sigClaroName: "Sup. Claro",
+				sigClaroScanPath: "/uploads/precert/doc-1-claro-scan.jpg",
+				sigClaroAt: expect.any(Date),
+			}),
+		})
 	})
 })

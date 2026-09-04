@@ -35,7 +35,7 @@ describe("parseCatalogCsv", () => {
 			upliftFactor: "1.15",
 			contractorPrice: "27.5230",
 			contractorFactor: "0.65",
-			PriceListRevision: "REV 2023-04-21",
+			priceListRevision: "REV 2023-04-21",
 			effectiveFrom: new Date("2023-04-21T00:00:00.000Z"),
 			accountCode: "610",
 			active: true,

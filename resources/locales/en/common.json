@@ -349,8 +349,33 @@
 			"aviso_pdf_required": "Upload the Aviso document.",
 			"invalid_aviso_lines": "Aviso lines could not be read.",
 			"aviso_amount_mismatch": "Aviso total {{avisoTotal}} does not match the JAF invoice line sum {{invoiceTotal}} (difference {{difference}}, tolerance {{tolerance}}). Correct the Aviso in Claro and re-save.",
-			"aviso_line_note_required": "Line quantities differ from installed quantities. Add a note."
+			"aviso_line_note_required": "Line quantities differ from installed quantities. Add a note.",
+			"aviso_match_required": "The Aviso must match the invoice before generating the sheet.",
+			"precert_required": "Generate the pre-certification sheet first.",
+			"precert_locked": "The sheet is signed. Regenerate it to change quantities.",
+			"precert_edit_reason_required": "A reason is required to change a certified quantity.",
+			"signature_required": "A signature is required.",
+			"contractor_code_required": "This crew has no contractor code. Enter it to sign."
 		}
+	},
+	"precert": {
+		"heading": "Step D — Hoja de Pre-Certificación Contratista",
+		"generate": "Generate sheet",
+		"regenerate": "Regenerate (new version, clears signatures)",
+		"regenerate_hint": "Re-issue supersedes the current version; history is kept.",
+		"version": "Version {{n}}",
+		"reason_placeholder": "Reason for the change",
+		"save_qty": "Save",
+		"download": "Download PDF",
+		"sig_supervisor": "Firma Supervisor Contratista",
+		"sig_subcontractor": "Firma Sub-Contratista",
+		"sig_claro": "Firma Supervisor Claro",
+		"sign": "Sign",
+		"signer_name": "Name",
+		"contractor_code": "Contractor code",
+		"claro_optional": "Optional — sign in-app or upload a photo of the signed printout.",
+		"not_captured": "Not captured",
+		"clear_signature": "Clear"
 	},
 	"docs_lc": {
 		"title": "LC Request — Lissette Review",

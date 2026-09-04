@@ -349,8 +349,33 @@
 			"aviso_pdf_required": "Suba el documento del Aviso.",
 			"invalid_aviso_lines": "No se pudieron leer las líneas del Aviso.",
 			"aviso_amount_mismatch": "El total del Aviso {{avisoTotal}} no coincide con la suma de líneas de la factura JAF {{invoiceTotal}} (diferencia {{difference}}, tolerancia {{tolerance}}). Corrija el Aviso en Claro y vuelva a guardar.",
-			"aviso_line_note_required": "Las cantidades por línea difieren de las instaladas. Agregue una nota."
+			"aviso_line_note_required": "Las cantidades por línea difieren de las instaladas. Agregue una nota.",
+			"aviso_match_required": "El Aviso debe coincidir con la factura antes de generar la hoja.",
+			"precert_required": "Genere primero la hoja de pre-certificación.",
+			"precert_locked": "La hoja está firmada. Regenérela para cambiar cantidades.",
+			"precert_edit_reason_required": "Se requiere una razón para cambiar una cantidad certificada.",
+			"signature_required": "Se requiere una firma.",
+			"contractor_code_required": "Esta brigada no tiene código de contratista. Ingréselo para firmar."
 		}
+	},
+	"precert": {
+		"heading": "Step D — Hoja de Pre-Certificación Contratista",
+		"generate": "Generar hoja",
+		"regenerate": "Regenerar (nueva versión, borra firmas)",
+		"regenerate_hint": "Reemitir reemplaza la versión actual; se conserva el historial.",
+		"version": "Versión {{n}}",
+		"reason_placeholder": "Razón del cambio",
+		"save_qty": "Guardar",
+		"download": "Descargar PDF",
+		"sig_supervisor": "Firma Supervisor Contratista",
+		"sig_subcontractor": "Firma Sub-Contratista",
+		"sig_claro": "Firma Supervisor Claro",
+		"sign": "Firmar",
+		"signer_name": "Nombre",
+		"contractor_code": "Código de contratista",
+		"claro_optional": "Opcional — firme en la app o suba una foto del impreso firmado.",
+		"not_captured": "No capturada",
+		"clear_signature": "Borrar"
 	},
 	"docs_lc": {
 		"title": "Solicitud de LC — Revisión de Lissette",

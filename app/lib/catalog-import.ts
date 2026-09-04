@@ -44,7 +44,7 @@ export function toServiceCodeData(
 		upliftFactor: orNull(row.uplift_factor),
 		contractorPrice: orNull(row.contractor_price),
 		contractorFactor: orNull(row.contractor_factor),
-		PriceListRevision: orNull(row.price_list_revision),
+		priceListRevision: orNull(row.price_list_revision),
 		effectiveFrom: row.effective_from
 			? new Date(`${row.effective_from}T00:00:00.000Z`)
 			: null,

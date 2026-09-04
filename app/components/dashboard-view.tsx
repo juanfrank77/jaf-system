@@ -162,6 +162,7 @@ function DashboardView({
 	alert,
 	explainer,
 	docs,
+	showFilters = false,
 	pendingReviewDocs = [],
 	sentBackDocs = [],
 	crewOptions = [],
@@ -183,6 +184,7 @@ function DashboardView({
 	alert: DashboardAlert
 	explainer: DashboardExplainer
 	docs: DashboardDocRow[]
+	showFilters?: boolean
 	pendingReviewDocs?: DashboardDocRow[]
 	sentBackDocs?: DashboardDocRow[]
 	crewOptions?: CrewOption[]
@@ -218,7 +220,7 @@ function DashboardView({
 		<div className="space-y-4">
 			<div className="flex items-center justify-between">
 				<h1 className="text-xl font-semibold">{t("dashboard.title")}</h1>
-				{hasActiveFilters && (
+				{showFilters && hasActiveFilters && (
 					<Button
 						variant="ghost"
 						size="sm"
@@ -237,115 +239,121 @@ function DashboardView({
 				)}
 			</div>
 
-			<div className="bg-white border rounded-lg p-3 space-y-3">
-				<div className="flex items-center gap-2 text-sm font-medium text-slate-600">
-					<HugeiconsIcon icon={FilterIcon} strokeWidth={2} className="size-4" />
-					{t("dashboard.filter.heading")}
-				</div>
-				<div className="grid grid-cols-1 gap-3 sm:grid-cols-4 items-end">
-					<Select
-						value={selectedStatus || ""}
-						onValueChange={(v) => {
-							const params = new URLSearchParams(location.search)
-							if (v) params.set("status", v)
-							else params.delete("status")
-							const query = params.toString()
-							window.location.href = `${location.pathname}${query ? `?${query}` : ""}`
-						}}
-					>
-						<SelectTrigger className="w-full">
-							<SelectValue
-								placeholder={t("dashboard.filter.status_placeholder")}
-							/>
-						</SelectTrigger>
-						<SelectContent>
-							{STATUS_OPTIONS.map((opt) => (
-								<SelectItem key={opt.value} value={opt.value}>
-									{t(opt.labelKey)}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
-
-					<Select
-						value={selectedCrew || ""}
-						onValueChange={(v) => {
-							const params = new URLSearchParams(location.search)
-							if (v) params.set("crew", v)
-							else params.delete("crew")
-							const query = params.toString()
-							window.location.href = `${location.pathname}${query ? `?${query}` : ""}`
-						}}
-						disabled={crewOptions.length === 0}
-					>
-						<SelectTrigger className="w-full">
-							<SelectValue
-								placeholder={t("dashboard.filter.crew_placeholder")}
-							/>
-						</SelectTrigger>
-						<SelectContent>
-							{crewOptions.map((c) => (
-								<SelectItem key={c.id} value={c.id}>
-									{c.name}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
-
-					<Select
-						value={selectedJobType || ""}
-						onValueChange={(v) => {
-							const params = new URLSearchParams(location.search)
-							if (v) params.set("jobType", v)
-							else params.delete("jobType")
-							const query = params.toString()
-							window.location.href = `${location.pathname}${query ? `?${query}` : ""}`
-						}}
-						disabled={!(jobTypeOptions && jobTypeOptions.length > 0)}
-					>
-						<SelectTrigger className="w-full">
-							<SelectValue
-								placeholder={t("dashboard.filter.job_type_placeholder")}
-							/>
-						</SelectTrigger>
-						<SelectContent>
-							{(jobTypeOptions || []).map((jt) => (
-								<SelectItem key={jt} value={jt}>
-									{jt}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
-
-					<form
-						method="get"
-						className="relative"
-						onSubmit={(e) => {
-							e.preventDefault()
-							const formData = new FormData(e.currentTarget)
-							const search = (formData.get("search") as string).trim()
-							const params = new URLSearchParams(location.search)
-							if (search) params.set("search", search)
-							else params.delete("search")
-							const query = params.toString()
-							window.location.href = `${location.pathname}${query ? `?${query}` : ""}`
-						}}
-					>
+			{showFilters && (
+				<div className="bg-white border rounded-lg p-3 space-y-3">
+					<div className="flex items-center gap-2 text-sm font-medium text-slate-600">
 						<HugeiconsIcon
-							icon={SearchIcon}
+							icon={FilterIcon}
 							strokeWidth={2}
-							className="absolute left-2.5 top-2.5 size-4 text-slate-400"
+							className="size-4"
 						/>
-						<Input
-							name="search"
-							type="search"
-							placeholder={t("dashboard.filter.search_placeholder")}
-							defaultValue={searchFilter}
-							className="pl-9"
-						/>
-					</form>
+						{t("dashboard.filter.heading")}
+					</div>
+					<div className="grid grid-cols-1 gap-3 sm:grid-cols-4 items-end">
+						<Select
+							value={selectedStatus || ""}
+							onValueChange={(v) => {
+								const params = new URLSearchParams(location.search)
+								if (v) params.set("status", v)
+								else params.delete("status")
+								const query = params.toString()
+								window.location.href = `${location.pathname}${query ? `?${query}` : ""}`
+							}}
+						>
+							<SelectTrigger className="w-full">
+								<SelectValue
+									placeholder={t("dashboard.filter.status_placeholder")}
+								/>
+							</SelectTrigger>
+							<SelectContent>
+								{STATUS_OPTIONS.map((opt) => (
+									<SelectItem key={opt.value} value={opt.value}>
+										{t(opt.labelKey)}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+
+						<Select
+							value={selectedCrew || ""}
+							onValueChange={(v) => {
+								const params = new URLSearchParams(location.search)
+								if (v) params.set("crew", v)
+								else params.delete("crew")
+								const query = params.toString()
+								window.location.href = `${location.pathname}${query ? `?${query}` : ""}`
+							}}
+							disabled={crewOptions.length === 0}
+						>
+							<SelectTrigger className="w-full">
+								<SelectValue
+									placeholder={t("dashboard.filter.crew_placeholder")}
+								/>
+							</SelectTrigger>
+							<SelectContent>
+								{crewOptions.map((c) => (
+									<SelectItem key={c.id} value={c.id}>
+										{c.name}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+
+						<Select
+							value={selectedJobType || ""}
+							onValueChange={(v) => {
+								const params = new URLSearchParams(location.search)
+								if (v) params.set("jobType", v)
+								else params.delete("jobType")
+								const query = params.toString()
+								window.location.href = `${location.pathname}${query ? `?${query}` : ""}`
+							}}
+							disabled={!(jobTypeOptions && jobTypeOptions.length > 0)}
+						>
+							<SelectTrigger className="w-full">
+								<SelectValue
+									placeholder={t("dashboard.filter.job_type_placeholder")}
+								/>
+							</SelectTrigger>
+							<SelectContent>
+								{(jobTypeOptions || []).map((jt) => (
+									<SelectItem key={jt} value={jt}>
+										{jt}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+
+						<form
+							method="get"
+							className="relative"
+							onSubmit={(e) => {
+								e.preventDefault()
+								const formData = new FormData(e.currentTarget)
+								const search = (formData.get("search") as string).trim()
+								const params = new URLSearchParams(location.search)
+								if (search) params.set("search", search)
+								else params.delete("search")
+								const query = params.toString()
+								window.location.href = `${location.pathname}${query ? `?${query}` : ""}`
+							}}
+						>
+							<HugeiconsIcon
+								icon={SearchIcon}
+								strokeWidth={2}
+								className="absolute left-2.5 top-2.5 size-4 text-slate-400"
+							/>
+							<Input
+								name="search"
+								type="search"
+								placeholder={t("dashboard.filter.search_placeholder")}
+								defaultValue={searchFilter}
+								className="pl-9"
+							/>
+						</form>
+					</div>
 				</div>
-			</div>
+			)}
 
 			{stats.length > 0 && (
 				<div className="grid grid-cols-2 gap-3 md:grid-cols-4">

@@ -767,6 +767,20 @@
 	"dashboard": {
 		"title": "Dashboard",
 		"no_documents": "No documents yet.",
+		"queue": {
+			"pending_review": "Pending review — crew submitted",
+			"sent_back": "Sent back to crew",
+			"missing_aviso": "Approved · missing Aviso",
+			"blocked": "Blocked · Aviso ≠ invoice",
+			"empty": "Nothing here."
+		},
+		"col": {
+			"work_order": "Work order",
+			"address": "Address",
+			"crew": "Crew",
+			"stage": "Stage",
+			"jaf_invoice": "JAF invoice"
+		},
 		"pending_review_heading": "Pending Review ({{count}})",
 		"sent_back_heading": "Sent Back ({{count}})",
 		"sent_back_badge": "Needs Fix",

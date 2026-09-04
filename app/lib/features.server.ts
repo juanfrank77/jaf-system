@@ -7,3 +7,8 @@
 export function isComptrollerEnabled(): boolean {
 	return process.env.ENABLE_COMPTROLLER === "true"
 }
+
+/** Dashboard filter bar. Hidden by default (Phase 3, Sept 2026); the loader still honours the query params. */
+export function isDashboardFiltersEnabled(): boolean {
+	return process.env.ENABLE_DASHBOARD_FILTERS === "true"
+}

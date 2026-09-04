@@ -2,14 +2,24 @@ import { useEffect } from "react"
 import { redirect } from "react-router"
 import { DashboardView } from "~/components/dashboard-view"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { SupervisorDashboard } from "~/components/supervisor-dashboard"
 import {
 	computeDashboardStats,
 	type DashboardExplainer,
 } from "~/lib/dashboard-stats"
 import { db } from "~/lib/db.server"
-import { isComptrollerEnabled } from "~/lib/features.server"
+import {
+	isComptrollerEnabled,
+	isDashboardFiltersEnabled,
+} from "~/lib/features.server"
 import { cacheJobs } from "~/lib/offline-store"
 import { requireSession } from "~/lib/permissions.server"
+import {
+	deriveSupervisorStage,
+	type SupervisorStage,
+} from "~/lib/supervisor-stage"
+import { getAvisoAmountTolerance } from "~/lib/system-settings.server"
+import { toNumberPrice } from "~/lib/utils"
 import type { DocStatus, Role } from "../../generated/prisma/client"
 import { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.dashboard"
@@ -30,6 +40,121 @@ function buildBaseWhere(role: Role, userId: string): Record<string, unknown> {
 	if (role === "SUPERVISOR") return { supervisorId: userId }
 	if (role === "CREW") return { assignedCrewIds: { has: userId } }
 	return {} // WAREHOUSE, FINANCE, ADMIN see all
+}
+
+type QueueRow = {
+	id: string
+	controlNumber: string
+	jobAddressEstimated: string
+	jobAddressActual: string | null
+	brigadeName: string | null
+	stage: SupervisorStage
+	amount: number | null
+	note?: string | null
+}
+
+const queueSelect = {
+	id: true,
+	controlNumber: true,
+	status: true,
+	jobType: true,
+	jobAddressEstimated: true,
+	jobAddressActual: true,
+	createdAt: true,
+	supervisorApprovedAt: true,
+	jafInvoiceGeneratedAt: true,
+	jafInvoiceLineTotal: true,
+	avisoLineTotal: true,
+	avisoMatchedAt: true,
+	releasedToFinanceAt: true,
+	sendBackHistory: true,
+	brigade: { select: { name: true } },
+} as const
+
+function toRow(
+	d: {
+		id: string
+		controlNumber: string
+		jobAddressEstimated: string
+		jobAddressActual?: string | null
+		jafInvoiceLineTotal?: unknown
+		brigade?: { name: string } | null
+	},
+	stage: SupervisorStage,
+	note?: string | null,
+): QueueRow {
+	return {
+		id: d.id,
+		controlNumber: d.controlNumber,
+		jobAddressEstimated: d.jobAddressEstimated,
+		jobAddressActual: d.jobAddressActual ?? null,
+		brigadeName: d.brigade?.name ?? null,
+		stage,
+		amount:
+			d.jafInvoiceLineTotal == null
+				? null
+				: toNumberPrice(d.jafInvoiceLineTotal),
+		note,
+	}
+}
+
+type SendBackHistoryEntry = { note?: string }
+
+async function loadSupervisorQueues(userId: string) {
+	const tolerance = await getAvisoAmountTolerance()
+	const [pending, sentBackRaw, approved] = await Promise.all([
+		db.jafInvoice.findMany({
+			where: { supervisorId: userId, status: "FIELD_UPDATED" },
+			select: queueSelect,
+			orderBy: { fieldSubmittedAt: "desc" },
+			take: 50,
+		}),
+		db.$queryRaw`
+			SELECT id, "controlNumber", "jobAddressEstimated", "jobAddressActual", "sendBackHistory"
+			FROM jaf_invoice
+			WHERE "supervisorId" = ${userId} AND status = 'SIGNED' AND jsonb_array_length("sendBackHistory") > 0
+			ORDER BY "createdAt" DESC LIMIT 50` as Promise<
+			{
+				id: string
+				controlNumber: string
+				jobAddressEstimated: string
+				jobAddressActual: string | null
+				sendBackHistory: unknown
+			}[]
+		>,
+		db.jafInvoice.findMany({
+			where: {
+				supervisorId: userId,
+				supervisorApprovedAt: { not: null },
+				releasedToFinanceAt: null,
+				status: { not: "CANCELLED" },
+			},
+			select: queueSelect,
+			orderBy: { supervisorApprovedAt: "asc" },
+			take: 100,
+		}),
+	])
+	const pendingReview = pending.map((d) => toRow(d, "APPROVE"))
+	const sentBack = sentBackRaw.map((d) => {
+		const h = Array.isArray(d.sendBackHistory)
+			? (d.sendBackHistory as SendBackHistoryEntry[])
+			: []
+		return toRow(d, "FIELD", h.at(-1)?.note ?? null)
+	})
+	const missingAviso: QueueRow[] = []
+	const blocked: QueueRow[] = []
+	for (const d of approved) {
+		const stage = deriveSupervisorStage(d, null)
+		if (d.avisoMatchedAt) continue
+		if (d.avisoLineTotal == null) missingAviso.push(toRow(d, stage))
+		else if (
+			Math.abs(
+				toNumberPrice(d.avisoLineTotal) - toNumberPrice(d.jafInvoiceLineTotal),
+			) > tolerance
+		)
+			blocked.push(toRow(d, "AVISO"))
+	}
+	return { pendingReview, sentBack, missingAviso, blocked }
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -96,32 +221,13 @@ export async function loader({ request }: Route.LoaderArgs) {
 			? docs
 			: docs.filter((d) => d.status !== "LC_REQUEST_GENERATED")
 
-	const { stats, alert } = computeDashboardStats(user.role, visibleDocs)
-
-	const pendingReviewDocs =
+	const { stats, alert, explainer } =
 		user.role === "SUPERVISOR"
-			? await db.jafInvoice.findMany({
-					where: {
-						...buildBaseWhere(user.role, user.id),
-						status: "FIELD_UPDATED",
-					},
-					orderBy: { createdAt: "desc" },
-					take: 50,
-				})
-			: []
+			? { stats: [], alert: null, explainer: null }
+			: computeDashboardStats(user.role, visibleDocs)
 
-	const sentBackDocs =
-		user.role === "SUPERVISOR"
-			? ((await db.$queryRaw`
-				SELECT id, "controlNumber", status, "jobType", "jobAddressEstimated", "createdAt", "sendBackHistory"
-				FROM jaf_invoice
-				WHERE "supervisorId" = ${user.id}
-					AND status = 'SIGNED'
-					AND jsonb_array_length("sendBackHistory") > 0
-			ORDER BY "createdAt" DESC
-			LIMIT 50
-		`) as SendBackHistoryRow[])
-			: []
+	const supervisorQueues =
+		user.role === "SUPERVISOR" ? await loadSupervisorQueues(user.id) : null
 
 	const warehousePreppedDocs =
 		user.role === "WAREHOUSE"
@@ -239,9 +345,12 @@ export async function loader({ request }: Route.LoaderArgs) {
 	return {
 		stats,
 		alert,
+		explainer,
 		docs: visibleDocs,
-		pendingReviewDocs,
-		sentBackDocs,
+		pendingReviewDocs: [],
+		sentBackDocs: [],
+		supervisorQueues,
+		showFilters: isDashboardFiltersEnabled(),
 		crewOptions,
 		jobTypeOptions: jobTypeOptions
 			.map((o) => o.jobType)
@@ -268,6 +377,8 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 		docs,
 		pendingReviewDocs,
 		sentBackDocs,
+		supervisorQueues,
+		showFilters,
 		crewOptions,
 		jobTypeOptions,
 		selectedStatus,
@@ -316,12 +427,17 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 		crewSubmittedDocs,
 	])
 
+	if (supervisorQueues) {
+		return <SupervisorDashboard queues={supervisorQueues} />
+	}
+
 	return (
 		<DashboardView
 			stats={stats}
 			alert={alert}
 			explainer={explainer}
 			docs={docs}
+			showFilters={showFilters}
 			pendingReviewDocs={pendingReviewDocs}
 			sentBackDocs={sentBackDocs}
 			crewOptions={crewOptions}

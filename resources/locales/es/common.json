@@ -767,6 +767,20 @@
 	"dashboard": {
 		"title": "Panel",
 		"no_documents": "Aún no hay documentos.",
+		"queue": {
+			"pending_review": "Pendiente de revisión — brigada entregó",
+			"sent_back": "Devuelto a la brigada",
+			"missing_aviso": "Aprobado · falta Aviso",
+			"blocked": "Bloqueado · Aviso ≠ factura",
+			"empty": "Nada por aquí."
+		},
+		"col": {
+			"work_order": "Orden",
+			"address": "Dirección",
+			"crew": "Brigada",
+			"stage": "Etapa",
+			"jaf_invoice": "Factura JAF"
+		},
 		"pending_review_heading": "Pendientes de revisión ({{count}})",
 		"sent_back_heading": "Devueltos ({{count}})",
 		"sent_back_badge": "Necesita corrección",

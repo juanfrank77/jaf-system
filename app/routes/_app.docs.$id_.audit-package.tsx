@@ -35,9 +35,15 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			releaseSignature: doc.releaseSignature,
 			crewSignature: doc.crewSignature,
 			warehouseName: doc.warehouse?.name ?? null,
-			materialsTaken: (doc.materialsTaken as any[]) ?? [],
-			materialsUsed: (doc.materialsUsed as any[]) ?? [],
-			auditTrail: doc.auditTrail as any,
+			materialsTaken:
+				(doc.materialsTaken as { serviceCodeId: string; qty: number }[]) ?? [],
+			materialsUsed:
+				(doc.materialsUsed as { serviceCodeId: string; qty: number }[]) ?? [],
+			auditTrail: doc.auditTrail as unknown as {
+				action: string
+				timestamp: Date
+				user: { name: string }
+			}[],
 			photos: doc.photos,
 		},
 		codeMap,

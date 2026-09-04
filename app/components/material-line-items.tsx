@@ -23,7 +23,7 @@ interface ServiceCode {
 	id: string
 	claroCode: string
 	name: string
-	unit: string
+	unit: string | null
 	unitPrice: number
 }
 

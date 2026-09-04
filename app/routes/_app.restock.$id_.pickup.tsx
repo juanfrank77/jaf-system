@@ -193,7 +193,7 @@ export default function PickupRestock({
 				</div>
 
 				{errorKey && (
-					<p className="text-sm text-red-600">{t(errorKey as any)}</p>
+					<p className="text-sm text-red-600">{t(errorKey as never)}</p>
 				)}
 
 				<Button type="submit" className="w-full">

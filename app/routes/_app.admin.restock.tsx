@@ -98,7 +98,7 @@ export async function action({ request }: Route.ActionArgs) {
 				{ status: 400 },
 			)
 		}
-		const updated = await db.vanRestockRequest.update({
+		await db.vanRestockRequest.update({
 			where: { id },
 			data: {
 				status: "APPROVED",
@@ -140,7 +140,7 @@ export async function action({ request }: Route.ActionArgs) {
 				{ status: 400 },
 			)
 		}
-		const updated = await db.vanRestockRequest.update({
+		await db.vanRestockRequest.update({
 			where: { id },
 			data: {
 				status: "DENIED",
@@ -187,7 +187,7 @@ export default function AdminRestock({
 		<div className="space-y-8">
 			<h1 className="text-xl font-semibold">{t("admin_restock.title")}</h1>
 
-			{error && <p className="text-sm text-red-600">{t(error as any)}</p>}
+			{error && <p className="text-sm text-red-600">{t(error as never)}</p>}
 
 			<section className="bg-white border rounded-lg overflow-hidden">
 				<h2 className="px-4 py-3 text-base font-medium border-b">

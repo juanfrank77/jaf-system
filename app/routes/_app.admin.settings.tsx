@@ -150,7 +150,7 @@ export default function AdminSettings({
 							required
 						/>
 					</div>
-					{error && <p className="text-sm text-red-600">{t(error as any)}</p>}
+					{error && <p className="text-sm text-red-600">{t(error as never)}</p>}
 					{success && (
 						<p className="text-sm text-green-600">
 							{t("admin_settings.saved")}
@@ -188,7 +188,7 @@ export default function AdminSettings({
 							required
 						/>
 					</div>
-					{error && <p className="text-sm text-red-600">{t(error as any)}</p>}
+					{error && <p className="text-sm text-red-600">{t(error as never)}</p>}
 					{successLcPbccAdvance && (
 						<p className="text-sm text-green-600">
 							{t("admin_settings.saved")}
@@ -225,7 +225,7 @@ export default function AdminSettings({
 							required
 						/>
 					</div>
-					{error && <p className="text-sm text-red-600">{t(error as any)}</p>}
+					{error && <p className="text-sm text-red-600">{t(error as never)}</p>}
 					{successAging && (
 						<p className="text-sm text-green-600">
 							{t("admin_settings.saved")}
@@ -262,7 +262,7 @@ export default function AdminSettings({
 							required
 						/>
 					</div>
-					{error && <p className="text-sm text-red-600">{t(error as any)}</p>}
+					{error && <p className="text-sm text-red-600">{t(error as never)}</p>}
 					{successTolerance && (
 						<p className="text-sm text-green-600">
 							{t("admin_settings.saved")}

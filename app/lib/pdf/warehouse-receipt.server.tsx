@@ -65,7 +65,7 @@ export async function generateWarehouseReceiptPdf(
 		id: string
 		claroCode: string
 		name: string
-		unit: string
+		unit: string | null
 		unitPrice: number
 	}[],
 	warehouseName: string,

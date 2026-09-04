@@ -1,5 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import type { ParseKeys } from "i18next"
 import { useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, redirect, useSubmit } from "react-router"
@@ -27,6 +28,7 @@ import {
 	getActiveServiceCodes,
 } from "~/lib/service-codes.server"
 import { toNumberPrice } from "~/lib/utils"
+import type { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id_.sign"
 
 type MaterialLine = { serviceCodeId: string; qty: number }
@@ -161,14 +163,20 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const serviceCodes = await getActiveServiceCodes()
 	const pdfBytes = await generateWarehouseReceiptPdf(
 		{
-			...(doc as any),
+			...doc,
 			materialsTaken,
 			releaseSignature,
 			crewSignature,
 			releaseSignerName: releaseSigner.name,
 			crewSignerName: crewSigner.name,
 		},
-		serviceCodes as any,
+		serviceCodes.map((c) => ({
+			id: c.id,
+			claroCode: c.claroCode,
+			name: c.name,
+			unit: c.unit,
+			unitPrice: toNumberPrice(c.unitPrice),
+		})),
 		warehouse?.name ?? "",
 	)
 	const uploadDir = process.env.UPLOAD_DIR || "/tmp/jaf/uploads"
@@ -213,7 +221,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 		},
 	})
 
-	const ops: any[] = [updateInvoice, statusChangeAudit]
+	const ops: Prisma.PrismaPromise<unknown>[] = [
+		updateInvoice,
+		statusChangeAudit,
+	]
 
 	if (hasOverage) {
 		ops.push(
@@ -263,6 +274,7 @@ export default function SignDoc({
 }: Route.ComponentProps) {
 	const { doc, serviceCodes, warehouses, warehouseUsers, crewUsers, user } =
 		loaderData
+	const error = actionData as { errorKey?: ParseKeys } | undefined
 	const releaseRef = useRef<SignaturePadHandle>(null)
 	const crewRef = useRef<SignaturePadHandle>(null)
 	const [warehouseId, setWarehouseId] = useState(
@@ -274,7 +286,9 @@ export default function SignDoc({
 	const [signedById, setSignedById] = useState(
 		user.role === "CREW" ? user.id : "",
 	)
-	const [items, setItems] = useState((doc.estimatedMaterials as any[]) || [])
+	const [items] = useState(
+		(doc.estimatedMaterials as MaterialLine[] | null) ?? [],
+	)
 	const submit = useSubmit()
 	const { t } = useTranslation()
 
@@ -301,8 +315,11 @@ export default function SignDoc({
 			return
 		}
 		const formData = new FormData(e.currentTarget)
-		formData.set("releaseSignature", releaseRef.current!.toDataURL())
-		formData.set("crewSignature", crewRef.current!.toDataURL())
+		const releasePad = releaseRef.current
+		const crewPad = crewRef.current
+		if (!releasePad || !crewPad) return
+		formData.set("releaseSignature", releasePad.toDataURL())
+		formData.set("crewSignature", crewPad.toDataURL())
 		formData.set("materials", JSON.stringify(items))
 		formData.set("warehouseId", warehouseId)
 		formData.set("releasedById", releasedById)
@@ -313,9 +330,7 @@ export default function SignDoc({
 	return (
 		<div className="space-y-5">
 			<h1 className="text-xl font-semibold">{t("docs_sign.title")}</h1>
-			<p className="text-sm font-mono text-slate-500">
-				{(doc as any).controlNumber}
-			</p>
+			<p className="text-sm font-mono text-slate-500">{doc.controlNumber}</p>
 
 			<div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
 				{t("docs_sign.review_notice")}
@@ -345,7 +360,7 @@ export default function SignDoc({
 					<Label>{t("docs_sign.materials_taken_label")}</Label>
 					<div className="mt-1">
 						<MaterialLineItems
-							serviceCodes={serviceCodes as any}
+							serviceCodes={serviceCodes}
 							initialItems={items}
 							readOnly={false}
 							name="materials"
@@ -433,10 +448,8 @@ export default function SignDoc({
 					</div>
 				</div>
 
-				{(actionData as any)?.errorKey && (
-					<p className="text-sm text-red-600">
-						{t((actionData as any).errorKey)}
-					</p>
+				{error?.errorKey && (
+					<p className="text-sm text-red-600">{t(error.errorKey)}</p>
 				)}
 
 				<Button type="submit" className="w-full">

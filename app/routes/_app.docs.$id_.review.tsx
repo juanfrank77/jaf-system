@@ -1,5 +1,7 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import type { ParseKeys } from "i18next"
+import type { ComponentProps } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
@@ -17,6 +19,20 @@ import { getActiveServiceCodes } from "~/lib/service-codes.server"
 import { getIvuRate } from "~/lib/system-settings.server"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id_.review"
+
+type MaterialLine = { serviceCodeId: string; qty: number }
+
+type SendBackHistoryEntry = {
+	fromStatus: string
+	toStatus: string
+	note: string
+	byUserId: string
+	createdAt: string
+}
+
+type MaterialServiceCode = ComponentProps<
+	typeof MaterialLineItems
+>["serviceCodes"][number]
 
 export const meta: Route.MetaFunction = ({ data }) => [
 	{
@@ -82,7 +98,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 					},
 				},
 			}),
-		] as any)
+		])
 	}
 
 	if (intent === "send_to_finance") {
@@ -115,7 +131,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 					},
 				}),
 			),
-		] as any)
+		])
 	}
 
 	if (intent === "upload_claro") {
@@ -162,7 +178,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 					},
 				}),
 			),
-		] as any)
+		])
 	}
 
 	if (intent === "generate_jaf_invoice") {
@@ -171,9 +187,11 @@ export async function action({ request, params }: Route.ActionArgs) {
 		const codeMap = Object.fromEntries(
 			(await getActiveServiceCodes()).map((c) => [c.id, c]),
 		)
-		const used = (doc.materialsUsed as any[]) || []
-		const source: any[] =
-			used.length > 0 ? used : (doc.materialsTaken as any[]) || []
+		const used = (doc.materialsUsed as unknown as MaterialLine[]) || []
+		const source: MaterialLine[] =
+			used.length > 0
+				? used
+				: (doc.materialsTaken as unknown as MaterialLine[]) || []
 		const lineItems = source.map((item) => {
 			const code = codeMap[item.serviceCodeId]
 			return {
@@ -220,7 +238,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 					diffJson: { path: localPath },
 				},
 			}),
-		] as any)
+		])
 	}
 
 	if (intent === "send_back") {
@@ -231,7 +249,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 		const crew = await db.user.findMany({
 			where: { id: { in: doc.assignedCrewIds }, active: true },
 		})
-		const history = ((doc.sendBackHistory as any[]) || []).concat([
+		const history = (
+			(doc.sendBackHistory as unknown as SendBackHistoryEntry[]) || []
+		).concat([
 			{
 				fromStatus: doc.status,
 				toStatus: "SIGNED",
@@ -262,7 +282,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 					},
 				}),
 			),
-		] as any)
+		])
 	}
 
 	if (intent === "edit_aviso") {
@@ -282,7 +302,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 					diffJson: { avisoNumber },
 				},
 			}),
-		] as any)
+		])
 		throw redirect(`/docs/${params.id}`)
 	}
 
@@ -296,11 +316,11 @@ export default function ReviewDoc({
 	const { doc, serviceCodes, photos, supervisor } = loaderData
 	const { t } = useTranslation()
 	const error = actionData as
-		| { errorKey?: any; errorMessage?: string }
+		| { errorKey?: string; errorMessage?: string }
 		| undefined
-	const estimated = (doc.estimatedMaterials as any[]) || []
-	const taken = (doc.materialsTaken as any[]) || []
-	const used = (doc.materialsUsed as any[]) || []
+	const estimated = (doc.estimatedMaterials as unknown as MaterialLine[]) || []
+	const taken = (doc.materialsTaken as unknown as MaterialLine[]) || []
+	const used = (doc.materialsUsed as unknown as MaterialLine[]) || []
 	const isApproved = [
 		"SUPERVISOR_APPROVED",
 		"CLARO_UPLOADED",
@@ -308,10 +328,8 @@ export default function ReviewDoc({
 	].includes(doc.status)
 
 	// Build Claro submission helper data
-	const codeMap = Object.fromEntries(
-		(serviceCodes as any[]).map((c: any) => [c.id, c]),
-	)
-	const takenItems = taken.map((t: any) => {
+	const codeMap = Object.fromEntries(serviceCodes.map((c) => [c.id, c]))
+	const takenItems = taken.map((t) => {
 		const code = codeMap[t.serviceCodeId]
 		return {
 			claroCode: code?.claroCode,
@@ -330,9 +348,7 @@ export default function ReviewDoc({
 	return (
 		<div className="space-y-5">
 			<h1 className="text-xl font-semibold">{t("docs_review.title")}</h1>
-			<p className="font-mono text-sm text-slate-500">
-				{(doc as any).controlNumber}
-			</p>
+			<p className="font-mono text-sm text-slate-500">{doc.controlNumber}</p>
 
 			{/* Materials variance */}
 			<div className="grid grid-cols-3 gap-3 text-sm">
@@ -341,7 +357,7 @@ export default function ReviewDoc({
 						{t("docs_review.estimated")}
 					</p>
 					<MaterialLineItems
-						serviceCodes={serviceCodes as any}
+						serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
 						initialItems={estimated}
 						readOnly
 					/>
@@ -351,7 +367,7 @@ export default function ReviewDoc({
 						{t("docs_review.taken")}
 					</p>
 					<MaterialLineItems
-						serviceCodes={serviceCodes as any}
+						serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
 						initialItems={taken}
 						readOnly
 					/>
@@ -359,7 +375,7 @@ export default function ReviewDoc({
 				<div className="bg-white border rounded-lg p-3">
 					<p className="text-xs text-slate-500 mb-1">{t("docs_review.used")}</p>
 					<MaterialLineItems
-						serviceCodes={serviceCodes as any}
+						serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
 						initialItems={used}
 						readOnly
 					/>
@@ -372,22 +388,22 @@ export default function ReviewDoc({
 					<span className="text-slate-500">
 						{t("docs_review.estimated_address")}:
 					</span>{" "}
-					{(doc as any).jobAddressEstimated}
+					{doc.jobAddressEstimated}
 				</p>
-				{(doc as any).jobAddressActual && (
+				{doc.jobAddressActual && (
 					<p>
 						<span className="text-slate-500">
 							{t("docs_review.actual_address")}:
 						</span>{" "}
-						{(doc as any).jobAddressActual}
+						{doc.jobAddressActual}
 					</p>
 				)}
-				{(doc as any).fieldNotes && (
+				{doc.fieldNotes && (
 					<p>
 						<span className="text-slate-500">
 							{t("docs_review.field_notes")}:
 						</span>{" "}
-						{(doc as any).fieldNotes}
+						{doc.fieldNotes}
 					</p>
 				)}
 			</div>
@@ -476,12 +492,12 @@ export default function ReviewDoc({
 						{photoItems.map((p) => (
 							<a
 								key={p.id}
-								href={`/files/photos/${(doc as any).id}/${p.basename}`}
+								href={`/files/photos/${doc.id}/${p.basename}`}
 								target="_blank"
 								rel="noreferrer"
 							>
 								<img
-									src={`/files/photos/${(doc as any).id}/${p.basename}`}
+									src={`/files/photos/${doc.id}/${p.basename}`}
 									alt={t("docs_review.job_site_alt")}
 									className="w-full h-24 object-cover rounded border"
 								/>
@@ -504,15 +520,15 @@ export default function ReviewDoc({
 						<span className="font-medium">
 							{t("docs_review.aviso_number")}:
 						</span>{" "}
-						{(doc as any).avisoNumber ?? t("docs_review.aviso_number_missing")}
+						{doc.avisoNumber ?? t("docs_review.aviso_number_missing")}
 					</p>
 					<p>
 						<span className="font-medium">{t("docs_review.job_type")}:</span>{" "}
-						{(doc as any).jobType}
+						{doc.jobType}
 					</p>
 					<p>
 						<span className="font-medium">{t("docs_review.address")}:</span>{" "}
-						{(doc as any).jobAddressActual ?? (doc as any).jobAddressEstimated}
+						{doc.jobAddressActual ?? doc.jobAddressEstimated}
 					</p>
 					<p>
 						<span className="font-medium">{t("docs_review.supervisor")}:</span>{" "}
@@ -534,7 +550,7 @@ export default function ReviewDoc({
 							</tr>
 						</thead>
 						<tbody>
-							{takenItems.map((item: any) => (
+							{takenItems.map((item) => (
 								<tr
 									key={item.claroCode ?? item.name}
 									className="border-b border-blue-100"
@@ -565,7 +581,7 @@ export default function ReviewDoc({
 						<Input
 							id="avisoNumber"
 							name="avisoNumber"
-							defaultValue={(doc as any).avisoNumber || ""}
+							defaultValue={doc.avisoNumber || ""}
 						/>
 					</div>
 					<div>
@@ -619,7 +635,9 @@ export default function ReviewDoc({
 						required
 					/>
 					{error?.errorKey && (
-						<p className="text-sm text-red-600">{t(error.errorKey)}</p>
+						<p className="text-sm text-red-600">
+							{t(error.errorKey as ParseKeys)}
+						</p>
 					)}
 					{error?.errorMessage && (
 						<p className="text-sm text-red-600">{error.errorMessage}</p>
@@ -648,7 +666,9 @@ export default function ReviewDoc({
 						</Button>
 					</div>
 					{error?.errorKey && (
-						<p className="text-sm text-red-600">{t(error.errorKey)}</p>
+						<p className="text-sm text-red-600">
+							{t(error.errorKey as ParseKeys)}
+						</p>
 					)}
 				</Form>
 			)}

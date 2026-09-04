@@ -149,7 +149,7 @@ export default function AdminCrews({
 						</Label>
 					</div>
 					<Button type="submit">{t("admin_crews.add_submit")}</Button>
-					{error && <p className="text-sm text-red-600">{t(error as any)}</p>}
+					{error && <p className="text-sm text-red-600">{t(error as never)}</p>}
 				</Form>
 			</section>
 

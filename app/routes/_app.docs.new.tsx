@@ -1,3 +1,4 @@
+import type { ParseKeys } from "i18next"
 import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
@@ -135,6 +136,7 @@ export default function NewDoc({
 	actionData,
 }: Route.ComponentProps) {
 	const { serviceCodes, brigades } = loaderData
+	const error = actionData as { errorKey?: ParseKeys } | undefined
 	const { t } = useTranslation()
 	return (
 		<div className="space-y-5">
@@ -178,7 +180,7 @@ export default function NewDoc({
 				<div>
 					<Label>{t("docs_new.estimated_materials_label")}</Label>
 					<div className="mt-1">
-						<MaterialLineItems serviceCodes={serviceCodes as any} />
+						<MaterialLineItems serviceCodes={serviceCodes} />
 					</div>
 				</div>
 				<div>
@@ -202,10 +204,8 @@ export default function NewDoc({
 						))}
 					</select>
 				</div>
-				{(actionData as any)?.errorKey && (
-					<p className="text-sm text-red-600">
-						{t((actionData as any).errorKey)}
-					</p>
+				{error?.errorKey && (
+					<p className="text-sm text-red-600">{t(error.errorKey)}</p>
 				)}
 				<Button type="submit" className="w-full">
 					{t("docs_new.submit")}

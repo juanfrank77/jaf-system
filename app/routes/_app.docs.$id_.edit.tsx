@@ -170,7 +170,7 @@ export default function EditDoc({ loaderData }: Route.ComponentProps) {
 					<Input
 						id="jobType"
 						name="jobType"
-						defaultValue={(doc as any).jobType}
+						defaultValue={doc.jobType}
 						required
 					/>
 				</div>
@@ -181,7 +181,7 @@ export default function EditDoc({ loaderData }: Route.ComponentProps) {
 					<Input
 						id="jobAddressEstimated"
 						name="jobAddressEstimated"
-						defaultValue={(doc as any).jobAddressEstimated}
+						defaultValue={doc.jobAddressEstimated}
 						required
 					/>
 				</div>
@@ -193,7 +193,7 @@ export default function EditDoc({ loaderData }: Route.ComponentProps) {
 						id="jobDescription"
 						name="jobDescription"
 						rows={2}
-						defaultValue={(doc as any).jobDescription ?? ""}
+						defaultValue={doc.jobDescription ?? ""}
 					/>
 				</div>
 				<div>
@@ -203,7 +203,7 @@ export default function EditDoc({ loaderData }: Route.ComponentProps) {
 					<Input
 						id="avisoNumber"
 						name="avisoNumber"
-						defaultValue={(doc as any).avisoNumber || ""}
+						defaultValue={doc.avisoNumber ?? ""}
 						placeholder="10333185"
 					/>
 				</div>
@@ -217,8 +217,13 @@ export default function EditDoc({ loaderData }: Route.ComponentProps) {
 					<Label>{t("docs_new.estimated_materials_label")}</Label>
 					<div className="mt-1">
 						<MaterialLineItems
-							serviceCodes={serviceCodes as any}
-							initialItems={(doc as any).estimatedMaterials as any[]}
+							serviceCodes={serviceCodes}
+							initialItems={
+								(doc.estimatedMaterials as {
+									serviceCodeId: string
+									qty: number
+								}[]) ?? []
+							}
 						/>
 					</div>
 				</div>

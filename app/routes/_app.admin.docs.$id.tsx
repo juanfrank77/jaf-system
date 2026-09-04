@@ -1,3 +1,4 @@
+import type { ComponentProps } from "react"
 import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
@@ -27,6 +28,29 @@ interface UserInfo {
 	role: string
 }
 
+type MaterialLine = { serviceCodeId: string; qty: number }
+
+type SendBackEntry = {
+	createdAt: string
+	byUserId: string
+	fromStatus: string
+	toStatus: string
+	note: string
+}
+
+type MaterialServiceCode = ComponentProps<
+	typeof MaterialLineItems
+>["serviceCodes"][number]
+
+type AuditDiff = {
+	status?: { before?: string; after?: string }
+	note?: string
+	materialsChanged?: boolean
+	avisoNumber?: string
+	to?: string[]
+	reason?: string
+}
+
 export async function loader({ request, params }: Route.LoaderArgs) {
 	await requireRole(request, ["ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
@@ -43,7 +67,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		},
 	})
 
-	const sendBack = (doc.sendBackHistory as any[] | null) ?? []
+	const sendBack =
+		(doc.sendBackHistory as unknown as SendBackEntry[] | null) ?? []
 	const knownIds = [
 		doc.supervisorId,
 		doc.preppedById,
@@ -76,7 +101,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	}
 }
 
-function actionSummary(action: string, diffJson: any): string {
+function actionSummary(action: string, diffJson: AuditDiff): string {
 	if (action === "STATUS_CHANGED")
 		return `Status: ${diffJson.status?.before ?? "?"} → ${diffJson.status?.after ?? "?"}`
 	if (action === "SEND_BACK") return `Sent back — note: ${diffJson.note ?? ""}`
@@ -95,9 +120,9 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 	const { doc, sendBack, peopleMap, serviceCodes } = loaderData
 	const t = useTranslation().t
 	const name = (id?: string | null) => (id ? (peopleMap[id]?.name ?? id) : "—")
-	const estimated = (doc.estimatedMaterials as any[]) || []
-	const taken = (doc.materialsTaken as any[]) || []
-	const used = (doc.materialsUsed as any[]) || []
+	const estimated = (doc.estimatedMaterials as unknown as MaterialLine[]) || []
+	const taken = (doc.materialsTaken as unknown as MaterialLine[]) || []
+	const used = (doc.materialsUsed as unknown as MaterialLine[]) || []
 
 	return (
 		<div className="space-y-6">
@@ -180,7 +205,7 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 							{a.action !== "STATUS_CHANGED" && (
 								<span className="text-sm text-slate-700">
 									{" — "}
-									{actionSummary(a.action, a.diffJson)}
+									{actionSummary(a.action, a.diffJson as AuditDiff)}
 								</span>
 							)}
 						</li>
@@ -204,7 +229,7 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 							</tr>
 						</thead>
 						<tbody>
-							{sendBack.map((s: any) => (
+							{sendBack.map((s) => (
 								<tr
 									key={`${s.createdAt}-${s.byUserId}`}
 									className="border-b last:border-0"
@@ -264,13 +289,15 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 						{doc.advanceAmount ? (
 							<div>
 								Advance: {formatMoney(toNumberPrice(doc.advanceAmount))}{" "}
-								{new Date(doc.advanceReceivedAt!).toLocaleDateString()}
+								{doc.advanceReceivedAt &&
+									new Date(doc.advanceReceivedAt).toLocaleDateString()}
 							</div>
 						) : null}
 						{doc.finalPaymentAmount ? (
 							<div>
 								Final: {formatMoney(toNumberPrice(doc.finalPaymentAmount))}{" "}
-								{new Date(doc.finalPaymentReceivedAt!).toLocaleDateString()}
+								{doc.finalPaymentReceivedAt &&
+									new Date(doc.finalPaymentReceivedAt).toLocaleDateString()}
 							</div>
 						) : null}
 					</div>
@@ -288,7 +315,7 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 								{t("docs_review.estimated")}
 							</p>
 							<MaterialLineItems
-								serviceCodes={serviceCodes as any}
+								serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
 								initialItems={estimated}
 								readOnly
 							/>
@@ -298,7 +325,7 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 						<>
 							<p className="text-xs text-slate-500">{t("docs_review.taken")}</p>
 							<MaterialLineItems
-								serviceCodes={serviceCodes as any}
+								serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
 								initialItems={taken}
 								readOnly
 							/>
@@ -308,7 +335,7 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 						<>
 							<p className="text-xs text-slate-500">{t("docs_review.used")}</p>
 							<MaterialLineItems
-								serviceCodes={serviceCodes as any}
+								serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
 								initialItems={used}
 								readOnly
 							/>

@@ -1,3 +1,4 @@
+import type { ParseKeys } from "i18next"
 import { useTranslation } from "react-i18next"
 import { data, Form, Link } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
@@ -23,9 +24,16 @@ import {
 import { requireRole } from "~/lib/permissions.server"
 import { getIvuRate, getLcPbccAdvanceRate } from "~/lib/system-settings.server"
 import { cn, formatMoney, toNumberPrice } from "~/lib/utils"
-import type { Route } from "./+types/_app.comptroller.$id"
 
-export const meta: Route.MetaFunction = ({ data }) => [
+// Route types are local: this screen is env-gated off, so react-router
+// typegen does not emit ./+types/_app.comptroller.$id.
+type ComptrollerLoaderArgs = { request: Request; params: { id: string } }
+
+export const meta = ({
+	data,
+}: {
+	data?: { doc: { controlNumber: string } } | undefined
+}) => [
 	{
 		title: data
 			? `${data.doc.controlNumber} — Comptroller — JAF Ops`
@@ -39,7 +47,7 @@ type AssignmentHistoryEntry = {
 	assignedAt?: string
 }
 
-export async function loader({ request, params }: Route.LoaderArgs) {
+export async function loader({ request, params }: ComptrollerLoaderArgs) {
 	if (!isComptrollerEnabled()) throw data(null, { status: 404 })
 	const { user } = await requireRole(request, ["COMPTROLLER", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
@@ -138,7 +146,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	}
 }
 
-export async function action({ request, params }: Route.ActionArgs) {
+export async function action({ request, params }: ComptrollerLoaderArgs) {
 	if (!isComptrollerEnabled()) throw data(null, { status: 404 })
 	const { user } = await requireRole(request, ["COMPTROLLER", "ADMIN"])
 	const form = await request.formData()
@@ -329,7 +337,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 export default function ComptrollerDetail({
 	loaderData,
 	actionData,
-}: Route.ComponentProps) {
+}: {
+	loaderData: Awaited<ReturnType<typeof loader>>
+	actionData: unknown
+}) {
 	const {
 		doc,
 		amount,
@@ -383,10 +394,12 @@ export default function ComptrollerDetail({
 			</div>
 
 			{error?.errorKey && (
-				<p className="text-sm text-red-600">{t(error.errorKey as any)}</p>
+				<p className="text-sm text-red-600">{t(error.errorKey as ParseKeys)}</p>
 			)}
 			{success?.successKey && (
-				<p className="text-sm text-green-700">{t(success.successKey as any)}</p>
+				<p className="text-sm text-green-700">
+					{t(success.successKey as ParseKeys)}
+				</p>
 			)}
 
 			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -769,6 +782,6 @@ export default function ComptrollerDetail({
 	)
 }
 
-export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
+export function ErrorBoundary({ error }: { error: unknown }) {
 	return <RouteErrorBoundary error={error} />
 }

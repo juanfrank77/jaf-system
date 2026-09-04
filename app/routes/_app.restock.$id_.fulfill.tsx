@@ -18,6 +18,9 @@ import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
 import { useEditableLines } from "~/lib/use-editable-lines"
 import { toNumberPrice } from "~/lib/utils"
+import type { RestockItem } from "~/lib/van-inventory"
+import type { Prisma } from "../../generated/prisma/client"
+import type { Route } from "./+types/_app.restock.$id_.fulfill"
 
 interface FulfillLine {
 	_key: string
@@ -40,7 +43,7 @@ export const meta = ({ data }: { data?: { request: { id: string } } }) => [
 	},
 ]
 
-export async function loader({ request, params }: any) {
+export async function loader({ request, params }: Route.LoaderArgs) {
 	await requireRole(request, ["WAREHOUSE", "ADMIN"])
 	const restockRequest = await db.vanRestockRequest.findUniqueOrThrow({
 		where: { id: params.id },
@@ -52,7 +55,7 @@ export async function loader({ request, params }: any) {
 	const serviceCodes = await db.serviceCode.findMany({
 		where: { active: true },
 	})
-	const items = (restockRequest.items as any[]) || []
+	const items = (restockRequest.items as RestockItem[]) || []
 	return {
 		request: restockRequest,
 		serviceCodes: serviceCodes.map((c) => ({
@@ -63,7 +66,7 @@ export async function loader({ request, params }: any) {
 	}
 }
 
-export async function action({ request, params }: any) {
+export async function action({ request, params }: Route.ActionArgs) {
 	await requireRole(request, ["WAREHOUSE", "ADMIN"])
 	const restockRequest = await db.vanRestockRequest.findUniqueOrThrow({
 		where: { id: params.id },
@@ -106,7 +109,7 @@ export async function action({ request, params }: any) {
 		await db.vanRestockRequest.update({
 			where: { id: params.id },
 			data: {
-				items: fulfillItems as any,
+				items: fulfillItems as unknown as Prisma.InputJsonValue,
 			},
 		})
 		return { missingFlagged: true }
@@ -116,7 +119,7 @@ export async function action({ request, params }: any) {
 		where: { id: params.id },
 		data: {
 			status: "READY",
-			items: fulfillItems as any,
+			items: fulfillItems as unknown as Prisma.InputJsonValue,
 		},
 	})
 
@@ -130,8 +133,15 @@ export async function action({ request, params }: any) {
 	throw redirect(`/dashboard`)
 }
 
-export default function FulfillRestock({ loaderData, actionData }: any) {
+export default function FulfillRestock({
+	loaderData,
+	actionData,
+}: Route.ComponentProps) {
 	const { request: restockRequest, serviceCodes, items } = loaderData
+	const { missingFlagged, errorKey } = (actionData ?? {}) as {
+		missingFlagged?: boolean
+		errorKey?: string
+	}
 	const { t } = useTranslation()
 
 	const {
@@ -141,7 +151,7 @@ export default function FulfillRestock({ loaderData, actionData }: any) {
 		update: updateLine,
 		serialized,
 	} = useEditableLines<FulfillLine>(() =>
-		items.map((m: any) => ({
+		items.map((m) => ({
 			_key: nextFulfillKey(),
 			serviceCodeId: m.serviceCodeId || "",
 			requestedQty: m.qty || 1,
@@ -175,7 +185,7 @@ export default function FulfillRestock({ loaderData, actionData }: any) {
 				{restockRequest.warehouse?.name ?? "Warehouse"}
 			</p>
 
-			{(actionData as any)?.missingFlagged && (
+			{missingFlagged && (
 				<div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
 					{t("restock_fulfill.missing_flagged_notice")}
 				</div>
@@ -184,18 +194,24 @@ export default function FulfillRestock({ loaderData, actionData }: any) {
 			<div className="space-y-3">
 				{lines.map((line, index) => {
 					const substitutionOptions = serviceCodes.filter(
-						(c: any) =>
+						(c) =>
 							c.id !== line.serviceCodeId &&
-							!lines.some(
-								(l: any, i: number) => i !== index && l.serviceCodeId === c.id,
-							),
+							!lines.some((l, i) => i !== index && l.serviceCodeId === c.id),
 					)
 
 					return (
 						<div key={line._key} className="border rounded-lg p-3 space-y-2">
 							<div className="flex items-center gap-2">
 								<MaterialLineItems
-									serviceCodes={serviceCodes as any}
+									serviceCodes={
+										serviceCodes as {
+											id: string
+											claroCode: string
+											name: string
+											unit: string
+											unitPrice: number
+										}[]
+									}
 									initialItems={[
 										{
 											serviceCodeId: line.serviceCodeId,
@@ -270,7 +286,7 @@ export default function FulfillRestock({ loaderData, actionData }: any) {
 											/>
 										</SelectTrigger>
 										<SelectContent>
-											{substitutionOptions.map((c: any) => (
+											{substitutionOptions.map((c) => (
 												<SelectItem key={c.id} value={c.id}>
 													{c.claroCode} — {c.name}
 												</SelectItem>
@@ -337,10 +353,8 @@ export default function FulfillRestock({ loaderData, actionData }: any) {
 				</Button>
 			</Form>
 
-			{(actionData as any)?.errorKey && (
-				<p className="text-sm text-red-600">
-					{t((actionData as any).errorKey)}
-				</p>
+			{errorKey && (
+				<p className="text-sm text-red-600">{t(errorKey as never)}</p>
 			)}
 		</div>
 	)

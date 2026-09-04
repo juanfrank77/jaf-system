@@ -2,7 +2,10 @@ import { useEffect } from "react"
 import { redirect } from "react-router"
 import { DashboardView } from "~/components/dashboard-view"
 import { RouteErrorBoundary } from "~/components/error-boundary"
-import { computeDashboardStats } from "~/lib/dashboard-stats"
+import {
+	computeDashboardStats,
+	type DashboardExplainer,
+} from "~/lib/dashboard-stats"
 import { db } from "~/lib/db.server"
 import { isComptrollerEnabled } from "~/lib/features.server"
 import { cacheJobs } from "~/lib/offline-store"
@@ -12,6 +15,16 @@ import { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.dashboard"
 
 export const meta: Route.MetaFunction = () => [{ title: "Dashboard — JAF Ops" }]
+
+type SendBackHistoryRow = {
+	id: string
+	controlNumber: string
+	status: DocStatus
+	jobType: string
+	jobAddressEstimated: string
+	createdAt: Date
+	sendBackHistory: unknown
+}
 
 function buildBaseWhere(role: Role, userId: string): Record<string, unknown> {
 	if (role === "SUPERVISOR") return { supervisorId: userId }
@@ -83,10 +96,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 			? docs
 			: docs.filter((d) => d.status !== "LC_REQUEST_GENERATED")
 
-	const { stats, alert, explainer } = computeDashboardStats(
-		user.role,
-		visibleDocs,
-	)
+	const { stats, alert } = computeDashboardStats(user.role, visibleDocs)
 
 	const pendingReviewDocs =
 		user.role === "SUPERVISOR"
@@ -108,9 +118,9 @@ export async function loader({ request }: Route.LoaderArgs) {
 				WHERE "supervisorId" = ${user.id}
 					AND status = 'SIGNED'
 					AND jsonb_array_length("sendBackHistory") > 0
-				ORDER BY "createdAt" DESC
-				LIMIT 50
-			`) as any[])
+			ORDER BY "createdAt" DESC
+			LIMIT 50
+		`) as SendBackHistoryRow[])
 			: []
 
 	const warehousePreppedDocs =
@@ -168,9 +178,9 @@ export async function loader({ request }: Route.LoaderArgs) {
 				WHERE "assignedCrewIds" @> ARRAY[${user.id}]::text[]
 					AND status = 'SIGNED'
 					AND ("sendBackHistory" IS NULL OR jsonb_array_length("sendBackHistory") = 0)
-				ORDER BY "createdAt" DESC
-				LIMIT 50
-			`) as any[])
+			ORDER BY "createdAt" DESC
+			LIMIT 50
+		`) as SendBackHistoryRow[])
 			: []
 
 	const crewSentBackDocs =
@@ -181,9 +191,9 @@ export async function loader({ request }: Route.LoaderArgs) {
 				WHERE "assignedCrewIds" @> ARRAY[${user.id}]::text[]
 					AND status = 'SIGNED'
 					AND jsonb_array_length("sendBackHistory") > 0
-				ORDER BY "createdAt" DESC
-				LIMIT 50
-			`) as any[])
+			ORDER BY "createdAt" DESC
+			LIMIT 50
+		`) as SendBackHistoryRow[])
 			: []
 
 	const crewSubmittedDocs =
@@ -272,8 +282,9 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 		crewSentBackDocs,
 		crewSubmittedDocs,
 		restockRequests,
-	} = loaderData as any
-	const explainer = (loaderData as any).explainer
+	} = loaderData
+	const explainer = (loaderData as { explainer?: DashboardExplainer })
+		.explainer as DashboardExplainer
 
 	useEffect(() => {
 		if (typeof window === "undefined") return
@@ -291,9 +302,9 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 				status: d.status,
 				jobType: d.jobType,
 				jobAddressEstimated: d.jobAddressEstimated,
-				assignedCrewIds: d.assignedCrewIds || [],
-				sendBackHistory: d.sendBackHistory,
-				avisoNumber: d.avisoNumber,
+				assignedCrewIds: "assignedCrewIds" in d ? d.assignedCrewIds : [],
+				sendBackHistory: "sendBackHistory" in d ? d.sendBackHistory : undefined,
+				avisoNumber: "avisoNumber" in d ? d.avisoNumber : null,
 				updatedAt: new Date().toISOString(),
 			})),
 		).catch(() => {})

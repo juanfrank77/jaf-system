@@ -1,4 +1,5 @@
-import { useState } from "react"
+import type { ParseKeys } from "i18next"
+import type { ComponentProps } from "react"
 import { Trans, useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
@@ -12,6 +13,8 @@ import { requireRole } from "~/lib/permissions.server"
 import { getActiveMaterialCodes } from "~/lib/service-codes.server"
 import { useEditableLines } from "~/lib/use-editable-lines"
 import { toNumberPrice } from "~/lib/utils"
+import type { Prisma } from "../../generated/prisma/client"
+import type { Route } from "./+types/_app.docs.$id_.returns"
 
 interface ReturnLine {
 	_key: string
@@ -20,6 +23,12 @@ interface ReturnLine {
 	returnedQty: number
 	notes: string
 }
+
+type MaterialLine = { serviceCodeId: string; qty: number }
+
+type MaterialServiceCode = ComponentProps<
+	typeof MaterialLineItems
+>["serviceCodes"][number]
 
 let _returnCounter = 0
 const nextReturnKey = () => `return-${(_returnCounter++).toString()}`
@@ -36,15 +45,15 @@ export const meta = ({
 	},
 ]
 
-export async function loader({ request, params }: any) {
-	const { user } = await requireRole(request, ["WAREHOUSE", "ADMIN"])
+export async function loader({ request, params }: Route.LoaderArgs) {
+	await requireRole(request, ["WAREHOUSE", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
 	if (!["SIGNED", "FIELD_UPDATED"].includes(doc.status))
 		throw redirect(`/docs/${params.id}`)
 	const serviceCodes = await getActiveMaterialCodes()
-	const taken = (doc.materialsTaken as any[]) || []
+	const taken = (doc.materialsTaken as unknown as MaterialLine[]) || []
 	const existingReturns = (doc.materialsReturned as ReturnLine[] | null) || null
 	const materialsUsed =
 		(doc.materialsUsed as { serviceCodeId: string; qty: number }[] | null) ||
@@ -61,7 +70,7 @@ export async function loader({ request, params }: any) {
 	}
 }
 
-export async function action({ request, params }: any) {
+export async function action({ request, params }: Route.ActionArgs) {
 	const { user } = await requireRole(request, ["WAREHOUSE", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
@@ -83,7 +92,7 @@ export async function action({ request, params }: any) {
 		return { errorKey: "docs_returns.errors.invalid_materials" }
 	}
 
-	const taken = (doc.materialsTaken as any[]) || []
+	const taken = (doc.materialsTaken as unknown as MaterialLine[]) || []
 	const takenMap = Object.fromEntries(
 		taken.map((t) => [t.serviceCodeId, t.qty]),
 	)
@@ -123,7 +132,10 @@ export async function action({ request, params }: any) {
 	await db.$transaction([
 		db.jafInvoice.update({
 			where: { id: params.id },
-			data: { materialsReturned: materialsReturned as any },
+			data: {
+				materialsReturned:
+					materialsReturned as unknown as Prisma.InputJsonValue,
+			},
 		}),
 		db.auditTrail.create({
 			data: {
@@ -131,21 +143,22 @@ export async function action({ request, params }: any) {
 				userId: user.id,
 				action: "RETURNS_LOGGED",
 				diffJson: {
-					materialsReturned: materialsReturned as any,
+					materialsReturned:
+						materialsReturned as unknown as Prisma.InputJsonValue,
 					returnNote,
 					shortage: materialsReturned.some(
 						(line) => line.returnedQty < line.takenQty,
 					),
-				} as any,
+				},
 			},
 		}),
-	] as any)
+	])
 
 	throw redirect(`/docs/${params.id}`)
 }
 
 function buildInitialReturnLines(
-	taken: any[],
+	taken: MaterialLine[],
 	existingReturns: ReturnLine[] | null,
 	materialsUsed: { serviceCodeId: string; qty: number }[] | null,
 ): ReturnLine[] {
@@ -163,7 +176,7 @@ function buildInitialReturnLines(
 		}))
 	}
 
-	return taken.map((m: any) => {
+	return taken.map((m) => {
 		const takenQty = m.qty || 0
 		const usedQty = usedMap[m.serviceCodeId] ?? 0
 		const returnedQty = Math.max(0, takenQty - usedQty)
@@ -182,9 +195,9 @@ export default function ReturnsDoc({
 	actionData,
 }: {
 	loaderData: {
-		doc: any
-		serviceCodes: any[]
-		taken: any[]
+		doc: { controlNumber: string }
+		serviceCodes: MaterialServiceCode[]
+		taken: MaterialLine[]
 		existingReturns: ReturnLine[] | null
 		materialsUsed: { serviceCodeId: string; qty: number }[] | null
 	}
@@ -219,24 +232,21 @@ export default function ReturnsDoc({
 			<p className="text-sm text-slate-600">
 				<Trans
 					i18nKey="docs_returns.confirm_message"
-					values={{ controlNumber: (doc as any).controlNumber }}
+					values={{ controlNumber: doc.controlNumber }}
 					components={{ strong: <strong /> }}
 				/>
 			</p>
 
 			<div className="space-y-3">
 				{lines.map((line, index) => {
-					const code = serviceCodes.find(
-						(c: any) => c.id === line.serviceCodeId,
-					)
+					const code = serviceCodes.find((c) => c.id === line.serviceCodeId)
 					const actualUsage = Math.max(
 						(line.takenQty || 0) - (line.returnedQty || 0),
 						0,
 					)
 					const usedQty = materialsUsed
-						? ((materialsUsed as any[]).find(
-								(u: any) => u.serviceCodeId === line.serviceCodeId,
-							)?.qty ?? null)
+						? (materialsUsed.find((u) => u.serviceCodeId === line.serviceCodeId)
+								?.qty ?? null)
 						: null
 					const expectedReturnQty =
 						usedQty != null ? Math.max(0, (line.takenQty || 0) - usedQty) : null
@@ -247,7 +257,7 @@ export default function ReturnsDoc({
 						<div key={line._key} className="border rounded-lg p-3 space-y-2">
 							<div className="flex items-center gap-2">
 								<MaterialLineItems
-									serviceCodes={serviceCodes as any}
+									serviceCodes={serviceCodes}
 									initialItems={[
 										{
 											serviceCodeId: line.serviceCodeId,
@@ -355,7 +365,7 @@ export default function ReturnsDoc({
 
 			{actionData?.errorKey && (
 				<p className="text-sm text-red-600">
-					{t(actionData.errorKey as any, actionData.errorParams)}
+					{t(actionData.errorKey as ParseKeys, actionData.errorParams)}
 				</p>
 			)}
 		</div>

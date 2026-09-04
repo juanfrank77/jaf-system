@@ -97,7 +97,6 @@ function createMockIdb() {
 					| ((this: IDBOpenDBRequest, ev: Event) => unknown)
 					| null,) {
 					queueMicrotask(() =>
-						// biome-ignore lint/suspicious/noExplicitAny: test mock
 						value?.call(request as any, new Event("success")),
 					)
 				},

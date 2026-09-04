@@ -1,5 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import type { ParseKeys } from "i18next"
 import { useRef, useState } from "react"
 import { Trans, useTranslation } from "react-i18next"
 import { data, Form, redirect, useSubmit } from "react-router"
@@ -30,9 +31,18 @@ import { requireRole } from "~/lib/permissions.server"
 import { getActiveMaterialCodes } from "~/lib/service-codes.server"
 import type { ServiceLine } from "~/lib/service-lines"
 import { toNumberPrice } from "~/lib/utils"
+import type { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id_.field"
 
 type MaterialLine = { serviceCodeId: string; qty: number }
+
+type SendBackEntry = {
+	createdAt: string
+	byUserId: string
+	fromStatus: string
+	toStatus: string
+	note: string
+}
 
 export const meta: Route.MetaFunction = ({ data }) => [
 	{
@@ -72,7 +82,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	if (user.role === "CREW" && !doc.assignedCrewIds.includes(user.id))
 		throw redirect(`/docs/${params.id}`)
 	const serviceCodes = await getActiveMaterialCodes()
-	const sendBackHistory = (doc.sendBackHistory as any[] | null) ?? []
+	const sendBackHistory =
+		(doc.sendBackHistory as unknown as SendBackEntry[] | null) ?? []
 	const latestSendBack =
 		sendBackHistory.length > 0
 			? sendBackHistory[sendBackHistory.length - 1]
@@ -145,12 +156,18 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const installedRaw = form.get("installedServiceLines") as string | null
 	if (installedRaw !== null) {
 		try {
-			installedServiceLines = JSON.parse(installedRaw)
+			const parsed = JSON.parse(installedRaw) as {
+				serviceCodeId?: unknown
+				claroCode?: unknown
+				accountCode?: unknown
+				name?: unknown
+				qty?: unknown
+			}[]
+			installedServiceLines = parsed
 				.filter(
-					(l: any) =>
-						l && typeof l.serviceCodeId === "string" && Number(l.qty) >= 0,
+					(l) => l && typeof l.serviceCodeId === "string" && Number(l.qty) >= 0,
 				)
-				.map((l: any) => ({
+				.map((l) => ({
 					serviceCodeId: String(l.serviceCodeId),
 					claroCode: String(l.claroCode ?? ""),
 					accountCode: l.accountCode ? String(l.accountCode) : null,
@@ -214,7 +231,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const startedAt = startedAtRaw ? new Date(startedAtRaw) : undefined
 	const endedAt = endedAtRaw ? new Date(endedAtRaw) : undefined
 
-	const ops: any[] = [
+	const ops: Prisma.PrismaPromise<unknown>[] = [
 		...photoPaths.map(({ path, tag }) =>
 			db.photo.create({
 				data: { docId: params.id, uploadedById: user.id, localPath: path, tag },
@@ -290,15 +307,19 @@ export default function FieldUpdate({
 	actionData,
 }: Route.ComponentProps) {
 	const { doc, serviceCodes, latestSendBack, sentByName } = loaderData
-	const taken = (doc.materialsTaken as any[]) || []
-	const used = (doc.materialsUsed as any[]) || []
-	const estimated = (doc.estimatedMaterials as any[]) || []
+	const taken = (doc.materialsTaken as MaterialLine[] | null) ?? []
+	const used = (doc.materialsUsed as MaterialLine[] | null) ?? []
+	const estimated = (doc.estimatedMaterials as MaterialLine[] | null) ?? []
 	const ordered = (doc.serviceLines as ServiceLine[] | null) ?? []
 	const corrections =
 		(doc.addressCorrections as AddressCorrection[] | null) || []
 	const { t } = useTranslation()
 	const error = actionData as
-		| { errorKey?: any; errorParams?: any; errorMessage?: string }
+		| {
+				errorKey?: ParseKeys
+				errorParams?: Record<string, string>
+				errorMessage?: string
+		  }
 		| undefined
 	const online = useOnline()
 	const submit = useSubmit()
@@ -431,9 +452,7 @@ export default function FieldUpdate({
 			)}
 
 			<h1 className="text-xl font-semibold">{t("docs_field.title")}</h1>
-			<p className="text-sm font-mono text-slate-500">
-				{(doc as any).controlNumber}
-			</p>
+			<p className="text-sm font-mono text-slate-500">{doc.controlNumber}</p>
 
 			{corrections.length > 0 && (
 				<div className="bg-slate-50 border rounded-lg p-3 text-sm space-y-2">
@@ -573,7 +592,7 @@ export default function FieldUpdate({
 								{t("docs_field.taken_reference_label")}
 							</p>
 							<MaterialLineItems
-								serviceCodes={serviceCodes as any}
+								serviceCodes={serviceCodes}
 								initialItems={taken}
 								readOnly
 							/>
@@ -584,7 +603,7 @@ export default function FieldUpdate({
 							{t("docs_field.used_entry_label")}
 						</p>
 						<MaterialLineItems
-							serviceCodes={serviceCodes as any}
+							serviceCodes={serviceCodes}
 							initialItems={used.length > 0 ? used : taken}
 							name="materialsUsed"
 						/>

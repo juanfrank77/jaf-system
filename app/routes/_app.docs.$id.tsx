@@ -1,3 +1,5 @@
+import type { ParseKeys } from "i18next"
+import type { ComponentProps } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, Link, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
@@ -20,10 +22,30 @@ import {
 import { isEditableStatus, isTerminalStatus } from "~/lib/permissions"
 import { requireRole, requireSession } from "~/lib/permissions.server"
 import { toNumberPrice } from "~/lib/utils"
+import { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id"
 
+type MaterialLine = { serviceCodeId: string; qty: number }
+
+type CrewAssignmentEntry = {
+	userIds: string[]
+	assignedById: string
+	assignedAt: string
+}
+
+type PreppedMaterialLine = {
+	serviceCodeId: string
+	missing?: boolean
+	substitutedWith?: string
+	notes?: string
+	_key?: string
+}
+
+type MaterialServiceCode = ComponentProps<
+	typeof MaterialLineItems
+>["serviceCodes"][number]
+
 let _missingCounter = 0
-const nextMissingKey = () => `missing-${(_missingCounter++).toString()}`
 
 export const meta: Route.MetaFunction = ({ data }) => [
 	{ title: data ? `${data.doc.controlNumber} — JAF Ops` : "JAF Ops" },
@@ -137,10 +159,12 @@ export async function action({ request, params }: Route.ActionArgs) {
 		const newCrew = await db.user.findUnique({
 			where: { id: newCrewId },
 		})
-		if (!newCrew || newCrew.role !== "CREW")
+		if (newCrew?.role !== "CREW")
 			return { errorKey: "docs_view.errors.reassign_invalid" }
 		if (isTerminalStatus(doc.status)) throw redirect(`/docs/${params.id}`)
-		const history = ((doc.crewAssignmentHistory as any[]) || []).concat([
+		const history = (
+			(doc.crewAssignmentHistory as unknown as CrewAssignmentEntry[]) || []
+		).concat([
 			{
 				userIds: [newCrewId],
 				assignedById: user.id,
@@ -173,7 +197,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 					message: `You have been reassigned to job ${doc.controlNumber}.`,
 				},
 			}),
-		] as any)
+		])
 		throw redirect(`/docs/${params.id}`)
 	}
 
@@ -185,7 +209,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 				where: { id: params.id },
 				data: {
 					prepChangedSincePrep: false,
-					preppedMaterials: (doc.preppedMaterials as any) || null,
+					preppedMaterials:
+						(doc.preppedMaterials as unknown as Prisma.InputJsonValue) ??
+						Prisma.DbNull,
 				},
 			}),
 			db.auditTrail.create({
@@ -196,7 +222,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 					diffJson: { note },
 				},
 			}),
-		] as any)
+		])
 		throw redirect(`/docs/${params.id}`)
 	}
 
@@ -216,7 +242,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 					diffJson: { avisoNumber },
 				},
 			}),
-		] as any)
+		])
 		throw redirect(`/docs/${params.id}`)
 	}
 
@@ -224,7 +250,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 }
 
 function nextActionHref(
-	doc: any,
+	doc: Route.ComponentProps["loaderData"]["doc"],
 	userRole: string,
 	userId: string,
 ): string | null {
@@ -286,13 +312,13 @@ export default function DocView({
 		auditTrail,
 	} = loaderData
 	const error = actionData as
-		| { errorKey?: any; errorMessage?: string }
+		| { errorKey?: string; errorMessage?: string }
 		| undefined
 	const { t } = useTranslation()
 	const nextHref = nextActionHref(doc, user.role, user.id)
-	const estimated = (doc.estimatedMaterials as any[]) || []
-	const taken = (doc.materialsTaken as any[]) || []
-	const used = (doc.materialsUsed as any[]) || []
+	const estimated = (doc.estimatedMaterials as unknown as MaterialLine[]) || []
+	const taken = (doc.materialsTaken as unknown as MaterialLine[]) || []
+	const used = (doc.materialsUsed as unknown as MaterialLine[]) || []
 	const corrections =
 		(doc.addressCorrections as AddressCorrection[] | null) || []
 	const gps = doc.gpsCoordinates as { lat: number; lng: number } | null
@@ -426,7 +452,7 @@ export default function DocView({
 						{t("docs_view.estimated_materials")}
 					</h2>
 					<MaterialLineItems
-						serviceCodes={serviceCodes as any}
+						serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
 						initialItems={estimated}
 						readOnly
 					/>
@@ -439,7 +465,7 @@ export default function DocView({
 						{t("docs_view.materials_taken")}
 					</h2>
 					<MaterialLineItems
-						serviceCodes={serviceCodes as any}
+						serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
 						initialItems={taken}
 						readOnly
 					/>
@@ -459,7 +485,7 @@ export default function DocView({
 						{t("docs_view.materials_used")}
 					</h2>
 					<MaterialLineItems
-						serviceCodes={serviceCodes as any}
+						serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
 						initialItems={used}
 						readOnly
 					/>
@@ -498,7 +524,7 @@ export default function DocView({
 			{(user.role === "SUPERVISOR" || user.role === "ADMIN") &&
 				isEditableStatus(doc.status) && (
 					<Link
-						to={`/docs/${(doc as any).id}/edit`}
+						to={`/docs/${doc.id}/edit`}
 						className={buttonVariants({
 							variant: "outline",
 							className: "w-full",
@@ -510,25 +536,26 @@ export default function DocView({
 
 			{(user.role === "SUPERVISOR" || user.role === "ADMIN") &&
 				doc.status === "CREATED" &&
-				(doc as any).prepChangedSincePrep && (
+				doc.prepChangedSincePrep && (
 					<div className="space-y-2 pt-2 border-t">
 						<p className="text-sm font-medium text-amber-700">
 							{t("docs_view.missing_materials_heading")}
 						</p>
 						{(() => {
-							const prepped = (doc.preppedMaterials as any[]) || []
+							const prepped =
+								(doc.preppedMaterials as unknown as PreppedMaterialLine[]) || []
 							const missingLines = prepped
-								.filter((l: any) => l.missing)
-								.map((line: any) => ({
+								.filter((l) => l.missing)
+								.map((line) => ({
 									...line,
 									_key: `missing-${(_missingCounter++).toString()}`,
 								}))
 							if (missingLines.length === 0) return null
 							return (
 								<div className="space-y-1">
-									{missingLines.map((line: any) => {
+									{missingLines.map((line) => {
 										const code = serviceCodes.find(
-											(c: any) => c.id === line.serviceCodeId,
+											(c) => c.id === line.serviceCodeId,
 										)
 										return (
 											<p key={line._key} className="text-xs text-slate-600">
@@ -556,16 +583,18 @@ export default function DocView({
 							</Button>
 						</Form>
 						{error?.errorKey && (
-							<p className="text-sm text-red-600">{t(error.errorKey)}</p>
+							<p className="text-sm text-red-600">
+								{t(error.errorKey as ParseKeys)}
+							</p>
 						)}
 					</div>
 				)}
 
 			{(user.role === "WAREHOUSE" || user.role === "ADMIN") &&
 				(doc.status === "SIGNED" || doc.status === "FIELD_UPDATED") &&
-				!(doc as any).materialsReturned && (
+				!doc.materialsReturned && (
 					<Link
-						to={`/docs/${(doc as any).id}/returns`}
+						to={`/docs/${doc.id}/returns`}
 						className={buttonVariants({
 							variant: "outline",
 							className: "w-full",
@@ -577,7 +606,7 @@ export default function DocView({
 
 			{user.role === "ADMIN" && (
 				<Link
-					to={`/admin/docs/${(doc as any).id}`}
+					to={`/admin/docs/${doc.id}`}
 					className={buttonVariants({
 						variant: "outline",
 						className: "w-full mt-2",
@@ -633,7 +662,9 @@ export default function DocView({
 								</Button>
 							</fieldset>
 							{error?.errorKey && (
-								<p className="text-sm text-red-600">{t(error.errorKey)}</p>
+								<p className="text-sm text-red-600">
+									{t(error.errorKey as ParseKeys)}
+								</p>
 							)}
 						</Form>
 					</div>
@@ -643,7 +674,7 @@ export default function DocView({
 				user.role === "FINANCE" ||
 				user.role === "ADMIN") && (
 				<a
-					href={`/docs/${(doc as any).id}/audit-package`}
+					href={`/docs/${doc.id}/audit-package`}
 					className={buttonVariants({
 						variant: "outline",
 						className: "mt-2 bg-primary text-primary-foreground",

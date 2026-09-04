@@ -1,4 +1,4 @@
-import { useState } from "react"
+import type { ParseKeys } from "i18next"
 import { Trans, useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
@@ -21,6 +21,7 @@ import { requireRole } from "~/lib/permissions.server"
 import { getActiveMaterialCodes } from "~/lib/service-codes.server"
 import { useEditableLines } from "~/lib/use-editable-lines"
 import { toNumberPrice } from "~/lib/utils"
+import type { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id_.prep"
 
 interface PrepLine {
@@ -88,7 +89,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 			db.jafInvoice.update({
 				where: { id: params.id },
 				data: {
-					preppedMaterials: preppedMaterials as any,
+					preppedMaterials:
+						preppedMaterials as unknown as Prisma.InputJsonValue,
 					prepChangedSincePrep: true,
 				},
 			}),
@@ -107,7 +109,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 					message: `Job ${doc.controlNumber} has missing materials flagged during prep. Please review.`,
 				},
 			}),
-		] as any)
+		])
 		return { missingFlagged: true }
 	}
 
@@ -118,7 +120,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 				status: "PREPPED",
 				preppedAt: new Date(),
 				preppedById: user.id,
-				preppedMaterials: preppedMaterials as any,
+				preppedMaterials: preppedMaterials as unknown as Prisma.InputJsonValue,
 				prepChangedSincePrep: false,
 			},
 		}),
@@ -139,7 +141,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 				},
 			}),
 		),
-	] as any)
+	])
 
 	throw redirect(`/docs/${params.id}`)
 }
@@ -149,8 +151,10 @@ export default function PrepDoc({
 	actionData,
 }: Route.ComponentProps) {
 	const { doc, serviceCodes } = loaderData
+	const error = actionData as { errorKey?: ParseKeys } | undefined
 	const { t } = useTranslation()
-	const estimated = (doc.estimatedMaterials as any[]) || []
+	const estimated =
+		(doc.estimatedMaterials as { serviceCodeId: string; qty: number }[]) || []
 
 	const {
 		items: lines,
@@ -189,12 +193,13 @@ export default function PrepDoc({
 			<p className="text-sm text-slate-600">
 				<Trans
 					i18nKey="docs_prep.confirm_message"
-					values={{ controlNumber: (doc as any).controlNumber }}
+					values={{ controlNumber: doc.controlNumber }}
 					components={{ strong: <strong /> }}
 				/>
 			</p>
 
-			{(actionData as any)?.missingFlagged && (
+			{(actionData as { missingFlagged?: boolean } | undefined)
+				?.missingFlagged && (
 				<div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
 					{t("docs_prep.missing_flagged_notice")}
 				</div>
@@ -213,7 +218,7 @@ export default function PrepDoc({
 						<div key={line._key} className="border rounded-lg p-3 space-y-2">
 							<div className="flex items-center gap-2">
 								<MaterialLineItems
-									serviceCodes={serviceCodes as any}
+									serviceCodes={serviceCodes}
 									initialItems={[
 										{
 											serviceCodeId: line.serviceCodeId,
@@ -348,10 +353,8 @@ export default function PrepDoc({
 				</Button>
 			</Form>
 
-			{(actionData as any)?.errorKey && (
-				<p className="text-sm text-red-600">
-					{t((actionData as any).errorKey)}
-				</p>
+			{error?.errorKey && (
+				<p className="text-sm text-red-600">{t(error.errorKey)}</p>
 			)}
 		</div>
 	)

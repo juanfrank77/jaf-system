@@ -112,7 +112,9 @@ export default function AdjustStock({
 		<div className="space-y-5">
 			<h1 className="text-xl font-semibold">{t("installer_adjust.title")}</h1>
 
-			{errorKey && <p className="text-sm text-red-600">{t(errorKey as any)}</p>}
+			{errorKey && (
+				<p className="text-sm text-red-600">{t(errorKey as never)}</p>
+			)}
 
 			<Form method="post" className="space-y-4">
 				<div>

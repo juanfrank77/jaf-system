@@ -1,3 +1,5 @@
+import type { ParseKeys } from "i18next"
+import type { ComponentProps } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
@@ -29,6 +31,16 @@ export const meta: Route.MetaFunction = ({ data }) => [
 			: "JAF Ops",
 	},
 ]
+
+type MaterialServiceCode = ComponentProps<
+	typeof MaterialLineItems
+>["serviceCodes"][number]
+
+type SendBackNote = {
+	note: string
+	byUserId: string
+	createdAt: string
+}
 
 export async function loader({ request, params }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])
@@ -63,7 +75,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		tolerance,
 		missingAviso: isMissingAviso(doc),
 		missingClaroPdf: isMissingClaroPdf(doc),
-		sendBackNotes: (doc.financeSendBackNotes as any[]) || [],
+		sendBackNotes: (doc.financeSendBackNotes as SendBackNote[]) || [],
 	}
 }
 
@@ -152,13 +164,15 @@ export async function action({ request, params }: Route.ActionArgs) {
 	if (intent === "send_back") {
 		const note = (form.get("note") as string | null)?.trim() || ""
 		if (!note) return { errorKey: "finance_verify.errors.note_required" }
-		const history = ((doc.financeSendBackNotes as any[]) || []).concat([
-			{
-				note,
-				byUserId: user.id,
-				createdAt: new Date().toISOString(),
-			},
-		])
+		const history = ((doc.financeSendBackNotes as SendBackNote[]) || []).concat(
+			[
+				{
+					note,
+					byUserId: user.id,
+					createdAt: new Date().toISOString(),
+				},
+			],
+		)
 		await db.$transaction([
 			db.jafInvoice.update({
 				where: { id: params.id },
@@ -215,15 +229,17 @@ export default function FinanceVerify({
 	const { t } = useTranslation()
 	const error = actionData as
 		| {
-				errorKey?: any
+				errorKey?: string
 				avisoAmount?: string
 				invoiceTotal?: number
 				difference?: number
 				tolerance?: number
 		  }
 		| undefined
-	const used = (doc.materialsUsed as any[]) || []
-	const taken = (doc.materialsTaken as any[]) || []
+	const used =
+		(doc.materialsUsed as { serviceCodeId: string; qty: number }[]) || []
+	const taken =
+		(doc.materialsTaken as { serviceCodeId: string; qty: number }[]) || []
 	const source = used.length > 0 ? used : taken
 	const claroPdfUrl = doc.claroPdfPath
 		? `/files/claro-pdfs/${doc.id}-claro.pdf`
@@ -343,7 +359,7 @@ export default function FinanceVerify({
 						</p>
 					</div>
 					<MaterialLineItems
-						serviceCodes={serviceCodes as any}
+						serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
 						initialItems={source}
 						readOnly
 					/>
@@ -372,7 +388,7 @@ export default function FinanceVerify({
 					<h3 className="text-sm font-medium text-amber-900">
 						{t("finance_verify.previous_send_backs")}
 					</h3>
-					{sendBackNotes.map((note: any) => (
+					{sendBackNotes.map((note) => (
 						<p
 							key={`${note.createdAt}-${note.note}`}
 							className="text-sm text-amber-800"
@@ -434,7 +450,7 @@ export default function FinanceVerify({
 						{error?.errorKey &&
 							error.errorKey !== "finance_verify.errors.amount_mismatch" && (
 								<p className="text-sm text-red-600">
-									{t(error.errorKey as any)}
+									{t(error.errorKey as ParseKeys)}
 								</p>
 							)}
 					</Form>

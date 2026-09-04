@@ -10,12 +10,11 @@ import { invoiceTotalUsed } from "~/lib/finance-pipeline.server"
 import { requireRole } from "~/lib/permissions.server"
 import { getIvuRate, getLcPbccAdvanceRate } from "~/lib/system-settings.server"
 import { cn, formatMoney, toNumberPrice } from "~/lib/utils"
-import type { DocStatus } from "../../generated/prisma/client"
-import type { Route } from "./+types/_app.comptroller"
+import type { DocStatus, JafInvoice } from "../../generated/prisma/client"
 
-export const meta: Route.MetaFunction = () => [
-	{ title: "Comptroller — JAF Ops" },
-]
+// Route types are local: this screen is env-gated off, so react-router
+// typegen does not emit ./+types/_app.comptroller.
+export const meta = () => [{ title: "Comptroller — JAF Ops" }]
 
 type JobRow = {
 	id: string
@@ -49,7 +48,7 @@ type CrewToPayRow = JobRow & {
 	crewNames: string[]
 }
 
-export async function loader({ request }: Route.LoaderArgs) {
+export async function loader({ request }: { request: Request }) {
 	if (!isComptrollerEnabled()) throw data(null, { status: 404 })
 	const { user } = await requireRole(request, ["COMPTROLLER", "ADMIN"])
 
@@ -171,7 +170,17 @@ export async function loader({ request }: Route.LoaderArgs) {
 			: []
 	const crewNameMap = new Map(crewUsers.map((u) => [u.id, u.name]))
 
-	const toRow = (raw: any): JobRow => ({
+	const toRow = (
+		raw: Pick<
+			JafInvoice,
+			| "id"
+			| "controlNumber"
+			| "jobType"
+			| "jobAddressEstimated"
+			| "materialsUsed"
+			| "materialsTaken"
+		>,
+	): JobRow => ({
 		id: raw.id,
 		controlNumber: raw.controlNumber,
 		jobType: raw.jobType,
@@ -271,7 +280,9 @@ function Empty({ children }: { children: React.ReactNode }) {
 
 export default function ComptrollerDashboard({
 	loaderData,
-}: Route.ComponentProps) {
+}: {
+	loaderData: Awaited<ReturnType<typeof loader>>
+}) {
 	const {
 		incomingDocs,
 		awaitingAdvance,
@@ -538,6 +549,6 @@ export default function ComptrollerDashboard({
 	)
 }
 
-export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
+export function ErrorBoundary({ error }: { error: unknown }) {
 	return <RouteErrorBoundary error={error} />
 }

@@ -16,7 +16,10 @@ import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
 import { getActiveMaterialCodes } from "~/lib/service-codes.server"
 import { toNumberPrice } from "~/lib/utils"
-import { appendVanAssignmentHistory } from "~/lib/van-history"
+import {
+	appendVanAssignmentHistory,
+	type VanAssignmentEvent,
+} from "~/lib/van-history"
 import type { Route } from "./+types/_app.admin.vans"
 
 type StockLevel = {
@@ -87,7 +90,7 @@ export async function action({ request }: Route.ActionArgs) {
 				typeof installerId === "string" && installerId.trim()
 					? installerId
 					: null,
-			standardStockLevels: stockLevels as any,
+			standardStockLevels: stockLevels,
 			active,
 		}
 
@@ -120,7 +123,7 @@ export async function action({ request }: Route.ActionArgs) {
 			}
 			await db.van.update({
 				where: { id },
-				data: { ...dataPayload, standardStockLevels: mergedLevels as any },
+				data: { ...dataPayload, standardStockLevels: mergedLevels },
 			})
 		} else {
 			await db.van.create({ data: dataPayload })
@@ -229,7 +232,7 @@ export default function AdminVans({
 						</Label>
 					</div>
 					<Button type="submit">{t("admin_vans.add_submit")}</Button>
-					{error && <p className="text-sm text-red-600">{t(error as any)}</p>}
+					{error && <p className="text-sm text-red-600">{t(error as never)}</p>}
 				</Form>
 			</section>
 
@@ -306,7 +309,9 @@ export default function AdminVans({
 												installers={installers}
 												serviceCodes={serviceCodes}
 												history={
-													(van.vanAssignmentHistory as any[] | undefined) || []
+													(van.vanAssignmentHistory as
+														| VanAssignmentEvent[]
+														| undefined) || []
 												}
 											/>
 										</div>

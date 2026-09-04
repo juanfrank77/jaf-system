@@ -1,5 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import type { ParseKeys } from "i18next"
 import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
@@ -339,7 +340,9 @@ export default function FinancePo({
 						{t("finance_po.record_po")}
 					</Button>
 					{error?.errorKey && (
-						<p className="text-sm text-red-600">{t(error.errorKey as any)}</p>
+						<p className="text-sm text-red-600">
+							{t(error.errorKey as ParseKeys)}
+						</p>
 					)}
 					{error?.errorMessage && (
 						<p className="text-sm text-red-600">{error.errorMessage}</p>
@@ -360,7 +363,9 @@ export default function FinancePo({
 						<Button type="submit">{t("finance_po.generate_final_doc")}</Button>
 					</Form>
 					{error?.errorKey && (
-						<p className="text-sm text-red-600">{t(error.errorKey as any)}</p>
+						<p className="text-sm text-red-600">
+							{t(error.errorKey as ParseKeys)}
+						</p>
 					)}
 				</div>
 			)}

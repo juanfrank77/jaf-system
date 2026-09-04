@@ -14,6 +14,7 @@ import {
 } from "~/components/ui/select"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
+import type { Role } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.admin.users"
 
 type UserRow = {
@@ -95,7 +96,7 @@ export async function action({ request }: Route.ActionArgs) {
 				data: {
 					email: email.trim(),
 					name: name.trim(),
-					role: role as any,
+					role: role as Role,
 				},
 			})
 			await tx.account.create({
@@ -180,7 +181,7 @@ export async function action({ request }: Route.ActionArgs) {
 		}
 		await db.user.update({
 			where: { id },
-			data: { role: role as any },
+			data: { role: role as Role },
 		})
 		return redirect("/admin/users")
 	}
@@ -237,7 +238,7 @@ export default function AdminUsers({
 								<SelectContent>
 									{roles.map((r) => (
 										<SelectItem key={r.value} value={r.value}>
-											{t(r.labelKey as any)}
+											{t(r.labelKey as never)}
 										</SelectItem>
 									))}
 								</SelectContent>
@@ -257,7 +258,7 @@ export default function AdminUsers({
 						</div>
 					</div>
 					<Button type="submit">{t("admin_users.add_submit")}</Button>
-					{error && <p className="text-sm text-red-600">{t(error as any)}</p>}
+					{error && <p className="text-sm text-red-600">{t(error as never)}</p>}
 				</Form>
 			</section>
 
@@ -317,7 +318,7 @@ export default function AdminUsers({
 											<SelectContent>
 												{roles.map((r) => (
 													<SelectItem key={r.value} value={r.value}>
-														{t(r.labelKey as any)}
+														{t(r.labelKey as never)}
 													</SelectItem>
 												))}
 											</SelectContent>

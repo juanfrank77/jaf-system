@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { data, Form, redirect, useSubmit } from "react-router"
+import { data, Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
@@ -103,7 +103,7 @@ export async function action({ request }: Route.ActionArgs) {
 		const warehouse = await db.warehouse.findUnique({
 			where: { id: warehouseId },
 		})
-		if (!warehouse || !warehouse.active) {
+		if (!warehouse?.active) {
 			return data({ conflict: "WAREHOUSE_INACTIVE" }, { status: 409 })
 		}
 	}
@@ -192,7 +192,6 @@ export default function RequestRestock({
 			? (actionData.errorKey as string)
 			: null
 	const online = useOnline()
-	const submit = useSubmit()
 	const [queued, setQueued] = useState(false)
 
 	const [lines, setLines] = useState<
@@ -218,7 +217,9 @@ export default function RequestRestock({
 		<div className="space-y-5">
 			<h1 className="text-xl font-semibold">{t("installer_restock.title")}</h1>
 
-			{errorKey && <p className="text-sm text-red-600">{t(errorKey as any)}</p>}
+			{errorKey && (
+				<p className="text-sm text-red-600">{t(errorKey as never)}</p>
+			)}
 
 			{queued && (
 				<div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
@@ -246,7 +247,8 @@ export default function RequestRestock({
 						let items: { serviceCodeId: string; qty: number }[] = []
 						try {
 							items = JSON.parse(itemsRaw).filter(
-								(i: any) => i.serviceCodeId && i.qty > 0,
+								(i: { serviceCodeId: string; qty: number }) =>
+									i.serviceCodeId && i.qty > 0,
 							)
 						} catch {
 							// ignore, validation happens on sync

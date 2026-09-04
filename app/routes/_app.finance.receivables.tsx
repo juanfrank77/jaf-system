@@ -1,3 +1,4 @@
+import type { ParseKeys } from "i18next"
 import { useTranslation } from "react-i18next"
 import { Form, Link } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
@@ -329,7 +330,7 @@ export default function FinancePipeline({
 			</div>
 
 			{error?.errorKey && (
-				<p className="text-sm text-red-600">{t(error.errorKey as any)}</p>
+				<p className="text-sm text-red-600">{t(error.errorKey as ParseKeys)}</p>
 			)}
 
 			{/* Stage totals */}

@@ -153,7 +153,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 					},
 				},
 			}),
-		] as any)
+		])
 
 		return new Response(new Uint8Array(pdfBytes), {
 			headers: {
@@ -169,17 +169,16 @@ export async function action({ request, params }: Route.ActionArgs) {
 export default function LcView({ loaderData }: Route.ComponentProps) {
 	const { doc, serviceCodes, ivuRate } = loaderData
 	const { t } = useTranslation()
-	const used = (doc.materialsUsed as any[]) || []
+	const used =
+		(doc.materialsUsed as { serviceCodeId: string; qty: number }[]) || []
 	const claroPdfUrl = doc.claroPdfPath
-		? `/files/claro-pdfs/${(doc as any).id}-claro.pdf`
+		? `/files/claro-pdfs/${doc.id}-claro.pdf`
 		: null
 
 	return (
 		<div className="space-y-5">
 			<h1 className="text-xl font-semibold">{t("docs_lc.title")}</h1>
-			<p className="font-mono text-sm text-slate-500">
-				{(doc as any).controlNumber}
-			</p>
+			<p className="font-mono text-sm text-slate-500">{doc.controlNumber}</p>
 			<p className="text-xs text-slate-400">
 				{t("docs_lc.ivu_rate", { rate: (ivuRate * 100).toFixed(1) })}
 			</p>
@@ -192,27 +191,26 @@ export default function LcView({ loaderData }: Route.ComponentProps) {
 					<div className="text-sm space-y-1">
 						<p>
 							<span className="text-slate-500">{t("docs_lc.job")}:</span>{" "}
-							{(doc as any).jobType}
+							{doc.jobType}
 						</p>
 						<p>
 							<span className="text-slate-500">{t("docs_lc.address")}:</span>{" "}
-							{(doc as any).jobAddressActual ??
-								(doc as any).jobAddressEstimated}
+							{doc.jobAddressActual ?? doc.jobAddressEstimated}
 						</p>
 						<p>
 							<span className="text-slate-500">
 								{t("docs_lc.aviso_number")}:
 							</span>{" "}
-							{(doc as any).avisoNumber ?? "—"}
+							{doc.avisoNumber ?? "—"}
 						</p>
 						<p>
 							<span className="text-slate-500">{t("docs_lc.supervisor")}:</span>{" "}
-							{(loaderData as any).supervisor?.name}
+							{loaderData.supervisor?.name}
 						</p>
 					</div>
 					<div className="mt-3">
 						<MaterialLineItems
-							serviceCodes={serviceCodes as any}
+							serviceCodes={serviceCodes}
 							initialItems={used}
 							readOnly
 						/>

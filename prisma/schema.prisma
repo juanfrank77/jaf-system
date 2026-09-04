@@ -90,6 +90,7 @@ model User {
   photos           Photo[]
    notifications    Notification[]
    paymentRecords   PaymentRecord[]
+   preCertSheets    PreCertSheet[]
 
    @@index([role, active])
 }
@@ -329,13 +330,13 @@ model ServiceCode {
   name              String          // catalog description,  e.g. "TRANSFER STITCH DE POSTESMC"
   description       String?
   kind              CatalogKind @default(MATERIAL)
-  unit              String      // EA, FT, SQFT, TRAMO (SPAN); null when the catalog has none
+  unit              String?      // EA, FT, SQFT, TRAMO (SPAN); null when the catalog has none
   unitPrice         Decimal     // = jaf_price (what JAF      invoices Claro)
   claroBasePrice    Decimal?
   upliftFactor      Decimal?
   contractorPrice   Decimal?
   contractorFactor  Decimal?
-  PriceListRevision String?
+  priceListRevision String?
   effectiveFrom     DateTime?
   accountCode       String?
   subAct            String?
@@ -388,7 +389,8 @@ model PreCertSheet {
   sigClaroAt            DateTime?
   pdfPath               String?
   issuedAt              DateTime   @default(now())
-  issuedById            String
+  issuedById		String
+  issuedBy              User       @relation(fields: [issuedById], references: [id])
 
   @@unique([docId, version])
   @@index([docId, supersededAt])

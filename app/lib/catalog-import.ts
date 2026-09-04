@@ -30,6 +30,18 @@ export function parseCatalogCsv(text: string): CatalogRow[] {
 
 const orNull = (v: string) => (v === "" ? null : v)
 
+const parseDate = (value: string): Date | null => {
+	const trimmed = value.trim()
+	if (!trimmed) return null
+	const date = new Date(`${trimmed}T00:00:00.000Z`)
+	if (Number.isNaN(date.getTime())) {
+		// biome-ignore lint/suspicious/noConsole: seed catalog validation output
+		console.warn(`Invalid date skipped: ${trimmed}`)
+		return null
+	}
+	return date
+}
+
 export function toServiceCodeData(
 	row: CatalogRow,
 ): Prisma.ServiceCodeCreateManyInput {
@@ -45,9 +57,7 @@ export function toServiceCodeData(
 		contractorPrice: orNull(row.contractor_price),
 		contractorFactor: orNull(row.contractor_factor),
 		priceListRevision: orNull(row.price_list_revision),
-		effectiveFrom: row.effective_from
-			? new Date(`${row.effective_from}T00:00:00.000Z`)
-			: null,
+		effectiveFrom: parseDate(row.effective_from),
 		accountCode: orNull(row.account_code),
 		active: true,
 	}

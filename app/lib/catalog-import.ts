@@ -14,12 +14,45 @@ type CatalogRow = {
 	effective_from: string
 }
 
-/** Minimal CSV parser: the seed file has no quoted commas or newlines. */
+/** Minimal CSV parser handling quoted fields with commas and escaped quotes. */
+const splitCsvLine = (line: string): string[] => {
+	const cells: string[] = []
+	let current = ""
+	let inQuotes = false
+
+	for (let i = 0; i < line.length; i++) {
+		const char = line[i]
+		if (inQuotes) {
+			if (char === '"') {
+				if (i + 1 < line.length && line[i + 1] === '"') {
+					current += '"'
+					i++
+				} else {
+					inQuotes = false
+				}
+			} else {
+				current += char
+			}
+		} else {
+			if (char === '"') {
+				inQuotes = true
+			} else if (char === ",") {
+				cells.push(current.trim())
+				current = ""
+			} else {
+				current += char
+			}
+		}
+	}
+	cells.push(current.trim())
+	return cells
+}
+
 export function parseCatalogCsv(text: string): CatalogRow[] {
 	const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "")
-	const header = lines[0].split(",").map((h) => h.trim())
+	const header = splitCsvLine(lines[0])
 	return lines.slice(1).map((line) => {
-		const cells = line.split(",")
+		const cells = splitCsvLine(line)
 		const row: Record<string, string> = {}
 		header.forEach((h, i) => {
 			row[h] = (cells[i] ?? "").trim()

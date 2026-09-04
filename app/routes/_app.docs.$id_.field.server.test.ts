@@ -188,6 +188,77 @@ describe("POST /docs/:id/field", () => {
 		expect(db.jafInvoice.update).not.toHaveBeenCalled()
 	})
 
+	function buildValidForm() {
+		const form = new FormData()
+		form.set("jobAddressActual", "123 Calle Sol")
+		form.set(
+			"materialsUsed",
+			JSON.stringify([{ serviceCodeId: "sc-1", qty: 5 }]),
+		)
+		form.set("completionSignature", "data:image/png;base64,abc")
+		return form
+	}
+
+	it("stores installed quantities per service line", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "crew-1", role: "CREW" },
+			session: {},
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			baseDoc() as any,
+		)
+		vi.mocked(db.$transaction).mockResolvedValue(undefined as any)
+
+		const form = buildValidForm()
+		form.set(
+			"installedServiceLines",
+			JSON.stringify([
+				{
+					serviceCodeId: "c1",
+					claroCode: "34006301",
+					accountCode: "610",
+					name: "TRANSFER",
+					qty: 4,
+				},
+			]),
+		)
+		await action({
+			request: formRequest(form),
+			params: { id: "doc-1" },
+		} as any).catch(() => {})
+		const update = vi.mocked(db.jafInvoice.update).mock.calls.at(-1)?.[0]
+		expect(update?.data.installedServiceLines).toEqual([
+			{
+				serviceCodeId: "c1",
+				claroCode: "34006301",
+				accountCode: "610",
+				name: "TRANSFER",
+				qty: 4,
+			},
+		])
+	})
+
+	it("rejects malformed installed service lines", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "crew-1", role: "CREW" },
+			session: {},
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			baseDoc() as any,
+		)
+
+		const form = buildValidForm()
+		form.set("installedServiceLines", "{bad")
+		const res = await action({
+			request: formRequest(form),
+			params: { id: "doc-1" },
+		} as any)
+		expect(res).toEqual({
+			errorKey: "docs_field.errors.invalid_service_lines",
+		})
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
 	it("accepts installed quantity greater than taken with a discrepancy note", async () => {
 		vi.mocked(requireRole).mockResolvedValue({
 			user: { id: "crew-1", role: "CREW" },

@@ -267,6 +267,8 @@
 		"time_on_site_value": "Tiempo en sitio: {{duration}}",
 		"materials_used_label": "Materiales utilizados",
 		"materials_used_hint": "No puede exceder lo entregado en el almacén.",
+		"services_performed_label": "Servicios realizados",
+		"services_performed_hint": "Cantidad instalada por código de servicio. La factura JAF y la hoja de pre-certificación se generan de esta columna.",
 		"taken_reference_label": "Retirado (firmado)",
 		"used_entry_label": "Instalado",
 		"ordered_vs_installed_hint": "La diferencia entre pedido e instalado es solo informativa.",
@@ -291,7 +293,8 @@
 		"errors": {
 			"invalid_materials": "Datos de materiales inválidos",
 			"discrepancy_note_required": "Se requiere una nota de discrepancia cuando las cantidades instaladas difieren de lo firmado en salida.",
-			"completion_signature_required": "Se requiere la firma de completado."
+			"completion_signature_required": "Se requiere la firma de completado.",
+			"invalid_service_lines": "No se pudieron leer las cantidades de servicio instaladas."
 		}
 	},
 	"docs_review": {

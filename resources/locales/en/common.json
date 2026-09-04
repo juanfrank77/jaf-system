@@ -267,6 +267,8 @@
 		"time_on_site_value": "Time on site: {{duration}}",
 		"materials_used_label": "Materials Used",
 		"materials_used_hint": "Cannot exceed what was signed out at warehouse.",
+		"services_performed_label": "Services performed",
+		"services_performed_hint": "Installed quantity per service code. The JAF invoice and the pre-certification sheet are built from this column.",
 		"taken_reference_label": "Taken (signed)",
 		"used_entry_label": "Installed",
 		"ordered_vs_installed_hint": "Ordered-vs-installed variance is informational only.",
@@ -291,7 +293,8 @@
 		"errors": {
 			"invalid_materials": "Invalid materials data",
 			"discrepancy_note_required": "A discrepancy note is required when installed quantities differ from signed-out quantities.",
-			"completion_signature_required": "Completion signature is required."
+			"completion_signature_required": "Completion signature is required.",
+			"invalid_service_lines": "Installed service quantities could not be read."
 		}
 	},
 	"docs_review": {

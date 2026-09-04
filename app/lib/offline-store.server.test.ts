@@ -70,7 +70,7 @@ function createMockIdb() {
 
 	const db = {
 		objectStoreNames: {
-			contains: (name: string) => true,
+			contains: (_name: string) => true,
 		},
 		transaction: (name: string, _mode: IDBTransactionMode) => {
 			return {
@@ -82,7 +82,7 @@ function createMockIdb() {
 
 	const factory = {
 		open: (_name: string, _version: number) => {
-			const listeners: Record<string, ((event: Event) => void)[]> = {}
+			const _listeners: Record<string, ((event: Event) => void)[]> = {}
 			const request = {
 				result: db,
 				error: null as Error | null,

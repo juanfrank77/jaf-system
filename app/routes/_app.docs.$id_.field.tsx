@@ -5,6 +5,7 @@ import { Trans, useTranslation } from "react-i18next"
 import { data, Form, redirect, useSubmit } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialLineItems } from "~/components/material-line-items"
+import { ServiceLinesTable } from "~/components/service-lines-table"
 import {
 	SignaturePad,
 	type SignaturePadHandle,
@@ -27,6 +28,7 @@ import { validateFile } from "~/lib/file-upload.server"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import { getActiveMaterialCodes } from "~/lib/service-codes.server"
+import type { ServiceLine } from "~/lib/service-lines"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id_.field"
 
@@ -137,6 +139,29 @@ export async function action({ request, params }: Route.ActionArgs) {
 		return { errorKey: "docs_field.errors.invalid_materials" }
 	}
 
+	// Zero is a legitimate installed quantity, so this does not use
+	// parseServiceLines, which drops zeros.
+	let installedServiceLines: ServiceLine[] | undefined
+	const installedRaw = form.get("installedServiceLines") as string | null
+	if (installedRaw !== null) {
+		try {
+			installedServiceLines = JSON.parse(installedRaw)
+				.filter(
+					(l: any) =>
+						l && typeof l.serviceCodeId === "string" && Number(l.qty) >= 0,
+				)
+				.map((l: any) => ({
+					serviceCodeId: String(l.serviceCodeId),
+					claroCode: String(l.claroCode ?? ""),
+					accountCode: l.accountCode ? String(l.accountCode) : null,
+					name: String(l.name ?? ""),
+					qty: Number(l.qty),
+				}))
+		} catch {
+			return { errorKey: "docs_field.errors.invalid_service_lines" }
+		}
+	}
+
 	const taken = (doc.materialsTaken as MaterialLine[] | null) ?? []
 
 	const quantityDiscrepancies = buildQuantityDiscrepancies(taken, materialsUsed)
@@ -203,6 +228,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 				addressCorrections,
 				gpsCoordinates: parseGpsCoordinates(gpsRaw),
 				materialsUsed,
+				installedServiceLines,
 				fieldNotes,
 				startedAt,
 				endedAt,
@@ -222,6 +248,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 					status: { before: doc.status, after: "FIELD_UPDATED" },
 					jobAddressActual,
 					materialsUsed,
+					installedServiceLines,
 					startedAt: startedAtRaw,
 					endedAt: endedAtRaw,
 				},
@@ -266,6 +293,7 @@ export default function FieldUpdate({
 	const taken = (doc.materialsTaken as any[]) || []
 	const used = (doc.materialsUsed as any[]) || []
 	const estimated = (doc.estimatedMaterials as any[]) || []
+	const ordered = (doc.serviceLines as ServiceLine[] | null) ?? []
 	const corrections =
 		(doc.addressCorrections as AddressCorrection[] | null) || []
 	const { t } = useTranslation()
@@ -367,6 +395,8 @@ export default function FieldUpdate({
 			discrepancyNote:
 				(formData.get("discrepancyNote") as string | null)?.trim() || null,
 			materialsUsed: formData.get("materialsUsed") as string,
+			installedServiceLines:
+				(formData.get("installedServiceLines") as string) || null,
 			completionSignature: signature,
 			startedAt: (formData.get("startedAt") as string) || null,
 			endedAt: (formData.get("endedAt") as string) || null,
@@ -515,6 +545,22 @@ export default function FieldUpdate({
 						)}
 					</div>
 				</div>
+
+				{ordered.length > 0 && (
+					<div className="border rounded-lg p-3 space-y-2">
+						<Label>{t("docs_field.services_performed_label")}</Label>
+						<p className="text-xs text-slate-500">
+							{t("docs_field.services_performed_hint")}
+						</p>
+						<ServiceLinesTable
+							lines={ordered}
+							installed={
+								(doc.installedServiceLines as ServiceLine[] | null) ?? undefined
+							}
+							editableName="installedServiceLines"
+						/>
+					</div>
+				)}
 
 				<div className="border rounded-lg p-3 space-y-3">
 					<Label>{t("docs_field.materials_used_label")}</Label>

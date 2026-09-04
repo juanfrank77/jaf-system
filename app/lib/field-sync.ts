@@ -10,6 +10,7 @@ export type FieldUpdatePayload = {
 	fieldNotes?: string | null
 	discrepancyNote?: string | null
 	materialsUsed: string
+	installedServiceLines?: string | null
 	completionSignature: string
 	startedAt?: string | null
 	endedAt?: string | null
@@ -62,6 +63,8 @@ export async function syncFieldUpdate(
 	if (payload.discrepancyNote)
 		formData.set("discrepancyNote", payload.discrepancyNote)
 	formData.set("materialsUsed", payload.materialsUsed)
+	if (payload.installedServiceLines)
+		formData.set("installedServiceLines", payload.installedServiceLines)
 	formData.set("completionSignature", payload.completionSignature)
 	if (payload.startedAt) formData.set("startedAt", payload.startedAt)
 	if (payload.endedAt) formData.set("endedAt", payload.endedAt)

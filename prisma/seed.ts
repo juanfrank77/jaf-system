@@ -16,7 +16,10 @@ const db = new PrismaClient({
 	adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
 })
 
-const CSV_PATH = path.resolve(__dirname, "../docs/JAF_Service_Catalog_seed.csv")
+const CSV_PATH = path.resolve(
+	process.cwd(),
+	"docs/JAF_Service_Catalog_seed.csv",
+)
 const BATCH = 100
 const TEMP_PASSWORD = process.env.SEED_TEMP_PASSWORD || "jaf2026!"
 

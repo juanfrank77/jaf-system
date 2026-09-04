@@ -65,20 +65,30 @@
 		"title": "Nueva factura JAF",
 		"job_type_label": "Tipo de trabajo",
 		"job_address_label": "Dirección del trabajo (estimada)",
+		"job_description_label": "Descripción del trabajo",
+		"service_codes_label": "Códigos de servicio",
 		"aviso_number_label": "# de aviso Claro (si se conoce)",
 		"assigned_crew_label": "Cuadrilla asignada",
+		"select_crew_label": "Seleccione una brigada",
+		"select_crew_placeholder": "Elija una brigada…",
 		"estimated_materials_label": "Materiales estimados",
 		"submit": "Crear documento",
 		"errors": {
 			"invalid_materials": "Datos de materiales inválidos",
+			"invalid_service_lines": "No se pudieron leer los códigos de servicio.",
 			"missing_fields": "Se requieren tipo de trabajo, dirección y al menos un miembro de la cuadrilla"
 		}
 	},
 	"docs_edit": {
 		"title": "Editar orden de trabajo",
 		"submit": "Guardar cambios",
+		"job_description_label": "Descripción del trabajo",
+		"service_codes_label": "Códigos de servicio",
+		"select_crew_label": "Seleccione una brigada",
+		"select_crew_placeholder": "Elija una brigada…",
 		"errors": {
 			"invalid_materials": "No se pudo leer la lista de materiales",
+			"invalid_service_lines": "No se pudieron leer los códigos de servicio.",
 			"missing_fields": "Se requieren tipo de trabajo, dirección y al menos un miembro de la cuadrilla"
 		}
 	},

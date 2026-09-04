@@ -2,13 +2,16 @@ import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialLineItems } from "~/components/material-line-items"
+import { ServicePicker } from "~/components/service-picker"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
+import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
 import { isEditableStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import { getActiveMaterialCodes } from "~/lib/service-codes.server"
+import { parseServiceLines, type ServiceLine } from "~/lib/service-lines"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id_.edit"
 
@@ -28,12 +31,14 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	})
 	if (!isEditableStatus(doc.status)) throw redirect(`/docs/${params.id}`)
 
-	const serviceCodes = await getActiveMaterialCodes()
-	const crew = await db.user.findMany({
-		where: { role: "CREW", active: true },
-		orderBy: { name: "asc" },
-		take: 100,
-	})
+	const [serviceCodes, brigades] = await Promise.all([
+		getActiveMaterialCodes(),
+		db.brigade.findMany({
+			where: { active: true },
+			orderBy: [{ area: "asc" }, { name: "asc" }],
+			select: { id: true, name: true, area: true, code: true, leadName: true },
+		}),
+	])
 	return {
 		doc,
 		user,
@@ -41,7 +46,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			...c,
 			unitPrice: toNumberPrice(c.unitPrice),
 		})),
-		crew,
+		brigades,
 	}
 }
 
@@ -55,7 +60,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const form = await request.formData()
 	const jobType = (form.get("jobType") as string).trim()
 	const jobAddressEstimated = (form.get("jobAddressEstimated") as string).trim()
-	const assignedCrewIds = form.getAll("assignedCrewIds") as string[]
+	const jobDescription =
+		(form.get("jobDescription") as string | null)?.trim() || null
+	const brigadeId = (form.get("brigadeId") as string | null)?.trim() || null
 	const avisoNumber = (form.get("avisoNumber") as string | null)?.trim() || null
 	const materialsRaw = (form.get("materials") as string) || "[]"
 
@@ -69,9 +76,21 @@ export async function action({ request, params }: Route.ActionArgs) {
 		return { errorKey: "docs_edit.errors.invalid_materials" }
 	}
 
-	if (!jobType || !jobAddressEstimated || assignedCrewIds.length === 0) {
+	let serviceLines: ServiceLine[] = []
+	try {
+		serviceLines = parseServiceLines(form.get("serviceLines") as string | null)
+	} catch {
+		return { errorKey: "docs_edit.errors.invalid_service_lines" }
+	}
+
+	if (!jobType || !jobAddressEstimated || !brigadeId) {
 		return { errorKey: "docs_edit.errors.missing_fields" }
 	}
+
+	const brigade = await db.brigade.findUniqueOrThrow({
+		where: { id: brigadeId },
+	})
+	const assignedCrewIds = brigade.memberIds
 
 	const materialsChanged =
 		JSON.stringify(estimatedMaterials) !==
@@ -83,7 +102,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 			data: {
 				jobType,
 				jobAddressEstimated,
+				jobDescription,
 				estimatedMaterials,
+				serviceLines,
+				brigadeId,
 				assignedCrewIds,
 				avisoNumber,
 				// PRD §2.7: editing materials after prep started → flag for re-confirm.
@@ -102,7 +124,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 					fields: [
 						"jobType",
 						"jobAddressEstimated",
+						"jobDescription",
 						"estimatedMaterials",
+						"serviceLines",
+						"brigadeId",
 						"assignedCrewIds",
 						"avisoNumber",
 					],
@@ -133,7 +158,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 }
 
 export default function EditDoc({ loaderData }: Route.ComponentProps) {
-	const { doc, serviceCodes, crew } = loaderData
+	const { doc, serviceCodes, brigades } = loaderData
 	const { t } = useTranslation()
 	return (
 		<div className="space-y-5">
@@ -161,6 +186,17 @@ export default function EditDoc({ loaderData }: Route.ComponentProps) {
 					/>
 				</div>
 				<div>
+					<Label htmlFor="jobDescription">
+						{t("docs_edit.job_description_label")}
+					</Label>
+					<Textarea
+						id="jobDescription"
+						name="jobDescription"
+						rows={2}
+						defaultValue={(doc as any).jobDescription ?? ""}
+					/>
+				</div>
+				<div>
 					<Label htmlFor="avisoNumber">
 						{t("docs_new.aviso_number_label")}
 					</Label>
@@ -172,20 +208,10 @@ export default function EditDoc({ loaderData }: Route.ComponentProps) {
 					/>
 				</div>
 				<div>
-					<Label>{t("docs_new.assigned_crew_label")}</Label>
-					<div className="space-y-1 mt-1">
-						{crew.map((c) => (
-							<label key={c.id} className="flex items-center gap-2 text-sm">
-								<input
-									type="checkbox"
-									name="assignedCrewIds"
-									value={c.id}
-									defaultChecked={(doc as any).assignedCrewIds?.includes(c.id)}
-								/>
-								{c.name}
-							</label>
-						))}
-					</div>
+					<Label>{t("docs_edit.service_codes_label")}</Label>
+					<ServicePicker
+						initialLines={(doc.serviceLines as ServiceLine[]) ?? []}
+					/>
 				</div>
 				<div>
 					<Label>{t("docs_new.estimated_materials_label")}</Label>
@@ -195,6 +221,27 @@ export default function EditDoc({ loaderData }: Route.ComponentProps) {
 							initialItems={(doc as any).estimatedMaterials as any[]}
 						/>
 					</div>
+				</div>
+				<div>
+					<Label htmlFor="brigadeId">{t("docs_edit.select_crew_label")}</Label>
+					<select
+						id="brigadeId"
+						name="brigadeId"
+						required
+						defaultValue={doc.brigadeId ?? ""}
+						className="mt-1 w-full border rounded-md h-9 px-2 text-sm bg-white"
+					>
+						<option value="" disabled>
+							{t("docs_edit.select_crew_placeholder")}
+						</option>
+						{brigades.map((b) => (
+							<option key={b.id} value={b.id}>
+								{b.name}
+								{b.code ? ` · ${b.code}` : ""}
+								{b.area ? ` (${b.area})` : ""}
+							</option>
+						))}
+					</select>
 				</div>
 				<Button type="submit" className="w-full">
 					{t("docs_edit.submit")}

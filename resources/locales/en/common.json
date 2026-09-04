@@ -65,20 +65,30 @@
 		"title": "New JAF Invoice",
 		"job_type_label": "Job Type",
 		"job_address_label": "Job Address (estimated)",
+		"job_description_label": "Job description",
+		"service_codes_label": "Service codes",
 		"aviso_number_label": "Claro Aviso # (if known)",
 		"assigned_crew_label": "Assigned Crew",
+		"select_crew_label": "Select a crew",
+		"select_crew_placeholder": "Choose a crew…",
 		"estimated_materials_label": "Estimated Materials",
 		"submit": "Create Document",
 		"errors": {
 			"invalid_materials": "Invalid materials data",
+			"invalid_service_lines": "Service codes could not be read.",
 			"missing_fields": "Job type, address, and at least one crew member are required"
 		}
 	},
 	"docs_edit": {
 		"title": "Edit Work Order",
 		"submit": "Save Changes",
+		"job_description_label": "Job description",
+		"service_codes_label": "Service codes",
+		"select_crew_label": "Select a crew",
+		"select_crew_placeholder": "Choose a crew…",
 		"errors": {
 			"invalid_materials": "The materials list could not be read",
+			"invalid_service_lines": "Service codes could not be read.",
 			"missing_fields": "Job type, address, and at least one crew member are required"
 		}
 	},

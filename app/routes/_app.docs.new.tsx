@@ -2,13 +2,16 @@ import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialLineItems } from "~/components/material-line-items"
+import { ServicePicker } from "~/components/service-picker"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
+import { Textarea } from "~/components/ui/textarea"
 import { generateControlNumber } from "~/lib/control-number.server"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
 import { getActiveMaterialCodes } from "~/lib/service-codes.server"
+import { parseServiceLines, type ServiceLine } from "~/lib/service-lines"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.new"
 
@@ -18,18 +21,21 @@ export const meta: Route.MetaFunction = () => [
 
 export async function loader({ request }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["SUPERVISOR", "ADMIN"])
-	const serviceCodes = await getActiveMaterialCodes()
-	const crew = await db.user.findMany({
-		where: { role: "CREW", active: true },
-		orderBy: { name: "asc" },
-	})
+	const [materials, brigades] = await Promise.all([
+		getActiveMaterialCodes(),
+		db.brigade.findMany({
+			where: { active: true },
+			orderBy: [{ area: "asc" }, { name: "asc" }],
+			select: { id: true, name: true, area: true, code: true, leadName: true },
+		}),
+	])
 	return {
 		user,
-		serviceCodes: serviceCodes.map((c) => ({
+		serviceCodes: materials.map((c) => ({
 			...c,
 			unitPrice: toNumberPrice(c.unitPrice),
 		})),
-		crew,
+		brigades,
 	}
 }
 
@@ -37,11 +43,14 @@ export async function action({ request }: Route.ActionArgs) {
 	const { user } = await requireRole(request, ["SUPERVISOR", "ADMIN"])
 	const form = await request.formData()
 
-	const jobType = (form.get("jobType") as string).trim()
-	const jobAddressEstimated = (form.get("jobAddressEstimated") as string).trim()
-	const assignedCrewIds = form.getAll("assignedCrewIds") as string[]
-	const materialsRaw = form.get("materials") as string
-	const avisoNumber = (form.get("avisoNumber") as string | null)?.trim() || null
+	const jobType = ((form.get("jobType") as string) || "").trim()
+	const jobAddressEstimated = (
+		(form.get("jobAddressEstimated") as string) || ""
+	).trim()
+	const jobDescription =
+		(form.get("jobDescription") as string | null)?.trim() || null
+	const brigadeId = (form.get("brigadeId") as string | null)?.trim() || null
+	const materialsRaw = (form.get("materials") as string) || "[]"
 
 	let estimatedMaterials: { serviceCodeId: string; qty: number }[] = []
 	try {
@@ -53,14 +62,22 @@ export async function action({ request }: Route.ActionArgs) {
 		return { errorKey: "docs_new.errors.invalid_materials" }
 	}
 
-	if (!jobType || !jobAddressEstimated || assignedCrewIds.length === 0) {
-		return {
-			errorKey: "docs_new.errors.missing_fields",
-		}
+	let serviceLines: ServiceLine[] = []
+	try {
+		serviceLines = parseServiceLines(form.get("serviceLines") as string | null)
+	} catch {
+		return { errorKey: "docs_new.errors.invalid_service_lines" }
 	}
 
-	const controlNumber = await generateControlNumber()
+	if (!jobType || !jobAddressEstimated || !brigadeId) {
+		return { errorKey: "docs_new.errors.missing_fields" }
+	}
 
+	const brigade = await db.brigade.findUniqueOrThrow({
+		where: { id: brigadeId },
+	})
+	const assignedCrewIds = brigade.memberIds
+	const controlNumber = await generateControlNumber()
 	const warehouse = await db.user.findMany({
 		where: { role: "WAREHOUSE", active: true },
 	})
@@ -72,13 +89,16 @@ export async function action({ request }: Route.ActionArgs) {
 				status: "CREATED",
 				jobType,
 				jobAddressEstimated,
+				jobDescription,
 				estimatedMaterials,
+				serviceLines,
+				brigadeId,
 				assignedCrewIds,
 				supervisorId: user.id,
-				avisoNumber,
 				crewAssignmentHistory: JSON.stringify([
 					{
 						userIds: assignedCrewIds,
+						brigadeId,
 						assignedById: user.id,
 						assignedAt: new Date().toISOString(),
 					},
@@ -90,7 +110,11 @@ export async function action({ request }: Route.ActionArgs) {
 				docId: doc.id,
 				userId: user.id,
 				action: "CREATED",
-				diffJson: { status: { before: null, after: "CREATED" } },
+				diffJson: {
+					status: { before: null, after: "CREATED" },
+					brigadeId,
+					serviceLines,
+				},
 			},
 		})
 		await tx.notification.createMany({
@@ -103,28 +127,19 @@ export async function action({ request }: Route.ActionArgs) {
 		return doc
 	})
 
-	throw redirect(`/docs/${controlNumber}`)
+	throw redirect("/dashboard")
 }
 
 export default function NewDoc({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { serviceCodes, crew } = loaderData
+	const { serviceCodes, brigades } = loaderData
 	const { t } = useTranslation()
 	return (
 		<div className="space-y-5">
 			<h1 className="text-xl font-semibold">{t("docs_new.title")}</h1>
 			<Form method="post" className="space-y-4">
-				<div>
-					<Label htmlFor="jobType">{t("docs_new.job_type_label")}</Label>
-					<Input
-						id="jobType"
-						name="jobType"
-						placeholder="Mantenimiento, Instalación..."
-						required
-					/>
-				</div>
 				<div>
 					<Label htmlFor="jobAddressEstimated">
 						{t("docs_new.job_address_label")}
@@ -137,27 +152,55 @@ export default function NewDoc({
 					/>
 				</div>
 				<div>
-					<Label htmlFor="avisoNumber">
-						{t("docs_new.aviso_number_label")}
-					</Label>
-					<Input id="avisoNumber" name="avisoNumber" placeholder="10333185" />
+					<Label htmlFor="jobType">{t("docs_new.job_type_label")}</Label>
+					<Input
+						id="jobType"
+						name="jobType"
+						placeholder="Mantenimiento, Instalación..."
+						required
+					/>
 				</div>
 				<div>
-					<Label>{t("docs_new.assigned_crew_label")}</Label>
-					<div className="space-y-1 mt-1">
-						{crew.map((c) => (
-							<label key={c.id} className="flex items-center gap-2 text-sm">
-								<input type="checkbox" name="assignedCrewIds" value={c.id} />
-								{c.name}
-							</label>
-						))}
-					</div>
+					<Label htmlFor="jobDescription">
+						{t("docs_new.job_description_label")}
+					</Label>
+					<Textarea
+						id="jobDescription"
+						name="jobDescription"
+						rows={2}
+						required
+					/>
+				</div>
+				<div>
+					<Label>{t("docs_new.service_codes_label")}</Label>
+					<ServicePicker />
 				</div>
 				<div>
 					<Label>{t("docs_new.estimated_materials_label")}</Label>
 					<div className="mt-1">
 						<MaterialLineItems serviceCodes={serviceCodes as any} />
 					</div>
+				</div>
+				<div>
+					<Label htmlFor="brigadeId">{t("docs_new.select_crew_label")}</Label>
+					<select
+						id="brigadeId"
+						name="brigadeId"
+						required
+						defaultValue=""
+						className="mt-1 w-full border rounded-md h-9 px-2 text-sm bg-white"
+					>
+						<option value="" disabled>
+							{t("docs_new.select_crew_placeholder")}
+						</option>
+						{brigades.map((b) => (
+							<option key={b.id} value={b.id}>
+								{b.name}
+								{b.code ? ` · ${b.code}` : ""}
+								{b.area ? ` (${b.area})` : ""}
+							</option>
+						))}
+					</select>
 				</div>
 				{(actionData as any)?.errorKey && (
 					<p className="text-sm text-red-600">

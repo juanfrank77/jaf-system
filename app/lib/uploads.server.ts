@@ -1,7 +1,7 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 
-export function uploadRoot(): string {
+function uploadRoot(): string {
 	return process.env.UPLOAD_DIR || "/tmp/jaf/uploads"
 }
 

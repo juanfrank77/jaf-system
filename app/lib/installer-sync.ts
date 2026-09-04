@@ -1,11 +1,11 @@
 import type { QueuedAction, SyncConflict } from "./offline-store"
 
-export type InstallerRestockPayload = {
+type InstallerRestockPayload = {
 	warehouseId: string
 	items: { serviceCodeId: string; qty: number }[]
 }
 
-export type InstallerInstallPayload = {
+type InstallerInstallPayload = {
 	claroJobReference: string
 	serviceType: string
 	date: string

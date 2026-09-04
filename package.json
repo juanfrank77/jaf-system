@@ -20,7 +20,7 @@
 		"check:fix": "biome check --write app/ prisma/ tests/",
 		"check:unused": "knip",
 		"check:unused:fix": "knip --fix",
-		"validate": "pnpm run typecheck && pnpm run check && pnpm run test && pnpm run check:unused",
+		"validate": "pnpm run typecheck && pnpm run check && vitest run && pnpm run check:unused",
 		"typegen": "react-router typegen"
 	},
 	"dependencies": {

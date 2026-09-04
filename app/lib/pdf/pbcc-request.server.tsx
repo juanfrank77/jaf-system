@@ -58,7 +58,7 @@ interface LineItem {
 	accountCode?: string | null
 }
 
-export interface PbccRequestParams {
+interface PbccRequestParams {
 	controlNumber: string
 	avisoNumber?: string | null
 	jobType: string

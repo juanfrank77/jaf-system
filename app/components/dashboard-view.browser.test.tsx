@@ -242,6 +242,7 @@ describe("DashboardView", () => {
 							alert={null}
 							explainer={null}
 							docs={[]}
+							showFilters
 							crewOptions={[{ id: "crew1", name: "Brigade Alpha" }]}
 						/>
 					),
@@ -267,6 +268,7 @@ describe("DashboardView", () => {
 							alert={null}
 							explainer={null}
 							docs={[]}
+							showFilters
 							crewOptions={[]}
 							selectedStatus="CREATED"
 						/>

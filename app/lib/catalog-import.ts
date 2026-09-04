@@ -1,6 +1,6 @@
 import type { Prisma } from "../../generated/prisma/client"
 
-export type CatalogRow = {
+type CatalogRow = {
 	service_code: string
 	description: string
 	account_code: string
@@ -75,7 +75,7 @@ export const SUPERVISOR_SEED = [
 	{ email: "rramos@jafcomm.local", name: "Ramón Ramos", phone: "787-533-6520" },
 ] as const
 
-export type BrigadeSeed = {
+type BrigadeSeed = {
 	name: string
 	code: string | null
 	area: string

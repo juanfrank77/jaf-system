@@ -9,7 +9,7 @@ import {
 } from "@react-pdf/renderer"
 import type { PreCertLine } from "~/lib/service-lines"
 
-export type PreCertPdfParams = {
+type PreCertPdfParams = {
 	avisoNumber: string | null
 	issuedOn: Date
 	title: string

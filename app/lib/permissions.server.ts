@@ -6,12 +6,6 @@ import { db } from "./db.server"
 // Re-export pure, client-safe status functions so they can be used
 // in both server-side code and client-side components without
 // pulling in server-only dependencies.
-export {
-	canTransition,
-	isEditableStatus,
-	isReviewActionStatus,
-	isTerminalStatus,
-} from "./permissions"
 
 export async function requireSession(request: Request) {
 	const session = await auth.api.getSession({ headers: request.headers })

@@ -8,7 +8,7 @@ export type RestockItem = {
 	qty: number
 }
 
-export type InventoryTransaction = {
+type InventoryTransaction = {
 	serviceCodeId: string
 	qty: number
 	type: string

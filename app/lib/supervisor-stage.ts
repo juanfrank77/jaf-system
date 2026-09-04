@@ -29,7 +29,7 @@ export const SUPERVISOR_STAGES: SupervisorStage[] = [
 	"RELEASED",
 ]
 
-export type StageDoc = Pick<
+type StageDoc = Pick<
 	JafInvoice,
 	| "status"
 	| "supervisorApprovedAt"
@@ -37,7 +37,7 @@ export type StageDoc = Pick<
 	| "avisoMatchedAt"
 	| "releasedToFinanceAt"
 >
-export type StageSheet = {
+type StageSheet = {
 	sigSupervisorAt: Date | null
 	sigSubcontractorAt: Date | null
 } | null
@@ -68,7 +68,7 @@ export function deriveSupervisorStage(
 	}
 }
 
-export type AvisoMatchResult = {
+type AvisoMatchResult = {
 	amountOk: boolean
 	difference: number
 	invoiceTotal: number
@@ -121,7 +121,7 @@ export function checkAvisoMatch(
 	}
 }
 
-export type ReleaseConditionKey =
+type ReleaseConditionKey =
 	| "approved"
 	| "invoice"
 	| "aviso"
@@ -130,7 +130,7 @@ export type ReleaseConditionKey =
 	| "precert_signed"
 	| "contractor_code"
 
-export type ReleaseGateDoc = Pick<
+type ReleaseGateDoc = Pick<
 	JafInvoice,
 	| "supervisorApprovedAt"
 	| "jafInvoiceGeneratedAt"

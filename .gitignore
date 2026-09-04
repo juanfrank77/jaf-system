@@ -30,3 +30,10 @@ vite.config.ts.*
 /docs/jaf-os.html
 /docs/superpowers/plans/
 /docs/superpowers/specs/
+
+# local-only agent tooling and artifacts, not for remote
+.agents
+.vitest-attachments
+app/components/__screenshots__
+app/lib/__screenshots__
+graphify-out

@@ -1,16 +1,17 @@
 {
-	"$schema": "https://unpkg.com/knip@5/schema.json",
-	"remix": true,
-	"lefthook": true,
-	"project": ["**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}"],
-	"ignore": [
+	"$schema":	"https://unpkg.com/knip@5/schema.json",
+	"remix":	true,
+	"lefthook":	true,
+	"project":	[
+		"**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}"
+	],
+	"ignore":	[
 		"app/sw.ts",
 		"app/components/ui/**",
 		"scripts/fix-db-url.mjs",
-		"scripts/recreate-db.mjs",
-		"tests/setup.browser.tsx"
+		"scripts/recreate-db.mjs"
 	],
-	"ignoreDependencies": [
+	"ignoreDependencies":	[
 		"@epic-web/client-hints",
 		"@fontsource-variable/figtree",
 		"i18next-http-backend",
@@ -20,7 +21,6 @@
 		"tw-animate-css",
 		"workbox-precaching",
 		"workbox-routing",
-		"workbox-strategies",
-		"vitest-browser-react"
+		"workbox-strategies"
 	]
 }

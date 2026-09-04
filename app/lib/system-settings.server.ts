@@ -1,6 +1,6 @@
 import { db } from "./db.server"
 
-export const DEFAULT_LC_PBCC_ADVANCE_RATE = 0.8
+const DEFAULT_LC_PBCC_ADVANCE_RATE = 0.8
 
 export async function getIvuRate(): Promise<number> {
 	const setting = await db.systemSetting.findUnique({

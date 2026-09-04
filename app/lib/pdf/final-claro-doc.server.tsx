@@ -63,7 +63,7 @@ interface LineItem {
 	unitPrice: number
 }
 
-export interface FinalClaroDocParams {
+interface FinalClaroDocParams {
 	controlNumber: string
 	avisoNumber?: string | null
 	claroPONumber?: string | null

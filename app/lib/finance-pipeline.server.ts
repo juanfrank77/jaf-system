@@ -4,21 +4,9 @@ import type {
 	ServiceCode,
 } from "../../generated/prisma/client"
 import { db } from "./db.server"
-import {
-	FINANCE_STAGES,
-	type FinanceStage,
-	type FinanceStageLabelKey,
-	financeStageLabelKey,
-} from "./finance-pipeline"
+import type { FinanceStage } from "./finance-pipeline"
 import { getAvisoAmountTolerance, getIvuRate } from "./system-settings.server"
 import { toNumberPrice } from "./utils"
-
-export {
-	FINANCE_STAGES,
-	type FinanceStage,
-	type FinanceStageLabelKey,
-	financeStageLabelKey,
-}
 
 export async function fetchInvoiceTotalContext(): Promise<{
 	serviceCodes: ServiceCode[]

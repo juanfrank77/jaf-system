@@ -35,7 +35,7 @@ export type PreCertLine = {
 	lineAmount: number
 }
 
-export type CatalogEntry = {
+type CatalogEntry = {
 	id: string
 	claroCode: string
 	name: string

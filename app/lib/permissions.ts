@@ -1,17 +1,14 @@
 import type { Role } from "../../generated/prisma/client"
 
-export const EDITABLE_STATUSES = ["CREATED", "PREPPED"] as const
-export type EditableStatus = (typeof EDITABLE_STATUSES)[number]
+const EDITABLE_STATUSES = ["CREATED", "PREPPED"] as const
+type EditableStatus = (typeof EDITABLE_STATUSES)[number]
 
 export function isEditableStatus(status: string): status is EditableStatus {
 	return EDITABLE_STATUSES.includes(status as EditableStatus)
 }
 
-export const REVIEW_ACTION_STATUSES = [
-	"FIELD_UPDATED",
-	"SUPERVISOR_APPROVED",
-] as const
-export type ReviewActionStatus = (typeof REVIEW_ACTION_STATUSES)[number]
+const REVIEW_ACTION_STATUSES = ["FIELD_UPDATED", "SUPERVISOR_APPROVED"] as const
+type ReviewActionStatus = (typeof REVIEW_ACTION_STATUSES)[number]
 
 export function isReviewActionStatus(
 	status: string,
@@ -19,8 +16,8 @@ export function isReviewActionStatus(
 	return REVIEW_ACTION_STATUSES.includes(status as ReviewActionStatus)
 }
 
-export const TERMINAL_STATUSES = ["CANCELLED", "LC_REQUEST_GENERATED"] as const
-export type TerminalStatus = (typeof TERMINAL_STATUSES)[number]
+const TERMINAL_STATUSES = ["CANCELLED", "LC_REQUEST_GENERATED"] as const
+type TerminalStatus = (typeof TERMINAL_STATUSES)[number]
 
 export function isTerminalStatus(status: string): status is TerminalStatus {
 	return TERMINAL_STATUSES.includes(status as TerminalStatus)

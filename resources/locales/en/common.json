@@ -22,6 +22,7 @@
 			"dashboard": "Dashboard",
 			"new_document": "+ New Document",
 			"receivables": "Finance Pipeline",
+			"finance_queue": "Payment requests",
 			"admin_settings": "Admin Settings",
 			"catalog": "Catalog",
 			"admin_users": "Users",
@@ -678,7 +679,24 @@
 			"closed": "Closed"
 		}
 	},
+	"finance_queue": {
+		"title": "Payment request queue",
+		"hint": "Packets released by supervisors. A job appears here only when complete.",
+		"empty": "No packets waiting.",
+		"claro_pct": "{{pct}}% with Claro field acceptance",
+		"complete": "Complete",
+		"no_claro_sig": "No Claro sig",
+		"col": {
+			"work_order": "Work order",
+			"aviso": "Aviso",
+			"contractor": "Contractor",
+			"amount": "Amount",
+			"packet": "Packet"
+		}
+	},
 	"finance_verify": {
+		"aviso_amount_prefilled": "Aviso amount {{amount}} captured and matched by the supervisor.",
+		"line_sum_pre_ivu": "Line sum (pre-IVU)",
 		"title": "Verify Aviso vs. Invoice",
 		"amount": "Invoice amount",
 		"ivu_rate": "IVU rate: {{rate}}%",

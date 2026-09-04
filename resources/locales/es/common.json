@@ -22,6 +22,7 @@
 			"dashboard": "Panel",
 			"new_document": "+ Nuevo documento",
 			"receivables": "Pipeline de Finanzas",
+			"finance_queue": "Solicitudes de pago",
 			"admin_settings": "Configuración de administrador",
 			"catalog": "Catálogo",
 			"admin_users": "Usuarios",
@@ -678,7 +679,24 @@
 			"closed": "Cerrado"
 		}
 	},
+	"finance_queue": {
+		"title": "Cola de solicitudes de pago",
+		"hint": "Paquetes liberados por supervisores. Un trabajo aparece aquí solo cuando está completo.",
+		"empty": "No hay paquetes en espera.",
+		"claro_pct": "{{pct}}% con aceptación de campo de Claro",
+		"complete": "Completo",
+		"no_claro_sig": "Sin firma Claro",
+		"col": {
+			"work_order": "Orden",
+			"aviso": "Aviso",
+			"contractor": "Contratista",
+			"amount": "Monto",
+			"packet": "Paquete"
+		}
+	},
 	"finance_verify": {
+		"aviso_amount_prefilled": "Monto del Aviso {{amount}} capturado y cotejado por el supervisor.",
+		"line_sum_pre_ivu": "Suma de líneas (antes de IVU)",
 		"title": "Verificar Aviso vs. Factura",
 		"amount": "Monto de factura",
 		"ivu_rate": "Tasa de IVU: {{rate}}%",

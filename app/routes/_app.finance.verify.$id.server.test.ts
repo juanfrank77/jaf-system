@@ -136,3 +136,43 @@ describe("Finance verify action guards", () => {
 		)
 	})
 })
+
+describe("verify pre-fill from supervisor capture", () => {
+	it("verify uses the stored aviso line total when the supervisor captured lines", async () => {
+		mocks.db.$transaction.mockResolvedValue([])
+		mocks.requireRole.mockResolvedValue({
+			user: { id: "fin-1", role: "FINANCE" },
+		})
+		mocks.isTerminalStatus.mockReturnValue(false)
+		mocks.computeFinanceStage.mockReturnValue("TO_VERIFY")
+		mocks.isMissingAviso.mockReturnValue(false)
+		mocks.isMissingClaroPdf.mockReturnValue(false)
+		const fixture = {
+			...baseDoc(),
+			avisoNumber: "10353961",
+			claroPdfPath: "/x/claro.pdf",
+			avisoLineTotal: "239.34",
+			avisoMatchedAt: new Date(),
+			jafInvoiceLineTotal: "239.34",
+		}
+		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue(fixture)
+		const form = new FormData()
+		form.set("intent", "verify") // no avisoAmount typed
+		const res = await action({
+			request: requestWith({ intent: "verify" }),
+			params: { id: "job-1" },
+		} as any).catch((r) => r)
+		expect(res.status).toBe(302)
+		expect(mocks.db.auditTrail.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({
+					diffJson: expect.objectContaining({
+						avisoAmount: 239.34,
+						invoiceTotal: 239.34,
+						source: "SUPERVISOR_CAPTURE",
+					}),
+				}),
+			}),
+		)
+	})
+})

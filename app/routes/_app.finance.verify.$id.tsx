@@ -21,7 +21,7 @@ import {
 } from "~/lib/finance-pipeline.server"
 import { isTerminalStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
-import { cn, formatMoney } from "~/lib/utils"
+import { cn, formatMoney, toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.finance.verify.$id"
 
 export const meta: Route.MetaFunction = ({ data }) => [
@@ -76,6 +76,14 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		missingAviso: isMissingAviso(doc),
 		missingClaroPdf: isMissingClaroPdf(doc),
 		sendBackNotes: (doc.financeSendBackNotes as SendBackNote[]) || [],
+		prefilledAvisoAmount:
+			doc.avisoMatchedAt && doc.avisoLineTotal != null
+				? toNumberPrice(doc.avisoLineTotal)
+				: null,
+		lineTotal:
+			doc.jafInvoiceLineTotal != null
+				? toNumberPrice(doc.jafInvoiceLineTotal)
+				: null,
 	}
 }
 
@@ -107,6 +115,40 @@ export async function action({ request, params }: Route.ActionArgs) {
 	if (intent === "verify") {
 		if (isMissingAviso(doc) || isMissingClaroPdf(doc)) {
 			return { errorKey: "finance_verify.billing_blocked" }
+		}
+		if (
+			doc.avisoMatchedAt &&
+			doc.avisoLineTotal != null &&
+			doc.jafInvoiceLineTotal != null
+		) {
+			const avisoAmount = toNumberPrice(doc.avisoLineTotal)
+			const invoiceTotal = toNumberPrice(doc.jafInvoiceLineTotal)
+			const note = (form.get("note") as string | null)?.trim() || null
+			await db.$transaction([
+				db.jafInvoice.update({
+					where: { id: params.id },
+					data: {
+						financeVerifiedAt: new Date(),
+						financeVerifiedById: user.id,
+					},
+				}),
+				db.auditTrail.create({
+					data: {
+						docId: params.id,
+						userId: user.id,
+						action: "FINANCE_VERIFIED",
+						diffJson: {
+							note,
+							avisoAmount,
+							invoiceTotal,
+							difference: Math.abs(avisoAmount - invoiceTotal),
+							withinTolerance: true,
+							source: "SUPERVISOR_CAPTURE",
+						},
+					},
+				}),
+			])
+			throw redirect("/finance/queue")
 		}
 		const avisoAmountRaw = (form.get("avisoAmount") as string | null)?.trim()
 		const avisoAmount = avisoAmountRaw ? Number(avisoAmountRaw) : NaN
@@ -225,6 +267,8 @@ export default function FinanceVerify({
 		missingAviso,
 		missingClaroPdf,
 		sendBackNotes,
+		prefilledAvisoAmount,
+		lineTotal,
 	} = loaderData
 	const { t } = useTranslation()
 	const error = actionData as
@@ -278,6 +322,12 @@ export default function FinanceVerify({
 					{t("finance_verify.amount")}:{" "}
 					<span className="font-medium">{formatMoney(amount)}</span>
 				</p>
+				{lineTotal != null && (
+					<p>
+						{t("finance_verify.line_sum_pre_ivu")}:{" "}
+						<span className="font-medium">{formatMoney(lineTotal)}</span>
+					</p>
+				)}
 				<p>
 					{t("finance_verify.ivu_rate", { rate: (ivuRate * 100).toFixed(1) })}
 				</p>
@@ -403,25 +453,41 @@ export default function FinanceVerify({
 				<div className="flex flex-wrap items-start gap-4">
 					<Form method="post" className="space-y-3">
 						<input type="hidden" name="intent" value="verify" />
-						<div>
-							<Label htmlFor="avisoAmount">
-								{t("finance_verify.aviso_amount_label")}
-							</Label>
-							<Input
-								id="avisoAmount"
-								name="avisoAmount"
-								type="number"
-								step="0.01"
-								min="0"
-								defaultValue={actionData?.avisoAmount ?? ""}
-								placeholder={t("finance_verify.aviso_amount_placeholder")}
-								className="mt-1"
-								required
-							/>
-							<p className="text-xs text-slate-500 mt-1">
-								{t("finance_verify.aviso_amount_hint")}
-							</p>
-						</div>
+						{prefilledAvisoAmount != null ? (
+							<div>
+								<Label htmlFor="avisoAmountPrefilled">
+									{t("finance_verify.aviso_amount_label")}
+								</Label>
+								<p
+									id="avisoAmountPrefilled"
+									className="mt-1 text-sm font-medium text-green-800 bg-green-50 border border-green-200 rounded px-2 py-1"
+								>
+									{t("finance_verify.aviso_amount_prefilled", {
+										amount: formatMoney(prefilledAvisoAmount),
+									})}
+								</p>
+							</div>
+						) : (
+							<div>
+								<Label htmlFor="avisoAmount">
+									{t("finance_verify.aviso_amount_label")}
+								</Label>
+								<Input
+									id="avisoAmount"
+									name="avisoAmount"
+									type="number"
+									step="0.01"
+									min="0"
+									defaultValue={actionData?.avisoAmount ?? ""}
+									placeholder={t("finance_verify.aviso_amount_placeholder")}
+									className="mt-1"
+									required
+								/>
+								<p className="text-xs text-slate-500 mt-1">
+									{t("finance_verify.aviso_amount_hint")}
+								</p>
+							</div>
+						)}
 						<Textarea
 							name="note"
 							rows={2}

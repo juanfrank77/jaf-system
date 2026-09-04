@@ -343,7 +343,13 @@
 		"errors": {
 			"pdf_required": "Por favor selecciona el PDF de Claro para cargar",
 			"send_back_note_required": "Se requiere una nota explicando la devolución.",
-			"installed_lines_required": "La brigada no registró cantidades instaladas por código de servicio."
+			"installed_lines_required": "La brigada no registró cantidades instaladas por código de servicio.",
+			"invoice_required": "Genere primero la factura JAF.",
+			"aviso_number_required": "El número de Aviso es obligatorio.",
+			"aviso_pdf_required": "Suba el documento del Aviso.",
+			"invalid_aviso_lines": "No se pudieron leer las líneas del Aviso.",
+			"aviso_amount_mismatch": "El total del Aviso {{avisoTotal}} no coincide con la suma de líneas de la factura JAF {{invoiceTotal}} (diferencia {{difference}}, tolerancia {{tolerance}}). Corrija el Aviso en Claro y vuelva a guardar.",
+			"aviso_line_note_required": "Las cantidades por línea difieren de las instaladas. Agregue una nota."
 		}
 	},
 	"docs_lc": {

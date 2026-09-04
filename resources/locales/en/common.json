@@ -343,7 +343,13 @@
 		"errors": {
 			"pdf_required": "Please select the Claro PDF to upload",
 			"send_back_note_required": "A note explaining the send-back is required.",
-			"installed_lines_required": "The crew has not recorded installed quantities per service code."
+			"installed_lines_required": "The crew has not recorded installed quantities per service code.",
+			"invoice_required": "Generate the JAF invoice first.",
+			"aviso_number_required": "Aviso # is required.",
+			"aviso_pdf_required": "Upload the Aviso document.",
+			"invalid_aviso_lines": "Aviso lines could not be read.",
+			"aviso_amount_mismatch": "Aviso total {{avisoTotal}} does not match the JAF invoice line sum {{invoiceTotal}} (difference {{difference}}, tolerance {{tolerance}}). Correct the Aviso in Claro and re-save.",
+			"aviso_line_note_required": "Line quantities differ from installed quantities. Add a note."
 		}
 	},
 	"docs_lc": {

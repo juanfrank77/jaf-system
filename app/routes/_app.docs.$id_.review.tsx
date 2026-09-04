@@ -16,14 +16,22 @@ import { canTransition, isReviewActionStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import { getActiveServiceCodes } from "~/lib/service-codes.server"
 import {
+	type AvisoLine,
 	buildInvoiceLines,
+	type InvoiceLine,
+	parseAvisoLines,
 	round2,
 	type ServiceLine,
 	sumLines,
 } from "~/lib/service-lines"
-import { getIvuRate } from "~/lib/system-settings.server"
+import { checkAvisoMatch } from "~/lib/supervisor-stage"
+import {
+	getAvisoAmountTolerance,
+	getIvuRate,
+} from "~/lib/system-settings.server"
 import { saveBuffer, saveUpload } from "~/lib/uploads.server"
 import { toNumberPrice } from "~/lib/utils"
+import type { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id_.review"
 
 type MaterialLine = { serviceCodeId: string; qty: number }
@@ -277,6 +285,151 @@ export async function action({ request, params }: Route.ActionArgs) {
 				},
 			}),
 		])
+		throw redirect(`/docs/${params.id}/review`)
+	}
+
+	if (intent === "save_aviso") {
+		if (!doc.jafInvoiceGeneratedAt || !doc.jafInvoiceLines)
+			return { errorKey: "docs_review.errors.invoice_required" }
+		if (doc.releasedToFinanceAt) throw redirect(`/docs/${params.id}/review`)
+
+		const avisoNumber =
+			(form.get("avisoNumber") as string | null)?.trim() || null
+		if (!avisoNumber)
+			return { errorKey: "docs_review.errors.aviso_number_required" }
+
+		let rawLines: AvisoLine[]
+		try {
+			rawLines = parseAvisoLines(form.get("avisoLines") as string | null)
+		} catch {
+			return { errorKey: "docs_review.errors.invalid_aviso_lines" }
+		}
+		// Merge duplicate codes (an Aviso may split one service over two rows).
+		// Recompute the line from the merged qty when the unit price matches so
+		// per-row rounding does not drift from the invoice total.
+		const merged = new Map<string, AvisoLine>()
+		for (const l of rawLines) {
+			const prev = merged.get(l.serviceCodeId)
+			if (prev) {
+				const qty = prev.qty + l.qty
+				prev.lineAmount =
+					prev.unitPrice === l.unitPrice
+						? round2(qty * prev.unitPrice)
+						: round2(prev.lineAmount + l.lineAmount)
+				prev.qty = qty
+			} else merged.set(l.serviceCodeId, { ...l })
+		}
+		const avisoLines = [...merged.values()]
+		if (avisoLines.length === 0)
+			return { errorKey: "docs_review.errors.invalid_aviso_lines" }
+
+		let avisoDocPath = doc.avisoDocPath
+		const avisoPdf = form.get("avisoPdf")
+		if (avisoPdf instanceof File && avisoPdf.size > 0) {
+			const validation = validateFile(avisoPdf, "pdf")
+			if (!validation.valid) return { errorMessage: validation.error }
+			avisoDocPath = await saveUpload(
+				"aviso-docs",
+				`${params.id}-aviso.pdf`,
+				avisoPdf,
+			)
+		}
+		if (!avisoDocPath)
+			return { errorKey: "docs_review.errors.aviso_pdf_required" }
+
+		const tolerance = await getAvisoAmountTolerance()
+		const match = checkAvisoMatch(
+			doc.jafInvoiceLines as InvoiceLine[],
+			avisoLines,
+			tolerance,
+		)
+		const lineNote = (form.get("lineNote") as string | null)?.trim() || null
+		if (match.amountOk && match.lineMismatches.length > 0 && !lineNote)
+			return {
+				errorKey: "docs_review.errors.aviso_line_note_required",
+				lineMismatches: match.lineMismatches,
+			}
+
+		const baseData = {
+			avisoNumber,
+			avisoDocPath,
+			avisoLines,
+			avisoLineTotal: match.avisoTotal,
+		}
+		const ops: Prisma.PrismaPromise<unknown>[] = [
+			db.auditTrail.create({
+				data: {
+					docId: params.id,
+					userId: user.id,
+					action: "AVISO_CAPTURED",
+					diffJson: {
+						avisoNumber,
+						avisoTotal: match.avisoTotal,
+						invoiceTotal: match.invoiceTotal,
+						difference: match.difference,
+						amountOk: match.amountOk,
+					},
+				},
+			}),
+		]
+
+		if (!match.amountOk) {
+			ops.unshift(
+				db.jafInvoice.update({ where: { id: params.id }, data: baseData }),
+			)
+			await db.$transaction(ops)
+			return {
+				errorKey: "docs_review.errors.aviso_amount_mismatch",
+				invoiceTotal: match.invoiceTotal,
+				avisoTotal: match.avisoTotal,
+				difference: match.difference,
+				tolerance,
+			}
+		}
+
+		const transition = canTransition(doc.status, "CLARO_UPLOADED", user.role)
+		ops.unshift(
+			db.jafInvoice.update({
+				where: { id: params.id },
+				data: {
+					...baseData,
+					avisoMatchedAt: new Date(),
+					...(transition
+						? { status: "CLARO_UPLOADED", claroUploadedAt: new Date() }
+						: {}),
+				},
+			}),
+		)
+		if (transition)
+			ops.push(
+				db.auditTrail.create({
+					data: {
+						docId: params.id,
+						userId: user.id,
+						action: "STATUS_CHANGED",
+						diffJson: {
+							status: { before: doc.status, after: "CLARO_UPLOADED" },
+						},
+					},
+				}),
+			)
+		if (match.lineMismatches.length > 0)
+			ops.push(
+				db.auditTrail.create({
+					data: {
+						docId: params.id,
+						userId: user.id,
+						action: "QUANTITY_DISCREPANCY",
+						diffJson: {
+							source: "AVISO",
+							discrepancies: match.lineMismatches,
+							note: lineNote,
+							blocksFinance: false,
+						},
+					},
+				}),
+			)
+		await db.$transaction(ops)
 		throw redirect(`/docs/${params.id}/review`)
 	}
 

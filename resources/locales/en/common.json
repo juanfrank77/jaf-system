@@ -377,6 +377,7 @@
 		"claro_code_label": "Claro Code *",
 		"name_label": "Name *",
 		"unit_price_label": "Unit Price *",
+		"unit_label": "Unit (EA, FT, SQFT…)",
 		"account_code_label": "Account Code",
 		"dept_label": "Dept",
 		"add_submit": "Add Service Code",

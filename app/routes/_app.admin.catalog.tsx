@@ -39,6 +39,7 @@ export async function action({ request }: Route.ActionArgs) {
 		const claroCode = formData.get("claroCode")
 		const name = formData.get("name")
 		const unitPrice = formData.get("unitPrice")
+		const unit = formData.get("unit")
 		const accountCode = formData.get("accountCode")
 		const dept = formData.get("dept")
 
@@ -61,6 +62,10 @@ export async function action({ request }: Route.ActionArgs) {
 				claroCode: claroCode.trim(),
 				name: name.trim(),
 				unitPrice: Number.parseFloat(unitPrice),
+				unit:
+					typeof unit === "string" && unit.trim()
+						? unit.trim().toUpperCase()
+						: "",
 				accountCode:
 					typeof accountCode === "string" && accountCode.trim()
 						? accountCode.trim()
@@ -179,6 +184,10 @@ export default function AdminCatalog({ loaderData }: Route.ComponentProps) {
 								min="0"
 								required
 							/>
+						</div>
+						<div className="space-y-1">
+							<Label htmlFor="unit">{t("admin_catalog.unit_label")}</Label>
+							<Input id="unit" name="unit" placeholder="EA, FT, SQFT…" />
 						</div>
 						<div className="space-y-1">
 							<Label htmlFor="accountCode">

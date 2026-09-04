@@ -377,6 +377,7 @@
 		"claro_code_label": "C\u00f3digo Claro *",
 		"name_label": "Nombre *",
 		"unit_price_label": "Precio unitario *",
+		"unit_label": "Unidad (EA, FT, SQFT…)",
 		"account_code_label": "C\u00f3digo de cuenta",
 		"dept_label": "Departamento",
 		"add_submit": "Agregar c\u00f3digo de servicio",

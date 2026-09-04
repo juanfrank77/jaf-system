@@ -14,6 +14,8 @@ import {
 } from "~/components/ui/select"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
+import { getActiveMaterialCodes } from "~/lib/service-codes.server"
+import { toNumberPrice } from "~/lib/utils"
 import { appendVanAssignmentHistory } from "~/lib/van-history"
 import type { Route } from "./+types/_app.admin.vans"
 
@@ -37,14 +39,17 @@ export async function loader({ request }: Route.LoaderArgs) {
 			orderBy: { name: "asc" },
 			select: { id: true, name: true, active: true },
 		}),
-		db.serviceCode.findMany({
-			where: { active: true },
-			orderBy: { claroCode: "asc" },
-			select: { id: true, claroCode: true, name: true },
-		}),
+		getActiveMaterialCodes(),
 	])
 
-	return { vans, installers, serviceCodes }
+	return {
+		vans,
+		installers,
+		serviceCodes: serviceCodes.map((c) => ({
+			...c,
+			unitPrice: toNumberPrice(c.unitPrice),
+		})),
+	}
 }
 
 export async function action({ request }: Route.ActionArgs) {

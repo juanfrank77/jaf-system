@@ -26,6 +26,7 @@ import {
 import { validateFile } from "~/lib/file-upload.server"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
+import { getActiveMaterialCodes } from "~/lib/service-codes.server"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id_.field"
 
@@ -68,9 +69,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		throw redirect(`/docs/${params.id}`)
 	if (user.role === "CREW" && !doc.assignedCrewIds.includes(user.id))
 		throw redirect(`/docs/${params.id}`)
-	const serviceCodes = await db.serviceCode.findMany({
-		where: { active: true },
-	})
+	const serviceCodes = await getActiveMaterialCodes()
 	const sendBackHistory = (doc.sendBackHistory as any[] | null) ?? []
 	const latestSendBack =
 		sendBackHistory.length > 0

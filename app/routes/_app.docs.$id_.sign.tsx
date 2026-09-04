@@ -22,6 +22,10 @@ import { db } from "~/lib/db.server"
 import { generateWarehouseReceiptPdf } from "~/lib/pdf/warehouse-receipt.server"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
+import {
+	getActiveMaterialCodes,
+	getActiveServiceCodes,
+} from "~/lib/service-codes.server"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id_.sign"
 
@@ -42,9 +46,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	})
 	if (!canTransition(doc.status, "SIGNED", user.role))
 		throw redirect(`/docs/${params.id}`)
-	const serviceCodes = await db.serviceCode.findMany({
-		where: { active: true },
-	})
+	const serviceCodes = await getActiveMaterialCodes()
 	const warehouses = await db.warehouse.findMany({ where: { active: true } })
 	const warehouseUsers = await db.user.findMany({
 		where: { role: "WAREHOUSE", active: true },
@@ -156,7 +158,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 		return { errorKey: "docs_sign.errors.already_signed" }
 	}
 
-	const serviceCodes = await db.serviceCode.findMany()
+	const serviceCodes = await getActiveServiceCodes()
 	const pdfBytes = await generateWarehouseReceiptPdf(
 		{
 			...(doc as any),

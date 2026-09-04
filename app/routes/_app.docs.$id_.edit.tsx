@@ -8,6 +8,7 @@ import { Label } from "~/components/ui/label"
 import { db } from "~/lib/db.server"
 import { isEditableStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
+import { getActiveMaterialCodes } from "~/lib/service-codes.server"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id_.edit"
 
@@ -27,9 +28,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	})
 	if (!isEditableStatus(doc.status)) throw redirect(`/docs/${params.id}`)
 
-	const serviceCodes = await db.serviceCode.findMany({
-		where: { active: true },
-	})
+	const serviceCodes = await getActiveMaterialCodes()
 	const crew = await db.user.findMany({
 		where: { role: "CREW", active: true },
 		orderBy: { name: "asc" },

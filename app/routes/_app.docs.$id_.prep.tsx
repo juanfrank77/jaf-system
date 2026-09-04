@@ -18,6 +18,7 @@ import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
+import { getActiveMaterialCodes } from "~/lib/service-codes.server"
 import { useEditableLines } from "~/lib/use-editable-lines"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id_.prep"
@@ -50,9 +51,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	})
 	if (!canTransition(doc.status, "PREPPED", user.role))
 		throw redirect(`/docs/${params.id}`)
-	const serviceCodes = await db.serviceCode.findMany({
-		where: { active: true },
-	})
+	const serviceCodes = await getActiveMaterialCodes()
 	return {
 		doc,
 		serviceCodes: serviceCodes.map((c) => ({

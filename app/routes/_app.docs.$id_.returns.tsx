@@ -9,6 +9,7 @@ import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
+import { getActiveMaterialCodes } from "~/lib/service-codes.server"
 import { useEditableLines } from "~/lib/use-editable-lines"
 import { toNumberPrice } from "~/lib/utils"
 
@@ -42,9 +43,7 @@ export async function loader({ request, params }: any) {
 	})
 	if (!["SIGNED", "FIELD_UPDATED"].includes(doc.status))
 		throw redirect(`/docs/${params.id}`)
-	const serviceCodes = await db.serviceCode.findMany({
-		where: { active: true },
-	})
+	const serviceCodes = await getActiveMaterialCodes()
 	const taken = (doc.materialsTaken as any[]) || []
 	const existingReturns = (doc.materialsReturned as ReturnLine[] | null) || null
 	const materialsUsed =

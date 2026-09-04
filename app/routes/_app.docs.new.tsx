@@ -8,6 +8,7 @@ import { Label } from "~/components/ui/label"
 import { generateControlNumber } from "~/lib/control-number.server"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
+import { getActiveMaterialCodes } from "~/lib/service-codes.server"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.new"
 
@@ -17,10 +18,7 @@ export const meta: Route.MetaFunction = () => [
 
 export async function loader({ request }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["SUPERVISOR", "ADMIN"])
-	const serviceCodes = await db.serviceCode.findMany({
-		where: { active: true },
-		orderBy: { claroCode: "asc" },
-	})
+	const serviceCodes = await getActiveMaterialCodes()
 	const crew = await db.user.findMany({
 		where: { role: "CREW", active: true },
 		orderBy: { name: "asc" },

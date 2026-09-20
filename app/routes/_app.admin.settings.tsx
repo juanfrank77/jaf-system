@@ -1,9 +1,14 @@
+import type { ParseKeys, TFunction } from "i18next"
+import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Form } from "react-router"
+import { useFetcher } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Button } from "~/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
+import { PageHeader } from "~/components/ui/page-header"
+import { useToastManager } from "~/components/ui/toast"
 import { requireRole } from "~/lib/permissions.server"
 import {
 	getAgingAlertDays,
@@ -15,7 +20,7 @@ import {
 	setIvuRate,
 	setLcPbccAdvanceRate,
 } from "~/lib/system-settings.server"
-import { formatMoney } from "~/lib/utils"
+import { cn } from "~/lib/utils"
 import type { Route } from "./+types/_app.admin.settings"
 
 export const meta: Route.MetaFunction = () => [
@@ -100,178 +105,310 @@ export async function action({ request }: Route.ActionArgs) {
 	return { errorKey: "admin_settings.errors.unknown_intent" }
 }
 
-export default function AdminSettings({
-	loaderData,
-	actionData,
-}: Route.ComponentProps) {
+function decimalToPercentDisplay(decimal: number): string {
+	return String(Number((decimal * 100).toFixed(4)))
+}
+
+function percentDisplayToDecimalString(percentStr: string): string {
+	const n = Number(percentStr)
+	if (!Number.isFinite(n)) return percentStr
+	return String(Number((n / 100).toFixed(6)))
+}
+
+function useSettingField(initial: string) {
+	const [baseline, setBaseline] = useState(initial)
+	const [value, setValue] = useState(initial)
+	return {
+		value,
+		setValue,
+		dirty: value !== baseline,
+		commit: () => setBaseline(value),
+		discard: () => setValue(baseline),
+	}
+}
+
+type SettingField = ReturnType<typeof useSettingField>
+type SubmitResult = { ok: boolean; errorKey?: string }
+
+function useSubmitAndWait() {
+	const fetcher = useFetcher<
+		{ errorKey?: string } | { success?: boolean } | null
+	>()
+	const resolverRef = useRef<((result: SubmitResult) => void) | null>(null)
+
+	useEffect(() => {
+		if (fetcher.state === "idle" && resolverRef.current) {
+			const resolve = resolverRef.current
+			resolverRef.current = null
+			const errorKey =
+				fetcher.data && "errorKey" in fetcher.data
+					? fetcher.data.errorKey
+					: undefined
+			resolve({ ok: !errorKey, errorKey })
+		}
+	}, [fetcher.state, fetcher.data])
+
+	return (formData: FormData) =>
+		new Promise<SubmitResult>((resolve) => {
+			resolverRef.current = resolve
+			fetcher.submit(formData, { method: "post" })
+		})
+}
+
+function SettingRow({
+	label,
+	description,
+	htmlFor,
+	last,
+	children,
+}: {
+	label: string
+	description: string
+	htmlFor: string
+	last?: boolean
+	children: React.ReactNode
+}) {
+	return (
+		<div
+			className={cn(
+				"flex flex-col gap-3 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6",
+				!last && "border-b border-border",
+			)}
+		>
+			<div className="sm:max-w-md">
+				<Label htmlFor={htmlFor}>{label}</Label>
+				<p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
+			</div>
+			<div className="sm:w-44 sm:shrink-0">{children}</div>
+		</div>
+	)
+}
+
+function SettingsSection({
+	title,
+	rows,
+	fields,
+	submitters,
+	t,
+}: {
+	title: string
+	rows: React.ReactNode
+	fields: SettingField[]
+	submitters: (() => Promise<SubmitResult>)[]
+	t: TFunction
+}) {
+	const [saving, setSaving] = useState(false)
+	const [error, setError] = useState<string | null>(null)
+	const dirty = fields.some((field) => field.dirty)
+	const toastManager = useToastManager()
+
+	async function handleSave() {
+		setSaving(true)
+		setError(null)
+		const results = await Promise.all(submitters.map((submit) => submit()))
+		setSaving(false)
+		const failed = results.find((result) => !result.ok)
+		if (failed) {
+			setError(failed.errorKey ?? null)
+			return
+		}
+		for (const field of fields) field.commit()
+		toastManager.add({ title: t("admin_settings.saved_toast") })
+	}
+
+	function handleDiscard() {
+		setError(null)
+		for (const field of fields) field.discard()
+	}
+
+	return (
+		<Card>
+			<CardHeader>
+				<CardTitle>{title}</CardTitle>
+			</CardHeader>
+			<CardContent className="pt-0">{rows}</CardContent>
+			{dirty && (
+				<div className="sticky bottom-4 z-10 mx-6 mb-6 flex flex-col gap-2 rounded-lg border border-border bg-card px-4 py-3 shadow-md sm:flex-row sm:items-center sm:justify-between">
+					<span className="text-sm text-muted-foreground">
+						{error
+							? t(error as ParseKeys)
+							: t("admin_settings.unsaved_changes")}
+					</span>
+					<div className="flex items-center gap-2">
+						<Button
+							type="button"
+							variant="secondary"
+							size="sm"
+							onClick={handleDiscard}
+							disabled={saving}
+						>
+							{t("admin_settings.discard")}
+						</Button>
+						<Button
+							type="button"
+							size="sm"
+							onClick={handleSave}
+							loading={saving}
+						>
+							{t("admin_settings.save_changes")}
+						</Button>
+					</div>
+				</div>
+			)}
+		</Card>
+	)
+}
+
+export default function AdminSettings({ loaderData }: Route.ComponentProps) {
 	const { ivuRate, agingAlertDays, avisoAmountTolerance, lcPbccAdvanceRate } =
 		loaderData
 	const { t } = useTranslation()
-	const error =
-		actionData && "errorKey" in actionData ? actionData.errorKey : null
-	const success =
-		actionData && "success" in actionData ? actionData.success : null
-	const successLcPbccAdvance =
-		actionData && "successLcPbccAdvance" in actionData
-			? actionData.successLcPbccAdvance
-			: null
-	const successAging =
-		actionData && "successAging" in actionData ? actionData.successAging : null
-	const successTolerance =
-		actionData && "successTolerance" in actionData
-			? actionData.successTolerance
-			: null
+
+	const ivuField = useSettingField(decimalToPercentDisplay(ivuRate))
+	const lcPbccField = useSettingField(
+		decimalToPercentDisplay(lcPbccAdvanceRate),
+	)
+	const agingField = useSettingField(String(agingAlertDays))
+	const toleranceField = useSettingField(String(avisoAmountTolerance))
+
+	const submitIvu = useSubmitAndWait()
+	const submitLcPbcc = useSubmitAndWait()
+	const submitAging = useSubmitAndWait()
+	const submitTolerance = useSubmitAndWait()
 
 	return (
-		<div className="space-y-6 max-w-sm">
-			<h1 className="text-xl font-semibold">{t("admin_settings.title")}</h1>
+		<div className="mx-auto max-w-[880px]">
+			<PageHeader
+				title={t("admin_settings.title")}
+				subtitle={t("admin_settings.subtitle")}
+			/>
 
-			<div className="bg-white border rounded-lg p-4 space-y-3">
-				<h2 className="font-medium text-sm">
-					{t("admin_settings.ivu_heading")}
-				</h2>
-				<p className="text-xs text-slate-500">
-					{t("admin_settings.ivu_description", {
-						current: (ivuRate * 100).toFixed(1),
-					})}
-				</p>
-				<Form method="post" className="space-y-3">
-					<input type="hidden" name="intent" value="ivu" />
-					<div>
-						<Label htmlFor="ivu_rate">{t("admin_settings.ivu_label")}</Label>
-						<Input
-							id="ivu_rate"
-							name="ivu_rate"
-							type="number"
-							step="0.001"
-							min="0"
-							max="0.999"
-							defaultValue={ivuRate}
-							required
-						/>
-					</div>
-					{error && <p className="text-sm text-red-600">{t(error as never)}</p>}
-					{success && (
-						<p className="text-sm text-green-600">
-							{t("admin_settings.saved")}
-						</p>
-					)}
-					<Button type="submit" size="sm">
-						{t("admin_settings.save")}
-					</Button>
-				</Form>
-			</div>
+			<div className="space-y-6">
+				<SettingsSection
+					title={t("admin_settings.groups.tax_financing")}
+					t={t}
+					fields={[ivuField, lcPbccField]}
+					submitters={[
+						() => {
+							const fd = new FormData()
+							fd.set("intent", "ivu")
+							fd.set("ivu_rate", percentDisplayToDecimalString(ivuField.value))
+							return submitIvu(fd)
+						},
+						() => {
+							const fd = new FormData()
+							fd.set("intent", "lc_pbcc_advance")
+							fd.set(
+								"lc_pbcc_advance_rate",
+								percentDisplayToDecimalString(lcPbccField.value),
+							)
+							return submitLcPbcc(fd)
+						},
+					]}
+					rows={
+						<>
+							<SettingRow
+								htmlFor="ivu_rate"
+								label={t("admin_settings.ivu_label")}
+								description={t("admin_settings.ivu_description")}
+							>
+								<Input
+									id="ivu_rate"
+									type="number"
+									step="0.1"
+									min="0"
+									max="99.9"
+									trailing="%"
+									value={ivuField.value}
+									onChange={(event) => ivuField.setValue(event.target.value)}
+								/>
+							</SettingRow>
+							<SettingRow
+								htmlFor="lc_pbcc_advance_rate"
+								label={t("admin_settings.lc_pbcc_label")}
+								description={t("admin_settings.lc_pbcc_description")}
+								last
+							>
+								<Input
+									id="lc_pbcc_advance_rate"
+									type="number"
+									step="1"
+									min="1"
+									max="100"
+									trailing="%"
+									value={lcPbccField.value}
+									onChange={(event) => lcPbccField.setValue(event.target.value)}
+								/>
+							</SettingRow>
+						</>
+					}
+				/>
 
-			<div className="bg-white border rounded-lg p-4 space-y-3">
-				<h2 className="font-medium text-sm">
-					{t("admin_settings.lc_pbcc_heading")}
-				</h2>
-				<p className="text-xs text-slate-500">
-					{t("admin_settings.lc_pbcc_description", {
-						current: (lcPbccAdvanceRate * 100).toFixed(1),
-					})}
-				</p>
-				<Form method="post" className="space-y-3">
-					<input type="hidden" name="intent" value="lc_pbcc_advance" />
-					<div>
-						<Label htmlFor="lc_pbcc_advance_rate">
-							{t("admin_settings.lc_pbcc_label")}
-						</Label>
-						<Input
-							id="lc_pbcc_advance_rate"
-							name="lc_pbcc_advance_rate"
-							type="number"
-							step="0.01"
-							min="0.01"
-							max="1"
-							defaultValue={lcPbccAdvanceRate}
-							required
-						/>
-					</div>
-					{error && <p className="text-sm text-red-600">{t(error as never)}</p>}
-					{successLcPbccAdvance && (
-						<p className="text-sm text-green-600">
-							{t("admin_settings.saved")}
-						</p>
-					)}
-					<Button type="submit" size="sm">
-						{t("admin_settings.save")}
-					</Button>
-				</Form>
-			</div>
+				<SettingsSection
+					title={t("admin_settings.groups.alerts")}
+					t={t}
+					fields={[agingField]}
+					submitters={[
+						() => {
+							const fd = new FormData()
+							fd.set("intent", "aging")
+							fd.set("aging_alert_days", agingField.value)
+							return submitAging(fd)
+						},
+					]}
+					rows={
+						<SettingRow
+							htmlFor="aging_alert_days"
+							label={t("admin_settings.aging_label")}
+							description={t("admin_settings.aging_description")}
+							last
+						>
+							<Input
+								id="aging_alert_days"
+								type="number"
+								step="1"
+								min="1"
+								trailing={t("admin_settings.days_adornment")}
+								value={agingField.value}
+								onChange={(event) => agingField.setValue(event.target.value)}
+							/>
+						</SettingRow>
+					}
+				/>
 
-			<div className="bg-white border rounded-lg p-4 space-y-3">
-				<h2 className="font-medium text-sm">
-					{t("admin_settings.aging_heading")}
-				</h2>
-				<p className="text-xs text-slate-500">
-					{t("admin_settings.aging_description", {
-						current: agingAlertDays,
-					})}
-				</p>
-				<Form method="post" className="space-y-3">
-					<input type="hidden" name="intent" value="aging" />
-					<div>
-						<Label htmlFor="aging_alert_days">
-							{t("admin_settings.aging_label")}
-						</Label>
-						<Input
-							id="aging_alert_days"
-							name="aging_alert_days"
-							type="number"
-							step="1"
-							min="1"
-							defaultValue={agingAlertDays}
-							required
-						/>
-					</div>
-					{error && <p className="text-sm text-red-600">{t(error as never)}</p>}
-					{successAging && (
-						<p className="text-sm text-green-600">
-							{t("admin_settings.saved")}
-						</p>
-					)}
-					<Button type="submit" size="sm">
-						{t("admin_settings.save")}
-					</Button>
-				</Form>
-			</div>
-
-			<div className="bg-white border rounded-lg p-4 space-y-3">
-				<h2 className="font-medium text-sm">
-					{t("admin_settings.tolerance_heading")}
-				</h2>
-				<p className="text-xs text-slate-500">
-					{t("admin_settings.tolerance_description", {
-						current: formatMoney(avisoAmountTolerance),
-					})}
-				</p>
-				<Form method="post" className="space-y-3">
-					<input type="hidden" name="intent" value="tolerance" />
-					<div>
-						<Label htmlFor="aviso_amount_tolerance">
-							{t("admin_settings.tolerance_label")}
-						</Label>
-						<Input
-							id="aviso_amount_tolerance"
-							name="aviso_amount_tolerance"
-							type="number"
-							step="0.01"
-							min="0"
-							defaultValue={avisoAmountTolerance}
-							required
-						/>
-					</div>
-					{error && <p className="text-sm text-red-600">{t(error as never)}</p>}
-					{successTolerance && (
-						<p className="text-sm text-green-600">
-							{t("admin_settings.saved")}
-						</p>
-					)}
-					<Button type="submit" size="sm">
-						{t("admin_settings.save")}
-					</Button>
-				</Form>
+				<SettingsSection
+					title={t("admin_settings.groups.verification")}
+					t={t}
+					fields={[toleranceField]}
+					submitters={[
+						() => {
+							const fd = new FormData()
+							fd.set("intent", "tolerance")
+							fd.set("aviso_amount_tolerance", toleranceField.value)
+							return submitTolerance(fd)
+						},
+					]}
+					rows={
+						<SettingRow
+							htmlFor="aviso_amount_tolerance"
+							label={t("admin_settings.tolerance_label")}
+							description={t("admin_settings.tolerance_description")}
+							last
+						>
+							<Input
+								id="aviso_amount_tolerance"
+								type="number"
+								step="0.01"
+								min="0"
+								leading="$"
+								value={toleranceField.value}
+								onChange={(event) =>
+									toleranceField.setValue(event.target.value)
+								}
+							/>
+						</SettingRow>
+					}
+				/>
 			</div>
 		</div>
 	)

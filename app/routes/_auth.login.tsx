@@ -57,12 +57,18 @@ export default function LoginPage() {
 	const data = useActionData<typeof action>()
 	const { t } = useTranslation()
 	return (
-		<>
-			<h1 className="text-2xl font-bold mb-6 text-center">
-				{t("login.title")}
-			</h1>
-			<Form method="post" className="space-y-4">
-				<div>
+		<div>
+			<img
+				src="/JAFCO-logo-cropped.png"
+				alt={t("login.brand")}
+				className="mb-6 h-12 w-auto"
+			/>
+			<h1 className="text-2xl font-bold text-foreground">{t("login.title")}</h1>
+			<p className="mt-1.5 text-sm text-muted-foreground">
+				{t("login.subtitle")}
+			</p>
+			<Form method="post" className="mt-8 space-y-4">
+				<div className="space-y-1.5">
 					<Label htmlFor="email">{t("login.email_label")}</Label>
 					<Input
 						id="email"
@@ -72,7 +78,7 @@ export default function LoginPage() {
 						autoComplete="email"
 					/>
 				</div>
-				<div>
+				<div className="space-y-1.5">
 					<Label htmlFor="password">{t("login.password_label")}</Label>
 					<Input
 						id="password"
@@ -83,7 +89,7 @@ export default function LoginPage() {
 					/>
 				</div>
 				{data?.errorKey && (
-					<p className="text-sm text-red-600">
+					<p className="rounded-md border border-status-danger/20 bg-status-danger-soft px-3 py-2 text-sm text-status-danger">
 						{t(data.errorKey, { count: data.errorCount })}
 					</p>
 				)}
@@ -91,7 +97,7 @@ export default function LoginPage() {
 					{t("login.submit")}
 				</Button>
 			</Form>
-		</>
+		</div>
 	)
 }
 

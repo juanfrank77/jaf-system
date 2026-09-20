@@ -2,15 +2,19 @@ import { Dialog } from "@base-ui/react/dialog"
 import { Popover } from "@base-ui/react/popover"
 import {
 	Cancel01Icon,
-	DashboardSquare01Icon,
 	FileAddIcon,
 	GridViewIcon,
+	HardHatIcon,
+	Home01Icon,
 	Invoice02Icon,
+	Logout01Icon,
 	Menu01Icon,
+	MoneyExchange02Icon,
 	Notification01Icon,
 	PackageIcon,
 	Settings02Icon,
 	TruckDeliveryIcon,
+	UnfoldMoreIcon,
 	UserGroup03Icon,
 	UserIcon,
 	Wallet01Icon,
@@ -19,18 +23,34 @@ import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react"
 import type { TFunction } from "i18next"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Form, Link, useLocation } from "react-router"
+import { Form, Link, useLocation, useSubmit } from "react-router"
+import { Avatar } from "~/components/ui/avatar"
 import { Button } from "~/components/ui/button"
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu"
+import { Toaster, ToastViewport } from "~/components/ui/toast"
 import { cn } from "~/lib/utils"
 import { LanguageSwitcher } from "~/library/language-switcher"
 import type { Role } from "../../generated/prisma/client"
 import { OfflineIndicator } from "./offline-indicator"
 
+type AppUser = {
+	id: string
+	name: string
+	role: Role
+	image?: string | null
+}
+
+type NavGroup = "home" | "finance" | "field" | "admin"
+
 type NavItem = {
 	to: string
 	labelKey:
 		| "app_shell.nav.dashboard"
-		| "app_shell.nav.new_document"
 		| "app_shell.nav.receivables"
 		| "app_shell.nav.finance_queue"
 		| "app_shell.nav.admin_settings"
@@ -42,6 +62,7 @@ type NavItem = {
 		| "app_shell.nav.admin_restock"
 		| "app_shell.nav.installer"
 	icon: IconSvgElement
+	group: NavGroup
 	roles?: Role[]
 }
 
@@ -49,83 +70,93 @@ const NAV_ITEMS: NavItem[] = [
 	{
 		to: "/dashboard",
 		labelKey: "app_shell.nav.dashboard",
-		icon: DashboardSquare01Icon,
-	},
-	{
-		to: "/docs/new",
-		labelKey: "app_shell.nav.new_document",
-		icon: FileAddIcon,
-		roles: ["SUPERVISOR", "ADMIN"],
+		icon: Home01Icon,
+		group: "home",
 	},
 	{
 		to: "/finance/queue",
 		labelKey: "app_shell.nav.finance_queue",
 		icon: Invoice02Icon,
+		group: "finance",
 		roles: ["FINANCE", "ADMIN"],
 	},
 	{
 		to: "/finance/receivables",
 		labelKey: "app_shell.nav.receivables",
-		icon: Invoice02Icon,
+		icon: MoneyExchange02Icon,
+		group: "finance",
 		roles: ["FINANCE", "ADMIN"],
 	},
 	{
-		to: "/admin/settings",
-		labelKey: "app_shell.nav.admin_settings",
-		icon: Settings02Icon,
+		to: "/comptroller",
+		labelKey: "app_shell.nav.comptroller",
+		icon: Wallet01Icon,
+		group: "finance",
+		roles: ["COMPTROLLER", "ADMIN"],
+	},
+	{
+		to: "/admin/restock",
+		labelKey: "app_shell.nav.admin_restock",
+		icon: PackageIcon,
+		group: "field",
 		roles: ["ADMIN"],
 	},
 	{
-		to: "/admin/catalog",
-		labelKey: "app_shell.nav.catalog",
-		icon: GridViewIcon,
-		roles: ["ADMIN"],
-	},
-	{
-		to: "/admin/users",
-		labelKey: "app_shell.nav.admin_users",
-		icon: UserIcon,
-		roles: ["ADMIN"],
+		to: "/installer",
+		labelKey: "app_shell.nav.installer",
+		icon: HardHatIcon,
+		group: "field",
+		roles: ["INSTALLER", "ADMIN"],
 	},
 	{
 		to: "/admin/crews",
 		labelKey: "app_shell.nav.admin_crews",
 		icon: UserGroup03Icon,
+		group: "field",
 		roles: ["ADMIN"],
 	},
 	{
 		to: "/admin/vans",
 		labelKey: "app_shell.nav.admin_vans",
 		icon: TruckDeliveryIcon,
+		group: "field",
 		roles: ["ADMIN"],
 	},
 	{
-		to: "/admin/restock",
-		labelKey: "app_shell.nav.admin_restock",
-		icon: PackageIcon,
+		to: "/admin/catalog",
+		labelKey: "app_shell.nav.catalog",
+		icon: GridViewIcon,
+		group: "admin",
 		roles: ["ADMIN"],
 	},
 	{
-		to: "/installer",
-		labelKey: "app_shell.nav.installer",
-		icon: TruckDeliveryIcon,
-		roles: ["INSTALLER", "ADMIN"],
+		to: "/admin/users",
+		labelKey: "app_shell.nav.admin_users",
+		icon: UserIcon,
+		group: "admin",
+		roles: ["ADMIN"],
 	},
 	{
-		to: "/comptroller",
-		labelKey: "app_shell.nav.comptroller",
-		icon: Wallet01Icon,
-		roles: ["COMPTROLLER", "ADMIN"],
+		to: "/admin/settings",
+		labelKey: "app_shell.nav.admin_settings",
+		icon: Settings02Icon,
+		group: "admin",
+		roles: ["ADMIN"],
 	},
 ]
 
-function initials(name: string) {
-	return name
-		.split(" ")
-		.filter(Boolean)
-		.slice(0, 2)
-		.map((part) => part[0]?.toUpperCase())
-		.join("")
+const GROUP_ORDER: NavGroup[] = ["home", "finance", "field", "admin"]
+const GROUP_LABEL_KEY: Partial<
+	Record<
+		NavGroup,
+		| "app_shell.nav.groups.finance"
+		| "app_shell.nav.groups.field"
+		| "app_shell.nav.groups.admin"
+	>
+> = {
+	finance: "app_shell.nav.groups.finance",
+	field: "app_shell.nav.groups.field",
+	admin: "app_shell.nav.groups.admin",
 }
 
 function NavList({
@@ -139,32 +170,69 @@ function NavList({
 }) {
 	const location = useLocation()
 	const { t } = useTranslation()
+	const groups = GROUP_ORDER.map((group) => ({
+		group,
+		items: items.filter((item) => item.group === group),
+	})).filter((entry) => entry.items.length > 0)
+
+	// Pick the single best match so nested pages (e.g. /installer/restock)
+	// highlight their parent entry, and a shorter prefix never steals the
+	// highlight from a longer one.
+	const activeTo = items
+		.filter(
+			(item) =>
+				location.pathname === item.to ||
+				location.pathname.startsWith(`${item.to}/`),
+		)
+		.sort((a, b) => b.to.length - a.to.length)[0]?.to
+
 	return (
-		<nav aria-label={ariaLabel} className="flex flex-col gap-1">
-			{items.map((item) => {
-				const active = location.pathname === item.to
+		<nav aria-label={ariaLabel} className="flex flex-col">
+			{groups.map(({ group, items: groupItems }, index) => {
+				const labelKey = GROUP_LABEL_KEY[group]
 				return (
-					<Link
-						key={item.to}
-						to={item.to}
-						onClick={onNavigate}
+					<div
+						key={group}
 						className={cn(
-							"flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-sidebar-foreground",
-							active
-								? "bg-sidebar-accent text-sidebar-accent-foreground"
-								: "hover:bg-sidebar-accent/60",
+							"flex flex-col gap-0.5",
+							index > 0 && "mt-3.5 border-t border-sidebar-border pt-3.5",
 						)}
 					>
-						<HugeiconsIcon
-							icon={item.icon}
-							strokeWidth={2}
-							className={cn(
-								"size-4 shrink-0",
-								!active && "text-muted-foreground",
-							)}
-						/>
-						{t(item.labelKey)}
-					</Link>
+						{labelKey && (
+							<div className="mb-1.5 px-2.5 text-xs font-medium text-muted-foreground select-none">
+								{t(labelKey)}
+							</div>
+						)}
+						{groupItems.map((item) => {
+							const active = item.to === activeTo
+							return (
+								<Link
+									key={item.to}
+									to={item.to}
+									onClick={onNavigate}
+									aria-current={active ? "page" : undefined}
+									className={cn(
+										"group/nav relative flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/50",
+										active
+											? "bg-sidebar-accent font-medium text-sidebar-accent-foreground before:absolute before:inset-y-2 before:-left-3 before:w-0.5 before:rounded-r-full before:bg-sidebar-primary"
+											: "font-normal text-sidebar-foreground/85 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+									)}
+								>
+									<HugeiconsIcon
+										icon={item.icon}
+										strokeWidth={active ? 2.25 : 1.75}
+										className={cn(
+											"size-[18px] shrink-0 transition-colors",
+											active
+												? "text-sidebar-accent-foreground"
+												: "text-muted-foreground group-hover/nav:text-sidebar-foreground",
+										)}
+									/>
+									<span className="truncate">{t(item.labelKey)}</span>
+								</Link>
+							)
+						})}
+					</div>
 				)
 			})}
 		</nav>
@@ -204,7 +272,7 @@ function NotificationBell({
 	return (
 		<Popover.Root open={notificationsOpen} onOpenChange={setNotificationsOpen}>
 			<Popover.Trigger
-				className="relative text-muted-foreground"
+				className="relative flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
 				aria-label={t("app_shell.notifications.bell_label")}
 			>
 				<HugeiconsIcon
@@ -213,7 +281,7 @@ function NotificationBell({
 					className="size-5"
 				/>
 				{notifications.length > 0 && (
-					<span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-status-danger text-[10px] text-white">
+					<span className="absolute top-0.5 right-0.5 flex size-4 items-center justify-center rounded-full bg-status-danger text-[10px] text-white">
 						{notifications.length}
 					</span>
 				)}
@@ -281,13 +349,105 @@ function NotificationBell({
 	)
 }
 
+function UserMenu({ user }: { user: AppUser }) {
+	const { t } = useTranslation()
+	const submit = useSubmit()
+
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger
+				className="group/user flex w-full items-center gap-2.5 rounded-md p-2 text-left transition-colors outline-none hover:bg-sidebar-accent/60 focus-visible:ring-2 focus-visible:ring-sidebar-ring/50 data-popup-open:bg-sidebar-accent/60"
+				aria-label={t("app_shell.user_menu.trigger_label")}
+			>
+				<Avatar
+					name={user.name}
+					src={user.image ? `/avatars/${user.id}` : null}
+					className="ring-1 ring-sidebar-border"
+				/>
+				<span className="min-w-0 flex-1">
+					<span className="block truncate text-sm font-medium text-sidebar-foreground">
+						{user.name}
+					</span>
+					<span className="block truncate text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+						{user.role}
+					</span>
+				</span>
+				<HugeiconsIcon
+					icon={UnfoldMoreIcon}
+					strokeWidth={2}
+					className="size-4 shrink-0 text-muted-foreground transition-colors group-hover/user:text-sidebar-foreground"
+				/>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent side="top" align="start" className="w-52">
+				<DropdownMenuItem render={<Link to="/account" />}>
+					<HugeiconsIcon icon={UserIcon} strokeWidth={2} className="size-4" />
+					{t("app_shell.user_menu.profile_link")}
+				</DropdownMenuItem>
+				<DropdownMenuItem
+					variant="destructive"
+					onClick={() => submit(null, { method: "post", action: "/sign-out" })}
+				>
+					<HugeiconsIcon
+						icon={Logout01Icon}
+						strokeWidth={2}
+						className="size-4"
+					/>
+					{t("app_shell.sign_out")}
+				</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	)
+}
+
+function SidebarContent({
+	items,
+	user,
+	canCreateDocument,
+	onNavigate,
+	navLabel,
+}: {
+	items: NavItem[]
+	user: AppUser
+	canCreateDocument: boolean
+	onNavigate?: () => void
+	navLabel: string
+}) {
+	const { t } = useTranslation()
+	return (
+		<div className="flex h-full min-h-0 w-full flex-col">
+			{canCreateDocument && (
+				<Button
+					render={<Link to="/docs/new" onClick={onNavigate} />}
+					nativeButton={false}
+					role="link"
+					className="mb-4 w-full shadow-xs"
+				>
+					<HugeiconsIcon
+						icon={FileAddIcon}
+						strokeWidth={2}
+						className="size-4"
+						data-icon="inline-start"
+					/>
+					{t("app_shell.nav.new_document")}
+				</Button>
+			)}
+			<div className="-mx-3 min-h-0 flex-1 overflow-y-auto px-3 pb-2">
+				<NavList items={items} onNavigate={onNavigate} aria-label={navLabel} />
+			</div>
+			<div className="-mx-3 mt-2 border-t border-sidebar-border px-2 pt-2">
+				<UserMenu user={user} />
+			</div>
+		</div>
+	)
+}
+
 function AppShell({
 	user,
 	notifications,
 	comptrollerEnabled,
 	children,
 }: {
-	user: { name: string; role: Role }
+	user: AppUser
 	notifications: {
 		id: string
 		message: string
@@ -299,104 +459,88 @@ function AppShell({
 }) {
 	const [drawerOpen, setDrawerOpen] = useState(false)
 	const { t } = useTranslation()
+	const canCreateDocument = ["SUPERVISOR", "ADMIN"].includes(user.role)
 	const items = NAV_ITEMS.filter((item) => {
 		if (item.to.startsWith("/comptroller") && !comptrollerEnabled) return false
 		return !item.roles || item.roles.includes(user.role)
 	})
 
 	return (
-		<Dialog.Root open={drawerOpen} onOpenChange={setDrawerOpen}>
-			<div className="min-h-screen bg-background">
-				<header className="sticky top-0 z-30 flex items-center gap-3.5 border-b border-border bg-card px-4.5 py-2.5">
-					<Dialog.Trigger
-						className="-ml-1.5 flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground md:hidden"
-						aria-label={t("app_shell.open_menu")}
-					>
-						<HugeiconsIcon
-							icon={Menu01Icon}
-							strokeWidth={2}
-							className="size-5"
-						/>
-					</Dialog.Trigger>
-					<Link
-						to="/dashboard"
-						className="flex items-center gap-2 font-bold tracking-tight"
-					>
-						<span className="flex size-7 items-center justify-center rounded-lg bg-primary text-sm font-extrabold text-primary-foreground">
-							J
-						</span>
-						JAF Ops
-					</Link>
-					<div className="flex-1" />
-					<div className="flex items-center gap-3 text-sm text-muted-foreground">
-						<OfflineIndicator />
-						<span className="font-medium text-foreground">{user.name}</span>
-						<span className="rounded-md bg-muted px-2 py-0.5 text-xs font-semibold">
-							{user.role}
-						</span>
-						<LanguageSwitcher />
-						<NotificationBell notifications={notifications} />
-						<Form method="post" action="/sign-out">
-							<Button type="submit" variant="ghost" size="sm">
-								{t("app_shell.sign_out")}
-							</Button>
-						</Form>
-					</div>
-				</header>
-				<div className="flex min-h-[calc(100vh-51px)]">
-					<aside className="hidden w-56 shrink-0 border-r border-sidebar-border bg-sidebar p-3 md:block">
-						<div className="mb-2 flex items-center gap-2.5 rounded-lg px-2.5 py-2">
-							<span className="flex size-8 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">
-								{initials(user.name)}
-							</span>
-							<div className="text-sm font-semibold text-sidebar-foreground">
-								{user.name}
-							</div>
-						</div>
-						<NavList items={items} aria-label={t("app_shell.primary_nav")} />
-					</aside>
-					<main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:px-8">
-						{children}
-					</main>
-				</div>
-			</div>
-			<Dialog.Portal>
-				<Dialog.Backdrop
-					data-testid="nav-drawer-backdrop"
-					className="fixed inset-0 z-40 bg-black/50 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
-				/>
-				<Dialog.Popup
-					aria-label={t("app_shell.navigation_dialog")}
-					className="fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-sidebar p-3 shadow-xl outline-none data-open:animate-in data-open:slide-in-from-left data-closed:animate-out data-closed:slide-out-to-left"
-				>
-					<div className="mb-2 flex items-center justify-between gap-2.5 rounded-lg px-2.5 py-2">
-						<div className="flex items-center gap-2.5">
-							<span className="flex size-8 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">
-								{initials(user.name)}
-							</span>
-							<div className="text-sm font-semibold text-sidebar-foreground">
-								{user.name}
-							</div>
-						</div>
-						<Dialog.Close
-							aria-label={t("app_shell.close_menu")}
-							className="flex size-8 items-center justify-center rounded-lg text-sidebar-foreground hover:bg-sidebar-accent/60"
+		<Toaster>
+			<Dialog.Root open={drawerOpen} onOpenChange={setDrawerOpen}>
+				<div className="min-h-screen bg-background">
+					<header className="sticky top-0 z-30 flex items-center gap-3.5 border-b border-border bg-card px-4 py-2.5 sm:px-5">
+						<Dialog.Trigger
+							className="-ml-1.5 flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground md:hidden"
+							aria-label={t("app_shell.open_menu")}
 						>
 							<HugeiconsIcon
-								icon={Cancel01Icon}
+								icon={Menu01Icon}
 								strokeWidth={2}
-								className="size-4"
+								className="size-5"
 							/>
-						</Dialog.Close>
+						</Dialog.Trigger>
+						<Link to="/dashboard" className="flex items-center">
+							<img
+								src="/JAFCO-logo-cropped.png"
+								alt="JAF Communication"
+								className="h-8 w-auto"
+							/>
+						</Link>
+						<div className="flex-1" />
+						<div className="flex items-center gap-1.5">
+							<OfflineIndicator />
+							<LanguageSwitcher />
+							<NotificationBell notifications={notifications} />
+						</div>
+					</header>
+					<div className="flex min-h-[calc(100vh-53px)]">
+						<aside className="sticky top-[53px] hidden h-[calc(100vh-53px)] w-60 shrink-0 self-start border-r border-sidebar-border bg-sidebar p-3 md:flex">
+							<SidebarContent
+								items={items}
+								user={user}
+								canCreateDocument={canCreateDocument}
+								navLabel={t("app_shell.primary_nav")}
+							/>
+						</aside>
+						<main className="w-full min-w-0 max-w-[1600px] flex-1 px-4 py-6 sm:px-5 md:px-8">
+							{children}
+						</main>
 					</div>
-					<NavList
-						items={items}
-						onNavigate={() => setDrawerOpen(false)}
-						aria-label={t("app_shell.primary_nav_mobile")}
+				</div>
+				<Dialog.Portal>
+					<Dialog.Backdrop
+						data-testid="nav-drawer-backdrop"
+						className="fixed inset-0 z-40 bg-black/50 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
 					/>
-				</Dialog.Popup>
-			</Dialog.Portal>
-		</Dialog.Root>
+					<Dialog.Popup
+						aria-label={t("app_shell.navigation_dialog")}
+						className="fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-sidebar p-3 shadow-xl outline-none data-open:animate-in data-open:slide-in-from-left data-closed:animate-out data-closed:slide-out-to-left"
+					>
+						<div className="mb-1 flex items-center justify-end">
+							<Dialog.Close
+								aria-label={t("app_shell.close_menu")}
+								className="flex size-8 items-center justify-center rounded-lg text-sidebar-foreground hover:bg-sidebar-accent"
+							>
+								<HugeiconsIcon
+									icon={Cancel01Icon}
+									strokeWidth={2}
+									className="size-4"
+								/>
+							</Dialog.Close>
+						</div>
+						<SidebarContent
+							items={items}
+							user={user}
+							canCreateDocument={canCreateDocument}
+							onNavigate={() => setDrawerOpen(false)}
+							navLabel={t("app_shell.primary_nav_mobile")}
+						/>
+					</Dialog.Popup>
+				</Dialog.Portal>
+			</Dialog.Root>
+			<ToastViewport />
+		</Toaster>
 	)
 }
 

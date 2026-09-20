@@ -22,7 +22,7 @@ export default defineConfig({
 			{
 				extends: true,
 				test: {
-					name: "server tests",
+					name: "server",
 					environment: "node",
 					include: [
 						"./**/*.server.test.{ts,tsx}",
@@ -52,7 +52,7 @@ export default defineConfig({
 						"!./**/*.server.test.{ts,tsx}",
 					],
 					setupFiles: ["./tests/setup.browser.tsx"],
-					name: "browser tests",
+					name: "browser",
 					browser: {
 						enabled: true,
 						headless: true,

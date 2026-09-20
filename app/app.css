@@ -1,14 +1,17 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/figtree";
+@import "@fontsource-variable/montserrat";
+@import "@fontsource-variable/ibm-plex-sans";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme {
 	--font-sans:
-		"Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
-		"Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+		"IBM Plex Sans Variable", ui-sans-serif, system-ui, sans-serif,
+		"Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 }
 
 html,
@@ -21,8 +24,10 @@ body {
 }
 
 @theme inline {
-	--font-heading: var(--font-sans);
-	--font-sans: "Figtree Variable", sans-serif;
+	--font-heading: "Montserrat Variable", "Segoe UI", system-ui, sans-serif;
+	--font-sans: "IBM Plex Sans Variable", "Segoe UI", system-ui, sans-serif;
+	--font-mono:
+		"IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
 	--color-sidebar-ring: var(--sidebar-ring);
 	--color-sidebar-border: var(--sidebar-border);
 	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -57,106 +62,167 @@ body {
 	--color-status-danger-line: var(--status-danger-line);
 	--color-status-ok: var(--status-ok);
 	--color-status-ok-soft: var(--status-ok-soft);
+	--color-job-unassigned-text: var(--job-unassigned-text);
+	--color-job-unassigned-bg: var(--job-unassigned-bg);
+	--color-job-scheduled-text: var(--job-scheduled-text);
+	--color-job-scheduled-bg: var(--job-scheduled-bg);
+	--color-job-dispatched-text: var(--job-dispatched-text);
+	--color-job-dispatched-bg: var(--job-dispatched-bg);
+	--color-job-progress-text: var(--job-progress-text);
+	--color-job-progress-bg: var(--job-progress-bg);
+	--color-job-hold-text: var(--job-hold-text);
+	--color-job-hold-bg: var(--job-hold-bg);
+	--color-job-completed-text: var(--job-completed-text);
+	--color-job-completed-bg: var(--job-completed-bg);
+	--color-job-overdue-text: var(--job-overdue-text);
+	--color-job-overdue-bg: var(--job-overdue-bg);
+	--color-job-cancelled-text: var(--job-cancelled-text);
+	--color-job-cancelled-bg: var(--job-cancelled-bg);
 	--color-popover-foreground: var(--popover-foreground);
 	--color-popover: var(--popover);
 	--color-card-foreground: var(--card-foreground);
 	--color-card: var(--card);
 	--color-foreground: var(--foreground);
 	--color-background: var(--background);
-	--radius-sm: calc(var(--radius) * 0.6);
-	--radius-md: calc(var(--radius) * 0.8);
-	--radius-lg: var(--radius);
-	--radius-xl: calc(var(--radius) * 1.4);
-	--radius-2xl: calc(var(--radius) * 1.8);
-	--radius-3xl: calc(var(--radius) * 2.2);
-	--radius-4xl: calc(var(--radius) * 2.6);
+	--radius-sm: 4px;
+	--radius-md: 6px;
+	--radius-lg: 8px;
+	--radius-xl: 12px;
+	--radius-2xl: 16px;
+	--radius-3xl: 20px;
+	--radius-4xl: 24px;
+	--shadow-xs: 0 1px 2px rgba(20, 24, 27, 0.06);
+	--shadow-sm: 0 2px 6px rgba(20, 24, 27, 0.08);
+	--shadow-md: 0 8px 24px rgba(20, 24, 27, 0.12);
+	--shadow-lg: 0 16px 48px rgba(20, 24, 27, 0.18);
 }
 
 :root {
-	--background: oklch(0.98 0 0);
-	--foreground: oklch(0.145 0 0);
-	--card: oklch(1 0 0);
-	--card-foreground: oklch(0.145 0 0);
-	--popover: oklch(1 0 0);
-	--popover-foreground: oklch(0.145 0 0);
-	--primary: #0d5c4f;
-	--primary-foreground: oklch(0.985 0 0);
-	--secondary: oklch(0.97 0 0);
-	--secondary-foreground: oklch(0.205 0 0);
-	--muted: oklch(0.97 0 0);
-	--muted-foreground: oklch(0.556 0 0);
-	--accent: oklch(0.97 0 0);
-	--accent-foreground: oklch(0.205 0 0);
-	--destructive: oklch(0.577 0.245 27.325);
-	--border: oklch(0.922 0 0);
-	--input: oklch(0.922 0 0);
-	--ring: oklch(0.708 0 0);
-	--chart-1: oklch(0.87 0 0);
-	--chart-2: oklch(0.556 0 0);
-	--chart-3: oklch(0.439 0 0);
-	--chart-4: oklch(0.371 0 0);
-	--chart-5: oklch(0.269 0 0);
-	--radius: 0.625rem;
-	--sidebar: oklch(0.985 0 0);
-	--sidebar-foreground: oklch(0.145 0 0);
-	--sidebar-primary: oklch(0.205 0 0);
-	--sidebar-primary-foreground: oklch(0.985 0 0);
-	--sidebar-accent: oklch(0.97 0 0);
-	--sidebar-accent-foreground: oklch(0.205 0 0);
-	--sidebar-border: oklch(0.922 0 0);
-	--sidebar-ring: oklch(0.708 0 0);
-	--status-info: #185fa5;
-	--status-info-soft: #e6f1fb;
-	--status-warn: #854f0b;
-	--status-warn-soft: #faeeda;
-	--status-danger: #a32d2d;
-	--status-danger-soft: #fcebeb;
+	/* JAFCOM brand primitives */
+	--jafcom-blue: #52a3c0;
+	--jafcom-charcoal: #4f5558;
+	--jafcom-globe: #2f6fa3;
+	--jafcom-teal: #2b7c99;
+
+	--background: #f6f8f9;
+	--foreground: #25292b;
+	--card: #ffffff;
+	--card-foreground: #25292b;
+	--popover: #ffffff;
+	--popover-foreground: #25292b;
+	--primary: #2b7c99;
+	--primary-foreground: #ffffff;
+	--secondary: #edf1f2;
+	--secondary-foreground: #25292b;
+	--muted: #edf1f2;
+	--muted-foreground: #6b7478;
+	--accent: #eff7fa;
+	--accent-foreground: #1f6781;
+	--destructive: #b91c1c;
+	--border: #dde3e5;
+	--input: #c2cacd;
+	--ring: #2b7c99;
+	--chart-1: #52a3c0;
+	--chart-2: #2f6fa3;
+	--chart-3: #4f5558;
+	--chart-4: #b45309;
+	--chart-5: #15803d;
+	--sidebar: #ffffff;
+	--sidebar-foreground: #25292b;
+	--sidebar-primary: #2b7c99;
+	--sidebar-primary-foreground: #ffffff;
+	--sidebar-accent: #eff7fa;
+	--sidebar-accent-foreground: #1f6781;
+	--sidebar-border: #dde3e5;
+	--sidebar-ring: #2b7c99;
+	--status-info: #2b7c99;
+	--status-info-soft: #e1f1f6;
+	--status-warn: #b45309;
+	--status-warn-soft: #fef3c7;
+	--status-danger: #b91c1c;
+	--status-danger-soft: #fee2e2;
 	--status-danger-line: #f0a5a5;
-	--status-ok: #3b6d11;
-	--status-ok-soft: #eaf3de;
+	--status-ok: #15803d;
+	--status-ok-soft: #dcfce7;
+
+	/* Job status chips (section 2.6) */
+	--job-unassigned-text: #3a3f42;
+	--job-unassigned-bg: #edf1f2;
+	--job-scheduled-text: #1e4e79;
+	--job-scheduled-bg: #e1edf7;
+	--job-dispatched-text: #5b21b6;
+	--job-dispatched-bg: #ede9fe;
+	--job-progress-text: #18566b;
+	--job-progress-bg: #e1f1f6;
+	--job-hold-text: #92400e;
+	--job-hold-bg: #fef3c7;
+	--job-completed-text: #166534;
+	--job-completed-bg: #dcfce7;
+	--job-overdue-text: #991b1b;
+	--job-overdue-bg: #fee2e2;
+	--job-cancelled-text: #6b7478;
+	--job-cancelled-bg: #f6f8f9;
 }
 
 .dark {
-	--background: oklch(0.145 0 0);
-	--foreground: oklch(0.985 0 0);
-	--card: oklch(0.205 0 0);
-	--card-foreground: oklch(0.985 0 0);
-	--popover: oklch(0.205 0 0);
-	--popover-foreground: oklch(0.985 0 0);
-	--primary: #2fae93;
-	--primary-foreground: oklch(0.205 0 0);
-	--secondary: oklch(0.269 0 0);
-	--secondary-foreground: oklch(0.985 0 0);
-	--muted: oklch(0.269 0 0);
-	--muted-foreground: oklch(0.708 0 0);
-	--accent: oklch(0.269 0 0);
-	--accent-foreground: oklch(0.985 0 0);
-	--destructive: oklch(0.704 0.191 22.216);
-	--border: oklch(1 0 0 / 10%);
-	--input: oklch(1 0 0 / 15%);
-	--ring: oklch(0.556 0 0);
-	--chart-1: oklch(0.87 0 0);
-	--chart-2: oklch(0.556 0 0);
-	--chart-3: oklch(0.439 0 0);
-	--chart-4: oklch(0.371 0 0);
-	--chart-5: oklch(0.269 0 0);
-	--sidebar: oklch(0.205 0 0);
-	--sidebar-foreground: oklch(0.985 0 0);
-	--sidebar-primary: oklch(0.488 0.243 264.376);
-	--sidebar-primary-foreground: oklch(0.985 0 0);
-	--sidebar-accent: oklch(0.269 0 0);
-	--sidebar-accent-foreground: oklch(0.985 0 0);
-	--sidebar-border: oklch(1 0 0 / 10%);
-	--sidebar-ring: oklch(0.556 0 0);
-	--status-info: #5fa3e6;
-	--status-info-soft: #142a40;
+	--background: #14181b;
+	--foreground: #edf1f2;
+	--card: #1c2124;
+	--card-foreground: #edf1f2;
+	--popover: #1c2124;
+	--popover-foreground: #edf1f2;
+	--primary: #69afc9;
+	--primary-foreground: #14181b;
+	--secondary: #25292b;
+	--secondary-foreground: #edf1f2;
+	--muted: #2e3336;
+	--muted-foreground: #98a2a6;
+	--accent: #15303a;
+	--accent-foreground: #7fb2dc;
+	--destructive: #e07a7a;
+	--border: #33393c;
+	--input: #474e52;
+	--ring: #69afc9;
+	--chart-1: #69afc9;
+	--chart-2: #7fb2dc;
+	--chart-3: #98a2a6;
+	--chart-4: #e0a857;
+	--chart-5: #4ade80;
+	--sidebar: #1c2124;
+	--sidebar-foreground: #edf1f2;
+	--sidebar-primary: #69afc9;
+	--sidebar-primary-foreground: #14181b;
+	--sidebar-accent: #15303a;
+	--sidebar-accent-foreground: #7fb2dc;
+	--sidebar-border: #33393c;
+	--sidebar-ring: #69afc9;
+	--status-info: #69afc9;
+	--status-info-soft: #15303a;
 	--status-warn: #e0a857;
 	--status-warn-soft: #33260f;
 	--status-danger: #e07a7a;
 	--status-danger-soft: #341818;
 	--status-danger-line: #5a2727;
-	--status-ok: #8fc04f;
-	--status-ok-soft: #1c2913;
+	--status-ok: #4ade80;
+	--status-ok-soft: #14291c;
+
+	/* Job status chips: keep the hue, dark tint bg + light text (section 7) */
+	--job-unassigned-text: #c2cacd;
+	--job-unassigned-bg: #2e3336;
+	--job-scheduled-text: #8cc4d9;
+	--job-scheduled-bg: #16303f;
+	--job-dispatched-text: #c4b5fd;
+	--job-dispatched-bg: #2e2350;
+	--job-progress-text: #7fb2dc;
+	--job-progress-bg: #15303a;
+	--job-hold-text: #fcd34d;
+	--job-hold-bg: #33260f;
+	--job-completed-text: #86efac;
+	--job-completed-bg: #14291c;
+	--job-overdue-text: #f87171;
+	--job-overdue-bg: #341818;
+	--job-cancelled-text: #98a2a6;
+	--job-cancelled-bg: #2e3336;
 }
 
 @layer base {
@@ -169,4 +235,24 @@ body {
 	html {
 		@apply font-sans;
 	}
+	h1,
+	h2,
+	h3,
+	h4,
+	h5,
+	h6 {
+		@apply font-heading;
+	}
+	table {
+		font-variant-numeric: tabular-nums;
+	}
+}
+
+/* Signature element (section 8): a stamp, not a pattern. Use only in the
+   four approved spots — login/splash, empty states, print headers, loading. */
+.jafcom-parallelogram {
+	position: absolute;
+	background: var(--jafcom-blue);
+	transform: rotate(-25deg);
+	pointer-events: none;
 }

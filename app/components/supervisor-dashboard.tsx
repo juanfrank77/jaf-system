@@ -1,7 +1,19 @@
 import type { ParseKeys } from "i18next"
 import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
+import type { Greeting } from "~/components/dashboard-view"
 import { Badge } from "~/components/ui/badge"
+import { Card, CardHeader, CardTitle } from "~/components/ui/card"
+import { EmptyState } from "~/components/ui/empty-state"
+import { PageHeader } from "~/components/ui/page-header"
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "~/components/ui/table"
 import type { SupervisorStage } from "~/lib/supervisor-stage"
 import { formatMoney } from "~/lib/utils"
 
@@ -47,90 +59,135 @@ function Queue({
 }) {
 	const { t } = useTranslation()
 	return (
-		<section className="bg-white border rounded-lg p-3 space-y-2">
-			<div className="flex items-center justify-between">
-				<h2 className="text-sm font-semibold">{t(titleKey)}</h2>
-				<Badge variant={variant}>{rows.length}</Badge>
-			</div>
+		<Card>
+			<CardHeader>
+				<CardTitle className="flex items-center gap-2">
+					{t(titleKey)}
+					<Badge variant={variant}>{rows.length}</Badge>
+				</CardTitle>
+			</CardHeader>
 			{rows.length === 0 ? (
-				<p className="text-xs text-slate-400">{t("dashboard.queue.empty")}</p>
+				<EmptyState title={t("dashboard.queue.empty")} />
 			) : (
-				<table className="w-full text-sm">
-					<thead>
-						<tr className="text-xs text-slate-500 text-left border-b">
-							<th className="py-1">{t("dashboard.col.work_order")}</th>
-							<th className="py-1">{t("dashboard.col.address")}</th>
-							<th className="py-1">{t("dashboard.col.crew")}</th>
-							<th className="py-1">{t("dashboard.col.stage")}</th>
-							<th className="py-1 text-right">
+				<Table>
+					<TableHeader>
+						<TableRow>
+							<TableHead>{t("dashboard.col.work_order")}</TableHead>
+							<TableHead>{t("dashboard.col.address")}</TableHead>
+							<TableHead>{t("dashboard.col.crew")}</TableHead>
+							<TableHead>{t("dashboard.col.stage")}</TableHead>
+							<TableHead className="text-right">
 								{t("dashboard.col.jaf_invoice")}
-							</th>
-						</tr>
-					</thead>
-					<tbody>
+							</TableHead>
+						</TableRow>
+					</TableHeader>
+					<TableBody>
 						{rows.map((r) => (
-							<tr
-								key={r.id}
-								className="border-b last:border-0 hover:bg-muted/40"
-							>
-								<td className="py-1.5 font-mono">
-									<Link to={href(r)} className="underline">
+							<TableRow key={r.id}>
+								<TableCell className="font-mono text-xs">
+									<Link
+										to={href(r)}
+										className="text-foreground hover:underline"
+									>
 										{r.controlNumber}
 									</Link>
-								</td>
-								<td className="py-1.5 truncate max-w-[16rem]">
+								</TableCell>
+								<TableCell className="max-w-[16rem] truncate">
 									{r.jobAddressActual ?? r.jobAddressEstimated}
-								</td>
-								<td className="py-1.5">{r.brigadeName ?? "—"}</td>
-								<td className="py-1.5">
+								</TableCell>
+								<TableCell>{r.brigadeName ?? "—"}</TableCell>
+								<TableCell>
 									{t(STAGE_KEY[r.stage])}
 									{r.note ? (
-										<span className="block text-xs text-amber-700">
+										<span className="block text-xs text-status-warn">
 											{r.note}
 										</span>
 									) : null}
-								</td>
-								<td className="py-1.5 text-right">
+								</TableCell>
+								<TableCell className="text-right tabular-nums">
 									{r.amount == null ? "—" : formatMoney(r.amount)}
-								</td>
-							</tr>
+								</TableCell>
+							</TableRow>
 						))}
-					</tbody>
-				</table>
+					</TableBody>
+				</Table>
 			)}
-		</section>
+		</Card>
 	)
 }
 
-export function SupervisorDashboard({ queues }: { queues: Queues }) {
-	const { t } = useTranslation()
+const GREETING_KEY: Record<Greeting, ParseKeys> = {
+	morning: "dashboard.greeting.morning",
+	afternoon: "dashboard.greeting.afternoon",
+	evening: "dashboard.greeting.evening",
+}
+
+export function SupervisorDashboard({
+	queues,
+	userName,
+	greeting = "morning",
+	todayIso,
+}: {
+	queues: Queues
+	userName?: string
+	greeting?: Greeting
+	todayIso?: string
+}) {
+	const { t, i18n } = useTranslation()
+	const firstName = userName?.trim().split(/\s+/)[0]
+	const todayLabel = todayIso
+		? new Date(todayIso).toLocaleDateString(i18n.language, {
+				weekday: "long",
+				day: "numeric",
+				month: "long",
+			})
+		: null
 	return (
-		<div className="space-y-4">
-			<h1 className="text-xl font-semibold">{t("dashboard.title")}</h1>
-			<Queue
-				titleKey="dashboard.queue.pending_review"
-				rows={queues.pendingReview}
-				variant="warn"
-				href={(r) => `/docs/${r.id}/review`}
+		<div>
+			<PageHeader
+				title={
+					firstName
+						? t(GREETING_KEY[greeting], {
+								name: firstName,
+								interpolation: { escapeValue: false },
+							})
+						: t("dashboard.title")
+				}
+				subtitle={t("dashboard.subtitle")}
+				meta={
+					todayLabel ? (
+						<span className="text-sm text-muted-foreground capitalize">
+							{todayLabel}
+						</span>
+					) : undefined
+				}
 			/>
-			<Queue
-				titleKey="dashboard.queue.sent_back"
-				rows={queues.sentBack}
-				variant="info"
-				href={(r) => `/docs/${r.id}`}
-			/>
-			<Queue
-				titleKey="dashboard.queue.missing_aviso"
-				rows={queues.missingAviso}
-				variant="warn"
-				href={(r) => `/docs/${r.id}/review`}
-			/>
-			<Queue
-				titleKey="dashboard.queue.blocked"
-				rows={queues.blocked}
-				variant="danger"
-				href={(r) => `/docs/${r.id}/review`}
-			/>
+			<div className="space-y-4">
+				<Queue
+					titleKey="dashboard.queue.pending_review"
+					rows={queues.pendingReview}
+					variant="warn"
+					href={(r) => `/docs/${r.id}/review`}
+				/>
+				<Queue
+					titleKey="dashboard.queue.sent_back"
+					rows={queues.sentBack}
+					variant="info"
+					href={(r) => `/docs/${r.id}`}
+				/>
+				<Queue
+					titleKey="dashboard.queue.missing_aviso"
+					rows={queues.missingAviso}
+					variant="warn"
+					href={(r) => `/docs/${r.id}/review`}
+				/>
+				<Queue
+					titleKey="dashboard.queue.blocked"
+					rows={queues.blocked}
+					variant="danger"
+					href={(r) => `/docs/${r.id}/review`}
+				/>
+			</div>
 		</div>
 	)
 }

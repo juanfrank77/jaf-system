@@ -12,6 +12,7 @@ export default [
 	layout("routes/_auth.tsx", [route("login", "routes/_auth.login.tsx")]),
 	layout("routes/_app.tsx", [
 		route("dashboard", "routes/_app.dashboard.tsx"),
+		route("account", "routes/_app.account.tsx"),
 		route("admin/catalog", "routes/_app.admin.catalog.tsx"),
 		route("admin/settings", "routes/_app.admin.settings.tsx"),
 		route("admin/docs/:id", "routes/_app.admin.docs.$id.tsx"),
@@ -48,6 +49,7 @@ export default [
 			: []),
 	]),
 	route("files/*", "routes/files.$.tsx"),
+	route("avatars/:userId", "routes/avatars.$userId.tsx"),
 	route("api/service-codes", "routes/api.service-codes.tsx"),
 	route("api/auth/*", "routes/api.auth.$.tsx"),
 	route("sign-out", "routes/action.sign-out.tsx"),

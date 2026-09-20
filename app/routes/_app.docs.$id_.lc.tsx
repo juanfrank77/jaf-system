@@ -183,7 +183,7 @@ export default function LcView({ loaderData }: Route.ComponentProps) {
 				{t("docs_lc.ivu_rate", { rate: (ivuRate * 100).toFixed(1) })}
 			</p>
 
-			<div className="grid grid-cols-2 gap-4">
+			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 				<div className="bg-white border rounded-lg p-4">
 					<h2 className="text-sm font-medium mb-2">
 						{t("docs_lc.jaf_invoice")}
@@ -234,7 +234,7 @@ export default function LcView({ loaderData }: Route.ComponentProps) {
 				</div>
 			</div>
 
-			<div className="flex gap-3">
+			<div className="flex flex-wrap gap-3">
 				<Form method="post">
 					<input type="hidden" name="intent" value="generate_acta" />
 					<Button type="submit" variant="outline">

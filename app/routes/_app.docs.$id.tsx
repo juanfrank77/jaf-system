@@ -1,12 +1,25 @@
+import { Alert02Icon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 import type { ParseKeys } from "i18next"
-import type { ComponentProps } from "react"
+import type { ComponentProps, ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, Link, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { StepRail } from "~/components/step-rail"
+import { AvatarStack } from "~/components/ui/avatar-stack"
+import { Badge } from "~/components/ui/badge"
 import { Button, buttonVariants } from "~/components/ui/button"
+import {
+	Card,
+	CardContent,
+	CardHeader,
+	CardHeaderText,
+	CardTitle,
+} from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
+import { Label } from "~/components/ui/label"
+import { BackLink, PageHeader } from "~/components/ui/page-header"
 import {
 	Select,
 	SelectContent,
@@ -15,7 +28,7 @@ import {
 	SelectValue,
 } from "~/components/ui/select"
 import { Textarea } from "~/components/ui/textarea"
-import { db } from "~/lib/db.server"
+import { db, Prisma } from "~/lib/db.server"
 import {
 	type AddressCorrection,
 	formatTimeOnSite,
@@ -24,7 +37,6 @@ import { isEditableStatus, isTerminalStatus } from "~/lib/permissions"
 import { requireRole, requireSession } from "~/lib/permissions.server"
 import { deriveSupervisorStage } from "~/lib/supervisor-stage"
 import { toNumberPrice } from "~/lib/utils"
-import { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id"
 
 type MaterialLine = { serviceCodeId: string; qty: number }
@@ -46,8 +58,6 @@ type PreppedMaterialLine = {
 type MaterialServiceCode = ComponentProps<
 	typeof MaterialLineItems
 >["serviceCodes"][number]
-
-let _missingCounter = 0
 
 export const meta: Route.MetaFunction = ({ data }) => [
 	{ title: data ? `${data.doc.controlNumber} — JAF Ops` : "JAF Ops" },
@@ -320,6 +330,35 @@ function nextActionLabelKey(
 	return "docs_view.next_action.default"
 }
 
+const STATUS_BADGE_VARIANT: Record<string, "ok" | "warn" | "danger" | "info"> =
+	{
+		CREATED: "warn",
+		PREPPED: "info",
+		SIGNED: "info",
+		FIELD_UPDATED: "warn",
+		SUPERVISOR_APPROVED: "info",
+		CLARO_UPLOADED: "info",
+		LC_REQUEST_GENERATED: "ok",
+		CANCELLED: "danger",
+	}
+
+const STATUS_LABEL_KEY: Record<string, ParseKeys> = {
+	CREATED: "docs_status.created",
+	PREPPED: "docs_status.prepped",
+	SIGNED: "docs_status.signed",
+	FIELD_UPDATED: "docs_status.field_updated",
+	SUPERVISOR_APPROVED: "docs_status.supervisor_approved",
+	CLARO_UPLOADED: "docs_status.claro_uploaded",
+	LC_REQUEST_GENERATED: "docs_status.lc_request_generated",
+	CANCELLED: "docs_status.cancelled",
+}
+
+const APPROVED_STATUSES = [
+	"SUPERVISOR_APPROVED",
+	"CLARO_UPLOADED",
+	"LC_REQUEST_GENERATED",
+] as const
+
 export default function DocView({
 	loaderData,
 	actionData,
@@ -345,44 +384,140 @@ export default function DocView({
 	const corrections =
 		(doc.addressCorrections as AddressCorrection[] | null) || []
 	const gps = doc.gpsCoordinates as { lat: number; lng: number } | null
+	const prepped =
+		(doc.preppedMaterials as unknown as PreppedMaterialLine[]) || []
+	const missingLines = prepped.filter((line) => line.missing)
+	const materials = serviceCodes as unknown as MaterialServiceCode[]
 
-	const APPROVED_STATUSES = [
-		"SUPERVISOR_APPROVED",
-		"CLARO_UPLOADED",
-		"LC_REQUEST_GENERATED",
-	] as const
+	const isSupervisor = user.role === "SUPERVISOR" || user.role === "ADMIN"
+	const canEdit = isSupervisor && isEditableStatus(doc.status)
+	const canManage = isSupervisor && !isTerminalStatus(doc.status)
+	const canReturns =
+		(user.role === "WAREHOUSE" || user.role === "ADMIN") &&
+		(doc.status === "SIGNED" || doc.status === "FIELD_UPDATED") &&
+		!doc.materialsReturned
+	const canAuditPackage =
+		user.role === "SUPERVISOR" ||
+		user.role === "FINANCE" ||
+		user.role === "ADMIN"
+	const canResolveMissing =
+		isSupervisor && doc.status === "CREATED" && doc.prepChangedSincePrep
 	const isApproved = APPROVED_STATUSES.includes(
 		doc.status as (typeof APPROVED_STATUSES)[number],
 	)
 	const missingAviso = isApproved && !doc.avisoNumber
 	const missingClaroPdf = isApproved && !doc.claroPdfPath
+	const hasMaterials =
+		estimated.length > 0 || taken.length > 0 || used.length > 0
+	const showSidebar = canManage
 
 	return (
-		<div className="space-y-5">
-			{(user.role === "SUPERVISOR" || user.role === "ADMIN") && (
-				<StepRail stage={stage} />
-			)}
-			<div className="flex items-center justify-between">
-				<div>
-					<h1 className="font-mono font-bold text-lg">{doc.controlNumber}</h1>
-					<p className="text-sm text-slate-500">{doc.jobType}</p>
-				</div>
-				<span className="text-xs bg-slate-100 px-3 py-1 rounded-full font-medium">
-					{doc.status.replace(/_/g, " ")}
-				</span>
-			</div>
+		<div>
+			<PageHeader
+				back={
+					<BackLink to="/dashboard">
+						{t("docs_view.back_to_dashboard")}
+					</BackLink>
+				}
+				title={
+					<span className="font-mono tracking-tight">{doc.controlNumber}</span>
+				}
+				subtitle={doc.jobType}
+				meta={
+					<Badge variant={STATUS_BADGE_VARIANT[doc.status] ?? "neutral"} dot>
+						{STATUS_LABEL_KEY[doc.status]
+							? t(STATUS_LABEL_KEY[doc.status])
+							: doc.status.replace(/_/g, " ")}
+					</Badge>
+				}
+				actions={
+					<>
+						{canEdit && (
+							<Link
+								to={`/docs/${doc.id}/edit`}
+								className={buttonVariants({ variant: "outline", size: "sm" })}
+							>
+								{t("docs_view.edit_work_order")}
+							</Link>
+						)}
+						{canReturns && (
+							<Link
+								to={`/docs/${doc.id}/returns`}
+								className={buttonVariants({ variant: "outline", size: "sm" })}
+							>
+								{t("docs_view.log_returns")}
+							</Link>
+						)}
+						{user.role === "ADMIN" && (
+							<Link
+								to={`/admin/docs/${doc.id}`}
+								className={buttonVariants({ variant: "outline", size: "sm" })}
+							>
+								{t("docs_view.full_history")}
+							</Link>
+						)}
+						{canAuditPackage && (
+							<a
+								href={`/docs/${doc.id}/audit-package`}
+								className={buttonVariants({ variant: "outline", size: "sm" })}
+								target="_blank"
+								rel="noreferrer"
+							>
+								{t("docs_view.download_audit_package")}
+							</a>
+						)}
+						{nextHref && (
+							<Link to={nextHref} className={buttonVariants({ size: "sm" })}>
+								{t(nextActionLabelKey(doc.status, user.role))}
+							</Link>
+						)}
+					</>
+				}
+			/>
 
-			{(missingAviso || missingClaroPdf) && (
-				<div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-2">
-					<div className="flex items-start gap-3">
-						<span className="text-amber-600 text-lg" aria-hidden>
-							⚠
-						</span>
+			<div className="space-y-6">
+				{isSupervisor && <StepRail stage={stage} />}
+
+				{error?.errorKey && (
+					<p
+						role="alert"
+						className="rounded-lg border border-status-danger/20 bg-status-danger-soft px-4 py-3 text-sm text-status-danger"
+					>
+						{t(error.errorKey as ParseKeys)}
+					</p>
+				)}
+
+				{doc.status === "CANCELLED" && (
+					<div
+						role="status"
+						className="rounded-lg border border-status-danger/20 bg-status-danger-soft px-4 py-3"
+					>
+						<p className="text-sm font-semibold text-status-danger">
+							{t("docs_view.cancelled_notice")}
+						</p>
+						{doc.cancellationReason && (
+							<p className="mt-1 text-sm text-status-danger/80">
+								{doc.cancellationReason}
+							</p>
+						)}
+					</div>
+				)}
+
+				{(missingAviso || missingClaroPdf) && (
+					<div
+						role="status"
+						className="flex items-start gap-3 rounded-lg border border-status-warn/20 bg-status-warn-soft px-4 py-3"
+					>
+						<HugeiconsIcon
+							icon={Alert02Icon}
+							strokeWidth={2}
+							className="mt-0.5 size-5 shrink-0 text-status-warn"
+						/>
 						<div className="space-y-1">
-							<p className="font-medium text-amber-900">
+							<p className="text-sm font-semibold text-status-warn">
 								{t("docs_view.billing_blocked")}
 							</p>
-							<ul className="text-sm text-amber-800 list-disc list-inside">
+							<ul className="list-inside list-disc text-sm text-status-warn/90">
 								{missingAviso && (
 									<li>{t("docs_view.billing_blocked_aviso")}</li>
 								)}
@@ -390,341 +525,398 @@ export default function DocView({
 									<li>{t("docs_view.billing_blocked_claro_pdf")}</li>
 								)}
 							</ul>
-							<p className="text-xs text-amber-700">
+							<p className="text-xs text-status-warn/80">
 								{t("docs_view.billing_blocked_hint")}
 							</p>
 						</div>
 					</div>
-				</div>
-			)}
+				)}
 
-			<section className="bg-white border rounded-lg p-4 space-y-2 text-sm">
-				<p>
-					<span className="text-slate-500">{t("docs_view.address")}:</span>{" "}
-					{doc.jobAddressActual || doc.jobAddressEstimated}
-					{gps && (
-						<span className="ml-1 text-slate-400">
-							({gps.lat.toFixed(4)}, {gps.lng.toFixed(4)})
-						</span>
-					)}
-				</p>
-				{corrections.length > 0 && (
-					<div className="pt-2 border-t">
-						<p className="text-slate-500 text-xs mb-1">
-							{t("docs_view.address_corrections")}
-						</p>
-						<ul className="space-y-1">
-							{corrections.map((c) => (
-								<li
-									key={`${c.original}-${c.corrected}-${c.correctedAt}`}
-									className="text-xs"
+				<div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+					<div className="space-y-6">
+						<Card>
+							<CardHeader divider>
+								<CardHeaderText>
+									<CardTitle>{t("docs_view.job_details")}</CardTitle>
+								</CardHeaderText>
+							</CardHeader>
+							<CardContent className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+								<DetailField
+									label={t("docs_view.address")}
+									className="sm:col-span-2"
 								>
-									<span className="line-through text-slate-400">
-										{c.original}
-									</span>
-									{" → "}
-									<span className="font-medium">{c.corrected}</span>
-									{c.gps && (
-										<span className="ml-1 text-slate-400">
-											({c.gps.lat.toFixed(4)}, {c.gps.lng.toFixed(4)})
-										</span>
-									)}
-								</li>
-							))}
-						</ul>
-					</div>
-				)}
-				{doc.avisoNumber && (
-					<p>
-						<span className="text-slate-500">
-							{t("docs_view.aviso_number")}:
-						</span>{" "}
-						{doc.avisoNumber}
-					</p>
-				)}
-				{(user.role === "SUPERVISOR" || user.role === "ADMIN") &&
-					!isTerminalStatus(doc.status) && (
-						<Form method="post" className="flex items-center gap-2">
-							<Input
-								type="text"
-								name="avisoNumber"
-								defaultValue={doc.avisoNumber || ""}
-								placeholder="10333185"
-								className="h-8 w-40"
-							/>
-							<input type="hidden" name="intent" value="edit_aviso" />
-							<Button type="submit" size="sm" variant="outline">
-								Save Aviso #
-							</Button>
-						</Form>
-					)}
-				<p>
-					<span className="text-slate-500">{t("docs_view.supervisor")}:</span>{" "}
-					{supervisor?.name}
-				</p>
-				<p>
-					<span className="text-slate-500">{t("docs_view.crew")}:</span>{" "}
-					{assignedCrew.map((c) => c.name).join(", ")}
-				</p>
-				<p>
-					<span className="text-slate-500">{t("docs_view.created")}:</span>{" "}
-					{new Date(doc.createdAt).toLocaleString()}
-				</p>
-			</section>
-
-			{estimated.length > 0 && (
-				<section className="bg-white border rounded-lg p-4">
-					<h2 className="text-sm font-medium mb-2 text-slate-600">
-						{t("docs_view.estimated_materials")}
-					</h2>
-					<MaterialLineItems
-						serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
-						initialItems={estimated}
-						readOnly
-					/>
-				</section>
-			)}
-
-			{taken.length > 0 && (
-				<section className="bg-white border rounded-lg p-4">
-					<h2 className="text-sm font-medium mb-2 text-slate-600">
-						{t("docs_view.materials_taken")}
-					</h2>
-					<MaterialLineItems
-						serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
-						initialItems={taken}
-						readOnly
-					/>
-					{doc.crewSignature && (
-						<img
-							src={doc.crewSignature}
-							alt={t("docs_view.crew_signature_alt")}
-							className="mt-3 border rounded max-h-16"
-						/>
-					)}
-				</section>
-			)}
-
-			{used.length > 0 && (
-				<section className="bg-white border rounded-lg p-4 space-y-3">
-					<h2 className="text-sm font-medium mb-2 text-slate-600">
-						{t("docs_view.materials_used")}
-					</h2>
-					<MaterialLineItems
-						serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
-						initialItems={used}
-						readOnly
-					/>
-					{doc.startedAt && doc.endedAt && (
-						<p className="text-sm text-slate-600">
-							<span className="text-slate-500">
-								{t("docs_view.time_on_site")}:
-							</span>{" "}
-							{formatTimeOnSite(doc.startedAt, doc.endedAt)}
-						</p>
-					)}
-					{doc.fieldNotes && (
-						<p className="text-sm text-slate-600">{doc.fieldNotes}</p>
-					)}
-					{doc.completionSignature && (
-						<div>
-							<p className="text-xs text-slate-500 mb-1">
-								{t("docs_view.completion_signature")}
-							</p>
-							<img
-								src={doc.completionSignature}
-								alt={t("docs_view.completion_signature_alt")}
-								className="border rounded max-h-16"
-							/>
-						</div>
-					)}
-				</section>
-			)}
-
-			{nextHref && (
-				<Link to={nextHref} className={buttonVariants({ className: "w-full" })}>
-					{t(nextActionLabelKey(doc.status, user.role))}
-				</Link>
-			)}
-
-			{(user.role === "SUPERVISOR" || user.role === "ADMIN") &&
-				isEditableStatus(doc.status) && (
-					<Link
-						to={`/docs/${doc.id}/edit`}
-						className={buttonVariants({
-							variant: "outline",
-							className: "w-full",
-						})}
-					>
-						{t("docs_view.edit_work_order")}
-					</Link>
-				)}
-
-			{(user.role === "SUPERVISOR" || user.role === "ADMIN") &&
-				doc.status === "CREATED" &&
-				doc.prepChangedSincePrep && (
-					<div className="space-y-2 pt-2 border-t">
-						<p className="text-sm font-medium text-amber-700">
-							{t("docs_view.missing_materials_heading")}
-						</p>
-						{(() => {
-							const prepped =
-								(doc.preppedMaterials as unknown as PreppedMaterialLine[]) || []
-							const missingLines = prepped
-								.filter((l) => l.missing)
-								.map((line) => ({
-									...line,
-									_key: `missing-${(_missingCounter++).toString()}`,
-								}))
-							if (missingLines.length === 0) return null
-							return (
-								<div className="space-y-1">
-									{missingLines.map((line) => {
-										const code = serviceCodes.find(
-											(c) => c.id === line.serviceCodeId,
-										)
-										return (
-											<p key={line._key} className="text-xs text-slate-600">
-												{code?.claroCode} — {code?.name}:{" "}
-												{line.substitutedWith ? `substituted` : `missing`}
-												{line.notes ? ` (${line.notes})` : ""}
+									<p>
+										{doc.jobAddressActual || doc.jobAddressEstimated}
+										{gps && (
+											<span className="ml-1 text-muted-foreground">
+												({gps.lat.toFixed(4)}, {gps.lng.toFixed(4)})
+											</span>
+										)}
+									</p>
+									{corrections.length > 0 && (
+										<div className="mt-2 border-t border-border pt-2">
+											<p className="mb-1 text-xs text-muted-foreground">
+												{t("docs_view.address_corrections")}
 											</p>
-										)
-									})}
-								</div>
-							)
-						})()}
-						<Form method="post" className="space-y-2">
-							<Textarea
-								name="resolutionNote"
-								placeholder={t(
-									"docs_view.missing_materials_resolution_placeholder",
+											<ul className="space-y-1">
+												{corrections.map((correction) => (
+													<li
+														key={`${correction.original}-${correction.corrected}-${correction.correctedAt}`}
+														className="text-xs"
+													>
+														<span className="text-muted-foreground line-through">
+															{correction.original}
+														</span>
+														{" → "}
+														<span className="font-medium">
+															{correction.corrected}
+														</span>
+														{correction.gps && (
+															<span className="ml-1 text-muted-foreground">
+																({correction.gps.lat.toFixed(4)},{" "}
+																{correction.gps.lng.toFixed(4)})
+															</span>
+														)}
+													</li>
+												))}
+											</ul>
+										</div>
+									)}
+								</DetailField>
+								{doc.jobDescription && (
+									<DetailField
+										label={t("docs_view.job_description")}
+										className="sm:col-span-2"
+									>
+										{doc.jobDescription}
+									</DetailField>
 								)}
-								rows={2}
-								required
-							/>
-							<input type="hidden" name="intent" value="resolveMissing" />
-							<Button type="submit" variant="outline" className="w-full">
-								{t("docs_view.missing_materials_resolve")}
-							</Button>
-						</Form>
-						{error?.errorKey && (
-							<p className="text-sm text-red-600">
-								{t(error.errorKey as ParseKeys)}
-							</p>
+								<DetailField label={t("docs_view.aviso_number")}>
+									{canManage ? (
+										<Form
+											method="post"
+											className="flex flex-wrap items-center gap-2"
+										>
+											<Label htmlFor="avisoNumber" className="sr-only">
+												{t("docs_view.aviso_number")}
+											</Label>
+											<Input
+												id="avisoNumber"
+												type="text"
+												name="avisoNumber"
+												defaultValue={doc.avisoNumber || ""}
+												placeholder="10333185"
+												className="h-8 w-40"
+											/>
+											<input type="hidden" name="intent" value="edit_aviso" />
+											<Button type="submit" size="sm" variant="outline">
+												{t("docs_view.save_aviso")}
+											</Button>
+										</Form>
+									) : (
+										doc.avisoNumber || "—"
+									)}
+								</DetailField>
+								<DetailField label={t("docs_view.created")}>
+									{new Date(doc.createdAt).toLocaleString()}
+								</DetailField>
+								<DetailField label={t("docs_view.supervisor")}>
+									{supervisor?.name || "—"}
+								</DetailField>
+								<DetailField label={t("docs_view.crew")}>
+									{assignedCrew.length > 0 ? (
+										<div className="flex items-center gap-2">
+											<AvatarStack people={assignedCrew} />
+											<span>
+												{assignedCrew.map((crew) => crew.name).join(", ")}
+											</span>
+										</div>
+									) : (
+										"—"
+									)}
+								</DetailField>
+								{doc.startedAt && doc.endedAt && (
+									<DetailField label={t("docs_view.time_on_site")}>
+										{formatTimeOnSite(doc.startedAt, doc.endedAt)}
+									</DetailField>
+								)}
+								{doc.fieldNotes && (
+									<DetailField
+										label={t("docs_view.field_notes")}
+										className="sm:col-span-2"
+									>
+										{doc.fieldNotes}
+									</DetailField>
+								)}
+							</CardContent>
+						</Card>
+
+						{canResolveMissing && (
+							<Card className="border-status-warn/30">
+								<CardHeader divider>
+									<CardHeaderText>
+										<CardTitle className="text-status-warn">
+											{t("docs_view.missing_materials_heading")}
+										</CardTitle>
+									</CardHeaderText>
+								</CardHeader>
+								<CardContent className="space-y-4">
+									{missingLines.length > 0 && (
+										<ul className="space-y-1.5">
+											{missingLines.map((line) => {
+												const code = serviceCodes.find(
+													(item) => item.id === line.serviceCodeId,
+												)
+												return (
+													<li
+														key={`${line.serviceCodeId}-${line.substitutedWith ?? ""}-${line.notes ?? ""}`}
+														className="text-sm text-foreground"
+													>
+														<span className="font-mono text-xs text-muted-foreground">
+															{code?.claroCode}
+														</span>{" "}
+														{code?.name}:{" "}
+														{line.substitutedWith
+															? t("docs_view.substituted_label")
+															: t("docs_view.missing_label")}
+														{line.notes ? ` (${line.notes})` : ""}
+													</li>
+												)
+											})}
+										</ul>
+									)}
+									<Form method="post" className="space-y-3">
+										<Label htmlFor="resolutionNote" className="sr-only">
+											{t("docs_view.missing_materials_resolve")}
+										</Label>
+										<Textarea
+											id="resolutionNote"
+											name="resolutionNote"
+											placeholder={t(
+												"docs_view.missing_materials_resolution_placeholder",
+											)}
+											rows={2}
+											required
+										/>
+										<input type="hidden" name="intent" value="resolveMissing" />
+										<Button type="submit" variant="outline">
+											{t("docs_view.missing_materials_resolve")}
+										</Button>
+									</Form>
+								</CardContent>
+							</Card>
+						)}
+
+						{hasMaterials && (
+							<Card>
+								<CardHeader divider>
+									<CardHeaderText>
+										<CardTitle>{t("docs_view.materials_heading")}</CardTitle>
+									</CardHeaderText>
+								</CardHeader>
+								<CardContent className="space-y-6">
+									{estimated.length > 0 && (
+										<MaterialBlock title={t("docs_view.estimated_materials")}>
+											<MaterialLineItems
+												serviceCodes={materials}
+												initialItems={estimated}
+												readOnly
+											/>
+										</MaterialBlock>
+									)}
+									{taken.length > 0 && (
+										<MaterialBlock title={t("docs_view.materials_taken")}>
+											<MaterialLineItems
+												serviceCodes={materials}
+												initialItems={taken}
+												readOnly
+											/>
+											{doc.crewSignature && (
+												<SignaturePreview
+													src={doc.crewSignature}
+													alt={t("docs_view.crew_signature_alt")}
+												/>
+											)}
+										</MaterialBlock>
+									)}
+									{used.length > 0 && (
+										<MaterialBlock title={t("docs_view.materials_used")}>
+											<MaterialLineItems
+												serviceCodes={materials}
+												initialItems={used}
+												readOnly
+											/>
+											{doc.completionSignature && (
+												<SignaturePreview
+													src={doc.completionSignature}
+													alt={t("docs_view.completion_signature_alt")}
+													caption={t("docs_view.completion_signature")}
+												/>
+											)}
+										</MaterialBlock>
+									)}
+								</CardContent>
+							</Card>
+						)}
+
+						{auditTrail.length > 0 && (
+							<Card>
+								<CardHeader divider>
+									<CardHeaderText>
+										<CardTitle>{t("docs_view.audit_trail")}</CardTitle>
+									</CardHeaderText>
+								</CardHeader>
+								<CardContent>
+									<ol className="relative space-y-4 border-l border-border pl-4">
+										{auditTrail.map((entry) => (
+											<li key={entry.id} className="relative">
+												<span
+													aria-hidden
+													className="absolute top-1.5 -left-[21px] size-2 rounded-full bg-muted-foreground/40"
+												/>
+												<p className="text-sm font-medium text-foreground">
+													{entry.action.replace(/_/g, " ")}
+												</p>
+												<p className="text-xs text-muted-foreground">
+													{entry.user.name}
+													{" · "}
+													{new Date(entry.timestamp).toLocaleString()}
+												</p>
+											</li>
+										))}
+									</ol>
+								</CardContent>
+							</Card>
 						)}
 					</div>
-				)}
 
-			{(user.role === "WAREHOUSE" || user.role === "ADMIN") &&
-				(doc.status === "SIGNED" || doc.status === "FIELD_UPDATED") &&
-				!doc.materialsReturned && (
-					<Link
-						to={`/docs/${doc.id}/returns`}
-						className={buttonVariants({
-							variant: "outline",
-							className: "w-full",
-						})}
-					>
-						{t("docs_view.log_returns")}
-					</Link>
-				)}
+					{showSidebar && (
+						<aside className="space-y-6 lg:sticky lg:top-6">
+							<Card>
+								<CardHeader divider>
+									<CardHeaderText>
+										<CardTitle>{t("docs_view.reassign_heading")}</CardTitle>
+									</CardHeaderText>
+								</CardHeader>
+								<CardContent>
+									<Form method="post" className="space-y-3">
+										<Label htmlFor="crewId" className="sr-only">
+											{t("docs_view.reassign_heading")}
+										</Label>
+										<Select name="crewId" required>
+											<SelectTrigger id="crewId" className="w-full">
+												<SelectValue
+													placeholder={t("docs_view.reassign_placeholder")}
+												/>
+											</SelectTrigger>
+											<SelectContent>
+												{crewOptions.map(
+													(crew: { id: string; name: string }) => (
+														<SelectItem key={crew.id} value={crew.id}>
+															{crew.name}
+														</SelectItem>
+													),
+												)}
+											</SelectContent>
+										</Select>
+										<input type="hidden" name="intent" value="reassign" />
+										<Button type="submit" variant="outline" className="w-full">
+											{t("docs_view.reassign_submit")}
+										</Button>
+									</Form>
+								</CardContent>
+							</Card>
 
-			{user.role === "ADMIN" && (
-				<Link
-					to={`/admin/docs/${doc.id}`}
-					className={buttonVariants({
-						variant: "outline",
-						className: "w-full mt-2",
-					})}
-				>
-					{t("docs_view.full_history")}
-				</Link>
-			)}
-
-			{(user.role === "SUPERVISOR" || user.role === "ADMIN") &&
-				!isTerminalStatus(doc.status) && (
-					<div className="space-y-3 pt-2 border-t">
-						<Form method="post" className="space-y-2">
-							<fieldset className="border rounded-lg p-3 space-y-2">
-								<legend className="text-sm font-medium px-1">
-									{t("docs_view.reassign_heading")}
-								</legend>
-								<Select name="crewId" required>
-									<SelectTrigger className="w-full">
-										<SelectValue
-											placeholder={t("docs_view.reassign_placeholder")}
+							<Card className="border-status-danger/20">
+								<CardHeader divider>
+									<CardHeaderText>
+										<CardTitle className="text-status-danger">
+											{t("docs_view.cancel_heading")}
+										</CardTitle>
+									</CardHeaderText>
+								</CardHeader>
+								<CardContent>
+									<Form method="post" className="space-y-3">
+										<Label htmlFor="cancelReason" className="sr-only">
+											{t("docs_view.cancel_heading")}
+										</Label>
+										<Textarea
+											id="cancelReason"
+											name="reason"
+											placeholder={t("docs_view.cancel_placeholder")}
+											rows={2}
+											required
 										/>
-									</SelectTrigger>
-									<SelectContent>
-										{crewOptions.map((c: { id: string; name: string }) => (
-											<SelectItem key={c.id} value={c.id}>
-												{c.name}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-								<input type="hidden" name="intent" value="reassign" />
-								<Button type="submit" variant="outline" size="sm">
-									{t("docs_view.reassign_submit")}
-								</Button>
-							</fieldset>
-						</Form>
+										<input type="hidden" name="intent" value="cancel" />
+										<Button
+											type="submit"
+											variant="destructive"
+											className="w-full"
+										>
+											{t("docs_view.cancel_submit")}
+										</Button>
+									</Form>
+								</CardContent>
+							</Card>
+						</aside>
+					)}
+				</div>
+			</div>
+		</div>
+	)
+}
 
-						<Form method="post" className="space-y-2">
-							<fieldset className="border rounded-lg p-3 space-y-2">
-								<legend className="text-sm font-medium px-1 text-red-700">
-									{t("docs_view.cancel_heading")}
-								</legend>
-								<Textarea
-									name="reason"
-									placeholder={t("docs_view.cancel_placeholder")}
-									rows={2}
-									required
-								/>
-								<input type="hidden" name="intent" value="cancel" />
-								<Button type="submit" variant="destructive" size="sm">
-									{t("docs_view.cancel_submit")}
-								</Button>
-							</fieldset>
-							{error?.errorKey && (
-								<p className="text-sm text-red-600">
-									{t(error.errorKey as ParseKeys)}
-								</p>
-							)}
-						</Form>
-					</div>
-				)}
+function DetailField({
+	label,
+	children,
+	className,
+}: {
+	label: string
+	children: ReactNode
+	className?: string
+}) {
+	return (
+		<div className={className}>
+			<p className="text-xs font-medium text-muted-foreground">{label}</p>
+			<div className="mt-0.5 text-sm text-foreground">{children}</div>
+		</div>
+	)
+}
 
-			{(user.role === "SUPERVISOR" ||
-				user.role === "FINANCE" ||
-				user.role === "ADMIN") && (
-				<a
-					href={`/docs/${doc.id}/audit-package`}
-					className={buttonVariants({
-						variant: "outline",
-						className: "mt-2 bg-primary text-primary-foreground",
-					})}
-					target="_blank"
-					rel="noreferrer"
-				>
-					{t("docs_view.download_audit_package")}
-				</a>
+function MaterialBlock({
+	title,
+	children,
+}: {
+	title: string
+	children: ReactNode
+}) {
+	return (
+		<section className="space-y-3 border-b border-border pb-6 last:border-b-0 last:pb-0">
+			<h3 className="text-sm font-medium text-foreground">{title}</h3>
+			{children}
+		</section>
+	)
+}
+
+function SignaturePreview({
+	src,
+	alt,
+	caption,
+}: {
+	src: string
+	alt: string
+	caption?: string
+}) {
+	return (
+		<div className="pt-1">
+			{caption && (
+				<p className="mb-1 text-xs text-muted-foreground">{caption}</p>
 			)}
-
-			{auditTrail.length > 0 && (
-				<section className="space-y-2 pt-3 border-t">
-					<p className="text-sm font-semibold text-foreground">
-						{t("docs_view.audit_trail")}
-					</p>
-					{auditTrail.map((a) => (
-						<p className="text-sm text-muted-foreground" key={a.id}>
-							{new Date(a.timestamp).toLocaleString()} — {a.user.name}:{" "}
-							{a.action}
-						</p>
-					))}
-				</section>
-			)}
+			<img
+				src={src}
+				alt={alt}
+				className="max-h-16 rounded-md border border-border bg-background"
+			/>
 		</div>
 	)
 }

@@ -911,71 +911,74 @@ function AvisoCaptureForm({
 					</a>
 				)}
 			</div>
-			<table className="w-full text-sm">
-				<thead>
-					<tr className="text-left text-xs text-slate-500 border-b">
-						<th className="py-1">{t("docs_review.table.code")}</th>
-						<th className="py-1">{t("docs_review.table.description")}</th>
-						<th className="py-1 text-right">
-							{t("docs_review_steps.charged_qty")}
-						</th>
-						<th className="py-1 text-right">
-							{t("docs_review_steps.aviso_unit_price")}
-						</th>
-					</tr>
-				</thead>
-				<tbody>
-					{rows.map((r, i) => (
-						<tr key={r.serviceCodeId} className="border-b last:border-0">
-							<td className="py-1 font-mono text-xs">{r.claroCode}</td>
-							<td className="py-1">
-								{
-									invoiceLines.find((l) => l.serviceCodeId === r.serviceCodeId)
-										?.name
-								}
-							</td>
-							<td className="py-1 text-right">
-								<Input
-									type="number"
-									min={0}
-									value={r.qty}
-									className="w-20 ml-auto"
-									onChange={(e) =>
-										setRows(
-											rows.map((row, j) =>
-												j === i
-													? {
-															...row,
-															qty: Number.parseInt(e.target.value, 10) || 0,
-														}
-													: row,
-											),
-										)
-									}
-								/>
-							</td>
-							<td className="py-1 text-right">
-								<Input
-									type="number"
-									step="0.0001"
-									min={0}
-									value={r.unitPrice}
-									className="w-28 ml-auto"
-									onChange={(e) =>
-										setRows(
-											rows.map((row, j) =>
-												j === i
-													? { ...row, unitPrice: Number(e.target.value) || 0 }
-													: row,
-											),
-										)
-									}
-								/>
-							</td>
+			<div className="overflow-x-auto">
+				<table className="w-full text-sm">
+					<thead>
+						<tr className="text-left text-xs text-slate-500 border-b">
+							<th className="py-1">{t("docs_review.table.code")}</th>
+							<th className="py-1">{t("docs_review.table.description")}</th>
+							<th className="py-1 text-right">
+								{t("docs_review_steps.charged_qty")}
+							</th>
+							<th className="py-1 text-right">
+								{t("docs_review_steps.aviso_unit_price")}
+							</th>
 						</tr>
-					))}
-				</tbody>
-			</table>
+					</thead>
+					<tbody>
+						{rows.map((r, i) => (
+							<tr key={r.serviceCodeId} className="border-b last:border-0">
+								<td className="py-1 font-mono text-xs">{r.claroCode}</td>
+								<td className="py-1">
+									{
+										invoiceLines.find(
+											(l) => l.serviceCodeId === r.serviceCodeId,
+										)?.name
+									}
+								</td>
+								<td className="py-1 text-right">
+									<Input
+										type="number"
+										min={0}
+										value={r.qty}
+										className="w-20 ml-auto"
+										onChange={(e) =>
+											setRows(
+												rows.map((row, j) =>
+													j === i
+														? {
+																...row,
+																qty: Number.parseInt(e.target.value, 10) || 0,
+															}
+														: row,
+												),
+											)
+										}
+									/>
+								</td>
+								<td className="py-1 text-right">
+									<Input
+										type="number"
+										step="0.0001"
+										min={0}
+										value={r.unitPrice}
+										className="w-28 ml-auto"
+										onChange={(e) =>
+											setRows(
+												rows.map((row, j) =>
+													j === i
+														? { ...row, unitPrice: Number(e.target.value) || 0 }
+														: row,
+												),
+											)
+										}
+									/>
+								</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
 			<input type="hidden" name="avisoLines" value={JSON.stringify(rows)} />
 			<div>
 				<Label htmlFor="lineNote" className="text-xs">
@@ -1088,37 +1091,39 @@ function PreCertPanel({
 					</a>
 				)}
 			</div>
-			<table className="w-full text-sm">
-				<thead>
-					<tr className="text-left text-xs text-slate-500 border-b">
-						<th className="py-1">{t("service_picker.col_code")}</th>
-						<th className="py-1">{t("service_picker.col_description")}</th>
-						<th className="py-1 text-right">
-							{t("service_picker.col_installed")}
-						</th>
-						<th className="py-1 text-right">Cant.</th>
-						<th className="py-1 text-right">Costo</th>
-					</tr>
-				</thead>
-				<tbody>
-					{lines.map((l) => (
-						<tr key={l.serviceCodeId} className="border-b last:border-0">
-							<td className="py-1 font-mono text-xs">{l.claroCode}</td>
-							<td className="py-1">
-								{l.description}
-								{l.editReason && (
-									<span className="block text-xs text-amber-700">
-										{l.editReason}
-									</span>
-								)}
-							</td>
-							<td className="py-1 text-right">{l.installedQty}</td>
-							<td className="py-1 text-right">{l.certifiedQty}</td>
-							<td className="py-1 text-right">${l.lineAmount.toFixed(2)}</td>
+			<div className="overflow-x-auto">
+				<table className="w-full text-sm">
+					<thead>
+						<tr className="text-left text-xs text-slate-500 border-b">
+							<th className="py-1">{t("service_picker.col_code")}</th>
+							<th className="py-1">{t("service_picker.col_description")}</th>
+							<th className="py-1 text-right">
+								{t("service_picker.col_installed")}
+							</th>
+							<th className="py-1 text-right">Cant.</th>
+							<th className="py-1 text-right">Costo</th>
 						</tr>
-					))}
-				</tbody>
-			</table>
+					</thead>
+					<tbody>
+						{lines.map((l) => (
+							<tr key={l.serviceCodeId} className="border-b last:border-0">
+								<td className="py-1 font-mono text-xs">{l.claroCode}</td>
+								<td className="py-1">
+									{l.description}
+									{l.editReason && (
+										<span className="block text-xs text-amber-700">
+											{l.editReason}
+										</span>
+									)}
+								</td>
+								<td className="py-1 text-right">{l.installedQty}</td>
+								<td className="py-1 text-right">{l.certifiedQty}</td>
+								<td className="py-1 text-right">${l.lineAmount.toFixed(2)}</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
 			<p className="text-sm text-right font-medium">
 				TOTAL {formatMoney(sheet?.total ?? 0)}
 			</p>
@@ -1267,48 +1272,50 @@ function FourColumnTable({
 }) {
 	const { t } = useTranslation()
 	return (
-		<table className="w-full text-sm">
-			<thead>
-				<tr className="text-left text-xs text-slate-500 border-b">
-					<th className="py-1">{t("service_picker.col_code")}</th>
-					<th className="py-1 text-right">{t("release.col_ordered")}</th>
-					<th className="py-1 text-right">{t("release.col_installed")}</th>
-					<th className="py-1 text-right">{t("release.col_certified")}</th>
-					<th className="py-1 text-right">{t("release.col_charged")}</th>
-					<th className="py-1 text-right">Status</th>
-				</tr>
-			</thead>
-			<tbody>
-				{ordered.map((l) => {
-					const inst = installed.find(
-						(x) => x.serviceCodeId === l.serviceCodeId,
-					)?.qty
-					const cert = certified?.find(
-						(x) => x.serviceCodeId === l.serviceCodeId,
-					)?.certifiedQty
-					const chg = charged?.find(
-						(x) => x.serviceCodeId === l.serviceCodeId,
-					)?.qty
-					const allEqual = l.qty === inst && l.qty === cert && l.qty === chg
-					return (
-						<tr key={l.serviceCodeId} className="border-b last:border-0">
-							<td className="py-1 font-mono text-xs">{l.claroCode}</td>
-							<td className="py-1 text-right">{l.qty}</td>
-							<td className="py-1 text-right">{inst ?? "—"}</td>
-							<td className="py-1 text-right">{cert ?? "—"}</td>
-							<td className="py-1 text-right">{chg ?? "—"}</td>
-							<td
-								className={`py-1 text-right ${
-									allEqual ? "text-green-700" : "text-amber-700"
-								}`}
-							>
-								{allEqual ? t("release.match") : t("release.mismatch")}
-							</td>
-						</tr>
-					)
-				})}
-			</tbody>
-		</table>
+		<div className="overflow-x-auto">
+			<table className="w-full text-sm">
+				<thead>
+					<tr className="text-left text-xs text-slate-500 border-b">
+						<th className="py-1">{t("service_picker.col_code")}</th>
+						<th className="py-1 text-right">{t("release.col_ordered")}</th>
+						<th className="py-1 text-right">{t("release.col_installed")}</th>
+						<th className="py-1 text-right">{t("release.col_certified")}</th>
+						<th className="py-1 text-right">{t("release.col_charged")}</th>
+						<th className="py-1 text-right">Status</th>
+					</tr>
+				</thead>
+				<tbody>
+					{ordered.map((l) => {
+						const inst = installed.find(
+							(x) => x.serviceCodeId === l.serviceCodeId,
+						)?.qty
+						const cert = certified?.find(
+							(x) => x.serviceCodeId === l.serviceCodeId,
+						)?.certifiedQty
+						const chg = charged?.find(
+							(x) => x.serviceCodeId === l.serviceCodeId,
+						)?.qty
+						const allEqual = l.qty === inst && l.qty === cert && l.qty === chg
+						return (
+							<tr key={l.serviceCodeId} className="border-b last:border-0">
+								<td className="py-1 font-mono text-xs">{l.claroCode}</td>
+								<td className="py-1 text-right">{l.qty}</td>
+								<td className="py-1 text-right">{inst ?? "—"}</td>
+								<td className="py-1 text-right">{cert ?? "—"}</td>
+								<td className="py-1 text-right">{chg ?? "—"}</td>
+								<td
+									className={`py-1 text-right ${
+										allEqual ? "text-green-700" : "text-amber-700"
+									}`}
+								>
+									{allEqual ? t("release.match") : t("release.mismatch")}
+								</td>
+							</tr>
+						)
+					})}
+				</tbody>
+			</table>
+		</div>
 	)
 }
 
@@ -1392,7 +1399,7 @@ export default function ReviewDoc({
 				{ordered.length > 0 && (
 					<ServiceLinesTable lines={ordered} installed={installed} />
 				)}
-				<div className="grid grid-cols-3 gap-3 text-sm">
+				<div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
 					<div className="border rounded-lg p-3">
 						<p className="text-xs text-slate-500 mb-1">
 							{t("docs_review.estimated")}
@@ -1429,7 +1436,7 @@ export default function ReviewDoc({
 						<p className="text-sm font-medium mb-2">
 							{t("docs_review.job_photos", { count: photoItems.length })}
 						</p>
-						<div className="grid grid-cols-3 gap-2">
+						<div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
 							{photoItems.map((p) => (
 								<a
 									key={p.id}
@@ -1489,43 +1496,47 @@ export default function ReviewDoc({
 							{t("docs_review_steps.invoice_heading")}
 						</h2>
 						{invoiceLines.length > 0 && (
-							<table className="w-full text-sm">
-								<thead>
-									<tr className="text-left text-xs text-slate-500 border-b">
-										<th className="py-1">{t("docs_review.table.code")}</th>
-										<th className="py-1">
-											{t("docs_review.table.description")}
-										</th>
-										<th className="py-1 text-right">
-											{t("docs_review.table.qty")}
-										</th>
-										<th className="py-1 text-right">
-											{t("docs_review_steps.unit_price")}
-										</th>
-										<th className="py-1 text-right">
-											{t("docs_review_steps.line_amount")}
-										</th>
-									</tr>
-								</thead>
-								<tbody>
-									{invoiceLines.map((l) => (
-										<tr
-											key={l.serviceCodeId}
-											className="border-b last:border-0"
-										>
-											<td className="py-1 font-mono text-xs">{l.claroCode}</td>
-											<td className="py-1">{l.name}</td>
-											<td className="py-1 text-right">{l.qty}</td>
-											<td className="py-1 text-right">
-												${l.unitPrice.toFixed(4)}
-											</td>
-											<td className="py-1 text-right">
-												${l.lineAmount.toFixed(2)}
-											</td>
+							<div className="overflow-x-auto">
+								<table className="w-full text-sm">
+									<thead>
+										<tr className="text-left text-xs text-slate-500 border-b">
+											<th className="py-1">{t("docs_review.table.code")}</th>
+											<th className="py-1">
+												{t("docs_review.table.description")}
+											</th>
+											<th className="py-1 text-right">
+												{t("docs_review.table.qty")}
+											</th>
+											<th className="py-1 text-right">
+												{t("docs_review_steps.unit_price")}
+											</th>
+											<th className="py-1 text-right">
+												{t("docs_review_steps.line_amount")}
+											</th>
 										</tr>
-									))}
-								</tbody>
-							</table>
+									</thead>
+									<tbody>
+										{invoiceLines.map((l) => (
+											<tr
+												key={l.serviceCodeId}
+												className="border-b last:border-0"
+											>
+												<td className="py-1 font-mono text-xs">
+													{l.claroCode}
+												</td>
+												<td className="py-1">{l.name}</td>
+												<td className="py-1 text-right">{l.qty}</td>
+												<td className="py-1 text-right">
+													${l.unitPrice.toFixed(4)}
+												</td>
+												<td className="py-1 text-right">
+													${l.lineAmount.toFixed(2)}
+												</td>
+											</tr>
+										))}
+									</tbody>
+								</table>
+							</div>
 						)}
 						{doc.jafInvoiceLineTotal != null && (
 							<p className="text-sm text-right">

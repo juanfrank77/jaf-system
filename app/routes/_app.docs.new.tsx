@@ -7,6 +7,14 @@ import { ServicePicker } from "~/components/service-picker"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
+import { PageHeader } from "~/components/ui/page-header"
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "~/components/ui/select"
 import { Textarea } from "~/components/ui/textarea"
 import { generateControlNumber } from "~/lib/control-number.server"
 import { db } from "~/lib/db.server"
@@ -131,6 +139,21 @@ export async function action({ request }: Route.ActionArgs) {
 	throw redirect("/dashboard")
 }
 
+function FormSection({
+	title,
+	children,
+}: {
+	title: string
+	children: React.ReactNode
+}) {
+	return (
+		<div className="space-y-4 border-b border-border pb-6 last:border-b-0 last:pb-0">
+			<h2 className="text-sm font-semibold text-foreground">{title}</h2>
+			<div className="space-y-4">{children}</div>
+		</div>
+	)
+}
+
 export default function NewDoc({
 	loaderData,
 	actionData,
@@ -138,74 +161,98 @@ export default function NewDoc({
 	const { serviceCodes, brigades } = loaderData
 	const error = actionData as { errorKey?: ParseKeys } | undefined
 	const { t } = useTranslation()
+
+	function crewLabel(brigade: (typeof brigades)[number]) {
+		return `${brigade.name}${brigade.code ? ` · ${brigade.code}` : ""}${
+			brigade.area ? ` (${brigade.area})` : ""
+		}`
+	}
+
 	return (
-		<div className="space-y-5">
-			<h1 className="text-xl font-semibold">{t("docs_new.title")}</h1>
-			<Form method="post" className="space-y-4">
-				<div>
-					<Label htmlFor="jobAddressEstimated">
-						{t("docs_new.job_address_label")}
-					</Label>
-					<Input
-						id="jobAddressEstimated"
-						name="jobAddressEstimated"
-						placeholder="Calle X, Barrio Y, Municipio"
-						required
-					/>
-				</div>
-				<div>
-					<Label htmlFor="jobType">{t("docs_new.job_type_label")}</Label>
-					<Input
-						id="jobType"
-						name="jobType"
-						placeholder="Mantenimiento, Instalación..."
-						required
-					/>
-				</div>
-				<div>
-					<Label htmlFor="jobDescription">
-						{t("docs_new.job_description_label")}
-					</Label>
-					<Textarea
-						id="jobDescription"
-						name="jobDescription"
-						rows={2}
-						required
-					/>
-				</div>
-				<div>
-					<Label>{t("docs_new.service_codes_label")}</Label>
-					<ServicePicker />
-				</div>
-				<div>
-					<Label>{t("docs_new.estimated_materials_label")}</Label>
-					<div className="mt-1">
-						<MaterialLineItems serviceCodes={serviceCodes} />
+		<div className="mx-auto max-w-[880px]">
+			<PageHeader
+				title={t("docs_new.title")}
+				subtitle={t("docs_new.subtitle")}
+			/>
+			<Form method="post" className="space-y-6">
+				<FormSection title={t("docs_new.section_job_details")}>
+					<div>
+						<Label htmlFor="jobAddressEstimated">
+							{t("docs_new.job_address_label")}
+						</Label>
+						<Input
+							id="jobAddressEstimated"
+							name="jobAddressEstimated"
+							placeholder="Calle X, Barrio Y, Municipio"
+							required
+						/>
 					</div>
-				</div>
-				<div>
-					<Label htmlFor="brigadeId">{t("docs_new.select_crew_label")}</Label>
-					<select
-						id="brigadeId"
-						name="brigadeId"
-						required
-						defaultValue=""
-						className="mt-1 w-full border rounded-md h-9 px-2 text-sm bg-white"
-					>
-						<option value="" disabled>
-							{t("docs_new.select_crew_placeholder")}
-						</option>
-						{brigades.map((b) => (
-							<option key={b.id} value={b.id}>
-								{b.name}
-								{b.code ? ` · ${b.code}` : ""}
-								{b.area ? ` (${b.area})` : ""}
-							</option>
-						))}
-					</select>
-				</div>
+					<div>
+						<Label htmlFor="jobType">{t("docs_new.job_type_label")}</Label>
+						<Input
+							id="jobType"
+							name="jobType"
+							placeholder="Mantenimiento, Instalación..."
+							required
+						/>
+					</div>
+					<div>
+						<Label htmlFor="jobDescription">
+							{t("docs_new.job_description_label")}
+						</Label>
+						<Textarea
+							id="jobDescription"
+							name="jobDescription"
+							rows={2}
+							required
+						/>
+					</div>
+				</FormSection>
+
+				<FormSection title={t("docs_new.section_materials")}>
+					<div>
+						<Label>{t("docs_new.service_codes_label")}</Label>
+						<ServicePicker />
+					</div>
+					<div>
+						<Label>{t("docs_new.estimated_materials_label")}</Label>
+						<div className="mt-1">
+							<MaterialLineItems serviceCodes={serviceCodes} />
+						</div>
+					</div>
+				</FormSection>
+
+				<FormSection title={t("docs_new.section_assignment")}>
+					<div>
+						<Label htmlFor="brigadeId">{t("docs_new.select_crew_label")}</Label>
+						<Select name="brigadeId" required>
+							<SelectTrigger id="brigadeId" className="mt-1 w-full">
+								<SelectValue
+									placeholder={t("docs_new.select_crew_placeholder")}
+								>
+									{(value) => {
+										const selected = brigades.find((b) => b.id === value)
+										return selected
+											? crewLabel(selected)
+											: t("docs_new.select_crew_placeholder")
+									}}
+								</SelectValue>
+							</SelectTrigger>
+							<SelectContent>
+								{brigades.map((b) => (
+									<SelectItem key={b.id} value={b.id}>
+										{crewLabel(b)}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</div>
+				</FormSection>
+
 				{error?.errorKey && (
-					<p className="text-sm text-red-600">{t(error.errorKey)}</p>
+					<p className="rounded-md border border-status-danger/20 bg-status-danger-soft px-3 py-2 text-sm text-status-danger">
+						{t(error.errorKey)}
+					</p>
 				)}
 				<Button type="submit" className="w-full">
 					{t("docs_new.submit")}

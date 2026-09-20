@@ -497,10 +497,6 @@ export function computeDashboardStats(
 		stats: [
 			{ labelKey: "dashboard.stat.total_documents", value: totalDocs },
 			{
-				labelKey: "dashboard.stat.open_receivables",
-				value: openReceivables,
-			},
-			{
 				labelKey: "dashboard.stat.awaiting_claro_upload",
 				value: awaitingClaroUpload,
 			},

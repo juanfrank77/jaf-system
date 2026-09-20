@@ -1,15 +1,58 @@
+import {
+	MoreHorizontalIcon,
+	PencilEdit02Icon,
+	PlusSignIcon,
+	Search01Icon,
+	UserGroup03Icon,
+} from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
+import type { ParseKeys, TFunction } from "i18next"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { data, Form, redirect } from "react-router"
+import { data, Form, redirect, useFetcher } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { Avatar } from "~/components/ui/avatar"
+import { AvatarStack } from "~/components/ui/avatar-stack"
+import { Badge } from "~/components/ui/badge"
 import { Button, buttonVariants } from "~/components/ui/button"
+import {
+	Card,
+	CardContent,
+	CardFooter,
+	CardHeader,
+	CardHeaderText,
+	CardTitle,
+} from "~/components/ui/card"
 import { Checkbox } from "~/components/ui/checkbox"
+import { Drawer, DrawerContent } from "~/components/ui/drawer"
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu"
+import { EmptyState } from "~/components/ui/empty-state"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
+import { PageHeader } from "~/components/ui/page-header"
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "~/components/ui/select"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
 import type { Route } from "./+types/_app.admin.crews"
 
-type CrewUser = { id: string; name: string; active: boolean }
+type CrewUser = {
+	id: string
+	name: string
+	active: boolean
+	image: string | null
+}
+type Crew = { id: string; name: string; memberIds: string[]; active: boolean }
 
 export const meta: Route.MetaFunction = () => [{ title: "Crews — JAF Ops" }]
 
@@ -21,7 +64,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		db.user.findMany({
 			where: { role: "CREW" },
 			orderBy: { name: "asc" },
-			select: { id: true, name: true, active: true },
+			select: { id: true, name: true, active: true, image: true },
 		}),
 	])
 
@@ -86,221 +129,313 @@ export async function action({ request }: Route.ActionArgs) {
 	)
 }
 
+function CrewForm({
+	crew,
+	crewUsers,
+	onSaved,
+	onCancel,
+	t,
+}: {
+	crew: Crew | null
+	crewUsers: CrewUser[]
+	onSaved: () => void
+	onCancel: () => void
+	t: TFunction
+}) {
+	const fetcher = useFetcher()
+	const wasSubmitting = useRef(false)
+	const submitting = fetcher.state !== "idle"
+
+	useEffect(() => {
+		if (wasSubmitting.current && !submitting) onSaved()
+		wasSubmitting.current = submitting
+	}, [submitting, onSaved])
+
+	return (
+		<fetcher.Form method="post" className="space-y-5">
+			<input type="hidden" name="intent" value={crew ? "update" : "create"} />
+			{crew && <input type="hidden" name="id" value={crew.id} />}
+			<div className="space-y-1.5">
+				<Label htmlFor="name">{t("admin_crews.name_label")}</Label>
+				<Input id="name" name="name" defaultValue={crew?.name} required />
+			</div>
+			<div className="space-y-2">
+				<p className="text-sm font-medium text-foreground">
+					{t("admin_crews.members_label")}
+				</p>
+				<div className="grid grid-cols-1 gap-2">
+					{crewUsers.map((u) => (
+						<label
+							key={u.id}
+							htmlFor={`member-${crew?.id ?? "new"}-${u.id}`}
+							className="flex items-center gap-2 text-sm"
+						>
+							<Checkbox
+								id={`member-${crew?.id ?? "new"}-${u.id}`}
+								name="memberIds"
+								value={u.id}
+								defaultChecked={crew?.memberIds.includes(u.id)}
+							/>
+							<Avatar
+								name={u.name}
+								src={u.image ? `/avatars/${u.id}` : null}
+								className="size-6"
+							/>
+							<span>
+								{u.name}{" "}
+								<span className="text-muted-foreground">
+									(
+									{u.active
+										? t("admin_crews.active")
+										: t("admin_crews.inactive")}
+									)
+								</span>
+							</span>
+						</label>
+					))}
+				</div>
+			</div>
+			<div className="flex items-center gap-2">
+				<Checkbox
+					id="active"
+					name="active"
+					defaultChecked={crew?.active ?? true}
+				/>
+				<Label htmlFor="active" className="text-sm">
+					{t("admin_crews.active_label")}
+				</Label>
+			</div>
+			<div className="flex justify-end gap-2 pt-2">
+				<Button type="button" variant="secondary" onClick={onCancel}>
+					{t("admin_crews.cancel")}
+				</Button>
+				<Button type="submit" loading={submitting}>
+					{crew ? t("admin_crews.save") : t("admin_crews.add_submit")}
+				</Button>
+			</div>
+		</fetcher.Form>
+	)
+}
+
 export default function AdminCrews({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
 	const { crews, crewUsers } = loaderData as {
-		crews: { id: string; name: string; memberIds: string[]; active: boolean }[]
+		crews: Crew[]
 		crewUsers: CrewUser[]
 	}
 	const { t } = useTranslation()
 	const error =
 		actionData && "errorKey" in actionData ? actionData.errorKey : null
+	const [drawerOpen, setDrawerOpen] = useState(false)
+	const [drawerCrew, setDrawerCrew] = useState<Crew | null>(null)
+	const [search, setSearch] = useState("")
+	const [statusFilter, setStatusFilter] = useState<
+		"all" | "active" | "inactive"
+	>("all")
+
+	const filtered = useMemo(() => {
+		const term = search.trim().toLowerCase()
+		return crews.filter((crew) => {
+			if (statusFilter === "active" && !crew.active) return false
+			if (statusFilter === "inactive" && crew.active) return false
+			if (!term) return true
+			if (crew.name.toLowerCase().includes(term)) return true
+			return crewUsers.some(
+				(user) =>
+					crew.memberIds.includes(user.id) &&
+					user.name.toLowerCase().includes(term),
+			)
+		})
+	}, [crews, crewUsers, search, statusFilter])
 
 	return (
-		<div className="space-y-8">
-			<h1 className="text-xl font-semibold">{t("admin_crews.title")}</h1>
+		<div>
+			<PageHeader
+				title={t("admin_crews.title")}
+				subtitle={t("admin_crews.subtitle")}
+				actions={
+					<Button
+						onClick={() => {
+							setDrawerCrew(null)
+							setDrawerOpen(true)
+						}}
+					>
+						<HugeiconsIcon
+							icon={PlusSignIcon}
+							strokeWidth={2}
+							className="size-4"
+						/>
+						{t("admin_crews.add_submit")}
+					</Button>
+				}
+			/>
 
-			<section className="bg-white border rounded-lg p-6 space-y-4">
-				<h2 className="text-base font-medium">
-					{t("admin_crews.add_heading")}
-				</h2>
-				<Form method="post" className="space-y-4">
-					<input type="hidden" name="intent" value="create" />
-					<div className="space-y-1">
-						<Label htmlFor="name">{t("admin_crews.name_label")}</Label>
-						<Input id="name" name="name" required />
-					</div>
-					<div className="space-y-2">
-						<p className="text-sm font-medium">
-							{t("admin_crews.members_label")}
-						</p>
-						<div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-							{crewUsers.map((u) => (
-								<label
-									key={u.id}
-									htmlFor={`member-${u.id}`}
-									className="flex items-center gap-2 text-sm"
-								>
-									<Checkbox
-										id={`member-${u.id}`}
-										name="memberIds"
-										value={u.id}
-									/>
-									<span>
-										{u.name}{" "}
-										<span className="text-slate-400">
-											(
-											{u.active
-												? t("admin_crews.active")
-												: t("admin_crews.inactive")}
-											)
-										</span>
-									</span>
-								</label>
-							))}
-						</div>
-					</div>
-					<div className="flex items-center gap-2">
-						<Checkbox id="active" name="active" defaultChecked />
-						<Label htmlFor="active" className="text-sm">
-							{t("admin_crews.active_label")}
-						</Label>
-					</div>
-					<Button type="submit">{t("admin_crews.add_submit")}</Button>
-					{error && <p className="text-sm text-red-600">{t(error as never)}</p>}
-				</Form>
-			</section>
+			{error && (
+				<p className="mb-4 rounded-md border border-status-danger/20 bg-status-danger-soft px-3 py-2 text-sm text-status-danger">
+					{t(error as ParseKeys)}
+				</p>
+			)}
 
-			<section className="bg-white border rounded-lg overflow-hidden">
-				<table className="w-full text-sm">
-					<thead className="bg-slate-50 border-b">
-						<tr>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
-								{t("admin_crews.table.name")}
-							</th>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
-								{t("admin_crews.table.members")}
-							</th>
-							<th className="px-4 py-3 text-center font-medium text-slate-600">
-								{t("admin_crews.table.active")}
-							</th>
-							<th className="px-4 py-3 text-center font-medium text-slate-600">
-								{t("admin_crews.table.actions")}
-							</th>
-						</tr>
-					</thead>
-					<tbody className="divide-y">
-						{crews.map((crew) => {
-							const members = crewUsers.filter((u) =>
-								crew.memberIds.includes(u.id),
-							)
-							return (
-								<tr key={crew.id} className="hover:bg-slate-50">
-									<td className="px-4 py-3 font-medium">{crew.name}</td>
-									<td className="px-4 py-3 text-slate-600">
-										{members.map((m) => m.name).join(", ") ||
-											t("admin_crews.no_members")}
-									</td>
-									<td className="px-4 py-3 text-center">
-										<span
-											className={
-												crew.active
-													? "text-green-600 font-medium"
-													: "text-slate-400"
-											}
+			<div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<Input
+					leading={
+						<HugeiconsIcon
+							icon={Search01Icon}
+							strokeWidth={2}
+							className="size-4"
+						/>
+					}
+					placeholder={t("admin_crews.search_placeholder")}
+					value={search}
+					onChange={(event) => setSearch(event.target.value)}
+					className="sm:w-64"
+				/>
+				<div className="flex flex-wrap items-center gap-3">
+					<span className="text-xs text-muted-foreground">
+						{t("admin_crews.result_count", { count: filtered.length })}
+					</span>
+					<Select
+						value={statusFilter}
+						onValueChange={(value) =>
+							setStatusFilter(value as typeof statusFilter)
+						}
+					>
+						<SelectTrigger size="sm" aria-label={t("admin_crews.active_label")}>
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="all">{t("admin_crews.filter_all")}</SelectItem>
+							<SelectItem value="active">
+								{t("admin_crews.filter_active")}
+							</SelectItem>
+							<SelectItem value="inactive">
+								{t("admin_crews.filter_inactive")}
+							</SelectItem>
+						</SelectContent>
+					</Select>
+				</div>
+			</div>
+
+			{filtered.length === 0 ? (
+				<Card>
+					<EmptyState
+						icon={UserGroup03Icon}
+						title={
+							crews.length === 0
+								? t("admin_crews.no_crews")
+								: t("admin_crews.no_matches")
+						}
+						description={
+							crews.length === 0 ? t("admin_crews.no_crews_hint") : undefined
+						}
+					/>
+				</Card>
+			) : (
+				<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+					{filtered.map((crew) => {
+						const members = crewUsers.filter((u) =>
+							crew.memberIds.includes(u.id),
+						)
+						return (
+							<Card key={crew.id} data-inactive={!crew.active || undefined}>
+								<CardHeader>
+									<CardHeaderText>
+										<CardTitle>{crew.name}</CardTitle>
+									</CardHeaderText>
+									<div className="flex shrink-0 items-center gap-1">
+										<Button
+											type="button"
+											variant="ghost"
+											size="icon-sm"
+											aria-label={t("admin_crews.edit")}
+											onClick={() => {
+												setDrawerCrew(crew)
+												setDrawerOpen(true)
+											}}
 										>
-											{crew.active ? t("admin_crews.yes") : t("admin_crews.no")}
-										</span>
-									</td>
-									<td className="px-4 py-3 text-center">
-										<div className="flex items-center justify-center gap-2">
-											<Form method="post">
-												<input type="hidden" name="intent" value="toggle" />
-												<input type="hidden" name="id" value={crew.id} />
-												<Button type="submit" variant="outline" size="sm">
-													{crew.active
-														? t("admin_crews.deactivate")
-														: t("admin_crews.activate")}
-												</Button>
-											</Form>
-											<EditCrewDialog crew={crew} crewUsers={crewUsers} />
-										</div>
-									</td>
-								</tr>
-							)
-						})}
-						{crews.length === 0 && (
-							<tr>
-								<td
-									colSpan={4}
-									className="px-4 py-6 text-center text-slate-400 text-sm"
-								>
-									{t("admin_crews.no_crews")}
-								</td>
-							</tr>
-						)}
-					</tbody>
-				</table>
-			</section>
-		</div>
-	)
-}
-
-function EditCrewDialog({
-	crew,
-	crewUsers,
-}: {
-	crew: { id: string; name: string; memberIds: string[]; active: boolean }
-	crewUsers: CrewUser[]
-}) {
-	const { t } = useTranslation()
-	return (
-		<details className="group">
-			<summary className={buttonVariants({ variant: "outline", size: "sm" })}>
-				{t("admin_crews.edit")}
-			</summary>
-			<Form method="post" className="mt-3 space-y-3 rounded-lg border p-3">
-				<input type="hidden" name="intent" value="update" />
-				<input type="hidden" name="id" value={crew.id} />
-				<div className="space-y-1">
-					<Label htmlFor={`name-${crew.id}`}>
-						{t("admin_crews.name_label")}
-					</Label>
-					<Input
-						id={`name-${crew.id}`}
-						name="name"
-						defaultValue={crew.name}
-						required
-					/>
-				</div>
-				<div className="space-y-2">
-					<p className="text-sm font-medium">
-						{t("admin_crews.members_label")}
-					</p>
-					<div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-						{crewUsers.map((u) => (
-							<label
-								key={u.id}
-								htmlFor={`member-${crew.id}-${u.id}`}
-								className="flex items-center gap-2 text-sm"
-							>
-								<Checkbox
-									id={`member-${crew.id}-${u.id}`}
-									name="memberIds"
-									value={u.id}
-									defaultChecked={crew.memberIds.includes(u.id)}
-								/>
-								<span>
-									{u.name}{" "}
-									<span className="text-slate-400">
-										(
-										{u.active
-											? t("admin_crews.active")
-											: t("admin_crews.inactive")}
-										)
+											<HugeiconsIcon
+												icon={PencilEdit02Icon}
+												strokeWidth={2}
+												className="size-4"
+											/>
+										</Button>
+										<DropdownMenu>
+											<DropdownMenuTrigger
+												aria-label={t("admin_crews.row_menu")}
+												className={buttonVariants({
+													variant: "ghost",
+													size: "icon-sm",
+												})}
+											>
+												<HugeiconsIcon
+													icon={MoreHorizontalIcon}
+													strokeWidth={2}
+													className="size-4"
+												/>
+											</DropdownMenuTrigger>
+											<DropdownMenuContent>
+												<Form method="post">
+													<input type="hidden" name="intent" value="toggle" />
+													<input type="hidden" name="id" value={crew.id} />
+													<DropdownMenuItem
+														variant={crew.active ? "destructive" : "default"}
+														render={<button type="submit" className="w-full" />}
+													>
+														{crew.active
+															? t("admin_crews.deactivate")
+															: t("admin_crews.activate")}
+													</DropdownMenuItem>
+												</Form>
+											</DropdownMenuContent>
+										</DropdownMenu>
+									</div>
+								</CardHeader>
+								<CardContent>
+									{members.length > 0 ? (
+										<AvatarStack people={members} />
+									) : (
+										<p className="text-sm text-muted-foreground">
+											{t("admin_crews.no_members")}
+										</p>
+									)}
+								</CardContent>
+								<CardFooter className="justify-between">
+									<span className="text-xs text-muted-foreground">
+										{t("admin_crews.members_label")}: {members.length}
 									</span>
-								</span>
-							</label>
-						))}
-					</div>
+									<Badge variant={crew.active ? "ok" : "neutral"} dot>
+										{crew.active
+											? t("admin_crews.status_active")
+											: t("admin_crews.status_inactive")}
+									</Badge>
+								</CardFooter>
+							</Card>
+						)
+					})}
 				</div>
-				<div className="flex items-center gap-2">
-					<Checkbox
-						id={`active-${crew.id}`}
-						name="active"
-						defaultChecked={crew.active}
+			)}
+
+			<Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
+				<DrawerContent
+					title={
+						drawerCrew
+							? t("admin_crews.edit_heading")
+							: t("admin_crews.add_heading")
+					}
+					closeLabel={t("admin_crews.close_drawer")}
+				>
+					<CrewForm
+						crew={drawerCrew}
+						crewUsers={crewUsers}
+						onSaved={() => setDrawerOpen(false)}
+						onCancel={() => setDrawerOpen(false)}
+						t={t}
 					/>
-					<Label htmlFor={`active-${crew.id}`} className="text-sm">
-						{t("admin_crews.active_label")}
-					</Label>
-				</div>
-				<Button type="submit" size="sm">
-					{t("admin_crews.save")}
-				</Button>
-			</Form>
-		</details>
+				</DrawerContent>
+			</Drawer>
+		</div>
 	)
 }
 

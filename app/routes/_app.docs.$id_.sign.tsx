@@ -12,6 +12,7 @@ import {
 } from "~/components/signature-pad"
 import { Button } from "~/components/ui/button"
 import { Label } from "~/components/ui/label"
+import { BackLink } from "~/components/ui/page-header"
 import {
 	Select,
 	SelectContent,
@@ -329,6 +330,9 @@ export default function SignDoc({
 
 	return (
 		<div className="space-y-5">
+			<BackLink to={`/docs/${doc.id}`}>
+				{t("docs_view.back_to_work_order")}
+			</BackLink>
 			<h1 className="text-xl font-semibold">{t("docs_sign.title")}</h1>
 			<p className="text-sm font-mono text-slate-500">{doc.controlNumber}</p>
 

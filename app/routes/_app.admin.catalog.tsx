@@ -1,13 +1,51 @@
-import { useState } from "react"
+import {
+	MoreHorizontalIcon,
+	PencilEdit02Icon,
+	PlusSignIcon,
+	Search01Icon,
+} from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
+import type { TFunction } from "i18next"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { data, redirect } from "react-router"
+import { data, redirect, useFetcher } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
-import { Button } from "~/components/ui/button"
+import { Badge } from "~/components/ui/badge"
+import { Button, buttonVariants } from "~/components/ui/button"
+import { Card } from "~/components/ui/card"
+import { Drawer, DrawerContent } from "~/components/ui/drawer"
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu"
+import { EmptyState } from "~/components/ui/empty-state"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
+import { PageHeader } from "~/components/ui/page-header"
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "~/components/ui/select"
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableEmptyRow,
+	TableFooter,
+	TableHead,
+	TableHeader,
+	TablePagination,
+	TableRow,
+	TableToolbar,
+} from "~/components/ui/table"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
-import { toNumberPrice } from "~/lib/utils"
+import { formatMoney, toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.admin.catalog"
 
 export const meta: Route.MetaFunction = () => [
@@ -145,234 +183,442 @@ export async function action({ request }: Route.ActionArgs) {
 	)
 }
 
+type ServiceCode = Route.ComponentProps["loaderData"]["codes"][number]
+
+const PAGE_SIZE = 20
+
+function CatalogForm({
+	code,
+	onSaved,
+	onCancel,
+	t,
+}: {
+	code: ServiceCode | null
+	onSaved: () => void
+	onCancel: () => void
+	t: TFunction
+}) {
+	const fetcher = useFetcher()
+	const wasSubmitting = useRef(false)
+	const submitting = fetcher.state !== "idle"
+
+	useEffect(() => {
+		if (wasSubmitting.current && !submitting) onSaved()
+		wasSubmitting.current = submitting
+	}, [submitting, onSaved])
+
+	return (
+		<fetcher.Form method="post" className="space-y-5">
+			<input type="hidden" name="intent" value={code ? "update" : "create"} />
+			{code && <input type="hidden" name="id" value={code.id} />}
+			<div className="space-y-1.5">
+				<Label htmlFor="claroCode">{t("admin_catalog.claro_code_label")}</Label>
+				<Input
+					id="claroCode"
+					name="claroCode"
+					defaultValue={code?.claroCode}
+					required
+				/>
+			</div>
+			<div className="space-y-1.5">
+				<Label htmlFor="name">{t("admin_catalog.name_label")}</Label>
+				<Input id="name" name="name" defaultValue={code?.name} required />
+			</div>
+			<div className="grid grid-cols-2 gap-4">
+				<div className="space-y-1.5">
+					<Label htmlFor="unitPrice">
+						{t("admin_catalog.unit_price_label")}
+					</Label>
+					<Input
+						id="unitPrice"
+						name="unitPrice"
+						type="number"
+						step="0.01"
+						min="0"
+						leading="$"
+						defaultValue={code ? toNumberPrice(code.unitPrice) : undefined}
+						required
+					/>
+				</div>
+				{!code && (
+					<div className="space-y-1.5">
+						<Label htmlFor="unit">{t("admin_catalog.unit_label")}</Label>
+						<Input id="unit" name="unit" />
+						<p className="text-xs text-muted-foreground">
+							{t("admin_catalog.unit_help")}
+						</p>
+					</div>
+				)}
+			</div>
+			<div className="grid grid-cols-2 gap-4">
+				<div className="space-y-1.5">
+					<Label htmlFor="accountCode">
+						{t("admin_catalog.account_code_label")}
+					</Label>
+					<Input
+						id="accountCode"
+						name="accountCode"
+						defaultValue={code?.accountCode ?? ""}
+					/>
+				</div>
+				<div className="space-y-1.5">
+					<Label htmlFor="dept">{t("admin_catalog.dept_label")}</Label>
+					<Input id="dept" name="dept" defaultValue={code?.dept ?? ""} />
+				</div>
+			</div>
+			<div className="flex justify-end gap-2 pt-2">
+				<Button type="button" variant="secondary" onClick={onCancel}>
+					{t("admin_catalog.cancel")}
+				</Button>
+				<Button type="submit" loading={submitting}>
+					{code ? t("admin_catalog.save") : t("admin_catalog.add_submit")}
+				</Button>
+			</div>
+		</fetcher.Form>
+	)
+}
+
 export default function AdminCatalog({ loaderData }: Route.ComponentProps) {
 	const { codes } = loaderData
 	const { t } = useTranslation()
-	const [editingId, setEditingId] = useState<string | null>(null)
+	const [drawerOpen, setDrawerOpen] = useState(false)
+	const [drawerCode, setDrawerCode] = useState<ServiceCode | null>(null)
+	const [search, setSearch] = useState("")
+	const [statusFilter, setStatusFilter] = useState<
+		"all" | "active" | "inactive"
+	>("all")
+	const [deptFilter, setDeptFilter] = useState("all")
+	const [kindFilter, setKindFilter] = useState<"all" | "SERVICE" | "MATERIAL">(
+		"all",
+	)
+	const [page, setPage] = useState(1)
+
+	const departments = useMemo(() => {
+		const values = new Set<string>()
+		for (const code of codes) {
+			if (code.dept?.trim()) values.add(code.dept.trim())
+		}
+		return [...values].sort((a, b) => a.localeCompare(b))
+	}, [codes])
+	const hasMissingDept = codes.some((code) => !code.dept?.trim())
+
+	const filtered = useMemo(() => {
+		const term = search.trim().toLowerCase()
+		return codes.filter((code) => {
+			if (statusFilter === "active" && !code.active) return false
+			if (statusFilter === "inactive" && code.active) return false
+			if (kindFilter !== "all" && code.kind !== kindFilter) return false
+			if (deptFilter === "none") {
+				if (code.dept?.trim()) return false
+			} else if (
+				deptFilter !== "all" &&
+				(code.dept ?? "").trim() !== deptFilter
+			) {
+				return false
+			}
+			if (!term) return true
+			return (
+				code.claroCode.toLowerCase().includes(term) ||
+				code.name.toLowerCase().includes(term) ||
+				(code.accountCode?.toLowerCase().includes(term) ?? false) ||
+				(code.dept?.toLowerCase().includes(term) ?? false)
+			)
+		})
+	}, [codes, search, statusFilter, deptFilter, kindFilter])
+
+	const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+	const currentPage = Math.min(page, pageCount)
+	const pageRows = filtered.slice(
+		(currentPage - 1) * PAGE_SIZE,
+		currentPage * PAGE_SIZE,
+	)
+
+	function openCreate() {
+		setDrawerCode(null)
+		setDrawerOpen(true)
+	}
+
+	function openEdit(code: ServiceCode) {
+		setDrawerCode(code)
+		setDrawerOpen(true)
+	}
 
 	return (
-		<div className="space-y-8">
-			<h1 className="text-xl font-semibold">{t("admin_catalog.title")}</h1>
+		<div>
+			<PageHeader
+				title={t("admin_catalog.title")}
+				subtitle={t("admin_catalog.subtitle")}
+				actions={
+					<Button onClick={openCreate}>
+						<HugeiconsIcon
+							icon={PlusSignIcon}
+							strokeWidth={2}
+							className="size-4"
+						/>
+						{t("admin_catalog.add_submit")}
+					</Button>
+				}
+			/>
 
-			{/* Add code form */}
-			<section className="bg-white border rounded-lg p-6 space-y-4">
-				<h2 className="text-base font-medium">
-					{t("admin_catalog.add_heading")}
-				</h2>
-				<form method="post" className="space-y-4">
-					<input type="hidden" name="intent" value="create" />
-					<div className="grid grid-cols-2 gap-4">
-						<div className="space-y-1">
-							<Label htmlFor="claroCode">
-								{t("admin_catalog.claro_code_label")}
-							</Label>
-							<Input id="claroCode" name="claroCode" required />
-						</div>
-						<div className="space-y-1">
-							<Label htmlFor="name">{t("admin_catalog.name_label")}</Label>
-							<Input id="name" name="name" required />
-						</div>
-						<div className="space-y-1">
-							<Label htmlFor="unitPrice">
-								{t("admin_catalog.unit_price_label")}
-							</Label>
-							<Input
-								id="unitPrice"
-								name="unitPrice"
-								type="number"
-								step="0.01"
-								min="0"
-								required
+			<Card>
+				<TableToolbar>
+					<Input
+						leading={
+							<HugeiconsIcon
+								icon={Search01Icon}
+								strokeWidth={2}
+								className="size-4"
 							/>
-						</div>
-						<div className="space-y-1">
-							<Label htmlFor="unit">{t("admin_catalog.unit_label")}</Label>
-							<Input id="unit" name="unit" placeholder="EA, FT, SQFT…" />
-						</div>
-						<div className="space-y-1">
-							<Label htmlFor="accountCode">
-								{t("admin_catalog.account_code_label")}
-							</Label>
-							<Input id="accountCode" name="accountCode" />
-						</div>
-						<div className="space-y-1">
-							<Label htmlFor="dept">{t("admin_catalog.dept_label")}</Label>
-							<Input id="dept" name="dept" />
-						</div>
-					</div>
-					<Button type="submit">{t("admin_catalog.add_submit")}</Button>
-				</form>
-			</section>
-
-			{/* Service codes table */}
-			<section className="bg-white border rounded-lg overflow-hidden">
-				<table className="w-full text-sm">
-					<thead className="bg-slate-50 border-b">
-						<tr>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
-								{t("admin_catalog.table.claro_code")}
-							</th>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
-								{t("admin_catalog.table.name")}
-							</th>
-							<th className="px-4 py-3 text-right font-medium text-slate-600">
-								{t("admin_catalog.table.unit_price")}
-							</th>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
-								{t("admin_catalog.table.account_code")}
-							</th>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
-								{t("admin_catalog.table.dept")}
-							</th>
-							<th className="px-4 py-3 text-center font-medium text-slate-600">
-								{t("admin_catalog.table.active")}
-							</th>
-							<th className="px-4 py-3 text-center font-medium text-slate-600">
-								{t("admin_catalog.table.actions")}
-							</th>
-						</tr>
-					</thead>
-					<tbody className="divide-y">
-						{codes.map((code) =>
-							editingId === code.id ? (
-								<tr key={code.id} className="bg-slate-50">
-									<td className="px-4 py-3">
-										<Input
-											name="claroCode"
-											defaultValue={code.claroCode}
-											form={`edit-form-${code.id}`}
-											required
-										/>
-									</td>
-									<td className="px-4 py-3">
-										<Input
-											name="name"
-											defaultValue={code.name}
-											form={`edit-form-${code.id}`}
-											required
-										/>
-									</td>
-									<td className="px-4 py-3">
-										<Input
-											name="unitPrice"
-											type="number"
-											step="0.01"
-											min="0"
-											defaultValue={toNumberPrice(code.unitPrice)}
-											form={`edit-form-${code.id}`}
-											required
-										/>
-									</td>
-									<td className="px-4 py-3">
-										<Input
-											name="accountCode"
-											defaultValue={code.accountCode ?? ""}
-											form={`edit-form-${code.id}`}
-										/>
-									</td>
-									<td className="px-4 py-3">
-										<Input
-											name="dept"
-											defaultValue={code.dept ?? ""}
-											form={`edit-form-${code.id}`}
-										/>
-									</td>
-									<td className="px-4 py-3 text-center">
-										<span
-											className={
-												code.active
-													? "text-green-600 font-medium"
-													: "text-slate-400"
-											}
-										>
-											{code.active
-												? t("admin_catalog.yes")
-												: t("admin_catalog.no")}
-										</span>
-									</td>
-									<td className="px-4 py-3 text-center">
-										<div className="flex items-center justify-center gap-2">
-											<form method="post" id={`edit-form-${code.id}`}>
-												<input type="hidden" name="intent" value="update" />
-												<input type="hidden" name="id" value={code.id} />
-												<Button type="submit" size="sm">
-													{t("admin_catalog.save")}
-												</Button>
-											</form>
-											<Button
-												type="button"
-												variant="ghost"
-												size="sm"
-												onClick={() => setEditingId(null)}
-											>
-												{t("admin_catalog.cancel")}
-											</Button>
-										</div>
-									</td>
-								</tr>
-							) : (
-								<tr key={code.id} className="hover:bg-slate-50">
-									<td className="px-4 py-3 font-mono">{code.claroCode}</td>
-									<td className="px-4 py-3">{code.name}</td>
-									<td className="px-4 py-3 text-right">
-										{toNumberPrice(code.unitPrice).toFixed(2)}
-									</td>
-									<td className="px-4 py-3 text-slate-500">
-										{code.accountCode ?? "—"}
-									</td>
-									<td className="px-4 py-3 text-slate-500">
-										{code.dept ?? "—"}
-									</td>
-									<td className="px-4 py-3 text-center">
-										<span
-											className={
-												code.active
-													? "text-green-600 font-medium"
-													: "text-slate-400"
-											}
-										>
-											{code.active
-												? t("admin_catalog.yes")
-												: t("admin_catalog.no")}
-										</span>
-									</td>
-									<td className="px-4 py-3 text-center">
-										<div className="flex items-center justify-center gap-2">
-											<form method="post">
-												<input type="hidden" name="intent" value="toggle" />
-												<input type="hidden" name="id" value={code.id} />
-												<Button type="submit" variant="outline" size="sm">
-													{code.active
-														? t("admin_catalog.deactivate")
-														: t("admin_catalog.activate")}
-												</Button>
-											</form>
-											<Button
-												type="button"
-												variant="outline"
-												size="sm"
-												onClick={() => setEditingId(code.id)}
-											>
-												{t("admin_catalog.edit")}
-											</Button>
-										</div>
-									</td>
-								</tr>
-							),
-						)}
-						{codes.length === 0 && (
-							<tr>
-								<td
-									colSpan={7}
-									className="px-4 py-6 text-center text-slate-400 text-sm"
+						}
+						placeholder={t("admin_catalog.search_placeholder")}
+						value={search}
+						onChange={(e) => {
+							setSearch(e.target.value)
+							setPage(1)
+						}}
+						className="sm:w-64"
+					/>
+					<div className="flex flex-wrap items-center gap-3">
+						<span className="text-xs text-muted-foreground">
+							{t("admin_catalog.result_count", { count: filtered.length })}
+						</span>
+						<Select
+							value={statusFilter}
+							onValueChange={(value) => {
+								setStatusFilter(value as typeof statusFilter)
+								setPage(1)
+							}}
+						>
+							<SelectTrigger
+								size="sm"
+								aria-label={t("admin_catalog.table.active")}
+							>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">
+									{t("admin_catalog.filter_all")}
+								</SelectItem>
+								<SelectItem value="active">
+									{t("admin_catalog.filter_active")}
+								</SelectItem>
+								<SelectItem value="inactive">
+									{t("admin_catalog.filter_inactive")}
+								</SelectItem>
+							</SelectContent>
+						</Select>
+						<Select
+							value={kindFilter}
+							onValueChange={(value) => {
+								setKindFilter(value as typeof kindFilter)
+								setPage(1)
+							}}
+						>
+							<SelectTrigger
+								size="sm"
+								aria-label={t("admin_catalog.filter_all_kinds")}
+							>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">
+									{t("admin_catalog.filter_all_kinds")}
+								</SelectItem>
+								<SelectItem value="SERVICE">
+									{t("admin_catalog.filter_kind_service")}
+								</SelectItem>
+								<SelectItem value="MATERIAL">
+									{t("admin_catalog.filter_kind_material")}
+								</SelectItem>
+							</SelectContent>
+						</Select>
+						{departments.length > 0 && (
+							<Select
+								value={deptFilter}
+								onValueChange={(value) => {
+									setDeptFilter(value ?? "all")
+									setPage(1)
+								}}
+							>
+								<SelectTrigger
+									size="sm"
+									aria-label={t("admin_catalog.table.dept")}
 								>
-									{t("admin_catalog.no_codes")}
-								</td>
-							</tr>
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="all">
+										{t("admin_catalog.filter_all_depts")}
+									</SelectItem>
+									{departments.map((dept) => (
+										<SelectItem key={dept} value={dept}>
+											{dept}
+										</SelectItem>
+									))}
+									{hasMissingDept && (
+										<SelectItem value="none">
+											{t("admin_catalog.filter_no_dept")}
+										</SelectItem>
+									)}
+								</SelectContent>
+							</Select>
 						)}
-					</tbody>
-				</table>
-			</section>
+					</div>
+				</TableToolbar>
+				<Table>
+					<TableHeader>
+						<TableRow>
+							<TableHead>{t("admin_catalog.table.claro_code")}</TableHead>
+							<TableHead>{t("admin_catalog.table.name")}</TableHead>
+							<TableHead className="text-right">
+								{t("admin_catalog.table.unit_price")}
+							</TableHead>
+							<TableHead className="hidden lg:table-cell">
+								{t("admin_catalog.table.account_code")}
+							</TableHead>
+							<TableHead className="hidden lg:table-cell">
+								{t("admin_catalog.table.dept")}
+							</TableHead>
+							<TableHead>{t("admin_catalog.table.active")}</TableHead>
+							<TableHead className="text-right">
+								{t("admin_catalog.table.actions")}
+							</TableHead>
+						</TableRow>
+					</TableHeader>
+					<TableBody>
+						{pageRows.map((code) => (
+							<TableRow key={code.id} data-inactive={!code.active || undefined}>
+								<TableCell className="font-mono text-xs">
+									{code.claroCode}
+								</TableCell>
+								<TableCell>{code.name}</TableCell>
+								<TableCell className="text-right tabular-nums">
+									{formatMoney(code.unitPrice)}
+								</TableCell>
+								<TableCell className="hidden text-muted-foreground lg:table-cell">
+									{code.accountCode ?? "—"}
+								</TableCell>
+								<TableCell className="hidden text-muted-foreground lg:table-cell">
+									{code.dept ?? "—"}
+								</TableCell>
+								<TableCell>
+									<Badge variant={code.active ? "ok" : "neutral"} dot>
+										{code.active
+											? t("admin_catalog.status_active")
+											: t("admin_catalog.status_inactive")}
+									</Badge>
+								</TableCell>
+								<TableCell className="text-right">
+									<div className="flex items-center justify-end gap-1">
+										<Button
+											type="button"
+											variant="ghost"
+											size="icon-sm"
+											aria-label={t("admin_catalog.edit")}
+											onClick={() => openEdit(code)}
+										>
+											<HugeiconsIcon
+												icon={PencilEdit02Icon}
+												strokeWidth={2}
+												className="size-4"
+											/>
+										</Button>
+										<DropdownMenu>
+											<DropdownMenuTrigger
+												aria-label={t("admin_catalog.row_menu")}
+												className={buttonVariants({
+													variant: "ghost",
+													size: "icon-sm",
+												})}
+											>
+												<HugeiconsIcon
+													icon={MoreHorizontalIcon}
+													strokeWidth={2}
+													className="size-4"
+												/>
+											</DropdownMenuTrigger>
+											<DropdownMenuContent>
+												<form
+													method="post"
+													onSubmit={(event) => {
+														if (
+															code.active &&
+															!confirm(
+																t("admin_catalog.confirm_deactivate", {
+																	name: code.name,
+																}),
+															)
+														) {
+															event.preventDefault()
+														}
+													}}
+												>
+													<input type="hidden" name="intent" value="toggle" />
+													<input type="hidden" name="id" value={code.id} />
+													<DropdownMenuItem
+														variant={code.active ? "destructive" : "default"}
+														render={<button type="submit" className="w-full" />}
+													>
+														{code.active
+															? t("admin_catalog.deactivate")
+															: t("admin_catalog.activate")}
+													</DropdownMenuItem>
+												</form>
+											</DropdownMenuContent>
+										</DropdownMenu>
+									</div>
+								</TableCell>
+							</TableRow>
+						))}
+						{pageRows.length === 0 && (
+							<TableEmptyRow colSpan={7}>
+								<EmptyState
+									icon={Search01Icon}
+									title={
+										codes.length === 0
+											? t("admin_catalog.no_codes")
+											: t("admin_catalog.no_matches")
+									}
+									description={
+										codes.length === 0
+											? t("admin_catalog.no_codes_hint")
+											: undefined
+									}
+								/>
+							</TableEmptyRow>
+						)}
+					</TableBody>
+				</Table>
+				{filtered.length > PAGE_SIZE && (
+					<TableFooter>
+						<TablePagination
+							page={currentPage}
+							pageCount={pageCount}
+							onPageChange={setPage}
+							labelPrev={t("admin_catalog.pagination_prev")}
+							labelNext={t("admin_catalog.pagination_next")}
+						/>
+					</TableFooter>
+				)}
+			</Card>
+
+			<Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
+				<DrawerContent
+					title={
+						drawerCode
+							? t("admin_catalog.edit_heading")
+							: t("admin_catalog.add_heading")
+					}
+					closeLabel={t("admin_catalog.close_drawer")}
+				>
+					<CatalogForm
+						code={drawerCode}
+						onSaved={() => setDrawerOpen(false)}
+						onCancel={() => setDrawerOpen(false)}
+						t={t}
+					/>
+				</DrawerContent>
+			</Drawer>
 		</div>
 	)
 }

@@ -4,6 +4,7 @@ import { RouteErrorBoundary } from "~/components/error-boundary"
 import { db } from "~/lib/db.server"
 import { isComptrollerEnabled } from "~/lib/features.server"
 import { requireSession } from "~/lib/permissions.server"
+import { getTheme } from "~/lib/theme.server"
 import type { Route } from "./+types/_app"
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -16,10 +17,12 @@ export async function loader({ request }: Route.LoaderArgs) {
 		orderBy: { createdAt: "desc" },
 		take: 10,
 	})
+	const theme = await getTheme(request)
 	return {
-		user: { name: user.name, role: user.role },
+		user: { id: user.id, name: user.name, role: user.role, image: user.image },
 		notifications,
 		comptrollerEnabled: isComptrollerEnabled(),
+		theme,
 	}
 }
 

@@ -1,3 +1,4 @@
+import type { ParseKeys } from "i18next"
 import type { ComponentProps } from "react"
 import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
@@ -5,8 +6,10 @@ import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { Badge } from "~/components/ui/badge"
 import { buttonVariants } from "~/components/ui/button"
+import { describeAuditEvent } from "~/lib/audit-event"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
+import type { ServiceLine } from "~/lib/service-lines"
 import { formatMoney, toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.admin.docs.$id"
 
@@ -42,13 +45,15 @@ type MaterialServiceCode = ComponentProps<
 	typeof MaterialLineItems
 >["serviceCodes"][number]
 
-type AuditDiff = {
-	status?: { before?: string; after?: string }
-	note?: string
-	materialsChanged?: boolean
-	avisoNumber?: string
-	to?: string[]
-	reason?: string
+const STATUS_LABEL_KEY: Record<string, ParseKeys> = {
+	CREATED: "docs_status.created",
+	PREPPED: "docs_status.prepped",
+	SIGNED: "docs_status.signed",
+	FIELD_UPDATED: "docs_status.field_updated",
+	SUPERVISOR_APPROVED: "docs_status.supervisor_approved",
+	CLARO_UPLOADED: "docs_status.claro_uploaded",
+	LC_REQUEST_GENERATED: "docs_status.lc_request_generated",
+	CANCELLED: "docs_status.cancelled",
 }
 
 export async function loader({ request, params }: Route.LoaderArgs) {
@@ -101,28 +106,21 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	}
 }
 
-function actionSummary(action: string, diffJson: AuditDiff): string {
-	if (action === "STATUS_CHANGED")
-		return `Status: ${diffJson.status?.before ?? "?"} → ${diffJson.status?.after ?? "?"}`
-	if (action === "SEND_BACK") return `Sent back — note: ${diffJson.note ?? ""}`
-	if (action === "WORK_ORDER_EDITED")
-		return `Work order edited${diffJson.materialsChanged ? " (materials changed)" : ""}`
-	if (action === "AVISO_NUMBER_SET")
-		return `Aviso #: ${diffJson.avisoNumber ?? "—"}`
-	if (action === "CREW_REASSIGNED")
-		return `Crew reassigned to ${JSON.stringify(diffJson.to ?? [])}`
-	if (action === "DOC_CANCELLED") return `Cancelled: ${diffJson.reason ?? ""}`
-	if (action === "JAF_INVOICE_GENERATED") return "JAF invoice generated"
-	return `${action}${diffJson ? ` — ${JSON.stringify(diffJson)}` : ""}`
+function statusLabelKey(status: string | null | undefined): ParseKeys {
+	if (status && STATUS_LABEL_KEY[status]) return STATUS_LABEL_KEY[status]
+	return "admin_history.detail.unknown_status"
 }
 
 export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 	const { doc, sendBack, peopleMap, serviceCodes } = loaderData
-	const t = useTranslation().t
+	const { t } = useTranslation()
 	const name = (id?: string | null) => (id ? (peopleMap[id]?.name ?? id) : "—")
 	const estimated = (doc.estimatedMaterials as unknown as MaterialLine[]) || []
 	const taken = (doc.materialsTaken as unknown as MaterialLine[]) || []
 	const used = (doc.materialsUsed as unknown as MaterialLine[]) || []
+	const billedLines = (doc.serviceLines as unknown as ServiceLine[]) || []
+	const translate = (key: string, options?: Record<string, unknown>) =>
+		t(key as ParseKeys, options)
 
 	return (
 		<div className="space-y-6">
@@ -131,12 +129,12 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 					<h1 className="font-mono font-bold text-lg">{doc.controlNumber}</h1>
 					<p className="text-sm text-slate-500">{doc.jobType}</p>
 				</div>
-				<Badge variant={STATUS_BADGE_VARIANT[doc.status]}>
-					{doc.status.replace(/_/g, " ")}
+				<Badge variant={STATUS_BADGE_VARIANT[doc.status] ?? "info"}>
+					{t(statusLabelKey(doc.status))}
 				</Badge>
 			</div>
 
-			<section className="grid grid-cols-2 gap-3 text-sm">
+			<section className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
 				<div className="bg-white border rounded-lg p-3">
 					<span className="text-xs text-slate-500">
 						{t("docs_view.address")}
@@ -162,7 +160,9 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 						<span className="text-xs text-slate-500">
 							{t("docs_view.crew")}
 						</span>{" "}
-						{doc.assignedCrewIds.map(name).join(", ")}
+						{doc.assignedCrewIds.length > 0
+							? doc.assignedCrewIds.map(name).join(", ")
+							: "—"}
 					</p>
 					{doc.avisoNumber && (
 						<p>
@@ -190,26 +190,37 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 						{t("admin_history.no_events")}
 					</p>
 				)}
-				<ol className="relative border-l border-slate-200 ml-px">
-					{doc.auditTrail.map((a) => (
-						<li key={a.id} className="relative mb-4 ml-4">
-							<div className="absolute -left-1.5 mt-1.5 h-3 w-3 rounded-full bg-blue-500" />
-							<time className="text-xs text-slate-500">
-								{new Date(a.timestamp).toLocaleString()}
-							</time>
-							<span className="text-xs text-slate-500">
-								{" "}
-								{a.user?.name ?? "?"}:{" "}
-							</span>
-							<span className="text-sm font-medium">{a.action}</span>
-							{a.action !== "STATUS_CHANGED" && (
-								<span className="text-sm text-slate-700">
-									{" — "}
-									{actionSummary(a.action, a.diffJson as AuditDiff)}
-								</span>
-							)}
-						</li>
-					))}
+				<ol className="relative space-y-5 border-l border-slate-200 pl-4">
+					{doc.auditTrail.map((a) => {
+						const event = describeAuditEvent(a.action, a.diffJson, {
+							t: translate,
+							statusLabel: (status) => t(statusLabelKey(status)),
+							nameOf: (id) => name(id),
+							formatMoney,
+						})
+						const title = t(event.titleKey, event.titleValues)
+						return (
+							<li key={a.id} className="relative">
+								<div className="absolute top-1.5 -left-[21px] h-3 w-3 rounded-full bg-blue-500" />
+								<p className="text-sm font-medium text-slate-900">{title}</p>
+								{event.detail && (
+									<p className="text-sm text-slate-700">{event.detail}</p>
+								)}
+								{event.items && event.items.length > 0 && (
+									<ul className="mt-1 list-disc space-y-0.5 pl-4 text-sm text-slate-700">
+										{event.items.map((item) => (
+											<li key={item}>{item}</li>
+										))}
+									</ul>
+								)}
+								<p className="mt-0.5 text-xs text-slate-500">
+									<time>{new Date(a.timestamp).toLocaleString()}</time>
+									{" · "}
+									{a.user?.name ?? t("admin_history.unknown_actor")}
+								</p>
+							</li>
+						)
+					})}
 				</ol>
 			</section>
 
@@ -218,33 +229,35 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 					<h2 className="text-sm font-semibold text-slate-700 mb-2">
 						{t("admin_history.send_backs_heading")}
 					</h2>
-					<table className="w-full text-xs">
-						<thead>
-							<tr className="text-left text-slate-500 border-b">
-								<th className="pb-1">Date</th>
-								<th className="pb-1">From</th>
-								<th className="pb-1">To</th>
-								<th className="pb-1">By</th>
-								<th className="pb-1">Note</th>
-							</tr>
-						</thead>
-						<tbody>
-							{sendBack.map((s) => (
-								<tr
-									key={`${s.createdAt}-${s.byUserId}`}
-									className="border-b last:border-0"
-								>
-									<td className="py-1">
-										{new Date(s.createdAt).toLocaleString()}
-									</td>
-									<td>{s.fromStatus}</td>
-									<td>{s.toStatus}</td>
-									<td>{name(s.byUserId)}</td>
-									<td>{s.note}</td>
+					<div className="overflow-x-auto">
+						<table className="w-full text-xs">
+							<thead>
+								<tr className="text-left text-slate-500 border-b">
+									<th className="pb-1">Date</th>
+									<th className="pb-1">From</th>
+									<th className="pb-1">To</th>
+									<th className="pb-1">By</th>
+									<th className="pb-1">Note</th>
 								</tr>
-							))}
-						</tbody>
-					</table>
+							</thead>
+							<tbody>
+								{sendBack.map((s) => (
+									<tr
+										key={`${s.createdAt}-${s.byUserId}`}
+										className="border-b last:border-0"
+									>
+										<td className="py-1">
+											{new Date(s.createdAt).toLocaleString()}
+										</td>
+										<td>{s.fromStatus}</td>
+										<td>{s.toStatus}</td>
+										<td>{name(s.byUserId)}</td>
+										<td>{s.note}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
 				</section>
 			)}
 
@@ -257,35 +270,37 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 						{t("admin_history.no_payments")}
 					</p>
 				) : (
-					<table className="w-full text-xs">
-						<thead>
-							<tr className="text-left text-slate-500 border-b">
-								<th className="pb-1">Date</th>
-								<th className="pb-1">Type</th>
-								<th className="pb-1 text-right">Amount</th>
-								<th className="pb-1">Recorded by</th>
-								<th className="pb-1">Note</th>
-							</tr>
-						</thead>
-						<tbody>
-							{doc.paymentRecords.map((pr) => (
-								<tr key={pr.id} className="border-b last:border-0">
-									<td className="py-1">
-										{new Date(pr.date).toLocaleDateString()}
-									</td>
-									<td>{pr.type}</td>
-									<td className="text-right">
-										{formatMoney(toNumberPrice(pr.amount))}
-									</td>
-									<td>{pr.recordedBy?.name ?? "—"}</td>
-									<td>{pr.note ?? ""}</td>
+					<div className="overflow-x-auto">
+						<table className="w-full text-xs">
+							<thead>
+								<tr className="text-left text-slate-500 border-b">
+									<th className="pb-1">Date</th>
+									<th className="pb-1">Type</th>
+									<th className="pb-1 text-right">Amount</th>
+									<th className="pb-1">Recorded by</th>
+									<th className="pb-1">Note</th>
 								</tr>
-							))}
-						</tbody>
-					</table>
+							</thead>
+							<tbody>
+								{doc.paymentRecords.map((pr) => (
+									<tr key={pr.id} className="border-b last:border-0">
+										<td className="py-1">
+											{new Date(pr.date).toLocaleDateString()}
+										</td>
+										<td>{pr.type}</td>
+										<td className="text-right">
+											{formatMoney(toNumberPrice(pr.amount))}
+										</td>
+										<td>{pr.recordedBy?.name ?? "—"}</td>
+										<td>{pr.note ?? ""}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
 				)}
 				{(doc.advanceAmount || doc.finalPaymentAmount) && (
-					<div className="grid grid-cols-2 gap-2 mt-3 text-xs">
+					<div className="grid grid-cols-1 gap-2 mt-3 text-xs sm:grid-cols-2">
 						{doc.advanceAmount ? (
 							<div>
 								Advance: {formatMoney(toNumberPrice(doc.advanceAmount))}{" "}
@@ -303,6 +318,39 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 					</div>
 				)}
 			</section>
+
+			{billedLines.length > 0 && (
+				<section className="bg-white border rounded-lg p-4">
+					<h2 className="text-sm font-semibold text-slate-700 mb-2">
+						{t("admin_history.service_lines_heading")}
+					</h2>
+					<div className="overflow-x-auto">
+						<table className="w-full text-sm">
+							<thead>
+								<tr className="text-left text-xs text-slate-500 border-b">
+									<th className="py-1">{t("service_picker.col_code")}</th>
+									<th className="py-1">
+										{t("service_picker.col_description")}
+									</th>
+									<th className="py-1 text-right">{t("service_picker.qty")}</th>
+								</tr>
+							</thead>
+							<tbody>
+								{billedLines.map((line) => (
+									<tr
+										key={line.serviceCodeId}
+										className="border-b last:border-0"
+									>
+										<td className="py-1 font-mono text-xs">{line.claroCode}</td>
+										<td className="py-1">{line.name}</td>
+										<td className="py-1 text-right">{line.qty}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				</section>
+			)}
 
 			{(estimated.length > 0 || taken.length > 0 || used.length > 0) && (
 				<section className="bg-white border rounded-lg p-4 space-y-4">

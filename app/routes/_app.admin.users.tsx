@@ -1,10 +1,30 @@
+import {
+	MoreHorizontalIcon,
+	PlusSignIcon,
+	Search01Icon,
+	UserIcon,
+} from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 import { hashPassword } from "better-auth/crypto"
+import type { ParseKeys } from "i18next"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { data, Form, redirect } from "react-router"
+import { data, Form, redirect, useFetcher } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
-import { Button } from "~/components/ui/button"
+import { Badge } from "~/components/ui/badge"
+import { Button, buttonVariants } from "~/components/ui/button"
+import { Card } from "~/components/ui/card"
+import { Drawer, DrawerContent } from "~/components/ui/drawer"
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu"
+import { EmptyState } from "~/components/ui/empty-state"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
+import { PageHeader } from "~/components/ui/page-header"
 import {
 	Select,
 	SelectContent,
@@ -12,6 +32,17 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "~/components/ui/select"
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableEmptyRow,
+	TableHead,
+	TableHeader,
+	TableRow,
+	TableToolbar,
+} from "~/components/ui/table"
+import { useToastManager } from "~/components/ui/toast"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
 import type { Role } from "../../generated/prisma/client"
@@ -192,6 +223,45 @@ export async function action({ request }: Route.ActionArgs) {
 	)
 }
 
+function RoleSelect({ user, roles }: { user: UserRow; roles: typeof ROLES }) {
+	const { t } = useTranslation()
+	const fetcher = useFetcher<{ errorKey?: string } | null>()
+	const toastManager = useToastManager()
+
+	useEffect(() => {
+		if (fetcher.data && "errorKey" in fetcher.data && fetcher.data.errorKey) {
+			toastManager.add({
+				title: t(fetcher.data.errorKey as ParseKeys),
+			})
+		}
+	}, [fetcher.data, t, toastManager])
+
+	return (
+		<Select
+			defaultValue={user.role}
+			onValueChange={(value) => {
+				if (!value) return
+				const fd = new FormData()
+				fd.set("intent", "updateRole")
+				fd.set("id", user.id)
+				fd.set("role", value)
+				fetcher.submit(fd, { method: "post" })
+			}}
+		>
+			<SelectTrigger size="sm" className="w-32">
+				<SelectValue />
+			</SelectTrigger>
+			<SelectContent>
+				{roles.map((r) => (
+					<SelectItem key={r.value} value={r.value}>
+						{t(r.labelKey as ParseKeys)}
+					</SelectItem>
+				))}
+			</SelectContent>
+		</Select>
+	)
+}
+
 export default function AdminUsers({
 	loaderData,
 	actionData,
@@ -207,30 +277,249 @@ export default function AdminUsers({
 		actionData && "resetSuccess" in actionData
 			? (actionData.resetSuccess as boolean)
 			: false
+	const [drawerOpen, setDrawerOpen] = useState(false)
+	const [search, setSearch] = useState("")
+	const [statusFilter, setStatusFilter] = useState<
+		"all" | "active" | "inactive"
+	>("all")
+	const [roleFilter, setRoleFilter] = useState("all")
+	const createFetcher = useFetcher<{ errorKey?: string } | null>()
+	const wasCreating = useRef(false)
+	const creating = createFetcher.state !== "idle"
+	const createError =
+		createFetcher.data && "errorKey" in createFetcher.data
+			? createFetcher.data.errorKey
+			: null
+
+	useEffect(() => {
+		if (wasCreating.current && !creating && !createError) setDrawerOpen(false)
+		wasCreating.current = creating
+	}, [creating, createError])
+
+	const filtered = useMemo(() => {
+		const term = search.trim().toLowerCase()
+		return users.filter((user) => {
+			if (statusFilter === "active" && !user.active) return false
+			if (statusFilter === "inactive" && user.active) return false
+			if (roleFilter !== "all" && user.role !== roleFilter) return false
+			if (!term) return true
+			return (
+				user.name.toLowerCase().includes(term) ||
+				user.email.toLowerCase().includes(term)
+			)
+		})
+	}, [users, search, statusFilter, roleFilter])
 
 	return (
-		<div className="space-y-8">
-			<h1 className="text-xl font-semibold">{t("admin_users.title")}</h1>
+		<div>
+			<PageHeader
+				title={t("admin_users.title")}
+				subtitle={t("admin_users.subtitle")}
+				actions={
+					<Button onClick={() => setDrawerOpen(true)}>
+						<HugeiconsIcon
+							icon={PlusSignIcon}
+							strokeWidth={2}
+							className="size-4"
+						/>
+						{t("admin_users.add_submit")}
+					</Button>
+				}
+			/>
 
-			<section className="bg-white border rounded-lg p-6 space-y-4">
-				<h2 className="text-base font-medium">
-					{t("admin_users.add_heading")}
-				</h2>
-				<Form method="post" className="space-y-4">
-					<input type="hidden" name="intent" value="create" />
-					<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-						<div className="space-y-1">
+			{error && (
+				<p className="mb-4 rounded-md border border-status-danger/20 bg-status-danger-soft px-3 py-2 text-sm text-status-danger">
+					{t(error as ParseKeys)}
+				</p>
+			)}
+
+			{resetSuccess && (
+				<div className="mb-4 rounded-md border border-status-warn/20 bg-status-warn-soft px-4 py-3 text-sm text-status-warn">
+					<p className="font-medium">
+						{t("admin_users.reset_password_notice")}
+					</p>
+					<p className="mt-1">{t("admin_users.reset_password_detail")}</p>
+				</div>
+			)}
+
+			<Card>
+				<TableToolbar>
+					<Input
+						leading={
+							<HugeiconsIcon
+								icon={Search01Icon}
+								strokeWidth={2}
+								className="size-4"
+							/>
+						}
+						placeholder={t("admin_users.search_placeholder")}
+						value={search}
+						onChange={(event) => setSearch(event.target.value)}
+						className="sm:w-64"
+					/>
+					<div className="flex flex-wrap items-center gap-3">
+						<span className="text-xs text-muted-foreground">
+							{t("admin_users.result_count", { count: filtered.length })}
+						</span>
+						<Select
+							value={roleFilter}
+							onValueChange={(value) => setRoleFilter(value ?? "all")}
+						>
+							<SelectTrigger size="sm" aria-label={t("admin_users.table.role")}>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">
+									{t("admin_users.filter_all_roles")}
+								</SelectItem>
+								{roles.map((role) => (
+									<SelectItem key={role.value} value={role.value}>
+										{t(role.labelKey as ParseKeys)}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+						<Select
+							value={statusFilter}
+							onValueChange={(value) =>
+								setStatusFilter(value as typeof statusFilter)
+							}
+						>
+							<SelectTrigger
+								size="sm"
+								aria-label={t("admin_users.table.active")}
+							>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">
+									{t("admin_users.filter_all")}
+								</SelectItem>
+								<SelectItem value="active">
+									{t("admin_users.filter_active")}
+								</SelectItem>
+								<SelectItem value="inactive">
+									{t("admin_users.filter_inactive")}
+								</SelectItem>
+							</SelectContent>
+						</Select>
+					</div>
+				</TableToolbar>
+				<Table>
+					<TableHeader>
+						<TableRow>
+							<TableHead>{t("admin_users.table.name")}</TableHead>
+							<TableHead>{t("admin_users.table.email")}</TableHead>
+							<TableHead>{t("admin_users.table.role")}</TableHead>
+							<TableHead>{t("admin_users.table.active")}</TableHead>
+							<TableHead className="text-right">
+								{t("admin_users.table.actions")}
+							</TableHead>
+						</TableRow>
+					</TableHeader>
+					<TableBody>
+						{filtered.map((user) => (
+							<TableRow key={user.id} data-inactive={!user.active || undefined}>
+								<TableCell>{user.name}</TableCell>
+								<TableCell className="text-muted-foreground">
+									{user.email}
+								</TableCell>
+								<TableCell>
+									<RoleSelect user={user} roles={roles} />
+								</TableCell>
+								<TableCell>
+									<Badge variant={user.active ? "ok" : "neutral"} dot>
+										{user.active
+											? t("admin_users.status_active")
+											: t("admin_users.status_inactive")}
+									</Badge>
+								</TableCell>
+								<TableCell className="text-right">
+									<DropdownMenu>
+										<DropdownMenuTrigger
+											aria-label={t("admin_users.row_menu")}
+											className={buttonVariants({
+												variant: "ghost",
+												size: "icon-sm",
+											})}
+										>
+											<HugeiconsIcon
+												icon={MoreHorizontalIcon}
+												strokeWidth={2}
+												className="size-4"
+											/>
+										</DropdownMenuTrigger>
+										<DropdownMenuContent>
+											<Form method="post">
+												<input type="hidden" name="intent" value="toggle" />
+												<input type="hidden" name="id" value={user.id} />
+												<DropdownMenuItem
+													variant={user.active ? "destructive" : "default"}
+													render={<button type="submit" className="w-full" />}
+												>
+													{user.active
+														? t("admin_users.deactivate")
+														: t("admin_users.activate")}
+												</DropdownMenuItem>
+											</Form>
+											<Form method="post">
+												<input
+													type="hidden"
+													name="intent"
+													value="resetPassword"
+												/>
+												<input type="hidden" name="id" value={user.id} />
+												<DropdownMenuItem
+													render={<button type="submit" className="w-full" />}
+												>
+													{t("admin_users.reset_password")}
+												</DropdownMenuItem>
+											</Form>
+										</DropdownMenuContent>
+									</DropdownMenu>
+								</TableCell>
+							</TableRow>
+						))}
+						{filtered.length === 0 && (
+							<TableEmptyRow colSpan={5}>
+								<EmptyState
+									icon={UserIcon}
+									title={
+										users.length === 0
+											? t("admin_users.no_users")
+											: t("admin_users.no_matches")
+									}
+									description={
+										users.length === 0
+											? t("admin_users.no_users_hint")
+											: undefined
+									}
+								/>
+							</TableEmptyRow>
+						)}
+					</TableBody>
+				</Table>
+			</Card>
+
+			<Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
+				<DrawerContent
+					title={t("admin_users.add_heading")}
+					closeLabel={t("admin_users.close_drawer")}
+				>
+					<createFetcher.Form method="post" className="space-y-5">
+						<input type="hidden" name="intent" value="create" />
+						<div className="space-y-1.5">
 							<Label htmlFor="name">{t("admin_users.name_label")}</Label>
 							<Input id="name" name="name" required />
 						</div>
-						<div className="space-y-1">
+						<div className="space-y-1.5">
 							<Label htmlFor="email">{t("admin_users.email_label")}</Label>
 							<Input id="email" name="email" type="email" required />
 						</div>
-						<div className="space-y-1">
+						<div className="space-y-1.5">
 							<Label htmlFor="role">{t("admin_users.role_label")}</Label>
 							<Select name="role" required>
-								<SelectTrigger id="role">
+								<SelectTrigger id="role" className="w-full">
 									<SelectValue
 										placeholder={t("admin_users.role_placeholder")}
 									/>
@@ -238,13 +527,13 @@ export default function AdminUsers({
 								<SelectContent>
 									{roles.map((r) => (
 										<SelectItem key={r.value} value={r.value}>
-											{t(r.labelKey as never)}
+											{t(r.labelKey as ParseKeys)}
 										</SelectItem>
 									))}
 								</SelectContent>
 							</Select>
 						</div>
-						<div className="space-y-1">
+						<div className="space-y-1.5">
 							<Label htmlFor="tempPassword">
 								{t("admin_users.temp_password_label")}
 							</Label>
@@ -256,128 +545,26 @@ export default function AdminUsers({
 								required
 							/>
 						</div>
-					</div>
-					<Button type="submit">{t("admin_users.add_submit")}</Button>
-					{error && <p className="text-sm text-red-600">{t(error as never)}</p>}
-				</Form>
-			</section>
-
-			{resetSuccess && (
-				<div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
-					<p className="font-medium">
-						{t("admin_users.reset_password_notice")}
-					</p>
-					<p className="mt-1">{t("admin_users.reset_password_detail")}</p>
-					<Button
-						variant="ghost"
-						size="sm"
-						className="mt-2"
-						onClick={() => {
-							/* actionData clears on next action */
-						}}
-					>
-						{t("admin_users.dismiss")}
-					</Button>
-				</div>
-			)}
-
-			<section className="bg-white border rounded-lg overflow-hidden">
-				<table className="w-full text-sm">
-					<thead className="bg-slate-50 border-b">
-						<tr>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
-								{t("admin_users.table.name")}
-							</th>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
-								{t("admin_users.table.email")}
-							</th>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
-								{t("admin_users.table.role")}
-							</th>
-							<th className="px-4 py-3 text-center font-medium text-slate-600">
-								{t("admin_users.table.active")}
-							</th>
-							<th className="px-4 py-3 text-center font-medium text-slate-600">
-								{t("admin_users.table.actions")}
-							</th>
-						</tr>
-					</thead>
-					<tbody className="divide-y">
-						{users.map((user) => (
-							<tr key={user.id} className="hover:bg-slate-50">
-								<td className="px-4 py-3">{user.name}</td>
-								<td className="px-4 py-3">{user.email}</td>
-								<td className="px-4 py-3">
-									<Form method="post" className="flex items-center gap-2">
-										<input type="hidden" name="intent" value="updateRole" />
-										<input type="hidden" name="id" value={user.id} />
-										<Select name="role" defaultValue={user.role}>
-											<SelectTrigger className="w-40">
-												<SelectValue />
-											</SelectTrigger>
-											<SelectContent>
-												{roles.map((r) => (
-													<SelectItem key={r.value} value={r.value}>
-														{t(r.labelKey as never)}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
-										<Button type="submit" variant="outline" size="sm">
-											{t("admin_users.update_role")}
-										</Button>
-									</Form>
-								</td>
-								<td className="px-4 py-3 text-center">
-									<span
-										className={
-											user.active
-												? "text-green-600 font-medium"
-												: "text-slate-400"
-										}
-									>
-										{user.active ? t("admin_users.yes") : t("admin_users.no")}
-									</span>
-								</td>
-								<td className="px-4 py-3 text-center">
-									<div className="flex items-center justify-center gap-2">
-										<Form method="post">
-											<input type="hidden" name="intent" value="toggle" />
-											<input type="hidden" name="id" value={user.id} />
-											<Button type="submit" variant="outline" size="sm">
-												{user.active
-													? t("admin_users.deactivate")
-													: t("admin_users.activate")}
-											</Button>
-										</Form>
-										<Form method="post">
-											<input
-												type="hidden"
-												name="intent"
-												value="resetPassword"
-											/>
-											<input type="hidden" name="id" value={user.id} />
-											<Button type="submit" variant="outline" size="sm">
-												{t("admin_users.reset_password")}
-											</Button>
-										</Form>
-									</div>
-								</td>
-							</tr>
-						))}
-						{users.length === 0 && (
-							<tr>
-								<td
-									colSpan={5}
-									className="px-4 py-6 text-center text-slate-400 text-sm"
-								>
-									{t("admin_users.no_users")}
-								</td>
-							</tr>
+						{createError && (
+							<p className="rounded-md border border-status-danger/20 bg-status-danger-soft px-3 py-2 text-sm text-status-danger">
+								{t(createError as ParseKeys)}
+							</p>
 						)}
-					</tbody>
-				</table>
-			</section>
+						<div className="flex justify-end gap-2 pt-2">
+							<Button
+								type="button"
+								variant="secondary"
+								onClick={() => setDrawerOpen(false)}
+							>
+								{t("admin_users.cancel")}
+							</Button>
+							<Button type="submit" loading={creating}>
+								{t("admin_users.add_submit")}
+							</Button>
+						</div>
+					</createFetcher.Form>
+				</DrawerContent>
+			</Drawer>
 		</div>
 	)
 }

@@ -536,7 +536,7 @@ export default function FieldUpdate({
 
 				<div className="border rounded-lg p-3 space-y-2">
 					<Label>{t("docs_field.time_on_site_label")}</Label>
-					<div className="flex items-center gap-2">
+					<div className="flex flex-wrap items-center gap-2">
 						<input type="hidden" name="startedAt" value={startedAt ?? ""} />
 						<input type="hidden" name="endedAt" value={endedAt ?? ""} />
 						<Button

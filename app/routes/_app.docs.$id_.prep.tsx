@@ -7,6 +7,7 @@ import { Button } from "~/components/ui/button"
 import { Checkbox } from "~/components/ui/checkbox"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
+import { BackLink } from "~/components/ui/page-header"
 import {
 	Select,
 	SelectContent,
@@ -189,6 +190,9 @@ export default function PrepDoc({
 
 	return (
 		<div className="space-y-4">
+			<BackLink to={`/docs/${doc.id}`}>
+				{t("docs_view.back_to_work_order")}
+			</BackLink>
 			<h1 className="text-xl font-semibold">{t("docs_prep.title")}</h1>
 			<p className="text-sm text-slate-600">
 				<Trans

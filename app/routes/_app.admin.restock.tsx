@@ -1,11 +1,16 @@
-import type { TFunction } from "i18next"
+import { CheckListIcon, InboxIcon } from "@hugeicons/core-free-icons"
+import type { ParseKeys, TFunction } from "i18next"
 import { useTranslation } from "react-i18next"
 import { data, Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
+import { Card } from "~/components/ui/card"
+import { EmptyState } from "~/components/ui/empty-state"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
+import { PageHeader } from "~/components/ui/page-header"
+import { Tabs, TabsList, TabsPanel, TabsTab } from "~/components/ui/tabs"
 import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
@@ -33,6 +38,7 @@ type RestockRequest = {
 	deniedReason: string | null
 	vanName: string | null
 	exceeds: boolean
+	createdAt: Date
 }
 
 export const meta: Route.MetaFunction = () => [
@@ -171,6 +177,19 @@ export async function action({ request }: Route.ActionArgs) {
 	)
 }
 
+const STATUS_LABEL_KEY: Record<string, ParseKeys> = {
+	REQUESTED: "admin_restock.status.requested",
+	PENDING_APPROVAL: "admin_restock.status.pending_approval",
+	APPROVED: "admin_restock.status.approved",
+	DENIED: "admin_restock.status.denied",
+}
+
+function formatAge(createdAt: Date, t: TFunction) {
+	const days = Math.floor((Date.now() - createdAt.getTime()) / 86_400_000)
+	if (days <= 0) return t("admin_restock.age_today")
+	return t("admin_restock.age", { count: days })
+}
+
 export default function AdminRestock({
 	loaderData,
 	actionData,
@@ -184,55 +203,74 @@ export default function AdminRestock({
 	const decided = requests.filter((r) => r.status !== "PENDING_APPROVAL")
 
 	return (
-		<div className="space-y-8">
-			<h1 className="text-xl font-semibold">{t("admin_restock.title")}</h1>
+		<div>
+			<PageHeader
+				title={t("admin_restock.title")}
+				subtitle={t("admin_restock.subtitle")}
+			/>
 
-			{error && <p className="text-sm text-red-600">{t(error as never)}</p>}
+			{error && (
+				<p className="mb-4 rounded-md border border-status-danger/20 bg-status-danger-soft px-3 py-2 text-sm text-status-danger">
+					{t(error as ParseKeys)}
+				</p>
+			)}
 
-			<section className="bg-white border rounded-lg overflow-hidden">
-				<h2 className="px-4 py-3 text-base font-medium border-b">
-					{t("admin_restock.pending_heading", { count: pending.length })}
-				</h2>
-				{pending.length === 0 ? (
-					<p className="p-4 text-sm text-slate-400">
-						{t("admin_restock.no_pending")}
-					</p>
-				) : (
-					<div className="divide-y">
-						{pending.map((req) => (
-							<RestockRequestRow
-								key={req.id}
-								request={req}
-								serviceCodes={serviceCodes}
-								t={t}
+			<Tabs defaultValue="pending">
+				<TabsList>
+					<TabsTab value="pending" className="gap-2">
+						{t("admin_restock.tab_pending")}
+						<Badge variant={pending.length > 0 ? "warn" : "neutral"}>
+							{pending.length}
+						</Badge>
+					</TabsTab>
+					<TabsTab value="history">{t("admin_restock.tab_history")}</TabsTab>
+				</TabsList>
+				<TabsPanel value="pending">
+					<Card>
+						{pending.length === 0 ? (
+							<EmptyState
+								icon={InboxIcon}
+								title={t("admin_restock.no_pending_title")}
+								description={t("admin_restock.no_pending_description")}
 							/>
-						))}
-					</div>
-				)}
-			</section>
-
-			<section className="bg-white border rounded-lg overflow-hidden">
-				<h2 className="px-4 py-3 text-base font-medium border-b">
-					{t("admin_restock.history_heading")}
-				</h2>
-				{decided.length === 0 ? (
-					<p className="p-4 text-sm text-slate-400">
-						{t("admin_restock.no_history")}
-					</p>
-				) : (
-					<div className="divide-y">
-						{decided.map((req) => (
-							<RestockRequestRow
-								key={req.id}
-								request={req}
-								serviceCodes={serviceCodes}
-								t={t}
-								history
+						) : (
+							<div className="divide-y divide-border">
+								{pending.map((req) => (
+									<RestockRequestRow
+										key={req.id}
+										request={req}
+										serviceCodes={serviceCodes}
+										t={t}
+									/>
+								))}
+							</div>
+						)}
+					</Card>
+				</TabsPanel>
+				<TabsPanel value="history">
+					<Card>
+						{decided.length === 0 ? (
+							<EmptyState
+								icon={CheckListIcon}
+								title={t("admin_restock.no_history_title")}
+								description={t("admin_restock.no_history_description")}
 							/>
-						))}
-					</div>
-				)}
-			</section>
+						) : (
+							<div className="divide-y divide-border">
+								{decided.map((req) => (
+									<RestockRequestRow
+										key={req.id}
+										request={req}
+										serviceCodes={serviceCodes}
+										t={t}
+										history
+									/>
+								))}
+							</div>
+						)}
+					</Card>
+				</TabsPanel>
+			</Tabs>
 		</div>
 	)
 }
@@ -260,16 +298,19 @@ function RestockRequestRow({
 	}, 0)
 
 	return (
-		<div className="p-4 space-y-3">
+		<div className="space-y-3 p-4">
 			<div className="flex flex-wrap items-center justify-between gap-2">
 				<div>
 					<p className="font-mono font-medium">#{request.id.slice(-6)}</p>
-					<p className="text-sm text-slate-500">
+					<p className="text-sm text-muted-foreground">
 						{request.requestedBy?.name} — {request.warehouse?.name}
 						{request.vanName && ` (${request.vanName})`}
 					</p>
 				</div>
 				<div className="flex items-center gap-2">
+					<span className="text-xs text-muted-foreground">
+						{formatAge(request.createdAt, t)}
+					</span>
 					{request.exceeds && (
 						<Badge variant="warn">{t("admin_restock.exceeds_badge")}</Badge>
 					)}
@@ -282,12 +323,12 @@ function RestockRequestRow({
 									: "info"
 						}
 					>
-						{request.status}
+						{t(STATUS_LABEL_KEY[request.status] ?? STATUS_LABEL_KEY.REQUESTED)}
 					</Badge>
 				</div>
 			</div>
 
-			<ul className="text-sm text-slate-600 space-y-1">
+			<ul className="space-y-1 text-sm text-muted-foreground">
 				{items.map((item) => {
 					const code = serviceCodes.find((c) => c.id === item.serviceCodeId)
 					return (
@@ -299,7 +340,7 @@ function RestockRequestRow({
 				{items.length === 0 && <li>{t("admin_restock.no_items")}</li>}
 			</ul>
 
-			<p className="text-sm font-medium">
+			<p className="text-sm font-medium tabular-nums">
 				{t("admin_restock.total")}: ${total.toFixed(2)}
 			</p>
 
@@ -337,7 +378,7 @@ function RestockRequestRow({
 								placeholder={t("admin_restock.deny_reason_placeholder")}
 							/>
 						</div>
-						<Button type="submit" variant="destructive" size="sm">
+						<Button type="submit" variant="secondary" size="sm">
 							{t("admin_restock.deny")}
 						</Button>
 					</Form>
@@ -345,7 +386,7 @@ function RestockRequestRow({
 			)}
 
 			{history && request.approvedBy && (
-				<p className="text-xs text-slate-500">
+				<p className="text-xs text-muted-foreground">
 					{t("admin_restock.decided_by", { name: request.approvedBy.name })}
 					{request.approvalNote && ` — ${request.approvalNote}`}
 					{request.deniedReason && ` — ${request.deniedReason}`}

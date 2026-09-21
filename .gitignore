@@ -39,3 +39,6 @@ app/lib/__screenshots__
 graphify-out
 
 **/__screenshots__/
+
+# runtime upload storage (written by the app at runtime)
+.local/

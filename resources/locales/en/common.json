@@ -1559,6 +1559,12 @@
 		"back": "Back",
 		"cancel": "Cancel",
 		"not_wired": "Not wired yet",
+		"shell": {
+			"skip_to_content": "Skip to content",
+			"wordmark_sub": "Operations",
+			"theme_light": "Light",
+			"theme_dark": "Dark"
+		},
 		"installer": {
 			"hello": "Hello, {{name}}",
 			"greet_pending": "You have {{count}} pending jobs in the queue.",

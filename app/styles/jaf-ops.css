@@ -1824,3 +1824,96 @@ body.jaf-phone .jaf-photos {
 	padding: 16px;
 	background: var(--surface);
 }
+
+/* app shell additions */
+.jaf-skip {
+	position: absolute;
+	left: -9999px;
+	top: auto;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	z-index: 100;
+}
+.jaf-skip:focus {
+	left: 12px;
+	top: 12px;
+	width: auto;
+	height: auto;
+	padding: 10px 14px;
+	background: var(--surface);
+	color: var(--ink);
+	border: 1px solid var(--ring);
+	border-radius: 10px;
+	box-shadow: var(--shadow);
+}
+.jaf-menu-btn {
+	display: none;
+}
+.jaf-top-mark {
+	display: none;
+	align-items: center;
+}
+.jaf-top-lang .jaf-toggles {
+	flex-wrap: nowrap;
+}
+.jaf-drawer {
+	border: 0;
+	margin: 0;
+	padding: 18px;
+	max-width: min(320px, 100vw - 32px);
+	height: 100%;
+	background: var(--plane);
+	color: var(--ink);
+}
+.jaf-drawer::backdrop {
+	background: rgba(0, 0, 0, 0.45);
+}
+.jaf-drawer-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 12px;
+}
+.jaf-drawer .jaf-foot {
+	margin-top: auto;
+	padding-top: 14px;
+}
+.jaf-drawer[open] {
+	display: flex;
+	flex-direction: column;
+	position: fixed;
+	inset: 0 auto 0 0;
+	z-index: 50;
+}
+@media (max-width: 1024px) {
+	.jaf-menu-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.jaf-top-mark {
+		display: inline-flex;
+	}
+}
+@media (min-width: 1025px) {
+	.jaf-top-lang {
+		display: none;
+	}
+}
+@media print {
+	.jaf-ds .jaf-rail,
+	.jaf-ds .jaf-top,
+	.jaf-ds .jaf-drawer,
+	.jaf-ds .jaf-skip,
+	.jaf-ds .jaf-toggles {
+		display: none;
+	}
+	.jaf-ds .jaf-shell {
+		display: block;
+	}
+	.jaf-ds .jaf-wrap {
+		max-width: none;
+		padding: 0;
+	}
+}

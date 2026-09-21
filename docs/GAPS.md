@@ -98,9 +98,9 @@ The admin dashboard filter dropdown shows a raw CUID where a supervisor name sho
 
 ---
 
-## Known debt: App shell/rail is still v1 on ported screens
+## Known debt: App shell/rail (`ENABLE_DS_SHELL`)
 
-The app shell (top bar + left rail) is still v1 on all ported screens. Porting the shell is a separate, deliberate step after more roles are done. Full v2 ports render body content with design-system primitives but inherit the v1 shell.
+Design-system shell (`DesignSystemAppShell`) ships behind `ENABLE_DS_SHELL` (requires `ENABLE_DESIGN_SYSTEM`). Flag off → v1 shell unchanged. Rail nav counts (gap #47) are not wired to the loader yet; counts render only when provided.
 
 ---
 
@@ -115,3 +115,5 @@ Route reads (`/installer`, `/installer/adjust`, `/installer/restock` action, `/a
 **Units owed back KPI:** Still blocked on gap **#16 (`SerialUnit`)**. Guide “units owed back” means serialized units taken and not yet returned — not surplus above par. Do not approximate with `onHand - parLevel`.
 
 **Pending restock on adjust:** `VanRestockRequest` has no `vanId`; pending restock is matched by `requestedById` (assumes one installer ↔ one van).
+
+**Rail nav counts (gap #47):** Documented as computed on page load; no count source is wired to the shell nav yet — v2 renders counts only when `navCounts` provides them.

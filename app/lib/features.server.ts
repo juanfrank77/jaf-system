@@ -44,3 +44,8 @@ export function isCrewV2Enabled(): boolean {
 export function isSupervisorV2Enabled(): boolean {
 	return isDesignSystemEnabled() && process.env.ENABLE_SUPERVISOR_V2 === "true"
 }
+
+/** Design-system app shell (top bar + rail). */
+export function isDsShellEnabled(): boolean {
+	return isDesignSystemEnabled() && process.env.ENABLE_DS_SHELL === "true"
+}

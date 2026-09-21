@@ -1559,6 +1559,12 @@
 		"back": "[UNPROOFED] Atrás",
 		"cancel": "[UNPROOFED] Cancelar",
 		"not_wired": "[UNPROOFED] Aún no conectado",
+		"shell": {
+			"skip_to_content": "[UNPROOFED] Saltar al contenido",
+			"wordmark_sub": "[UNPROOFED] Operaciones",
+			"theme_light": "[UNPROOFED] Claro",
+			"theme_dark": "[UNPROOFED] Oscuro"
+		},
 		"installer": {
 			"hello": "[UNPROOFED] Hola, {{name}}",
 			"greet_pending": "[UNPROOFED] Tienes {{count}} trabajos pendientes en la cola.",

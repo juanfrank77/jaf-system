@@ -1,13 +1,14 @@
 import { useEffect } from "react"
 import { redirect } from "react-router"
-import { DashboardView } from "~/components/dashboard-view"
+import { DashboardView, type Greeting } from "~/components/dashboard-view"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { SupervisorDashboard } from "~/components/supervisor-dashboard"
 import {
 	computeDashboardStats,
 	type DashboardExplainer,
 } from "~/lib/dashboard-stats"
-import { db } from "~/lib/db.server"
+import { db, Prisma } from "~/lib/db.server"
+import { loadExecDashboard } from "~/lib/exec-dashboard.server"
 import {
 	isComptrollerEnabled,
 	isDashboardFiltersEnabled,
@@ -21,7 +22,6 @@ import {
 import { getAvisoAmountTolerance } from "~/lib/system-settings.server"
 import { toNumberPrice } from "~/lib/utils"
 import type { DocStatus, Role } from "../../generated/prisma/client"
-import { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.dashboard"
 
 export const meta: Route.MetaFunction = () => [{ title: "Dashboard — JAF Ops" }]
@@ -34,6 +34,13 @@ type SendBackHistoryRow = {
 	jobAddressEstimated: string
 	createdAt: Date
 	sendBackHistory: unknown
+}
+
+function greetingFor(now: Date): Greeting {
+	const hour = now.getHours()
+	if (hour < 12) return "morning"
+	if (hour < 18) return "afternoon"
+	return "evening"
 }
 
 function buildBaseWhere(role: Role, userId: string): Record<string, unknown> {
@@ -342,11 +349,24 @@ export async function loader({ request }: Route.LoaderArgs) {
 					})
 				: []
 
+	// Executive command center: money, PO gap, field and warehouse figures.
+	const exec =
+		user.role === "FINANCE" || user.role === "ADMIN"
+			? await loadExecDashboard()
+			: null
+
+	const now = new Date()
+
 	return {
 		stats,
 		alert,
 		explainer,
 		docs: visibleDocs,
+		exec,
+		role: user.role,
+		userName: user.name,
+		greeting: greetingFor(now),
+		todayIso: now.toISOString(),
 		pendingReviewDocs: [],
 		sentBackDocs: [],
 		supervisorQueues,
@@ -375,6 +395,11 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 		stats,
 		alert,
 		docs,
+		exec,
+		role,
+		userName,
+		greeting,
+		todayIso,
 		pendingReviewDocs,
 		sentBackDocs,
 		supervisorQueues,
@@ -428,7 +453,14 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 	])
 
 	if (supervisorQueues) {
-		return <SupervisorDashboard queues={supervisorQueues} />
+		return (
+			<SupervisorDashboard
+				queues={supervisorQueues}
+				userName={userName}
+				greeting={greeting}
+				todayIso={todayIso}
+			/>
+		)
 	}
 
 	return (
@@ -437,6 +469,11 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 			alert={alert}
 			explainer={explainer}
 			docs={docs}
+			exec={exec}
+			userRole={role}
+			userName={userName}
+			greeting={greeting}
+			todayIso={todayIso}
 			showFilters={showFilters}
 			pendingReviewDocs={pendingReviewDocs}
 			sentBackDocs={sentBackDocs}

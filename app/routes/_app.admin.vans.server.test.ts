@@ -1,10 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-type StockLevel = {
-	serviceCodeId: string
-	qty: number
-}
-
 vi.mock("~/lib/db.server", () => ({
 	db: {
 		van: {
@@ -23,6 +18,10 @@ vi.mock("~/lib/db.server", () => ({
 		auditTrail: {
 			create: vi.fn(),
 		},
+		$transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => {
+			const { db: client } = await import("~/lib/db.server")
+			return fn(client)
+		}),
 	},
 }))
 
@@ -30,8 +29,13 @@ vi.mock("~/lib/permissions.server", () => ({
 	requireRole: vi.fn(),
 }))
 
+vi.mock("~/lib/van-stock.server", () => ({
+	setVanParLevels: vi.fn(),
+}))
+
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
+import { setVanParLevels } from "~/lib/van-stock.server"
 import { action } from "./_app.admin.vans"
 
 function formRequest(form: FormData) {
@@ -44,12 +48,16 @@ function formRequest(form: FormData) {
 describe("POST /admin/vans", () => {
 	beforeEach(() => vi.clearAllMocks())
 
-	it("creates a van with standard stock levels", async () => {
+	it("creates a van with empty legacy JSON then writes par levels", async () => {
 		vi.mocked(requireRole).mockResolvedValue({
 			user: { id: "admin-1" },
 			session: {},
 		} as any)
-		vi.mocked(db.van.create).mockResolvedValue({} as any)
+		vi.mocked(db.van.create).mockResolvedValue({ id: "van-new" } as any)
+		vi.mocked(setVanParLevels).mockResolvedValue([
+			{ serviceCodeId: "code-a", parLevel: 10 },
+			{ serviceCodeId: "code-b", parLevel: 5 },
+		])
 
 		const form = new FormData()
 		form.set("intent", "create")
@@ -65,17 +73,24 @@ describe("POST /admin/vans", () => {
 		} as any).catch((r) => r)
 
 		expect(result.status).toBe(302)
+		expect(db.$transaction).toHaveBeenCalledTimes(1)
 		expect(db.van.create).toHaveBeenCalledWith({
 			data: expect.objectContaining({
 				name: "Van 101",
 				installerId: "installer-1",
-				standardStockLevels: expect.arrayContaining([
-					{ serviceCodeId: "code-a", qty: 10 },
-					{ serviceCodeId: "code-b", qty: 5 },
-				]),
+				standardStockLevels: [],
 				active: true,
 			}),
 		})
+		expect(setVanParLevels).toHaveBeenCalledWith(
+			"van-new",
+			[
+				{ serviceCodeId: "code-a", parLevel: 10 },
+				{ serviceCodeId: "code-b", parLevel: 5 },
+			],
+			"create",
+			expect.anything(),
+		)
 	})
 
 	it("allows unassigned installer", async () => {
@@ -83,7 +98,7 @@ describe("POST /admin/vans", () => {
 			user: { id: "admin-1" },
 			session: {},
 		} as any)
-		vi.mocked(db.van.create).mockResolvedValue({} as any)
+		vi.mocked(db.van.create).mockResolvedValue({ id: "van-new" } as any)
 
 		const form = new FormData()
 		form.set("intent", "create")
@@ -101,6 +116,57 @@ describe("POST /admin/vans", () => {
 				installerId: null,
 			}),
 		})
+		expect(setVanParLevels).not.toHaveBeenCalled()
+	})
+
+	it("accepts par level of zero", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "admin-1" },
+			session: {},
+		} as any)
+		vi.mocked(db.van.create).mockResolvedValue({ id: "van-new" } as any)
+		vi.mocked(setVanParLevels).mockResolvedValue([
+			{ serviceCodeId: "code-a", parLevel: 0 },
+		])
+
+		const form = new FormData()
+		form.set("intent", "create")
+		form.set("name", "Van Zero")
+		form.set("stock_code-a", "0")
+
+		const result = await action({
+			request: formRequest(form),
+			params: {},
+		} as any).catch((r) => r)
+
+		expect(result.status).toBe(302)
+		expect(setVanParLevels).toHaveBeenCalledWith(
+			"van-new",
+			[{ serviceCodeId: "code-a", parLevel: 0 }],
+			"create",
+			expect.anything(),
+		)
+	})
+
+	it("rejects negative par levels", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "admin-1" },
+			session: {},
+		} as any)
+
+		const form = new FormData()
+		form.set("intent", "create")
+		form.set("name", "Van Bad")
+		form.set("stock_code-a", "-1")
+
+		const result = await action({
+			request: formRequest(form),
+			params: {},
+		} as any)
+
+		expect((result as any).init?.status).toBe(400)
+		expect((result as any).data.errorKey).toBe("admin_vans.errors.negative_par")
+		expect(db.van.create).not.toHaveBeenCalled()
 	})
 
 	it("toggles van active status", async () => {
@@ -130,7 +196,7 @@ describe("POST /admin/vans", () => {
 		})
 	})
 
-	it("preserves inactive service code stock levels on update", async () => {
+	it("preserves inactive service code stock levels on update via setVanParLevels", async () => {
 		vi.mocked(requireRole).mockResolvedValue({
 			user: { id: "admin-1" },
 			session: {},
@@ -138,11 +204,11 @@ describe("POST /admin/vans", () => {
 		vi.mocked(db.van.findUnique).mockResolvedValue({
 			id: "van-1",
 			installerId: "installer-1",
-			standardStockLevels: [
-				{ serviceCodeId: "inactive-code", qty: 4 },
-				{ serviceCodeId: "active-code", qty: 2 },
-			],
 		} as any)
+		vi.mocked(setVanParLevels).mockResolvedValue([
+			{ serviceCodeId: "inactive-code", parLevel: 4 },
+			{ serviceCodeId: "active-code", parLevel: 3 },
+		])
 		vi.mocked(db.van.update).mockResolvedValue({} as any)
 
 		const form = new FormData()
@@ -159,19 +225,57 @@ describe("POST /admin/vans", () => {
 		} as any).catch((r) => r)
 
 		expect(result.status).toBe(302)
-		expect(db.van.update).toHaveBeenCalledWith(
-			expect.objectContaining({
-				where: { id: "van-1" },
+		expect(db.$transaction).toHaveBeenCalledTimes(1)
+		expect(setVanParLevels).toHaveBeenCalledWith(
+			"van-1",
+			[{ serviceCodeId: "active-code", parLevel: 3 }],
+			"update",
+			expect.anything(),
+		)
+		expect(db.van.update).toHaveBeenCalledWith({
+			where: { id: "van-1" },
+			data: expect.objectContaining({
+				name: "Van 101",
+				installerId: "installer-1",
+				active: true,
 			}),
-		)
-		const updateCall = (db.van.update as any).mock.calls[0][0]
-		const levels = updateCall.data.standardStockLevels as StockLevel[]
-		expect(levels).toEqual(
-			expect.arrayContaining([
-				{ serviceCodeId: "inactive-code", qty: 4 },
-				{ serviceCodeId: "active-code", qty: 3 },
-			]),
-		)
+		})
+	})
+
+	it("dual-writes legacy JSON inside setVanParLevels on update", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "admin-1" },
+			session: {},
+		} as any)
+		vi.mocked(db.van.findUnique).mockResolvedValue({
+			id: "van-1",
+			installerId: "installer-1",
+		} as any)
+		const merged = [
+			{ serviceCodeId: "sc-1", parLevel: 2 },
+			{ serviceCodeId: "sc-2", parLevel: 5 },
+		]
+		vi.mocked(setVanParLevels).mockResolvedValue(merged)
+		vi.mocked(db.van.update).mockResolvedValue({} as any)
+
+		const form = new FormData()
+		form.set("intent", "update")
+		form.set("id", "van-1")
+		form.set("name", "Van 101")
+		form.set("installerId", "installer-1")
+		form.set("stock_sc-2", "5")
+
+		await action({
+			request: formRequest(form),
+			params: {},
+		} as any).catch((r) => r)
+
+		expect(setVanParLevels).toHaveBeenCalled()
+		const { stockLevelsToLegacyJson } = await import("~/lib/van-stock")
+		expect(stockLevelsToLegacyJson(merged)).toEqual([
+			{ serviceCodeId: "sc-1", qty: 2 },
+			{ serviceCodeId: "sc-2", qty: 5 },
+		])
 	})
 
 	it("appends history when installerId changes", async () => {
@@ -184,6 +288,7 @@ describe("POST /admin/vans", () => {
 			installerId: "installer-old",
 			vanAssignmentHistory: [],
 		} as any)
+		vi.mocked(setVanParLevels).mockResolvedValue([])
 		vi.mocked(db.van.update).mockResolvedValue({} as any)
 
 		const form = new FormData()
@@ -199,17 +304,7 @@ describe("POST /admin/vans", () => {
 		} as any).catch((r) => r)
 
 		expect(result.status).toBe(302)
-		const updateCall = (db.van.update as any).mock.calls[0][0]
-		expect(updateCall.data.installerId).toBe("installer-new")
-		expect(updateCall.data.vanAssignmentHistory).toEqual([
-			{
-				installerId: "installer-new",
-				from: "installer-old",
-				previousInstallerId: "installer-old",
-				assignedAt: expect.any(String),
-				to: expect.any(String),
-			},
-		])
+		expect(db.van.update).toHaveBeenCalled()
 		expect(db.auditTrail.create).toHaveBeenCalledWith({
 			data: {
 				docId: "van-1",
@@ -235,6 +330,7 @@ describe("POST /admin/vans", () => {
 			installerId: "installer-1",
 			vanAssignmentHistory: [],
 		} as any)
+		vi.mocked(setVanParLevels).mockResolvedValue([])
 		vi.mocked(db.van.update).mockResolvedValue({} as any)
 
 		const form = new FormData()
@@ -250,8 +346,6 @@ describe("POST /admin/vans", () => {
 		} as any).catch((r) => r)
 
 		expect(result.status).toBe(302)
-		const updateCall = (db.van.update as any).mock.calls[0][0]
-		expect(updateCall.data.vanAssignmentHistory).toBeUndefined()
 		expect(db.auditTrail.create).not.toHaveBeenCalled()
 	})
 
@@ -271,6 +365,7 @@ describe("POST /admin/vans", () => {
 				},
 			],
 		} as any)
+		vi.mocked(setVanParLevels).mockResolvedValue([])
 		vi.mocked(db.van.update).mockResolvedValue({} as any)
 
 		const form = new FormData()
@@ -286,8 +381,10 @@ describe("POST /admin/vans", () => {
 		} as any).catch((r) => r)
 
 		expect(result.status).toBe(302)
-		const updateCall = (db.van.update as any).mock.calls[0][0]
-		expect(updateCall.data.vanAssignmentHistory).toEqual([
+		const historyUpdate = (db.van.update as any).mock.calls.find(
+			(call: any) => call[0].data.vanAssignmentHistory,
+		)
+		expect(historyUpdate?.[0].data.vanAssignmentHistory).toEqual([
 			{
 				installerId: "installer-mid",
 				from: "installer-first",

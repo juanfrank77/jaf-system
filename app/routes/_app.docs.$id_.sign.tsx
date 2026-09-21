@@ -12,26 +12,22 @@ import {
 } from "~/components/signature-pad"
 import { Button } from "~/components/ui/button"
 import { Label } from "~/components/ui/label"
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "~/components/ui/select"
+import { BackLink } from "~/components/ui/page-header"
 import { db } from "~/lib/db.server"
 import { generateWarehouseReceiptPdf } from "~/lib/pdf/warehouse-receipt.server"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
-import {
-	getActiveMaterialCodes,
-	getActiveServiceCodes,
-} from "~/lib/service-codes.server"
 import { toNumberPrice } from "~/lib/utils"
 import type { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id_.sign"
 
 type MaterialLine = { serviceCodeId: string; qty: number }
+
+type PreppedMaterialLine = {
+	serviceCodeId: string
+	preppedQty?: number
+	estimatedQty?: number
+}
 
 export const meta: Route.MetaFunction = ({ data }) => [
 	{
@@ -48,8 +44,15 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	})
 	if (!canTransition(doc.status, "SIGNED", user.role))
 		throw redirect(`/docs/${params.id}`)
-	const serviceCodes = await getActiveMaterialCodes()
-	const warehouses = await db.warehouse.findMany({ where: { active: true } })
+	// Use all active service codes instead of just materials
+	const serviceCodes = await db.serviceCode.findMany({
+		where: { active: true },
+		orderBy: { claroCode: "asc" },
+	})
+	const warehouses = await db.warehouse.findMany({
+		where: { active: true },
+		orderBy: { name: "asc" },
+	})
 	const warehouseUsers = await db.user.findMany({
 		where: { role: "WAREHOUSE", active: true },
 		orderBy: { name: "asc" },
@@ -58,6 +61,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		where: { role: "CREW", active: true },
 		orderBy: { name: "asc" },
 	})
+
 	return {
 		doc,
 		user,
@@ -154,13 +158,39 @@ export async function action({ request, params }: Route.ActionArgs) {
 		return { errorKey: "docs_sign.errors.crew_signer_invalid" }
 	}
 
+	// Auto-assign crew member if not already assigned
+	const assignedCrewIds = doc.assignedCrewIds ?? []
+	const isCrewAssigned = assignedCrewIds.includes(signedById)
+	const updatedCrewIds = isCrewAssigned
+		? assignedCrewIds
+		: [...assignedCrewIds, signedById]
+
+	// Track crew assignment history if auto-assigning
+	type CrewAssignmentEntry = {
+		userIds: string[]
+		assignedById: string
+		assignedAt: string
+	}
+	const crewAssignmentHistory = !isCrewAssigned
+		? [
+				...((doc.crewAssignmentHistory as CrewAssignmentEntry[]) || []),
+				{
+					userIds: [signedById],
+					assignedById: releasedById, // warehouse person assigned them
+					assignedAt: new Date().toISOString(),
+				},
+			]
+		: (doc.crewAssignmentHistory as CrewAssignmentEntry[]) || []
+
 	// Permanently lock: refuse to overwrite an existing signed materials record.
 	const existingTaken = (doc.materialsTaken as MaterialLine[] | null) ?? []
 	if (existingTaken.length > 0) {
 		return { errorKey: "docs_sign.errors.already_signed" }
 	}
 
-	const serviceCodes = await getActiveServiceCodes()
+	const serviceCodes = await db.serviceCode.findMany({
+		where: { active: true },
+	})
 	const pdfBytes = await generateWarehouseReceiptPdf(
 		{
 			...doc,
@@ -201,6 +231,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 				releasedById,
 				signedById,
 				materialsTaken,
+				crewAutoAssigned: !isCrewAssigned ? signedById : null,
 			},
 		},
 	})
@@ -210,6 +241,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 		data: {
 			status: "SIGNED",
 			warehouseId,
+			assignedCrewIds: updatedCrewIds,
+			crewAssignmentHistory:
+				crewAssignmentHistory as unknown as Prisma.InputJsonValue,
 			materialsTaken,
 			releaseSignature,
 			releasedById,
@@ -225,6 +259,19 @@ export async function action({ request, params }: Route.ActionArgs) {
 		updateInvoice,
 		statusChangeAudit,
 	]
+
+	// Notify crew member if they were auto-assigned during pickup
+	if (!isCrewAssigned) {
+		ops.push(
+			db.notification.create({
+				data: {
+					userId: signedById,
+					docId: params.id,
+					message: `You have been assigned to job ${doc.controlNumber} (signed at pickup).`,
+				},
+			}),
+		)
+	}
 
 	if (hasOverage) {
 		ops.push(
@@ -286,9 +333,21 @@ export default function SignDoc({
 	const [signedById, setSignedById] = useState(
 		user.role === "CREW" ? user.id : "",
 	)
-	const [items] = useState(
-		(doc.estimatedMaterials as MaterialLine[] | null) ?? [],
-	)
+
+	// Use preppedMaterials if available (from warehouse prep), otherwise fall back to estimatedMaterials
+	const preppedMaterials =
+		(doc.preppedMaterials as PreppedMaterialLine[] | null) ?? []
+	const estimatedMaterials =
+		(doc.estimatedMaterials as MaterialLine[] | null) ?? []
+	const initialMaterials =
+		preppedMaterials.length > 0
+			? preppedMaterials.map((p) => ({
+					serviceCodeId: p.serviceCodeId,
+					qty: p.preppedQty ?? p.estimatedQty ?? 1,
+				}))
+			: estimatedMaterials
+
+	const [items] = useState(initialMaterials)
 	const submit = useSubmit()
 	const { t } = useTranslation()
 
@@ -327,8 +386,11 @@ export default function SignDoc({
 		submit(formData, { method: "post" })
 	}
 
-	return (
+	const page = (
 		<div className="space-y-5">
+			<BackLink to={`/docs/${doc.id}`}>
+				{t("docs_view.back_to_work_order")}
+			</BackLink>
 			<h1 className="text-xl font-semibold">{t("docs_sign.title")}</h1>
 			<p className="text-sm font-mono text-slate-500">{doc.controlNumber}</p>
 
@@ -339,21 +401,19 @@ export default function SignDoc({
 			<Form method="post" onSubmit={handleSubmit} className="space-y-5">
 				<div>
 					<Label>{t("docs_sign.warehouse_label")}</Label>
-					<Select
+					<select
 						value={warehouseId}
-						onValueChange={(v) => setWarehouseId(v ?? "")}
+						onChange={(e) => setWarehouseId(e.target.value)}
+						className="mt-1 w-full rounded-md border border-input bg-input/30 px-3 py-2 text-sm h-9"
+						required
 					>
-						<SelectTrigger className="mt-1">
-							<SelectValue placeholder={t("docs_sign.warehouse_placeholder")} />
-						</SelectTrigger>
-						<SelectContent>
-							{warehouses.map((w) => (
-								<SelectItem key={w.id} value={w.id}>
-									{w.name} — {w.zone}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
+						<option value="">{t("docs_sign.warehouse_placeholder")}</option>
+						{warehouses.map((w) => (
+							<option key={w.id} value={w.id}>
+								{w.name} — {w.zone}
+							</option>
+						))}
+					</select>
 				</div>
 
 				<div>
@@ -362,7 +422,7 @@ export default function SignDoc({
 						<MaterialLineItems
 							serviceCodes={serviceCodes}
 							initialItems={items}
-							readOnly={false}
+							readOnly={true}
 							name="materials"
 						/>
 					</div>
@@ -380,23 +440,21 @@ export default function SignDoc({
 							<Label className="text-xs text-slate-500">
 								{t("docs_sign.release_signer_label")}
 							</Label>
-							<Select
+							<select
 								value={releasedById}
-								onValueChange={(v) => setReleasedById(v ?? "")}
+								onChange={(e) => setReleasedById(e.target.value)}
+								className="mt-1 w-full rounded-md border border-input bg-input/30 px-3 py-2 text-sm h-9"
+								required
 							>
-								<SelectTrigger className="mt-1">
-									<SelectValue
-										placeholder={t("docs_sign.release_signer_placeholder")}
-									/>
-								</SelectTrigger>
-								<SelectContent>
-									{warehouseUsers.map((u) => (
-										<SelectItem key={u.id} value={u.id}>
-											{u.name}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
+								<option value="">
+									{t("docs_sign.release_signer_placeholder")}
+								</option>
+								{warehouseUsers.map((u) => (
+									<option key={u.id} value={u.id}>
+										{u.name}
+									</option>
+								))}
+							</select>
 						</div>
 						<SignaturePad ref={releaseRef} width={320} height={120} />
 						<button
@@ -419,23 +477,21 @@ export default function SignDoc({
 							<Label className="text-xs text-slate-500">
 								{t("docs_sign.crew_signer_label")}
 							</Label>
-							<Select
+							<select
 								value={signedById}
-								onValueChange={(v) => setSignedById(v ?? "")}
+								onChange={(e) => setSignedById(e.target.value)}
+								className="mt-1 w-full rounded-md border border-input bg-input/30 px-3 py-2 text-sm h-9"
+								required
 							>
-								<SelectTrigger className="mt-1">
-									<SelectValue
-										placeholder={t("docs_sign.crew_signer_placeholder")}
-									/>
-								</SelectTrigger>
-								<SelectContent>
-									{crewUsers.map((u) => (
-										<SelectItem key={u.id} value={u.id}>
-											{u.name}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
+								<option value="">
+									{t("docs_sign.crew_signer_placeholder")}
+								</option>
+								{crewUsers.map((u) => (
+									<option key={u.id} value={u.id}>
+										{u.name}
+									</option>
+								))}
+							</select>
 						</div>
 						<SignaturePad ref={crewRef} width={320} height={120} />
 						<button
@@ -458,6 +514,8 @@ export default function SignDoc({
 			</Form>
 		</div>
 	)
+
+	return page
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {

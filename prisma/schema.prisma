@@ -57,6 +57,7 @@ model User {
   name      String
   role      Role
   phone     String?
+  image     String?
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
 
@@ -346,6 +347,8 @@ model ServiceCode {
   costCenterCode    String?
   active            Boolean     @default(true)
 
+  vanStockLevels    VanStockLevel[]
+
   @@index([kind, active])
 }
 
@@ -461,16 +464,32 @@ model Van {
   name                    String
   installerId             String?  @unique
   installer               User?    @relation("VanInstaller", fields: [installerId], references: [id])
-  standardStockLevels     Json     // [{ serviceCodeId, qty }]
+  standardStockLevels     Json     // deprecated legacy mirror [{ serviceCodeId, qty }]; canonical par → VanStockLevel
   active                  Boolean  @default(true)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
   vanAssignmentHistory    Json?    // [{ installerId, from, to }] — append-only
 
+  stockLevels             VanStockLevel[]
   inventoryTransactions VanInventoryTransaction[]
   installLogs           InstallLog[]
 
   @@index([active])
+}
+
+model VanStockLevel {
+  id            String      @id @default(cuid())
+  vanId         String
+  van           Van         @relation(fields: [vanId], references: [id], onDelete: Cascade)
+  serviceCodeId String
+  serviceCode   ServiceCode @relation(fields: [serviceCodeId], references: [id])
+  parLevel      Int
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([vanId, serviceCodeId])
+  @@index([vanId])
+  @@map("van_stock_level")
 }
 
 model VanRestockRequest {

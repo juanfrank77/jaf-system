@@ -21,7 +21,7 @@ export default defineConfig({
 			manifest: {
 				name: "JAF Operations",
 				short_name: "JAF",
-				theme_color: "#1e3a5f",
+				theme_color: "#2b7c99",
 				background_color: "#ffffff",
 				display: "standalone",
 				icons: [

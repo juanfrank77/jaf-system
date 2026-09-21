@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next"
 import { data, Form, redirect } from "react-router"
+import { InstallerAdjustV2 } from "~/components/design-system/installer-adjust"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
@@ -13,7 +14,14 @@ import {
 } from "~/components/ui/select"
 import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
+import { isInstallerV2Enabled } from "~/lib/features.server"
 import { requireRole } from "~/lib/permissions.server"
+import { buildInventoryComparison } from "~/lib/van-inventory"
+import {
+	computeParStatus,
+	getVanParLevels,
+	parLevelsToStockLevels,
+} from "~/lib/van-stock.server"
 import type { Route } from "./+types/_app.installer.adjust"
 
 export const meta: Route.MetaFunction = () => [
@@ -30,7 +38,40 @@ export async function loader({ request }: Route.LoaderArgs) {
 		}),
 	])
 	if (!van) throw redirect("/installer")
-	return { van, serviceCodes }
+	const [transactions, parLevels, pendingRestock] = await Promise.all([
+		db.vanInventoryTransaction.findMany({
+			where: { vanId: van.id },
+		}),
+		getVanParLevels(van.id),
+		db.vanRestockRequest.findFirst({
+			where: {
+				requestedById: user.id,
+				status: {
+					in: ["REQUESTED", "PENDING_APPROVAL", "APPROVED", "READY"],
+				},
+			},
+			select: { id: true },
+		}),
+	])
+	const serviceCodeMap = new Map(
+		serviceCodes.map((c) => [c.id, { claroCode: c.claroCode, name: c.name }]),
+	)
+	const comparison = buildInventoryComparison(
+		transactions,
+		parLevelsToStockLevels(parLevels),
+		serviceCodeMap,
+	)
+	const parStatus = computeParStatus({ parLevels, transactions })
+	return {
+		version: isInstallerV2Enabled() ? "v2" : "v1",
+		van,
+		serviceCodes,
+		comparison,
+		parLevels,
+		parStatus,
+		hasPendingRestock: pendingRestock != null,
+		belowParCount: parStatus.belowParCount,
+	}
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -101,12 +142,33 @@ export default function AdjustStock({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { serviceCodes } = loaderData
+	const {
+		serviceCodes,
+		version,
+		van,
+		comparison,
+		parLevels,
+		parStatus,
+		hasPendingRestock,
+	} = loaderData
 	const { t } = useTranslation()
 	const errorKey =
 		actionData && "errorKey" in actionData
 			? (actionData.errorKey as string)
 			: null
+
+	if (version === "v2") {
+		return (
+			<InstallerAdjustV2
+				van={van}
+				comparison={comparison}
+				parLevels={parLevels}
+				parStatus={parStatus}
+				hasPendingRestock={hasPendingRestock}
+				errorKey={errorKey}
+			/>
+		)
+	}
 
 	return (
 		<div className="space-y-5">

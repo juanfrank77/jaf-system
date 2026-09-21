@@ -1,7 +1,31 @@
+import { Invoice02Icon, Search01Icon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
+import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Badge } from "~/components/ui/badge"
+import { Card } from "~/components/ui/card"
+import { EmptyState } from "~/components/ui/empty-state"
+import { Input } from "~/components/ui/input"
+import { PageHeader } from "~/components/ui/page-header"
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "~/components/ui/select"
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableEmptyRow,
+	TableHead,
+	TableHeader,
+	TableRow,
+	TableToolbar,
+} from "~/components/ui/table"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
 import { formatMoney, toNumberPrice } from "~/lib/utils"
@@ -68,64 +92,142 @@ export async function loader({ request }: Route.LoaderArgs) {
 export default function FinanceQueue({ loaderData }: Route.ComponentProps) {
 	const { rows, claroAcceptancePct } = loaderData
 	const { t } = useTranslation()
+	const [search, setSearch] = useState("")
+	const [packetFilter, setPacketFilter] = useState<
+		"all" | "missing_claro" | "has_claro"
+	>("all")
+
+	const filtered = useMemo(() => {
+		const term = search.trim().toLowerCase()
+		return rows.filter((row) => {
+			if (packetFilter === "missing_claro" && row.claroSigned) return false
+			if (packetFilter === "has_claro" && !row.claroSigned) return false
+			if (!term) return true
+			return (
+				row.controlNumber.toLowerCase().includes(term) ||
+				(row.avisoNumber?.toLowerCase().includes(term) ?? false) ||
+				row.contractorName.toLowerCase().includes(term) ||
+				(row.contractorCode?.toLowerCase().includes(term) ?? false)
+			)
+		})
+	}, [rows, search, packetFilter])
+
 	return (
-		<div className="space-y-4">
-			<div className="flex items-center justify-between">
-				<h1 className="text-xl font-semibold">{t("finance_queue.title")}</h1>
-				{claroAcceptancePct != null && (
-					<span className="text-xs bg-slate-100 px-3 py-1 rounded-full">
-						{t("finance_queue.claro_pct", { pct: claroAcceptancePct })}
-					</span>
-				)}
-			</div>
-			<p className="text-sm text-slate-500">{t("finance_queue.hint")}</p>
-			{rows.length === 0 ? (
-				<p className="text-sm text-slate-400">{t("finance_queue.empty")}</p>
-			) : (
-				<div className="overflow-x-auto bg-white border rounded-lg">
-					<table className="w-full text-sm">
-						<thead>
-							<tr className="text-xs text-slate-500 text-left border-b">
-								<th className="p-2">{t("finance_queue.col.work_order")}</th>
-								<th className="p-2">{t("finance_queue.col.aviso")}</th>
-								<th className="p-2">{t("finance_queue.col.contractor")}</th>
-								<th className="p-2 text-right">
+		<div>
+			<PageHeader
+				title={t("finance_queue.title")}
+				subtitle={t("finance_queue.hint")}
+				meta={
+					claroAcceptancePct != null && (
+						<Badge variant="info">
+							{t("finance_queue.claro_pct", { pct: claroAcceptancePct })}
+						</Badge>
+					)
+				}
+			/>
+			<Card>
+				<TableToolbar>
+					<Input
+						leading={
+							<HugeiconsIcon
+								icon={Search01Icon}
+								strokeWidth={2}
+								className="size-4"
+							/>
+						}
+						placeholder={t("finance_queue.search_placeholder")}
+						value={search}
+						onChange={(event) => setSearch(event.target.value)}
+						className="sm:w-72"
+					/>
+					<div className="flex flex-wrap items-center gap-3">
+						<span className="text-xs text-muted-foreground">
+							{t("finance_queue.result_count", { count: filtered.length })}
+						</span>
+						<Select
+							value={packetFilter}
+							onValueChange={(value) =>
+								setPacketFilter(value as typeof packetFilter)
+							}
+						>
+							<SelectTrigger
+								size="sm"
+								aria-label={t("finance_queue.col.packet")}
+							>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">
+									{t("finance_queue.filter_all")}
+								</SelectItem>
+								<SelectItem value="missing_claro">
+									{t("finance_queue.filter_missing_claro")}
+								</SelectItem>
+								<SelectItem value="has_claro">
+									{t("finance_queue.filter_has_claro")}
+								</SelectItem>
+							</SelectContent>
+						</Select>
+					</div>
+				</TableToolbar>
+				{rows.length === 0 ? (
+					<EmptyState icon={Invoice02Icon} title={t("finance_queue.empty")} />
+				) : (
+					<Table>
+						<TableHeader>
+							<TableRow>
+								<TableHead>{t("finance_queue.col.work_order")}</TableHead>
+								<TableHead>{t("finance_queue.col.aviso")}</TableHead>
+								<TableHead>{t("finance_queue.col.contractor")}</TableHead>
+								<TableHead className="text-right">
 									{t("finance_queue.col.amount")}
-								</th>
-								<th className="p-2">{t("finance_queue.col.packet")}</th>
-							</tr>
-						</thead>
-						<tbody>
-							{rows.map((r) => (
-								<tr
-									key={r.id}
-									className="border-b last:border-0 hover:bg-muted/40"
-								>
-									<td className="p-2 font-mono">
-										<Link to={`/finance/verify/${r.id}`} className="underline">
+								</TableHead>
+								<TableHead>{t("finance_queue.col.packet")}</TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{filtered.map((r) => (
+								<TableRow key={r.id}>
+									<TableCell className="font-mono text-xs">
+										<Link
+											to={`/finance/verify/${r.id}`}
+											className="text-foreground hover:underline"
+										>
 											{r.controlNumber}
 										</Link>
-									</td>
-									<td className="p-2">{r.avisoNumber ?? "—"}</td>
-									<td className="p-2">
+									</TableCell>
+									<TableCell>{r.avisoNumber ?? "—"}</TableCell>
+									<TableCell>
 										{r.contractorName}
 										{r.contractorCode ? ` · ${r.contractorCode}` : ""}
-									</td>
-									<td className="p-2 text-right">{formatMoney(r.amount)}</td>
-									<td className="p-2 space-x-1">
-										<Badge variant="ok">{t("finance_queue.complete")}</Badge>
-										{!r.claroSigned && (
-											<Badge variant="warn">
-												{t("finance_queue.no_claro_sig")}
-											</Badge>
-										)}
-									</td>
-								</tr>
+									</TableCell>
+									<TableCell className="text-right tabular-nums">
+										{formatMoney(r.amount)}
+									</TableCell>
+									<TableCell>
+										<div className="flex flex-wrap gap-1">
+											<Badge variant="ok">{t("finance_queue.complete")}</Badge>
+											{!r.claroSigned && (
+												<Badge variant="warn">
+													{t("finance_queue.no_claro_sig")}
+												</Badge>
+											)}
+										</div>
+									</TableCell>
+								</TableRow>
 							))}
-						</tbody>
-					</table>
-				</div>
-			)}
+							{filtered.length === 0 && (
+								<TableEmptyRow colSpan={5}>
+									<EmptyState
+										icon={Invoice02Icon}
+										title={t("finance_queue.no_matches")}
+									/>
+								</TableEmptyRow>
+							)}
+						</TableBody>
+					</Table>
+				)}
+			</Card>
 		</div>
 	)
 }

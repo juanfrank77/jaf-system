@@ -5,7 +5,6 @@ import { useRef, useState } from "react"
 import { Trans, useTranslation } from "react-i18next"
 import { data, Form, redirect, useSubmit } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
-import { MaterialLineItems } from "~/components/material-line-items"
 import { ServiceLinesTable } from "~/components/service-lines-table"
 import {
 	SignaturePad,
@@ -15,12 +14,14 @@ import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
+import { useToastManager } from "~/components/ui/toast"
 import { useOnline } from "~/hooks/use-online"
 import { db } from "~/lib/db.server"
 import { queueFieldUpdate } from "~/lib/field-sync"
 import {
 	type AddressCorrection,
 	buildAddressCorrection,
+	clampUsedToTook,
 	formatTimeOnSite,
 	mergeAddressCorrections,
 	parseGpsCoordinates,
@@ -28,7 +29,6 @@ import {
 import { validateFile } from "~/lib/file-upload.server"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
-import { getActiveMaterialCodes } from "~/lib/service-codes.server"
 import type { ServiceLine } from "~/lib/service-lines"
 import { toNumberPrice } from "~/lib/utils"
 import type { Prisma } from "../../generated/prisma/client"
@@ -81,7 +81,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		throw redirect(`/docs/${params.id}`)
 	if (user.role === "CREW" && !doc.assignedCrewIds.includes(user.id))
 		throw redirect(`/docs/${params.id}`)
-	const serviceCodes = await getActiveMaterialCodes()
+	// Use all active service codes instead of just materials
+	const serviceCodes = await db.serviceCode.findMany({
+		where: { active: true },
+		orderBy: { claroCode: "asc" },
+	})
 	const sendBackHistory =
 		(doc.sendBackHistory as unknown as SendBackEntry[] | null) ?? []
 	const latestSendBack =
@@ -150,6 +154,22 @@ export async function action({ request, params }: Route.ActionArgs) {
 		return { errorKey: "docs_field.errors.invalid_materials" }
 	}
 
+	const taken = (doc.materialsTaken as MaterialLine[] | null) ?? []
+	const quantityDiscrepancies = buildQuantityDiscrepancies(taken, materialsUsed)
+	const hasQuantityDiscrepancy = quantityDiscrepancies.length > 0
+	if (hasQuantityDiscrepancy && !discrepancyNote) {
+		return { errorKey: "docs_field.errors.discrepancy_note_required" }
+	}
+
+	const takenMap = Object.fromEntries(
+		taken.map((t) => [t.serviceCodeId, t.qty]),
+	)
+	materialsUsed = materialsUsed.map((line) => {
+		const max = takenMap[line.serviceCodeId]
+		if (typeof max !== "number") return line
+		return { ...line, qty: clampUsedToTook(line.qty, max).qty }
+	})
+
 	// Zero is a legitimate installed quantity, so this does not use
 	// parseServiceLines, which drops zeros.
 	let installedServiceLines: ServiceLine[] | undefined
@@ -177,14 +197,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 		} catch {
 			return { errorKey: "docs_field.errors.invalid_service_lines" }
 		}
-	}
-
-	const taken = (doc.materialsTaken as MaterialLine[] | null) ?? []
-
-	const quantityDiscrepancies = buildQuantityDiscrepancies(taken, materialsUsed)
-	const hasQuantityDiscrepancy = quantityDiscrepancies.length > 0
-	if (hasQuantityDiscrepancy && !discrepancyNote) {
-		return { errorKey: "docs_field.errors.discrepancy_note_required" }
 	}
 
 	// Handle photo uploads
@@ -314,6 +326,7 @@ export default function FieldUpdate({
 	const corrections =
 		(doc.addressCorrections as AddressCorrection[] | null) || []
 	const { t } = useTranslation()
+	const toastManager = useToastManager()
 	const error = actionData as
 		| {
 				errorKey?: ParseKeys
@@ -428,7 +441,7 @@ export default function FieldUpdate({
 		setQueued(true)
 	}
 
-	return (
+	const page = (
 		<div className="space-y-5">
 			<div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
 				<Trans
@@ -536,7 +549,7 @@ export default function FieldUpdate({
 
 				<div className="border rounded-lg p-3 space-y-2">
 					<Label>{t("docs_field.time_on_site_label")}</Label>
-					<div className="flex items-center gap-2">
+					<div className="flex flex-wrap items-center gap-2">
 						<input type="hidden" name="startedAt" value={startedAt ?? ""} />
 						<input type="hidden" name="endedAt" value={endedAt ?? ""} />
 						<Button
@@ -586,28 +599,108 @@ export default function FieldUpdate({
 					<p className="text-xs text-slate-500">
 						{t("docs_field.materials_used_hint")}
 					</p>
-					{taken.length > 0 && (
-						<div className="bg-slate-50 rounded p-2">
-							<p className="text-xs font-medium text-slate-600 mb-1">
-								{t("docs_field.taken_reference_label")}
+					{taken.length > 0 ? (
+						<div className="space-y-2">
+							<p className="text-xs font-medium text-slate-600">
+								{t("docs_field.mark_quantities_used")}
 							</p>
-							<MaterialLineItems
-								serviceCodes={serviceCodes}
-								initialItems={taken}
-								readOnly
+							<input
+								type="hidden"
+								name="materialsUsed"
+								value={JSON.stringify(
+									taken.map((t) => ({
+										serviceCodeId: t.serviceCodeId,
+										qty:
+											used.find((u) => u.serviceCodeId === t.serviceCodeId)
+												?.qty ?? t.qty,
+									})),
+								)}
 							/>
+							{taken.map((item) => {
+								const code = serviceCodes.find(
+									(c) => c.id === item.serviceCodeId,
+								)
+								const usedItem = used.find(
+									(u) => u.serviceCodeId === item.serviceCodeId,
+								)
+								const initialQty = usedItem?.qty ?? item.qty
+								return (
+									<div
+										key={item.serviceCodeId}
+										className="flex items-center gap-3 py-2 border-b last:border-0"
+									>
+										<div className="flex-1 min-w-0">
+											<p className="text-sm font-medium">
+												<span className="font-mono text-xs text-muted-foreground">
+													{code?.claroCode}
+												</span>{" "}
+												{code?.name}
+											</p>
+											<p className="text-xs text-muted-foreground">
+												{t("docs_field.taken_qty", {
+													qty: item.qty,
+													unit: code?.unit || "",
+												})}
+											</p>
+										</div>
+										<div className="flex items-center gap-2">
+											<Label
+												htmlFor={`used-${item.serviceCodeId}`}
+												className="text-xs whitespace-nowrap"
+											>
+												{t("docs_field.used_label")}:
+											</Label>
+											<Input
+												id={`used-${item.serviceCodeId}`}
+												type="number"
+												min={0}
+												max={item.qty}
+												defaultValue={initialQty}
+												className="w-20"
+												onChange={(e) => {
+													const attempted = parseInt(e.target.value, 10) || 0
+													const newQty = Math.min(
+														Math.max(0, attempted),
+														item.qty,
+													)
+													if (newQty !== attempted) {
+														e.target.value = String(newQty)
+														toastManager.add({
+															title: t("docs_field.used_clamped_title"),
+															description: t("docs_field.used_clamped_body", {
+																attempted,
+																clampedTo: newQty,
+															}),
+														})
+													}
+													// Update hidden input
+													const hiddenInput = document.querySelector(
+														'input[name="materialsUsed"]',
+													) as HTMLInputElement
+													if (hiddenInput) {
+														const current = JSON.parse(hiddenInput.value)
+														const updated = current.map((m: MaterialLine) =>
+															m.serviceCodeId === item.serviceCodeId
+																? { ...m, qty: newQty }
+																: m,
+														)
+														hiddenInput.value = JSON.stringify(updated)
+													}
+												}}
+											/>
+											<span className="text-xs text-muted-foreground">
+												{code?.unit}
+											</span>
+										</div>
+									</div>
+								)
+							})}
 						</div>
-					)}
-					<div>
-						<p className="text-xs font-medium text-slate-600 mb-1">
-							{t("docs_field.used_entry_label")}
+					) : (
+						<p className="text-sm text-muted-foreground">
+							{t("docs_field.no_materials_taken")}
 						</p>
-						<MaterialLineItems
-							serviceCodes={serviceCodes}
-							initialItems={used.length > 0 ? used : taken}
-							name="materialsUsed"
-						/>
-					</div>
+					)}
 					{estimated.length > 0 && (
 						<p className="text-xs text-slate-500">
 							{t("docs_field.ordered_vs_installed_hint")}
@@ -705,6 +798,8 @@ export default function FieldUpdate({
 			</Form>
 		</div>
 	)
+
+	return page
 }
 
 function fileToBase64(file: File): Promise<string> {

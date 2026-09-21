@@ -16,14 +16,21 @@ type Result = {
 export function ServicePicker({
 	name = "serviceLines",
 	initialLines = [],
+	onChange,
 }: {
 	name?: string
 	initialLines?: ServiceLine[]
+	onChange?: (lines: ServiceLine[]) => void
 }) {
 	const { t } = useTranslation()
 	const fetcher = useFetcher<{ results: Result[]; total: number }>()
 	const [query, setQuery] = useState("")
 	const [lines, setLines] = useState<ServiceLine[]>(initialLines)
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: onChange is an optional reporting callback, not a reactive dependency
+	useEffect(() => {
+		onChange?.(lines)
+	}, [lines])
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: fetcher identity is stable; re-run on query only
 	useEffect(() => {
@@ -85,12 +92,12 @@ export function ServicePicker({
 									<button
 										type="button"
 										onClick={() => add(r)}
-										className="w-full text-left px-2 py-1.5 hover:bg-slate-50 flex items-center gap-3"
+										className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1.5 text-left hover:bg-slate-50"
 									>
 										<span className="font-mono text-xs text-slate-500">
 											{r.claroCode}
 										</span>
-										<span className="flex-1">{r.name}</span>
+										<span className="min-w-0 flex-1">{r.name}</span>
 										<span className="text-xs text-slate-500">
 											{t("service_picker.account")} {r.accountCode ?? "—"} ·{" "}
 											{r.unit ?? "—"} · ${r.unitPrice.toFixed(2)}
@@ -125,12 +132,12 @@ export function ServicePicker({
 				{lines.map((l) => (
 					<div
 						key={l.serviceCodeId}
-						className="flex items-center gap-2 text-sm"
+						className="flex flex-wrap items-center gap-2 text-sm"
 					>
 						<span className="font-mono text-xs text-slate-500">
 							{l.claroCode}
 						</span>
-						<span className="flex-1">{l.name}</span>
+						<span className="min-w-0 flex-1">{l.name}</span>
 						<span className="text-xs text-slate-500">
 							{l.accountCode ?? "—"}
 						</span>
@@ -145,12 +152,12 @@ export function ServicePicker({
 									Math.max(1, parseInt(e.target.value, 10) || 1),
 								)
 							}
-							className="w-20"
+							className="w-20 shrink-0"
 						/>
 						<button
 							type="button"
 							onClick={() => remove(l.serviceCodeId)}
-							className="text-slate-400 hover:text-red-600"
+							className="shrink-0 text-slate-400 hover:text-red-600"
 							aria-label={t("service_picker.remove")}
 						>
 							×

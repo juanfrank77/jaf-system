@@ -6,6 +6,27 @@ import {
 	sumLines,
 } from "./service-lines"
 
+/**
+ * Guide's 8-step model maps to app state as follows:
+ * Steps 1–5: DocStatus enum values (CREATED → SUPERVISOR_APPROVED).
+ * Steps 6–8: Computed from timestamps (jafInvoiceGeneratedAt, avisoMatchedAt,
+ * releasedToFinanceAt).
+ *
+ * This function returns 9 stages (splits step 7 into AVISO + PRECERT) to handle
+ * the Aviso match → PreCert sign → Release sequence. UI collapses these back to
+ * 8 steps for the .jaf-flow strip.
+ *
+ *   1 Created         = INTAKE          (CREATED)
+ *   2 Warehouse prep  = WAREHOUSE       (PREPPED)
+ *   3 Crew signs out  = (still PREPPED on the pickup screen; SIGNED once done)
+ *   4 Field work      = FIELD           (SIGNED)
+ *   5 You review      = APPROVE         (FIELD_UPDATED)
+ *   6 JAF invoice     = INVOICE         (supervisorApprovedAt, no invoice yet)
+ *   7 Aviso matched   = AVISO | PRECERT (jafInvoiceGeneratedAt / avisoMatchedAt)
+ *   8 To Finance      = RELEASE | RELEASED (ready to release / releasedToFinanceAt)
+ *
+ * Labels on the flow strip are the guide's UI copy, not DocStatus names.
+ */
 export type SupervisorStage =
 	| "INTAKE"
 	| "WAREHOUSE"
@@ -65,6 +86,28 @@ export function deriveSupervisorStage(
 			return "APPROVE"
 		default:
 			return "INVOICE"
+	}
+}
+
+/** Collapse the 9 supervisor stages onto the guide's numbered 1–8 strip. */
+export function supervisorStageToGuideStep(stage: SupervisorStage): number {
+	switch (stage) {
+		case "INTAKE":
+			return 1
+		case "WAREHOUSE":
+			return 2
+		case "FIELD":
+			return 4
+		case "APPROVE":
+			return 5
+		case "INVOICE":
+			return 6
+		case "AVISO":
+		case "PRECERT":
+			return 7
+		case "RELEASE":
+		case "RELEASED":
+			return 8
 	}
 }
 

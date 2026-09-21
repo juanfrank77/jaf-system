@@ -84,3 +84,15 @@ export function formatTimeOnSite(
 	const remaining = minutes % 60
 	return remaining > 0 ? `${hours}h ${remaining}m` : `${hours}h`
 }
+
+/** Used can never exceed Took. Returns the clamped qty and whether it changed. */
+export function clampUsedToTook(
+	used: number,
+	took: number,
+): { qty: number; clamped: boolean } {
+	if (!Number.isFinite(used) || used < 0) return { qty: 0, clamped: used !== 0 }
+	if (!Number.isFinite(took) || used <= took) {
+		return { qty: used, clamped: false }
+	}
+	return { qty: took, clamped: true }
+}

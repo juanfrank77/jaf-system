@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { data, Form, redirect } from "react-router"
+import { InstallerWizardV2 } from "~/components/design-system/installer-wizard"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
@@ -15,6 +16,7 @@ import {
 import { Textarea } from "~/components/ui/textarea"
 import { useOnline } from "~/hooks/use-online"
 import { db } from "~/lib/db.server"
+import { isInstallerV2Enabled } from "~/lib/features.server"
 import { queueInstallerInstall } from "~/lib/installer-sync"
 import { requireRole } from "~/lib/permissions.server"
 import { computeVanInventory } from "~/lib/van-inventory"
@@ -36,7 +38,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		}),
 	])
 	if (!van) throw redirect("/installer")
-	return { van, serviceCodes }
+	return { version: isInstallerV2Enabled() ? "v2" : "v1", van, serviceCodes }
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -179,7 +181,7 @@ export default function LogInstall({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { serviceCodes } = loaderData
+	const { serviceCodes, version } = loaderData
 	const { t } = useTranslation()
 	const errorKey =
 		actionData && "errorKey" in actionData
@@ -203,6 +205,50 @@ export default function LogInstall({
 		key: string,
 		patch: Partial<{ serviceCodeId: string; qty: number }>,
 	) => setLines(lines.map((l) => (l._key === key ? { ...l, ...patch } : l)))
+
+	function handleOfflineSubmit(e: React.FormEvent<HTMLFormElement>) {
+		e.preventDefault()
+		const form = e.currentTarget
+		const formData = new FormData(form)
+		const claroJobReference =
+			(formData.get("claroJobReference") as string)?.trim() || ""
+		const serviceType = (formData.get("serviceType") as string) || ""
+		const dateRaw = formData.get("date") as string
+		const itemsRaw = formData.get("items") as string
+		const notes = (formData.get("notes") as string | null)?.trim() || null
+		let items: { serviceCodeId: string; qty: number }[] = []
+		try {
+			items = JSON.parse(itemsRaw).filter(
+				(i: { serviceCodeId: string; qty: number }) =>
+					i.serviceCodeId && i.qty > 0,
+			)
+		} catch {
+			// ignore, validation happens on sync
+		}
+		queueInstallerInstall({
+			claroJobReference,
+			serviceType,
+			date: dateRaw,
+			items,
+			notes,
+		}).then(() => setQueued(true))
+	}
+
+	if (version === "v2") {
+		return (
+			<InstallerWizardV2
+				serviceCodes={serviceCodes}
+				errorKey={errorKey}
+				online={online}
+				queued={queued}
+				lines={lines}
+				addLine={addLine}
+				removeLine={removeLine}
+				updateLine={updateLine}
+				onOfflineSubmit={handleOfflineSubmit}
+			/>
+		)
+	}
 
 	const used = new Set(lines.map((l) => l.serviceCodeId).filter(Boolean))
 	const available = serviceCodes.filter((c) => !used.has(c.id))

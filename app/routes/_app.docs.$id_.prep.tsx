@@ -2,11 +2,11 @@ import type { ParseKeys } from "i18next"
 import { Trans, useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
-import { MaterialLineItems } from "~/components/material-line-items"
 import { Button } from "~/components/ui/button"
 import { Checkbox } from "~/components/ui/checkbox"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
+import { BackLink } from "~/components/ui/page-header"
 import {
 	Select,
 	SelectContent,
@@ -18,7 +18,6 @@ import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
-import { getActiveMaterialCodes } from "~/lib/service-codes.server"
 import { useEditableLines } from "~/lib/use-editable-lines"
 import { toNumberPrice } from "~/lib/utils"
 import type { Prisma } from "../../generated/prisma/client"
@@ -52,7 +51,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	})
 	if (!canTransition(doc.status, "PREPPED", user.role))
 		throw redirect(`/docs/${params.id}`)
-	const serviceCodes = await getActiveMaterialCodes()
+	// Use all active service codes instead of just materials
+	const serviceCodes = await db.serviceCode.findMany({
+		where: { active: true },
+		orderBy: { claroCode: "asc" },
+	})
 	return {
 		doc,
 		serviceCodes: serviceCodes.map((c) => ({
@@ -129,7 +132,12 @@ export async function action({ request, params }: Route.ActionArgs) {
 				docId: params.id,
 				userId: user.id,
 				action: "STATUS_CHANGED",
-				diffJson: { status: { before: "CREATED", after: "PREPPED" } },
+				diffJson: {
+					status: { before: "CREATED", after: "PREPPED" },
+					materialsCount: preppedMaterials.length,
+					preppedMaterials:
+						preppedMaterials as unknown as Prisma.InputJsonValue,
+				},
 			},
 		}),
 		...doc.assignedCrewIds.map((crewId) =>
@@ -187,8 +195,11 @@ export default function PrepDoc({
 
 	const missingCount = lines.filter((l) => l.missing).length
 
-	return (
+	const page = (
 		<div className="space-y-4">
+			<BackLink to={`/docs/${doc.id}`}>
+				{t("docs_view.back_to_work_order")}
+			</BackLink>
 			<h1 className="text-xl font-semibold">{t("docs_prep.title")}</h1>
 			<p className="text-sm text-slate-600">
 				<Trans
@@ -217,17 +228,28 @@ export default function PrepDoc({
 					return (
 						<div key={line._key} className="border rounded-lg p-3 space-y-2">
 							<div className="flex items-center gap-2">
-								<MaterialLineItems
-									serviceCodes={serviceCodes}
-									initialItems={[
-										{
-											serviceCodeId: line.serviceCodeId,
-											qty: line.preppedQty,
-										},
-									]}
-									readOnly={false}
-									name={`prepped-${index}`}
-								/>
+								<select
+									value={line.serviceCodeId}
+									onChange={(e) => {
+										updateLine(index, { serviceCodeId: e.target.value })
+									}}
+									className="min-w-0 flex-1 rounded-md border border-input bg-input/30 px-3 py-2 text-sm"
+								>
+									<option value="">Select service code...</option>
+									{serviceCodes
+										.filter(
+											(c) =>
+												c.id === line.serviceCodeId ||
+												!lines.some(
+													(l, i) => i !== index && l.serviceCodeId === c.id,
+												),
+										)
+										.map((code) => (
+											<option key={code.id} value={code.id}>
+												{code.claroCode} — {code.name}
+											</option>
+										))}
+								</select>
 								<button
 									type="button"
 									onClick={() => removeLine(index)}
@@ -358,6 +380,8 @@ export default function PrepDoc({
 			)}
 		</div>
 	)
+
+	return page
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {

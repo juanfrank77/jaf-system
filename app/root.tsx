@@ -6,6 +6,7 @@ import {
 	Outlet,
 	Scripts,
 	ScrollRestoration,
+	useRouteLoaderData,
 } from "react-router"
 import { useChangeLanguage } from "remix-i18next/react"
 import { RouteErrorBoundary } from "~/components/error-boundary"
@@ -37,8 +38,18 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 export function Layout({ children }: { children: React.ReactNode }) {
 	const { i18n } = useTranslation()
+	// Theme preference only exists on the authenticated app shell's loader
+	// data — this keeps the sign-in page pinned to the default light theme.
+	const appData = useRouteLoaderData<{ theme?: "light" | "dark" }>(
+		"routes/_app",
+	)
+	const dark = appData?.theme === "dark"
 	return (
-		<html lang={i18n.language} dir={i18n.dir()}>
+		<html
+			lang={i18n.language}
+			dir={i18n.dir()}
+			className={dark ? "dark" : undefined}
+		>
 			<head>
 				<meta charSet="utf-8" />
 				<meta name="viewport" content="width=device-width, initial-scale=1" />

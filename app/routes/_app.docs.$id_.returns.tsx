@@ -7,6 +7,7 @@ import { MaterialLineItems } from "~/components/material-line-items"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
+import { BackLink } from "~/components/ui/page-header"
 import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
@@ -195,7 +196,7 @@ export default function ReturnsDoc({
 	actionData,
 }: {
 	loaderData: {
-		doc: { controlNumber: string }
+		doc: { id: string; controlNumber: string }
 		serviceCodes: MaterialServiceCode[]
 		taken: MaterialLine[]
 		existingReturns: ReturnLine[] | null
@@ -226,8 +227,11 @@ export default function ReturnsDoc({
 			notes: "",
 		})
 
-	return (
+	const page = (
 		<div className="space-y-4">
+			<BackLink to={`/docs/${doc.id}`}>
+				{t("docs_view.back_to_work_order")}
+			</BackLink>
 			<h1 className="text-xl font-semibold">{t("docs_returns.title")}</h1>
 			<p className="text-sm text-slate-600">
 				<Trans
@@ -370,6 +374,8 @@ export default function ReturnsDoc({
 			)}
 		</div>
 	)
+
+	return page
 }
 
 export function ErrorBoundary({ error }: { error: unknown }) {

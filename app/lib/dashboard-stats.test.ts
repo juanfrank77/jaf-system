@@ -171,7 +171,7 @@ describe("computeDashboardStats", () => {
 		})
 	})
 
-	it("FINANCE: counts total docs, open receivables, awaiting Claro upload", () => {
+	it("FINANCE: counts total docs, awaiting Claro upload", () => {
 		const docs = [
 			doc("SUPERVISOR_APPROVED"),
 			doc("CLARO_UPLOADED"),
@@ -181,7 +181,6 @@ describe("computeDashboardStats", () => {
 		const { stats, alert } = computeDashboardStats("FINANCE", docs)
 		expect(stats).toEqual([
 			{ labelKey: "dashboard.stat.total_documents", value: 4 },
-			{ labelKey: "dashboard.stat.open_receivables", value: 2 },
 			{ labelKey: "dashboard.stat.awaiting_claro_upload", value: 1 },
 			{ labelKey: "dashboard.stat.stage_awaiting_warehouse", value: 1 },
 			{ labelKey: "dashboard.stat.stage_awaiting_crew", value: 0 },

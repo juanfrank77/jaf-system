@@ -1,3 +1,16 @@
+import {
+	ArrowRight01Icon,
+	CheckmarkCircle02Icon,
+	ChevronRightIcon,
+	ClipboardListIcon,
+	CloudUploadIcon,
+	File01Icon,
+	PackageIcon,
+	Shield01Icon,
+	Tick02Icon,
+	UserGroup03Icon,
+} from "@hugeicons/core-free-icons"
+import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react"
 import type { ParseKeys } from "i18next"
 import { useTranslation } from "react-i18next"
 import { Form, Link } from "react-router"
@@ -5,7 +18,9 @@ import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Badge } from "~/components/ui/badge"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { Card, CardContent } from "~/components/ui/card"
+import { EmptyState } from "~/components/ui/empty-state"
 import { Input } from "~/components/ui/input"
+import { PageHeader } from "~/components/ui/page-header"
 import { db } from "~/lib/db.server"
 import { sendInternalEmail } from "~/lib/email.server"
 import { isComptrollerEnabled } from "~/lib/features.server"
@@ -33,7 +48,7 @@ import {
 } from "~/lib/payment-records.server"
 import { requireRole } from "~/lib/permissions.server"
 import { getAgingAlertDays } from "~/lib/system-settings.server"
-import { formatMoney } from "~/lib/utils"
+import { cn, formatMoney } from "~/lib/utils"
 import type { DocStatus } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.finance.receivables"
 
@@ -286,10 +301,102 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 const AGE_COLOR = (days: number, isAlert: boolean) => {
-	if (isAlert) return "text-red-600 font-semibold"
-	if (days > 90) return "text-orange-600"
-	if (days > 60) return "text-yellow-700"
-	return "text-slate-700"
+	if (isAlert) return "text-status-danger font-semibold"
+	if (days > 60) return "text-status-warn"
+	return "text-muted-foreground"
+}
+
+const STAGE_ICONS: Record<FinanceStage, IconSvgElement> = {
+	TO_VERIFY: File01Icon,
+	PBCC_REQUEST_PENDING: ClipboardListIcon,
+	WAITING_PBCC_FUNDING: Shield01Icon,
+	WAITING_CLARO_PO: PackageIcon,
+	PO_RECEIVED_UPLOAD: CloudUploadIcon,
+	IN_CLARO_QUEUE: UserGroup03Icon,
+	READY_TO_CLOSE: CheckmarkCircle02Icon,
+	CLOSED: Tick02Icon,
+}
+
+const STAGE_TINT: Record<FinanceStage, string> = {
+	TO_VERIFY: "bg-status-ok/10",
+	PBCC_REQUEST_PENDING: "bg-status-info/10",
+	WAITING_PBCC_FUNDING: "bg-status-info/15",
+	WAITING_CLARO_PO: "bg-orange-500/10",
+	PO_RECEIVED_UPLOAD: "bg-sky-500/10",
+	IN_CLARO_QUEUE: "bg-card",
+	READY_TO_CLOSE: "bg-violet-500/10",
+	CLOSED: "bg-status-ok-soft border-status-ok/30",
+}
+
+function StageFlowCard({
+	stage,
+	index,
+	count,
+	amount,
+	active,
+	hasAlert,
+}: {
+	stage: FinanceStage
+	index: number
+	count: number
+	amount: number
+	active: boolean
+	hasAlert: boolean
+}) {
+	const { t } = useTranslation()
+	const label = t(financeStageLabelKey(stage))
+	const closed = stage === "CLOSED"
+	return (
+		<Link
+			to={active ? "/finance/receivables" : `?stage=${stage}`}
+			aria-current={active || undefined}
+			aria-label={t("finance_receivables.stage_aria", {
+				number: index + 1,
+				label,
+			})}
+			className={cn(
+				"flex h-full min-h-36 w-full flex-col items-start gap-1 rounded-xl border border-border px-3 py-3 text-left text-foreground outline-none transition-shadow hover:border-foreground/20 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+				STAGE_TINT[stage],
+				active && "border-primary/40 ring-2 ring-primary/40",
+			)}
+		>
+			<span className="flex w-full items-center justify-between gap-2">
+				{closed ? (
+					<HugeiconsIcon
+						icon={Tick02Icon}
+						strokeWidth={2}
+						className="size-4 text-status-ok"
+					/>
+				) : (
+					<span className="text-xs font-medium tabular-nums text-muted-foreground">
+						{index + 1}
+					</span>
+				)}
+				<HugeiconsIcon
+					icon={STAGE_ICONS[stage]}
+					strokeWidth={2}
+					className={cn(
+						"size-4",
+						closed ? "text-status-ok" : "text-muted-foreground",
+					)}
+				/>
+			</span>
+			<span className="text-xs leading-snug font-medium text-foreground">
+				{label}
+			</span>
+			<span className="mt-auto flex flex-wrap items-center gap-1.5">
+				<span className="text-xl font-semibold tabular-nums">{count}</span>
+				{hasAlert && (
+					<Badge variant="warn" dot>
+						{t("finance_receivables.aging_badge")}
+					</Badge>
+				)}
+			</span>
+			<span className="text-xs tabular-nums text-muted-foreground">
+				{formatMoney(amount)}
+			</span>
+		</Link>
+	)
 }
 
 function StageBadge({ stage }: { stage: FinanceStage }) {
@@ -303,7 +410,10 @@ function StageBadge({ stage }: { stage: FinanceStage }) {
 		READY_TO_CLOSE: "ok",
 		CLOSED: "neutral",
 	}
-	return <Badge variant={variantMap[stage]}>{stage.replace(/_/g, " ")}</Badge>
+	const { t } = useTranslation()
+	return (
+		<Badge variant={variantMap[stage]}>{t(financeStageLabelKey(stage))}</Badge>
+	)
 }
 
 export default function FinancePipeline({
@@ -317,48 +427,115 @@ export default function FinancePipeline({
 		user.role,
 	)
 	const today = new Date().toISOString().slice(0, 10)
+	// Aging alert data is only complete for every stage when no stage filter
+	// narrows `rows` down to a single stage - skip the badge rather than fake
+	// it from partial data.
+	const stagesWithAlert = stageFilter
+		? new Set<FinanceStage>()
+		: new Set(rows.filter((r) => r.isAlert).map((r) => r.stage))
+	const pipelineCount = FINANCE_STAGES.reduce(
+		(sum, stage) => sum + totals[stage].count,
+		0,
+	)
+	const totalValue = FINANCE_STAGES.reduce(
+		(sum, stage) => sum + totals[stage].amount,
+		0,
+	)
 
 	return (
-		<div className="space-y-6">
-			<div className="flex items-center justify-between">
-				<h1 className="text-xl font-semibold">
-					{t("finance_receivables.title")}
-				</h1>
-				<p className="text-sm text-muted-foreground">
-					{t("finance_receivables.total_open", { count: rows.length })}
-				</p>
-			</div>
+		<div>
+			<PageHeader
+				title={t("finance_receivables.title")}
+				subtitle={t("finance_receivables.subtitle")}
+				meta={
+					<span className="text-sm text-muted-foreground">
+						{t("finance_receivables.total_open", { count: pipelineCount })}
+						{" · "}
+						{t("finance_receivables.total_value", {
+							amount: formatMoney(totalValue),
+						})}
+					</span>
+				}
+				actions={
+					stageFilter ? (
+						<Link
+							to="/finance/receivables"
+							className="text-sm font-medium text-primary hover:underline"
+						>
+							{t("finance_receivables.clear_filter")}
+						</Link>
+					) : undefined
+				}
+			/>
 
 			{error?.errorKey && (
-				<p className="text-sm text-red-600">{t(error.errorKey as ParseKeys)}</p>
+				<p className="mb-4 rounded-md border border-status-danger/20 bg-status-danger-soft px-3 py-2 text-sm text-status-danger">
+					{t(error.errorKey as ParseKeys)}
+				</p>
 			)}
 
-			{/* Stage totals */}
-			<div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-				{FINANCE_STAGES.map((stage) => {
-					const active = stageFilter === stage
-					return (
-						<Link
-							key={stage}
-							to={active ? "/finance/receivables" : `?stage=${stage}`}
-							className={buttonVariants({
-								variant: active ? "default" : "outline",
-								className: "h-auto flex-col items-start gap-1 py-3 px-4",
-							})}
-						>
-							<span className="text-xs font-normal opacity-80">
-								{t(financeStageLabelKey(stage))}
-							</span>
-							<span className="text-lg font-semibold">
-								{totals[stage].count}
-							</span>
-							<span className="text-xs font-normal opacity-80">
-								{formatMoney(totals[stage].amount)}
-							</span>
-						</Link>
-					)
-				})}
+			<div className="mb-6 flex flex-wrap items-stretch gap-2 xl:flex-nowrap">
+				{FINANCE_STAGES.map((stage, index) => (
+					<div key={stage} className="contents">
+						<div className="min-w-[calc(50%-0.25rem)] flex-1 sm:min-w-[calc(25%-0.375rem)] xl:min-w-0">
+							<StageFlowCard
+								stage={stage}
+								index={index}
+								count={totals[stage].count}
+								amount={totals[stage].amount}
+								active={stageFilter === stage}
+								hasAlert={stagesWithAlert.has(stage)}
+							/>
+						</div>
+						{index < FINANCE_STAGES.length - 1 ? (
+							<HugeiconsIcon
+								icon={ChevronRightIcon}
+								strokeWidth={2}
+								aria-hidden="true"
+								className="hidden size-5 shrink-0 self-center text-muted-foreground/40 xl:block"
+							/>
+						) : null}
+					</div>
+				))}
 			</div>
+
+			{rows.length === 0 && (
+				<Card className="rounded-2xl">
+					<EmptyState
+						className="px-6 py-16"
+						icon={File01Icon}
+						iconClassName="mb-3 size-16 bg-status-ok/10 text-status-ok [&_svg]:size-7"
+						title={
+							stageFilter
+								? t("finance_receivables.no_jobs_in_stage_title")
+								: t("finance_receivables.no_jobs_title")
+						}
+						description={
+							stageFilter
+								? t("finance_receivables.no_jobs_in_stage_description")
+								: t("finance_receivables.no_jobs_description")
+						}
+						action={
+							stageFilter ? undefined : (
+								<Link
+									to="/docs/new"
+									className={buttonVariants({
+										size: "sm",
+										className: "gap-1.5",
+									})}
+								>
+									{t("finance_receivables.no_jobs_action")}
+									<HugeiconsIcon
+										icon={ArrowRight01Icon}
+										strokeWidth={2}
+										className="size-4"
+									/>
+								</Link>
+							)
+						}
+					/>
+				</Card>
+			)}
 
 			<div className="space-y-3">
 				{rows.map((row) => (
@@ -398,14 +575,14 @@ export default function FinancePipeline({
 									{formatMoney(row.amount)}
 								</span>
 								{row.poMismatch && row.poAmount !== null && (
-									<span className="text-amber-700">
+									<span className="text-status-warn">
 										{t("finance_receivables.po_mismatch", {
 											poAmount: formatMoney(row.poAmount),
 										})}
 									</span>
 								)}
 								{(row.missingAviso || row.missingClaroPdf) && (
-									<span className="text-amber-700">
+									<span className="text-status-warn">
 										{t("finance_receivables.missing_docs")}
 									</span>
 								)}

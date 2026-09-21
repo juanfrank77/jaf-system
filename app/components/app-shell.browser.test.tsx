@@ -12,7 +12,7 @@ describe("AppShell", () => {
 					path: "/",
 					Component: () => (
 						<AppShell
-							user={{ name: "Jose Alfaro", role: "SUPERVISOR" }}
+							user={{ id: "user-1", name: "Jose Alfaro", role: "SUPERVISOR" }}
 							notifications={[]}
 						>
 							<p>content</p>
@@ -21,8 +21,7 @@ describe("AppShell", () => {
 				},
 			],
 		})
-		const header = screen.getByRole("banner")
-		expect(within(header).getByText("Jose Alfaro")).toBeInTheDocument()
+		expect(screen.getByText("Jose Alfaro")).toBeInTheDocument()
 		expect(screen.getByText("SUPERVISOR")).toBeInTheDocument()
 	})
 
@@ -33,7 +32,7 @@ describe("AppShell", () => {
 					path: "/",
 					Component: () => (
 						<AppShell
-							user={{ name: "Jose Alfaro", role: "SUPERVISOR" }}
+							user={{ id: "user-1", name: "Jose Alfaro", role: "SUPERVISOR" }}
 							notifications={[]}
 						>
 							<p>dashboard body</p>
@@ -45,7 +44,7 @@ describe("AppShell", () => {
 		expect(screen.getByText("dashboard body")).toBeInTheDocument()
 	})
 
-	it("shows + New Document for SUPERVISOR but not Admin links", async ({
+	it("shows + New work order for SUPERVISOR but not Admin links", async ({
 		renderStub,
 	}) => {
 		await renderStub({
@@ -54,7 +53,7 @@ describe("AppShell", () => {
 					path: "/",
 					Component: () => (
 						<AppShell
-							user={{ name: "Jose Alfaro", role: "SUPERVISOR" }}
+							user={{ id: "user-1", name: "Jose Alfaro", role: "SUPERVISOR" }}
 							notifications={[]}
 						>
 							<p>content</p>
@@ -64,14 +63,37 @@ describe("AppShell", () => {
 			],
 		})
 		expect(
-			screen.getByRole("link", { name: "+ New Document", hidden: true }),
+			screen.getByRole("link", { name: "New work order", hidden: true }),
 		).toBeInTheDocument()
 		expect(
-			screen.queryByRole("link", { name: "Admin Settings", hidden: true }),
+			screen.queryByRole("link", { name: "Settings", hidden: true }),
 		).not.toBeInTheDocument()
 		expect(
-			screen.queryByRole("link", { name: "Receivables", hidden: true }),
+			screen.queryByRole("link", { name: "Finance pipeline", hidden: true }),
 		).not.toBeInTheDocument()
+	})
+
+	it("hides section labels when only Dashboard is visible", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<AppShell
+							user={{ id: "user-1", name: "L. Rivera", role: "CREW" }}
+							notifications={[]}
+						>
+							<p>content</p>
+						</AppShell>
+					),
+				},
+			],
+		})
+		expect(screen.queryByText("Finance")).not.toBeInTheDocument()
+		expect(screen.queryByText("Field")).not.toBeInTheDocument()
+		expect(screen.queryByText("Admin")).not.toBeInTheDocument()
 	})
 
 	it("shows only Dashboard for CREW", async ({ renderStub }) => {
@@ -81,7 +103,7 @@ describe("AppShell", () => {
 					path: "/",
 					Component: () => (
 						<AppShell
-							user={{ name: "L. Rivera", role: "CREW" }}
+							user={{ id: "user-1", name: "L. Rivera", role: "CREW" }}
 							notifications={[]}
 						>
 							<p>content</p>
@@ -94,13 +116,13 @@ describe("AppShell", () => {
 			screen.getByRole("link", { name: "Dashboard", hidden: true }),
 		).toBeInTheDocument()
 		expect(
-			screen.queryByRole("link", { name: "+ New Document", hidden: true }),
+			screen.queryByRole("link", { name: "New work order", hidden: true }),
 		).not.toBeInTheDocument()
 		expect(
-			screen.queryByRole("link", { name: "Receivables", hidden: true }),
+			screen.queryByRole("link", { name: "Finance pipeline", hidden: true }),
 		).not.toBeInTheDocument()
 		expect(
-			screen.queryByRole("link", { name: "Admin Settings", hidden: true }),
+			screen.queryByRole("link", { name: "Settings", hidden: true }),
 		).not.toBeInTheDocument()
 	})
 
@@ -113,7 +135,7 @@ describe("AppShell", () => {
 					path: "/",
 					Component: () => (
 						<AppShell
-							user={{ name: "Monica García", role: "ADMIN" }}
+							user={{ id: "user-1", name: "Monica García", role: "ADMIN" }}
 							notifications={[]}
 							comptrollerEnabled={false}
 						>
@@ -137,7 +159,7 @@ describe("AppShell", () => {
 					path: "/",
 					Component: () => (
 						<AppShell
-							user={{ name: "Monica García", role: "ADMIN" }}
+							user={{ id: "user-1", name: "Monica García", role: "ADMIN" }}
 							notifications={[]}
 							comptrollerEnabled={true}
 						>
@@ -159,7 +181,7 @@ describe("AppShell", () => {
 					path: "/",
 					Component: () => (
 						<AppShell
-							user={{ name: "Monica García", role: "ADMIN" }}
+							user={{ id: "user-1", name: "Monica García", role: "ADMIN" }}
 							notifications={[]}
 						>
 							<p>content</p>
@@ -172,13 +194,13 @@ describe("AppShell", () => {
 			screen.getByRole("link", { name: "Dashboard", hidden: true }),
 		).toBeInTheDocument()
 		expect(
-			screen.getByRole("link", { name: "+ New Document", hidden: true }),
+			screen.getByRole("link", { name: "New work order", hidden: true }),
 		).toBeInTheDocument()
 		expect(
-			screen.getByRole("link", { name: "Finance Pipeline", hidden: true }),
+			screen.getByRole("link", { name: "Finance pipeline", hidden: true }),
 		).toBeInTheDocument()
 		expect(
-			screen.getByRole("link", { name: "Admin Settings", hidden: true }),
+			screen.getByRole("link", { name: "Settings", hidden: true }),
 		).toBeInTheDocument()
 		expect(
 			screen.getByRole("link", { name: "Catalog", hidden: true }),
@@ -193,8 +215,32 @@ describe("AppShell", () => {
 			screen.getByRole("link", { name: "Vans", hidden: true }),
 		).toBeInTheDocument()
 		expect(
-			screen.getByRole("link", { name: "Restock Sign-offs", hidden: true }),
+			screen.getByRole("link", { name: "Restock sign-offs", hidden: true }),
 		).toBeInTheDocument()
+		expect(screen.getByText("Finance")).toBeInTheDocument()
+		expect(screen.getByText("Field")).toBeInTheDocument()
+		expect(screen.getByText("Admin")).toBeInTheDocument()
+		expect(screen.queryByText("Work")).not.toBeInTheDocument()
+
+		const nav = screen.getByRole("navigation", {
+			name: "Primary",
+			hidden: true,
+		})
+		const labels = within(nav)
+			.getAllByRole("link", { hidden: true })
+			.map((link) => link.textContent)
+		expect(labels).toEqual([
+			"Dashboard",
+			"Payment requests",
+			"Finance pipeline",
+			"Restock sign-offs",
+			"Installer",
+			"Crews",
+			"Vans",
+			"Catalog",
+			"Users",
+			"Settings",
+		])
 	})
 
 	it("shows the unread notification count", async ({ renderStub }) => {
@@ -204,7 +250,7 @@ describe("AppShell", () => {
 					path: "/",
 					Component: () => (
 						<AppShell
-							user={{ name: "Jose Alfaro", role: "SUPERVISOR" }}
+							user={{ id: "user-1", name: "Jose Alfaro", role: "SUPERVISOR" }}
 							notifications={[
 								{
 									id: "1",
@@ -238,7 +284,7 @@ describe("AppShell", () => {
 					path: "/",
 					Component: () => (
 						<AppShell
-							user={{ name: "Jose Alfaro", role: "SUPERVISOR" }}
+							user={{ id: "user-1", name: "Jose Alfaro", role: "SUPERVISOR" }}
 							notifications={[
 								{
 									id: "1",
@@ -269,7 +315,7 @@ describe("AppShell", () => {
 					path: "/",
 					Component: () => (
 						<AppShell
-							user={{ name: "Jose Alfaro", role: "SUPERVISOR" }}
+							user={{ id: "user-1", name: "Jose Alfaro", role: "SUPERVISOR" }}
 							notifications={[]}
 						>
 							<p>content</p>
@@ -291,7 +337,7 @@ describe("AppShell", () => {
 					path: "/",
 					Component: () => (
 						<AppShell
-							user={{ name: "Jose Alfaro", role: "SUPERVISOR" }}
+							user={{ id: "user-1", name: "Jose Alfaro", role: "SUPERVISOR" }}
 							notifications={[]}
 						>
 							<p>content</p>
@@ -315,7 +361,7 @@ describe("AppShell", () => {
 					path: "/",
 					Component: () => (
 						<AppShell
-							user={{ name: "Jose Alfaro", role: "SUPERVISOR" }}
+							user={{ id: "user-1", name: "Jose Alfaro", role: "SUPERVISOR" }}
 							notifications={[
 								{
 									id: "1",
@@ -355,7 +401,7 @@ describe("AppShell", () => {
 					path: "/dashboard",
 					Component: () => (
 						<AppShell
-							user={{ name: "Jose Alfaro", role: "SUPERVISOR" }}
+							user={{ id: "user-1", name: "Jose Alfaro", role: "SUPERVISOR" }}
 							notifications={[
 								{
 									id: "1",
@@ -394,7 +440,7 @@ describe("AppShell", () => {
 					path: "/dashboard",
 					Component: () => (
 						<AppShell
-							user={{ name: "Jose Alfaro", role: "SUPERVISOR" }}
+							user={{ id: "user-1", name: "Jose Alfaro", role: "SUPERVISOR" }}
 							notifications={[
 								{
 									id: "1",
@@ -436,7 +482,7 @@ describe("AppShell", () => {
 					path: "/",
 					Component: () => (
 						<AppShell
-							user={{ name: "Jose Alfaro", role: "SUPERVISOR" }}
+							user={{ id: "user-1", name: "Jose Alfaro", role: "SUPERVISOR" }}
 							notifications={[]}
 						>
 							<p>content</p>
@@ -462,7 +508,7 @@ describe("AppShell", () => {
 					path: "/",
 					Component: () => (
 						<AppShell
-							user={{ name: "Jose Alfaro", role: "SUPERVISOR" }}
+							user={{ id: "user-1", name: "Jose Alfaro", role: "SUPERVISOR" }}
 							notifications={[]}
 						>
 							<p>content</p>
@@ -479,10 +525,10 @@ describe("AppShell", () => {
 			within(drawer).getByRole("link", { name: "Dashboard" }),
 		).toBeInTheDocument()
 		expect(
-			within(drawer).getByRole("link", { name: "+ New Document" }),
+			within(drawer).getByRole("link", { name: "New work order" }),
 		).toBeInTheDocument()
 		expect(
-			within(drawer).queryByRole("link", { name: "Admin Settings" }),
+			within(drawer).queryByRole("link", { name: "Settings" }),
 		).not.toBeInTheDocument()
 	})
 
@@ -495,7 +541,7 @@ describe("AppShell", () => {
 					path: "/",
 					Component: () => (
 						<AppShell
-							user={{ name: "Jose Alfaro", role: "SUPERVISOR" }}
+							user={{ id: "user-1", name: "Jose Alfaro", role: "SUPERVISOR" }}
 							notifications={[]}
 						>
 							<Outlet />
@@ -534,7 +580,7 @@ describe("AppShell", () => {
 					path: "/",
 					Component: () => (
 						<AppShell
-							user={{ name: "Jose Alfaro", role: "SUPERVISOR" }}
+							user={{ id: "user-1", name: "Jose Alfaro", role: "SUPERVISOR" }}
 							notifications={[]}
 						>
 							<p>content</p>

@@ -37,3 +37,5 @@ vite.config.ts.*
 app/components/__screenshots__
 app/lib/__screenshots__
 graphify-out
+
+**/__screenshots__/

@@ -1,8 +1,9 @@
 import { Outlet } from "react-router"
 import { AppShell } from "~/components/app-shell"
+import { DesignSystemAppShell } from "~/components/design-system/app-shell"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { db } from "~/lib/db.server"
-import { isComptrollerEnabled } from "~/lib/features.server"
+import { isComptrollerEnabled, isDsShellEnabled } from "~/lib/features.server"
 import { requireSession } from "~/lib/permissions.server"
 import { getTheme } from "~/lib/theme.server"
 import type { Route } from "./+types/_app"
@@ -23,11 +24,24 @@ export async function loader({ request }: Route.LoaderArgs) {
 		notifications,
 		comptrollerEnabled: isComptrollerEnabled(),
 		theme,
+		dsShell: isDsShellEnabled(),
 	}
 }
 
 export default function AppShellRoute({ loaderData }: Route.ComponentProps) {
-	const { user, notifications, comptrollerEnabled } = loaderData
+	const { user, notifications, comptrollerEnabled, theme, dsShell } = loaderData
+	if (dsShell) {
+		return (
+			<DesignSystemAppShell
+				user={user}
+				notifications={notifications}
+				comptrollerEnabled={comptrollerEnabled}
+				theme={theme}
+			>
+				<Outlet />
+			</DesignSystemAppShell>
+		)
+	}
 	return (
 		<AppShell
 			user={user}

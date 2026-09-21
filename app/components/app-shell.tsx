@@ -3,24 +3,13 @@ import { Popover } from "@base-ui/react/popover"
 import {
 	Cancel01Icon,
 	FileAddIcon,
-	GridViewIcon,
-	HardHatIcon,
-	Home01Icon,
-	Invoice02Icon,
 	Logout01Icon,
 	Menu01Icon,
-	MoneyExchange02Icon,
 	Notification01Icon,
-	PackageIcon,
-	Settings02Icon,
-	TruckDeliveryIcon,
 	UnfoldMoreIcon,
-	UserGroup03Icon,
 	UserIcon,
-	Wallet01Icon,
 } from "@hugeicons/core-free-icons"
-import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react"
-import type { TFunction } from "i18next"
+import { HugeiconsIcon } from "@hugeicons/react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, Link, useLocation, useSubmit } from "react-router"
@@ -33,6 +22,16 @@ import {
 	DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
 import { Toaster, ToastViewport } from "~/components/ui/toast"
+import {
+	canCreateDocument,
+	filterNavItems,
+	groupNavItems,
+	NAV_GROUP_LABEL_KEY,
+	NAV_ITEMS,
+	type NavItem,
+	resolveActiveNavTo,
+} from "~/lib/app-shell-nav"
+import { formatRelativeTime } from "~/lib/format-relative-time"
 import { cn } from "~/lib/utils"
 import { LanguageSwitcher } from "~/library/language-switcher"
 import type { Role } from "../../generated/prisma/client"
@@ -43,120 +42,6 @@ type AppUser = {
 	name: string
 	role: Role
 	image?: string | null
-}
-
-type NavGroup = "home" | "finance" | "field" | "admin"
-
-type NavItem = {
-	to: string
-	labelKey:
-		| "app_shell.nav.dashboard"
-		| "app_shell.nav.receivables"
-		| "app_shell.nav.finance_queue"
-		| "app_shell.nav.admin_settings"
-		| "app_shell.nav.catalog"
-		| "app_shell.nav.comptroller"
-		| "app_shell.nav.admin_users"
-		| "app_shell.nav.admin_crews"
-		| "app_shell.nav.admin_vans"
-		| "app_shell.nav.admin_restock"
-		| "app_shell.nav.installer"
-	icon: IconSvgElement
-	group: NavGroup
-	roles?: Role[]
-}
-
-const NAV_ITEMS: NavItem[] = [
-	{
-		to: "/dashboard",
-		labelKey: "app_shell.nav.dashboard",
-		icon: Home01Icon,
-		group: "home",
-	},
-	{
-		to: "/finance/queue",
-		labelKey: "app_shell.nav.finance_queue",
-		icon: Invoice02Icon,
-		group: "finance",
-		roles: ["FINANCE", "ADMIN"],
-	},
-	{
-		to: "/finance/receivables",
-		labelKey: "app_shell.nav.receivables",
-		icon: MoneyExchange02Icon,
-		group: "finance",
-		roles: ["FINANCE", "ADMIN"],
-	},
-	{
-		to: "/comptroller",
-		labelKey: "app_shell.nav.comptroller",
-		icon: Wallet01Icon,
-		group: "finance",
-		roles: ["COMPTROLLER", "ADMIN"],
-	},
-	{
-		to: "/admin/restock",
-		labelKey: "app_shell.nav.admin_restock",
-		icon: PackageIcon,
-		group: "field",
-		roles: ["ADMIN"],
-	},
-	{
-		to: "/installer",
-		labelKey: "app_shell.nav.installer",
-		icon: HardHatIcon,
-		group: "field",
-		roles: ["INSTALLER", "ADMIN"],
-	},
-	{
-		to: "/admin/crews",
-		labelKey: "app_shell.nav.admin_crews",
-		icon: UserGroup03Icon,
-		group: "field",
-		roles: ["ADMIN"],
-	},
-	{
-		to: "/admin/vans",
-		labelKey: "app_shell.nav.admin_vans",
-		icon: TruckDeliveryIcon,
-		group: "field",
-		roles: ["ADMIN"],
-	},
-	{
-		to: "/admin/catalog",
-		labelKey: "app_shell.nav.catalog",
-		icon: GridViewIcon,
-		group: "admin",
-		roles: ["ADMIN"],
-	},
-	{
-		to: "/admin/users",
-		labelKey: "app_shell.nav.admin_users",
-		icon: UserIcon,
-		group: "admin",
-		roles: ["ADMIN"],
-	},
-	{
-		to: "/admin/settings",
-		labelKey: "app_shell.nav.admin_settings",
-		icon: Settings02Icon,
-		group: "admin",
-		roles: ["ADMIN"],
-	},
-]
-
-const GROUP_ORDER: NavGroup[] = ["home", "finance", "field", "admin"]
-const GROUP_LABEL_KEY: Partial<
-	Record<
-		NavGroup,
-		| "app_shell.nav.groups.finance"
-		| "app_shell.nav.groups.field"
-		| "app_shell.nav.groups.admin"
-	>
-> = {
-	finance: "app_shell.nav.groups.finance",
-	field: "app_shell.nav.groups.field",
-	admin: "app_shell.nav.groups.admin",
 }
 
 function NavList({
@@ -170,26 +55,13 @@ function NavList({
 }) {
 	const location = useLocation()
 	const { t } = useTranslation()
-	const groups = GROUP_ORDER.map((group) => ({
-		group,
-		items: items.filter((item) => item.group === group),
-	})).filter((entry) => entry.items.length > 0)
-
-	// Pick the single best match so nested pages (e.g. /installer/restock)
-	// highlight their parent entry, and a shorter prefix never steals the
-	// highlight from a longer one.
-	const activeTo = items
-		.filter(
-			(item) =>
-				location.pathname === item.to ||
-				location.pathname.startsWith(`${item.to}/`),
-		)
-		.sort((a, b) => b.to.length - a.to.length)[0]?.to
+	const groups = groupNavItems(items)
+	const activeTo = resolveActiveNavTo(location.pathname, items)
 
 	return (
 		<nav aria-label={ariaLabel} className="flex flex-col">
 			{groups.map(({ group, items: groupItems }, index) => {
-				const labelKey = GROUP_LABEL_KEY[group]
+				const labelKey = NAV_GROUP_LABEL_KEY[group]
 				return (
 					<div
 						key={group}
@@ -237,21 +109,6 @@ function NavList({
 			})}
 		</nav>
 	)
-}
-
-function formatRelativeTime(date: Date, t: TFunction) {
-	const diffMs = Date.now() - date.getTime()
-	const diffMinutes = Math.round(diffMs / 60000)
-	if (diffMinutes < 1) return t("app_shell.notifications.time.just_now")
-	if (diffMinutes < 60)
-		return t("app_shell.notifications.time.minutes_ago", {
-			count: diffMinutes,
-		})
-	const diffHours = Math.round(diffMinutes / 60)
-	if (diffHours < 24)
-		return t("app_shell.notifications.time.hours_ago", { count: diffHours })
-	const diffDays = Math.round(diffHours / 24)
-	return t("app_shell.notifications.time.days_ago", { count: diffDays })
 }
 
 function NotificationBell({
@@ -402,20 +259,20 @@ function UserMenu({ user }: { user: AppUser }) {
 function SidebarContent({
 	items,
 	user,
-	canCreateDocument,
+	createDoc,
 	onNavigate,
 	navLabel,
 }: {
 	items: NavItem[]
 	user: AppUser
-	canCreateDocument: boolean
+	createDoc: boolean
 	onNavigate?: () => void
 	navLabel: string
 }) {
 	const { t } = useTranslation()
 	return (
 		<div className="flex h-full min-h-0 w-full flex-col">
-			{canCreateDocument && (
+			{createDoc && (
 				<Button
 					render={<Link to="/docs/new" onClick={onNavigate} />}
 					nativeButton={false}
@@ -459,10 +316,9 @@ function AppShell({
 }) {
 	const [drawerOpen, setDrawerOpen] = useState(false)
 	const { t } = useTranslation()
-	const canCreateDocument = ["SUPERVISOR", "ADMIN"].includes(user.role)
-	const items = NAV_ITEMS.filter((item) => {
-		if (item.to.startsWith("/comptroller") && !comptrollerEnabled) return false
-		return !item.roles || item.roles.includes(user.role)
+	const createDoc = canCreateDocument(user.role)
+	const items = filterNavItems(NAV_ITEMS, user, {
+		comptrollerEnabled: comptrollerEnabled ?? false,
 	})
 
 	return (
@@ -499,7 +355,7 @@ function AppShell({
 							<SidebarContent
 								items={items}
 								user={user}
-								canCreateDocument={canCreateDocument}
+								createDoc={createDoc}
 								navLabel={t("app_shell.primary_nav")}
 							/>
 						</aside>
@@ -532,7 +388,7 @@ function AppShell({
 						<SidebarContent
 							items={items}
 							user={user}
-							canCreateDocument={canCreateDocument}
+							createDoc={createDoc}
 							onNavigate={() => setDrawerOpen(false)}
 							navLabel={t("app_shell.primary_nav_mobile")}
 						/>

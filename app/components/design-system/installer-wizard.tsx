@@ -72,7 +72,7 @@ export function InstallerWizardV2({
 	]
 
 	return (
-		<DesignSystem>
+		<DesignSystem constrain>
 			<Link to="/installer" className="jaf-back">
 				← {t("ds.back")}
 			</Link>

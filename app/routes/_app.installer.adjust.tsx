@@ -17,7 +17,11 @@ import { db } from "~/lib/db.server"
 import { isInstallerV2Enabled } from "~/lib/features.server"
 import { requireRole } from "~/lib/permissions.server"
 import { buildInventoryComparison } from "~/lib/van-inventory"
-import { getVanParLevels, parLevelsToStockLevels } from "~/lib/van-stock.server"
+import {
+	computeParStatus,
+	getVanParLevels,
+	parLevelsToStockLevels,
+} from "~/lib/van-stock.server"
 import type { Route } from "./+types/_app.installer.adjust"
 
 export const meta: Route.MetaFunction = () => [
@@ -34,11 +38,20 @@ export async function loader({ request }: Route.LoaderArgs) {
 		}),
 	])
 	if (!van) throw redirect("/installer")
-	const [transactions, parLevels] = await Promise.all([
+	const [transactions, parLevels, pendingRestock] = await Promise.all([
 		db.vanInventoryTransaction.findMany({
 			where: { vanId: van.id },
 		}),
 		getVanParLevels(van.id),
+		db.vanRestockRequest.findFirst({
+			where: {
+				requestedById: user.id,
+				status: {
+					in: ["REQUESTED", "PENDING_APPROVAL", "APPROVED", "READY"],
+				},
+			},
+			select: { id: true },
+		}),
 	])
 	const serviceCodeMap = new Map(
 		serviceCodes.map((c) => [c.id, { claroCode: c.claroCode, name: c.name }]),
@@ -48,12 +61,16 @@ export async function loader({ request }: Route.LoaderArgs) {
 		parLevelsToStockLevels(parLevels),
 		serviceCodeMap,
 	)
-	const belowParCount = comparison.filter((i) => i.onHand < i.standard).length
+	const parStatus = computeParStatus({ parLevels, transactions })
 	return {
 		version: isInstallerV2Enabled() ? "v2" : "v1",
 		van,
 		serviceCodes,
-		belowParCount,
+		comparison,
+		parLevels,
+		parStatus,
+		hasPendingRestock: pendingRestock != null,
+		belowParCount: parStatus.belowParCount,
 	}
 }
 
@@ -125,7 +142,15 @@ export default function AdjustStock({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { serviceCodes, version, belowParCount } = loaderData
+	const {
+		serviceCodes,
+		version,
+		van,
+		comparison,
+		parLevels,
+		parStatus,
+		hasPendingRestock,
+	} = loaderData
 	const { t } = useTranslation()
 	const errorKey =
 		actionData && "errorKey" in actionData
@@ -135,9 +160,12 @@ export default function AdjustStock({
 	if (version === "v2") {
 		return (
 			<InstallerAdjustV2
-				serviceCodes={serviceCodes}
+				van={van}
+				comparison={comparison}
+				parLevels={parLevels}
+				parStatus={parStatus}
+				hasPendingRestock={hasPendingRestock}
 				errorKey={errorKey}
-				belowParCount={belowParCount}
 			/>
 		)
 	}

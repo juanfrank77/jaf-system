@@ -113,3 +113,5 @@ Route reads (`/installer`, `/installer/adjust`, `/installer/restock` action, `/a
 **Par-status KPI (PR 2):** Wired on `/installer` v2 dashboard via [`computeParStatus`](../app/lib/van-stock.ts) — three states: no par levels set (neutral), all at par (ok), below-par count (warn).
 
 **Units owed back KPI:** Still blocked on gap **#16 (`SerialUnit`)**. Guide “units owed back” means serialized units taken and not yet returned — not surplus above par. Do not approximate with `onHand - parLevel`.
+
+**Pending restock on adjust:** `VanRestockRequest` has no `vanId`; pending restock is matched by `requestedById` (assumes one installer ↔ one van).

@@ -104,10 +104,16 @@ export function Note({
 	tone = "warn",
 }: {
 	children: ReactNode
-	tone?: "warn" | "crit" | "ok" | "acc"
+	tone?: "warn" | "crit" | "ok" | "acc" | "neutral"
 }) {
 	return (
-		<div className={cn("jaf-note", tone !== "warn" && `jaf-${tone}`)}>
+		<div
+			className={cn(
+				"jaf-note",
+				tone === "neutral" && "jaf-neutral",
+				tone !== "warn" && tone !== "neutral" && `jaf-${tone}`,
+			)}
+		>
 			{children}
 		</div>
 	)
@@ -141,6 +147,7 @@ export function Stat({ label, value }: { label: ReactNode; value: ReactNode }) {
 
 export function Gate({
 	items,
+	live,
 }: {
 	items: {
 		id: string
@@ -148,9 +155,13 @@ export function Gate({
 		label: ReactNode
 		detail?: ReactNode
 	}[]
+	live?: boolean
 }) {
 	return (
-		<ul className="jaf-gate">
+		<ul
+			className="jaf-gate"
+			{...(live ? { "aria-live": "polite" as const } : {})}
+		>
 			{items.map((item) => (
 				<li key={item.id}>
 					<span

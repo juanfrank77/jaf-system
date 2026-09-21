@@ -1707,6 +1707,11 @@ select.jaf-inp {
 	background: var(--accent-wash);
 	color: var(--accent);
 }
+.jaf-note.jaf-neutral {
+	background: var(--surface);
+	color: var(--ink-2);
+	border: 1px solid var(--hair);
+}
 .jaf-radio {
 	display: flex;
 	gap: 8px;

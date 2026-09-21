@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next"
 import { data, Form, redirect } from "react-router"
-import { InstallerAdjustV2 } from "~/components/design-system/installer-dashboard"
+import { InstallerAdjustV2 } from "~/components/design-system/installer-adjust"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"

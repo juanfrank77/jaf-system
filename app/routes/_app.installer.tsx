@@ -15,7 +15,12 @@ import { PageHeader } from "~/components/ui/page-header"
 import { db } from "~/lib/db.server"
 import { isInstallerDashboardV2Enabled } from "~/lib/features.server"
 import { requireRole } from "~/lib/permissions.server"
-import { buildInventoryComparison, type StockLevel } from "~/lib/van-inventory"
+import { buildInventoryComparison } from "~/lib/van-inventory"
+import {
+	computeParStatus,
+	getVanParLevels,
+	parLevelsToStockLevels,
+} from "~/lib/van-stock.server"
 import type { Route } from "./+types/_app.installer"
 
 export const meta: Route.MetaFunction = () => [
@@ -61,12 +66,15 @@ export async function loader({ request }: Route.LoaderArgs) {
 			}),
 		])
 
-	const transactions = van
-		? await db.vanInventoryTransaction.findMany({
-				where: { vanId: van.id },
-				orderBy: { createdAt: "desc" },
-			})
-		: []
+	const [transactions, parLevels] = van
+		? await Promise.all([
+				db.vanInventoryTransaction.findMany({
+					where: { vanId: van.id },
+					orderBy: { createdAt: "desc" },
+				}),
+				getVanParLevels(van.id),
+			])
+		: [[], []]
 
 	const serviceCodeMap = new Map(
 		serviceCodes.map((c) => [c.id, { claroCode: c.claroCode, name: c.name }]),
@@ -74,10 +82,13 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const inventoryComparison = van
 		? buildInventoryComparison(
 				transactions,
-				(van.standardStockLevels as StockLevel[]) || [],
+				parLevelsToStockLevels(parLevels),
 				serviceCodeMap,
 			)
 		: []
+	const parStatus = van
+		? computeParStatus({ parLevels, transactions })
+		: { hasParLevels: false, belowParCount: 0, belowParLines: [] }
 
 	const completedTrend = Array.from({ length: 7 }, (_, i) => {
 		const day = new Date(sevenDaysAgo)
@@ -97,6 +108,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		serviceCodes,
 		completedThisWeek: weekLogs,
 		completedTrend,
+		parStatus,
 	}
 }
 
@@ -117,6 +129,7 @@ export default function InstallerPortal({ loaderData }: Route.ComponentProps) {
 		inventoryComparison,
 		completedThisWeek,
 		completedTrend,
+		parStatus,
 	} = loaderData
 	const { t } = useTranslation()
 
@@ -134,6 +147,7 @@ export default function InstallerPortal({ loaderData }: Route.ComponentProps) {
 				pendingCount={0}
 				completedThisWeek={completedThisWeek}
 				completedTrend={completedTrend}
+				parStatus={parStatus}
 				restockPendingCount={pendingRequests.length}
 				readyForPickup={readyForPickup}
 				installLogs={installLogs}

@@ -15,12 +15,11 @@ import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
 import { toNumberPrice } from "~/lib/utils"
+import {
+	getVanParLevelsForVans,
+	parLevelsToStockLevels,
+} from "~/lib/van-stock.server"
 import type { Route } from "./+types/_app.admin.restock"
-
-type StockLevel = {
-	serviceCodeId: string
-	qty: number
-}
 
 type RestockItem = {
 	serviceCodeId: string
@@ -64,10 +63,14 @@ export async function loader({ request }: Route.LoaderArgs) {
 		}),
 	])
 
+	const parLevelsByVan = await getVanParLevelsForVans(vans.map((v) => v.id))
+
 	const enriched = requests.map((req) => {
 		const items = (req.items as RestockItem[]) || []
 		const van = vans.find((v) => v.installerId === req.requestedById)
-		const standardLevels = (van?.standardStockLevels as StockLevel[]) || []
+		const standardLevels = van
+			? parLevelsToStockLevels(parLevelsByVan.get(van.id) ?? [])
+			: []
 		const exceeds = items.some((item) => {
 			const standard = standardLevels.find(
 				(l) => l.serviceCodeId === item.serviceCodeId,

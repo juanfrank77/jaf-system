@@ -104,10 +104,12 @@ The app shell (top bar + left rail) is still v1 on all ported screens. Porting t
 
 ---
 
-## Van stock — PR 1 landed (`VanStockLevel` table)
+## Van stock — PR 1 landed, PR 2 route cutover landed
 
-Additive migration: par levels live in `van_stock_level`; `Van.standardStockLevels` JSON kept as deprecated legacy mirror (dual-write starts in PR 2).
+Additive migration: par levels live in `van_stock_level`; `Van.standardStockLevels` JSON kept as deprecated legacy mirror (dual-write on admin van create/update via [`setVanParLevels`](../app/lib/van-stock.server.ts)).
 
-**Units owed back KPI:** Blocked on gap **#16 (`SerialUnit`)**. Guide “units owed back” means serialized units taken and not yet returned — not surplus above par. Do not approximate with `onHand - parLevel`.
+Route reads (`/installer`, `/installer/adjust`, `/installer/restock` action, `/admin/restock` loader, `/admin/vans` loader) use the van-stock module; dual-read fallback to JSON remains until a later cleanup PR.
 
-**PR 2 — par-status KPI must expose three states:** [`computeParStatus`](../app/lib/van-stock.ts) returns `hasParLevels`, `belowParCount`, and `belowParLines`. A van with **no par rows** yields `hasParLevels: false` and `belowParCount: 0` — same numbers as “fully stocked.” The installer dashboard KPI must **not** treat that as green; wire a third UI state: **“No par levels set”** when `hasParLevels === false`.
+**Par-status KPI (PR 2):** Wired on `/installer` v2 dashboard via [`computeParStatus`](../app/lib/van-stock.ts) — three states: no par levels set (neutral), all at par (ok), below-par count (warn).
+
+**Units owed back KPI:** Still blocked on gap **#16 (`SerialUnit`)**. Guide “units owed back” means serialized units taken and not yet returned — not surplus above par. Do not approximate with `onHand - parLevel`.

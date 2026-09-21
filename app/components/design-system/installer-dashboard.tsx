@@ -27,11 +27,17 @@ type InstallRow = {
 	discrepancyFlagged: boolean
 }
 
+type ParStatus = {
+	hasParLevels: boolean
+	belowParCount: number
+}
+
 export function InstallerDashboardV2({
 	userName,
 	pendingCount,
 	completedThisWeek,
 	completedTrend,
+	parStatus,
 	restockPendingCount,
 	readyForPickup,
 	installLogs,
@@ -40,6 +46,7 @@ export function InstallerDashboardV2({
 	pendingCount: number
 	completedThisWeek: number
 	completedTrend: number[]
+	parStatus: ParStatus
 	restockPendingCount: number
 	readyForPickup: RestockRow[]
 	installLogs: InstallRow[]
@@ -84,11 +91,29 @@ export function InstallerDashboardV2({
 						/>
 					}
 				/>
-				<KPI
-					label={t("ds.installer.kpi_par")}
-					value="—"
-					delta={t("ds.installer.kpi_par_unwired")}
-				/>
+				{!parStatus.hasParLevels ? (
+					<KPI
+						label={t("ds.installer.kpi_par")}
+						value="—"
+						delta={t("ds.installer.kpi_par_none")}
+					/>
+				) : parStatus.belowParCount === 0 ? (
+					<KPI
+						label={t("ds.installer.kpi_par")}
+						value={t("ds.installer.kpi_par_ok")}
+						variant="good"
+						delta={t("ds.installer.kpi_par_at_par")}
+					/>
+				) : (
+					<KPI
+						label={t("ds.installer.kpi_par")}
+						value={parStatus.belowParCount}
+						variant="warn"
+						delta={t("ds.installer.kpi_par_below", {
+							count: parStatus.belowParCount,
+						})}
+					/>
+				)}
 				<KPI
 					label={t("ds.installer.kpi_restock")}
 					value={restockPendingCount}

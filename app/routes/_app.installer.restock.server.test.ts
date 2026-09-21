@@ -39,8 +39,17 @@ vi.mock("~/lib/permissions.server", () => ({
 	requireRole: vi.fn(),
 }))
 
+vi.mock("~/lib/van-stock.server", () => ({
+	getVanParLevels: vi.fn(),
+	parLevelsToStockLevels: vi.fn(
+		(levels: { serviceCodeId: string; parLevel: number }[]) =>
+			levels.map((l) => ({ serviceCodeId: l.serviceCodeId, qty: l.parLevel })),
+	),
+}))
+
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
+import { getVanParLevels } from "~/lib/van-stock.server"
 import { action } from "./_app.installer.restock"
 
 function formRequest(form: FormData) {
@@ -54,10 +63,13 @@ describe("POST /installer/restock", () => {
 	beforeEach(() => vi.clearAllMocks())
 
 	function baseVan(standard = 5) {
+		vi.mocked(getVanParLevels).mockResolvedValue([
+			{ serviceCodeId: "sc-1", parLevel: standard },
+		])
 		return {
 			id: "van-1",
 			name: "Van 1",
-			standardStockLevels: [{ serviceCodeId: "sc-1", qty: standard }],
+			active: true,
 		}
 	}
 

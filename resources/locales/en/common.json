@@ -801,6 +801,7 @@
 		"no_matches": "No vans match your search or filter.",
 		"errors": {
 			"invalid_name": "Van name is required.",
+			"negative_par": "Par levels cannot be negative.",
 			"id_required": "Van id is required.",
 			"unknown_intent": "Unknown action."
 		},
@@ -1566,6 +1567,11 @@
 			"kpi_pending_delta": "Assigned work orders",
 			"kpi_completed": "Completed this week",
 			"kpi_par": "Par status",
+			"kpi_par_none": "No par levels set",
+			"kpi_par_ok": "OK",
+			"kpi_par_at_par": "All lines at or above par",
+			"kpi_par_below_one": "{{count}} line below par",
+			"kpi_par_below_other": "{{count}} lines below par",
 			"kpi_par_unwired": "Stock tracking coming soon",
 			"kpi_restock": "Restock requests",
 			"today": "Today",

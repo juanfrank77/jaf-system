@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { buildInventoryComparison } from "./van-inventory"
 import {
 	computeParStatus,
 	parLevelsToStockLevels,
@@ -18,7 +19,16 @@ vi.mock("./db.server", () => ({
 			findMany: vi.fn(),
 			update: vi.fn(),
 		},
-		$transaction: vi.fn((ops: unknown[]) => Promise.all(ops)),
+		$transaction: vi.fn(async (arg: unknown) => {
+			if (typeof arg === "function") {
+				const { db: client } = await import("./db.server")
+				return arg({
+					vanStockLevel: client.vanStockLevel,
+					van: client.van,
+				})
+			}
+			return Promise.all(arg as Promise<unknown>[])
+		}),
 	},
 }))
 
@@ -215,6 +225,105 @@ describe("setVanParLevels", () => {
 				standardStockLevels: stockLevelsToLegacyJson(merged),
 			},
 		})
+	})
+
+	it("seeds update merge from legacy JSON when table is empty", async () => {
+		vi.mocked(db.vanStockLevel.findMany).mockResolvedValue([] as never)
+		vi.mocked(db.van.findUnique).mockResolvedValue({
+			standardStockLevels: [{ serviceCodeId: "legacy-code", qty: 4 }],
+		} as never)
+		vi.mocked(db.vanStockLevel.upsert).mockResolvedValue({} as never)
+		vi.mocked(db.van.update).mockResolvedValue({} as never)
+
+		const merged = await setVanParLevels(
+			"van-1",
+			[{ serviceCodeId: "active-code", parLevel: 3 }],
+			"update",
+		)
+
+		expect(merged).toEqual([
+			{ serviceCodeId: "legacy-code", parLevel: 4 },
+			{ serviceCodeId: "active-code", parLevel: 3 },
+		])
+		expect(db.van.update).toHaveBeenCalledWith({
+			where: { id: "van-1" },
+			data: {
+				standardStockLevels: [
+					{ serviceCodeId: "legacy-code", qty: 4 },
+					{ serviceCodeId: "active-code", qty: 3 },
+				],
+			},
+		})
+	})
+
+	it("writes table upserts and legacy JSON in one transaction", async () => {
+		vi.mocked(db.vanStockLevel.findMany).mockResolvedValue([] as never)
+		vi.mocked(db.vanStockLevel.upsert).mockResolvedValue({} as never)
+		vi.mocked(db.van.update).mockResolvedValue({} as never)
+
+		await setVanParLevels(
+			"van-1",
+			[{ serviceCodeId: "sc-1", parLevel: 2 }],
+			"create",
+		)
+
+		expect(db.$transaction).toHaveBeenCalledTimes(1)
+		expect(typeof vi.mocked(db.$transaction).mock.calls[0]?.[0]).toBe(
+			"function",
+		)
+		expect(db.vanStockLevel.upsert).toHaveBeenCalled()
+		expect(db.van.update).toHaveBeenCalled()
+	})
+
+	it("rejects negative par levels", async () => {
+		await expect(
+			setVanParLevels(
+				"van-1",
+				[{ serviceCodeId: "sc-1", parLevel: -1 }],
+				"create",
+			),
+		).rejects.toThrow(/parLevel must be >= 0/)
+	})
+
+	it("accepts par level of zero", async () => {
+		vi.mocked(db.vanStockLevel.upsert).mockResolvedValue({} as never)
+		vi.mocked(db.van.update).mockResolvedValue({} as never)
+
+		const merged = await setVanParLevels(
+			"van-1",
+			[{ serviceCodeId: "sc-1", parLevel: 0 }],
+			"create",
+		)
+
+		expect(merged).toEqual([{ serviceCodeId: "sc-1", parLevel: 0 }])
+	})
+})
+
+describe("buildInventoryComparison parity", () => {
+	it("matches table par levels to legacy JSON par levels", () => {
+		const transactions = [
+			{ serviceCodeId: "sc-1", qty: 2, type: "RESTOCK" },
+			{ serviceCodeId: "sc-2", qty: 1, type: "RESTOCK" },
+		]
+		const parLevels = [
+			{ serviceCodeId: "sc-1", parLevel: 5 },
+			{ serviceCodeId: "sc-2", parLevel: 3 },
+		]
+		const serviceCodeMap = new Map([
+			["sc-1", { claroCode: "A", name: "Item A" }],
+			["sc-2", { claroCode: "B", name: "Item B" }],
+		])
+		const fromTable = buildInventoryComparison(
+			transactions,
+			parLevelsToStockLevels(parLevels),
+			serviceCodeMap,
+		)
+		const fromLegacy = buildInventoryComparison(
+			transactions,
+			stockLevelsToLegacyJson(parLevels),
+			serviceCodeMap,
+		)
+		expect(fromTable).toEqual(fromLegacy)
 	})
 })
 

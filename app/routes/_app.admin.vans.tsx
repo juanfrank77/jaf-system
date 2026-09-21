@@ -51,6 +51,12 @@ import {
 	appendVanAssignmentHistory,
 	type VanAssignmentEvent,
 } from "~/lib/van-history"
+import {
+	getVanParLevelsForVans,
+	type ParLevel,
+	parLevelsToStockLevels,
+	setVanParLevels,
+} from "~/lib/van-stock.server"
 import type { Route } from "./+types/_app.admin.vans"
 
 type StockLevel = {
@@ -74,7 +80,7 @@ export const meta: Route.MetaFunction = () => [{ title: "Vans — JAF Ops" }]
 export async function loader({ request }: Route.LoaderArgs) {
 	await requireRole(request, ["ADMIN"])
 
-	const [vans, installers, serviceCodes] = await Promise.all([
+	const [vansRaw, installers, serviceCodes] = await Promise.all([
 		db.van.findMany({ orderBy: { name: "asc" } }),
 		db.user.findMany({
 			where: { role: "INSTALLER" },
@@ -83,6 +89,16 @@ export async function loader({ request }: Route.LoaderArgs) {
 		}),
 		getActiveMaterialCodes(),
 	])
+
+	const parLevelsByVan = await getVanParLevelsForVans(
+		vansRaw.map((van) => van.id),
+	)
+	const vans = vansRaw.map((van) => ({
+		...van,
+		standardStockLevels: parLevelsToStockLevels(
+			parLevelsByVan.get(van.id) ?? [],
+		),
+	}))
 
 	return {
 		vans,
@@ -105,14 +121,19 @@ export async function action({ request }: Route.ActionArgs) {
 		const installerId = form.get("installerId")
 		const active = form.get("active") === "on"
 
-		const stockLevels: StockLevel[] = []
+		const submittedParLevels: ParLevel[] = []
 		for (const [key, value] of form.entries()) {
 			if (key.startsWith("stock_")) {
 				const serviceCodeId = key.slice("stock_".length)
 				const qty = Number.parseInt(value as string, 10)
-				if (!Number.isNaN(qty) && qty >= 0) {
-					stockLevels.push({ serviceCodeId, qty })
+				if (Number.isNaN(qty)) continue
+				if (qty < 0) {
+					return data(
+						{ errorKey: "admin_vans.errors.negative_par" },
+						{ status: 400 },
+					)
 				}
+				submittedParLevels.push({ serviceCodeId, parLevel: qty })
 			}
 		}
 
@@ -123,49 +144,39 @@ export async function action({ request }: Route.ActionArgs) {
 			)
 		}
 
-		const dataPayload = {
+		const vanFields = {
 			name: name.trim(),
 			installerId:
 				typeof installerId === "string" && installerId.trim()
 					? installerId
 					: null,
-			standardStockLevels: stockLevels,
 			active,
 		}
 
 		if (intent === "update" && typeof id === "string" && id.trim()) {
 			const existing = await db.van.findUnique({ where: { id } })
-			const existingLevels = (
-				(existing?.standardStockLevels as StockLevel[]) || []
-			).filter(Boolean) as StockLevel[]
-			const mergedMap = new Map<string, number>(
-				existingLevels.map((level) => [level.serviceCodeId, level.qty]),
-			)
-			for (const level of stockLevels) {
-				mergedMap.set(level.serviceCodeId, level.qty)
+			if (vanFields.installerId !== existing?.installerId) {
+				await appendVanAssignmentHistory(id, vanFields.installerId, user.id)
 			}
-			const mergedLevels = existingLevels
-				.map((level) => ({
-					serviceCodeId: level.serviceCodeId,
-					qty: mergedMap.get(level.serviceCodeId) ?? 0,
-				}))
-				.concat(
-					Array.from(mergedMap.entries())
-						.filter(
-							([serviceCodeId]) =>
-								!existingLevels.some((l) => l.serviceCodeId === serviceCodeId),
-						)
-						.map(([serviceCodeId, qty]) => ({ serviceCodeId, qty })),
-				)
-			if (dataPayload.installerId !== existing?.installerId) {
-				await appendVanAssignmentHistory(id, dataPayload.installerId, user.id)
-			}
-			await db.van.update({
-				where: { id },
-				data: { ...dataPayload, standardStockLevels: mergedLevels },
+			await db.$transaction(async (tx) => {
+				await setVanParLevels(id, submittedParLevels, "update", tx)
+				await tx.van.update({
+					where: { id },
+					data: vanFields,
+				})
 			})
 		} else {
-			await db.van.create({ data: dataPayload })
+			await db.$transaction(async (tx) => {
+				const van = await tx.van.create({
+					data: {
+						...vanFields,
+						standardStockLevels: [],
+					},
+				})
+				if (submittedParLevels.length > 0) {
+					await setVanParLevels(van.id, submittedParLevels, "create", tx)
+				}
+			})
 		}
 		return redirect("/admin/vans")
 	}

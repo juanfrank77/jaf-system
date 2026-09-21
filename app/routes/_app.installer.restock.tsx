@@ -16,7 +16,8 @@ import { useOnline } from "~/hooks/use-online"
 import { db } from "~/lib/db.server"
 import { queueInstallerRestock } from "~/lib/installer-sync"
 import { requireRole } from "~/lib/permissions.server"
-import { evaluateRestockApproval, type StockLevel } from "~/lib/van-inventory"
+import { evaluateRestockApproval } from "~/lib/van-inventory"
+import { getVanParLevels, parLevelsToStockLevels } from "~/lib/van-stock.server"
 import type { Route } from "./+types/_app.installer.restock"
 
 export const meta: Route.MetaFunction = () => [
@@ -142,10 +143,11 @@ export async function action({ request }: Route.ActionArgs) {
 		...pendingItems,
 	]
 
+	const parLevels = await getVanParLevels(van.id)
 	const { requiresApproval } = evaluateRestockApproval(
 		items,
 		allTransactions,
-		(van.standardStockLevels as StockLevel[]) || [],
+		parLevelsToStockLevels(parLevels),
 	)
 
 	const status = requiresApproval ? "PENDING_APPROVAL" : "REQUESTED"

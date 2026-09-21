@@ -801,6 +801,7 @@
 		"no_matches": "Ninguna van coincide con tu búsqueda o filtro.",
 		"errors": {
 			"invalid_name": "Se requiere el nombre de la van.",
+			"negative_par": "[UNPROOFED] Los niveles par no pueden ser negativos.",
 			"id_required": "Se requiere el id de la van.",
 			"unknown_intent": "Acción desconocida."
 		},
@@ -1566,6 +1567,11 @@
 			"kpi_pending_delta": "[UNPROOFED] Órdenes asignadas",
 			"kpi_completed": "[UNPROOFED] Completadas esta semana",
 			"kpi_par": "[UNPROOFED] Estado de par",
+			"kpi_par_none": "[UNPROOFED] Sin niveles de par configurados",
+			"kpi_par_ok": "[UNPROOFED] OK",
+			"kpi_par_at_par": "[UNPROOFED] Todas las líneas en o sobre par",
+			"kpi_par_below_one": "[UNPROOFED] {{count}} línea bajo par",
+			"kpi_par_below_other": "[UNPROOFED] {{count}} líneas bajo par",
 			"kpi_par_unwired": "[UNPROOFED] El seguimiento de stock llega pronto",
 			"kpi_restock": "[UNPROOFED] Solicitudes de reabastecimiento",
 			"today": "[UNPROOFED] Hoy",

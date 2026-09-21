@@ -1,3 +1,4 @@
+import type { Prisma } from "../../generated/prisma/client"
 import { db } from "./db.server"
 import {
 	type ParLevel,
@@ -15,13 +16,22 @@ export {
 	stockLevelsToLegacyJson,
 } from "./van-stock"
 
+type VanStockWriteClient = Pick<
+	Prisma.TransactionClient,
+	"vanStockLevel" | "van"
+>
+
 function logFallback(vanId: string) {
 	// biome-ignore lint/suspicious/noConsole: operational fallback signal for dual-read
 	console.warn(`[van-stock] fallback_to_json vanId=${vanId}`)
 }
 
-export async function getVanParLevels(vanId: string): Promise<ParLevel[]> {
-	const rows = await db.vanStockLevel.findMany({
+/** Table rows when present; otherwise legacy JSON (same path as getVanParLevels). */
+async function loadParLevelsForWrite(
+	vanId: string,
+	client: VanStockWriteClient,
+): Promise<ParLevel[]> {
+	const rows = await client.vanStockLevel.findMany({
 		where: { vanId },
 		select: { serviceCodeId: true, parLevel: true },
 	})
@@ -33,7 +43,7 @@ export async function getVanParLevels(vanId: string): Promise<ParLevel[]> {
 		}))
 	}
 
-	const van = await db.van.findUnique({
+	const van = await client.van.findUnique({
 		where: { id: vanId },
 		select: { standardStockLevels: true },
 	})
@@ -44,6 +54,10 @@ export async function getVanParLevels(vanId: string): Promise<ParLevel[]> {
 		logFallback(vanId)
 	}
 	return levels
+}
+
+export async function getVanParLevels(vanId: string): Promise<ParLevel[]> {
+	return loadParLevelsForWrite(vanId, db)
 }
 
 export async function getVanParLevelsForVans(
@@ -89,39 +103,14 @@ export async function getVanParLevelsForVans(
 	return result
 }
 
-export async function setVanParLevels(
+async function writeParLevels(
+	client: VanStockWriteClient,
 	vanId: string,
-	submitted: ParLevel[],
-	mode: "create" | "update",
-): Promise<ParLevel[]> {
-	for (const level of submitted) {
-		if (level.parLevel < 0) {
-			throw new Error(`parLevel must be >= 0 for ${level.serviceCodeId}`)
-		}
-	}
-
-	let merged: ParLevel[]
-
-	if (mode === "create") {
-		merged = submitted
-	} else {
-		const existing = await db.vanStockLevel.findMany({
-			where: { vanId },
-			select: { serviceCodeId: true, parLevel: true },
-		})
-		const submittedIds = new Set(submitted.map((l) => l.serviceCodeId))
-		const preserved = existing
-			.filter((row) => !submittedIds.has(row.serviceCodeId))
-			.map((row) => ({
-				serviceCodeId: row.serviceCodeId,
-				parLevel: row.parLevel,
-			}))
-		merged = [...preserved, ...submitted]
-	}
-
-	await db.$transaction([
+	merged: ParLevel[],
+): Promise<void> {
+	await Promise.all([
 		...merged.map((level) =>
-			db.vanStockLevel.upsert({
+			client.vanStockLevel.upsert({
 				where: {
 					vanId_serviceCodeId: {
 						vanId,
@@ -136,13 +125,51 @@ export async function setVanParLevels(
 				update: { parLevel: level.parLevel },
 			}),
 		),
-		db.van.update({
+		client.van.update({
 			where: { id: vanId },
 			data: {
 				standardStockLevels: stockLevelsToLegacyJson(merged),
 			},
 		}),
 	])
+}
+
+export async function setVanParLevels(
+	vanId: string,
+	submitted: ParLevel[],
+	mode: "create" | "update",
+	tx?: VanStockWriteClient,
+): Promise<ParLevel[]> {
+	for (const level of submitted) {
+		if (level.parLevel < 0) {
+			throw new Error(`parLevel must be >= 0 for ${level.serviceCodeId}`)
+		}
+	}
+
+	let merged: ParLevel[]
+
+	if (mode === "create") {
+		merged = submitted
+	} else {
+		const client = tx ?? db
+		const existing = await loadParLevelsForWrite(vanId, client)
+		const submittedIds = new Set(submitted.map((l) => l.serviceCodeId))
+		const preserved = existing
+			.filter((row) => !submittedIds.has(row.serviceCodeId))
+			.map((row) => ({
+				serviceCodeId: row.serviceCodeId,
+				parLevel: row.parLevel,
+			}))
+		merged = [...preserved, ...submitted]
+	}
+
+	if (tx) {
+		await writeParLevels(tx, vanId, merged)
+	} else {
+		await db.$transaction(async (transaction) => {
+			await writeParLevels(transaction, vanId, merged)
+		})
+	}
 
 	return merged
 }

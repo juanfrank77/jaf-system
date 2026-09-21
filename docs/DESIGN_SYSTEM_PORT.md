@@ -393,7 +393,7 @@ Route logic reads user session, branches on user's flags. Admin can opt in 1-2 u
 
 1. **`/installer` dashboard (thin slice)** — wire KPIs that already have data; render par-status KPI as honest "not wired yet" card per guide's own guidance. ZERO SCHEMA CHANGE. This proves the design system works before committing to data restructure. **✓ BUILT AND BROWSER-VERIFIED** (both themes, flag round-trip, same URL).
 
-2. **Van stock restructure (additive migration)** — **PR 1 done:** `VanStockLevel` table + backfill + [`app/lib/van-stock.server.ts`](../app/lib/van-stock.server.ts). **PR 2:** route read/write cutover + par KPI wiring. JSON column retained.
+2. **Van stock restructure (additive migration)** — **PR 1 done:** `VanStockLevel` table + backfill + [`app/lib/van-stock.server.ts`](../app/lib/van-stock.server.ts). **PR 2 done:** route read/write cutover + par KPI wiring on installer v2 dashboard. JSON column retained as dual-write mirror.
 
 3. **`/installer/adjust`** — van stock panel (depends on PR 2 route cutover)
 
@@ -538,14 +538,14 @@ JSON column is never deleted or overwritten by backfill; invalid blobs are skipp
 **Data it already has:**
 
 - Van ID, installer link (`Van.installerId`)
-- Current stock JSON (`Van.standardStockLevels`)
+- Par levels via [`getVanParLevels`](../app/lib/van-stock.server.ts) (PR 2 route cutover)
 - Material catalog (`ServiceCode` where `kind = MATERIAL`)
 - Transaction history (`VanInventoryTransaction`)
+- **Below par count** — computed in loader via `buildInventoryComparison` (PR 2)
 
 **Data it doesn't have:**
 
-- **Par level per material** — canonical store is `VanStockLevel.parLevel` (PR 1); on-hand remains transaction ledger only
-- **"Below par" logic** — computed from above
+- **v2 UI port** — v1 form still shown when `ENABLE_INSTALLER_V2` is off; v2 chrome exists but full table port is a follow-up
 - **Serial-tracked items (modems, ONTs)** — no `SerialUnit` register (schema gap #16)
 
 ---
@@ -876,7 +876,7 @@ i18next mechanism: Guide's `data-es` JS must be replaced with `remix-i18next` (s
 
 1. **Installer dashboard (thin slice)** — use only existing data; par-status KPI renders "—" with "not wired yet" subtitle. ZERO SCHEMA CHANGE. **✓ BUILT AND BROWSER-VERIFIED.**
 
-2. **Van adjust** — PR 1 schema landed; PR 2 route cutover + UI port
+2. **Van adjust** — PR 2 route cutover landed; v2 UI port remains follow-up
 
 3. **Completion wizard** — needs footage bracket table, serial lookup, gate validation logic (additive gaps #50, #52)
 

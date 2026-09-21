@@ -16,7 +16,8 @@ import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
 import { isInstallerV2Enabled } from "~/lib/features.server"
 import { requireRole } from "~/lib/permissions.server"
-import { buildInventoryComparison, type StockLevel } from "~/lib/van-inventory"
+import { buildInventoryComparison } from "~/lib/van-inventory"
+import { getVanParLevels, parLevelsToStockLevels } from "~/lib/van-stock.server"
 import type { Route } from "./+types/_app.installer.adjust"
 
 export const meta: Route.MetaFunction = () => [
@@ -33,15 +34,18 @@ export async function loader({ request }: Route.LoaderArgs) {
 		}),
 	])
 	if (!van) throw redirect("/installer")
-	const transactions = await db.vanInventoryTransaction.findMany({
-		where: { vanId: van.id },
-	})
+	const [transactions, parLevels] = await Promise.all([
+		db.vanInventoryTransaction.findMany({
+			where: { vanId: van.id },
+		}),
+		getVanParLevels(van.id),
+	])
 	const serviceCodeMap = new Map(
 		serviceCodes.map((c) => [c.id, { claroCode: c.claroCode, name: c.name }]),
 	)
 	const comparison = buildInventoryComparison(
 		transactions,
-		(van.standardStockLevels as StockLevel[]) || [],
+		parLevelsToStockLevels(parLevels),
 		serviceCodeMap,
 	)
 	const belowParCount = comparison.filter((i) => i.onHand < i.standard).length

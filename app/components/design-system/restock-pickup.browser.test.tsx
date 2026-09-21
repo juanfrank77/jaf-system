@@ -42,7 +42,7 @@ const lines = [
 ]
 
 describe("RestockPickupV2 signatures", () => {
-	it("keeps confirm disabled until both pads are signed", async ({
+	it("keeps confirm disabled until the installer signs", async ({
 		renderStub,
 	}) => {
 		await renderStub({
@@ -62,11 +62,6 @@ describe("RestockPickupV2 signatures", () => {
 		})
 
 		const confirm = screen.getByRole("button", { name: /Confirm Pickup/i })
-		expect(confirm).toBeDisabled()
-
-		await userEvent.click(
-			screen.getByRole("button", { name: /Warehouse signature/i }),
-		)
 		expect(confirm).toBeDisabled()
 
 		await userEvent.click(

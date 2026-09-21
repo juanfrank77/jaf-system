@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Form, Link } from "react-router"
+import { Form, Link, useNavigation } from "react-router"
 import { useOnline } from "~/hooks/use-online"
 import { queueInstallerRestock } from "~/lib/installer-sync"
 import type { AdjustInventoryRow } from "./installer-adjust"
@@ -105,8 +105,17 @@ export function InstallerRestockV2({
 	errorKey: string | null
 }) {
 	const { t } = useTranslation()
+	const navigation = useNavigation()
 	const online = useOnline()
 	const [queued, setQueued] = useState(false)
+	const submitStartedRef = useRef(false)
+	const [submitStarted, setSubmitStarted] = useState(false)
+	const navigationSubmitting =
+		online &&
+		navigation.state !== "idle" &&
+		navigation.formMethod != null &&
+		navigation.formMethod.toLowerCase() === "post"
+	const isSubmitting = submitStarted || navigationSubmitting
 	const [warehouseId, setWarehouseId] = useState("")
 	const [qtyByRow, setQtyByRow] = useState<Record<string, string>>({})
 
@@ -206,7 +215,14 @@ export function InstallerRestockV2({
 								warehouseId,
 								items: submitState.items,
 							}).then(() => setQueued(true))
+							return
 						}
+						if (submitStartedRef.current) {
+							e.preventDefault()
+							return
+						}
+						submitStartedRef.current = true
+						setSubmitStarted(true)
 					}}
 				>
 					<Box span={12}>
@@ -312,11 +328,13 @@ export function InstallerRestockV2({
 							type="submit"
 							className="jaf-blue"
 							style={{ width: "100%", minHeight: 44, marginTop: 12 }}
-							disabled={!submitState.canSubmit || queued}
+							disabled={!submitState.canSubmit || queued || isSubmitting}
 						>
-							{online
-								? t("installer_restock.submit")
-								: t("installer_restock.save_offline")}
+							{isSubmitting
+								? t("ds.installer.restock_sending")
+								: online
+									? t("installer_restock.submit")
+									: t("installer_restock.save_offline")}
 						</DsButton>
 					</Box>
 				</Form>

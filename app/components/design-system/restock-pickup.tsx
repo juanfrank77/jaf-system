@@ -24,15 +24,13 @@ export type PickupLine = {
 }
 
 export function canConfirmPickup({
-	warehouseSigned,
 	installerSigned,
 	submitted,
 }: {
-	warehouseSigned: boolean
 	installerSigned: boolean
 	submitted: boolean
 }) {
-	return warehouseSigned && installerSigned && !submitted
+	return installerSigned && !submitted
 }
 
 function DsSignatureSlot({
@@ -91,26 +89,13 @@ export function RestockPickupV2({
 	errorKey: string | null
 }) {
 	const { t } = useTranslation()
-	const warehouseRef = useRef<SignaturePadHandle>(null)
 	const installerRef = useRef<SignaturePadHandle>(null)
-	const [warehouseSigned, setWarehouseSigned] = useState(false)
 	const [installerSigned, setInstallerSigned] = useState(false)
 	const [submitted, setSubmitted] = useState(false)
-	const canConfirm = canConfirmPickup({
-		warehouseSigned,
-		installerSigned,
-		submitted,
-	})
+	const canConfirm = canConfirmPickup({ installerSigned, submitted })
 
 	const gateItems = useMemo(() => {
 		return [
-			{
-				id: "warehouse",
-				ok: warehouseSigned,
-				label: warehouseSigned
-					? t("ds.installer.pickup_gate_warehouse_ok")
-					: t("ds.installer.pickup_gate_warehouse"),
-			},
 			{
 				id: "installer",
 				ok: installerSigned,
@@ -119,7 +104,7 @@ export function RestockPickupV2({
 					: t("ds.installer.pickup_gate_installer"),
 			},
 		]
-	}, [installerSigned, t, warehouseSigned])
+	}, [installerSigned, t])
 
 	const pickupSummary = lines
 		.map((line) => `${line.claroCode} × ${line.approvedQty}`)
@@ -192,22 +177,13 @@ export function RestockPickupV2({
 			</Box>
 
 			<Box span={12}>
-				<div className="jaf-sigs" style={{ gridTemplateColumns: "1fr 1fr" }}>
-					<DsSignatureSlot
-						label={t("ds.installer.pickup_sig_warehouse")}
-						clearLabel={t("restock_pickup.clear")}
-						padRef={warehouseRef}
-						onSignedChange={setWarehouseSigned}
-						disabled={submitted}
-					/>
-					<DsSignatureSlot
-						label={t("ds.installer.pickup_sig_installer")}
-						clearLabel={t("restock_pickup.clear")}
-						padRef={installerRef}
-						onSignedChange={setInstallerSigned}
-						disabled={submitted}
-					/>
-				</div>
+				<DsSignatureSlot
+					label={t("ds.installer.pickup_sig_installer")}
+					clearLabel={t("restock_pickup.clear")}
+					padRef={installerRef}
+					onSignedChange={setInstallerSigned}
+					disabled={submitted}
+				/>
 			</Box>
 
 			<Box span={12}>

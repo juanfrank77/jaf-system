@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react"
+import { screen, waitFor } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
 import { userEvent } from "vitest/browser"
 import { InstallerAdjustV2 } from "./installer-adjust"
@@ -81,6 +81,8 @@ describe("InstallerAdjustV2", () => {
 		expect(submit).not.toBeDisabled()
 		await userEvent.click(submit)
 
-		expect(posted).toEqual({ serviceCodeId: "sc-b", qty: "3" })
+		await waitFor(() => {
+			expect(posted).toEqual({ serviceCodeId: "sc-b", qty: "3" })
+		})
 	})
 })

@@ -53,3 +53,61 @@ describe("InstallerRestockV2 gate", () => {
 		})
 	})
 })
+
+describe("InstallerRestockV2 submit", () => {
+	it("does not post twice when submit is clicked during an in-flight request", async ({
+		renderStub,
+	}) => {
+		let postCount = 0
+
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					action: async () => {
+						postCount += 1
+						await new Promise((resolve) => setTimeout(resolve, 400))
+						return null
+					},
+					Component: () => (
+						<InstallerRestockV2
+							van={{ id: "van-1", name: "Van 444" }}
+							warehouses={[{ id: "wh-1", name: "Guaynabo" }]}
+							comparison={comparison}
+							parStatus={{ hasParLevels: true, belowParCount: 1 }}
+							hasPendingRestock={false}
+							pendingRequestCount={0}
+							restockRequests={[]}
+							errorKey={null}
+						/>
+					),
+				},
+			],
+		})
+
+		await userEvent.selectOptions(screen.getByLabelText(/Warehouse/i), "wh-1")
+		await userEvent.fill(screen.getByLabelText(/Qty for Cable/i), "2")
+
+		const submit = screen.getByRole("button", {
+			name: /Submit Restock Request/i,
+		})
+		await waitFor(() => {
+			expect(submit).toBeEnabled()
+		})
+
+		await userEvent.click(submit)
+
+		const sending = await waitFor(() => {
+			const button = screen.getByRole("button", { name: /Sending/i })
+			expect(button).toBeDisabled()
+			return button
+		})
+
+		// Disabled submit cannot receive a second pointer click.
+		expect(sending).toBeDisabled()
+
+		await waitFor(() => {
+			expect(postCount).toBe(1)
+		})
+	})
+})

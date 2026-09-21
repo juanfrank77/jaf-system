@@ -1655,6 +1655,7 @@
 			"restock_gate_qty": "[UNPROOFED] Ingrese al menos una cantidad mayor que 0",
 			"restock_gate_qty_ok": "[UNPROOFED] Al menos una línea solicitada",
 			"restock_gate_qty_invalid": "[UNPROOFED] Corrija cantidades inválidas",
+			"restock_sending": "[UNPROOFED] Enviando…",
 			"restock_my_requests": "[UNPROOFED] Mis solicitudes",
 			"restock_no_requests": "[UNPROOFED] Aún no hay solicitudes activas.",
 			"restock_no_requests_hint": "[UNPROOFED] Envíe el formulario arriba cuando necesite materiales.",

@@ -1655,6 +1655,7 @@
 			"restock_gate_qty": "Enter at least one request qty above 0",
 			"restock_gate_qty_ok": "At least one line requested",
 			"restock_gate_qty_invalid": "Fix invalid quantities",
+			"restock_sending": "Sending…",
 			"restock_my_requests": "My requests",
 			"restock_no_requests": "No active restock requests yet.",
 			"restock_no_requests_hint": "Submit the form above when you need materials.",

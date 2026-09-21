@@ -1,6 +1,7 @@
 import { useRef } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
+import { RestockPickupV2 } from "~/components/design-system/restock-pickup"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import {
 	SignaturePad,
@@ -9,6 +10,7 @@ import {
 import { Button } from "~/components/ui/button"
 import { Label } from "~/components/ui/label"
 import { db } from "~/lib/db.server"
+import { isInstallerV2Enabled } from "~/lib/features.server"
 import { requireRole } from "~/lib/permissions.server"
 import type { Route } from "./+types/_app.restock.$id_.pickup"
 
@@ -35,7 +37,27 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const serviceCodes = await db.serviceCode.findMany({
 		where: { active: true },
 	})
-	return { request: requestRecord, serviceCodes }
+	const items =
+		(requestRecord.items as {
+			serviceCodeId: string
+			preparedQty?: number
+			qty?: number
+		}[]) || []
+	const lines = items.map((item) => {
+		const code = serviceCodes.find((c) => c.id === item.serviceCodeId)
+		return {
+			serviceCodeId: item.serviceCodeId,
+			claroCode: code?.claroCode ?? item.serviceCodeId,
+			name: code?.name ?? "Unknown",
+			approvedQty: item.preparedQty ?? item.qty ?? 0,
+		}
+	})
+	return {
+		version: isInstallerV2Enabled() ? "v2" : "v1",
+		request: requestRecord,
+		serviceCodes,
+		lines,
+	}
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
@@ -110,13 +132,24 @@ export default function PickupRestock({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { request: requestRecord, serviceCodes } = loaderData
+	const { version, request: requestRecord, serviceCodes, lines } = loaderData
 	const { t } = useTranslation()
 	const signatureRef = useRef<SignaturePadHandle>(null)
 	const errorKey =
 		actionData && "errorKey" in actionData
 			? (actionData.errorKey as string)
 			: null
+
+	if (version === "v2") {
+		return (
+			<RestockPickupV2
+				requestId={requestRecord.id}
+				warehouseName={requestRecord.warehouse?.name ?? ""}
+				lines={lines}
+				errorKey={errorKey}
+			/>
+		)
+	}
 
 	const items =
 		(requestRecord.items as {

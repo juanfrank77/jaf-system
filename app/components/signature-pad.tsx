@@ -10,6 +10,8 @@ interface Props {
 	width?: number
 	height?: number
 	className?: string
+	ariaLabel?: string
+	onEnd?: () => void
 }
 
 interface SignaturePadInstance {
@@ -20,21 +22,34 @@ interface SignaturePadInstance {
 }
 
 export const SignaturePad = forwardRef<SignaturePadHandle, Props>(
-	function SignaturePad({ width = 400, height = 150, className }, ref) {
+	function SignaturePad(
+		{ width = 400, height = 150, className, ariaLabel, onEnd },
+		ref,
+	) {
 		const canvasRef = useRef<HTMLCanvasElement>(null)
 		const padRef = useRef<SignaturePadInstance | null>(null)
 
 		useEffect(() => {
 			const canvas = canvasRef.current
 			if (!canvas) return
+			let pad: SignaturePadInstance | null = null
 			import("signature_pad").then(({ default: SP }) => {
-				padRef.current = new SP(canvas, {
-					backgroundColor: "rgb(255,255,255)",
-					penColor: "rgb(0,0,0)",
+				pad = new SP(canvas, {
+					backgroundColor: "rgb(255, 255, 255)",
+					penColor: "rgb(0, 0, 0)",
 				}) as SignaturePadInstance
+				padRef.current = pad
+				if (onEnd) {
+					canvas.addEventListener("pointerup", onEnd)
+				}
 			})
-			return () => padRef.current?.off()
-		}, [])
+			return () => {
+				pad?.off()
+				if (onEnd) {
+					canvas.removeEventListener("pointerup", onEnd)
+				}
+			}
+		}, [onEnd])
 
 		useImperativeHandle(ref, () => ({
 			toDataURL: () => padRef.current?.toDataURL("image/png") ?? "",
@@ -47,8 +62,10 @@ export const SignaturePad = forwardRef<SignaturePadHandle, Props>(
 				ref={canvasRef}
 				width={width}
 				height={height}
-				className={`border rounded touch-none ${className ?? ""}`}
-				style={{ touchAction: "none" }}
+				role="img"
+				aria-label={ariaLabel}
+				className={`jaf-sigpad touch-none ${className ?? ""}`}
+				style={{ touchAction: "none", width: "100%", maxWidth: width }}
 			/>
 		)
 	},

@@ -168,7 +168,7 @@ export function InstallerAdjustV2({
 	}
 
 	return (
-		<DesignSystem>
+		<DesignSystem constrain>
 			<Back to="/installer">← {t("ds.back")}</Back>
 			<Greet title={t("installer_adjust.title")} subtitle={greetSubtitle} />
 

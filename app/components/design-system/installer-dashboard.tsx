@@ -47,7 +47,7 @@ export function InstallerDashboardV2({
 	const first = userName.split(" ")[0] || userName
 
 	return (
-		<DesignSystem>
+		<DesignSystem constrain>
 			<Greet
 				title={t("ds.installer.hello", { name: first })}
 				subtitle={
@@ -193,7 +193,7 @@ export function InstallerDashboardV2({
 export function InstallerNoVanV2() {
 	const { t } = useTranslation()
 	return (
-		<DesignSystem>
+		<DesignSystem constrain>
 			<Greet title={t("installer.title")} subtitle={t("installer.no_van")} />
 			<Box span={12}>
 				<EmptyState

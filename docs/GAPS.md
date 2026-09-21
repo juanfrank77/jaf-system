@@ -116,4 +116,6 @@ Route reads (`/installer`, `/installer/adjust`, `/installer/restock` action, `/a
 
 **Pending restock on adjust:** `VanRestockRequest` has no `vanId`; pending restock is matched by `requestedById` (assumes one installer ↔ one van).
 
-**Rail nav counts (gap #47):** Documented as computed on page load; no count source is wired to the shell nav yet — v2 renders counts only when `navCounts` provides them.
+**Rail nav counts (gap #47):** **Additive — not wired.** `CountBadge` is ready; no `navCounts` loader yet — v2 renders counts only when provided.
+
+**DS shell drawer breakpoint:** 1024px per guide (v1 used 768px). Viewports 769–1024px use the off-canvas drawer instead of the sidebar.

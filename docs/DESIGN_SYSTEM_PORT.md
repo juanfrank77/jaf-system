@@ -175,9 +175,9 @@ Full 53-row reconciliation: [gap-reconciliation-53.md](gap-reconciliation-53.md)
 | 32 (blocking) | 7-item release gate | [`evaluateReleaseGate`](../app/lib/supervisor-stage.ts) derives all 7 from `JafInvoice`, `PreCertSheet`, `Photo` |
 | 39 | Installer completeness computed | Derive from `InstallLog` + `Photo` queries |
 | 44 | Spanish i18n | `remix-i18next` + `data-es` pattern exists (needs seeding from guide copy) |
-| 45 | Theme persistence | `theme.server.ts` cookie → `root.tsx` applies before first paint ✓ NO FLASH |
-| 46 | Greeting sentence from queries | Generated on every dashboard |
-| 47 | Rail counts | Computed on page load from `Notification` + job filters |
+| 45 | Theme persistence | `theme.server.ts` cookie → [`root.tsx`](../app/root.tsx) `Layout` reads `_app` loader theme and sets `html.dark` before paint ✓ |
+| 46 | Greeting sentence from queries | **Partial** — role dashboards use time-of-day greeting; installer v2 subtitle is loader-derived |
+| 47 | Rail counts | **Additive — not wired** — `CountBadge` ready; no `navCounts` loader yet |
 | 49 | Actor names on transitions | Relations to `User` on every state-change field |
 | 51 | Missing SAP code UI state | `ServiceCode` rows where `claroCode IS NULL`; render as chip |
 | 53 | Van par levels | `Van.standardStockLevels` JSON |

@@ -131,6 +131,14 @@
 	min-width: 0;
 	overflow-x: clip;
 }
+.jaf-wrap.jaf-wide {
+	max-width: 1600px;
+}
+.jaf-ds.jaf-constrain {
+	max-width: 1200px;
+	margin-inline: auto;
+	width: 100%;
+}
 
 /* top bar */
 .jaf-top {

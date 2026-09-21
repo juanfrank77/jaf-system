@@ -107,8 +107,8 @@ Full reconciliation of all 53 claims from the JAF Ops Design System Guide agains
 |---|-------|-------------------|---------------------|---------|
 | 44 | Spanish twin on every string | Translation layer | `remix-i18next` + i18n JSON keys | **SATISFIED** - Mechanism exists; needs seeding from guide's `data-es` copy |
 | 45 | Theme persistence before first paint | Stored preference applied server-side | [`theme.server.ts`](../app/lib/theme.server.ts) cookie → [`root.tsx`](../app/root.tsx) applies `className="dark"` | **SATISFIED** - No flash; works correctly |
-| 46 | Greeting sentence from KPI queries | Generated, must match tiles | Every dashboard generates greeting | **SATISFIED** |
-| 47 | Rail counts: red pill vs grey number | Per-user queue counts | Computed on page load from `Notification` + job filters | **SATISFIED** - No storage needed |
+| 46 | Greeting sentence from KPI queries | Generated, must match tiles | Role dashboards use time-of-day greeting only ([`_app.dashboard.tsx`](../app/routes/_app.dashboard.tsx) `greetingFor`); installer v2 subtitle is loader-derived | **PARTIAL** — ported installer screens match KPI data; other dashboards still use time-of-day |
+| 47 | Rail counts: red pill vs grey number | Per-user queue counts | `CountBadge` in DS shell; no `navCounts` loader wired | **ADDITIVE — not wired** (`CountBadge` ready, no `navCounts` loader) |
 | 48 | `.ex` dotted figures = estimated | Unverified/estimated flag on metric | **NONE** | **ADDITIVE** - Add `MetricSnapshot.isEstimate` boolean or hardcode list of estimated metric keys |
 | 49 | Names not roles: "Sent back by Edgard" | Actor names on every transition | All state-change fields FK to `User`; names available | **SATISFIED** |
 
@@ -129,8 +129,9 @@ Full reconciliation of all 53 claims from the JAF Ops Design System Guide agains
 
 | Verdict | Claims |
 |---------|--------|
-| **SATISFIED** | 1 (via derivation), 2, 4, 7, 11, 14, 19, 20, 21, 22, 24, 26, 27, 30, 32 (blocking), 39, 44, 45, 46, 47, 49, 51, 53 |
-| **ADDITIVE** | 1 (derivedStep getter), 3, 5, 8, 10, 13, 15, 16, 17, 18, 23, 25, 31, 32 (attribution), 33, 37, 48, 50, 52 |
+| **SATISFIED** | 1 (via derivation), 2, 4, 7, 11, 14, 19, 20, 21, 22, 24, 26, 27, 30, 32 (blocking), 39, 44, 45, 49, 51, 53 |
+| **PARTIAL** | 46 |
+| **ADDITIVE** | 1 (derivedStep getter), 3, 5, 8, 10, 13, 15, 16, 17, 18, 23, 25, 31, 32 (attribution), 33, 37, 47, 48, 50, 52 |
 | **STRUCTURAL** | 6, 9, 12, 28, 29, 34, 35, 36, 38, 40, 41, 42, 43 |
 
 **Quick wins:** Already satisfied via `deriveSupervisorStage` (claim #1) and `evaluateReleaseGate` (claim #32 blocking)  

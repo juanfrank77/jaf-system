@@ -5,11 +5,18 @@ import { cn } from "~/lib/utils"
 export function DesignSystem({
 	children,
 	className,
+	constrain,
 }: {
 	children: ReactNode
 	className?: string
+	/** Guide content column (1200px) for ported screens inside a wide shell. */
+	constrain?: boolean
 }) {
-	return <div className={cn("jaf-ds", className)}>{children}</div>
+	return (
+		<div className={cn("jaf-ds", constrain && "jaf-constrain", className)}>
+			{children}
+		</div>
+	)
 }
 
 export function Greet({

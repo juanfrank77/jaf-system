@@ -113,10 +113,19 @@ function ShellNotifications({
 	const location = useLocation()
 	const redirectTo = `${location.pathname}${location.search}`
 	const [open, setOpen] = useState(false)
+	const triggerRef = useRef<HTMLButtonElement>(null)
+
+	function handleOpenChange(next: boolean) {
+		setOpen(next)
+		if (!next) {
+			queueMicrotask(() => triggerRef.current?.focus())
+		}
+	}
 
 	return (
-		<Popover.Root open={open} onOpenChange={setOpen}>
+		<Popover.Root open={open} onOpenChange={handleOpenChange}>
 			<Popover.Trigger
+				ref={triggerRef}
 				className="jaf-btn jaf-ghost"
 				style={{ minHeight: 44, minWidth: 44, position: "relative" }}
 				aria-label={t("app_shell.notifications.bell_label")}
@@ -208,10 +217,19 @@ function ShellUserMenu({ user }: { user: AppUser }) {
 	const { t } = useTranslation()
 	const submit = useSubmit()
 	const [open, setOpen] = useState(false)
+	const triggerRef = useRef<HTMLButtonElement>(null)
+
+	function handleOpenChange(next: boolean) {
+		setOpen(next)
+		if (!next) {
+			queueMicrotask(() => triggerRef.current?.focus())
+		}
+	}
 
 	return (
-		<Popover.Root open={open} onOpenChange={setOpen}>
+		<Popover.Root open={open} onOpenChange={handleOpenChange}>
 			<Popover.Trigger
+				ref={triggerRef}
 				className="jaf-user"
 				style={{
 					width: "100%",
@@ -405,7 +423,7 @@ export function DesignSystemAppShell({
 						activeTo={activeTo}
 						theme={theme}
 					/>
-					<div className="jaf-wrap">
+					<div className="jaf-wrap jaf-wide">
 						<header className="jaf-top">
 							<button
 								ref={menuButtonRef}

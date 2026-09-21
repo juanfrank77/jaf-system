@@ -12,22 +12,32 @@ const LANGUAGE_LABELS: Record<Language, string> = {
 
 export function DsThemeToggle({ theme }: { theme: Theme }) {
 	const { t } = useTranslation()
-	const fetcher = useFetcher<{ theme?: Theme }>()
-	const current = fetcher.formData
-		? ((fetcher.formData.get("theme") as Theme) ?? theme)
-		: theme
-	const next: Theme = current === "dark" ? "light" : "dark"
+	const fetcher = useFetcher<{ theme?: Theme; errorKey?: string }>()
+	const pendingTheme = fetcher.formData?.get("theme")
+	const appliedTheme: Theme =
+		typeof pendingTheme === "string"
+			? pendingTheme === "dark"
+				? "dark"
+				: "light"
+			: fetcher.data?.theme && !fetcher.data.errorKey
+				? fetcher.data.theme
+				: theme
+	const next: Theme = appliedTheme === "dark" ? "light" : "dark"
 
 	useEffect(() => {
-		document.documentElement.classList.toggle("dark", current === "dark")
-	}, [current])
+		if (fetcher.state === "idle" && fetcher.data?.errorKey) {
+			document.documentElement.classList.toggle("dark", theme === "dark")
+			return
+		}
+		document.documentElement.classList.toggle("dark", appliedTheme === "dark")
+	}, [appliedTheme, fetcher.data?.errorKey, fetcher.state, theme])
 
 	return (
 		<button
 			type="button"
 			className="jaf-toggle"
 			style={{ minHeight: 44 }}
-			aria-pressed={current === "dark"}
+			aria-pressed={appliedTheme === "dark"}
 			onClick={() =>
 				fetcher.submit(
 					{ intent: "updateTheme", theme: next },
@@ -35,7 +45,7 @@ export function DsThemeToggle({ theme }: { theme: Theme }) {
 				)
 			}
 		>
-			{current === "dark"
+			{appliedTheme === "dark"
 				? t("ds.shell.theme_light")
 				: t("ds.shell.theme_dark")}
 		</button>

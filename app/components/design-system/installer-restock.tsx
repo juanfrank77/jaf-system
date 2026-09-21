@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, Link, useNavigation } from "react-router"
 import { useOnline } from "~/hooks/use-online"
@@ -116,6 +116,14 @@ export function InstallerRestockV2({
 		navigation.formMethod != null &&
 		navigation.formMethod.toLowerCase() === "post"
 	const isSubmitting = submitStarted || navigationSubmitting
+
+	useEffect(() => {
+		if (navigation.state === "idle" && errorKey) {
+			submitStartedRef.current = false
+			setSubmitStarted(false)
+		}
+	}, [navigation.state, errorKey])
+
 	const [warehouseId, setWarehouseId] = useState("")
 	const [qtyByRow, setQtyByRow] = useState<Record<string, string>>({})
 
@@ -214,7 +222,11 @@ export function InstallerRestockV2({
 							queueInstallerRestock({
 								warehouseId,
 								items: submitState.items,
-							}).then(() => setQueued(true))
+							}).then(() => {
+								submitStartedRef.current = false
+								setSubmitStarted(false)
+								setQueued(true)
+							})
 							return
 						}
 						if (submitStartedRef.current) {

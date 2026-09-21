@@ -5,6 +5,7 @@
 @import "@fontsource-variable/ibm-plex-sans";
 @import "@fontsource/ibm-plex-mono/400.css";
 @import "@fontsource/ibm-plex-mono/500.css";
+@import "./styles/jaf-ops.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -255,4 +256,79 @@ body {
 	background: var(--jafcom-blue);
 	transform: rotate(-25deg);
 	pointer-events: none;
+}
+
+/*
+  JAF Ops kernel tokens, scoped to .jaf-ds so they do not overwrite
+  Tailwind/shadcn --accent, --ring, or --shadow.
+
+  Mapping (guide → existing app):
+    --plane        → --background
+    --surface      → --card
+    --surface-2    → --muted / --secondary
+    --ink          → --foreground
+    --ink-2        → --muted-foreground
+    --ink-3        → --muted-foreground (guide is same in both themes)
+    --hair         → --border
+    --ring         → --ring  (guide is a hairline rgba, app is brand teal)
+    --accent       → --primary / --chart-1
+    --accent-2     → --chart-2
+    --accent-ink   → --primary-foreground
+    --accent-wash  → --accent (Tailwind semantic wash)
+    --critical     → --status-danger
+    --warning      → --status-warn
+    --good         → --status-ok
+    --crit-wash    → --status-danger-soft
+    --warn-wash    → --status-warn-soft
+    --good-wash    → --status-ok-soft
+    --shadow       → --shadow-sm / --shadow-md
+*/
+.jaf-ds {
+	color-scheme: light;
+	--plane: #f4f4f2;
+	--surface: #fcfcfb;
+	--surface-2: #f0f0ed;
+	--ink: #111110;
+	--ink-2: #52514e;
+	--ink-3: #898781;
+	--hair: #e1e0d9;
+	--ring: rgba(11, 11, 11, 0.08);
+	--accent: #1c5cab;
+	--accent-2: #86b6ef;
+	--accent-ink: #ffffff;
+	--accent-wash: rgba(28, 92, 171, 0.08);
+	--critical: #d03b3b;
+	--warning: #b7791f;
+	--good: #006300;
+	--crit-wash: rgba(208, 59, 59, 0.1);
+	--warn-wash: rgba(183, 121, 31, 0.13);
+	--good-wash: rgba(0, 99, 0, 0.1);
+	--shadow:
+		0 1px 2px rgba(30, 28, 20, 0.05), 0 10px 30px -14px rgba(30, 28, 20, 0.14);
+	--grid: #e1e0d9;
+	color: var(--ink);
+}
+
+.dark .jaf-ds {
+	color-scheme: dark;
+	--plane: #0f0f0e;
+	--surface: #1a1a19;
+	--surface-2: #222221;
+	--ink: #f4f4f1;
+	--ink-2: #c3c2b7;
+	--ink-3: #898781;
+	--hair: #2c2c2a;
+	--ring: rgba(255, 255, 255, 0.08);
+	--accent: #3987e5;
+	--accent-2: #9ec5f4;
+	--accent-ink: #ffffff;
+	--accent-wash: rgba(57, 135, 229, 0.12);
+	--critical: #e66767;
+	--warning: #e0a634;
+	--good: #3fbf3f;
+	--crit-wash: rgba(230, 103, 103, 0.14);
+	--warn-wash: rgba(224, 166, 52, 0.16);
+	--good-wash: rgba(63, 191, 63, 0.14);
+	--shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 30px -14px rgba(0, 0, 0, 0.6);
+	--grid: #2c2c2a;
 }

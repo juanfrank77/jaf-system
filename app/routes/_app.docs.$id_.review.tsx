@@ -128,7 +128,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
-	const [serviceCodes, photos, supervisor, sheet, brigade, tolerance] =
+	const [serviceCodes, photosRaw, supervisor, sheet, brigade, tolerance] =
 		await Promise.all([
 			getActiveServiceCodes(),
 			db.photo.findMany({ where: { docId: params.id } }),
@@ -139,8 +139,15 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 				: Promise.resolve(null),
 			getAvisoAmountTolerance(),
 		])
+
+	// Add basename to photos for client use (avoid path module in client bundle)
+	const photos = photosRaw.map((p) => ({
+		...p,
+		basename: path.basename(p.localPath),
+	}))
+
 	const stage = deriveSupervisorStage(doc, sheet)
-	const gate = evaluateReleaseGate(doc, sheet, photos)
+	const gate = evaluateReleaseGate(doc, sheet, photosRaw)
 	return {
 		doc,
 		user,
@@ -1355,13 +1362,10 @@ export default function ReviewDoc({
 	const avisoLines = (doc.avisoLines as AvisoLine[] | null) ?? []
 	const precertLines = (sheet?.lines as PreCertLine[] | undefined) ?? undefined
 
-	// Extract basenames for photos in JSX (avoid path module in client bundle)
-	const photoItems = photos.map((p) => ({
-		id: p.id,
-		basename: path.basename(p.localPath),
-	}))
+	// Photos already have basename added in loader (avoid path module in client bundle)
+	const photoItems = photos
 
-	return (
+	const page = (
 		<div className="space-y-5">
 			<h1 className="text-xl font-semibold">{t("docs_review.title")}</h1>
 			<p className="font-mono text-sm text-slate-500">{doc.controlNumber}</p>
@@ -1663,13 +1667,11 @@ export default function ReviewDoc({
 								{c.ok ? "✓" : "–"} {t(CONDITION_KEYS[c.key])}
 							</li>
 						))}
-						<li className="text-slate-500">
-							– {t("release.condition.claro_badge")}
-							{sheet?.sigClaroAt
-								? " ✓"
-								: ` (${t("release.claro_not_captured")})`}
-						</li>
 					</ul>
+					<p className="jaf-note text-xs text-slate-500">
+						{t("release.condition.claro_badge")}
+						{sheet?.sigClaroAt ? " ✓" : ` (${t("release.claro_not_captured")})`}
+					</p>
 					{error?.errorKey === "docs_review.errors.release_blocked" &&
 						error.conditions && (
 							<p className="text-sm text-red-600">
@@ -1697,6 +1699,8 @@ export default function ReviewDoc({
 			)}
 		</div>
 	)
+
+	return page
 }
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
 	return <RouteErrorBoundary error={error} />

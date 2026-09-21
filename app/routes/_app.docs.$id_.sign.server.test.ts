@@ -65,6 +65,7 @@ describe("POST /docs/:id/sign", () => {
 			controlNumber: "JAF-1001",
 			status: "PREPPED",
 			supervisorId: "sup-1",
+			assignedCrewIds: ["crew-1"],
 			estimatedMaterials: [{ serviceCodeId: "sc-1", qty: 2 }],
 			materialsTaken: null,
 		}

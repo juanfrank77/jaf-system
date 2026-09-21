@@ -3,6 +3,7 @@ import {
 	checkAvisoMatch,
 	deriveSupervisorStage,
 	evaluateReleaseGate,
+	supervisorStageToGuideStep,
 } from "./supervisor-stage"
 
 const now = new Date()
@@ -183,5 +184,19 @@ describe("evaluateReleaseGate", () => {
 		)
 		expect(r.conditions.find((c) => c.key === "precert_signed")?.ok).toBe(false)
 		expect(evaluateReleaseGate(good, null, photos).ok).toBe(false)
+	})
+})
+
+describe("supervisorStageToGuideStep", () => {
+	it("maps nine stages onto the guide's 1–8 strip", () => {
+		expect(supervisorStageToGuideStep("INTAKE")).toBe(1)
+		expect(supervisorStageToGuideStep("WAREHOUSE")).toBe(2)
+		expect(supervisorStageToGuideStep("FIELD")).toBe(4)
+		expect(supervisorStageToGuideStep("APPROVE")).toBe(5)
+		expect(supervisorStageToGuideStep("INVOICE")).toBe(6)
+		expect(supervisorStageToGuideStep("AVISO")).toBe(7)
+		expect(supervisorStageToGuideStep("PRECERT")).toBe(7)
+		expect(supervisorStageToGuideStep("RELEASE")).toBe(8)
+		expect(supervisorStageToGuideStep("RELEASED")).toBe(8)
 	})
 })

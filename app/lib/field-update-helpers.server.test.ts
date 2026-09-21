@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
 	buildAddressCorrection,
+	clampUsedToTook,
 	formatTimeOnSite,
 	mergeAddressCorrections,
 	parseGpsCoordinates,
@@ -104,6 +105,16 @@ describe("field-update-helpers", () => {
 			const start = new Date("2026-08-13T12:00:00Z")
 			const end = new Date("2026-08-13T13:45:00Z")
 			expect(formatTimeOnSite(start, end)).toBe("1h 45m")
+		})
+	})
+
+	describe("clampUsedToTook", () => {
+		it("leaves used at or below took", () => {
+			expect(clampUsedToTook(2, 5)).toEqual({ qty: 2, clamped: false })
+			expect(clampUsedToTook(5, 5)).toEqual({ qty: 5, clamped: false })
+		})
+		it("snaps used down to took", () => {
+			expect(clampUsedToTook(8, 5)).toEqual({ qty: 5, clamped: true })
 		})
 	})
 })

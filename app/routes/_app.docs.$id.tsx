@@ -49,6 +49,8 @@ type CrewAssignmentEntry = {
 
 type PreppedMaterialLine = {
 	serviceCodeId: string
+	preppedQty?: number
+	estimatedQty?: number
 	missing?: boolean
 	substitutedWith?: string
 	notes?: string
@@ -78,6 +80,16 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const assignedCrew = await db.user.findMany({
 		where: { id: { in: doc.assignedCrewIds } },
 	})
+	// Load the actual signers (warehouse and crew who signed at pickup)
+	const warehouseSigner = doc.releasedById
+		? await db.user.findUnique({ where: { id: doc.releasedById } })
+		: null
+	const crewSigner = doc.signedById
+		? await db.user.findUnique({ where: { id: doc.signedById } })
+		: null
+	const warehouse = doc.warehouseId
+		? await db.warehouse.findUnique({ where: { id: doc.warehouseId } })
+		: null
 	if (
 		doc.status === "LC_REQUEST_GENERATED" &&
 		!["FINANCE", "ADMIN"].includes(user.role)
@@ -109,6 +121,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		})),
 		supervisor,
 		assignedCrew,
+		warehouseSigner,
+		crewSigner,
+		warehouse,
 		crewOptions: crewOptions.map((c) => ({ id: c.id, name: c.name })),
 		auditTrail,
 		stage: deriveSupervisorStage(doc, sheet),
@@ -369,6 +384,9 @@ export default function DocView({
 		serviceCodes,
 		supervisor,
 		assignedCrew,
+		warehouseSigner,
+		crewSigner,
+		warehouse,
 		crewOptions,
 		auditTrail,
 		stage,
@@ -408,7 +426,10 @@ export default function DocView({
 	const missingAviso = isApproved && !doc.avisoNumber
 	const missingClaroPdf = isApproved && !doc.claroPdfPath
 	const hasMaterials =
-		estimated.length > 0 || taken.length > 0 || used.length > 0
+		estimated.length > 0 ||
+		prepped.length > 0 ||
+		taken.length > 0 ||
+		used.length > 0
 	const showSidebar = canManage
 
 	return (
@@ -635,6 +656,31 @@ export default function DocView({
 										"—"
 									)}
 								</DetailField>
+								{warehouse && (
+									<DetailField label={t("docs_view.warehouse")}>
+										{warehouse.name} — {warehouse.zone}
+									</DetailField>
+								)}
+								{warehouseSigner && (
+									<DetailField label={t("docs_view.warehouse_signer")}>
+										{warehouseSigner.name}
+										{doc.releaseSignedAt && (
+											<span className="text-xs text-muted-foreground ml-2">
+												({new Date(doc.releaseSignedAt).toLocaleString()})
+											</span>
+										)}
+									</DetailField>
+								)}
+								{crewSigner && (
+									<DetailField label={t("docs_view.crew_signer")}>
+										{crewSigner.name}
+										{doc.signedAt && (
+											<span className="text-xs text-muted-foreground ml-2">
+												({new Date(doc.signedAt).toLocaleString()})
+											</span>
+										)}
+									</DetailField>
+								)}
 								{doc.startedAt && doc.endedAt && (
 									<DetailField label={t("docs_view.time_on_site")}>
 										{formatTimeOnSite(doc.startedAt, doc.endedAt)}
@@ -722,6 +768,24 @@ export default function DocView({
 												initialItems={estimated}
 												readOnly
 											/>
+										</MaterialBlock>
+									)}
+									{prepped.length > 0 && (
+										<MaterialBlock title={t("docs_view.prepped_materials")}>
+											<MaterialLineItems
+												serviceCodes={materials}
+												initialItems={prepped.map((p) => ({
+													serviceCodeId: p.serviceCodeId,
+													qty: p.preppedQty ?? p.estimatedQty ?? 1,
+												}))}
+												readOnly
+											/>
+											{prepped.some((p) => p.missing) && (
+												<div className="mt-2 text-xs text-status-warn">
+													{missingLines.length}{" "}
+													{t("docs_view.materials_missing")}
+												</div>
+											)}
 										</MaterialBlock>
 									)}
 									{taken.length > 0 && (

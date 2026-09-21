@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next"
 import { data, Form, redirect } from "react-router"
+import { InstallerAdjustV2 } from "~/components/design-system/installer-dashboard"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
@@ -13,7 +14,9 @@ import {
 } from "~/components/ui/select"
 import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
+import { isInstallerV2Enabled } from "~/lib/features.server"
 import { requireRole } from "~/lib/permissions.server"
+import { buildInventoryComparison, type StockLevel } from "~/lib/van-inventory"
 import type { Route } from "./+types/_app.installer.adjust"
 
 export const meta: Route.MetaFunction = () => [
@@ -30,7 +33,24 @@ export async function loader({ request }: Route.LoaderArgs) {
 		}),
 	])
 	if (!van) throw redirect("/installer")
-	return { van, serviceCodes }
+	const transactions = await db.vanInventoryTransaction.findMany({
+		where: { vanId: van.id },
+	})
+	const serviceCodeMap = new Map(
+		serviceCodes.map((c) => [c.id, { claroCode: c.claroCode, name: c.name }]),
+	)
+	const comparison = buildInventoryComparison(
+		transactions,
+		(van.standardStockLevels as StockLevel[]) || [],
+		serviceCodeMap,
+	)
+	const belowParCount = comparison.filter((i) => i.onHand < i.standard).length
+	return {
+		version: isInstallerV2Enabled() ? "v2" : "v1",
+		van,
+		serviceCodes,
+		belowParCount,
+	}
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -101,12 +121,22 @@ export default function AdjustStock({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { serviceCodes } = loaderData
+	const { serviceCodes, version, belowParCount } = loaderData
 	const { t } = useTranslation()
 	const errorKey =
 		actionData && "errorKey" in actionData
 			? (actionData.errorKey as string)
 			: null
+
+	if (version === "v2") {
+		return (
+			<InstallerAdjustV2
+				serviceCodes={serviceCodes}
+				errorKey={errorKey}
+				belowParCount={belowParCount}
+			/>
+		)
+	}
 
 	return (
 		<div className="space-y-5">

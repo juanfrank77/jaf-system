@@ -2,6 +2,10 @@ import { PackageIcon, TruckDeliveryIcon } from "@hugeicons/core-free-icons"
 import type { ParseKeys } from "i18next"
 import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
+import {
+	InstallerDashboardV2,
+	InstallerNoVanV2,
+} from "~/components/design-system/installer-dashboard"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Badge } from "~/components/ui/badge"
 import { buttonVariants } from "~/components/ui/button"
@@ -9,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card"
 import { EmptyState } from "~/components/ui/empty-state"
 import { PageHeader } from "~/components/ui/page-header"
 import { db } from "~/lib/db.server"
+import { isInstallerDashboardV2Enabled } from "~/lib/features.server"
 import { requireRole } from "~/lib/permissions.server"
 import { buildInventoryComparison, type StockLevel } from "~/lib/van-inventory"
 import type { Route } from "./+types/_app.installer"
@@ -19,24 +24,42 @@ export const meta: Route.MetaFunction = () => [
 
 export async function loader({ request }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["INSTALLER", "ADMIN"])
+	const version = isInstallerDashboardV2Enabled() ? "v2" : "v1"
 	const van = await db.van.findUnique({
 		where: { installerId: user.id },
 	})
 
-	const [restockRequests, installLogs, serviceCodes] = await Promise.all([
-		db.vanRestockRequest.findMany({
-			where: { requestedById: user.id },
-			orderBy: { createdAt: "desc" },
-			take: 20,
-			include: { warehouse: true },
-		}),
-		db.installLog.findMany({
-			where: { installerId: user.id },
-			orderBy: { date: "desc" },
-			take: 20,
-		}),
-		db.serviceCode.findMany({ where: { active: true } }),
-	])
+	const now = new Date()
+	const startOfWeek = new Date(now)
+	const weekday = startOfWeek.getDay()
+	startOfWeek.setHours(0, 0, 0, 0)
+	startOfWeek.setDate(startOfWeek.getDate() - (weekday === 0 ? 6 : weekday - 1))
+	const sevenDaysAgo = new Date(now)
+	sevenDaysAgo.setHours(0, 0, 0, 0)
+	sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6)
+
+	const [restockRequests, installLogs, serviceCodes, weekLogs, trendLogs] =
+		await Promise.all([
+			db.vanRestockRequest.findMany({
+				where: { requestedById: user.id },
+				orderBy: { createdAt: "desc" },
+				take: 20,
+				include: { warehouse: true },
+			}),
+			db.installLog.findMany({
+				where: { installerId: user.id },
+				orderBy: { date: "desc" },
+				take: 20,
+			}),
+			db.serviceCode.findMany({ where: { active: true } }),
+			db.installLog.count({
+				where: { installerId: user.id, date: { gte: startOfWeek } },
+			}),
+			db.installLog.findMany({
+				where: { installerId: user.id, date: { gte: sevenDaysAgo } },
+				select: { date: true },
+			}),
+		])
 
 	const transactions = van
 		? await db.vanInventoryTransaction.findMany({
@@ -56,13 +79,24 @@ export async function loader({ request }: Route.LoaderArgs) {
 			)
 		: []
 
+	const completedTrend = Array.from({ length: 7 }, (_, i) => {
+		const day = new Date(sevenDaysAgo)
+		day.setDate(sevenDaysAgo.getDate() + i)
+		const key = day.toISOString().slice(0, 10)
+		return trendLogs.filter((l) => l.date.toISOString().slice(0, 10) === key)
+			.length
+	})
+
 	return {
+		version,
 		user,
 		van,
 		restockRequests,
 		installLogs,
 		inventoryComparison,
 		serviceCodes,
+		completedThisWeek: weekLogs,
+		completedTrend,
 	}
 }
 
@@ -74,8 +108,38 @@ const RESTOCK_STATUS_LABEL_KEY: Record<string, ParseKeys> = {
 }
 
 export default function InstallerPortal({ loaderData }: Route.ComponentProps) {
-	const { van, restockRequests, installLogs, inventoryComparison } = loaderData
+	const {
+		version,
+		user,
+		van,
+		restockRequests,
+		installLogs,
+		inventoryComparison,
+		completedThisWeek,
+		completedTrend,
+	} = loaderData
 	const { t } = useTranslation()
+
+	if (version === "v2") {
+		if (!van) return <InstallerNoVanV2 />
+		const pendingRequests = restockRequests.filter((r: { status: string }) =>
+			["REQUESTED", "PENDING_APPROVAL", "APPROVED", "READY"].includes(r.status),
+		)
+		const readyForPickup = restockRequests.filter(
+			(r: { status: string }) => r.status === "READY",
+		)
+		return (
+			<InstallerDashboardV2
+				userName={user.name}
+				pendingCount={0}
+				completedThisWeek={completedThisWeek}
+				completedTrend={completedTrend}
+				restockPendingCount={pendingRequests.length}
+				readyForPickup={readyForPickup}
+				installLogs={installLogs}
+			/>
+		)
+	}
 
 	if (!van) {
 		return (

@@ -5,9 +5,11 @@ import { Input } from "~/components/ui/input"
 import {
 	Select,
 	SelectContent,
+	SelectItem,
 	SelectTrigger,
 	SelectValue,
 } from "~/components/ui/select"
+import { clampUsedToTook } from "~/lib/field-update-helpers"
 import { toNumberPrice } from "~/lib/utils"
 
 interface LineItem {
@@ -33,6 +35,13 @@ interface Props {
 	readOnly?: boolean
 	name?: string
 	onChange?: (items: LineItem[]) => void
+	/** Per-code ceiling (Used ≤ Took). */
+	qtyMaxByServiceCodeId?: Record<string, number>
+	onQtyClamped?: (
+		serviceCodeId: string,
+		attempted: number,
+		clampedTo: number,
+	) => void
 }
 
 let _counter = 0
@@ -61,6 +70,8 @@ export function MaterialLineItems({
 	readOnly = false,
 	name = "materials",
 	onChange,
+	qtyMaxByServiceCodeId,
+	onQtyClamped,
 }: Props) {
 	const { t } = useTranslation()
 	const [items, setItems] = useState<InternalItem[]>(() =>
@@ -117,8 +128,7 @@ export function MaterialLineItems({
 				return (
 					<div key={item._key} className="flex flex-wrap items-center gap-2">
 						<Select
-							items={dropdownItems}
-							value={item.serviceCodeId}
+							value={item.serviceCodeId || undefined}
 							onValueChange={(v) =>
 								updateItem(item._key, { serviceCodeId: v ?? "" })
 							}
@@ -128,17 +138,30 @@ export function MaterialLineItems({
 									placeholder={t("material_line_items.select_placeholder")}
 								/>
 							</SelectTrigger>
-							<SelectContent />
+							<SelectContent>
+								{dropdownItems.map((option) => (
+									<SelectItem key={option.value} value={option.value}>
+										{option.label}
+									</SelectItem>
+								))}
+							</SelectContent>
 						</Select>
 						<Input
 							type="number"
 							min={1}
 							value={item.qty}
-							onChange={(e) =>
-								updateItem(item._key, {
-									qty: parseInt(e.target.value, 10) || 1,
-								})
-							}
+							onChange={(e) => {
+								const attempted = Number.parseInt(e.target.value, 10) || 0
+								const max = qtyMaxByServiceCodeId?.[item.serviceCodeId]
+								if (typeof max === "number") {
+									const { qty, clamped } = clampUsedToTook(attempted, max)
+									updateItem(item._key, { qty })
+									if (clamped)
+										onQtyClamped?.(item.serviceCodeId, attempted, qty)
+									return
+								}
+								updateItem(item._key, { qty: attempted || 1 })
+							}}
 							className="w-20 shrink-0"
 						/>
 						<button

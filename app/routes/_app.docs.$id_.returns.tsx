@@ -227,7 +227,7 @@ export default function ReturnsDoc({
 			notes: "",
 		})
 
-	return (
+	const page = (
 		<div className="space-y-4">
 			<BackLink to={`/docs/${doc.id}`}>
 				{t("docs_view.back_to_work_order")}
@@ -374,6 +374,8 @@ export default function ReturnsDoc({
 			)}
 		</div>
 	)
+
+	return page
 }
 
 export function ErrorBoundary({ error }: { error: unknown }) {

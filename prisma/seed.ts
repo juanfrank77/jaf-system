@@ -143,11 +143,34 @@ async function seedBrigades() {
 	console.log(`brigades: ${BRIGADE_SEED.length} upserted`)
 }
 
+async function seedWarehouses() {
+	const warehouses = [
+		{ name: "Main Warehouse", zone: "Central", active: true },
+		{ name: "North Depot", zone: "Northern Zone", active: true },
+		{ name: "South Depot", zone: "Southern Zone", active: true },
+	]
+
+	for (const w of warehouses) {
+		const existing = await db.warehouse.findFirst({ where: { name: w.name } })
+		if (existing) {
+			await db.warehouse.update({
+				where: { id: existing.id },
+				data: { zone: w.zone, active: w.active },
+			})
+		} else {
+			await db.warehouse.create({ data: w })
+		}
+	}
+	// biome-ignore lint/suspicious/noConsole: CLI seed output
+	console.log(`warehouses: ${warehouses.length} upserted`)
+}
+
 async function main() {
 	await seedCatalog()
 	await seedSupervisors()
 	await seedDemoRoleAccounts()
 	await seedBrigades()
+	await seedWarehouses()
 }
 
 main()

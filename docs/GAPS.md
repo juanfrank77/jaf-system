@@ -124,4 +124,11 @@ Route reads (`/installer`, `/installer/adjust`, `/installer/restock` action, `/a
 
 **Restock pickup signatures:** Restock pickup is single-signature (installer). Dual signature pending ops decision on whether pickups are attended; if yes, persist `releaseSignature` + signer and enforce both server-side (schema field already exists).
 
-**Install completion wizard (`/installer/install` v2):** `InstallLog` stores `claroJobReference`, `serviceType`, `date`, `materialsUsed`, `notes`, and `discrepancyFlagged` only. No serial, photo, signature, address, drop footage, or GPS fields on `InstallLog`. v2 UI collects only what the action persists; serial entry is local-only with an unwired note (#52/#16). Footage bracket defaults (#50) and address diff (work-order fields) are not shown. Negative-stock blocking on install remains an ops decision — ledger may go negative and flags warehouse via `discrepancyFlagged`. No idempotency (#25) — double submit can duplicate logs.
+**Install completion wizard (`/installer/install` v2):** Three-step wizard (Info → Materials → Submit). Collects only fields the action persists. Footage bracket defaults (#50) and address diff (work-order fields) are not shown. Negative-stock blocking on install remains an ops decision — ledger may go negative and flags warehouse via `discrepancyFlagged`. No idempotency (#25) — double submit can duplicate logs.
+
+### InstallLog has no completion evidence
+
+- **`InstallLog` stores no serial, photo, or signature.** Current columns: `claroJobReference`, `serviceType`, `date`, `materialsUsed`, `notes`, `discrepancyFlagged` ([`schema.prisma`](../prisma/schema.prisma) `InstallLog`).
+- The guide rule **"incomplete install is not payable"** cannot be enforced — completeness is not computable from persisted data.
+- **Proposed additive change (before any Carmen installer-pay screen):** nullable `serialNumber` on `InstallLog`, a form-photo relation (or tagged `Photo` FK), and `installerSignature` + `signedAt`.
+- v2 Submit shows a neutral note only; no serial/photo/signature inputs.

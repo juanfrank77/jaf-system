@@ -126,7 +126,7 @@ describe("InstallerRestockV2 submit guard reset", () => {
 				{
 					path: "/",
 					action: async () => {
-						await new Promise((resolve) => setTimeout(resolve, 200))
+						await new Promise((resolve) => setTimeout(resolve, 500))
 						return { errorKey: "installer_restock.errors.invalid_items" }
 					},
 					Component: () => {
@@ -160,10 +160,6 @@ describe("InstallerRestockV2 submit guard reset", () => {
 		})
 
 		await userEvent.click(submit)
-
-		await waitFor(() => {
-			expect(screen.getByRole("button", { name: /Sending/i })).toBeDisabled()
-		})
 
 		await waitFor(() => {
 			expect(

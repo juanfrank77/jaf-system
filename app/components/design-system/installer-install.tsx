@@ -24,12 +24,7 @@ export const INSTALL_SERVICE_TYPES = [
 	"OTHER",
 ] as const
 
-export const INSTALL_WIZARD_STEPS = [
-	"info",
-	"device",
-	"materials",
-	"submit",
-] as const
+export const INSTALL_WIZARD_STEPS = ["info", "materials", "submit"] as const
 
 export type InstallWizardStep = (typeof INSTALL_WIZARD_STEPS)[number]
 
@@ -85,8 +80,6 @@ export function canAdvanceInstallStep({
 	switch (step) {
 		case "info":
 			return isInstallInfoComplete({ claroJobReference, serviceType, date })
-		case "device":
-			return true
 		case "materials":
 			return isInstallMaterialsComplete(lines)
 		case "submit":
@@ -161,7 +154,6 @@ export function InstallerInstallV2({
 	const [claroJobReference, setClaroJobReference] = useState("")
 	const [serviceType, setServiceType] = useState("")
 	const [date, setDate] = useState(defaultDateValue)
-	const [serial, setSerial] = useState("")
 	const [notes, setNotes] = useState("")
 	const [lines, setLines] = useState<MaterialLine[]>([
 		{ _key: "1", serviceCodeId: "", qty: 1 },
@@ -393,34 +385,6 @@ export function InstallerInstallV2({
 					</Box>
 				</div>
 
-				<div hidden={step !== "device"}>
-					<Box span={12}>
-						<h2 className="jaf-sub">{t("ds.installer.tab_device")}</h2>
-						<p className="jaf-sub">{t("ds.installer.serial_unwired")}</p>
-						<div className="jaf-scan">
-							<Field
-								label={t("ds.installer.serial_label")}
-								htmlFor="installSerial"
-							>
-								<input
-									id="installSerial"
-									className="jaf-inp"
-									style={{ minHeight: 44 }}
-									value={serial}
-									onChange={(e) => setSerial(e.target.value)}
-									placeholder={t("ds.installer.serial_placeholder")}
-									autoComplete="off"
-								/>
-							</Field>
-						</div>
-						{serial.trim() ? (
-							<Note tone="neutral">
-								{t("ds.installer.install_serial_recorded")}
-							</Note>
-						) : null}
-					</Box>
-				</div>
-
 				<div hidden={step !== "materials"}>
 					<Box span={12}>
 						<h2 className="jaf-sub">
@@ -547,6 +511,9 @@ export function InstallerInstallV2({
 								placeholder={t("installer_install.notes_placeholder")}
 							/>
 						</Field>
+						<Note tone="neutral">
+							{t("ds.installer.install_evidence_unavailable")}
+						</Note>
 						<Gate items={gateItems} live />
 						{missingLabels.length > 0 ? (
 							<p className="jaf-sub" aria-live="polite">

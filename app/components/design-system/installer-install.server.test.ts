@@ -30,18 +30,6 @@ describe("InstallerInstallV2 wizard state", () => {
 		).toBe(true)
 	})
 
-	it("always allows advancing from Device", () => {
-		expect(
-			canAdvanceInstallStep({
-				step: "device",
-				claroJobReference: "",
-				serviceType: "",
-				date: "",
-				lines: [],
-			}),
-		).toBe(true)
-	})
-
 	it("requires at least one positive material line before Materials next", () => {
 		expect(
 			canAdvanceInstallStep({

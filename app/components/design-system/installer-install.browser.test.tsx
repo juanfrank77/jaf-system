@@ -64,13 +64,6 @@ describe("InstallerInstallV2 wizard", () => {
 
 		await userEvent.click(screen.getByRole("button", { name: /^Next$/i }))
 
-		await userEvent.fill(screen.getByLabelText(/Scanned serial/i), "ONT-999")
-		expect(
-			screen.getByText(/Serial recorded · device lookup not wired yet/i),
-		).toBeInTheDocument()
-
-		await userEvent.click(screen.getByRole("button", { name: /^Next$/i }))
-
 		await userEvent.selectOptions(
 			screen.getByLabelText(/Select material/i),
 			"sc-1",
@@ -83,6 +76,12 @@ describe("InstallerInstallV2 wizard", () => {
 			screen.getByLabelText(/^Notes$/i),
 			"Completed at curb box",
 		)
+
+		expect(
+			screen.getByText(
+				/Serial number, form photo and signature capture aren't available yet/i,
+			),
+		).toBeInTheDocument()
 
 		const submit = screen.getByRole("button", { name: /Log Install/i })
 		await waitFor(() => {
@@ -138,7 +137,6 @@ describe("InstallerInstallV2 wizard", () => {
 		})
 
 		await userEvent.click(next)
-		await userEvent.click(screen.getByRole("button", { name: /^Next$/i }))
 
 		const materialsNext = screen.getByRole("button", { name: /^Next$/i })
 		expect(materialsNext).toBeDisabled()
@@ -231,7 +229,6 @@ describe("InstallerInstallV2 wizard", () => {
 			"WIFI",
 		)
 		await userEvent.fill(screen.getByLabelText(/^Date$/i), "2026-08-13")
-		await userEvent.click(screen.getByRole("button", { name: /^Next$/i }))
 		await userEvent.click(screen.getByRole("button", { name: /^Next$/i }))
 		await userEvent.selectOptions(
 			screen.getByLabelText(/Select material/i),

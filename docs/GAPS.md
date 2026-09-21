@@ -119,3 +119,7 @@ Route reads (`/installer`, `/installer/adjust`, `/installer/restock` action, `/a
 **Rail nav counts (gap #47):** **Additive — not wired.** `CountBadge` is ready; no `navCounts` loader yet — v2 renders counts only when provided.
 
 **DS shell drawer breakpoint:** 1024px per guide (v1 used 768px). Viewports 769–1024px use the off-canvas drawer instead of the sidebar.
+
+**Signature pad keyboard access:** Canvas signing remains pointer/touch-only on restock pickup (and other screens using `SignaturePad`). Keyboard-only capture is a separate accessibility track — not solved in the installer restock pickup port.
+
+**Restock pickup signatures:** Restock pickup is single-signature (installer). Dual signature pending ops decision on whether pickups are attended; if yes, persist `releaseSignature` + signer and enforce both server-side (schema field already exists).

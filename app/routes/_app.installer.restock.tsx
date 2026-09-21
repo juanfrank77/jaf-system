@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { data, Form, redirect } from "react-router"
+import { InstallerRestockV2 } from "~/components/design-system/installer-restock"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
@@ -14,15 +15,36 @@ import {
 } from "~/components/ui/select"
 import { useOnline } from "~/hooks/use-online"
 import { db } from "~/lib/db.server"
+import { isInstallerV2Enabled } from "~/lib/features.server"
 import { queueInstallerRestock } from "~/lib/installer-sync"
 import { requireRole } from "~/lib/permissions.server"
-import { evaluateRestockApproval } from "~/lib/van-inventory"
-import { getVanParLevels, parLevelsToStockLevels } from "~/lib/van-stock.server"
+import {
+	buildInventoryComparison,
+	evaluateRestockApproval,
+} from "~/lib/van-inventory"
+import {
+	computeParStatus,
+	getVanParLevels,
+	parLevelsToStockLevels,
+} from "~/lib/van-stock.server"
 import type { Route } from "./+types/_app.installer.restock"
 
 export const meta: Route.MetaFunction = () => [
 	{ title: "Request Restock — JAF Ops" },
 ]
+
+const ACTIVE_RESTOCK_STATUSES = [
+	"REQUESTED",
+	"PENDING_APPROVAL",
+	"APPROVED",
+	"READY",
+] as const
+
+const PENDING_RESTOCK_STATUSES = [
+	"REQUESTED",
+	"PENDING_APPROVAL",
+	"APPROVED",
+] as const
 
 export async function loader({ request }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["INSTALLER", "ADMIN"])
@@ -35,7 +57,51 @@ export async function loader({ request }: Route.LoaderArgs) {
 		}),
 	])
 	if (!van) throw redirect("/installer")
-	return { van, warehouses, serviceCodes }
+
+	const [transactions, parLevels, restockRequests, pendingRestock] =
+		await Promise.all([
+			db.vanInventoryTransaction.findMany({ where: { vanId: van.id } }),
+			getVanParLevels(van.id),
+			db.vanRestockRequest.findMany({
+				where: { requestedById: user.id },
+				orderBy: { createdAt: "desc" },
+				take: 20,
+				include: { warehouse: true },
+			}),
+			db.vanRestockRequest.findFirst({
+				where: {
+					requestedById: user.id,
+					status: { in: [...ACTIVE_RESTOCK_STATUSES] },
+				},
+				select: { id: true },
+			}),
+		])
+
+	const serviceCodeMap = new Map(
+		serviceCodes.map((c) => [c.id, { claroCode: c.claroCode, name: c.name }]),
+	)
+	const comparison = buildInventoryComparison(
+		transactions,
+		parLevelsToStockLevels(parLevels),
+		serviceCodeMap,
+	)
+	const parStatus = computeParStatus({ parLevels, transactions })
+	const pendingRequestCount = restockRequests.filter((r) =>
+		(PENDING_RESTOCK_STATUSES as readonly string[]).includes(r.status),
+	).length
+
+	return {
+		version: isInstallerV2Enabled() ? "v2" : "v1",
+		van,
+		warehouses,
+		serviceCodes,
+		comparison,
+		parLevels,
+		parStatus,
+		hasPendingRestock: pendingRestock != null,
+		pendingRequestCount,
+		restockRequests,
+	}
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -187,7 +253,17 @@ export default function RequestRestock({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { warehouses, serviceCodes } = loaderData
+	const {
+		version,
+		van,
+		warehouses,
+		serviceCodes,
+		comparison,
+		parStatus,
+		hasPendingRestock,
+		pendingRequestCount,
+		restockRequests,
+	} = loaderData
 	const { t } = useTranslation()
 	const errorKey =
 		actionData && "errorKey" in actionData
@@ -199,6 +275,21 @@ export default function RequestRestock({
 	const [lines, setLines] = useState<
 		{ _key: string; serviceCodeId: string; qty: number }[]
 	>([{ _key: "1", serviceCodeId: "", qty: 1 }])
+
+	if (version === "v2") {
+		return (
+			<InstallerRestockV2
+				van={van}
+				warehouses={warehouses}
+				comparison={comparison}
+				parStatus={parStatus}
+				hasPendingRestock={hasPendingRestock}
+				pendingRequestCount={pendingRequestCount}
+				restockRequests={restockRequests}
+				errorKey={errorKey}
+			/>
+		)
+	}
 
 	const addLine = () =>
 		setLines([

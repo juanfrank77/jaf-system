@@ -13,8 +13,8 @@ Full reconciliation of all 53 claims from the JAF Ops Design System Guide agains
 
 | # | Claim | Needs to Exist As | Existing Field/Table | Verdict |
 |---|-------|-------------------|---------------------|---------|
-| 1 | Step 1-8 ordered enum, sortable | Ordered enum on work order | `DocStatus` enum (steps 1-5) + timestamps (steps 6-8); [`deriveSupervisorStage`](../app/lib/supervisor-stage.ts) computes step number from status + timestamps | **SATISFIED** via derivation - Render `.jaf-flow` strip by calling `deriveSupervisorStage` → step 1-8. **ADDITIVE**: Add `derivedStep` getter on `JafInvoice` for table sorts. |
-| 2 | Auto work-order number `JAF-2026-####` | Server-side sequence per year | `JafInvoice.controlNumber` unique string | **SATISFIED** - Format is app-level (controlled in route logic) |
+| 1 | Step 1-8 ordered enum, sortable | Ordered enum on work order | `DocStatus` enum (steps 1-5) + timestamps (steps 6-8); [`deriveSupervisorStage`](../app/lib/supervisor-stage.ts) computes step number from status + timestamps | **PARTIAL** - Derivation works for flow strip (`supervisorStageToGuideStep` maps 9 stages → 8 guide steps, step 3 crew sign-out omitted). **ADDITIVE**: persisted `derivedStep` for table sorts. |
+| 2 | Auto work-order number `JAF-2026-####` | Server-side sequence per year | `JafInvoice.controlNumber` unique string | **PARTIAL** - [`generateControlNumber`](../app/lib/control-number.server.ts) emits `MAINT-YYMMDD-###` per day, not `JAF-YYYY-####` per year |
 | 3 | Aviso optional at step 1, captured at step 7 | Nullable 8-digit field + capture timestamp + user | `avisoNumber?` nullable; `avisoMatchedAt?` timestamp exists; **NO** `avisoCapturedBy` user FK | **ADDITIVE** - Add `avisoCapturedById?`, `avisoCapturedAt?` |
 | 4 | Estimated address + correction history (diff) | Two address fields + GPS + timestamp + user | `jobAddressEstimated`, `jobAddressActual`, `addressCorrections?` JSON, `gpsCoordinates?` | **SATISFIED** |
 | 5 | Job type as controlled list | Lookup table | `JafInvoice.jobType` free `String` | **ADDITIVE** - Create `JobType` model; migrate string → FK |
@@ -26,7 +26,7 @@ Full reconciliation of all 53 claims from the JAF Ops Design System Guide agains
 
 | # | Claim | Needs to Exist As | Existing Field/Table | Verdict |
 |---|-------|-------------------|---------------------|---------|
-| 7 | 934 searchable codes by description | Searchable catalog, description primary index | `ServiceCode.name` + trigram index (`gin_trgm_ops`) | **SATISFIED** |
+| 7 | 934 searchable codes by description | Searchable catalog, description primary index | `ServiceCode` table; admin catalog client-side filter on `name`/`claroCode` | **PARTIAL** - No `gin_trgm_ops` index on `ServiceCode.name` (trigram indexes exist on `JafInvoice` address/aviso only) |
 | 8 | Dual account codes (610 vs 615) | Account as real attribute; duplicates legitimate | `ServiceCode.accountCode?` nullable; allows duplicates | **ADDITIVE** - Current schema allows it; UI must show both rows and let user choose (not dedupe) |
 | 9 | Unit price to 4 decimal places `$42.3430` | `Decimal(12,4)` | `ServiceCode.unitPrice Decimal` (Prisma — precision unspecified in schema) | **STRUCTURAL** - Must verify DB column is `numeric(12,4)` or migrate |
 | 10 | Catalog revision `REV 2023-04-21` versioned | Versioned price lists with effective dates | `ServiceCode.priceListRevision?` string, `effectiveFrom?` DateTime | **ADDITIVE** - Revision label exists; needs `PriceListRevision` entity as first-class object |
@@ -40,7 +40,7 @@ Full reconciliation of all 53 claims from the JAF Ops Design System Guide agains
 |---|-------|-------------------|---------------------|---------|
 | 12 | Separate SAP materials catalog (no prices) | Distinct table from service codes | `ServiceCode` with `kind: SERVICE\|MATERIAL` enum | **STRUCTURAL** - Guide wants two tables; app has one with discriminator. Splitting requires refactor of all material references. |
 | 13 | Conversion factor `CAJAS · 1 = 100 PZA` | Conversion factor per code, nullable | **NONE** | **ADDITIVE** - Add `ServiceCode.conversionFactor?`, `conversionUnit?` |
-| 14 | 39 codes have no factor → "unit not set" UI | Null case as rendered state | (UI concern, not schema) | **SATISFIED** - Render `conversionFactor IS NULL` as `.jaf-tag.warn` chip; no schema change |
+| 14 | 39 codes have no factor → "unit not set" UI | Null case as rendered state | **NONE** — no `conversionFactor` column | **ADDITIVE** - Add `ServiceCode.conversionFactor?`; then render null as `.jaf-tag.warn` chip |
 | 15 | Reorder minimum per code → "Below minimum" | Reorder point per code per warehouse | **NONE** | **ADDITIVE** - Create `StockLevel` model (`warehouseId`, `serviceCodeId`, `minimum`, `current`) |
 | 16 | Serialized units (modems/ONTs) counted individually | Serial register + last-counted date | **NONE** | **ADDITIVE** - Create `SerialUnit` model (serial, `serviceCodeId`, `currentVanId?`, `lastCountedAt`, `claroAuditStatus?`) |
 | 17 | Every movement has person + time | Append-only movement log | `VanInventoryTransaction` exists; **NO** warehouse-level log | **ADDITIVE** - Create `WarehouseTransaction` model (append-only, per-site) |
@@ -52,10 +52,10 @@ Full reconciliation of all 53 claims from the JAF Ops Design System Guide agains
 
 | # | Claim | Needs to Exist As | Existing Field/Table | Verdict |
 |---|-------|-------------------|---------------------|---------|
-| 19 | Dual signature locks pickup | Two signature records + names + timestamps + device | `releaseSignature`, `crewSignature` (base64) + `releasedById`, `signedById` + `releaseSignedAt`, `signedAt` | **SATISFIED** - Immutability is app logic, not schema constraint |
-| 20 | Over-pull allowed, captured, flagged amber | Taken qty stored alongside listed qty + reason | `materialsTaken` JSON stores variance alongside `preppedMaterials` | **SATISFIED** |
-| 21 | Taken → used → back quantities | Three quantities per material line | `materialsTaken`, `materialsUsed`, `materialsReturned` JSON blobs | **SATISFIED** |
-| 22 | Before/after photos with timestamps | Photo storage + slug + capture time + WO link | `Photo` model (`docId`, `localPath`, `takenAt`, `tag: BEFORE\|AFTER`) | **SATISFIED** |
+| 19 | Dual signature locks pickup | Two signature records + names + timestamps + device | `releaseSignature`, `crewSignature` (base64) + `releasedById`, `signedById` + `releaseSignedAt`, `signedAt` | **PARTIAL** - Fields exist; [`_app.docs.$id_.sign.tsx`](../app/routes/_app.docs.$id_.sign.tsx) refuses overwrite when `materialsTaken` already set — not a DB immutability constraint |
+| 20 | Over-pull allowed, captured, flagged amber | Taken qty stored alongside listed qty + reason | `materialsTaken` JSON; `buildOverages` vs `estimatedMaterials` | **PARTIAL** - Over-pull detected at sign; no separate persisted over-pull reason field |
+| 21 | Taken → used → back quantities | Three quantities per material line | `materialsTaken`, `materialsUsed`, `materialsReturned` JSON blobs | **PARTIAL** - Three blobs on `JafInvoice`; return lines use `{ takenQty, returnedQty }` shape distinct from `{ serviceCodeId, qty }` |
+| 22 | Before/after photos with timestamps | Photo storage + slug + capture time + WO link | `Photo` model (`docId` → `JafInvoice`, `localPath`, `takenAt`, `tag: BEFORE\|AFTER`) | **PARTIAL** - Work-order photos only; no `Photo`/`InstallLog` link for installer completions |
 | 23 | Send-back requests specific photos, keeps rest | Partial rejection at evidence level | `sendBackHistory` JSON on `JafInvoice`; `Photo` has no per-item rejection flag | **ADDITIVE** - Add `Photo.sendBackRequested` boolean to flag specific photos |
 | 24 | Installed qty ≠ ordered | Second quantity column on line | `serviceLines` vs `installedServiceLines` JSON | **SATISFIED** |
 | 25 | Offline queue: "saved on phone, sends itself" | Client queue + retry + idempotent submission | [`offline-store.ts`](../app/lib/offline-store.ts) exists; idempotency needs server-side dedup key | **ADDITIVE** - Add submission dedup key (e.g. `clientSubmissionId` UUID) |
@@ -86,7 +86,7 @@ Full reconciliation of all 53 claims from the JAF Ops Design System Guide agains
 | 36 | Retention register for Hacienda | Retention accrued per run/contractor, exportable | **NONE** | **STRUCTURAL** - Create `RetentionAccrual` model (`runId`, `contractorId`, `amount`, `remittedAt?`, `exportPath?`) |
 | 37 | ACH reference (WinPay external) | ACH reference field `20260912-JAF-015` | **NONE** | **ADDITIVE** - Add `PaymentRecord.achReference?` string |
 | 38 | Carmen's check-off closes arm A | Per-line checked state visible to Lissette | **NONE** | **STRUCTURAL** - Add `PaymentRun.linesChecked` JSON or `PaymentRunLine` join table (`checkedAt?`, `checkedById?`) |
-| 39 | Installer incomplete not payable | Completeness rule (serial + photos present) | `InstallLog` has submission fields; completeness is computed | **SATISFIED** - App-side logic from `InstallLog` + `Photo` queries |
+| 39 | Installer incomplete not payable | Completeness rule (serial + photos present) | `InstallLog` — no serial/photo/signature columns | **ADDITIVE** — InstallLog lacks serial/photo/signature; completeness not computable. Proposed: `serialNumber?`, form-photo relation, `installerSignature?` + `signedAt?` before Carmen pay screens |
 
 ---
 
@@ -105,12 +105,12 @@ Full reconciliation of all 53 claims from the JAF Ops Design System Guide agains
 
 | # | Claim | Needs to Exist As | Existing Field/Table | Verdict |
 |---|-------|-------------------|---------------------|---------|
-| 44 | Spanish twin on every string | Translation layer | `remix-i18next` + i18n JSON keys | **SATISFIED** - Mechanism exists; needs seeding from guide's `data-es` copy |
+| 44 | Spanish twin on every string | Translation layer | `remix-i18next` + i18n JSON keys | **PARTIAL** - Mechanism exists; many DS keys marked `[UNPROOFED]`; not every UI string has es twin yet |
 | 45 | Theme persistence before first paint | Stored preference applied server-side | [`theme.server.ts`](../app/lib/theme.server.ts) cookie → [`root.tsx`](../app/root.tsx) applies `className="dark"` | **SATISFIED** - No flash; works correctly |
 | 46 | Greeting sentence from KPI queries | Generated, must match tiles | Role dashboards use time-of-day greeting only ([`_app.dashboard.tsx`](../app/routes/_app.dashboard.tsx) `greetingFor`); installer v2 subtitle is loader-derived | **PARTIAL** — ported installer screens match KPI data; other dashboards still use time-of-day |
 | 47 | Rail counts: red pill vs grey number | Per-user queue counts | `CountBadge` in DS shell; no `navCounts` loader wired | **ADDITIVE — not wired** (`CountBadge` ready, no `navCounts` loader) |
 | 48 | `.ex` dotted figures = estimated | Unverified/estimated flag on metric | **NONE** | **ADDITIVE** - Add `MetricSnapshot.isEstimate` boolean or hardcode list of estimated metric keys |
-| 49 | Names not roles: "Sent back by Edgard" | Actor names on every transition | All state-change fields FK to `User`; names available | **SATISFIED** |
+| 49 | Names not roles: "Sent back by Edgard" | Actor names on every transition | Most transitions FK `User`; `sendBackHistory` stores `byUserId` | **PARTIAL** - Actor FKs exist; UI must resolve names from `User` — not rendered on every transition yet |
 
 ---
 
@@ -119,9 +119,9 @@ Full reconciliation of all 53 claims from the JAF Ops Design System Guide agains
 | # | Claim | Needs to Exist As | Existing Field/Table | Verdict |
 |---|-------|-------------------|---------------------|---------|
 | 50 | Footage bracket table 250/500/750 FT | Bracket table mapping drop length → accessory qtys | **NONE** | **ADDITIVE** - Create `AccessoryBracket` model (`dropLengthFT`, `serviceCodeId`, `defaultQty`) |
-| 51 | Two accessory lines have no SAP code → chip | Missing-code case as rendered state | (UI concern, not schema) | **SATISFIED** - `ServiceCode` rows where `claroCode IS NULL`; UI renders as chip |
+| 51 | Two accessory lines have no SAP code → chip | Missing-code case as rendered state | `ServiceCode.claroCode String @unique` (NOT NULL) | **PARTIAL** - Schema requires `claroCode`; install v2 chip is defensive UI only until nullable/missing-code rows exist |
 | 52 | Scanned serial → device + van | Serial lookup returning model + current holder | **NONE** | **ADDITIVE** - Depends on #16 (`SerialUnit` model); query by serial → device type + `currentVanId` |
-| 53 | Van par levels + units owed back | Per-van stock + target + outstanding-returns count | `Van.standardStockLevels` JSON | **SATISFIED** - JSON exists; needs structured shape or migrate to `VanStockLevel` table |
+| 53 | Van par levels + units owed back | Per-van stock + target + outstanding-returns count | `VanStockLevel` table + legacy `Van.standardStockLevels` JSON mirror | **PARTIAL** - Par levels canonical via [`getVanParLevels`](../app/lib/van-stock.server.ts); **units owed back** still blocked on #16 (`SerialUnit`) |
 
 ---
 
@@ -129,11 +129,43 @@ Full reconciliation of all 53 claims from the JAF Ops Design System Guide agains
 
 | Verdict | Claims |
 |---------|--------|
-| **SATISFIED** | 1 (via derivation), 2, 4, 7, 11, 14, 19, 20, 21, 22, 24, 26, 27, 30, 32 (blocking), 39, 44, 45, 49, 51, 53 |
-| **PARTIAL** | 46 |
-| **ADDITIVE** | 1 (derivedStep getter), 3, 5, 8, 10, 13, 15, 16, 17, 18, 23, 25, 31, 32 (attribution), 33, 37, 47, 48, 50, 52 |
+| **SATISFIED** | 4, 11, 24, 26, 27, 30, 32 (blocking), 45 |
+| **PARTIAL** | 1, 2, 7, 19, 20, 21, 22, 44, 46, 49, 51, 53 |
+| **ADDITIVE** | 1 (derivedStep getter), 3, 5, 8, 10, 13, 14, 15, 16, 17, 18, 23, 25, 31, 32 (attribution), 33, 37, 39, 47, 48, 50, 52 |
 | **STRUCTURAL** | 6, 9, 12, 28, 29, 34, 35, 36, 38, 40, 41, 42, 43 |
 
-**Quick wins:** Already satisfied via `deriveSupervisorStage` (claim #1) and `evaluateReleaseGate` (claim #32 blocking)  
-**Ship UI first, backfill schema:** Additive claims including #1's `derivedStep` getter for table sorts, #32 attribution for who/when  
+**Quick wins:** `evaluateReleaseGate` blocking logic (claim #32); address diff fields on `JafInvoice` (#4)  
+**Ship UI first, backfill schema:** Additive claims including #39 (InstallLog evidence), #14 (conversion factor), #1's `derivedStep` getter  
 **Scope separately, do not block port:** Structural claims
+
+---
+
+## SATISFIED-claim audit (2026-09-22)
+
+Independent verification of every claim previously marked **SATISFIED**:
+
+| # | Claim | Verdict | Evidence | Corrected wording if not TRUE |
+|---|-------|---------|----------|-------------------------------|
+| 1 | Step 1-8 ordered enum | **PARTIAL** | `app/lib/supervisor-stage.ts:66-112` | Derive guide step via `supervisorStageToGuideStep`; add persisted sort key |
+| 2 | Auto WO number | **PARTIAL** | `app/lib/control-number.server.ts:14-24` | Daily `MAINT-YYMMDD-###` sequence, not annual `JAF-YYYY-####` |
+| 4 | Address + correction diff | **TRUE** | `prisma/schema.prisma:166-218` | — |
+| 7 | Searchable 934-code catalog | **PARTIAL** | `app/routes/_app.admin.catalog.tsx:306-327` | Client filter; add trigram index on `ServiceCode.name` for scale |
+| 11 | Unit of measure EA | **TRUE** | `prisma/schema.prisma:334` | — |
+| 14 | Missing-factor UI | **FALSE** | No `conversionFactor` in schema | **ADDITIVE** — add column then chip |
+| 19 | Dual signature locks pickup | **PARTIAL** | `app/routes/_app.docs.$id_.sign.tsx:185-189` | App refuses re-sign when `materialsTaken` set; not DB-enforced |
+| 20 | Over-pull captured | **PARTIAL** | `app/routes/_app.docs.$id_.sign.tsx:78-90,220` | Detected at sign; no dedicated reason field |
+| 21 | Taken/used/returned | **PARTIAL** | `prisma/schema.prisma:181-219`; `app/routes/_app.docs.$id_.returns.tsx:20-26` | Three JSON blobs; return shape differs |
+| 22 | Before/after photos | **PARTIAL** | `prisma/schema.prisma:315-326` | `Photo.docId` → `JafInvoice` only |
+| 24 | Installed ≠ ordered | **TRUE** | `prisma/schema.prisma:270-271` | — |
+| 26 | Generated invoice | **TRUE** | `app/routes/_app.docs.$id_.review.tsx:328` | — |
+| 27 | Pre-cert 3 signatures | **TRUE** | `prisma/schema.prisma:381-392` | — |
+| 30 | Price snapshot | **TRUE** | `prisma/schema.prisma:273` | — |
+| 32 | 7-item release gate | **TRUE** | `app/lib/supervisor-stage.ts:187-216` | Seven keys: approved, invoice, aviso, amount_match, photos, precert_signed, contractor_code |
+| 39 | Installer completeness | **FALSE** | `prisma/schema.prisma:528-545` | **ADDITIVE** — InstallLog lacks serial/photo/signature |
+| 44 | Spanish twin | **PARTIAL** | `app/localization/i18n.ts`; `resources/locales/es/common.json` | Mechanism only; coverage incomplete |
+| 45 | Theme before paint | **TRUE** | `app/lib/theme.server.ts`; `app/root.tsx` | — |
+| 46 | Greeting from KPIs | **PARTIAL** | `app/routes/_app.dashboard.tsx` | Already tracked |
+| 47 | Rail counts | **ADDITIVE** | `docs/GAPS.md:119` | Already tracked |
+| 49 | Actor names | **PARTIAL** | `prisma/schema.prisma:211-213` `sendBackHistory` | FKs exist; name rendering not universal |
+| 51 | No SAP code chip | **PARTIAL** | `prisma/schema.prisma:330`; `installer-install.tsx:478` | `claroCode` NOT NULL; chip is defensive |
+| 53 | Van par + owed back | **PARTIAL** | `prisma/schema.prisma:480-492`; `app/lib/van-stock.server.ts:59` | `VanStockLevel` canonical; owed-back needs #16 |

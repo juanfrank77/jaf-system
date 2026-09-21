@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { data, Form, redirect } from "react-router"
-import { InstallerWizardV2 } from "~/components/design-system/installer-wizard"
+import { InstallerInstallV2 } from "~/components/design-system/installer-install"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
@@ -19,7 +19,11 @@ import { db } from "~/lib/db.server"
 import { isInstallerV2Enabled } from "~/lib/features.server"
 import { queueInstallerInstall } from "~/lib/installer-sync"
 import { requireRole } from "~/lib/permissions.server"
-import { computeVanInventory } from "~/lib/van-inventory"
+import {
+	buildInventoryComparison,
+	computeVanInventory,
+} from "~/lib/van-inventory"
+import { getVanParLevels, parLevelsToStockLevels } from "~/lib/van-stock.server"
 import type { Route } from "./+types/_app.installer.install"
 
 const SERVICE_TYPES = ["CABLE_TV", "WIFI", "PHONE", "OTHER"] as const
@@ -38,7 +42,26 @@ export async function loader({ request }: Route.LoaderArgs) {
 		}),
 	])
 	if (!van) throw redirect("/installer")
-	return { version: isInstallerV2Enabled() ? "v2" : "v1", van, serviceCodes }
+
+	const [transactions, parLevels] = await Promise.all([
+		db.vanInventoryTransaction.findMany({ where: { vanId: van.id } }),
+		getVanParLevels(van.id),
+	])
+	const serviceCodeMap = new Map(
+		serviceCodes.map((c) => [c.id, { claroCode: c.claroCode, name: c.name }]),
+	)
+	const comparison = buildInventoryComparison(
+		transactions,
+		parLevelsToStockLevels(parLevels),
+		serviceCodeMap,
+	)
+
+	return {
+		version: isInstallerV2Enabled() ? "v2" : "v1",
+		van,
+		serviceCodes,
+		comparison,
+	}
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -181,7 +204,7 @@ export default function LogInstall({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { serviceCodes, version } = loaderData
+	const { serviceCodes, comparison, version } = loaderData
 	const { t } = useTranslation()
 	const errorKey =
 		actionData && "errorKey" in actionData
@@ -236,16 +259,10 @@ export default function LogInstall({
 
 	if (version === "v2") {
 		return (
-			<InstallerWizardV2
+			<InstallerInstallV2
 				serviceCodes={serviceCodes}
+				comparison={comparison}
 				errorKey={errorKey}
-				online={online}
-				queued={queued}
-				lines={lines}
-				addLine={addLine}
-				removeLine={removeLine}
-				updateLine={updateLine}
-				onOfflineSubmit={handleOfflineSubmit}
 			/>
 		)
 	}
@@ -279,31 +296,7 @@ export default function LogInstall({
 				onSubmit={(e) => {
 					if (!online) {
 						e.preventDefault()
-						const form = e.currentTarget
-						const formData = new FormData(form)
-						const claroJobReference =
-							(formData.get("claroJobReference") as string)?.trim() || ""
-						const serviceType = (formData.get("serviceType") as string) || ""
-						const dateRaw = formData.get("date") as string
-						const itemsRaw = formData.get("items") as string
-						const notes =
-							(formData.get("notes") as string | null)?.trim() || null
-						let items: { serviceCodeId: string; qty: number }[] = []
-						try {
-							items = JSON.parse(itemsRaw).filter(
-								(i: { serviceCodeId: string; qty: number }) =>
-									i.serviceCodeId && i.qty > 0,
-							)
-						} catch {
-							// ignore, validation happens on sync
-						}
-						queueInstallerInstall({
-							claroJobReference,
-							serviceType,
-							date: dateRaw,
-							items,
-							notes,
-						}).then(() => setQueued(true))
+						handleOfflineSubmit(e)
 					}
 				}}
 			>

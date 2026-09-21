@@ -86,7 +86,7 @@ Full reconciliation of all 53 claims from the JAF Ops Design System Guide agains
 | 36 | Retention register for Hacienda | Retention accrued per run/contractor, exportable | **NONE** | **STRUCTURAL** - Create `RetentionAccrual` model (`runId`, `contractorId`, `amount`, `remittedAt?`, `exportPath?`) |
 | 37 | ACH reference (WinPay external) | ACH reference field `20260912-JAF-015` | **NONE** | **ADDITIVE** - Add `PaymentRecord.achReference?` string |
 | 38 | Carmen's check-off closes arm A | Per-line checked state visible to Lissette | **NONE** | **STRUCTURAL** - Add `PaymentRun.linesChecked` JSON or `PaymentRunLine` join table (`checkedAt?`, `checkedById?`) |
-| 39 | Installer incomplete not payable | Completeness rule (serial + photos present) | `InstallLog` has submission fields; completeness is computed | **SATISFIED** - App-side logic from `InstallLog` + `Photo` queries |
+| 39 | Installer incomplete not payable | Completeness rule (serial + photos present) | `InstallLog` — no serial/photo/signature columns | **ADDITIVE** — InstallLog lacks serial/photo/signature; completeness not computable |
 
 ---
 
@@ -129,10 +129,13 @@ Full reconciliation of all 53 claims from the JAF Ops Design System Guide agains
 
 | Verdict | Claims |
 |---------|--------|
-| **SATISFIED** | 1 (via derivation), 2, 4, 7, 11, 14, 19, 20, 21, 22, 24, 26, 27, 30, 32 (blocking), 39, 44, 45, 46, 47, 49, 51, 53 |
-| **ADDITIVE** | 1 (derivedStep getter), 3, 5, 8, 10, 13, 15, 16, 17, 18, 23, 25, 31, 32 (attribution), 33, 37, 48, 50, 52 |
+| **SATISFIED** | 4, 11, 24, 26, 27, 30, 32 (blocking), 45 |
+| **PARTIAL** | 1, 2, 7, 19, 20, 21, 22, 44, 46, 49, 51, 53 |
+| **ADDITIVE** | 1 (derivedStep getter), 3, 5, 8, 10, 13, 14, 15, 16, 17, 18, 23, 25, 31, 32 (attribution), 33, 37, 39, 47, 48, 50, 52 |
 | **STRUCTURAL** | 6, 9, 12, 28, 29, 34, 35, 36, 38, 40, 41, 42, 43 |
 
-**Quick wins:** Already satisfied via `deriveSupervisorStage` (claim #1) and `evaluateReleaseGate` (claim #32 blocking)  
-**Ship UI first, backfill schema:** Additive claims including #1's `derivedStep` getter for table sorts, #32 attribution for who/when  
+**Quick wins:** `evaluateReleaseGate` blocking logic (#32); address diff on `JafInvoice` (#4)  
+**Ship UI first, backfill schema:** Additive claims including #39 (InstallLog evidence), #14, #1's `derivedStep` getter  
 **Scope separately, do not block port:** Structural claims
+
+Full audit table: [docs/gap-reconciliation-53.md](../docs/gap-reconciliation-53.md) § SATISFIED-claim audit (2026-09-22)

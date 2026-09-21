@@ -154,33 +154,32 @@ Full 53-row reconciliation: [gap-reconciliation-53.md](gap-reconciliation-53.md)
 
 **Grouped summary:**
 
-#### Already Satisfied
+#### Already Satisfied (verified 2026-09-22)
 
 | Claim # | What | Existing field/table |
 |---------|------|---------------------|
-| 1 | Step 1-8 ordered enum, sortable | `deriveSupervisorStage` computes step number from `DocStatus` + timestamps |
-| 2 | Auto work-order number | `controlNumber` unique (format is app-level `JAF-YYYY-####`) |
 | 4 | Estimated address + correction history | `jobAddressEstimated`, `jobAddressActual`, `addressCorrections`, `gpsCoordinates` |
-| 7 | Searchable 934-code catalog | `ServiceCode` + trigram indexes |
 | 11 | Unit of measure | `ServiceCode.unit` |
-| 14 | Missing-factor UI state | Render `conversionFactor IS NULL` as `.jaf-tag.warn` chip |
-| 19 | Dual signature locks pickup | `releaseSignature`, `crewSignature` + timestamps + user FKs |
-| 20 | Over-pull captured | `materialsTaken` JSON stores variance |
-| 21 | Taken / used / returned quantities | Three JSON blobs: `materialsTaken`, `materialsUsed`, `materialsReturned` |
-| 22 | Before/after photos with timestamps | `Photo` model (`tag: BEFORE|AFTER`, `takenAt`) |
 | 24 | Installed ≠ ordered quantities | `serviceLines` vs `installedServiceLines` JSON |
 | 26 | Generated invoice (read-only) | `jafInvoiceLines` JSON (snapshot at generation) |
 | 27 | Pre-cert 3 signatures | `PreCertSheet` (`sigSupervisor*`, `sigSubcontractor*`, `sigClaro*`) |
 | 30 | Price snapshot at invoice time | `jafInvoiceLines` includes `unitPrice` independent of live catalog |
-| 32 (blocking) | 7-item release gate | [`evaluateReleaseGate`](../app/lib/supervisor-stage.ts) derives all 7 from `JafInvoice`, `PreCertSheet`, `Photo` |
-| 39 | Installer completeness computed | Derive from `InstallLog` + `Photo` queries |
-| 44 | Spanish i18n | `remix-i18next` + `data-es` pattern exists (needs seeding from guide copy) |
-| 45 | Theme persistence | `theme.server.ts` cookie → [`root.tsx`](../app/root.tsx) `Layout` reads `_app` loader theme and sets `html.dark` before paint ✓ |
-| 46 | Greeting sentence from queries | **Partial** — role dashboards use time-of-day greeting; installer v2 subtitle is loader-derived |
-| 47 | Rail counts | **Additive — not wired** — `CountBadge` ready; no `navCounts` loader yet |
-| 49 | Actor names on transitions | Relations to `User` on every state-change field |
-| 51 | Missing SAP code UI state | `ServiceCode` rows where `claroCode IS NULL`; render as chip |
-| 53 | Van par levels | `Van.standardStockLevels` JSON |
+| 32 (blocking) | 7-item release gate | [`evaluateReleaseGate`](../app/lib/supervisor-stage.ts) — seven keys match docs |
+| 45 | Theme persistence | `theme.server.ts` cookie → [`root.tsx`](../app/root.tsx) `Layout` sets `html.dark` before paint ✓ |
+
+#### Partial (schema or UI gap remains)
+
+| Claim # | What | Gap |
+|---------|------|-----|
+| 1 | Step 1-8 enum | Derived via `deriveSupervisorStage`; no persisted sort column; step 3 omitted in mapping |
+| 2 | Auto work-order number | `MAINT-YYMMDD-###` not `JAF-YYYY-####` |
+| 7 | Searchable catalog | Client filter; no trigram on `ServiceCode.name` |
+| 19–22 | Pickup / field capture | Fields exist on `JafInvoice`; immutability/Photo scope partial — see [gap-reconciliation-53.md](gap-reconciliation-53.md) audit |
+| 44 | Spanish i18n | Mechanism only; coverage incomplete |
+| 46 | Greeting from KPIs | Installer v2 loader-derived; other dashboards time-of-day |
+| 49 | Actor names | User FKs exist; not rendered on every transition |
+| 51 | Missing SAP chip | `claroCode` NOT NULL in schema; chip defensive only |
+| 53 | Van par levels | `VanStockLevel` canonical; units owed back blocked #16 |
 
 #### Additive (nullable columns or new tables, ship UI first)
 
@@ -190,7 +189,8 @@ Full 53-row reconciliation: [gap-reconciliation-53.md](gap-reconciliation-53.md)
 | 5 | Job type lookup table | Create `JobType` model; migrate free string → FK |
 | 8 | Dual account codes (610 vs 615) | Allow duplicate `claroCode` rows with different `accountCode`; UI shows both |
 | 10 | Catalog revision as entity | Create `PriceListRevision` model; FK from `ServiceCode.revisionId` |
-| 13 | Conversion factors | Add `ServiceCode.conversionFactor?`, `conversionUnit?` |
+| 13, 14 | Conversion factors + missing-factor UI | Add `ServiceCode.conversionFactor?`, `conversionUnit?`; then render null as chip |
+| 39 | InstallLog completion evidence | Add `serialNumber?`, form-photo relation, `installerSignature?` + `signedAt?` before Carmen pay screens |
 | 15 | Reorder minimum per warehouse | Add `StockLevel` model (`warehouseId`, `serviceCodeId`, `minimum`, `current`) |
 | 16 | Serialized unit register | Create `SerialUnit` model (`serial`, `serviceCodeId`, `currentVanId?`, `lastCountedAt`) |
 | 17 | Warehouse movement log | Create `WarehouseTransaction` model (append-only) |

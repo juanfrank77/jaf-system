@@ -197,32 +197,36 @@ describe("InstallerRestockV2 submit guard reset", () => {
 			configurable: true,
 			value: false,
 		})
-		window.dispatchEvent(new Event("offline"))
+		try {
+			window.dispatchEvent(new Event("offline"))
 
-		await waitFor(() => {
-			expect(screen.getByText(/You are offline/i)).toBeInTheDocument()
-		})
+			await waitFor(() => {
+				expect(screen.getByText(/You are offline/i)).toBeInTheDocument()
+			})
 
-		await userEvent.selectOptions(screen.getByLabelText(/Warehouse/i), "wh-1")
-		await userEvent.fill(screen.getByLabelText(/Qty for Cable/i), "2")
+			await userEvent.selectOptions(screen.getByLabelText(/Warehouse/i), "wh-1")
+			await userEvent.fill(screen.getByLabelText(/Qty for Cable/i), "2")
 
-		const submit = screen.getByRole("button", { name: /Save for later sync/i })
-		await waitFor(() => {
-			expect(submit).toBeEnabled()
-		})
+			const submit = screen.getByRole("button", {
+				name: /Save for later sync/i,
+			})
+			await waitFor(() => {
+				expect(submit).toBeEnabled()
+			})
 
-		await userEvent.click(submit)
+			await userEvent.click(submit)
 
-		await waitFor(() => {
-			expect(queueInstallerRestock).toHaveBeenCalledOnce()
-			expect(screen.getByText(/Saved on your phone/i)).toBeInTheDocument()
-		})
+			await waitFor(() => {
+				expect(queueInstallerRestock).toHaveBeenCalledOnce()
+				expect(screen.getByText(/Saved on your phone/i)).toBeInTheDocument()
+			})
 
-		expect(screen.queryByRole("button", { name: /Sending/i })).toBeNull()
-		expect(
-			screen.getByRole("button", { name: /Save for later sync/i }),
-		).toBeDisabled()
-
-		window.dispatchEvent(new Event("online"))
+			expect(screen.queryByRole("button", { name: /Sending/i })).toBeNull()
+			expect(
+				screen.getByRole("button", { name: /Save for later sync/i }),
+			).toBeDisabled()
+		} finally {
+			window.dispatchEvent(new Event("online"))
+		}
 	})
 })

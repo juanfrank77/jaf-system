@@ -2,6 +2,10 @@ import { screen, waitFor } from "@testing-library/react"
 import { useActionData } from "react-router"
 import { describe, expect, it } from "vitest"
 import { userEvent } from "vitest/browser"
+import {
+	clickWhenReady,
+	fillWhenReady,
+} from "../../../tests/browser-test-utils"
 import { InstallerInstallV2 } from "./installer-install"
 
 const serviceCodes = [
@@ -62,18 +66,24 @@ describe("InstallerInstallV2 wizard", () => {
 		)
 		await userEvent.fill(screen.getByLabelText(/^Date$/i), "2026-08-13")
 
-		await userEvent.click(screen.getByRole("button", { name: /^Next$/i }))
+		await clickWhenReady(() => screen.getByRole("button", { name: /^Next$/i }))
 
+		await waitFor(() => {
+			expect(screen.getByLabelText(/Select material/i)).toBeInTheDocument()
+		})
 		await userEvent.selectOptions(
 			screen.getByLabelText(/Select material/i),
 			"sc-1",
 		)
 		await userEvent.fill(screen.getByLabelText(/Qty used for Cable drop/i), "2")
 
-		await userEvent.click(screen.getByRole("button", { name: /^Next$/i }))
+		await clickWhenReady(() => screen.getByRole("button", { name: /^Next$/i }))
 
-		await userEvent.fill(
-			screen.getByLabelText(/^Notes$/i),
+		await waitFor(() => {
+			expect(screen.getByLabelText(/^Notes$/i)).toBeInTheDocument()
+		})
+		await fillWhenReady(
+			() => screen.getByLabelText(/^Notes$/i),
 			"Completed at curb box",
 		)
 
@@ -136,7 +146,7 @@ describe("InstallerInstallV2 wizard", () => {
 			expect(next).toBeEnabled()
 		})
 
-		await userEvent.click(next)
+		await clickWhenReady(() => next)
 
 		const materialsNext = screen.getByRole("button", { name: /^Next$/i })
 		expect(materialsNext).toBeDisabled()
@@ -229,19 +239,22 @@ describe("InstallerInstallV2 wizard", () => {
 			"WIFI",
 		)
 		await userEvent.fill(screen.getByLabelText(/^Date$/i), "2026-08-13")
-		await userEvent.click(screen.getByRole("button", { name: /^Next$/i }))
+		await clickWhenReady(() => screen.getByRole("button", { name: /^Next$/i }))
+		await waitFor(() => {
+			expect(screen.getByLabelText(/Select material/i)).toBeInTheDocument()
+		})
 		await userEvent.selectOptions(
 			screen.getByLabelText(/Select material/i),
 			"sc-1",
 		)
-		await userEvent.click(screen.getByRole("button", { name: /^Next$/i }))
+		await clickWhenReady(() => screen.getByRole("button", { name: /^Next$/i }))
 
 		const submit = screen.getByRole("button", { name: /Log Install/i })
 		await waitFor(() => {
 			expect(submit).toBeEnabled()
 		})
 
-		await userEvent.click(submit)
+		await clickWhenReady(() => submit)
 
 		await waitFor(() => {
 			expect(screen.getByRole("button", { name: /Sending/i })).toBeDisabled()

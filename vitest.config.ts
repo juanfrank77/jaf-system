@@ -54,6 +54,9 @@ export default defineConfig({
 					],
 					setupFiles: ["./tests/setup.browser.tsx"],
 					name: "browser",
+					// One Chromium page; parallel browser files race CDP actions when
+					// the server project runs hundreds of node tests concurrently.
+					fileParallelism: false,
 					browser: {
 						enabled: true,
 						headless: true,

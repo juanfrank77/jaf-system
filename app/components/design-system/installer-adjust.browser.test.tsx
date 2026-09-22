@@ -1,6 +1,10 @@
 import { screen, waitFor } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
 import { userEvent } from "vitest/browser"
+import {
+	clickWhenReady,
+	fillWhenReady,
+} from "../../../tests/browser-test-utils"
 import { InstallerAdjustV2 } from "./installer-adjust"
 
 const rows = [
@@ -68,12 +72,19 @@ describe("InstallerAdjustV2", () => {
 		await userEvent.fill(screen.getByLabelText(/Qty removed from van/i), "2")
 
 		await userEvent.click(adjustButtons[1])
-		expect(screen.getByText(/Discard changes/i)).toBeInTheDocument()
-		await userEvent.click(screen.getByRole("button", { name: /^Discard$/i }))
+		await waitFor(() => {
+			expect(screen.getByText(/Discard changes/i)).toBeInTheDocument()
+		})
+		await clickWhenReady(() =>
+			screen.getByRole("button", { name: /^Discard$/i }),
+		)
 
-		await userEvent.fill(screen.getByLabelText(/Qty removed from van/i), "3")
-		await userEvent.fill(
-			screen.getByLabelText(/^Reason$/i),
+		await fillWhenReady(
+			() => screen.getByLabelText(/Qty removed from van/i),
+			"3",
+		)
+		await fillWhenReady(
+			() => screen.getByLabelText(/^Reason$/i),
 			"Damaged in transit",
 		)
 

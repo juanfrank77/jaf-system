@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react"
 import { Outlet } from "react-router"
 import { describe, expect, it } from "vitest"
 import { userEvent } from "vitest/browser"
+import { clickWhenReady } from "../../tests/browser-test-utils"
 import { AppShell } from "./app-shell"
 
 describe("AppShell", () => {
@@ -461,11 +462,13 @@ describe("AppShell", () => {
 				},
 			],
 		})
-		await userEvent.click(screen.getByRole("button", { name: "Notifications" }))
+		await clickWhenReady(() =>
+			screen.getByRole("button", { name: "Notifications" }),
+		)
 		const row = screen.getByRole("button", {
 			name: "Job JAF-2026-1001 is ready for pickup.",
 		})
-		await userEvent.click(row)
+		await clickWhenReady(() => row)
 		await waitFor(() => {
 			expect(
 				screen.queryByText("Job JAF-2026-1001 is ready for pickup."),
@@ -554,11 +557,11 @@ describe("AppShell", () => {
 				},
 			],
 		})
-		await userEvent.click(
+		await clickWhenReady(() =>
 			screen.getByRole("button", { name: "Open navigation menu" }),
 		)
 		const drawer = screen.getByRole("dialog", { name: "Navigation" })
-		await userEvent.click(
+		await clickWhenReady(() =>
 			within(drawer).getByRole("link", { name: "Dashboard" }),
 		)
 		// The popup unmounts only after its CSS exit animation finishes

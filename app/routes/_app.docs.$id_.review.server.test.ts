@@ -1056,6 +1056,67 @@ describe("review: save_aviso re-save bypass", () => {
 	})
 })
 
+describe("review: save_aviso release lock", () => {
+	const invoiced = {
+		...approvedDoc,
+		jafInvoiceGeneratedAt: new Date(),
+		jafInvoiceLines: matchingInvoiceLines,
+		jafInvoiceLineTotal: 239.34,
+		avisoDocPath: "/uploads/aviso-docs/doc-1-aviso.pdf",
+		avisoLines: matchingAvisoLines,
+		avisoMatchedAt: new Date(),
+	}
+
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1", role: "SUPERVISOR", name: "E" },
+			session: {},
+		} as any)
+		vi.mocked(getAvisoAmountTolerance).mockResolvedValue(0.01)
+	})
+
+	it("rejects save_aviso after release without changing the job", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...invoiced,
+			releasedToFinanceAt: new Date(),
+		} as any)
+		const form = intent("save_aviso", {
+			avisoNumber: "10353961",
+			avisoLines: JSON.stringify(matchingAvisoLines),
+		})
+		const res = await action({
+			request: post(form),
+			params: { id: "doc-1" },
+		} as any)
+		expect(res).toEqual({
+			errorKey: "docs_review.errors.aviso_locked_after_release",
+		})
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+		expect(db.auditTrail.create).not.toHaveBeenCalled()
+	})
+
+	it("rejects save_aviso at LC_REQUEST_GENERATED", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...invoiced,
+			status: "LC_REQUEST_GENERATED",
+		} as any)
+		const res = await action({
+			request: post(
+				intent("save_aviso", {
+					avisoNumber: "10353961",
+					avisoLines: JSON.stringify(matchingAvisoLines),
+				}),
+			),
+			params: { id: "doc-1" },
+		} as any)
+		expect(res).toEqual({
+			errorKey: "docs_review.errors.aviso_locked_after_release",
+		})
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+})
+
 describe("review: supervisor ownership", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()

@@ -352,7 +352,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 	if (intent === "save_aviso") {
 		if (!doc.jafInvoiceGeneratedAt || !doc.jafInvoiceLines)
 			return { errorKey: "docs_review.errors.invoice_required" }
-		if (doc.releasedToFinanceAt) throw redirect(`/docs/${params.id}/review`)
+		if (doc.releasedToFinanceAt || doc.status === "LC_REQUEST_GENERATED") {
+			return { errorKey: "docs_review.errors.aviso_locked_after_release" }
+		}
 
 		const avisoNumber =
 			(form.get("avisoNumber") as string | null)?.trim() || null
@@ -435,15 +437,15 @@ export async function action({ request, params }: Route.ActionArgs) {
 		]
 
 		if (!match.amountOk) {
+			const revertStatus =
+				doc.status === "CLARO_UPLOADED" && !doc.releasedToFinanceAt
 			ops.unshift(
 				db.jafInvoice.update({
 					where: { id: params.id },
 					data: {
 						...baseData,
 						avisoMatchedAt: null,
-						...(doc.status === "CLARO_UPLOADED"
-							? { status: "SUPERVISOR_APPROVED" as const }
-							: {}),
+						...(revertStatus ? { status: "SUPERVISOR_APPROVED" as const } : {}),
 					},
 				}),
 			)
@@ -1641,29 +1643,34 @@ export default function ReviewDoc({
 							})}
 						</Pill>
 					) : null}
-					{doc.status === "SUPERVISOR_APPROVED" && (
-						<details>
-							<summary className="text-xs text-slate-500 cursor-pointer">
-								{t("docs_review_steps.claro_pdf_optional")}
-							</summary>
-							<Form
-								method="post"
-								encType="multipart/form-data"
-								className="space-y-2 pt-2"
-							>
-								<input type="hidden" name="intent" value="upload_claro" />
-								<Input
-									type="file"
-									name="claroPdf"
-									accept="application/pdf"
-									required
-								/>
-								<Button type="submit" variant="outline" size="sm">
-									{t("docs_review.upload_pdf_submit")}
-								</Button>
-							</Form>
-						</details>
-					)}
+					{doc.status === "SUPERVISOR_APPROVED" &&
+						(avisoLines.length > 0 ? (
+							<details>
+								<summary className="text-xs text-slate-500 cursor-pointer">
+									{t("docs_review_steps.claro_pdf_optional")}
+								</summary>
+								<Form
+									method="post"
+									encType="multipart/form-data"
+									className="space-y-2 pt-2"
+								>
+									<input type="hidden" name="intent" value="upload_claro" />
+									<Input
+										type="file"
+										name="claroPdf"
+										accept="application/pdf"
+										required
+									/>
+									<Button type="submit" variant="outline" size="sm">
+										{t("docs_review.upload_pdf_submit")}
+									</Button>
+								</Form>
+							</details>
+						) : (
+							<p className="text-sm text-slate-600">
+								{t("docs_review_steps.capture_aviso_to_continue")}
+							</p>
+						))}
 				</section>
 			)}
 

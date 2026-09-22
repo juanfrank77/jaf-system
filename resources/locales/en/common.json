@@ -481,6 +481,7 @@
 			"aviso_pdf_required": "Upload the Aviso document.",
 			"invalid_aviso_lines": "Aviso lines could not be read.",
 			"aviso_amount_mismatch": "Aviso total {{avisoTotal}} does not match the JAF invoice line sum {{invoiceTotal}} (difference {{difference}}, tolerance {{tolerance}}). Correct the Aviso in Claro and re-save.",
+			"aviso_locked_after_release": "This job has been released to Finance. The Aviso cannot be changed.",
 			"aviso_line_note_required": "Line quantities differ from installed quantities. Add a note.",
 			"aviso_match_required": "The Aviso must match the invoice before generating the sheet.",
 			"precert_required": "Generate the pre-certification sheet first.",
@@ -519,7 +520,8 @@
 		"save_aviso": "Save Aviso and run match",
 		"amount_match_ok": "Amount match passed — Aviso {{total}}",
 		"amount_match_blocked": "Blocked: Aviso {{aviso}} ≠ invoice {{invoice}}. Correct the Aviso in Claro and re-save.",
-		"claro_pdf_optional": "Claro work-order PDF (optional, separate from the Aviso)"
+		"claro_pdf_optional": "Claro work-order PDF (optional, separate from the Aviso)",
+		"capture_aviso_to_continue": "Capture the Aviso to continue."
 	},
 	"release": {
 		"heading": "Step E — Release to Finance",
@@ -573,7 +575,8 @@
 		"no_claro_pdf": "No Claro PDF on file.",
 		"download_acta": "Download Acta de Conformidad (2A)",
 		"generate_schedule": "Generate & Download Schedule of Accounts (2B)",
-		"footer_note": "Generating the Schedule of Accounts marks this document as LC Request Generated. Email the PDF to hs@pbcc.com."
+		"footer_note": "Generating the Schedule of Accounts marks this document as LC Request Generated. Email the PDF to hs@pbcc.com.",
+		"aviso_legacy_mismatch_warning": "Legacy data: stored Aviso lines do not match the JAF invoice total. You can view this page, but generating a new Schedule of Accounts is blocked until the supervisor re-captures the Aviso (before release) or Finance confirms the on-file amounts."
 	},
 	"admin_settings": {
 		"title": "Settings",

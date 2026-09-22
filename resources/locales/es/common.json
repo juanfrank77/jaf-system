@@ -481,6 +481,7 @@
 			"aviso_pdf_required": "Suba el documento del Aviso.",
 			"invalid_aviso_lines": "No se pudieron leer las líneas del Aviso.",
 			"aviso_amount_mismatch": "El total del Aviso {{avisoTotal}} no coincide con la suma de líneas de la factura JAF {{invoiceTotal}} (diferencia {{difference}}, tolerancia {{tolerance}}). Corrija el Aviso en Claro y vuelva a guardar.",
+			"aviso_locked_after_release": "Este trabajo ya fue liberado a Finanzas. El Aviso no puede modificarse.",
 			"aviso_line_note_required": "Las cantidades por línea difieren de las instaladas. Agregue una nota.",
 			"aviso_match_required": "El Aviso debe coincidir con la factura antes de generar la hoja.",
 			"precert_required": "Genere primero la hoja de pre-certificación.",
@@ -519,7 +520,8 @@
 		"save_aviso": "Guardar Aviso y cotejar",
 		"amount_match_ok": "Cotejo de monto aprobado — Aviso {{total}}",
 		"amount_match_blocked": "Bloqueado: Aviso {{aviso}} ≠ factura {{invoice}}. Corrija el Aviso en Claro y vuelva a guardar.",
-		"claro_pdf_optional": "PDF de orden de trabajo Claro (opcional, distinto del Aviso)"
+		"claro_pdf_optional": "PDF de orden de trabajo Claro (opcional, distinto del Aviso)",
+		"capture_aviso_to_continue": "Capture el Aviso para continuar."
 	},
 	"release": {
 		"heading": "Paso E — Liberar a Finanzas",
@@ -573,7 +575,8 @@
 		"no_claro_pdf": "No hay PDF de Claro en archivo.",
 		"download_acta": "Descargar Acta de Conformidad (2A)",
 		"generate_schedule": "Generar y descargar Relación de Cuentas (2B)",
-		"footer_note": "Generar la Relación de Cuentas marca este documento como LC solicitada. Envía el PDF por correo a hs@pbcc.com."
+		"footer_note": "Generar la Relación de Cuentas marca este documento como LC solicitada. Envía el PDF por correo a hs@pbcc.com.",
+		"aviso_legacy_mismatch_warning": "Datos heredados: las líneas del Aviso guardadas no coinciden con el total de la factura JAF. Puede ver esta página, pero generar una nueva Relación de Cuentas está bloqueado hasta que el supervisor vuelva a capturar el Aviso (antes de la liberación) o Finanzas confirme los montos en archivo."
 	},
 	"admin_settings": {
 		"title": "Configuración",

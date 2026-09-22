@@ -287,6 +287,33 @@ No shared “brigade pay preview” module for supervisor screens today.
 
 ---
 
+## Decisions (22 Sep)
+
+Product and engineering decisions recorded during S1+S3 implementation (`supervisor-money-access`):
+
+| Topic | Decision |
+|-------|----------|
+| Step convention | **Work in progress** (per v5 mockup) for supervisor-facing UI going forward. |
+| Aviso mismatch | **Claro correction** is the primary path; **adjust invoice with reason** deferred to a later PR. |
+| Number formats | Mockup formats (`JAF-YYYY-####`, `INV-YYYY-####`) for **new records only** when implemented. |
+| Approve + invoice | **One action** (mockup) when the review screen is ported. |
+| Release gate | **Returns reconciled** is in the gate; **Claro signature optional** (visual only). |
+| Brigade scope (S3) | Filter by **`Brigade.supervisorId === user.id`** on create/edit (seed assigns all 14 brigades to supervisors). |
+
+**Still open for product owner:**
+
+- `contractor_code` placement in the gate (mockup returns vs code contractor account).
+- Cross-supervisor cover (vacation / area backup).
+- Pay-visibility conflict (invoices sidebar vs brigade screen).
+
+**Implemented in S1+S3 (server-side):**
+
+- #28 Aviso hard block — [`aviso-guard.server.ts`](../app/lib/aviso-guard.server.ts), [`permissions.ts`](../app/lib/permissions.ts), all mutation paths.
+- Supervisor ownership — [`job-access.server.ts`](../app/lib/job-access.server.ts) on `/docs/:id`, `/review`, `/edit`, audit package.
+- Brigade scope — [`brigade-scope.server.ts`](../app/lib/brigade-scope.server.ts) on `/docs/new` and edit.
+
+---
+
 ## Appendix — file index
 
 | Area | Primary files |

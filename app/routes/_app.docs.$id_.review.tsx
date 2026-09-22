@@ -16,8 +16,13 @@ import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Pill } from "~/components/ui/pill"
 import { Textarea } from "~/components/ui/textarea"
+import {
+	AvisoAmountMismatchError,
+	assertAvisoAmountMatches,
+} from "~/lib/aviso-guard.server"
 import { db } from "~/lib/db.server"
 import { validateFile } from "~/lib/file-upload.server"
+import { requireJobAccess } from "~/lib/job-access.server"
 import { generateJafInvoicePdf } from "~/lib/pdf/jaf-invoice.server"
 import { generatePreCertSheetPdf } from "~/lib/pdf/pre-cert-sheet.server"
 import { canTransition, isReviewActionStatus } from "~/lib/permissions"
@@ -128,6 +133,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
+	requireJobAccess(user, doc, "read")
 	const [serviceCodes, photosRaw, supervisor, sheet, brigade, tolerance] =
 		await Promise.all([
 			getActiveServiceCodes(),
@@ -170,6 +176,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
+	requireJobAccess(user, doc, "write")
 	const form = await request.formData()
 	const intent = form.get("intent") as string
 
@@ -429,7 +436,16 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 		if (!match.amountOk) {
 			ops.unshift(
-				db.jafInvoice.update({ where: { id: params.id }, data: baseData }),
+				db.jafInvoice.update({
+					where: { id: params.id },
+					data: {
+						...baseData,
+						avisoMatchedAt: null,
+						...(doc.status === "CLARO_UPLOADED"
+							? { status: "SUPERVISOR_APPROVED" as const }
+							: {}),
+					},
+				}),
 			)
 			await db.$transaction(ops)
 			return {
@@ -441,7 +457,11 @@ export async function action({ request, params }: Route.ActionArgs) {
 			}
 		}
 
-		const transition = canTransition(doc.status, "CLARO_UPLOADED", user.role)
+		const transition = canTransition(doc.status, "CLARO_UPLOADED", user.role, {
+			jafInvoiceLines: doc.jafInvoiceLines,
+			avisoLines,
+			tolerance,
+		})
 		ops.unshift(
 			db.jafInvoice.update({
 				where: { id: params.id },
@@ -488,9 +508,13 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	if (intent === "generate_precert") {
-		if (!doc.avisoMatchedAt)
-			return { errorKey: "docs_review.errors.aviso_match_required" }
 		if (doc.releasedToFinanceAt) throw redirect(`/docs/${params.id}/review`)
+		const precertTolerance = await getAvisoAmountTolerance()
+		try {
+			assertAvisoAmountMatches(doc, precertTolerance)
+		} catch {
+			return { errorKey: "docs_review.errors.aviso_match_required" }
+		}
 		const catalog = await getActiveServiceCodes()
 		const codeMap = Object.fromEntries(catalog.map((c) => [c.id, c]))
 		const installed = (doc.installedServiceLines as ServiceLine[] | null) ?? []
@@ -727,6 +751,21 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 	if (intent === "release_to_finance") {
 		if (doc.releasedToFinanceAt) throw redirect(`/docs/${params.id}/review`)
+		const releaseTolerance = await getAvisoAmountTolerance()
+		try {
+			assertAvisoAmountMatches(doc, releaseTolerance)
+		} catch (e) {
+			if (e instanceof AvisoAmountMismatchError) {
+				return {
+					errorKey: "docs_review.errors.aviso_amount_mismatch",
+					invoiceTotal: e.match.invoiceTotal,
+					avisoTotal: e.match.avisoTotal,
+					difference: e.match.difference,
+					tolerance: releaseTolerance,
+				}
+			}
+			throw e
+		}
 		const [sheet, photos] = await Promise.all([
 			activeSheet(params.id),
 			db.photo.findMany({ where: { docId: params.id }, select: { tag: true } }),

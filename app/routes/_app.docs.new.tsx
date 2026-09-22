@@ -16,6 +16,10 @@ import {
 	SelectValue,
 } from "~/components/ui/select"
 import { Textarea } from "~/components/ui/textarea"
+import {
+	activeBrigadesWhere,
+	isBrigadeInScope,
+} from "~/lib/brigade-scope.server"
 import { generateControlNumber } from "~/lib/control-number.server"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
@@ -33,7 +37,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const [materials, brigades] = await Promise.all([
 		getActiveMaterialCodes(),
 		db.brigade.findMany({
-			where: { active: true },
+			where: activeBrigadesWhere(user),
 			orderBy: [{ area: "asc" }, { name: "asc" }],
 			select: { id: true, name: true, area: true, code: true, leadName: true },
 		}),
@@ -85,6 +89,9 @@ export async function action({ request }: Route.ActionArgs) {
 	const brigade = await db.brigade.findUniqueOrThrow({
 		where: { id: brigadeId },
 	})
+	if (!isBrigadeInScope(user, brigade)) {
+		return { errorKey: "docs_new.errors.brigade_not_allowed" }
+	}
 	const assignedCrewIds = brigade.memberIds
 	const controlNumber = await generateControlNumber()
 	const warehouse = await db.user.findMany({

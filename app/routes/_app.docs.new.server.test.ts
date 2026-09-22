@@ -45,6 +45,7 @@ describe("POST /docs/new", () => {
 			id: "b1",
 			name: "JESUS MARTINEZ",
 			memberIds: ["crew-1", "crew-2"],
+			supervisorId: "sup-1",
 		} as any)
 		tx.jafInvoice.create.mockResolvedValue({ id: "doc-1" })
 	})
@@ -98,6 +99,25 @@ describe("POST /docs/new", () => {
 		form.set("serviceLines", "[]")
 		const res = await action({ request: post(form), params: {} } as any)
 		expect(res).toEqual({ errorKey: "docs_new.errors.missing_fields" })
+	})
+
+	it("rejects a brigade outside the supervisor scope", async () => {
+		vi.mocked(db.brigade.findUniqueOrThrow).mockResolvedValue({
+			id: "b-other",
+			name: "OTHER BRIGADE",
+			memberIds: ["crew-9"],
+			supervisorId: "sup-other",
+		} as any)
+		const form = new FormData()
+		form.set("jobType", "Mantenimiento")
+		form.set("jobAddressEstimated", "X")
+		form.set("jobDescription", "Test")
+		form.set("brigadeId", "b-other")
+		form.set("materials", "[]")
+		form.set("serviceLines", "[]")
+		const res = await action({ request: post(form), params: {} } as any)
+		expect(res).toEqual({ errorKey: "docs_new.errors.brigade_not_allowed" })
+		expect(tx.jafInvoice.create).not.toHaveBeenCalled()
 	})
 
 	it("rejects malformed service lines", async () => {

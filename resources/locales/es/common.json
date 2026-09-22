@@ -122,7 +122,8 @@
 		"errors": {
 			"invalid_materials": "Datos de materiales inválidos",
 			"invalid_service_lines": "No se pudieron leer los códigos de servicio.",
-			"missing_fields": "Se requieren tipo de trabajo, dirección y al menos un miembro de la cuadrilla"
+			"missing_fields": "Se requieren tipo de trabajo, dirección y al menos un miembro de la cuadrilla",
+			"brigade_not_allowed": "Esa brigada no está asignada a usted."
 		}
 	},
 	"docs_edit": {
@@ -135,7 +136,8 @@
 		"errors": {
 			"invalid_materials": "No se pudo leer la lista de materiales",
 			"invalid_service_lines": "No se pudieron leer los códigos de servicio.",
-			"missing_fields": "Se requieren tipo de trabajo, dirección y al menos un miembro de la cuadrilla"
+			"missing_fields": "Se requieren tipo de trabajo, dirección y al menos un miembro de la cuadrilla",
+			"brigade_not_allowed": "Esa brigada no está asignada a usted."
 		}
 	},
 	"admin_history": {

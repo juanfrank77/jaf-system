@@ -5,12 +5,17 @@ import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { Button } from "~/components/ui/button"
+import { assertAvisoAmountMatches } from "~/lib/aviso-guard.server"
 import { db } from "~/lib/db.server"
 import { generateActaConformidadPdf } from "~/lib/pdf/acta-conformidad.server"
 import { generateScheduleAccountsPdf } from "~/lib/pdf/schedule-accounts.server"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
-import { getIvuRate, getLcPbccAdvanceRate } from "~/lib/system-settings.server"
+import {
+	getAvisoAmountTolerance,
+	getIvuRate,
+	getLcPbccAdvanceRate,
+} from "~/lib/system-settings.server"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id_.lc"
 
@@ -27,7 +32,13 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
-	if (!canTransition(doc.status, "LC_REQUEST_GENERATED", user.role))
+	const tolerance = await getAvisoAmountTolerance()
+	const avisoCtx = {
+		jafInvoiceLines: doc.jafInvoiceLines,
+		avisoLines: doc.avisoLines,
+		tolerance,
+	}
+	if (!canTransition(doc.status, "LC_REQUEST_GENERATED", user.role, avisoCtx))
 		throw redirect(`/docs/${params.id}`)
 	const serviceCodes = await db.serviceCode.findMany()
 	const supervisor = await db.user.findUnique({
@@ -53,7 +64,13 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
-	if (!canTransition(doc.status, "LC_REQUEST_GENERATED", user.role))
+	const tolerance = await getAvisoAmountTolerance()
+	const avisoCtx = {
+		jafInvoiceLines: doc.jafInvoiceLines,
+		avisoLines: doc.avisoLines,
+		tolerance,
+	}
+	if (!canTransition(doc.status, "LC_REQUEST_GENERATED", user.role, avisoCtx))
 		throw redirect(`/docs/${params.id}`)
 
 	const form = await request.formData()
@@ -132,6 +149,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 		const localPath = path.join(lcDir, `${params.id}-schedule.pdf`)
 		await fs.writeFile(localPath, pdfBytes)
+
+		assertAvisoAmountMatches(doc, tolerance)
 
 		await db.$transaction([
 			db.jafInvoice.update({

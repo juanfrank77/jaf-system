@@ -122,7 +122,8 @@
 		"errors": {
 			"invalid_materials": "Invalid materials data",
 			"invalid_service_lines": "Service codes could not be read.",
-			"missing_fields": "Job type, address, and at least one crew member are required"
+			"missing_fields": "Job type, address, and at least one crew member are required",
+			"brigade_not_allowed": "That brigade is not assigned to you."
 		}
 	},
 	"docs_edit": {
@@ -135,7 +136,8 @@
 		"errors": {
 			"invalid_materials": "The materials list could not be read",
 			"invalid_service_lines": "Service codes could not be read.",
-			"missing_fields": "Job type, address, and at least one crew member are required"
+			"missing_fields": "Job type, address, and at least one crew member are required",
+			"brigade_not_allowed": "That brigade is not assigned to you."
 		}
 	},
 	"admin_history": {

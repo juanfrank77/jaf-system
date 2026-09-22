@@ -12,7 +12,7 @@ Recommended order is the sequence that unblocks ops screens without betting the 
 | Claim | What | Verdict | Recommended order | Why this order |
 |-------|------|---------|-------------------|----------------|
 | 9 | `Decimal(12,4)` price precision | Refactor (verify then migrate) | 1 | Touches every money line; confirm before new finance entities. |
-| 28 | Aviso amount hard-block in `canTransition` | Refactor (guard) | 2 | Money control. Backend must repeat the UI block. |
+| 28 | Aviso amount hard-block in `canTransition` | **Done (server-side, all paths — 22 Sep 2026)** | — | [`assertAvisoAmountMatches`](../app/lib/aviso-guard.server.ts), [`canTransition`](../app/lib/permissions.ts) for `CLARO_UPLOADED` / `LC_REQUEST_GENERATED`, [`save_aviso`](../app/routes/_app.docs.$id_.review.tsx) clears stale `avisoMatchedAt`, [`release_to_finance`](../app/routes/_app.docs.$id_.review.tsx), [`generate_precert`](../app/routes/_app.docs.$id_.review.tsx), [`/docs/:id/lc`](../app/routes/_app.docs.$id_.lc.tsx). |
 | 6 | Warehouse + crew notified in one transaction | Refactor | 3 | Create-WO integrity; small transaction wrap. |
 | 16 | `SerialUnit` register | Additive | 4 | Unlocks installer scan + Claro serial audits. |
 | 17 | `WarehouseTransaction` log | Additive | 5 | Stock honesty after serials. |

@@ -111,6 +111,23 @@ describe("GET /docs/:id", () => {
 		).rejects.toMatchObject({ status: 404 })
 	})
 
+	it("returns 404 when a supervisor loads another supervisor's job", async () => {
+		vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
+			id: "sup-b",
+			role: "SUPERVISOR",
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			baseDoc("FIELD_UPDATED") as any,
+		)
+
+		await expect(
+			loader({
+				request: new Request("http://localhost/docs/doc-1"),
+				params: { id: "doc-1" },
+			} as any),
+		).rejects.toMatchObject({ status: 404 })
+	})
+
 	it("blocks a Warehouse user from loading an LC_REQUEST_GENERATED doc", async () => {
 		vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
 			id: "user-1",
@@ -130,7 +147,7 @@ describe("GET /docs/:id", () => {
 
 	it("allows a Supervisor to load a normal doc", async () => {
 		vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
-			id: "user-1",
+			id: "sup-1",
 			role: "SUPERVISOR",
 		} as any)
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(

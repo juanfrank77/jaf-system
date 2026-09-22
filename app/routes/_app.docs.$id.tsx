@@ -33,6 +33,7 @@ import {
 	type AddressCorrection,
 	formatTimeOnSite,
 } from "~/lib/field-update-helpers"
+import { requireJobAccess } from "~/lib/job-access.server"
 import { isEditableStatus, isTerminalStatus } from "~/lib/permissions"
 import { requireRole, requireSession } from "~/lib/permissions.server"
 import { deriveSupervisorStage } from "~/lib/supervisor-stage"
@@ -73,6 +74,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
+	requireJobAccess(user, doc, "read")
 	const serviceCodes = await db.serviceCode.findMany()
 	const supervisor = await db.user.findUnique({
 		where: { id: doc.supervisorId },
@@ -135,6 +137,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
+	requireJobAccess(user, doc, "write")
 	if (isTerminalStatus(doc.status)) throw redirect(`/docs/${params.id}`)
 	const form = await request.formData()
 	const intent = form.get("intent") as string

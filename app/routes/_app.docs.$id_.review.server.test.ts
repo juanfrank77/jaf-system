@@ -49,7 +49,7 @@ import {
 	getIvuRate,
 } from "~/lib/system-settings.server"
 import { saveBuffer, saveUpload } from "~/lib/uploads.server"
-import { action } from "./_app.docs.$id_.review"
+import { action, loader } from "./_app.docs.$id_.review"
 
 const CATALOG = [
 	{
@@ -327,7 +327,7 @@ describe("review: save_aviso", () => {
 		})
 		const data = vi.mocked(db.jafInvoice.update).mock.calls[0][0].data
 		expect(data.avisoLineTotal).toBe(11623.28)
-		expect(data.avisoMatchedAt).toBeUndefined()
+		expect(data.avisoMatchedAt).toBeNull()
 		expect(data.status).toBeUndefined()
 	})
 
@@ -462,24 +462,55 @@ describe("review: save_aviso", () => {
 	})
 })
 
+const matchingInvoiceLines = [
+	{
+		serviceCodeId: "c1",
+		claroCode: "34006301",
+		accountCode: "610",
+		name: "T",
+		unit: "EA",
+		qty: 5,
+		unitPrice: 42.343,
+		lineAmount: 211.72,
+	},
+	{
+		serviceCodeId: "c2",
+		claroCode: "34007030",
+		accountCode: "6102",
+		name: "R",
+		unit: "EA",
+		qty: 2,
+		unitPrice: 13.8115,
+		lineAmount: 27.62,
+	},
+]
+const matchingAvisoLines = [
+	{
+		serviceCodeId: "c1",
+		claroCode: "34006301",
+		qty: 5,
+		unitPrice: 42.343,
+		lineAmount: 211.72,
+	},
+	{
+		serviceCodeId: "c2",
+		claroCode: "34007030",
+		qty: 2,
+		unitPrice: 13.8115,
+		lineAmount: 27.62,
+	},
+]
+
 describe("review: pre-cert sheet", () => {
 	const matched = {
 		...approvedDoc,
 		status: "CLARO_UPLOADED",
 		avisoNumber: "10353961",
 		jafInvoiceGeneratedAt: new Date(),
-		jafInvoiceLines: [],
+		jafInvoiceLines: matchingInvoiceLines,
 		jafInvoiceLineTotal: 239.34,
 		avisoDocPath: "/x/aviso.pdf",
-		avisoLines: [
-			{
-				serviceCodeId: "c1",
-				claroCode: "34006301",
-				qty: 5,
-				unitPrice: 42.343,
-				lineAmount: 211.72,
-			},
-		],
+		avisoLines: matchingAvisoLines,
 		avisoLineTotal: 239.34,
 		avisoMatchedAt: new Date(),
 	}
@@ -491,6 +522,7 @@ describe("review: pre-cert sheet", () => {
 			user: { id: "sup-1", role: "SUPERVISOR", name: "Edgard Ocasio" },
 			session: {},
 		} as any)
+		vi.mocked(getAvisoAmountTolerance).mockResolvedValue(0.01)
 		vi.mocked(getActiveServiceCodes).mockResolvedValue(CATALOG as any)
 		vi.mocked(generatePreCertSheetPdf).mockResolvedValue(Buffer.from("pdf"))
 		vi.mocked(saveBuffer).mockResolvedValue("/uploads/precert/doc-1-v1.pdf")
@@ -566,6 +598,7 @@ describe("review: pre-cert sheet", () => {
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
 			...matched,
 			avisoMatchedAt: null,
+			avisoLines: null,
 		} as any)
 		const res = await action({
 			request: post(intent("generate_precert")),
@@ -812,17 +845,10 @@ describe("review: release_to_finance", () => {
 		status: "CLARO_UPLOADED",
 		avisoNumber: "10353961",
 		jafInvoiceGeneratedAt: new Date(),
-		jafInvoiceLineTotal: 586.37,
+		jafInvoiceLines: matchingInvoiceLines,
+		jafInvoiceLineTotal: 239.34,
 		avisoDocPath: "/x/aviso.pdf",
-		avisoLines: [
-			{
-				serviceCodeId: "c1",
-				claroCode: "34006301",
-				qty: 5,
-				unitPrice: 42.343,
-				lineAmount: 211.72,
-			},
-		],
+		avisoLines: matchingAvisoLines,
 		avisoMatchedAt: new Date(),
 		contractorAccountCode: "204",
 	}
@@ -832,6 +858,7 @@ describe("review: release_to_finance", () => {
 			user: { id: "sup-1", role: "SUPERVISOR", name: "E" },
 			session: {},
 		} as any)
+		vi.mocked(getAvisoAmountTolerance).mockResolvedValue(0.01)
 		vi.mocked(db.user.findMany).mockResolvedValue([{ id: "fin-1" }] as any)
 		vi.mocked(db.brigade.findUnique).mockResolvedValue({
 			id: "b1",
@@ -870,7 +897,7 @@ describe("review: release_to_finance", () => {
 				userId: "fin-1",
 				docId: "doc-1",
 				message:
-					"MAINT-260903-001 · Aviso 10353961 · Jesús Martínez · $586.37 — ready for payment request",
+					"MAINT-260903-001 · Aviso 10353961 · Jesús Martínez · $239.34 — ready for payment request",
 			},
 		})
 	})
@@ -920,5 +947,218 @@ describe("review: release_to_finance", () => {
 		} as any).catch(() => {})
 		expect(db.auditTrail.create).not.toHaveBeenCalled()
 		expect(db.notification.create).not.toHaveBeenCalled()
+	})
+
+	it("blocks release when avisoMatchedAt is set but stored lines no longer match", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...ready,
+			avisoLines: [
+				{
+					serviceCodeId: "c1",
+					claroCode: "34006301",
+					qty: 5,
+					unitPrice: 999,
+					lineAmount: 4995,
+				},
+			],
+		} as any)
+		const res = await action({
+			request: post(intent("release_to_finance")),
+			params: { id: "doc-1" },
+		} as any)
+		expect(res).toMatchObject({
+			errorKey: "docs_review.errors.aviso_amount_mismatch",
+		})
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+})
+
+describe("review: save_aviso re-save bypass", () => {
+	const invoiced = {
+		...approvedDoc,
+		jafInvoiceGeneratedAt: new Date(),
+		jafInvoiceLines: [
+			{
+				serviceCodeId: "c1",
+				claroCode: "34006301",
+				qty: 5,
+				unitPrice: 42.343,
+				lineAmount: 211.72,
+			},
+			{
+				serviceCodeId: "c2",
+				claroCode: "34007030",
+				qty: 2,
+				unitPrice: 13.8115,
+				lineAmount: 27.62,
+			},
+		],
+		jafInvoiceLineTotal: 239.34,
+		avisoDocPath: "/uploads/aviso-docs/doc-1-aviso.pdf",
+	}
+
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1", role: "SUPERVISOR", name: "E" },
+			session: {},
+		} as any)
+		vi.mocked(getAvisoAmountTolerance).mockResolvedValue(0.01)
+		vi.mocked(saveUpload).mockResolvedValue(
+			"/uploads/aviso-docs/doc-1-aviso.pdf",
+		)
+	})
+
+	it("clears avisoMatchedAt when re-saving with a mismatch after a prior match", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...invoiced,
+			status: "CLARO_UPLOADED",
+			avisoMatchedAt: new Date(),
+			avisoLines: [
+				{
+					serviceCodeId: "c1",
+					claroCode: "34006301",
+					qty: 5,
+					unitPrice: 42.343,
+					lineAmount: 211.72,
+				},
+			],
+		} as any)
+		const form = intent("save_aviso", {
+			avisoNumber: "10353961",
+			avisoLines: JSON.stringify([
+				{
+					serviceCodeId: "c1",
+					claroCode: "34006301",
+					qty: 5,
+					unitPrice: 2324.656,
+				},
+			]),
+		})
+		form.set(
+			"avisoPdf",
+			new File([Buffer.from("%PDF-1.4")], "aviso.pdf", {
+				type: "application/pdf",
+			}),
+		)
+		await action({
+			request: post(form),
+			params: { id: "doc-1" },
+		} as any)
+		expect(db.jafInvoice.update).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({
+					avisoMatchedAt: null,
+					status: "SUPERVISOR_APPROVED",
+				}),
+			}),
+		)
+	})
+})
+
+describe("review: save_aviso release lock", () => {
+	const invoiced = {
+		...approvedDoc,
+		jafInvoiceGeneratedAt: new Date(),
+		jafInvoiceLines: matchingInvoiceLines,
+		jafInvoiceLineTotal: 239.34,
+		avisoDocPath: "/uploads/aviso-docs/doc-1-aviso.pdf",
+		avisoLines: matchingAvisoLines,
+		avisoMatchedAt: new Date(),
+	}
+
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1", role: "SUPERVISOR", name: "E" },
+			session: {},
+		} as any)
+		vi.mocked(getAvisoAmountTolerance).mockResolvedValue(0.01)
+	})
+
+	it("rejects save_aviso after release without changing the job", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...invoiced,
+			releasedToFinanceAt: new Date(),
+		} as any)
+		const form = intent("save_aviso", {
+			avisoNumber: "10353961",
+			avisoLines: JSON.stringify(matchingAvisoLines),
+		})
+		const res = await action({
+			request: post(form),
+			params: { id: "doc-1" },
+		} as any)
+		expect(res).toEqual({
+			errorKey: "docs_review.errors.aviso_locked_after_release",
+		})
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+		expect(db.auditTrail.create).not.toHaveBeenCalled()
+	})
+
+	it("rejects save_aviso at LC_REQUEST_GENERATED", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...invoiced,
+			status: "LC_REQUEST_GENERATED",
+		} as any)
+		const res = await action({
+			request: post(
+				intent("save_aviso", {
+					avisoNumber: "10353961",
+					avisoLines: JSON.stringify(matchingAvisoLines),
+				}),
+			),
+			params: { id: "doc-1" },
+		} as any)
+		expect(res).toEqual({
+			errorKey: "docs_review.errors.aviso_locked_after_release",
+		})
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+})
+
+describe("review: supervisor ownership", () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(getAvisoAmountTolerance).mockResolvedValue(0.01)
+		vi.mocked(getActiveServiceCodes).mockResolvedValue(CATALOG as any)
+		vi.mocked(db.photo.findMany).mockResolvedValue([])
+		vi.mocked(db.preCertSheet.findFirst).mockResolvedValue(null)
+		vi.mocked(db.user.findUnique).mockResolvedValue({ name: "Other" } as any)
+	})
+
+	it("returns 404 on loader for another supervisor's job", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-b", role: "SUPERVISOR", name: "B" },
+			session: {},
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...approvedDoc,
+			supervisorId: "sup-a",
+		} as any)
+		await expect(
+			loader({
+				request: new Request("http://localhost/docs/doc-1/review"),
+				params: { id: "doc-1" },
+			} as any),
+		).rejects.toMatchObject({ status: 404 })
+	})
+
+	it("returns 404 on approve for another supervisor's job", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-b", role: "SUPERVISOR", name: "B" },
+			session: {},
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...approvedDoc,
+			supervisorId: "sup-a",
+			status: "FIELD_UPDATED",
+		} as any)
+		await expect(
+			action({
+				request: post(intent("approve")),
+				params: { id: "doc-1" },
+			} as any),
+		).rejects.toMatchObject({ status: 404 })
 	})
 })

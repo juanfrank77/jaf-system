@@ -1,4 +1,12 @@
 import type { Role } from "../../generated/prisma/client"
+import type { AvisoLine, InvoiceLine } from "./service-lines"
+import { checkAvisoMatch } from "./supervisor-stage"
+
+export type AvisoTransitionContext = {
+	jafInvoiceLines: unknown
+	avisoLines: unknown
+	tolerance: number
+}
 
 const EDITABLE_STATUSES = ["CREATED", "PREPPED"] as const
 type EditableStatus = (typeof EDITABLE_STATUSES)[number]
@@ -47,9 +55,25 @@ export function canTransition(
 	currentStatus: string,
 	targetStatus: string,
 	role: Role,
+	aviso?: AvisoTransitionContext,
 ): boolean {
 	const rule = TRANSITIONS[targetStatus]
 	if (!rule) return false
 	const validFrom = Array.isArray(rule.from) ? rule.from : [rule.from]
-	return validFrom.includes(currentStatus) && rule.roles.includes(role)
+	if (!validFrom.includes(currentStatus) || !rule.roles.includes(role)) {
+		return false
+	}
+	if (
+		targetStatus === "CLARO_UPLOADED" ||
+		targetStatus === "LC_REQUEST_GENERATED"
+	) {
+		if (!aviso) return false
+		const invoiceLines = (aviso.jafInvoiceLines as InvoiceLine[] | null) ?? []
+		const avisoLines = (aviso.avisoLines as AvisoLine[] | null) ?? []
+		if (invoiceLines.length === 0 || avisoLines.length === 0) return false
+		if (!checkAvisoMatch(invoiceLines, avisoLines, aviso.tolerance).amountOk) {
+			return false
+		}
+	}
+	return true
 }

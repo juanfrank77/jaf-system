@@ -5,12 +5,20 @@ import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { Button } from "~/components/ui/button"
+import {
+	assertAvisoAmountMatches,
+	avisoAmountMatch,
+} from "~/lib/aviso-guard.server"
 import { db } from "~/lib/db.server"
 import { generateActaConformidadPdf } from "~/lib/pdf/acta-conformidad.server"
 import { generateScheduleAccountsPdf } from "~/lib/pdf/schedule-accounts.server"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
-import { getIvuRate, getLcPbccAdvanceRate } from "~/lib/system-settings.server"
+import {
+	getAvisoAmountTolerance,
+	getIvuRate,
+	getLcPbccAdvanceRate,
+} from "~/lib/system-settings.server"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id_.lc"
 
@@ -27,8 +35,12 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
-	if (!canTransition(doc.status, "LC_REQUEST_GENERATED", user.role))
-		throw redirect(`/docs/${params.id}`)
+	const tolerance = await getAvisoAmountTolerance()
+	const atOrPastLc = doc.status === "LC_REQUEST_GENERATED"
+	const released = !!doc.releasedToFinanceAt
+	const canEnterLc = doc.status === "CLARO_UPLOADED" || atOrPastLc || released
+	if (!canEnterLc) throw redirect(`/docs/${params.id}`)
+	const avisoLegacyMismatch = !avisoAmountMatch(doc, tolerance).amountOk
 	const serviceCodes = await db.serviceCode.findMany()
 	const supervisor = await db.user.findUnique({
 		where: { id: doc.supervisorId },
@@ -45,6 +57,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		supervisor,
 		poLinks,
 		ivuRate,
+		avisoLegacyMismatch,
+		atOrPastLc,
 	}
 }
 
@@ -53,7 +67,13 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
-	if (!canTransition(doc.status, "LC_REQUEST_GENERATED", user.role))
+	const tolerance = await getAvisoAmountTolerance()
+	const avisoCtx = {
+		jafInvoiceLines: doc.jafInvoiceLines,
+		avisoLines: doc.avisoLines,
+		tolerance,
+	}
+	if (!canTransition(doc.status, "LC_REQUEST_GENERATED", user.role, avisoCtx))
 		throw redirect(`/docs/${params.id}`)
 
 	const form = await request.formData()
@@ -133,6 +153,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 		const localPath = path.join(lcDir, `${params.id}-schedule.pdf`)
 		await fs.writeFile(localPath, pdfBytes)
 
+		assertAvisoAmountMatches(doc, tolerance)
+
 		await db.$transaction([
 			db.jafInvoice.update({
 				where: { id: params.id },
@@ -167,7 +189,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 }
 
 export default function LcView({ loaderData }: Route.ComponentProps) {
-	const { doc, serviceCodes, ivuRate } = loaderData
+	const { doc, serviceCodes, ivuRate, avisoLegacyMismatch, atOrPastLc } =
+		loaderData
 	const { t } = useTranslation()
 	const used =
 		(doc.materialsUsed as { serviceCodeId: string; qty: number }[]) || []
@@ -182,6 +205,11 @@ export default function LcView({ loaderData }: Route.ComponentProps) {
 			<p className="text-xs text-slate-400">
 				{t("docs_lc.ivu_rate", { rate: (ivuRate * 100).toFixed(1) })}
 			</p>
+			{avisoLegacyMismatch && (
+				<p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+					{t("docs_lc.aviso_legacy_mismatch_warning")}
+				</p>
+			)}
 
 			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 				<div className="bg-white border rounded-lg p-4">
@@ -243,7 +271,9 @@ export default function LcView({ loaderData }: Route.ComponentProps) {
 				</Form>
 				<Form method="post">
 					<input type="hidden" name="intent" value="generate_schedule" />
-					<Button type="submit">{t("docs_lc.generate_schedule")}</Button>
+					<Button type="submit" disabled={avisoLegacyMismatch || atOrPastLc}>
+						{t("docs_lc.generate_schedule")}
+					</Button>
 				</Form>
 			</div>
 			<p className="text-xs text-slate-400">{t("docs_lc.footer_note")}</p>

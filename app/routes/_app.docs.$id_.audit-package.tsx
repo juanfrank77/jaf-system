@@ -1,10 +1,15 @@
 import { db } from "~/lib/db.server"
+import { requireJobAccess } from "~/lib/job-access.server"
 import { generateAuditPackagePdf } from "~/lib/pdf/audit-package.server"
 import { requireRole } from "~/lib/permissions.server"
 import type { Route } from "./+types/_app.docs.$id_.audit-package"
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-	await requireRole(request, ["SUPERVISOR", "FINANCE", "ADMIN"])
+	const { user } = await requireRole(request, [
+		"SUPERVISOR",
+		"FINANCE",
+		"ADMIN",
+	])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 		include: {
@@ -13,6 +18,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			warehouse: true,
 		},
 	})
+	requireJobAccess(user, doc, "read")
 	const serviceCodes = await db.serviceCode.findMany()
 	const codeMap = Object.fromEntries(
 		serviceCodes.map((c) => [

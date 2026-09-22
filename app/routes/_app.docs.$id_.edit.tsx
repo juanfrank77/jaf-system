@@ -7,7 +7,12 @@ import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
+import {
+	activeBrigadesWhere,
+	isBrigadeInScope,
+} from "~/lib/brigade-scope.server"
 import { db } from "~/lib/db.server"
+import { requireJobAccess } from "~/lib/job-access.server"
 import { isEditableStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import { getActiveMaterialCodes } from "~/lib/service-codes.server"
@@ -29,12 +34,13 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			supervisor: { select: { id: true, name: true } },
 		},
 	})
+	requireJobAccess(user, doc, "read")
 	if (!isEditableStatus(doc.status)) throw redirect(`/docs/${params.id}`)
 
 	const [serviceCodes, brigades] = await Promise.all([
 		getActiveMaterialCodes(),
 		db.brigade.findMany({
-			where: { active: true },
+			where: activeBrigadesWhere(user),
 			orderBy: [{ area: "asc" }, { name: "asc" }],
 			select: { id: true, name: true, area: true, code: true, leadName: true },
 		}),
@@ -55,6 +61,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
+	requireJobAccess(user, doc, "write")
 	if (!isEditableStatus(doc.status)) throw redirect(`/docs/${params.id}`)
 
 	const form = await request.formData()
@@ -90,6 +97,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const brigade = await db.brigade.findUniqueOrThrow({
 		where: { id: brigadeId },
 	})
+	if (!isBrigadeInScope(user, brigade)) {
+		return { errorKey: "docs_edit.errors.brigade_not_allowed" }
+	}
 	const assignedCrewIds = brigade.memberIds
 
 	const materialsChanged =

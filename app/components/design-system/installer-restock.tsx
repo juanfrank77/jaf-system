@@ -3,6 +3,10 @@ import { useTranslation } from "react-i18next"
 import { Form, Link, useNavigation } from "react-router"
 import { useOnline } from "~/hooks/use-online"
 import { queueInstallerRestock } from "~/lib/installer-sync"
+import {
+	countRestockLinesRequiringApproval,
+	type StockLevel,
+} from "~/lib/van-inventory"
 import type { AdjustInventoryRow } from "./installer-adjust"
 import { ParStatusBanner } from "./installer-par-banner"
 import {
@@ -105,6 +109,8 @@ export function InstallerRestockV2({
 	pendingRequestCount,
 	restockRequests,
 	prefillByRow = {},
+	approvalLedger = [],
+	stockLevels = [],
 	errorKey,
 }: {
 	van: { id: string; name: string }
@@ -115,6 +121,8 @@ export function InstallerRestockV2({
 	pendingRequestCount: number
 	restockRequests: RestockRequestRow[]
 	prefillByRow?: Record<string, number>
+	approvalLedger?: { serviceCodeId: string; qty: number; type: string }[]
+	stockLevels?: StockLevel[]
 	errorKey: string | null
 }) {
 	const { t } = useTranslation()
@@ -148,6 +156,16 @@ export function InstallerRestockV2({
 		qtyByRow,
 		comparison,
 	})
+
+	const aboveParLineCount = useMemo(
+		() =>
+			countRestockLinesRequiringApproval(
+				submitState.items,
+				approvalLedger,
+				stockLevels,
+			),
+		[approvalLedger, stockLevels, submitState.items],
+	)
 
 	const greetSubtitle = useMemo(() => {
 		const parts: string[] = []
@@ -286,6 +304,18 @@ export function InstallerRestockV2({
 							<div style={{ marginBottom: 8 }}>
 								<Note tone="neutral">
 									{t("ds.installer.restock_prefill_note")}
+								</Note>
+							</div>
+						) : null}
+						{aboveParLineCount > 0 ? (
+							<div style={{ marginBottom: 8 }} aria-live="polite">
+								<Note tone="warn">
+									{t(
+										aboveParLineCount === 1
+											? "ds.installer.restock_above_par_signoff_one"
+											: "ds.installer.restock_above_par_signoff_other",
+										{ count: aboveParLineCount },
+									)}
 								</Note>
 							</div>
 						) : null}

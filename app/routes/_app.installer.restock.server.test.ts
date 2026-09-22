@@ -73,7 +73,7 @@ describe("POST /installer/restock", () => {
 		}
 	}
 
-	it("creates a prefilled-to-par request as REQUESTED", async () => {
+	it("creates a prefilled-to-par request as REQUESTED when no pending on that code", async () => {
 		vi.mocked(requireRole).mockResolvedValue({
 			user: { id: "installer-1", role: "INSTALLER" },
 			session: {},
@@ -105,6 +105,44 @@ describe("POST /installer/restock", () => {
 		const createCall = vi.mocked(db.vanRestockRequest.create).mock.calls[0][0]
 		expect(createCall.data.status).toBe("REQUESTED")
 		expect(createCall.data.requiresApproval).toBe(false)
+	})
+
+	it("creates a prefilled request as PENDING_APPROVAL when pending already covers the code", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "installer-1", role: "INSTALLER" },
+			session: {},
+		} as any)
+		vi.mocked(db.van.findUnique).mockResolvedValue(baseVan(10) as any)
+		vi.mocked(db.serviceCode.findMany).mockResolvedValue([
+			{ id: "sc-1" },
+		] as any)
+		vi.mocked(db.$queryRaw).mockResolvedValue([
+			{ serviceCodeId: "sc-1", qty: 2 },
+		] as any)
+		vi.mocked(db.vanRestockRequest.findMany).mockResolvedValue([
+			{
+				items: [{ serviceCodeId: "sc-1", qty: 3 }],
+			},
+		] as any)
+		vi.mocked(db.vanRestockRequest.create).mockResolvedValue({
+			id: "req-2",
+		} as any)
+		vi.mocked(db.user.findMany).mockResolvedValue([])
+		vi.mocked(db.$transaction).mockResolvedValue(undefined as any)
+
+		const form = new FormData()
+		form.set("warehouseId", "wh-1")
+		form.set("items", JSON.stringify([{ serviceCodeId: "sc-1", qty: 8 }]))
+
+		const result = await action({
+			request: formRequest(form),
+			params: {},
+		} as any).catch((r: any) => r)
+
+		expect(result.status).toBe(302)
+		const createCall = vi.mocked(db.vanRestockRequest.create).mock.calls[0][0]
+		expect(createCall.data.status).toBe("PENDING_APPROVAL")
+		expect(createCall.data.requiresApproval).toBe(true)
 	})
 
 	it("creates a within-standard request straight to REQUESTED", async () => {

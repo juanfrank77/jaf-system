@@ -42,7 +42,7 @@ export function getEffectiveOnHand(
 	return computeVanInventory(transactions).get(serviceCodeId) ?? 0
 }
 
-/** Prefill request qty: max(0, par − effective on-hand). Zero when no par or at/above par. */
+/** Prefill request qty: max(0, par − on van). Van ledger only — not pending requests. */
 export function computeRestockPrefillQty(
 	serviceCodeId: string,
 	transactions: InventoryTransaction[],
@@ -51,8 +51,8 @@ export function computeRestockPrefillQty(
 	const standard =
 		standardLevels.find((l) => l.serviceCodeId === serviceCodeId)?.qty ?? 0
 	if (standard <= 0) return 0
-	const effective = getEffectiveOnHand(transactions, serviceCodeId)
-	return Math.max(0, standard - effective)
+	const onVan = getOnHand(transactions, serviceCodeId)
+	return Math.max(0, standard - onVan)
 }
 
 /** Map of serviceCodeId → prefill qty for rows below par (empty when at/above par or no par). */
@@ -91,6 +91,16 @@ export function evaluateRestockApproval(
 	}
 
 	return { requiresApproval: reasons.length > 0, reasons }
+}
+
+/** Lines in the request that exceed par (same rules as {@link evaluateRestockApproval}). */
+export function countRestockLinesRequiringApproval(
+	items: RestockItem[],
+	transactions: InventoryTransaction[],
+	standardLevels: StockLevel[],
+): number {
+	return evaluateRestockApproval(items, transactions, standardLevels).reasons
+		.length
 }
 
 export function buildInventoryComparison(

@@ -19,6 +19,8 @@ const comparison = [
 	},
 ]
 
+const stockLevels = [{ serviceCodeId: "sc-1", qty: 5 }]
+
 describe("InstallerRestockV2 prefill", () => {
 	it("renders prefilled qty and submits without editing", async ({
 		renderStub,
@@ -46,6 +48,10 @@ describe("InstallerRestockV2 prefill", () => {
 							pendingRequestCount={0}
 							restockRequests={[]}
 							prefillByRow={{ "sc-1": 3 }}
+							approvalLedger={[
+								{ serviceCodeId: "sc-1", qty: 2, type: "RESTOCK" },
+							]}
+							stockLevels={stockLevels}
 							errorKey={null}
 						/>
 					),
@@ -53,7 +59,9 @@ describe("InstallerRestockV2 prefill", () => {
 			],
 		})
 
-		expect(screen.getByText(/Prefilled to par/i)).toBeInTheDocument()
+		expect(
+			screen.getByText(/Pre-filled to par minus on van/i),
+		).toBeInTheDocument()
 		expect(screen.getByLabelText(/Qty for Cable/i)).toHaveValue(3)
 
 		await userEvent.selectOptions(screen.getByLabelText(/Warehouse/i), "wh-1")
@@ -69,6 +77,51 @@ describe("InstallerRestockV2 prefill", () => {
 
 		await waitFor(() => {
 			expect(postCount).toBe(1)
+		})
+	})
+})
+
+describe("InstallerRestockV2 above-par sign-off note", () => {
+	it("updates live when a quantity puts a line above par", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<InstallerRestockV2
+							van={{ id: "van-1", name: "Van 444" }}
+							warehouses={[{ id: "wh-1", name: "Guaynabo" }]}
+							comparison={comparison}
+							parStatus={{ hasParLevels: true, belowParCount: 1 }}
+							hasPendingRestock={false}
+							pendingRequestCount={0}
+							restockRequests={[]}
+							prefillByRow={{ "sc-1": 3 }}
+							approvalLedger={[
+								{ serviceCodeId: "sc-1", qty: 2, type: "RESTOCK" },
+							]}
+							stockLevels={stockLevels}
+							errorKey={null}
+						/>
+					),
+				},
+			],
+		})
+
+		expect(
+			screen.queryByText(/go above par → this request needs sign-off/i),
+		).toBeNull()
+
+		await userEvent.fill(screen.getByLabelText(/Qty for Cable/i), "4")
+
+		await waitFor(() => {
+			expect(
+				screen.getByText(
+					/1 line goes above par → this request needs sign-off/i,
+				),
+			).toBeInTheDocument()
 		})
 	})
 })

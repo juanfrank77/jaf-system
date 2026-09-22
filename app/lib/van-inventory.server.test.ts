@@ -4,6 +4,7 @@ import {
 	buildRestockPrefillMap,
 	computeRestockPrefillQty,
 	computeVanInventory,
+	countRestockLinesRequiringApproval,
 	evaluateRestockApproval,
 	getOnHand,
 } from "./van-inventory"
@@ -140,17 +141,41 @@ describe("van-inventory helpers", () => {
 			).toBe(0)
 		})
 
-		it("accounts for pending request qty like evaluateRestockApproval", () => {
+		it("uses van on-hand only and ignores pending restock in the ledger", () => {
+			const vanLedger = [{ serviceCodeId: "sc-1", qty: 2, type: "RESTOCK" }]
+			expect(computeRestockPrefillQty("sc-1", vanLedger, standards)).toBe(8)
 			expect(
 				computeRestockPrefillQty(
 					"sc-1",
+					[...vanLedger, { serviceCodeId: "sc-1", qty: 3, type: "RESTOCK" }],
+					standards,
+				),
+			).toBe(5)
+		})
+	})
+
+	describe("countRestockLinesRequiringApproval", () => {
+		it("counts lines that exceed par using effective on-hand", () => {
+			expect(
+				countRestockLinesRequiringApproval(
+					[{ serviceCodeId: "sc-1", qty: 3 }],
 					[
 						{ serviceCodeId: "sc-1", qty: 2, type: "RESTOCK" },
 						{ serviceCodeId: "sc-1", qty: 3, type: "RESTOCK" },
 					],
-					standards,
+					[{ serviceCodeId: "sc-1", qty: 10 }],
 				),
-			).toBe(5)
+			).toBe(0)
+			expect(
+				countRestockLinesRequiringApproval(
+					[{ serviceCodeId: "sc-1", qty: 6 }],
+					[
+						{ serviceCodeId: "sc-1", qty: 2, type: "RESTOCK" },
+						{ serviceCodeId: "sc-1", qty: 3, type: "RESTOCK" },
+					],
+					[{ serviceCodeId: "sc-1", qty: 10 }],
+				),
+			).toBe(1)
 		})
 	})
 

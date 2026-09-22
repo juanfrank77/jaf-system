@@ -64,7 +64,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		parLevels,
 		restockRequests,
 		pendingRestock,
-		pendingForPrefill,
+		pendingForApproval,
 	] = await Promise.all([
 		db.vanInventoryTransaction.findMany({ where: { vanId: van.id } }),
 		getVanParLevels(van.id),
@@ -100,7 +100,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		serviceCodeMap,
 	)
 	const pendingItems = (
-		pendingForPrefill as { items: { serviceCodeId: string; qty: number }[] }[]
+		pendingForApproval as { items: { serviceCodeId: string; qty: number }[] }[]
 	).flatMap((r) =>
 		(r.items || []).map((i) => ({
 			serviceCodeId: i.serviceCodeId,
@@ -108,10 +108,15 @@ export async function loader({ request }: Route.LoaderArgs) {
 			type: "RESTOCK" as const,
 		})),
 	)
-	const prefillByRow = buildRestockPrefillMap(
-		[...transactions, ...pendingItems],
-		stockLevels,
-	)
+	const prefillByRow = buildRestockPrefillMap(transactions, stockLevels)
+	const approvalLedger = [
+		...transactions.map((t) => ({
+			serviceCodeId: t.serviceCodeId,
+			qty: t.qty,
+			type: t.type,
+		})),
+		...pendingItems,
+	]
 	const parStatus = computeParStatus({ parLevels, transactions })
 	const pendingRequestCount = restockRequests.filter((r) =>
 		(PENDING_RESTOCK_STATUSES as readonly string[]).includes(r.status),
@@ -129,6 +134,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 		pendingRequestCount,
 		restockRequests,
 		prefillByRow,
+		approvalLedger,
+		stockLevels,
 	}
 }
 
@@ -292,6 +299,8 @@ export default function RequestRestock({
 		pendingRequestCount,
 		restockRequests,
 		prefillByRow = {},
+		approvalLedger = [],
+		stockLevels = [],
 	} = loaderData
 	const { t } = useTranslation()
 	const errorKey =
@@ -316,6 +325,8 @@ export default function RequestRestock({
 				pendingRequestCount={pendingRequestCount}
 				restockRequests={restockRequests}
 				prefillByRow={prefillByRow}
+				approvalLedger={approvalLedger}
+				stockLevels={stockLevels}
 				errorKey={errorKey}
 			/>
 		)

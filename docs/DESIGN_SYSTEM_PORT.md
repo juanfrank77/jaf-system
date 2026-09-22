@@ -88,7 +88,7 @@ export function KPI({ label, value, delta, variant, viz }: KPIProps) {
 |------------|-------------|----------------|-----|
 | 1 | Created | `CREATED` | ✓ Clean |
 | 2 | Warehouse prep | `PREPPED` (+ `preppedAt`) | ✓ Clean — labels match |
-| 3 | Crew signs out | `PREPPED` on pickup screen → `SIGNED` after dual sigs | ⚠ `deriveSupervisorStage(PREPPED)` → `WAREHOUSE` (step 2); `supervisorStageToGuideStep` **never returns 3** (known bug, fix pending) |
+| 3 | Crew signs out | `SIGNED` | ✓ Clean — [`deriveGuideStep`](../app/lib/supervisor-stage.ts) returns 3 at `SIGNED` |
 | 4 | Field work | `SIGNED` → `FIELD_UPDATED` | ⚠ Ambiguous — "in field" vs "submitted" are two DocStatus values for one guide step |
 | 5 | You review | `FIELD_UPDATED` → `SUPERVISOR_APPROVED` | ✓ Clean |
 | 6 | JAF invoice | `jafInvoiceGeneratedAt` timestamp (status stays `SUPERVISOR_APPROVED`) | ✗ Not in enum — invoice generation is a timestamp, not a status transition |
@@ -103,9 +103,9 @@ export function KPI({ label, value, delta, variant, viz }: KPIProps) {
 - Tables that want to sort "by step" need a computed step column, not a direct `DocStatus` enum sort
 - Steps 6–8 rendering requires checking nullable timestamps — a job at `SUPERVISOR_APPROVED` may be at step 5, 6, 7, or 8 depending on which timestamps are set
 
-**Known bug — step 3 missing from flow strip:** [`supervisorStageToGuideStep`](../app/lib/supervisor-stage.ts) maps `WAREHOUSE` → 2 and `FIELD` → 4, so guide step **3 is never returned**. Production UI today uses `StepRail` (9 internal stages) or hard-coded step numbers on DS screens — not this helper. Fix pending on branch `fix-guide-step-3`.
+**Guide step derivation — fixed via [`deriveGuideStep`](../app/lib/supervisor-stage.ts):** Reads `DocStatus` + timestamps directly (not `SupervisorStage`). Step 3 is returned at `SIGNED`. Legacy [`supervisorStageToGuideStep`](../app/lib/supervisor-stage.ts) is deprecated — it still omits step 3 because `SupervisorStage` cannot distinguish crew sign-out from field work; StepRail continues to use `deriveSupervisorStage` unchanged.
 
-**Step-number convention — unresolved (product owner):** The mapping table above reads like **last status reached** (e.g. `PREPPED` labelled "Warehouse prep" at step 2). The example code below and [`FlowStrip`](../app/components/design-system/primitives.tsx) treat the number as **work in progress** (`step.n < current` = done). Pick one convention before wiring `.jaf-flow` everywhere.
+**Step-number convention (default — pending product owner):** **`deriveGuideStep` uses "last status reached"** — the mapping table above and [`GUIDE_STEP_FROM_STATUS`](../app/lib/supervisor-stage.ts). [`FlowStrip`](../app/components/design-system/primitives.tsx) may still treat the number as work-in-progress (`step.n < current` = done); confirm with product owner before wiring `.jaf-flow` everywhere.
 
 **Recommended resolution:**
 
@@ -113,7 +113,7 @@ export function KPI({ label, value, delta, variant, viz }: KPIProps) {
 
 **DO:**
 
-1. Use `deriveSupervisorStage` (or equivalent) as the source of truth for rendering `.jaf-flow` strips and computing step numbers. This function already encodes the timestamp logic:
+1. Use [`deriveGuideStep`](../app/lib/supervisor-stage.ts) for the 8-step `.jaf-flow` strip. Use `deriveSupervisorStage` only for StepRail (9 stages). Timestamp logic for steps 6–8:
 
    ```ts
    // Simplified logic (see app/lib/supervisor-stage.ts for full version)
@@ -124,12 +124,11 @@ export function KPI({ label, value, delta, variant, viz }: KPIProps) {
    return step 8 (RELEASED)
    ```
 
-2. Render `.jaf-flow` strips dynamically with step numbers 1–8 derived from `deriveSupervisorStage`:
+2. Render `.jaf-flow` strips dynamically with step numbers 1–8 from `deriveGuideStep`:
 
    ```tsx
-   const currentStep = deriveSupervisorStage(invoice)
-   const stepNumber = STAGE_TO_STEP_MAP[currentStep] // e.g. AVISO → 7
-   <FlowStrip steps={8} current={stepNumber} you={roleSteps[currentRole]} />
+   const stepNumber = deriveGuideStep(invoice) // 1–8, or null when cancelled
+   <FlowStrip steps={8} current={stepNumber ?? 1} you={roleSteps[currentRole]} />
    ```
 
 3. Use guide's step labels for the `.jaf-flow` strip (Created, Warehouse prep, Crew signs out, Field work, You review, JAF invoice, Aviso matched, To Finance) — these are UI conventions, not schema labels. The app's `DocStatus` labels (CREATED, PREPPED, etc.) remain in code/logs.
@@ -148,7 +147,7 @@ export function KPI({ label, value, delta, variant, viz }: KPIProps) {
     */
    ```
 
-5. For sorting: Add a computed `derivedStep` getter on `JafInvoice` that calls `deriveSupervisorStage` → step number. Use this for table sorts, not raw `DocStatus`.
+5. For sorting: Add a computed `derivedStep` getter on `JafInvoice` that calls `deriveGuideStep`. Use this for table sorts, not raw `DocStatus`.
 
 ---
 

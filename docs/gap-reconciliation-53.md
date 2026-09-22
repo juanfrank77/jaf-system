@@ -13,7 +13,7 @@ Full reconciliation of all 53 claims from the JAF Ops Design System Guide agains
 
 | # | Claim | Needs to Exist As | Existing Field/Table | Verdict |
 |---|-------|-------------------|---------------------|---------|
-| 1 | Step 1-8 ordered enum, sortable | Ordered enum on work order | `DocStatus` enum (steps 1-5) + timestamps (steps 6-8); [`deriveSupervisorStage`](../app/lib/supervisor-stage.ts) computes step number from status + timestamps | **PARTIAL** - Derivation works for flow strip (`supervisorStageToGuideStep` maps 9 stages → 8 guide steps, step 3 crew sign-out omitted). **ADDITIVE**: persisted `derivedStep` for table sorts. |
+| 1 | Step 1-8 ordered enum, sortable | Ordered enum on work order | `DocStatus` enum (steps 1-5) + timestamps (steps 6-8); [`deriveGuideStep`](../app/lib/supervisor-stage.ts) derives 1–8 from status + timestamps (step 3 at `SIGNED`; no stored enum) | **PARTIAL** - Derivation works for flow strip. **ADDITIVE**: persisted `derivedStep` for table sorts. |
 | 2 | Auto work-order number `JAF-2026-####` | Server-side sequence per year | `JafInvoice.controlNumber` unique string | **PARTIAL** - [`generateControlNumber`](../app/lib/control-number.server.ts) emits `MAINT-YYMMDD-###` per day, not `JAF-YYYY-####` per year |
 | 3 | Aviso optional at step 1, captured at step 7 | Nullable 8-digit field + capture timestamp + user | `avisoNumber?` nullable; `avisoMatchedAt?` timestamp exists; **NO** `avisoCapturedBy` user FK | **ADDITIVE** - Add `avisoCapturedById?`, `avisoCapturedAt?` |
 | 4 | Estimated address + correction history (diff) | Two address fields + GPS + timestamp + user | `jobAddressEstimated`, `jobAddressActual`, `addressCorrections?` JSON, `gpsCoordinates?` | **SATISFIED** |
@@ -146,7 +146,7 @@ Independent verification of every claim previously marked **SATISFIED**:
 
 | # | Claim | Verdict | Evidence | Corrected wording if not TRUE |
 |---|-------|---------|----------|-------------------------------|
-| 1 | Step 1-8 ordered enum | **PARTIAL** | `app/lib/supervisor-stage.ts:66-112` | Derive guide step via `supervisorStageToGuideStep`; add persisted sort key |
+| 1 | Step 1-8 ordered enum | **PARTIAL** | `app/lib/supervisor-stage.ts` (`deriveGuideStep`) | Derived via `deriveGuideStep`; step 3 included; sort column still not persisted |
 | 2 | Auto WO number | **PARTIAL** | `app/lib/control-number.server.ts:14-24` | Daily `MAINT-YYMMDD-###` sequence, not annual `JAF-YYYY-####` |
 | 4 | Address + correction diff | **TRUE** | `prisma/schema.prisma:166-218` | — |
 | 7 | Searchable 934-code catalog | **PARTIAL** | `app/routes/_app.admin.catalog.tsx:306-327` | Client filter; add trigram index on `ServiceCode.name` for scale |

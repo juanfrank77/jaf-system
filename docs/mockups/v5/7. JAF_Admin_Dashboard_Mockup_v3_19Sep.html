@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JAF Ops, Command Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ---------------------------------------------------------------
+     JAF Ops, Monica's command center. Mockup v3, 19 Sep 2026.
+     Dual theme. Follows the OS setting; the toggle in the top bar
+     overrides it. One accent (blue), status colors only for state.
+     Radius rule: containers 16px, controls 10px, chips 6px.
+     Blue two-step ramp validated on both surfaces: PASS / PASS.
+     Chart data: monthly sums from Lissette's 2026 log, by the month
+     the brigade was paid. Real figures unless dotted.
+     --------------------------------------------------------------- */
+  :root{
+    color-scheme: light;
+    --plane:#f4f4f2; --surface:#fcfcfb; --surface-2:#f0f0ed;
+    --ink:#111110; --ink-2:#52514e; --ink-3:#898781;
+    --hair:#e1e0d9; --ring:rgba(11,11,11,.08);
+    --accent:#1c5cab; --accent-2:#86b6ef; --accent-ink:#ffffff;
+    --accent-wash:rgba(28,92,171,.08);
+    --critical:#d03b3b; --warning:#b7791f; --good:#006300;
+    --shadow:0 1px 2px rgba(30,28,20,.05), 0 10px 30px -14px rgba(30,28,20,.14);
+    --grid:#e1e0d9;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      color-scheme: dark;
+      --plane:#0f0f0e; --surface:#1a1a19; --surface-2:#222221;
+      --ink:#f4f4f1; --ink-2:#c3c2b7; --ink-3:#898781;
+      --hair:#2c2c2a; --ring:rgba(255,255,255,.08);
+      --accent:#3987e5; --accent-2:#9ec5f4; --accent-ink:#ffffff;
+      --accent-wash:rgba(57,135,229,.12);
+      --critical:#e66767; --warning:#e0a634; --good:#3fbf3f;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 30px -14px rgba(0,0,0,.6);
+      --grid:#2c2c2a;
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --plane:#0f0f0e; --surface:#1a1a19; --surface-2:#222221;
+    --ink:#f4f4f1; --ink-2:#c3c2b7; --ink-3:#898781;
+    --hair:#2c2c2a; --ring:rgba(255,255,255,.08);
+    --accent:#3987e5; --accent-2:#9ec5f4; --accent-ink:#ffffff;
+    --accent-wash:rgba(57,135,229,.12);
+    --critical:#e66767; --warning:#e0a634; --good:#3fbf3f;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 30px -14px rgba(0,0,0,.6);
+    --grid:#2c2c2a;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; background:var(--plane); color:var(--ink); }
+  body{ font-family:"Geist", system-ui, -apple-system, "Segoe UI", sans-serif; font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; transition:background .2s ease, color .2s ease; }
+  .shell{ display:grid; grid-template-columns:236px minmax(0,1fr); min-height:100dvh; }
+  .rail{ border-right:1px solid var(--hair); padding:22px 18px; display:flex; flex-direction:column; gap:8px; position:sticky; top:0; height:100dvh; background:var(--plane); }
+  .rail .wordmark{ padding:4px 10px 18px; font-size:16px; }
+  .rail .wordmark span{ display:block; font-size:11.5px; font-weight:500; color:var(--ink-3); margin-top:2px; }
+  .rail .grp{ font-size:11px; font-weight:600; color:var(--ink-3); padding:14px 10px 4px; letter-spacing:.02em; }
+  .rail a{ display:flex; align-items:center; justify-content:space-between; text-decoration:none; color:var(--ink-2); font-size:13.5px; font-weight:500; padding:8px 10px; border-radius:10px; }
+  .rail a:hover{ background:var(--surface-2); color:var(--ink); }
+  .rail a.on{ background:var(--surface); color:var(--ink); font-weight:600; box-shadow:var(--shadow); border:1px solid var(--ring); }
+  .rail a .pill{ font-size:11px; font-weight:600; background:var(--critical); color:#fff; padding:1px 7px; border-radius:6px; }
+  .rail a .n{ font-size:12px; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+  .rail .foot{ margin-top:auto; border-top:1px solid var(--hair); padding-top:14px; display:flex; flex-direction:column; gap:10px; }
+  .rail .user{ display:flex; align-items:center; gap:10px; padding:4px 10px; }
+  .rail .av{ width:30px; height:30px; border-radius:50%; background:var(--accent); color:#fff; font-size:12px; font-weight:600; display:flex; align-items:center; justify-content:center; }
+  .rail .user .nm{ font-size:13px; font-weight:600; line-height:1.2; }
+  .rail .user .rl{ font-size:11.5px; color:var(--ink-3); }
+  .wrap{ max-width:1200px; margin:0 auto; padding:0 28px 56px; width:100%; }
+
+  /* top bar */
+  .top{ height:68px; display:flex; align-items:center; gap:22px; border-bottom:1px solid var(--hair); }
+  .wordmark{ font-weight:700; letter-spacing:-.01em; font-size:15px; white-space:nowrap; }
+  .tabs{ display:flex; gap:2px; background:var(--surface-2); padding:3px; border-radius:10px; }
+  .tabs a{ text-decoration:none; font-size:13px; font-weight:500; color:var(--ink-2); padding:6px 12px; border-radius:8px; white-space:nowrap; }
+  .tabs a.on{ background:var(--surface); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.08); font-weight:600; }
+  .spacer{ flex:1; }
+  .who{ font-size:13px; color:var(--ink-2); white-space:nowrap; }
+  .btn{ font:inherit; font-weight:600; font-size:13px; background:var(--ink); color:var(--plane); border:0; border-radius:10px; padding:9px 14px; cursor:pointer; transition:transform .12s ease, opacity .12s ease; white-space:nowrap; }
+  .btn:hover{ opacity:.88; } .btn:active{ transform:translateY(1px); }
+  .btn.ghost{ background:transparent; color:var(--ink); border:1px solid var(--hair); }
+  .btn.ghost:hover{ background:var(--surface-2); opacity:1; }
+  .btn.acc{ background:var(--accent-ink); color:var(--accent); }
+  .btn.acc:hover{ opacity:.9; }
+  .toggle{ font:inherit; font-size:12.5px; font-weight:600; color:var(--ink-2); background:var(--surface-2); border:1px solid var(--hair); border-radius:10px; padding:7px 11px; cursor:pointer; }
+
+  /* greeting + kpi strip */
+  .greet{ padding:30px 0 18px; display:flex; align-items:flex-end; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+  .greet h1{ font-size:30px; font-weight:600; letter-spacing:-.02em; margin:0 0 4px; line-height:1.15; }
+  .greet p{ margin:0; color:var(--ink-2); font-size:15px; max-width:60ch; }
+  .greet b{ color:var(--ink); font-weight:600; }
+  .kpis{ display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin:6px 0 20px; }
+  .kpi{ background:var(--surface); border:1px solid var(--ring); border-radius:16px; padding:14px 16px; box-shadow:var(--shadow); display:flex; align-items:center; justify-content:space-between; gap:12px; min-width:0; }
+  .kpi .l{ font-size:12px; color:var(--ink-3); white-space:nowrap; }
+  .kpi .v{ font-size:24px; font-weight:600; letter-spacing:-.02em; line-height:1.15; margin-top:2px; }
+  .kpi .d{ font-size:12px; color:var(--ink-2); margin-top:2px; }
+  .kpi .v.neg{ color:var(--critical); }
+  .kpi .viz{ flex:0 0 auto; }
+  /* ring: fill carries the share, the track is a lighter step of the same hue */
+  .ring{ width:52px; height:52px; }
+  .ring .trk{ fill:none; stroke:var(--accent-2); stroke-opacity:.45; stroke-width:5; }
+  .ring .fil{ fill:none; stroke:var(--accent); stroke-width:5; stroke-linecap:round; transform:rotate(-90deg); transform-origin:50% 50%; }
+  .ring.crit .trk{ stroke:var(--critical); stroke-opacity:.22; }
+  .ring.crit .fil{ stroke:var(--critical); }
+  .ring text{ font-size:11px; font-weight:600; fill:var(--ink); text-anchor:middle; }
+  .ring .cap{ font-size:8px; font-weight:500; fill:var(--ink-3); }
+  /* sparkline and mini bars */
+  .spark{ width:72px; height:34px; }
+  .spark path{ fill:none; stroke:var(--accent); stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }
+  .spark .area{ fill:var(--accent); fill-opacity:.10; stroke:none; }
+  .spark circle{ fill:var(--accent); stroke:var(--surface); stroke-width:2; }
+  .mini{ display:flex; align-items:flex-end; gap:3px; height:34px; }
+  .mini i{ display:block; width:9px; background:var(--accent); border-radius:3px 3px 0 0; }
+  .mini i.lo{ background:var(--accent-2); }
+  @media (prefers-reduced-motion:no-preference){ .ring .fil{ transition:stroke-dashoffset .8s cubic-bezier(.16,1,.3,1); } }
+
+  /* grid + boxes */
+  .grid{ display:grid; grid-template-columns:repeat(12,1fr); gap:16px; }
+  .box{ background:var(--surface); border:1px solid var(--ring); border-radius:16px; box-shadow:var(--shadow); padding:20px 22px; min-width:0; }
+  .box.acc{ background:var(--accent); color:var(--accent-ink); border-color:transparent; }
+  .box.acc h2, .box.acc .sub{ color:rgba(255,255,255,.85); }
+  .c3{ grid-column:span 3; } .c4{ grid-column:span 4; } .c5{ grid-column:span 5; } .c12{ grid-column:span 12; }
+  .box h2{ font-size:13.5px; font-weight:600; color:var(--ink-2); margin:0 0 2px; }
+  .box .sub{ color:var(--ink-3); font-size:12.5px; margin:0 0 14px; }
+  .count{ display:inline-block; min-width:20px; text-align:center; font-size:11px; font-weight:600; padding:1px 6px; border-radius:6px; background:var(--critical); color:#fff; margin-left:6px; vertical-align:1px; }
+  .ex{ text-decoration:underline dotted var(--ink-3); text-underline-offset:3px; text-decoration-thickness:1px; }
+
+  /* exposure list */
+  .lines{ list-style:none; margin:4px 0 0; padding:0; }
+  .lines li{ display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--hair); }
+  .lines li:last-child{ border-bottom:0; }
+  .lines i{ width:10px; height:10px; border-radius:3px; flex:0 0 auto; }
+  .lines .n{ flex:1; font-size:13.5px; font-weight:500; }
+  .lines .v{ font-size:15px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .hero{ font-size:44px; font-weight:600; letter-spacing:-.03em; line-height:1; margin:4px 0 2px; }
+  .heroline{ color:var(--ink-2); font-size:13px; margin:0 0 14px; }
+
+  /* chart */
+  .chartwrap{ position:relative; }
+  .chart{ width:100%; height:auto; display:block; }
+  .legend{ display:flex; gap:18px; font-size:12.5px; color:var(--ink-2); margin:2px 0 6px; flex-wrap:wrap; }
+  .legend i{ display:inline-block; width:14px; height:3px; border-radius:2px; margin-right:7px; vertical-align:3px; }
+  .tip{ position:absolute; pointer-events:none; background:var(--ink); color:var(--plane); font-size:12px; padding:8px 10px; border-radius:8px; white-space:nowrap; transform:translate(-50%,-110%); opacity:0; transition:opacity .12s; box-shadow:var(--shadow); }
+  .tip b{ font-weight:600; }
+  .chartwrap:hover .tip{ opacity:1; }
+  .axis{ font-size:11px; fill:var(--ink-3); }
+  .grd{ stroke:var(--grid); stroke-width:1; }
+  .ln1{ stroke:var(--accent); } .ln2{ stroke:var(--accent-2); }
+  .dot1{ fill:var(--accent); } .dot2{ fill:var(--accent-2); }
+  .ringc{ stroke:var(--surface); stroke-width:2; }
+  .col:hover .band{ fill:var(--accent-wash); }
+  .band{ fill:transparent; }
+  .endlbl{ font-size:11.5px; font-weight:600; fill:var(--ink); }
+
+  /* glance tile */
+  .glance .big{ font-size:40px; font-weight:600; letter-spacing:-.03em; line-height:1; margin:6px 0 4px; }
+  .glance p{ margin:0 0 16px; font-size:13px; color:rgba(255,255,255,.85); }
+  .glance .btn{ display:block; width:100%; text-align:left; margin-top:8px; }
+
+  /* attention */
+  .att{ list-style:none; margin:0; padding:0; }
+  .att li{ display:grid; grid-template-columns:3px 1fr auto; gap:0 12px; padding:9px 0; border-bottom:1px solid var(--hair); align-items:start; }
+  .att li:last-child{ border-bottom:0; }
+  .att .mark{ width:3px; min-height:30px; border-radius:2px; background:var(--critical); margin-top:2px; }
+  .att .mark.w{ background:var(--warning); }
+  .att .t{ font-weight:600; font-size:13.5px; }
+  .att .d{ color:var(--ink-2); font-size:12.5px; }
+  .att .lvl{ font-size:11px; font-weight:600; color:var(--critical); padding-top:2px; }
+  .att .lvl.w{ color:var(--warning); }
+  .more{ display:block; margin-top:10px; font-size:12.5px; color:var(--accent); text-decoration:none; font-weight:600; }
+
+  /* field */
+  .bars{ display:grid; grid-template-columns:auto 1fr auto; gap:8px 12px; align-items:center; margin-top:6px; }
+  .bars .n{ font-size:13px; font-weight:500; }
+  .bars .b{ height:9px; background:var(--accent); border-radius:0 4px 4px 0; }
+  .bars .v{ font-size:12.5px; font-variant-numeric:tabular-nums; color:var(--ink-2); }
+  .split{ display:grid; grid-template-columns:1fr 1fr; gap:14px 18px; margin-top:14px; padding-top:14px; border-top:1px solid var(--hair); }
+  .stat .l{ font-size:12px; color:var(--ink-3); }
+  .stat .v{ font-size:22px; font-weight:600; letter-spacing:-.02em; line-height:1.15; }
+  .rows{ margin:6px 0 0; padding:0; list-style:none; }
+  .rows li{ display:flex; justify-content:space-between; gap:12px; padding:8px 0; border-bottom:1px solid var(--hair); font-size:13.5px; }
+  .rows li:last-child{ border-bottom:0; }
+  .st{ font-size:12px; font-weight:600; }
+  .st.crit{ color:var(--critical); } .st.warn{ color:var(--warning); } .st.ok{ color:var(--good); }
+
+  /* table */
+  table{ width:100%; border-collapse:collapse; margin-top:6px; }
+  th{ text-align:left; font-size:11.5px; font-weight:600; color:var(--ink-3); padding:8px 10px 8px 0; border-bottom:1px solid var(--hair); }
+  td{ padding:10px 10px 10px 0; border-bottom:1px solid var(--hair); font-size:13.5px; vertical-align:top; }
+  tr:last-child td{ border-bottom:0; }
+  tbody tr:hover td{ background:var(--accent-wash); }
+  td.num, th.num{ text-align:right; font-variant-numeric:tabular-nums; }
+  td.mono{ font-variant-numeric:tabular-nums; }
+  .neg{ color:var(--critical); }
+
+  footer{ margin-top:36px; padding-top:14px; border-top:1px solid var(--hair); color:var(--ink-3); font-size:12px; display:flex; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+
+  @media (prefers-reduced-motion:no-preference){
+    .kpi, .box, .greet{ animation:rise .5s cubic-bezier(.16,1,.3,1) both; }
+    .kpi:nth-child(2){ animation-delay:.04s } .kpi:nth-child(3){ animation-delay:.08s } .kpi:nth-child(4){ animation-delay:.12s } .kpi:nth-child(5){ animation-delay:.16s }
+    .grid .box:nth-child(1){ animation-delay:.10s } .grid .box:nth-child(2){ animation-delay:.15s } .grid .box:nth-child(3){ animation-delay:.20s }
+    .grid .box:nth-child(4){ animation-delay:.25s } .grid .box:nth-child(5){ animation-delay:.30s } .grid .box:nth-child(6){ animation-delay:.35s } .grid .box:nth-child(7){ animation-delay:.40s }
+    @keyframes rise{ from{ opacity:0; transform:translateY(8px) } to{ opacity:1; transform:none } }
+  }
+  .mdate{ display:none; }
+  @media (max-width:1024px){ .shell{ grid-template-columns:1fr; } .rail{ display:none; } .top .wordmark, .top .tabs{ display:inline-flex; } .top .who, .top .print{ display:none; } .kpis{ grid-template-columns:repeat(3,1fr); } .c3,.c4,.c5{ grid-column:span 6; } }
+  .wrap{ min-width:0; overflow-x:clip; }
+  @media (min-width:1025px){ .top .wordmark, .top .tabs{ display:none; } }
+  @media (max-width:640px){ .top .tabs{ display:none; } }
+  @media (max-width:760px){ .kpis{ grid-template-columns:1fr 1fr; } .c3,.c4,.c5,.c12{ grid-column:span 12; } .wrap{ padding:0 16px 40px; } .greet h1{ font-size:24px; } .hero{ font-size:38px; } .top{ height:58px; gap:10px; } .who{ display:none; } .mdate{ display:block; color:var(--ink-3); font-size:13px; margin-bottom:6px; } }
+</style>
+</head>
+<body>
+<div class="shell">
+
+<aside class="rail">
+  <div class="wordmark">JAF Ops <span>Executive view</span></div>
+  <a class="on" href="#">Command center</a>
+  <a href="#">Collections <span class="pill">3</span></a>
+  <a href="#">Brigades <span class="n">14</span></a>
+  <a href="#">Installers <span class="n">54</span></a>
+  <a href="#">Warehouse <span class="pill">2</span></a>
+  <div class="grp">Reports</div>
+  <a href="#">Exposure to Claro</a>
+  <a href="#">Weekly field summary</a>
+  <a href="#">Payroll, brigades and installers</a>
+  <a href="#">Inventory and audit</a>
+  <div class="foot">
+    <div class="user"><div class="av">MG</div><div><div class="nm">Monica García</div><div class="rl">CEO</div></div></div>
+    <button class="toggle" id="themeBtn" type="button">Dark</button>
+  </div>
+</aside>
+
+<div class="wrap">
+
+  <div class="top">
+    <div class="wordmark">JAF Ops</div>
+    <nav class="tabs"><a class="on" href="#">Command center</a><a href="#">Collections</a><a href="#">Field</a><a href="#">Warehouse</a><a href="#">Reports</a></nav>
+    <div class="spacer"></div>
+    <div class="who">Friday, 19 September</div>
+    <button class="btn ghost print">Print</button>
+    <button class="btn">Share report</button>
+  </div>
+
+  <div class="greet">
+    <div>
+      <div class="mdate">Friday, 19 September</div>
+      <h1>Good morning, Monica.</h1>
+      <p><b>27 jobs</b> in the field, <b>$482K</b> waiting on Claro, and <b>7 items</b> need a decision from you. Nothing on this page needed a phone call.</p>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi">
+      <div><div class="l">Waiting on Claro</div><div class="v neg">$482K</div><div class="d">no PO, or PO short</div></div>
+      <svg class="viz ring crit" viewBox="0 0 52 52" role="img" aria-label="19 percent of this year's sales still open"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="19"/><text x="26" y="25">19%</text><text class="cap" x="26" y="35">open</text></svg>
+    </div>
+    <div class="kpi">
+      <div><div class="l">Jobs in the field</div><div class="v"><span class="ex">27</span></div><div class="d">across 14 brigades</div></div>
+      <div class="viz mini" role="img" aria-label="Jobs per supervisor, Rivera 9, Ocasio 8, González 6, Ramos 4"><i style="height:100%"></i><i style="height:89%"></i><i style="height:67%"></i><i class="lo" style="height:44%"></i></div>
+    </div>
+    <div class="kpi">
+      <div><div class="l">Avisos this year</div><div class="v">1,838</div><div class="d">$2.49M sold</div></div>
+      <svg class="viz spark" id="spark" viewBox="0 0 72 34" role="img" aria-label="Avisos per month, January to August"></svg>
+    </div>
+    <div class="kpi">
+      <div><div class="l">Avisos with no PO</div><div class="v">588</div><div class="d">per the 3 Sep review</div></div>
+      <svg class="viz ring" viewBox="0 0 52 52" role="img" aria-label="32 percent of avisos have no PO"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="32"/><text x="26" y="25">32%</text><text class="cap" x="26" y="35">of all</text></svg>
+    </div>
+    <div class="kpi">
+      <div><div class="l">Active installers</div><div class="v">54</div><div class="d">Norte, Este, Sur</div></div>
+      <div class="viz mini" role="img" aria-label="Installers by area, Norte 13, Este 7, Sur 7, no area 27"><i style="height:48%"></i><i style="height:26%"></i><i style="height:26%"></i><i class="lo" style="height:100%"></i></div>
+    </div>
+  </div>
+
+  <div class="grid">
+
+    <!-- exposure -->
+    <section class="box c3">
+      <h2>Money out the door</h2>
+      <p class="sub">Lissette's log, this morning.</p>
+      <div class="hero">$482,411</div>
+      <p class="heroline">still owed by Claro on 2026 work</p>
+      <ul class="lines">
+        <li><i style="background:var(--accent)"></i><span class="n">Sold to Claro</span><span class="v">$2.49M</span></li>
+        <li><i style="background:var(--accent-2)"></i><span class="n">POs received</span><span class="v">$1.39M</span></li>
+        <li><i style="background:var(--critical)"></i><span class="n">Balance open</span><span class="v">$482K</span></li>
+      </ul>
+    </section>
+
+    <!-- trend chart -->
+    <section class="box c5">
+      <h2>Sold vs. POs received, by month the brigade was paid</h2>
+      <p class="sub">Every month from April on, work is paid out and the PO still hasn't landed. That is the float JAF finances.</p>
+      <div class="legend"><span><i style="background:var(--accent)"></i>Sold to Claro</span><span><i style="background:var(--accent-2)"></i>POs received so far</span></div>
+      <div class="chartwrap" id="chartwrap">
+        <svg class="chart" id="chart" viewBox="0 0 640 230" aria-label="Line chart, monthly sold versus POs received, January to August 2026"></svg>
+        <div class="tip" id="tip"></div>
+      </div>
+    </section>
+
+    <!-- glance -->
+    <section class="box c4 acc glance">
+      <h2>Today at a glance</h2>
+      <div class="big">7 items</div>
+      <p>need a decision from you. Three are money, two are warehouse, two are field.</p>
+      <button class="btn acc">Review the 3 short POs</button>
+      <button class="btn acc">Export exposure report for Claro</button>
+      <button class="btn acc">Approve material request</button>
+    </section>
+
+    <!-- attention -->
+    <section class="box c5">
+      <h2>Needs your attention <span class="count">7</span></h2>
+      <p class="sub">Only what needs a decision. The rest stays in the panels.</p>
+      <ul class="att">
+        <li><span class="mark"></span><div><div class="t">Aviso M17-10341818 came in $314.66 short</div><div class="d">Sold $8,271.91, POs total $7,957.25. A manhole cleaner and a tube riser were left off.</div></div><span class="lvl">Critical</span></li>
+        <li><span class="mark"></span><div><div class="t">19 serialized Claro units have never been counted</div><div class="d">Modems, ONTs, STBs. Claro audits three times a year.</div></div><span class="lvl">Critical</span></li>
+        <li><span class="mark"></span><div><div class="t">3 invoices at twice the average exposure</div><div class="d">The specific ones worth a call this week, not the whole balance.</div></div><span class="lvl">Critical</span></li>
+        <li><span class="mark w"></span><div><div class="t">39 material codes have no unit conversion</div><div class="d">Stock math can't subtract boxes from pieces until these are set.</div></div><span class="lvl w">Watch</span></li>
+      </ul>
+      <a class="more" href="#">3 more to watch</a>
+    </section>
+
+    <!-- field -->
+    <section class="box c4">
+      <h2>Field today</h2>
+      <p class="sub">Jobs in progress per brigade supervisor.</p>
+      <div class="bars">
+        <div class="n">Rivera</div><div class="b" style="width:100%"></div><div class="v"><span class="ex">9</span></div>
+        <div class="n">Ocasio</div><div class="b" style="width:89%"></div><div class="v"><span class="ex">8</span></div>
+        <div class="n">González</div><div class="b" style="width:67%"></div><div class="v"><span class="ex">6</span></div>
+        <div class="n">Ramos</div><div class="b" style="width:44%"></div><div class="v"><span class="ex">4</span></div>
+      </div>
+      <div class="split">
+        <div class="stat"><div class="l">Installers on the road</div><div class="v"><span class="ex">31</span> <span style="font-size:13px;font-weight:500;color:var(--ink-3)">of 54</span></div></div>
+        <div class="stat"><div class="l">Paid by Carmen this week</div><div class="v"><span class="ex">$41.2K</span></div></div>
+      </div>
+    </section>
+
+    <!-- warehouse -->
+    <section class="box c3">
+      <h2>Warehouse</h2>
+      <p class="sub">Guaynabo and Arecibo.</p>
+      <ul class="rows">
+        <li><span>Modem 788 V3</span><span class="st crit">Low</span></li>
+        <li><span>DGA4122HP</span><span class="st warn">Reorder</span></li>
+        <li><span>Drop wire 750 ft</span><span class="st warn">Reorder</span></li>
+        <li><span>Ground wire #6</span><span class="st ok">Fine</span></li>
+      </ul>
+      <p style="margin:14px 0 0"><button class="btn ghost">Request material</button></p>
+    </section>
+
+    <!-- table -->
+    <section class="box c12">
+      <h2>Collections, Lissette's desk</h2>
+      <p class="sub">Open avisos with a PO problem. Days counted from the day the brigade was paid, which is when JAF's money went out.</p>
+      <table>
+        <thead><tr><th>Aviso</th><th>Brigade paid</th><th class="num">Sold</th><th class="num">POs received</th><th class="num">Balance</th><th>Stage</th><th class="num">Days out</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">M17-10341818</td><td>29 Apr</td><td class="num">8,271.91</td><td class="num">7,957.25</td><td class="num neg">-314.66</td><td>PO short, in discussion</td><td class="num">143</td></tr>
+          <tr><td class="mono">M17-10334200</td><td>18 Feb</td><td class="num">606.38</td><td class="num">294.53</td><td class="num neg">-311.85</td><td>PO short, 3 pole removals missing</td><td class="num">213</td></tr>
+          <tr><td class="mono">M17-10334504</td><td>18 Feb</td><td class="num">812.08</td><td class="num">610.15</td><td class="num neg">-201.93</td><td>PO short, 1 of 2 poles paid</td><td class="num">213</td></tr>
+          <tr><td class="mono">M17-10333077</td><td>4 Feb</td><td class="num">675.12</td><td class="num">0.00</td><td class="num neg">-675.12</td><td>Cancelled, claim filed</td><td class="num">227</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+  </div>
+
+  <footer>
+    <span>Solid figures come from the September discovery files: Lissette's 2026 log, the installer roster, the material lists. <span class="ex">Dotted figures</span> are placeholders for layout.</span>
+    <span>Mockup v3, 19 Sep. Not for client distribution.</span>
+  </footer>
+</div>
+</div>
+
+<script>
+  // theme toggle (OS preference by default, button overrides)
+  (function(){
+    var btn=document.getElementById('themeBtn'), root=document.documentElement;
+    function isDark(){ var t=root.getAttribute('data-theme'); if(t) return t==='dark'; return matchMedia('(prefers-color-scheme: dark)').matches; }
+    function paint(){ btn.textContent = isDark() ? 'Light' : 'Dark'; }
+    btn.addEventListener('click', function(){ root.setAttribute('data-theme', isDark() ? 'light' : 'dark'); paint(); });
+    paint();
+  })();
+
+  // KPI rings: dasharray from data-pct
+  document.querySelectorAll('.ring .fil').forEach(function(c){
+    var r=21, C=2*Math.PI*r, p=+c.getAttribute('data-pct')/100;
+    c.setAttribute('stroke-dasharray', C); c.setAttribute('stroke-dashoffset', C);
+    requestAnimationFrame(function(){ c.setAttribute('stroke-dashoffset', C*(1-p)); });
+  });
+  // KPI sparkline: real avisos per month from 2026 - LOG.xlsx
+  (function(){
+    var n=[185,245,326,261,232,171,191,228], s=document.getElementById('spark');
+    var W=72,H=34,pad=4, max=Math.max.apply(null,n), min=Math.min.apply(null,n);
+    var x=function(i){ return pad+(W-2*pad)*i/(n.length-1); }, y=function(v){ return pad+(H-2*pad)*(1-(v-min)/(max-min)); };
+    var ns='http://www.w3.org/2000/svg';
+    var d=n.map(function(v,i){ return (i?'L':'M')+x(i)+' '+y(v); }).join(' ');
+    var a=document.createElementNS(ns,'path'); a.setAttribute('class','area'); a.setAttribute('d', d+' L'+x(n.length-1)+' '+(H-pad)+' L'+x(0)+' '+(H-pad)+' Z'); s.appendChild(a);
+    var p=document.createElementNS(ns,'path'); p.setAttribute('d',d); s.appendChild(p);
+    var c=document.createElementNS(ns,'circle'); c.setAttribute('cx',x(n.length-1)); c.setAttribute('cy',y(n[n.length-1])); c.setAttribute('r',3.5); s.appendChild(c);
+  })();
+
+  // chart: real monthly sums from 2026 - LOG.xlsx (sold vs PO received, by month the brigade was paid)
+  (function(){
+    var months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug'];
+    var sold=[125267,169812,253916,176101,179029,122121,138890,151179];
+    var po  =[125318,167902,248345,126733, 39386,  5627,  1199,     0];
+    var svg=document.getElementById('chart'), tip=document.getElementById('tip'), wrap=document.getElementById('chartwrap');
+    var W=640,H=230,L=44,R=70,T=14,B=30, max=300000;
+    var x=function(i){ return L+(W-L-R)*i/(months.length-1); }, y=function(v){ return T+(H-T-B)*(1-v/max); };
+    var ns='http://www.w3.org/2000/svg', el=function(n,a){ var e=document.createElementNS(ns,n); for(var k in a) e.setAttribute(k,a[k]); return e; };
+    var fmt=function(v){ return '$'+Math.round(v/1000)+'K'; };
+    // grid + y ticks
+    [0,100000,200000,300000].forEach(function(v){
+      svg.appendChild(el('line',{x1:L,x2:W-R,y1:y(v),y2:y(v),'class':'grd'}));
+      var t=el('text',{x:L-8,y:y(v)+4,'text-anchor':'end','class':'axis'}); t.textContent=fmt(v); svg.appendChild(t);
+    });
+    // x labels
+    months.forEach(function(m,i){ var t=el('text',{x:x(i),y:H-8,'text-anchor':'middle','class':'axis'}); t.textContent=m; svg.appendChild(t); });
+    // lines
+    var path=function(arr,cls){ var d=arr.map(function(v,i){ return (i?'L':'M')+x(i)+' '+y(v); }).join(' '); svg.appendChild(el('path',{d:d,fill:'none','stroke-width':2,'stroke-linejoin':'round','stroke-linecap':'round','class':cls})); };
+    path(sold,'ln1'); path(po,'ln2');
+    // hover bands + dots
+    months.forEach(function(m,i){
+      var g=el('g',{'class':'col'});
+      var bw=(W-L-R)/(months.length-1);
+      g.appendChild(el('rect',{x:x(i)-bw/2,y:T,width:bw,height:H-T-B,'class':'band'}));
+      g.appendChild(el('circle',{cx:x(i),cy:y(sold[i]),r:4.5,'class':'dot1 ringc'}));
+      g.appendChild(el('circle',{cx:x(i),cy:y(po[i]),r:4.5,'class':'dot2 ringc'}));
+      g.addEventListener('mousemove',function(){
+        tip.innerHTML='<b>'+m+' 2026</b><br>Sold '+fmt(sold[i])+'<br>POs received '+fmt(po[i])+'<br>Still open '+fmt(sold[i]-po[i]);
+        var r=svg.getBoundingClientRect(); tip.style.left=(x(i)/W*r.width)+'px'; tip.style.top=(Math.min(y(sold[i]),y(po[i]))/H*r.height)+'px';
+      });
+      svg.appendChild(g);
+    });
+    // end labels
+    var e1=el('text',{x:x(7)+10,y:y(sold[7])+4,'class':'endlbl'}); e1.textContent='Sold'; svg.appendChild(e1);
+    var e2=el('text',{x:x(7)+10,y:y(po[7])+4,'class':'endlbl'}); e2.textContent='POs'; svg.appendChild(e2);
+  })();
+</script>
+</body>
+</html>

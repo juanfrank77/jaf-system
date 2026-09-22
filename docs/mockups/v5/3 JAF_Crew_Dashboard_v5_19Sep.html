@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JAF Ops, Crew</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ---------------------------------------------------------------
+     JAF Ops design system. Same tokens as Monica's command center
+     (mockup v3, 19 Sep 2026). Dual theme, one accent, status colors
+     only for state. Radius: containers 16px, controls 10px, chips 6px.
+     --------------------------------------------------------------- */
+  :root{
+    color-scheme: light;
+    --plane:#f4f4f2; --surface:#fcfcfb; --surface-2:#f0f0ed;
+    --ink:#111110; --ink-2:#52514e; --ink-3:#898781;
+    --hair:#e1e0d9; --ring:rgba(11,11,11,.08);
+    --accent:#1c5cab; --accent-2:#86b6ef; --accent-ink:#ffffff;
+    --accent-wash:rgba(28,92,171,.08);
+    --critical:#d03b3b; --warning:#b7791f; --good:#006300;
+    --crit-wash:rgba(208,59,59,.10); --warn-wash:rgba(183,121,31,.13); --good-wash:rgba(0,99,0,.10);
+    --shadow:0 1px 2px rgba(30,28,20,.05), 0 10px 30px -14px rgba(30,28,20,.14);
+    --grid:#e1e0d9;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      color-scheme: dark;
+      --plane:#0f0f0e; --surface:#1a1a19; --surface-2:#222221;
+      --ink:#f4f4f1; --ink-2:#c3c2b7; --ink-3:#898781;
+      --hair:#2c2c2a; --ring:rgba(255,255,255,.08);
+      --accent:#3987e5; --accent-2:#9ec5f4; --accent-ink:#ffffff;
+      --accent-wash:rgba(57,135,229,.12);
+      --critical:#e66767; --warning:#e0a634; --good:#3fbf3f;
+      --crit-wash:rgba(230,103,103,.14); --warn-wash:rgba(224,166,52,.16); --good-wash:rgba(63,191,63,.14);
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 30px -14px rgba(0,0,0,.6);
+      --grid:#2c2c2a;
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --plane:#0f0f0e; --surface:#1a1a19; --surface-2:#222221;
+    --ink:#f4f4f1; --ink-2:#c3c2b7; --ink-3:#898781;
+    --hair:#2c2c2a; --ring:rgba(255,255,255,.08);
+    --accent:#3987e5; --accent-2:#9ec5f4; --accent-ink:#ffffff;
+    --accent-wash:rgba(57,135,229,.12);
+    --critical:#e66767; --warning:#e0a634; --good:#3fbf3f;
+    --crit-wash:rgba(230,103,103,.14); --warn-wash:rgba(224,166,52,.16); --good-wash:rgba(63,191,63,.14);
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 30px -14px rgba(0,0,0,.6);
+    --grid:#2c2c2a;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; background:var(--plane); color:var(--ink); }
+  body{ font-family:"Geist", system-ui, -apple-system, "Segoe UI", sans-serif; font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; transition:background .2s ease, color .2s ease; }
+  .shell{ display:grid; grid-template-columns:236px minmax(0,1fr); min-height:100dvh; }
+  .rail{ border-right:1px solid var(--hair); padding:22px 18px; display:flex; flex-direction:column; gap:8px; position:sticky; top:0; height:100dvh; background:var(--plane); }
+  .rail .wordmark{ padding:4px 10px 18px; font-size:16px; font-weight:700; letter-spacing:-.01em; }
+  .rail .wordmark span{ display:block; font-size:11.5px; font-weight:500; color:var(--ink-3); margin-top:2px; }
+  .rail .grp{ font-size:11px; font-weight:600; color:var(--ink-3); padding:14px 10px 4px; letter-spacing:.02em; }
+  .rail a{ display:flex; align-items:center; justify-content:space-between; text-decoration:none; color:var(--ink-2); font-size:13.5px; font-weight:500; padding:8px 10px; border-radius:10px; }
+  .rail a:hover{ background:var(--surface-2); color:var(--ink); }
+  .rail a.on{ background:var(--surface); color:var(--ink); font-weight:600; box-shadow:var(--shadow); border:1px solid var(--ring); }
+  .rail a .pill{ font-size:11px; font-weight:600; background:var(--critical); color:#fff; padding:1px 7px; border-radius:6px; }
+  .rail a .n{ font-size:12px; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+  .rail .foot{ margin-top:auto; border-top:1px solid var(--hair); padding-top:14px; display:flex; flex-direction:column; gap:10px; }
+  .rail .user{ display:flex; align-items:center; gap:10px; padding:4px 10px; }
+  .rail .av{ width:30px; height:30px; border-radius:50%; background:var(--accent); color:#fff; font-size:12px; font-weight:600; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .rail .user .nm{ font-size:13px; font-weight:600; line-height:1.2; }
+  .rail .user .rl{ font-size:11.5px; color:var(--ink-3); }
+  .rail .toggles{ display:flex; gap:8px; }
+  .rail .toggles .toggle{ flex:1; }
+  .wrap{ max-width:1200px; margin:0 auto; padding:0 28px 56px; width:100%; min-width:0; overflow-x:clip; }
+
+  /* top bar */
+  .top{ height:68px; display:flex; align-items:center; gap:22px; border-bottom:1px solid var(--hair); }
+  .wordmark{ font-weight:700; letter-spacing:-.01em; font-size:15px; white-space:nowrap; }
+  .tabs{ display:flex; gap:2px; background:var(--surface-2); padding:3px; border-radius:10px; }
+  .tabs a{ text-decoration:none; font-size:13px; font-weight:500; color:var(--ink-2); padding:6px 12px; border-radius:8px; white-space:nowrap; }
+  .tabs a.on{ background:var(--surface); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.08); font-weight:600; }
+  .spacer{ flex:1; }
+  .who{ font-size:13px; color:var(--ink-2); white-space:nowrap; }
+  .btn{ font:inherit; font-weight:600; font-size:13px; background:var(--ink); color:var(--plane); border:0; border-radius:10px; padding:9px 14px; cursor:pointer; transition:transform .12s ease, opacity .12s ease; white-space:nowrap; }
+  .btn:hover{ opacity:.88; } .btn:active{ transform:translateY(1px); }
+  .btn.ghost{ background:transparent; color:var(--ink); border:1px solid var(--hair); }
+  .btn.ghost:hover{ background:var(--surface-2); opacity:1; }
+  .btn.acc{ background:var(--accent-ink); color:var(--accent); }
+  .btn.acc:hover{ opacity:.9; }
+  .btn.blue{ background:var(--accent); color:#fff; }
+  .btn.sm{ font-size:12.5px; padding:6px 11px; border-radius:8px; }
+  .btn[disabled]{ opacity:.45; cursor:not-allowed; }
+  .toggle{ font:inherit; font-size:12.5px; font-weight:600; color:var(--ink-2); background:var(--surface-2); border:1px solid var(--hair); border-radius:10px; padding:7px 11px; cursor:pointer; }
+
+  /* greeting + kpi strip */
+  .greet{ padding:30px 0 18px; display:flex; align-items:flex-end; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+  .greet h1{ font-size:30px; font-weight:600; letter-spacing:-.02em; margin:0 0 4px; line-height:1.15; }
+  .greet p{ margin:0; color:var(--ink-2); font-size:15px; max-width:64ch; }
+  .greet b{ color:var(--ink); font-weight:600; }
+  .kpis{ display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin:6px 0 20px; }
+  .kpis.k4{ grid-template-columns:repeat(4,1fr); }
+  .kpi{ background:var(--surface); border:1px solid var(--ring); border-radius:16px; padding:14px 16px; box-shadow:var(--shadow); display:flex; align-items:center; justify-content:space-between; gap:12px; min-width:0; }
+  .kpi .l{ font-size:12px; color:var(--ink-3); white-space:nowrap; }
+  .kpi .v{ font-size:24px; font-weight:600; letter-spacing:-.02em; line-height:1.15; margin-top:2px; }
+  .kpi .d{ font-size:12px; color:var(--ink-2); margin-top:2px; }
+  .kpi .v.neg{ color:var(--critical); } .kpi .v.warn{ color:var(--warning); } .kpi .v.good{ color:var(--good); }
+  .kpi .viz{ flex:0 0 auto; }
+  .ring{ width:52px; height:52px; }
+  .ring .trk{ fill:none; stroke:var(--accent-2); stroke-opacity:.45; stroke-width:5; }
+  .ring .fil{ fill:none; stroke:var(--accent); stroke-width:5; stroke-linecap:round; transform:rotate(-90deg); transform-origin:50% 50%; }
+  .ring.crit .trk{ stroke:var(--critical); stroke-opacity:.22; } .ring.crit .fil{ stroke:var(--critical); }
+  .ring.warn .trk{ stroke:var(--warning); stroke-opacity:.22; } .ring.warn .fil{ stroke:var(--warning); }
+  .ring.good .trk{ stroke:var(--good); stroke-opacity:.22; } .ring.good .fil{ stroke:var(--good); }
+  .ring text{ font-size:11px; font-weight:600; fill:var(--ink); text-anchor:middle; }
+  .ring .cap{ font-size:8px; font-weight:500; fill:var(--ink-3); }
+  .spark{ width:72px; height:34px; }
+  .spark path{ fill:none; stroke:var(--accent); stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }
+  .spark .area{ fill:var(--accent); fill-opacity:.10; stroke:none; }
+  .spark circle{ fill:var(--accent); stroke:var(--surface); stroke-width:2; }
+  .mini{ display:flex; align-items:flex-end; gap:3px; height:34px; }
+  .mini i{ display:block; width:9px; background:var(--accent); border-radius:3px 3px 0 0; }
+  .mini i.lo{ background:var(--accent-2); }
+  .mini i.crit{ background:var(--critical); } .mini i.warn{ background:var(--warning); }
+  @media (prefers-reduced-motion:no-preference){ .ring .fil{ transition:stroke-dashoffset .8s cubic-bezier(.16,1,.3,1); } }
+
+  /* grid + boxes */
+  .grid{ display:grid; grid-template-columns:repeat(12,1fr); gap:16px; }
+  .box{ background:var(--surface); border:1px solid var(--ring); border-radius:16px; box-shadow:var(--shadow); padding:20px 22px; min-width:0; }
+  .box.acc{ background:var(--accent); color:var(--accent-ink); border-color:transparent; }
+  .box.acc h2, .box.acc .sub{ color:rgba(255,255,255,.85); }
+  .c3{ grid-column:span 3; } .c4{ grid-column:span 4; } .c5{ grid-column:span 5; } .c6{ grid-column:span 6; } .c7{ grid-column:span 7; } .c8{ grid-column:span 8; } .c12{ grid-column:span 12; }
+  .box h2{ font-size:13.5px; font-weight:600; color:var(--ink-2); margin:0 0 2px; }
+  .box .sub{ color:var(--ink-3); font-size:12.5px; margin:0 0 14px; }
+  .box .head{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+  .count{ display:inline-block; min-width:20px; text-align:center; font-size:11px; font-weight:600; padding:1px 6px; border-radius:6px; background:var(--critical); color:#fff; margin-left:6px; vertical-align:1px; }
+  .count.w{ background:var(--warning); } .count.a{ background:var(--accent); }
+  .ex{ text-decoration:underline dotted var(--ink-3); text-underline-offset:3px; text-decoration-thickness:1px; }
+
+  /* lines / hero */
+  .lines{ list-style:none; margin:4px 0 0; padding:0; }
+  .lines li{ display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--hair); }
+  .lines li:last-child{ border-bottom:0; }
+  .lines i{ width:10px; height:10px; border-radius:3px; flex:0 0 auto; }
+  .lines .n{ flex:1; font-size:13.5px; font-weight:500; }
+  .lines .v{ font-size:15px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .hero{ font-size:44px; font-weight:600; letter-spacing:-.03em; line-height:1; margin:4px 0 2px; }
+  .heroline{ color:var(--ink-2); font-size:13px; margin:0 0 14px; }
+
+  /* chart */
+  .chartwrap{ position:relative; }
+  .chart{ width:100%; height:auto; display:block; }
+  .legend{ display:flex; gap:18px; font-size:12.5px; color:var(--ink-2); margin:2px 0 6px; flex-wrap:wrap; }
+  .legend i{ display:inline-block; width:14px; height:3px; border-radius:2px; margin-right:7px; vertical-align:3px; }
+  .tip{ position:absolute; pointer-events:none; background:var(--ink); color:var(--plane); font-size:12px; padding:8px 10px; border-radius:8px; white-space:nowrap; transform:translate(-50%,-110%); opacity:0; transition:opacity .12s; box-shadow:var(--shadow); }
+  .tip b{ font-weight:600; }
+  .chartwrap:hover .tip{ opacity:1; }
+  .axis{ font-size:11px; fill:var(--ink-3); }
+  .grd{ stroke:var(--grid); stroke-width:1; }
+  .ln1{ stroke:var(--accent); } .ln2{ stroke:var(--accent-2); }
+  .dot1{ fill:var(--accent); } .dot2{ fill:var(--accent-2); }
+  .ringc{ stroke:var(--surface); stroke-width:2; }
+  .col:hover .band{ fill:var(--accent-wash); }
+  .band{ fill:transparent; }
+  .endlbl{ font-size:11.5px; font-weight:600; fill:var(--ink); }
+  .bar1{ fill:var(--accent); } .bar2{ fill:var(--accent-2); }
+
+  /* glance tile */
+  .glance .big{ font-size:40px; font-weight:600; letter-spacing:-.03em; line-height:1; margin:6px 0 4px; }
+  .glance p{ margin:0 0 16px; font-size:13px; color:rgba(255,255,255,.85); }
+  .glance .btn{ display:block; width:100%; text-align:left; margin-top:8px; }
+
+  /* attention list */
+  .att{ list-style:none; margin:0; padding:0; }
+  .att li{ display:grid; grid-template-columns:3px 1fr auto; gap:0 12px; padding:9px 0; border-bottom:1px solid var(--hair); align-items:start; }
+  .att li:last-child{ border-bottom:0; }
+  .att .mark{ width:3px; min-height:30px; border-radius:2px; background:var(--critical); margin-top:2px; }
+  .att .mark.w{ background:var(--warning); } .att .mark.a{ background:var(--accent); } .att .mark.g{ background:var(--good); }
+  .att .t{ font-weight:600; font-size:13.5px; }
+  .att .d{ color:var(--ink-2); font-size:12.5px; }
+  .att .lvl{ font-size:11px; font-weight:600; color:var(--critical); padding-top:2px; white-space:nowrap; }
+  .att .lvl.w{ color:var(--warning); } .att .lvl.a{ color:var(--accent); } .att .lvl.g{ color:var(--good); }
+  .more{ display:inline-block; margin-top:10px; font-size:12.5px; color:var(--accent); text-decoration:none; font-weight:600; cursor:pointer; }
+
+  /* bars + stats + rows */
+  .bars{ display:grid; grid-template-columns:auto 1fr auto; gap:8px 12px; align-items:center; margin-top:6px; }
+  .bars .n{ font-size:13px; font-weight:500; }
+  .bars .b{ height:9px; background:var(--accent); border-radius:0 4px 4px 0; }
+  .bars .b.lo{ background:var(--accent-2); } .bars .b.crit{ background:var(--critical); } .bars .b.warn{ background:var(--warning); }
+  .bars .v{ font-size:12.5px; font-variant-numeric:tabular-nums; color:var(--ink-2); }
+  .split{ display:grid; grid-template-columns:1fr 1fr; gap:14px 18px; margin-top:14px; padding-top:14px; border-top:1px solid var(--hair); }
+  .stat .l{ font-size:12px; color:var(--ink-3); }
+  .stat .v{ font-size:22px; font-weight:600; letter-spacing:-.02em; line-height:1.15; }
+  .rows{ margin:6px 0 0; padding:0; list-style:none; }
+  .rows li{ display:flex; justify-content:space-between; gap:12px; padding:8px 0; border-bottom:1px solid var(--hair); font-size:13.5px; align-items:center; }
+  .rows li:last-child{ border-bottom:0; }
+  .st{ font-size:12px; font-weight:600; }
+  .st.crit{ color:var(--critical); } .st.warn{ color:var(--warning); } .st.ok{ color:var(--good); } .st.acc{ color:var(--accent); }
+
+  /* chips */
+  .tag{ display:inline-block; font-size:11px; font-weight:600; padding:2px 7px; border-radius:6px; background:var(--surface-2); color:var(--ink-2); white-space:nowrap; vertical-align:middle; }
+  .tag.ok{ background:var(--good-wash); color:var(--good); }
+  .tag.warn{ background:var(--warn-wash); color:var(--warning); }
+  .tag.crit{ background:var(--crit-wash); color:var(--critical); }
+  .tag.acc{ background:var(--accent-wash); color:var(--accent); }
+  .tag.dark{ background:var(--ink); color:var(--plane); }
+
+  /* checklist gate */
+  .gate{ list-style:none; margin:6px 0 0; padding:0; }
+  .gate li{ display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--hair); font-size:13.5px; }
+  .gate li:last-child{ border-bottom:0; }
+  .gate .ic{ width:20px; height:20px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex:0 0 auto; }
+  .gate .ic.y{ background:var(--good-wash); color:var(--good); }
+  .gate .ic.n{ background:var(--crit-wash); color:var(--critical); }
+  .gate .ic.w{ background:var(--warn-wash); color:var(--warning); }
+  .gate small{ margin-left:auto; color:var(--ink-3); font-size:12px; white-space:nowrap; }
+
+  /* checkbox */
+  .chk{ width:18px; height:18px; border:1.5px solid var(--ink-3); border-radius:5px; display:inline-grid; place-items:center; font-size:11px; color:#fff; cursor:pointer; background:var(--surface); flex:0 0 auto; vertical-align:middle; }
+  .chk.on{ background:var(--good); border-color:var(--good); }
+
+  /* step flow strip */
+  .flow{ display:flex; gap:6px; margin:10px 0 0; }
+  .flow div{ flex:1; padding:8px 6px; border-radius:10px; border:1px solid var(--hair); font-size:11.5px; text-align:center; color:var(--ink-3); line-height:1.3; }
+  .flow div b{ display:block; font-size:10.5px; font-weight:600; color:var(--ink-2); letter-spacing:.03em; }
+  .flow .on{ background:var(--accent); color:#fff; border-color:transparent; }
+  .flow .on b{ color:rgba(255,255,255,.85); }
+  .flow .done{ background:var(--accent-wash); color:var(--accent); border-color:transparent; }
+  .flow .done b{ color:var(--accent); }
+  .flow .you{ box-shadow:inset 0 -3px 0 var(--accent); }
+
+  /* table */
+  table{ width:100%; border-collapse:collapse; margin-top:6px; }
+  th{ text-align:left; font-size:11.5px; font-weight:600; color:var(--ink-3); padding:8px 10px 8px 0; border-bottom:1px solid var(--hair); white-space:nowrap; }
+  td{ padding:10px 10px 10px 0; border-bottom:1px solid var(--hair); font-size:13.5px; vertical-align:middle; }
+  tr:last-child td{ border-bottom:0; }
+  tbody tr:hover td{ background:var(--accent-wash); }
+  td.num, th.num{ text-align:right; font-variant-numeric:tabular-nums; }
+  td.mono{ font-variant-numeric:tabular-nums; font-weight:500; }
+  td.act, th.act{ text-align:right; }
+  .neg{ color:var(--critical); }
+  .dim{ color:var(--ink-3); }
+  .sm{ font-size:12px; color:var(--ink-3); }
+  .paidrow td{ color:var(--ink-3); }
+  .paidrow td .mono, .paidrow td.mono{ text-decoration:none; }
+
+  /* input */
+  .inp{ font:inherit; font-size:13px; color:var(--ink); background:var(--surface); border:1px solid var(--hair); border-radius:10px; padding:8px 11px; width:100%; }
+  .inp::placeholder{ color:var(--ink-3); }
+  .field{ display:flex; flex-direction:column; gap:5px; }
+  .field label{ font-size:12px; color:var(--ink-3); font-weight:500; }
+  .form3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-top:8px; }
+
+  footer{ margin-top:36px; padding-top:14px; border-top:1px solid var(--hair); color:var(--ink-3); font-size:12px; display:flex; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+
+  @media (prefers-reduced-motion:no-preference){
+    .kpi, .box, .greet{ animation:rise .5s cubic-bezier(.16,1,.3,1) both; }
+    .kpi:nth-child(2){ animation-delay:.04s } .kpi:nth-child(3){ animation-delay:.08s } .kpi:nth-child(4){ animation-delay:.12s } .kpi:nth-child(5){ animation-delay:.16s }
+    .grid .box:nth-child(1){ animation-delay:.10s } .grid .box:nth-child(2){ animation-delay:.15s } .grid .box:nth-child(3){ animation-delay:.20s }
+    .grid .box:nth-child(4){ animation-delay:.25s } .grid .box:nth-child(5){ animation-delay:.30s } .grid .box:nth-child(6){ animation-delay:.35s } .grid .box:nth-child(7){ animation-delay:.40s }
+    @keyframes rise{ from{ opacity:0; transform:translateY(8px) } to{ opacity:1; transform:none } }
+  }
+  .mdate{ display:none; }
+  @media (max-width:1024px){ .shell{ grid-template-columns:1fr; } .rail{ display:none; } .top .wordmark, .top .tabs{ display:inline-flex; } .top .who, .top .print{ display:none; } .kpis, .kpis.k4{ grid-template-columns:repeat(3,1fr); } .c3,.c4,.c5,.c6,.c7,.c8{ grid-column:span 6; } }
+  @media (min-width:1025px){ .top .wordmark, .top .tabs{ display:none; } }
+  @media (max-width:640px){ .top .tabs{ display:none; } }
+  @media (max-width:760px){ .kpis, .kpis.k4{ grid-template-columns:1fr 1fr; } .c3,.c4,.c5,.c6,.c7,.c8,.c12{ grid-column:span 12; } .wrap{ padding:0 16px 40px; } .greet h1{ font-size:24px; } .hero{ font-size:38px; } .top{ height:58px; gap:10px; } .who{ display:none; } .mdate{ display:block; color:var(--ink-3); font-size:13px; margin-bottom:6px; } .form3{ grid-template-columns:1fr; } }
+
+  /* phone preview (crew): same page, constrained to a handset */
+  body.phone .shell{ display:block; }
+  body.phone .rail{ display:none; }
+  body.phone .wrap{ max-width:418px; margin:24px auto 40px; padding:0 14px 30px; border:12px solid #141413; border-radius:44px; background:var(--plane); min-height:820px; box-shadow:0 30px 60px -20px rgba(0,0,0,.45); }
+  body.phone .top{ height:58px; gap:10px; }
+  body.phone .top .wordmark{ display:inline-flex; }
+  body.phone .top .tabs, body.phone .top .who, body.phone .top .print, body.phone .top .desk{ display:none; }
+  body.phone .mdate{ display:block; color:var(--ink-3); font-size:13px; margin-bottom:6px; }
+  body.phone .greet{ padding:22px 0 14px; }
+  body.phone .greet h1{ font-size:24px; }
+  body.phone .kpis, body.phone .kpis.k4{ grid-template-columns:1fr 1fr; }
+  body.phone .c3, body.phone .c4, body.phone .c5, body.phone .c6, body.phone .c7, body.phone .c8, body.phone .c12{ grid-column:span 12; }
+  body.phone .hero{ font-size:36px; }
+  body.phone .form3{ grid-template-columns:1fr; }
+  body.phone .hide-phone{ display:none; }
+  .phonebar{ display:none; }
+  body.phone .phonebar{ display:flex; justify-content:space-between; font-size:12px; font-weight:600; padding:8px 8px 0; color:var(--ink); }
+  .phoneexit, .phonetools{ display:none; }
+  body.phone .phoneexit{ display:block; text-align:center; margin:14px 0 0; }
+  body.phone .phonetools{ display:flex; gap:8px; justify-content:center; margin:18px 0 0; }
+  @media (max-width:1024px){ .phonetools{ display:flex; gap:8px; justify-content:center; margin:18px 0 0; } }
+  .glance .btn{ white-space:normal; line-height:1.3; }
+  body.phone #netTag{ display:none; }
+  body.phone .box table, body.phone .flow{ }
+  body.phone .tblwrap, .tblwrap{ min-width:0; }
+  body.phone table{ display:block; overflow-x:auto; white-space:nowrap; }
+  body.phone table td{ white-space:normal; min-width:90px; }
+  body.phone .flow{ flex-wrap:wrap; }
+  body.phone .flow div{ flex:1 1 21%; }
+  @media (max-width:760px){ table{ display:block; overflow-x:auto; } .flow{ flex-wrap:wrap; } .flow div{ flex:1 1 21%; } #netTag{ display:none; } }
+
+  /* ---- screens / router ---- */
+  .screen{ display:none; }
+  .screen.on{ display:block; }
+  .back{ font-size:12.5px; color:var(--accent); font-weight:600; cursor:pointer; text-decoration:none; }
+  .greet .actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  #toast{ position:fixed; left:50%; bottom:28px; transform:translate(-50%,20px); background:var(--ink); color:var(--plane); padding:10px 16px; border-radius:10px; font-size:13px; font-weight:600; opacity:0; transition:.2s; z-index:99; pointer-events:none; box-shadow:var(--shadow); max-width:90vw; text-align:center; }
+  #toast.on{ opacity:1; transform:translate(-50%,0); }
+
+  /* forms */
+  .form2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:8px; }
+  textarea.inp{ min-height:74px; resize:vertical; }
+  select.inp{ appearance:none; padding-right:30px; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4.5L6 8.5L10 4.5' stroke='%23898781' stroke-width='1.6' fill='none' stroke-linecap='round'/></svg>"); background-repeat:no-repeat; background-position:right 10px center; }
+  .inp.ro{ background:var(--surface-2); color:var(--ink-2); }
+  .inp:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-wash); }
+  .inp.sm{ padding:5px 8px; font-size:12.5px; width:auto; }
+  .qty{ width:64px; text-align:right; }
+  .actions{ display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; align-items:center; }
+
+  /* crew picker */
+  .crewgrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px; margin-top:8px; }
+  .crewopt{ border:1px solid var(--hair); border-radius:10px; padding:10px 12px; cursor:pointer; display:flex; gap:10px; align-items:flex-start; background:var(--surface); }
+  .crewopt:hover{ background:var(--surface-2); }
+  .crewopt.on{ border-color:var(--accent); background:var(--accent-wash); }
+  .crewopt .bx{ width:16px; height:16px; border-radius:5px; border:1.5px solid var(--ink-3); flex:0 0 auto; margin-top:2px; display:grid; place-items:center; font-size:10px; color:#fff; }
+  .crewopt.on .bx{ background:var(--accent); border-color:var(--accent); }
+  .crewopt .cn{ font-weight:600; font-size:13.5px; }
+  .crewopt .cm{ font-size:12px; color:var(--ink-3); }
+
+  /* catalog picker */
+  .picker{ border:1px solid var(--hair); border-radius:10px; overflow:hidden; margin-top:8px; }
+  .picker .srch{ display:flex; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--hair); }
+  .picker .srch input{ border:0; outline:0; font:inherit; flex:1; background:transparent; color:var(--ink); }
+  .picker .opt{ display:flex; align-items:center; gap:12px; padding:8px 12px; border-bottom:1px solid var(--hair); cursor:pointer; font-size:13px; }
+  .picker .opt:last-child{ border-bottom:0; }
+  .picker .opt:hover{ background:var(--accent-wash); }
+  .picker .opt .cd{ font-size:12px; color:var(--ink-3); width:80px; flex:0 0 auto; font-variant-numeric:tabular-nums; }
+  .picker .opt .ds{ flex:1; }
+
+  /* photos */
+  .photos{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:8px; }
+  .ph{ aspect-ratio:4/3; border-radius:10px; border:1px solid var(--hair); display:grid; place-items:center; font-size:11px; color:var(--ink-3); text-align:center; background:linear-gradient(135deg,var(--surface-2),var(--hair)); }
+  .ph b{ display:block; font-size:10px; letter-spacing:.06em; color:var(--ink-2); }
+  .ph.cam{ border:2px dashed var(--accent-2); background:var(--surface); color:var(--accent); font-weight:600; cursor:pointer; }
+  .diff{ background:var(--accent-wash); border-left:3px solid var(--accent); padding:8px 12px; border-radius:0 8px 8px 0; font-size:13px; margin-top:8px; }
+  .diff .old{ color:var(--critical); text-decoration:line-through; }
+  .diff .new{ color:var(--good); font-weight:600; }
+
+  /* signature pad */
+  .sigpad{ border:1.5px dashed var(--ink-3); border-radius:10px; height:78px; display:grid; place-items:center; color:var(--ink-3); font-size:13px; background:var(--surface); cursor:pointer; }
+  .sigpad.done{ border-style:solid; border-color:var(--accent); background:var(--accent-wash); color:var(--accent); font-family:"Segoe Script","Bradley Hand","Snell Roundhand",cursive; font-size:22px; }
+
+  /* stepper */
+  .stepper{ display:inline-flex; align-items:center; border:1px solid var(--hair); border-radius:8px; overflow:hidden; vertical-align:middle; }
+  .stepper span{ width:30px; height:30px; display:grid; place-items:center; font-size:16px; color:var(--accent); font-weight:700; background:var(--surface-2); cursor:pointer; user-select:none; }
+  .stepper b{ width:38px; text-align:center; font-size:14px; }
+
+  /* pre-cert sheet */
+  .sheet{ border:2px solid var(--ink); border-radius:4px; padding:20px; background:var(--surface); font-size:13px; }
+  .sheet .shead{ text-align:center; border-bottom:1px solid var(--ink); padding-bottom:10px; margin-bottom:14px; }
+  .sheet .shead b{ font-size:16px; letter-spacing:-.2px; }
+  .sheet .shead p{ margin:2px 0 0; font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-2); }
+  .sheet .meta{ display:grid; grid-template-columns:1fr 1fr; gap:8px 18px; margin-bottom:12px; font-size:12.5px; }
+  .sheet .meta div{ border-bottom:1px solid var(--hair); padding-bottom:4px; }
+  .sheet .meta span{ color:var(--ink-3); font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; display:block; }
+  .sheet table th, .sheet table td{ border:1px solid var(--hair); padding:6px 8px; }
+  .sigs{ display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:16px; }
+  .sig{ border:1px solid var(--hair); border-radius:8px; padding:10px; }
+  .sig .lbl{ font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3); font-weight:700; margin-bottom:8px; }
+  .sig .ink{ font-family:"Segoe Script","Bradley Hand","Snell Roundhand",cursive; font-size:20px; color:var(--accent); border-bottom:1px solid var(--ink); padding-bottom:3px; margin-bottom:6px; }
+  .sig .empty{ border-bottom:1px dashed var(--ink-3); height:29px; margin-bottom:6px; cursor:pointer; }
+  .sig .nm{ font-size:12px; font-weight:600; }
+  .sig .dt{ font-size:11px; color:var(--ink-3); }
+
+  /* misc */
+  .note{ background:var(--warn-wash); color:var(--warning); border-radius:10px; padding:10px 12px; font-size:13px; }
+  .note.crit{ background:var(--crit-wash); color:var(--critical); }
+  .note.ok{ background:var(--good-wash); color:var(--good); }
+  .note.acc{ background:var(--accent-wash); color:var(--accent); }
+  .radio{ display:flex; gap:8px; flex-wrap:wrap; }
+  .radio label{ border:1px solid var(--hair); border-radius:8px; padding:6px 10px; font-size:12.5px; cursor:pointer; }
+  .radio label.on{ border-color:var(--accent); background:var(--accent-wash); color:var(--accent); font-weight:600; }
+  .kv{ display:grid; grid-template-columns:auto 1fr; gap:6px 16px; font-size:13.5px; margin-top:6px; }
+  .kv span:nth-child(odd){ color:var(--ink-3); }
+  tr.hidden{ display:none; }
+  tr.sel td{ background:var(--accent-wash); }
+  .clickable{ cursor:pointer; }
+  @media (max-width:760px){ .form2, .sigs, .photos{ grid-template-columns:1fr 1fr; } .crewgrid{ grid-template-columns:1fr; } }
+  body.phone .form2, body.phone .sigs{ grid-template-columns:1fr; }
+  body.phone .photos{ grid-template-columns:1fr 1fr; }
+
+
+</style>
+</head>
+<body>
+<div class="shell">
+
+<aside class="rail">
+  <div class="wordmark">JAF Ops <span data-es="Brigada 009 · Central">Brigade 009 · Central</span></div>
+  <a data-go="dash" class="on" href="#" data-es="Mis trabajos">My jobs</a>
+  <a data-go="pickup" href="#"><span data-es="Recoger y firmar">Pickup &amp; sign</span> <span class="n">1</span></a>
+  <a data-go="field" href="#"><span data-es="Reporte de campo">Field update</span> <span class="n">1</span></a>
+  <a data-go="sentback" href="#"><span data-es="Devueltos">Sent back</span> <span class="pill">1</span></a>
+  <a data-go="payments" href="#"><span data-es="Mis pagos">My payments</span> <span class="n">$746</span></a>
+  <a data-go="history" href="#" data-es="Historial">History</a>
+  <div class="grp" data-es="Mi supervisor">My supervisor</div>
+  <a data-go="super" href="#">Edgard Ocasio <span class="n">787-444-0165</span></a>
+  <div class="grp" data-es="Almacén">Warehouse</div>
+  <a data-go="wh" href="#">Guaynabo <span class="n">Calle Ajanta</span></a>
+  <div class="foot">
+    <div class="user"><div class="av">JM</div><div><div class="nm">Jesús Martínez</div><div class="rl" data-es="Brigada · cuenta 009">Brigade · account 009</div></div></div>
+    <div class="toggles"><button class="toggle" id="themeBtn" type="button">Dark</button><button class="toggle" id="langBtn" type="button">ES</button></div>
+  </div>
+</aside>
+
+<div class="wrap">
+  <div class="phonebar"><span>9:41</span><span>●●● ᯤ ▮</span></div>
+
+  <div class="top">
+    <div class="wordmark">JAF Ops</div>
+    <nav class="tabs"><a data-go="dash" class="on" href="#" data-es="Trabajos">Jobs</a><a data-go="payments" href="#" data-es="Pagos">Payments</a></nav>
+    <div class="spacer"></div>
+    <div class="who" data-es="Sábado, 19 de septiembre">Saturday, 19 September</div>
+    <span class="tag ok" id="netTag" data-es="En línea · todo sincronizado">Online · everything synced</span>
+    <button class="btn ghost" id="phoneBtn" data-es="Vista de teléfono">Phone view</button>
+  </div>
+
+<section class="screen on" data-screen="dash">
+  <div class="greet">
+    <div>
+      <div class="mdate" data-es="Sábado, 19 de septiembre">Saturday, 19 September</div>
+      <h1 data-es="Buenos días, Jesús.">Good morning, Jesús.</h1>
+      <p data-es="<b>3 trabajos</b> abiertos: uno listo para recoger en Guaynabo, uno en sitio y uno devuelto. <b>$746.75</b> te entran en la corrida del 9/24."><b>3 jobs</b> open: one ready to pick up at Guaynabo, one on site, one sent back. <b>$746.75</b> comes to you in the 9/24 run.</p>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi">
+      <div><div class="l" data-es="Trabajos asignados">Jobs assigned</div><div class="v">3</div><div class="d" data-es="abiertos ahora">open right now</div></div>
+      <div class="viz mini" role="img" aria-label="Jobs by step"><i style="height:100%"></i><i style="height:100%"></i><i class="crit" style="height:100%"></i></div>
+    </div>
+    <div class="kpi">
+      <div><div class="l" data-es="Listo para recoger">Ready for pickup</div><div class="v">1</div><div class="d">Guaynabo · JAF-2026-1043</div></div>
+      <svg class="viz ring" viewBox="0 0 52 52" role="img" aria-label="Step 3 of 8"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="37"/><text x="26" y="25">3/8</text><text class="cap" x="26" y="35" data-es="paso">step</text></svg>
+    </div>
+    <div class="kpi">
+      <div><div class="l" data-es="Enviado · en revisión">Submitted · in review</div><div class="v">1</div><div class="d" data-es="Edgard revisa hoy">Edgard reviews today</div></div>
+      <svg class="viz ring" viewBox="0 0 52 52" role="img" aria-label="Step 5 of 8"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="62"/><text x="26" y="25">5/8</text><text class="cap" x="26" y="35" data-es="paso">step</text></svg>
+    </div>
+    <div class="kpi">
+      <div><div class="l" data-es="Esperando pago">Awaiting payment</div><div class="v">$746.75</div><div class="d">2 <span data-es="trabajos · corrida 9/24">jobs · run 9/24</span></div></div>
+      <svg class="viz ring good" viewBox="0 0 52 52" role="img" aria-label="Approved, in the next journal run"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="66"/><text x="26" y="25">9/24</text><text class="cap" x="26" y="35" data-es="corrida">run</text></svg>
+    </div>
+    <div class="kpi">
+      <div><div class="l" data-es="Pagado este mes">Paid this month</div><div class="v good">$1,231.07</div><div class="d" data-es="corrida 9/10 · ACH 9/12">run 9/10 · ACH 9/12</div></div>
+      <svg class="viz spark" data-n="980,1105,1340,1212,1088,1180,1231" viewBox="0 0 72 34" role="img" aria-label="Last 7 runs"></svg>
+    </div>
+  </div>
+
+  <div class="grid">
+
+    <!-- glance -->
+    <section class="box c4 acc glance">
+      <h2 data-es="Hoy">Today</h2>
+      <div class="big">3 <span data-es="cosas">things</span></div>
+      <p data-es="Recoge en Guaynabo, cierra el reporte del trabajo en sitio y repite las fotos que Edgard devolvió.">Pick up at Guaynabo, close the field report on the job on site, and retake the photos Edgard sent back.</p>
+      <button class="btn acc" data-go="pickup" data-es="Recoger JAF-2026-1043 · Guaynabo · 6 líneas">Pick up JAF-2026-1043 · Guaynabo · 6 lines</button>
+      <button class="btn acc" data-go="field" data-es="Terminar reporte JAF-2026-1003 · Manatí">Finish field update JAF-2026-1003 · Manatí</button>
+      <button class="btn acc" data-go="sentback" data-es="Repetir fotos «después» · JAF-2026-1005">Retake after photos · JAF-2026-1005</button>
+    </section>
+
+    <!-- my jobs -->
+    <section class="box c8">
+      <div class="head"><div><h2 data-es="Mis trabajos">My jobs</h2><p class="sub" data-es="Solo los de tu brigada. Tus pasos son 3 (recoger) y 4 (trabajar y documentar). Sin precios, sin Avisos.">Only your brigade's. Your steps are 3 (pick up) and 4 (work and document). No prices, no Avisos.</p></div></div>
+      <table>
+        <thead><tr><th data-es="Orden">Work order</th><th data-es="Trabajo">Job</th><th data-es="Dónde">Where</th><th data-es="Paso">Step</th><th class="act"></th></tr></thead>
+        <tbody>
+          <tr><td class="mono">JAF-2026-1043</td><td>Transf. attachments y remoción de poste<div class="sm">CAM 906, Com. Aguacate, Yabucoa</div></td><td data-es="Listo en Guaynabo">Staged at Guaynabo</td><td><span class="tag acc" data-es="3 · recoger y firmar">3 · pick up &amp; sign</span></td><td class="act"><button class="btn sm blue" data-go="pickup" data-es="Estoy en el almacén">I'm at the warehouse</button></td></tr>
+          <tr><td class="mono">JAF-2026-1003</td><td>Guy wire installation<div class="sm">PR-2 KM 88.1, Manatí</div></td><td data-es="En sitio · desde 8/25">On site · since 8/25</td><td><span class="tag acc" data-es="4 · trabajar y documentar">4 · work &amp; document</span></td><td class="act"><button class="btn sm blue" data-go="field" data-es="Reporte de campo">Field update</button></td></tr>
+          <tr><td class="mono">JAF-2026-1005</td><td>Tree trimming — line clearance<div class="sm">PR-111 KM 5.2, San Sebastián</div></td><td data-es="Devuelto por Edgard">Sent back by Edgard</td><td><span class="tag crit" data-es="4 · corregir y reenviar">4 · fix &amp; resubmit</span></td><td class="act"><button class="btn sm ghost" data-go="sentback" data-es="Corregir">Fix</button></td></tr>
+          <tr class="paidrow"><td class="mono">JAF-2026-1038</td><td>Transfer attachments — Calle Ajanta<div class="sm">Guaynabo</div></td><td data-es="Terminado 8/22">Done 8/22</td><td><span class="tag ok" data-es="aprobado · en corrida 9/24">approved · in 9/24 run</span></td><td class="act"></td></tr>
+        </tbody>
+      </table>
+      <div class="flow"><div class="done"><b>1</b><span data-es="Creada">Created</span></div><div class="done"><b>2</b><span data-es="Prep">Prep</span></div><div class="you on"><b>3</b><span data-es="Recoger">Pick up</span></div><div class="you"><b>4</b><span data-es="Trabajo">Work</span></div><div><b>5</b><span data-es="Revisión">Review</span></div><div><b>6</b><span data-es="Factura">Invoice</span></div><div><b>7</b><span data-es="Aviso">Aviso</span></div><div><b>8</b><span data-es="Pago">Pay</span></div></div>
+    </section>
+
+    <!-- sent back -->
+    <section class="box c4">
+      <h2><span data-es="Devuelto">Sent back</span> <span class="count">1</span></h2>
+      <p class="sub" data-es="Lo que Edgard pidió corregir. Solo eso; el resto del reporte se conserva.">What Edgard asked you to fix. Only that; the rest of your report is kept.</p>
+      <ul class="att">
+        <li><span class="mark"></span><div><div class="t">JAF-2026-1005 · <span data-es="ayer">yesterday</span></div><div class="d">“<span data-es="Las fotos de después están muy oscuras para verificar el empalme. Repítelas de día.">After photos are too dark to verify the splice. Retake them in daylight.</span>”</div></div><span class="lvl" data-es="Fotos">Photos</span></li>
+      </ul>
+      <p style="margin:14px 0 0"><button class="btn blue" style="width:100%" data-go="sentback" data-es="Abrir cámara · fotos «después»">Open camera · after photos</button></p>
+    </section>
+
+    <!-- payments -->
+    <section class="box c4">
+      <h2 data-es="Mis pagos">My payments</h2>
+      <p class="sub" data-es="Lo que te toca por trabajo, después del 65 % y la retención del 10 %. Se paga por corrida, cada dos semanas.">What's yours per job, after the 65% and the 10% retention. Paid per run, every two weeks.</p>
+      <ul class="rows">
+        <li><span>JAF-2026-1043<div class="sm" data-es="en revisión de Edgard">in Edgard's review</div></span><span><b>$343.03</b> <span class="st warn" data-es="pendiente">pending</span></span></li>
+        <li><span>JAF-2026-1038<div class="sm" data-es="aprobado 8/26 · corrida 9/24">approved 8/26 · run 9/24</div></span><span><b>$434.60</b> <span class="st acc" data-es="en corrida">in run</span></span></li>
+        <li><span>JAF-2026-1027<div class="sm" data-es="aprobado 9/2 · corrida 9/24">approved 9/2 · run 9/24</div></span><span><b>$312.15</b> <span class="st acc" data-es="en corrida">in run</span></span></li>
+        <li><span><span data-es="Corrida 9/10 · 4 trabajos">Run 9/10 · 4 jobs</span><div class="sm">ACH 9/12 · 20260912-JAF-015</div></span><span><b>$1,231.07</b> <span class="st ok" data-es="pagado">paid</span></span></li>
+      </ul>
+      <div class="flow" style="margin-top:12px"><div class="done"><b>A</b><span data-es="Aprobado">Approved</span></div><div class="on"><b>B</b><span data-es="En corrida">In run</span></div><div><b>C</b><span data-es="Carmen pagó">Carmen paid</span></div></div>
+    </section>
+
+    <!-- sync -->
+    <section class="box c4">
+      <h2 data-es="Conexión">Connection</h2>
+      <p class="sub" data-es="Funciona sin señal. Lo que envías se guarda en el teléfono y sale solo cuando vuelve la conexión.">Works without signal. What you submit is saved on the phone and sends itself when the connection comes back.</p>
+      <ul class="gate">
+        <li><span class="ic y" id="syncIc">✓</span><span id="syncTxt" data-es="En línea · todo sincronizado">Online · everything synced</span><small id="syncN">0 <span data-es="pendientes">waiting</span></small></li>
+        <li><span class="ic y">✓</span><span data-es="Última sincronización">Last sync</span><small>9:38 AM</small></li>
+        <li><span class="ic y">✓</span><span data-es="Fotos guardadas en el teléfono">Photos saved on the phone</span><small>7</small></li>
+      </ul>
+      <p style="margin:14px 0 0"><button class="btn ghost" id="netBtn" style="width:100%" data-es="Simular sin señal">Simulate offline</button></p>
+    </section>
+
+    <!-- history chart -->
+    <section class="box c8">
+      <h2 data-es="Lo que te han pagado · 2026">What you've been paid · 2026</h2>
+      <p class="sub" data-es="Por corrida, neto después de la retención. La retención del 10 % va a Hacienda una vez al año.">Per run, net after retention. The 10% retention goes to Hacienda once a year.</p>
+      <div class="chartwrap"><svg class="chart" id="pay" viewBox="0 0 640 230" aria-label="Paid per run"></svg><div class="tip"></div></div>
+    </section>
+
+    <!-- year stats -->
+    <section class="box c4">
+      <h2 data-es="Tu año">Your year</h2>
+      <p class="sub" data-es="Enero a hoy.">January to today.</p>
+      <div class="hero">47</div>
+      <p class="heroline" data-es="trabajos terminados y aprobados">jobs done and approved</p>
+      <ul class="lines">
+        <li><i style="background:var(--good)"></i><span class="n" data-es="Pagado a ti">Paid to you</span><span class="v">$14,822</span></li>
+        <li><i style="background:var(--accent)"></i><span class="n" data-es="En corridas pendientes">In pending runs</span><span class="v">$746.75</span></li>
+        <li><i style="background:var(--accent-2)"></i><span class="n" data-es="Retención 10 % (Hacienda)">10% retention (Hacienda)</span><span class="v">$1,647</span></li>
+      </ul>
+    </section>
+
+  </div>
+
+</section>
+
+<!-- ================= PICKUP & SIGN ================= -->
+<section class="screen" data-screen="pickup">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Mis trabajos">← My jobs</a><h1 data-es="Recoger y firmar">Pickup &amp; sign</h1><p data-es="Paso 3 de 8 · JAF-2026-1043 · mostrador de Guaynabo · Frank Ramos. Cuenten juntos. ¿Necesitas más que la lista? Cambia el número, está permitido. Luego firman los dos; la lista se bloquea.">Step 3 of 8 · JAF-2026-1043 · Guaynabo counter · Frank Ramos. Count each line together. Need more than the list? Change the number, that's allowed. Then both sign; the list locks.</p></div></div>
+  <div class="flow" style="margin:0 0 16px"><div class="done"><b>1</b><span data-es="Creada">Created</span></div><div class="done"><b>2</b><span data-es="Prep">Prep</span></div><div class="on you"><b>3</b><span data-es="Recoger">Pick up</span></div><div class="you"><b>4</b><span data-es="Trabajo">Work</span></div><div><b>5</b><span data-es="Revisión">Review</span></div><div><b>6</b><span data-es="Factura">Invoice</span></div><div><b>7</b><span data-es="Aviso">Aviso</span></div><div><b>8</b><span data-es="Pago">Pay</span></div></div>
+  <div class="grid">
+    <section class="box c7">
+      <h2 data-es="Materiales que te llevas">Materials you're taking</h2>
+      <table id="cpTable">
+        <thead><tr><th data-es="Material">Material</th><th class="num" data-es="Listado">Listed</th><th class="num" data-es="Te llevas">Taking</th></tr></thead>
+        <tbody>
+          <tr data-listed="300"><td>BURIED SERVICE WIRE 6x22<div class="sm">1005803 · FT</div></td><td class="num">300</td><td class="num"><span class="stepper"><span>−</span><b>300</b><span>+</span></span></td></tr>
+          <tr data-listed="2"><td>ROD GROUND 5/8 X 8<div class="sm">1003748 · PZA</div></td><td class="num">2</td><td class="num"><span class="stepper"><span>−</span><b>2</b><span>+</span></span></td></tr>
+          <tr data-listed="40"><td>WIRE GROUND # 6<div class="sm">1005807 · FT</div></td><td class="num">40</td><td class="num"><span class="stepper"><span>−</span><b>40</b><span>+</span></span></td></tr>
+          <tr data-listed="4"><td>SPAN CLAMP<div class="sm">1003793 · PZA</div><div class="fl"></div></td><td class="num">4</td><td class="num"><span class="stepper"><span>−</span><b>6</b><span>+</span></span></td></tr>
+          <tr data-listed="6"><td>LAG SCREW 2 1/2 X 5/16<div class="sm">1005855 · PZA</div></td><td class="num">6</td><td class="num"><span class="stepper"><span>−</span><b>6</b><span>+</span></span></td></tr>
+          <tr data-listed="0"><td>ELECTRIC BLACK TAPE<div class="sm">1005818 · PZA</div><div><span class="tag acc" data-es="añadido en mostrador">added at counter</span></div></td><td class="num">—</td><td class="num"><span class="stepper"><span>−</span><b>2</b><span>+</span></span></td></tr>
+        </tbody>
+      </table>
+      <p class="sm" data-es="Llevar más de lo listado es normal. El supervisor ve la diferencia al revisar. Nunca es un error.">Taking more than listed is normal. The supervisor sees the difference at review. It's never an error.</p>
+    </section>
+    <section class="box c5">
+      <h2 data-es="Firmas">Signatures</h2>
+      <p class="sub" data-es="Con las dos firmas, «Te llevas» se bloquea para todos, almacén incluido.">Once both sign, "Taking" locks for everyone, warehouse included.</p>
+      <div class="field"><label data-es="Almacén · Frank Ramos">Warehouse · Frank Ramos</label><div class="sigpad done">F. Ramos</div></div>
+      <div class="field" style="margin-top:10px"><label data-es="Brigada · Jesús Martínez">Crew · Jesús Martínez</label><div class="sigpad" data-name="J. Martínez" data-es="Firma aquí con el dedo">Sign here with your finger</div></div>
+      <p style="margin:14px 0 0"><button class="btn blue" id="cpGo" style="width:100%" disabled data-es="Ambos firmaron → ir al sitio">Both signed → go to site</button></p>
+      <div class="note acc" style="margin-top:12px" data-es="Sin señal en el almacén? Se guarda en el teléfono y se envía solo.">No signal at the warehouse? It saves on the phone and sends itself.</div>
+    </section>
+  </div>
+</section>
+
+<!-- ================= FIELD UPDATE ================= -->
+<section class="screen" data-screen="field">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Mis trabajos">← My jobs</a><h1 data-es="Reporte de campo">Field update</h1><p data-es="Paso 4 de 8 · JAF-2026-1003 · Guy wire installation · PR-2 KM 88.1, Manatí. Corrige la dirección, fotos antes y después, lo que instalaste y lo que usaste. Envía; funciona sin señal.">Step 4 of 8 · JAF-2026-1003 · Guy wire installation · PR-2 KM 88.1, Manatí. Fix the address, before and after photos, what you installed and what you used. Submit; works without signal.</p></div></div>
+  <div class="flow" style="margin:0 0 16px"><div class="done"><b>1</b><span data-es="Creada">Created</span></div><div class="done"><b>2</b><span data-es="Prep">Prep</span></div><div class="done"><b>3</b><span data-es="Recoger">Pick up</span></div><div class="on you"><b>4</b><span data-es="Trabajo">Work</span></div><div><b>5</b><span data-es="Revisión">Review</span></div><div><b>6</b><span data-es="Factura">Invoice</span></div><div><b>7</b><span data-es="Aviso">Aviso</span></div><div><b>8</b><span data-es="Pago">Pay</span></div></div>
+  <div class="grid">
+    <section class="box c6">
+      <h2 data-es="Dirección real">Real address</h2>
+      <p class="sub" data-es="El original queda guardado; el cambio lleva tu nombre, hora y GPS.">The original is kept; the change carries your name, time and GPS.</p>
+      <input class="inp" id="fuAddr" value="PR-2 KM 88.1, Manatí">
+      <div class="diff" id="fuDiff" style="display:none"><span class="old">PR-2 KM 88.1, Manatí</span> → <span class="new" id="fuNew"></span><div class="sm" style="margin-top:4px" data-es="Editado por ti · hoy · GPS 18.43, −66.49">Edited by you · today · GPS 18.43, −66.49</div></div>
+    </section>
+    <section class="box c6">
+      <h2 data-es="Fotos · cámara, no galería">Photos · camera, not gallery</h2>
+      <p class="sub" data-es="Mínimo una antes y una después para enviar.">At least one before and one after to submit.</p>
+      <div class="photos" id="fuPhotos"><div class="ph"><div><b>BEFORE</b>8:12 AM</div></div><div class="ph cam" data-kind="BEFORE">📷 <span data-es="Antes">Before</span></div><div class="ph cam" data-kind="AFTER">📷 <span data-es="Después">After</span></div></div>
+      <p class="sm" id="fuPhotoNote" data-es="Falta al menos una foto «después».">Missing at least one "after" photo.</p>
+    </section>
+    <section class="box c7">
+      <h2 data-es="Trabajo instalado · por código de servicio">Work installed · per service code</h2>
+      <p class="sub" data-es="De aquí sale la factura. Si hiciste más o menos de lo ordenado, dilo aquí.">This is what gets invoiced. If you did more or less than ordered, say so here.</p>
+      <table>
+        <thead><tr><th data-es="Servicio">Service</th><th class="num" data-es="Ordenado">Ordered</th><th class="num" data-es="Instalado">Installed</th></tr></thead>
+        <tbody>
+          <tr><td>INST GUY WIRE<div class="sm">34006310</div></td><td class="num">2</td><td class="num"><span class="stepper"><span>−</span><b>2</b><span>+</span></span></td></tr>
+          <tr><td>ROD GROUND INST<div class="sm">34006340</div></td><td class="num">2</td><td class="num"><span class="stepper"><span>−</span><b>2</b><span>+</span></span></td></tr>
+          <tr><td>TRANSFER ATTCH DE POSTES<div class="sm">34006301</div></td><td class="num">3</td><td class="num"><span class="stepper"><span>−</span><b>3</b><span>+</span></span></td></tr>
+        </tbody>
+      </table>
+    </section>
+    <section class="box c5">
+      <h2 data-es="Materiales usados">Materials used</h2>
+      <p class="sub" data-es="«Usado» no puede ser más que «Tomado» — esa es la lista firmada.">"Used" can't be more than "Took" — that's the signed list.</p>
+      <table id="fuMat">
+        <thead><tr><th data-es="Material">Material</th><th class="num" data-es="Tomado">Took</th><th class="num" data-es="Usado">Used</th></tr></thead>
+        <tbody>
+          <tr data-took="120"><td>GUY WIRE <span class="sm">FT</span></td><td class="num">120</td><td class="num"><input class="inp qty" value="100"></td></tr>
+          <tr data-took="2"><td>ROD GROUND</td><td class="num">2</td><td class="num"><input class="inp qty" value="2"></td></tr>
+          <tr data-took="4"><td>SPAN CLAMP</td><td class="num">4</td><td class="num"><input class="inp qty" value="3"></td></tr>
+          <tr data-took="2"><td>ELECTRIC BLACK TAPE</td><td class="num">2</td><td class="num"><input class="inp qty" value="1"></td></tr>
+        </tbody>
+      </table>
+      <div class="note" id="fuBack" style="margin-top:12px"></div>
+    </section>
+    <section class="box c12">
+      <div class="field"><label data-es="Nota para el supervisor">Note for the supervisor</label><input class="inp" value="Trabajo completado. Guy wire instalado, poste asegurado."></div>
+      <div class="actions"><button class="btn blue" id="fuSubmit" data-es="Enviar al supervisor">Submit to supervisor</button><span class="sm" data-es="Sin señal? Se guarda en el teléfono y se envía cuando vuelvas a tener conexión.">No signal? It saves on the phone and sends when you're back online.</span></div>
+    </section>
+  </div>
+</section>
+
+<!-- ================= SENT BACK ================= -->
+<section class="screen" data-screen="sentback">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Mis trabajos">← My jobs</a><h1 data-es="Devuelto">Sent back</h1><p data-es="Lo que Edgard pidió corregir. Solo eso; el resto de tu reporte se conserva. Corriges, reenvías, y el trabajo vuelve al paso 5.">What Edgard asked you to fix. Only that; the rest of your report is kept. Fix it, resubmit, and the job goes back to step 5.</p></div></div>
+  <div class="grid">
+    <section class="box c6">
+      <div class="note crit"><b>↩ JAF-2026-1005 · Tree trimming — line clearance</b><br><span data-es="Edgard Ocasio · ayer 5:40 PM">Edgard Ocasio · yesterday 5:40 PM</span><br>“<span data-es="Las fotos de después están muy oscuras para verificar el empalme. Repítelas de día.">After photos are too dark to verify the splice. Retake them in daylight.</span>”</div>
+      <h2 style="margin-top:16px" data-es="Lo que se conserva">What is kept</h2>
+      <ul class="gate">
+        <li><span class="ic y">✓</span><span data-es="Dirección corregida">Corrected address</span><small>PR-111 KM 5.2, San Sebastián</small></li>
+        <li><span class="ic y">✓</span><span data-es="Fotos antes">Before photos</span><small>2</small></li>
+        <li><span class="ic n">!</span><span data-es="Fotos después · repetir">After photos · retake</span><small data-es="muy oscuras">too dark</small></li>
+        <li><span class="ic y">✓</span><span data-es="Instalado por código">Installed per code</span><small>3 <span data-es="líneas">lines</span></small></li>
+        <li><span class="ic y">✓</span><span data-es="Materiales usados">Materials used</span><small>4 <span data-es="líneas">lines</span></small></li>
+      </ul>
+    </section>
+    <section class="box c6">
+      <h2 data-es="Fotos después · de nuevo">After photos · again</h2>
+      <div class="photos" id="sbPhotos"><div class="ph" style="opacity:.5"><div><b>AFTER</b>6:48 PM · <span data-es="oscura">dark</span></div></div><div class="ph cam" data-kind="AFTER">📷 <span data-es="Tomar foto">Take photo</span></div></div>
+      <p style="margin:14px 0 0"><button class="btn blue" id="sbResubmit" style="width:100%" disabled data-es="Reenviar a Edgard">Resubmit to Edgard</button></p>
+      <p class="sm" id="sbNote" data-es="Se activa con al menos una foto nueva.">Enabled once you take at least one new photo.</p>
+    </section>
+  </div>
+</section>
+
+<!-- ================= MY PAYMENTS ================= -->
+<section class="screen" data-screen="payments">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Mis trabajos">← My jobs</a><h1 data-es="Mis pagos">My payments</h1><p data-es="Lo que te toca por trabajo después del 65 % y la retención del 10 %. Se paga por corrida cada dos semanas, por ACH. Aquí ves en qué paso está cada uno.">What's yours per job after the 65% and the 10% retention. Paid per run every two weeks, by ACH. Here you see which step each one is on.</p></div></div>
+  <div class="kpis k4">
+    <div class="kpi"><div><div class="l" data-es="Pendiente de revisión">Pending review</div><div class="v">$343.03</div><div class="d">1 <span data-es="trabajo">job</span></div></div><svg class="viz ring warn" viewBox="0 0 52 52"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="20"/><text x="26" y="25">A</text></svg></div>
+    <div class="kpi"><div><div class="l" data-es="En corrida 9/24">In run 9/24</div><div class="v">$746.75</div><div class="d">2 <span data-es="trabajos">jobs</span></div></div><svg class="viz ring" viewBox="0 0 52 52"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="66"/><text x="26" y="25">B</text></svg></div>
+    <div class="kpi"><div><div class="l" data-es="Pagado · 2026">Paid · 2026</div><div class="v good">$14,822</div><div class="d">19 <span data-es="corridas">runs</span></div></div><svg class="viz spark" data-n="980,1105,1340,1212,1088,1180,1231" viewBox="0 0 72 34"></svg></div>
+    <div class="kpi"><div><div class="l" data-es="Retención 10 % · 2026">10% retention · 2026</div><div class="v">$1,647</div><div class="d" data-es="a Hacienda, una vez al año">to Hacienda, once a year</div></div><svg class="viz ring" viewBox="0 0 52 52"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="10"/><text x="26" y="25">10%</text></svg></div>
+  </div>
+  <div class="grid">
+    <section class="box c12">
+      <div class="tabs" style="display:inline-flex;margin-bottom:12px"><a class="on" href="#" data-tab="pay:open" data-es="Abiertos">Open</a><a href="#" data-tab="pay:paid" data-es="Pagados">Paid</a></div>
+      <div data-panel="pay:open">
+        <table>
+          <thead><tr><th data-es="Trabajo">Job</th><th data-es="Terminado">Done</th><th class="num" data-es="Precio JAF">JAF price</th><th class="num" data-es="65 %">65%</th><th class="num" data-es="Ret. 10 %">10% ret.</th><th class="num" data-es="Para ti">Yours</th><th data-es="Paso">Step</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">JAF-2026-1043</td><td>8/26</td><td class="num">$586.37</td><td class="num">$381.14</td><td class="num">−$38.11</td><td class="num"><b>$343.03</b></td><td><span class="tag warn" data-es="A · revisión de Edgard">A · Edgard's review</span></td></tr>
+            <tr><td class="mono">JAF-2026-1038</td><td>8/22</td><td class="num">$742.90</td><td class="num">$482.89</td><td class="num">−$48.29</td><td class="num"><b>$434.60</b></td><td><span class="tag acc" data-es="B · en corrida 9/24">B · in run 9/24</span></td></tr>
+            <tr><td class="mono">JAF-2026-1027</td><td>9/2</td><td class="num">$480.23</td><td class="num">$312.15</td><td class="num">−$31.22</td><td class="num"><b>$280.94</b> <span class="sm">*</span></td><td><span class="tag acc" data-es="B · en corrida 9/24">B · in run 9/24</span></td></tr>
+          </tbody>
+        </table>
+        <div class="flow" style="margin-top:12px"><div class="done"><b>A</b><span data-es="Aprobado por Edgard">Approved by Edgard</span></div><div class="on"><b>B</b><span data-es="En corrida (Lissette)">In run (Lissette)</span></div><div><b>C</b><span data-es="Carmen pagó · ACH">Carmen paid · ACH</span></div></div>
+      </div>
+      <div data-panel="pay:paid">
+        <table>
+          <thead><tr><th data-es="Corrida">Run</th><th class="num" data-es="Trabajos">Jobs</th><th class="num" data-es="Bruto">Gross</th><th class="num" data-es="Ret. 10 %">10% ret.</th><th class="num" data-es="Pagado">Paid</th><th>ACH</th><th data-es="Estado">Status</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">9/10</td><td class="num">4</td><td class="num">$2,104.40</td><td class="num">$136.79</td><td class="num"><b>$1,231.07</b></td><td>9/12 · 20260912-JAF-015</td><td><span class="tag ok" data-es="pagado">paid</span></td></tr>
+            <tr><td class="mono">8/27</td><td class="num">4</td><td class="num">$2,018.20</td><td class="num">$131.18</td><td class="num"><b>$1,180.65</b></td><td>8/29 · 20260829-JAF-014</td><td><span class="tag ok" data-es="pagado">paid</span></td></tr>
+            <tr><td class="mono">8/13</td><td class="num">3</td><td class="num">$1,860.40</td><td class="num">$120.93</td><td class="num"><b>$1,088.33</b></td><td>8/15 · 20260815-JAF-013</td><td><span class="tag ok" data-es="pagado">paid</span></td></tr>
+            <tr><td class="mono">7/30</td><td class="num">4</td><td class="num">$2,072.10</td><td class="num">$134.69</td><td class="num"><b>$1,212.18</b></td><td>8/1 · 20260801-JAF-012</td><td><span class="tag ok" data-es="pagado">paid</span></td></tr>
+            <tr><td class="mono">7/16</td><td class="num">5</td><td class="num">$2,291.00</td><td class="num">$148.92</td><td class="num"><b>$1,340.24</b></td><td>7/18 · 20260718-JAF-011</td><td><span class="tag ok" data-es="pagado">paid</span></td></tr>
+          </tbody>
+        </table>
+        <p class="sm" data-es="14 corridas más desde enero.">14 more runs since January.</p>
+      </div>
+    </section>
+  </div>
+</section>
+
+<!-- ================= HISTORY ================= -->
+<section class="screen" data-screen="history">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Mis trabajos">← My jobs</a><h1 data-es="Historial">History</h1><p data-es="Todo lo que has terminado este año, con el paso en que está. 47 aprobados, 2 devueltos y corregidos.">Everything you've finished this year, with the step it's on. 47 approved, 2 sent back and fixed.</p></div><div class="actions"><input class="inp" style="width:220px" data-filter="#histTable" placeholder="Search job, address…" data-es-ph="Buscar trabajo, dirección…"></div></div>
+  <div class="grid">
+    <section class="box c12">
+      <table id="histTable">
+        <thead><tr><th data-es="Trabajo">Job</th><th data-es="Descripción">Description</th><th data-es="Terminado">Done</th><th data-es="Estado">Status</th><th class="num" data-es="Para ti">Yours</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">JAF-2026-1038</td><td>Transfer attachments — Calle Ajanta, Guaynabo</td><td>8/22</td><td><span class="tag acc" data-es="en corrida 9/24">in run 9/24</span></td><td class="num">$434.60</td></tr>
+          <tr><td class="mono">JAF-2026-1027</td><td>Remoción de línea bajante — Cayey</td><td>9/2</td><td><span class="tag acc" data-es="en corrida 9/24">in run 9/24</span></td><td class="num">$280.94</td></tr>
+          <tr><td class="mono">JAF-2026-1019</td><td>Pole replacement — Comerío</td><td>8/24</td><td><span class="tag ok" data-es="pagado 9/12">paid 9/12</span></td><td class="num">$402.10</td></tr>
+          <tr><td class="mono">JAF-2026-1011</td><td>Guy wire installation — Naranjito</td><td>8/20</td><td><span class="tag ok" data-es="pagado 9/12">paid 9/12</span></td><td class="num">$298.40</td></tr>
+          <tr><td class="mono">JAF-2026-1002</td><td>Tree trimming — Barranquitas</td><td>8/18</td><td><span class="tag ok" data-es="pagado 9/12">paid 9/12</span></td><td class="num">$265.77</td></tr>
+          <tr><td class="mono">JAF-2026-0996</td><td>Remoción de poste — Aibonito</td><td>8/14</td><td><span class="tag ok" data-es="pagado 9/12">paid 9/12</span></td><td class="num">$264.80</td></tr>
+          <tr><td class="mono">JAF-2026-0981</td><td>Transfer attachments — Cidra</td><td>8/8</td><td><span class="tag ok" data-es="pagado 8/29">paid 8/29</span></td><td class="num">$311.20</td></tr>
+          <tr><td class="mono">JAF-2026-0972</td><td>Línea bajante — Cayey</td><td>8/5 · <span class="tag warn" data-es="devuelto 1×">sent back 1×</span></td><td><span class="tag ok" data-es="pagado 8/29">paid 8/29</span></td><td class="num">$220.15</td></tr>
+        </tbody>
+      </table>
+      <p class="sm" data-es="39 trabajos más este año.">39 more jobs this year.</p>
+    </section>
+  </div>
+</section>
+
+<!-- ================= SUPERVISOR ================= -->
+<section class="screen" data-screen="super">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Mis trabajos">← My jobs</a><h1>Edgard Ocasio</h1><p data-es="Tu supervisor · Área Central · 4 brigadas">Your supervisor · Central area · 4 brigades</p></div></div>
+  <div class="grid">
+    <section class="box c5">
+      <h2 data-es="Contacto">Contact</h2>
+      <div class="kv"><span data-es="Teléfono">Phone</span><span>787-444-0165</span><span data-es="Correo">Email</span><span>eocasio@jafcommunications.com</span><span data-es="Horario">Hours</span><span>Mon–Sat 6:30 AM – 5:00 PM</span></div>
+      <div class="actions"><button class="btn blue" data-say="Calling 787-444-0165…" data-say-es="Llamando 787-444-0165…" data-es="Llamar">Call</button><button class="btn ghost" data-say="Opening WhatsApp…" data-say-es="Abriendo WhatsApp…">WhatsApp</button></div>
+    </section>
+    <section class="box c7">
+      <h2 data-es="Lo que tiene tuyo ahora">What he has of yours right now</h2>
+      <ul class="att">
+        <li><span class="mark w"></span><div><div class="t">JAF-2026-1043 · <span data-es="en su revisión">in his review</span></div><div class="d" data-es="Enviado 8/26 4:12 PM. Suele responder en 1 día.">Submitted 8/26 4:12 PM. He usually answers within a day.</div></div><span class="lvl w" data-es="Esperando">Waiting</span></li>
+        <li><span class="mark"></span><div><div class="t">JAF-2026-1005 · <span data-es="te lo devolvió">sent back to you</span></div><div class="d" data-es="Fotos después. Reenvía y vuelve a su cola.">After photos. Resubmit and it returns to his queue.</div></div><span class="lvl" data-es="Tuyo">Yours</span></li>
+      </ul>
+    </section>
+  </div>
+</section>
+
+<!-- ================= WAREHOUSE ================= -->
+<section class="screen" data-screen="wh">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Mis trabajos">← My jobs</a><h1>Guaynabo</h1><p data-es="Tu almacén de recogida · Calle Ajanta, Guaynabo">Your pickup warehouse · Calle Ajanta, Guaynabo</p></div></div>
+  <div class="grid">
+    <section class="box c5">
+      <h2 data-es="Datos">Details</h2>
+      <div class="kv"><span data-es="Dirección">Address</span><span>Calle Ajanta, Guaynabo</span><span data-es="Horario">Hours</span><span>Mon–Fri 7:00–5:30 · Sat 7:00–12:00</span><span data-es="Mostrador">Counter</span><span>Frank Ramos · Gilberto Ayala</span><span data-es="Teléfono">Phone</span><span>787-790-2214</span></div>
+      <div class="actions"><button class="btn blue" data-say="Opening directions…" data-say-es="Abriendo direcciones…" data-es="Cómo llegar">Directions</button><button class="btn ghost" data-say="Calling Guaynabo counter…" data-say-es="Llamando al mostrador de Guaynabo…" data-es="Llamar">Call</button></div>
+    </section>
+    <section class="box c7">
+      <h2 data-es="Tuyo en el almacén">Yours at the warehouse</h2>
+      <ul class="gate">
+        <li><span class="ic y">✓</span>JAF-2026-1043 · <span data-es="preparado, jaula B-2">staged, cage B-2</span><small data-es="listo para recoger">ready for pickup</small></li>
+        <li><span class="ic w">·</span>JAF-2026-1044 · <span data-es="preparando">prepping</span><small data-es="hoy">today</small></li>
+        <li><span class="ic w">↩</span>JAF-2026-1003 · <span data-es="debes devolver: 20 FT wire, 1 clamp, 1 tape">you owe back: 20 FT wire, 1 clamp, 1 tape</span><small data-es="al terminar">when done</small></li>
+      </ul>
+    </section>
+  </div>
+</section>
+
+
+
+  <div class="phonetools"><button class="toggle" type="button" onclick="document.getElementById('themeBtn').click()" data-es="Claro / oscuro">Light / dark</button><button class="toggle" type="button" onclick="document.getElementById('langBtn').click()">EN / ES</button></div>
+  <p class="phoneexit"><button class="btn ghost" id="phoneExit" data-es="Volver a escritorio">Back to desktop view</button></p>
+
+  <footer>
+    <span data-es="Datos reales: brigada Jesús Martínez (cuenta 009, Central, bajo Edgard Ocasio), trabajo JAF-2026-1043 de la hoja firmada 8/26, corrida 9/10 del Production Journal. Los montos por trabajo son ilustrativos.">Real data: brigade Jesús Martínez (account 009, Central, under Edgard Ocasio), job JAF-2026-1043 from the signed 8/26 sheet, run 9/10 from the Production Journal. Per-job amounts are illustrative.</span>
+    <span data-es="Mockup v5, 19 sep. No distribuir al cliente.">Mockup v5, 19 Sep. Not for client distribution.</span>
+  </footer>
+</div>
+</div>
+<script>
+  // ---- theme: OS preference by default, button overrides ----
+  (function(){
+    var btn=document.getElementById('themeBtn'), root=document.documentElement;
+    function isDark(){ var t=root.getAttribute('data-theme'); if(t) return t==='dark'; return matchMedia('(prefers-color-scheme: dark)').matches; }
+    function paint(){ btn.textContent = isDark() ? (LANG==='es'?'Claro':'Light') : (LANG==='es'?'Oscuro':'Dark'); }
+    btn.addEventListener('click', function(){ root.setAttribute('data-theme', isDark() ? 'light' : 'dark'); paint(); });
+    window.paintTheme=paint; paint();
+  })();
+
+  // ---- language: EN / ES. Every element with data-es swaps its text. ----
+  var LANG='en';
+  (function(){
+    var btn=document.getElementById('langBtn');
+    var els=document.querySelectorAll('[data-es]');
+    els.forEach(function(e){ e.setAttribute('data-en', e.innerHTML); });
+    function apply(){
+      els.forEach(function(e){ e.innerHTML = LANG==='es' ? e.getAttribute('data-es') : e.getAttribute('data-en'); });
+      document.querySelectorAll('[data-es-ph]').forEach(function(e){ if(!e.getAttribute('data-en-ph')) e.setAttribute('data-en-ph', e.placeholder); e.placeholder = LANG==='es' ? e.getAttribute('data-es-ph') : e.getAttribute('data-en-ph'); });
+      btn.textContent = LANG==='es' ? 'EN' : 'ES';
+      document.documentElement.lang = LANG;
+      if(window.paintTheme) window.paintTheme();
+    }
+    btn.addEventListener('click', function(){ LANG = LANG==='es' ? 'en' : 'es'; apply(); });
+    apply();
+  })();
+
+  // ---- KPI rings: dasharray from data-pct ----
+  document.querySelectorAll('.ring .fil').forEach(function(c){
+    var r=21, C=2*Math.PI*r, p=+c.getAttribute('data-pct')/100;
+    c.setAttribute('stroke-dasharray', C); c.setAttribute('stroke-dashoffset', C);
+    requestAnimationFrame(function(){ c.setAttribute('stroke-dashoffset', C*(1-p)); });
+  });
+
+  // ---- sparklines: <svg class="spark" data-n="1,2,3"> ----
+  document.querySelectorAll('svg.spark[data-n]').forEach(function(s){
+    var n=s.getAttribute('data-n').split(',').map(Number);
+    var W=72,H=34,pad=4, max=Math.max.apply(null,n), min=Math.min.apply(null,n); if(max===min){max=min+1;}
+    var x=function(i){ return pad+(W-2*pad)*i/(n.length-1); }, y=function(v){ return pad+(H-2*pad)*(1-(v-min)/(max-min)); };
+    var ns='http://www.w3.org/2000/svg';
+    var d=n.map(function(v,i){ return (i?'L':'M')+x(i)+' '+y(v); }).join(' ');
+    var a=document.createElementNS(ns,'path'); a.setAttribute('class','area'); a.setAttribute('d', d+' L'+x(n.length-1)+' '+(H-pad)+' L'+x(0)+' '+(H-pad)+' Z'); s.appendChild(a);
+    var p=document.createElementNS(ns,'path'); p.setAttribute('d',d); s.appendChild(p);
+    var c=document.createElementNS(ns,'circle'); c.setAttribute('cx',x(n.length-1)); c.setAttribute('cy',y(n[n.length-1])); c.setAttribute('r',3.5); s.appendChild(c);
+  });
+
+  // ---- generic two-series line chart with hover tooltip ----
+  function lineChart(id, months, s1, s2, lbl1, lbl2, fmt, max){
+    var svg=document.getElementById(id), wrap=svg.parentNode, tip=wrap.querySelector('.tip');
+    var W=640,H=230,L=48,R=64,T=14,B=30;
+    var x=function(i){ return L+(W-L-R)*i/(months.length-1); }, y=function(v){ return T+(H-T-B)*(1-v/max); };
+    var ns='http://www.w3.org/2000/svg', el=function(n,a){ var e=document.createElementNS(ns,n); for(var k in a) e.setAttribute(k,a[k]); return e; };
+    var ticks=[0,max/3,2*max/3,max];
+    ticks.forEach(function(v){ svg.appendChild(el('line',{x1:L,x2:W-R,y1:y(v),y2:y(v),'class':'grd'})); var t=el('text',{x:L-8,y:y(v)+4,'text-anchor':'end','class':'axis'}); t.textContent=fmt(v); svg.appendChild(t); });
+    months.forEach(function(m,i){ var t=el('text',{x:x(i),y:H-8,'text-anchor':'middle','class':'axis'}); t.textContent=m; svg.appendChild(t); });
+    var path=function(arr,cls){ var d=arr.map(function(v,i){ return (i?'L':'M')+x(i)+' '+y(v); }).join(' '); svg.appendChild(el('path',{d:d,fill:'none','stroke-width':2,'stroke-linejoin':'round','stroke-linecap':'round','class':cls})); };
+    path(s1,'ln1'); if(s2) path(s2,'ln2');
+    months.forEach(function(m,i){
+      var g=el('g',{'class':'col'}); var bw=(W-L-R)/(months.length-1);
+      g.appendChild(el('rect',{x:x(i)-bw/2,y:T,width:bw,height:H-T-B,'class':'band'}));
+      g.appendChild(el('circle',{cx:x(i),cy:y(s1[i]),r:4.5,'class':'dot1 ringc'}));
+      if(s2) g.appendChild(el('circle',{cx:x(i),cy:y(s2[i]),r:4.5,'class':'dot2 ringc'}));
+      g.addEventListener('mousemove',function(){
+        tip.innerHTML='<b>'+m+'</b><br>'+lbl1+' '+fmt(s1[i])+(s2?'<br>'+lbl2+' '+fmt(s2[i]):'');
+        var r=svg.getBoundingClientRect(); tip.style.left=(x(i)/W*r.width)+'px'; tip.style.top=(Math.min(y(s1[i]), s2?y(s2[i]):y(s1[i]))/H*r.height)+'px';
+      });
+      svg.appendChild(g);
+    });
+    var e1=el('text',{x:x(months.length-1)+10,y:y(s1[months.length-1])+4,'class':'endlbl'}); e1.textContent=lbl1; svg.appendChild(e1);
+    if(s2){ var e2=el('text',{x:x(months.length-1)+10,y:y(s2[months.length-1])+4,'class':'endlbl'}); e2.textContent=lbl2; svg.appendChild(e2); }
+  }
+
+  // ---- generic grouped bar chart ----
+  function barChart(id, cats, s1, s2, lbl1, lbl2, fmt, max){
+    var svg=document.getElementById(id), wrap=svg.parentNode, tip=wrap.querySelector('.tip');
+    var W=640,H=230,L=48,R=16,T=14,B=30;
+    var ns='http://www.w3.org/2000/svg', el=function(n,a){ var e=document.createElementNS(ns,n); for(var k in a) e.setAttribute(k,a[k]); return e; };
+    var y=function(v){ return T+(H-T-B)*(1-v/max); };
+    var slot=(W-L-R)/cats.length, bw=s2?slot*0.28:slot*0.5;
+    [0,max/3,2*max/3,max].forEach(function(v){ svg.appendChild(el('line',{x1:L,x2:W-R,y1:y(v),y2:y(v),'class':'grd'})); var t=el('text',{x:L-8,y:y(v)+4,'text-anchor':'end','class':'axis'}); t.textContent=fmt(v); svg.appendChild(t); });
+    cats.forEach(function(c,i){
+      var cx=L+slot*i+slot/2;
+      var g=el('g',{'class':'col'});
+      g.appendChild(el('rect',{x:L+slot*i,y:T,width:slot,height:H-T-B,'class':'band'}));
+      var x1=s2?cx-bw-2:cx-bw/2;
+      g.appendChild(el('rect',{x:x1,y:y(s1[i]),width:bw,height:H-B-y(s1[i]),rx:3,'class':'bar1'}));
+      if(s2) g.appendChild(el('rect',{x:cx+2,y:y(s2[i]),width:bw,height:H-B-y(s2[i]),rx:3,'class':'bar2'}));
+      var t=el('text',{x:cx,y:H-8,'text-anchor':'middle','class':'axis'}); t.textContent=c; g.appendChild(t);
+      g.addEventListener('mousemove',function(){ tip.innerHTML='<b>'+c+'</b><br>'+lbl1+' '+fmt(s1[i])+(s2?'<br>'+lbl2+' '+fmt(s2[i]):''); var r=svg.getBoundingClientRect(); tip.style.left=(cx/W*r.width)+'px'; tip.style.top=(y(Math.max(s1[i],s2?s2[i]:0))/H*r.height)+'px'; });
+      svg.appendChild(g);
+    });
+  }
+
+  // ---- toast ----
+  function toast(m){ var t=document.getElementById('toast'); if(!t){ t=document.createElement('div'); t.id='toast'; document.body.appendChild(t); } t.textContent=m; t.classList.add('on'); clearTimeout(t._t); t._t=setTimeout(function(){ t.classList.remove('on'); },2600); }
+  function T(en,es){ return LANG==='es' ? es : en; }
+
+  // ---- screen router: any [data-go] shows the matching [data-screen] ----
+  (function(){
+    var screens=document.querySelectorAll('[data-screen]');
+    if(!screens.length) return;
+    function go(id,arg){
+      var found=false;
+      screens.forEach(function(s){ var on=s.getAttribute('data-screen')===id; s.classList.toggle('on',on); if(on) found=true; });
+      if(!found){ toast(T('Not in this mockup yet','Todavía no está en este mockup')); return; }
+      document.querySelectorAll('.rail a[data-go], .tabs a[data-go]').forEach(function(a){
+        var hit=a.getAttribute('data-go')===id && (!a.hasAttribute('data-arg') || a.getAttribute('data-arg')===arg);
+        if(!hit && a.hasAttribute('data-children')){ hit=(' '+a.getAttribute('data-children')+' ').indexOf(' '+id+' ')>-1; }
+        a.classList.toggle('on',hit);
+      });
+      window.scrollTo({top:0,behavior:'smooth'});
+      document.dispatchEvent(new CustomEvent('screen',{detail:{id:id,arg:arg}}));
+    }
+    document.addEventListener('click',function(e){ var t=e.target.closest('[data-go]'); if(t){ e.preventDefault(); go(t.getAttribute('data-go'), t.getAttribute('data-arg')); } });
+    window.go=go;
+  })();
+
+  // ---- flip: a button that becomes a status chip ----
+  document.addEventListener('click',function(e){
+    var b=e.target.closest('[data-flip]'); if(!b) return;
+    var sp=document.createElement('span'); sp.className='tag '+(b.getAttribute('data-flip-cls')||'ok');
+    sp.textContent = LANG==='es' && b.getAttribute('data-flip-es') ? b.getAttribute('data-flip-es') : b.getAttribute('data-flip');
+    b.replaceWith(sp);
+    if(b.getAttribute('data-toast')) toast(LANG==='es' && b.getAttribute('data-toast-es') ? b.getAttribute('data-toast-es') : b.getAttribute('data-toast'));
+  });
+  // ---- plain toast buttons ----
+  document.addEventListener('click',function(e){ var b=e.target.closest('[data-say]'); if(!b||b.hasAttribute('data-flip')) return; toast(LANG==='es' && b.getAttribute('data-say-es') ? b.getAttribute('data-say-es') : b.getAttribute('data-say')); });
+
+  // ---- table filter: <input data-filter="#tableId"> ----
+  document.addEventListener('input',function(e){
+    var i=e.target; if(!i.hasAttribute('data-filter')) return;
+    var q=i.value.toLowerCase(), t=document.querySelector(i.getAttribute('data-filter')); if(!t) return;
+    t.querySelectorAll('tbody tr, .opt').forEach(function(r){ r.classList.toggle('hidden', q && r.textContent.toLowerCase().indexOf(q)<0); });
+  });
+  // ---- in-page tabs: a[data-tab="group:name"] + [data-panel="group:name"] ----
+  document.addEventListener('click',function(e){
+    var a=e.target.closest('[data-tab]'); if(!a) return; e.preventDefault();
+    var v=a.getAttribute('data-tab'), g=v.split(':')[0];
+    document.querySelectorAll('[data-tab^="'+g+':"]').forEach(function(x){ x.classList.toggle('on',x===a); });
+    document.querySelectorAll('[data-panel^="'+g+':"]').forEach(function(p){ p.style.display = p.getAttribute('data-panel')===v ? '' : 'none'; });
+  });
+  document.querySelectorAll('[data-panel]').forEach(function(p){ var v=p.getAttribute('data-panel'), g=v.split(':')[0]; var on=document.querySelector('[data-tab="'+v+'"]'); p.style.display = on && on.classList.contains('on') ? '' : 'none'; });
+  // ---- generic checkbox, radio, signature pad, stepper, crew option ----
+  document.addEventListener('click',function(e){
+    var c=e.target.closest('.chk'); if(c && !c.closest('#runTable') && !c.closest('[data-checkoff]')){ c.classList.toggle('on'); c.textContent=c.classList.contains('on')?'✓':''; return; }
+    var r=e.target.closest('.radio label'); if(r){ r.parentNode.querySelectorAll('label').forEach(function(x){ x.classList.remove('on'); }); r.classList.add('on'); return; }
+    var s=e.target.closest('.sigpad'); if(s && !s.classList.contains('done')){ s.classList.add('done'); s.textContent=s.getAttribute('data-name')||'Firmado'; return; }
+    var em=e.target.closest('.sig .empty'); if(em){ var d=document.createElement('div'); d.className='ink'; d.textContent=em.getAttribute('data-name')||'Firmado'; em.replaceWith(d); return; }
+    var co=e.target.closest('.crewopt'); if(co){ var one=co.parentNode.hasAttribute('data-single'); if(one) co.parentNode.querySelectorAll('.crewopt').forEach(function(x){ x.classList.remove('on'); x.querySelector('.bx').textContent=''; }); co.classList.toggle('on'); co.querySelector('.bx').textContent=co.classList.contains('on')?'✓':''; return; }
+    var st=e.target.closest('.stepper span'); if(st){ var b=st.parentNode.querySelector('b'), v=+b.textContent; b.textContent = st.textContent.trim()==='−' ? Math.max(0,v-1) : v+1; b.dispatchEvent(new Event('change',{bubbles:true})); return; }
+  });
+  // ---- buttons that need a field filled: <button data-requires="#id"> ----
+  document.querySelectorAll('[data-requires]').forEach(function(b){ var f=document.querySelector(b.getAttribute('data-requires')); if(!f) return; b.disabled=!f.value.trim(); f.addEventListener('input',function(){ b.disabled=!f.value.trim(); }); });
+  // ---- row select: tr[data-sel] highlights ----
+  document.addEventListener('click',function(e){ var tr=e.target.closest('tr[data-sel]'); if(!tr||e.target.closest('button,a,input,.chk')) return; tr.parentNode.querySelectorAll('tr').forEach(function(x){ x.classList.remove('sel'); }); tr.classList.add('sel'); });
+
+
+  barChart('pay', ['6/18','7/2','7/16','7/30','8/13','8/27','9/10'], [980,1105,1340,1212,1088,1180,1231], null, 'Paid', '', function(v){ return '$'+Math.round(v).toLocaleString(); }, 1500);
+  (function(){
+    var pb=document.getElementById('phoneBtn'), px=document.getElementById('phoneExit');
+    function set(on){ document.body.classList.toggle('phone',on); pb.textContent = on ? (LANG==='es'?'Vista de escritorio':'Desktop view') : (LANG==='es'?'Vista de teléfono':'Phone view'); window.scrollTo({top:0}); }
+    pb.addEventListener('click',function(){ set(!document.body.classList.contains('phone')); });
+    px.addEventListener('click',function(){ set(false); });
+    var off=false, nb=document.getElementById('netBtn'), tag=document.getElementById('netTag'), ic=document.getElementById('syncIc'), tx=document.getElementById('syncTxt'), n=document.getElementById('syncN');
+    nb.addEventListener('click',function(){
+      off=!off;
+      tag.className = off ? 'tag warn' : 'tag ok';
+      tag.textContent = off ? (LANG==='es'?'Sin señal · 2 por enviar':'Offline · 2 waiting to sync') : (LANG==='es'?'En línea · todo sincronizado':'Online · everything synced');
+      ic.className = off ? 'ic w' : 'ic y'; ic.textContent = off ? '!' : '✓';
+      tx.textContent = tag.textContent; n.textContent = off ? '2' : '0';
+      nb.textContent = off ? (LANG==='es'?'Simular con señal':'Simulate back online') : (LANG==='es'?'Simular sin señal':'Simulate offline');
+    });
+  })();
+
+  // ---- crew pickup: signature unlocks, over-draw flag ----
+  (function(){
+    var t=document.getElementById('cpTable'); function flag(){ t.querySelectorAll('tbody tr').forEach(function(r){ var l=+r.dataset.listed, v=+r.querySelector('.stepper b').textContent, fl=r.querySelector('.fl'); if(!fl) return; fl.innerHTML = v>l ? '<span class="tag warn">+'+(v-l)+' '+T('more than listed','más de lo listado')+'</span>' : ''; }); }
+    t.addEventListener('change',flag); t.addEventListener('click',function(){ setTimeout(flag,0); }); flag();
+    var sec=document.querySelector('[data-screen="pickup"]'); sec.addEventListener('click',function(){ setTimeout(function(){ if(sec.querySelectorAll('.sigpad.done').length===2) document.getElementById('cpGo').disabled=false; },0); });
+    document.getElementById('cpGo').addEventListener('click',function(){ toast(T('List locked. Stock moved at Guaynabo. See you on site.','Lista bloqueada. Stock movido en Guaynabo. Nos vemos en el sitio.')); go('field'); });
+  })();
+  // ---- field update ----
+  (function(){
+    var a=document.getElementById('fuAddr'); a.addEventListener('input',function(){ var d=document.getElementById('fuDiff'); if(a.value!=='PR-2 KM 88.1, Manatí'){ d.style.display=''; document.getElementById('fuNew').textContent=a.value; } else d.style.display='none'; });
+    var after=0;
+    document.addEventListener('click',function(e){ var c=e.target.closest('.ph.cam'); if(!c) return; var k=c.getAttribute('data-kind'); var ph=document.createElement('div'); ph.className='ph'; var now=new Date(); ph.innerHTML='<div><b>'+k+'</b>'+now.getHours()+':'+String(now.getMinutes()).padStart(2,'0')+'</div>'; c.parentNode.insertBefore(ph,c);
+      if(c.closest('#fuPhotos') && k==='AFTER'){ after++; document.getElementById('fuPhotoNote').textContent=T('Before 1 · After '+after+' · ready to submit','Antes 1 · Después '+after+' · listo para enviar'); }
+      if(c.closest('#sbPhotos')){ document.getElementById('sbResubmit').disabled=false; document.getElementById('sbNote').textContent=T('New after photo added. Resubmit when ready.','Foto después añadida. Reenvía cuando estés listo.'); } });
+    var m=document.getElementById('fuMat'); function back(){ var parts=[]; m.querySelectorAll('tbody tr').forEach(function(r){ var took=+r.dataset.took, i=r.querySelector('.qty'), u=+i.value||0; if(u>took){ i.value=took; u=took; toast(T('"Used" can\'t exceed "Took".','«Usado» no puede ser más que «Tomado».')); } i.style.borderColor=''; var d=took-u; if(d>0) parts.push(d+' '+r.children[0].firstChild.textContent.trim()); }); document.getElementById('fuBack').innerHTML='<b>↩ '+T('Bring back to Guaynabo: ','Devolver a Guaynabo: ')+'</b>'+(parts.length?parts.join(' · '):T('nothing','nada'))+'<div class="sm">'+T('Took − used. The warehouse expects these.','Tomado − usado. El almacén los espera.')+'</div>'; }
+    m.addEventListener('input',back); back();
+    document.getElementById('fuSubmit').addEventListener('click',function(){ if(after<1){ toast(T('Take at least one "after" photo first.','Toma al menos una foto «después» primero.')); return; } this.disabled=true; this.textContent=T('Submitted · 4:12 PM · Edgard notified','Enviado · 4:12 PM · Edgard notificado'); toast(T('JAF-2026-1003 submitted. If offline, it sends itself later.','JAF-2026-1003 enviado. Sin señal, se envía solo después.')); });
+    document.getElementById('sbResubmit').addEventListener('click',function(){ this.disabled=true; this.textContent=T('Resubmitted · back in Edgard\'s queue','Reenviado · de vuelta en la cola de Edgard'); toast(T('JAF-2026-1005 resubmitted. Only the after photos changed.','JAF-2026-1005 reenviado. Solo cambiaron las fotos después.')); });
+  })();
+
+</script>
+</body>
+</html>

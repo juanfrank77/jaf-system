@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JAF Ops, Comptroller</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ---------------------------------------------------------------
+     JAF Ops design system. Same tokens as Monica's command center
+     (mockup v3, 19 Sep 2026). Dual theme, one accent, status colors
+     only for state. Radius: containers 16px, controls 10px, chips 6px.
+     --------------------------------------------------------------- */
+  :root{
+    color-scheme: light;
+    --plane:#f4f4f2; --surface:#fcfcfb; --surface-2:#f0f0ed;
+    --ink:#111110; --ink-2:#52514e; --ink-3:#898781;
+    --hair:#e1e0d9; --ring:rgba(11,11,11,.08);
+    --accent:#1c5cab; --accent-2:#86b6ef; --accent-ink:#ffffff;
+    --accent-wash:rgba(28,92,171,.08);
+    --critical:#d03b3b; --warning:#b7791f; --good:#006300;
+    --crit-wash:rgba(208,59,59,.10); --warn-wash:rgba(183,121,31,.13); --good-wash:rgba(0,99,0,.10);
+    --shadow:0 1px 2px rgba(30,28,20,.05), 0 10px 30px -14px rgba(30,28,20,.14);
+    --grid:#e1e0d9;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      color-scheme: dark;
+      --plane:#0f0f0e; --surface:#1a1a19; --surface-2:#222221;
+      --ink:#f4f4f1; --ink-2:#c3c2b7; --ink-3:#898781;
+      --hair:#2c2c2a; --ring:rgba(255,255,255,.08);
+      --accent:#3987e5; --accent-2:#9ec5f4; --accent-ink:#ffffff;
+      --accent-wash:rgba(57,135,229,.12);
+      --critical:#e66767; --warning:#e0a634; --good:#3fbf3f;
+      --crit-wash:rgba(230,103,103,.14); --warn-wash:rgba(224,166,52,.16); --good-wash:rgba(63,191,63,.14);
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 30px -14px rgba(0,0,0,.6);
+      --grid:#2c2c2a;
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --plane:#0f0f0e; --surface:#1a1a19; --surface-2:#222221;
+    --ink:#f4f4f1; --ink-2:#c3c2b7; --ink-3:#898781;
+    --hair:#2c2c2a; --ring:rgba(255,255,255,.08);
+    --accent:#3987e5; --accent-2:#9ec5f4; --accent-ink:#ffffff;
+    --accent-wash:rgba(57,135,229,.12);
+    --critical:#e66767; --warning:#e0a634; --good:#3fbf3f;
+    --crit-wash:rgba(230,103,103,.14); --warn-wash:rgba(224,166,52,.16); --good-wash:rgba(63,191,63,.14);
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 30px -14px rgba(0,0,0,.6);
+    --grid:#2c2c2a;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; background:var(--plane); color:var(--ink); }
+  body{ font-family:"Geist", system-ui, -apple-system, "Segoe UI", sans-serif; font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; transition:background .2s ease, color .2s ease; }
+  .shell{ display:grid; grid-template-columns:236px minmax(0,1fr); min-height:100dvh; }
+  .rail{ border-right:1px solid var(--hair); padding:22px 18px; display:flex; flex-direction:column; gap:8px; position:sticky; top:0; height:100dvh; background:var(--plane); }
+  .rail .wordmark{ padding:4px 10px 18px; font-size:16px; font-weight:700; letter-spacing:-.01em; }
+  .rail .wordmark span{ display:block; font-size:11.5px; font-weight:500; color:var(--ink-3); margin-top:2px; }
+  .rail .grp{ font-size:11px; font-weight:600; color:var(--ink-3); padding:14px 10px 4px; letter-spacing:.02em; }
+  .rail a{ display:flex; align-items:center; justify-content:space-between; text-decoration:none; color:var(--ink-2); font-size:13.5px; font-weight:500; padding:8px 10px; border-radius:10px; }
+  .rail a:hover{ background:var(--surface-2); color:var(--ink); }
+  .rail a.on{ background:var(--surface); color:var(--ink); font-weight:600; box-shadow:var(--shadow); border:1px solid var(--ring); }
+  .rail a .pill{ font-size:11px; font-weight:600; background:var(--critical); color:#fff; padding:1px 7px; border-radius:6px; }
+  .rail a .n{ font-size:12px; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+  .rail .foot{ margin-top:auto; border-top:1px solid var(--hair); padding-top:14px; display:flex; flex-direction:column; gap:10px; }
+  .rail .user{ display:flex; align-items:center; gap:10px; padding:4px 10px; }
+  .rail .av{ width:30px; height:30px; border-radius:50%; background:var(--accent); color:#fff; font-size:12px; font-weight:600; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .rail .user .nm{ font-size:13px; font-weight:600; line-height:1.2; }
+  .rail .user .rl{ font-size:11.5px; color:var(--ink-3); }
+  .rail .toggles{ display:flex; gap:8px; }
+  .rail .toggles .toggle{ flex:1; }
+  .wrap{ max-width:1200px; margin:0 auto; padding:0 28px 56px; width:100%; min-width:0; overflow-x:clip; }
+
+  /* top bar */
+  .top{ height:68px; display:flex; align-items:center; gap:22px; border-bottom:1px solid var(--hair); }
+  .wordmark{ font-weight:700; letter-spacing:-.01em; font-size:15px; white-space:nowrap; }
+  .tabs{ display:flex; gap:2px; background:var(--surface-2); padding:3px; border-radius:10px; }
+  .tabs a{ text-decoration:none; font-size:13px; font-weight:500; color:var(--ink-2); padding:6px 12px; border-radius:8px; white-space:nowrap; }
+  .tabs a.on{ background:var(--surface); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.08); font-weight:600; }
+  .spacer{ flex:1; }
+  .who{ font-size:13px; color:var(--ink-2); white-space:nowrap; }
+  .btn{ font:inherit; font-weight:600; font-size:13px; background:var(--ink); color:var(--plane); border:0; border-radius:10px; padding:9px 14px; cursor:pointer; transition:transform .12s ease, opacity .12s ease; white-space:nowrap; }
+  .btn:hover{ opacity:.88; } .btn:active{ transform:translateY(1px); }
+  .btn.ghost{ background:transparent; color:var(--ink); border:1px solid var(--hair); }
+  .btn.ghost:hover{ background:var(--surface-2); opacity:1; }
+  .btn.acc{ background:var(--accent-ink); color:var(--accent); }
+  .btn.acc:hover{ opacity:.9; }
+  .btn.blue{ background:var(--accent); color:#fff; }
+  .btn.sm{ font-size:12.5px; padding:6px 11px; border-radius:8px; }
+  .btn[disabled]{ opacity:.45; cursor:not-allowed; }
+  .toggle{ font:inherit; font-size:12.5px; font-weight:600; color:var(--ink-2); background:var(--surface-2); border:1px solid var(--hair); border-radius:10px; padding:7px 11px; cursor:pointer; }
+
+  /* greeting + kpi strip */
+  .greet{ padding:30px 0 18px; display:flex; align-items:flex-end; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+  .greet h1{ font-size:30px; font-weight:600; letter-spacing:-.02em; margin:0 0 4px; line-height:1.15; }
+  .greet p{ margin:0; color:var(--ink-2); font-size:15px; max-width:64ch; }
+  .greet b{ color:var(--ink); font-weight:600; }
+  .kpis{ display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin:6px 0 20px; }
+  .kpis.k4{ grid-template-columns:repeat(4,1fr); }
+  .kpi{ background:var(--surface); border:1px solid var(--ring); border-radius:16px; padding:14px 16px; box-shadow:var(--shadow); display:flex; align-items:center; justify-content:space-between; gap:12px; min-width:0; }
+  .kpi .l{ font-size:12px; color:var(--ink-3); white-space:nowrap; }
+  .kpi .v{ font-size:24px; font-weight:600; letter-spacing:-.02em; line-height:1.15; margin-top:2px; }
+  .kpi .d{ font-size:12px; color:var(--ink-2); margin-top:2px; }
+  .kpi .v.neg{ color:var(--critical); } .kpi .v.warn{ color:var(--warning); } .kpi .v.good{ color:var(--good); }
+  .kpi .viz{ flex:0 0 auto; }
+  .ring{ width:52px; height:52px; }
+  .ring .trk{ fill:none; stroke:var(--accent-2); stroke-opacity:.45; stroke-width:5; }
+  .ring .fil{ fill:none; stroke:var(--accent); stroke-width:5; stroke-linecap:round; transform:rotate(-90deg); transform-origin:50% 50%; }
+  .ring.crit .trk{ stroke:var(--critical); stroke-opacity:.22; } .ring.crit .fil{ stroke:var(--critical); }
+  .ring.warn .trk{ stroke:var(--warning); stroke-opacity:.22; } .ring.warn .fil{ stroke:var(--warning); }
+  .ring.good .trk{ stroke:var(--good); stroke-opacity:.22; } .ring.good .fil{ stroke:var(--good); }
+  .ring text{ font-size:11px; font-weight:600; fill:var(--ink); text-anchor:middle; }
+  .ring .cap{ font-size:8px; font-weight:500; fill:var(--ink-3); }
+  .spark{ width:72px; height:34px; }
+  .spark path{ fill:none; stroke:var(--accent); stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }
+  .spark .area{ fill:var(--accent); fill-opacity:.10; stroke:none; }
+  .spark circle{ fill:var(--accent); stroke:var(--surface); stroke-width:2; }
+  .mini{ display:flex; align-items:flex-end; gap:3px; height:34px; }
+  .mini i{ display:block; width:9px; background:var(--accent); border-radius:3px 3px 0 0; }
+  .mini i.lo{ background:var(--accent-2); }
+  .mini i.crit{ background:var(--critical); } .mini i.warn{ background:var(--warning); }
+  @media (prefers-reduced-motion:no-preference){ .ring .fil{ transition:stroke-dashoffset .8s cubic-bezier(.16,1,.3,1); } }
+
+  /* grid + boxes */
+  .grid{ display:grid; grid-template-columns:repeat(12,1fr); gap:16px; }
+  .box{ background:var(--surface); border:1px solid var(--ring); border-radius:16px; box-shadow:var(--shadow); padding:20px 22px; min-width:0; }
+  .box.acc{ background:var(--accent); color:var(--accent-ink); border-color:transparent; }
+  .box.acc h2, .box.acc .sub{ color:rgba(255,255,255,.85); }
+  .c3{ grid-column:span 3; } .c4{ grid-column:span 4; } .c5{ grid-column:span 5; } .c6{ grid-column:span 6; } .c7{ grid-column:span 7; } .c8{ grid-column:span 8; } .c12{ grid-column:span 12; }
+  .box h2{ font-size:13.5px; font-weight:600; color:var(--ink-2); margin:0 0 2px; }
+  .box .sub{ color:var(--ink-3); font-size:12.5px; margin:0 0 14px; }
+  .box .head{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+  .count{ display:inline-block; min-width:20px; text-align:center; font-size:11px; font-weight:600; padding:1px 6px; border-radius:6px; background:var(--critical); color:#fff; margin-left:6px; vertical-align:1px; }
+  .count.w{ background:var(--warning); } .count.a{ background:var(--accent); }
+  .ex{ text-decoration:underline dotted var(--ink-3); text-underline-offset:3px; text-decoration-thickness:1px; }
+
+  /* lines / hero */
+  .lines{ list-style:none; margin:4px 0 0; padding:0; }
+  .lines li{ display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--hair); }
+  .lines li:last-child{ border-bottom:0; }
+  .lines i{ width:10px; height:10px; border-radius:3px; flex:0 0 auto; }
+  .lines .n{ flex:1; font-size:13.5px; font-weight:500; }
+  .lines .v{ font-size:15px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .hero{ font-size:44px; font-weight:600; letter-spacing:-.03em; line-height:1; margin:4px 0 2px; }
+  .heroline{ color:var(--ink-2); font-size:13px; margin:0 0 14px; }
+
+  /* chart */
+  .chartwrap{ position:relative; }
+  .chart{ width:100%; height:auto; display:block; }
+  .legend{ display:flex; gap:18px; font-size:12.5px; color:var(--ink-2); margin:2px 0 6px; flex-wrap:wrap; }
+  .legend i{ display:inline-block; width:14px; height:3px; border-radius:2px; margin-right:7px; vertical-align:3px; }
+  .tip{ position:absolute; pointer-events:none; background:var(--ink); color:var(--plane); font-size:12px; padding:8px 10px; border-radius:8px; white-space:nowrap; transform:translate(-50%,-110%); opacity:0; transition:opacity .12s; box-shadow:var(--shadow); }
+  .tip b{ font-weight:600; }
+  .chartwrap:hover .tip{ opacity:1; }
+  .axis{ font-size:11px; fill:var(--ink-3); }
+  .grd{ stroke:var(--grid); stroke-width:1; }
+  .ln1{ stroke:var(--accent); } .ln2{ stroke:var(--accent-2); }
+  .dot1{ fill:var(--accent); } .dot2{ fill:var(--accent-2); }
+  .ringc{ stroke:var(--surface); stroke-width:2; }
+  .col:hover .band{ fill:var(--accent-wash); }
+  .band{ fill:transparent; }
+  .endlbl{ font-size:11.5px; font-weight:600; fill:var(--ink); }
+  .bar1{ fill:var(--accent); } .bar2{ fill:var(--accent-2); }
+
+  /* glance tile */
+  .glance .big{ font-size:40px; font-weight:600; letter-spacing:-.03em; line-height:1; margin:6px 0 4px; }
+  .glance p{ margin:0 0 16px; font-size:13px; color:rgba(255,255,255,.85); }
+  .glance .btn{ display:block; width:100%; text-align:left; margin-top:8px; }
+
+  /* attention list */
+  .att{ list-style:none; margin:0; padding:0; }
+  .att li{ display:grid; grid-template-columns:3px 1fr auto; gap:0 12px; padding:9px 0; border-bottom:1px solid var(--hair); align-items:start; }
+  .att li:last-child{ border-bottom:0; }
+  .att .mark{ width:3px; min-height:30px; border-radius:2px; background:var(--critical); margin-top:2px; }
+  .att .mark.w{ background:var(--warning); } .att .mark.a{ background:var(--accent); } .att .mark.g{ background:var(--good); }
+  .att .t{ font-weight:600; font-size:13.5px; }
+  .att .d{ color:var(--ink-2); font-size:12.5px; }
+  .att .lvl{ font-size:11px; font-weight:600; color:var(--critical); padding-top:2px; white-space:nowrap; }
+  .att .lvl.w{ color:var(--warning); } .att .lvl.a{ color:var(--accent); } .att .lvl.g{ color:var(--good); }
+  .more{ display:inline-block; margin-top:10px; font-size:12.5px; color:var(--accent); text-decoration:none; font-weight:600; cursor:pointer; }
+
+  /* bars + stats + rows */
+  .bars{ display:grid; grid-template-columns:auto 1fr auto; gap:8px 12px; align-items:center; margin-top:6px; }
+  .bars .n{ font-size:13px; font-weight:500; }
+  .bars .b{ height:9px; background:var(--accent); border-radius:0 4px 4px 0; }
+  .bars .b.lo{ background:var(--accent-2); } .bars .b.crit{ background:var(--critical); } .bars .b.warn{ background:var(--warning); }
+  .bars .v{ font-size:12.5px; font-variant-numeric:tabular-nums; color:var(--ink-2); }
+  .split{ display:grid; grid-template-columns:1fr 1fr; gap:14px 18px; margin-top:14px; padding-top:14px; border-top:1px solid var(--hair); }
+  .stat .l{ font-size:12px; color:var(--ink-3); }
+  .stat .v{ font-size:22px; font-weight:600; letter-spacing:-.02em; line-height:1.15; }
+  .rows{ margin:6px 0 0; padding:0; list-style:none; }
+  .rows li{ display:flex; justify-content:space-between; gap:12px; padding:8px 0; border-bottom:1px solid var(--hair); font-size:13.5px; align-items:center; }
+  .rows li:last-child{ border-bottom:0; }
+  .st{ font-size:12px; font-weight:600; }
+  .st.crit{ color:var(--critical); } .st.warn{ color:var(--warning); } .st.ok{ color:var(--good); } .st.acc{ color:var(--accent); }
+
+  /* chips */
+  .tag{ display:inline-block; font-size:11px; font-weight:600; padding:2px 7px; border-radius:6px; background:var(--surface-2); color:var(--ink-2); white-space:nowrap; vertical-align:middle; }
+  .tag.ok{ background:var(--good-wash); color:var(--good); }
+  .tag.warn{ background:var(--warn-wash); color:var(--warning); }
+  .tag.crit{ background:var(--crit-wash); color:var(--critical); }
+  .tag.acc{ background:var(--accent-wash); color:var(--accent); }
+  .tag.dark{ background:var(--ink); color:var(--plane); }
+
+  /* checklist gate */
+  .gate{ list-style:none; margin:6px 0 0; padding:0; }
+  .gate li{ display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--hair); font-size:13.5px; }
+  .gate li:last-child{ border-bottom:0; }
+  .gate .ic{ width:20px; height:20px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex:0 0 auto; }
+  .gate .ic.y{ background:var(--good-wash); color:var(--good); }
+  .gate .ic.n{ background:var(--crit-wash); color:var(--critical); }
+  .gate .ic.w{ background:var(--warn-wash); color:var(--warning); }
+  .gate small{ margin-left:auto; color:var(--ink-3); font-size:12px; white-space:nowrap; }
+
+  /* checkbox */
+  .chk{ width:18px; height:18px; border:1.5px solid var(--ink-3); border-radius:5px; display:inline-grid; place-items:center; font-size:11px; color:#fff; cursor:pointer; background:var(--surface); flex:0 0 auto; vertical-align:middle; }
+  .chk.on{ background:var(--good); border-color:var(--good); }
+
+  /* step flow strip */
+  .flow{ display:flex; gap:6px; margin:10px 0 0; }
+  .flow div{ flex:1; padding:8px 6px; border-radius:10px; border:1px solid var(--hair); font-size:11.5px; text-align:center; color:var(--ink-3); line-height:1.3; }
+  .flow div b{ display:block; font-size:10.5px; font-weight:600; color:var(--ink-2); letter-spacing:.03em; }
+  .flow .on{ background:var(--accent); color:#fff; border-color:transparent; }
+  .flow .on b{ color:rgba(255,255,255,.85); }
+  .flow .done{ background:var(--accent-wash); color:var(--accent); border-color:transparent; }
+  .flow .done b{ color:var(--accent); }
+  .flow .you{ box-shadow:inset 0 -3px 0 var(--accent); }
+
+  /* table */
+  table{ width:100%; border-collapse:collapse; margin-top:6px; }
+  th{ text-align:left; font-size:11.5px; font-weight:600; color:var(--ink-3); padding:8px 10px 8px 0; border-bottom:1px solid var(--hair); white-space:nowrap; }
+  td{ padding:10px 10px 10px 0; border-bottom:1px solid var(--hair); font-size:13.5px; vertical-align:middle; }
+  tr:last-child td{ border-bottom:0; }
+  tbody tr:hover td{ background:var(--accent-wash); }
+  td.num, th.num{ text-align:right; font-variant-numeric:tabular-nums; }
+  td.mono{ font-variant-numeric:tabular-nums; font-weight:500; }
+  td.act, th.act{ text-align:right; }
+  .neg{ color:var(--critical); }
+  .dim{ color:var(--ink-3); }
+  .sm{ font-size:12px; color:var(--ink-3); }
+  .paidrow td{ color:var(--ink-3); }
+  .paidrow td .mono, .paidrow td.mono{ text-decoration:none; }
+
+  /* input */
+  .inp{ font:inherit; font-size:13px; color:var(--ink); background:var(--surface); border:1px solid var(--hair); border-radius:10px; padding:8px 11px; width:100%; }
+  .inp::placeholder{ color:var(--ink-3); }
+  .field{ display:flex; flex-direction:column; gap:5px; }
+  .field label{ font-size:12px; color:var(--ink-3); font-weight:500; }
+  .form3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-top:8px; }
+
+  footer{ margin-top:36px; padding-top:14px; border-top:1px solid var(--hair); color:var(--ink-3); font-size:12px; display:flex; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+
+  @media (prefers-reduced-motion:no-preference){
+    .kpi, .box, .greet{ animation:rise .5s cubic-bezier(.16,1,.3,1) both; }
+    .kpi:nth-child(2){ animation-delay:.04s } .kpi:nth-child(3){ animation-delay:.08s } .kpi:nth-child(4){ animation-delay:.12s } .kpi:nth-child(5){ animation-delay:.16s }
+    .grid .box:nth-child(1){ animation-delay:.10s } .grid .box:nth-child(2){ animation-delay:.15s } .grid .box:nth-child(3){ animation-delay:.20s }
+    .grid .box:nth-child(4){ animation-delay:.25s } .grid .box:nth-child(5){ animation-delay:.30s } .grid .box:nth-child(6){ animation-delay:.35s } .grid .box:nth-child(7){ animation-delay:.40s }
+    @keyframes rise{ from{ opacity:0; transform:translateY(8px) } to{ opacity:1; transform:none } }
+  }
+  .mdate{ display:none; }
+  @media (max-width:1024px){ .shell{ grid-template-columns:1fr; } .rail{ display:none; } .top .wordmark, .top .tabs{ display:inline-flex; } .top .who, .top .print{ display:none; } .kpis, .kpis.k4{ grid-template-columns:repeat(3,1fr); } .c3,.c4,.c5,.c6,.c7,.c8{ grid-column:span 6; } }
+  @media (min-width:1025px){ .top .wordmark, .top .tabs{ display:none; } }
+  @media (max-width:640px){ .top .tabs{ display:none; } }
+  @media (max-width:760px){ .kpis, .kpis.k4{ grid-template-columns:1fr 1fr; } .c3,.c4,.c5,.c6,.c7,.c8,.c12{ grid-column:span 12; } .wrap{ padding:0 16px 40px; } .greet h1{ font-size:24px; } .hero{ font-size:38px; } .top{ height:58px; gap:10px; } .who{ display:none; } .mdate{ display:block; color:var(--ink-3); font-size:13px; margin-bottom:6px; } .form3{ grid-template-columns:1fr; } }
+
+  /* phone preview (crew): same page, constrained to a handset */
+  body.phone .shell{ display:block; }
+  body.phone .rail{ display:none; }
+  body.phone .wrap{ max-width:418px; margin:24px auto 40px; padding:0 14px 30px; border:12px solid #141413; border-radius:44px; background:var(--plane); min-height:820px; box-shadow:0 30px 60px -20px rgba(0,0,0,.45); }
+  body.phone .top{ height:58px; gap:10px; }
+  body.phone .top .wordmark{ display:inline-flex; }
+  body.phone .top .tabs, body.phone .top .who, body.phone .top .print, body.phone .top .desk{ display:none; }
+  body.phone .mdate{ display:block; color:var(--ink-3); font-size:13px; margin-bottom:6px; }
+  body.phone .greet{ padding:22px 0 14px; }
+  body.phone .greet h1{ font-size:24px; }
+  body.phone .kpis, body.phone .kpis.k4{ grid-template-columns:1fr 1fr; }
+  body.phone .c3, body.phone .c4, body.phone .c5, body.phone .c6, body.phone .c7, body.phone .c8, body.phone .c12{ grid-column:span 12; }
+  body.phone .hero{ font-size:36px; }
+  body.phone .form3{ grid-template-columns:1fr; }
+  body.phone .hide-phone{ display:none; }
+  .phonebar{ display:none; }
+  body.phone .phonebar{ display:flex; justify-content:space-between; font-size:12px; font-weight:600; padding:8px 8px 0; color:var(--ink); }
+  .phoneexit, .phonetools{ display:none; }
+  body.phone .phoneexit{ display:block; text-align:center; margin:14px 0 0; }
+  body.phone .phonetools{ display:flex; gap:8px; justify-content:center; margin:18px 0 0; }
+  @media (max-width:1024px){ .phonetools{ display:flex; gap:8px; justify-content:center; margin:18px 0 0; } }
+  .glance .btn{ white-space:normal; line-height:1.3; }
+  body.phone #netTag{ display:none; }
+  body.phone .box table, body.phone .flow{ }
+  body.phone .tblwrap, .tblwrap{ min-width:0; }
+  body.phone table{ display:block; overflow-x:auto; white-space:nowrap; }
+  body.phone table td{ white-space:normal; min-width:90px; }
+  body.phone .flow{ flex-wrap:wrap; }
+  body.phone .flow div{ flex:1 1 21%; }
+  @media (max-width:760px){ table{ display:block; overflow-x:auto; } .flow{ flex-wrap:wrap; } .flow div{ flex:1 1 21%; } #netTag{ display:none; } }
+
+  /* ---- screens / router ---- */
+  .screen{ display:none; }
+  .screen.on{ display:block; }
+  .back{ font-size:12.5px; color:var(--accent); font-weight:600; cursor:pointer; text-decoration:none; }
+  .greet .actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  #toast{ position:fixed; left:50%; bottom:28px; transform:translate(-50%,20px); background:var(--ink); color:var(--plane); padding:10px 16px; border-radius:10px; font-size:13px; font-weight:600; opacity:0; transition:.2s; z-index:99; pointer-events:none; box-shadow:var(--shadow); max-width:90vw; text-align:center; }
+  #toast.on{ opacity:1; transform:translate(-50%,0); }
+
+  /* forms */
+  .form2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:8px; }
+  textarea.inp{ min-height:74px; resize:vertical; }
+  select.inp{ appearance:none; padding-right:30px; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4.5L6 8.5L10 4.5' stroke='%23898781' stroke-width='1.6' fill='none' stroke-linecap='round'/></svg>"); background-repeat:no-repeat; background-position:right 10px center; }
+  .inp.ro{ background:var(--surface-2); color:var(--ink-2); }
+  .inp:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-wash); }
+  .inp.sm{ padding:5px 8px; font-size:12.5px; width:auto; }
+  .qty{ width:64px; text-align:right; }
+  .actions{ display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; align-items:center; }
+
+  /* crew picker */
+  .crewgrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px; margin-top:8px; }
+  .crewopt{ border:1px solid var(--hair); border-radius:10px; padding:10px 12px; cursor:pointer; display:flex; gap:10px; align-items:flex-start; background:var(--surface); }
+  .crewopt:hover{ background:var(--surface-2); }
+  .crewopt.on{ border-color:var(--accent); background:var(--accent-wash); }
+  .crewopt .bx{ width:16px; height:16px; border-radius:5px; border:1.5px solid var(--ink-3); flex:0 0 auto; margin-top:2px; display:grid; place-items:center; font-size:10px; color:#fff; }
+  .crewopt.on .bx{ background:var(--accent); border-color:var(--accent); }
+  .crewopt .cn{ font-weight:600; font-size:13.5px; }
+  .crewopt .cm{ font-size:12px; color:var(--ink-3); }
+
+  /* catalog picker */
+  .picker{ border:1px solid var(--hair); border-radius:10px; overflow:hidden; margin-top:8px; }
+  .picker .srch{ display:flex; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--hair); }
+  .picker .srch input{ border:0; outline:0; font:inherit; flex:1; background:transparent; color:var(--ink); }
+  .picker .opt{ display:flex; align-items:center; gap:12px; padding:8px 12px; border-bottom:1px solid var(--hair); cursor:pointer; font-size:13px; }
+  .picker .opt:last-child{ border-bottom:0; }
+  .picker .opt:hover{ background:var(--accent-wash); }
+  .picker .opt .cd{ font-size:12px; color:var(--ink-3); width:80px; flex:0 0 auto; font-variant-numeric:tabular-nums; }
+  .picker .opt .ds{ flex:1; }
+
+  /* photos */
+  .photos{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:8px; }
+  .ph{ aspect-ratio:4/3; border-radius:10px; border:1px solid var(--hair); display:grid; place-items:center; font-size:11px; color:var(--ink-3); text-align:center; background:linear-gradient(135deg,var(--surface-2),var(--hair)); }
+  .ph b{ display:block; font-size:10px; letter-spacing:.06em; color:var(--ink-2); }
+  .ph.cam{ border:2px dashed var(--accent-2); background:var(--surface); color:var(--accent); font-weight:600; cursor:pointer; }
+  .diff{ background:var(--accent-wash); border-left:3px solid var(--accent); padding:8px 12px; border-radius:0 8px 8px 0; font-size:13px; margin-top:8px; }
+  .diff .old{ color:var(--critical); text-decoration:line-through; }
+  .diff .new{ color:var(--good); font-weight:600; }
+
+  /* signature pad */
+  .sigpad{ border:1.5px dashed var(--ink-3); border-radius:10px; height:78px; display:grid; place-items:center; color:var(--ink-3); font-size:13px; background:var(--surface); cursor:pointer; }
+  .sigpad.done{ border-style:solid; border-color:var(--accent); background:var(--accent-wash); color:var(--accent); font-family:"Segoe Script","Bradley Hand","Snell Roundhand",cursive; font-size:22px; }
+
+  /* stepper */
+  .stepper{ display:inline-flex; align-items:center; border:1px solid var(--hair); border-radius:8px; overflow:hidden; vertical-align:middle; }
+  .stepper span{ width:30px; height:30px; display:grid; place-items:center; font-size:16px; color:var(--accent); font-weight:700; background:var(--surface-2); cursor:pointer; user-select:none; }
+  .stepper b{ width:38px; text-align:center; font-size:14px; }
+
+  /* pre-cert sheet */
+  .sheet{ border:2px solid var(--ink); border-radius:4px; padding:20px; background:var(--surface); font-size:13px; }
+  .sheet .shead{ text-align:center; border-bottom:1px solid var(--ink); padding-bottom:10px; margin-bottom:14px; }
+  .sheet .shead b{ font-size:16px; letter-spacing:-.2px; }
+  .sheet .shead p{ margin:2px 0 0; font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-2); }
+  .sheet .meta{ display:grid; grid-template-columns:1fr 1fr; gap:8px 18px; margin-bottom:12px; font-size:12.5px; }
+  .sheet .meta div{ border-bottom:1px solid var(--hair); padding-bottom:4px; }
+  .sheet .meta span{ color:var(--ink-3); font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; display:block; }
+  .sheet table th, .sheet table td{ border:1px solid var(--hair); padding:6px 8px; }
+  .sigs{ display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:16px; }
+  .sig{ border:1px solid var(--hair); border-radius:8px; padding:10px; }
+  .sig .lbl{ font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3); font-weight:700; margin-bottom:8px; }
+  .sig .ink{ font-family:"Segoe Script","Bradley Hand","Snell Roundhand",cursive; font-size:20px; color:var(--accent); border-bottom:1px solid var(--ink); padding-bottom:3px; margin-bottom:6px; }
+  .sig .empty{ border-bottom:1px dashed var(--ink-3); height:29px; margin-bottom:6px; cursor:pointer; }
+  .sig .nm{ font-size:12px; font-weight:600; }
+  .sig .dt{ font-size:11px; color:var(--ink-3); }
+
+  /* misc */
+  .note{ background:var(--warn-wash); color:var(--warning); border-radius:10px; padding:10px 12px; font-size:13px; }
+  .note.crit{ background:var(--crit-wash); color:var(--critical); }
+  .note.ok{ background:var(--good-wash); color:var(--good); }
+  .note.acc{ background:var(--accent-wash); color:var(--accent); }
+  .radio{ display:flex; gap:8px; flex-wrap:wrap; }
+  .radio label{ border:1px solid var(--hair); border-radius:8px; padding:6px 10px; font-size:12.5px; cursor:pointer; }
+  .radio label.on{ border-color:var(--accent); background:var(--accent-wash); color:var(--accent); font-weight:600; }
+  .kv{ display:grid; grid-template-columns:auto 1fr; gap:6px 16px; font-size:13.5px; margin-top:6px; }
+  .kv span:nth-child(odd){ color:var(--ink-3); }
+  tr.hidden{ display:none; }
+  tr.sel td{ background:var(--accent-wash); }
+  .clickable{ cursor:pointer; }
+  @media (max-width:760px){ .form2, .sigs, .photos{ grid-template-columns:1fr 1fr; } .crewgrid{ grid-template-columns:1fr; } }
+  body.phone .form2, body.phone .sigs{ grid-template-columns:1fr; }
+  body.phone .photos{ grid-template-columns:1fr 1fr; }
+
+
+  tr.done td{ color:var(--ink-3); }
+  tr.done td b{ color:var(--ink-3); }
+  .achin{ width:150px; font-variant-numeric:tabular-nums; }
+  .banner{ display:none; margin-top:14px; padding:12px 14px; border-radius:12px; background:var(--good-wash); color:var(--good); font-weight:600; font-size:13.5px; }
+  .banner.on{ display:block; }
+
+</style>
+</head>
+<body>
+<div class="shell">
+
+<aside class="rail">
+  <div class="wordmark">JAF Ops <span data-es="Contralora">Comptroller</span></div>
+  <a data-go="dash" class="on" href="#" data-es="Panel">Dashboard</a>
+  <a data-go="inbox" href="#"><span data-es="Bandeja · listas de Lissette">Inbox · lists from Lissette</span> <span class="pill">1</span></a>
+  <a data-go="runs" href="#"><span data-es="Corridas por pagar">Runs to pay</span> <span class="n">2</span></a>
+  <a data-go="paid" href="#"><span data-es="Corridas pagadas">Paid runs</span> <span class="n">18</span></a>
+  <a data-go="retention" href="#" data-es="Registro de retención">Retention register</a>
+  <a data-go="installers" href="#"><span data-es="Instaladores">Installers</span> <span class="pill">9</span></a>
+  <div class="grp" data-es="Referencia">Reference</div>
+  <a data-go="claro" href="#" data-es="Cobros de Claro (Lissette)">Claro cash in (Lissette)</a>
+  <a data-go="hacienda" href="#" data-es="Exportar para Hacienda">Export for Hacienda</a>
+  <div class="foot">
+    <div class="user"><div class="av">CL</div><div><div class="nm">Carmen Lamboy</div><div class="rl" data-es="Contralora">Comptroller</div></div></div>
+    <div class="toggles"><button class="toggle" id="themeBtn" type="button">Dark</button><button class="toggle" id="langBtn" type="button">ES</button></div>
+  </div>
+</aside>
+
+<div class="wrap">
+
+  <div class="top">
+    <div class="wordmark">JAF Ops</div>
+    <nav class="tabs"><a data-go="dash" class="on" href="#" data-es="Panel">Dashboard</a><a data-go="runs" href="#" data-es="Corridas">Runs</a><a data-go="installers" href="#" data-es="Instaladores">Installers</a></nav>
+    <div class="spacer"></div>
+    <div class="who" data-es="Sábado, 19 de septiembre">Saturday, 19 September</div>
+    <button class="btn ghost print" data-say="Production Journal 9/24 · PDF · same layout as today" data-say-es="Production Journal 9/24 · PDF · mismo formato de hoy" data-es="Journal PDF">Journal PDF</button>
+    <button class="btn blue" data-go="dash" data-es="Abrir lista 9/24">Open the 9/24 list</button>
+  </div>
+
+<section class="screen on" data-screen="dash">
+  <div class="greet">
+    <div>
+      <div class="mdate" data-es="Sábado, 19 de septiembre">Saturday, 19 September</div>
+      <h1 data-es="Buenos días, Carmen.">Good morning, Carmen.</h1>
+      <p data-es="Una lista nueva de Lissette: corrida <b>9/24</b>, 5 cuentas, <b>$5,504.44</b>. En la del 9/10 quedan <b>2 cuentas</b> sin marcar. <b>9 instaladores</b> esperan pago."><b>One new list</b> from Lissette: run <b>9/24</b>, 5 accounts, <b>$5,504.44</b>. On the 9/10 list, <b>2 accounts</b> are still unchecked. <b>9 installers</b> are waiting to be paid.</p>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi">
+      <div><div class="l" data-es="Listas nuevas en bandeja">New lists in inbox</div><div class="v">1</div><div class="d" data-es="de Lissette · corrida 9/24">from Lissette · run 9/24</div></div>
+      <svg class="viz ring" viewBox="0 0 52 52" role="img" aria-label="0 of 5 checked"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="0" id="kpiRing"/><text x="26" y="25" id="kpiRingTxt">0/5</text><text class="cap" x="26" y="35" data-es="marcadas">checked</text></svg>
+    </div>
+    <div class="kpi">
+      <div><div class="l" data-es="A pagar en WinPay">To pay in WinPay</div><div class="v" id="kpiToPay">$5,504.44</div><div class="d"><span id="kpiToPayN">5</span> <span data-es="cuentas · 14 Avisos">accounts · 14 Avisos</span></div></div>
+      <div class="viz mini" role="img" aria-label="To pay per account"><i style="height:69%"></i><i class="lo" style="height:20%"></i><i style="height:100%"></i><i style="height:54%"></i><i style="height:65%"></i></div>
+    </div>
+    <div class="kpi">
+      <div><div class="l" data-es="Sin marcar · corrida 9/10">Unchecked · run 9/10</div><div class="v warn">2</div><div class="d">$2,122.45 · Alexis Díaz, Zariel Garay</div></div>
+      <svg class="viz ring warn" viewBox="0 0 52 52" role="img" aria-label="3 of 5 checked"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="60"/><text x="26" y="25">3/5</text><text class="cap" x="26" y="35" data-es="marcadas">checked</text></svg>
+    </div>
+    <div class="kpi">
+      <div><div class="l" data-es="Retención 2026 · Hacienda">2026 retention · Hacienda</div><div class="v">$5,568</div><div class="d">18 <span data-es="corridas · +$611.61 con la 9/24">runs · +$611.61 with 9/24</span></div></div>
+      <svg class="viz spark" data-n="4102,4380,4651,4933,5190,5568" viewBox="0 0 72 34" role="img" aria-label="Retention by run"></svg>
+    </div>
+    <div class="kpi">
+      <div><div class="l" data-es="Instaladores por pagar">Installers to pay</div><div class="v">9</div><div class="d">3 <span data-es="incompletos · no pagables">incomplete · not payable</span></div></div>
+      <svg class="viz ring" viewBox="0 0 52 52" role="img" aria-label="9 of 12 complete"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="75"/><text x="26" y="25">9/12</text><text class="cap" x="26" y="35" data-es="completos">complete</text></svg>
+    </div>
+  </div>
+
+  <div class="grid">
+
+    <!-- glance -->
+    <section class="box c4 acc glance">
+      <h2 data-es="Hoy">Today</h2>
+      <div class="big">7 <span data-es="cuentas">accounts</span></div>
+      <p data-es="Cinco de la lista nueva del 9/24 y dos que quedaron del 9/10. Pagas en WinPay como siempre; aquí solo marcas.">Five on the new 9/24 list and two left over from 9/10. You pay in WinPay as always; here you only check them off.</p>
+      <button class="btn acc" data-go="inbox" data-es="Abrir lista 9/24 · 5 cuentas · $5,504.44">Open the 9/24 list · 5 accounts · $5,504.44</button>
+      <button class="btn acc" data-go="runs" data-es="Terminar 9/10 · Alexis Díaz, Zariel Garay">Finish 9/10 · Alexis Díaz, Zariel Garay</button>
+      <button class="btn acc" data-go="installers" data-es="Pagar 9 solicitudes de instaladores">Pay 9 installer requests</button>
+    </section>
+
+    <!-- inbox -->
+    <section class="box c8">
+      <div class="head"><div><h2><span data-es="Bandeja · listas de Lissette">Inbox · lists from Lissette</span> <span class="count">1</span></h2><p class="sub" data-es="Cada lista es un Production Journal generado por el sistema. Ábrela, paga en WinPay, marca cada cuenta. Tu marca le llega a Lissette al instante.">Each list is a Production Journal generated by the system. Open it, pay in WinPay, check each account. Your check reaches Lissette instantly.</p></div></div>
+      <table>
+        <thead><tr><th data-es="Lista">List</th><th data-es="Enviada por Lissette">Sent by Lissette</th><th class="num" data-es="Cuentas">Accounts</th><th class="num" data-es="Avisos">Avisos</th><th class="num" data-es="A pagar">To pay</th><th data-es="Estado">Status</th><th class="act"></th></tr></thead>
+        <tbody>
+          <tr><td class="mono"><span data-es="Corrida">Run</span> 9/24</td><td>9/19 · 10:02 AM</td><td class="num">5</td><td class="num">14</td><td class="num">$5,504.44</td><td><span class="tag acc" id="inboxStatus" data-es="nueva · 0 de 5">new · 0 of 5</span></td><td class="act"><button class="btn sm blue" data-go="inbox" data-es="Abrir">Open</button></td></tr>
+          <tr><td class="mono"><span data-es="Corrida">Run</span> 9/10</td><td>9/10 · 8:41 AM</td><td class="num">5</td><td class="num">14</td><td class="num">$5,504.44</td><td><span class="tag warn" data-es="3 de 5 marcadas">3 of 5 checked</span></td><td class="act"><button class="btn sm ghost" data-go="runs" data-es="Terminar">Finish</button></td></tr>
+          <tr class="done"><td class="mono"><span data-es="Corrida">Run</span> 8/27</td><td>8/27 · 9:15 AM</td><td class="num">18</td><td class="num">126</td><td class="num">$50,111.97</td><td><span class="tag ok" data-es="completa · 8/29">complete · 8/29</span></td><td class="act"></td></tr>
+        </tbody>
+      </table>
+      <div class="flow"><div class="done"><b>1</b><span data-es="Lissette genera">Lissette generates</span></div><div class="done"><b>2</b><span data-es="Llega a tu bandeja">Lands in your inbox</span></div><div class="on you"><b>3</b><span data-es="Pagas en WinPay">You pay in WinPay</span></div><div class="you"><b>4</b><span data-es="Marcas ✓">You check ✓</span></div><div><b>5</b><span data-es="Lissette ve el ✓">Lissette sees ✓</span></div><div><b>6</b><span data-es="Brazo A cerrado">Arm A closed</span></div></div>
+    </section>
+
+    <!-- run 9/24 check-off -->
+    <section class="box c12">
+      <div class="head"><div><h2 data-es="Corrida 9/24 · de Lissette · paga en WinPay, luego marca">Run 9/24 · from Lissette · pay in WinPay, then check</h2><p class="sub" data-es="Mismos bloques que el reporte que siempre has pagado. Código de empleado al lado de cada contratista; el cruce lo hace el sistema. Retención etiquetada 10 %, no «7 % Ret.».">Same blocks as the report you've always paid from. Employee code beside each contractor; the crosswalk is the system's job. Retention labelled 10%, not "7% Ret.".</p></div><div><span class="tag acc" id="runStatus" data-es="0 de 5 marcadas">0 of 5 checked</span></div></div>
+      <table id="runTable">
+        <thead><tr><th style="width:30px"></th><th data-es="Cuenta">Acct</th><th data-es="Contratista">Contractor</th><th data-es="Código WinPay">WinPay code</th><th class="num" data-es="Trabajos">Jobs</th><th class="num" data-es="Bruto">Gross</th><th class="num" data-es="Neto">Net</th><th class="num" data-es="Ret. 10 %">10% ret.</th><th class="num" data-es="A pagar">To pay</th><th data-es="Ref. ACH">ACH ref</th><th data-es="A Lissette">To Lissette</th></tr></thead>
+        <tbody>
+          <tr data-amt="1231.07"><td><span class="chk"></span></td><td class="mono">009</td><td>Jesús Martínez</td><td class="dim">E-0231</td><td class="num">4</td><td class="num">$2,104.40</td><td class="num">$1,367.86</td><td class="num">$136.79</td><td class="num"><b>$1,231.07</b></td><td><input class="inp achin" placeholder="20260926-JAF-016"></td><td class="fb"><span class="tag" data-es="esperando">waiting</span></td></tr>
+          <tr data-amt="360.00"><td><span class="chk"></span></td><td class="mono">009D</td><td>Jesús Martínez · <span data-es="equipo">equipment</span></td><td class="dim">E-0231</td><td class="num">1</td><td class="num">$500.00</td><td class="num">$400.00 <span class="sm">80%</span></td><td class="num">$40.00</td><td class="num"><b>$360.00</b></td><td><input class="inp achin" placeholder="20260926-JAF-016"></td><td class="fb"><span class="tag" data-es="esperando">waiting</span></td></tr>
+          <tr data-amt="1790.92"><td><span class="chk"></span></td><td class="mono">041</td><td>Dino Castillo</td><td class="dim">E-0187</td><td class="num">3</td><td class="num">$3,061.40</td><td class="num">$1,989.91</td><td class="num">$198.99</td><td class="num"><b>$1,790.92</b></td><td><input class="inp achin" placeholder="20260926-JAF-016"></td><td class="fb"><span class="tag" data-es="esperando">waiting</span></td></tr>
+          <tr data-amt="959.40"><td><span class="chk"></span></td><td class="mono">052</td><td>Alexis Díaz</td><td class="dim">E-0204</td><td class="num">2</td><td class="num">$1,640.00</td><td class="num">$1,066.00</td><td class="num">$106.60</td><td class="num"><b>$959.40</b></td><td><input class="inp achin" placeholder="20260926-JAF-016"></td><td class="fb"><span class="tag" data-es="esperando">waiting</span></td></tr>
+          <tr data-amt="1163.05"><td><span class="chk"></span></td><td class="mono">077</td><td>Zariel Garay</td><td class="dim">E-0219</td><td class="num">4</td><td class="num">$1,988.12</td><td class="num">$1,292.28</td><td class="num">$129.23</td><td class="num"><b>$1,163.05</b></td><td><input class="inp achin" placeholder="20260926-JAF-016"></td><td class="fb"><span class="tag" data-es="esperando">waiting</span></td></tr>
+        </tbody>
+        <tfoot><tr><td></td><td colspan="3"><b data-es="Corrida 9/24 · 5 cuentas · 14 Avisos">Run 9/24 · 5 accounts · 14 Avisos</b></td><td class="num"><b>14</b></td><td class="num"><b>$9,293.92</b></td><td class="num"><b>$6,116.05</b></td><td class="num"><b>$611.61</b></td><td class="num"><b>$5,504.44</b></td><td colspan="2"></td></tr></tfoot>
+      </table>
+      <div class="banner" id="runBanner" data-es="✓ Corrida 9/24 completa · Brazo A cerrado en 14 Avisos · $611.61 sumados al registro de retención · Lissette notificada.">✓ Run 9/24 complete · Arm A closed on 14 Avisos · $611.61 added to the retention register · Lissette notified.</div>
+      <p class="sm" style="margin:12px 0 0" data-es="Tu trabajo en WinPay no cambia. Lo que cambia es la marca de después: reemplaza el papel de vuelta y el login quincenal de Lissette.">Your WinPay work doesn't change. What changes is the check afterwards: it replaces the paper going back and Lissette's fortnightly login.</p>
+    </section>
+
+    <!-- retention -->
+    <section class="box c4">
+      <h2 data-es="Registro de retención · 2026">Retention register · 2026</h2>
+      <p class="sub" data-es="10 % de cada corrida, acumulado para Hacienda. Hoy nadie puede decir este saldo de memoria.">10% of every run, accumulating for Hacienda. Today nobody can state this balance from memory.</p>
+      <div class="hero" id="retHero">$5,567.99</div>
+      <p class="heroline" data-es="retenido hasta la corrida 9/10 · se paga una vez al año">withheld through run 9/10 · paid once a year</p>
+      <ul class="lines">
+        <li><i style="background:var(--accent)"></i><span class="n" data-es="Corridas contadas">Runs counted</span><span class="v" id="retRuns">18</span></li>
+        <li><i style="background:var(--accent-2)"></i><span class="n" data-es="Suma la corrida 9/24">Run 9/24 adds</span><span class="v">$611.61</span></li>
+        <li><i style="background:var(--good)"></i><span class="n" data-es="Sub-contratistas con retención">Sub-contractors with retention</span><span class="v">18</span></li>
+      </ul>
+      <p style="margin:14px 0 0"><button class="btn ghost" style="width:100%" data-go="hacienda" data-es="Exportar registro para Hacienda">Export register for Hacienda</button></p>
+    </section>
+
+    <!-- installers -->
+    <section class="box c4">
+      <h2><span data-es="Instaladores · solicitudes de pago">Installers · payment requests</span> <span class="count">9</span></h2>
+      <p class="sub" data-es="Del formulario de terminación en el teléfono. Incompleto = no pagable, y dice qué falta.">From the completion form on the phone. Incomplete = not payable, and it says what's missing.</p>
+      <ul class="att">
+        <li><span class="mark g"></span><div><div class="t">1-4X7Q2M · R. Santiago · TOA 118</div><div class="d" data-es="INSTALL · foto del formulario, etiqueta del módem, PDF">INSTALL · form photo, modem label, completion PDF</div></div><span class="lvl g" data-es="Completo">Complete</span></li>
+        <li><span class="mark g"></span><div><div class="t">1-4X8B19 · J. Colón · TOA 073</div><div class="d" data-es="INSTALL · foto del formulario, etiqueta del módem, PDF">INSTALL · form photo, modem label, completion PDF</div></div><span class="lvl g" data-es="Completo">Complete</span></li>
+        <li><span class="mark w"></span><div><div class="t">1-4W9K44 · R. Santiago · TOA 118</div><div class="d" data-es="CALLBACK · cambio 4009642 #…8812 → #…9107 · 19 d">CALLBACK · swap 4009642 #…8812 → #…9107 · 19 d</div></div><span class="lvl w" data-es="Revisar">Check</span></li>
+        <li><span class="mark"></span><div><div class="t">1-4X6P70 · M. Rivera · TOA 041</div><div class="d" data-es="Sin firma del cliente, sin serial del módem">No client signature, no modem serial</div></div><span class="lvl" data-es="Incompleto">Incomplete</span></li>
+      </ul>
+      <a class="more" href="#" data-go="installers" data-es="Ver las 12 solicitudes">See all 12 requests</a>
+    </section>
+
+    <!-- Claro cash in -->
+    <section class="box c4">
+      <h2 data-es="Cobros de Claro · registro de Lissette">Claro cash in · Lissette's record</h2>
+      <p class="sub" data-es="Solo lectura. Lissette marca cada factura recibida cuando Monica reenvía el reporte de pago de Claro.">Read-only. Lissette marks each factura received when Monica forwards Claro's payment report.</p>
+      <ul class="rows">
+        <li><span data-es="Recibido este mes">Received this month</span><span class="st ok">$63,412</span></li>
+        <li><span data-es="Pendiente de Claro · 22 facturas">Pending from Claro · 22 facturas</span><span class="st warn">$41,206</span></li>
+        <li><span data-es="Más de 90 días · 5 facturas">Older than 90 days · 5 facturas</span><span class="st crit">$9,870</span></li>
+        <li><span data-es="Claro debe en total (2026)">Claro owes in total (2026)</span><span class="st crit">$482K</span></li>
+      </ul>
+      <div class="flow" style="margin-top:14px"><div class="done"><b>A</b><span data-es="Tú pagas brigadas">You pay brigades</span></div><div class="done"><b>B</b><span data-es="Lissette factura a Claro">Lissette invoices Claro</span></div><div class="on"><b>C</b><span data-es="Claro paga · Lissette cierra">Claro pays · Lissette closes</span></div></div>
+    </section>
+
+    <!-- paid runs -->
+    <section class="box c12">
+      <h2 data-es="Corridas pagadas · 2026">Paid runs · 2026</h2>
+      <p class="sub" data-es="Cada corrida con su referencia ACH. 15 corridas anteriores tienen la misma forma, desde enero.">Every run with its ACH reference. 15 earlier runs have the same shape, back to January.</p>
+      <table>
+        <thead><tr><th data-es="Corrida">Run</th><th data-es="Cuentas">Accounts</th><th class="num">Avisos</th><th class="num" data-es="Bruto">Gross</th><th class="num" data-es="Retención">Retention</th><th class="num" data-es="Pagado">Paid</th><th data-es="Ref. ACH">ACH ref</th><th data-es="Marcado">Checked</th></tr></thead>
+        <tbody id="paidRuns">
+          <tr><td class="mono">9/10</td><td>5 <span class="sm" data-es="(Central)">(Central)</span></td><td class="num">14</td><td class="num">$9,293.92</td><td class="num">$611.61</td><td class="num">$5,504.44</td><td class="dim">20260912-JAF-015</td><td><span class="tag warn" data-es="3 de 5">3 of 5</span></td></tr>
+          <tr><td class="mono">8/27</td><td>18</td><td class="num">126</td><td class="num">$85,430.73</td><td class="num">$5,567.99</td><td class="num">$50,111.97</td><td class="dim">20260829-JAF-014</td><td><span class="tag ok" data-es="completa">complete</span></td></tr>
+          <tr><td class="mono">8/13</td><td>16</td><td class="num">109</td><td class="num">$71,220.10</td><td class="num">$4,629.31</td><td class="num">$41,987.40</td><td class="dim">20260815-JAF-013</td><td><span class="tag ok" data-es="completa">complete</span></td></tr>
+          <tr><td class="mono">7/30</td><td>17</td><td class="num">118</td><td class="num">$79,904.55</td><td class="num">$5,193.80</td><td class="num">$47,109.44</td><td class="dim">20260801-JAF-012</td><td><span class="tag ok" data-es="completa">complete</span></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+  </div>
+
+</section>
+
+<!-- ================= INBOX ================= -->
+<section class="screen" data-screen="inbox">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Bandeja · listas de Lissette">Inbox · lists from Lissette</h1><p data-es="Cada lista es un Production Journal generado por el sistema, con el código de empleado de WinPay al lado de cada contratista. Abres, pagas en WinPay como siempre, y marcas cada cuenta. Tu marca le llega a Lissette al instante.">Each list is a Production Journal generated by the system, with the WinPay employee code beside each contractor. You open it, pay in WinPay as always, and check each account. Your check reaches Lissette instantly.</p></div></div>
+  <div class="grid">
+    <section class="box c12">
+      <table id="inboxTable">
+        <thead><tr><th data-es="Lista">List</th><th data-es="Enviada por Lissette">Sent by Lissette</th><th class="num" data-es="Cuentas">Accounts</th><th class="num">Avisos</th><th class="num" data-es="Bruto">Gross</th><th class="num" data-es="Ret. 10 %">10% ret.</th><th class="num" data-es="A pagar">To pay</th><th data-es="Estado">Status</th><th class="act"></th></tr></thead>
+        <tbody>
+          <tr><td class="mono"><span data-es="Corrida">Run</span> 9/24</td><td>9/19 · 10:02 AM</td><td class="num">5</td><td class="num">14</td><td class="num">$9,293.92</td><td class="num">$611.61</td><td class="num"><b>$5,504.44</b></td><td><span class="tag acc" data-es="nueva">new</span></td><td class="act"><button class="btn sm blue" data-go="dash" data-es="Abrir">Open</button></td></tr>
+          <tr><td class="mono"><span data-es="Corrida">Run</span> 9/10</td><td>9/10 · 8:41 AM</td><td class="num">5</td><td class="num">14</td><td class="num">$9,293.92</td><td class="num">$611.61</td><td class="num"><b>$5,504.44</b></td><td><span class="tag warn" data-es="3 de 5 marcadas">3 of 5 checked</span></td><td class="act"><button class="btn sm blue" data-go="runs" data-es="Terminar">Finish</button></td></tr>
+          <tr class="paidrow"><td class="mono"><span data-es="Corrida">Run</span> 8/27</td><td>8/27 · 9:15 AM</td><td class="num">18</td><td class="num">126</td><td class="num">$85,430.73</td><td class="num">$5,567.99</td><td class="num"><b>$50,111.97</b></td><td><span class="tag ok" data-es="completa · 8/29">complete · 8/29</span></td><td class="act"><button class="btn sm ghost" data-go="paid" data-es="Ver">View</button></td></tr>
+          <tr class="paidrow"><td class="mono"><span data-es="Corrida">Run</span> 8/13</td><td>8/13 · 9:02 AM</td><td class="num">16</td><td class="num">109</td><td class="num">$71,220.10</td><td class="num">$4,629.31</td><td class="num"><b>$41,987.40</b></td><td><span class="tag ok" data-es="completa · 8/15">complete · 8/15</span></td><td class="act"><button class="btn sm ghost" data-go="paid" data-es="Ver">View</button></td></tr>
+        </tbody>
+      </table>
+      <div class="flow" style="margin-top:14px"><div class="done"><b>1</b><span data-es="Lissette genera">Lissette generates</span></div><div class="done"><b>2</b><span data-es="Llega a tu bandeja">Lands in your inbox</span></div><div class="on you"><b>3</b><span data-es="Pagas en WinPay">You pay in WinPay</span></div><div class="you"><b>4</b><span data-es="Marcas ✓">You check ✓</span></div><div><b>5</b><span data-es="Lissette ve el ✓">Lissette sees ✓</span></div><div><b>6</b><span data-es="Brazo A cerrado">Arm A closed</span></div></div>
+    </section>
+  </div>
+</section>
+
+<!-- ================= RUNS TO PAY ================= -->
+<section class="screen" data-screen="runs">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Corridas por pagar">Runs to pay</h1><p data-es="Dos abiertas: la 9/24 (nueva, en el panel) y la 9/10 con dos cuentas sin marcar. Alexis Díaz y Zariel Garay ya cobraron por ACH; falta el clic que se lo dice a Lissette.">Two open: 9/24 (new, on the dashboard) and 9/10 with two accounts unchecked. Alexis Díaz and Zariel Garay were paid by ACH; the click that tells Lissette is what's missing.</p></div><div class="actions"><button class="btn blue" data-go="dash" data-es="Ir a la corrida 9/24">Go to run 9/24</button></div></div>
+  <div class="grid">
+    <section class="box c12">
+      <div class="head"><div><h2 data-es="Corrida 9/10 · terminar">Run 9/10 · finish</h2><p class="sub">ACH 9/12 · ref 20260912-JAF-015</p></div><div><span class="tag warn" id="r910Status" data-es="3 de 5 marcadas">3 of 5 checked</span></div></div>
+      <table data-checkoff id="run910">
+        <thead><tr><th style="width:30px"></th><th data-es="Cuenta">Acct</th><th data-es="Contratista">Contractor</th><th data-es="Código WinPay">WinPay code</th><th class="num" data-es="Avisos">Avisos</th><th class="num" data-es="A pagar">To pay</th><th data-es="Ref. ACH">ACH ref</th><th data-es="A Lissette">To Lissette</th></tr></thead>
+        <tbody>
+          <tr class="done"><td><span class="chk on">✓</span></td><td class="mono">009</td><td>Jesús Martínez</td><td class="dim">E-0231</td><td class="num">4</td><td class="num"><b>$1,231.07</b></td><td class="dim">20260912-JAF-015</td><td><span class="tag ok">✓ 9/12</span></td></tr>
+          <tr class="done"><td><span class="chk on">✓</span></td><td class="mono">009D</td><td>Jesús Martínez · <span data-es="equipo">equipment</span></td><td class="dim">E-0231</td><td class="num">1</td><td class="num"><b>$360.00</b></td><td class="dim">20260912-JAF-015</td><td><span class="tag ok">✓ 9/12</span></td></tr>
+          <tr class="done"><td><span class="chk on">✓</span></td><td class="mono">041</td><td>Dino Castillo</td><td class="dim">E-0187</td><td class="num">3</td><td class="num"><b>$1,790.92</b></td><td class="dim">20260912-JAF-015</td><td><span class="tag ok">✓ 9/12</span></td></tr>
+          <tr><td><span class="chk"></span></td><td class="mono">052</td><td>Alexis Díaz</td><td class="dim">E-0204</td><td class="num">2</td><td class="num"><b>$959.40</b></td><td><input class="inp achin" value="20260912-JAF-015"></td><td class="fb"><span class="tag" data-es="esperando">waiting</span></td></tr>
+          <tr><td><span class="chk"></span></td><td class="mono">077</td><td>Zariel Garay</td><td class="dim">E-0219</td><td class="num">4</td><td class="num"><b>$1,163.05</b></td><td><input class="inp achin" value="20260912-JAF-015"></td><td class="fb"><span class="tag" data-es="esperando">waiting</span></td></tr>
+        </tbody>
+      </table>
+      <div class="banner" id="r910Banner" data-es="✓ Corrida 9/10 completa · Brazo A cerrado en 14 Avisos · Lissette notificada.">✓ Run 9/10 complete · Arm A closed on 14 Avisos · Lissette notified.</div>
+    </section>
+  </div>
+</section>
+
+<!-- ================= PAID RUNS ================= -->
+<section class="screen" data-screen="paid">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Corridas pagadas · 2026">Paid runs · 2026</h1><p data-es="Cada corrida con su referencia ACH y su retención. Toca una para ver las cuentas.">Every run with its ACH reference and its retention. Tap one to see the accounts.</p></div><div class="actions"><input class="inp" style="width:200px" data-filter="#paidAll" placeholder="Search run or ref…" data-es-ph="Buscar corrida o ref…"><button class="btn ghost" data-say="Exported paid runs 2026 (.xlsx)" data-say-es="Corridas pagadas 2026 exportadas (.xlsx)" data-es="⬇ Exportar">⬇ Export</button></div></div>
+  <div class="grid">
+    <section class="box c7">
+      <table id="paidAll">
+        <thead><tr><th data-es="Corrida">Run</th><th class="num" data-es="Cuentas">Accounts</th><th class="num">Avisos</th><th class="num" data-es="Bruto">Gross</th><th class="num" data-es="Ret.">Ret.</th><th class="num" data-es="Pagado">Paid</th><th>ACH</th></tr></thead>
+        <tbody>
+          <tr data-sel class="sel"><td class="mono">8/27</td><td class="num">18</td><td class="num">126</td><td class="num">$85,430.73</td><td class="num">$5,567.99</td><td class="num">$50,111.97</td><td class="dim">20260829-JAF-014</td></tr>
+          <tr data-sel><td class="mono">8/13</td><td class="num">16</td><td class="num">109</td><td class="num">$71,220.10</td><td class="num">$4,629.31</td><td class="num">$41,987.40</td><td class="dim">20260815-JAF-013</td></tr>
+          <tr data-sel><td class="mono">7/30</td><td class="num">17</td><td class="num">118</td><td class="num">$79,904.55</td><td class="num">$5,193.80</td><td class="num">$47,109.44</td><td class="dim">20260801-JAF-012</td></tr>
+          <tr data-sel><td class="mono">7/16</td><td class="num">17</td><td class="num">121</td><td class="num">$82,114.20</td><td class="num">$5,337.42</td><td class="num">$48,036.82</td><td class="dim">20260718-JAF-011</td></tr>
+          <tr data-sel><td class="mono">7/2</td><td class="num">16</td><td class="num">104</td><td class="num">$68,930.10</td><td class="num">$4,480.46</td><td class="num">$40,324.11</td><td class="dim">20260704-JAF-010</td></tr>
+          <tr data-sel><td class="mono">6/18</td><td class="num">18</td><td class="num">130</td><td class="num">$88,402.65</td><td class="num">$5,746.17</td><td class="num">$51,715.55</td><td class="dim">20260620-JAF-009</td></tr>
+        </tbody>
+      </table>
+      <p class="sm" data-es="12 corridas más desde enero. Total pagado 2026: $823,410.">12 more runs since January. Total paid in 2026: $823,410.</p>
+    </section>
+    <section class="box c5">
+      <h2 data-es="Corrida 8/27 · por cuenta">Run 8/27 · by account</h2>
+      <p class="sub" data-es="18 cuentas · 126 Avisos · ACH 8/29 · marcada completa el 8/29 9:40 AM">18 accounts · 126 Avisos · ACH 8/29 · marked complete 8/29 9:40 AM</p>
+      <table>
+        <thead><tr><th data-es="Cuenta">Acct</th><th data-es="Contratista">Contractor</th><th class="num" data-es="Pagado">Paid</th><th>✓</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">009</td><td>Jesús Martínez</td><td class="num">$1,180.65</td><td><span class="tag ok">8/29</span></td></tr>
+          <tr><td class="mono">041</td><td>Dino Castillo</td><td class="num">$2,914.10</td><td><span class="tag ok">8/29</span></td></tr>
+          <tr><td class="mono">052</td><td>Alexis Díaz</td><td class="num">$2,101.88</td><td><span class="tag ok">8/29</span></td></tr>
+          <tr><td class="mono">077</td><td>Zariel Garay</td><td class="num">$1,977.40</td><td><span class="tag ok">8/29</span></td></tr>
+          <tr><td class="mono">083</td><td>R. Ramos · <span data-es="brigada">crew</span></td><td class="num">$3,402.15</td><td><span class="tag ok">8/29</span></td></tr>
+          <tr><td class="mono">…</td><td class="dim" data-es="13 cuentas más">13 more accounts</td><td class="num">$38,535.79</td><td><span class="tag ok">8/29</span></td></tr>
+        </tbody>
+        <tfoot><tr><td colspan="2"><b data-es="Total">Total</b></td><td class="num"><b>$50,111.97</b></td><td></td></tr></tfoot>
+      </table>
+      <div class="actions"><button class="btn ghost" data-say="Production Journal 8/27 · PDF" data-say-es="Production Journal 8/27 · PDF" data-es="Journal PDF">Journal PDF</button></div>
+    </section>
+  </div>
+</section>
+
+<!-- ================= RETENTION ================= -->
+<section class="screen" data-screen="retention">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Registro de retención · 2026">Retention register · 2026</h1><p data-es="10 % de cada corrida, retenido a los sub-contratistas y acumulado para Hacienda. Se paga una vez al año, nunca se devuelve. Hoy nadie puede decir este saldo de memoria; aquí es derivado y vivo.">10% of every run, withheld from the sub-contractors and accumulating for Hacienda. Paid once a year, never returned. Today nobody can state this balance from memory; here it is derived and live.</p></div><div class="actions"><button class="btn blue" data-go="hacienda" data-es="Exportar para Hacienda">Export for Hacienda</button></div></div>
+  <div class="kpis k4">
+    <div class="kpi"><div><div class="l" data-es="Saldo 2026">2026 balance</div><div class="v" id="retHero2">$5,567.99</div><div class="d" data-es="hasta la corrida 9/10">through run 9/10</div></div><svg class="viz spark" data-n="4102,4380,4651,4933,5190,5568" viewBox="0 0 72 34"></svg></div>
+    <div class="kpi"><div><div class="l" data-es="Corridas contadas">Runs counted</div><div class="v">18</div><div class="d" data-es="desde enero">since January</div></div><svg class="viz ring" viewBox="0 0 52 52"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="75"/><text x="26" y="25">18</text></svg></div>
+    <div class="kpi"><div><div class="l" data-es="Sub-contratistas">Sub-contractors</div><div class="v">18</div><div class="d" data-es="con retención">with retention</div></div><svg class="viz ring" viewBox="0 0 52 52"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="100"/><text x="26" y="25">18</text></svg></div>
+    <div class="kpi"><div><div class="l" data-es="Próxima radicación">Next filing</div><div class="v">Jan 2027</div><div class="d" data-es="Hacienda · anual">Hacienda · annual</div></div><svg class="viz ring" viewBox="0 0 52 52"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="72"/><text x="26" y="25">72%</text></svg></div>
+  </div>
+  <div class="grid">
+    <section class="box c7">
+      <h2 data-es="Retenido por corrida">Withheld by run</h2>
+      <table>
+        <thead><tr><th data-es="Corrida">Run</th><th class="num" data-es="Bruto pagado">Gross paid</th><th class="num" data-es="Neto (65 % / 80 %)">Net (65% / 80%)</th><th class="num" data-es="10 % retenido">10% withheld</th><th class="num" data-es="Acumulado 2026">Cumulative 2026</th></tr></thead>
+        <tbody id="retBody2">
+          <tr><td class="mono">9/10</td><td class="num">$9,293.92</td><td class="num">$6,116.05</td><td class="num">$611.61</td><td class="num">$5,567.99</td></tr>
+          <tr><td class="mono">8/27</td><td class="num">$85,430.73</td><td class="num">$55,679.97</td><td class="num">$5,567.99</td><td class="num">$4,956.38</td></tr>
+          <tr><td class="mono">8/13</td><td class="num">$71,220.10</td><td class="num">$46,293.07</td><td class="num">$4,629.31</td><td class="num">…</td></tr>
+          <tr><td class="mono">7/30</td><td class="num">$79,904.55</td><td class="num">$51,937.96</td><td class="num">$5,193.80</td><td class="num">…</td></tr>
+        </tbody>
+      </table>
+      <p class="sm" data-es="Este mockup colapsa 14 corridas anteriores en el saldo de apertura. El registro real lleva cada corrida individualmente, y por sub-contratista.">This mockup collapses 14 earlier runs into the opening balance. The real register carries every run individually, and per sub-contractor.</p>
+    </section>
+    <section class="box c5">
+      <h2 data-es="Por sub-contratista · 2026">By sub-contractor · 2026</h2>
+      <div class="bars">
+        <div class="n">Dino Castillo</div><div class="b" style="width:100%"></div><div class="v">$412</div>
+        <div class="n">R. Ramos</div><div class="b" style="width:92%"></div><div class="v">$380</div>
+        <div class="n">Alexis Díaz</div><div class="b" style="width:80%"></div><div class="v">$331</div>
+        <div class="n">Zariel Garay</div><div class="b" style="width:74%"></div><div class="v">$305</div>
+        <div class="n">Jesús Martínez</div><div class="b lo" style="width:68%"></div><div class="v">$281</div>
+      </div>
+      <p class="sm" style="margin-top:12px" data-es="13 más. Cada sub-contratista puede pedir su propio estado de retención; es el mismo registro.">13 more. Each sub-contractor can ask for their own retention statement; it's the same register.</p>
+    </section>
+  </div>
+</section>
+
+<!-- ================= INSTALLERS ================= -->
+<section class="screen" data-screen="installers">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Instaladores · solicitudes de pago">Installers · payment requests</h1><p data-es="Un tercer dinero, aparte del Brazo A y B. Cada línea viene del formulario de terminación en el teléfono del instalador. Completo/incompleto lo decide el código: foto del formulario, serial del módem, footage, accesorios, firma del cliente. Incompleto no se puede pagar, y dice qué falta.">A third money, separate from Arm A and B. Each line comes from the completion form on the installer's phone. Complete/incomplete is decided in code: form photo, modem serial, footage, accessories, client signature. Incomplete can't be paid, and it says what's missing.</p></div></div>
+  <div class="grid">
+    <section class="box c12">
+      <div class="tabs" style="display:inline-flex;margin-bottom:12px"><a class="on" href="#" data-tab="ins:pay" data-es="Por pagar · 9">To pay · 9</a><a href="#" data-tab="ins:inc" data-es="Incompletos · 3">Incomplete · 3</a><a href="#" data-tab="ins:paid" data-es="Pagados">Paid</a></div>
+      <div data-panel="ins:pay">
+        <table>
+          <thead><tr><th data-es="Orden Claro">Claro order</th><th data-es="Instalador">Installer</th><th data-es="Fecha">Date</th><th data-es="Tipo">Type</th><th data-es="Paquete">Packet</th><th class="num" data-es="Monto">Amount</th><th class="act"></th></tr></thead>
+          <tbody>
+            <tr><td class="mono">1-4X7Q2M</td><td>R. Santiago · TOA 118 · Metro</td><td>8/30</td><td><span class="tag acc">INSTALL</span></td><td><span class="tag ok" data-es="completo">complete</span> <span class="sm" data-es="foto · serial · PDF · firma">photo · serial · PDF · signature</span></td><td class="num">$85.00</td><td class="act"><button class="btn sm blue" data-ipay="1-4X7Q2M|$85.00" data-es="Pagar…">Pay…</button></td></tr>
+            <tr><td class="mono">1-4X8B19</td><td>J. Colón · TOA 073 · Norte</td><td>8/30</td><td><span class="tag acc">INSTALL</span></td><td><span class="tag ok" data-es="completo">complete</span></td><td class="num">$85.00</td><td class="act"><button class="btn sm blue" data-ipay="1-4X8B19|$85.00" data-es="Pagar…">Pay…</button></td></tr>
+            <tr><td class="mono">1-4W9K44</td><td>R. Santiago · TOA 118 · Metro</td><td>8/29</td><td><span class="tag warn">CALLBACK · 19 d</span></td><td><span class="tag ok" data-es="completo">complete</span> <span class="sm">swap 4009642 #…8812 → #…9107</span></td><td class="num">$45.00</td><td class="act"><button class="btn sm blue" data-ipay="1-4W9K44|$45.00" data-es="Pagar…">Pay…</button></td></tr>
+            <tr><td class="mono">1-4X9C02</td><td>M. Rivera · TOA 041 · Oeste</td><td>9/2</td><td><span class="tag acc">INSTALL</span></td><td><span class="tag ok" data-es="completo">complete</span></td><td class="num">$85.00</td><td class="act"><button class="btn sm blue" data-ipay="1-4X9C02|$85.00" data-es="Pagar…">Pay…</button></td></tr>
+            <tr><td class="mono">1-4XA118</td><td>J. Colón · TOA 073 · Norte</td><td>9/4</td><td><span class="tag acc">INSTALL</span></td><td><span class="tag ok" data-es="completo">complete</span></td><td class="num">$85.00</td><td class="act"><button class="btn sm blue" data-ipay="1-4XA118|$85.00" data-es="Pagar…">Pay…</button></td></tr>
+          </tbody>
+        </table>
+        <p class="sm" data-es="4 más · total por pagar $735.00. Tu trabajo EWITS → Ariba sigue fuera de pantalla; aquí lees el PDF tecleado, no una foto de letra a mano.">4 more · total to pay $735.00. Your EWITS → Ariba work stays off-screen; here you read the typed PDF, not a photo of handwriting.</p>
+        <div id="ipForm" style="display:none" class="form2">
+          <div class="field"><label data-es="Orden">Order</label><input class="inp ro" id="ipOrd" readonly></div>
+          <div class="field"><label data-es="Fecha de pago">Payment date</label><input class="inp" value="9/19/2026"></div>
+          <div class="field"><label data-es="Referencia">Reference</label><input class="inp" id="ipRef" placeholder="ACH / check #"></div>
+          <div><button class="btn blue" id="ipSave" data-requires="#ipRef" data-es="✓ Pagado · el instalador lo ve en su teléfono">✓ Paid · installer sees it on his phone</button></div>
+        </div>
+      </div>
+      <div data-panel="ins:inc">
+        <table>
+          <thead><tr><th data-es="Orden Claro">Claro order</th><th data-es="Instalador">Installer</th><th data-es="Fecha">Date</th><th data-es="Falta">Missing</th><th class="act"></th></tr></thead>
+          <tbody>
+            <tr><td class="mono">1-4X6P70</td><td>M. Rivera · TOA 041 · Oeste</td><td>8/28</td><td><span class="tag crit" data-es="firma del cliente">client signature</span> <span class="tag crit" data-es="serial del módem">modem serial</span></td><td class="act"><button class="btn sm ghost" data-say="M. Rivera reminded on his phone: 2 items missing on 1-4X6P70." data-say-es="Recordatorio a M. Rivera en su teléfono: faltan 2 cosas en 1-4X6P70." data-es="Recordar">Remind</button></td></tr>
+            <tr><td class="mono">1-4X8D31</td><td>L. Ortiz · TOA 095 · Sur</td><td>9/1</td><td><span class="tag crit">footage</span></td><td class="act"><button class="btn sm ghost" data-say="L. Ortiz reminded." data-say-es="Recordatorio a L. Ortiz." data-es="Recordar">Remind</button></td></tr>
+            <tr><td class="mono">1-4X9F08</td><td>R. Santiago · TOA 118 · Metro</td><td>9/6</td><td><span class="tag crit" data-es="foto del formulario">form photo</span></td><td class="act"><button class="btn sm ghost" data-say="R. Santiago reminded." data-say-es="Recordatorio a R. Santiago." data-es="Recordar">Remind</button></td></tr>
+          </tbody>
+        </table>
+        <p class="sm" data-es="El instalador ve el mismo «qué falta» en su teléfono. Nada llega aquí como foto ilegible.">The installer sees the same "what's missing" on his phone. Nothing reaches you as an illegible photo.</p>
+      </div>
+      <div data-panel="ins:paid">
+        <table id="ipPaid">
+          <thead><tr><th data-es="Orden Claro">Claro order</th><th data-es="Instalador">Installer</th><th data-es="Tipo">Type</th><th class="num" data-es="Monto">Amount</th><th data-es="Pagado">Paid</th><th data-es="Ref.">Ref.</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">1-4W7A55</td><td>J. Colón · TOA 073</td><td><span class="tag acc">INSTALL</span></td><td class="num">$85.00</td><td>9/12</td><td class="dim">ACH 0912-2201</td></tr>
+            <tr><td class="mono">1-4W6Z10</td><td>R. Santiago · TOA 118</td><td><span class="tag acc">INSTALL</span></td><td class="num">$85.00</td><td>9/12</td><td class="dim">ACH 0912-2201</td></tr>
+            <tr><td class="mono">1-4W5Q91</td><td>M. Rivera · TOA 041</td><td><span class="tag warn">CALLBACK</span></td><td class="num">$45.00</td><td>9/12</td><td class="dim">ACH 0912-2201</td></tr>
+          </tbody>
+        </table>
+        <p class="sm" data-es="Septiembre: 31 líneas pagadas · $2,485.00.">September: 31 lines paid · $2,485.00.</p>
+      </div>
+    </section>
+  </div>
+</section>
+
+<!-- ================= CLARO CASH IN ================= -->
+<section class="screen" data-screen="claro">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Cobros de Claro · registro de Lissette">Claro cash in · Lissette's record</h1><p data-es="Solo lectura. Lissette marca cada factura recibida cuando Monica reenvía el reporte de pago de Claro; eso cierra el Brazo B. Tú lo ves para cuadrar el banco, no para tocarlo.">Read-only. Lissette marks each factura received when Monica forwards Claro's payment report; that closes Arm B. You see it to reconcile the bank, not to touch it.</p></div><div class="actions"><input class="inp" style="width:220px" data-filter="#ccTable" placeholder="Search factura, Aviso…" data-es-ph="Buscar factura, Aviso…"></div></div>
+  <div class="kpis k4">
+    <div class="kpi"><div><div class="l" data-es="Recibido este mes">Received this month</div><div class="v good">$63,412</div><div class="d">14 <span data-es="depósitos">deposits</span></div></div><svg class="viz spark" data-n="41,58,49,63" viewBox="0 0 72 34"></svg></div>
+    <div class="kpi"><div><div class="l" data-es="Pendiente de Claro">Pending from Claro</div><div class="v warn">$41,206</div><div class="d">22 facturas</div></div><svg class="viz ring warn" viewBox="0 0 52 52"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="39"/><text x="26" y="25">22</text></svg></div>
+    <div class="kpi"><div><div class="l" data-es="Más de 90 días">Older than 90 days</div><div class="v neg">5</div><div class="d">$9,870</div></div><svg class="viz ring crit" viewBox="0 0 52 52"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="23"/><text x="26" y="25">5</text></svg></div>
+    <div class="kpi"><div><div class="l" data-es="Claro debe · 2026">Claro owes · 2026</div><div class="v neg">$482K</div><div class="d" data-es="sin PO o PO corto">no PO, or PO short</div></div><svg class="viz ring crit" viewBox="0 0 52 52"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="19"/><text x="26" y="25">19%</text></svg></div>
+  </div>
+  <div class="grid">
+    <section class="box c12">
+      <table id="ccTable">
+        <thead><tr><th>Factura</th><th data-es="Aviso · orden">Aviso · job</th><th>PO</th><th class="num" data-es="Monto">Amount</th><th data-es="Enviada">Submitted</th><th data-es="Depósito">Deposit</th><th data-es="Ref. banco">Bank ref</th><th data-es="Brazo B">Arm B</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">F-26-0402</td><td><span class="mono">10349102</span> · Alexis Díaz</td><td class="mono">4500981221</td><td class="num">$600.00</td><td>6/20</td><td>7/28</td><td class="dim">0728-4431</td><td><span class="tag ok" data-es="cerrado en este PO">closed for this PO</span></td></tr>
+          <tr><td class="mono">F-26-0391</td><td><span class="mono">10348820</span> · Dino Castillo</td><td class="mono">4500979003</td><td class="num">$2,318.50</td><td>6/12</td><td>7/28</td><td class="dim">0728-4431</td><td><span class="tag ok" data-es="cerrado · último PO">closed · last PO</span></td></tr>
+          <tr><td class="mono">F-26-0533</td><td><span class="mono">10351980</span> · Dino Castillo</td><td class="mono">4500994410</td><td class="num">$2,014.30</td><td>8/20</td><td class="dim">—</td><td class="dim">—</td><td><span class="tag warn" data-es="pendiente · 30 d">pending · 30 d</span></td></tr>
+          <tr><td class="mono">F-26-0517</td><td><span class="mono">10349102</span> · Alexis Díaz</td><td class="mono">4500992870</td><td class="num">$400.00</td><td>8/12</td><td class="dim">—</td><td class="dim">—</td><td><span class="tag warn" data-es="pendiente · 38 d">pending · 38 d</span></td></tr>
+          <tr><td class="mono">F-26-0288</td><td><span class="mono">10347991</span> · Zariel Garay</td><td class="mono">4500971009</td><td class="num">$1,445.00</td><td>3/4</td><td class="dim">—</td><td class="dim">—</td><td><span class="tag crit" data-es="pendiente · 199 d">pending · 199 d</span></td></tr>
+        </tbody>
+      </table>
+      <p class="sm" data-es="17 facturas pendientes más. Lo que Lissette marca aparece aquí al instante.">17 more pending facturas. What Lissette marks shows here instantly.</p>
+    </section>
+  </div>
+</section>
+
+<!-- ================= HACIENDA EXPORT ================= -->
+<section class="screen" data-screen="hacienda">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Exportar para Hacienda">Export for Hacienda</h1><p data-es="La retención del 10 % por sub-contratista, por corrida, con referencia ACH. Un archivo por año. Se genera del registro; nada se teclea.">The 10% retention per sub-contractor, per run, with ACH reference. One file per year. Generated from the register; nothing is keyed.</p></div></div>
+  <div class="grid">
+    <section class="box c5">
+      <h2 data-es="Generar">Generate</h2>
+      <div class="field"><label data-es="Año">Year</label><select class="inp"><option>2026</option><option>2025</option></select></div>
+      <div class="field" style="margin-top:10px"><label data-es="Periodo">Period</label><div class="radio"><label class="on" data-es="Año completo">Full year</label><label>Q3</label><label data-es="Hasta hoy">To date</label></div></div>
+      <div class="field" style="margin-top:10px"><label data-es="Formato">Format</label><div class="radio"><label class="on">Excel (.xlsx)</label><label>PDF</label><label>CSV</label></div></div>
+      <div class="field" style="margin-top:10px"><label data-es="Agrupar por">Group by</label><div class="radio"><label class="on" data-es="Sub-contratista">Sub-contractor</label><label data-es="Corrida">Run</label></div></div>
+      <div class="actions"><button class="btn blue" data-flip="Generated · Retencion_2026_JAF.xlsx · 18 sub-contractors · $5,567.99" data-flip-es="Generado · Retencion_2026_JAF.xlsx · 18 sub-contratistas · $5,567.99" data-toast="File ready to download." data-toast-es="Archivo listo para descargar." data-es="⬇ Generar y descargar">⬇ Generate and download</button></div>
+    </section>
+    <section class="box c7">
+      <h2 data-es="Vista previa · 2026 hasta hoy">Preview · 2026 to date</h2>
+      <table>
+        <thead><tr><th data-es="Sub-contratista">Sub-contractor</th><th data-es="Cuenta">Account</th><th class="num" data-es="Corridas">Runs</th><th class="num" data-es="Bruto">Gross</th><th class="num" data-es="Retenido 10 %">10% withheld</th></tr></thead>
+        <tbody>
+          <tr><td>Dino Castillo</td><td class="mono">041</td><td class="num">18</td><td class="num">$6,340.00</td><td class="num">$412.10</td></tr>
+          <tr><td>R. Ramos</td><td class="mono">083</td><td class="num">17</td><td class="num">$5,846.15</td><td class="num">$380.00</td></tr>
+          <tr><td>Alexis Díaz</td><td class="mono">052</td><td class="num">18</td><td class="num">$5,092.31</td><td class="num">$331.00</td></tr>
+          <tr><td>Zariel Garay</td><td class="mono">077</td><td class="num">16</td><td class="num">$4,692.31</td><td class="num">$305.00</td></tr>
+          <tr><td>Jesús Martínez</td><td class="mono">009 · 009D</td><td class="num">18</td><td class="num">$4,323.08</td><td class="num">$281.00</td></tr>
+          <tr><td class="dim" data-es="13 más">13 more</td><td></td><td class="num"></td><td class="num">$59,384.15</td><td class="num">$3,858.89</td></tr>
+        </tbody>
+        <tfoot><tr><td colspan="4"><b data-es="Total 2026 hasta la corrida 9/10">Total 2026 through run 9/10</b></td><td class="num"><b>$5,567.99</b></td></tr></tfoot>
+      </table>
+    </section>
+  </div>
+</section>
+
+
+
+  <footer>
+    <span data-es="Datos reales: corrida 8/27 del Production Journal ($85,430.73 bruto · $5,567.99 retención · $50,111.97 pagado · 18 cuentas · 126 trabajos). Códigos de empleado de WinPay son marcadores hasta la respuesta de Carmen (Q9). Montos de corridas pequeñas son ilustrativos.">Real data: the 8/27 Production Journal run ($85,430.73 gross · $5,567.99 retention · $50,111.97 paid · 18 accounts · 126 jobs). WinPay employee codes are placeholders until Carmen's answer (Q9). Small-run amounts are illustrative.</span>
+    <span data-es="Mockup v5, 19 sep. No distribuir al cliente.">Mockup v5, 19 Sep. Not for client distribution.</span>
+  </footer>
+</div>
+</div>
+<script>
+  // ---- theme: OS preference by default, button overrides ----
+  (function(){
+    var btn=document.getElementById('themeBtn'), root=document.documentElement;
+    function isDark(){ var t=root.getAttribute('data-theme'); if(t) return t==='dark'; return matchMedia('(prefers-color-scheme: dark)').matches; }
+    function paint(){ btn.textContent = isDark() ? (LANG==='es'?'Claro':'Light') : (LANG==='es'?'Oscuro':'Dark'); }
+    btn.addEventListener('click', function(){ root.setAttribute('data-theme', isDark() ? 'light' : 'dark'); paint(); });
+    window.paintTheme=paint; paint();
+  })();
+
+  // ---- language: EN / ES. Every element with data-es swaps its text. ----
+  var LANG='en';
+  (function(){
+    var btn=document.getElementById('langBtn');
+    var els=document.querySelectorAll('[data-es]');
+    els.forEach(function(e){ e.setAttribute('data-en', e.innerHTML); });
+    function apply(){
+      els.forEach(function(e){ e.innerHTML = LANG==='es' ? e.getAttribute('data-es') : e.getAttribute('data-en'); });
+      document.querySelectorAll('[data-es-ph]').forEach(function(e){ if(!e.getAttribute('data-en-ph')) e.setAttribute('data-en-ph', e.placeholder); e.placeholder = LANG==='es' ? e.getAttribute('data-es-ph') : e.getAttribute('data-en-ph'); });
+      btn.textContent = LANG==='es' ? 'EN' : 'ES';
+      document.documentElement.lang = LANG;
+      if(window.paintTheme) window.paintTheme();
+    }
+    btn.addEventListener('click', function(){ LANG = LANG==='es' ? 'en' : 'es'; apply(); });
+    apply();
+  })();
+
+  // ---- KPI rings: dasharray from data-pct ----
+  document.querySelectorAll('.ring .fil').forEach(function(c){
+    var r=21, C=2*Math.PI*r, p=+c.getAttribute('data-pct')/100;
+    c.setAttribute('stroke-dasharray', C); c.setAttribute('stroke-dashoffset', C);
+    requestAnimationFrame(function(){ c.setAttribute('stroke-dashoffset', C*(1-p)); });
+  });
+
+  // ---- sparklines: <svg class="spark" data-n="1,2,3"> ----
+  document.querySelectorAll('svg.spark[data-n]').forEach(function(s){
+    var n=s.getAttribute('data-n').split(',').map(Number);
+    var W=72,H=34,pad=4, max=Math.max.apply(null,n), min=Math.min.apply(null,n); if(max===min){max=min+1;}
+    var x=function(i){ return pad+(W-2*pad)*i/(n.length-1); }, y=function(v){ return pad+(H-2*pad)*(1-(v-min)/(max-min)); };
+    var ns='http://www.w3.org/2000/svg';
+    var d=n.map(function(v,i){ return (i?'L':'M')+x(i)+' '+y(v); }).join(' ');
+    var a=document.createElementNS(ns,'path'); a.setAttribute('class','area'); a.setAttribute('d', d+' L'+x(n.length-1)+' '+(H-pad)+' L'+x(0)+' '+(H-pad)+' Z'); s.appendChild(a);
+    var p=document.createElementNS(ns,'path'); p.setAttribute('d',d); s.appendChild(p);
+    var c=document.createElementNS(ns,'circle'); c.setAttribute('cx',x(n.length-1)); c.setAttribute('cy',y(n[n.length-1])); c.setAttribute('r',3.5); s.appendChild(c);
+  });
+
+  // ---- generic two-series line chart with hover tooltip ----
+  function lineChart(id, months, s1, s2, lbl1, lbl2, fmt, max){
+    var svg=document.getElementById(id), wrap=svg.parentNode, tip=wrap.querySelector('.tip');
+    var W=640,H=230,L=48,R=64,T=14,B=30;
+    var x=function(i){ return L+(W-L-R)*i/(months.length-1); }, y=function(v){ return T+(H-T-B)*(1-v/max); };
+    var ns='http://www.w3.org/2000/svg', el=function(n,a){ var e=document.createElementNS(ns,n); for(var k in a) e.setAttribute(k,a[k]); return e; };
+    var ticks=[0,max/3,2*max/3,max];
+    ticks.forEach(function(v){ svg.appendChild(el('line',{x1:L,x2:W-R,y1:y(v),y2:y(v),'class':'grd'})); var t=el('text',{x:L-8,y:y(v)+4,'text-anchor':'end','class':'axis'}); t.textContent=fmt(v); svg.appendChild(t); });
+    months.forEach(function(m,i){ var t=el('text',{x:x(i),y:H-8,'text-anchor':'middle','class':'axis'}); t.textContent=m; svg.appendChild(t); });
+    var path=function(arr,cls){ var d=arr.map(function(v,i){ return (i?'L':'M')+x(i)+' '+y(v); }).join(' '); svg.appendChild(el('path',{d:d,fill:'none','stroke-width':2,'stroke-linejoin':'round','stroke-linecap':'round','class':cls})); };
+    path(s1,'ln1'); if(s2) path(s2,'ln2');
+    months.forEach(function(m,i){
+      var g=el('g',{'class':'col'}); var bw=(W-L-R)/(months.length-1);
+      g.appendChild(el('rect',{x:x(i)-bw/2,y:T,width:bw,height:H-T-B,'class':'band'}));
+      g.appendChild(el('circle',{cx:x(i),cy:y(s1[i]),r:4.5,'class':'dot1 ringc'}));
+      if(s2) g.appendChild(el('circle',{cx:x(i),cy:y(s2[i]),r:4.5,'class':'dot2 ringc'}));
+      g.addEventListener('mousemove',function(){
+        tip.innerHTML='<b>'+m+'</b><br>'+lbl1+' '+fmt(s1[i])+(s2?'<br>'+lbl2+' '+fmt(s2[i]):'');
+        var r=svg.getBoundingClientRect(); tip.style.left=(x(i)/W*r.width)+'px'; tip.style.top=(Math.min(y(s1[i]), s2?y(s2[i]):y(s1[i]))/H*r.height)+'px';
+      });
+      svg.appendChild(g);
+    });
+    var e1=el('text',{x:x(months.length-1)+10,y:y(s1[months.length-1])+4,'class':'endlbl'}); e1.textContent=lbl1; svg.appendChild(e1);
+    if(s2){ var e2=el('text',{x:x(months.length-1)+10,y:y(s2[months.length-1])+4,'class':'endlbl'}); e2.textContent=lbl2; svg.appendChild(e2); }
+  }
+
+  // ---- generic grouped bar chart ----
+  function barChart(id, cats, s1, s2, lbl1, lbl2, fmt, max){
+    var svg=document.getElementById(id), wrap=svg.parentNode, tip=wrap.querySelector('.tip');
+    var W=640,H=230,L=48,R=16,T=14,B=30;
+    var ns='http://www.w3.org/2000/svg', el=function(n,a){ var e=document.createElementNS(ns,n); for(var k in a) e.setAttribute(k,a[k]); return e; };
+    var y=function(v){ return T+(H-T-B)*(1-v/max); };
+    var slot=(W-L-R)/cats.length, bw=s2?slot*0.28:slot*0.5;
+    [0,max/3,2*max/3,max].forEach(function(v){ svg.appendChild(el('line',{x1:L,x2:W-R,y1:y(v),y2:y(v),'class':'grd'})); var t=el('text',{x:L-8,y:y(v)+4,'text-anchor':'end','class':'axis'}); t.textContent=fmt(v); svg.appendChild(t); });
+    cats.forEach(function(c,i){
+      var cx=L+slot*i+slot/2;
+      var g=el('g',{'class':'col'});
+      g.appendChild(el('rect',{x:L+slot*i,y:T,width:slot,height:H-T-B,'class':'band'}));
+      var x1=s2?cx-bw-2:cx-bw/2;
+      g.appendChild(el('rect',{x:x1,y:y(s1[i]),width:bw,height:H-B-y(s1[i]),rx:3,'class':'bar1'}));
+      if(s2) g.appendChild(el('rect',{x:cx+2,y:y(s2[i]),width:bw,height:H-B-y(s2[i]),rx:3,'class':'bar2'}));
+      var t=el('text',{x:cx,y:H-8,'text-anchor':'middle','class':'axis'}); t.textContent=c; g.appendChild(t);
+      g.addEventListener('mousemove',function(){ tip.innerHTML='<b>'+c+'</b><br>'+lbl1+' '+fmt(s1[i])+(s2?'<br>'+lbl2+' '+fmt(s2[i]):''); var r=svg.getBoundingClientRect(); tip.style.left=(cx/W*r.width)+'px'; tip.style.top=(y(Math.max(s1[i],s2?s2[i]:0))/H*r.height)+'px'; });
+      svg.appendChild(g);
+    });
+  }
+
+  // ---- toast ----
+  function toast(m){ var t=document.getElementById('toast'); if(!t){ t=document.createElement('div'); t.id='toast'; document.body.appendChild(t); } t.textContent=m; t.classList.add('on'); clearTimeout(t._t); t._t=setTimeout(function(){ t.classList.remove('on'); },2600); }
+  function T(en,es){ return LANG==='es' ? es : en; }
+
+  // ---- screen router: any [data-go] shows the matching [data-screen] ----
+  (function(){
+    var screens=document.querySelectorAll('[data-screen]');
+    if(!screens.length) return;
+    function go(id,arg){
+      var found=false;
+      screens.forEach(function(s){ var on=s.getAttribute('data-screen')===id; s.classList.toggle('on',on); if(on) found=true; });
+      if(!found){ toast(T('Not in this mockup yet','Todavía no está en este mockup')); return; }
+      document.querySelectorAll('.rail a[data-go], .tabs a[data-go]').forEach(function(a){
+        var hit=a.getAttribute('data-go')===id && (!a.hasAttribute('data-arg') || a.getAttribute('data-arg')===arg);
+        if(!hit && a.hasAttribute('data-children')){ hit=(' '+a.getAttribute('data-children')+' ').indexOf(' '+id+' ')>-1; }
+        a.classList.toggle('on',hit);
+      });
+      window.scrollTo({top:0,behavior:'smooth'});
+      document.dispatchEvent(new CustomEvent('screen',{detail:{id:id,arg:arg}}));
+    }
+    document.addEventListener('click',function(e){ var t=e.target.closest('[data-go]'); if(t){ e.preventDefault(); go(t.getAttribute('data-go'), t.getAttribute('data-arg')); } });
+    window.go=go;
+  })();
+
+  // ---- flip: a button that becomes a status chip ----
+  document.addEventListener('click',function(e){
+    var b=e.target.closest('[data-flip]'); if(!b) return;
+    var sp=document.createElement('span'); sp.className='tag '+(b.getAttribute('data-flip-cls')||'ok');
+    sp.textContent = LANG==='es' && b.getAttribute('data-flip-es') ? b.getAttribute('data-flip-es') : b.getAttribute('data-flip');
+    b.replaceWith(sp);
+    if(b.getAttribute('data-toast')) toast(LANG==='es' && b.getAttribute('data-toast-es') ? b.getAttribute('data-toast-es') : b.getAttribute('data-toast'));
+  });
+  // ---- plain toast buttons ----
+  document.addEventListener('click',function(e){ var b=e.target.closest('[data-say]'); if(!b||b.hasAttribute('data-flip')) return; toast(LANG==='es' && b.getAttribute('data-say-es') ? b.getAttribute('data-say-es') : b.getAttribute('data-say')); });
+
+  // ---- table filter: <input data-filter="#tableId"> ----
+  document.addEventListener('input',function(e){
+    var i=e.target; if(!i.hasAttribute('data-filter')) return;
+    var q=i.value.toLowerCase(), t=document.querySelector(i.getAttribute('data-filter')); if(!t) return;
+    t.querySelectorAll('tbody tr, .opt').forEach(function(r){ r.classList.toggle('hidden', q && r.textContent.toLowerCase().indexOf(q)<0); });
+  });
+  // ---- in-page tabs: a[data-tab="group:name"] + [data-panel="group:name"] ----
+  document.addEventListener('click',function(e){
+    var a=e.target.closest('[data-tab]'); if(!a) return; e.preventDefault();
+    var v=a.getAttribute('data-tab'), g=v.split(':')[0];
+    document.querySelectorAll('[data-tab^="'+g+':"]').forEach(function(x){ x.classList.toggle('on',x===a); });
+    document.querySelectorAll('[data-panel^="'+g+':"]').forEach(function(p){ p.style.display = p.getAttribute('data-panel')===v ? '' : 'none'; });
+  });
+  document.querySelectorAll('[data-panel]').forEach(function(p){ var v=p.getAttribute('data-panel'), g=v.split(':')[0]; var on=document.querySelector('[data-tab="'+v+'"]'); p.style.display = on && on.classList.contains('on') ? '' : 'none'; });
+  // ---- generic checkbox, radio, signature pad, stepper, crew option ----
+  document.addEventListener('click',function(e){
+    var c=e.target.closest('.chk'); if(c && !c.closest('#runTable') && !c.closest('[data-checkoff]')){ c.classList.toggle('on'); c.textContent=c.classList.contains('on')?'✓':''; return; }
+    var r=e.target.closest('.radio label'); if(r){ r.parentNode.querySelectorAll('label').forEach(function(x){ x.classList.remove('on'); }); r.classList.add('on'); return; }
+    var s=e.target.closest('.sigpad'); if(s && !s.classList.contains('done')){ s.classList.add('done'); s.textContent=s.getAttribute('data-name')||'Firmado'; return; }
+    var em=e.target.closest('.sig .empty'); if(em){ var d=document.createElement('div'); d.className='ink'; d.textContent=em.getAttribute('data-name')||'Firmado'; em.replaceWith(d); return; }
+    var co=e.target.closest('.crewopt'); if(co){ var one=co.parentNode.hasAttribute('data-single'); if(one) co.parentNode.querySelectorAll('.crewopt').forEach(function(x){ x.classList.remove('on'); x.querySelector('.bx').textContent=''; }); co.classList.toggle('on'); co.querySelector('.bx').textContent=co.classList.contains('on')?'✓':''; return; }
+    var st=e.target.closest('.stepper span'); if(st){ var b=st.parentNode.querySelector('b'), v=+b.textContent; b.textContent = st.textContent.trim()==='−' ? Math.max(0,v-1) : v+1; b.dispatchEvent(new Event('change',{bubbles:true})); return; }
+  });
+  // ---- buttons that need a field filled: <button data-requires="#id"> ----
+  document.querySelectorAll('[data-requires]').forEach(function(b){ var f=document.querySelector(b.getAttribute('data-requires')); if(!f) return; b.disabled=!f.value.trim(); f.addEventListener('input',function(){ b.disabled=!f.value.trim(); }); });
+  // ---- row select: tr[data-sel] highlights ----
+  document.addEventListener('click',function(e){ var tr=e.target.closest('tr[data-sel]'); if(!tr||e.target.closest('button,a,input,.chk')) return; tr.parentNode.querySelectorAll('tr').forEach(function(x){ x.classList.remove('sel'); }); tr.classList.add('sel'); });
+
+
+  (function(){
+    var rows=document.querySelectorAll('#runTable tbody tr'), total=5504.44, paid=0, n=0;
+    var fmt=function(v){ return '$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+    rows.forEach(function(r){
+      var c=r.querySelector('.chk'), fb=r.querySelector('.fb'), inp=r.querySelector('input');
+      c.addEventListener('click',function(){
+        if(c.classList.contains('on')) return;
+        c.classList.add('on'); c.textContent='✓'; r.classList.add('done');
+        if(!inp.value) inp.value=inp.placeholder; inp.disabled=true;
+        paid += +r.dataset.amt; n++;
+        fb.innerHTML='<span class="tag ok">'+(LANG==='es'?'✓ enviado a Lissette · hoy':'✓ sent to Lissette · today')+'</span>';
+        var s=n+(LANG==='es'?' de 5 marcadas':' of 5 checked');
+        document.getElementById('runStatus').textContent=s; document.getElementById('runStatus').className = n===5?'tag ok':'tag acc';
+        document.getElementById('inboxStatus').textContent = n===5 ? (LANG==='es'?'completa · hoy':'complete · today') : (LANG==='es'?'en progreso · ':'in progress · ')+n+(LANG==='es'?' de 5':' of 5');
+        document.getElementById('inboxStatus').className = n===5?'tag ok':'tag acc';
+        document.getElementById('kpiToPay').textContent=fmt(Math.max(0,total-paid)); document.getElementById('kpiToPayN').textContent=5-n;
+        var ring=document.getElementById('kpiRing'), C=2*Math.PI*21; ring.setAttribute('stroke-dashoffset', C*(1-n/5)); document.getElementById('kpiRingTxt').textContent=n+'/5';
+        if(n===5){
+          document.getElementById('runBanner').classList.add('on');
+          document.getElementById('retHero').textContent='$6,179.60'; document.getElementById('retRuns').textContent='19';
+          var tr=document.createElement('tr'); tr.innerHTML='<td class="mono">9/24</td><td>5 <span class="sm">(Central)</span></td><td class="num">14</td><td class="num">$9,293.92</td><td class="num">$611.61</td><td class="num">$5,504.44</td><td class="dim">20260926-JAF-016</td><td><span class="tag ok">'+(LANG==='es'?'completa · hoy':'complete · today')+'</span></td>';
+          var body=document.getElementById('paidRuns'); body.insertBefore(tr, body.firstChild);
+        }
+      });
+    });
+  })();
+
+  // ---- run 9/10 check-off ----
+  (function(){
+    var t=document.getElementById('run910'); var n=3;
+    t.addEventListener('click',function(e){ var c=e.target.closest('.chk'); if(!c||c.classList.contains('on')) return; var r=c.closest('tr'); c.classList.add('on'); c.textContent='✓'; r.classList.add('done'); var i=r.querySelector('input'); if(i) i.disabled=true; r.querySelector('.fb').innerHTML='<span class="tag ok">'+T('✓ sent to Lissette · today','✓ enviado a Lissette · hoy')+'</span>'; n++; var s=document.getElementById('r910Status'); s.textContent=n+T(' of 5 checked',' de 5 marcadas'); if(n===5){ s.className='tag ok'; document.getElementById('r910Banner').classList.add('on'); toast(T('Run 9/10 complete. Lissette\'s "Awaiting Carmen\'s ✓" list clears.','Corrida 9/10 completa. La lista «Esperando el ✓ de Carmen» de Lissette se limpia.')); } else toast(T('Sent to Lissette · Arm A closed on that account\'s Avisos.','Enviado a Lissette · Brazo A cerrado en los Avisos de esa cuenta.')); });
+  })();
+  // ---- installer pay ----
+  (function(){
+    var cur;
+    document.addEventListener('click',function(e){ var b=e.target.closest('[data-ipay]'); if(!b) return; cur=b.closest('tr'); var d=b.getAttribute('data-ipay').split('|'); document.getElementById('ipOrd').value=d[0]+' · '+d[1]; document.getElementById('ipRef').value=''; document.getElementById('ipSave').disabled=true; var f=document.getElementById('ipForm'); f.style.display=''; f.scrollIntoView({behavior:'smooth',block:'center'}); });
+    document.getElementById('ipSave').addEventListener('click',function(){ var ref=document.getElementById('ipRef').value; var tb=document.querySelector('#ipPaid tbody'); var tr=document.createElement('tr'); tr.innerHTML='<td class="mono">'+cur.children[0].textContent+'</td><td>'+cur.children[1].textContent+'</td><td>'+cur.children[3].innerHTML+'</td><td class="num">'+cur.children[5].textContent+'</td><td>9/19</td><td class="dim">'+ref+'</td>'; tb.insertBefore(tr,tb.firstChild); cur.remove(); document.getElementById('ipForm').style.display='none'; toast(T('Paid. The installer sees ✓ Paid on his phone. Installer loop closed.','Pagado. El instalador ve ✓ Pagado en su teléfono. Ciclo del instalador cerrado.')); });
+  })();
+
+</script>
+</body>
+</html>

@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JAF Ops, Billing &amp; Collections</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ---------------------------------------------------------------
+     JAF Ops design system. Same tokens as Monica's command center
+     (mockup v3, 19 Sep 2026). Dual theme, one accent, status colors
+     only for state. Radius: containers 16px, controls 10px, chips 6px.
+     --------------------------------------------------------------- */
+  :root{
+    color-scheme: light;
+    --plane:#f4f4f2; --surface:#fcfcfb; --surface-2:#f0f0ed;
+    --ink:#111110; --ink-2:#52514e; --ink-3:#898781;
+    --hair:#e1e0d9; --ring:rgba(11,11,11,.08);
+    --accent:#1c5cab; --accent-2:#86b6ef; --accent-ink:#ffffff;
+    --accent-wash:rgba(28,92,171,.08);
+    --critical:#d03b3b; --warning:#b7791f; --good:#006300;
+    --crit-wash:rgba(208,59,59,.10); --warn-wash:rgba(183,121,31,.13); --good-wash:rgba(0,99,0,.10);
+    --shadow:0 1px 2px rgba(30,28,20,.05), 0 10px 30px -14px rgba(30,28,20,.14);
+    --grid:#e1e0d9;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      color-scheme: dark;
+      --plane:#0f0f0e; --surface:#1a1a19; --surface-2:#222221;
+      --ink:#f4f4f1; --ink-2:#c3c2b7; --ink-3:#898781;
+      --hair:#2c2c2a; --ring:rgba(255,255,255,.08);
+      --accent:#3987e5; --accent-2:#9ec5f4; --accent-ink:#ffffff;
+      --accent-wash:rgba(57,135,229,.12);
+      --critical:#e66767; --warning:#e0a634; --good:#3fbf3f;
+      --crit-wash:rgba(230,103,103,.14); --warn-wash:rgba(224,166,52,.16); --good-wash:rgba(63,191,63,.14);
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 30px -14px rgba(0,0,0,.6);
+      --grid:#2c2c2a;
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --plane:#0f0f0e; --surface:#1a1a19; --surface-2:#222221;
+    --ink:#f4f4f1; --ink-2:#c3c2b7; --ink-3:#898781;
+    --hair:#2c2c2a; --ring:rgba(255,255,255,.08);
+    --accent:#3987e5; --accent-2:#9ec5f4; --accent-ink:#ffffff;
+    --accent-wash:rgba(57,135,229,.12);
+    --critical:#e66767; --warning:#e0a634; --good:#3fbf3f;
+    --crit-wash:rgba(230,103,103,.14); --warn-wash:rgba(224,166,52,.16); --good-wash:rgba(63,191,63,.14);
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 30px -14px rgba(0,0,0,.6);
+    --grid:#2c2c2a;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; background:var(--plane); color:var(--ink); }
+  body{ font-family:"Geist", system-ui, -apple-system, "Segoe UI", sans-serif; font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; transition:background .2s ease, color .2s ease; }
+  .shell{ display:grid; grid-template-columns:236px minmax(0,1fr); min-height:100dvh; }
+  .rail{ border-right:1px solid var(--hair); padding:22px 18px; display:flex; flex-direction:column; gap:8px; position:sticky; top:0; height:100dvh; background:var(--plane); }
+  .rail .wordmark{ padding:4px 10px 18px; font-size:16px; font-weight:700; letter-spacing:-.01em; }
+  .rail .wordmark span{ display:block; font-size:11.5px; font-weight:500; color:var(--ink-3); margin-top:2px; }
+  .rail .grp{ font-size:11px; font-weight:600; color:var(--ink-3); padding:14px 10px 4px; letter-spacing:.02em; }
+  .rail a{ display:flex; align-items:center; justify-content:space-between; text-decoration:none; color:var(--ink-2); font-size:13.5px; font-weight:500; padding:8px 10px; border-radius:10px; }
+  .rail a:hover{ background:var(--surface-2); color:var(--ink); }
+  .rail a.on{ background:var(--surface); color:var(--ink); font-weight:600; box-shadow:var(--shadow); border:1px solid var(--ring); }
+  .rail a .pill{ font-size:11px; font-weight:600; background:var(--critical); color:#fff; padding:1px 7px; border-radius:6px; }
+  .rail a .n{ font-size:12px; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+  .rail .foot{ margin-top:auto; border-top:1px solid var(--hair); padding-top:14px; display:flex; flex-direction:column; gap:10px; }
+  .rail .user{ display:flex; align-items:center; gap:10px; padding:4px 10px; }
+  .rail .av{ width:30px; height:30px; border-radius:50%; background:var(--accent); color:#fff; font-size:12px; font-weight:600; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .rail .user .nm{ font-size:13px; font-weight:600; line-height:1.2; }
+  .rail .user .rl{ font-size:11.5px; color:var(--ink-3); }
+  .rail .toggles{ display:flex; gap:8px; }
+  .rail .toggles .toggle{ flex:1; }
+  .wrap{ max-width:1200px; margin:0 auto; padding:0 28px 56px; width:100%; min-width:0; overflow-x:clip; }
+
+  /* top bar */
+  .top{ height:68px; display:flex; align-items:center; gap:22px; border-bottom:1px solid var(--hair); }
+  .wordmark{ font-weight:700; letter-spacing:-.01em; font-size:15px; white-space:nowrap; }
+  .tabs{ display:flex; gap:2px; background:var(--surface-2); padding:3px; border-radius:10px; }
+  .tabs a{ text-decoration:none; font-size:13px; font-weight:500; color:var(--ink-2); padding:6px 12px; border-radius:8px; white-space:nowrap; }
+  .tabs a.on{ background:var(--surface); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.08); font-weight:600; }
+  .spacer{ flex:1; }
+  .who{ font-size:13px; color:var(--ink-2); white-space:nowrap; }
+  .btn{ font:inherit; font-weight:600; font-size:13px; background:var(--ink); color:var(--plane); border:0; border-radius:10px; padding:9px 14px; cursor:pointer; transition:transform .12s ease, opacity .12s ease; white-space:nowrap; }
+  .btn:hover{ opacity:.88; } .btn:active{ transform:translateY(1px); }
+  .btn.ghost{ background:transparent; color:var(--ink); border:1px solid var(--hair); }
+  .btn.ghost:hover{ background:var(--surface-2); opacity:1; }
+  .btn.acc{ background:var(--accent-ink); color:var(--accent); }
+  .btn.acc:hover{ opacity:.9; }
+  .btn.blue{ background:var(--accent); color:#fff; }
+  .btn.sm{ font-size:12.5px; padding:6px 11px; border-radius:8px; }
+  .btn[disabled]{ opacity:.45; cursor:not-allowed; }
+  .toggle{ font:inherit; font-size:12.5px; font-weight:600; color:var(--ink-2); background:var(--surface-2); border:1px solid var(--hair); border-radius:10px; padding:7px 11px; cursor:pointer; }
+
+  /* greeting + kpi strip */
+  .greet{ padding:30px 0 18px; display:flex; align-items:flex-end; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+  .greet h1{ font-size:30px; font-weight:600; letter-spacing:-.02em; margin:0 0 4px; line-height:1.15; }
+  .greet p{ margin:0; color:var(--ink-2); font-size:15px; max-width:64ch; }
+  .greet b{ color:var(--ink); font-weight:600; }
+  .kpis{ display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin:6px 0 20px; }
+  .kpis.k4{ grid-template-columns:repeat(4,1fr); }
+  .kpi{ background:var(--surface); border:1px solid var(--ring); border-radius:16px; padding:14px 16px; box-shadow:var(--shadow); display:flex; align-items:center; justify-content:space-between; gap:12px; min-width:0; }
+  .kpi .l{ font-size:12px; color:var(--ink-3); white-space:nowrap; }
+  .kpi .v{ font-size:24px; font-weight:600; letter-spacing:-.02em; line-height:1.15; margin-top:2px; }
+  .kpi .d{ font-size:12px; color:var(--ink-2); margin-top:2px; }
+  .kpi .v.neg{ color:var(--critical); } .kpi .v.warn{ color:var(--warning); } .kpi .v.good{ color:var(--good); }
+  .kpi .viz{ flex:0 0 auto; }
+  .ring{ width:52px; height:52px; }
+  .ring .trk{ fill:none; stroke:var(--accent-2); stroke-opacity:.45; stroke-width:5; }
+  .ring .fil{ fill:none; stroke:var(--accent); stroke-width:5; stroke-linecap:round; transform:rotate(-90deg); transform-origin:50% 50%; }
+  .ring.crit .trk{ stroke:var(--critical); stroke-opacity:.22; } .ring.crit .fil{ stroke:var(--critical); }
+  .ring.warn .trk{ stroke:var(--warning); stroke-opacity:.22; } .ring.warn .fil{ stroke:var(--warning); }
+  .ring.good .trk{ stroke:var(--good); stroke-opacity:.22; } .ring.good .fil{ stroke:var(--good); }
+  .ring text{ font-size:11px; font-weight:600; fill:var(--ink); text-anchor:middle; }
+  .ring .cap{ font-size:8px; font-weight:500; fill:var(--ink-3); }
+  .spark{ width:72px; height:34px; }
+  .spark path{ fill:none; stroke:var(--accent); stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }
+  .spark .area{ fill:var(--accent); fill-opacity:.10; stroke:none; }
+  .spark circle{ fill:var(--accent); stroke:var(--surface); stroke-width:2; }
+  .mini{ display:flex; align-items:flex-end; gap:3px; height:34px; }
+  .mini i{ display:block; width:9px; background:var(--accent); border-radius:3px 3px 0 0; }
+  .mini i.lo{ background:var(--accent-2); }
+  .mini i.crit{ background:var(--critical); } .mini i.warn{ background:var(--warning); }
+  @media (prefers-reduced-motion:no-preference){ .ring .fil{ transition:stroke-dashoffset .8s cubic-bezier(.16,1,.3,1); } }
+
+  /* grid + boxes */
+  .grid{ display:grid; grid-template-columns:repeat(12,1fr); gap:16px; }
+  .box{ background:var(--surface); border:1px solid var(--ring); border-radius:16px; box-shadow:var(--shadow); padding:20px 22px; min-width:0; }
+  .box.acc{ background:var(--accent); color:var(--accent-ink); border-color:transparent; }
+  .box.acc h2, .box.acc .sub{ color:rgba(255,255,255,.85); }
+  .c3{ grid-column:span 3; } .c4{ grid-column:span 4; } .c5{ grid-column:span 5; } .c6{ grid-column:span 6; } .c7{ grid-column:span 7; } .c8{ grid-column:span 8; } .c12{ grid-column:span 12; }
+  .box h2{ font-size:13.5px; font-weight:600; color:var(--ink-2); margin:0 0 2px; }
+  .box .sub{ color:var(--ink-3); font-size:12.5px; margin:0 0 14px; }
+  .box .head{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+  .count{ display:inline-block; min-width:20px; text-align:center; font-size:11px; font-weight:600; padding:1px 6px; border-radius:6px; background:var(--critical); color:#fff; margin-left:6px; vertical-align:1px; }
+  .count.w{ background:var(--warning); } .count.a{ background:var(--accent); }
+  .ex{ text-decoration:underline dotted var(--ink-3); text-underline-offset:3px; text-decoration-thickness:1px; }
+
+  /* lines / hero */
+  .lines{ list-style:none; margin:4px 0 0; padding:0; }
+  .lines li{ display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--hair); }
+  .lines li:last-child{ border-bottom:0; }
+  .lines i{ width:10px; height:10px; border-radius:3px; flex:0 0 auto; }
+  .lines .n{ flex:1; font-size:13.5px; font-weight:500; }
+  .lines .v{ font-size:15px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .hero{ font-size:44px; font-weight:600; letter-spacing:-.03em; line-height:1; margin:4px 0 2px; }
+  .heroline{ color:var(--ink-2); font-size:13px; margin:0 0 14px; }
+
+  /* chart */
+  .chartwrap{ position:relative; }
+  .chart{ width:100%; height:auto; display:block; }
+  .legend{ display:flex; gap:18px; font-size:12.5px; color:var(--ink-2); margin:2px 0 6px; flex-wrap:wrap; }
+  .legend i{ display:inline-block; width:14px; height:3px; border-radius:2px; margin-right:7px; vertical-align:3px; }
+  .tip{ position:absolute; pointer-events:none; background:var(--ink); color:var(--plane); font-size:12px; padding:8px 10px; border-radius:8px; white-space:nowrap; transform:translate(-50%,-110%); opacity:0; transition:opacity .12s; box-shadow:var(--shadow); }
+  .tip b{ font-weight:600; }
+  .chartwrap:hover .tip{ opacity:1; }
+  .axis{ font-size:11px; fill:var(--ink-3); }
+  .grd{ stroke:var(--grid); stroke-width:1; }
+  .ln1{ stroke:var(--accent); } .ln2{ stroke:var(--accent-2); }
+  .dot1{ fill:var(--accent); } .dot2{ fill:var(--accent-2); }
+  .ringc{ stroke:var(--surface); stroke-width:2; }
+  .col:hover .band{ fill:var(--accent-wash); }
+  .band{ fill:transparent; }
+  .endlbl{ font-size:11.5px; font-weight:600; fill:var(--ink); }
+  .bar1{ fill:var(--accent); } .bar2{ fill:var(--accent-2); }
+
+  /* glance tile */
+  .glance .big{ font-size:40px; font-weight:600; letter-spacing:-.03em; line-height:1; margin:6px 0 4px; }
+  .glance p{ margin:0 0 16px; font-size:13px; color:rgba(255,255,255,.85); }
+  .glance .btn{ display:block; width:100%; text-align:left; margin-top:8px; }
+
+  /* attention list */
+  .att{ list-style:none; margin:0; padding:0; }
+  .att li{ display:grid; grid-template-columns:3px 1fr auto; gap:0 12px; padding:9px 0; border-bottom:1px solid var(--hair); align-items:start; }
+  .att li:last-child{ border-bottom:0; }
+  .att .mark{ width:3px; min-height:30px; border-radius:2px; background:var(--critical); margin-top:2px; }
+  .att .mark.w{ background:var(--warning); } .att .mark.a{ background:var(--accent); } .att .mark.g{ background:var(--good); }
+  .att .t{ font-weight:600; font-size:13.5px; }
+  .att .d{ color:var(--ink-2); font-size:12.5px; }
+  .att .lvl{ font-size:11px; font-weight:600; color:var(--critical); padding-top:2px; white-space:nowrap; }
+  .att .lvl.w{ color:var(--warning); } .att .lvl.a{ color:var(--accent); } .att .lvl.g{ color:var(--good); }
+  .more{ display:inline-block; margin-top:10px; font-size:12.5px; color:var(--accent); text-decoration:none; font-weight:600; cursor:pointer; }
+
+  /* bars + stats + rows */
+  .bars{ display:grid; grid-template-columns:auto 1fr auto; gap:8px 12px; align-items:center; margin-top:6px; }
+  .bars .n{ font-size:13px; font-weight:500; }
+  .bars .b{ height:9px; background:var(--accent); border-radius:0 4px 4px 0; }
+  .bars .b.lo{ background:var(--accent-2); } .bars .b.crit{ background:var(--critical); } .bars .b.warn{ background:var(--warning); }
+  .bars .v{ font-size:12.5px; font-variant-numeric:tabular-nums; color:var(--ink-2); }
+  .split{ display:grid; grid-template-columns:1fr 1fr; gap:14px 18px; margin-top:14px; padding-top:14px; border-top:1px solid var(--hair); }
+  .stat .l{ font-size:12px; color:var(--ink-3); }
+  .stat .v{ font-size:22px; font-weight:600; letter-spacing:-.02em; line-height:1.15; }
+  .rows{ margin:6px 0 0; padding:0; list-style:none; }
+  .rows li{ display:flex; justify-content:space-between; gap:12px; padding:8px 0; border-bottom:1px solid var(--hair); font-size:13.5px; align-items:center; }
+  .rows li:last-child{ border-bottom:0; }
+  .st{ font-size:12px; font-weight:600; }
+  .st.crit{ color:var(--critical); } .st.warn{ color:var(--warning); } .st.ok{ color:var(--good); } .st.acc{ color:var(--accent); }
+
+  /* chips */
+  .tag{ display:inline-block; font-size:11px; font-weight:600; padding:2px 7px; border-radius:6px; background:var(--surface-2); color:var(--ink-2); white-space:nowrap; vertical-align:middle; }
+  .tag.ok{ background:var(--good-wash); color:var(--good); }
+  .tag.warn{ background:var(--warn-wash); color:var(--warning); }
+  .tag.crit{ background:var(--crit-wash); color:var(--critical); }
+  .tag.acc{ background:var(--accent-wash); color:var(--accent); }
+  .tag.dark{ background:var(--ink); color:var(--plane); }
+
+  /* checklist gate */
+  .gate{ list-style:none; margin:6px 0 0; padding:0; }
+  .gate li{ display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--hair); font-size:13.5px; }
+  .gate li:last-child{ border-bottom:0; }
+  .gate .ic{ width:20px; height:20px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex:0 0 auto; }
+  .gate .ic.y{ background:var(--good-wash); color:var(--good); }
+  .gate .ic.n{ background:var(--crit-wash); color:var(--critical); }
+  .gate .ic.w{ background:var(--warn-wash); color:var(--warning); }
+  .gate small{ margin-left:auto; color:var(--ink-3); font-size:12px; white-space:nowrap; }
+
+  /* checkbox */
+  .chk{ width:18px; height:18px; border:1.5px solid var(--ink-3); border-radius:5px; display:inline-grid; place-items:center; font-size:11px; color:#fff; cursor:pointer; background:var(--surface); flex:0 0 auto; vertical-align:middle; }
+  .chk.on{ background:var(--good); border-color:var(--good); }
+
+  /* step flow strip */
+  .flow{ display:flex; gap:6px; margin:10px 0 0; }
+  .flow div{ flex:1; padding:8px 6px; border-radius:10px; border:1px solid var(--hair); font-size:11.5px; text-align:center; color:var(--ink-3); line-height:1.3; }
+  .flow div b{ display:block; font-size:10.5px; font-weight:600; color:var(--ink-2); letter-spacing:.03em; }
+  .flow .on{ background:var(--accent); color:#fff; border-color:transparent; }
+  .flow .on b{ color:rgba(255,255,255,.85); }
+  .flow .done{ background:var(--accent-wash); color:var(--accent); border-color:transparent; }
+  .flow .done b{ color:var(--accent); }
+  .flow .you{ box-shadow:inset 0 -3px 0 var(--accent); }
+
+  /* table */
+  table{ width:100%; border-collapse:collapse; margin-top:6px; }
+  th{ text-align:left; font-size:11.5px; font-weight:600; color:var(--ink-3); padding:8px 10px 8px 0; border-bottom:1px solid var(--hair); white-space:nowrap; }
+  td{ padding:10px 10px 10px 0; border-bottom:1px solid var(--hair); font-size:13.5px; vertical-align:middle; }
+  tr:last-child td{ border-bottom:0; }
+  tbody tr:hover td{ background:var(--accent-wash); }
+  td.num, th.num{ text-align:right; font-variant-numeric:tabular-nums; }
+  td.mono{ font-variant-numeric:tabular-nums; font-weight:500; }
+  td.act, th.act{ text-align:right; }
+  .neg{ color:var(--critical); }
+  .dim{ color:var(--ink-3); }
+  .sm{ font-size:12px; color:var(--ink-3); }
+  .paidrow td{ color:var(--ink-3); }
+  .paidrow td .mono, .paidrow td.mono{ text-decoration:none; }
+
+  /* input */
+  .inp{ font:inherit; font-size:13px; color:var(--ink); background:var(--surface); border:1px solid var(--hair); border-radius:10px; padding:8px 11px; width:100%; }
+  .inp::placeholder{ color:var(--ink-3); }
+  .field{ display:flex; flex-direction:column; gap:5px; }
+  .field label{ font-size:12px; color:var(--ink-3); font-weight:500; }
+  .form3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-top:8px; }
+
+  footer{ margin-top:36px; padding-top:14px; border-top:1px solid var(--hair); color:var(--ink-3); font-size:12px; display:flex; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+
+  @media (prefers-reduced-motion:no-preference){
+    .kpi, .box, .greet{ animation:rise .5s cubic-bezier(.16,1,.3,1) both; }
+    .kpi:nth-child(2){ animation-delay:.04s } .kpi:nth-child(3){ animation-delay:.08s } .kpi:nth-child(4){ animation-delay:.12s } .kpi:nth-child(5){ animation-delay:.16s }
+    .grid .box:nth-child(1){ animation-delay:.10s } .grid .box:nth-child(2){ animation-delay:.15s } .grid .box:nth-child(3){ animation-delay:.20s }
+    .grid .box:nth-child(4){ animation-delay:.25s } .grid .box:nth-child(5){ animation-delay:.30s } .grid .box:nth-child(6){ animation-delay:.35s } .grid .box:nth-child(7){ animation-delay:.40s }
+    @keyframes rise{ from{ opacity:0; transform:translateY(8px) } to{ opacity:1; transform:none } }
+  }
+  .mdate{ display:none; }
+  @media (max-width:1024px){ .shell{ grid-template-columns:1fr; } .rail{ display:none; } .top .wordmark, .top .tabs{ display:inline-flex; } .top .who, .top .print{ display:none; } .kpis, .kpis.k4{ grid-template-columns:repeat(3,1fr); } .c3,.c4,.c5,.c6,.c7,.c8{ grid-column:span 6; } }
+  @media (min-width:1025px){ .top .wordmark, .top .tabs{ display:none; } }
+  @media (max-width:640px){ .top .tabs{ display:none; } }
+  @media (max-width:760px){ .kpis, .kpis.k4{ grid-template-columns:1fr 1fr; } .c3,.c4,.c5,.c6,.c7,.c8,.c12{ grid-column:span 12; } .wrap{ padding:0 16px 40px; } .greet h1{ font-size:24px; } .hero{ font-size:38px; } .top{ height:58px; gap:10px; } .who{ display:none; } .mdate{ display:block; color:var(--ink-3); font-size:13px; margin-bottom:6px; } .form3{ grid-template-columns:1fr; } }
+
+  /* phone preview (crew): same page, constrained to a handset */
+  body.phone .shell{ display:block; }
+  body.phone .rail{ display:none; }
+  body.phone .wrap{ max-width:418px; margin:24px auto 40px; padding:0 14px 30px; border:12px solid #141413; border-radius:44px; background:var(--plane); min-height:820px; box-shadow:0 30px 60px -20px rgba(0,0,0,.45); }
+  body.phone .top{ height:58px; gap:10px; }
+  body.phone .top .wordmark{ display:inline-flex; }
+  body.phone .top .tabs, body.phone .top .who, body.phone .top .print, body.phone .top .desk{ display:none; }
+  body.phone .mdate{ display:block; color:var(--ink-3); font-size:13px; margin-bottom:6px; }
+  body.phone .greet{ padding:22px 0 14px; }
+  body.phone .greet h1{ font-size:24px; }
+  body.phone .kpis, body.phone .kpis.k4{ grid-template-columns:1fr 1fr; }
+  body.phone .c3, body.phone .c4, body.phone .c5, body.phone .c6, body.phone .c7, body.phone .c8, body.phone .c12{ grid-column:span 12; }
+  body.phone .hero{ font-size:36px; }
+  body.phone .form3{ grid-template-columns:1fr; }
+  body.phone .hide-phone{ display:none; }
+  .phonebar{ display:none; }
+  body.phone .phonebar{ display:flex; justify-content:space-between; font-size:12px; font-weight:600; padding:8px 8px 0; color:var(--ink); }
+  .phoneexit, .phonetools{ display:none; }
+  body.phone .phoneexit{ display:block; text-align:center; margin:14px 0 0; }
+  body.phone .phonetools{ display:flex; gap:8px; justify-content:center; margin:18px 0 0; }
+  @media (max-width:1024px){ .phonetools{ display:flex; gap:8px; justify-content:center; margin:18px 0 0; } }
+  .glance .btn{ white-space:normal; line-height:1.3; }
+  body.phone #netTag{ display:none; }
+  body.phone .box table, body.phone .flow{ }
+  body.phone .tblwrap, .tblwrap{ min-width:0; }
+  body.phone table{ display:block; overflow-x:auto; white-space:nowrap; }
+  body.phone table td{ white-space:normal; min-width:90px; }
+  body.phone .flow{ flex-wrap:wrap; }
+  body.phone .flow div{ flex:1 1 21%; }
+  @media (max-width:760px){ table{ display:block; overflow-x:auto; } .flow{ flex-wrap:wrap; } .flow div{ flex:1 1 21%; } #netTag{ display:none; } }
+
+  /* ---- screens / router ---- */
+  .screen{ display:none; }
+  .screen.on{ display:block; }
+  .back{ font-size:12.5px; color:var(--accent); font-weight:600; cursor:pointer; text-decoration:none; }
+  .greet .actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  #toast{ position:fixed; left:50%; bottom:28px; transform:translate(-50%,20px); background:var(--ink); color:var(--plane); padding:10px 16px; border-radius:10px; font-size:13px; font-weight:600; opacity:0; transition:.2s; z-index:99; pointer-events:none; box-shadow:var(--shadow); max-width:90vw; text-align:center; }
+  #toast.on{ opacity:1; transform:translate(-50%,0); }
+
+  /* forms */
+  .form2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:8px; }
+  textarea.inp{ min-height:74px; resize:vertical; }
+  select.inp{ appearance:none; padding-right:30px; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4.5L6 8.5L10 4.5' stroke='%23898781' stroke-width='1.6' fill='none' stroke-linecap='round'/></svg>"); background-repeat:no-repeat; background-position:right 10px center; }
+  .inp.ro{ background:var(--surface-2); color:var(--ink-2); }
+  .inp:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-wash); }
+  .inp.sm{ padding:5px 8px; font-size:12.5px; width:auto; }
+  .qty{ width:64px; text-align:right; }
+  .actions{ display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; align-items:center; }
+
+  /* crew picker */
+  .crewgrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px; margin-top:8px; }
+  .crewopt{ border:1px solid var(--hair); border-radius:10px; padding:10px 12px; cursor:pointer; display:flex; gap:10px; align-items:flex-start; background:var(--surface); }
+  .crewopt:hover{ background:var(--surface-2); }
+  .crewopt.on{ border-color:var(--accent); background:var(--accent-wash); }
+  .crewopt .bx{ width:16px; height:16px; border-radius:5px; border:1.5px solid var(--ink-3); flex:0 0 auto; margin-top:2px; display:grid; place-items:center; font-size:10px; color:#fff; }
+  .crewopt.on .bx{ background:var(--accent); border-color:var(--accent); }
+  .crewopt .cn{ font-weight:600; font-size:13.5px; }
+  .crewopt .cm{ font-size:12px; color:var(--ink-3); }
+
+  /* catalog picker */
+  .picker{ border:1px solid var(--hair); border-radius:10px; overflow:hidden; margin-top:8px; }
+  .picker .srch{ display:flex; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--hair); }
+  .picker .srch input{ border:0; outline:0; font:inherit; flex:1; background:transparent; color:var(--ink); }
+  .picker .opt{ display:flex; align-items:center; gap:12px; padding:8px 12px; border-bottom:1px solid var(--hair); cursor:pointer; font-size:13px; }
+  .picker .opt:last-child{ border-bottom:0; }
+  .picker .opt:hover{ background:var(--accent-wash); }
+  .picker .opt .cd{ font-size:12px; color:var(--ink-3); width:80px; flex:0 0 auto; font-variant-numeric:tabular-nums; }
+  .picker .opt .ds{ flex:1; }
+
+  /* photos */
+  .photos{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:8px; }
+  .ph{ aspect-ratio:4/3; border-radius:10px; border:1px solid var(--hair); display:grid; place-items:center; font-size:11px; color:var(--ink-3); text-align:center; background:linear-gradient(135deg,var(--surface-2),var(--hair)); }
+  .ph b{ display:block; font-size:10px; letter-spacing:.06em; color:var(--ink-2); }
+  .ph.cam{ border:2px dashed var(--accent-2); background:var(--surface); color:var(--accent); font-weight:600; cursor:pointer; }
+  .diff{ background:var(--accent-wash); border-left:3px solid var(--accent); padding:8px 12px; border-radius:0 8px 8px 0; font-size:13px; margin-top:8px; }
+  .diff .old{ color:var(--critical); text-decoration:line-through; }
+  .diff .new{ color:var(--good); font-weight:600; }
+
+  /* signature pad */
+  .sigpad{ border:1.5px dashed var(--ink-3); border-radius:10px; height:78px; display:grid; place-items:center; color:var(--ink-3); font-size:13px; background:var(--surface); cursor:pointer; }
+  .sigpad.done{ border-style:solid; border-color:var(--accent); background:var(--accent-wash); color:var(--accent); font-family:"Segoe Script","Bradley Hand","Snell Roundhand",cursive; font-size:22px; }
+
+  /* stepper */
+  .stepper{ display:inline-flex; align-items:center; border:1px solid var(--hair); border-radius:8px; overflow:hidden; vertical-align:middle; }
+  .stepper span{ width:30px; height:30px; display:grid; place-items:center; font-size:16px; color:var(--accent); font-weight:700; background:var(--surface-2); cursor:pointer; user-select:none; }
+  .stepper b{ width:38px; text-align:center; font-size:14px; }
+
+  /* pre-cert sheet */
+  .sheet{ border:2px solid var(--ink); border-radius:4px; padding:20px; background:var(--surface); font-size:13px; }
+  .sheet .shead{ text-align:center; border-bottom:1px solid var(--ink); padding-bottom:10px; margin-bottom:14px; }
+  .sheet .shead b{ font-size:16px; letter-spacing:-.2px; }
+  .sheet .shead p{ margin:2px 0 0; font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-2); }
+  .sheet .meta{ display:grid; grid-template-columns:1fr 1fr; gap:8px 18px; margin-bottom:12px; font-size:12.5px; }
+  .sheet .meta div{ border-bottom:1px solid var(--hair); padding-bottom:4px; }
+  .sheet .meta span{ color:var(--ink-3); font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; display:block; }
+  .sheet table th, .sheet table td{ border:1px solid var(--hair); padding:6px 8px; }
+  .sigs{ display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:16px; }
+  .sig{ border:1px solid var(--hair); border-radius:8px; padding:10px; }
+  .sig .lbl{ font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3); font-weight:700; margin-bottom:8px; }
+  .sig .ink{ font-family:"Segoe Script","Bradley Hand","Snell Roundhand",cursive; font-size:20px; color:var(--accent); border-bottom:1px solid var(--ink); padding-bottom:3px; margin-bottom:6px; }
+  .sig .empty{ border-bottom:1px dashed var(--ink-3); height:29px; margin-bottom:6px; cursor:pointer; }
+  .sig .nm{ font-size:12px; font-weight:600; }
+  .sig .dt{ font-size:11px; color:var(--ink-3); }
+
+  /* misc */
+  .note{ background:var(--warn-wash); color:var(--warning); border-radius:10px; padding:10px 12px; font-size:13px; }
+  .note.crit{ background:var(--crit-wash); color:var(--critical); }
+  .note.ok{ background:var(--good-wash); color:var(--good); }
+  .note.acc{ background:var(--accent-wash); color:var(--accent); }
+  .radio{ display:flex; gap:8px; flex-wrap:wrap; }
+  .radio label{ border:1px solid var(--hair); border-radius:8px; padding:6px 10px; font-size:12.5px; cursor:pointer; }
+  .radio label.on{ border-color:var(--accent); background:var(--accent-wash); color:var(--accent); font-weight:600; }
+  .kv{ display:grid; grid-template-columns:auto 1fr; gap:6px 16px; font-size:13.5px; margin-top:6px; }
+  .kv span:nth-child(odd){ color:var(--ink-3); }
+  tr.hidden{ display:none; }
+  tr.sel td{ background:var(--accent-wash); }
+  .clickable{ cursor:pointer; }
+  @media (max-width:760px){ .form2, .sigs, .photos{ grid-template-columns:1fr 1fr; } .crewgrid{ grid-template-columns:1fr; } }
+  body.phone .form2, body.phone .sigs{ grid-template-columns:1fr; }
+  body.phone .photos{ grid-template-columns:1fr 1fr; }
+
+
+  .docs{ display:flex; gap:4px; flex-wrap:wrap; }
+  .docs .tag{ font-size:10.5px; }
+
+</style>
+</head>
+<body>
+<div class="shell">
+
+<aside class="rail">
+  <div class="wordmark">JAF Ops <span data-es="Facturación y cobros">Billing &amp; Collections</span></div>
+  <a data-go="dash" class="on" href="#" data-es="Panel">Dashboard</a>
+  <a data-go="packets" href="#"><span data-es="Paquetes recibidos">Packets in</span> <span class="pill">2</span></a>
+  <a data-go="lc" href="#"><span data-es="Solicitudes a la LC">LC requests</span> <span class="n">3</span></a>
+  <a data-go="lists" href="#"><span data-es="Listas para Carmen">Lists to Carmen</span> <span class="pill">1</span></a>
+  <a data-go="awaiting" href="#"><span data-es="Esperando ✓ de Carmen">Awaiting Carmen's ✓</span> <span class="n">2</span></a>
+  <div class="grp" data-es="Brazo B · Claro nos paga">Arm B · Claro pays JAF</div>
+  <a data-go="po" href="#"><span data-es="Esperando PO">Awaiting PO</span> <span class="pill">37</span></a>
+  <a data-go="ariba" href="#"><span data-es="Esperando Ariba">Awaiting Ariba</span> <span class="n">6</span></a>
+  <a data-go="claro" href="#"><span data-es="Pagos de Claro">Claro payments</span> <span class="n">3</span></a>
+  <a data-go="short" href="#"><span data-es="Cerrados cortos">Closed short</span> <span class="n">3</span></a>
+  <div class="foot">
+    <div class="user"><div class="av">LC</div><div><div class="nm">Lissette Cintrón</div><div class="rl" data-es="Facturación y cobros">Billing &amp; Collections</div></div></div>
+    <div class="toggles"><button class="toggle" id="themeBtn" type="button">Dark</button><button class="toggle" id="langBtn" type="button">ES</button></div>
+  </div>
+</aside>
+
+<div class="wrap">
+
+  <div class="top">
+    <div class="wordmark">JAF Ops</div>
+    <nav class="tabs"><a data-go="dash" class="on" href="#" data-es="Panel">Dashboard</a><a data-go="lists" href="#" data-es="Brazo A">Arm A</a><a data-go="po" href="#" data-es="Brazo B">Arm B</a></nav>
+    <div class="spacer"></div>
+    <div class="who" data-es="Sábado, 19 de septiembre">Saturday, 19 September</div>
+    <button class="btn ghost print" data-say="Exporting the dashboard…" data-say-es="Exportando el panel…" data-es="Exportar">Export</button>
+    <button class="btn blue" data-go="lists" data-es="Generar lista para Carmen">Generate list for Carmen</button>
+  </div>
+
+<section class="screen on" data-screen="dash">
+  <div class="greet">
+    <div>
+      <div class="mdate" data-es="Sábado, 19 de septiembre">Saturday, 19 September</div>
+      <h1 data-es="Buenos días, Lissette.">Good morning, Lissette.</h1>
+      <p data-es="<b>2 paquetes</b> llegaron completos de Edgard, la lista del <b>9/24</b> está lista para Carmen, y Carmen ya marcó <b>3 de 5</b> cuentas de la lista del 9/10. Claro todavía debe <b>$482K</b>."><b>2 packets</b> came in complete from Edgard, the <b>9/24</b> list is ready for Carmen, and Carmen has checked off <b>3 of 5</b> accounts on the 9/10 list. Claro still owes <b>$482K</b>.</p>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi">
+      <div><div class="l" data-es="Paquetes recibidos">Packets in</div><div class="v">2</div><div class="d" data-es="documentos completos">documents complete</div></div>
+      <svg class="viz ring good" viewBox="0 0 52 52" role="img" aria-label="All documents present"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="100"/><text x="26" y="25">5/5</text><text class="cap" x="26" y="35" data-es="docs">docs</text></svg>
+    </div>
+    <div class="kpi">
+      <div><div class="l" data-es="Solicitudes a la LC">LC requests</div><div class="v">3</div><div class="d">$2,684 · 1 <span data-es="financiada">funded</span></div></div>
+      <svg class="viz ring" viewBox="0 0 52 52" role="img" aria-label="1 of 3 funded"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="33"/><text x="26" y="25">1/3</text><text class="cap" x="26" y="35" data-es="financ.">funded</text></svg>
+    </div>
+    <div class="kpi">
+      <div><div class="l" data-es="Lista para Carmen · 9/24">List for Carmen · 9/24</div><div class="v">$5,504</div><div class="d">5 <span data-es="cuentas · 14 Avisos">accounts · 14 Avisos</span></div></div>
+      <div class="viz mini" role="img" aria-label="To pay per account"><i style="height:69%"></i><i class="lo" style="height:20%"></i><i style="height:100%"></i><i style="height:54%"></i><i style="height:65%"></i></div>
+    </div>
+    <div class="kpi">
+      <div><div class="l" data-es="Carmen marcó · 9/10">Carmen checked · 9/10</div><div class="v good">3 <span class="sm" data-es="de 5">of 5</span></div><div class="d" data-es="Brazo A cerrado en 9 Avisos">Arm A closed on 9 Avisos</div></div>
+      <svg class="viz ring good" viewBox="0 0 52 52" role="img" aria-label="60 percent checked"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="60"/><text x="26" y="25">60%</text><text class="cap" x="26" y="35" data-es="pagado">paid</text></svg>
+    </div>
+    <div class="kpi">
+      <div><div class="l" data-es="Claro nos debe">Waiting on Claro</div><div class="v neg">$482K</div><div class="d" data-es="sin PO, o PO corto">no PO, or PO short</div></div>
+      <svg class="viz ring crit" viewBox="0 0 52 52" role="img" aria-label="19 percent of sales still open"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="19"/><text x="26" y="25">19%</text><text class="cap" x="26" y="35" data-es="abierto">open</text></svg>
+    </div>
+  </div>
+
+  <div class="grid">
+
+    <!-- glance -->
+    <section class="box c4 acc glance">
+      <h2 data-es="Hoy">Today</h2>
+      <div class="big">3 <span data-es="pasos">steps</span></div>
+      <p data-es="Revisa los dos paquetes, pide el adelanto a la LC y manda la lista del 9/24 a Carmen. Lo del 9/10 se cierra solo cuando ella marque.">Check the two packets, request the LC advance, and send the 9/24 list to Carmen. The 9/10 list closes itself as she checks.</p>
+      <button class="btn acc" data-go="packets" data-es="Revisar paquete JAF-2026-1043 · 5 de 5 docs">Check packet JAF-2026-1043 · 5 of 5 docs</button>
+      <button class="btn acc" data-go="lc" data-es="Pedir adelanto a la LC · 2 paquetes · $1,329.27">Request LC advance · 2 packets · $1,329.27</button>
+      <button class="btn acc" data-go="lists" data-es="Enviar lista 9/24 a Carmen · 5 cuentas">Send 9/24 list to Carmen · 5 accounts</button>
+    </section>
+
+    <!-- packets in -->
+    <section class="box c8">
+      <div class="head"><div><h2><span data-es="Paquetes recibidos · revisión de documentos">Packets in · document check</span> <span class="count">2</span></h2><p class="sub" data-es="Llegan del supervisor cuando cierra su paso 8. Cinco documentos por paquete; nada que engrapar.">They arrive from the supervisor when he closes his step 8. Five documents per packet; nothing to staple.</p></div></div>
+      <table>
+        <thead><tr><th data-es="Paquete">Packet</th><th data-es="Brigada">Brigade</th><th class="num" data-es="Factura JAF">JAF invoice</th><th data-es="Documentos">Documents</th><th class="act"></th></tr></thead>
+        <tbody>
+          <tr><td class="mono">JAF-2026-1043<div class="sm">Aviso 10353961 · Edgard Ocasio · 8/26</div></td><td>Jesús Martínez <div class="sm">009</div></td><td class="num">$586.37</td><td><div class="docs"><span class="tag ok" data-es="factura JAF">JAF invoice</span><span class="tag ok" data-es="Aviso">Aviso</span><span class="tag ok" data-es="pre-cert firmada">pre-cert signed</span><span class="tag ok" data-es="fotos 2/2">photos 2/2</span><span class="tag ok" data-es="cuenta 009">account 009</span><span class="tag warn" data-es="firma Claro: no">Claro sig: no</span></div></td><td class="act"><button class="btn sm blue" data-go="packets" data-es="Aceptar → LC">Accept → LC</button></td></tr>
+          <tr><td class="mono">JAF-2026-1038<div class="sm">Aviso 10352770 · Edgard Ocasio · 8/22</div></td><td>Dino Castillo <div class="sm">041</div></td><td class="num">$742.90</td><td><div class="docs"><span class="tag ok" data-es="factura JAF">JAF invoice</span><span class="tag ok" data-es="Aviso">Aviso</span><span class="tag ok" data-es="pre-cert firmada">pre-cert signed</span><span class="tag ok" data-es="fotos 2/2">photos 2/2</span><span class="tag ok" data-es="cuenta 041">account 041</span><span class="tag ok" data-es="firma Claro ✓">Claro sig ✓</span></div></td><td class="act"><button class="btn sm blue" data-go="packets" data-es="Aceptar → LC">Accept → LC</button></td></tr>
+        </tbody>
+      </table>
+      <div class="flow"><div class="on"><b>1</b><span data-es="Paquete llega">Packet in</span></div><div><b>2</b><span data-es="Docs revisados">Docs checked</span></div><div><b>3</b><span data-es="Adelanto LC">LC request</span></div><div><b>4</b><span data-es="LC financió">LC funded</span></div><div><b>5</b><span data-es="Lista a Carmen">List to Carmen</span></div><div><b>6</b><span data-es="Carmen ✓">Carmen ✓</span></div><div><b>7</b><span data-es="Brazo A cerrado">Arm A closed</span></div></div>
+    </section>
+
+    <!-- list for Carmen -->
+    <section class="box c8">
+      <div class="head"><div><h2 data-es="Lista para Carmen · corrida 9/24">List for Carmen · run 9/24</h2><p class="sub" data-es="El Production Journal, generado por el sistema. Una fila por cuenta de contratista, código de empleado de WinPay al lado. Carmen lo recibe en su bandeja.">The Production Journal, generated by the system. One row per contractor account, WinPay employee code alongside. Carmen receives it in her inbox.</p></div><div><span class="tag" id="listStatus" data-es="borrador · no enviado">draft · not sent</span></div></div>
+      <table>
+        <thead><tr><th data-es="Cuenta">Acct</th><th data-es="Contratista">Contractor</th><th data-es="Código WinPay">WinPay code</th><th class="num" data-es="Trabajos">Jobs</th><th class="num" data-es="Bruto">Gross</th><th class="num" data-es="Neto 65 %">Net 65%</th><th class="num" data-es="Ret. 10 %">10% ret.</th><th class="num" data-es="A pagar">To pay</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">009</td><td>Jesús Martínez</td><td class="dim">E-0231</td><td class="num">4</td><td class="num">$2,104.40</td><td class="num">$1,367.86</td><td class="num">$136.79</td><td class="num"><b>$1,231.07</b></td></tr>
+          <tr><td class="mono">009D</td><td>Jesús Martínez · <span data-es="equipo">equipment</span></td><td class="dim">E-0231</td><td class="num">1</td><td class="num">$500.00</td><td class="num">$400.00 <span class="sm">80%</span></td><td class="num">$40.00</td><td class="num"><b>$360.00</b></td></tr>
+          <tr><td class="mono">041</td><td>Dino Castillo</td><td class="dim">E-0187</td><td class="num">3</td><td class="num">$3,061.40</td><td class="num">$1,989.91</td><td class="num">$198.99</td><td class="num"><b>$1,790.92</b></td></tr>
+          <tr><td class="mono">052</td><td>Alexis Díaz</td><td class="dim">E-0204</td><td class="num">2</td><td class="num">$1,640.00</td><td class="num">$1,066.00</td><td class="num">$106.60</td><td class="num"><b>$959.40</b></td></tr>
+          <tr><td class="mono">077</td><td>Zariel Garay</td><td class="dim">E-0219</td><td class="num">4</td><td class="num">$1,988.12</td><td class="num">$1,292.28</td><td class="num">$129.23</td><td class="num"><b>$1,163.05</b></td></tr>
+        </tbody>
+        <tfoot><tr><td colspan="3"><b data-es="Corrida 9/24 · 5 cuentas · 14 Avisos">Run 9/24 · 5 accounts · 14 Avisos</b></td><td class="num"><b>14</b></td><td class="num"><b>$9,293.92</b></td><td class="num"><b>$6,116.05</b></td><td class="num"><b>$611.61</b></td><td class="num"><b>$5,504.44</b></td></tr></tfoot>
+      </table>
+      <div style="display:flex;gap:10px;margin-top:14px;align-items:center;flex-wrap:wrap">
+        <button class="btn blue" id="sendList" data-es="Enviar lista a Carmen">Send list to Carmen</button>
+        <button class="btn ghost" data-es="Journal PDF · mismo formato de hoy">Journal PDF · same layout as today</button>
+        <span class="sm" id="sendNote" data-es="Ella la ve en su bandeja al instante. Cuando marque una cuenta pagada, la verás aquí.">She sees it in her inbox instantly. When she checks an account paid, you'll see it here.</span>
+      </div>
+    </section>
+
+    <!-- Carmen's check-offs -->
+    <section class="box c4">
+      <h2><span data-es="Marcas de Carmen · corrida 9/10">Carmen's check-offs · run 9/10</span> <span class="count a">3</span></h2>
+      <p class="sub" data-es="Cada ✓ que Carmen pone en WinPay llega aquí y cierra el Brazo A de esos Avisos. Sin llamadas, sin papel de vuelta.">Every ✓ Carmen puts after WinPay lands here and closes Arm A on those Avisos. No calls, no paper coming back.</p>
+      <ul class="gate">
+        <li><span class="ic y">✓</span>009 · Jesús Martínez<small>$1,231.07 · 9/12</small></li>
+        <li><span class="ic y">✓</span>009D · Jesús Martínez · <span data-es="equipo">equipment</span><small>$360.00 · 9/12</small></li>
+        <li><span class="ic y">✓</span>041 · Dino Castillo<small>$1,790.92 · 9/12</small></li>
+        <li><span class="ic w">·</span>052 · Alexis Díaz<small data-es="esperando">waiting</small></li>
+        <li><span class="ic w">·</span>077 · Zariel Garay<small data-es="esperando">waiting</small></li>
+      </ul>
+      <div class="split">
+        <div class="stat"><div class="l" data-es="Brazo A cerrado">Arm A closed</div><div class="v">9 <span class="sm" data-es="de 14 Avisos">of 14 Avisos</span></div></div>
+        <div class="stat"><div class="l" data-es="Ref. ACH">ACH ref</div><div class="v" style="font-size:14px">20260912-JAF-015</div></div>
+      </div>
+    </section>
+
+    <!-- LC requests -->
+    <section class="box c4">
+      <h2><span data-es="Adelantos de la LC (PBCC)">LC advances (PBCC)</span> <span class="count a">3</span></h2>
+      <p class="sub" data-es="Aviso + factura JAF + factura formato banco + Excel del banco. Un paquete, una solicitud.">Aviso + JAF invoice + bank-format invoice + bank Excel. One packet, one request.</p>
+      <ul class="rows">
+        <li><span>JAF-2026-1038 · $742.90<div class="sm" data-es="pedido 9/15 · financiado 9/17">requested 9/15 · funded 9/17</div></span><span class="st ok" data-es="financiado">funded</span></li>
+        <li><span>JAF-2026-1027 · $612.40<div class="sm" data-es="pedido 9/16">requested 9/16</div></span><span class="st warn" data-es="en el banco">at the bank</span></li>
+        <li><span>JAF-2026-1012 · $412.06<div class="sm" data-es="pedido 9/16">requested 9/16</div></span><span class="st warn" data-es="en el banco">at the bank</span></li>
+        <li><span>JAF-2026-1043 · $586.37<div class="sm" data-es="paquete aceptado hoy">packet accepted today</div></span><span class="st acc" data-es="listo para pedir">ready to request</span></li>
+      </ul>
+      <p style="margin:14px 0 0"><button class="btn blue" style="width:100%" data-go="lc" data-es="Pedir adelanto · 2 paquetes · $1,329.27">Request advance · 2 packets · $1,329.27</button></p>
+    </section>
+
+    <!-- Arm B table -->
+    <section class="box c8">
+      <div class="head"><div><h2><span data-es="Brazo B · esperando PO de Claro">Arm B · waiting on Claro's PO</span> <span class="count">37</span></h2><p class="sub" data-es="Un Aviso, varios POs. El balance se deriva: factura − Σ POs. Un PO corto es saldo pendiente, no un error, hasta que envejece.">One Aviso, several POs. The balance is derived: invoice − Σ POs. A short PO is an outstanding balance, not an error, until it ages.</p></div></div>
+      <table>
+        <thead><tr><th>Aviso</th><th data-es="Brigada">Brigade</th><th class="num" data-es="Facturado">Sold</th><th class="num" data-es="POs recibidos">POs received</th><th class="num" data-es="Balance">Balance</th><th data-es="Días">Days</th><th data-es="Estado">Status</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">10347991</td><td>Zariel Garay · JAF-2026-0402</td><td class="num">2,890.00</td><td class="num">1,445.00</td><td class="num neg">-1,445.00</td><td>212</td><td><span class="tag crit" data-es="pasó el umbral · reclamar">past threshold · claim</span></td></tr>
+          <tr><td class="mono">10349102</td><td>Alexis Díaz · JAF-2026-0871</td><td class="num">1,204.18</td><td class="num">1,000.00</td><td class="num neg">-204.18</td><td>34</td><td><span class="tag warn" data-es="2 de 3 POs">2 of 3 POs</span></td></tr>
+          <tr><td class="mono">10351206</td><td>Dino Castillo · JAF-2026-0990</td><td class="num">2,318.50</td><td class="num">2,318.50</td><td class="num">0.00</td><td>21</td><td><span class="tag warn" data-es="PO en mano · no está en Ariba">PO in hand · not in Ariba</span></td></tr>
+          <tr><td class="mono">10352001</td><td>Zariel Garay · JAF-2026-1012</td><td class="num">412.06</td><td class="num">0.00</td><td class="num neg">-412.06</td><td>20</td><td><span class="tag" data-es="esperando PO">waiting on PO</span></td></tr>
+        </tbody>
+      </table>
+      <div class="split">
+        <div class="stat"><div class="l" data-es="Pendiente total · 37 Avisos">Outstanding · 37 Avisos</div><div class="v neg">$18,402.61</div></div>
+        <div class="stat"><div class="l" data-es="En Ariba, sin factura">In Ariba, not yet invoiced</div><div class="v">6</div></div>
+      </div>
+    </section>
+
+    <!-- Claro payments received -->
+    <section class="box c4">
+      <h2><span data-es="Pagos de Claro · reporte de Monica">Claro payments · Monica's report</span> <span class="count a">3</span></h2>
+      <p class="sub" data-es="Monica reenvía el reporte de pago de Claro. Tú marcas la factura recibida; eso cierra el Brazo B de ese PO.">Monica forwards Claro's payment report. You mark the factura received; that closes Arm B for that PO.</p>
+      <ul class="rows" id="claroList">
+        <li><span>F-26-0533 · $2,014.30<div class="sm">Aviso 10351980 · Dino Castillo</div></span><button class="btn sm blue" data-rec data-es="Recibido">Received</button></li>
+        <li><span>F-26-0517 · $400.00<div class="sm">Aviso 10349102 · Alexis Díaz</div></span><button class="btn sm blue" data-rec data-es="Recibido">Received</button></li>
+        <li><span>F-26-0498 · $1,120.00<div class="sm">Aviso 10350877 · Jesús Martínez</div></span><button class="btn sm blue" data-rec data-es="Recibido">Received</button></li>
+        <li><span>F-26-0402 · $600.00<div class="sm">Aviso 10349102 · <span data-es="depositado 7/28">deposited 7/28</span></div></span><span class="st ok" data-es="B cerrado">B closed</span></li>
+      </ul>
+      <div class="split" style="grid-template-columns:1fr"><div class="stat"><div class="l" data-es="Recibido de Claro este mes">Received from Claro this month</div><div class="v good">$63,412</div></div></div>
+    </section>
+
+    <!-- chart -->
+    <section class="box c8">
+      <h2 data-es="Facturado vs. POs recibidos, por mes en que se pagó a la brigada">Sold vs. POs received, by month the brigade was paid</h2>
+      <p class="sub" data-es="Desde abril, cada mes se paga trabajo y el PO todavía no llega. Ese es el flotante que JAF financia con la LC.">Every month from April on, work is paid out and the PO still hasn't landed. That is the float JAF finances on the LC.</p>
+      <div class="legend"><span><i style="background:var(--accent)"></i><span data-es="Facturado a Claro">Sold to Claro</span></span><span><i style="background:var(--accent-2)"></i><span data-es="POs recibidos">POs received so far</span></span></div>
+      <div class="chartwrap"><svg class="chart" id="float" viewBox="0 0 640 230" aria-label="Sold vs POs received"></svg><div class="tip"></div></div>
+    </section>
+
+  </div>
+
+</section>
+
+<!-- ================= PACKETS IN ================= -->
+<section class="screen" data-screen="packets">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Paquetes recibidos">Packets in</h1><p data-es="Llegan del supervisor cuando cierra su paso 8. Revisa que los cinco documentos estén; el sistema ya calculó el pago del contratista. Acepta y pasa a pedir el adelanto a la LC.">They arrive from the supervisor when he closes his step 8. Check that all five documents are there; the system already computed the contractor's pay. Accept and move on to the LC request.</p></div></div>
+  <div class="tabs" style="display:inline-flex;margin-bottom:16px"><a class="on" href="#" data-tab="pkt:1043">JAF-2026-1043 · Jesús Martínez</a><a href="#" data-tab="pkt:1038">JAF-2026-1038 · Dino Castillo</a></div>
+  <div data-panel="pkt:1043">
+    <div class="grid">
+      <section class="box c5">
+        <h2 data-es="Documentos · 5 de 5">Documents · 5 of 5</h2>
+        <p class="sub" data-es="Aviso 10353961 · liberado por Edgard Ocasio 8/26 5:10 PM">Aviso 10353961 · released by Edgard Ocasio 8/26 5:10 PM</p>
+        <ul class="gate">
+          <li><span class="ic y">✓</span><span data-es="Factura JAF INV-2026-0412 · PDF">JAF invoice INV-2026-0412 · PDF</span><small>$586.37 · $653.80 <span data-es="con IVU">with IVU</span></small></li>
+          <li><span class="ic y">✓</span><span data-es="Aviso de Claro 10353961 · documento + 5 renglones">Claro Aviso 10353961 · document + 5 lines</span><small data-es="monto cuadra">amount matches</small></li>
+          <li><span class="ic y">✓</span><span data-es="Hoja de pre-certificación · supervisor + sub-contratista">Pre-cert sheet · supervisor + sub-contractor</span><small data-es="Claro: sin firma · marcado">Claro: no signature · badged</small></li>
+          <li><span class="ic y">✓</span><span data-es="Fotos antes / después">Before / after photos</span><small>2 / 2</small></li>
+          <li><span class="ic y">✓</span><span data-es="Cuenta del contratista resuelta">Contractor account resolved</span><small>009 · Jesús Martínez</small></li>
+        </ul>
+        <div class="actions"><button class="btn blue" data-flip="Accepted · ready for LC request" data-flip-es="Aceptado · listo para pedir a la LC" data-toast="Packet accepted. It's now on the LC requests screen." data-toast-es="Paquete aceptado. Ya está en Solicitudes a la LC." data-es="Aceptar paquete → LC">Accept packet → LC</button><button class="btn ghost" data-say="Opening the 5 documents…" data-say-es="Abriendo los 5 documentos…" data-es="Ver documentos">Open documents</button></div>
+      </section>
+      <section class="box c7">
+        <h2 data-es="Pago del contratista · calculado, no tecleado">Contractor payment · computed, not keyed</h2>
+        <p class="sub" data-es="65 % por defecto, sobreescritura por cuenta (009D TRUCKBOOM = 0.80), 10 % de retención mostrada.">65% default, per-account override (009D TRUCKBOOM = 0.80), 10% retention shown.</p>
+        <table>
+          <thead><tr><th data-es="Código">Code</th><th data-es="Descripción">Description</th><th class="num" data-es="Cant.">Qty</th><th class="num" data-es="Precio JAF">JAF price</th><th class="num" data-es="Bruto">Gross</th><th class="num" data-es="Parte">Share</th><th class="num" data-es="Neto">Net</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">34006301</td><td>TRANSFER ATTCH DE POSTES</td><td class="num">5</td><td class="num">$42.3430</td><td class="num">$211.72</td><td class="num dim">65%</td><td class="num">$137.62</td></tr>
+            <tr><td class="mono">34007030</td><td>REMOCION DE LINEA BAJANTE</td><td class="num">2</td><td class="num">$13.8115</td><td class="num">$27.62</td><td class="num dim">65%</td><td class="num">$17.95</td></tr>
+            <tr><td class="mono">34006291</td><td>REMOCION POSTES (TODO TIPO)</td><td class="num">1</td><td class="num">$103.9485</td><td class="num">$103.95</td><td class="num dim">65%</td><td class="num">$67.57</td></tr>
+            <tr><td class="mono">34007080</td><td>TRANSF / MOVER TERM 25X X 85</td><td class="num">1</td><td class="num">$41.1585</td><td class="num">$41.16</td><td class="num dim">65%</td><td class="num">$26.75</td></tr>
+            <tr><td class="mono">34005457</td><td>INST POSTE 30 C5</td><td class="num">1</td><td class="num">$201.9285</td><td class="num">$201.93</td><td class="num dim">65%</td><td class="num">$131.25</td></tr>
+          </tbody>
+          <tfoot>
+            <tr><td colspan="4" class="num" data-es="Bruto (JAF)">Gross (JAF)</td><td class="num">$586.37</td><td></td><td class="num">$381.14</td></tr>
+            <tr><td colspan="6" class="num dim" data-es="Retención 10 % → Hacienda">10% retention → Hacienda</td><td class="num">−$38.11</td></tr>
+            <tr><td colspan="6" class="num"><b data-es="Se paga a Jesús Martínez esta corrida">Paid to Jesús Martínez this run</b></td><td class="num"><b>$343.03</b></td></tr>
+          </tfoot>
+        </table>
+      </section>
+    </div>
+  </div>
+  <div data-panel="pkt:1038">
+    <div class="grid">
+      <section class="box c5">
+        <h2 data-es="Documentos · 5 de 5">Documents · 5 of 5</h2>
+        <p class="sub" data-es="Aviso 10352770 · liberado por Edgard Ocasio 8/22">Aviso 10352770 · released by Edgard Ocasio 8/22</p>
+        <ul class="gate">
+          <li><span class="ic y">✓</span><span data-es="Factura JAF INV-2026-0398">JAF invoice INV-2026-0398</span><small>$742.90</small></li>
+          <li><span class="ic y">✓</span><span data-es="Aviso 10352770 · 4 renglones">Aviso 10352770 · 4 lines</span><small data-es="cuadra">matches</small></li>
+          <li><span class="ic y">✓</span><span data-es="Pre-cert · las tres firmas">Pre-cert · all three signatures</span><small>Claro ✓</small></li>
+          <li><span class="ic y">✓</span><span data-es="Fotos">Photos</span><small>3 / 2</small></li>
+          <li><span class="ic y">✓</span><span data-es="Cuenta">Account</span><small>041 · Dino Castillo</small></li>
+        </ul>
+        <div class="actions"><button class="btn blue" data-flip="Accepted · ready for LC request" data-flip-es="Aceptado · listo para pedir a la LC" data-toast="Packet accepted." data-toast-es="Paquete aceptado." data-es="Aceptar paquete → LC">Accept packet → LC</button></div>
+      </section>
+      <section class="box c7">
+        <h2 data-es="Pago del contratista">Contractor payment</h2>
+        <table>
+          <thead><tr><th data-es="Código">Code</th><th data-es="Descripción">Description</th><th class="num" data-es="Cant.">Qty</th><th class="num" data-es="Bruto">Gross</th><th class="num" data-es="Neto 65 %">Net 65%</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">34006301</td><td>TRANSFER ATTCH DE POSTES</td><td class="num">8</td><td class="num">$338.74</td><td class="num">$220.18</td></tr>
+            <tr><td class="mono">34006291</td><td>REMOCION POSTES (TODO TIPO)</td><td class="num">2</td><td class="num">$207.90</td><td class="num">$135.13</td></tr>
+            <tr><td class="mono">34007030</td><td>REMOCION DE LINEA BAJANTE</td><td class="num">4</td><td class="num">$55.25</td><td class="num">$35.91</td></tr>
+            <tr><td class="mono">34007080</td><td>TRANSF / MOVER TERM 25X X 85</td><td class="num">1</td><td class="num">$41.16</td><td class="num">$26.75</td></tr>
+            <tr><td class="mono">34005410</td><td>ANCLA Y RETENIDA</td><td class="num">1</td><td class="num">$99.85</td><td class="num">$64.90</td></tr>
+          </tbody>
+          <tfoot><tr><td colspan="3" class="num" data-es="Bruto">Gross</td><td class="num">$742.90</td><td class="num">$482.89</td></tr><tr><td colspan="4" class="num dim" data-es="Retención 10 %">10% retention</td><td class="num">−$48.29</td></tr><tr><td colspan="4" class="num"><b data-es="Se paga a Dino Castillo">Paid to Dino Castillo</b></td><td class="num"><b>$434.60</b></td></tr></tfoot>
+        </table>
+      </section>
+    </div>
+  </div>
+</section>
+
+<!-- ================= LC REQUESTS ================= -->
+<section class="screen" data-screen="lc">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Solicitudes a la LC · PBCC">LC requests · PBCC</h1><p data-es="Pides el adelanto al banco con cuatro documentos: Aviso, factura JAF, factura en formato del banco, y el Excel del banco. Un paquete, una solicitud. Cuando el banco financia, lo marcas y el envejecimiento del Brazo B empieza.">You request the advance from the bank with four documents: Aviso, JAF invoice, bank-format invoice, and the bank's Excel. One packet, one request. When the bank funds it you mark it, and Arm B's aging clock starts.</p></div></div>
+  <div class="grid">
+    <section class="box c7">
+      <h2 data-es="Solicitudes">Requests</h2>
+      <table id="lcTable">
+        <thead><tr><th data-es="Paquete">Packet</th><th data-es="Brigada">Brigade</th><th class="num" data-es="Monto">Amount</th><th data-es="Pedido">Requested</th><th data-es="Estado">Status</th><th class="act"></th></tr></thead>
+        <tbody>
+          <tr><td class="mono">JAF-2026-1038</td><td>Dino Castillo</td><td class="num">$742.90</td><td>9/15</td><td><span class="tag ok" data-es="financiado 9/17 · ref PBCC-88213">funded 9/17 · ref PBCC-88213</span></td><td class="act"></td></tr>
+          <tr><td class="mono">JAF-2026-1027</td><td>Jesús Martínez</td><td class="num">$612.40</td><td>9/16</td><td><span class="tag warn" data-es="en el banco · 3 d">at the bank · 3 d</span></td><td class="act"><button class="btn sm ghost" data-flip="funded today · ref PBCC-88231" data-flip-es="financiado hoy · ref PBCC-88231" data-es="Marcar financiado">Mark funded</button></td></tr>
+          <tr><td class="mono">JAF-2026-1012</td><td>Zariel Garay</td><td class="num">$412.06</td><td>9/16</td><td><span class="tag warn" data-es="en el banco · 3 d">at the bank · 3 d</span></td><td class="act"><button class="btn sm ghost" data-flip="funded today · ref PBCC-88232" data-flip-es="financiado hoy · ref PBCC-88232" data-es="Marcar financiado">Mark funded</button></td></tr>
+        </tbody>
+      </table>
+      <div class="split"><div class="stat"><div class="l" data-es="Financiado este mes">Funded this month</div><div class="v">$8,214</div></div><div class="stat"><div class="l" data-es="Tiempo medio del banco">Bank's average</div><div class="v">2.4 <span class="sm" data-es="días">days</span></div></div></div>
+    </section>
+    <section class="box c5">
+      <h2 data-es="Nueva solicitud · 2 paquetes aceptados">New request · 2 accepted packets</h2>
+      <ul class="rows"><li><span>JAF-2026-1043 · Jesús Martínez</span><span><b>$586.37</b></span></li><li><span>JAF-2026-1038 · Dino Castillo</span><span><b>$742.90</b></span></li></ul>
+      <h2 style="margin-top:16px" data-es="Los cuatro documentos">The four documents</h2>
+      <ul class="gate">
+        <li><span class="ic y">✓</span><span data-es="Aviso de Claro">Claro Aviso</span><small data-es="listo">ready</small></li>
+        <li><span class="ic y">✓</span><span data-es="Factura JAF">JAF invoice</span><small data-es="listo">ready</small></li>
+        <li id="lcDoc3"><span class="ic w">!</span><span data-es="Factura formato banco">Bank-format invoice</span><small data-es="plantilla pendiente">template pending</small></li>
+        <li id="lcDoc4"><span class="ic w">!</span><span data-es="Excel del banco">Bank's Excel schedule</span><small data-es="plantilla pendiente">template pending</small></li>
+      </ul>
+      <div class="actions"><button class="btn blue" id="lcSend" data-es="Enviar solicitud · $1,329.27">Send request · $1,329.27</button><button class="btn ghost" data-say="Recorded: sent by hand outside the system, same record." data-say-es="Registrado: enviado a mano fuera del sistema, mismo registro." data-es="Enviado a mano">Sent by hand</button></div>
+      <p class="sm" data-es="Los dos documentos del banco se generan cuando llegue la plantilla en blanco. Mientras, se registra que se enviaron a mano.">The two bank documents are generated once the blank template arrives. Until then, the system records that they were sent by hand.</p>
+    </section>
+  </div>
+</section>
+
+<!-- ================= LISTS TO CARMEN ================= -->
+<section class="screen" data-screen="lists">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Listas para Carmen">Lists to Carmen</h1><p data-es="Cada dos semanas generas la lista (el Production Journal) con todos los paquetes financiados. Una fila por cuenta, código WinPay al lado. La envías; Carmen la ve en su bandeja al instante.">Every two weeks you generate the list (the Production Journal) from all funded packets. One row per account, WinPay code alongside. You send it; Carmen sees it in her inbox instantly.</p></div><div class="actions"><button class="btn blue" id="genList" data-es="Generar lista · corrida 9/24">Generate list · run 9/24</button></div></div>
+  <div class="grid">
+    <section class="box c12">
+      <div class="head"><div><h2 data-es="Corrida 9/24 · borrador">Run 9/24 · draft</h2><p class="sub" data-es="De los paquetes financiados desde el 9/11. Puedes quitar una cuenta y dejarla para la próxima.">From packets funded since 9/11. You can drop an account and leave it for the next run.</p></div><div><span class="tag" id="lstStatus" data-es="borrador · no enviada">draft · not sent</span></div></div>
+      <table id="lstTable">
+        <thead><tr><th style="width:30px"></th><th data-es="Cuenta">Acct</th><th data-es="Contratista">Contractor</th><th data-es="Código WinPay">WinPay code</th><th class="num" data-es="Trabajos">Jobs</th><th class="num" data-es="Bruto">Gross</th><th class="num" data-es="Neto">Net</th><th class="num" data-es="Ret. 10 %">10% ret.</th><th class="num" data-es="A pagar">To pay</th></tr></thead>
+        <tbody>
+          <tr data-pay="1231.07"><td><span class="chk on">✓</span></td><td class="mono">009</td><td>Jesús Martínez</td><td class="dim">E-0231</td><td class="num">4</td><td class="num">$2,104.40</td><td class="num">$1,367.86</td><td class="num">$136.79</td><td class="num"><b>$1,231.07</b></td></tr>
+          <tr data-pay="360.00"><td><span class="chk on">✓</span></td><td class="mono">009D</td><td>Jesús Martínez · <span data-es="equipo">equipment</span></td><td class="dim">E-0231</td><td class="num">1</td><td class="num">$500.00</td><td class="num">$400.00 <span class="sm">80%</span></td><td class="num">$40.00</td><td class="num"><b>$360.00</b></td></tr>
+          <tr data-pay="1790.92"><td><span class="chk on">✓</span></td><td class="mono">041</td><td>Dino Castillo</td><td class="dim">E-0187</td><td class="num">3</td><td class="num">$3,061.40</td><td class="num">$1,989.91</td><td class="num">$198.99</td><td class="num"><b>$1,790.92</b></td></tr>
+          <tr data-pay="959.40"><td><span class="chk on">✓</span></td><td class="mono">052</td><td>Alexis Díaz</td><td class="dim">E-0204</td><td class="num">2</td><td class="num">$1,640.00</td><td class="num">$1,066.00</td><td class="num">$106.60</td><td class="num"><b>$959.40</b></td></tr>
+          <tr data-pay="1163.05"><td><span class="chk on">✓</span></td><td class="mono">077</td><td>Zariel Garay</td><td class="dim">E-0219</td><td class="num">4</td><td class="num">$1,988.12</td><td class="num">$1,292.28</td><td class="num">$129.23</td><td class="num"><b>$1,163.05</b></td></tr>
+        </tbody>
+        <tfoot><tr><td></td><td colspan="3"><b id="lstSum" data-es="5 cuentas · 14 Avisos">5 accounts · 14 Avisos</b></td><td class="num"><b>14</b></td><td class="num"><b>$9,293.92</b></td><td class="num"><b>$6,116.05</b></td><td class="num"><b>$611.61</b></td><td class="num"><b id="lstTot">$5,504.44</b></td></tr></tfoot>
+      </table>
+      <div class="actions"><button class="btn blue" id="lstSend" data-es="Enviar lista a Carmen">Send list to Carmen</button><button class="btn ghost" data-say="Production Journal PDF · same layout as the paper one." data-say-es="Production Journal PDF · mismo formato que el de papel." data-es="Journal PDF">Journal PDF</button><span class="sm" data-es="Dos trampas del reporte real: ADJ. NET es acumulado; y el total decía «7 % Ret.» sobre un 10 %. Aquí el número es el mismo y la etiqueta es correcta.">Two traps from the real report: ADJ. NET is cumulative; and the total said "7% Ret." on a 10% number. Here the number is the same and the label is right.</span></div>
+    </section>
+    <section class="box c12">
+      <h2 data-es="Listas enviadas">Lists sent</h2>
+      <table id="lstHist">
+        <thead><tr><th data-es="Corrida">Run</th><th data-es="Enviada">Sent</th><th class="num" data-es="Cuentas">Accounts</th><th class="num" data-es="Avisos">Avisos</th><th class="num" data-es="A pagar">To pay</th><th data-es="Carmen">Carmen</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">9/10</td><td>9/10 · 8:41 AM</td><td class="num">5</td><td class="num">14</td><td class="num">$5,504.44</td><td><span class="tag warn" data-es="3 de 5 marcadas">3 of 5 checked</span></td></tr>
+          <tr><td class="mono">8/27</td><td>8/27 · 9:15 AM</td><td class="num">18</td><td class="num">126</td><td class="num">$50,111.97</td><td><span class="tag ok" data-es="completa · 8/29">complete · 8/29</span></td></tr>
+          <tr><td class="mono">8/13</td><td>8/13 · 9:02 AM</td><td class="num">16</td><td class="num">109</td><td class="num">$41,987.40</td><td><span class="tag ok" data-es="completa · 8/15">complete · 8/15</span></td></tr>
+        </tbody>
+      </table>
+    </section>
+  </div>
+</section>
+
+<!-- ================= AWAITING CARMEN ================= -->
+<section class="screen" data-screen="awaiting">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Esperando el ✓ de Carmen">Awaiting Carmen's ✓</h1><p data-es="Cada cuenta que Carmen marca pagada en su bandeja aparece aquí y cierra el Brazo A de esos Avisos. Sin llamadas, sin login quincenal. Si Carmen no está, puedes confirmar del papel; mismo registro, otro autor.">Every account Carmen checks paid in her inbox shows up here and closes Arm A on those Avisos. No calls, no fortnightly login. If Carmen is out, you can confirm from paper; same record, different author.</p></div></div>
+  <div class="grid">
+    <section class="box c7">
+      <h2 data-es="Corrida 9/10 · 3 de 5">Run 9/10 · 3 of 5</h2>
+      <p class="sub" data-es="ACH 9/12 · ref 20260912-JAF-015">ACH 9/12 · ref 20260912-JAF-015</p>
+      <table>
+        <thead><tr><th data-es="Cuenta">Acct</th><th data-es="Contratista">Contractor</th><th class="num" data-es="Avisos">Avisos</th><th class="num" data-es="Pagado">Paid</th><th data-es="Carmen">Carmen</th><th data-es="Brazo A">Arm A</th><th class="act"></th></tr></thead>
+        <tbody>
+          <tr><td class="mono">009</td><td>Jesús Martínez</td><td class="num">4</td><td class="num">$1,231.07</td><td><span class="tag ok">✓ 9/12</span></td><td><span class="tag ok" data-es="cerrado · 4 Avisos">closed · 4 Avisos</span></td><td class="act"></td></tr>
+          <tr><td class="mono">009D</td><td>Jesús Martínez · <span data-es="equipo">equipment</span></td><td class="num">1</td><td class="num">$360.00</td><td><span class="tag ok">✓ 9/12</span></td><td><span class="tag ok" data-es="cerrado · 1 Aviso">closed · 1 Aviso</span></td><td class="act"></td></tr>
+          <tr><td class="mono">041</td><td>Dino Castillo</td><td class="num">3</td><td class="num">$1,790.92</td><td><span class="tag ok">✓ 9/12</span></td><td><span class="tag ok" data-es="cerrado · 3 Avisos">closed · 3 Avisos</span></td><td class="act"></td></tr>
+          <tr><td class="mono">052</td><td>Alexis Díaz</td><td class="num">2</td><td class="num">$959.40</td><td><span class="tag warn" data-es="esperando">waiting</span></td><td><span class="tag" data-es="abierto">open</span></td><td class="act"><button class="btn sm ghost" data-flip="confirmed from paper · you" data-flip-es="confirmado del papel · tú" data-es="Confirmar del papel">Confirm from paper</button></td></tr>
+          <tr><td class="mono">077</td><td>Zariel Garay</td><td class="num">4</td><td class="num">$1,163.05</td><td><span class="tag warn" data-es="esperando">waiting</span></td><td><span class="tag" data-es="abierto">open</span></td><td class="act"><button class="btn sm ghost" data-flip="confirmed from paper · you" data-flip-es="confirmado del papel · tú" data-es="Confirmar del papel">Confirm from paper</button></td></tr>
+        </tbody>
+      </table>
+    </section>
+    <section class="box c5">
+      <h2 data-es="Envejecimiento">Aging</h2>
+      <p class="sub" data-es="Una corrida con más de un ciclo de nómina sin confirmar se pone roja.">A run older than one payroll cycle without confirmation turns red.</p>
+      <ul class="att">
+        <li><span class="mark w"></span><div><div class="t" data-es="Corrida 9/10 · 2 cuentas sin ✓ · 9 días">Run 9/10 · 2 accounts without ✓ · 9 days</div><div class="d" data-es="Alexis Díaz y Zariel Garay. Carmen dice que pagó; falta el clic.">Alexis Díaz and Zariel Garay. Carmen says she paid; the click is missing.</div></div><span class="lvl w" data-es="Recordar">Nudge</span></li>
+        <li><span class="mark g"></span><div><div class="t" data-es="Corrida 8/27 · 18 de 18 · 2 días">Run 8/27 · 18 of 18 · 2 days</div><div class="d" data-es="Brazo A cerrado en 125 Avisos el 8/29.">Arm A closed on 125 Avisos on 8/29.</div></div><span class="lvl g" data-es="Completa">Complete</span></li>
+      </ul>
+      <p style="margin:14px 0 0"><button class="btn ghost" style="width:100%" data-say="Carmen nudged: '2 accounts on run 9/10 still unchecked'." data-say-es="Recordatorio a Carmen: '2 cuentas de la corrida 9/10 sin marcar'." data-es="Recordar a Carmen">Nudge Carmen</button></p>
+    </section>
+  </div>
+</section>
+
+<!-- ================= AWAITING PO ================= -->
+<section class="screen" data-screen="po">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Brazo B · esperando PO de Claro">Arm B · awaiting Claro's PO</h1><p data-es="Un Aviso, varios POs. Cada PO es una fila; el balance se deriva (factura − Σ POs). Un PO corto es saldo pendiente, no discrepancia, hasta que envejece o tú marcas «totalmente facturado». Sin ruta de cierre, los expedientes son inmortales.">One Aviso, several POs. Each PO is a row; the balance is derived (invoice − Σ POs). A short PO is an outstanding balance, not a discrepancy, until it ages or you mark "fully invoiced". Without a close path, files are immortal.</p></div><div class="actions"><input class="inp" style="width:240px" data-filter="#poList" placeholder="Search Aviso, brigade…" data-es-ph="Buscar Aviso, brigada…"></div></div>
+  <div class="grid">
+    <section class="box c12">
+      <div class="head"><div><h2>JAF-2026-0871 · Aviso 10349102</h2><p class="sub" data-es="Remoción de línea bajante · Alexis Díaz · liberado 2/3 · Brazo A cerrado 2/27">Remoción de línea bajante · Alexis Díaz · released 2/3 · Arm A closed 2/27</p></div><div><span class="tag ok" data-es="A cerrado">A closed</span> <span class="tag warn" data-es="B · 2 de 3 POs">B · 2 of 3 POs</span></div></div>
+      <div class="kpis k4" style="margin:6px 0 14px">
+        <div class="kpi"><div><div class="l" data-es="Factura JAF">JAF invoice</div><div class="v">$1,204.18</div><div class="d">INV-2026-0311</div></div></div>
+        <div class="kpi"><div><div class="l" data-es="POs recibidos">POs received</div><div class="v">$1,000.00</div><div class="d">2 POs</div></div><svg class="viz ring" viewBox="0 0 52 52"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="83"/><text x="26" y="25">83%</text></svg></div>
+        <div class="kpi"><div><div class="l" data-es="Pendiente · derivado">Outstanding · derived</div><div class="v warn">$204.18</div><div class="d">34 <span data-es="días desde el último PO">days since last PO</span></div></div></div>
+        <div class="kpi"><div><div class="l" data-es="Umbral de reclamo">Claim threshold</div><div class="v">180 <span class="sm">d</span></div><div class="d" data-es="Admin · configurable">Admin · configurable</div></div></div>
+      </div>
+      <table id="poDetail">
+        <thead><tr><th>PO (PEDIDO)</th><th class="num" data-es="Monto">Amount</th><th data-es="Recibido">Received</th><th data-es="En Ariba">In Ariba</th><th data-es="Factura (IBS)">Factura (IBS)</th><th data-es="Enviada">Submitted</th><th data-es="Depósito">Deposit</th><th data-es="Estado">Status</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">4500981221</td><td class="num">$600.00</td><td>6/12</td><td>6/19 <span class="sm">7 d</span></td><td class="mono">F-26-0402</td><td>6/20</td><td>7/28 ✓</td><td><span class="tag ok" data-es="pagado · B cerrado en este PO">paid · B closed for this PO</span></td></tr>
+          <tr><td class="mono">4500992870</td><td class="num">$400.00</td><td>7/30</td><td>8/11 <span class="sm">12 d</span></td><td class="mono">F-26-0517</td><td>8/12</td><td>—</td><td><span class="tag acc" data-es="esperando depósito · 21 d">awaiting deposit · 21 d</span></td></tr>
+          <tr class="dim"><td data-es="— no recibido —">— not yet received —</td><td class="num">$204.18</td><td colspan="5"><span class="sm" data-es="envejeciendo desde 7/30 · 34 días · umbral 180 d">aging from 7/30 · 34 days · threshold 180 d</span></td><td><span class="tag warn" data-es="pendiente">outstanding</span></td></tr>
+        </tbody>
+      </table>
+      <div class="actions">
+        <button class="btn blue" id="poAdd" data-es="＋ Registrar PO recibido">＋ Record PO received</button>
+        <button class="btn ghost" data-flip="fully invoiced · no more POs · claim opened for $204.18" data-flip-es="totalmente facturado · sin más POs · reclamo abierto por $204.18" data-flip-cls="warn" data-es="Marcar totalmente facturado">Mark fully invoiced</button>
+        <button class="btn ghost" data-go="short" data-es="Cerrar corto con razón…">Close short with reason…</button>
+      </div>
+      <div id="poForm" style="display:none;margin-top:12px" class="form2">
+        <div class="field"><label>PO #</label><input class="inp" id="poNum" placeholder="45009…"></div>
+        <div class="field"><label data-es="Monto">Amount</label><input class="inp" id="poAmt" placeholder="$"></div>
+        <div class="field"><label data-es="Recibido el">Received on</label><input class="inp" value="9/19/2026"></div>
+        <div class="field"><label data-es="Documento">Document</label><div class="ph cam" style="aspect-ratio:auto;height:38px;font-size:12px">📎 PDF</div></div>
+        <div><button class="btn blue" id="poSave" data-requires="#poNum" data-es="Guardar PO">Save PO</button></div>
+      </div>
+    </section>
+    <section class="box c12">
+      <h2 data-es="Todos los Avisos esperando PO · 37 · el más viejo primero">All Avisos awaiting PO · 37 · oldest first</h2>
+      <table id="poList">
+        <thead><tr><th>Aviso</th><th data-es="Brigada">Brigade</th><th class="num" data-es="Facturado">Sold</th><th class="num" data-es="POs">POs</th><th class="num" data-es="Balance">Balance</th><th data-es="Último PO">Last PO</th><th class="num" data-es="Días">Days</th><th data-es="Estado">Status</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">10347991</td><td>Zariel Garay · JAF-2026-0402</td><td class="num">2,890.00</td><td class="num">1,445.00</td><td class="num neg">−1,445.00</td><td>2/2</td><td class="num">212</td><td><span class="tag crit" data-es="pasó el umbral · reclamar">past threshold · claim</span></td></tr>
+          <tr><td class="mono">10346120</td><td>Dino Castillo · JAF-2026-0377</td><td class="num">1,318.40</td><td class="num">0.00</td><td class="num neg">−1,318.40</td><td>—</td><td class="num">213</td><td><span class="tag crit" data-es="pasó el umbral · reclamar">past threshold · claim</span></td></tr>
+          <tr><td class="mono">10349102</td><td>Alexis Díaz · JAF-2026-0871</td><td class="num">1,204.18</td><td class="num">1,000.00</td><td class="num neg">−204.18</td><td>7/30</td><td class="num">34</td><td><span class="tag warn" data-es="pendiente">outstanding</span></td></tr>
+          <tr><td class="mono">10351206</td><td>Dino Castillo · JAF-2026-0990</td><td class="num">2,318.50</td><td class="num">2,318.50</td><td class="num">0.00</td><td>8/12</td><td class="num">21</td><td><span class="tag warn" data-es="PO en mano · no en Ariba">PO in hand · not in Ariba</span></td></tr>
+          <tr><td class="mono">10352001</td><td>Zariel Garay · JAF-2026-1012</td><td class="num">412.06</td><td class="num">0.00</td><td class="num neg">−412.06</td><td>—</td><td class="num">20</td><td><span class="tag" data-es="esperando">waiting</span></td></tr>
+          <tr><td class="mono">10352770</td><td>Dino Castillo · JAF-2026-1038</td><td class="num">742.90</td><td class="num">0.00</td><td class="num neg">−742.90</td><td>—</td><td class="num">3</td><td><span class="tag" data-es="esperando">waiting</span></td></tr>
+        </tbody>
+      </table>
+      <p class="sm" data-es="31 más. Total pendiente $18,402.61. En el log de 2026: 1,839 Avisos, un tercio con 2+ POs.">31 more. Outstanding $18,402.61. In the 2026 log: 1,839 Avisos, a third with 2+ POs.</p>
+    </section>
+  </div>
+</section>
+
+<!-- ================= AWAITING ARIBA ================= -->
+<section class="screen" data-screen="ariba">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Brazo B · esperando visibilidad en Ariba">Arm B · awaiting Ariba visibility</h1><p data-es="PO en mano no es PO facturable. Dos relojes: días desde que llegó, días desde que revisaste. «Revisado hoy, no está» es un clic y queda registrado. Cuando aparece, facturas en IBS, envías en Ariba y registras el número de factura aquí; esa factura pasa a la lista de Carmen.">A PO in hand is not an invoiceable PO. Two clocks: days since it arrived, days since you checked. "Checked today, not there" is one click and logged. When it appears, you invoice in IBS, submit in Ariba, and record the factura number here; that factura goes on Carmen's list.</p></div></div>
+  <div class="grid">
+    <section class="box c12">
+      <table id="arTable">
+        <thead><tr><th style="width:30px"></th><th data-es="Aviso · orden">Aviso · job</th><th>PO</th><th class="num" data-es="Monto">Amount</th><th data-es="Recibido">Received</th><th data-es="Última revisión">Last checked</th><th data-es="Estado">Status</th><th class="act"></th></tr></thead>
+        <tbody>
+          <tr><td><span class="chk"></span></td><td><span class="mono">10351206</span> · JAF-2026-0990 · Dino Castillo</td><td class="mono">4500993114</td><td class="num">$2,318.50</td><td>8/12 <span class="tag crit">21 d</span></td><td class="lc">8/29</td><td class="st"><span class="tag crit" data-es="no está en Ariba · llamar a Claro AP">not in Ariba · chase Claro AP</span></td><td class="act"><button class="btn sm blue" data-inv="4500993114|$2,318.50" data-es="Ya está → facturar">Visible now → invoice</button></td></tr>
+          <tr><td><span class="chk"></span></td><td><span class="mono">10352440</span> · JAF-2026-1019 · Alexis Díaz</td><td class="mono">4500995002</td><td class="num">$688.20</td><td>8/25 <span class="tag">8 d</span></td><td class="lc">8/29</td><td class="st"><span class="tag warn" data-es="no está en Ariba">not in Ariba</span></td><td class="act"><button class="btn sm blue" data-inv="4500995002|$688.20" data-es="Ya está → facturar">Visible now → invoice</button></td></tr>
+          <tr><td><span class="chk"></span></td><td><span class="mono">10352770</span> · JAF-2026-1038 · Dino Castillo</td><td class="mono">4500995871</td><td class="num">$742.90</td><td>8/30 <span class="tag">3 d</span></td><td class="lc" data-es="nunca">never</td><td class="st"><span class="tag" data-es="sin revisar">not checked</span></td><td class="act"><button class="btn sm blue" data-inv="4500995871|$742.90" data-es="Ya está → facturar">Visible now → invoice</button></td></tr>
+          <tr><td><span class="chk"></span></td><td><span class="mono">10352901</span> · JAF-2026-1033 · Zariel Garay</td><td class="mono">4500996120</td><td class="num">$1,120.00</td><td>9/4 <span class="tag">2 d</span></td><td class="lc">9/17</td><td class="st"><span class="tag warn" data-es="no está en Ariba">not in Ariba</span></td><td class="act"><button class="btn sm blue" data-inv="4500996120|$1,120.00" data-es="Ya está → facturar">Visible now → invoice</button></td></tr>
+        </tbody>
+      </table>
+      <div class="actions"><button class="btn blue" id="arChecked" data-es="✓ Revisé Ariba hoy · los seleccionados no están">✓ Checked Ariba today · selected not there yet</button><span class="sm" data-es="Recordatorio: martes y viernes, tu elección.">Nudge: Tuesdays and Fridays, your choice.</span></div>
+    </section>
+    <section class="box c12" id="arForm" style="display:none">
+      <h2 data-es="Registrar la factura a Claro · adaptador manual v1">Record the Claro invoice · manual adapter v1</h2>
+      <p class="sub" data-es="Hoy registras lo que hiciste en IBS y Ariba. Fase 4: cXML escribe el mismo registro. Tú sigues apretando enviar.">Today you record what you did in IBS and Ariba. Phase 4: cXML writes the same record. You still press send.</p>
+      <div class="form2">
+        <div class="field"><label>PO</label><input class="inp ro" id="arPo" readonly></div>
+        <div class="field"><label data-es="Factura # (IBS)">Factura # (IBS)</label><input class="inp" id="arFac" placeholder="F-26-0…"></div>
+        <div class="field"><label data-es="Enviada en Ariba el">Submitted in Ariba on</label><input class="inp" value="9/19/2026"></div>
+        <div class="field"><label data-es="Monto · debe sumar al Aviso entre POs">Amount · must sum to the Aviso across POs</label><input class="inp" id="arAmt"></div>
+      </div>
+      <div class="actions"><button class="btn blue" id="arSave" data-requires="#arFac" data-es="Registrar → lista de Carmen">Record → Carmen's receivables list</button><button class="btn ghost" id="arCancel" data-es="Cancelar">Cancel</button></div>
+    </section>
+  </div>
+</section>
+
+<!-- ================= CLARO PAYMENTS ================= -->
+<section class="screen" data-screen="claro">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Pagos de Claro">Claro payments</h1><p data-es="Monica reenvía el reporte de pago de Claro. Tú marcas cada factura recibida con fecha y referencia del depósito; eso cierra el Brazo B de ese PO. Cuando el último PO del Aviso cae, el trabajo está cerrado del todo.">Monica forwards Claro's payment report. You mark each factura received with the deposit date and reference; that closes Arm B for that PO. When the last PO on the Aviso lands, the job is fully closed.</p></div><div class="actions"><button class="btn ghost" data-say="Upload Claro's payment report (PDF/Excel from Monica). Lines match to facturas automatically." data-say-es="Sube el reporte de pago de Claro (PDF/Excel de Monica). Se cruzan con las facturas solas." data-es="📎 Reporte de Claro">📎 Claro's report</button></div></div>
+  <div class="kpis k4">
+    <div class="kpi"><div><div class="l" data-es="En el reporte de hoy">On today's report</div><div class="v">3</div><div class="d">$3,534.30</div></div><svg class="viz ring" viewBox="0 0 52 52"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="14"/><text x="26" y="25">3</text></svg></div>
+    <div class="kpi"><div><div class="l" data-es="Recibido este mes">Received this month</div><div class="v good">$63,412</div><div class="d">14 <span data-es="depósitos">deposits</span></div></div><svg class="viz spark" data-n="41,58,49,63" viewBox="0 0 72 34"></svg></div>
+    <div class="kpi"><div><div class="l" data-es="Pendiente de Claro">Pending from Claro</div><div class="v warn">$41,206</div><div class="d">22 <span data-es="facturas">facturas</span></div></div><svg class="viz ring warn" viewBox="0 0 52 52"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="39"/><text x="26" y="25">22</text></svg></div>
+    <div class="kpi"><div><div class="l" data-es="Más de 90 días">Older than 90 days</div><div class="v neg">5</div><div class="d">$9,870</div></div><svg class="viz ring crit" viewBox="0 0 52 52"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="23"/><text x="26" y="25">5</text></svg></div>
+  </div>
+  <div class="grid">
+    <section class="box c12">
+      <table id="clTable">
+        <thead><tr><th>Factura</th><th data-es="Aviso · orden">Aviso · job</th><th>PO</th><th class="num" data-es="Monto">Amount</th><th data-es="Enviada">Submitted</th><th data-es="Edad">Age</th><th data-es="Progreso del Aviso">Aviso progress</th><th class="act"></th></tr></thead>
+        <tbody>
+          <tr><td class="mono">F-26-0533</td><td><span class="mono">10351980</span> · JAF-2026-1008 · Dino Castillo</td><td class="mono">4500994410</td><td class="num">$2,014.30</td><td>8/20</td><td>30 d</td><td><div class="bars" style="margin:0"><div class="b" style="width:100%"></div></div><span class="sm">$2,014.30 <span data-es="de">of</span> $2,014.30 · <span data-es="último PO">last PO</span></span></td><td class="act"><button class="btn sm blue" data-rec2 data-es="Recibido…">Received…</button></td></tr>
+          <tr><td class="mono">F-26-0517</td><td><span class="mono">10349102</span> · JAF-2026-0871 · Alexis Díaz</td><td class="mono">4500992870</td><td class="num">$400.00</td><td>8/12</td><td>38 d</td><td><div class="bars" style="margin:0"><div class="b" style="width:83%"></div></div><span class="sm">$1,000 <span data-es="de">of</span> $1,204.18 · 2 <span data-es="de">of</span> 3 POs</span></td><td class="act"><button class="btn sm blue" data-rec2 data-es="Recibido…">Received…</button></td></tr>
+          <tr><td class="mono">F-26-0498</td><td><span class="mono">10350877</span> · JAF-2026-0955 · Jesús Martínez</td><td class="mono">4500990112</td><td class="num">$1,120.00</td><td>7/29</td><td>52 d</td><td><div class="bars" style="margin:0"><div class="b" style="width:100%"></div></div><span class="sm">$1,120 <span data-es="de">of</span> $1,120 · <span data-es="último PO">last PO</span></span></td><td class="act"><button class="btn sm blue" data-rec2 data-es="Recibido…">Received…</button></td></tr>
+          <tr><td class="mono">F-26-0288</td><td><span class="mono">10347991</span> · JAF-2026-0402 · Zariel Garay</td><td class="mono">4500971009</td><td class="num">$1,445.00</td><td>3/4</td><td class="neg">199 d</td><td><div class="bars" style="margin:0"><div class="b" style="width:50%"></div></div><span class="sm">$1,445 <span data-es="de">of</span> $2,890 · 1 <span data-es="de">of</span> 2 POs</span></td><td class="act"><span class="tag crit" data-es="no en el reporte · reclamar">not on report · claim</span></td></tr>
+          <tr class="paidrow"><td class="mono">F-26-0402</td><td><span class="mono">10349102</span> · JAF-2026-0871 · Alexis Díaz</td><td class="mono">4500981221</td><td class="num">$600.00</td><td>6/20</td><td>—</td><td><span class="sm" data-es="depositado 7/28 · ref 0728-4431">deposited 7/28 · ref 0728-4431</span></td><td class="act"><span class="tag ok" data-es="B cerrado en este PO">B closed for this PO</span></td></tr>
+        </tbody>
+      </table>
+    </section>
+    <section class="box c6" id="recForm" style="display:none">
+      <h2><span data-es="Depósito recibido">Deposit received</span> · <span id="recWhich" class="mono"></span></h2>
+      <div class="form2">
+        <div class="field"><label data-es="Fecha del depósito">Deposit date</label><input class="inp" value="9/19/2026"></div>
+        <div class="field"><label data-es="Referencia del banco">Bank reference</label><input class="inp" id="recRef" placeholder="0919-…"></div>
+        <div class="field"><label data-es="Monto recibido">Amount received</label><input class="inp" id="recAmt"></div>
+      </div>
+      <div class="actions"><button class="btn blue" id="recSave" data-requires="#recRef" data-es="✓ Recibido · cerrar Brazo B en este PO">✓ Received · close Arm B for this PO</button><button class="btn ghost" id="recCancel" data-es="Cancelar">Cancel</button></div>
+      <p class="sm" data-es="Si el monto difiere de la factura, la diferencia queda como saldo pendiente en el Aviso (pantalla PO y balance).">If the amount differs from the factura, the difference stays on the Aviso as an outstanding balance (PO &amp; balance screen).</p>
+    </section>
+  </div>
+</section>
+
+<!-- ================= CLOSED SHORT ================= -->
+<section class="screen" data-screen="short">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Cerrados cortos · castigos">Closed short · write-offs</h1><p data-es="Claro puede simplemente dejar de enviar POs. Sin una ruta de cierre con razón, un expediente nunca muere. Cada cierre lleva razón, monto y quién; Monica los ve en su panel.">Claro can simply stop sending POs. Without a close-with-reason path, a file never dies. Every close carries a reason, an amount and who; Monica sees them on her dashboard.</p></div></div>
+  <div class="grid">
+    <section class="box c7">
+      <h2 data-es="Cerrados este año">Closed this year</h2>
+      <table id="shortTable">
+        <thead><tr><th>Aviso</th><th data-es="Brigada">Brigade</th><th class="num" data-es="Facturado">Sold</th><th class="num" data-es="Cobrado">Collected</th><th class="num" data-es="Castigado">Written off</th><th data-es="Razón">Reason</th><th data-es="Quién · cuándo">Who · when</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">10333077</td><td>Dino Castillo</td><td class="num">675.12</td><td class="num">0.00</td><td class="num neg">−675.12</td><td data-es="Cancelado por Claro · reclamo radicado">Cancelled by Claro · claim filed</td><td>Lissette · 8/30</td></tr>
+          <tr><td class="mono">10334200</td><td>Zariel Garay</td><td class="num">606.38</td><td class="num">294.53</td><td class="num neg">−311.85</td><td data-es="3 remociones de poste no reconocidas">3 pole removals not recognized</td><td>Lissette · 7/14</td></tr>
+          <tr><td class="mono">10334504</td><td>Alexis Díaz</td><td class="num">812.08</td><td class="num">610.15</td><td class="num neg">−201.93</td><td data-es="1 de 2 postes pagado · Claro no responde">1 of 2 poles paid · Claro unresponsive</td><td>Lissette · 7/14</td></tr>
+        </tbody>
+      </table>
+      <div class="split"><div class="stat"><div class="l" data-es="Castigado · 2026">Written off · 2026</div><div class="v neg">$1,188.90</div></div><div class="stat"><div class="l" data-es="Como % de lo facturado">As % of sales</div><div class="v">0.05%</div></div></div>
+    </section>
+    <section class="box c5">
+      <h2 data-es="Cerrar corto">Close short</h2>
+      <p class="sub" data-es="Solo Avisos que pasaron el umbral o que marcaste «totalmente facturado».">Only Avisos past the threshold or marked "fully invoiced".</p>
+      <div class="field"><label>Aviso</label><select class="inp"><option>10347991 · Zariel Garay · $1,445.00 open · 212 d</option><option>10346120 · Dino Castillo · $1,318.40 open · 213 d</option><option>10349102 · Alexis Díaz · $204.18 open · 34 d</option></select></div>
+      <div class="field" style="margin-top:10px"><label data-es="Razón">Reason</label><div class="radio"><label class="on" data-es="Claro dejó de enviar POs">Claro stopped sending POs</label><label data-es="Renglón no reconocido">Line not recognized</label><label data-es="Cancelado">Cancelled</label><label data-es="Otro">Other</label></div></div>
+      <div class="field" style="margin-top:10px"><label data-es="Nota · obligatoria">Note · required</label><textarea class="inp" id="shortNote" placeholder="What happened, for Monica and the auditor…" data-es-ph="Qué pasó, para Monica y el auditor…"></textarea></div>
+      <div class="actions"><button class="btn blue" id="shortSave" data-requires="#shortNote" data-es="Cerrar corto · $1,445.00">Close short · $1,445.00</button></div>
+    </section>
+  </div>
+</section>
+
+
+
+  <footer>
+    <span data-es="Datos reales: log 2026 de Lissette (1,839 Avisos), corrida 8/27 del Production Journal, Aviso 10353961 de la hoja firmada 8/26. Números de PO y fechas individuales son ilustrativos.">Real data: Lissette's 2026 log (1,839 Avisos), the 8/27 Production Journal run, Aviso 10353961 from the signed 8/26 sheet. Individual PO numbers and dates are illustrative.</span>
+    <span data-es="Mockup v5, 19 sep. No distribuir al cliente.">Mockup v5, 19 Sep. Not for client distribution.</span>
+  </footer>
+</div>
+</div>
+<script>
+  // ---- theme: OS preference by default, button overrides ----
+  (function(){
+    var btn=document.getElementById('themeBtn'), root=document.documentElement;
+    function isDark(){ var t=root.getAttribute('data-theme'); if(t) return t==='dark'; return matchMedia('(prefers-color-scheme: dark)').matches; }
+    function paint(){ btn.textContent = isDark() ? (LANG==='es'?'Claro':'Light') : (LANG==='es'?'Oscuro':'Dark'); }
+    btn.addEventListener('click', function(){ root.setAttribute('data-theme', isDark() ? 'light' : 'dark'); paint(); });
+    window.paintTheme=paint; paint();
+  })();
+
+  // ---- language: EN / ES. Every element with data-es swaps its text. ----
+  var LANG='en';
+  (function(){
+    var btn=document.getElementById('langBtn');
+    var els=document.querySelectorAll('[data-es]');
+    els.forEach(function(e){ e.setAttribute('data-en', e.innerHTML); });
+    function apply(){
+      els.forEach(function(e){ e.innerHTML = LANG==='es' ? e.getAttribute('data-es') : e.getAttribute('data-en'); });
+      document.querySelectorAll('[data-es-ph]').forEach(function(e){ if(!e.getAttribute('data-en-ph')) e.setAttribute('data-en-ph', e.placeholder); e.placeholder = LANG==='es' ? e.getAttribute('data-es-ph') : e.getAttribute('data-en-ph'); });
+      btn.textContent = LANG==='es' ? 'EN' : 'ES';
+      document.documentElement.lang = LANG;
+      if(window.paintTheme) window.paintTheme();
+    }
+    btn.addEventListener('click', function(){ LANG = LANG==='es' ? 'en' : 'es'; apply(); });
+    apply();
+  })();
+
+  // ---- KPI rings: dasharray from data-pct ----
+  document.querySelectorAll('.ring .fil').forEach(function(c){
+    var r=21, C=2*Math.PI*r, p=+c.getAttribute('data-pct')/100;
+    c.setAttribute('stroke-dasharray', C); c.setAttribute('stroke-dashoffset', C);
+    requestAnimationFrame(function(){ c.setAttribute('stroke-dashoffset', C*(1-p)); });
+  });
+
+  // ---- sparklines: <svg class="spark" data-n="1,2,3"> ----
+  document.querySelectorAll('svg.spark[data-n]').forEach(function(s){
+    var n=s.getAttribute('data-n').split(',').map(Number);
+    var W=72,H=34,pad=4, max=Math.max.apply(null,n), min=Math.min.apply(null,n); if(max===min){max=min+1;}
+    var x=function(i){ return pad+(W-2*pad)*i/(n.length-1); }, y=function(v){ return pad+(H-2*pad)*(1-(v-min)/(max-min)); };
+    var ns='http://www.w3.org/2000/svg';
+    var d=n.map(function(v,i){ return (i?'L':'M')+x(i)+' '+y(v); }).join(' ');
+    var a=document.createElementNS(ns,'path'); a.setAttribute('class','area'); a.setAttribute('d', d+' L'+x(n.length-1)+' '+(H-pad)+' L'+x(0)+' '+(H-pad)+' Z'); s.appendChild(a);
+    var p=document.createElementNS(ns,'path'); p.setAttribute('d',d); s.appendChild(p);
+    var c=document.createElementNS(ns,'circle'); c.setAttribute('cx',x(n.length-1)); c.setAttribute('cy',y(n[n.length-1])); c.setAttribute('r',3.5); s.appendChild(c);
+  });
+
+  // ---- generic two-series line chart with hover tooltip ----
+  function lineChart(id, months, s1, s2, lbl1, lbl2, fmt, max){
+    var svg=document.getElementById(id), wrap=svg.parentNode, tip=wrap.querySelector('.tip');
+    var W=640,H=230,L=48,R=64,T=14,B=30;
+    var x=function(i){ return L+(W-L-R)*i/(months.length-1); }, y=function(v){ return T+(H-T-B)*(1-v/max); };
+    var ns='http://www.w3.org/2000/svg', el=function(n,a){ var e=document.createElementNS(ns,n); for(var k in a) e.setAttribute(k,a[k]); return e; };
+    var ticks=[0,max/3,2*max/3,max];
+    ticks.forEach(function(v){ svg.appendChild(el('line',{x1:L,x2:W-R,y1:y(v),y2:y(v),'class':'grd'})); var t=el('text',{x:L-8,y:y(v)+4,'text-anchor':'end','class':'axis'}); t.textContent=fmt(v); svg.appendChild(t); });
+    months.forEach(function(m,i){ var t=el('text',{x:x(i),y:H-8,'text-anchor':'middle','class':'axis'}); t.textContent=m; svg.appendChild(t); });
+    var path=function(arr,cls){ var d=arr.map(function(v,i){ return (i?'L':'M')+x(i)+' '+y(v); }).join(' '); svg.appendChild(el('path',{d:d,fill:'none','stroke-width':2,'stroke-linejoin':'round','stroke-linecap':'round','class':cls})); };
+    path(s1,'ln1'); if(s2) path(s2,'ln2');
+    months.forEach(function(m,i){
+      var g=el('g',{'class':'col'}); var bw=(W-L-R)/(months.length-1);
+      g.appendChild(el('rect',{x:x(i)-bw/2,y:T,width:bw,height:H-T-B,'class':'band'}));
+      g.appendChild(el('circle',{cx:x(i),cy:y(s1[i]),r:4.5,'class':'dot1 ringc'}));
+      if(s2) g.appendChild(el('circle',{cx:x(i),cy:y(s2[i]),r:4.5,'class':'dot2 ringc'}));
+      g.addEventListener('mousemove',function(){
+        tip.innerHTML='<b>'+m+'</b><br>'+lbl1+' '+fmt(s1[i])+(s2?'<br>'+lbl2+' '+fmt(s2[i]):'');
+        var r=svg.getBoundingClientRect(); tip.style.left=(x(i)/W*r.width)+'px'; tip.style.top=(Math.min(y(s1[i]), s2?y(s2[i]):y(s1[i]))/H*r.height)+'px';
+      });
+      svg.appendChild(g);
+    });
+    var e1=el('text',{x:x(months.length-1)+10,y:y(s1[months.length-1])+4,'class':'endlbl'}); e1.textContent=lbl1; svg.appendChild(e1);
+    if(s2){ var e2=el('text',{x:x(months.length-1)+10,y:y(s2[months.length-1])+4,'class':'endlbl'}); e2.textContent=lbl2; svg.appendChild(e2); }
+  }
+
+  // ---- generic grouped bar chart ----
+  function barChart(id, cats, s1, s2, lbl1, lbl2, fmt, max){
+    var svg=document.getElementById(id), wrap=svg.parentNode, tip=wrap.querySelector('.tip');
+    var W=640,H=230,L=48,R=16,T=14,B=30;
+    var ns='http://www.w3.org/2000/svg', el=function(n,a){ var e=document.createElementNS(ns,n); for(var k in a) e.setAttribute(k,a[k]); return e; };
+    var y=function(v){ return T+(H-T-B)*(1-v/max); };
+    var slot=(W-L-R)/cats.length, bw=s2?slot*0.28:slot*0.5;
+    [0,max/3,2*max/3,max].forEach(function(v){ svg.appendChild(el('line',{x1:L,x2:W-R,y1:y(v),y2:y(v),'class':'grd'})); var t=el('text',{x:L-8,y:y(v)+4,'text-anchor':'end','class':'axis'}); t.textContent=fmt(v); svg.appendChild(t); });
+    cats.forEach(function(c,i){
+      var cx=L+slot*i+slot/2;
+      var g=el('g',{'class':'col'});
+      g.appendChild(el('rect',{x:L+slot*i,y:T,width:slot,height:H-T-B,'class':'band'}));
+      var x1=s2?cx-bw-2:cx-bw/2;
+      g.appendChild(el('rect',{x:x1,y:y(s1[i]),width:bw,height:H-B-y(s1[i]),rx:3,'class':'bar1'}));
+      if(s2) g.appendChild(el('rect',{x:cx+2,y:y(s2[i]),width:bw,height:H-B-y(s2[i]),rx:3,'class':'bar2'}));
+      var t=el('text',{x:cx,y:H-8,'text-anchor':'middle','class':'axis'}); t.textContent=c; g.appendChild(t);
+      g.addEventListener('mousemove',function(){ tip.innerHTML='<b>'+c+'</b><br>'+lbl1+' '+fmt(s1[i])+(s2?'<br>'+lbl2+' '+fmt(s2[i]):''); var r=svg.getBoundingClientRect(); tip.style.left=(cx/W*r.width)+'px'; tip.style.top=(y(Math.max(s1[i],s2?s2[i]:0))/H*r.height)+'px'; });
+      svg.appendChild(g);
+    });
+  }
+
+  // ---- toast ----
+  function toast(m){ var t=document.getElementById('toast'); if(!t){ t=document.createElement('div'); t.id='toast'; document.body.appendChild(t); } t.textContent=m; t.classList.add('on'); clearTimeout(t._t); t._t=setTimeout(function(){ t.classList.remove('on'); },2600); }
+  function T(en,es){ return LANG==='es' ? es : en; }
+
+  // ---- screen router: any [data-go] shows the matching [data-screen] ----
+  (function(){
+    var screens=document.querySelectorAll('[data-screen]');
+    if(!screens.length) return;
+    function go(id,arg){
+      var found=false;
+      screens.forEach(function(s){ var on=s.getAttribute('data-screen')===id; s.classList.toggle('on',on); if(on) found=true; });
+      if(!found){ toast(T('Not in this mockup yet','Todavía no está en este mockup')); return; }
+      document.querySelectorAll('.rail a[data-go], .tabs a[data-go]').forEach(function(a){
+        var hit=a.getAttribute('data-go')===id && (!a.hasAttribute('data-arg') || a.getAttribute('data-arg')===arg);
+        if(!hit && a.hasAttribute('data-children')){ hit=(' '+a.getAttribute('data-children')+' ').indexOf(' '+id+' ')>-1; }
+        a.classList.toggle('on',hit);
+      });
+      window.scrollTo({top:0,behavior:'smooth'});
+      document.dispatchEvent(new CustomEvent('screen',{detail:{id:id,arg:arg}}));
+    }
+    document.addEventListener('click',function(e){ var t=e.target.closest('[data-go]'); if(t){ e.preventDefault(); go(t.getAttribute('data-go'), t.getAttribute('data-arg')); } });
+    window.go=go;
+  })();
+
+  // ---- flip: a button that becomes a status chip ----
+  document.addEventListener('click',function(e){
+    var b=e.target.closest('[data-flip]'); if(!b) return;
+    var sp=document.createElement('span'); sp.className='tag '+(b.getAttribute('data-flip-cls')||'ok');
+    sp.textContent = LANG==='es' && b.getAttribute('data-flip-es') ? b.getAttribute('data-flip-es') : b.getAttribute('data-flip');
+    b.replaceWith(sp);
+    if(b.getAttribute('data-toast')) toast(LANG==='es' && b.getAttribute('data-toast-es') ? b.getAttribute('data-toast-es') : b.getAttribute('data-toast'));
+  });
+  // ---- plain toast buttons ----
+  document.addEventListener('click',function(e){ var b=e.target.closest('[data-say]'); if(!b||b.hasAttribute('data-flip')) return; toast(LANG==='es' && b.getAttribute('data-say-es') ? b.getAttribute('data-say-es') : b.getAttribute('data-say')); });
+
+  // ---- table filter: <input data-filter="#tableId"> ----
+  document.addEventListener('input',function(e){
+    var i=e.target; if(!i.hasAttribute('data-filter')) return;
+    var q=i.value.toLowerCase(), t=document.querySelector(i.getAttribute('data-filter')); if(!t) return;
+    t.querySelectorAll('tbody tr, .opt').forEach(function(r){ r.classList.toggle('hidden', q && r.textContent.toLowerCase().indexOf(q)<0); });
+  });
+  // ---- in-page tabs: a[data-tab="group:name"] + [data-panel="group:name"] ----
+  document.addEventListener('click',function(e){
+    var a=e.target.closest('[data-tab]'); if(!a) return; e.preventDefault();
+    var v=a.getAttribute('data-tab'), g=v.split(':')[0];
+    document.querySelectorAll('[data-tab^="'+g+':"]').forEach(function(x){ x.classList.toggle('on',x===a); });
+    document.querySelectorAll('[data-panel^="'+g+':"]').forEach(function(p){ p.style.display = p.getAttribute('data-panel')===v ? '' : 'none'; });
+  });
+  document.querySelectorAll('[data-panel]').forEach(function(p){ var v=p.getAttribute('data-panel'), g=v.split(':')[0]; var on=document.querySelector('[data-tab="'+v+'"]'); p.style.display = on && on.classList.contains('on') ? '' : 'none'; });
+  // ---- generic checkbox, radio, signature pad, stepper, crew option ----
+  document.addEventListener('click',function(e){
+    var c=e.target.closest('.chk'); if(c && !c.closest('#runTable') && !c.closest('[data-checkoff]')){ c.classList.toggle('on'); c.textContent=c.classList.contains('on')?'✓':''; return; }
+    var r=e.target.closest('.radio label'); if(r){ r.parentNode.querySelectorAll('label').forEach(function(x){ x.classList.remove('on'); }); r.classList.add('on'); return; }
+    var s=e.target.closest('.sigpad'); if(s && !s.classList.contains('done')){ s.classList.add('done'); s.textContent=s.getAttribute('data-name')||'Firmado'; return; }
+    var em=e.target.closest('.sig .empty'); if(em){ var d=document.createElement('div'); d.className='ink'; d.textContent=em.getAttribute('data-name')||'Firmado'; em.replaceWith(d); return; }
+    var co=e.target.closest('.crewopt'); if(co){ var one=co.parentNode.hasAttribute('data-single'); if(one) co.parentNode.querySelectorAll('.crewopt').forEach(function(x){ x.classList.remove('on'); x.querySelector('.bx').textContent=''; }); co.classList.toggle('on'); co.querySelector('.bx').textContent=co.classList.contains('on')?'✓':''; return; }
+    var st=e.target.closest('.stepper span'); if(st){ var b=st.parentNode.querySelector('b'), v=+b.textContent; b.textContent = st.textContent.trim()==='−' ? Math.max(0,v-1) : v+1; b.dispatchEvent(new Event('change',{bubbles:true})); return; }
+  });
+  // ---- buttons that need a field filled: <button data-requires="#id"> ----
+  document.querySelectorAll('[data-requires]').forEach(function(b){ var f=document.querySelector(b.getAttribute('data-requires')); if(!f) return; b.disabled=!f.value.trim(); f.addEventListener('input',function(){ b.disabled=!f.value.trim(); }); });
+  // ---- row select: tr[data-sel] highlights ----
+  document.addEventListener('click',function(e){ var tr=e.target.closest('tr[data-sel]'); if(!tr||e.target.closest('button,a,input,.chk')) return; tr.parentNode.querySelectorAll('tr').forEach(function(x){ x.classList.remove('sel'); }); tr.classList.add('sel'); });
+
+
+  lineChart('float', ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug'], [125267,169812,253916,176101,179029,122121,138890,151179], [125318,167902,248345,126733,39386,5627,1199,0], 'Sold', 'POs', function(v){ return '$'+Math.round(v/1000)+'K'; }, 300000);
+  (function(){
+    var b=document.getElementById('sendList'), s=document.getElementById('listStatus'), n=document.getElementById('sendNote');
+    b.addEventListener('click',function(){
+      b.disabled=true; b.textContent = LANG==='es' ? 'Enviada a Carmen · 9/19 10:02 AM' : 'Sent to Carmen · 9/19 10:02 AM';
+      s.className='tag acc'; s.textContent = LANG==='es' ? 'en la bandeja de Carmen · 0 de 5 marcadas' : "in Carmen's inbox · 0 of 5 checked";
+      n.textContent = LANG==='es' ? 'Carmen fue notificada. Cada ✓ suyo aparecerá aquí.' : 'Carmen has been notified. Each ✓ of hers will show here.';
+    });
+    document.querySelectorAll('[data-rec]').forEach(function(x){ x.addEventListener('click',function(){ var sp=document.createElement('span'); sp.className='st ok'; sp.textContent = LANG==='es' ? 'B cerrado · hoy' : 'B closed · today'; x.replaceWith(sp); }); });
+  })();
+
+  // ---- LC send ----
+  document.getElementById('lcSend').addEventListener('click',function(){ this.disabled=true; this.textContent=T('Sent · 2 documents in the system, 2 by hand','Enviado · 2 documentos en el sistema, 2 a mano'); var t=document.querySelector('#lcTable tbody'); ['JAF-2026-1043|Jesús Martínez|$586.37','JAF-2026-1038|Dino Castillo|$742.90'].forEach(function(x){ var d=x.split('|'); var tr=document.createElement('tr'); tr.innerHTML='<td class="mono">'+d[0]+'</td><td>'+d[1]+'</td><td class="num">'+d[2]+'</td><td>9/19</td><td><span class="tag warn">'+T('at the bank · today','en el banco · hoy')+'</span></td><td class="act"><button class="btn sm ghost" data-flip="funded" data-flip-es="financiado">'+T('Mark funded','Marcar financiado')+'</button></td>'; t.insertBefore(tr,t.firstChild); }); toast(T('PBCC request sent · $1,329.27. Arm B aging starts now.','Solicitud PBCC enviada · $1,329.27. El Brazo B empieza a envejecer ahora.')); });
+  // ---- list to Carmen: toggle accounts, totals, send ----
+  (function(){
+    var t=document.getElementById('lstTable'); function recalc(){ var n=0,s=0; t.querySelectorAll('tbody tr').forEach(function(r){ var on=r.querySelector('.chk').classList.contains('on'); r.style.opacity=on?'':'.45'; if(on){ n++; s+=+r.dataset.pay; } }); document.getElementById('lstTot').textContent='$'+s.toLocaleString('en-US',{minimumFractionDigits:2}); document.getElementById('lstSum').textContent=n+' '+T('accounts','cuentas'); }
+    t.addEventListener('click',function(e){ if(e.target.closest('.chk')) setTimeout(recalc,0); });
+    document.getElementById('genList').addEventListener('click',function(){ toast(T('Run 9/24 regenerated from funded packets · 5 accounts.','Corrida 9/24 regenerada de los paquetes financiados · 5 cuentas.')); });
+    document.getElementById('lstSend').addEventListener('click',function(){ this.disabled=true; this.textContent=T("Sent to Carmen · 9/19 10:02 AM",'Enviada a Carmen · 9/19 10:02 AM'); var s=document.getElementById('lstStatus'); s.className='tag acc'; s.textContent=T("in Carmen's inbox · 0 of 5 checked",'en la bandeja de Carmen · 0 de 5'); var h=document.querySelector('#lstHist tbody'); var tr=document.createElement('tr'); tr.innerHTML='<td class="mono">9/24</td><td>9/19 · 10:02 AM</td><td class="num">'+document.getElementById('lstSum').textContent.split(' ')[0]+'</td><td class="num">14</td><td class="num">'+document.getElementById('lstTot').textContent+'</td><td><span class="tag acc">'+T('new · 0 checked','nueva · 0 marcadas')+'</span></td>'; h.insertBefore(tr,h.firstChild); toast(T('Carmen notified. Each ✓ of hers shows on Awaiting Carmen\'s ✓.','Carmen notificada. Cada ✓ suyo aparece en Esperando el ✓ de Carmen.')); });
+  })();
+  // ---- PO record ----
+  (function(){
+    document.getElementById('poAdd').addEventListener('click',function(){ document.getElementById('poForm').style.display=''; });
+    document.getElementById('poSave').addEventListener('click',function(){ var n=document.getElementById('poNum').value, a=document.getElementById('poAmt').value||'$204.18'; var tb=document.querySelector('#poDetail tbody'); var tr=document.createElement('tr'); tr.innerHTML='<td class="mono">'+n+'</td><td class="num">'+a+'</td><td>9/19</td><td>—</td><td>—</td><td>—</td><td>—</td><td><span class="tag acc">'+T('received · check Ariba','recibido · revisar Ariba')+'</span></td>'; tb.insertBefore(tr,tb.lastElementChild); tb.lastElementChild.remove(); document.getElementById('poForm').style.display='none'; toast(T('PO recorded. Balance is now derived at $0.00. It moves to Awaiting Ariba.','PO registrado. El balance derivado es $0.00. Pasa a Esperando Ariba.')); });
+  })();
+  // ---- Ariba ----
+  (function(){
+    document.getElementById('arChecked').addEventListener('click',function(){ var n=0; document.querySelectorAll('#arTable tbody tr').forEach(function(r){ if(r.querySelector('.chk').classList.contains('on')){ n++; r.querySelector('.lc').textContent=T('today','hoy'); r.querySelector('.st').innerHTML='<span class="tag warn">'+T('checked today · not in Ariba','revisado hoy · no está')+'</span>'; r.querySelector('.chk').classList.remove('on'); r.querySelector('.chk').textContent=''; } }); toast(n?T(n+' PO(s) logged as checked today.',n+' PO(s) registrados como revisados hoy.'):T('Select the POs you checked.','Selecciona los POs que revisaste.')); });
+    var cur;
+    document.addEventListener('click',function(e){ var b=e.target.closest('[data-inv]'); if(!b) return; cur=b.closest('tr'); var d=b.getAttribute('data-inv').split('|'); document.getElementById('arPo').value=d[0]+' · '+d[1]; document.getElementById('arAmt').value=d[1]; document.getElementById('arFac').value=''; document.getElementById('arSave').disabled=true; document.getElementById('arForm').style.display=''; document.getElementById('arForm').scrollIntoView({behavior:'smooth',block:'center'}); });
+    document.getElementById('arCancel').addEventListener('click',function(){ document.getElementById('arForm').style.display='none'; });
+    document.getElementById('arSave').addEventListener('click',function(){ var f=document.getElementById('arFac').value; cur.querySelector('.st').innerHTML='<span class="tag ok">'+T('invoiced · ','facturado · ')+f+T(' · on Carmen\'s list',' · en la lista de Carmen')+'</span>'; cur.querySelector('.act').innerHTML=''; document.getElementById('arForm').style.display='none'; toast(T('Factura '+f+' recorded. It appears on Claro payments once Monica\'s report lists it.','Factura '+f+' registrada. Aparece en Pagos de Claro cuando el reporte de Monica la traiga.')); });
+  })();
+  // ---- Claro payments received ----
+  (function(){
+    var cur;
+    document.addEventListener('click',function(e){ var b=e.target.closest('[data-rec2]'); if(!b) return; cur=b.closest('tr'); document.getElementById('recWhich').textContent=cur.children[0].textContent+' · '+cur.children[3].textContent; document.getElementById('recAmt').value=cur.children[3].textContent; document.getElementById('recRef').value=''; document.getElementById('recSave').disabled=true; var f=document.getElementById('recForm'); f.style.display=''; f.scrollIntoView({behavior:'smooth',block:'center'}); });
+    document.getElementById('recCancel').addEventListener('click',function(){ document.getElementById('recForm').style.display='none'; });
+    document.getElementById('recSave').addEventListener('click',function(){ cur.querySelector('.act').innerHTML='<span class="tag ok">'+T('B closed · today · ref ','B cerrado · hoy · ref ')+document.getElementById('recRef').value+'</span>'; cur.classList.add('paidrow'); document.getElementById('recForm').style.display='none'; var last=cur.children[6].textContent.indexOf(T('last PO','último PO'))>-1; toast(last?T('Arm B closed on this Aviso. Job fully closed: A and B.','Brazo B cerrado en este Aviso. Trabajo cerrado del todo: A y B.'):T('Arm B closed for this PO. The Aviso stays open until the last PO lands.','Brazo B cerrado en este PO. El Aviso sigue abierto hasta el último PO.')); });
+  })();
+  // ---- close short ----
+  document.getElementById('shortSave').addEventListener('click',function(){ this.disabled=true; var tb=document.querySelector('#shortTable tbody'); var tr=document.createElement('tr'); tr.innerHTML='<td class="mono">10347991</td><td>Zariel Garay</td><td class="num">2,890.00</td><td class="num">1,445.00</td><td class="num neg">−1,445.00</td><td>'+T('Claro stopped sending POs','Claro dejó de enviar POs')+'</td><td>Lissette · 9/19</td>'; tb.insertBefore(tr,tb.firstChild); toast(T('Aviso 10347991 closed short · $1,445.00. Monica sees it on her dashboard.','Aviso 10347991 cerrado corto · $1,445.00. Monica lo ve en su panel.')); });
+
+</script>
+</body>
+</html>

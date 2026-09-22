@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JAF Ops, Warehouse</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ---------------------------------------------------------------
+     JAF Ops design system. Same tokens as Monica's command center
+     (mockup v3, 19 Sep 2026). Dual theme, one accent, status colors
+     only for state. Radius: containers 16px, controls 10px, chips 6px.
+     --------------------------------------------------------------- */
+  :root{
+    color-scheme: light;
+    --plane:#f4f4f2; --surface:#fcfcfb; --surface-2:#f0f0ed;
+    --ink:#111110; --ink-2:#52514e; --ink-3:#898781;
+    --hair:#e1e0d9; --ring:rgba(11,11,11,.08);
+    --accent:#1c5cab; --accent-2:#86b6ef; --accent-ink:#ffffff;
+    --accent-wash:rgba(28,92,171,.08);
+    --critical:#d03b3b; --warning:#b7791f; --good:#006300;
+    --crit-wash:rgba(208,59,59,.10); --warn-wash:rgba(183,121,31,.13); --good-wash:rgba(0,99,0,.10);
+    --shadow:0 1px 2px rgba(30,28,20,.05), 0 10px 30px -14px rgba(30,28,20,.14);
+    --grid:#e1e0d9;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      color-scheme: dark;
+      --plane:#0f0f0e; --surface:#1a1a19; --surface-2:#222221;
+      --ink:#f4f4f1; --ink-2:#c3c2b7; --ink-3:#898781;
+      --hair:#2c2c2a; --ring:rgba(255,255,255,.08);
+      --accent:#3987e5; --accent-2:#9ec5f4; --accent-ink:#ffffff;
+      --accent-wash:rgba(57,135,229,.12);
+      --critical:#e66767; --warning:#e0a634; --good:#3fbf3f;
+      --crit-wash:rgba(230,103,103,.14); --warn-wash:rgba(224,166,52,.16); --good-wash:rgba(63,191,63,.14);
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 30px -14px rgba(0,0,0,.6);
+      --grid:#2c2c2a;
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --plane:#0f0f0e; --surface:#1a1a19; --surface-2:#222221;
+    --ink:#f4f4f1; --ink-2:#c3c2b7; --ink-3:#898781;
+    --hair:#2c2c2a; --ring:rgba(255,255,255,.08);
+    --accent:#3987e5; --accent-2:#9ec5f4; --accent-ink:#ffffff;
+    --accent-wash:rgba(57,135,229,.12);
+    --critical:#e66767; --warning:#e0a634; --good:#3fbf3f;
+    --crit-wash:rgba(230,103,103,.14); --warn-wash:rgba(224,166,52,.16); --good-wash:rgba(63,191,63,.14);
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 30px -14px rgba(0,0,0,.6);
+    --grid:#2c2c2a;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; background:var(--plane); color:var(--ink); }
+  body{ font-family:"Geist", system-ui, -apple-system, "Segoe UI", sans-serif; font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; transition:background .2s ease, color .2s ease; }
+  .shell{ display:grid; grid-template-columns:236px minmax(0,1fr); min-height:100dvh; }
+  .rail{ border-right:1px solid var(--hair); padding:22px 18px; display:flex; flex-direction:column; gap:8px; position:sticky; top:0; height:100dvh; background:var(--plane); }
+  .rail .wordmark{ padding:4px 10px 18px; font-size:16px; font-weight:700; letter-spacing:-.01em; }
+  .rail .wordmark span{ display:block; font-size:11.5px; font-weight:500; color:var(--ink-3); margin-top:2px; }
+  .rail .grp{ font-size:11px; font-weight:600; color:var(--ink-3); padding:14px 10px 4px; letter-spacing:.02em; }
+  .rail a{ display:flex; align-items:center; justify-content:space-between; text-decoration:none; color:var(--ink-2); font-size:13.5px; font-weight:500; padding:8px 10px; border-radius:10px; }
+  .rail a:hover{ background:var(--surface-2); color:var(--ink); }
+  .rail a.on{ background:var(--surface); color:var(--ink); font-weight:600; box-shadow:var(--shadow); border:1px solid var(--ring); }
+  .rail a .pill{ font-size:11px; font-weight:600; background:var(--critical); color:#fff; padding:1px 7px; border-radius:6px; }
+  .rail a .n{ font-size:12px; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+  .rail .foot{ margin-top:auto; border-top:1px solid var(--hair); padding-top:14px; display:flex; flex-direction:column; gap:10px; }
+  .rail .user{ display:flex; align-items:center; gap:10px; padding:4px 10px; }
+  .rail .av{ width:30px; height:30px; border-radius:50%; background:var(--accent); color:#fff; font-size:12px; font-weight:600; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .rail .user .nm{ font-size:13px; font-weight:600; line-height:1.2; }
+  .rail .user .rl{ font-size:11.5px; color:var(--ink-3); }
+  .rail .toggles{ display:flex; gap:8px; }
+  .rail .toggles .toggle{ flex:1; }
+  .wrap{ max-width:1200px; margin:0 auto; padding:0 28px 56px; width:100%; min-width:0; overflow-x:clip; }
+
+  /* top bar */
+  .top{ height:68px; display:flex; align-items:center; gap:22px; border-bottom:1px solid var(--hair); }
+  .wordmark{ font-weight:700; letter-spacing:-.01em; font-size:15px; white-space:nowrap; }
+  .tabs{ display:flex; gap:2px; background:var(--surface-2); padding:3px; border-radius:10px; }
+  .tabs a{ text-decoration:none; font-size:13px; font-weight:500; color:var(--ink-2); padding:6px 12px; border-radius:8px; white-space:nowrap; }
+  .tabs a.on{ background:var(--surface); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.08); font-weight:600; }
+  .spacer{ flex:1; }
+  .who{ font-size:13px; color:var(--ink-2); white-space:nowrap; }
+  .btn{ font:inherit; font-weight:600; font-size:13px; background:var(--ink); color:var(--plane); border:0; border-radius:10px; padding:9px 14px; cursor:pointer; transition:transform .12s ease, opacity .12s ease; white-space:nowrap; }
+  .btn:hover{ opacity:.88; } .btn:active{ transform:translateY(1px); }
+  .btn.ghost{ background:transparent; color:var(--ink); border:1px solid var(--hair); }
+  .btn.ghost:hover{ background:var(--surface-2); opacity:1; }
+  .btn.acc{ background:var(--accent-ink); color:var(--accent); }
+  .btn.acc:hover{ opacity:.9; }
+  .btn.blue{ background:var(--accent); color:#fff; }
+  .btn.sm{ font-size:12.5px; padding:6px 11px; border-radius:8px; }
+  .btn[disabled]{ opacity:.45; cursor:not-allowed; }
+  .toggle{ font:inherit; font-size:12.5px; font-weight:600; color:var(--ink-2); background:var(--surface-2); border:1px solid var(--hair); border-radius:10px; padding:7px 11px; cursor:pointer; }
+
+  /* greeting + kpi strip */
+  .greet{ padding:30px 0 18px; display:flex; align-items:flex-end; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+  .greet h1{ font-size:30px; font-weight:600; letter-spacing:-.02em; margin:0 0 4px; line-height:1.15; }
+  .greet p{ margin:0; color:var(--ink-2); font-size:15px; max-width:64ch; }
+  .greet b{ color:var(--ink); font-weight:600; }
+  .kpis{ display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin:6px 0 20px; }
+  .kpis.k4{ grid-template-columns:repeat(4,1fr); }
+  .kpi{ background:var(--surface); border:1px solid var(--ring); border-radius:16px; padding:14px 16px; box-shadow:var(--shadow); display:flex; align-items:center; justify-content:space-between; gap:12px; min-width:0; }
+  .kpi .l{ font-size:12px; color:var(--ink-3); white-space:nowrap; }
+  .kpi .v{ font-size:24px; font-weight:600; letter-spacing:-.02em; line-height:1.15; margin-top:2px; }
+  .kpi .d{ font-size:12px; color:var(--ink-2); margin-top:2px; }
+  .kpi .v.neg{ color:var(--critical); } .kpi .v.warn{ color:var(--warning); } .kpi .v.good{ color:var(--good); }
+  .kpi .viz{ flex:0 0 auto; }
+  .ring{ width:52px; height:52px; }
+  .ring .trk{ fill:none; stroke:var(--accent-2); stroke-opacity:.45; stroke-width:5; }
+  .ring .fil{ fill:none; stroke:var(--accent); stroke-width:5; stroke-linecap:round; transform:rotate(-90deg); transform-origin:50% 50%; }
+  .ring.crit .trk{ stroke:var(--critical); stroke-opacity:.22; } .ring.crit .fil{ stroke:var(--critical); }
+  .ring.warn .trk{ stroke:var(--warning); stroke-opacity:.22; } .ring.warn .fil{ stroke:var(--warning); }
+  .ring.good .trk{ stroke:var(--good); stroke-opacity:.22; } .ring.good .fil{ stroke:var(--good); }
+  .ring text{ font-size:11px; font-weight:600; fill:var(--ink); text-anchor:middle; }
+  .ring .cap{ font-size:8px; font-weight:500; fill:var(--ink-3); }
+  .spark{ width:72px; height:34px; }
+  .spark path{ fill:none; stroke:var(--accent); stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }
+  .spark .area{ fill:var(--accent); fill-opacity:.10; stroke:none; }
+  .spark circle{ fill:var(--accent); stroke:var(--surface); stroke-width:2; }
+  .mini{ display:flex; align-items:flex-end; gap:3px; height:34px; }
+  .mini i{ display:block; width:9px; background:var(--accent); border-radius:3px 3px 0 0; }
+  .mini i.lo{ background:var(--accent-2); }
+  .mini i.crit{ background:var(--critical); } .mini i.warn{ background:var(--warning); }
+  @media (prefers-reduced-motion:no-preference){ .ring .fil{ transition:stroke-dashoffset .8s cubic-bezier(.16,1,.3,1); } }
+
+  /* grid + boxes */
+  .grid{ display:grid; grid-template-columns:repeat(12,1fr); gap:16px; }
+  .box{ background:var(--surface); border:1px solid var(--ring); border-radius:16px; box-shadow:var(--shadow); padding:20px 22px; min-width:0; }
+  .box.acc{ background:var(--accent); color:var(--accent-ink); border-color:transparent; }
+  .box.acc h2, .box.acc .sub{ color:rgba(255,255,255,.85); }
+  .c3{ grid-column:span 3; } .c4{ grid-column:span 4; } .c5{ grid-column:span 5; } .c6{ grid-column:span 6; } .c7{ grid-column:span 7; } .c8{ grid-column:span 8; } .c12{ grid-column:span 12; }
+  .box h2{ font-size:13.5px; font-weight:600; color:var(--ink-2); margin:0 0 2px; }
+  .box .sub{ color:var(--ink-3); font-size:12.5px; margin:0 0 14px; }
+  .box .head{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+  .count{ display:inline-block; min-width:20px; text-align:center; font-size:11px; font-weight:600; padding:1px 6px; border-radius:6px; background:var(--critical); color:#fff; margin-left:6px; vertical-align:1px; }
+  .count.w{ background:var(--warning); } .count.a{ background:var(--accent); }
+  .ex{ text-decoration:underline dotted var(--ink-3); text-underline-offset:3px; text-decoration-thickness:1px; }
+
+  /* lines / hero */
+  .lines{ list-style:none; margin:4px 0 0; padding:0; }
+  .lines li{ display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--hair); }
+  .lines li:last-child{ border-bottom:0; }
+  .lines i{ width:10px; height:10px; border-radius:3px; flex:0 0 auto; }
+  .lines .n{ flex:1; font-size:13.5px; font-weight:500; }
+  .lines .v{ font-size:15px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .hero{ font-size:44px; font-weight:600; letter-spacing:-.03em; line-height:1; margin:4px 0 2px; }
+  .heroline{ color:var(--ink-2); font-size:13px; margin:0 0 14px; }
+
+  /* chart */
+  .chartwrap{ position:relative; }
+  .chart{ width:100%; height:auto; display:block; }
+  .legend{ display:flex; gap:18px; font-size:12.5px; color:var(--ink-2); margin:2px 0 6px; flex-wrap:wrap; }
+  .legend i{ display:inline-block; width:14px; height:3px; border-radius:2px; margin-right:7px; vertical-align:3px; }
+  .tip{ position:absolute; pointer-events:none; background:var(--ink); color:var(--plane); font-size:12px; padding:8px 10px; border-radius:8px; white-space:nowrap; transform:translate(-50%,-110%); opacity:0; transition:opacity .12s; box-shadow:var(--shadow); }
+  .tip b{ font-weight:600; }
+  .chartwrap:hover .tip{ opacity:1; }
+  .axis{ font-size:11px; fill:var(--ink-3); }
+  .grd{ stroke:var(--grid); stroke-width:1; }
+  .ln1{ stroke:var(--accent); } .ln2{ stroke:var(--accent-2); }
+  .dot1{ fill:var(--accent); } .dot2{ fill:var(--accent-2); }
+  .ringc{ stroke:var(--surface); stroke-width:2; }
+  .col:hover .band{ fill:var(--accent-wash); }
+  .band{ fill:transparent; }
+  .endlbl{ font-size:11.5px; font-weight:600; fill:var(--ink); }
+  .bar1{ fill:var(--accent); } .bar2{ fill:var(--accent-2); }
+
+  /* glance tile */
+  .glance .big{ font-size:40px; font-weight:600; letter-spacing:-.03em; line-height:1; margin:6px 0 4px; }
+  .glance p{ margin:0 0 16px; font-size:13px; color:rgba(255,255,255,.85); }
+  .glance .btn{ display:block; width:100%; text-align:left; margin-top:8px; }
+
+  /* attention list */
+  .att{ list-style:none; margin:0; padding:0; }
+  .att li{ display:grid; grid-template-columns:3px 1fr auto; gap:0 12px; padding:9px 0; border-bottom:1px solid var(--hair); align-items:start; }
+  .att li:last-child{ border-bottom:0; }
+  .att .mark{ width:3px; min-height:30px; border-radius:2px; background:var(--critical); margin-top:2px; }
+  .att .mark.w{ background:var(--warning); } .att .mark.a{ background:var(--accent); } .att .mark.g{ background:var(--good); }
+  .att .t{ font-weight:600; font-size:13.5px; }
+  .att .d{ color:var(--ink-2); font-size:12.5px; }
+  .att .lvl{ font-size:11px; font-weight:600; color:var(--critical); padding-top:2px; white-space:nowrap; }
+  .att .lvl.w{ color:var(--warning); } .att .lvl.a{ color:var(--accent); } .att .lvl.g{ color:var(--good); }
+  .more{ display:inline-block; margin-top:10px; font-size:12.5px; color:var(--accent); text-decoration:none; font-weight:600; cursor:pointer; }
+
+  /* bars + stats + rows */
+  .bars{ display:grid; grid-template-columns:auto 1fr auto; gap:8px 12px; align-items:center; margin-top:6px; }
+  .bars .n{ font-size:13px; font-weight:500; }
+  .bars .b{ height:9px; background:var(--accent); border-radius:0 4px 4px 0; }
+  .bars .b.lo{ background:var(--accent-2); } .bars .b.crit{ background:var(--critical); } .bars .b.warn{ background:var(--warning); }
+  .bars .v{ font-size:12.5px; font-variant-numeric:tabular-nums; color:var(--ink-2); }
+  .split{ display:grid; grid-template-columns:1fr 1fr; gap:14px 18px; margin-top:14px; padding-top:14px; border-top:1px solid var(--hair); }
+  .stat .l{ font-size:12px; color:var(--ink-3); }
+  .stat .v{ font-size:22px; font-weight:600; letter-spacing:-.02em; line-height:1.15; }
+  .rows{ margin:6px 0 0; padding:0; list-style:none; }
+  .rows li{ display:flex; justify-content:space-between; gap:12px; padding:8px 0; border-bottom:1px solid var(--hair); font-size:13.5px; align-items:center; }
+  .rows li:last-child{ border-bottom:0; }
+  .st{ font-size:12px; font-weight:600; }
+  .st.crit{ color:var(--critical); } .st.warn{ color:var(--warning); } .st.ok{ color:var(--good); } .st.acc{ color:var(--accent); }
+
+  /* chips */
+  .tag{ display:inline-block; font-size:11px; font-weight:600; padding:2px 7px; border-radius:6px; background:var(--surface-2); color:var(--ink-2); white-space:nowrap; vertical-align:middle; }
+  .tag.ok{ background:var(--good-wash); color:var(--good); }
+  .tag.warn{ background:var(--warn-wash); color:var(--warning); }
+  .tag.crit{ background:var(--crit-wash); color:var(--critical); }
+  .tag.acc{ background:var(--accent-wash); color:var(--accent); }
+  .tag.dark{ background:var(--ink); color:var(--plane); }
+
+  /* checklist gate */
+  .gate{ list-style:none; margin:6px 0 0; padding:0; }
+  .gate li{ display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--hair); font-size:13.5px; }
+  .gate li:last-child{ border-bottom:0; }
+  .gate .ic{ width:20px; height:20px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex:0 0 auto; }
+  .gate .ic.y{ background:var(--good-wash); color:var(--good); }
+  .gate .ic.n{ background:var(--crit-wash); color:var(--critical); }
+  .gate .ic.w{ background:var(--warn-wash); color:var(--warning); }
+  .gate small{ margin-left:auto; color:var(--ink-3); font-size:12px; white-space:nowrap; }
+
+  /* checkbox */
+  .chk{ width:18px; height:18px; border:1.5px solid var(--ink-3); border-radius:5px; display:inline-grid; place-items:center; font-size:11px; color:#fff; cursor:pointer; background:var(--surface); flex:0 0 auto; vertical-align:middle; }
+  .chk.on{ background:var(--good); border-color:var(--good); }
+
+  /* step flow strip */
+  .flow{ display:flex; gap:6px; margin:10px 0 0; }
+  .flow div{ flex:1; padding:8px 6px; border-radius:10px; border:1px solid var(--hair); font-size:11.5px; text-align:center; color:var(--ink-3); line-height:1.3; }
+  .flow div b{ display:block; font-size:10.5px; font-weight:600; color:var(--ink-2); letter-spacing:.03em; }
+  .flow .on{ background:var(--accent); color:#fff; border-color:transparent; }
+  .flow .on b{ color:rgba(255,255,255,.85); }
+  .flow .done{ background:var(--accent-wash); color:var(--accent); border-color:transparent; }
+  .flow .done b{ color:var(--accent); }
+  .flow .you{ box-shadow:inset 0 -3px 0 var(--accent); }
+
+  /* table */
+  table{ width:100%; border-collapse:collapse; margin-top:6px; }
+  th{ text-align:left; font-size:11.5px; font-weight:600; color:var(--ink-3); padding:8px 10px 8px 0; border-bottom:1px solid var(--hair); white-space:nowrap; }
+  td{ padding:10px 10px 10px 0; border-bottom:1px solid var(--hair); font-size:13.5px; vertical-align:middle; }
+  tr:last-child td{ border-bottom:0; }
+  tbody tr:hover td{ background:var(--accent-wash); }
+  td.num, th.num{ text-align:right; font-variant-numeric:tabular-nums; }
+  td.mono{ font-variant-numeric:tabular-nums; font-weight:500; }
+  td.act, th.act{ text-align:right; }
+  .neg{ color:var(--critical); }
+  .dim{ color:var(--ink-3); }
+  .sm{ font-size:12px; color:var(--ink-3); }
+  .paidrow td{ color:var(--ink-3); }
+  .paidrow td .mono, .paidrow td.mono{ text-decoration:none; }
+
+  /* input */
+  .inp{ font:inherit; font-size:13px; color:var(--ink); background:var(--surface); border:1px solid var(--hair); border-radius:10px; padding:8px 11px; width:100%; }
+  .inp::placeholder{ color:var(--ink-3); }
+  .field{ display:flex; flex-direction:column; gap:5px; }
+  .field label{ font-size:12px; color:var(--ink-3); font-weight:500; }
+  .form3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-top:8px; }
+
+  footer{ margin-top:36px; padding-top:14px; border-top:1px solid var(--hair); color:var(--ink-3); font-size:12px; display:flex; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+
+  @media (prefers-reduced-motion:no-preference){
+    .kpi, .box, .greet{ animation:rise .5s cubic-bezier(.16,1,.3,1) both; }
+    .kpi:nth-child(2){ animation-delay:.04s } .kpi:nth-child(3){ animation-delay:.08s } .kpi:nth-child(4){ animation-delay:.12s } .kpi:nth-child(5){ animation-delay:.16s }
+    .grid .box:nth-child(1){ animation-delay:.10s } .grid .box:nth-child(2){ animation-delay:.15s } .grid .box:nth-child(3){ animation-delay:.20s }
+    .grid .box:nth-child(4){ animation-delay:.25s } .grid .box:nth-child(5){ animation-delay:.30s } .grid .box:nth-child(6){ animation-delay:.35s } .grid .box:nth-child(7){ animation-delay:.40s }
+    @keyframes rise{ from{ opacity:0; transform:translateY(8px) } to{ opacity:1; transform:none } }
+  }
+  .mdate{ display:none; }
+  @media (max-width:1024px){ .shell{ grid-template-columns:1fr; } .rail{ display:none; } .top .wordmark, .top .tabs{ display:inline-flex; } .top .who, .top .print{ display:none; } .kpis, .kpis.k4{ grid-template-columns:repeat(3,1fr); } .c3,.c4,.c5,.c6,.c7,.c8{ grid-column:span 6; } }
+  @media (min-width:1025px){ .top .wordmark, .top .tabs{ display:none; } }
+  @media (max-width:640px){ .top .tabs{ display:none; } }
+  @media (max-width:760px){ .kpis, .kpis.k4{ grid-template-columns:1fr 1fr; } .c3,.c4,.c5,.c6,.c7,.c8,.c12{ grid-column:span 12; } .wrap{ padding:0 16px 40px; } .greet h1{ font-size:24px; } .hero{ font-size:38px; } .top{ height:58px; gap:10px; } .who{ display:none; } .mdate{ display:block; color:var(--ink-3); font-size:13px; margin-bottom:6px; } .form3{ grid-template-columns:1fr; } }
+
+  /* phone preview (crew): same page, constrained to a handset */
+  body.phone .shell{ display:block; }
+  body.phone .rail{ display:none; }
+  body.phone .wrap{ max-width:418px; margin:24px auto 40px; padding:0 14px 30px; border:12px solid #141413; border-radius:44px; background:var(--plane); min-height:820px; box-shadow:0 30px 60px -20px rgba(0,0,0,.45); }
+  body.phone .top{ height:58px; gap:10px; }
+  body.phone .top .wordmark{ display:inline-flex; }
+  body.phone .top .tabs, body.phone .top .who, body.phone .top .print, body.phone .top .desk{ display:none; }
+  body.phone .mdate{ display:block; color:var(--ink-3); font-size:13px; margin-bottom:6px; }
+  body.phone .greet{ padding:22px 0 14px; }
+  body.phone .greet h1{ font-size:24px; }
+  body.phone .kpis, body.phone .kpis.k4{ grid-template-columns:1fr 1fr; }
+  body.phone .c3, body.phone .c4, body.phone .c5, body.phone .c6, body.phone .c7, body.phone .c8, body.phone .c12{ grid-column:span 12; }
+  body.phone .hero{ font-size:36px; }
+  body.phone .form3{ grid-template-columns:1fr; }
+  body.phone .hide-phone{ display:none; }
+  .phonebar{ display:none; }
+  body.phone .phonebar{ display:flex; justify-content:space-between; font-size:12px; font-weight:600; padding:8px 8px 0; color:var(--ink); }
+  .phoneexit, .phonetools{ display:none; }
+  body.phone .phoneexit{ display:block; text-align:center; margin:14px 0 0; }
+  body.phone .phonetools{ display:flex; gap:8px; justify-content:center; margin:18px 0 0; }
+  @media (max-width:1024px){ .phonetools{ display:flex; gap:8px; justify-content:center; margin:18px 0 0; } }
+  .glance .btn{ white-space:normal; line-height:1.3; }
+  body.phone #netTag{ display:none; }
+  body.phone .box table, body.phone .flow{ }
+  body.phone .tblwrap, .tblwrap{ min-width:0; }
+  body.phone table{ display:block; overflow-x:auto; white-space:nowrap; }
+  body.phone table td{ white-space:normal; min-width:90px; }
+  body.phone .flow{ flex-wrap:wrap; }
+  body.phone .flow div{ flex:1 1 21%; }
+  @media (max-width:760px){ table{ display:block; overflow-x:auto; } .flow{ flex-wrap:wrap; } .flow div{ flex:1 1 21%; } #netTag{ display:none; } }
+
+  /* ---- screens / router ---- */
+  .screen{ display:none; }
+  .screen.on{ display:block; }
+  .back{ font-size:12.5px; color:var(--accent); font-weight:600; cursor:pointer; text-decoration:none; }
+  .greet .actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  #toast{ position:fixed; left:50%; bottom:28px; transform:translate(-50%,20px); background:var(--ink); color:var(--plane); padding:10px 16px; border-radius:10px; font-size:13px; font-weight:600; opacity:0; transition:.2s; z-index:99; pointer-events:none; box-shadow:var(--shadow); max-width:90vw; text-align:center; }
+  #toast.on{ opacity:1; transform:translate(-50%,0); }
+
+  /* forms */
+  .form2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:8px; }
+  textarea.inp{ min-height:74px; resize:vertical; }
+  select.inp{ appearance:none; padding-right:30px; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4.5L6 8.5L10 4.5' stroke='%23898781' stroke-width='1.6' fill='none' stroke-linecap='round'/></svg>"); background-repeat:no-repeat; background-position:right 10px center; }
+  .inp.ro{ background:var(--surface-2); color:var(--ink-2); }
+  .inp:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-wash); }
+  .inp.sm{ padding:5px 8px; font-size:12.5px; width:auto; }
+  .qty{ width:64px; text-align:right; }
+  .actions{ display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; align-items:center; }
+
+  /* crew picker */
+  .crewgrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px; margin-top:8px; }
+  .crewopt{ border:1px solid var(--hair); border-radius:10px; padding:10px 12px; cursor:pointer; display:flex; gap:10px; align-items:flex-start; background:var(--surface); }
+  .crewopt:hover{ background:var(--surface-2); }
+  .crewopt.on{ border-color:var(--accent); background:var(--accent-wash); }
+  .crewopt .bx{ width:16px; height:16px; border-radius:5px; border:1.5px solid var(--ink-3); flex:0 0 auto; margin-top:2px; display:grid; place-items:center; font-size:10px; color:#fff; }
+  .crewopt.on .bx{ background:var(--accent); border-color:var(--accent); }
+  .crewopt .cn{ font-weight:600; font-size:13.5px; }
+  .crewopt .cm{ font-size:12px; color:var(--ink-3); }
+
+  /* catalog picker */
+  .picker{ border:1px solid var(--hair); border-radius:10px; overflow:hidden; margin-top:8px; }
+  .picker .srch{ display:flex; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--hair); }
+  .picker .srch input{ border:0; outline:0; font:inherit; flex:1; background:transparent; color:var(--ink); }
+  .picker .opt{ display:flex; align-items:center; gap:12px; padding:8px 12px; border-bottom:1px solid var(--hair); cursor:pointer; font-size:13px; }
+  .picker .opt:last-child{ border-bottom:0; }
+  .picker .opt:hover{ background:var(--accent-wash); }
+  .picker .opt .cd{ font-size:12px; color:var(--ink-3); width:80px; flex:0 0 auto; font-variant-numeric:tabular-nums; }
+  .picker .opt .ds{ flex:1; }
+
+  /* photos */
+  .photos{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:8px; }
+  .ph{ aspect-ratio:4/3; border-radius:10px; border:1px solid var(--hair); display:grid; place-items:center; font-size:11px; color:var(--ink-3); text-align:center; background:linear-gradient(135deg,var(--surface-2),var(--hair)); }
+  .ph b{ display:block; font-size:10px; letter-spacing:.06em; color:var(--ink-2); }
+  .ph.cam{ border:2px dashed var(--accent-2); background:var(--surface); color:var(--accent); font-weight:600; cursor:pointer; }
+  .diff{ background:var(--accent-wash); border-left:3px solid var(--accent); padding:8px 12px; border-radius:0 8px 8px 0; font-size:13px; margin-top:8px; }
+  .diff .old{ color:var(--critical); text-decoration:line-through; }
+  .diff .new{ color:var(--good); font-weight:600; }
+
+  /* signature pad */
+  .sigpad{ border:1.5px dashed var(--ink-3); border-radius:10px; height:78px; display:grid; place-items:center; color:var(--ink-3); font-size:13px; background:var(--surface); cursor:pointer; }
+  .sigpad.done{ border-style:solid; border-color:var(--accent); background:var(--accent-wash); color:var(--accent); font-family:"Segoe Script","Bradley Hand","Snell Roundhand",cursive; font-size:22px; }
+
+  /* stepper */
+  .stepper{ display:inline-flex; align-items:center; border:1px solid var(--hair); border-radius:8px; overflow:hidden; vertical-align:middle; }
+  .stepper span{ width:30px; height:30px; display:grid; place-items:center; font-size:16px; color:var(--accent); font-weight:700; background:var(--surface-2); cursor:pointer; user-select:none; }
+  .stepper b{ width:38px; text-align:center; font-size:14px; }
+
+  /* pre-cert sheet */
+  .sheet{ border:2px solid var(--ink); border-radius:4px; padding:20px; background:var(--surface); font-size:13px; }
+  .sheet .shead{ text-align:center; border-bottom:1px solid var(--ink); padding-bottom:10px; margin-bottom:14px; }
+  .sheet .shead b{ font-size:16px; letter-spacing:-.2px; }
+  .sheet .shead p{ margin:2px 0 0; font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-2); }
+  .sheet .meta{ display:grid; grid-template-columns:1fr 1fr; gap:8px 18px; margin-bottom:12px; font-size:12.5px; }
+  .sheet .meta div{ border-bottom:1px solid var(--hair); padding-bottom:4px; }
+  .sheet .meta span{ color:var(--ink-3); font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; display:block; }
+  .sheet table th, .sheet table td{ border:1px solid var(--hair); padding:6px 8px; }
+  .sigs{ display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:16px; }
+  .sig{ border:1px solid var(--hair); border-radius:8px; padding:10px; }
+  .sig .lbl{ font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3); font-weight:700; margin-bottom:8px; }
+  .sig .ink{ font-family:"Segoe Script","Bradley Hand","Snell Roundhand",cursive; font-size:20px; color:var(--accent); border-bottom:1px solid var(--ink); padding-bottom:3px; margin-bottom:6px; }
+  .sig .empty{ border-bottom:1px dashed var(--ink-3); height:29px; margin-bottom:6px; cursor:pointer; }
+  .sig .nm{ font-size:12px; font-weight:600; }
+  .sig .dt{ font-size:11px; color:var(--ink-3); }
+
+  /* misc */
+  .note{ background:var(--warn-wash); color:var(--warning); border-radius:10px; padding:10px 12px; font-size:13px; }
+  .note.crit{ background:var(--crit-wash); color:var(--critical); }
+  .note.ok{ background:var(--good-wash); color:var(--good); }
+  .note.acc{ background:var(--accent-wash); color:var(--accent); }
+  .radio{ display:flex; gap:8px; flex-wrap:wrap; }
+  .radio label{ border:1px solid var(--hair); border-radius:8px; padding:6px 10px; font-size:12.5px; cursor:pointer; }
+  .radio label.on{ border-color:var(--accent); background:var(--accent-wash); color:var(--accent); font-weight:600; }
+  .kv{ display:grid; grid-template-columns:auto 1fr; gap:6px 16px; font-size:13.5px; margin-top:6px; }
+  .kv span:nth-child(odd){ color:var(--ink-3); }
+  tr.hidden{ display:none; }
+  tr.sel td{ background:var(--accent-wash); }
+  .clickable{ cursor:pointer; }
+  @media (max-width:760px){ .form2, .sigs, .photos{ grid-template-columns:1fr 1fr; } .crewgrid{ grid-template-columns:1fr; } }
+  body.phone .form2, body.phone .sigs{ grid-template-columns:1fr; }
+  body.phone .photos{ grid-template-columns:1fr 1fr; }
+
+
+</style>
+</head>
+<body>
+<div class="shell">
+
+<aside class="rail">
+  <div class="wordmark">JAF Ops <span data-es="Almacén · Guaynabo">Warehouse · Guaynabo</span></div>
+  <a data-go="dash" class="on" href="#" data-es="Panel">Dashboard</a>
+  <a data-go="prep" href="#"><span data-es="Órdenes por preparar">Work orders to prep</span> <span class="pill">3</span></a>
+  <a data-go="pickup" href="#"><span data-es="Esperando recogida">Awaiting pickup</span> <span class="n">2</span></a>
+  <a data-go="returns" href="#"><span data-es="Devoluciones pendientes">Returns due</span> <span class="n">2</span></a>
+  <a data-go="inventory" href="#"><span data-es="Inventario">Inventory count</span> <span class="n">128</span></a>
+  <a data-go="requests" href="#"><span data-es="Pedidos de material">Material requests</span> <span class="pill">1</span></a>
+  <a data-go="serials" href="#"><span data-es="Registro de seriales">Serial register</span> <span class="n">37</span></a>
+  <a data-go="log" href="#" data-es="Historial de movimientos">Movement log</a>
+  <div class="grp" data-es="Almacenes">Warehouses</div>
+  <a data-go="wh" data-arg="g" class="on" href="#" style="box-shadow:none;background:transparent;border-color:transparent">Guaynabo <span class="n" data-es="Calle Ajanta">Calle Ajanta</span></a>
+  <a data-go="wh" data-arg="a" href="#">Arecibo <span class="n">Sabana Hoyos</span></a>
+  <div class="foot">
+    <div class="user"><div class="av">FR</div><div><div class="nm">Frank Ramos</div><div class="rl" data-es="Mostrador · Guaynabo">Counter · Guaynabo</div></div></div>
+    <div class="toggles"><button class="toggle" id="themeBtn" type="button">Dark</button><button class="toggle" id="langBtn" type="button">ES</button></div>
+  </div>
+</aside>
+
+<div class="wrap">
+
+  <div class="top">
+    <div class="wordmark">JAF Ops</div>
+    <nav class="tabs"><a data-go="wh" data-arg="g" class="on" href="#">Guaynabo</a><a data-go="wh" data-arg="a" href="#">Arecibo</a></nav>
+    <div class="spacer"></div>
+    <div class="who" data-es="Sábado, 19 de septiembre">Saturday, 19 September</div>
+    <button class="btn ghost print" data-go="log" data-es="Recibir entrega">Receive delivery</button>
+    <button class="btn blue" data-go="inventory" data-es="Cargar conteo">Load count</button>
+  </div>
+
+<section class="screen on" data-screen="dash">
+  <div class="greet">
+    <div>
+      <div class="mdate" data-es="Sábado, 19 de septiembre">Saturday, 19 September</div>
+      <h1 data-es="Buenos días, Frank.">Good morning, Frank.</h1>
+      <p data-es="<b>3 órdenes</b> por preparar, <b>2</b> listas para recoger (una lleva 5 días), y <b>2 materiales</b> por debajo del mínimo. Un pedido a Claro espera la aprobación de Monica."><b>3 work orders</b> to prep, <b>2</b> staged for pickup (one has sat 5 days), and <b>2 materials</b> below minimum. One request to Claro is waiting on Monica.</p>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi">
+      <div><div class="l" data-es="Por preparar">To prep</div><div class="v">3</div><div class="d">12 <span data-es="líneas de material">material lines</span></div></div>
+      <div class="viz mini" role="img" aria-label="Materials per order"><i style="height:100%"></i><i style="height:80%"></i><i style="height:60%"></i></div>
+    </div>
+    <div class="kpi">
+      <div><div class="l" data-es="Esperando recogida">Awaiting pickup</div><div class="v warn">2</div><div class="d">1 <span data-es="lleva más de 3 días">over 3 days</span></div></div>
+      <svg class="viz ring warn" viewBox="0 0 52 52" role="img" aria-label="1 of 2 staged orders is aging"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="50"/><text x="26" y="25">5d</text><text class="cap" x="26" y="35" data-es="más viejo">oldest</text></svg>
+    </div>
+    <div class="kpi">
+      <div><div class="l" data-es="Devoluciones pendientes">Returns due</div><div class="v">2</div><div class="d">5 <span data-es="líneas esperadas">lines expected back</span></div></div>
+      <svg class="viz ring" viewBox="0 0 52 52" role="img" aria-label="2 of 8 open jobs owe a return"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="25"/><text x="26" y="25">2</text><text class="cap" x="26" y="35" data-es="de 8">of 8 jobs</text></svg>
+    </div>
+    <div class="kpi">
+      <div><div class="l" data-es="Bajo mínimo">Below minimum</div><div class="v neg">2</div><div class="d">SPAN CLAMP · LAG SCREW</div></div>
+      <svg class="viz ring crit" viewBox="0 0 52 52" role="img" aria-label="2 of 128 codes below minimum"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="8"/><text x="26" y="25">2</text><text class="cap" x="26" y="35" data-es="de 128">of 128</text></svg>
+    </div>
+    <div class="kpi">
+      <div><div class="l" data-es="Seriales contados">Serialized units counted</div><div class="v">18 <span class="sm" data-es="de 37">of 37</span></div><div class="d" data-es="Claro audita 3 veces al año">Claro audits 3× a year</div></div>
+      <svg class="viz ring" viewBox="0 0 52 52" role="img" aria-label="49 percent of serialized units counted"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="49"/><text x="26" y="25">49%</text><text class="cap" x="26" y="35" data-es="contado">counted</text></svg>
+    </div>
+  </div>
+
+  <div class="grid">
+
+    <!-- glance -->
+    <section class="box c4 acc glance">
+      <h2 data-es="Hoy en el mostrador">Today at the counter</h2>
+      <div class="big">3 <span data-es="por preparar">to prep</span></div>
+      <p data-es="Jesús Martínez viene por JAF-2026-1043 esta mañana. La lista está preparada; faltan las dos firmas.">Jesús Martínez is coming for JAF-2026-1043 this morning. The list is staged; it needs both signatures.</p>
+      <button class="btn acc" data-go="prep" data-es="Preparar JAF-2026-1044 · 5 materiales">Prep JAF-2026-1044 · 5 materials</button>
+      <button class="btn acc" data-go="pickup" data-es="Entregar JAF-2026-1043 · firma doble">Release JAF-2026-1043 · dual signature</button>
+      <button class="btn acc" data-go="requests" data-es="Pedir SPAN CLAMP y LAG SCREW a Claro">Request SPAN CLAMP and LAG SCREW from Claro</button>
+    </section>
+
+    <!-- prep queue -->
+    <section class="box c8">
+      <div class="head"><div><h2><span data-es="Órdenes de trabajo por preparar">Work orders to prep</span> <span class="count">3</span></h2><p class="sub" data-es="Llegan del supervisor en el momento en que crea la orden. Revisa el stock, ajusta, sustituye o marca faltante.">They arrive from the supervisor the moment he creates the order. Check stock, adjust, substitute or flag missing.</p></div></div>
+      <table>
+        <thead><tr><th data-es="Orden">Work order</th><th data-es="Brigada">Brigade</th><th data-es="Materiales">Materials</th><th data-es="Creada por">Created by</th><th data-es="Stock">Stock check</th><th class="act"></th></tr></thead>
+        <tbody>
+          <tr><td class="mono">JAF-2026-1044</td><td>Jesús Martínez</td><td>5 <span data-es="líneas">lines</span><div class="sm">300 FT wire · rods · clamps · screws</div></td><td>Edgard Ocasio <div class="sm" data-es="hoy 6:23 AM">today 6:23 AM</div></td><td><span class="tag ok" data-es="todo en stock">all in stock</span></td><td class="act"><button class="btn sm blue" data-go="prep" data-es="Preparar">Prep</button></td></tr>
+          <tr><td class="mono">JAF-2026-1046</td><td>Alexis Díaz</td><td>3 <span data-es="líneas">lines</span><div class="sm">500 FT buried wire · tape · clamps</div></td><td>Edgard Ocasio <div class="sm" data-es="hoy">today</div></td><td><span class="tag crit" data-es="SPAN CLAMP en 0 · 4 faltan">SPAN CLAMP at 0 · 4 short</span></td><td class="act"><button class="btn sm ghost" data-go="prep" data-es="Marcar faltante">Flag missing</button></td></tr>
+          <tr><td class="mono">JAF-2026-1001</td><td>Zariel Garay</td><td>4 <span data-es="líneas">lines</span><div class="sm">ground rod · wire · lag screws</div></td><td>Edgard Ocasio <div class="sm">7/21</div></td><td><span class="tag warn" data-es="LAG SCREW · quedan 2, pide 6">LAG SCREW · 2 left, needs 6</span></td><td class="act"><button class="btn sm ghost" data-go="prep" data-es="Sustituir">Substitute</button></td></tr>
+        </tbody>
+      </table>
+      <div class="split">
+        <div class="stat"><div class="l" data-es="Preparadas esta semana">Prepped this week</div><div class="v">11</div></div>
+        <div class="stat"><div class="l" data-es="Tiempo medio hasta recogida">Average time to pickup</div><div class="v">1.4 <span class="sm" data-es="días">days</span></div></div>
+      </div>
+    </section>
+
+    <!-- inventory -->
+    <section class="box c8">
+      <div class="head"><div><h2 data-es="Inventario · Guaynabo">Inventory count · Guaynabo</h2><p class="sub" data-es="Por código SAP. Lo que cuentas y la unidad en que se descuenta, lado a lado. Cada movimiento queda registrado con persona y hora.">By SAP code. What you count and the unit it's deducted in, side by side. Every movement is logged with a person and a time.</p></div><div><input class="inp" style="width:220px" placeholder="Search SAP code or name…" data-es-ph="Buscar código SAP o nombre…"></div></div>
+      <table>
+        <thead><tr><th>SAP</th><th data-es="Material">Material</th><th data-es="Se cuenta en">Counted as</th><th class="num" data-es="En mano">On hand</th><th class="num" data-es="Mínimo">Minimum</th><th data-es="Estado">Status</th><th class="act"></th></tr></thead>
+        <tbody>
+          <tr><td class="mono">1003793</td><td>SPAN CLAMP</td><td class="dim">CAJAS · 1 = 100</td><td class="num">0 PZA</td><td class="num dim">50</td><td><span class="tag crit" data-es="agotado">Out</span></td><td class="act"><button class="btn sm ghost" data-go="requests" data-es="Pedir">Request</button></td></tr>
+          <tr><td class="mono">1005855</td><td>LAG SCREW 2 1/2 X 5/16</td><td class="dim">CAJAS · 1 = 100</td><td class="num">2 PZA</td><td class="num dim">50</td><td><span class="tag crit" data-es="bajo">Low</span></td><td class="act"><button class="btn sm ghost" data-go="requests" data-es="Pedir">Request</button></td></tr>
+          <tr><td class="mono">4009642</td><td>MODEM 788 ADSL/VDSL V3 <span class="tag acc" data-es="serial">serialized</span></td><td class="dim">MODEMS · 1 = 1</td><td class="num">18</td><td class="num dim">25</td><td><span class="tag warn" data-es="reordenar">Reorder</span></td><td class="act"><button class="btn sm ghost" data-go="serials" data-es="Seriales">Serials</button></td></tr>
+          <tr><td class="mono">4012210</td><td>DGA4122HP <span class="tag acc" data-es="serial">serialized</span></td><td class="dim">UNITS · 1 = 1</td><td class="num">6</td><td class="num dim">15</td><td><span class="tag warn" data-es="reordenar · pedido">Reorder · requested</span></td><td class="act"><button class="btn sm ghost" data-go="serials" data-es="Seriales">Serials</button></td></tr>
+          <tr><td class="mono">1005803</td><td>BURIED SERVICE WIRE 6x22</td><td class="dim">ROLLOS · 1 = 500 FT</td><td class="num">1,240 FT</td><td class="num dim">1,000 FT</td><td><span class="tag ok" data-es="bien">Fine</span></td><td class="act"><button class="btn sm ghost" data-go="inventory" data-es="Ajustar">Adjust</button></td></tr>
+          <tr><td class="mono">1003748</td><td>ROD GROUND 5/8 X 8</td><td class="dim">PZA · 1 = 1</td><td class="num">31 PZA</td><td class="num dim">20</td><td><span class="tag ok" data-es="bien">Fine</span></td><td class="act"><button class="btn sm ghost" data-go="inventory" data-es="Ajustar">Adjust</button></td></tr>
+          <tr><td class="mono">1005807</td><td>WIRE GROUND # 6</td><td class="dim">ROLLOS · <span class="neg" data-es="factor sin definir">factor not set</span></td><td class="num dim">4 rollos</td><td class="num dim">—</td><td><span class="tag" data-es="unidad sin definir">unit not set</span></td><td class="act"><button class="btn sm ghost" data-go="inventory" data-es="Definir">Set unit</button></td></tr>
+        </tbody>
+      </table>
+      <div class="split">
+        <div class="stat"><div class="l" data-es="Códigos con conteo cargado">Codes with a count loaded</div><div class="v">89 <span class="sm" data-es="de 128">of 128</span></div></div>
+        <div class="stat"><div class="l" data-es="Sin factor de unidad">Without a unit factor</div><div class="v warn">39</div></div>
+      </div>
+    </section>
+
+    <!-- material request -->
+    <section class="box c4">
+      <h2><span data-es="Pedir material a Claro">Request material from Claro</span> <span class="count w">1</span></h2>
+      <p class="sub" data-es="Tú pides, Monica aprueba y lo envía a Claro. Aquí ves en qué paso va.">You request, Monica approves and sends it to Claro. You see which step it's on.</p>
+      <ul class="rows" id="reqlist">
+        <li><span>DGA4122HP × 40<div class="sm" data-es="enviado 9/17">sent 9/17</div></span><span class="st warn" data-es="esperando a Monica">waiting on Monica</span></li>
+        <li><span>MODEM 788 V3 × 30<div class="sm" data-es="enviado 9/12 · aprobado 9/13">sent 9/12 · approved 9/13</div></span><span class="st acc" data-es="pedido a Claro">ordered from Claro</span></li>
+      </ul>
+      <div class="flow" style="margin-top:14px"><div class="done"><b>1</b><span data-es="Tú pides">You request</span></div><div class="on"><b>2</b><span data-es="Monica aprueba">Monica approves</span></div><div><b>3</b><span data-es="Enviado a Claro">Sent to Claro</span></div><div><b>4</b><span data-es="Recibido">Received</span></div></div>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--hair)">
+        <div class="sm" style="margin-bottom:8px" data-es="Nuevo pedido · 2 materiales bajo mínimo">New request · 2 materials below minimum</div>
+        <ul class="gate" style="margin:0 0 10px">
+          <li><span class="ic n">!</span>SPAN CLAMP · 1003793<small>× 200</small></li>
+          <li><span class="ic n">!</span>LAG SCREW 2 1/2 · 1005855<small>× 200</small></li>
+        </ul>
+        <button class="btn blue" id="reqBtn" style="width:100%" data-es="Enviar pedido a Monica">Send request to Monica</button>
+      </div>
+    </section>
+
+    <!-- awaiting pickup -->
+    <section class="box c4">
+      <h2><span data-es="Esperando recogida">Awaiting pickup</span> <span class="count w">1</span></h2>
+      <p class="sub" data-es="Preparado y en la jaula. Más de 3 días se pone rojo.">Staged and in the cage. Past 3 days it turns red.</p>
+      <ul class="att">
+        <li><span class="mark a"></span><div><div class="t">JAF-2026-1043 · Jesús Martínez</div><div class="d" data-es="6 líneas · preparó Gilberto Ayala · viene hoy">6 lines · prepped by Gilberto Ayala · coming today</div></div><span class="lvl a">1 <span data-es="día">day</span></span></li>
+        <li><span class="mark"></span><div><div class="t">JAF-2026-1002 · Alexis Díaz</div><div class="d" data-es="4 líneas · preparó Frank Ramos · llamar al supervisor">4 lines · prepped by Frank Ramos · call the supervisor</div></div><span class="lvl">5 <span data-es="días">days</span></span></li>
+      </ul>
+    </section>
+
+    <!-- returns -->
+    <section class="box c4">
+      <h2><span data-es="Devoluciones pendientes">Returns due</span> <span class="count a">2</span></h2>
+      <p class="sub" data-es="Lo que la brigada dijo que sobró. Cuenta lo que llega; lo que falte lleva nota.">What the crew said was left over. Count what arrives; anything short gets a note.</p>
+      <ul class="att">
+        <li><span class="mark a"></span><div><div class="t">JAF-2026-1003 · Jesús Martínez</div><div class="d" data-es="Espera: 40 FT wire · 1 span clamp · 1 tape">Expected: 40 FT wire · 1 span clamp · 1 tape</div></div><span class="lvl a" data-es="hoy">today</span></li>
+        <li><span class="mark a"></span><div><div class="t">JAF-2026-1004 · Dino Castillo</div><div class="d" data-es="Espera: 2 líneas · enviado hace 2 h">Expected: 2 lines · submitted 2 h ago</div></div><span class="lvl a" data-es="mañana">tomorrow</span></li>
+      </ul>
+      <div class="split" style="grid-template-columns:1fr">
+        <div class="stat"><div class="l" data-es="Discrepancias este mes">Discrepancies this month</div><div class="v">3 <span class="sm">· $184 <span data-es="en material">of material</span></span></div></div>
+      </div>
+    </section>
+
+    <!-- movement log -->
+    <section class="box c4">
+      <h2 data-es="Últimos movimientos">Latest movements</h2>
+      <p class="sub" data-es="Persona, hora y orden en cada línea. Esto es lo que se defiende ante el auditor de Claro.">Person, time and order on every line. This is what stands up to Claro's auditor.</p>
+      <ul class="rows">
+        <li><span><b>−6</b> SPAN CLAMP<div class="sm">JAF-2026-1043 · F. Ramos + J. Martínez · 8/25</div></span><span class="st" data-es="entregado">released</span></li>
+        <li><span><b>−300 FT</b> BURIED WIRE<div class="sm">JAF-2026-1043 · F. Ramos + J. Martínez · 8/25</div></span><span class="st" data-es="entregado">released</span></li>
+        <li><span><b>+3</b> MODEM 788 V3<div class="sm" data-es="devolución · G. Ayala · 8/24">return · G. Ayala · 8/24</div></span><span class="st ok" data-es="devuelto">returned</span></li>
+        <li><span><b>+100</b> SPAN CLAMP<div class="sm" data-es="entrega Claro · O. Guzmán · 8/12">Claro delivery · O. Guzmán · 8/12</div></span><span class="st acc" data-es="recibido">received</span></li>
+      </ul>
+      <a class="more" href="#" data-go="log" data-es="Ver historial completo">See the full log</a>
+    </section>
+
+    <!-- movements chart -->
+    <section class="box c12">
+      <h2 data-es="Movimientos de stock · últimas 8 semanas">Stock movements · last 8 weeks</h2>
+      <p class="sub" data-es="Líneas entregadas a brigadas contra líneas recibidas (devoluciones y entregas de Claro). Guaynabo.">Lines released to brigades versus lines received (returns and Claro deliveries). Guaynabo.</p>
+      <div class="legend"><span><i style="background:var(--accent)"></i><span data-es="Entregado">Released</span></span><span><i style="background:var(--accent-2)"></i><span data-es="Recibido">Received</span></span></div>
+      <div class="chartwrap"><svg class="chart" id="moves" viewBox="0 0 640 230" aria-label="Weekly stock movements"></svg><div class="tip"></div></div>
+    </section>
+
+  </div>
+
+</section>
+
+<!-- ================= PREP ================= -->
+<section class="screen" data-screen="prep">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Órdenes por preparar">Work orders to prep</h1><p data-es="Paso 2. Saca la lista. Si una cantidad está mal, ajústala. Si algo falta, sustituye o marca faltante; el supervisor decide. Luego marca preparada.">Step 2. Pull the list. If a quantity is off, adjust it. If something is out, substitute or flag it; the supervisor decides. Then mark it prepped.</p></div></div>
+  <div class="tabs" style="display:inline-flex;margin-bottom:16px"><a class="on" href="#" data-tab="pr:1044">JAF-2026-1044 · Jesús Martínez</a><a href="#" data-tab="pr:1046">JAF-2026-1046 · Alexis Díaz <span class="tag crit" style="margin-left:6px" data-es="faltante">short</span></a><a href="#" data-tab="pr:1001">JAF-2026-1001 · Zariel Garay</a></div>
+
+  <div data-panel="pr:1044">
+    <div class="grid">
+      <section class="box c8">
+        <h2>JAF-2026-1044 · <span data-es="lista de preparación">prep list</span></h2>
+        <p class="sub" data-es="Creada por Edgard Ocasio hoy 6:23 AM · recoge Jesús Martínez · Guaynabo">Created by Edgard Ocasio today 6:23 AM · pickup by Jesús Martínez · Guaynabo</p>
+        <table>
+          <thead><tr><th>SAP</th><th data-es="Material">Material</th><th class="num" data-es="Pedido">Requested</th><th class="num" data-es="En mano">On hand</th><th class="num" data-es="Preparar">Prep qty</th><th data-es="Estado">Status</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">1005803</td><td>BURIED SERVICE WIRE 6x22</td><td class="num">300 FT</td><td class="num">1,240 FT</td><td class="num"><input class="inp qty" value="300"></td><td><span class="tag ok">ok</span></td></tr>
+            <tr><td class="mono">1003748</td><td>ROD GROUND 5/8 X 8</td><td class="num">2 PZA</td><td class="num">31 PZA</td><td class="num"><input class="inp qty" value="2"></td><td><span class="tag ok">ok</span></td></tr>
+            <tr><td class="mono">1005807</td><td>WIRE GROUND # 6</td><td class="num">40 FT</td><td class="num dim">— <span class="tag" data-es="unidad sin definir">unit not set</span></td><td class="num"><input class="inp qty" value="40"></td><td><span class="tag ok">ok</span></td></tr>
+            <tr><td class="mono">1003793</td><td>SPAN CLAMP</td><td class="num">4 PZA</td><td class="num">0 PZA</td><td class="num"><input class="inp qty" value="4"></td><td><span class="tag acc" data-es="sustituido → 1005859 MASK CLAMP">substituted → 1005859 MASK CLAMP</span></td></tr>
+            <tr><td class="mono">1005855</td><td>LAG SCREW 2 1/2 X 5/16</td><td class="num">6 PZA</td><td class="num">2 PZA</td><td class="num"><input class="inp qty" value="6"></td><td><span class="tag ok">ok</span></td></tr>
+          </tbody>
+        </table>
+        <div class="actions"><button class="btn ghost" data-say="Pick a line, then change the quantity." data-say-es="Elige una línea y cambia la cantidad." data-es="Ajustar cantidad">Adjust qty</button><button class="btn ghost" data-say="Substitute: choose an equivalent SAP code. Logged on the order." data-say-es="Sustituir: elige un código SAP equivalente. Queda en la orden." data-es="Sustituir…">Substitute…</button><button class="btn ghost" data-say="Edgard Ocasio notified: choose wait / substitute / proceed." data-say-es="Edgard Ocasio notificado: espera / sustituye / procede." data-es="⚑ Marcar faltante → avisar al supervisor">⚑ Flag missing → notify supervisor</button></div>
+      </section>
+      <section class="box c4">
+        <h2 data-es="Marcar preparada">Mark as prepped</h2>
+        <p class="sub" data-es="Pasa a «esperando recogida». La brigada ve «lista en Guaynabo» en su teléfono.">Moves to "awaiting pickup". The crew sees "staged at Guaynabo" on their phone.</p>
+        <div class="kv"><span data-es="Preparó">Prepped by</span><span>Frank Ramos</span><span data-es="Jaula">Cage</span><span>B-3</span><span data-es="Líneas">Lines</span><span>5 · 1 <span data-es="sustituida">substituted</span></span></div>
+        <p style="margin:14px 0 0"><button class="btn blue" style="width:100%" data-flip="Prepped · staged in cage B-3" data-flip-es="Preparada · en jaula B-3" data-toast="JAF-2026-1044 staged. Jesús Martínez notified." data-toast-es="JAF-2026-1044 preparada. Jesús Martínez notificado." data-es="Marcar preparada">Mark as prepped</button></p>
+      </section>
+    </div>
+  </div>
+
+  <div data-panel="pr:1046">
+    <div class="grid">
+      <section class="box c8">
+        <h2>JAF-2026-1046 · <span data-es="lista de preparación">prep list</span></h2>
+        <p class="sub" data-es="Creada por Edgard Ocasio hoy · recoge Alexis Díaz · Guaynabo">Created by Edgard Ocasio today · pickup by Alexis Díaz · Guaynabo</p>
+        <table>
+          <thead><tr><th>SAP</th><th data-es="Material">Material</th><th class="num" data-es="Pedido">Requested</th><th class="num" data-es="En mano">On hand</th><th class="num" data-es="Preparar">Prep qty</th><th data-es="Estado">Status</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">1005803</td><td>BURIED SERVICE WIRE 6x22</td><td class="num">500 FT</td><td class="num">1,240 FT</td><td class="num"><input class="inp qty" value="500"></td><td><span class="tag ok">ok</span></td></tr>
+            <tr><td class="mono">1005818</td><td>ELECTRIC BLACK TAPE</td><td class="num">4 PZA</td><td class="num">62 PZA</td><td class="num"><input class="inp qty" value="4"></td><td><span class="tag ok">ok</span></td></tr>
+            <tr><td class="mono">1003793</td><td>SPAN CLAMP</td><td class="num">4 PZA</td><td class="num">0 PZA</td><td class="num"><input class="inp qty" value="0"></td><td><span class="tag crit" data-es="faltante · 4 cortos">missing · 4 short</span></td></tr>
+          </tbody>
+        </table>
+        <div class="note crit" style="margin-top:14px" data-es="SPAN CLAMP en 0. Arecibo tiene 40. Opciones: transferir de Arecibo (1 día), sustituir por MASK CLAMP, o marcar faltante y que Edgard decida.">SPAN CLAMP at 0. Arecibo has 40. Options: transfer from Arecibo (1 day), substitute MASK CLAMP, or flag missing and let Edgard decide.</div>
+        <div class="actions"><button class="btn ghost" data-flip="Transfer requested from Arecibo · 40 PZA" data-flip-es="Transferencia pedida a Arecibo · 40 PZA" data-flip-cls="acc" data-es="Transferir de Arecibo">Transfer from Arecibo</button><button class="btn ghost" data-say="Substituted → 1005859 MASK CLAMP × 4" data-say-es="Sustituido → 1005859 MASK CLAMP × 4" data-es="Sustituir">Substitute</button><button class="btn blue" data-flip="Flagged · waiting on Edgard Ocasio" data-flip-es="Marcado · esperando a Edgard Ocasio" data-flip-cls="warn" data-toast="Edgard Ocasio notified. Order stays TO PREP · waiting on supervisor." data-toast-es="Edgard Ocasio notificado. La orden queda en POR PREPARAR · esperando supervisor." data-es="⚑ Marcar faltante → avisar al supervisor">⚑ Flag missing → notify supervisor</button></div>
+      </section>
+      <section class="box c4">
+        <h2 data-es="Marcar preparada">Mark as prepped</h2>
+        <p class="sub" data-es="Bloqueado hasta que el supervisor conteste el faltante.">Blocked until the supervisor answers the missing line.</p>
+        <button class="btn blue" style="width:100%" disabled data-es="Marcar preparada · bloqueado">Mark as prepped · blocked</button>
+      </section>
+    </div>
+  </div>
+
+  <div data-panel="pr:1001">
+    <div class="grid">
+      <section class="box c8">
+        <h2>JAF-2026-1001 · <span data-es="lista de preparación">prep list</span></h2>
+        <p class="sub" data-es="Creada por Edgard Ocasio el 7/21 · recoge Zariel Garay · Guaynabo">Created by Edgard Ocasio on 7/21 · pickup by Zariel Garay · Guaynabo</p>
+        <table>
+          <thead><tr><th>SAP</th><th data-es="Material">Material</th><th class="num" data-es="Pedido">Requested</th><th class="num" data-es="En mano">On hand</th><th class="num" data-es="Preparar">Prep qty</th><th data-es="Estado">Status</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">1003748</td><td>ROD GROUND 5/8 X 8</td><td class="num">2 PZA</td><td class="num">31 PZA</td><td class="num"><input class="inp qty" value="2"></td><td><span class="tag ok">ok</span></td></tr>
+            <tr><td class="mono">1005807</td><td>WIRE GROUND # 6</td><td class="num">40 FT</td><td class="num dim">—</td><td class="num"><input class="inp qty" value="40"></td><td><span class="tag ok">ok</span></td></tr>
+            <tr><td class="mono">1005855</td><td>LAG SCREW 2 1/2 X 5/16</td><td class="num">6 PZA</td><td class="num">2 PZA</td><td class="num"><input class="inp qty" value="2"></td><td><span class="tag warn" data-es="quedan 2 · pide 6">2 left · needs 6</span></td></tr>
+            <tr><td class="mono">1005818</td><td>ELECTRIC BLACK TAPE</td><td class="num">2 PZA</td><td class="num">62 PZA</td><td class="num"><input class="inp qty" value="2"></td><td><span class="tag ok">ok</span></td></tr>
+          </tbody>
+        </table>
+        <div class="actions"><button class="btn ghost" data-flip="Substituted → 1005856 LAG SCREW 3 X 3/8 × 4" data-flip-es="Sustituido → 1005856 LAG SCREW 3 X 3/8 × 4" data-flip-cls="acc" data-es="Sustituir LAG SCREW">Substitute LAG SCREW</button><button class="btn ghost" data-say="Edgard Ocasio notified." data-say-es="Edgard Ocasio notificado." data-es="⚑ Marcar faltante">⚑ Flag missing</button></div>
+      </section>
+      <section class="box c4">
+        <h2 data-es="Marcar preparada">Mark as prepped</h2>
+        <p style="margin:6px 0 0"><button class="btn blue" style="width:100%" data-flip="Prepped · staged in cage A-1" data-flip-es="Preparada · en jaula A-1" data-toast="JAF-2026-1001 staged. Zariel Garay notified." data-toast-es="JAF-2026-1001 preparada. Zariel Garay notificado." data-es="Marcar preparada">Mark as prepped</button></p>
+      </section>
+    </div>
+  </div>
+</section>
+
+<!-- ================= PICKUP & RELEASE ================= -->
+<section class="screen" data-screen="pickup">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Recogida y entrega · firma doble">Pickup &amp; release · dual signature</h1><p data-es="Paso 3. La misma pantalla para ti y la brigada. Cuenten juntos; si llevan más, cambia el número (ámbar, nunca rojo). Ambos firman; la lista se bloquea para todos.">Step 3. The same screen for you and the crew. Count together; if they take more, change the number (amber, never red). Both sign; the list locks for everyone.</p></div></div>
+  <div class="tabs" style="display:inline-flex;margin-bottom:16px"><a class="on" href="#" data-tab="pk:1043">JAF-2026-1043 · Jesús Martínez · 1 <span data-es="día">day</span></a><a href="#" data-tab="pk:1002">JAF-2026-1002 · Alexis Díaz · <span class="tag crit" style="margin-left:6px">5 <span data-es="días">days</span></span></a></div>
+  <div data-panel="pk:1043">
+    <div class="grid">
+      <section class="box c8">
+        <h2>JAF-2026-1043 · <span data-es="materiales">materials</span></h2>
+        <p class="sub" data-es="Jesús Martínez en el mostrador de Guaynabo · entrega Frank Ramos · jaula B-2">Jesús Martínez at the Guaynabo counter · Frank Ramos releasing · cage B-2</p>
+        <table id="pkTable">
+          <thead><tr><th>SAP</th><th data-es="Material">Material</th><th class="num" data-es="Listado">Listed</th><th class="num" data-es="Se lleva">Taken</th><th></th></tr></thead>
+          <tbody>
+            <tr data-listed="300"><td class="mono">1005803</td><td>BURIED SERVICE WIRE 6x22 <span class="sm">FT</span></td><td class="num">300</td><td class="num"><input class="inp qty" value="300"></td><td class="fl"></td></tr>
+            <tr data-listed="2"><td class="mono">1003748</td><td>ROD GROUND 5/8 X 8 <span class="sm">PZA</span></td><td class="num">2</td><td class="num"><input class="inp qty" value="2"></td><td class="fl"></td></tr>
+            <tr data-listed="40"><td class="mono">1005807</td><td>WIRE GROUND # 6 <span class="sm">FT</span></td><td class="num">40</td><td class="num"><input class="inp qty" value="40"></td><td class="fl"></td></tr>
+            <tr data-listed="4"><td class="mono">1003793</td><td>SPAN CLAMP <span class="sm">PZA</span></td><td class="num">4</td><td class="num"><input class="inp qty" value="6"></td><td class="fl"></td></tr>
+            <tr data-listed="6"><td class="mono">1005855</td><td>LAG SCREW 2 1/2 X 5/16 <span class="sm">PZA</span></td><td class="num">6</td><td class="num"><input class="inp qty" value="6"></td><td class="fl"></td></tr>
+            <tr data-listed="0"><td class="mono">1005818</td><td>ELECTRIC BLACK TAPE <span class="sm">PZA</span></td><td class="num">—</td><td class="num"><input class="inp qty" value="2"></td><td class="fl"><span class="tag acc" data-es="añadido en mostrador">added at counter</span></td></tr>
+          </tbody>
+        </table>
+        <div class="actions"><button class="btn ghost" data-say="Search the SAP catalog and add a line. Shows as 'added at counter'." data-say-es="Busca en el catálogo SAP y añade una línea. Aparece como 'añadido en mostrador'." data-es="＋ Añadir material">＋ Add a material</button><span class="sm" data-es="Llevar más de lo listado es normal. El supervisor lo ve en la revisión. Nunca es error.">Taking more than listed is normal. The supervisor sees it at review. It's never an error.</span></div>
+      </section>
+      <section class="box c4">
+        <h2 data-es="Firmas">Signatures</h2>
+        <p class="sub" data-es="Las dos, en cualquier orden. Al firmar la segunda, «Se lleva» se bloquea en todo el sistema y el stock se descuenta.">Both, in any order. On the second signature, "Taken" locks everywhere in the system and stock is deducted.</p>
+        <div class="field"><label data-es="Almacén · Frank Ramos">Warehouse · Frank Ramos</label><div class="sigpad" data-name="F. Ramos" data-es="Toca para firmar">Tap to sign</div></div>
+        <div class="field" style="margin-top:10px"><label data-es="Brigada · Jesús Martínez">Crew · Jesús Martínez</label><div class="sigpad" data-name="J. Martínez" data-es="Toca para firmar">Tap to sign</div></div>
+        <p style="margin:14px 0 0"><button class="btn blue" id="relMat" style="width:100%" disabled data-es="Entregar materiales → bloquear lista">Release materials → lock list</button></p>
+        <p class="sm" id="relNote" data-es="Se activa con las dos firmas.">Enabled once both have signed.</p>
+      </section>
+    </div>
+  </div>
+  <div data-panel="pk:1002">
+    <div class="grid">
+      <section class="box c8">
+        <h2>JAF-2026-1002 · <span data-es="materiales">materials</span></h2>
+        <p class="sub" data-es="Preparado por Frank Ramos hace 5 días · Alexis Díaz no ha venido · jaula A-4">Prepped by Frank Ramos 5 days ago · Alexis Díaz hasn't come · cage A-4</p>
+        <table>
+          <thead><tr><th>SAP</th><th data-es="Material">Material</th><th class="num" data-es="Listado">Listed</th><th class="num" data-es="Se lleva">Taken</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">1005803</td><td>BURIED SERVICE WIRE 6x22 <span class="sm">FT</span></td><td class="num">250</td><td class="num"><input class="inp qty" value="250"></td></tr>
+            <tr><td class="mono">1005818</td><td>ELECTRIC BLACK TAPE <span class="sm">PZA</span></td><td class="num">3</td><td class="num"><input class="inp qty" value="3"></td></tr>
+            <tr><td class="mono">1003793</td><td>SPAN CLAMP <span class="sm">PZA</span></td><td class="num">4</td><td class="num"><input class="inp qty" value="4"></td></tr>
+            <tr><td class="mono">1005855</td><td>LAG SCREW 2 1/2 X 5/16 <span class="sm">PZA</span></td><td class="num">4</td><td class="num"><input class="inp qty" value="4"></td></tr>
+          </tbody>
+        </table>
+        <div class="note" style="margin-top:14px" data-es="5 días en la jaula. El supervisor ya fue avisado el día 3. Puedes devolver el material al stock si la brigada no viene hoy.">5 days in the cage. The supervisor was notified on day 3. You can put the material back in stock if the crew doesn't come today.</div>
+        <div class="actions"><button class="btn ghost" data-say="Edgard Ocasio notified again." data-say-es="Edgard Ocasio notificado de nuevo." data-es="Avisar al supervisor">Notify supervisor</button><button class="btn ghost" data-flip="Returned to stock · order back to TO PREP" data-flip-es="Devuelto al stock · orden vuelve a POR PREPARAR" data-flip-cls="warn" data-es="Devolver al stock">Put back in stock</button></div>
+      </section>
+      <section class="box c4">
+        <h2 data-es="Firmas">Signatures</h2>
+        <div class="field"><label data-es="Almacén">Warehouse</label><div class="sigpad" data-name="F. Ramos" data-es="Toca para firmar">Tap to sign</div></div>
+        <div class="field" style="margin-top:10px"><label data-es="Brigada · Alexis Díaz">Crew · Alexis Díaz</label><div class="sigpad" data-name="A. Díaz" data-es="Toca para firmar">Tap to sign</div></div>
+      </section>
+    </div>
+  </div>
+</section>
+
+<!-- ================= RETURNS ================= -->
+<section class="screen" data-screen="returns">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Devoluciones · conciliar">Returns · reconcile</h1><p data-es="La brigada dijo qué usó; el sistema calculó qué debe volver (tomado − usado). Cuenta lo que llega. Lo que falte lleva nota y razón; nunca se reclasifica como «consumido».">The crew said what they used; the system computed what should come back (taken − used). Count what arrives. Anything short gets a note and a reason; it's never reclassified as "consumed".</p></div></div>
+  <div class="tabs" style="display:inline-flex;margin-bottom:16px"><a class="on" href="#" data-tab="rt:1003">JAF-2026-1003 · Jesús Martínez</a><a href="#" data-tab="rt:1004">JAF-2026-1004 · Dino Castillo</a></div>
+  <div data-panel="rt:1003">
+    <div class="grid">
+      <section class="box c8">
+        <h2>JAF-2026-1003 · <span data-es="recibiendo en Guaynabo">receiving at Guaynabo</span></h2>
+        <p class="sub" data-es="Cambia un número en «Recibido» para ver la regla. Prueba el span clamp: espera 1, recibe 0.">Change a "Received" number to see the rule. Try the span clamp: expected 1, received 0.</p>
+        <table id="retTable">
+          <thead><tr><th>SAP</th><th data-es="Material">Material</th><th class="num" data-es="Tomado 🔒">Taken 🔒</th><th class="num" data-es="Usado (brigada)">Used (crew)</th><th class="num" data-es="Debe volver">Expected back</th><th class="num" data-es="Recibido">Received</th><th data-es="Estado">Status</th></tr></thead>
+          <tbody>
+            <tr data-exp="40"><td class="mono">1005803</td><td>BURIED SERVICE WIRE 6x22 <span class="sm">FT</span></td><td class="num">300</td><td class="num">260</td><td class="num">40</td><td class="num"><input class="inp qty" value="40" data-ret></td><td class="st"></td></tr>
+            <tr data-exp="0"><td class="mono">1003748</td><td>ROD GROUND 5/8 X 8</td><td class="num">2</td><td class="num">2</td><td class="num">0</td><td class="num"><input class="inp qty" value="0" data-ret></td><td class="st"></td></tr>
+            <tr data-exp="0"><td class="mono">1005807</td><td>WIRE GROUND # 6 <span class="sm">FT</span></td><td class="num">40</td><td class="num">40</td><td class="num">0</td><td class="num"><input class="inp qty" value="0" data-ret></td><td class="st"></td></tr>
+            <tr data-exp="1"><td class="mono">1003793</td><td>SPAN CLAMP</td><td class="num">6</td><td class="num">5</td><td class="num">1</td><td class="num"><input class="inp qty" value="1" data-ret></td><td class="st"></td></tr>
+            <tr data-exp="0"><td class="mono">1005855</td><td>LAG SCREW 2 1/2 X 5/16</td><td class="num">6</td><td class="num">6</td><td class="num">0</td><td class="num"><input class="inp qty" value="0" data-ret></td><td class="st"></td></tr>
+            <tr data-exp="1"><td class="mono">1005818</td><td>ELECTRIC BLACK TAPE</td><td class="num">2</td><td class="num">1</td><td class="num">1</td><td class="num"><input class="inp qty" value="1" data-ret></td><td class="st"></td></tr>
+          </tbody>
+        </table>
+        <div id="retAlert" style="margin-top:14px"></div>
+        <div id="retNote" style="display:none;margin-top:12px">
+          <div class="field"><label data-es="Nota de discrepancia · obligatoria">Discrepancy note · required</label><input class="inp" id="retNoteTxt" placeholder="e.g. 'clamp damaged on site, crew has photo'" data-es-ph="ej. 'clamp dañado en sitio, la brigada tiene foto'"></div>
+          <div class="field" style="margin-top:10px"><label data-es="Razón">Reason</label><div class="radio"><label class="on" data-es="Dañado">Damaged</label><label data-es="Perdido / no devuelto">Lost / not returned</label><label data-es="Mal contado al recoger">Miscount at pickup</label><label data-es="Usado, la brigada reportó de menos">Used, crew under-reported</label></div></div>
+        </div>
+      </section>
+      <section class="box c4">
+        <h2 data-es="Confirmar devolución">Confirm return</h2>
+        <div class="field"><label data-es="Devuelto a">Returned to</label><select class="inp"><option>Guaynabo (pickup warehouse)</option><option>Arecibo</option></select></div>
+        <div class="field" style="margin-top:10px"><label data-es="Recibe">Received by</label><input class="inp ro" value="Frank Ramos · 9/19 8:10 AM" readonly></div>
+        <p style="margin:14px 0 0"><button class="btn blue" id="retBtn" style="width:100%" data-es="Confirmar devolución">Confirm return</button></p>
+        <div class="note acc" style="margin-top:14px" data-es="La cantidad facturada no cambia aquí. «Usado» es lo que el supervisor factura; esto solo decide si el almacén recuperó su material.">The invoiced quantity never changes here. "Used" is what the supervisor invoices; this only decides whether the warehouse got its material back.</div>
+      </section>
+    </div>
+  </div>
+  <div data-panel="rt:1004">
+    <div class="grid">
+      <section class="box c8">
+        <h2>JAF-2026-1004 · <span data-es="esperado mañana">expected tomorrow</span></h2>
+        <p class="sub" data-es="Dino Castillo envió el reporte hace 2 h. El sistema ya calculó lo que debe volver.">Dino Castillo submitted the field update 2 h ago. The system already computed what should come back.</p>
+        <table>
+          <thead><tr><th>SAP</th><th data-es="Material">Material</th><th class="num" data-es="Tomado 🔒">Taken 🔒</th><th class="num" data-es="Usado">Used</th><th class="num" data-es="Debe volver">Expected back</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">1005803</td><td>BURIED SERVICE WIRE 6x22 <span class="sm">FT</span></td><td class="num">200</td><td class="num">180</td><td class="num">20</td></tr>
+            <tr><td class="mono">1003793</td><td>SPAN CLAMP</td><td class="num">4</td><td class="num">4</td><td class="num">0</td></tr>
+            <tr><td class="mono">1005855</td><td>LAG SCREW 2 1/2 X 5/16</td><td class="num">6</td><td class="num">4</td><td class="num">2</td></tr>
+          </tbody>
+        </table>
+      </section>
+      <section class="box c4"><h2 data-es="Cuando llegue">When it arrives</h2><p class="sub" data-es="Esta pestaña se vuelve editable cuando la brigada llega al mostrador.">This tab becomes editable when the crew reaches the counter.</p><button class="btn ghost" style="width:100%" data-say="Dino Castillo: 'tomorrow 7:30 AM'" data-say-es="Dino Castillo: 'mañana 7:30 AM'" data-es="Preguntar hora de llegada">Ask arrival time</button></section>
+    </div>
+  </div>
+</section>
+
+<!-- ================= INVENTORY ================= -->
+<section class="screen" data-screen="inventory">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Inventario · Guaynabo">Inventory count · Guaynabo</h1><p data-es="Por código SAP, un nombre canónico. La unidad en que cuentas y la unidad en que se descuenta, lado a lado. Ajustas con razón, nunca a secas. Cada movimiento lleva persona y hora.">By SAP code, one canonical name. The unit you count in and the unit it's deducted in, side by side. You adjust with a reason, never bare. Every movement carries a person and a time.</p></div><div class="actions"><input class="inp" style="width:260px" data-filter="#invFull" placeholder="Search SAP code or name (either name for the 21 duplicates)…" data-es-ph="Buscar código SAP o nombre…"><button class="btn ghost" data-say="Snapshot as of 9/19/2026 exported (.xlsx). The number you defend to Claro's auditor." data-say-es="Snapshot al 9/19/2026 exportado (.xlsx). El número que defiendes ante el auditor de Claro." data-es="⬇ Snapshot a fecha">⬇ Snapshot as of…</button><button class="btn blue" data-say="Upload the count sheet (.xlsx). Differences show as adjustments to confirm." data-say-es="Sube la hoja de conteo (.xlsx). Las diferencias aparecen como ajustes a confirmar." data-es="Cargar conteo">Load count</button></div></div>
+  <div class="grid">
+    <section class="box c12">
+      <div class="tabs" style="display:inline-flex;margin-bottom:12px"><a class="on" href="#" data-say="All 128 codes" data-say-es="Los 128 códigos" data-es="Todos">All</a><a href="#" data-say="Filter: below minimum (2)" data-say-es="Filtro: bajo mínimo (2)" data-es="Bajo mínimo">Below minimum</a><a href="#" data-say="Filter: serialized (19 SKUs)" data-say-es="Filtro: serializados (19 SKUs)" data-es="Serializados">Serialized</a><a href="#" data-say="Filter: no unit factor (39)" data-say-es="Filtro: sin factor (39)" data-es="Sin factor">No unit factor</a></div>
+      <table id="invFull">
+        <thead><tr><th>SAP</th><th data-es="Material">Material</th><th data-es="Uso">Used in</th><th data-es="Se cuenta en">Counted as</th><th data-es="= unidad stock">= stock unit</th><th class="num" data-es="En mano">On hand</th><th class="num" data-es="Mínimo">Min</th><th data-es="Último movimiento">Last movement</th><th class="act"></th></tr></thead>
+        <tbody>
+          <tr><td class="mono">1005803</td><td>BURIED SERVICE WIRE 6x22</td><td class="dim">BOTH</td><td>ROLLOS</td><td class="dim">1 rollo = 500 FT</td><td class="num"><b>1,240 FT</b> <span class="sm">(2.5 rollos)</span></td><td class="num dim">1,000</td><td class="sm">−300 FT · JAF-1043 · F. Ramos · 8/25</td><td class="act"><button class="btn sm ghost" data-adj="1005803" data-es="Ajustar">Adjust</button></td></tr>
+          <tr><td class="mono">1003748</td><td>ROD GROUND 5/8 X 8 <span class="sm">alt: Ground Rod (Varilla de Tierra)</span></td><td class="dim">BOTH</td><td>PZA</td><td class="dim">1 = 1</td><td class="num"><b>31 PZA</b></td><td class="num dim">20</td><td class="sm">−2 · JAF-1043 · 8/25</td><td class="act"><button class="btn sm ghost" data-adj="1003748" data-es="Ajustar">Adjust</button></td></tr>
+          <tr><td class="mono">1005807</td><td>WIRE GROUND # 6 <span class="sm">alt: Ground Wire # 6 AWG</span></td><td class="dim">BOTH</td><td>ROLLOS</td><td><span class="tag" data-es="sin factor · pedir a Orlando">not set · ask Orlando</span></td><td class="num dim">— <span class="sm">4 rollos</span></td><td class="num dim">—</td><td class="sm">−40 FT · JAF-1043 · 8/25</td><td class="act"><button class="btn sm ghost" data-say="Set the factor (1 rollo = ? FT). Until then the figure stays hidden." data-say-es="Define el factor (1 rollo = ? FT). Hasta entonces la cifra queda oculta." data-es="Definir unidad">Set unit</button></td></tr>
+          <tr><td class="mono">1003793</td><td>SPAN CLAMP</td><td class="dim">BOTH</td><td>CAJAS</td><td class="dim">1 caja = 100</td><td class="num"><b>0 PZA</b> <span class="tag crit" data-es="agotado">out</span></td><td class="num dim">50</td><td class="sm">−6 · JAF-1043 · 8/25</td><td class="act"><button class="btn sm ghost" data-go="requests" data-es="Pedir">Request</button></td></tr>
+          <tr><td class="mono">1005855</td><td>LAG SCREW 2 1/2 X 5/16</td><td class="dim">BOTH</td><td>CAJAS</td><td class="dim">1 caja = 100</td><td class="num"><b>2 PZA</b> <span class="tag crit" data-es="bajo">low</span></td><td class="num dim">50</td><td class="sm">−6 · JAF-1043 · 8/25</td><td class="act"><button class="btn sm ghost" data-go="requests" data-es="Pedir">Request</button></td></tr>
+          <tr><td class="mono">1005818</td><td>ELECTRIC BLACK TAPE</td><td class="dim">BOTH</td><td>PZA</td><td class="dim">1 = 1</td><td class="num"><b>62 PZA</b></td><td class="num dim">24</td><td class="sm">−2 · JAF-1043 · 8/25</td><td class="act"><button class="btn sm ghost" data-adj="1005818" data-es="Ajustar">Adjust</button></td></tr>
+          <tr><td class="mono">1005859</td><td>MASK CLAMP</td><td class="dim">BOTH</td><td>CAJAS</td><td class="dim">1 caja = 50</td><td class="num"><b>140 PZA</b></td><td class="num dim">50</td><td class="sm">+100 · <span data-es="entrega">delivery</span> · 8/12</td><td class="act"><button class="btn sm ghost" data-adj="1005859" data-es="Ajustar">Adjust</button></td></tr>
+          <tr><td class="mono">4009642</td><td>MODEM 788 ADSL/VDSL V3 <span class="tag acc">serialized</span></td><td class="dim">INSTALL</td><td>MODEMS</td><td class="dim">1 = 1</td><td class="num"><b>18</b></td><td class="num dim">25</td><td class="sm">+3 <span data-es="devueltos">returned</span> · 8/24</td><td class="act"><button class="btn sm ghost" data-go="serials" data-es="Seriales">Serials</button></td></tr>
+          <tr><td class="mono">4012210</td><td>DGA4122HP <span class="tag acc">serialized</span></td><td class="dim">INSTALL</td><td>UNITS</td><td class="dim">1 = 1</td><td class="num"><b>6</b></td><td class="num dim">15</td><td class="sm">−4 · <span data-es="instalador">installer</span> R. Santiago · 9/16</td><td class="act"><button class="btn sm ghost" data-go="serials" data-es="Seriales">Serials</button></td></tr>
+          <tr><td class="mono">4011281</td><td>ONT GPON-A <span class="tag acc">serialized</span></td><td class="dim">INSTALL</td><td>UNITS</td><td class="dim">1 = 1</td><td class="num"><b>9</b></td><td class="num dim">10</td><td class="sm">−2 · <span data-es="instalador">installer</span> J. Colón · 9/17</td><td class="act"><button class="btn sm ghost" data-go="serials" data-es="Seriales">Serials</button></td></tr>
+          <tr><td class="mono">1005890</td><td>DROP WIRE 750 FT</td><td class="dim">INSTALL</td><td>ROLLOS</td><td class="dim">1 rollo = 750 FT</td><td class="num"><b>1,500 FT</b> <span class="tag warn" data-es="reordenar">reorder</span></td><td class="num dim">3,000</td><td class="sm">−750 FT · <span data-es="instalador">installer</span> · 9/15</td><td class="act"><button class="btn sm ghost" data-go="requests" data-es="Pedir">Request</button></td></tr>
+        </tbody>
+      </table>
+      <p class="sm" data-es="118 códigos más. 39 sin factor de unidad ocultan la cifra hasta que Orlando lo defina; un número en la unidad equivocada es peor que ninguno.">118 more codes. 39 without a unit factor hide the figure until Orlando sets it; a number in the wrong unit is worse than none.</p>
+    </section>
+    <section class="box c5" id="adjBox" style="display:none">
+      <h2 data-es="Ajustar con razón">Adjust with a reason</h2>
+      <p class="sub"><span data-es="Código">Code</span> <b id="adjCode"></b> · <span data-es="queda registrado con tu nombre y la hora">logged with your name and the time</span></p>
+      <div class="form2"><div class="field"><label data-es="Nuevo conteo">New count</label><input class="inp" id="adjQty" placeholder="0"></div><div class="field"><label data-es="Razón">Reason</label><select class="inp"><option data-es="Conteo físico">Physical count</option><option data-es="Dañado">Damaged</option><option data-es="Encontrado">Found</option><option data-es="Corrección de entrada">Entry correction</option></select></div></div>
+      <div class="actions"><button class="btn blue" data-requires="#adjQty" id="adjSave" data-es="Guardar ajuste">Save adjustment</button><button class="btn ghost" id="adjCancel" data-es="Cancelar">Cancel</button></div>
+    </section>
+  </div>
+</section>
+
+<!-- ================= MATERIAL REQUESTS ================= -->
+<section class="screen" data-screen="requests">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Pedidos de material a Claro">Material requests to Claro</h1><p data-es="Tú pides. Monica aprueba y lo manda a Claro. Cuando llega, lo recibes aquí y el stock sube. Un pedido, cuatro pasos, siempre visibles.">You request. Monica approves and sends it to Claro. When it arrives you receive it here and stock goes up. One request, four steps, always visible.</p></div></div>
+  <div class="grid">
+    <section class="box c7">
+      <h2 data-es="Pedidos abiertos">Open requests</h2>
+      <table id="reqTable">
+        <thead><tr><th data-es="Pedido">Request</th><th data-es="Material">Material</th><th class="num" data-es="Cant.">Qty</th><th data-es="Enviado">Sent</th><th data-es="Paso">Step</th><th data-es="Estado">Status</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">MR-0031</td><td>DGA4122HP · 4012210</td><td class="num">40</td><td>9/17 · F. Ramos</td><td><span data-es="2 · Monica">2 · Monica</span></td><td><span class="tag warn" data-es="esperando aprobación">waiting on approval</span></td></tr>
+          <tr><td class="mono">MR-0030</td><td>MODEM 788 V3 · 4009642</td><td class="num">30</td><td>9/12 · O. Guzmán</td><td><span data-es="3 · Claro">3 · Claro</span></td><td><span class="tag acc" data-es="pedido a Claro · 9/13">ordered from Claro · 9/13</span></td></tr>
+          <tr><td class="mono">MR-0029</td><td>DROP WIRE 750 FT · 1005890</td><td class="num">6 rollos</td><td>9/10 · F. Ramos</td><td><span data-es="4 · Recibido">4 · Received</span></td><td><span class="tag ok" data-es="recibido 9/18 · stock +4,500 FT">received 9/18 · stock +4,500 FT</span></td></tr>
+        </tbody>
+      </table>
+      <div class="flow" style="margin-top:14px"><div class="done"><b>1</b><span data-es="Tú pides">You request</span></div><div class="on"><b>2</b><span data-es="Monica aprueba">Monica approves</span></div><div><b>3</b><span data-es="Enviado a Claro">Sent to Claro</span></div><div><b>4</b><span data-es="Recibido · stock sube">Received · stock up</span></div></div>
+    </section>
+    <section class="box c5">
+      <h2 data-es="Nuevo pedido">New request</h2>
+      <p class="sub" data-es="Los materiales bajo mínimo ya están puestos. Añade o quita, y envía.">Materials below minimum are pre-filled. Add or remove, then send.</p>
+      <table id="newReq">
+        <thead><tr><th data-es="Material">Material</th><th class="num" data-es="En mano">On hand</th><th class="num" data-es="Pedir">Request</th><th></th></tr></thead>
+        <tbody>
+          <tr><td>SPAN CLAMP · 1003793</td><td class="num">0</td><td class="num"><input class="inp qty" value="200"></td><td class="act"><span class="clickable dim" data-del>✕</span></td></tr>
+          <tr><td>LAG SCREW 2 1/2 · 1005855</td><td class="num">2</td><td class="num"><input class="inp qty" value="200"></td><td class="act"><span class="clickable dim" data-del>✕</span></td></tr>
+        </tbody>
+      </table>
+      <div class="field" style="margin-top:12px"><label data-es="Añadir material">Add a material</label><input class="inp" id="reqAdd" placeholder="Type a SAP code or name…" data-es-ph="Escribe código SAP o nombre…"></div>
+      <div class="field" style="margin-top:10px"><label data-es="Nota para Monica · opcional">Note for Monica · optional</label><input class="inp" placeholder="e.g. 'JAF-2026-1046 is waiting on the clamps'" data-es-ph="ej. 'JAF-2026-1046 espera por los clamps'"></div>
+      <p style="margin:14px 0 0"><button class="btn blue" id="reqSend" style="width:100%" data-es="Enviar pedido a Monica">Send request to Monica</button></p>
+    </section>
+  </div>
+</section>
+
+<!-- ================= SERIAL REGISTER ================= -->
+<section class="screen" data-screen="serials">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Registro de seriales">Serial register</h1><p data-es="19 SKUs serializados de Claro. Cada unidad tiene una ubicación: en almacén, en la van, instalada en una dirección, o fallida. Claro audita tres veces al año; esto es lo que se entrega.">19 serialized Claro SKUs. Every unit has a location: in the warehouse, on a van, installed at an address, or failed. Claro audits three times a year; this is what gets handed over.</p></div><div class="actions"><input class="inp" style="width:240px" data-filter="#serTable" placeholder="Scan or type a serial…" data-es-ph="Escanea o escribe un serial…"><button class="btn blue" data-say="Camera opens · scan the label · unit goes RETURNED." data-say-es="Abre la cámara · escanea la etiqueta · la unidad pasa a DEVUELTA." data-es="Escanear entrada">Scan in</button></div></div>
+  <div class="kpis k4">
+    <div class="kpi"><div><div class="l" data-es="En almacén">In warehouse</div><div class="v">18</div><div class="d">Guaynabo</div></div><svg class="viz ring" viewBox="0 0 52 52"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="49"/><text x="26" y="25">49%</text></svg></div>
+    <div class="kpi"><div><div class="l" data-es="En vans">On vans</div><div class="v">11</div><div class="d">6 <span data-es="instaladores">installers</span></div></div><svg class="viz ring" viewBox="0 0 52 52"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="30"/><text x="26" y="25">30%</text></svg></div>
+    <div class="kpi"><div><div class="l" data-es="Instaladas · este mes">Installed · this month</div><div class="v">27</div><div class="d" data-es="con dirección">with an address</div></div><svg class="viz spark" data-n="5,7,6,9" viewBox="0 0 72 34"></svg></div>
+    <div class="kpi"><div><div class="l" data-es="Fallidas · a reparar">Failed · to repair</div><div class="v warn">3</div><div class="d" data-es="códigos REPARADO">REPARADO codes</div></div><svg class="viz ring warn" viewBox="0 0 52 52"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="8"/><text x="26" y="25">3</text></svg></div>
+  </div>
+  <div class="grid">
+    <section class="box c12">
+      <table id="serTable">
+        <thead><tr><th data-es="Serial">Serial</th><th>SAP</th><th data-es="Material">Material</th><th data-es="Ubicación">Location</th><th data-es="Desde">Since</th><th data-es="Último movimiento">Last movement</th><th class="act"></th></tr></thead>
+        <tbody>
+          <tr><td class="mono">4009642-A8812</td><td class="mono">4009642</td><td>MODEM 788 ADSL/VDSL V3</td><td><span class="tag warn" data-es="fallida · van R. Santiago">failed · van R. Santiago</span></td><td>8/29</td><td><span data-es="cambio en">swap at</span> 1-4W9K44</td><td class="act"><button class="btn sm ghost" data-flip="RETURNED · to REPARADO" data-flip-es="DEVUELTA · a REPARADO" data-es="Escanear entrada">Scan in</button></td></tr>
+          <tr><td class="mono">4009642-A9107</td><td class="mono">4009642</td><td>MODEM 788 ADSL/VDSL V3</td><td><span class="tag ok" data-es="instalada · Calle 4 #12, Caguas">installed · Calle 4 #12, Caguas</span></td><td>8/29</td><td>R. Santiago · 1-4W9K44</td><td class="act"></td></tr>
+          <tr><td class="mono">4009642-B0211</td><td class="mono">4009642</td><td>MODEM 788 ADSL/VDSL V3</td><td><span class="tag acc" data-es="en almacén · estante S-2">in warehouse · shelf S-2</span></td><td>8/24</td><td><span data-es="devuelta">returned</span> · G. Ayala</td><td class="act"><button class="btn sm ghost" data-say="Assign to a van via the installer restock flow." data-say-es="Se asigna a una van desde el restock del instalador." data-es="A van">To van</button></td></tr>
+          <tr><td class="mono">4012210-C4470</td><td class="mono">4012210</td><td>DGA4122HP</td><td><span class="tag acc" data-es="en almacén · S-1">in warehouse · S-1</span></td><td>9/2</td><td><span data-es="entrega Claro">Claro delivery</span></td><td class="act"></td></tr>
+          <tr><td class="mono">4012210-C4471</td><td class="mono">4012210</td><td>DGA4122HP</td><td><span class="tag" data-es="en van · J. Colón">on van · J. Colón</span></td><td>9/16</td><td><span data-es="restock a par">restock to par</span></td><td class="act"></td></tr>
+          <tr><td class="mono">4011281-D1188</td><td class="mono">4011281</td><td>ONT GPON-A</td><td><span class="tag ok" data-es="instalada · Urb. Los Robles, Norte">installed · Urb. Los Robles, Norte</span></td><td>9/17</td><td>J. Colón · 1-4X8B19</td><td class="act"></td></tr>
+          <tr><td class="mono">4011281-D1190</td><td class="mono">4011281</td><td>ONT GPON-A</td><td><span class="tag crit" data-es="nunca contada">never counted</span></td><td>—</td><td><span data-es="en la lista de Claro, no en la nuestra">on Claro's list, not ours</span></td><td class="act"><button class="btn sm ghost" data-flip="Counted · in warehouse" data-flip-es="Contada · en almacén" data-es="Contar">Count</button></td></tr>
+        </tbody>
+      </table>
+      <p class="sm" data-es="30 seriales más. 19 unidades nunca han sido contadas: aparecen en la lista de Claro y no en la nuestra. Ese es el hallazgo que Monica ve en su panel.">30 more serials. 19 units have never been counted: they appear on Claro's list and not ours. That's the finding Monica sees on her dashboard.</p>
+    </section>
+  </div>
+</section>
+
+<!-- ================= MOVEMENT LOG ================= -->
+<section class="screen" data-screen="log">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Historial de movimientos">Movement log</h1><p data-es="Cada entrada y salida, con quién, cuándo y contra qué orden. El stock es la suma de esto; nunca se escribe a mano. Un número sin historia no se defiende; uno con persona, hora y orden, sí.">Every in and out, with who, when and against which order. Stock is the sum of this; it's never typed. A number with no history can't be defended; one with a person, a time and an order can.</p></div><div class="actions"><input class="inp" style="width:260px" data-filter="#logTable" placeholder="Filter by code, order, person…" data-es-ph="Filtrar por código, orden, persona…"><button class="btn ghost" data-say="Exported movement log · Guaynabo · Aug–Sep 2026 (.xlsx)" data-say-es="Historial exportado · Guaynabo · ago–sep 2026 (.xlsx)" data-es="⬇ Exportar">⬇ Export</button></div></div>
+  <div class="grid">
+    <section class="box c12">
+      <table id="logTable">
+        <thead><tr><th data-es="Fecha">Date</th><th data-es="Movimiento">Movement</th><th>SAP</th><th data-es="Material">Material</th><th class="num" data-es="Cant.">Qty</th><th data-es="Orden / motivo">Order / reason</th><th data-es="Quién">Who</th><th class="num" data-es="Saldo">Balance</th></tr></thead>
+        <tbody>
+          <tr><td>9/18 10:22</td><td><span class="tag ok" data-es="entrega Claro">Claro delivery</span></td><td class="mono">1005890</td><td>DROP WIRE 750 FT</td><td class="num">+4,500 FT</td><td>MR-0029</td><td>O. Guzmán</td><td class="num">6,000 FT</td></tr>
+          <tr><td>9/17 15:40</td><td><span class="tag" data-es="salida instalador">installer pickup</span></td><td class="mono">4011281</td><td>ONT GPON-A</td><td class="num">−2</td><td><span data-es="restock van J. Colón">restock van J. Colón</span></td><td>F. Ramos + J. Colón</td><td class="num">9</td></tr>
+          <tr><td>9/16 09:05</td><td><span class="tag" data-es="salida instalador">installer pickup</span></td><td class="mono">4012210</td><td>DGA4122HP</td><td class="num">−4</td><td><span data-es="restock van R. Santiago">restock van R. Santiago</span></td><td>G. Ayala + R. Santiago</td><td class="num">6</td></tr>
+          <tr><td>8/27 08:10</td><td><span class="tag ok" data-es="devolución">return</span></td><td class="mono">1005803</td><td>BURIED SERVICE WIRE 6x22</td><td class="num">+40 FT</td><td>JAF-2026-1038</td><td>F. Ramos</td><td class="num">1,240 FT</td></tr>
+          <tr><td>8/25 15:40</td><td><span class="tag acc" data-es="entrega a brigada">release to crew</span></td><td class="mono">1003793</td><td>SPAN CLAMP</td><td class="num">−6</td><td>JAF-2026-1043 · <span data-es="listado 4, se llevó 6">listed 4, took 6</span></td><td>F. Ramos + J. Martínez</td><td class="num">0</td></tr>
+          <tr><td>8/25 15:40</td><td><span class="tag acc" data-es="entrega a brigada">release to crew</span></td><td class="mono">1005803</td><td>BURIED SERVICE WIRE 6x22</td><td class="num">−300 FT</td><td>JAF-2026-1043</td><td>F. Ramos + J. Martínez</td><td class="num">1,200 FT</td></tr>
+          <tr><td>8/24 11:30</td><td><span class="tag ok" data-es="devolución">return</span></td><td class="mono">4009642</td><td>MODEM 788 ADSL/VDSL V3</td><td class="num">+3</td><td><span data-es="escaneo · van R. Santiago">scan in · van R. Santiago</span></td><td>G. Ayala</td><td class="num">18</td></tr>
+          <tr><td>8/19 09:02</td><td><span class="tag acc" data-es="entrega a brigada">release to crew</span></td><td class="mono">1003793</td><td>SPAN CLAMP</td><td class="num">−4</td><td>JAF-2026-1038</td><td>G. Ayala + D. Castillo</td><td class="num">6</td></tr>
+          <tr><td>8/12 11:15</td><td><span class="tag ok" data-es="entrega Claro">Claro delivery</span></td><td class="mono">1003793</td><td>SPAN CLAMP</td><td class="num">+100</td><td>MR-0024 · 1 caja</td><td>O. Guzmán</td><td class="num">10 → 110</td></tr>
+          <tr><td>8/01 —</td><td><span class="tag warn" data-es="saldo inicial">starting balance</span></td><td class="mono">1003793</td><td>SPAN CLAMP</td><td class="num">10</td><td><span data-es="cargado del último conteo · «a corregir en el primer conteo»">loaded from last audit · "to be corrected at first count"</span></td><td>O. Guzmán</td><td class="num">10</td></tr>
+        </tbody>
+      </table>
+      <p class="sm" data-es="1,204 movimientos desde el 8/01. El saldo inicial está marcado como tal y se corrige sin programador.">1,204 movements since 8/01. The starting balance is marked as such and is correctable without a developer.</p>
+    </section>
+  </div>
+</section>
+
+<!-- ================= WAREHOUSE (Guaynabo / Arecibo) ================= -->
+<section class="screen" data-screen="wh">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 id="whName">Guaynabo</h1><p id="whSub">Calle Ajanta · counter: Frank Ramos, Gilberto Ayala · manager: Orlando Guzmán</p></div><div class="actions"><button class="btn blue" id="whSwitch" data-es="Trabajar en este almacén">Work from this warehouse</button></div></div>
+  <div class="kpis k4">
+    <div class="kpi"><div><div class="l" data-es="Por preparar">To prep</div><div class="v" id="whPrep">3</div></div><div class="viz mini"><i style="height:100%"></i><i style="height:80%"></i><i style="height:60%"></i></div></div>
+    <div class="kpi"><div><div class="l" data-es="Esperando recogida">Awaiting pickup</div><div class="v" id="whPick">2</div></div><svg class="viz ring" viewBox="0 0 52 52"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="40"/><text x="26" y="25">2</text></svg></div>
+    <div class="kpi"><div><div class="l" data-es="Bajo mínimo">Below minimum</div><div class="v neg" id="whLow">2</div></div><svg class="viz ring crit" viewBox="0 0 52 52"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="8"/><text x="26" y="25">2</text></svg></div>
+    <div class="kpi"><div><div class="l" data-es="Seriales en almacén">Serials in warehouse</div><div class="v" id="whSer">18</div></div><svg class="viz ring" viewBox="0 0 52 52"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="49"/><text x="26" y="25">49%</text></svg></div>
+  </div>
+  <div class="grid">
+    <section class="box c6"><h2 data-es="Turno de hoy">Today's shift</h2><ul class="rows" id="whStaff"></ul></section>
+    <section class="box c6"><h2 data-es="Datos del almacén">Warehouse details</h2><div class="kv" id="whKv"></div></section>
+  </div>
+</section>
+
+
+
+  <footer>
+    <span data-es="Datos reales: almacenes Guaynabo y Arecibo, personal del formulario de Orlando (31 ago), códigos SAP y unidades de las dos listas de Orlando. Las cantidades en mano son ilustrativas; el conteo físico no se ha hecho.">Real data: Guaynabo and Arecibo warehouses, staff from Orlando's 31 Aug form, SAP codes and units from Orlando's two lists. On-hand quantities are illustrative; the physical count has not been done.</span>
+    <span data-es="Mockup v5, 19 sep. No distribuir al cliente.">Mockup v5, 19 Sep. Not for client distribution.</span>
+  </footer>
+</div>
+</div>
+<script>
+  // ---- theme: OS preference by default, button overrides ----
+  (function(){
+    var btn=document.getElementById('themeBtn'), root=document.documentElement;
+    function isDark(){ var t=root.getAttribute('data-theme'); if(t) return t==='dark'; return matchMedia('(prefers-color-scheme: dark)').matches; }
+    function paint(){ btn.textContent = isDark() ? (LANG==='es'?'Claro':'Light') : (LANG==='es'?'Oscuro':'Dark'); }
+    btn.addEventListener('click', function(){ root.setAttribute('data-theme', isDark() ? 'light' : 'dark'); paint(); });
+    window.paintTheme=paint; paint();
+  })();
+
+  // ---- language: EN / ES. Every element with data-es swaps its text. ----
+  var LANG='en';
+  (function(){
+    var btn=document.getElementById('langBtn');
+    var els=document.querySelectorAll('[data-es]');
+    els.forEach(function(e){ e.setAttribute('data-en', e.innerHTML); });
+    function apply(){
+      els.forEach(function(e){ e.innerHTML = LANG==='es' ? e.getAttribute('data-es') : e.getAttribute('data-en'); });
+      document.querySelectorAll('[data-es-ph]').forEach(function(e){ if(!e.getAttribute('data-en-ph')) e.setAttribute('data-en-ph', e.placeholder); e.placeholder = LANG==='es' ? e.getAttribute('data-es-ph') : e.getAttribute('data-en-ph'); });
+      btn.textContent = LANG==='es' ? 'EN' : 'ES';
+      document.documentElement.lang = LANG;
+      if(window.paintTheme) window.paintTheme();
+    }
+    btn.addEventListener('click', function(){ LANG = LANG==='es' ? 'en' : 'es'; apply(); });
+    apply();
+  })();
+
+  // ---- KPI rings: dasharray from data-pct ----
+  document.querySelectorAll('.ring .fil').forEach(function(c){
+    var r=21, C=2*Math.PI*r, p=+c.getAttribute('data-pct')/100;
+    c.setAttribute('stroke-dasharray', C); c.setAttribute('stroke-dashoffset', C);
+    requestAnimationFrame(function(){ c.setAttribute('stroke-dashoffset', C*(1-p)); });
+  });
+
+  // ---- sparklines: <svg class="spark" data-n="1,2,3"> ----
+  document.querySelectorAll('svg.spark[data-n]').forEach(function(s){
+    var n=s.getAttribute('data-n').split(',').map(Number);
+    var W=72,H=34,pad=4, max=Math.max.apply(null,n), min=Math.min.apply(null,n); if(max===min){max=min+1;}
+    var x=function(i){ return pad+(W-2*pad)*i/(n.length-1); }, y=function(v){ return pad+(H-2*pad)*(1-(v-min)/(max-min)); };
+    var ns='http://www.w3.org/2000/svg';
+    var d=n.map(function(v,i){ return (i?'L':'M')+x(i)+' '+y(v); }).join(' ');
+    var a=document.createElementNS(ns,'path'); a.setAttribute('class','area'); a.setAttribute('d', d+' L'+x(n.length-1)+' '+(H-pad)+' L'+x(0)+' '+(H-pad)+' Z'); s.appendChild(a);
+    var p=document.createElementNS(ns,'path'); p.setAttribute('d',d); s.appendChild(p);
+    var c=document.createElementNS(ns,'circle'); c.setAttribute('cx',x(n.length-1)); c.setAttribute('cy',y(n[n.length-1])); c.setAttribute('r',3.5); s.appendChild(c);
+  });
+
+  // ---- generic two-series line chart with hover tooltip ----
+  function lineChart(id, months, s1, s2, lbl1, lbl2, fmt, max){
+    var svg=document.getElementById(id), wrap=svg.parentNode, tip=wrap.querySelector('.tip');
+    var W=640,H=230,L=48,R=64,T=14,B=30;
+    var x=function(i){ return L+(W-L-R)*i/(months.length-1); }, y=function(v){ return T+(H-T-B)*(1-v/max); };
+    var ns='http://www.w3.org/2000/svg', el=function(n,a){ var e=document.createElementNS(ns,n); for(var k in a) e.setAttribute(k,a[k]); return e; };
+    var ticks=[0,max/3,2*max/3,max];
+    ticks.forEach(function(v){ svg.appendChild(el('line',{x1:L,x2:W-R,y1:y(v),y2:y(v),'class':'grd'})); var t=el('text',{x:L-8,y:y(v)+4,'text-anchor':'end','class':'axis'}); t.textContent=fmt(v); svg.appendChild(t); });
+    months.forEach(function(m,i){ var t=el('text',{x:x(i),y:H-8,'text-anchor':'middle','class':'axis'}); t.textContent=m; svg.appendChild(t); });
+    var path=function(arr,cls){ var d=arr.map(function(v,i){ return (i?'L':'M')+x(i)+' '+y(v); }).join(' '); svg.appendChild(el('path',{d:d,fill:'none','stroke-width':2,'stroke-linejoin':'round','stroke-linecap':'round','class':cls})); };
+    path(s1,'ln1'); if(s2) path(s2,'ln2');
+    months.forEach(function(m,i){
+      var g=el('g',{'class':'col'}); var bw=(W-L-R)/(months.length-1);
+      g.appendChild(el('rect',{x:x(i)-bw/2,y:T,width:bw,height:H-T-B,'class':'band'}));
+      g.appendChild(el('circle',{cx:x(i),cy:y(s1[i]),r:4.5,'class':'dot1 ringc'}));
+      if(s2) g.appendChild(el('circle',{cx:x(i),cy:y(s2[i]),r:4.5,'class':'dot2 ringc'}));
+      g.addEventListener('mousemove',function(){
+        tip.innerHTML='<b>'+m+'</b><br>'+lbl1+' '+fmt(s1[i])+(s2?'<br>'+lbl2+' '+fmt(s2[i]):'');
+        var r=svg.getBoundingClientRect(); tip.style.left=(x(i)/W*r.width)+'px'; tip.style.top=(Math.min(y(s1[i]), s2?y(s2[i]):y(s1[i]))/H*r.height)+'px';
+      });
+      svg.appendChild(g);
+    });
+    var e1=el('text',{x:x(months.length-1)+10,y:y(s1[months.length-1])+4,'class':'endlbl'}); e1.textContent=lbl1; svg.appendChild(e1);
+    if(s2){ var e2=el('text',{x:x(months.length-1)+10,y:y(s2[months.length-1])+4,'class':'endlbl'}); e2.textContent=lbl2; svg.appendChild(e2); }
+  }
+
+  // ---- generic grouped bar chart ----
+  function barChart(id, cats, s1, s2, lbl1, lbl2, fmt, max){
+    var svg=document.getElementById(id), wrap=svg.parentNode, tip=wrap.querySelector('.tip');
+    var W=640,H=230,L=48,R=16,T=14,B=30;
+    var ns='http://www.w3.org/2000/svg', el=function(n,a){ var e=document.createElementNS(ns,n); for(var k in a) e.setAttribute(k,a[k]); return e; };
+    var y=function(v){ return T+(H-T-B)*(1-v/max); };
+    var slot=(W-L-R)/cats.length, bw=s2?slot*0.28:slot*0.5;
+    [0,max/3,2*max/3,max].forEach(function(v){ svg.appendChild(el('line',{x1:L,x2:W-R,y1:y(v),y2:y(v),'class':'grd'})); var t=el('text',{x:L-8,y:y(v)+4,'text-anchor':'end','class':'axis'}); t.textContent=fmt(v); svg.appendChild(t); });
+    cats.forEach(function(c,i){
+      var cx=L+slot*i+slot/2;
+      var g=el('g',{'class':'col'});
+      g.appendChild(el('rect',{x:L+slot*i,y:T,width:slot,height:H-T-B,'class':'band'}));
+      var x1=s2?cx-bw-2:cx-bw/2;
+      g.appendChild(el('rect',{x:x1,y:y(s1[i]),width:bw,height:H-B-y(s1[i]),rx:3,'class':'bar1'}));
+      if(s2) g.appendChild(el('rect',{x:cx+2,y:y(s2[i]),width:bw,height:H-B-y(s2[i]),rx:3,'class':'bar2'}));
+      var t=el('text',{x:cx,y:H-8,'text-anchor':'middle','class':'axis'}); t.textContent=c; g.appendChild(t);
+      g.addEventListener('mousemove',function(){ tip.innerHTML='<b>'+c+'</b><br>'+lbl1+' '+fmt(s1[i])+(s2?'<br>'+lbl2+' '+fmt(s2[i]):''); var r=svg.getBoundingClientRect(); tip.style.left=(cx/W*r.width)+'px'; tip.style.top=(y(Math.max(s1[i],s2?s2[i]:0))/H*r.height)+'px'; });
+      svg.appendChild(g);
+    });
+  }
+
+  // ---- toast ----
+  function toast(m){ var t=document.getElementById('toast'); if(!t){ t=document.createElement('div'); t.id='toast'; document.body.appendChild(t); } t.textContent=m; t.classList.add('on'); clearTimeout(t._t); t._t=setTimeout(function(){ t.classList.remove('on'); },2600); }
+  function T(en,es){ return LANG==='es' ? es : en; }
+
+  // ---- screen router: any [data-go] shows the matching [data-screen] ----
+  (function(){
+    var screens=document.querySelectorAll('[data-screen]');
+    if(!screens.length) return;
+    function go(id,arg){
+      var found=false;
+      screens.forEach(function(s){ var on=s.getAttribute('data-screen')===id; s.classList.toggle('on',on); if(on) found=true; });
+      if(!found){ toast(T('Not in this mockup yet','Todavía no está en este mockup')); return; }
+      document.querySelectorAll('.rail a[data-go], .tabs a[data-go]').forEach(function(a){
+        var hit=a.getAttribute('data-go')===id && (!a.hasAttribute('data-arg') || a.getAttribute('data-arg')===arg);
+        if(!hit && a.hasAttribute('data-children')){ hit=(' '+a.getAttribute('data-children')+' ').indexOf(' '+id+' ')>-1; }
+        a.classList.toggle('on',hit);
+      });
+      window.scrollTo({top:0,behavior:'smooth'});
+      document.dispatchEvent(new CustomEvent('screen',{detail:{id:id,arg:arg}}));
+    }
+    document.addEventListener('click',function(e){ var t=e.target.closest('[data-go]'); if(t){ e.preventDefault(); go(t.getAttribute('data-go'), t.getAttribute('data-arg')); } });
+    window.go=go;
+  })();
+
+  // ---- flip: a button that becomes a status chip ----
+  document.addEventListener('click',function(e){
+    var b=e.target.closest('[data-flip]'); if(!b) return;
+    var sp=document.createElement('span'); sp.className='tag '+(b.getAttribute('data-flip-cls')||'ok');
+    sp.textContent = LANG==='es' && b.getAttribute('data-flip-es') ? b.getAttribute('data-flip-es') : b.getAttribute('data-flip');
+    b.replaceWith(sp);
+    if(b.getAttribute('data-toast')) toast(LANG==='es' && b.getAttribute('data-toast-es') ? b.getAttribute('data-toast-es') : b.getAttribute('data-toast'));
+  });
+  // ---- plain toast buttons ----
+  document.addEventListener('click',function(e){ var b=e.target.closest('[data-say]'); if(!b||b.hasAttribute('data-flip')) return; toast(LANG==='es' && b.getAttribute('data-say-es') ? b.getAttribute('data-say-es') : b.getAttribute('data-say')); });
+
+  // ---- table filter: <input data-filter="#tableId"> ----
+  document.addEventListener('input',function(e){
+    var i=e.target; if(!i.hasAttribute('data-filter')) return;
+    var q=i.value.toLowerCase(), t=document.querySelector(i.getAttribute('data-filter')); if(!t) return;
+    t.querySelectorAll('tbody tr, .opt').forEach(function(r){ r.classList.toggle('hidden', q && r.textContent.toLowerCase().indexOf(q)<0); });
+  });
+  // ---- in-page tabs: a[data-tab="group:name"] + [data-panel="group:name"] ----
+  document.addEventListener('click',function(e){
+    var a=e.target.closest('[data-tab]'); if(!a) return; e.preventDefault();
+    var v=a.getAttribute('data-tab'), g=v.split(':')[0];
+    document.querySelectorAll('[data-tab^="'+g+':"]').forEach(function(x){ x.classList.toggle('on',x===a); });
+    document.querySelectorAll('[data-panel^="'+g+':"]').forEach(function(p){ p.style.display = p.getAttribute('data-panel')===v ? '' : 'none'; });
+  });
+  document.querySelectorAll('[data-panel]').forEach(function(p){ var v=p.getAttribute('data-panel'), g=v.split(':')[0]; var on=document.querySelector('[data-tab="'+v+'"]'); p.style.display = on && on.classList.contains('on') ? '' : 'none'; });
+  // ---- generic checkbox, radio, signature pad, stepper, crew option ----
+  document.addEventListener('click',function(e){
+    var c=e.target.closest('.chk'); if(c && !c.closest('#runTable') && !c.closest('[data-checkoff]')){ c.classList.toggle('on'); c.textContent=c.classList.contains('on')?'✓':''; return; }
+    var r=e.target.closest('.radio label'); if(r){ r.parentNode.querySelectorAll('label').forEach(function(x){ x.classList.remove('on'); }); r.classList.add('on'); return; }
+    var s=e.target.closest('.sigpad'); if(s && !s.classList.contains('done')){ s.classList.add('done'); s.textContent=s.getAttribute('data-name')||'Firmado'; return; }
+    var em=e.target.closest('.sig .empty'); if(em){ var d=document.createElement('div'); d.className='ink'; d.textContent=em.getAttribute('data-name')||'Firmado'; em.replaceWith(d); return; }
+    var co=e.target.closest('.crewopt'); if(co){ var one=co.parentNode.hasAttribute('data-single'); if(one) co.parentNode.querySelectorAll('.crewopt').forEach(function(x){ x.classList.remove('on'); x.querySelector('.bx').textContent=''; }); co.classList.toggle('on'); co.querySelector('.bx').textContent=co.classList.contains('on')?'✓':''; return; }
+    var st=e.target.closest('.stepper span'); if(st){ var b=st.parentNode.querySelector('b'), v=+b.textContent; b.textContent = st.textContent.trim()==='−' ? Math.max(0,v-1) : v+1; b.dispatchEvent(new Event('change',{bubbles:true})); return; }
+  });
+  // ---- buttons that need a field filled: <button data-requires="#id"> ----
+  document.querySelectorAll('[data-requires]').forEach(function(b){ var f=document.querySelector(b.getAttribute('data-requires')); if(!f) return; b.disabled=!f.value.trim(); f.addEventListener('input',function(){ b.disabled=!f.value.trim(); }); });
+  // ---- row select: tr[data-sel] highlights ----
+  document.addEventListener('click',function(e){ var tr=e.target.closest('tr[data-sel]'); if(!tr||e.target.closest('button,a,input,.chk')) return; tr.parentNode.querySelectorAll('tr').forEach(function(x){ x.classList.remove('sel'); }); tr.classList.add('sel'); });
+
+
+  barChart('moves', ['W30','W31','W32','W33','W34','W35','W36','W37'], [38,44,51,47,58,62,49,55], [12,18,9,22,31,14,27,19], 'Released', 'Received', function(v){ return Math.round(v); }, 75);
+  (function(){
+    var b=document.getElementById('reqBtn');
+    b.addEventListener('click',function(){
+      b.disabled=true; b.textContent = LANG==='es' ? 'Enviado a Monica · 9/19' : 'Sent to Monica · 9/19';
+      var li=document.createElement('li');
+      li.innerHTML='<span>SPAN CLAMP × 200 · LAG SCREW × 200<div class="sm">'+(LANG==='es'?'enviado hoy':'sent today')+'</div></span><span class="st warn">'+(LANG==='es'?'esperando a Monica':'waiting on Monica')+'</span>';
+      var l=document.getElementById('reqlist'); l.insertBefore(li,l.firstChild);
+    });
+  })();
+
+  // ---- pickup: over-draw amber, both signatures unlock release ----
+  (function(){
+    var t=document.getElementById('pkTable'); function flag(){ t.querySelectorAll('tbody tr').forEach(function(r){ var l=+r.dataset.listed, v=+r.querySelector('.qty').value||0, fl=r.querySelector('.fl'); if(l===0) return; if(v>l){ fl.innerHTML='<span class="tag warn">+'+(v-l)+' '+T('more than listed','más de lo listado')+'</span>'; r.querySelector('.qty').style.borderColor='var(--warning)'; } else { fl.innerHTML=''; r.querySelector('.qty').style.borderColor=''; } }); }
+    t.addEventListener('input',flag); flag();
+    var panel=document.querySelector('[data-panel="pk:1043"]');
+    panel.addEventListener('click',function(){ setTimeout(function(){ var n=panel.querySelectorAll('.sigpad.done').length; var b=document.getElementById('relMat'); if(n===2 && b.disabled){ b.disabled=false; document.getElementById('relNote').textContent=T('Both signed. Release locks Taken everywhere and moves stock.','Ambos firmaron. Entregar bloquea «Se lleva» en todo el sistema y mueve el stock.'); } },0); });
+    document.getElementById('relMat').addEventListener('click',function(){ var b=this; b.disabled=true; b.textContent=T('Released · list locked · stock moved','Entregado · lista bloqueada · stock movido'); t.querySelectorAll('.qty').forEach(function(i){ i.disabled=true; }); toast(T('JAF-2026-1043 released. Edgard Ocasio notified: +2 span clamp, +2 tape.','JAF-2026-1043 entregada. Edgard Ocasio notificado: +2 span clamp, +2 tape.')); });
+  })();
+  // ---- returns reconciliation ----
+  (function(){
+    var body=document.querySelector('#retTable tbody'), a=document.getElementById('retAlert'), n=document.getElementById('retNote'), b=document.getElementById('retBtn');
+    function check(){ var short=0, over=0; body.querySelectorAll('tr').forEach(function(r){ var exp=+r.dataset.exp, got=+r.querySelector('[data-ret]').value||0, st=r.querySelector('.st'), inp=r.querySelector('[data-ret]'); inp.style.borderColor='';
+      if(got<exp){ short++; inp.style.borderColor='var(--critical)'; st.innerHTML='<span class="tag crit">'+(exp-got)+' '+T('short · note','corto · nota')+'</span>'; }
+      else if(got>exp){ over++; inp.style.borderColor='var(--warning)'; st.innerHTML='<span class="tag warn">+'+(got-exp)+' '+T('over · crew under-reported?','de más · ¿reportó de menos?')+'</span>'; }
+      else { st.innerHTML = exp>0 ? '<span class="tag ok">'+T('received','recibido')+'</span>' : ''; } });
+      if(short){ a.innerHTML='<div class="note crit">'+short+' '+T('line(s) short of what the crew reported. Recorded as a discrepancy against Jesús Martínez, not as consumed. Note required.','línea(s) por debajo de lo reportado. Se registra como discrepancia contra Jesús Martínez, no como consumido. Nota obligatoria.')+'</div>'; n.style.display='block'; b.textContent=T('Confirm return · '+short+' discrepancy logged','Confirmar devolución · '+short+' discrepancia registrada'); }
+      else if(over){ a.innerHTML='<div class="note">'+T('More came back than expected. The crew may have under-reported use; flag to the supervisor, the invoice quantity is his call.','Volvió más de lo esperado. La brigada pudo reportar de menos; avisa al supervisor, la cantidad facturada es su decisión.')+'</div>'; n.style.display='none'; b.textContent=T('Confirm return · flag to supervisor','Confirmar devolución · avisar al supervisor'); }
+      else { a.innerHTML='<div class="note ok">'+T('Everything the crew reported came back. Stock updates on confirm.','Todo lo que reportó la brigada volvió. El stock se actualiza al confirmar.')+'</div>'; n.style.display='none'; b.textContent=T('Confirm return','Confirmar devolución'); } }
+    body.addEventListener('input',check); check();
+    b.addEventListener('click',function(){ b.disabled=true; b.textContent=T('Return confirmed · stock updated','Devolución confirmada · stock actualizado'); toast(T('Stock +40 FT wire, +1 tape. Release gate on JAF-2026-1003 turns green for Edgard.','Stock +40 FT wire, +1 tape. La compuerta de JAF-2026-1003 se pone verde para Edgard.')); });
+  })();
+  // ---- inventory adjust ----
+  (function(){
+    var box=document.getElementById('adjBox');
+    document.addEventListener('click',function(e){ var b=e.target.closest('[data-adj]'); if(!b) return; box.style.display=''; document.getElementById('adjCode').textContent=b.getAttribute('data-adj'); document.getElementById('adjQty').value=''; document.getElementById('adjSave').disabled=true; box.scrollIntoView({behavior:'smooth',block:'center'}); });
+    document.getElementById('adjCancel').addEventListener('click',function(){ box.style.display='none'; });
+    document.getElementById('adjSave').addEventListener('click',function(){ box.style.display='none'; toast(T('Adjustment saved · logged as F. Ramos · 9/19','Ajuste guardado · registrado como F. Ramos · 9/19')); });
+  })();
+  // ---- material request ----
+  (function(){
+    var tb=document.querySelector('#newReq tbody');
+    tb.addEventListener('click',function(e){ if(e.target.hasAttribute('data-del')) e.target.closest('tr').remove(); });
+    document.getElementById('reqAdd').addEventListener('keydown',function(e){ if(e.key==='Enter' && this.value.trim()){ var tr=document.createElement('tr'); tr.innerHTML='<td>'+this.value+'</td><td class="num dim">—</td><td class="num"><input class="inp qty" value="1"></td><td class="act"><span class="clickable dim" data-del>✕</span></td>'; tb.appendChild(tr); this.value=''; } });
+    document.getElementById('reqSend').addEventListener('click',function(){ var rows=tb.querySelectorAll('tr'); if(!rows.length){ toast(T('Nothing to request.','Nada que pedir.')); return; } var items=[].map.call(rows,function(r){ return r.children[0].textContent.split(' ·')[0]+' × '+r.querySelector('.qty').value; }).join(', ');
+      var tr=document.createElement('tr'); tr.innerHTML='<td class="mono">MR-0032</td><td>'+items+'</td><td class="num">'+rows.length+' '+T('lines','líneas')+'</td><td>9/19 · F. Ramos</td><td>2 · Monica</td><td><span class="tag warn">'+T('waiting on approval','esperando aprobación')+'</span></td>'; var t=document.querySelector('#reqTable tbody'); t.insertBefore(tr,t.firstChild); tb.innerHTML=''; this.disabled=true; this.textContent=T('Sent · MR-0032 · waiting on Monica','Enviado · MR-0032 · esperando a Monica'); toast(T('Request MR-0032 sent to Monica.','Pedido MR-0032 enviado a Monica.')); });
+  })();
+  // ---- warehouse page ----
+  (function(){
+    var W={ g:{n:'Guaynabo',addr:'Calle Ajanta, Guaynabo',mgr:'Orlando Guzmán',staff:[['Frank Ramos','counter · 7:00–3:30'],['Gilberto Ayala','counter · 9:00–5:30'],['Orlando Guzmán','manager · both warehouses']],prep:3,pick:2,low:2,ser:18,codes:128,hours:'Mon–Fri 7:00–5:30 · Sat 7:00–12:00'},
+            a:{n:'Arecibo',addr:'Calle Ramón Morcelo Nieves, Sabana Hoyos, Arecibo',mgr:'Orlando Guzmán',staff:[['Gilberto Ayala','counter · Tue/Thu'],['Orlando Guzmán','manager']],prep:1,pick:0,low:4,ser:7,codes:96,hours:'Mon–Fri 7:30–4:00'} };
+    var cur='g';
+    document.addEventListener('screen',function(e){ if(e.detail.id!=='wh') return; var w=W[e.detail.arg]||W.g; cur=e.detail.arg||'g';
+      document.getElementById('whName').textContent=w.n; document.getElementById('whSub').textContent=w.addr+' · '+T('manager','encargado')+': '+w.mgr;
+      document.getElementById('whPrep').textContent=w.prep; document.getElementById('whPick').textContent=w.pick; document.getElementById('whLow').textContent=w.low; document.getElementById('whSer').textContent=w.ser;
+      document.getElementById('whStaff').innerHTML=w.staff.map(function(s){ return '<li><span>'+s[0]+'<div class="sm">'+s[1]+'</div></span><span class="st ok">'+T('on shift','en turno')+'</span></li>'; }).join('');
+      document.getElementById('whKv').innerHTML='<span>'+T('Address','Dirección')+'</span><span>'+w.addr+'</span><span>'+T('Hours','Horario')+'</span><span>'+w.hours+'</span><span>'+T('SAP codes stocked','Códigos SAP en stock')+'</span><span>'+w.codes+'</span><span>'+T('Serialized units','Unidades serializadas')+'</span><span>'+w.ser+'</span>';
+    });
+    document.getElementById('whSwitch').addEventListener('click',function(){ var w=W[cur]; document.querySelector('.rail .wordmark span').textContent=T('Warehouse · ','Almacén · ')+w.n; document.querySelectorAll('.tabs a[data-go="wh"]').forEach(function(a){ a.classList.toggle('on',a.getAttribute('data-arg')===cur); }); toast(T('Now working from '+w.n+'. Queues, stock and returns scoped to it.','Ahora trabajas desde '+w.n+'. Colas, stock y devoluciones de ese almacén.')); go('dash'); });
+  })();
+
+</script>
+</body>
+</html>

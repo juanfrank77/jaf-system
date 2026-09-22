@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JAF Ops, Supervisor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ---------------------------------------------------------------
+     JAF Ops design system. Same tokens as Monica's command center
+     (mockup v3, 19 Sep 2026). Dual theme, one accent, status colors
+     only for state. Radius: containers 16px, controls 10px, chips 6px.
+     --------------------------------------------------------------- */
+  :root{
+    color-scheme: light;
+    --plane:#f4f4f2; --surface:#fcfcfb; --surface-2:#f0f0ed;
+    --ink:#111110; --ink-2:#52514e; --ink-3:#898781;
+    --hair:#e1e0d9; --ring:rgba(11,11,11,.08);
+    --accent:#1c5cab; --accent-2:#86b6ef; --accent-ink:#ffffff;
+    --accent-wash:rgba(28,92,171,.08);
+    --critical:#d03b3b; --warning:#b7791f; --good:#006300;
+    --crit-wash:rgba(208,59,59,.10); --warn-wash:rgba(183,121,31,.13); --good-wash:rgba(0,99,0,.10);
+    --shadow:0 1px 2px rgba(30,28,20,.05), 0 10px 30px -14px rgba(30,28,20,.14);
+    --grid:#e1e0d9;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      color-scheme: dark;
+      --plane:#0f0f0e; --surface:#1a1a19; --surface-2:#222221;
+      --ink:#f4f4f1; --ink-2:#c3c2b7; --ink-3:#898781;
+      --hair:#2c2c2a; --ring:rgba(255,255,255,.08);
+      --accent:#3987e5; --accent-2:#9ec5f4; --accent-ink:#ffffff;
+      --accent-wash:rgba(57,135,229,.12);
+      --critical:#e66767; --warning:#e0a634; --good:#3fbf3f;
+      --crit-wash:rgba(230,103,103,.14); --warn-wash:rgba(224,166,52,.16); --good-wash:rgba(63,191,63,.14);
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 30px -14px rgba(0,0,0,.6);
+      --grid:#2c2c2a;
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --plane:#0f0f0e; --surface:#1a1a19; --surface-2:#222221;
+    --ink:#f4f4f1; --ink-2:#c3c2b7; --ink-3:#898781;
+    --hair:#2c2c2a; --ring:rgba(255,255,255,.08);
+    --accent:#3987e5; --accent-2:#9ec5f4; --accent-ink:#ffffff;
+    --accent-wash:rgba(57,135,229,.12);
+    --critical:#e66767; --warning:#e0a634; --good:#3fbf3f;
+    --crit-wash:rgba(230,103,103,.14); --warn-wash:rgba(224,166,52,.16); --good-wash:rgba(63,191,63,.14);
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 30px -14px rgba(0,0,0,.6);
+    --grid:#2c2c2a;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; background:var(--plane); color:var(--ink); }
+  body{ font-family:"Geist", system-ui, -apple-system, "Segoe UI", sans-serif; font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; transition:background .2s ease, color .2s ease; }
+  .shell{ display:grid; grid-template-columns:236px minmax(0,1fr); min-height:100dvh; }
+  .rail{ border-right:1px solid var(--hair); padding:22px 18px; display:flex; flex-direction:column; gap:8px; position:sticky; top:0; height:100dvh; background:var(--plane); }
+  .rail .wordmark{ padding:4px 10px 18px; font-size:16px; font-weight:700; letter-spacing:-.01em; }
+  .rail .wordmark span{ display:block; font-size:11.5px; font-weight:500; color:var(--ink-3); margin-top:2px; }
+  .rail .grp{ font-size:11px; font-weight:600; color:var(--ink-3); padding:14px 10px 4px; letter-spacing:.02em; }
+  .rail a{ display:flex; align-items:center; justify-content:space-between; text-decoration:none; color:var(--ink-2); font-size:13.5px; font-weight:500; padding:8px 10px; border-radius:10px; }
+  .rail a:hover{ background:var(--surface-2); color:var(--ink); }
+  .rail a.on{ background:var(--surface); color:var(--ink); font-weight:600; box-shadow:var(--shadow); border:1px solid var(--ring); }
+  .rail a .pill{ font-size:11px; font-weight:600; background:var(--critical); color:#fff; padding:1px 7px; border-radius:6px; }
+  .rail a .n{ font-size:12px; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+  .rail .foot{ margin-top:auto; border-top:1px solid var(--hair); padding-top:14px; display:flex; flex-direction:column; gap:10px; }
+  .rail .user{ display:flex; align-items:center; gap:10px; padding:4px 10px; }
+  .rail .av{ width:30px; height:30px; border-radius:50%; background:var(--accent); color:#fff; font-size:12px; font-weight:600; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .rail .user .nm{ font-size:13px; font-weight:600; line-height:1.2; }
+  .rail .user .rl{ font-size:11.5px; color:var(--ink-3); }
+  .rail .toggles{ display:flex; gap:8px; }
+  .rail .toggles .toggle{ flex:1; }
+  .wrap{ max-width:1200px; margin:0 auto; padding:0 28px 56px; width:100%; min-width:0; overflow-x:clip; }
+
+  /* top bar */
+  .top{ height:68px; display:flex; align-items:center; gap:22px; border-bottom:1px solid var(--hair); }
+  .wordmark{ font-weight:700; letter-spacing:-.01em; font-size:15px; white-space:nowrap; }
+  .tabs{ display:flex; gap:2px; background:var(--surface-2); padding:3px; border-radius:10px; }
+  .tabs a{ text-decoration:none; font-size:13px; font-weight:500; color:var(--ink-2); padding:6px 12px; border-radius:8px; white-space:nowrap; }
+  .tabs a.on{ background:var(--surface); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.08); font-weight:600; }
+  .spacer{ flex:1; }
+  .who{ font-size:13px; color:var(--ink-2); white-space:nowrap; }
+  .btn{ font:inherit; font-weight:600; font-size:13px; background:var(--ink); color:var(--plane); border:0; border-radius:10px; padding:9px 14px; cursor:pointer; transition:transform .12s ease, opacity .12s ease; white-space:nowrap; }
+  .btn:hover{ opacity:.88; } .btn:active{ transform:translateY(1px); }
+  .btn.ghost{ background:transparent; color:var(--ink); border:1px solid var(--hair); }
+  .btn.ghost:hover{ background:var(--surface-2); opacity:1; }
+  .btn.acc{ background:var(--accent-ink); color:var(--accent); }
+  .btn.acc:hover{ opacity:.9; }
+  .btn.blue{ background:var(--accent); color:#fff; }
+  .btn.sm{ font-size:12.5px; padding:6px 11px; border-radius:8px; }
+  .btn[disabled]{ opacity:.45; cursor:not-allowed; }
+  .toggle{ font:inherit; font-size:12.5px; font-weight:600; color:var(--ink-2); background:var(--surface-2); border:1px solid var(--hair); border-radius:10px; padding:7px 11px; cursor:pointer; }
+
+  /* greeting + kpi strip */
+  .greet{ padding:30px 0 18px; display:flex; align-items:flex-end; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+  .greet h1{ font-size:30px; font-weight:600; letter-spacing:-.02em; margin:0 0 4px; line-height:1.15; }
+  .greet p{ margin:0; color:var(--ink-2); font-size:15px; max-width:64ch; }
+  .greet b{ color:var(--ink); font-weight:600; }
+  .kpis{ display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin:6px 0 20px; }
+  .kpis.k4{ grid-template-columns:repeat(4,1fr); }
+  .kpi{ background:var(--surface); border:1px solid var(--ring); border-radius:16px; padding:14px 16px; box-shadow:var(--shadow); display:flex; align-items:center; justify-content:space-between; gap:12px; min-width:0; }
+  .kpi .l{ font-size:12px; color:var(--ink-3); white-space:nowrap; }
+  .kpi .v{ font-size:24px; font-weight:600; letter-spacing:-.02em; line-height:1.15; margin-top:2px; }
+  .kpi .d{ font-size:12px; color:var(--ink-2); margin-top:2px; }
+  .kpi .v.neg{ color:var(--critical); } .kpi .v.warn{ color:var(--warning); } .kpi .v.good{ color:var(--good); }
+  .kpi .viz{ flex:0 0 auto; }
+  .ring{ width:52px; height:52px; }
+  .ring .trk{ fill:none; stroke:var(--accent-2); stroke-opacity:.45; stroke-width:5; }
+  .ring .fil{ fill:none; stroke:var(--accent); stroke-width:5; stroke-linecap:round; transform:rotate(-90deg); transform-origin:50% 50%; }
+  .ring.crit .trk{ stroke:var(--critical); stroke-opacity:.22; } .ring.crit .fil{ stroke:var(--critical); }
+  .ring.warn .trk{ stroke:var(--warning); stroke-opacity:.22; } .ring.warn .fil{ stroke:var(--warning); }
+  .ring.good .trk{ stroke:var(--good); stroke-opacity:.22; } .ring.good .fil{ stroke:var(--good); }
+  .ring text{ font-size:11px; font-weight:600; fill:var(--ink); text-anchor:middle; }
+  .ring .cap{ font-size:8px; font-weight:500; fill:var(--ink-3); }
+  .spark{ width:72px; height:34px; }
+  .spark path{ fill:none; stroke:var(--accent); stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }
+  .spark .area{ fill:var(--accent); fill-opacity:.10; stroke:none; }
+  .spark circle{ fill:var(--accent); stroke:var(--surface); stroke-width:2; }
+  .mini{ display:flex; align-items:flex-end; gap:3px; height:34px; }
+  .mini i{ display:block; width:9px; background:var(--accent); border-radius:3px 3px 0 0; }
+  .mini i.lo{ background:var(--accent-2); }
+  .mini i.crit{ background:var(--critical); } .mini i.warn{ background:var(--warning); }
+  @media (prefers-reduced-motion:no-preference){ .ring .fil{ transition:stroke-dashoffset .8s cubic-bezier(.16,1,.3,1); } }
+
+  /* grid + boxes */
+  .grid{ display:grid; grid-template-columns:repeat(12,1fr); gap:16px; }
+  .box{ background:var(--surface); border:1px solid var(--ring); border-radius:16px; box-shadow:var(--shadow); padding:20px 22px; min-width:0; }
+  .box.acc{ background:var(--accent); color:var(--accent-ink); border-color:transparent; }
+  .box.acc h2, .box.acc .sub{ color:rgba(255,255,255,.85); }
+  .c3{ grid-column:span 3; } .c4{ grid-column:span 4; } .c5{ grid-column:span 5; } .c6{ grid-column:span 6; } .c7{ grid-column:span 7; } .c8{ grid-column:span 8; } .c12{ grid-column:span 12; }
+  .box h2{ font-size:13.5px; font-weight:600; color:var(--ink-2); margin:0 0 2px; }
+  .box .sub{ color:var(--ink-3); font-size:12.5px; margin:0 0 14px; }
+  .box .head{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+  .count{ display:inline-block; min-width:20px; text-align:center; font-size:11px; font-weight:600; padding:1px 6px; border-radius:6px; background:var(--critical); color:#fff; margin-left:6px; vertical-align:1px; }
+  .count.w{ background:var(--warning); } .count.a{ background:var(--accent); }
+  .ex{ text-decoration:underline dotted var(--ink-3); text-underline-offset:3px; text-decoration-thickness:1px; }
+
+  /* lines / hero */
+  .lines{ list-style:none; margin:4px 0 0; padding:0; }
+  .lines li{ display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--hair); }
+  .lines li:last-child{ border-bottom:0; }
+  .lines i{ width:10px; height:10px; border-radius:3px; flex:0 0 auto; }
+  .lines .n{ flex:1; font-size:13.5px; font-weight:500; }
+  .lines .v{ font-size:15px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .hero{ font-size:44px; font-weight:600; letter-spacing:-.03em; line-height:1; margin:4px 0 2px; }
+  .heroline{ color:var(--ink-2); font-size:13px; margin:0 0 14px; }
+
+  /* chart */
+  .chartwrap{ position:relative; }
+  .chart{ width:100%; height:auto; display:block; }
+  .legend{ display:flex; gap:18px; font-size:12.5px; color:var(--ink-2); margin:2px 0 6px; flex-wrap:wrap; }
+  .legend i{ display:inline-block; width:14px; height:3px; border-radius:2px; margin-right:7px; vertical-align:3px; }
+  .tip{ position:absolute; pointer-events:none; background:var(--ink); color:var(--plane); font-size:12px; padding:8px 10px; border-radius:8px; white-space:nowrap; transform:translate(-50%,-110%); opacity:0; transition:opacity .12s; box-shadow:var(--shadow); }
+  .tip b{ font-weight:600; }
+  .chartwrap:hover .tip{ opacity:1; }
+  .axis{ font-size:11px; fill:var(--ink-3); }
+  .grd{ stroke:var(--grid); stroke-width:1; }
+  .ln1{ stroke:var(--accent); } .ln2{ stroke:var(--accent-2); }
+  .dot1{ fill:var(--accent); } .dot2{ fill:var(--accent-2); }
+  .ringc{ stroke:var(--surface); stroke-width:2; }
+  .col:hover .band{ fill:var(--accent-wash); }
+  .band{ fill:transparent; }
+  .endlbl{ font-size:11.5px; font-weight:600; fill:var(--ink); }
+  .bar1{ fill:var(--accent); } .bar2{ fill:var(--accent-2); }
+
+  /* glance tile */
+  .glance .big{ font-size:40px; font-weight:600; letter-spacing:-.03em; line-height:1; margin:6px 0 4px; }
+  .glance p{ margin:0 0 16px; font-size:13px; color:rgba(255,255,255,.85); }
+  .glance .btn{ display:block; width:100%; text-align:left; margin-top:8px; }
+
+  /* attention list */
+  .att{ list-style:none; margin:0; padding:0; }
+  .att li{ display:grid; grid-template-columns:3px 1fr auto; gap:0 12px; padding:9px 0; border-bottom:1px solid var(--hair); align-items:start; }
+  .att li:last-child{ border-bottom:0; }
+  .att .mark{ width:3px; min-height:30px; border-radius:2px; background:var(--critical); margin-top:2px; }
+  .att .mark.w{ background:var(--warning); } .att .mark.a{ background:var(--accent); } .att .mark.g{ background:var(--good); }
+  .att .t{ font-weight:600; font-size:13.5px; }
+  .att .d{ color:var(--ink-2); font-size:12.5px; }
+  .att .lvl{ font-size:11px; font-weight:600; color:var(--critical); padding-top:2px; white-space:nowrap; }
+  .att .lvl.w{ color:var(--warning); } .att .lvl.a{ color:var(--accent); } .att .lvl.g{ color:var(--good); }
+  .more{ display:inline-block; margin-top:10px; font-size:12.5px; color:var(--accent); text-decoration:none; font-weight:600; cursor:pointer; }
+
+  /* bars + stats + rows */
+  .bars{ display:grid; grid-template-columns:auto 1fr auto; gap:8px 12px; align-items:center; margin-top:6px; }
+  .bars .n{ font-size:13px; font-weight:500; }
+  .bars .b{ height:9px; background:var(--accent); border-radius:0 4px 4px 0; }
+  .bars .b.lo{ background:var(--accent-2); } .bars .b.crit{ background:var(--critical); } .bars .b.warn{ background:var(--warning); }
+  .bars .v{ font-size:12.5px; font-variant-numeric:tabular-nums; color:var(--ink-2); }
+  .split{ display:grid; grid-template-columns:1fr 1fr; gap:14px 18px; margin-top:14px; padding-top:14px; border-top:1px solid var(--hair); }
+  .stat .l{ font-size:12px; color:var(--ink-3); }
+  .stat .v{ font-size:22px; font-weight:600; letter-spacing:-.02em; line-height:1.15; }
+  .rows{ margin:6px 0 0; padding:0; list-style:none; }
+  .rows li{ display:flex; justify-content:space-between; gap:12px; padding:8px 0; border-bottom:1px solid var(--hair); font-size:13.5px; align-items:center; }
+  .rows li:last-child{ border-bottom:0; }
+  .st{ font-size:12px; font-weight:600; }
+  .st.crit{ color:var(--critical); } .st.warn{ color:var(--warning); } .st.ok{ color:var(--good); } .st.acc{ color:var(--accent); }
+
+  /* chips */
+  .tag{ display:inline-block; font-size:11px; font-weight:600; padding:2px 7px; border-radius:6px; background:var(--surface-2); color:var(--ink-2); white-space:nowrap; vertical-align:middle; }
+  .tag.ok{ background:var(--good-wash); color:var(--good); }
+  .tag.warn{ background:var(--warn-wash); color:var(--warning); }
+  .tag.crit{ background:var(--crit-wash); color:var(--critical); }
+  .tag.acc{ background:var(--accent-wash); color:var(--accent); }
+  .tag.dark{ background:var(--ink); color:var(--plane); }
+
+  /* checklist gate */
+  .gate{ list-style:none; margin:6px 0 0; padding:0; }
+  .gate li{ display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--hair); font-size:13.5px; }
+  .gate li:last-child{ border-bottom:0; }
+  .gate .ic{ width:20px; height:20px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex:0 0 auto; }
+  .gate .ic.y{ background:var(--good-wash); color:var(--good); }
+  .gate .ic.n{ background:var(--crit-wash); color:var(--critical); }
+  .gate .ic.w{ background:var(--warn-wash); color:var(--warning); }
+  .gate small{ margin-left:auto; color:var(--ink-3); font-size:12px; white-space:nowrap; }
+
+  /* checkbox */
+  .chk{ width:18px; height:18px; border:1.5px solid var(--ink-3); border-radius:5px; display:inline-grid; place-items:center; font-size:11px; color:#fff; cursor:pointer; background:var(--surface); flex:0 0 auto; vertical-align:middle; }
+  .chk.on{ background:var(--good); border-color:var(--good); }
+
+  /* step flow strip */
+  .flow{ display:flex; gap:6px; margin:10px 0 0; }
+  .flow div{ flex:1; padding:8px 6px; border-radius:10px; border:1px solid var(--hair); font-size:11.5px; text-align:center; color:var(--ink-3); line-height:1.3; }
+  .flow div b{ display:block; font-size:10.5px; font-weight:600; color:var(--ink-2); letter-spacing:.03em; }
+  .flow .on{ background:var(--accent); color:#fff; border-color:transparent; }
+  .flow .on b{ color:rgba(255,255,255,.85); }
+  .flow .done{ background:var(--accent-wash); color:var(--accent); border-color:transparent; }
+  .flow .done b{ color:var(--accent); }
+  .flow .you{ box-shadow:inset 0 -3px 0 var(--accent); }
+
+  /* table */
+  table{ width:100%; border-collapse:collapse; margin-top:6px; }
+  th{ text-align:left; font-size:11.5px; font-weight:600; color:var(--ink-3); padding:8px 10px 8px 0; border-bottom:1px solid var(--hair); white-space:nowrap; }
+  td{ padding:10px 10px 10px 0; border-bottom:1px solid var(--hair); font-size:13.5px; vertical-align:middle; }
+  tr:last-child td{ border-bottom:0; }
+  tbody tr:hover td{ background:var(--accent-wash); }
+  td.num, th.num{ text-align:right; font-variant-numeric:tabular-nums; }
+  td.mono{ font-variant-numeric:tabular-nums; font-weight:500; }
+  td.act, th.act{ text-align:right; }
+  .neg{ color:var(--critical); }
+  .dim{ color:var(--ink-3); }
+  .sm{ font-size:12px; color:var(--ink-3); }
+  .paidrow td{ color:var(--ink-3); }
+  .paidrow td .mono, .paidrow td.mono{ text-decoration:none; }
+
+  /* input */
+  .inp{ font:inherit; font-size:13px; color:var(--ink); background:var(--surface); border:1px solid var(--hair); border-radius:10px; padding:8px 11px; width:100%; }
+  .inp::placeholder{ color:var(--ink-3); }
+  .field{ display:flex; flex-direction:column; gap:5px; }
+  .field label{ font-size:12px; color:var(--ink-3); font-weight:500; }
+  .form3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-top:8px; }
+
+  footer{ margin-top:36px; padding-top:14px; border-top:1px solid var(--hair); color:var(--ink-3); font-size:12px; display:flex; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+
+  @media (prefers-reduced-motion:no-preference){
+    .kpi, .box, .greet{ animation:rise .5s cubic-bezier(.16,1,.3,1) both; }
+    .kpi:nth-child(2){ animation-delay:.04s } .kpi:nth-child(3){ animation-delay:.08s } .kpi:nth-child(4){ animation-delay:.12s } .kpi:nth-child(5){ animation-delay:.16s }
+    .grid .box:nth-child(1){ animation-delay:.10s } .grid .box:nth-child(2){ animation-delay:.15s } .grid .box:nth-child(3){ animation-delay:.20s }
+    .grid .box:nth-child(4){ animation-delay:.25s } .grid .box:nth-child(5){ animation-delay:.30s } .grid .box:nth-child(6){ animation-delay:.35s } .grid .box:nth-child(7){ animation-delay:.40s }
+    @keyframes rise{ from{ opacity:0; transform:translateY(8px) } to{ opacity:1; transform:none } }
+  }
+  .mdate{ display:none; }
+  @media (max-width:1024px){ .shell{ grid-template-columns:1fr; } .rail{ display:none; } .top .wordmark, .top .tabs{ display:inline-flex; } .top .who, .top .print{ display:none; } .kpis, .kpis.k4{ grid-template-columns:repeat(3,1fr); } .c3,.c4,.c5,.c6,.c7,.c8{ grid-column:span 6; } }
+  @media (min-width:1025px){ .top .wordmark, .top .tabs{ display:none; } }
+  @media (max-width:640px){ .top .tabs{ display:none; } }
+  @media (max-width:760px){ .kpis, .kpis.k4{ grid-template-columns:1fr 1fr; } .c3,.c4,.c5,.c6,.c7,.c8,.c12{ grid-column:span 12; } .wrap{ padding:0 16px 40px; } .greet h1{ font-size:24px; } .hero{ font-size:38px; } .top{ height:58px; gap:10px; } .who{ display:none; } .mdate{ display:block; color:var(--ink-3); font-size:13px; margin-bottom:6px; } .form3{ grid-template-columns:1fr; } }
+
+  /* phone preview (crew): same page, constrained to a handset */
+  body.phone .shell{ display:block; }
+  body.phone .rail{ display:none; }
+  body.phone .wrap{ max-width:418px; margin:24px auto 40px; padding:0 14px 30px; border:12px solid #141413; border-radius:44px; background:var(--plane); min-height:820px; box-shadow:0 30px 60px -20px rgba(0,0,0,.45); }
+  body.phone .top{ height:58px; gap:10px; }
+  body.phone .top .wordmark{ display:inline-flex; }
+  body.phone .top .tabs, body.phone .top .who, body.phone .top .print, body.phone .top .desk{ display:none; }
+  body.phone .mdate{ display:block; color:var(--ink-3); font-size:13px; margin-bottom:6px; }
+  body.phone .greet{ padding:22px 0 14px; }
+  body.phone .greet h1{ font-size:24px; }
+  body.phone .kpis, body.phone .kpis.k4{ grid-template-columns:1fr 1fr; }
+  body.phone .c3, body.phone .c4, body.phone .c5, body.phone .c6, body.phone .c7, body.phone .c8, body.phone .c12{ grid-column:span 12; }
+  body.phone .hero{ font-size:36px; }
+  body.phone .form3{ grid-template-columns:1fr; }
+  body.phone .hide-phone{ display:none; }
+  .phonebar{ display:none; }
+  body.phone .phonebar{ display:flex; justify-content:space-between; font-size:12px; font-weight:600; padding:8px 8px 0; color:var(--ink); }
+  .phoneexit, .phonetools{ display:none; }
+  body.phone .phoneexit{ display:block; text-align:center; margin:14px 0 0; }
+  body.phone .phonetools{ display:flex; gap:8px; justify-content:center; margin:18px 0 0; }
+  @media (max-width:1024px){ .phonetools{ display:flex; gap:8px; justify-content:center; margin:18px 0 0; } }
+  .glance .btn{ white-space:normal; line-height:1.3; }
+  body.phone #netTag{ display:none; }
+  body.phone .box table, body.phone .flow{ }
+  body.phone .tblwrap, .tblwrap{ min-width:0; }
+  body.phone table{ display:block; overflow-x:auto; white-space:nowrap; }
+  body.phone table td{ white-space:normal; min-width:90px; }
+  body.phone .flow{ flex-wrap:wrap; }
+  body.phone .flow div{ flex:1 1 21%; }
+  @media (max-width:760px){ table{ display:block; overflow-x:auto; } .flow{ flex-wrap:wrap; } .flow div{ flex:1 1 21%; } #netTag{ display:none; } }
+
+  /* ---- screens / router ---- */
+  .screen{ display:none; }
+  .screen.on{ display:block; }
+  .back{ font-size:12.5px; color:var(--accent); font-weight:600; cursor:pointer; text-decoration:none; }
+  .greet .actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  #toast{ position:fixed; left:50%; bottom:28px; transform:translate(-50%,20px); background:var(--ink); color:var(--plane); padding:10px 16px; border-radius:10px; font-size:13px; font-weight:600; opacity:0; transition:.2s; z-index:99; pointer-events:none; box-shadow:var(--shadow); max-width:90vw; text-align:center; }
+  #toast.on{ opacity:1; transform:translate(-50%,0); }
+
+  /* forms */
+  .form2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:8px; }
+  textarea.inp{ min-height:74px; resize:vertical; }
+  select.inp{ appearance:none; padding-right:30px; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4.5L6 8.5L10 4.5' stroke='%23898781' stroke-width='1.6' fill='none' stroke-linecap='round'/></svg>"); background-repeat:no-repeat; background-position:right 10px center; }
+  .inp.ro{ background:var(--surface-2); color:var(--ink-2); }
+  .inp:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-wash); }
+  .inp.sm{ padding:5px 8px; font-size:12.5px; width:auto; }
+  .qty{ width:64px; text-align:right; }
+  .actions{ display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; align-items:center; }
+
+  /* crew picker */
+  .crewgrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px; margin-top:8px; }
+  .crewopt{ border:1px solid var(--hair); border-radius:10px; padding:10px 12px; cursor:pointer; display:flex; gap:10px; align-items:flex-start; background:var(--surface); }
+  .crewopt:hover{ background:var(--surface-2); }
+  .crewopt.on{ border-color:var(--accent); background:var(--accent-wash); }
+  .crewopt .bx{ width:16px; height:16px; border-radius:5px; border:1.5px solid var(--ink-3); flex:0 0 auto; margin-top:2px; display:grid; place-items:center; font-size:10px; color:#fff; }
+  .crewopt.on .bx{ background:var(--accent); border-color:var(--accent); }
+  .crewopt .cn{ font-weight:600; font-size:13.5px; }
+  .crewopt .cm{ font-size:12px; color:var(--ink-3); }
+
+  /* catalog picker */
+  .picker{ border:1px solid var(--hair); border-radius:10px; overflow:hidden; margin-top:8px; }
+  .picker .srch{ display:flex; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--hair); }
+  .picker .srch input{ border:0; outline:0; font:inherit; flex:1; background:transparent; color:var(--ink); }
+  .picker .opt{ display:flex; align-items:center; gap:12px; padding:8px 12px; border-bottom:1px solid var(--hair); cursor:pointer; font-size:13px; }
+  .picker .opt:last-child{ border-bottom:0; }
+  .picker .opt:hover{ background:var(--accent-wash); }
+  .picker .opt .cd{ font-size:12px; color:var(--ink-3); width:80px; flex:0 0 auto; font-variant-numeric:tabular-nums; }
+  .picker .opt .ds{ flex:1; }
+
+  /* photos */
+  .photos{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:8px; }
+  .ph{ aspect-ratio:4/3; border-radius:10px; border:1px solid var(--hair); display:grid; place-items:center; font-size:11px; color:var(--ink-3); text-align:center; background:linear-gradient(135deg,var(--surface-2),var(--hair)); }
+  .ph b{ display:block; font-size:10px; letter-spacing:.06em; color:var(--ink-2); }
+  .ph.cam{ border:2px dashed var(--accent-2); background:var(--surface); color:var(--accent); font-weight:600; cursor:pointer; }
+  .diff{ background:var(--accent-wash); border-left:3px solid var(--accent); padding:8px 12px; border-radius:0 8px 8px 0; font-size:13px; margin-top:8px; }
+  .diff .old{ color:var(--critical); text-decoration:line-through; }
+  .diff .new{ color:var(--good); font-weight:600; }
+
+  /* signature pad */
+  .sigpad{ border:1.5px dashed var(--ink-3); border-radius:10px; height:78px; display:grid; place-items:center; color:var(--ink-3); font-size:13px; background:var(--surface); cursor:pointer; }
+  .sigpad.done{ border-style:solid; border-color:var(--accent); background:var(--accent-wash); color:var(--accent); font-family:"Segoe Script","Bradley Hand","Snell Roundhand",cursive; font-size:22px; }
+
+  /* stepper */
+  .stepper{ display:inline-flex; align-items:center; border:1px solid var(--hair); border-radius:8px; overflow:hidden; vertical-align:middle; }
+  .stepper span{ width:30px; height:30px; display:grid; place-items:center; font-size:16px; color:var(--accent); font-weight:700; background:var(--surface-2); cursor:pointer; user-select:none; }
+  .stepper b{ width:38px; text-align:center; font-size:14px; }
+
+  /* pre-cert sheet */
+  .sheet{ border:2px solid var(--ink); border-radius:4px; padding:20px; background:var(--surface); font-size:13px; }
+  .sheet .shead{ text-align:center; border-bottom:1px solid var(--ink); padding-bottom:10px; margin-bottom:14px; }
+  .sheet .shead b{ font-size:16px; letter-spacing:-.2px; }
+  .sheet .shead p{ margin:2px 0 0; font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-2); }
+  .sheet .meta{ display:grid; grid-template-columns:1fr 1fr; gap:8px 18px; margin-bottom:12px; font-size:12.5px; }
+  .sheet .meta div{ border-bottom:1px solid var(--hair); padding-bottom:4px; }
+  .sheet .meta span{ color:var(--ink-3); font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; display:block; }
+  .sheet table th, .sheet table td{ border:1px solid var(--hair); padding:6px 8px; }
+  .sigs{ display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:16px; }
+  .sig{ border:1px solid var(--hair); border-radius:8px; padding:10px; }
+  .sig .lbl{ font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3); font-weight:700; margin-bottom:8px; }
+  .sig .ink{ font-family:"Segoe Script","Bradley Hand","Snell Roundhand",cursive; font-size:20px; color:var(--accent); border-bottom:1px solid var(--ink); padding-bottom:3px; margin-bottom:6px; }
+  .sig .empty{ border-bottom:1px dashed var(--ink-3); height:29px; margin-bottom:6px; cursor:pointer; }
+  .sig .nm{ font-size:12px; font-weight:600; }
+  .sig .dt{ font-size:11px; color:var(--ink-3); }
+
+  /* misc */
+  .note{ background:var(--warn-wash); color:var(--warning); border-radius:10px; padding:10px 12px; font-size:13px; }
+  .note.crit{ background:var(--crit-wash); color:var(--critical); }
+  .note.ok{ background:var(--good-wash); color:var(--good); }
+  .note.acc{ background:var(--accent-wash); color:var(--accent); }
+  .radio{ display:flex; gap:8px; flex-wrap:wrap; }
+  .radio label{ border:1px solid var(--hair); border-radius:8px; padding:6px 10px; font-size:12.5px; cursor:pointer; }
+  .radio label.on{ border-color:var(--accent); background:var(--accent-wash); color:var(--accent); font-weight:600; }
+  .kv{ display:grid; grid-template-columns:auto 1fr; gap:6px 16px; font-size:13.5px; margin-top:6px; }
+  .kv span:nth-child(odd){ color:var(--ink-3); }
+  tr.hidden{ display:none; }
+  tr.sel td{ background:var(--accent-wash); }
+  .clickable{ cursor:pointer; }
+  @media (max-width:760px){ .form2, .sigs, .photos{ grid-template-columns:1fr 1fr; } .crewgrid{ grid-template-columns:1fr; } }
+  body.phone .form2, body.phone .sigs{ grid-template-columns:1fr; }
+  body.phone .photos{ grid-template-columns:1fr 1fr; }
+
+
+</style>
+</head>
+<body>
+<div class="shell">
+
+<aside class="rail">
+  <div class="wordmark">JAF Ops <span data-es="Supervisor · Área Central">Supervisor · Central area</span></div>
+  <a data-go="dash" class="on" href="#" data-es="Panel">Dashboard</a>
+  <a data-go="new" href="#" data-es="Nueva orden de trabajo">New work order</a>
+  <a data-go="review" href="#"><span data-es="Por revisar">Review queue</span> <span class="pill">2</span></a>
+  <a data-go="match" href="#"><span data-es="Aviso y cuadre">Aviso &amp; match</span> <span class="pill">1</span></a>
+  <a data-go="invoices" href="#"><span data-es="Facturas JAF">JAF invoices</span> <span class="n">14</span></a>
+  <a data-go="precert" href="#"><span data-es="Hojas de pre-certificación">Pre-cert sheets</span> <span class="n">14</span></a>
+  <a data-go="release" href="#"><span data-es="Enviado a Finanzas">Released to Finance</span> <span class="n">31</span></a>
+  <div class="grp" data-es="Mis brigadas">My brigades</div>
+  <a data-go="brigade" data-arg="jm" href="#">Jesús Martínez <span class="n">3</span></a>
+  <a data-go="brigade" data-arg="dc" href="#">Dino Castillo <span class="n">2</span></a>
+  <a data-go="brigade" data-arg="ad" href="#">Alexis Díaz <span class="n">2</span></a>
+  <a data-go="brigade" data-arg="zg" href="#">Zariel Garay <span class="n">1</span></a>
+  <div class="foot">
+    <div class="user"><div class="av">EO</div><div><div class="nm">Edgard Ocasio</div><div class="rl" data-es="Supervisor · Central">Supervisor · Central</div></div></div>
+    <div class="toggles"><button class="toggle" id="themeBtn" type="button">Dark</button><button class="toggle" id="langBtn" type="button">ES</button></div>
+  </div>
+</aside>
+
+<div class="wrap">
+
+  <div class="top">
+    <div class="wordmark">JAF Ops</div>
+    <nav class="tabs"><a data-go="dash" class="on" href="#" data-es="Panel">Dashboard</a><a data-go="review" href="#" data-es="Revisar">Review</a><a data-go="dash" href="#" data-es="Órdenes">Orders</a><a data-go="brigade" data-arg="jm" href="#" data-es="Brigadas">Brigades</a></nav>
+    <div class="spacer"></div>
+    <div class="who" data-es="Sábado, 19 de septiembre">Saturday, 19 September</div>
+    <button class="btn ghost print" data-say="Printing dashboard…" data-say-es="Imprimiendo panel…" data-es="Imprimir">Print</button>
+    <button class="btn blue" data-go="new" data-es="+ Nueva orden de trabajo">+ New work order</button>
+  </div>
+
+<section class="screen on" data-screen="dash">
+  <div class="greet">
+    <div>
+      <div class="mdate" data-es="Sábado, 19 de septiembre">Saturday, 19 September</div>
+      <h1 data-es="Buenos días, Edgard.">Good morning, Edgard.</h1>
+      <p data-es="<b>2 trabajos</b> esperan tu revisión, <b>1</b> está bloqueado porque el Aviso no cuadra con la factura, y tus <b>4 brigadas</b> tienen 8 trabajos abiertos."><b>2 jobs</b> are waiting for your review, <b>1</b> is blocked because the Aviso doesn't match the invoice, and your <b>4 brigades</b> have 8 jobs open.</p>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi">
+      <div><div class="l" data-es="Órdenes abiertas">Open work orders</div><div class="v">8</div><div class="d" data-es="en 4 brigadas">across 4 brigades</div></div>
+      <div class="viz mini" role="img" aria-label="Open jobs by stage"><i class="lo" style="height:60%"></i><i class="lo" style="height:90%"></i><i style="height:30%"></i><i style="height:60%"></i><i style="height:60%"></i><i class="lo" style="height:30%"></i></div>
+    </div>
+    <div class="kpi">
+      <div><div class="l" data-es="Por revisar">Pending your review</div><div class="v">2</div><div class="d" data-es="enviados desde el campo">submitted from the field</div></div>
+      <svg class="viz ring" viewBox="0 0 52 52" role="img" aria-label="25 percent of open jobs need review"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="25"/><text x="26" y="25">25%</text><text class="cap" x="26" y="35" data-es="abiertas">of open</text></svg>
+    </div>
+    <div class="kpi">
+      <div><div class="l" data-es="Devueltos a brigada">Sent back to crew</div><div class="v warn">1</div><div class="d" data-es="fotos a repetir">photos to retake</div></div>
+      <svg class="viz ring warn" viewBox="0 0 52 52" role="img" aria-label="1 of 8 sent back"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="12"/><text x="26" y="25">1</text><text class="cap" x="26" y="35" data-es="de 8">of 8</text></svg>
+    </div>
+    <div class="kpi">
+      <div><div class="l" data-es="Bloqueados · Aviso ≠ factura">Blocked · Aviso ≠ invoice</div><div class="v neg">1</div><div class="d">$204.18 <span data-es="de diferencia">apart</span></div></div>
+      <svg class="viz ring crit" viewBox="0 0 52 52" role="img" aria-label="1 blocked"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="12"/><text x="26" y="25">1</text><text class="cap" x="26" y="35" data-es="bloqueado">blocked</text></svg>
+    </div>
+    <div class="kpi">
+      <div><div class="l" data-es="Enviado a Finanzas · sept.">Released to Finance · Sep</div><div class="v">$4,812</div><div class="d">7 <span data-es="trabajos, 3 semanas">jobs, 3 weeks</span></div></div>
+      <svg class="viz spark" data-n="742,1329,586,1204,951" viewBox="0 0 72 34" role="img" aria-label="Weekly releases"></svg>
+    </div>
+  </div>
+
+  <div class="grid">
+
+    <!-- glance -->
+    <section class="box c4 acc glance">
+      <h2 data-es="Hoy">Today</h2>
+      <div class="big">3 <span data-es="decisiones">decisions</span></div>
+      <p data-es="Dos revisiones del campo y un Aviso que no cuadra. Todo lo demás está en camino.">Two field reviews and one Aviso that doesn't add up. Everything else is moving on its own.</p>
+      <button class="btn acc" data-go="review" data-es="Revisar JAF-2026-1043 · Jesús Martínez">Review JAF-2026-1043 · Jesús Martínez</button>
+      <button class="btn acc" data-go="review" data-es="Revisar JAF-2026-1004 · diferencia de cantidad">Review JAF-2026-1004 · qty discrepancy</button>
+      <button class="btn acc" data-go="match" data-es="Resolver Aviso ≠ factura en JAF-2026-1041">Resolve Aviso ≠ invoice on JAF-2026-1041</button>
+    </section>
+
+    <!-- review queue -->
+    <section class="box c8">
+      <div class="head"><div><h2><span data-es="Por revisar">Needs your review</span> <span class="count">2</span></h2><p class="sub" data-es="La brigada ya documentó el trabajo. Fotos, dirección corregida y cantidades instaladas por código.">The crew has documented the work. Photos, corrected address, installed quantities per code.</p></div></div>
+      <table>
+        <thead><tr><th data-es="Orden">Work order</th><th data-es="Trabajo">Job</th><th data-es="Brigada">Brigade</th><th data-es="Enviado">Submitted</th><th data-es="Señal">Flag</th><th class="act"></th></tr></thead>
+        <tbody>
+          <tr><td class="mono">JAF-2026-1043</td><td>Transf. attachments y remoción de poste<div class="sm">CAM 906, Com. Aguacate, Yabucoa</div></td><td>Jesús Martínez</td><td>8/26 · 4:12 PM</td><td><span class="tag ok" data-es="cantidades cuadran">quantities match</span></td><td class="act"><button class="btn sm blue" data-go="review" data-es="Revisar">Review</button></td></tr>
+          <tr><td class="mono">JAF-2026-1004</td><td>Pole removal — guy wire support<div class="sm">PR-2 KM 63.6, Isabela</div></td><td>Dino Castillo</td><td data-es="hace 2 h">2 h ago</td><td><span class="tag warn" data-es="instaló 6, ordenado 4">installed 6, ordered 4</span></td><td class="act"><button class="btn sm blue" data-go="review" data-es="Revisar">Review</button></td></tr>
+        </tbody>
+      </table>
+      <div class="split">
+        <div class="stat"><div class="l" data-es="Devuelto a brigada">Sent back to crew</div><div class="v">1 <span class="sm">JAF-2026-1005 · Zariel Garay</span></div></div>
+        <div class="stat"><div class="l" data-es="Aprobado esta semana">Approved this week</div><div class="v">4 <span class="sm">$2,741 <span data-es="facturado">invoiced</span></span></div></div>
+      </div>
+    </section>
+
+    <!-- field -->
+    <section class="box c4">
+      <h2 data-es="Mis brigadas hoy">My brigades today</h2>
+      <p class="sub" data-es="Trabajos abiertos por brigada, Área Central.">Open jobs per brigade, Central area.</p>
+      <div class="bars">
+        <div class="n">Jesús Martínez</div><div class="b" style="width:100%"></div><div class="v">3</div>
+        <div class="n">Dino Castillo</div><div class="b" style="width:67%"></div><div class="v">2</div>
+        <div class="n">Alexis Díaz</div><div class="b" style="width:67%"></div><div class="v">2</div>
+        <div class="n">Zariel Garay</div><div class="b lo" style="width:33%"></div><div class="v">1</div>
+      </div>
+      <div class="split">
+        <div class="stat"><div class="l" data-es="En almacén (prep)">At the warehouse (prep)</div><div class="v">3</div></div>
+        <div class="stat"><div class="l" data-es="En sitio ahora">On site now</div><div class="v">2</div></div>
+      </div>
+    </section>
+
+    <!-- pipeline chart -->
+    <section class="box c8">
+      <h2 data-es="Dónde está cada trabajo">Where each job sits</h2>
+      <p class="sub" data-es="Los 8 pasos de una orden. Tus pasos son 5 a 8: revisar, facturar, cuadrar el Aviso, enviar a Finanzas.">The 8 steps of a work order. Your steps are 5 to 8: review, invoice, match the Aviso, release to Finance.</p>
+      <div class="flow">
+        <div><b>1</b><span data-es="Creada">Created</span></div><div><b>2</b><span data-es="Prep almacén">Warehouse prep</span></div><div><b>3</b><span data-es="Brigada firma">Crew signs out</span></div><div><b>4</b><span data-es="Trabajo en sitio">Field work</span></div><div class="you on"><b>5</b><span data-es="Tú revisas">You review</span></div><div class="you"><b>6</b><span data-es="Factura JAF">JAF invoice</span></div><div class="you"><b>7</b><span data-es="Aviso cuadrado">Aviso matched</span></div><div class="you"><b>8</b><span data-es="A Finanzas">To Finance</span></div>
+      </div>
+      <div class="chartwrap" style="margin-top:12px">
+        <svg class="chart" id="pipe" viewBox="0 0 640 230" aria-label="Open jobs per step"></svg>
+        <div class="tip"></div>
+      </div>
+    </section>
+
+    <!-- aviso & match -->
+    <section class="box c4">
+      <h2><span data-es="Aviso y cuadre">Aviso &amp; match</span> <span class="count">1</span></h2>
+      <p class="sub" data-es="El monto del Aviso debe cuadrar con la factura JAF. Si no cuadra, el trabajo no sale a Finanzas.">The Aviso amount must match the JAF invoice. If it doesn't, the job does not go to Finance.</p>
+      <ul class="att">
+        <li><span class="mark"></span><div><div class="t">JAF-2026-1041 · Aviso 10351842</div><div class="d" data-es="Factura $1,204.18, Aviso $1,000.00. Falta un renglón de $204.18 en el Aviso de Claro.">Invoice $1,204.18, Aviso $1,000.00. A $204.18 line is missing from Claro's Aviso.</div></div><span class="lvl" data-es="Bloqueado">Blocked</span></li>
+        <li><span class="mark w"></span><div><div class="t">JAF-2026-0998 · <span data-es="sin Aviso">no Aviso yet</span></div><div class="d" data-es="Aprobado el 9/15, $742.90. Claro no ha enviado el número de Aviso.">Approved 9/15, $742.90. Claro hasn't sent the Aviso number.</div></div><span class="lvl w" data-es="Esperando">Waiting</span></li>
+        <li><span class="mark g"></span><div><div class="t">JAF-2026-1038 · Aviso 10352770</div><div class="d" data-es="$742.90 cuadra. Hoja de pre-certificación firmada. Enviado a Lissette.">$742.90 matches. Pre-cert sheet signed. Released to Lissette.</div></div><span class="lvl g" data-es="Cuadrado">Matched</span></li>
+      </ul>
+      <a class="more" href="#" data-go="match" data-es="Ver los 14 Avisos del mes">See all 14 Avisos this month</a>
+    </section>
+
+    <!-- invoices + pre-cert -->
+    <section class="box c8">
+      <h2 data-es="Facturas JAF y hojas de pre-certificación · septiembre">JAF invoices and pre-cert sheets · September</h2>
+      <p class="sub" data-es="Generadas del trabajo aprobado. Nada se escribe a mano excepto las firmas.">Generated from the approved job. Nothing is keyed in except the signatures.</p>
+      <table>
+        <thead><tr><th data-es="Factura">Invoice</th><th data-es="Orden">Work order</th><th class="num" data-es="Monto">Amount</th><th data-es="Pre-cert firmada por">Pre-cert signed by</th><th data-es="Estado">Status</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">INV-2026-0412</td><td>JAF-2026-1043 · Jesús Martínez</td><td class="num">$586.37</td><td><span class="tag ok" data-es="supervisor">supervisor</span> <span class="tag ok" data-es="sub-contratista">sub-contractor</span> <span class="tag" data-es="Claro pendiente">Claro pending</span></td><td><span class="tag warn" data-es="por revisar">to review</span></td></tr>
+          <tr><td class="mono">INV-2026-0405</td><td>JAF-2026-1041 · Alexis Díaz</td><td class="num">$1,204.18</td><td><span class="tag ok" data-es="supervisor">supervisor</span> <span class="tag ok" data-es="sub-contratista">sub-contractor</span> <span class="tag ok">Claro</span></td><td><span class="tag crit" data-es="Aviso ≠ factura">Aviso ≠ invoice</span></td></tr>
+          <tr><td class="mono">INV-2026-0401</td><td>JAF-2026-0998 · Dino Castillo</td><td class="num">$742.90</td><td><span class="tag ok" data-es="supervisor">supervisor</span> <span class="tag ok" data-es="sub-contratista">sub-contractor</span> <span class="tag" data-es="Claro pendiente">Claro pending</span></td><td><span class="tag" data-es="esperando Aviso">waiting on Aviso</span></td></tr>
+          <tr class="paidrow"><td class="mono">INV-2026-0398</td><td>JAF-2026-1038 · Dino Castillo</td><td class="num">$742.90</td><td><span class="tag ok" data-es="supervisor">supervisor</span> <span class="tag ok" data-es="sub-contratista">sub-contractor</span> <span class="tag ok">Claro</span></td><td><span class="tag ok" data-es="en Finanzas">at Finance</span></td></tr>
+        </tbody>
+      </table>
+      <div class="split">
+        <div class="stat"><div class="l" data-es="Facturado en septiembre">Invoiced in September</div><div class="v">$4,812</div></div>
+        <div class="stat"><div class="l" data-es="Hojas con firma de Claro">Sheets with Claro's signature</div><div class="v">9 <span class="sm" data-es="de 14">of 14</span></div></div>
+      </div>
+    </section>
+
+    <!-- all work orders -->
+    <section class="box c12">
+      <div class="head"><div><h2 data-es="Todas las órdenes de trabajo · Área Central">All work orders · Central area</h2><p class="sub" data-es="Ordenadas por el paso en que están. Tus brigadas solamente.">Sorted by the step they're on. Your brigades only.</p></div><div><input class="inp" style="width:260px" placeholder="Search Aviso, address, brigade…" data-es-ph="Buscar Aviso, dirección, brigada…"></div></div>
+      <table>
+        <thead><tr><th data-es="Orden">Work order</th><th data-es="Trabajo">Job</th><th data-es="Brigada">Brigade</th><th data-es="Paso">Step</th><th data-es="Aviso">Aviso</th><th class="num" data-es="Factura JAF">JAF invoice</th><th data-es="Estado">Status</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">JAF-2026-1044</td><td>Transf. attachments y remoción de poste</td><td>Jesús Martínez</td><td>2 · <span data-es="Prep almacén">Warehouse prep</span></td><td class="dim">—</td><td class="num dim">$586.37 <span class="sm" data-es="est.">est.</span></td><td><span class="tag" data-es="Guaynabo preparando">Guaynabo prepping</span></td></tr>
+          <tr><td class="mono">JAF-2026-1046</td><td>Remoción cable aéreo</td><td>Alexis Díaz</td><td>2 · <span data-es="Prep almacén">Warehouse prep</span></td><td class="dim">—</td><td class="num dim">$318.40 <span class="sm" data-es="est.">est.</span></td><td><span class="tag warn" data-es="material faltante · tu decisión">missing stock · your call</span></td></tr>
+          <tr><td class="mono">JAF-2026-1003</td><td>Guy wire installation</td><td>Jesús Martínez</td><td>4 · <span data-es="En sitio">On site</span></td><td class="dim">—</td><td class="num dim">$412.06 <span class="sm" data-es="est.">est.</span></td><td><span class="tag acc" data-es="firmó salida 8/25">signed out 8/25</span></td></tr>
+          <tr><td class="mono">JAF-2026-1043</td><td>Transf. attachments y remoción de poste</td><td>Jesús Martínez</td><td>5 · <span data-es="Tu revisión">Your review</span></td><td class="mono">10353961</td><td class="num">$586.37</td><td><span class="tag warn" data-es="por revisar">to review</span></td></tr>
+          <tr><td class="mono">JAF-2026-1004</td><td>Pole removal — guy wire support</td><td>Dino Castillo</td><td>5 · <span data-es="Tu revisión">Your review</span></td><td class="dim">—</td><td class="num">$951.20</td><td><span class="tag warn" data-es="por revisar · diferencia">to review · discrepancy</span></td></tr>
+          <tr><td class="mono">JAF-2026-1005</td><td>Tree trimming — line clearance</td><td>Zariel Garay</td><td>4 · <span data-es="Devuelto">Sent back</span></td><td class="dim">—</td><td class="num dim">$268.90 <span class="sm" data-es="est.">est.</span></td><td><span class="tag crit" data-es="repetir fotos «después»">retake after photos</span></td></tr>
+          <tr><td class="mono">JAF-2026-1041</td><td>Remoción de línea bajante</td><td>Alexis Díaz</td><td>7 · <span data-es="Cuadre de Aviso">Aviso match</span></td><td class="mono">10351842</td><td class="num">$1,204.18</td><td><span class="tag crit" data-es="Aviso ≠ factura">Aviso ≠ invoice</span></td></tr>
+          <tr><td class="mono">JAF-2026-0998</td><td>Pole replacement</td><td>Dino Castillo</td><td>7 · <span data-es="Cuadre de Aviso">Aviso match</span></td><td class="dim" data-es="sin Aviso">none yet</td><td class="num">$742.90</td><td><span class="tag" data-es="esperando a Claro">waiting on Claro</span></td></tr>
+          <tr class="paidrow"><td class="mono">JAF-2026-1038</td><td>Transfer attachments — Calle Ajanta, Guaynabo</td><td>Dino Castillo</td><td>8 · <span data-es="En Finanzas">At Finance</span></td><td class="mono">10352770</td><td class="num">$742.90</td><td><span class="tag ok" data-es="enviado a Lissette 8/22">released to Lissette 8/22</span></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+  </div>
+
+</section>
+
+<!-- ================= NEW WORK ORDER ================= -->
+<section class="screen" data-screen="new">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Nueva orden de trabajo">New work order</h1><p data-es="Paso 1 de 8. Describe el trabajo, elige los códigos de servicio del catálogo, asigna la brigada. Al crear, sale al almacén y a la brigada a la vez.">Step 1 of 8. Describe the job, pick the service codes from the catalog, assign the brigade. On create it goes to the warehouse and the crew at the same time.</p></div></div>
+  <div class="flow" style="margin:0 0 16px"><div class="on you"><b>1</b><span data-es="Creada">Created</span></div><div><b>2</b><span data-es="Prep almacén">Warehouse prep</span></div><div><b>3</b><span data-es="Brigada firma">Crew signs out</span></div><div><b>4</b><span data-es="Trabajo en sitio">Field work</span></div><div class="you"><b>5</b><span data-es="Tú revisas">You review</span></div><div class="you"><b>6</b><span data-es="Factura JAF">JAF invoice</span></div><div class="you"><b>7</b><span data-es="Aviso cuadrado">Aviso matched</span></div><div class="you"><b>8</b><span data-es="A Finanzas">To Finance</span></div></div>
+  <div class="grid">
+    <section class="box c8">
+      <h2 data-es="El trabajo">The job</h2>
+      <p class="sub" data-es="El número de orden se asigna solo. El Aviso es opcional aquí: si Claro te lo dio con el trabajo, escríbelo; si no, se captura en el paso 7.">The work order number is assigned automatically. The Aviso is optional here: if Claro gave it to you with the job, enter it; otherwise it's captured at step 7.</p>
+      <div class="form2">
+        <div class="field"><label data-es="Orden de trabajo #">Work order #</label><input class="inp ro" value="JAF-2026-1047" readonly></div>
+        <div class="field"><label data-es="Aviso de Claro # · opcional">Claro Aviso # · optional</label><input class="inp" placeholder="8 digits, e.g. 10353961" data-es-ph="8 dígitos, ej. 10353961"></div>
+        <div class="field"><label data-es="Tipo de trabajo">Job type</label><select class="inp"><option>Mantenimiento de planta externa</option><option>Emergencia — línea bajante</option><option>Remoción</option><option>Instalación de poste</option></select></div>
+        <div class="field"><label data-es="Dirección · estimada, la brigada la corrige en sitio">Address · estimated, the crew corrects it on site</label><input class="inp" value="PR-2 KM 45.3, Aguadilla"></div>
+      </div>
+      <div class="field" style="margin-top:12px"><label data-es="Descripción">Description</label><textarea class="inp" placeholder="What Claro asked for…" data-es-ph="Lo que pidió Claro…">Reemplazo de poste 30 C5 y transferencia de attachments.</textarea></div>
+
+      <h2 style="margin-top:20px" data-es="Códigos de servicio · del catálogo (934 códigos)">Service codes · from the catalog (934 codes)</h2>
+      <p class="sub" data-es="Busca por descripción; el sistema pone el código. Cuando una descripción tiene dos códigos, tú eliges la cuenta. Nunca se escribe el código a mano.">Search by description; the system supplies the code. When one description has two codes, you pick the account. The code is never typed by hand.</p>
+      <div class="picker" id="picker">
+        <div class="srch"><span class="dim">🔍</span><input data-filter="#pickerOpts" placeholder="Type a description — 'transfer attach', 'remoción poste', 'línea bajante'…" data-es-ph="Escribe una descripción — 'transfer attach', 'remoción poste'…"></div>
+        <div id="pickerOpts">
+          <div class="opt" data-add="34006301|TRANSFER ATTCH DE POSTES|610|42.3430"><span class="cd">34006301</span><span class="ds">TRANSFER ATTCH DE POSTES</span><span class="tag warn">cuenta 610</span><span class="tag">EA · $42.34</span></div>
+          <div class="opt" data-add="34006498|TRANSFER ATTCH DE POSTES|615|42.3430"><span class="cd">34006498</span><span class="ds">TRANSFER ATTCH DE POSTES</span><span class="tag warn">cuenta 615</span><span class="tag">EA · $42.34</span></div>
+          <div class="opt" data-add="34007030|REMOCION DE LINEA BAJANTE|6102|13.8115"><span class="cd">34007030</span><span class="ds">REMOCION DE LINEA BAJANTE</span><span class="tag">cuenta 6102</span><span class="tag">EA · $13.81</span></div>
+          <div class="opt" data-add="34006291|REMOCION POSTES (TODO TIPO)|600|103.9485"><span class="cd">34006291</span><span class="ds">REMOCION POSTES (TODO TIPO)</span><span class="tag">cuenta 600</span><span class="tag">EA · $103.95</span></div>
+          <div class="opt" data-add="34007080|TRANSF / MOVER TERM 25X X 85|6102|41.1585"><span class="cd">34007080</span><span class="ds">TRANSF / MOVER TERM 25X X 85</span><span class="tag">cuenta 6102</span><span class="tag">EA · $41.16</span></div>
+          <div class="opt" data-add="34005457|INST POSTE 30 C5|600|201.9285"><span class="cd">34005457</span><span class="ds">INST POSTE 30 C5</span><span class="tag">cuenta 600</span><span class="tag">EA · $201.93</span></div>
+        </div>
+      </div>
+      <table id="woLines">
+        <thead><tr><th data-es="Código">Code</th><th data-es="Descripción">Description</th><th data-es="Cuenta">Acct</th><th class="num" data-es="Cant.">Qty</th><th class="num" data-es="Precio unit.">Unit price</th><th class="num" data-es="Línea">Line</th><th></th></tr></thead>
+        <tbody>
+          <tr data-price="201.9285"><td class="mono">34005457</td><td>INST POSTE 30 C5</td><td class="dim">600</td><td class="num"><input class="inp qty" value="1"></td><td class="num">$201.9285</td><td class="num line">$201.93</td><td class="act"><span class="clickable dim" data-del>✕</span></td></tr>
+          <tr data-price="42.3430"><td class="mono">34006301</td><td>TRANSFER ATTCH DE POSTES</td><td class="dim">610</td><td class="num"><input class="inp qty" value="4"></td><td class="num">$42.3430</td><td class="num line">$169.37</td><td class="act"><span class="clickable dim" data-del>✕</span></td></tr>
+        </tbody>
+        <tfoot><tr><td colspan="5" class="num" data-es="Subtotal estimado (antes de IVU)">Estimated subtotal (pre-IVU)</td><td class="num"><b id="woTotal">$371.30</b></td><td></td></tr></tfoot>
+      </table>
+      <p class="sm" data-es="Precios del catálogo vigente, REV 2023-04-21. La factura real se genera de las cantidades instaladas, no de estas.">Prices from the catalog revision in force, REV 2023-04-21. The real invoice is generated from installed quantities, not these.</p>
+    </section>
+
+    <section class="box c4">
+      <h2 data-es="Brigada">Brigade</h2>
+      <p class="sub" data-es="Solo las brigadas de tu área. El nombre del contratista, nunca «Brigada 2».">Only your area's brigades. The contractor's name, never "Brigade 2".</p>
+      <div class="crewgrid" data-single style="grid-template-columns:1fr">
+        <div class="crewopt"><div class="bx"></div><div><div class="cn">Dino Castillo</div><div class="cm">041 · Central · 787-617-0975</div></div></div>
+        <div class="crewopt"><div class="bx"></div><div><div class="cn">Alexis Díaz</div><div class="cm">052 · Central · 787-450-5291</div></div></div>
+        <div class="crewopt on"><div class="bx">✓</div><div><div class="cn">Zariel Garay</div><div class="cm">077 · Central · 787-405-5513</div></div></div>
+        <div class="crewopt"><div class="bx"></div><div><div class="cn">Jesús Martínez</div><div class="cm">009 · Central · 787-647-6842</div></div></div>
+      </div>
+      <h2 style="margin-top:20px" data-es="Materiales · catálogo SAP, aparte">Materials · SAP catalog, separate</h2>
+      <p class="sub" data-es="Lo que el almacén prepara. Sin precios; son artículos físicos.">What the warehouse preps. No prices; these are physical items.</p>
+      <select class="inp"><option data-es="Kit poste 30 C5 · 6 artículos · Guaynabo">Pole 30 C5 kit · 6 items · Guaynabo</option><option>Kit mantenimiento · 5 items</option><option>Custom list…</option></select>
+      <div class="field" style="margin-top:10px"><label data-es="Almacén de recogida">Pickup warehouse</label><div class="radio"><label class="on">Guaynabo</label><label>Arecibo</label></div></div>
+      <div class="note acc" style="margin-top:16px" data-es="Al crear: Guaynabo recibe la lista para preparar y la brigada recibe el trabajo en su teléfono. Tú vuelves a ver esta orden en el paso 5.">On create: Guaynabo gets the prep list and the brigade gets the job on their phone. You see this order again at step 5.</div>
+      <p style="margin:14px 0 0"><button class="btn blue" id="woCreate" style="width:100%" data-es="Crear orden de trabajo">Create work order</button></p>
+    </section>
+  </div>
+</section>
+
+<!-- ================= REVIEW QUEUE ================= -->
+<section class="screen" data-screen="review">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Revisar trabajo de campo">Review field work</h1><p data-es="Paso 5 de 8. La brigada documentó: dirección corregida, fotos antes/después, instalado por código, materiales usados. Apruebas o devuelves con nota.">Step 5 of 8. The crew documented: corrected address, before/after photos, installed per code, materials used. You approve, or send back with a note.</p></div></div>
+  <div class="tabs" style="display:inline-flex;margin-bottom:16px"><a class="on" href="#" data-tab="rev:1043">JAF-2026-1043 · Jesús Martínez</a><a href="#" data-tab="rev:1004">JAF-2026-1004 · Dino Castillo <span class="tag warn" style="margin-left:6px">qty</span></a></div>
+
+  <div data-panel="rev:1043">
+    <div class="grid">
+      <section class="box c4">
+        <h2 data-es="Dirección · corregida en sitio">Address · corrected on site</h2>
+        <p class="sub" data-es="El original, la corrección, quién y cuándo. Un solo valor de aquí en adelante.">The original, the correction, who and when. One value from here on.</p>
+        <div class="diff"><span class="old">CAM 906, Int. Parcelas Nuevas, Com. Aguacate, Yabucoa</span><br>→ <span class="new">CAM 906, Int. Parcelas Nuevas, Com. Aguacate, Yabucoa PR 00767</span><div class="sm" style="margin-top:4px">Jesús Martínez · 8/26 2:41 PM · GPS 18.05, −65.87</div></div>
+        <div class="kv" style="margin-top:14px"><span data-es="Enviado">Submitted</span><span>8/26 · 4:12 PM</span><span data-es="Firmó salida">Signed out</span><span>8/25 · Guaynabo · F. Ramos</span><span data-es="Nota de la brigada">Crew note</span><span>“Trabajo completado. Poste removido, attachments transferidos.”</span></div>
+      </section>
+      <section class="box c8">
+        <h2 data-es="Fotos">Photos</h2>
+        <p class="sub" data-es="Mínimo una antes y una después. Toca para ampliar.">At least one before and one after. Tap to enlarge.</p>
+        <div class="photos"><div class="ph"><div><b>BEFORE</b>2:12 PM</div></div><div class="ph"><div><b>BEFORE</b>2:14 PM</div></div><div class="ph"><div><b>AFTER</b>3:58 PM</div></div><div class="ph"><div><b>AFTER</b>4:02 PM</div></div></div>
+      </section>
+      <section class="box c8">
+        <h2 data-es="Ordenado vs. instalado · por código de servicio">Ordered vs. installed · per service code</h2>
+        <p class="sub" data-es="La factura JAF y la hoja de pre-certificación se generan de la columna «Instalado».">The JAF invoice and the pre-cert sheet are generated from the "Installed" column.</p>
+        <table>
+          <thead><tr><th data-es="Código">Code</th><th data-es="Descripción">Description</th><th class="num" data-es="Ordenado">Ordered</th><th class="num" data-es="Instalado">Installed</th><th class="num" data-es="Precio unit.">Unit price</th><th class="num" data-es="Línea">Line</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">34006301</td><td>TRANSFER ATTCH DE POSTES</td><td class="num">5</td><td class="num">5</td><td class="num">$42.3430</td><td class="num">$211.72</td></tr>
+            <tr><td class="mono">34007030</td><td>REMOCION DE LINEA BAJANTE</td><td class="num">2</td><td class="num">2</td><td class="num">$13.8115</td><td class="num">$27.62</td></tr>
+            <tr><td class="mono">34006291</td><td>REMOCION POSTES (TODO TIPO)</td><td class="num">1</td><td class="num">1</td><td class="num">$103.9485</td><td class="num">$103.95</td></tr>
+            <tr><td class="mono">34007080</td><td>TRANSF / MOVER TERM 25X X 85</td><td class="num">1</td><td class="num">1</td><td class="num">$41.1585</td><td class="num">$41.16</td></tr>
+            <tr><td class="mono">34005457</td><td>INST POSTE 30 C5</td><td class="num">1</td><td class="num">1</td><td class="num">$201.9285</td><td class="num">$201.93</td></tr>
+          </tbody>
+          <tfoot><tr><td colspan="5" class="num"><b data-es="Subtotal instalado (antes de IVU)">Installed subtotal (pre-IVU)</b></td><td class="num"><b>$586.37</b></td></tr></tfoot>
+        </table>
+      </section>
+      <section class="box c4">
+        <h2 data-es="Materiales usados · información">Materials used · information</h2>
+        <p class="sub" data-es="Tomado, usado, y lo que vuelve al almacén. El almacén concilia; tú solo ves.">Taken, used, and what goes back to the warehouse. The warehouse reconciles; you just see it.</p>
+        <ul class="rows">
+          <li><span>BURIED SERVICE WIRE 6x22</span><span class="sm">300 → 260 FT · 40 <span data-es="vuelven">back</span></span></li>
+          <li><span>SPAN CLAMP <span class="tag warn">+2 <span data-es="más de lo listado">over listed</span></span></span><span class="sm">6 → 5 · 1 <span data-es="vuelve">back</span></span></li>
+          <li><span>LAG SCREW 2 1/2 X 5/16</span><span class="sm">6 → 6</span></li>
+          <li><span>ROD GROUND 5/8 X 8</span><span class="sm">2 → 2</span></li>
+        </ul>
+        <h2 style="margin-top:18px" data-es="Tu decisión">Your decision</h2>
+        <button class="btn blue" style="width:100%;margin-top:6px" data-flip="Approved · JAF invoice INV-2026-0412 generated" data-flip-es="Aprobado · factura INV-2026-0412 generada" data-toast="Approved. Next: Aviso & match (step 7)." data-toast-es="Aprobado. Siguiente: Aviso y cuadre (paso 7)." data-es="Aprobar → generar factura JAF">Approve → generate JAF invoice</button>
+        <div class="field" style="margin-top:12px"><label data-es="O devolver a la brigada · nota obligatoria">Or send back to the crew · note required</label><textarea class="inp" id="sb1043" placeholder="What needs fixing, in plain words…" data-es-ph="Qué hay que corregir, en palabras simples…"></textarea></div>
+        <button class="btn ghost" style="width:100%;margin-top:8px" data-requires="#sb1043" data-flip="Sent back · crew notified" data-flip-es="Devuelto · brigada notificada" data-flip-cls="warn" data-es="Devolver a Jesús Martínez">Send back to Jesús Martínez</button>
+      </section>
+    </div>
+  </div>
+
+  <div data-panel="rev:1004">
+    <div class="grid">
+      <section class="box c4">
+        <h2 data-es="Dirección">Address</h2>
+        <div class="diff"><span class="old">PR-2 KM 63.4, Isabela</span><br>→ <span class="new">PR-2 KM 63.6, Isabela</span><div class="sm" style="margin-top:4px">Dino Castillo · <span data-es="hoy">today</span> 7:05 AM · GPS 18.50, −67.02</div></div>
+        <div class="note" style="margin-top:14px" data-es="Diferencia de cantidad: la brigada instaló 6 transferencias, se ordenaron 4. No es un error; decide si se factura lo instalado.">Quantity discrepancy: the crew installed 6 transfers, 4 were ordered. Not an error; decide whether the installed count gets invoiced.</div>
+      </section>
+      <section class="box c8">
+        <h2 data-es="Fotos">Photos</h2>
+        <div class="photos"><div class="ph"><div><b>BEFORE</b>7:10 AM</div></div><div class="ph"><div><b>AFTER</b>9:31 AM</div></div><div class="ph"><div><b>AFTER</b>9:33 AM</div></div></div>
+      </section>
+      <section class="box c8">
+        <h2 data-es="Ordenado vs. instalado">Ordered vs. installed</h2>
+        <table>
+          <thead><tr><th data-es="Código">Code</th><th data-es="Descripción">Description</th><th class="num" data-es="Ordenado">Ordered</th><th class="num" data-es="Instalado">Installed</th><th class="num" data-es="Línea">Line</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">34006291</td><td>REMOCION POSTES (TODO TIPO)</td><td class="num">1</td><td class="num">1</td><td class="num">$103.95</td></tr>
+            <tr><td class="mono">34006301</td><td>TRANSFER ATTCH DE POSTES</td><td class="num">4</td><td class="num"><span class="tag warn">6</span></td><td class="num">$254.06</td></tr>
+            <tr><td class="mono">34005457</td><td>INST POSTE 30 C5</td><td class="num">1</td><td class="num">1</td><td class="num">$201.93</td></tr>
+            <tr><td class="mono">34007080</td><td>TRANSF / MOVER TERM 25X X 85</td><td class="num">1</td><td class="num">1</td><td class="num">$41.16</td></tr>
+          </tbody>
+          <tfoot><tr><td colspan="4" class="num"><b data-es="Subtotal instalado">Installed subtotal</b></td><td class="num"><b>$601.10</b> <span class="sm">($951.20 <span data-es="ordenado">ordered</span>)</span></td></tr></tfoot>
+        </table>
+      </section>
+      <section class="box c4">
+        <h2 data-es="Tu decisión">Your decision</h2>
+        <p class="sub" data-es="Aprobar factura lo instalado (6). Devolver si las 2 extra no están justificadas en las fotos.">Approve invoices what was installed (6). Send back if the 2 extra aren't justified by the photos.</p>
+        <button class="btn blue" style="width:100%" data-flip="Approved with variance noted" data-flip-es="Aprobado con variación anotada" data-toast="Approved. Variance logged for Lissette." data-toast-es="Aprobado. Variación registrada para Lissette." data-es="Aprobar con variación">Approve with variance</button>
+        <div class="field" style="margin-top:12px"><label data-es="O devolver · nota obligatoria">Or send back · note required</label><textarea class="inp" id="sb1004" placeholder="e.g. photo the two extra transfers" data-es-ph="ej. foto de las dos transferencias extra"></textarea></div>
+        <button class="btn ghost" style="width:100%;margin-top:8px" data-requires="#sb1004" data-flip="Sent back · crew notified" data-flip-es="Devuelto · brigada notificada" data-flip-cls="warn" data-es="Devolver a Dino Castillo">Send back to Dino Castillo</button>
+      </section>
+    </div>
+  </div>
+</section>
+
+<!-- ================= AVISO & MATCH ================= -->
+<section class="screen" data-screen="match">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Aviso y cuadre">Aviso &amp; match</h1><p data-es="Paso 7 de 8. Captura el Aviso de Claro y compáralo con la factura JAF. Monto distinto = bloqueado. Cantidad distinta = señal con nota, el trabajo sigue.">Step 7 of 8. Capture Claro's Aviso and compare it to the JAF invoice. Amount mismatch = hard block. Quantity mismatch = flag with a note, the job flows.</p></div></div>
+  <div class="tabs" style="display:inline-flex;margin-bottom:16px"><a class="on" href="#" data-tab="mt:1041">JAF-2026-1041 <span class="tag crit" style="margin-left:6px">≠</span></a><a href="#" data-tab="mt:1043">JAF-2026-1043</a><a href="#" data-tab="mt:0998">JAF-2026-0998 <span class="tag" style="margin-left:6px" data-es="sin Aviso">no Aviso</span></a></div>
+
+  <div data-panel="mt:1041">
+    <div class="grid">
+      <section class="box c4">
+        <h2 data-es="Aviso 10351842 · capturado">Aviso 10351842 · captured</h2>
+        <p class="sub" data-es="Documento de Claro, 4 renglones leídos.">Claro's document, 4 lines captured.</p>
+        <div class="kv"><span data-es="Orden">Work order</span><span>JAF-2026-1041 · Alexis Díaz</span><span data-es="Factura JAF">JAF invoice</span><span>INV-2026-0405 · $1,204.18</span><span data-es="Aviso total">Aviso total</span><span class="neg"><b>$1,000.00</b></span><span data-es="Diferencia">Difference</span><span class="neg"><b>−$204.18</b></span></div>
+        <div class="note crit" style="margin-top:14px" data-es="Bloqueado. El monto del Aviso no cuadra con la factura. No sale a Finanzas hasta que Claro corrija el Aviso o tú ajustes la factura con justificación.">Blocked. The Aviso amount doesn't match the invoice. It does not go to Finance until Claro corrects the Aviso or you adjust the invoice with a reason.</div>
+        <div class="actions"><button class="btn blue" data-say="Request sent to Claro AP with the missing line attached." data-say-es="Solicitud enviada a Claro AP con el renglón faltante adjunto." data-es="Pedir Aviso corregido a Claro">Ask Claro for a corrected Aviso</button><button class="btn ghost" data-say="Upload the corrected Aviso PDF; lines are re-read automatically." data-say-es="Sube el PDF corregido; los renglones se releen solos." data-es="Adjuntar Aviso corregido">Attach corrected Aviso</button></div>
+      </section>
+      <section class="box c8">
+        <h2 data-es="Renglón por renglón · Aviso vs. factura JAF">Line by line · Aviso vs. JAF invoice</h2>
+        <table>
+          <thead><tr><th data-es="Código">Code</th><th data-es="Descripción">Description</th><th class="num" data-es="Factura cant.">Invoice qty</th><th class="num" data-es="Aviso cant.">Aviso qty</th><th class="num" data-es="Factura $">Invoice $</th><th class="num" data-es="Aviso $">Aviso $</th><th data-es="Estado">Status</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">34007030</td><td>REMOCION DE LINEA BAJANTE</td><td class="num">12</td><td class="num">12</td><td class="num">$165.74</td><td class="num">$165.74</td><td><span class="tag ok" data-es="cuadra">match</span></td></tr>
+            <tr><td class="mono">34006291</td><td>REMOCION POSTES (TODO TIPO)</td><td class="num">2</td><td class="num">2</td><td class="num">$207.90</td><td class="num">$207.90</td><td><span class="tag ok" data-es="cuadra">match</span></td></tr>
+            <tr><td class="mono">34005457</td><td>INST POSTE 30 C5</td><td class="num">3</td><td class="num">3</td><td class="num">$605.79</td><td class="num">$605.79</td><td><span class="tag ok" data-es="cuadra">match</span></td></tr>
+            <tr><td class="mono">34006301</td><td>TRANSFER ATTCH DE POSTES</td><td class="num">5</td><td class="num">0</td><td class="num">$211.72</td><td class="num">$0.00</td><td><span class="tag crit" data-es="falta en el Aviso">missing on Aviso</span></td></tr>
+            <tr><td class="mono">34007080</td><td>TRANSF / MOVER TERM 25X X 85</td><td class="num">0</td><td class="num">1</td><td class="num">$0.00</td><td class="num">$20.57</td><td><span class="tag warn" data-es="solo en el Aviso">only on Aviso</span></td></tr>
+          </tbody>
+          <tfoot><tr><td colspan="4"><b data-es="Total">Total</b></td><td class="num"><b>$1,204.18</b></td><td class="num neg"><b>$1,000.00</b></td><td><span class="tag crit" data-es="≠ · bloqueado">≠ · blocked</span></td></tr></tfoot>
+        </table>
+        <p class="sm" data-es="La regla compara igual con igual, antes de IVU. La cantidad puede diferir con nota; el monto no.">The rule compares like with like, pre-IVU. Quantity may differ with a note; amount may not.</p>
+      </section>
+    </div>
+  </div>
+
+  <div data-panel="mt:1043">
+    <div class="grid">
+      <section class="box c4">
+        <h2>Aviso 10353961</h2>
+        <p class="sub" data-es="De la hoja firmada del 8/26. 5 renglones.">From the signed 8/26 sheet. 5 lines.</p>
+        <div class="kv"><span data-es="Orden">Work order</span><span>JAF-2026-1043 · Jesús Martínez</span><span data-es="Factura JAF">JAF invoice</span><span>INV-2026-0412 · $586.37</span><span data-es="Aviso total">Aviso total</span><span><b>$586.37</b></span><span data-es="Diferencia">Difference</span><span class="st ok"><b>$0.00</b></span></div>
+        <div class="note ok" style="margin-top:14px" data-es="Cuadra. Al confirmar, la orden pasa al paso 8 y la hoja de pre-certificación queda lista para firmar.">Matches. On confirm, the order moves to step 8 and the pre-cert sheet is ready to sign.</div>
+        <p style="margin:14px 0 0"><button class="btn blue" style="width:100%" data-flip="Matched · step 8 ready" data-flip-es="Cuadrado · paso 8 listo" data-toast="Aviso matched. Go to Pre-cert sheets to sign." data-toast-es="Aviso cuadrado. Ve a Hojas de pre-certificación para firmar." data-es="Confirmar cuadre → paso 8">Confirm match → step 8</button></p>
+      </section>
+      <section class="box c8">
+        <h2 data-es="Renglón por renglón">Line by line</h2>
+        <table>
+          <thead><tr><th data-es="Código">Code</th><th data-es="Descripción">Description</th><th class="num" data-es="Factura">Invoice</th><th class="num">Aviso</th><th data-es="Estado">Status</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">34006301</td><td>TRANSFER ATTCH DE POSTES</td><td class="num">5 · $211.72</td><td class="num">5 · $211.72</td><td><span class="tag ok" data-es="cuadra">match</span></td></tr>
+            <tr><td class="mono">34007030</td><td>REMOCION DE LINEA BAJANTE</td><td class="num">2 · $27.62</td><td class="num">2 · $27.62</td><td><span class="tag ok" data-es="cuadra">match</span></td></tr>
+            <tr><td class="mono">34006291</td><td>REMOCION POSTES (TODO TIPO)</td><td class="num">1 · $103.95</td><td class="num">1 · $103.95</td><td><span class="tag ok" data-es="cuadra">match</span></td></tr>
+            <tr><td class="mono">34007080</td><td>TRANSF / MOVER TERM 25X X 85</td><td class="num">1 · $41.16</td><td class="num">1 · $41.16</td><td><span class="tag ok" data-es="cuadra">match</span></td></tr>
+            <tr><td class="mono">34005457</td><td>INST POSTE 30 C5</td><td class="num">1 · $201.93</td><td class="num">1 · $201.93</td><td><span class="tag ok" data-es="cuadra">match</span></td></tr>
+          </tbody>
+          <tfoot><tr><td colspan="2"><b data-es="Total">Total</b></td><td class="num"><b>$586.37</b></td><td class="num"><b>$586.37</b></td><td><span class="tag ok">= · OK</span></td></tr></tfoot>
+        </table>
+      </section>
+    </div>
+  </div>
+
+  <div data-panel="mt:0998">
+    <div class="grid">
+      <section class="box c5">
+        <h2 data-es="Capturar el Aviso">Capture the Aviso</h2>
+        <p class="sub" data-es="JAF-2026-0998 · Dino Castillo · aprobado 9/15 · factura INV-2026-0401 · $742.90. Claro no ha enviado el Aviso.">JAF-2026-0998 · Dino Castillo · approved 9/15 · invoice INV-2026-0401 · $742.90. Claro hasn't sent the Aviso.</p>
+        <div class="field"><label data-es="Aviso de Claro #">Claro Aviso #</label><input class="inp" id="av0998" placeholder="8 digits" data-es-ph="8 dígitos"></div>
+        <div class="field" style="margin-top:10px"><label data-es="Documento del Aviso">Aviso document</label><div class="ph cam" style="aspect-ratio:auto;height:64px" data-es="📎 PDF o foto · los renglones se leen solos">📎 PDF or photo · lines are read automatically</div></div>
+        <p style="margin:14px 0 0"><button class="btn blue" style="width:100%" data-requires="#av0998" data-flip="Aviso captured · lines pending" data-flip-es="Aviso capturado · renglones pendientes" data-es="Capturar y comparar">Capture and compare</button></p>
+      </section>
+      <section class="box c7">
+        <h2 data-es="Mientras tanto">Meanwhile</h2>
+        <p class="sub" data-es="El trabajo espera en el paso 7. La factura JAF ya existe; Lissette no la ve hasta que el Aviso cuadre.">The job waits at step 7. The JAF invoice exists; Lissette doesn't see it until the Aviso matches.</p>
+        <ul class="att">
+          <li><span class="mark w"></span><div><div class="t" data-es="4 días esperando el Aviso">4 days waiting on the Aviso</div><div class="d" data-es="Aprobado 9/15. Promedio de Claro este año: 6 días.">Approved 9/15. Claro's average this year: 6 days.</div></div><span class="lvl w" data-es="Normal">Normal</span></li>
+          <li><span class="mark a"></span><div><div class="t" data-es="Hoja de pre-certificación firmada por la sub-contratista">Pre-cert sheet signed by the sub-contractor</div><div class="d" data-es="Falta tu firma y la de Claro; se piden al cuadrar.">Your signature and Claro's are still missing; they're asked for at match.</div></div><span class="lvl a" data-es="Listo">Ready</span></li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</section>
+
+<!-- ================= JAF INVOICES ================= -->
+<section class="screen" data-screen="invoices">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Facturas JAF">JAF invoices</h1><p data-es="Paso 6. Generadas del trabajo aprobado: códigos × cantidad instalada × precio JAF, más IVU. Los precios se fijan al generar y quedan guardados en el registro.">Step 6. Generated from the approved job: codes × installed quantity × JAF price, plus IVU. Prices are pinned at generation and stored on the record.</p></div><div class="actions"><input class="inp" style="width:240px" data-filter="#invTable" placeholder="Search invoice, order, brigade…" data-es-ph="Buscar factura, orden, brigada…"></div></div>
+  <div class="grid">
+    <section class="box c12">
+      <table id="invTable">
+        <thead><tr><th data-es="Factura">Invoice</th><th data-es="Orden">Work order</th><th data-es="Brigada">Brigade</th><th data-es="Generada">Generated</th><th class="num" data-es="Antes de IVU">Pre-IVU</th><th class="num">IVU 11.5%</th><th class="num" data-es="Total">Total</th><th data-es="Estado">Status</th><th class="act"></th></tr></thead>
+        <tbody>
+          <tr data-sel class="sel"><td class="mono">INV-2026-0412</td><td>JAF-2026-1043</td><td>Jesús Martínez</td><td>8/26</td><td class="num">$586.37</td><td class="num">$67.43</td><td class="num">$653.80</td><td><span class="tag warn" data-es="esperando cuadre">awaiting match</span></td><td class="act"><button class="btn sm ghost" data-say="Opening INV-2026-0412 as PDF…" data-say-es="Abriendo INV-2026-0412 en PDF…">PDF</button></td></tr>
+          <tr data-sel><td class="mono">INV-2026-0405</td><td>JAF-2026-1041</td><td>Alexis Díaz</td><td>9/12</td><td class="num">$1,204.18</td><td class="num">$138.48</td><td class="num">$1,342.66</td><td><span class="tag crit" data-es="Aviso ≠">Aviso ≠</span></td><td class="act"><button class="btn sm ghost" data-go="match">Match</button></td></tr>
+          <tr data-sel><td class="mono">INV-2026-0401</td><td>JAF-2026-0998</td><td>Dino Castillo</td><td>9/15</td><td class="num">$742.90</td><td class="num">$85.43</td><td class="num">$828.33</td><td><span class="tag" data-es="esperando Aviso">awaiting Aviso</span></td><td class="act"><button class="btn sm ghost" data-go="match">Match</button></td></tr>
+          <tr data-sel><td class="mono">INV-2026-0398</td><td>JAF-2026-1038</td><td>Dino Castillo</td><td>8/22</td><td class="num">$742.90</td><td class="num">$85.43</td><td class="num">$828.33</td><td><span class="tag ok" data-es="en Finanzas">at Finance</span></td><td class="act"><button class="btn sm ghost" data-say="Opening INV-2026-0398 as PDF…" data-say-es="Abriendo INV-2026-0398 en PDF…">PDF</button></td></tr>
+          <tr data-sel><td class="mono">INV-2026-0391</td><td>JAF-2026-1027</td><td>Jesús Martínez</td><td>9/2</td><td class="num">$480.23</td><td class="num">$55.23</td><td class="num">$535.46</td><td><span class="tag ok" data-es="en Finanzas">at Finance</span></td><td class="act"><button class="btn sm ghost" data-say="Opening INV-2026-0391 as PDF…" data-say-es="Abriendo INV-2026-0391 en PDF…">PDF</button></td></tr>
+          <tr data-sel><td class="mono">INV-2026-0387</td><td>JAF-2026-1012</td><td>Zariel Garay</td><td>8/13</td><td class="num">$412.06</td><td class="num">$47.39</td><td class="num">$459.45</td><td><span class="tag ok" data-es="en Finanzas">at Finance</span></td><td class="act"><button class="btn sm ghost" data-say="Opening INV-2026-0387 as PDF…" data-say-es="Abriendo INV-2026-0387 en PDF…">PDF</button></td></tr>
+        </tbody>
+      </table>
+      <p class="sm" data-es="8 facturas más este mes, mismo formato.">8 more invoices this month, same shape.</p>
+    </section>
+    <section class="box c8">
+      <h2>INV-2026-0412 · JAF-2026-1043</h2>
+      <p class="sub" data-es="Precios del catálogo REV 2023-04-21, fijados el 8/26. Cambiar el catálogo después no cambia esta factura.">Prices from catalog REV 2023-04-21, pinned on 8/26. Changing the catalog later doesn't change this invoice.</p>
+      <table>
+        <thead><tr><th data-es="Código">Code</th><th data-es="Descripción">Description</th><th data-es="Cuenta">Acct</th><th class="num" data-es="Instalado">Installed</th><th class="num" data-es="Precio JAF">JAF price</th><th class="num" data-es="Línea">Line</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">34006301</td><td>TRANSFER ATTCH DE POSTES</td><td class="dim">610</td><td class="num">5 EA</td><td class="num">$42.3430</td><td class="num">$211.72</td></tr>
+          <tr><td class="mono">34007030</td><td>REMOCION DE LINEA BAJANTE</td><td class="dim">6102</td><td class="num">2 EA</td><td class="num">$13.8115</td><td class="num">$27.62</td></tr>
+          <tr><td class="mono">34006291</td><td>REMOCION POSTES (TODO TIPO)</td><td class="dim">600</td><td class="num">1 EA</td><td class="num">$103.9485</td><td class="num">$103.95</td></tr>
+          <tr><td class="mono">34007080</td><td>TRANSF / MOVER TERM 25X X 85</td><td class="dim">6102</td><td class="num">1 EA</td><td class="num">$41.1585</td><td class="num">$41.16</td></tr>
+          <tr><td class="mono">34005457</td><td>INST POSTE 30 C5</td><td class="dim">600</td><td class="num">1 EA</td><td class="num">$201.9285</td><td class="num">$201.93</td></tr>
+        </tbody>
+        <tfoot>
+          <tr><td colspan="5" class="num" data-es="Subtotal">Subtotal</td><td class="num">$586.37</td></tr>
+          <tr><td colspan="5" class="num">IVU 11.5%</td><td class="num">$67.43</td></tr>
+          <tr><td colspan="5" class="num"><b data-es="Total a Claro">Total to Claro</b></td><td class="num"><b>$653.80</b></td></tr>
+        </tfoot>
+      </table>
+    </section>
+    <section class="box c4">
+      <h2 data-es="Lo que ve Finanzas · solo información">What Finance sees · information only</h2>
+      <p class="sub" data-es="Tú no tocas esto. Lo computa el sistema para Lissette.">You don't touch this. The system computes it for Lissette.</p>
+      <ul class="lines">
+        <li><i style="background:var(--accent)"></i><span class="n" data-es="Precio JAF (antes de IVU)">JAF price (pre-IVU)</span><span class="v">$586.37</span></li>
+        <li><i style="background:var(--accent-2)"></i><span class="n" data-es="Parte del contratista · 65 %">Contractor share · 65%</span><span class="v">$381.14</span></li>
+        <li><i style="background:var(--warning)"></i><span class="n" data-es="Retención 10 % · Hacienda">10% retention · Hacienda</span><span class="v">−$38.11</span></li>
+        <li><i style="background:var(--good)"></i><span class="n" data-es="Se paga a Jesús Martínez">Paid to Jesús Martínez</span><span class="v">$343.03</span></li>
+      </ul>
+      <div class="actions"><button class="btn ghost" data-say="Printing INV-2026-0412…" data-say-es="Imprimiendo INV-2026-0412…" data-es="Imprimir">Print</button><button class="btn ghost" data-go="precert" data-es="Ver hoja de pre-cert">See pre-cert sheet</button></div>
+    </section>
+  </div>
+</section>
+
+<!-- ================= PRE-CERT SHEETS ================= -->
+<section class="screen" data-screen="precert">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Hojas de pre-certificación">Pre-cert sheets</h1><p data-es="Generadas del trabajo aprobado; nada se escribe a mano excepto las firmas. La firma de Claro es opcional y se cuenta.">Generated from the approved job; nothing is keyed in except the signatures. Claro's signature is optional and is counted.</p></div><div class="actions"><button class="btn ghost" data-say="Printing Hoja de Pre-Certificación · JAF-2026-1043" data-say-es="Imprimiendo Hoja de Pre-Certificación · JAF-2026-1043" data-es="Imprimir hoja">Print sheet</button></div></div>
+  <div class="grid">
+    <section class="box c4">
+      <h2 data-es="Este mes">This month</h2>
+      <ul class="rows" id="pcList">
+        <li class="clickable"><span>JAF-2026-1043 · Jesús Martínez<div class="sm">Aviso 10353961 · $586.37</div></span><span class="tag warn" data-es="2 de 3 firmas">2 of 3 signatures</span></li>
+        <li class="clickable"><span>JAF-2026-1041 · Alexis Díaz<div class="sm">Aviso 10351842 · $1,204.18</div></span><span class="tag ok" data-es="3 de 3">3 of 3</span></li>
+        <li class="clickable"><span>JAF-2026-0998 · Dino Castillo<div class="sm" data-es="sin Aviso · $742.90">no Aviso · $742.90</div></span><span class="tag" data-es="1 de 3">1 of 3</span></li>
+        <li class="clickable"><span>JAF-2026-1038 · Dino Castillo<div class="sm">Aviso 10352770 · $742.90</div></span><span class="tag ok" data-es="3 de 3 · enviada">3 of 3 · released</span></li>
+      </ul>
+      <div class="split"><div class="stat"><div class="l" data-es="Con firma de Claro">With Claro's signature</div><div class="v">9 <span class="sm" data-es="de 14">of 14</span></div></div><div class="stat"><div class="l" data-es="Sin firma de Claro">Without</div><div class="v">5</div></div></div>
+    </section>
+    <section class="box c8">
+      <div class="sheet">
+        <div class="shead"><b>JAF COMMUNICATIONS · HOJA DE PRE-CERTIFICACIÓN</b><p>Mantenimiento de planta externa · Claro Puerto Rico</p></div>
+        <div class="meta">
+          <div><span>Aviso</span>10353961</div><div><span>Orden de trabajo</span>JAF-2026-1043</div>
+          <div><span>Fecha</span>26 / 08 / 2026</div><div><span>Área</span>Central · Edgard Ocasio</div>
+          <div><span>Sub-contratista</span>Jesús Martínez · cuenta 009</div><div><span>Dirección</span>CAM 906, Int. Parcelas Nuevas, Com. Aguacate, Yabucoa PR 00767</div>
+        </div>
+        <table>
+          <thead><tr><th>Código</th><th>Descripción</th><th class="num">Cant.</th><th class="num">Costo</th><th class="num">Total</th></tr></thead>
+          <tbody>
+            <tr><td>34006301</td><td>TRANSFER ATTCH DE POSTES</td><td class="num">5</td><td class="num">42.3430</td><td class="num">211.72</td></tr>
+            <tr><td>34007030</td><td>REMOCION DE LINEA BAJANTE</td><td class="num">2</td><td class="num">13.8115</td><td class="num">27.62</td></tr>
+            <tr><td>34006291</td><td>REMOCION POSTES (TODO TIPO)</td><td class="num">1</td><td class="num">103.9485</td><td class="num">103.95</td></tr>
+            <tr><td>34007080</td><td>TRANSF / MOVER TERM 25X X 85</td><td class="num">1</td><td class="num">41.1585</td><td class="num">41.16</td></tr>
+            <tr><td>34005457</td><td>INST POSTE 30 C5</td><td class="num">1</td><td class="num">201.9285</td><td class="num">201.93</td></tr>
+            <tr><td colspan="4" class="num"><b>TOTAL</b></td><td class="num"><b>586.37</b></td></tr>
+          </tbody>
+        </table>
+        <div class="sigs">
+          <div class="sig"><div class="lbl">Supervisor JAF</div><div class="ink">E. Ocasio</div><div class="nm">Edgard Ocasio</div><div class="dt">26 / 08 / 2026</div></div>
+          <div class="sig"><div class="lbl">Sub-contratista</div><div class="ink">J. Martínez</div><div class="nm">Jesús Martínez</div><div class="dt">26 / 08 / 2026</div></div>
+          <div class="sig"><div class="lbl">Representante Claro · opcional</div><div class="empty" data-name="R. Colón" title="Tap to capture"></div><div class="nm" data-es="Toca para capturar firma">Tap to capture signature</div><div class="dt">— / — / —</div></div>
+        </div>
+      </div>
+    </section>
+  </div>
+</section>
+
+<!-- ================= RELEASE TO FINANCE ================= -->
+<section class="screen" data-screen="release">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 data-es="Enviar a Finanzas">Release to Finance</h1><p data-es="Paso 8 de 8. Siete condiciones se verifican en código. Cuando las siete están en verde, un solo paquete llega a la bandeja de Lissette: sin adjuntos, sin correos.">Step 8 of 8. Seven conditions are checked in code. When all seven are green, one packet lands in Lissette's queue: no attachments, no emails.</p></div></div>
+  <div class="grid">
+    <section class="box c5">
+      <h2>JAF-2026-1043 · <span data-es="compuerta de salida">release gate</span> <span class="count w" id="gateCnt">6/7</span></h2>
+      <p class="sub" data-es="Una sola condición pendiente. Se pone verde sola cuando el almacén concilie la devolución.">One condition pending. It turns green by itself when the warehouse reconciles the return.</p>
+      <ul class="gate" id="gate1043">
+        <li><span class="ic y">✓</span><span data-es="Revisado y aprobado">Reviewed and approved</span><small>8/27</small></li>
+        <li><span class="ic y">✓</span><span data-es="Factura JAF generada · INV-2026-0412">JAF invoice generated · INV-2026-0412</span><small>$586.37</small></li>
+        <li><span class="ic y">✓</span><span data-es="Aviso capturado · 10353961">Aviso captured · 10353961</span><small data-es="5 renglones">5 lines</small></li>
+        <li><span class="ic y">✓</span><span data-es="Monto cuadra · Aviso = factura">Amount matches · Aviso = invoice</span><small>$0.00</small></li>
+        <li><span class="ic y">✓</span><span data-es="Pre-cert firmada · supervisor y sub-contratista">Pre-cert signed · supervisor and sub-contractor</span><small data-es="Claro: opcional">Claro: optional</small></li>
+        <li><span class="ic y">✓</span><span data-es="Fotos antes y después">Before and after photos</span><small>2 / 2</small></li>
+        <li id="gateWh"><span class="ic w">·</span><span data-es="Devolución de materiales conciliada por el almacén">Materials return reconciled by the warehouse</span><small data-es="Frank recibe hoy">Frank receives today</small></li>
+      </ul>
+      <div class="actions"><button class="btn blue" id="relBtn" disabled data-es="Enviar a Lissette · 1 paquete">Release to Lissette · 1 packet</button><button class="btn ghost" id="whCheck" data-es="Ver estado del almacén">Check warehouse status</button></div>
+    </section>
+    <section class="box c7">
+      <h2 data-es="Enviadas este mes">Released this month</h2>
+      <p class="sub" data-es="Lo que ya está en la bandeja de Lissette. Desde aquí solo miras; los dos brazos del dinero son de Finanzas.">What's already in Lissette's queue. From here you only look; the two money arms are Finance's.</p>
+      <table>
+        <thead><tr><th data-es="Orden">Work order</th><th data-es="Brigada">Brigade</th><th>Aviso</th><th class="num" data-es="Factura">Invoice</th><th data-es="Enviada">Released</th><th data-es="En Finanzas">At Finance</th></tr></thead>
+        <tbody id="relTable">
+          <tr><td class="mono">JAF-2026-1038</td><td>Dino Castillo</td><td class="mono">10352770</td><td class="num">$742.90</td><td>8/22</td><td><span class="tag acc" data-es="paquete aceptado · LC pedida">packet accepted · LC requested</span></td></tr>
+          <tr><td class="mono">JAF-2026-1027</td><td>Jesús Martínez</td><td class="mono">10352214</td><td class="num">$480.23</td><td>9/2</td><td><span class="tag acc" data-es="LC en el banco">LC at the bank</span></td></tr>
+          <tr><td class="mono">JAF-2026-1012</td><td>Zariel Garay</td><td class="mono">10352001</td><td class="num">$412.06</td><td>8/13</td><td><span class="tag ok" data-es="brigada pagada 8/29">brigade paid 8/29</span></td></tr>
+          <tr><td class="mono">JAF-2026-0990</td><td>Dino Castillo</td><td class="mono">10351206</td><td class="num">$2,318.50</td><td>8/1</td><td><span class="tag ok" data-es="brigada pagada 8/15">brigade paid 8/15</span></td></tr>
+        </tbody>
+      </table>
+      <div class="split"><div class="stat"><div class="l" data-es="Enviadas en septiembre">Released in September</div><div class="v">7 <span class="sm">· $4,812</span></div></div><div class="stat"><div class="l" data-es="Tiempo medio de aprobar a enviar">Average approve → release</div><div class="v">2.1 <span class="sm" data-es="días">days</span></div></div></div>
+    </section>
+  </div>
+</section>
+
+<!-- ================= BRIGADE ================= -->
+<section class="screen" data-screen="brigade">
+  <div class="greet"><div><a class="back" data-go="dash" data-es="← Panel">← Dashboard</a><h1 id="brName">Jesús Martínez</h1><p id="brSub">Account 009 · Central · 787-647-6842</p></div><div class="actions"><button class="btn ghost" data-say="Calling…" data-say-es="Llamando…" data-es="Llamar">Call</button><button class="btn blue" data-go="new" data-es="+ Orden para esta brigada">+ Work order for this brigade</button></div></div>
+  <div class="kpis k4">
+    <div class="kpi"><div><div class="l" data-es="Trabajos abiertos">Open jobs</div><div class="v" id="brOpen">3</div><div class="d" data-es="ahora">right now</div></div><svg class="viz ring" viewBox="0 0 52 52"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="37" id="brRing"/><text x="26" y="25" id="brRingT">3/8</text><text class="cap" x="26" y="35" data-es="del área">of area</text></svg></div>
+    <div class="kpi"><div><div class="l" data-es="Terminados · 2026">Done · 2026</div><div class="v" id="brDone">47</div><div class="d" data-es="aprobados">approved</div></div><svg class="viz spark" data-n="4,6,7,5,6,8,6,5" viewBox="0 0 72 34"></svg></div>
+    <div class="kpi"><div><div class="l" data-es="Devueltos · 2026">Sent back · 2026</div><div class="v" id="brBack">2</div><div class="d" data-es="fotos, ambas veces">photos, both times</div></div><svg class="viz ring good" viewBox="0 0 52 52"><circle class="trk" cx="26" cy="26" r="21"/><circle class="fil" cx="26" cy="26" r="21" data-pct="96"/><text x="26" y="25">96%</text><text class="cap" x="26" y="35" data-es="a la primera">first time</text></svg></div>
+    <div class="kpi"><div><div class="l" data-es="Facturado · 2026">Invoiced · 2026</div><div class="v" id="brInv">$28,410</div><div class="d" data-es="precio JAF">JAF price</div></div><div class="viz mini"><i style="height:60%"></i><i style="height:80%"></i><i style="height:100%"></i><i style="height:70%"></i><i class="lo" style="height:50%"></i></div></div>
+  </div>
+  <div class="grid">
+    <section class="box c8">
+      <h2 data-es="Trabajos abiertos">Open jobs</h2>
+      <table><thead><tr><th data-es="Orden">Work order</th><th data-es="Trabajo">Job</th><th data-es="Paso">Step</th><th data-es="Estado">Status</th></tr></thead><tbody id="brJobs"></tbody></table>
+    </section>
+    <section class="box c4">
+      <h2 data-es="Contacto y cuenta">Contact and account</h2>
+      <div class="kv" id="brKv"></div>
+      <div class="note acc" style="margin-top:14px" data-es="Lo que la brigada gana por trabajo lo calcula Finanzas (65 %, −10 % retención). Tú no lo ves ni lo tocas.">What the brigade earns per job is computed by Finance (65%, −10% retention). You don't see it or touch it.</div>
+    </section>
+  </div>
+</section>
+
+
+
+  <footer>
+    <span data-es="Datos reales de los archivos de descubrimiento de septiembre: roster de brigadas, catálogo de servicios REV 2023-04-21, Aviso 10353961 de la hoja firmada 8/26. Direcciones y montos estimados son ilustrativos.">Real data from the September discovery files: brigade roster, service catalog REV 2023-04-21, Aviso 10353961 from the signed 8/26 sheet. Addresses and estimated amounts are illustrative.</span>
+    <span data-es="Mockup v5, 19 sep. No distribuir al cliente.">Mockup v5, 19 Sep. Not for client distribution.</span>
+  </footer>
+</div>
+</div>
+<script>
+  // ---- theme: OS preference by default, button overrides ----
+  (function(){
+    var btn=document.getElementById('themeBtn'), root=document.documentElement;
+    function isDark(){ var t=root.getAttribute('data-theme'); if(t) return t==='dark'; return matchMedia('(prefers-color-scheme: dark)').matches; }
+    function paint(){ btn.textContent = isDark() ? (LANG==='es'?'Claro':'Light') : (LANG==='es'?'Oscuro':'Dark'); }
+    btn.addEventListener('click', function(){ root.setAttribute('data-theme', isDark() ? 'light' : 'dark'); paint(); });
+    window.paintTheme=paint; paint();
+  })();
+
+  // ---- language: EN / ES. Every element with data-es swaps its text. ----
+  var LANG='en';
+  (function(){
+    var btn=document.getElementById('langBtn');
+    var els=document.querySelectorAll('[data-es]');
+    els.forEach(function(e){ e.setAttribute('data-en', e.innerHTML); });
+    function apply(){
+      els.forEach(function(e){ e.innerHTML = LANG==='es' ? e.getAttribute('data-es') : e.getAttribute('data-en'); });
+      document.querySelectorAll('[data-es-ph]').forEach(function(e){ if(!e.getAttribute('data-en-ph')) e.setAttribute('data-en-ph', e.placeholder); e.placeholder = LANG==='es' ? e.getAttribute('data-es-ph') : e.getAttribute('data-en-ph'); });
+      btn.textContent = LANG==='es' ? 'EN' : 'ES';
+      document.documentElement.lang = LANG;
+      if(window.paintTheme) window.paintTheme();
+    }
+    btn.addEventListener('click', function(){ LANG = LANG==='es' ? 'en' : 'es'; apply(); });
+    apply();
+  })();
+
+  // ---- KPI rings: dasharray from data-pct ----
+  document.querySelectorAll('.ring .fil').forEach(function(c){
+    var r=21, C=2*Math.PI*r, p=+c.getAttribute('data-pct')/100;
+    c.setAttribute('stroke-dasharray', C); c.setAttribute('stroke-dashoffset', C);
+    requestAnimationFrame(function(){ c.setAttribute('stroke-dashoffset', C*(1-p)); });
+  });
+
+  // ---- sparklines: <svg class="spark" data-n="1,2,3"> ----
+  document.querySelectorAll('svg.spark[data-n]').forEach(function(s){
+    var n=s.getAttribute('data-n').split(',').map(Number);
+    var W=72,H=34,pad=4, max=Math.max.apply(null,n), min=Math.min.apply(null,n); if(max===min){max=min+1;}
+    var x=function(i){ return pad+(W-2*pad)*i/(n.length-1); }, y=function(v){ return pad+(H-2*pad)*(1-(v-min)/(max-min)); };
+    var ns='http://www.w3.org/2000/svg';
+    var d=n.map(function(v,i){ return (i?'L':'M')+x(i)+' '+y(v); }).join(' ');
+    var a=document.createElementNS(ns,'path'); a.setAttribute('class','area'); a.setAttribute('d', d+' L'+x(n.length-1)+' '+(H-pad)+' L'+x(0)+' '+(H-pad)+' Z'); s.appendChild(a);
+    var p=document.createElementNS(ns,'path'); p.setAttribute('d',d); s.appendChild(p);
+    var c=document.createElementNS(ns,'circle'); c.setAttribute('cx',x(n.length-1)); c.setAttribute('cy',y(n[n.length-1])); c.setAttribute('r',3.5); s.appendChild(c);
+  });
+
+  // ---- generic two-series line chart with hover tooltip ----
+  function lineChart(id, months, s1, s2, lbl1, lbl2, fmt, max){
+    var svg=document.getElementById(id), wrap=svg.parentNode, tip=wrap.querySelector('.tip');
+    var W=640,H=230,L=48,R=64,T=14,B=30;
+    var x=function(i){ return L+(W-L-R)*i/(months.length-1); }, y=function(v){ return T+(H-T-B)*(1-v/max); };
+    var ns='http://www.w3.org/2000/svg', el=function(n,a){ var e=document.createElementNS(ns,n); for(var k in a) e.setAttribute(k,a[k]); return e; };
+    var ticks=[0,max/3,2*max/3,max];
+    ticks.forEach(function(v){ svg.appendChild(el('line',{x1:L,x2:W-R,y1:y(v),y2:y(v),'class':'grd'})); var t=el('text',{x:L-8,y:y(v)+4,'text-anchor':'end','class':'axis'}); t.textContent=fmt(v); svg.appendChild(t); });
+    months.forEach(function(m,i){ var t=el('text',{x:x(i),y:H-8,'text-anchor':'middle','class':'axis'}); t.textContent=m; svg.appendChild(t); });
+    var path=function(arr,cls){ var d=arr.map(function(v,i){ return (i?'L':'M')+x(i)+' '+y(v); }).join(' '); svg.appendChild(el('path',{d:d,fill:'none','stroke-width':2,'stroke-linejoin':'round','stroke-linecap':'round','class':cls})); };
+    path(s1,'ln1'); if(s2) path(s2,'ln2');
+    months.forEach(function(m,i){
+      var g=el('g',{'class':'col'}); var bw=(W-L-R)/(months.length-1);
+      g.appendChild(el('rect',{x:x(i)-bw/2,y:T,width:bw,height:H-T-B,'class':'band'}));
+      g.appendChild(el('circle',{cx:x(i),cy:y(s1[i]),r:4.5,'class':'dot1 ringc'}));
+      if(s2) g.appendChild(el('circle',{cx:x(i),cy:y(s2[i]),r:4.5,'class':'dot2 ringc'}));
+      g.addEventListener('mousemove',function(){
+        tip.innerHTML='<b>'+m+'</b><br>'+lbl1+' '+fmt(s1[i])+(s2?'<br>'+lbl2+' '+fmt(s2[i]):'');
+        var r=svg.getBoundingClientRect(); tip.style.left=(x(i)/W*r.width)+'px'; tip.style.top=(Math.min(y(s1[i]), s2?y(s2[i]):y(s1[i]))/H*r.height)+'px';
+      });
+      svg.appendChild(g);
+    });
+    var e1=el('text',{x:x(months.length-1)+10,y:y(s1[months.length-1])+4,'class':'endlbl'}); e1.textContent=lbl1; svg.appendChild(e1);
+    if(s2){ var e2=el('text',{x:x(months.length-1)+10,y:y(s2[months.length-1])+4,'class':'endlbl'}); e2.textContent=lbl2; svg.appendChild(e2); }
+  }
+
+  // ---- generic grouped bar chart ----
+  function barChart(id, cats, s1, s2, lbl1, lbl2, fmt, max){
+    var svg=document.getElementById(id), wrap=svg.parentNode, tip=wrap.querySelector('.tip');
+    var W=640,H=230,L=48,R=16,T=14,B=30;
+    var ns='http://www.w3.org/2000/svg', el=function(n,a){ var e=document.createElementNS(ns,n); for(var k in a) e.setAttribute(k,a[k]); return e; };
+    var y=function(v){ return T+(H-T-B)*(1-v/max); };
+    var slot=(W-L-R)/cats.length, bw=s2?slot*0.28:slot*0.5;
+    [0,max/3,2*max/3,max].forEach(function(v){ svg.appendChild(el('line',{x1:L,x2:W-R,y1:y(v),y2:y(v),'class':'grd'})); var t=el('text',{x:L-8,y:y(v)+4,'text-anchor':'end','class':'axis'}); t.textContent=fmt(v); svg.appendChild(t); });
+    cats.forEach(function(c,i){
+      var cx=L+slot*i+slot/2;
+      var g=el('g',{'class':'col'});
+      g.appendChild(el('rect',{x:L+slot*i,y:T,width:slot,height:H-T-B,'class':'band'}));
+      var x1=s2?cx-bw-2:cx-bw/2;
+      g.appendChild(el('rect',{x:x1,y:y(s1[i]),width:bw,height:H-B-y(s1[i]),rx:3,'class':'bar1'}));
+      if(s2) g.appendChild(el('rect',{x:cx+2,y:y(s2[i]),width:bw,height:H-B-y(s2[i]),rx:3,'class':'bar2'}));
+      var t=el('text',{x:cx,y:H-8,'text-anchor':'middle','class':'axis'}); t.textContent=c; g.appendChild(t);
+      g.addEventListener('mousemove',function(){ tip.innerHTML='<b>'+c+'</b><br>'+lbl1+' '+fmt(s1[i])+(s2?'<br>'+lbl2+' '+fmt(s2[i]):''); var r=svg.getBoundingClientRect(); tip.style.left=(cx/W*r.width)+'px'; tip.style.top=(y(Math.max(s1[i],s2?s2[i]:0))/H*r.height)+'px'; });
+      svg.appendChild(g);
+    });
+  }
+
+  // ---- toast ----
+  function toast(m){ var t=document.getElementById('toast'); if(!t){ t=document.createElement('div'); t.id='toast'; document.body.appendChild(t); } t.textContent=m; t.classList.add('on'); clearTimeout(t._t); t._t=setTimeout(function(){ t.classList.remove('on'); },2600); }
+  function T(en,es){ return LANG==='es' ? es : en; }
+
+  // ---- screen router: any [data-go] shows the matching [data-screen] ----
+  (function(){
+    var screens=document.querySelectorAll('[data-screen]');
+    if(!screens.length) return;
+    function go(id,arg){
+      var found=false;
+      screens.forEach(function(s){ var on=s.getAttribute('data-screen')===id; s.classList.toggle('on',on); if(on) found=true; });
+      if(!found){ toast(T('Not in this mockup yet','Todavía no está en este mockup')); return; }
+      document.querySelectorAll('.rail a[data-go], .tabs a[data-go]').forEach(function(a){
+        var hit=a.getAttribute('data-go')===id && (!a.hasAttribute('data-arg') || a.getAttribute('data-arg')===arg);
+        if(!hit && a.hasAttribute('data-children')){ hit=(' '+a.getAttribute('data-children')+' ').indexOf(' '+id+' ')>-1; }
+        a.classList.toggle('on',hit);
+      });
+      window.scrollTo({top:0,behavior:'smooth'});
+      document.dispatchEvent(new CustomEvent('screen',{detail:{id:id,arg:arg}}));
+    }
+    document.addEventListener('click',function(e){ var t=e.target.closest('[data-go]'); if(t){ e.preventDefault(); go(t.getAttribute('data-go'), t.getAttribute('data-arg')); } });
+    window.go=go;
+  })();
+
+  // ---- flip: a button that becomes a status chip ----
+  document.addEventListener('click',function(e){
+    var b=e.target.closest('[data-flip]'); if(!b) return;
+    var sp=document.createElement('span'); sp.className='tag '+(b.getAttribute('data-flip-cls')||'ok');
+    sp.textContent = LANG==='es' && b.getAttribute('data-flip-es') ? b.getAttribute('data-flip-es') : b.getAttribute('data-flip');
+    b.replaceWith(sp);
+    if(b.getAttribute('data-toast')) toast(LANG==='es' && b.getAttribute('data-toast-es') ? b.getAttribute('data-toast-es') : b.getAttribute('data-toast'));
+  });
+  // ---- plain toast buttons ----
+  document.addEventListener('click',function(e){ var b=e.target.closest('[data-say]'); if(!b||b.hasAttribute('data-flip')) return; toast(LANG==='es' && b.getAttribute('data-say-es') ? b.getAttribute('data-say-es') : b.getAttribute('data-say')); });
+
+  // ---- table filter: <input data-filter="#tableId"> ----
+  document.addEventListener('input',function(e){
+    var i=e.target; if(!i.hasAttribute('data-filter')) return;
+    var q=i.value.toLowerCase(), t=document.querySelector(i.getAttribute('data-filter')); if(!t) return;
+    t.querySelectorAll('tbody tr, .opt').forEach(function(r){ r.classList.toggle('hidden', q && r.textContent.toLowerCase().indexOf(q)<0); });
+  });
+  // ---- in-page tabs: a[data-tab="group:name"] + [data-panel="group:name"] ----
+  document.addEventListener('click',function(e){
+    var a=e.target.closest('[data-tab]'); if(!a) return; e.preventDefault();
+    var v=a.getAttribute('data-tab'), g=v.split(':')[0];
+    document.querySelectorAll('[data-tab^="'+g+':"]').forEach(function(x){ x.classList.toggle('on',x===a); });
+    document.querySelectorAll('[data-panel^="'+g+':"]').forEach(function(p){ p.style.display = p.getAttribute('data-panel')===v ? '' : 'none'; });
+  });
+  document.querySelectorAll('[data-panel]').forEach(function(p){ var v=p.getAttribute('data-panel'), g=v.split(':')[0]; var on=document.querySelector('[data-tab="'+v+'"]'); p.style.display = on && on.classList.contains('on') ? '' : 'none'; });
+  // ---- generic checkbox, radio, signature pad, stepper, crew option ----
+  document.addEventListener('click',function(e){
+    var c=e.target.closest('.chk'); if(c && !c.closest('#runTable') && !c.closest('[data-checkoff]')){ c.classList.toggle('on'); c.textContent=c.classList.contains('on')?'✓':''; return; }
+    var r=e.target.closest('.radio label'); if(r){ r.parentNode.querySelectorAll('label').forEach(function(x){ x.classList.remove('on'); }); r.classList.add('on'); return; }
+    var s=e.target.closest('.sigpad'); if(s && !s.classList.contains('done')){ s.classList.add('done'); s.textContent=s.getAttribute('data-name')||'Firmado'; return; }
+    var em=e.target.closest('.sig .empty'); if(em){ var d=document.createElement('div'); d.className='ink'; d.textContent=em.getAttribute('data-name')||'Firmado'; em.replaceWith(d); return; }
+    var co=e.target.closest('.crewopt'); if(co){ var one=co.parentNode.hasAttribute('data-single'); if(one) co.parentNode.querySelectorAll('.crewopt').forEach(function(x){ x.classList.remove('on'); x.querySelector('.bx').textContent=''; }); co.classList.toggle('on'); co.querySelector('.bx').textContent=co.classList.contains('on')?'✓':''; return; }
+    var st=e.target.closest('.stepper span'); if(st){ var b=st.parentNode.querySelector('b'), v=+b.textContent; b.textContent = st.textContent.trim()==='−' ? Math.max(0,v-1) : v+1; b.dispatchEvent(new Event('change',{bubbles:true})); return; }
+  });
+  // ---- buttons that need a field filled: <button data-requires="#id"> ----
+  document.querySelectorAll('[data-requires]').forEach(function(b){ var f=document.querySelector(b.getAttribute('data-requires')); if(!f) return; b.disabled=!f.value.trim(); f.addEventListener('input',function(){ b.disabled=!f.value.trim(); }); });
+  // ---- row select: tr[data-sel] highlights ----
+  document.addEventListener('click',function(e){ var tr=e.target.closest('tr[data-sel]'); if(!tr||e.target.closest('button,a,input,.chk')) return; tr.parentNode.querySelectorAll('tr').forEach(function(x){ x.classList.remove('sel'); }); tr.classList.add('sel'); });
+
+
+  barChart('pipe', ['1 Created','2 Prep','3 Pickup','4 Field','5 Review','6 Invoice','7 Aviso','8 Finance'], [0,2,0,2,2,0,2,1], null, 'Open jobs', '', function(v){ return Math.round(v); }, 3);
+
+  // ---- new work order: picker adds lines, totals recompute, create ----
+  (function(){
+    var tbody=document.querySelector('#woLines tbody'), tot=document.getElementById('woTotal');
+    function money(v){ return '$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+    function recalc(){ var s=0; tbody.querySelectorAll('tr').forEach(function(r){ var q=+r.querySelector('.qty').value||0, p=+r.dataset.price; var l=q*p; r.querySelector('.line').textContent=money(l); s+=l; }); tot.textContent=money(s); }
+    document.getElementById('pickerOpts').addEventListener('click',function(e){ var o=e.target.closest('.opt'); if(!o) return; var d=o.getAttribute('data-add').split('|');
+      var tr=document.createElement('tr'); tr.dataset.price=d[3]; tr.innerHTML='<td class="mono">'+d[0]+'</td><td>'+d[1]+'</td><td class="dim">'+d[2]+'</td><td class="num"><input class="inp qty" value="1"></td><td class="num">$'+(+d[3]).toFixed(4)+'</td><td class="num line"></td><td class="act"><span class="clickable dim" data-del>✕</span></td>'; tbody.appendChild(tr); recalc(); toast(T('Added ','Añadido ')+d[1]+' · '+T('account','cuenta')+' '+d[2]); });
+    tbody.addEventListener('input',recalc);
+    tbody.addEventListener('click',function(e){ if(e.target.hasAttribute('data-del')){ e.target.closest('tr').remove(); recalc(); } });
+    document.getElementById('woCreate').addEventListener('click',function(){
+      var crew=(document.querySelector('[data-screen="new"] .crewopt.on .cn')||{}).textContent||'—';
+      var dashT=document.querySelector('[data-screen="dash"] .box.c12 tbody');
+      if(dashT){ var tr=document.createElement('tr'); tr.innerHTML='<td class="mono">JAF-2026-1047</td><td>Reemplazo de poste 30 C5 y transferencia</td><td>'+crew+'</td><td>2 · Warehouse prep</td><td class="dim">—</td><td class="num dim">'+tot.textContent+' <span class="sm">est.</span></td><td><span class="tag" >Guaynabo prepping</span></td>'; dashT.insertBefore(tr,dashT.firstChild); }
+      toast(T('JAF-2026-1047 created · Guaynabo is prepping · '+crew+' notified','JAF-2026-1047 creada · Guaynabo preparando · '+crew+' notificado')); go('dash');
+    });
+  })();
+  // ---- release gate ----
+  (function(){
+    var wh=document.getElementById('whCheck'), rel=document.getElementById('relBtn');
+    wh.addEventListener('click',function(){ var li=document.getElementById('gateWh'); li.innerHTML='<span class="ic y">✓</span><span>'+T('Materials return reconciled by the warehouse','Devolución de materiales conciliada por el almacén')+'</span><small>'+T('Frank Ramos · today 8:10 AM','Frank Ramos · hoy 8:10 AM')+'</small>'; document.getElementById('gateCnt').textContent='7/7'; document.getElementById('gateCnt').className='count a'; rel.disabled=false; wh.remove(); toast(T('Warehouse reconciled the return. Gate is green.','El almacén concilió la devolución. Compuerta en verde.')); });
+    rel.addEventListener('click',function(){ rel.disabled=true; rel.textContent=T('Released · in Lissette\'s queue · 1 packet','Enviado · en la bandeja de Lissette · 1 paquete'); var tr=document.createElement('tr'); tr.innerHTML='<td class="mono">JAF-2026-1043</td><td>Jesús Martínez</td><td class="mono">10353961</td><td class="num">$586.37</td><td>'+T('today','hoy')+'</td><td><span class="tag acc">'+T('packet in · new','paquete recibido · nuevo')+'</span></td>'; var t=document.getElementById('relTable'); t.insertBefore(tr,t.firstChild); toast(T('One packet sent to Lissette. No attachments, no email.','Un paquete enviado a Lissette. Sin adjuntos, sin correo.')); });
+  })();
+  // ---- brigade page ----
+  (function(){
+    var B={
+      jm:{n:'Jesús Martínez',a:'009',ph:'787-647-6842',open:3,done:47,back:2,inv:'$28,410',jobs:[['JAF-2026-1043','Transf. attachments y remoción de poste','5 · Your review','warn','to review'],['JAF-2026-1003','Guy wire installation','4 · On site','acc','signed out 8/25'],['JAF-2026-1044','Transf. attachments y remoción de poste','2 · Warehouse prep','','Guaynabo prepping']]},
+      dc:{n:'Dino Castillo',a:'041',ph:'787-617-0975',open:2,done:39,back:1,inv:'$24,117',jobs:[['JAF-2026-1004','Pole removal — guy wire support','5 · Your review','warn','to review · discrepancy'],['JAF-2026-0998','Pole replacement','7 · Aviso match','','waiting on Claro']]},
+      ad:{n:'Alexis Díaz',a:'052',ph:'787-450-5291',open:2,done:35,back:0,inv:'$21,860',jobs:[['JAF-2026-1046','Remoción cable aéreo','2 · Warehouse prep','warn','missing stock · your call'],['JAF-2026-1041','Remoción de línea bajante','7 · Aviso match','crit','Aviso ≠ invoice']]},
+      zg:{n:'Zariel Garay',a:'077',ph:'787-405-5513',open:1,done:31,back:3,inv:'$18,204',jobs:[['JAF-2026-1005','Tree trimming — line clearance','4 · Sent back','crit','retake after photos']]}
+    };
+    document.addEventListener('screen',function(e){ if(e.detail.id!=='brigade') return; var b=B[e.detail.arg]||B.jm;
+      document.getElementById('brName').textContent=b.n; document.getElementById('brSub').textContent=T('Account ','Cuenta ')+b.a+' · Central · '+b.ph;
+      document.getElementById('brOpen').textContent=b.open; document.getElementById('brDone').textContent=b.done; document.getElementById('brBack').textContent=b.back; document.getElementById('brInv').textContent=b.inv;
+      var C=2*Math.PI*21; document.getElementById('brRing').setAttribute('stroke-dashoffset',C*(1-b.open/8)); document.getElementById('brRingT').textContent=b.open+'/8';
+      document.getElementById('brJobs').innerHTML=b.jobs.map(function(j){ return '<tr><td class="mono">'+j[0]+'</td><td>'+j[1]+'</td><td>'+j[2]+'</td><td><span class="tag '+j[3]+'">'+j[4]+'</span></td></tr>'; }).join('');
+      document.getElementById('brKv').innerHTML='<span>'+T('Contractor','Contratista')+'</span><span>'+b.n+'</span><span>'+T('Account','Cuenta')+'</span><span>'+b.a+(b.a==='009'?' · 009D (equipment)':'')+'</span><span>'+T('Phone','Teléfono')+'</span><span>'+b.ph+'</span><span>'+T('Area','Área')+'</span><span>Central · Edgard Ocasio</span><span>'+T('Pickup','Recoge en')+'</span><span>Guaynabo</span><span>'+T('Since','Desde')+'</span><span>2021</span>';
+    });
+  })();
+
+</script>
+</body>
+</html>

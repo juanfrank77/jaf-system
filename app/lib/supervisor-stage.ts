@@ -383,14 +383,14 @@ export function evaluateReleaseGate(
 		},
 		{ key: "amount_match", ok: !!doc.avisoMatchedAt },
 		{
+			key: "precert_signed",
+			ok: !!sheet?.sigSupervisorAt && !!sheet?.sigSubcontractorAt,
+		},
+		{
 			key: "photos",
 			ok:
 				photos.some((p) => p.tag === "BEFORE") &&
 				photos.some((p) => p.tag === "AFTER"),
-		},
-		{
-			key: "precert_signed",
-			ok: !!sheet?.sigSupervisorAt && !!sheet?.sigSubcontractorAt,
 		},
 		{
 			key: "returns_reconciled",

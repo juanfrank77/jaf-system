@@ -184,8 +184,8 @@ describe("evaluateReleaseGate", () => {
 			"invoice",
 			"aviso",
 			"amount_match",
-			"photos",
 			"precert_signed",
+			"photos",
 			"returns_reconciled",
 		])
 		expect(r.prerequisites.map((p) => p.key)).toEqual(["contractor_code"])

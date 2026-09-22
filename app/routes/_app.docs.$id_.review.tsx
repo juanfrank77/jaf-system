@@ -773,10 +773,11 @@ export async function action({ request, params }: Route.ActionArgs) {
 			db.photo.findMany({ where: { docId: params.id }, select: { tag: true } }),
 		])
 		const gate = evaluateReleaseGate(doc, sheet, photos)
-		if (!gate.ok)
+		if (!gate.releaseOk)
 			return {
 				errorKey: "docs_review.errors.release_blocked",
 				conditions: gate.conditions,
+				prerequisites: gate.prerequisites,
 			}
 		const brigade = doc.brigadeId
 			? await db.brigade.findUnique({ where: { id: doc.brigadeId } })
@@ -888,7 +889,11 @@ const CONDITION_KEYS = {
 	amount_match: "release.condition.amount_match",
 	photos: "release.condition.photos",
 	precert_signed: "release.condition.precert_signed",
-	contractor_code: "release.condition.contractor_code",
+	returns_reconciled: "release.condition.returns_reconciled",
+} as const
+
+const PREREQUISITE_KEYS = {
+	contractor_code: "release.prerequisite.contractor_code",
 } as const
 
 function AvisoCaptureForm({
@@ -1714,6 +1719,14 @@ export default function ReviewDoc({
 							</li>
 						))}
 					</ul>
+					{gate.prerequisites.map((p) => (
+						<p
+							key={p.key}
+							className={`text-xs ${p.ok ? "text-green-700" : "text-slate-500"}`}
+						>
+							{p.ok ? "✓" : "–"} {t(PREREQUISITE_KEYS[p.key])}
+						</p>
+					))}
 					<p className="jaf-note text-xs text-slate-500">
 						{t("release.condition.claro_badge")}
 						{sheet?.sigClaroAt ? " ✓" : ` (${t("release.claro_not_captured")})`}
@@ -1733,7 +1746,11 @@ export default function ReviewDoc({
 					) : (
 						<Form method="post">
 							<input type="hidden" name="intent" value="release_to_finance" />
-							<Button type="submit" disabled={!gate.ok} className="w-full">
+							<Button
+								type="submit"
+								disabled={!gate.releaseOk}
+								className="w-full"
+							>
 								{t("release.button")}
 							</Button>
 						</Form>

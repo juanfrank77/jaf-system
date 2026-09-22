@@ -44,9 +44,11 @@ There is **no `ReleaseGate` table**. [`evaluateReleaseGate`](../app/lib/supervis
 | 4 | `amount_match` | `avisoMatchedAt` set |
 | 5 | `photos` | at least one `BEFORE` and one `AFTER` photo |
 | 6 | `precert_signed` | supervisor + subcontractor signatures on the active sheet |
-| 7 | `contractor_code` | `contractorAccountCode` set |
+| 7 | `returns_reconciled` | Warehouse recorded `materialsReturned`, or nothing expected back (`taken − used = 0` per line / no materials). Short lines need a per-line note. |
 
-`ok` is `conditions.every`. The release mutation **repeats this check** and refuses `release_to_finance` when any item is false. The button is also `disabled={!gate.ok}`.
+`contractorAccountCode` is a **prerequisite** (not gate row 7) — placement pending product-owner confirmation.
+
+`ok` is `conditions.every`. `releaseOk` is `ok` and every prerequisite. The release mutation **repeats this check** and refuses `release_to_finance` when `releaseOk` is false. The button is also `disabled={!gate.releaseOk}`.
 
 What the additive entity would add: who/when each item flipped, and persistence independent of those source fields.
 

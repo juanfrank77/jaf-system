@@ -540,8 +540,9 @@
 		"condition.amount_match": "Amount match green (hard gate)",
 		"condition.photos": "Before and after photos present",
 		"condition.precert_signed": "Pre-cert sheet signed — supervisor + sub-contractor",
-		"condition.contractor_code": "Contractor account resolved",
-		"condition.claro_badge": "Claro field acceptance — badge only, not a release condition"
+		"condition.returns_reconciled": "Materials return reconciled by warehouse",
+		"condition.claro_badge": "Claro field acceptance — badge only, not a release condition",
+		"prerequisite.contractor_code": "Contractor account code on file (prerequisite — placement pending product owner)"
 	},
 	"precert": {
 		"heading": "Step D — Hoja de Pre-Certificación Contratista",

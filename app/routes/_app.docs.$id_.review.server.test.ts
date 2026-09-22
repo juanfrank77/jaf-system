@@ -949,6 +949,49 @@ describe("review: release_to_finance", () => {
 		expect(db.notification.create).not.toHaveBeenCalled()
 	})
 
+	it("blocks release when contractor_code prerequisite fails despite seven green", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...ready,
+			contractorAccountCode: null,
+		} as any)
+		const res = await action({
+			request: post(intent("release_to_finance")),
+			params: { id: "doc-1" },
+		} as any)
+		expect(res).toMatchObject({
+			errorKey: "docs_review.errors.release_blocked",
+		})
+		expect(
+			res.prerequisites?.find(
+				(p: { key: string }) => p.key === "contractor_code",
+			)?.ok,
+		).toBe(false)
+		expect(res.conditions?.every((c: { ok: boolean }) => c.ok)).toBe(true)
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("blocks release when warehouse has not reconciled expected returns", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...ready,
+			materialsTaken: [{ serviceCodeId: "mat-1", qty: 10 }],
+			materialsUsed: [{ serviceCodeId: "mat-1", qty: 7 }],
+			materialsReturned: null,
+		} as any)
+		const res = await action({
+			request: post(intent("release_to_finance")),
+			params: { id: "doc-1" },
+		} as any)
+		expect(res).toMatchObject({
+			errorKey: "docs_review.errors.release_blocked",
+		})
+		expect(
+			res.conditions?.find(
+				(c: { key: string }) => c.key === "returns_reconciled",
+			)?.ok,
+		).toBe(false)
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
 	it("blocks release when avisoMatchedAt is set but stored lines no longer match", async () => {
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
 			...ready,

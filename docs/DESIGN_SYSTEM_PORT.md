@@ -88,12 +88,12 @@ export function KPI({ label, value, delta, variant, viz }: KPIProps) {
 |------------|-------------|----------------|-----|
 | 1 | Created | `CREATED` | ✓ Clean |
 | 2 | Warehouse prep | `PREPPED` (+ `preppedAt`) | ✓ Clean — labels match |
-| 3 | Crew signs out | `SIGNED` | ✓ Clean — [`deriveGuideStep`](../app/lib/supervisor-stage.ts) returns 3 at `SIGNED` |
-| 4 | Field work | `SIGNED` → `FIELD_UPDATED` | ⚠ Ambiguous — "in field" vs "submitted" are two DocStatus values for one guide step |
-| 5 | You review | `FIELD_UPDATED` → `SUPERVISOR_APPROVED` | ✓ Clean |
-| 6 | JAF invoice | `jafInvoiceGeneratedAt` timestamp (status stays `SUPERVISOR_APPROVED`) | ✗ Not in enum — invoice generation is a timestamp, not a status transition |
-| 7 | Aviso matched | `avisoMatchedAt` timestamp (often → `CLARO_UPLOADED`) | ⚠ Partial — Aviso match is a timestamp; `deriveSupervisorStage` computes separate AVISO and PRECERT stages (7a, 7b) |
-| 8 | To Finance | `releasedToFinanceAt` timestamp (status often still `CLARO_UPLOADED`) | ✗ Not in enum — release is a timestamp |
+| 3 | Crew signs out | `PREPPED` (WIP) / `SIGNED` (last reached) | ✓ [`deriveGuideProgress`](../app/lib/supervisor-stage.ts) returns 3 at `PREPPED` |
+| 4 | Field work | `SIGNED` (including send-back) | ✓ WIP step 4 |
+| 5 | You review | `FIELD_UPDATED` | ✓ WIP step 5 |
+| 6 | JAF invoice | `SUPERVISOR_APPROVED` without `jafInvoiceGeneratedAt` | ✓ WIP step 6 |
+| 7 | Aviso matched | Invoice generated, `avisoMatchedAt` not set | ✓ WIP step 7 |
+| 8 | To Finance | `avisoMatchedAt` set — pre-cert + release; `allDone` when `releasedToFinanceAt` | ✓ WIP step 8 |
 
 **Root cause:** The schema grew organically — early work fit a 5-step enum (`CREATED` … `SUPERVISOR_APPROVED`), then supervisor/finance complexity was added as timestamps rather than splitting the enum further. Steps 6–8 are timestamp gates, not first-class statuses.
 
@@ -103,51 +103,35 @@ export function KPI({ label, value, delta, variant, viz }: KPIProps) {
 - Tables that want to sort "by step" need a computed step column, not a direct `DocStatus` enum sort
 - Steps 6–8 rendering requires checking nullable timestamps — a job at `SUPERVISOR_APPROVED` may be at step 5, 6, 7, or 8 depending on which timestamps are set
 
-**Guide step derivation — fixed via [`deriveGuideStep`](../app/lib/supervisor-stage.ts):** Reads `DocStatus` + timestamps directly (not `SupervisorStage`). Step 3 is returned at `SIGNED`. Legacy [`supervisorStageToGuideStep`](../app/lib/supervisor-stage.ts) is deprecated — it still omits step 3 because `SupervisorStage` cannot distinguish crew sign-out from field work; StepRail continues to use `deriveSupervisorStage` unchanged.
+**Guide step derivation — DECIDED (22 Sep 2026): work IN PROGRESS** per v5 supervisor mockup. Use [`deriveGuideProgress`](../app/lib/supervisor-stage.ts) → `{ current: 1–8, allDone } | null`. [`deriveGuideStep`](../app/lib/supervisor-stage.ts) returns `.current` for compatibility.
 
-**Step-number convention (default — pending product owner):** **`deriveGuideStep` uses "last status reached"** — the mapping table above and [`GUIDE_STEP_FROM_STATUS`](../app/lib/supervisor-stage.ts). [`FlowStrip`](../app/components/design-system/primitives.tsx) may still treat the number as work-in-progress (`step.n < current` = done); confirm with product owner before wiring `.jaf-flow` everywhere.
+| Job state | `current` |
+|-----------|-----------|
+| Step 1 (unsaved new WO form only) | 1 — not computed server-side |
+| `CREATED` | 2 — warehouse prep pending |
+| `PREPPED` | 3 — crew signs out |
+| `SIGNED` (including sent back) | 4 — field work |
+| `FIELD_UPDATED` | 5 — supervisor review |
+| `SUPERVISOR_APPROVED`, no invoice | 6 |
+| Invoice generated, not matched | 7 |
+| `avisoMatchedAt` set, not released | 8 — pre-cert + release |
+| `releasedToFinanceAt` set | 8, `allDone: true` |
+| `CANCELLED` | `null` |
 
-**Recommended resolution:**
-
-**Do NOT:** Add a stored `step` integer field or rename `DocStatus` values — the schema is stable and correct for the domain.
+Saved jobs start at step 2. [`deriveSupervisorStage`](../app/lib/supervisor-stage.ts) / StepRail (9 stages) are **unchanged**. Legacy [`supervisorStageToGuideStep`](../app/lib/supervisor-stage.ts) and [`GUIDE_STEP_FROM_STATUS`](../app/lib/supervisor-stage.ts) remain deprecated.
 
 **DO:**
 
-1. Use [`deriveGuideStep`](../app/lib/supervisor-stage.ts) for the 8-step `.jaf-flow` strip. Use `deriveSupervisorStage` only for StepRail (9 stages). Timestamp logic for steps 6–8:
+1. Use `deriveGuideProgress(job)` for the 8-step `.jaf-flow` strip; use `deriveSupervisorStage` only for StepRail.
 
-   ```ts
-   // Simplified logic (see app/lib/supervisor-stage.ts for full version)
-   if (!jafInvoiceGeneratedAt) return step 5 (SUPERVISOR_APPROVED)
-   if (!avisoMatchedAt) return step 6 (INVOICE)
-   if (!preCertAllSigned) return step 7 (AVISO → PRECERT)
-   if (!releasedToFinanceAt) return step 7.5 (PRECERT → RELEASE)
-   return step 8 (RELEASED)
-   ```
-
-2. Render `.jaf-flow` strips dynamically with step numbers 1–8 from `deriveGuideStep`:
+2. Render `.jaf-flow` from progress:
 
    ```tsx
-   const stepNumber = deriveGuideStep(invoice) // 1–8, or null when cancelled
-   <FlowStrip steps={8} current={stepNumber ?? 1} you={roleSteps[currentRole]} />
+   const progress = deriveGuideProgress(invoice)
+   <FlowStrip steps={8} current={progress?.current ?? 1} allDone={progress?.allDone} />
    ```
 
-3. Use guide's step labels for the `.jaf-flow` strip (Created, Warehouse prep, Crew signs out, Field work, You review, JAF invoice, Aviso matched, To Finance) — these are UI conventions, not schema labels. The app's `DocStatus` labels (CREATED, PREPPED, etc.) remain in code/logs.
-
-4. Document the mapping in [`supervisor-stage.ts`](../app/lib/supervisor-stage.ts) header comment:
-
-   ```ts
-   /**
-    * Guide's 8-step model maps to app state as follows:
-    * Steps 1-5: DocStatus enum values (CREATED → SUPERVISOR_APPROVED)
-    * Steps 6-8: Computed from timestamps (jafInvoiceGeneratedAt, avisoMatchedAt, releasedToFinanceAt)
-    * 
-    * This function returns 9 stages (splits step 7 into AVISO + PRECERT) to handle
-    * the Aviso match → PreCert sign → Release sequence. UI collapses these back to
-    * 8 steps for the .jaf-flow strip.
-    */
-   ```
-
-5. For sorting: Add a computed `derivedStep` getter on `JafInvoice` that calls `deriveGuideStep`. Use this for table sorts, not raw `DocStatus`.
+3. For sorting: computed `derivedStep` getter calling `deriveGuideStep` — still additive (#1).
 
 ---
 
@@ -167,7 +151,7 @@ Full 53-row reconciliation: [gap-reconciliation-53.md](gap-reconciliation-53.md)
 | 26 | Generated invoice (read-only) | `jafInvoiceLines` JSON (snapshot at generation) |
 | 27 | Pre-cert 3 signatures | `PreCertSheet` (`sigSupervisor*`, `sigSubcontractor*`, `sigClaro*`) |
 | 30 | Price snapshot at invoice time | `jafInvoiceLines` includes `unitPrice` independent of live catalog |
-| 32 (blocking) | 7-item release gate | [`evaluateReleaseGate`](../app/lib/supervisor-stage.ts) — seven keys match docs |
+| 32 (blocking) | 7-item release gate | [`evaluateReleaseGate`](../app/lib/supervisor-stage.ts) — mockup seven + `contractor_code` prerequisite |
 | 45 | Theme persistence | `theme.server.ts` cookie → [`root.tsx`](../app/root.tsx) `Layout` sets `html.dark` before paint ✓ |
 
 #### Partial (schema or UI gap remains)

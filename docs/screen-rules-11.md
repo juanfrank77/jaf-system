@@ -27,7 +27,7 @@ These are **not UI polish** — they are real business constraints the mockups e
 | **2. Warehouse · Returns** | | | | |
 | | **Short** (returned < expected) → red chip + note **required** + logged as discrepancy **not consumption** | [`_app.docs.$id_.returns.tsx`](../app/routes/_app.docs.$id_.returns.tsx) | Check: note enforced? Logged separately from consumption? | **CRITICAL** |
 | | **Over** (returned > expected) → amber chip + flags to supervisor for invoice review | Returns reconciliation | Check: supervisor sees "crew under-reported?" flag? | HIGH |
-| | **Exact** → green chip, gate item 7 goes green for supervisor | Supervisor release gate | Check: gate item 7 computed from returns reconciliation? | MEDIUM |
+| | **Exact** → green chip, gate item 7 goes green for supervisor | [`evaluateReleaseGate`](../app/lib/supervisor-stage.ts) `returns_reconciled` | **Enforced** — item 7 true when warehouse recorded returns or nothing expected back | MEDIUM |
 | **3. Crew · Field Update (step 4)** | | | | |
 | | Address edit reveals **diff live** — original struck, correction green + crew + time + GPS | [`_app.docs.$id_.field.tsx`](../app/routes/_app.docs.$id_.field.tsx) | Check: does `.diff` component exist? GPS captured? | MEDIUM |
 | | Photo capture inserts **timestamped photo** + caption recounts "Before 1 · After 2 · ready" | Photo upload + counter | Check: caption updates live? | LOW |
@@ -61,7 +61,7 @@ These are **not UI polish** — they are real business constraints the mockups e
 | **10. Installer · Swap** | | | | |
 | | **One action, four consequences**: old serial → return, new serial → installed, callback → Carmen, warehouse + supervisor notified | Swap flow | **GAP**: swap screen doesn't exist | HIGH |
 | **11. Supervisor · Release (step 8)** | | | | |
-| | **7-item gate** — release disabled until all seven green, warehouse's action un-disables it live | [`_app.docs.$id_.review.tsx`](../app/routes/_app.docs.$id_.review.tsx) release gate | **GAP**: 7-item gate entity doesn't exist (#32) | **CRITICAL** |
+| | **7-item gate** — release disabled until all seven green, warehouse's action un-disables item 7 (`returns_reconciled`) live | [`evaluateReleaseGate`](../app/lib/supervisor-stage.ts) + [`_app.docs.$id_.review.tsx`](../app/routes/_app.docs.$id_.review.tsx) | **Enforced** — seven mockup rows; `contractor_code` prerequisite separate (#32) | **CRITICAL** |
 | | **Aviso amount ≠ invoice is hard block** — job cannot reach step 8 by any route | Transition guard | **GAP**: backend guard missing in [`permissions.ts`](../app/lib/permissions.ts) | **CRITICAL** |
 
 ---

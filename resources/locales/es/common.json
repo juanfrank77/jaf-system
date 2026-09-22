@@ -540,8 +540,9 @@
 		"condition.amount_match": "Cotejo de monto aprobado (bloqueo duro)",
 		"condition.photos": "Fotos de antes y después presentes",
 		"condition.precert_signed": "Hoja pre-cert firmada — supervisor + sub-contratista",
-		"condition.contractor_code": "Cuenta de contratista resuelta",
-		"condition.claro_badge": "Aceptación de campo de Claro — solo insignia, no condición"
+		"condition.returns_reconciled": "Devolución de materiales conciliada por almacén",
+		"condition.claro_badge": "Aceptación de campo de Claro — solo insignia, no condición",
+		"prerequisite.contractor_code": "Código de cuenta de contratista en archivo (requisito previo — ubicación pendiente del PO)"
 	},
 	"precert": {
 		"heading": "Step D — Hoja de Pre-Certificación Contratista",

@@ -13,7 +13,7 @@ Full reconciliation of all 53 claims from the JAF Ops Design System Guide agains
 
 | # | Claim | Needs to Exist As | Existing Field/Table | Verdict |
 |---|-------|-------------------|---------------------|---------|
-| 1 | Step 1-8 ordered enum, sortable | Ordered enum on work order | `DocStatus` enum (steps 1-5) + timestamps (steps 6-8); [`deriveGuideStep`](../app/lib/supervisor-stage.ts) derives 1–8 from status + timestamps (step 3 at `SIGNED`; no stored enum) | **PARTIAL** - Derivation works for flow strip. **ADDITIVE**: persisted `derivedStep` for table sorts. |
+| 1 | Step 1-8 ordered enum, sortable | Ordered enum on work order | [`deriveGuideProgress`](../app/lib/supervisor-stage.ts) — WIP convention (decided 22 Sep); step 1 form-only; saved jobs start at 2 | **PARTIAL** - Derivation works for flow strip. **ADDITIVE**: persisted `derivedStep` for table sorts. |
 | 2 | Auto work-order number `JAF-2026-####` | Server-side sequence per year | `JafInvoice.controlNumber` unique string | **PARTIAL** - [`generateControlNumber`](../app/lib/control-number.server.ts) emits `MAINT-YYMMDD-###` per day, not `JAF-YYYY-####` per year |
 | 3 | Aviso optional at step 1, captured at step 7 | Nullable 8-digit field + capture timestamp + user | `avisoNumber?` nullable; `avisoMatchedAt?` timestamp exists; **NO** `avisoCapturedBy` user FK | **ADDITIVE** - Add `avisoCapturedById?`, `avisoCapturedAt?` |
 | 4 | Estimated address + correction history (diff) | Two address fields + GPS + timestamp + user | `jobAddressEstimated`, `jobAddressActual`, `addressCorrections?` JSON, `gpsCoordinates?` | **SATISFIED** |
@@ -72,7 +72,7 @@ Full reconciliation of all 53 claims from the JAF Ops Design System Guide agains
 | 29 | Invoice splits pre-IVU, IVU 11.5%, total | Tax as stored rated field | `jafInvoiceLineTotal` is pre-IVU; **NO** separate IVU/total columns | **STRUCTURAL** - Invoice-line schema change to store `ivuRate`, `ivuAmount`, `totalWithIvu` |
 | 30 | Prices fixed at generation | Price snapshot per invoice line | `jafInvoiceLines` JSON includes `unitPrice` independent of live catalog | **SATISFIED** |
 | 31 | Callback = no new Claro order, flat rate | Job type flag + flat-rate amount | **NONE** | **ADDITIVE** - Add `JafInvoice.isCallback` boolean, `callbackFlatRate?` Decimal |
-| 32 | 7-item release gate | Checklist with 7 computed items + who/when | [`evaluateReleaseGate`](../app/lib/supervisor-stage.ts) derives all 7 from `JafInvoice`, `PreCertSheet`, `Photo` | **SATISFIED** (blocking) - All 7 items derived live from fields. **ADDITIVE** (attribution) - Add who/when per item: `ReleaseGate` model or JSON with `{ item, byUserId, at }` |
+| 32 | 7-item release gate | Checklist with 7 computed items + who/when | [`evaluateReleaseGate`](../app/lib/supervisor-stage.ts) — mockup order: approved, invoice, aviso, amount_match, photos, precert_signed, **returns_reconciled**. `contractor_code` is a separate prerequisite (pending PO). | **SATISFIED** (blocking) - Seven gate rows + prerequisite; `releaseOk` for mutations/buttons. **ADDITIVE** (attribution) - Add who/when per item: `ReleaseGate` model or JSON with `{ item, byUserId, at }` |
 | 33 | Release → one packet (internal handoff) | Packet entity, not email | `releasedToFinanceAt` timestamp; **NO** packet entity | **ADDITIVE** - Create `FinancePacket` model (`jobId`, `documents[]`, `sentAt`, `receivedByLissetteAt`) |
 
 ---
@@ -160,7 +160,7 @@ Independent verification of every claim previously marked **SATISFIED**:
 | 26 | Generated invoice | **TRUE** | `app/routes/_app.docs.$id_.review.tsx:328` | — |
 | 27 | Pre-cert 3 signatures | **TRUE** | `prisma/schema.prisma:381-392` | — |
 | 30 | Price snapshot | **TRUE** | `prisma/schema.prisma:273` | — |
-| 32 | 7-item release gate | **TRUE** | `app/lib/supervisor-stage.ts:187-216` | Seven keys: approved, invoice, aviso, amount_match, photos, precert_signed, contractor_code |
+| 32 | 7-item release gate | **TRUE** | `app/lib/supervisor-stage.ts` (`evaluateReleaseGate`) | Seven keys per v5 mockup; `contractor_code` prerequisite blocks via `releaseOk` |
 | 39 | Installer completeness | **FALSE** | `prisma/schema.prisma:528-545` | **ADDITIVE** — InstallLog lacks serial/photo/signature |
 | 44 | Spanish twin | **PARTIAL** | `app/localization/i18n.ts`; `resources/locales/es/common.json` | Mechanism only; coverage incomplete |
 | 45 | Theme before paint | **TRUE** | `app/lib/theme.server.ts`; `app/root.tsx` | — |

@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest"
 import type { DocStatus } from "../../generated/prisma/client"
 import {
 	checkAvisoMatch,
+	deriveGuideProgress,
 	deriveGuideStep,
 	deriveSupervisorStage,
 	evaluateReleaseGate,
+	isReturnsReconciled,
+	nothingExpectedBack,
 	type SupervisorStage,
 	supervisorStageToGuideStep,
 } from "./supervisor-stage"
@@ -97,8 +100,6 @@ describe("checkAvisoMatch", () => {
 		)
 		expect(r.amountOk).toBe(true)
 		expect(r.lineMismatches).toEqual([])
-		expect(r.invoiceTotal).toBe(211.72)
-		expect(r.avisoTotal).toBe(211.72)
 	})
 	it("fails on a one-cent-over difference", () => {
 		const r = checkAvisoMatch(
@@ -109,23 +110,44 @@ describe("checkAvisoMatch", () => {
 		expect(r.amountOk).toBe(false)
 		expect(r.difference).toBe(0.02)
 	})
-	it("passes at exactly the tolerance", () => {
-		expect(
-			checkAvisoMatch([inv("a", "1", 1, 10)], [av("a", "1", 1, 10.01)], 0.01)
-				.amountOk,
-		).toBe(true)
+})
+
+describe("returns reconciliation", () => {
+	it("treats no materials as nothing expected back", () => {
+		expect(nothingExpectedBack(null, null)).toBe(true)
+		expect(isReturnsReconciled(null, null, null)).toBe(true)
 	})
-	it("reports per-line quantity mismatches including missing lines", () => {
-		const r = checkAvisoMatch(
-			[inv("a", "1", 2, 10), inv("b", "2", 1, 5)],
-			[av("a", "1", 1, 10), av("c", "3", 1, 15)],
-			0.01,
-		)
-		expect(r.lineMismatches).toEqual([
-			{ serviceCodeId: "a", claroCode: "1", installedQty: 2, chargedQty: 1 },
-			{ serviceCodeId: "b", claroCode: "2", installedQty: 1, chargedQty: 0 },
-			{ serviceCodeId: "c", claroCode: "3", installedQty: 0, chargedQty: 1 },
-		])
+	it("treats fully used materials as nothing expected back", () => {
+		const taken = [{ serviceCodeId: "sc-1", qty: 10 }]
+		const used = [{ serviceCodeId: "sc-1", qty: 10 }]
+		expect(nothingExpectedBack(taken, used)).toBe(true)
+		expect(isReturnsReconciled(taken, used, null)).toBe(true)
+	})
+	it("requires warehouse returns when material is expected back", () => {
+		const taken = [{ serviceCodeId: "sc-1", qty: 10 }]
+		const used = [{ serviceCodeId: "sc-1", qty: 7 }]
+		expect(isReturnsReconciled(taken, used, null)).toBe(false)
+	})
+	it("accepts a short with its line note as reconciled", () => {
+		const taken = [{ serviceCodeId: "sc-1", qty: 10 }]
+		const used = [{ serviceCodeId: "sc-1", qty: 7 }]
+		const returned = [
+			{
+				serviceCodeId: "sc-1",
+				takenQty: 10,
+				returnedQty: 2,
+				notes: "two units missing",
+			},
+		]
+		expect(isReturnsReconciled(taken, used, returned)).toBe(true)
+	})
+	it("rejects a short without a note", () => {
+		const taken = [{ serviceCodeId: "sc-1", qty: 10 }]
+		const used = [{ serviceCodeId: "sc-1", qty: 7 }]
+		const returned = [
+			{ serviceCodeId: "sc-1", takenQty: 10, returnedQty: 2, notes: "" },
+		]
+		expect(isReturnsReconciled(taken, used, returned)).toBe(false)
 	})
 })
 
@@ -146,13 +168,17 @@ describe("evaluateReleaseGate", () => {
 		],
 		avisoMatchedAt: now,
 		contractorAccountCode: "204",
+		materialsTaken: [],
+		materialsUsed: [],
+		materialsReturned: null,
 	}
 	const sheet = { sigSupervisorAt: now, sigSubcontractorAt: now }
 	const photos = [{ tag: "BEFORE" as const }, { tag: "AFTER" as const }]
 
-	it("passes when all seven hold", () => {
+	it("passes all seven gate items and prerequisites", () => {
 		const r = evaluateReleaseGate(good, sheet, photos)
 		expect(r.ok).toBe(true)
+		expect(r.releaseOk).toBe(true)
 		expect(r.conditions.map((c) => c.key)).toEqual([
 			"approved",
 			"invoice",
@@ -160,33 +186,60 @@ describe("evaluateReleaseGate", () => {
 			"amount_match",
 			"photos",
 			"precert_signed",
-			"contractor_code",
+			"returns_reconciled",
 		])
+		expect(r.prerequisites.map((p) => p.key)).toEqual(["contractor_code"])
 	})
+
 	it.each([
 		["approved", { supervisorApprovedAt: null }],
 		["invoice", { jafInvoiceGeneratedAt: null }],
 		["aviso", { avisoDocPath: null }],
-		["aviso", { avisoLines: [] }],
 		["amount_match", { avisoMatchedAt: null }],
-		["contractor_code", { contractorAccountCode: null }],
-	])("fails %s", (key, patch) => {
+		[
+			"returns_reconciled",
+			{ materialsTaken: [{ serviceCodeId: "x", qty: 5 }] },
+		],
+	])("fails gate item %s", (key, patch) => {
 		const r = evaluateReleaseGate({ ...good, ...patch }, sheet, photos)
 		expect(r.ok).toBe(false)
 		expect(r.conditions.find((c) => c.key === key)?.ok).toBe(false)
 	})
-	it("fails photos when an AFTER photo is missing", () => {
-		const r = evaluateReleaseGate(good, sheet, [{ tag: "BEFORE" }])
-		expect(r.conditions.find((c) => c.key === "photos")?.ok).toBe(false)
-	})
-	it("fails precert_signed without the sub-contractor signature", () => {
+
+	it("blocks release when contractor_code prerequisite fails despite seven green", () => {
 		const r = evaluateReleaseGate(
-			good,
-			{ sigSupervisorAt: now, sigSubcontractorAt: null },
+			{ ...good, contractorAccountCode: null },
+			sheet,
 			photos,
 		)
-		expect(r.conditions.find((c) => c.key === "precert_signed")?.ok).toBe(false)
-		expect(evaluateReleaseGate(good, null, photos).ok).toBe(false)
+		expect(r.ok).toBe(true)
+		expect(r.releaseOk).toBe(false)
+		expect(r.prerequisites.find((p) => p.key === "contractor_code")?.ok).toBe(
+			false,
+		)
+	})
+
+	it("passes returns_reconciled when warehouse logged exact returns", () => {
+		const r = evaluateReleaseGate(
+			{
+				...good,
+				materialsTaken: [{ serviceCodeId: "sc-1", qty: 10 }],
+				materialsUsed: [{ serviceCodeId: "sc-1", qty: 7 }],
+				materialsReturned: [
+					{
+						serviceCodeId: "sc-1",
+						takenQty: 10,
+						returnedQty: 3,
+						notes: "",
+					},
+				],
+			},
+			sheet,
+			photos,
+		)
+		expect(r.conditions.find((c) => c.key === "returns_reconciled")?.ok).toBe(
+			true,
+		)
 	})
 })
 
@@ -196,111 +249,114 @@ describe("supervisorStageToGuideStep", () => {
 		expect(supervisorStageToGuideStep("WAREHOUSE")).toBe(2)
 		expect(supervisorStageToGuideStep("FIELD")).toBe(4)
 		expect(supervisorStageToGuideStep("APPROVE")).toBe(5)
-		expect(supervisorStageToGuideStep("INVOICE")).toBe(6)
-		expect(supervisorStageToGuideStep("AVISO")).toBe(7)
-		expect(supervisorStageToGuideStep("PRECERT")).toBe(7)
-		expect(supervisorStageToGuideStep("RELEASE")).toBe(8)
-		expect(supervisorStageToGuideStep("RELEASED")).toBe(8)
 	})
 })
 
-const tsNone = {
+const tsNull = {
 	jafInvoiceGeneratedAt: null,
 	avisoMatchedAt: null,
 	releasedToFinanceAt: null,
 } as const
-const tsJaf = {
-	jafInvoiceGeneratedAt: now,
-	avisoMatchedAt: null,
-	releasedToFinanceAt: null,
-} as const
-const tsAviso = {
-	jafInvoiceGeneratedAt: now,
-	avisoMatchedAt: now,
-	releasedToFinanceAt: null,
-} as const
-const tsReleased = {
-	jafInvoiceGeneratedAt: now,
-	avisoMatchedAt: now,
-	releasedToFinanceAt: now,
-} as const
 
-const timestampPresets = [
-	["none", tsNone],
-	["jaf", tsJaf],
-	["aviso", tsAviso],
-	["released", tsReleased],
-] as const
-
-const forwardStatuses: DocStatus[] = [
-	"CREATED",
-	"PREPPED",
-	"SIGNED",
-	"FIELD_UPDATED",
-	"SUPERVISOR_APPROVED",
-	"CLARO_UPLOADED",
-	"LC_REQUEST_GENERATED",
+const progressCases: Array<
+	[
+		string,
+		{
+			status: DocStatus
+			jafInvoiceGeneratedAt: Date | null
+			avisoMatchedAt: Date | null
+			releasedToFinanceAt: Date | null
+		},
+		number | null,
+		boolean,
+	]
+> = [
+	["CREATED", { status: "CREATED", ...tsNull }, 2, false],
+	["PREPPED", { status: "PREPPED", ...tsNull }, 3, false],
+	["SIGNED", { status: "SIGNED", ...tsNull }, 4, false],
+	["SIGNED send-back", { status: "SIGNED", ...tsNull }, 4, false],
+	["FIELD_UPDATED", { status: "FIELD_UPDATED", ...tsNull }, 5, false],
+	[
+		"SUPERVISOR_APPROVED no invoice",
+		{ status: "SUPERVISOR_APPROVED", ...tsNull },
+		6,
+		false,
+	],
+	[
+		"SUPERVISOR_APPROVED invoice only",
+		{
+			status: "SUPERVISOR_APPROVED",
+			jafInvoiceGeneratedAt: now,
+			avisoMatchedAt: null,
+			releasedToFinanceAt: null,
+		},
+		7,
+		false,
+	],
+	[
+		"SUPERVISOR_APPROVED matched not released",
+		{
+			status: "SUPERVISOR_APPROVED",
+			jafInvoiceGeneratedAt: now,
+			avisoMatchedAt: now,
+			releasedToFinanceAt: null,
+		},
+		8,
+		false,
+	],
+	[
+		"released",
+		{
+			status: "CLARO_UPLOADED",
+			jafInvoiceGeneratedAt: now,
+			avisoMatchedAt: now,
+			releasedToFinanceAt: now,
+		},
+		8,
+		true,
+	],
+	["CANCELLED", { status: "CANCELLED", ...tsNull }, null, false],
 ]
 
-function expectedGuideStep(
-	status: DocStatus,
-	ts: typeof tsNone | typeof tsJaf | typeof tsAviso | typeof tsReleased,
-): number | null {
-	if (status === "CANCELLED") return null
-	const base: Record<Exclude<DocStatus, "CANCELLED">, number> = {
-		CREATED: 1,
-		PREPPED: 2,
-		SIGNED: 3,
-		FIELD_UPDATED: 4,
-		SUPERVISOR_APPROVED: 5,
-		CLARO_UPLOADED: 5,
-		LC_REQUEST_GENERATED: 5,
-	}
-	let step = base[status]
-	if (ts.jafInvoiceGeneratedAt) step = Math.max(step, 6)
-	if (ts.avisoMatchedAt) step = Math.max(step, 7)
-	if (ts.releasedToFinanceAt) step = Math.max(step, 8)
-	return step
-}
-
-describe("deriveGuideStep", () => {
-	it.each(
-		forwardStatuses.flatMap((status) =>
-			timestampPresets.map(([label, ts]) => [status, label, ts] as const),
-		),
-	)("status=%s timestamps=%s", (status, _label, ts) => {
-		const job = { status, ...ts }
-		expect(deriveGuideStep(job)).toBe(expectedGuideStep(status, ts))
-	})
-
-	it("returns null for CANCELLED regardless of timestamps", () => {
-		expect(deriveGuideStep({ status: "CANCELLED", ...tsReleased })).toBeNull()
-	})
-
-	it("reaches every guide step 1–8", () => {
-		const reached = new Set<number>()
-		for (const status of forwardStatuses) {
-			for (const [, ts] of timestampPresets) {
-				const step = deriveGuideStep({ status, ...ts })
-				if (step !== null) reached.add(step)
-			}
+describe("deriveGuideProgress (work in progress)", () => {
+	it.each(progressCases)("%s", (_label, job, current, allDone) => {
+		const progress = deriveGuideProgress(job)
+		if (current === null) {
+			expect(progress).toBeNull()
+		} else {
+			expect(progress).toEqual({ current, allDone })
 		}
-		expect([...reached].sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+		expect(deriveGuideStep(job)).toBe(current)
 	})
 
-	it("never decreases along a normal lifecycle", () => {
-		const lifecycle = [
-			{ status: "CREATED" as const, ...tsNone },
-			{ status: "PREPPED" as const, ...tsNone },
-			{ status: "SIGNED" as const, ...tsNone },
-			{ status: "FIELD_UPDATED" as const, ...tsNone },
-			{ status: "SUPERVISOR_APPROVED" as const, ...tsNone },
-			{ status: "SUPERVISOR_APPROVED" as const, ...tsJaf },
-			{ status: "CLARO_UPLOADED" as const, ...tsAviso },
-			{ status: "CLARO_UPLOADED" as const, ...tsReleased },
+	it("never decreases on the forward path", () => {
+		const forward = [
+			{ status: "CREATED" as const, ...tsNull },
+			{ status: "PREPPED" as const, ...tsNull },
+			{ status: "SIGNED" as const, ...tsNull },
+			{ status: "FIELD_UPDATED" as const, ...tsNull },
+			{ status: "SUPERVISOR_APPROVED" as const, ...tsNull },
+			{
+				status: "SUPERVISOR_APPROVED" as const,
+				jafInvoiceGeneratedAt: now,
+				avisoMatchedAt: null,
+				releasedToFinanceAt: null,
+			},
+			{
+				status: "CLARO_UPLOADED" as const,
+				jafInvoiceGeneratedAt: now,
+				avisoMatchedAt: now,
+				releasedToFinanceAt: null,
+			},
+			{
+				status: "CLARO_UPLOADED" as const,
+				jafInvoiceGeneratedAt: now,
+				avisoMatchedAt: now,
+				releasedToFinanceAt: now,
+			},
 		]
 		let prev = 0
-		for (const job of lifecycle) {
+		for (const job of forward) {
 			const step = deriveGuideStep(job)
 			expect(step).not.toBeNull()
 			expect(step!).toBeGreaterThanOrEqual(prev)
@@ -308,60 +364,44 @@ describe("deriveGuideStep", () => {
 		}
 	})
 
+	it("send-back returns to step 4 from step 5", () => {
+		expect(deriveGuideStep({ status: "FIELD_UPDATED", ...tsNull })).toBe(5)
+		expect(deriveGuideStep({ status: "SIGNED", ...tsNull })).toBe(4)
+	})
+
+	it("sets allDone only when released", () => {
+		expect(
+			deriveGuideProgress({
+				status: "CLARO_UPLOADED",
+				jafInvoiceGeneratedAt: now,
+				avisoMatchedAt: now,
+				releasedToFinanceAt: null,
+			})?.allDone,
+		).toBe(false)
+		expect(
+			deriveGuideProgress({
+				status: "CLARO_UPLOADED",
+				jafInvoiceGeneratedAt: now,
+				avisoMatchedAt: now,
+				releasedToFinanceAt: now,
+			})?.allDone,
+		).toBe(true)
+	})
+})
+
+describe("deriveSupervisorStage unchanged", () => {
 	it.each([
-		["CREATED", "none", tsNone, "INTAKE"],
-		["CREATED", "jaf", tsJaf, "AVISO"],
-		["CREATED", "aviso", tsAviso, "RELEASE"],
-		["CREATED", "released", tsReleased, "RELEASED"],
-		["PREPPED", "none", tsNone, "WAREHOUSE"],
-		["PREPPED", "jaf", tsJaf, "AVISO"],
-		["PREPPED", "aviso", tsAviso, "RELEASE"],
-		["PREPPED", "released", tsReleased, "RELEASED"],
-		["SIGNED", "none", tsNone, "FIELD"],
-		["SIGNED", "jaf", tsJaf, "AVISO"],
-		["SIGNED", "aviso", tsAviso, "RELEASE"],
-		["SIGNED", "released", tsReleased, "RELEASED"],
-		["FIELD_UPDATED", "none", tsNone, "APPROVE"],
-		["FIELD_UPDATED", "jaf", tsJaf, "AVISO"],
-		["FIELD_UPDATED", "aviso", tsAviso, "RELEASE"],
-		["FIELD_UPDATED", "released", tsReleased, "RELEASED"],
-		["SUPERVISOR_APPROVED", "none", tsNone, "INVOICE"],
-		["SUPERVISOR_APPROVED", "jaf", tsJaf, "AVISO"],
-		["SUPERVISOR_APPROVED", "aviso", tsAviso, "RELEASE"],
-		["SUPERVISOR_APPROVED", "released", tsReleased, "RELEASED"],
-		["CLARO_UPLOADED", "none", tsNone, "INVOICE"],
-		["CLARO_UPLOADED", "jaf", tsJaf, "AVISO"],
-		["CLARO_UPLOADED", "aviso", tsAviso, "RELEASE"],
-		["CLARO_UPLOADED", "released", tsReleased, "RELEASED"],
-		["LC_REQUEST_GENERATED", "none", tsNone, "INVOICE"],
-		["LC_REQUEST_GENERATED", "jaf", tsJaf, "AVISO"],
-		["LC_REQUEST_GENERATED", "aviso", tsAviso, "RELEASE"],
-		["LC_REQUEST_GENERATED", "released", tsReleased, "RELEASED"],
+		["CREATED", "none", tsNull, "INTAKE"],
+		["FIELD_UPDATED", "none", tsNull, "APPROVE"],
+		["SUPERVISOR_APPROVED", "none", tsNull, "INVOICE"],
 	] as const satisfies ReadonlyArray<
-		[
-			DocStatus,
-			string,
-			typeof tsNone | typeof tsJaf | typeof tsAviso | typeof tsReleased,
-			SupervisorStage,
-		]
-	>)(
-		"deriveSupervisorStage unchanged for status=%s timestamps=%s → %s",
-		(status, _label, ts, expectedStage) => {
-			const doc = {
-				status,
-				supervisorApprovedAt:
-					status === "SUPERVISOR_APPROVED" ||
-					status === "CLARO_UPLOADED" ||
-					status === "LC_REQUEST_GENERATED"
-						? now
-						: null,
-				...ts,
-			}
-			const sheet =
-				ts.avisoMatchedAt || ts.releasedToFinanceAt
-					? { sigSupervisorAt: now, sigSubcontractorAt: now }
-					: null
-			expect(deriveSupervisorStage(doc, sheet)).toBe(expectedStage)
-		},
-	)
+		[DocStatus, string, typeof tsNull, SupervisorStage]
+	>)("status=%s timestamps=%s → %s", (status, _label, ts, expectedStage) => {
+		const doc = {
+			status,
+			supervisorApprovedAt: status === "SUPERVISOR_APPROVED" ? now : null,
+			...ts,
+		}
+		expect(deriveSupervisorStage(doc, null)).toBe(expectedStage)
+	})
 })

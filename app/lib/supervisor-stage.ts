@@ -9,42 +9,87 @@ import {
 /**
  * Guide `.jaf-flow` strip — steps 1–8 (labels from JAF Ops Design System Guide).
  *
- * **Convention (default — pending product-owner confirmation): "last status reached".**
- * A job's step is the highest milestone completed, not work-in-progress. To switch
- * conventions later, change only {@link GUIDE_STEP_FROM_STATUS} and
- * {@link GUIDE_STEP_FROM_TIMESTAMP}.
+ * **Convention (decided 22 Sep 2026): work IN PROGRESS** — the step number is what
+ * the role is doing *now*, not the last milestone reached. See v5 supervisor mockup.
  *
- * | Step | Reached when |
- * |------|----------------|
- * | 1 | `CREATED` |
- * | 2 | `PREPPED` |
- * | 3 | `SIGNED` |
- * | 4 | `FIELD_UPDATED` |
- * | 5 | `SUPERVISOR_APPROVED` (also base for `CLARO_UPLOADED` / `LC_REQUEST_GENERATED`) |
- * | 6 | `jafInvoiceGeneratedAt` set |
- * | 7 | `avisoMatchedAt` set (pre-cert signing stays at 7) |
- * | 8 | `releasedToFinanceAt` set |
+ * Step 1 ("Created") applies only to the **unsaved** new work-order form. Saved jobs
+ * in `CREATED` start at step 2 (warehouse prep pending).
  *
- * `CANCELLED` → `null`. Post-approval statuses take their step from timestamps,
- * not from the enum value alone.
+ * | Step | In progress when |
+ * |------|------------------|
+ * | 1 | Unsaved new WO form only (not computed here) |
+ * | 2 | `CREATED` |
+ * | 3 | `PREPPED` |
+ * | 4 | `SIGNED` (including sent back to crew) |
+ * | 5 | `FIELD_UPDATED` |
+ * | 6 | `SUPERVISOR_APPROVED` without `jafInvoiceGeneratedAt` |
+ * | 7 | Invoice generated, Aviso not matched |
+ * | 8 | `avisoMatchedAt` set — pre-cert + release; `allDone` when released |
  *
- * **Use {@link deriveGuideStep} for the 8-step strip.** {@link deriveSupervisorStage}
- * returns 9 internal stages (splits step 7 into AVISO + PRECERT) for StepRail /
- * supervisor UI — do not change that mapping when fixing guide steps.
+ * `CANCELLED` → `null`. {@link deriveSupervisorStage} / StepRail stay on the 9-stage
+ * model — do not change them when adjusting guide steps.
  */
 
-/** DocStatus → guide step (steps 1–5). Pending product-owner confirmation. */
-export const GUIDE_STEP_FROM_STATUS: Partial<Record<DocStatus, number>> = {
-	CREATED: 1,
-	PREPPED: 2,
-	SIGNED: 3,
-	FIELD_UPDATED: 4,
-	SUPERVISOR_APPROVED: 5,
-	CLARO_UPLOADED: 5,
-	LC_REQUEST_GENERATED: 5,
+/** In-progress mapping (v5 mockup). Step 1 is form-only; saved jobs start at 2. */
+export const GUIDE_PROGRESS_BY_STATUS: Partial<
+	Record<DocStatus, { current: number; allDone: boolean }>
+> = {
+	CREATED: { current: 2, allDone: false },
+	PREPPED: { current: 3, allDone: false },
+	SIGNED: { current: 4, allDone: false },
+	FIELD_UPDATED: { current: 5, allDone: false },
 }
 
-/** Timestamp fields that advance guide steps 6–8 (checked in step order). */
+type GuideProgressJob = Pick<
+	JafInvoice,
+	"status" | "jafInvoiceGeneratedAt" | "avisoMatchedAt" | "releasedToFinanceAt"
+>
+
+export type GuideProgress = { current: number; allDone: boolean }
+
+/** Guide `.jaf-flow` work-in-progress step (1–8), or `null` when cancelled. */
+export function deriveGuideProgress(
+	job: GuideProgressJob,
+): GuideProgress | null {
+	if (job.status === "CANCELLED") return null
+
+	if (job.releasedToFinanceAt) {
+		return { current: 8, allDone: true }
+	}
+
+	const base = GUIDE_PROGRESS_BY_STATUS[job.status]
+	if (base) return base
+
+	if (
+		job.status === "SUPERVISOR_APPROVED" ||
+		job.status === "CLARO_UPLOADED" ||
+		job.status === "LC_REQUEST_GENERATED"
+	) {
+		if (!job.jafInvoiceGeneratedAt) return { current: 6, allDone: false }
+		if (!job.avisoMatchedAt) return { current: 7, allDone: false }
+		return { current: 8, allDone: false }
+	}
+
+	return null
+}
+
+/** @deprecated Use {@link deriveGuideProgress}. Returns `.current` for compatibility. */
+export function deriveGuideStep(job: GuideProgressJob): number | null {
+	return deriveGuideProgress(job)?.current ?? null
+}
+
+/** @deprecated Last-reached convention removed; kept for doc/tests referencing the old shape. */
+export const GUIDE_STEP_FROM_STATUS: Partial<Record<DocStatus, number>> = {
+	CREATED: 2,
+	PREPPED: 3,
+	SIGNED: 4,
+	FIELD_UPDATED: 5,
+	SUPERVISOR_APPROVED: 6,
+	CLARO_UPLOADED: 6,
+	LC_REQUEST_GENERATED: 6,
+}
+
+/** @deprecated Last-reached convention removed. */
 export const GUIDE_STEP_FROM_TIMESTAMP = [
 	{ field: "jafInvoiceGeneratedAt", step: 6 },
 	{ field: "avisoMatchedAt", step: 7 },
@@ -56,25 +101,6 @@ export const GUIDE_STEP_FROM_TIMESTAMP = [
 	>
 	step: number
 }>
-
-type GuideStepJob = Pick<
-	JafInvoice,
-	"status" | "jafInvoiceGeneratedAt" | "avisoMatchedAt" | "releasedToFinanceAt"
->
-
-/** Guide `.jaf-flow` current step (1–8), or `null` when cancelled. */
-export function deriveGuideStep(job: GuideStepJob): number | null {
-	if (job.status === "CANCELLED") return null
-
-	const fromStatus = GUIDE_STEP_FROM_STATUS[job.status]
-	if (fromStatus === undefined) return null
-
-	let step = fromStatus
-	for (const { field, step: milestone } of GUIDE_STEP_FROM_TIMESTAMP) {
-		if (job[field]) step = Math.max(step, milestone)
-	}
-	return step
-}
 
 /**
  * Guide's 9-stage supervisor model (StepRail). Splits guide step 7 into AVISO +
@@ -239,7 +265,81 @@ type ReleaseConditionKey =
 	| "amount_match"
 	| "photos"
 	| "precert_signed"
-	| "contractor_code"
+	| "returns_reconciled"
+
+type ReleasePrerequisiteKey = "contractor_code"
+
+type MaterialQtyLine = { serviceCodeId: string; qty: number }
+
+type ReturnRecordedLine = {
+	serviceCodeId: string
+	takenQty: number
+	returnedQty: number
+	notes?: string
+}
+
+export function expectedReturnQty(takenQty: number, usedQty: number): number {
+	return Math.max(0, takenQty - usedQty)
+}
+
+/** True when every material line has taken − used = 0, or the job took no materials. */
+export function nothingExpectedBack(
+	materialsTaken: unknown,
+	materialsUsed: unknown,
+): boolean {
+	const taken = Array.isArray(materialsTaken)
+		? (materialsTaken as MaterialQtyLine[])
+		: []
+	if (taken.length === 0) return true
+	const usedMap = Object.fromEntries(
+		(Array.isArray(materialsUsed)
+			? (materialsUsed as MaterialQtyLine[])
+			: []
+		).map((u) => [u.serviceCodeId, u.qty]),
+	)
+	return taken.every(
+		(t) => expectedReturnQty(t.qty, usedMap[t.serviceCodeId] ?? 0) === 0,
+	)
+}
+
+/**
+ * Warehouse returns reconciled for release gate item 7.
+ * Short lines require a per-line note (see `/docs/:id/returns`).
+ */
+export function isReturnsReconciled(
+	materialsTaken: unknown,
+	materialsUsed: unknown,
+	materialsReturned: unknown,
+): boolean {
+	if (nothingExpectedBack(materialsTaken, materialsUsed)) return true
+	if (materialsReturned == null) return false
+	if (!Array.isArray(materialsReturned)) return false
+
+	const taken = Array.isArray(materialsTaken)
+		? (materialsTaken as MaterialQtyLine[])
+		: []
+	const usedMap = Object.fromEntries(
+		(Array.isArray(materialsUsed)
+			? (materialsUsed as MaterialQtyLine[])
+			: []
+		).map((u) => [u.serviceCodeId, u.qty]),
+	)
+	const returnedLines = materialsReturned as ReturnRecordedLine[]
+
+	for (const t of taken) {
+		const used = usedMap[t.serviceCodeId] ?? 0
+		const expected = expectedReturnQty(t.qty, used)
+		if (expected === 0) continue
+
+		const line = returnedLines.find((r) => r.serviceCodeId === t.serviceCodeId)
+		if (!line) return false
+
+		const lineExpected = expectedReturnQty(line.takenQty ?? t.qty, used)
+		if (line.returnedQty < lineExpected && !line.notes?.trim()) return false
+	}
+
+	return returnedLines.length > 0
+}
 
 type ReleaseGateDoc = Pick<
 	JafInvoice,
@@ -250,13 +350,26 @@ type ReleaseGateDoc = Pick<
 	| "avisoLines"
 	| "avisoMatchedAt"
 	| "contractorAccountCode"
+	| "materialsTaken"
+	| "materialsUsed"
+	| "materialsReturned"
 >
+
+export type ReleaseGateResult = {
+	/** All seven mockup gate items pass. */
+	ok: boolean
+	conditions: { key: ReleaseConditionKey; ok: boolean }[]
+	/** Extra checks that block release but are not gate rows (contractor_code placement pending PO). */
+	prerequisites: { key: ReleasePrerequisiteKey; ok: boolean }[]
+	/** `ok` and every prerequisite — use for release mutations and buttons. */
+	releaseOk: boolean
+}
 
 export function evaluateReleaseGate(
 	doc: ReleaseGateDoc,
 	sheet: StageSheet,
 	photos: { tag: "BEFORE" | "AFTER" | null }[],
-): { ok: boolean; conditions: { key: ReleaseConditionKey; ok: boolean }[] } {
+): ReleaseGateResult {
 	const avisoLines = Array.isArray(doc.avisoLines) ? doc.avisoLines : []
 	const conditions: { key: ReleaseConditionKey; ok: boolean }[] = [
 		{ key: "approved", ok: !!doc.supervisorApprovedAt },
@@ -279,7 +392,20 @@ export function evaluateReleaseGate(
 			key: "precert_signed",
 			ok: !!sheet?.sigSupervisorAt && !!sheet?.sigSubcontractorAt,
 		},
+		{
+			key: "returns_reconciled",
+			ok: isReturnsReconciled(
+				doc.materialsTaken,
+				doc.materialsUsed,
+				doc.materialsReturned,
+			),
+		},
+	]
+	// contractor_code placement pending product-owner confirmation
+	const prerequisites: { key: ReleasePrerequisiteKey; ok: boolean }[] = [
 		{ key: "contractor_code", ok: !!doc.contractorAccountCode },
 	]
-	return { ok: conditions.every((c) => c.ok), conditions }
+	const ok = conditions.every((c) => c.ok)
+	const releaseOk = ok && prerequisites.every((p) => p.ok)
+	return { ok, conditions, prerequisites, releaseOk }
 }

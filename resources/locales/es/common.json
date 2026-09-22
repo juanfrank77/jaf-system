@@ -1658,6 +1658,7 @@
 			"restock_greet_clear": "[UNPROOFED] {{vanName}} · todas las líneas en o sobre par",
 			"restock_empty_materials": "[UNPROOFED] Aún no hay material en esta camioneta. Ajuste inventario o contacte al supervisor para fijar niveles par.",
 			"restock_offline_saved": "[UNPROOFED] Guardado en el teléfono — se envía solo cuando vuelva la conexión.",
+			"restock_prefill_note": "[UNPROOFED] Rellenado al par — ajuste si hace falta",
 			"restock_col_material": "[UNPROOFED] Material",
 			"restock_col_request": "[UNPROOFED] Solicitud",
 			"restock_col_warehouse": "[UNPROOFED] Almacén",

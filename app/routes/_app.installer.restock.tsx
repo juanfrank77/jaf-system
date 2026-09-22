@@ -20,6 +20,7 @@ import { queueInstallerRestock } from "~/lib/installer-sync"
 import { requireRole } from "~/lib/permissions.server"
 import {
 	buildInventoryComparison,
+	buildRestockPrefillMap,
 	evaluateRestockApproval,
 } from "~/lib/van-inventory"
 import {
@@ -58,32 +59,58 @@ export async function loader({ request }: Route.LoaderArgs) {
 	])
 	if (!van) throw redirect("/installer")
 
-	const [transactions, parLevels, restockRequests, pendingRestock] =
-		await Promise.all([
-			db.vanInventoryTransaction.findMany({ where: { vanId: van.id } }),
-			getVanParLevels(van.id),
-			db.vanRestockRequest.findMany({
-				where: { requestedById: user.id },
-				orderBy: { createdAt: "desc" },
-				take: 20,
-				include: { warehouse: true },
-			}),
-			db.vanRestockRequest.findFirst({
-				where: {
-					requestedById: user.id,
-					status: { in: [...ACTIVE_RESTOCK_STATUSES] },
-				},
-				select: { id: true },
-			}),
-		])
+	const [
+		transactions,
+		parLevels,
+		restockRequests,
+		pendingRestock,
+		pendingForPrefill,
+	] = await Promise.all([
+		db.vanInventoryTransaction.findMany({ where: { vanId: van.id } }),
+		getVanParLevels(van.id),
+		db.vanRestockRequest.findMany({
+			where: { requestedById: user.id },
+			orderBy: { createdAt: "desc" },
+			take: 20,
+			include: { warehouse: true },
+		}),
+		db.vanRestockRequest.findFirst({
+			where: {
+				requestedById: user.id,
+				status: { in: [...ACTIVE_RESTOCK_STATUSES] },
+			},
+			select: { id: true },
+		}),
+		db.vanRestockRequest.findMany({
+			where: {
+				requestedById: user.id,
+				status: { in: [...PENDING_RESTOCK_STATUSES] },
+			},
+			select: { items: true },
+		}),
+	])
 
 	const serviceCodeMap = new Map(
 		serviceCodes.map((c) => [c.id, { claroCode: c.claroCode, name: c.name }]),
 	)
+	const stockLevels = parLevelsToStockLevels(parLevels)
 	const comparison = buildInventoryComparison(
 		transactions,
-		parLevelsToStockLevels(parLevels),
+		stockLevels,
 		serviceCodeMap,
+	)
+	const pendingItems = (
+		pendingForPrefill as { items: { serviceCodeId: string; qty: number }[] }[]
+	).flatMap((r) =>
+		(r.items || []).map((i) => ({
+			serviceCodeId: i.serviceCodeId,
+			qty: i.qty,
+			type: "RESTOCK" as const,
+		})),
+	)
+	const prefillByRow = buildRestockPrefillMap(
+		[...transactions, ...pendingItems],
+		stockLevels,
 	)
 	const parStatus = computeParStatus({ parLevels, transactions })
 	const pendingRequestCount = restockRequests.filter((r) =>
@@ -101,6 +128,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		hasPendingRestock: pendingRestock != null,
 		pendingRequestCount,
 		restockRequests,
+		prefillByRow,
 	}
 }
 
@@ -263,6 +291,7 @@ export default function RequestRestock({
 		hasPendingRestock,
 		pendingRequestCount,
 		restockRequests,
+		prefillByRow = {},
 	} = loaderData
 	const { t } = useTranslation()
 	const errorKey =
@@ -286,6 +315,7 @@ export default function RequestRestock({
 				hasPendingRestock={hasPendingRestock}
 				pendingRequestCount={pendingRequestCount}
 				restockRequests={restockRequests}
+				prefillByRow={prefillByRow}
 				errorKey={errorKey}
 			/>
 		)

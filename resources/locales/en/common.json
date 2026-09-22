@@ -1658,6 +1658,7 @@
 			"restock_greet_clear": "{{vanName}} · all lines at or above par",
 			"restock_empty_materials": "Nothing on this van yet. Adjust stock or contact your supervisor to set par levels.",
 			"restock_offline_saved": "Saved on your phone — sends itself when back online.",
+			"restock_prefill_note": "Prefilled to par — adjust if needed",
 			"restock_col_material": "Material",
 			"restock_col_request": "Request",
 			"restock_col_warehouse": "Warehouse",

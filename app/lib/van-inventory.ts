@@ -34,19 +34,56 @@ export function getOnHand(
 	return computeVanInventory(transactions).get(serviceCodeId) ?? 0
 }
 
+/** On-hand plus in-flight restock (same inputs as {@link evaluateRestockApproval}). */
+export function getEffectiveOnHand(
+	transactions: InventoryTransaction[],
+	serviceCodeId: string,
+): number {
+	return computeVanInventory(transactions).get(serviceCodeId) ?? 0
+}
+
+/** Prefill request qty: max(0, par − effective on-hand). Zero when no par or at/above par. */
+export function computeRestockPrefillQty(
+	serviceCodeId: string,
+	transactions: InventoryTransaction[],
+	standardLevels: StockLevel[],
+): number {
+	const standard =
+		standardLevels.find((l) => l.serviceCodeId === serviceCodeId)?.qty ?? 0
+	if (standard <= 0) return 0
+	const effective = getEffectiveOnHand(transactions, serviceCodeId)
+	return Math.max(0, standard - effective)
+}
+
+/** Map of serviceCodeId → prefill qty for rows below par (empty when at/above par or no par). */
+export function buildRestockPrefillMap(
+	transactions: InventoryTransaction[],
+	standardLevels: StockLevel[],
+): Record<string, number> {
+	const result: Record<string, number> = {}
+	for (const level of standardLevels) {
+		const qty = computeRestockPrefillQty(
+			level.serviceCodeId,
+			transactions,
+			standardLevels,
+		)
+		if (qty > 0) result[level.serviceCodeId] = qty
+	}
+	return result
+}
+
 export function evaluateRestockApproval(
 	items: RestockItem[],
 	transactions: InventoryTransaction[],
 	standardLevels: StockLevel[],
 ): { requiresApproval: boolean; reasons: string[] } {
-	const inventory = computeVanInventory(transactions)
 	const standardMap = new Map(
 		standardLevels.map((l) => [l.serviceCodeId, l.qty]),
 	)
 	const reasons: string[] = []
 
 	for (const item of items) {
-		const current = inventory.get(item.serviceCodeId) ?? 0
+		const current = getEffectiveOnHand(transactions, item.serviceCodeId)
 		const standard = standardMap.get(item.serviceCodeId) ?? 0
 		if (current + item.qty > standard) {
 			reasons.push(item.serviceCodeId)

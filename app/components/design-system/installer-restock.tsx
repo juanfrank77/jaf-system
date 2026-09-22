@@ -30,6 +30,17 @@ function parseRequestQty(raw: string): number | null {
 	return qty
 }
 
+export function buildInitialRestockQtyByRow(
+	prefillByRow: Record<string, number>,
+): Record<string, string> {
+	return Object.fromEntries(
+		Object.entries(prefillByRow).map(([serviceCodeId, qty]) => [
+			serviceCodeId,
+			String(qty),
+		]),
+	)
+}
+
 export function buildRestockSubmitState({
 	warehouseId,
 	qtyByRow,
@@ -93,6 +104,7 @@ export function InstallerRestockV2({
 	hasPendingRestock,
 	pendingRequestCount,
 	restockRequests,
+	prefillByRow = {},
 	errorKey,
 }: {
 	van: { id: string; name: string }
@@ -102,6 +114,7 @@ export function InstallerRestockV2({
 	hasPendingRestock: boolean
 	pendingRequestCount: number
 	restockRequests: RestockRequestRow[]
+	prefillByRow?: Record<string, number>
 	errorKey: string | null
 }) {
 	const { t } = useTranslation()
@@ -125,7 +138,10 @@ export function InstallerRestockV2({
 	}, [navigation.state, errorKey])
 
 	const [warehouseId, setWarehouseId] = useState("")
-	const [qtyByRow, setQtyByRow] = useState<Record<string, string>>({})
+	const [qtyByRow, setQtyByRow] = useState<Record<string, string>>(() =>
+		buildInitialRestockQtyByRow(prefillByRow),
+	)
+	const hasPrefill = Object.keys(prefillByRow).length > 0
 
 	const submitState = buildRestockSubmitState({
 		warehouseId,
@@ -266,6 +282,13 @@ export function InstallerRestockV2({
 						<h2 className="jaf-sub" style={{ marginBottom: 8 }}>
 							{t("installer_restock.items_label")}
 						</h2>
+						{hasPrefill ? (
+							<div style={{ marginBottom: 8 }}>
+								<Note tone="neutral">
+									{t("ds.installer.restock_prefill_note")}
+								</Note>
+							</div>
+						) : null}
 						<input
 							type="hidden"
 							name="items"

@@ -142,7 +142,7 @@ Spec items from the 3 Sep architecture wireframe not yet in the gap register. So
 | Gap | What | Verdict |
 |-----|------|---------|
 | W1 | `ServiceCode.isSerialized` (+ serial count audit) | **Additive** — wireframe cites 19/278 serialized; no `isSerialized` column in [`schema.prisma`](../prisma/schema.prisma) today |
-| W2 | Restock qty prefilled to par on `/installer/restock` | **Additive UI** — [`InstallerRestockV2`](../app/components/design-system/installer-restock.tsx) starts qty fields empty |
+| W2 | Restock qty prefilled to par on `/installer/restock` | **Done** — [`buildRestockPrefillMap`](../app/lib/van-inventory.ts) + [`InstallerRestockV2`](../app/components/design-system/installer-restock.tsx) |
 | W3 | Dual-signature restock pickup (release + receiver) | **Additive** — [`releaseSignature`](../prisma/schema.prisma) on `VanRestockRequest` exists; pickup action only sets `receiverSignature` |
 | W4 | Adjust overdraw as persisted flag (amber, never red) | **Partial** — UI warns in [`installer-adjust.tsx`](../app/components/design-system/installer-adjust.tsx); no persisted overdraw flag on transaction |
 | W5 | Above-par restock sign-off role (wireframe: Monica) | **Partial** — [`evaluateRestockApproval`](../app/lib/van-inventory.ts) + admin restock approval; not CEO-specific |

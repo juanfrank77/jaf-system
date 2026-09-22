@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest"
 import {
 	buildInventoryComparison,
+	buildRestockPrefillMap,
+	computeRestockPrefillQty,
 	computeVanInventory,
+	countRestockLinesRequiringApproval,
 	evaluateRestockApproval,
 	getOnHand,
 } from "./van-inventory"
@@ -76,6 +79,120 @@ describe("van-inventory helpers", () => {
 			)
 			expect(result.requiresApproval).toBe(false)
 			expect(result.reasons).toHaveLength(0)
+		})
+
+		it("does not require approval for prefilled-to-par quantities", () => {
+			const transactions = [
+				{ serviceCodeId: "sc-1", qty: 2, type: "RESTOCK" as const },
+			]
+			const standards = [{ serviceCodeId: "sc-1", qty: 5 }]
+			const prefillQty = computeRestockPrefillQty(
+				"sc-1",
+				transactions,
+				standards,
+			)
+			expect(prefillQty).toBe(3)
+			const result = evaluateRestockApproval(
+				[{ serviceCodeId: "sc-1", qty: prefillQty }],
+				transactions,
+				standards,
+			)
+			expect(result.requiresApproval).toBe(false)
+		})
+	})
+
+	describe("computeRestockPrefillQty", () => {
+		const standards = [{ serviceCodeId: "sc-1", qty: 10 }]
+
+		it("prefills below-par gap", () => {
+			expect(
+				computeRestockPrefillQty(
+					"sc-1",
+					[{ serviceCodeId: "sc-1", qty: 3, type: "RESTOCK" }],
+					standards,
+				),
+			).toBe(7)
+		})
+
+		it("returns zero at or above par", () => {
+			expect(
+				computeRestockPrefillQty(
+					"sc-1",
+					[{ serviceCodeId: "sc-1", qty: 10, type: "RESTOCK" }],
+					standards,
+				),
+			).toBe(0)
+			expect(
+				computeRestockPrefillQty(
+					"sc-1",
+					[{ serviceCodeId: "sc-1", qty: 12, type: "RESTOCK" }],
+					standards,
+				),
+			).toBe(0)
+		})
+
+		it("returns zero when no par level is set", () => {
+			expect(
+				computeRestockPrefillQty(
+					"sc-1",
+					[{ serviceCodeId: "sc-1", qty: 2, type: "RESTOCK" }],
+					[],
+				),
+			).toBe(0)
+		})
+
+		it("uses van on-hand only and ignores pending restock in the ledger", () => {
+			const vanLedger = [{ serviceCodeId: "sc-1", qty: 2, type: "RESTOCK" }]
+			expect(computeRestockPrefillQty("sc-1", vanLedger, standards)).toBe(8)
+			expect(
+				computeRestockPrefillQty(
+					"sc-1",
+					[...vanLedger, { serviceCodeId: "sc-1", qty: 3, type: "RESTOCK" }],
+					standards,
+				),
+			).toBe(5)
+		})
+	})
+
+	describe("countRestockLinesRequiringApproval", () => {
+		it("counts lines that exceed par using effective on-hand", () => {
+			expect(
+				countRestockLinesRequiringApproval(
+					[{ serviceCodeId: "sc-1", qty: 3 }],
+					[
+						{ serviceCodeId: "sc-1", qty: 2, type: "RESTOCK" },
+						{ serviceCodeId: "sc-1", qty: 3, type: "RESTOCK" },
+					],
+					[{ serviceCodeId: "sc-1", qty: 10 }],
+				),
+			).toBe(0)
+			expect(
+				countRestockLinesRequiringApproval(
+					[{ serviceCodeId: "sc-1", qty: 6 }],
+					[
+						{ serviceCodeId: "sc-1", qty: 2, type: "RESTOCK" },
+						{ serviceCodeId: "sc-1", qty: 3, type: "RESTOCK" },
+					],
+					[{ serviceCodeId: "sc-1", qty: 10 }],
+				),
+			).toBe(1)
+		})
+	})
+
+	describe("buildRestockPrefillMap", () => {
+		it("includes only rows with a positive prefill", () => {
+			expect(
+				buildRestockPrefillMap(
+					[
+						{ serviceCodeId: "sc-1", qty: 2, type: "RESTOCK" },
+						{ serviceCodeId: "sc-2", qty: 5, type: "RESTOCK" },
+					],
+					[
+						{ serviceCodeId: "sc-1", qty: 5 },
+						{ serviceCodeId: "sc-2", qty: 5 },
+					],
+				),
+			).toEqual({ "sc-1": 3 })
 		})
 	})
 

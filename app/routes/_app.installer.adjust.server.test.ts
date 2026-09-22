@@ -7,13 +7,24 @@ vi.mock("~/lib/db.server", () => ({
 		},
 		serviceCode: {
 			findMany: vi.fn(),
+			findFirst: vi.fn(),
 		},
 		vanInventoryTransaction: {
 			findMany: vi.fn(),
+			create: vi.fn(),
 		},
 		vanRestockRequest: {
 			findFirst: vi.fn(),
 		},
+		user: {
+			findMany: vi.fn(),
+		},
+		notification: {
+			create: vi.fn(),
+		},
+		$transaction: vi.fn(async (ops: unknown[]) => {
+			for (const op of ops) await op
+		}),
 	},
 }))
 
@@ -37,7 +48,16 @@ vi.mock("~/lib/van-stock.server", () => ({
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
 import { computeParStatus, getVanParLevels } from "~/lib/van-stock.server"
-import { loader } from "./_app.installer.adjust"
+import { action, loader } from "./_app.installer.adjust"
+
+function adjustForm(fields: Record<string, string>) {
+	const form = new FormData()
+	for (const [key, value] of Object.entries(fields)) form.set(key, value)
+	return new Request("http://localhost/installer/adjust", {
+		method: "POST",
+		body: form,
+	})
+}
 
 describe("GET /installer/adjust loader", () => {
 	beforeEach(() => vi.clearAllMocks())
@@ -145,5 +165,80 @@ describe("GET /installer/adjust loader", () => {
 		} as any)
 
 		expect(result.hasPendingRestock).toBe(true)
+	})
+})
+
+describe("POST /installer/adjust action", () => {
+	beforeEach(() => vi.clearAllMocks())
+
+	function baseActionMocks(onHand = 5) {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "installer-1", role: "INSTALLER" },
+			session: {},
+		} as any)
+		vi.mocked(db.van.findUnique).mockResolvedValue({
+			id: "van-1",
+			name: "Van 444",
+		} as any)
+		vi.mocked(db.serviceCode.findFirst).mockResolvedValue({
+			id: "sc-1",
+			claroCode: "34000001",
+			name: "Cable",
+		} as any)
+		vi.mocked(db.vanInventoryTransaction.findMany).mockResolvedValue([
+			{ serviceCodeId: "sc-1", qty: onHand, type: "RESTOCK" },
+		] as any)
+		vi.mocked(db.user.findMany).mockResolvedValue([{ id: "wh-1" }] as any)
+		vi.mocked(db.vanInventoryTransaction.create).mockResolvedValue({} as any)
+		vi.mocked(db.notification.create).mockResolvedValue({} as any)
+	}
+
+	it("writes the transaction and flags overdraw in the notification message", async () => {
+		baseActionMocks(2)
+
+		const result = await action({
+			request: adjustForm({
+				serviceCodeId: "sc-1",
+				qty: "5",
+				note: "Lost in field",
+			}),
+			params: {},
+		} as any).catch((r: unknown) => r)
+
+		expect((result as Response).status).toBe(302)
+		expect(db.vanInventoryTransaction.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({ qty: -5, type: "ADJUSTMENT" }),
+			}),
+		)
+		expect(db.notification.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({
+					message: expect.stringContaining("on hand now -3 after adjustment"),
+				}),
+			}),
+		)
+	})
+
+	it("keeps the standard notification when adjustment stays at or above zero", async () => {
+		baseActionMocks(5)
+
+		await action({
+			request: adjustForm({
+				serviceCodeId: "sc-1",
+				qty: "2",
+				note: "Damaged reel",
+			}),
+			params: {},
+		} as any).catch((r: unknown) => r)
+
+		expect(db.notification.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({
+					message:
+						"Van 444 reported 2 damaged/lost stock for 34000001 — Cable: Damaged reel",
+				}),
+			}),
+		)
 	})
 })

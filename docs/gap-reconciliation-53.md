@@ -86,7 +86,7 @@ Full reconciliation of all 53 claims from the JAF Ops Design System Guide agains
 | 36 | Retention register for Hacienda | Retention accrued per run/contractor, exportable | **NONE** | **STRUCTURAL** - Create `RetentionAccrual` model (`runId`, `contractorId`, `amount`, `remittedAt?`, `exportPath?`) |
 | 37 | ACH reference (WinPay external) | ACH reference field `20260912-JAF-015` | **NONE** | **ADDITIVE** - Add `PaymentRecord.achReference?` string |
 | 38 | Carmen's check-off closes arm A | Per-line checked state visible to Lissette | **NONE** | **STRUCTURAL** - Add `PaymentRun.linesChecked` JSON or `PaymentRunLine` join table (`checkedAt?`, `checkedById?`) |
-| 39 | Installer incomplete not payable | Completeness rule (serial + photos present) | `InstallLog` — no serial/photo/signature columns | **ADDITIVE** — InstallLog lacks serial/photo/signature; completeness not computable. Proposed: `serialNumber?`, form-photo relation, `installerSignature?` + `signedAt?` before Carmen pay screens |
+| 39 | Installer incomplete not payable | Completeness rule (serial + photos present) | `InstallLog` — no serial/photo/signature columns ([`schema.prisma`](../prisma/schema.prisma)); v2 wizard is 3-step and shows [`install_evidence_unavailable`](../resources/locales/en/common.json) only | **ADDITIVE** — completeness not computable. Proposed: `serialNumber?`, form-photo relation, `installerSignature?` + `signedAt?` before Carmen pay screens |
 
 ---
 

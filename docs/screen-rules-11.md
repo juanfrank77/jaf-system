@@ -50,10 +50,11 @@ These are **not UI polish** — they are real business constraints the mockups e
 | | Save disabled until **payment reference entered** (no reference, no payment) | Payment reference gate | **GAP**: reference field doesn't exist (#37) | **CRITICAL** |
 | | **Incomplete** request (missing serial/photo) **cannot be selected** at all | Completeness check | Check: computed from `InstallLog` + `Photo`? | **CRITICAL** |
 | **8. Installer · New Completion** | | | | |
-| | Address edit reveals diff (same as crew field update) | [`_app.installer.install.tsx`](../app/routes/_app.installer.install.tsx) | Check: diff rendering exists? | MEDIUM |
-| | **Scan slot must be filled before Next enables** — resolves to "ALCLED1A5220 · Nokia G-240W · on Van 12 ✓" | Serial scan gate | **GAP**: serial lookup doesn't exist (#52) | HIGH |
-| | Drop footage picks **bracket 250/500/750 FT**, accessory table refills with defaults, installer adjusts | Footage bracket logic | **GAP**: bracket table doesn't exist (#50) | HIGH |
-| | Submit gated on **form photo + signature**, live note: "Missing: form photo, signature" | Completion gate | Check: gate note updates live? | MEDIUM |
+| | **3-step wizard (Info → Materials → Submit)** when `ENABLE_INSTALLER_V2` | [`InstallerInstallV2`](../app/components/design-system/installer-install.tsx) | Device/serial step removed — no `InstallLog` fields (#39) | **N/A** |
+| | Address edit reveals diff (same as crew field update) | v2 install wizard | **GAP**: not shown in v2 | MEDIUM |
+| | **Scan slot must be filled before Next enables** — wireframe rule | Serial scan gate | **GAP**: not in v2 UI; serial lookup #52 | HIGH |
+| | Drop footage picks **bracket 250/500/750 FT**, accessory table refills | Footage bracket logic | **GAP**: #50; v2 shows [`bracket_unwired`](../resources/locales/en/common.json) note only | HIGH |
+| | Submit gated on **form photo + signature** | Completion gate | **GAP**: v2 shows [`install_evidence_unavailable`](../resources/locales/en/common.json) note; gate is info + materials only | **CRITICAL** (deferred #39) |
 | **9. Warehouse · Prep (step 2)** | | | | |
 | | **Flag missing → notify supervisor** is first-class action (not error) — order to "to prep · waiting on supervisor" | [`_app.docs.$id_.prep.tsx`](../app/routes/_app.docs.$id_.prep.tsx) assumed | Check: flag-missing action exists? Supervisor notified? | HIGH |
 | | Falling under minimum pre-fills material request | Stock-level check | **GAP**: reorder minimums don't exist (#15) | MEDIUM |

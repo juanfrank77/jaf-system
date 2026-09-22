@@ -143,8 +143,8 @@ Spec items from the 3 Sep architecture wireframe not yet in the gap register. So
 |-----|------|---------|
 | W1 | `ServiceCode.isSerialized` (+ serial count audit) | **Additive** — wireframe cites 19/278 serialized; no `isSerialized` column in [`schema.prisma`](../prisma/schema.prisma) today |
 | W2 | Restock qty prefilled to par on `/installer/restock` | **Done** — [`buildRestockPrefillMap`](../app/lib/van-inventory.ts) + [`InstallerRestockV2`](../app/components/design-system/installer-restock.tsx) |
-| W3 | Dual-signature restock pickup (release + receiver) | **Additive** — [`releaseSignature`](../prisma/schema.prisma) on `VanRestockRequest` exists; pickup action only sets `receiverSignature` |
-| W4 | Adjust overdraw as persisted flag (amber, never red) | **Partial** — UI warns in [`installer-adjust.tsx`](../app/components/design-system/installer-adjust.tsx); no persisted overdraw flag on transaction |
+| W3 | Dual-signature restock pickup (release + receiver) | **Additive** — wireframe scopes this to the warehouse counter pickup screen (same flow as crew sign-out step 3), not the installer [`/restock/:id/pickup`](../app/routes/_app.restock.$id_.pickup.tsx) screen; [`releaseSignature`](../prisma/schema.prisma) exists but unused |
+| W4 | Adjust overdraw as persisted flag (amber, never red) | **Done** — overdraw flagged in warehouse notification message ([`_app.installer.adjust.tsx`](../app/routes/_app.installer.adjust.tsx) action); UI amber warning unchanged; transaction never blocked |
 | W5 | Above-par restock sign-off role (wireframe: Monica) | **Partial** — [`evaluateRestockApproval`](../app/lib/van-inventory.ts) + admin restock approval; not CEO-specific |
 | W6 | `payablesClosedAt` per PO (Arm B closure) | **Additive** — not in schema; [`receivableClosedAt`](../prisma/schema.prisma) exists on `JafInvoice` only |
 | W7 | `PaymentRequest` entity from installer submit | **Additive** — no model or route in repo |

@@ -16,7 +16,7 @@ import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
 import { isInstallerV2Enabled } from "~/lib/features.server"
 import { requireRole } from "~/lib/permissions.server"
-import { buildInventoryComparison } from "~/lib/van-inventory"
+import { buildInventoryComparison, getOnHand } from "~/lib/van-inventory"
 import {
 	computeParStatus,
 	getVanParLevels,
@@ -99,20 +99,31 @@ export async function action({ request }: Route.ActionArgs) {
 		)
 	}
 
-	const [validServiceCode] = await db.serviceCode.findMany({
+	const serviceCode = await db.serviceCode.findFirst({
 		where: { id: serviceCodeId, active: true },
-		select: { id: true },
+		select: { id: true, claroCode: true, name: true },
 	})
-	if (!validServiceCode) {
+	if (!serviceCode) {
 		return data(
 			{ errorKey: "installer_adjust.errors.invalid_service_code" },
 			{ status: 400 },
 		)
 	}
 
-	const warehouseUsers = await db.user.findMany({
-		where: { role: { in: ["WAREHOUSE", "ADMIN"] }, active: true },
-	})
+	const [transactions, warehouseUsers] = await Promise.all([
+		db.vanInventoryTransaction.findMany({ where: { vanId: van.id } }),
+		db.user.findMany({
+			where: { role: { in: ["WAREHOUSE", "ADMIN"] }, active: true },
+		}),
+	])
+
+	const onHandBefore = getOnHand(transactions, serviceCodeId)
+	const onHandAfter = onHandBefore - qty
+	const materialLabel = `${serviceCode.claroCode} — ${serviceCode.name}`
+	const message =
+		onHandAfter < 0
+			? `${van.name}: ${materialLabel} on hand now ${onHandAfter} after adjustment`
+			: `${van.name} reported ${qty} damaged/lost stock for ${materialLabel}: ${note}`
 
 	await db.$transaction([
 		db.vanInventoryTransaction.create({
@@ -129,7 +140,7 @@ export async function action({ request }: Route.ActionArgs) {
 			db.notification.create({
 				data: {
 					userId: w.id,
-					message: `${van.name} reported ${qty} damaged/lost stock for ${serviceCodeId}: ${note}`,
+					message,
 				},
 			}),
 		),

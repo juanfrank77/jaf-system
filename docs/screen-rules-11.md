@@ -25,8 +25,8 @@ These are **not UI polish** — they are real business constraints the mockups e
 | | Release disabled until **both** signature pads signed (not one, not checkbox) | Dual-sig gate logic | Check: can release fire with 1 sig? | **CRITICAL** |
 | | On release: inputs disable, stock moves, toast **names deltas to supervisor** | Stock deduction + notification | Check: supervisor notified with item names? | HIGH |
 | **2. Warehouse · Returns** | | | | |
-| | **Short** (returned < expected) → red chip + note **required** + logged as discrepancy **not consumption** | [`_app.docs.$id_.returns.tsx`](../app/routes/_app.docs.$id_.returns.tsx) | Check: note enforced? Logged separately from consumption? | **CRITICAL** |
-| | **Over** (returned > expected) → amber chip + flags to supervisor for invoice review | Returns reconciliation | Check: supervisor sees "crew under-reported?" flag? | HIGH |
+| | **Short** (returned < expected) → red chip + note **required** + logged as discrepancy **not consumption** | [`_app.docs.$id_.returns.tsx`](../app/routes/_app.docs.$id_.returns.tsx) action accepts submit without line note; [`returns_reconciled`](../app/lib/supervisor-stage.ts) blocks release only | **GAP** — enforce note on returns screen in warehouse port; do not rely on release gate alone | **CRITICAL** |
+| | **Over** (returned > expected) → amber chip + flags to supervisor for invoice review | v1 accepts over-return silently (capped at `takenQty`); no supervisor flag | **GAP** — amber chip + supervisor notification in warehouse port | HIGH |
 | | **Exact** → green chip, gate item 7 goes green for supervisor | [`evaluateReleaseGate`](../app/lib/supervisor-stage.ts) `returns_reconciled` | **Enforced** — item 7 true when warehouse recorded returns or nothing expected back | MEDIUM |
 | **3. Crew · Field Update (step 4)** | | | | |
 | | Address edit reveals **diff live** — original struck, correction green + crew + time + GPS | [`_app.docs.$id_.field.tsx`](../app/routes/_app.docs.$id_.field.tsx) | Check: does `.diff` component exist? GPS captured? | MEDIUM |

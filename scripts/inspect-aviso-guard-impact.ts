@@ -1,17 +1,31 @@
 /**
- * Read-only inspection for supervisor-money-access (#28) legacy data impact.
- * Run BEFORE deploying the aviso guard PR on staging/production:
+ * Read-only inspection for supervisor deploy safety.
+ * Run BEFORE deploying supervisor gate / aviso guard changes on staging/production:
  *
  *   pnpm exec tsx scripts/inspect-aviso-guard-impact.ts
  *
- * No writes.
+ * No writes. Uses app `db.server` (same adapter as the running app).
  */
 import { avisoAmountMatch } from "../app/lib/aviso-guard.server"
 import { db } from "../app/lib/db.server"
+import {
+	expectedReturnQty,
+	isReturnsReconciled,
+	nothingExpectedBack,
+} from "../app/lib/supervisor-stage"
 import { getAvisoAmountTolerance } from "../app/lib/system-settings.server"
+
 function isEmptyAvisoLines(avisoLines: unknown): boolean {
 	if (!avisoLines || !Array.isArray(avisoLines)) return true
 	return avisoLines.length === 0
+}
+
+type MaterialQtyLine = { serviceCodeId: string; qty: number }
+type ReturnRecordedLine = {
+	serviceCodeId: string
+	takenQty: number
+	returnedQty: number
+	notes?: string
 }
 
 type Row = {
@@ -22,6 +36,52 @@ type Row = {
 	avisoMatchedAt: Date | null
 	claroPdfPath: string | null
 	reason: string
+}
+
+function categoryDReason(doc: {
+	materialsTaken: unknown
+	materialsUsed: unknown
+	materialsReturned: unknown
+}): string | null {
+	if (isReturnsReconciled(
+		doc.materialsTaken,
+		doc.materialsUsed,
+		doc.materialsReturned,
+	)) {
+		return null
+	}
+	if (nothingExpectedBack(doc.materialsTaken, doc.materialsUsed)) return null
+
+	if (doc.materialsReturned == null) return "expected_back_no_returns"
+
+	const taken = Array.isArray(doc.materialsTaken)
+		? (doc.materialsTaken as MaterialQtyLine[])
+		: []
+	const usedMap = Object.fromEntries(
+		(Array.isArray(doc.materialsUsed)
+			? (doc.materialsUsed as MaterialQtyLine[])
+			: []
+		).map((u) => [u.serviceCodeId, u.qty]),
+	)
+	const returnedLines = Array.isArray(doc.materialsReturned)
+		? (doc.materialsReturned as ReturnRecordedLine[])
+		: []
+
+	for (const t of taken) {
+		const used = usedMap[t.serviceCodeId] ?? 0
+		const expected = expectedReturnQty(t.qty, used)
+		if (expected === 0) continue
+
+		const line = returnedLines.find((r) => r.serviceCodeId === t.serviceCodeId)
+		if (!line) return "expected_back_no_returns"
+
+		const lineExpected = expectedReturnQty(line.takenQty ?? t.qty, used)
+		if (line.returnedQty < lineExpected && !line.notes?.trim()) {
+			return "short_without_note"
+		}
+	}
+
+	return "returns_not_reconciled"
 }
 
 async function main() {
@@ -100,6 +160,40 @@ async function main() {
 		}
 	}
 
+	const approvedNotReleased = await db.jafInvoice.findMany({
+		where: {
+			supervisorApprovedAt: { not: null },
+			releasedToFinanceAt: null,
+		},
+		select: {
+			id: true,
+			controlNumber: true,
+			status: true,
+			releasedToFinanceAt: true,
+			avisoMatchedAt: true,
+			claroPdfPath: true,
+			materialsTaken: true,
+			materialsUsed: true,
+			materialsReturned: true,
+		},
+		orderBy: { controlNumber: "asc" },
+	})
+
+	const categoryD: Row[] = []
+	for (const doc of approvedNotReleased) {
+		const reason = categoryDReason(doc)
+		if (!reason) continue
+		categoryD.push({
+			id: doc.id,
+			controlNumber: doc.controlNumber,
+			status: doc.status,
+			releasedToFinanceAt: doc.releasedToFinanceAt,
+			avisoMatchedAt: doc.avisoMatchedAt,
+			claroPdfPath: doc.claroPdfPath,
+			reason,
+		})
+	}
+
 	const summary = {
 		tolerance,
 		scanned: docs.length,
@@ -121,6 +215,13 @@ async function main() {
 			count: categoryC.length,
 			controlNumbers: categoryC.map((r) => r.controlNumber),
 			rows: categoryC,
+		},
+		categoryD: {
+			label:
+				"approved, not released — would fail returns_reconciled (expected back with no returns, or short without note)",
+			count: categoryD.length,
+			controlNumbers: categoryD.map((r) => r.controlNumber),
+			rows: categoryD,
 		},
 	}
 

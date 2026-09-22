@@ -100,6 +100,8 @@ describe("checkAvisoMatch", () => {
 		)
 		expect(r.amountOk).toBe(true)
 		expect(r.lineMismatches).toEqual([])
+		expect(r.invoiceTotal).toBe(211.72)
+		expect(r.avisoTotal).toBe(211.72)
 	})
 	it("fails on a one-cent-over difference", () => {
 		const r = checkAvisoMatch(
@@ -109,6 +111,24 @@ describe("checkAvisoMatch", () => {
 		)
 		expect(r.amountOk).toBe(false)
 		expect(r.difference).toBe(0.02)
+	})
+	it("passes at exactly the tolerance", () => {
+		expect(
+			checkAvisoMatch([inv("a", "1", 1, 10)], [av("a", "1", 1, 10.01)], 0.01)
+				.amountOk,
+		).toBe(true)
+	})
+	it("reports per-line quantity mismatches including missing lines", () => {
+		const r = checkAvisoMatch(
+			[inv("a", "1", 2, 10), inv("b", "2", 1, 5)],
+			[av("a", "1", 1, 10), av("c", "3", 1, 15)],
+			0.01,
+		)
+		expect(r.lineMismatches).toEqual([
+			{ serviceCodeId: "a", claroCode: "1", installedQty: 2, chargedQty: 1 },
+			{ serviceCodeId: "b", claroCode: "2", installedQty: 1, chargedQty: 0 },
+			{ serviceCodeId: "c", claroCode: "3", installedQty: 0, chargedQty: 1 },
+		])
 	})
 })
 
@@ -257,6 +277,21 @@ const tsNull = {
 	avisoMatchedAt: null,
 	releasedToFinanceAt: null,
 } as const
+const tsJaf = {
+	jafInvoiceGeneratedAt: now,
+	avisoMatchedAt: null,
+	releasedToFinanceAt: null,
+} as const
+const tsAviso = {
+	jafInvoiceGeneratedAt: now,
+	avisoMatchedAt: now,
+	releasedToFinanceAt: null,
+} as const
+const tsReleased = {
+	jafInvoiceGeneratedAt: now,
+	avisoMatchedAt: now,
+	releasedToFinanceAt: now,
+} as const
 
 const progressCases: Array<
 	[
@@ -392,16 +427,58 @@ describe("deriveGuideProgress (work in progress)", () => {
 describe("deriveSupervisorStage unchanged", () => {
 	it.each([
 		["CREATED", "none", tsNull, "INTAKE"],
+		["CREATED", "jaf", tsJaf, "AVISO"],
+		["CREATED", "aviso", tsAviso, "RELEASE"],
+		["CREATED", "released", tsReleased, "RELEASED"],
+		["PREPPED", "none", tsNull, "WAREHOUSE"],
+		["PREPPED", "jaf", tsJaf, "AVISO"],
+		["PREPPED", "aviso", tsAviso, "RELEASE"],
+		["PREPPED", "released", tsReleased, "RELEASED"],
+		["SIGNED", "none", tsNull, "FIELD"],
+		["SIGNED", "jaf", tsJaf, "AVISO"],
+		["SIGNED", "aviso", tsAviso, "RELEASE"],
+		["SIGNED", "released", tsReleased, "RELEASED"],
 		["FIELD_UPDATED", "none", tsNull, "APPROVE"],
+		["FIELD_UPDATED", "jaf", tsJaf, "AVISO"],
+		["FIELD_UPDATED", "aviso", tsAviso, "RELEASE"],
+		["FIELD_UPDATED", "released", tsReleased, "RELEASED"],
 		["SUPERVISOR_APPROVED", "none", tsNull, "INVOICE"],
+		["SUPERVISOR_APPROVED", "jaf", tsJaf, "AVISO"],
+		["SUPERVISOR_APPROVED", "aviso", tsAviso, "RELEASE"],
+		["SUPERVISOR_APPROVED", "released", tsReleased, "RELEASED"],
+		["CLARO_UPLOADED", "none", tsNull, "INVOICE"],
+		["CLARO_UPLOADED", "jaf", tsJaf, "AVISO"],
+		["CLARO_UPLOADED", "aviso", tsAviso, "RELEASE"],
+		["CLARO_UPLOADED", "released", tsReleased, "RELEASED"],
+		["LC_REQUEST_GENERATED", "none", tsNull, "INVOICE"],
+		["LC_REQUEST_GENERATED", "jaf", tsJaf, "AVISO"],
+		["LC_REQUEST_GENERATED", "aviso", tsAviso, "RELEASE"],
+		["LC_REQUEST_GENERATED", "released", tsReleased, "RELEASED"],
 	] as const satisfies ReadonlyArray<
-		[DocStatus, string, typeof tsNull, SupervisorStage]
-	>)("status=%s timestamps=%s → %s", (status, _label, ts, expectedStage) => {
-		const doc = {
-			status,
-			supervisorApprovedAt: status === "SUPERVISOR_APPROVED" ? now : null,
-			...ts,
-		}
-		expect(deriveSupervisorStage(doc, null)).toBe(expectedStage)
-	})
+		[
+			DocStatus,
+			string,
+			typeof tsNull | typeof tsJaf | typeof tsAviso | typeof tsReleased,
+			SupervisorStage,
+		]
+	>)(
+		"deriveSupervisorStage unchanged for status=%s timestamps=%s → %s",
+		(status, _label, ts, expectedStage) => {
+			const doc = {
+				status,
+				supervisorApprovedAt:
+					status === "SUPERVISOR_APPROVED" ||
+					status === "CLARO_UPLOADED" ||
+					status === "LC_REQUEST_GENERATED"
+						? now
+						: null,
+				...ts,
+			}
+			const sheet =
+				ts.avisoMatchedAt || ts.releasedToFinanceAt
+					? { sigSupervisorAt: now, sigSubcontractorAt: now }
+					: null
+			expect(deriveSupervisorStage(doc, sheet)).toBe(expectedStage)
+		},
+	)
 })

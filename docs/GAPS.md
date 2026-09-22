@@ -42,8 +42,8 @@ There is **no `ReleaseGate` table**. [`evaluateReleaseGate`](../app/lib/supervis
 | 2 | `invoice` | `jafInvoiceGeneratedAt` set |
 | 3 | `aviso` | `avisoNumber` + `avisoDocPath` + `avisoLines.length > 0` |
 | 4 | `amount_match` | `avisoMatchedAt` set |
-| 5 | `photos` | at least one `BEFORE` and one `AFTER` photo |
-| 6 | `precert_signed` | supervisor + subcontractor signatures on the active sheet |
+| 5 | `precert_signed` | supervisor + subcontractor signatures on the active sheet |
+| 6 | `photos` | at least one `BEFORE` and one `AFTER` photo |
 | 7 | `returns_reconciled` | Warehouse recorded `materialsReturned`, or nothing expected back (`taken − used = 0` per line / no materials). Short lines need a per-line note. |
 
 `contractorAccountCode` is a **prerequisite** (not gate row 7) — placement pending product-owner confirmation.
@@ -53,6 +53,19 @@ There is **no `ReleaseGate` table**. [`evaluateReleaseGate`](../app/lib/supervis
 What the additive entity would add: who/when each item flipped, and persistence independent of those source fields.
 
 **Claro field-acceptance badge:** When supervisor review is ported, the Claro badge should render as a `.jaf-note` below the seven gate rows. It is **visual only**, not part of `evaluateReleaseGate`, and does **not** block release.
+
+---
+
+## Warehouse returns v1 gaps (screen 2 — fix in returns port)
+
+[`/docs/:id/returns`](../app/routes/_app.docs.$id_.returns.tsx) v1 does not fully enforce the screen rules. Release gate item 7 (`returns_reconciled`) catches some cases at supervisor review, but the warehouse screen should own them first.
+
+| Rule | v1 today | Fix in warehouse returns port |
+|------|----------|--------------------------------|
+| **Short without note** | Submit accepted; per-line `notes` optional on action | **Block submit** when `returnedQty < expected` and line note empty; red chip on row |
+| **Over-return** | Submit accepted silently (`returnedQty` capped at `takenQty` only) | **Amber chip** on row + flag supervisor for invoice review (“crew under-reported?”) |
+
+Run [`scripts/inspect-aviso-guard-impact.ts`](../scripts/inspect-aviso-guard-impact.ts) category **D** before deploy to list approved-but-not-released jobs that would newly fail `returns_reconciled`.
 
 ---
 

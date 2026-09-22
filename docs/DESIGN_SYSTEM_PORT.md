@@ -44,8 +44,8 @@ This maps to two rows in the guide's "Frameworks" table:
 
 1. Extract design tokens from guide CSS (`:root { --plane, --ink, … }`) → `app.css` `@theme` block
 2. Add guide component CSS (`.jaf-box`, `.jaf-kpi`, …) as a separate layer or imported sheet
-3. Keep guide JS for: theme toggle, i18n (`data-es`), SVG rings/sparks, chart hover, toast
-4. Replace guide JS for: `data-go` navigation (→ `<Link to>`), `data-tab` (→ React state), `data-filter` (→ controlled inputs)
+3. Keep guide JS for: theme toggle, SVG rings/sparks, chart hover, toast
+4. Replace guide JS for: `data-go` navigation (→ `<Link to>`), `data-tab` (→ React state), `data-filter` (→ controlled inputs), i18n (`data-es` → `remix-i18next`; see § i18next vs `data-es`)
 5. Build new React components that render guide markup with React props, not pure HTML strings
 
 **Example:**
@@ -88,7 +88,7 @@ export function KPI({ label, value, delta, variant, viz }: KPIProps) {
 |------------|-------------|----------------|-----|
 | 1 | Created | `CREATED` | ✓ Clean |
 | 2 | Warehouse prep | `PREPPED` (+ `preppedAt`) | ✓ Clean — labels match |
-| 3 | Crew signs out | `SIGNED` (+ dual sigs) | ✓ Clean |
+| 3 | Crew signs out | `PREPPED` on pickup screen → `SIGNED` after dual sigs | ⚠ `deriveSupervisorStage(PREPPED)` → `WAREHOUSE` (step 2); `supervisorStageToGuideStep` **never returns 3** (known bug, fix pending) |
 | 4 | Field work | `SIGNED` → `FIELD_UPDATED` | ⚠ Ambiguous — "in field" vs "submitted" are two DocStatus values for one guide step |
 | 5 | You review | `FIELD_UPDATED` → `SUPERVISOR_APPROVED` | ✓ Clean |
 | 6 | JAF invoice | `jafInvoiceGeneratedAt` timestamp (status stays `SUPERVISOR_APPROVED`) | ✗ Not in enum — invoice generation is a timestamp, not a status transition |
@@ -102,6 +102,10 @@ export function KPI({ label, value, delta, variant, viz }: KPIProps) {
 - The guide's `.jaf-flow` strip (steps 1–8 as pills) cannot render directly from `DocStatus` — it must call `deriveSupervisorStage` or equivalent logic that reads `status` + timestamps
 - Tables that want to sort "by step" need a computed step column, not a direct `DocStatus` enum sort
 - Steps 6–8 rendering requires checking nullable timestamps — a job at `SUPERVISOR_APPROVED` may be at step 5, 6, 7, or 8 depending on which timestamps are set
+
+**Known bug — step 3 missing from flow strip:** [`supervisorStageToGuideStep`](../app/lib/supervisor-stage.ts) maps `WAREHOUSE` → 2 and `FIELD` → 4, so guide step **3 is never returned**. Production UI today uses `StepRail` (9 internal stages) or hard-coded step numbers on DS screens — not this helper. Fix pending on branch `fix-guide-step-3`.
+
+**Step-number convention — unresolved (product owner):** The mapping table above reads like **last status reached** (e.g. `PREPPED` labelled "Warehouse prep" at step 2). The example code below and [`FlowStrip`](../app/components/design-system/primitives.tsx) treat the number as **work in progress** (`step.n < current` = done). Pick one convention before wiring `.jaf-flow` everywhere.
 
 **Recommended resolution:**
 
@@ -395,11 +399,11 @@ Route logic reads user session, branches on user's flags. Admin can opt in 1-2 u
 
 2. **Van stock restructure (additive migration)** — **PR 1 done:** `VanStockLevel` table + backfill + [`app/lib/van-stock.server.ts`](../app/lib/van-stock.server.ts). **PR 2 done:** route read/write cutover + par KPI wiring on installer v2 dashboard. JSON column retained as dual-write mirror.
 
-3. **`/installer/adjust`** — van stock panel (depends on PR 2 route cutover)
+3. **`/installer/adjust`** — **✓ BUILT** (see § Installer ports)
 
-4. **`/installer/install`** — completion wizard (depends on footage brackets #50, serial lookup #52)
+4. **`/installer/install`** — **✓ BUILT (partial)** — 3-step wizard; evidence fields deferred (#39)
 
-5. **`/installer/restock` + `/restock/:id/pickup`** — restock request + dual-sig pickup
+5. **`/installer/restock` + `/restock/:id/pickup`** — **✓ BUILT (partial)** — request + single-sig pickup today
 
 6. **Later:** swap, payments, history (new screens, lower urgency)
 
@@ -448,8 +452,7 @@ Route logic reads user session, branches on user's flags. Admin can opt in 1-2 u
 
 **Data NOT wired** (honest "not wired yet" cards):
 
-- **Par status KPI** — render as `.jaf-kpi` with value "—" (em dash) and subtitle "Stock tracking coming soon" or similar. Per guide: "The UI can ship with a card that honestly says the data is not wired yet."
-- **Units owed back** — omit from KPI strip (use 4-KPI layout `.kpis.k4`, not 5)
+- **Units owed back** — omitted from KPI strip (4-KPI layout `.jaf-k4`); blocked on gap #16 (`SerialUnit`)
 
 **Both themes:**
 
@@ -524,59 +527,75 @@ JSON column is never deleted or overwritten by backfill; invalid blobs are skipp
 
 ---
 
-## Screen 2: `/installer/adjust` (Van Stock Adjust)
+## Installer ports — built status (verified 2026-09-22)
 
-**Components needed:**
+Flags (all require `ENABLE_DESIGN_SYSTEM=true` unless noted): [`app/lib/features.server.ts`](../app/lib/features.server.ts).
 
-- `.greet` + `.jaf-back` link
-- `.jaf-box.c12` — material list table
-- `.jaf-inp` — quantity inputs (+ `.jaf-inp.ro` for locked "Took" column)
-- `.jaf-field` — label + control stack
-- `.jaf-actions` — button row (Save, Cancel)
-- `.jaf-note.warn` — "2 below par · restock requested" banner
-
-**Data it already has:**
-
-- Van ID, installer link (`Van.installerId`)
-- Par levels via [`getVanParLevels`](../app/lib/van-stock.server.ts) (PR 2 route cutover)
-- Material catalog (`ServiceCode` where `kind = MATERIAL`)
-- Transaction history (`VanInventoryTransaction`)
-- **Below par count** — computed in loader via `buildInventoryComparison` (PR 2)
-
-**Data it doesn't have:**
-
-- **v2 UI port** — v1 form still shown when `ENABLE_INSTALLER_V2` is off; v2 chrome exists but full table port is a follow-up
-- **Serial-tracked items (modems, ONTs)** — no `SerialUnit` register (schema gap #16)
+| Screen | Route | Flag | Status | What code does today | Honest "not wired yet" |
+|--------|-------|------|--------|----------------------|------------------------|
+| **Dashboard** | `/installer` | `ENABLE_INSTALLER_DASH_V2` | **Built** | [`InstallerDashboardV2`](../app/components/design-system/installer-dashboard.tsx): KPIs from `InstallLog` counts + 7-day spark, par status via [`computeParStatus`](../app/lib/van-stock.ts), restock queue table, `<DesignSystem constrain>` | Units owed back KPI (#16); v1 shadcn branch when flag off |
+| **Adjust** | `/installer/adjust` | `ENABLE_INSTALLER_V2` | **Built** | Full v2 in [`InstallerAdjustV2`](../app/components/design-system/installer-adjust.tsx); loader uses [`getVanParLevels`](../app/lib/van-stock.server.ts) | Serial-tracked rows (#16); v1 form when flag off |
+| **Install** | `/installer/install` | `ENABLE_INSTALLER_V2` | **Partial** | **3-step** wizard (`info` → `materials` → `submit`) in [`InstallerInstallV2`](../app/components/design-system/installer-install.tsx); persists only [`InstallLog`](../prisma/schema.prisma) columns | Serial, form photo, signature (#39); footage brackets (#50); address diff |
+| **Restock** | `/installer/restock` | `ENABLE_INSTALLER_V2` | **Built** | [`InstallerRestockV2`](../app/components/design-system/installer-restock.tsx): warehouse select, per-line qty, gate, offline queue via [`queueInstallerRestock`](../app/lib/installer-sync.ts) | Qty **not** prefilled to par (wireframe spec); v1 when flag off |
+| **Pickup** | `/restock/:id/pickup` | `ENABLE_INSTALLER_V2` (loader `version`) | **Partial** | [`RestockPickupV2`](../app/components/design-system/restock-pickup.tsx): **single** installer signature → `receiverSignature` in [`_app.restock.$id_.pickup.tsx`](../app/routes/_app.restock.$id_.pickup.tsx) action | Dual-signature release; `VanRestockRequest.releaseSignature` unused |
+| **App shell** | all `_app` routes | `ENABLE_DS_SHELL` | **Partial** | [`DesignSystemAppShell`](../app/components/design-system/app-shell.tsx) in [`_app.tsx`](../app/routes/_app.tsx); drawer `@media (max-width: 1024px)` in [`jaf-ops.css`](../app/styles/jaf-ops.css) | Rail [`navCounts`](../app/components/design-system/app-shell.tsx) not loaded (#47); v1 [`AppShell`](../app/components/app-shell.tsx) when flag off |
 
 ---
 
-## Screen 3: `/installer/install` (New Completion Wizard)
+## Screen 2: `/installer/adjust` (Van Stock Adjust) — **BUILT**
 
-**Components needed:**
+**Flag:** `ENABLE_INSTALLER_V2` → [`InstallerAdjustV2`](../app/components/design-system/installer-adjust.tsx) in [`_app.installer.adjust.tsx`](../app/routes/_app.installer.adjust.tsx).
 
-- `.greet` + `h1` + subtitle (rule sentence)
-- `.jaf-tabs` — 4-panel wizard (Info, Device, Materials, Submit)
-- `.jaf-field` + `.jaf-inp` — Claro job ref, service type, drop footage
-- `.jaf-diff` — address correction diff (existing app component?)
-- `.jaf-scan` — serial scan slot (custom component wrapping camera API)
-- `.jaf-table` — accessory quantities (pre-filled from bracket)
-- `.jaf-gate` — gate checklist ("Missing: form photo, signature")
-- Signature pad (existing `<SignaturePad>` component, restyle with guide `.sig` markup)
-- `.jaf-actions` — Submit button (disabled until gate clears)
+**Row-select pattern:** One **Adjust** button per table row opens an inline form for that row only ([`requestRow`](../app/components/design-system/installer-adjust.tsx)). Switching rows with unsaved draft shows a discard prompt (`switchPrompt`).
 
-**Data it already has:**
+**Qty field:** Label **"Qty removed from van"** (`ds.installer.adjust_qty_label` in [`common.json`](../resources/locales/en/common.json)). Posts positive integer `qty` as a negative `VanInventoryTransaction` (ADJUSTMENT).
 
-- Installer user ID
-- Service types (free string on `InstallLog.serviceType`)
-- Materials used JSON (`InstallLog.materialsUsed`)
-- Completion signature flow (`InstallLog` has submission fields)
+**Negative on-hand:** Allowed — submit is **not** blocked. When `onHand - qty < 0`, an amber [`Note`](../app/components/design-system/installer-adjust.tsx) warns (`adjust_qty_negative`); gate still requires qty + reason only.
 
-**Data it doesn't have:**
+**Not wired:** `SerialUnit` register (#16); v1 shadcn form when flag off.
 
-- **Footage bracket table** — no `AccessoryBracket` model (schema gap #50); defaults are hardcoded in mockups, must be data-driven
-- **Serial → device/van lookup** — no `SerialUnit` register (schema gap #52); scan resolves to what?
-- **Two materials have no SAP code** — guide shows this as chip; needs `ServiceCode` rows where `claroCode IS NULL` + UI handles gracefully (gap #51, already in mockups)
-- **Photo + signature gate** — `InstallLog` has fields, but gate logic (disable Submit until both present) is app-side validation, not schema
+---
+
+## Screen 3: `/installer/install` (New Completion Wizard) — **PARTIAL**
+
+**Flag:** `ENABLE_INSTALLER_V2` → [`InstallerInstallV2`](../app/components/design-system/installer-install.tsx).
+
+**Steps (3, not 4):** [`INSTALL_WIZARD_STEPS`](../app/components/design-system/installer-install.tsx) = `info` → `materials` → `submit`. **Device/serial step removed** — no schema fields to persist.
+
+**Why Device/serial removed:** [`InstallLog`](../prisma/schema.prisma) stores only `claroJobReference`, `serviceType`, `date`, `materialsUsed`, `notes`, `discrepancyFlagged`. No serial, photo, or signature columns (gap **#39**). Submit shows neutral note [`install_evidence_unavailable`](../resources/locales/en/common.json) — not fake inputs.
+
+**Persisted on submit:** [`_app.installer.install.tsx`](../app/routes/_app.installer.install.tsx) action writes the fields above + optional offline queue.
+
+**Not wired:** Footage brackets (#50), serial lookup (#52), address diff, form photo/signature gate (Screen Rules §8 — deferred until #39).
+
+---
+
+## Screen 4–5: `/installer/restock` + `/restock/:id/pickup` — **BUILT / PARTIAL**
+
+### Restock request (`/installer/restock`)
+
+**Built:** [`InstallerRestockV2`](../app/components/design-system/installer-restock.tsx). Installer enters warehouse + qty per below-par line. Above-standard qty triggers `PENDING_APPROVAL` via [`evaluateRestockApproval`](../app/lib/van-inventory.ts) (supervisor/admin approves in [`_app.admin.restock.tsx`](../app/routes/_app.admin.restock.tsx) — not Monica-specific today).
+
+**Not built (wireframe spec):** Restock qty **prefilled to par** — [`qtyByRow`](../app/components/design-system/installer-restock.tsx) starts empty (`useState({})`).
+
+### Restock pickup (`/restock/:id/pickup`)
+
+**Built today:** **Single-signature** pickup. [`RestockPickupV2`](../app/components/design-system/restock-pickup.tsx) collects installer signature only; action writes `receiverSignature` / `receiverSignedAt` ([`_app.restock.$id_.pickup.tsx`](../app/routes/_app.restock.$id_.pickup.tsx)).
+
+**Wireframe spec (not built):** Dual-signature release — same pattern as warehouse crew pickup ([`_app.docs.$id_.sign.tsx`](../app/routes/_app.docs.$id_.sign.tsx) uses `releaseSignature` + `crewSignature` on `JafInvoice`). [`VanRestockRequest.releaseSignature`](../prisma/schema.prisma) exists on the model but is **never set** by the pickup action.
+
+---
+
+## DS app shell — **PARTIAL**
+
+**Flag:** `ENABLE_DS_SHELL` (requires `ENABLE_DESIGN_SYSTEM`) → [`DesignSystemAppShell`](../app/components/design-system/app-shell.tsx) wraps `<Outlet />` in [`_app.tsx`](../app/routes/_app.tsx).
+
+| Topic | Code reality |
+|-------|----------------|
+| **Breakpoint** | Drawer + hamburger at **`max-width: 1024px`** ([`jaf-ops.css`](../app/styles/jaf-ops.css) `@media (max-width: 1024px)`); v1 shell used 768px |
+| **Layout** | Shell content in `.jaf-wrap.jaf-wide` (full width); installer screens use `<DesignSystem constrain>` → `.jaf-ds.jaf-constrain` (narrow column) |
+| **Rail counts** | [`CountBadge`](../app/components/design-system/count-badge.tsx) renders when `navCounts[item.to]` is passed — **loader never supplies `navCounts`** today (gap #47) |
+| **Theme / lang** | [`DsThemeToggle`](../app/components/design-system/shell-controls.tsx), [`DsLanguageToggle`](../app/components/design-system/shell-controls.tsx) |
 
 ---
 
@@ -858,6 +877,24 @@ i18next mechanism: Guide's `data-es` JS must be replaced with `remix-i18next` (s
 
 ---
 
+## Architecture wireframe (3 Sep 2026) — deltas
+
+**Source:** Architecture wireframe dated 3 Sep 2026. Listed as **spec / target**, not as built — unless a code path is cited.
+
+| Wireframe item | Built today? | Code / gap |
+|----------------|--------------|------------|
+| Restock prefilled to par | **No** | [`qtyByRow`](../app/components/design-system/installer-restock.tsx) empty initial state |
+| Pickup dual-signature (van release + installer receive) | **No** | Single sig → `receiverSignature`; [`releaseSignature`](../prisma/schema.prisma) on `VanRestockRequest` unused |
+| Overdraw amber, never red (adjust / pickup) | **Partial** | Adjust: amber warning, submit allowed ([`installer-adjust.tsx`](../app/components/design-system/installer-adjust.tsx)); warehouse crew pickup over-pull differs ([`_app.docs.$id_.sign.tsx`](../app/routes/_app.docs.$id_.sign.tsx)) |
+| 19 of 278 materials serialized | **Not verified** | No `ServiceCode.isSerialized` in schema; count not checked in repo |
+| Restock above-par sign-off by Monica | **Partial** | [`evaluateRestockApproval`](../app/lib/van-inventory.ts) → `PENDING_APPROVAL`; [`_app.admin.restock.tsx`](../app/routes/_app.admin.restock.tsx) (ADMIN role, not CEO-specific) |
+| Installer evidence → Carmen C3 complete/incomplete gate | **No** | `InstallLog` lacks serial/photo/signature (#39); no Carmen installer-pay screen |
+| Arm A/B closure: `payablesClosedAt` / `receivableClosedAt` per PO | **Partial** | [`receivableClosedAt`](../prisma/schema.prisma) on `JafInvoice` (job-level, not `PoLink`); **no** `payablesClosedAt` field found |
+| `PaymentRequest` from installer submit | **No** | No model or route; not in gap register — add to [GAPS.md](GAPS.md) |
+| Sequencing: "nothing built until supervisor base live" vs "Installer first" | **Conflict** | Installer v2 screens ship behind flags while supervisor DS ports remain reverted chrome — **pending product owner** |
+
+---
+
 ## Detailed Supporting Files
 
 - **Full 53-row gap reconciliation:** [gap-reconciliation-53.md](gap-reconciliation-53.md) — Every claim mapped to existing field or verdict (satisfied/additive/structural)
@@ -872,13 +909,17 @@ i18next mechanism: Guide's `data-es` JS must be replaced with `remix-i18next` (s
 
 **Port sequence:** Installer first (least logic, high payoff), then Warehouse, Crew, Supervisor steps 1–5, Finance, Comptroller, CEO last.
 
-**First 3 screens:**
+**Installer ports (staging):**
 
-1. **Installer dashboard (thin slice)** — use only existing data; par-status KPI renders "—" with "not wired yet" subtitle. ZERO SCHEMA CHANGE. **✓ BUILT AND BROWSER-VERIFIED.**
+1. **Dashboard** — **✓ BUILT** (`ENABLE_INSTALLER_DASH_V2`); par KPI wired via `computeParStatus`
 
-2. **Van adjust** — PR 2 route cutover landed; v2 UI port remains follow-up
+2. **Adjust** — **✓ BUILT** (`ENABLE_INSTALLER_V2`); row-select + negative on-hand warning
 
-3. **Completion wizard** — needs footage bracket table, serial lookup, gate validation logic (additive gaps #50, #52)
+3. **Install** — **✓ PARTIAL** — 3-step wizard; evidence deferred (#39)
+
+4. **Restock + pickup** — **✓ PARTIAL** — request built; pickup single-sig only
+
+5. **App shell** — **✓ PARTIAL** (`ENABLE_DS_SHELL`); rail counts not wired (#47)
 
 **Schema/route/integration work (separate):**
 

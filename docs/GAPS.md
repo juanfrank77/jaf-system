@@ -75,7 +75,7 @@ Four doc routes were briefly wired with design-system **chrome wrappers** — a 
 2. **Duplicate release gate** — Supervisor review showed `evaluateReleaseGate` in both `SupervisorReviewChrome` and the v1 release section (`<ul>` checklist). One source of truth only.
 3. **Duplicate chrome** — Wrappers added DS back link + title while v1 `page` kept its own `BackLink`, `h1`, and (on review) vertical `StepRail` alongside horizontal `.jaf-flow`. Full ports replace v1 header/progress UI; they do not stack both.
 
-**Real ports today:** installer dashboard and installer task screens (`ENABLE_INSTALLER_DASH_V2`, `ENABLE_INSTALLER_V2`).
+**Real ports today:** installer dashboard (`ENABLE_INSTALLER_DASH_V2`), adjust/install/restock (`ENABLE_INSTALLER_V2`), restock pickup (v2 when flag on), DS app shell (`ENABLE_DS_SHELL`). See [DESIGN_SYSTEM_PORT.md § Installer ports](DESIGN_SYSTEM_PORT.md#installer-ports--built-status-verified-2026-09-22).
 
 ---
 
@@ -132,3 +132,20 @@ Route reads (`/installer`, `/installer/adjust`, `/installer/restock` action, `/a
 - The guide rule **"incomplete install is not payable"** cannot be enforced — completeness is not computable from persisted data.
 - **Proposed additive change (before any Carmen installer-pay screen):** nullable `serialNumber` on `InstallLog`, a form-photo relation (or tagged `Photo` FK), and `installerSignature` + `signedAt`.
 - v2 Submit shows a neutral note only; no serial/photo/signature inputs.
+
+---
+
+## Architecture wireframe gaps (3 Sep 2026)
+
+Spec items from the 3 Sep architecture wireframe not yet in the gap register. Source: **wireframe 3 Sep**.
+
+| Gap | What | Verdict |
+|-----|------|---------|
+| W1 | `ServiceCode.isSerialized` (+ serial count audit) | **Additive** — wireframe cites 19/278 serialized; no `isSerialized` column in [`schema.prisma`](../prisma/schema.prisma) today |
+| W2 | Restock qty prefilled to par on `/installer/restock` | **Additive UI** — [`InstallerRestockV2`](../app/components/design-system/installer-restock.tsx) starts qty fields empty |
+| W3 | Dual-signature restock pickup (release + receiver) | **Additive** — [`releaseSignature`](../prisma/schema.prisma) on `VanRestockRequest` exists; pickup action only sets `receiverSignature` |
+| W4 | Adjust overdraw as persisted flag (amber, never red) | **Partial** — UI warns in [`installer-adjust.tsx`](../app/components/design-system/installer-adjust.tsx); no persisted overdraw flag on transaction |
+| W5 | Above-par restock sign-off role (wireframe: Monica) | **Partial** — [`evaluateRestockApproval`](../app/lib/van-inventory.ts) + admin restock approval; not CEO-specific |
+| W6 | `payablesClosedAt` per PO (Arm B closure) | **Additive** — not in schema; [`receivableClosedAt`](../prisma/schema.prisma) exists on `JafInvoice` only |
+| W7 | `PaymentRequest` entity from installer submit | **Additive** — no model or route in repo |
+| W8 | Carmen installer-pay completeness gate fed by install evidence | **Blocked on #39** — cannot compute complete/incomplete without persisted evidence |

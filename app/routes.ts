@@ -30,6 +30,8 @@ export default [
 			"routes/_app.installer.swap.$completionId.tsx",
 		),
 		route("warehouse/scan-in", "routes/_app.warehouse.scan-in.tsx"),
+		route("installer/van", "routes/_app.installer.van.tsx"),
+		route("installer-supervisor", "routes/_app.installer-supervisor.tsx"),
 		route("docs/new", "routes/_app.docs.new.tsx"),
 		route("docs/:id", "routes/_app.docs.$id.tsx"),
 		route("docs/:id/edit", "routes/_app.docs.$id_.edit.tsx"),

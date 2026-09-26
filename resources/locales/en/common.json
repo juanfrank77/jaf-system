@@ -30,6 +30,7 @@
 			"admin_vans": "Vans",
 			"admin_restock": "Restock Sign-offs",
 			"installer": "Installer",
+			"installer_supervisor": "Installer Supervisor",
 			"comptroller": "Comptroller"
 		},
 		"notifications": {

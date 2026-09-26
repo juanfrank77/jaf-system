@@ -305,7 +305,7 @@ export const WAREHOUSE_BACKUP_SEED = [
 	{ email: "cgarcia@jafcom.net", name: "Catherine García", phone: null },
 ] as const
 
-export type InstallerRosterRow = {
+type InstallerRosterRow = {
 	name: string
 	jafNumber: string
 	toaNumber: string

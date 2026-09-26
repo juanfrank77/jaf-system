@@ -5,7 +5,7 @@ import { db } from "./db.server"
 import { generateInstallCompletionPdf } from "./pdf/install-completion.server"
 import { nextSerialState } from "./van-inventory-v3"
 
-export type CompletionInput = {
+type CompletionInput = {
 	idempotencyKey: string
 	claroOrderNo: string
 	installerId: string

@@ -6,7 +6,11 @@ import { hashPassword } from "better-auth/crypto"
 import {
 	BRIGADE_SEED,
 	LEGACY_DEMO_CODES,
+	LIMIT_TABLE_PLACEHOLDER_CODES,
+	LIMIT_TABLE_SEED,
 	parseCatalogCsv,
+	parseInstallerRosterCsv,
+	SERIALIZED_PREFIXES,
 	SUPERVISOR_SEED,
 	toServiceCodeData,
 	WAREHOUSE_BACKUP_SEED,
@@ -194,6 +198,186 @@ async function seedWarehouseBackups() {
 	)
 }
 
+const INSTALLER_ROSTER_CSV_PATH = path.resolve(
+	process.cwd(),
+	"docs/JAF_Installer_Roster_seed.csv",
+)
+
+async function seedNeedsCodePlaceholders() {
+	for (const { claroCode, name } of LIMIT_TABLE_PLACEHOLDER_CODES) {
+		await db.serviceCode.upsert({
+			where: { claroCode },
+			update: {},
+			create: {
+				claroCode,
+				name,
+				kind: "MATERIAL",
+				unitPrice: "0",
+				active: true,
+			},
+		})
+	}
+}
+
+async function seedSerializedFlags() {
+	for (const { prefix, claroCode, name } of SERIALIZED_PREFIXES) {
+		await db.serviceCode.upsert({
+			where: { claroCode },
+			update: { serialized: true, serialPrefix: prefix },
+			create: {
+				claroCode,
+				name,
+				kind: "MATERIAL",
+				unitPrice: "0",
+				active: true,
+				serialized: true,
+				serialPrefix: prefix,
+			},
+		})
+	}
+}
+
+async function seedInstallers() {
+	const rows = parseInstallerRosterCsv(
+		await fs.readFile(INSTALLER_ROSTER_CSV_PATH, "utf8"),
+	)
+	const password = await hashPassword(TEMP_PASSWORD)
+	for (const r of rows) {
+		const user = await db.user.upsert({
+			where: { email: r.email },
+			update: { name: r.name },
+			create: {
+				email: r.email,
+				name: r.name,
+				role: "INSTALLER",
+				installerProfile: {
+					create: {
+						jafNumber: r.jafNumber,
+						toaNumber: r.toaNumber,
+						region: r.region,
+					},
+				},
+			},
+		})
+		await db.account.upsert({
+			where: { id: `seed-${r.email}` },
+			update: {},
+			create: {
+				id: `seed-${r.email}`,
+				userId: user.id,
+				accountId: user.id,
+				providerId: "credential",
+				password,
+			},
+		})
+	}
+	// biome-ignore lint/suspicious/noConsole: CLI seed output
+	console.log(
+		`installers: ${rows.length} upserted (temporary password: ${TEMP_PASSWORD})`,
+	)
+}
+
+async function seedVansAndStock() {
+	// Placeholder van numbers — client has not supplied the real van→installer map (spec §10).
+	const installers = await db.user.findMany({
+		where: { role: "INSTALLER" },
+		orderBy: { createdAt: "asc" },
+	})
+	const serialized = await db.serviceCode.findMany({
+		where: { serialized: true },
+	})
+	let n = 0
+	for (const inst of installers) {
+		const existing = await db.van.findFirst({ where: { installerId: inst.id } })
+		const van =
+			existing ??
+			(await db.van.create({
+				data: { name: `Van P-${++n} (placeholder)`, installerId: inst.id },
+			}))
+		// Synthetic opening stock (spec §10): 2 serials per serialized SKU on the van.
+		for (const sc of serialized) {
+			for (let k = 0; k < 2; k++) {
+				const serial = `${sc.serialPrefix ?? "SN"}${van.id.slice(-4)}${k}${sc.claroCode.slice(-3)}`
+				await db.serialLocation.upsert({
+					where: { serial },
+					update: {},
+					create: {
+						serial,
+						serviceCodeId: sc.id,
+						status: "VAN",
+						currentRef: van.id,
+					},
+				})
+				await db.vanMovement.create({
+					data: {
+						vanId: van.id,
+						serviceCodeId: sc.id,
+						qty: 1,
+						serial,
+						type: "ADJUST",
+						byUserId: inst.id,
+					},
+				})
+			}
+		}
+	}
+	// biome-ignore lint/suspicious/noConsole: CLI seed output
+	console.log(`vans: ${n} created with synthetic opening stock`)
+}
+
+async function seedLimitTable() {
+	const byCode = Object.fromEntries(
+		(await db.serviceCode.findMany()).map((c) => [c.claroCode, c.id]),
+	)
+	let inserted = 0
+	for (const r of LIMIT_TABLE_SEED) {
+		const serviceCodeId = byCode[r.claroCode]
+		if (!serviceCodeId) continue
+		await db.limitTable.upsert({
+			where: {
+				bracketFt_serviceCodeId: { bracketFt: r.bracketFt, serviceCodeId },
+			},
+			update: { qty: r.qty },
+			create: { bracketFt: r.bracketFt, serviceCodeId, qty: r.qty },
+		})
+		inserted++
+	}
+	// biome-ignore lint/suspicious/noConsole: CLI seed output
+	console.log(
+		`limit table: ${inserted}/${LIMIT_TABLE_SEED.length} rows upserted`,
+	)
+}
+
+async function seedInstallerSupervisor() {
+	// jalfaro@ per discovery notes; unconfirmed — spec §15 flags this as pending Alex/IT.
+	const email = "jalfaro@jafcom.net"
+	const password = await hashPassword(TEMP_PASSWORD)
+	const user = await db.user.upsert({
+		where: { email },
+		update: {},
+		create: {
+			email,
+			name: "Installer Supervisor",
+			role: "INSTALLER_SUPERVISOR",
+		},
+	})
+	await db.account.upsert({
+		where: { id: `seed-${email}` },
+		update: {},
+		create: {
+			id: `seed-${email}`,
+			userId: user.id,
+			accountId: user.id,
+			providerId: "credential",
+			password,
+		},
+	})
+	// biome-ignore lint/suspicious/noConsole: CLI seed output
+	console.log(
+		`installer supervisor: ${email} upserted (unconfirmed identity — flagged)`,
+	)
+}
+
 async function main() {
 	await seedCatalog()
 	await seedSupervisors()
@@ -201,6 +385,12 @@ async function main() {
 	await seedWarehouses()
 	await seedWarehouseStaff()
 	await seedWarehouseBackups()
+	await seedNeedsCodePlaceholders()
+	await seedSerializedFlags()
+	await seedInstallerSupervisor()
+	await seedInstallers()
+	await seedVansAndStock()
+	await seedLimitTable()
 }
 
 main()

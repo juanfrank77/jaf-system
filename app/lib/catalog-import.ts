@@ -304,3 +304,122 @@ export const WAREHOUSE_BACKUP_SEED = [
 	{ email: "amedina@jafcom.net", name: "Alfredo Medina", phone: null },
 	{ email: "cgarcia@jafcom.net", name: "Catherine García", phone: null },
 ] as const
+
+export type InstallerRosterRow = {
+	name: string
+	jafNumber: string
+	toaNumber: string
+	region: string | null
+	email: string
+}
+
+// docs/JAF_Installer_Roster_seed.csv — cleansed from LISTADO INSTALADORES ACTIVOS
+// AGOSTO 8 2024.xlsx (see docs/JAF_Installer_Roster_notes.md for the cleansing pass).
+export function parseInstallerRosterCsv(text: string): InstallerRosterRow[] {
+	const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "")
+	const header = splitCsvLine(lines[0])
+	const seen = new Set<string>()
+	const out: InstallerRosterRow[] = []
+	for (const line of lines.slice(1)) {
+		const cells = splitCsvLine(line)
+		const row: Record<string, string> = {}
+		header.forEach((h, i) => {
+			row[h] = (cells[i] ?? "").trim()
+		})
+		if (!row.toa_number || seen.has(row.toa_number)) continue
+		seen.add(row.toa_number)
+		out.push({
+			name: row.name,
+			jafNumber: row.jaf_number,
+			toaNumber: row.toa_number,
+			region: row.region === "" ? null : row.region,
+			email: row.email,
+		})
+	}
+	return out
+}
+
+// Orlando's per-order accessory ceiling by drop-footage bracket
+// (docs/JAF_Package/06 Fee, Material and Crew Codes/Limite de materiales por orden .xlsx).
+// None of the 7 accessory names in that sheet (JOTAS, MORDAZAS, SPAN CLAMP, HOOK,
+// TORNILLO HOOK, TIE WRAP, MOUNTING) match a claroCode in the 934-row service catalog —
+// they aren't Claro-billed line items, so no SAP code exists for them yet (spec §15:
+// "Tie-wrap/Mounting SAP codes ... Orlando ... placeholder codes + needsCode"). Seeded
+// under synthetic NEEDS_CODE_* claroCodes (see seedNeedsCodePlaceholders in prisma/seed.ts)
+// so the bracket-prefill demo is exercisable; swap in the real SAP codes once Orlando confirms.
+export const LIMIT_TABLE_SEED: {
+	bracketFt: number
+	claroCode: string
+	qty: number
+}[] = (
+	[
+		[100, 1, 5, 1, 1, 1, 15, 15],
+		[150, 1, 5, 1, 1, 1, 15, 15],
+		[200, 1, 5, 1, 1, 1, 15, 15],
+		[250, 2, 7, 1, 1, 1, 15, 15],
+		[350, 2, 7, 1, 1, 1, 15, 15],
+		[500, 3, 10, 1, 1, 1, 15, 15],
+		[750, 3, 10, 1, 1, 1, 15, 15],
+		[1000, 4, 13, 1, 1, 1, 15, 15],
+		[1250, 4, 15, 1, 1, 1, 15, 15],
+		[2000, 4, 20, 1, 1, 1, 15, 15],
+	] as const
+).flatMap(
+	([
+		bracketFt,
+		jotas,
+		mordazas,
+		spanClamp,
+		hook,
+		tornilloHook,
+		tieWrap,
+		mounting,
+	]) => [
+		{ bracketFt, claroCode: "NEEDS_CODE_JOTAS", qty: jotas },
+		{ bracketFt, claroCode: "NEEDS_CODE_MORDAZAS", qty: mordazas },
+		{ bracketFt, claroCode: "NEEDS_CODE_SPAN_CLAMP", qty: spanClamp },
+		{ bracketFt, claroCode: "NEEDS_CODE_HOOK", qty: hook },
+		{ bracketFt, claroCode: "NEEDS_CODE_TORNILLO_HOOK", qty: tornilloHook },
+		{ bracketFt, claroCode: "NEEDS_CODE_TIE_WRAP", qty: tieWrap },
+		{ bracketFt, claroCode: "NEEDS_CODE_MOUNTING", qty: mounting },
+	],
+)
+
+// The 7 NEEDS_CODE_* accessory placeholders LIMIT_TABLE_SEED references, so seedLimitTable
+// has a ServiceCode row to attach to (none of these have a real Claro SAP code yet).
+export const LIMIT_TABLE_PLACEHOLDER_CODES: {
+	claroCode: string
+	name: string
+}[] = [
+	{ claroCode: "NEEDS_CODE_JOTAS", name: "JOTAS (needs SAP code)" },
+	{ claroCode: "NEEDS_CODE_MORDAZAS", name: "MORDAZAS (needs SAP code)" },
+	{ claroCode: "NEEDS_CODE_SPAN_CLAMP", name: "SPAN CLAMP (needs SAP code)" },
+	{ claroCode: "NEEDS_CODE_HOOK", name: "HOOK (needs SAP code)" },
+	{
+		claroCode: "NEEDS_CODE_TORNILLO_HOOK",
+		name: "TORNILLO HOOK (needs SAP code)",
+	},
+	{ claroCode: "NEEDS_CODE_TIE_WRAP", name: "TIE WRAP (needs SAP code)" },
+	{ claroCode: "NEEDS_CODE_MOUNTING", name: "MOUNTING (needs SAP code)" },
+]
+
+// Serial-prefix → SKU resolution for the serialized modem/ONT/STB units. No source in the
+// package names real Claro SAP codes for hardware serials (the 934-row catalog is
+// Claro-billed service/labor line items, not an equipment SKU list) — synthetic, same
+// tier as the placeholder van assignment + opening stock (spec §10/§15).
+export const SERIALIZED_PREFIXES: {
+	prefix: string
+	claroCode: string
+	name: string
+}[] = [
+	{
+		prefix: "ALCLED",
+		claroCode: "NEEDS_CODE_ONT",
+		name: "ONT (needs real model/SAP code)",
+	},
+	{
+		prefix: "STBHW",
+		claroCode: "NEEDS_CODE_STB",
+		name: "Set-Top Box (needs real model/SAP code)",
+	},
+]

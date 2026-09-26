@@ -66,6 +66,24 @@ it("includes a par'd serialized SKU with zero stock instead of dropping it", asy
 	expect(modem).toEqual({ serviceCodeId: modemCode.id, onVan: 0, par: 2 })
 })
 
+it("includes the since timestamp on an owed-back serial, so callers can key on the return episode instead of the serial alone", async () => {
+	const owedSerial = `vv-owed-${Date.now()}`
+	const since = new Date(Date.now() - 10 * 86_400_000)
+	await db.serialLocation.create({
+		data: {
+			serial: owedSerial,
+			serviceCodeId: scId,
+			status: "REMOVED_PENDING_RETURN",
+			currentRef: vanId,
+			since,
+		},
+	})
+	const view = await getVanView(vanId)
+	const owed = view.owedBack.find((o) => o.serial === owedSerial)
+	expect(owed?.since).toEqual(since)
+	expect(owed?.sinceDays).toBe(10)
+})
+
 it("nets accessory stock from many movement rows via DB aggregation, not an unbounded in-memory scan", async () => {
 	const wrapCode = await db.serviceCode.create({
 		data: { claroCode: `WRN${Date.now()}`, name: "WrapNet", unitPrice: "0" },

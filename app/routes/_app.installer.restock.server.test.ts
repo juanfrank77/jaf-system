@@ -98,4 +98,55 @@ describe("POST /installer/restock", () => {
 		expect((res as Response).status).toBe(302)
 		expect(mocks.db.restockRequest.updateMany).toHaveBeenCalledTimes(1)
 	})
+
+	it("drops a posted line whose serviceCodeId is not a real, active service code", async () => {
+		mocks.requireRole.mockResolvedValue({
+			user: { id: "inst-1", role: "INSTALLER" },
+		})
+		mocks.requireInstaller.mockResolvedValue({ van: { id: "van-1" } })
+		mocks.getActiveMaterialCodes.mockResolvedValue([
+			{
+				id: "sc-real",
+				claroCode: "C1",
+				name: "Wrap",
+				unit: "EA",
+				unitPrice: "1",
+			},
+		])
+		const req = formRequest({
+			lines: JSON.stringify([
+				{ serviceCodeId: "sc-real", qty: 2 },
+				{ serviceCodeId: "sc-forged", qty: 5 },
+			]),
+		})
+		await action({ request: req, params: {} } as never)
+		expect(mocks.createRestock).toHaveBeenCalledWith(
+			"van-1",
+			[{ serviceCodeId: "sc-real", qty: 2 }],
+			{ id: "inst-1" },
+		)
+	})
+
+	it("drops a posted line with a non-integer quantity", async () => {
+		mocks.requireRole.mockResolvedValue({
+			user: { id: "inst-1", role: "INSTALLER" },
+		})
+		mocks.requireInstaller.mockResolvedValue({ van: { id: "van-1" } })
+		mocks.getActiveMaterialCodes.mockResolvedValue([
+			{
+				id: "sc-real",
+				claroCode: "C1",
+				name: "Wrap",
+				unit: "EA",
+				unitPrice: "1",
+			},
+		])
+		const req = formRequest({
+			lines: JSON.stringify([{ serviceCodeId: "sc-real", qty: 1.5 }]),
+		})
+		await action({ request: req, params: {} } as never)
+		expect(mocks.createRestock).toHaveBeenCalledWith("van-1", [], {
+			id: "inst-1",
+		})
+	})
 })

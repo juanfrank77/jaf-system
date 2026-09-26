@@ -7,6 +7,14 @@
   - You are about to drop the `install_log` table. If the table is not empty, all the data it contains will be lost.
   - You are about to drop the `van_inventory_transaction` table. If the table is not empty, all the data it contains will be lost.
 
+  Verified against the real production database before this migration was
+  authored (row counts, run directly via psql — see PR #21 review thread for
+  the verification detail):
+    ConsignmentReceipt = 0, VanRestockRequest = 0, install_log = 0,
+    van_inventory_transaction = 0, Van.standardStockLevels IS NOT NULL => 0.
+  No archive/rename or van_par backfill is needed for that database. If you
+  are applying this migration against a DIFFERENT database, re-run those
+  counts first — see docs/it-deployment-guide.md §7.
 */
 -- CreateEnum
 CREATE TYPE "SerialStatus" AS ENUM ('WAREHOUSE', 'VAN', 'INSTALLED', 'REMOVED_PENDING_RETURN', 'RETURNED', 'SENT_FOR_REPAIR');

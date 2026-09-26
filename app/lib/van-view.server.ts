@@ -76,6 +76,7 @@ export async function getVanView(vanId: string) {
 		const row = serials.find((s) => s.serial === serial)
 		return {
 			serial,
+			since: row?.since ?? null,
 			sinceDays: row
 				? Math.floor((Date.now() - row.since.getTime()) / 86_400_000)
 				: 0,

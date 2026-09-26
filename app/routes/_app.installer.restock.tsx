@@ -79,8 +79,16 @@ export async function action({ request }: Route.ActionArgs) {
 
 	const { van } = await requireInstaller(request)
 	if (!van) return { errorKey: "installer.no_van" as const }
+	// A posted service code and quantity are otherwise trusted wholesale: a
+	// forged serviceCodeId becomes a permanent phantom PICKUP movement, and a
+	// non-integer qty passes qty > 0 but makes the restock unreleasable
+	// (reconciliation in load-to-van.server.ts compares exact counts).
+	const validCodeIds = new Set(
+		(await getActiveMaterialCodes()).map((c) => c.id),
+	)
 	const lines = JSON.parse((form.get("lines") as string) || "[]").filter(
-		(l: { serviceCodeId: string; qty: number }) => l.serviceCodeId && l.qty > 0,
+		(l: { serviceCodeId: string; qty: number }) =>
+			validCodeIds.has(l.serviceCodeId) && Number.isInteger(l.qty) && l.qty > 0,
 	)
 	await createRestock(van.id, lines, { id: user.id })
 	return redirect("/installer")

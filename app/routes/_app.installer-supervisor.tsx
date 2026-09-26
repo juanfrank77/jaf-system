@@ -26,14 +26,19 @@ export async function loader({ request }: Route.LoaderArgs) {
 	// Every aged owed-back serial × every supervisor, deduped against what's
 	// already been sent — computed in memory from one batch read, written in
 	// one batch insert, instead of a findFirst+create pair per (serial,
-	// supervisor) on every GET of this page. Deduped by a stable docId (the
-	// serial), not by the message string: the message embeds sinceDays, which
-	// increments daily, so keying on it would never match yesterday's row and
-	// would re-notify every supervisor every day past the threshold forever.
+	// supervisor) on every GET of this page. Deduped by a stable docId keyed
+	// on the serial's owed-back *episode* (its `since` timestamp, reset every
+	// time it re-enters REMOVED_PENDING_RETURN), not by the message string
+	// (embeds sinceDays, which increments daily — would never match
+	// yesterday's row) and not by the serial alone (a serial returned once
+	// and re-issued/aged again would never re-notify, since its first
+	// episode's row would still match).
 	const agedSerials = rollup
 		.flatMap((r) => r.owedBackDetails)
 		.filter((o) => o.sinceDays > OWED_BACK_AGING_DAYS)
-	const docIds = agedSerials.map((o) => `owed-back:${o.serial}`)
+	const docId = (o: { serial: string; since: Date | null }) =>
+		`owed-back:${o.serial}:${(o.since ?? new Date(0)).toISOString()}`
+	const docIds = agedSerials.map(docId)
 
 	if (docIds.length > 0 && supervisors.length > 0) {
 		const existing = await db.notification.findMany({
@@ -46,10 +51,10 @@ export async function loader({ request }: Route.LoaderArgs) {
 		const existingKeys = new Set(existing.map((e) => `${e.userId}::${e.docId}`))
 		const toCreate = supervisors.flatMap((s) =>
 			agedSerials
-				.filter((o) => !existingKeys.has(`${s.id}::owed-back:${o.serial}`))
+				.filter((o) => !existingKeys.has(`${s.id}::${docId(o)}`))
 				.map((o) => ({
 					userId: s.id,
-					docId: `owed-back:${o.serial}`,
+					docId: docId(o),
 					message: `Serial ${o.serial} owed back for ${o.sinceDays} days.`,
 				})),
 		)

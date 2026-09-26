@@ -43,6 +43,16 @@ const TRANSITIONS: Record<string, { from: string | string[]; roles: Role[] }> =
 		},
 	}
 
+export function canReleaseToVan(role: Role): boolean {
+	return role === "WAREHOUSE" || role === "ADMIN"
+}
+export function canApproveRestock(role: Role): boolean {
+	return role === "INSTALLER_SUPERVISOR" || role === "ADMIN"
+}
+export function canScanInReturn(role: Role): boolean {
+	return role === "WAREHOUSE" || role === "ADMIN"
+}
+
 export function canTransition(
 	currentStatus: string,
 	targetStatus: string,

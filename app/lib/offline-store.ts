@@ -6,7 +6,7 @@ const QUEUE_STORE = "queue"
 export type QueuedAction = {
 	id: string
 	docId?: string
-	action: "FIELD_UPDATE"
+	action: "FIELD_UPDATE" | "INSTALLER_COMPLETION"
 	payload: Record<string, unknown>
 	createdAt: string
 }

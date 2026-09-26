@@ -32,6 +32,7 @@
 			"installer": "Instalador",
 			"installer_supervisor": "Supervisor de Instaladores",
 			"warehouse_scan_in": "Registrar Devolución",
+			"warehouse_restock": "Reabastecimientos por Liberar",
 			"comptroller": "Contraloría"
 		},
 		"notifications": {

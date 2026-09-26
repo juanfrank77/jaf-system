@@ -18,6 +18,9 @@ export async function submitSwap(
 	const completion = await db.installCompletion.findUniqueOrThrow({
 		where: { id: input.completionId },
 	})
+	if (completion.installerId !== input.installerId) {
+		throw new Error("Cannot swap against another installer's completion")
+	}
 	if (completion.status !== "SUBMITTED") {
 		throw new Error(
 			"Cannot swap against a completion that has not been submitted",

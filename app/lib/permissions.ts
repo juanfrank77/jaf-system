@@ -1,5 +1,20 @@
 import type { Role } from "../../generated/prisma/client"
 
+// Kept as a local literal, not a runtime import of the Prisma Role enum:
+// this file is imported by route modules whose component half is bundled
+// for the browser, and importing the generated Prisma client at runtime
+// there pulls in Node built-ins (node:url) that break in that context.
+const ALL_ROLES: Role[] = [
+	"SUPERVISOR",
+	"CREW",
+	"WAREHOUSE",
+	"FINANCE",
+	"ADMIN",
+	"INSTALLER",
+	"COMPTROLLER",
+	"INSTALLER_SUPERVISOR",
+]
+
 const EDITABLE_STATUSES = ["CREATED", "PREPPED"] as const
 type EditableStatus = (typeof EDITABLE_STATUSES)[number]
 
@@ -51,6 +66,13 @@ export function canApproveRestock(role: Role): boolean {
 }
 export function canScanInReturn(role: Role): boolean {
 	return role === "WAREHOUSE" || role === "ADMIN"
+}
+
+/** Derives the requireRole() allow-list from a can*() predicate, so the
+ * predicate stays the single source of truth for a route's authorization
+ * instead of a second, separately-maintained role array. */
+export function rolesMatching(predicate: (role: Role) => boolean): Role[] {
+	return ALL_ROLES.filter(predicate)
 }
 
 export function canTransition(

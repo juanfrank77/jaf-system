@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
-import { getInstallerRollup, getVanView } from "~/lib/van-view.server"
+import { getInstallerRollup } from "~/lib/van-view.server"
 import type { Route } from "./+types/_app.installer-supervisor"
 
 const OWED_BACK_AGING_DAYS = 7
@@ -15,7 +15,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 	await requireRole(request, ["INSTALLER_SUPERVISOR", "ADMIN"])
 	const rollup = await getInstallerRollup()
 
-	const vans = await db.van.findMany({ where: { active: true } })
 	const supervisors = await db.user.findMany({
 		where: {
 			role: { in: ["INSTALLER_SUPERVISOR", "WAREHOUSE"] },
@@ -23,18 +22,34 @@ export async function loader({ request }: Route.LoaderArgs) {
 		},
 		select: { id: true },
 	})
-	for (const v of vans) {
-		const view = await getVanView(v.id)
-		for (const o of view.owedBack) {
-			if (o.sinceDays <= OWED_BACK_AGING_DAYS) continue
-			const message = `Serial ${o.serial} owed back for ${o.sinceDays} days.`
-			for (const s of supervisors) {
-				const existing = await db.notification.findFirst({
-					where: { userId: s.id, message },
-				})
-				if (!existing)
-					await db.notification.create({ data: { userId: s.id, message } })
-			}
+
+	// Every aged owed-back serial × every supervisor's message, deduped
+	// against what's already been sent — computed in memory from one batch
+	// read, written in one batch insert, instead of a findFirst+create pair
+	// per (serial, supervisor) on every GET of this page.
+	const agedMessages = rollup
+		.flatMap((r) => r.owedBackDetails)
+		.filter((o) => o.sinceDays > OWED_BACK_AGING_DAYS)
+		.map((o) => `Serial ${o.serial} owed back for ${o.sinceDays} days.`)
+
+	if (agedMessages.length > 0 && supervisors.length > 0) {
+		const existing = await db.notification.findMany({
+			where: {
+				userId: { in: supervisors.map((s) => s.id) },
+				message: { in: agedMessages },
+			},
+			select: { userId: true, message: true },
+		})
+		const existingKeys = new Set(
+			existing.map((e) => `${e.userId}::${e.message}`),
+		)
+		const toCreate = supervisors.flatMap((s) =>
+			agedMessages
+				.filter((message) => !existingKeys.has(`${s.id}::${message}`))
+				.map((message) => ({ userId: s.id, message })),
+		)
+		if (toCreate.length > 0) {
+			await db.notification.createMany({ data: toCreate })
 		}
 	}
 

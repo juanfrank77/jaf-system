@@ -93,9 +93,12 @@ export async function action({ request }: Route.ActionArgs) {
 			serialInstalled: (form.get("serialInstalled") as string) || undefined,
 			serialUnreadable: form.get("serialUnreadable") === "true",
 			modelResolved: (form.get("modelResolved") as string) || undefined,
-			formPhotoPath:
-				formPhotoPath ?? ((form.get("formPhotoPath") as string) || undefined),
-			labelPhotoPath: (form.get("labelPhotoPath") as string) || undefined,
+			// Only a path this action itself just wrote (from an uploaded File,
+			// online or reattached from the offline queue) is ever trusted — never
+			// a client-supplied string, which would let a crafted request claim
+			// an arbitrary file (including someone else's) as this record's photo.
+			formPhotoPath,
+			labelPhotoPath: undefined,
 			sigInstaller: (form.get("sigInstaller") as string) || undefined,
 			installedAt: new Date(),
 		},

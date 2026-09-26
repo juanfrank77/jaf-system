@@ -1,7 +1,10 @@
+import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Button } from "~/components/ui/button"
+import { Input } from "~/components/ui/input"
+import { Label } from "~/components/ui/label"
 import { db } from "~/lib/db.server"
 import { requireInstaller } from "~/lib/installer-context.server"
 import { canApproveRestock } from "~/lib/permissions"
@@ -42,8 +45,11 @@ export async function action({ request }: Route.ActionArgs) {
 	if (intent === "approve") {
 		if (!canApproveRestock(user.role)) throw redirect("/installer/restock")
 		const id = form.get("id") as string
-		await db.restockRequest.update({
-			where: { id },
+		// Atomic guard: only a restock still awaiting sign-off can be approved,
+		// so a replayed/double-submitted approve can never flip an already
+		// APPROVED or RECEIVED restock back to APPROVED.
+		await db.restockRequest.updateMany({
+			where: { id, status: "NEEDS_SIGNOFF" },
 			data: { status: "APPROVED", approvedById: user.id },
 		})
 		return redirect("/installer/restock")
@@ -59,6 +65,13 @@ export async function action({ request }: Route.ActionArgs) {
 export default function InstallerRestock({ loaderData }: Route.ComponentProps) {
 	const { role, van, prefill, pending } = loaderData
 	const { t } = useTranslation()
+	const [lines, setLines] = useState(prefill)
+
+	function setQty(serviceCodeId: string, qty: number) {
+		setLines((prev) =>
+			prev.map((l) => (l.serviceCodeId === serviceCodeId ? { ...l, qty } : l)),
+		)
+	}
 
 	if (role !== "INSTALLER") {
 		return (
@@ -100,15 +113,30 @@ export default function InstallerRestock({ loaderData }: Route.ComponentProps) {
 				<p className="text-sm text-amber-600">{t("installer.no_van")}</p>
 			) : (
 				<Form method="post" className="space-y-4">
-					<input type="hidden" name="lines" value={JSON.stringify(prefill)} />
-					<ul className="text-sm space-y-1">
-						{prefill.map((l) => (
-							<li key={l.serviceCodeId}>
-								{l.serviceCodeId}: {l.qty}
+					<input type="hidden" name="lines" value={JSON.stringify(lines)} />
+					<ul className="space-y-2">
+						{lines.map((l) => (
+							<li key={l.serviceCodeId} className="flex items-center gap-2">
+								<Label
+									htmlFor={`qty-${l.serviceCodeId}`}
+									className="flex-1 text-sm"
+								>
+									{l.serviceCodeId}
+								</Label>
+								<Input
+									id={`qty-${l.serviceCodeId}`}
+									type="number"
+									min={0}
+									className="w-24"
+									value={l.qty}
+									onChange={(e) =>
+										setQty(l.serviceCodeId, Number(e.target.value) || 0)
+									}
+								/>
 							</li>
 						))}
-						{prefill.length === 0 && (
-							<li className="text-slate-500">
+						{lines.length === 0 && (
+							<li className="text-sm text-slate-500">
 								{t(
 									"restock.empty_prefill",
 									"No par levels set yet — add lines manually.",

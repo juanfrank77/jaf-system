@@ -115,3 +115,83 @@ it("rejects releasing the same restock twice (no replay, no double-counted acces
 		1,
 	)
 })
+
+it("rejects a release that scans fewer serials than the restock requested (partial fulfillment)", async () => {
+	const s1 = `PART1-${Date.now()}`
+	const s2 = `PART2-${Date.now()}`
+	await db.serialLocation.create({
+		data: {
+			serial: s1,
+			serviceCodeId: scId,
+			status: "WAREHOUSE",
+			currentRef: "wh1",
+		},
+	})
+	await db.serialLocation.create({
+		data: {
+			serial: s2,
+			serviceCodeId: scId,
+			status: "WAREHOUSE",
+			currentRef: "wh1",
+		},
+	})
+	const req = await db.restockRequest.create({
+		data: {
+			vanId,
+			lines: [{ serviceCodeId: scId, qty: 2 }],
+			status: "APPROVED",
+		},
+	})
+	// Only 1 of the 2 requested serials was actually scanned.
+	await expect(
+		releaseRestockToVan(req.id, [{ serial: s1, serviceCodeId: scId }], [], {
+			id: actorId,
+		}),
+	).rejects.toThrow()
+	expect(
+		(await db.restockRequest.findUniqueOrThrow({ where: { id: req.id } }))
+			.status,
+	).toBe("APPROVED")
+	expect(await db.vanMovement.count({ where: { refRestockId: req.id } })).toBe(
+		0,
+	)
+})
+
+it("rejects a release that scans more units than the restock requested (excess)", async () => {
+	const s1 = `EXC1-${Date.now()}`
+	const s2 = `EXC2-${Date.now()}`
+	await db.serialLocation.create({
+		data: {
+			serial: s1,
+			serviceCodeId: scId,
+			status: "WAREHOUSE",
+			currentRef: "wh1",
+		},
+	})
+	await db.serialLocation.create({
+		data: {
+			serial: s2,
+			serviceCodeId: scId,
+			status: "WAREHOUSE",
+			currentRef: "wh1",
+		},
+	})
+	const req = await db.restockRequest.create({
+		data: {
+			vanId,
+			lines: [{ serviceCodeId: scId, qty: 1 }],
+			status: "APPROVED",
+		},
+	})
+	await expect(
+		releaseRestockToVan(
+			req.id,
+			[
+				{ serial: s1, serviceCodeId: scId },
+				{ serial: s2, serviceCodeId: scId },
+			],
+			[],
+			{ id: actorId },
+		),
+	).rejects.toThrow()
+})

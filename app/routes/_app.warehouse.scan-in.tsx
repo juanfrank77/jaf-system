@@ -12,6 +12,7 @@ import {
 	SelectValue,
 } from "~/components/ui/select"
 import { db } from "~/lib/db.server"
+import { canScanInReturn, rolesMatching } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import { scanInReturn } from "~/lib/scan-in.server"
 import type { Route } from "./+types/_app.warehouse.scan-in"
@@ -19,13 +20,13 @@ import type { Route } from "./+types/_app.warehouse.scan-in"
 export const meta: Route.MetaFunction = () => [{ title: "Scan In — JAF Ops" }]
 
 export async function loader({ request }: Route.LoaderArgs) {
-	await requireRole(request, ["WAREHOUSE", "ADMIN"])
+	await requireRole(request, rolesMatching(canScanInReturn))
 	const warehouses = await db.warehouse.findMany({ where: { active: true } })
 	return { warehouses }
 }
 
 export async function action({ request }: Route.ActionArgs) {
-	const { user } = await requireRole(request, ["WAREHOUSE", "ADMIN"])
+	const { user } = await requireRole(request, rolesMatching(canScanInReturn))
 	const form = await request.formData()
 	const serial = form.get("serial") as string
 	const warehouseId = form.get("warehouseId") as string

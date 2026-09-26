@@ -30,6 +30,7 @@ export default [
 			"routes/_app.installer.swap.$completionId.tsx",
 		),
 		route("warehouse/scan-in", "routes/_app.warehouse.scan-in.tsx"),
+		route("warehouse/restock", "routes/_app.warehouse.restock.tsx"),
 		route("installer/van", "routes/_app.installer.van.tsx"),
 		route("installer-supervisor", "routes/_app.installer-supervisor.tsx"),
 		route("installer/restock", "routes/_app.installer.restock.tsx"),

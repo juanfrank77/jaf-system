@@ -117,3 +117,106 @@ it("flags an unreadable serial as INCOMPLETE with missing serial", async () => {
 	})
 	expect(pr?.missing).toContain("serial")
 })
+
+it("leaves no orphan InstallCompletion when the transaction fails", async () => {
+	const key = `k-orphan-${Date.now()}`
+	const s3 = `ALCLED3-${Date.now()}`
+	await db.serialLocation.create({
+		data: {
+			serial: s3,
+			serviceCodeId: modemCodeId,
+			status: "VAN",
+			currentRef: vanId,
+		},
+	})
+	await expect(
+		submitCompletion(
+			{
+				idempotencyKey: key,
+				claroOrderNo: "3",
+				installerId,
+				vanId,
+				address: "a",
+				accessories: [],
+				groundRod: true,
+				serialInstalled: s3,
+				serialUnreadable: false,
+				formPhotoPath: "/tmp/f.jpg",
+				sigInstaller: "data:image/png;base64,AAA",
+				installedAt: new Date(),
+			},
+			// A byUserId that doesn't exist violates VanMovement's FK — this must
+			// roll back the InstallCompletion too, not just the movement.
+			{ id: "does-not-exist" },
+		),
+	).rejects.toThrow()
+	const completion = await db.installCompletion.findUnique({
+		where: { idempotencyKey: key },
+	})
+	expect(completion).toBeNull()
+	expect(
+		(await db.serialLocation.findUnique({ where: { serial: s3 } }))?.status,
+	).toBe("VAN")
+})
+
+it("recovers the winner's row instead of throwing when a concurrent submit already committed the idempotencyKey", async () => {
+	const key = `k-race-${Date.now()}`
+	const winner = await db.installCompletion.create({
+		data: {
+			idempotencyKey: key,
+			claroOrderNo: "4",
+			installerId,
+			vanId,
+			status: "SUBMITTED",
+			address: "a",
+			groundRod: true,
+			serialUnreadable: true,
+			formPhotoPath: "/tmp/f.jpg",
+			submittedAt: new Date(),
+		},
+	})
+	const winnerPr = await db.paymentRequest.create({
+		data: {
+			kind: "INSTALL",
+			completionId: winner.id,
+			installerId,
+			status: "INCOMPLETE",
+			missing: ["serial"],
+		},
+	})
+
+	// submitCompletion doesn't see `winner` via its own findUnique read (it
+	// hasn't been given the chance to), so it attempts to create a duplicate —
+	// exercising the same P2002 path a true race would hit — and must recover
+	// the winner's row rather than throw or fabricate a fake one.
+	const dbAny = db as unknown as {
+		installCompletion: { findUnique: typeof db.installCompletion.findUnique }
+	}
+	const original = dbAny.installCompletion.findUnique
+	dbAny.installCompletion.findUnique = (async () => null) as never
+	try {
+		const res = await submitCompletion(
+			{
+				idempotencyKey: key,
+				claroOrderNo: "4",
+				installerId,
+				vanId,
+				address: "a",
+				accessories: [],
+				groundRod: true,
+				serialUnreadable: true,
+				formPhotoPath: "/tmp/f.jpg",
+				sigInstaller: "data:image/png;base64,AAA",
+				installedAt: new Date(),
+			},
+			{ id: installerId },
+		)
+		expect(res.completionId).toBe(winner.id)
+		expect(res.paymentRequestId).toBe(winnerPr.id)
+	} finally {
+		dbAny.installCompletion.findUnique = original
+	}
+	expect(
+		await db.installCompletion.count({ where: { idempotencyKey: key } }),
+	).toBe(1)
+})

@@ -48,21 +48,26 @@ export function BarcodeScanner({
 				canvas.getContext("2d")?.drawImage(video, 0, 0)
 				return canvas.toDataURL("image/jpeg", 0.8)
 			}
-			const native = await decodeWithNative(video)
-			if (native && !stop) {
-				onDecode(native, frame())
-				return
+			try {
+				const native = await decodeWithNative(video)
+				if (native && !stop) {
+					onDecode(native, frame())
+					return
+				}
+				controls = await reader.decodeFromVideoDevice(
+					undefined,
+					video,
+					(result) => {
+						if (result && !stop) {
+							stop = true
+							onDecode(result.getText(), frame())
+						}
+					},
+				)
+			} catch {
+				// No camera device, permission denied, or an unsupported browser.
+				// The manual "Can't scan" button below still lets the flow continue.
 			}
-			controls = await reader.decodeFromVideoDevice(
-				undefined,
-				video,
-				(result) => {
-					if (result && !stop) {
-						stop = true
-						onDecode(result.getText(), frame())
-					}
-				},
-			)
 		})()
 		return () => {
 			stop = true

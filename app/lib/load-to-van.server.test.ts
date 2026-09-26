@@ -64,3 +64,54 @@ it("moves a warehouse serial onto the van and closes the restock", async () => {
 		await db.vanMovement.count({ where: { serial, type: "PICKUP" } }),
 	).toBe(1)
 })
+
+it("rejects releasing a restock that is still awaiting over-par sign-off", async () => {
+	const needsSignoff = await db.restockRequest.create({
+		data: {
+			vanId,
+			lines: [{ serviceCodeId: scId, qty: 1 }],
+			status: "NEEDS_SIGNOFF",
+		},
+	})
+	await expect(
+		releaseRestockToVan(
+			needsSignoff.id,
+			[],
+			[{ serviceCodeId: scId, qty: 3 }],
+			{
+				id: actorId,
+			},
+		),
+	).rejects.toThrow()
+	expect(
+		await db.vanMovement.count({ where: { refRestockId: needsSignoff.id } }),
+	).toBe(0)
+	expect(
+		(
+			await db.restockRequest.findUniqueOrThrow({
+				where: { id: needsSignoff.id },
+			})
+		).status,
+	).toBe("NEEDS_SIGNOFF")
+})
+
+it("rejects releasing the same restock twice (no replay, no double-counted accessory stock)", async () => {
+	const req = await db.restockRequest.create({
+		data: {
+			vanId,
+			lines: [{ serviceCodeId: scId, qty: 4 }],
+			status: "APPROVED",
+		},
+	})
+	await releaseRestockToVan(req.id, [], [{ serviceCodeId: scId, qty: 4 }], {
+		id: actorId,
+	})
+	await expect(
+		releaseRestockToVan(req.id, [], [{ serviceCodeId: scId, qty: 4 }], {
+			id: actorId,
+		}),
+	).rejects.toThrow()
+	expect(await db.vanMovement.count({ where: { refRestockId: req.id } })).toBe(
+		1,
+	)
+})

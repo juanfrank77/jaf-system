@@ -47,6 +47,18 @@ export async function action({ request }: Route.ActionArgs) {
 		return { errorKey: "installer.completion.errors.no_van" as const }
 	}
 	const form = await request.formData()
+
+	const claroOrderNoRaw = form.get("claroOrderNo")
+	if (typeof claroOrderNoRaw !== "string" || !claroOrderNoRaw.trim()) {
+		return {
+			errorKey: "installer.completion.errors.order_no_required" as const,
+		}
+	}
+	const addressRaw = form.get("address")
+	if (typeof addressRaw !== "string" || !addressRaw.trim()) {
+		return { errorKey: "installer.completion.errors.address_required" as const }
+	}
+
 	const accessories = JSON.parse((form.get("accessories") as string) || "[]")
 
 	let formPhotoPath: string | undefined
@@ -147,7 +159,10 @@ export default function NewCompletion({ loaderData }: Route.ComponentProps) {
 					if (!online) {
 						e.preventDefault()
 						const form = e.currentTarget
-						const payload = {
+						const formPhotoFile = (
+							form.elements.namedItem("formPhoto") as HTMLInputElement | null
+						)?.files?.[0]
+						const buildPayload = (formPhotoBase64?: string) => ({
 							idempotencyKey,
 							claroOrderNo,
 							address,
@@ -166,10 +181,25 @@ export default function NewCompletion({ loaderData }: Route.ComponentProps) {
 							sigInstaller: sigRef.current?.isEmpty()
 								? ""
 								: (sigRef.current?.toDataURL() ?? ""),
-						}
-						queueCompletion(payload).then(() => {
-							window.location.href = "/installer"
+							...(formPhotoBase64
+								? {
+										formPhotoBase64,
+										formPhotoName: formPhotoFile?.name ?? "photo.jpg",
+										formPhotoType: formPhotoFile?.type ?? "image/jpeg",
+									}
+								: {}),
 						})
+						const queueAndLeave = (formPhotoBase64?: string) =>
+							queueCompletion(buildPayload(formPhotoBase64)).then(() => {
+								window.location.href = "/installer"
+							})
+						if (formPhotoFile) {
+							const reader = new FileReader()
+							reader.onload = () => queueAndLeave(reader.result as string)
+							reader.readAsDataURL(formPhotoFile)
+						} else {
+							queueAndLeave()
+						}
 					}
 				}}
 				className="space-y-4"

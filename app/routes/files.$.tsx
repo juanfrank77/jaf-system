@@ -54,6 +54,45 @@ function canAccessDoc(
 	return false
 }
 
+async function canAccessCompletionFile(
+	relativePath: string,
+	absolutePath: string,
+	user: { id: string; role: string },
+): Promise<boolean> {
+	if (user.role === "ADMIN" || user.role === "INSTALLER_SUPERVISOR") {
+		const pdfMatch = relativePath.match(/^completions\/([^/]+)\.pdf$/)
+		if (pdfMatch) {
+			const completion = await db.installCompletion.findUnique({
+				where: { id: pdfMatch[1] },
+			})
+			return Boolean(completion)
+		}
+		const photo = await db.installCompletion.findFirst({
+			where: {
+				OR: [{ formPhotoPath: absolutePath }, { labelPhotoPath: absolutePath }],
+			},
+		})
+		return Boolean(photo)
+	}
+	if (user.role === "INSTALLER") {
+		const pdfMatch = relativePath.match(/^completions\/([^/]+)\.pdf$/)
+		if (pdfMatch) {
+			const completion = await db.installCompletion.findUnique({
+				where: { id: pdfMatch[1] },
+			})
+			return completion?.installerId === user.id
+		}
+		const photo = await db.installCompletion.findFirst({
+			where: {
+				installerId: user.id,
+				OR: [{ formPhotoPath: absolutePath }, { labelPhotoPath: absolutePath }],
+			},
+		})
+		return Boolean(photo)
+	}
+	return false
+}
+
 export async function loader({ request, params }: Route.LoaderArgs) {
 	const session = await requireSession(request)
 	const user = await db.user.findUniqueOrThrow({
@@ -70,22 +109,28 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		return new Response("Forbidden", { status: 403 })
 	}
 
-	const docId = extractDocId(params["*"] ?? "")
-	if (!docId) {
-		return new Response("Forbidden", { status: 403 })
-	}
+	const relativePath = params["*"] ?? ""
+	if (relativePath.startsWith("completions/")) {
+		const allowed = await canAccessCompletionFile(relativePath, filePath, user)
+		if (!allowed) return new Response("Forbidden", { status: 403 })
+	} else {
+		const docId = extractDocId(relativePath)
+		if (!docId) {
+			return new Response("Forbidden", { status: 403 })
+		}
 
-	const doc = await db.jafInvoice.findUnique({
-		where: { id: docId },
-		select: {
-			status: true,
-			supervisorId: true,
-			assignedCrewIds: true,
-		},
-	})
+		const doc = await db.jafInvoice.findUnique({
+			where: { id: docId },
+			select: {
+				status: true,
+				supervisorId: true,
+				assignedCrewIds: true,
+			},
+		})
 
-	if (!doc || !canAccessDoc(doc, user.role, user.id)) {
-		return new Response("Forbidden", { status: 403 })
+		if (!doc || !canAccessDoc(doc, user.role, user.id)) {
+			return new Response("Forbidden", { status: 403 })
+		}
 	}
 
 	try {

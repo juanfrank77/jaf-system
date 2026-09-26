@@ -80,4 +80,42 @@ describe("POST /installer/completion/new", () => {
 			status: "READY",
 		})
 	})
+
+	it("returns a validation error instead of crashing when claroOrderNo is missing", async () => {
+		mocks.requireInstaller.mockResolvedValue({
+			user: { id: "inst-1" },
+			profile: { id: "p1" },
+			van: { id: "van-1", active: true },
+		})
+		const req = offlineRequest({
+			idempotencyKey: "k1",
+			address: "a",
+			serialUnreadable: "true",
+			accessories: "[]",
+		})
+		const res = await action({ request: req, params: {}, context: {} } as never)
+		expect(res).toEqual({
+			errorKey: "installer.completion.errors.order_no_required",
+		})
+		expect(mocks.submitCompletion).not.toHaveBeenCalled()
+	})
+
+	it("returns a validation error instead of crashing when address is missing", async () => {
+		mocks.requireInstaller.mockResolvedValue({
+			user: { id: "inst-1" },
+			profile: { id: "p1" },
+			van: { id: "van-1", active: true },
+		})
+		const req = offlineRequest({
+			idempotencyKey: "k1",
+			claroOrderNo: "430920",
+			serialUnreadable: "true",
+			accessories: "[]",
+		})
+		const res = await action({ request: req, params: {}, context: {} } as never)
+		expect(res).toEqual({
+			errorKey: "installer.completion.errors.address_required",
+		})
+		expect(mocks.submitCompletion).not.toHaveBeenCalled()
+	})
 })

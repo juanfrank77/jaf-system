@@ -49,13 +49,16 @@ export async function submitCompletion(
 		where: { idempotencyKey: i.idempotencyKey },
 	})
 	if (existing) {
-		const pr = await db.paymentRequest.findFirst({
+		// The completion and its PaymentRequest are created together in the
+		// transaction below, so once `existing` is found here the PaymentRequest
+		// is guaranteed to exist too.
+		const pr = await db.paymentRequest.findFirstOrThrow({
 			where: { completionId: existing.id },
 		})
 		return {
 			completionId: existing.id,
-			paymentRequestId: pr?.id ?? "",
-			status: pr?.status ?? "READY",
+			paymentRequestId: pr.id,
+			status: pr.status,
 		}
 	}
 
@@ -76,94 +79,119 @@ export async function submitCompletion(
 	const status: PaymentRequestStatus =
 		missing.length > 0 ? "INCOMPLETE" : "READY"
 
-	const completion = await db.installCompletion.create({
-		data: {
-			idempotencyKey: i.idempotencyKey,
-			claroOrderNo: i.claroOrderNo,
-			installerId: i.installerId,
-			vanId: i.vanId,
-			status: "SUBMITTED",
-			address: i.address,
-			addressEditLog: i.addressEditLog as never,
-			gpsLat: i.gpsLat,
-			gpsLng: i.gpsLng,
-			dropFt: i.dropFt,
-			accessories: i.accessories as never,
-			groundRod: i.groundRod,
-			coaxFt: i.coaxFt,
-			serialInstalled: i.serialInstalled,
-			serialUnreadable: i.serialUnreadable,
-			serialNotOnVan,
-			modelResolved: i.modelResolved,
-			formPhotoPath: i.formPhotoPath,
-			labelPhotoPath: i.labelPhotoPath,
-			extraPhotoPaths: i.extraPhotoPaths ?? [],
-			sigInstaller: i.sigInstaller,
-			sigInstallerAt: i.sigInstaller ? new Date() : null,
-			submittedAt: new Date(),
-			installedAt: i.installedAt,
-		},
-	})
-
-	const ops = []
-	// Serialized unit: INSTALL movement + authoritative SerialLocation → INSTALLED (only when it was on the van).
-	if (i.serialInstalled && !serialNotOnVan) {
-		const loc = await db.serialLocation.findUnique({
-			where: { serial: i.serialInstalled },
-		})
-		const to = nextSerialState(loc?.status ?? null, "INSTALL")
-		ops.push(
-			db.serialLocation.update({
-				where: { serial: i.serialInstalled },
-				data: { status: to, currentRef: completion.id, since: new Date() },
-			}),
-		)
-		ops.push(
-			db.vanMovement.create({
+	let completionId: string
+	let paymentRequestId: string
+	let paymentRequestStatus: PaymentRequestStatus
+	try {
+		const result = await db.$transaction(async (tx) => {
+			const completion = await tx.installCompletion.create({
 				data: {
+					idempotencyKey: i.idempotencyKey,
+					claroOrderNo: i.claroOrderNo,
+					installerId: i.installerId,
 					vanId: i.vanId,
-					serviceCodeId: loc?.serviceCodeId ?? "",
-					qty: -1,
-					serial: i.serialInstalled,
-					type: "INSTALL",
-					refCompletionId: completion.id,
-					byUserId: actor.id,
+					status: "SUBMITTED",
+					address: i.address,
+					addressEditLog: i.addressEditLog as never,
+					gpsLat: i.gpsLat,
+					gpsLng: i.gpsLng,
+					dropFt: i.dropFt,
+					accessories: i.accessories as never,
+					groundRod: i.groundRod,
+					coaxFt: i.coaxFt,
+					serialInstalled: i.serialInstalled,
+					serialUnreadable: i.serialUnreadable,
+					serialNotOnVan,
+					modelResolved: i.modelResolved,
+					formPhotoPath: i.formPhotoPath,
+					labelPhotoPath: i.labelPhotoPath,
+					extraPhotoPaths: i.extraPhotoPaths ?? [],
+					sigInstaller: i.sigInstaller,
+					sigInstallerAt: i.sigInstaller ? new Date() : null,
+					submittedAt: new Date(),
+					installedAt: i.installedAt,
 				},
-			}),
-		)
-	}
-	// Accessories: one INSTALL movement per line.
-	for (const a of i.accessories) {
-		if (a.qty > 0)
-			ops.push(
-				db.vanMovement.create({
+			})
+
+			// Serialized unit: INSTALL movement + authoritative SerialLocation → INSTALLED (only when it was on the van).
+			if (i.serialInstalled && !serialNotOnVan) {
+				const loc = await tx.serialLocation.findUnique({
+					where: { serial: i.serialInstalled },
+				})
+				const to = nextSerialState(loc?.status ?? null, "INSTALL")
+				await tx.serialLocation.update({
+					where: { serial: i.serialInstalled },
+					data: { status: to, currentRef: completion.id, since: new Date() },
+				})
+				await tx.vanMovement.create({
 					data: {
 						vanId: i.vanId,
-						serviceCodeId: a.serviceCodeId,
-						qty: -a.qty,
+						serviceCodeId: loc?.serviceCodeId ?? "",
+						qty: -1,
+						serial: i.serialInstalled,
 						type: "INSTALL",
 						refCompletionId: completion.id,
 						byUserId: actor.id,
 					},
-				}),
-			)
+				})
+			}
+			// Accessories: one INSTALL movement per line.
+			for (const a of i.accessories) {
+				if (a.qty > 0)
+					await tx.vanMovement.create({
+						data: {
+							vanId: i.vanId,
+							serviceCodeId: a.serviceCodeId,
+							qty: -a.qty,
+							type: "INSTALL",
+							refCompletionId: completion.id,
+							byUserId: actor.id,
+						},
+					})
+			}
+
+			const paymentRequest = await tx.paymentRequest.create({
+				data: {
+					kind: "INSTALL",
+					completionId: completion.id,
+					installerId: i.installerId,
+					status,
+					missing,
+					attachments: [
+						i.formPhotoPath && { kind: "formPhoto", path: i.formPhotoPath },
+					].filter(Boolean) as never,
+				},
+			})
+
+			return { completionId: completion.id, paymentRequest }
+		})
+		completionId = result.completionId
+		paymentRequestId = result.paymentRequest.id
+		paymentRequestStatus = result.paymentRequest.status
+	} catch (e) {
+		// Concurrent double-submit (reconnect fires + user retaps): the losing
+		// request hits the idempotencyKey unique constraint. Return the winner's
+		// row instead of surfacing a 500 (Review Focus: offline double-submit).
+		if (
+			e &&
+			typeof e === "object" &&
+			"code" in e &&
+			(e as { code?: string }).code === "P2002"
+		) {
+			const won = await db.installCompletion.findUniqueOrThrow({
+				where: { idempotencyKey: i.idempotencyKey },
+			})
+			const pr = await db.paymentRequest.findFirstOrThrow({
+				where: { completionId: won.id },
+			})
+			return {
+				completionId: won.id,
+				paymentRequestId: pr.id,
+				status: pr.status,
+			}
+		}
+		throw e
 	}
-	const paymentRequest = db.paymentRequest.create({
-		data: {
-			kind: "INSTALL",
-			completionId: completion.id,
-			installerId: i.installerId,
-			status,
-			missing,
-			attachments: [
-				i.formPhotoPath && { kind: "formPhoto", path: i.formPhotoPath },
-			].filter(Boolean) as never,
-		},
-	})
-	await db.$transaction([paymentRequest, ...ops])
-	const prRow = await db.paymentRequest.findFirstOrThrow({
-		where: { completionId: completion.id },
-	})
 
 	// Completion PDF (best-effort, outside the tx) + notify installer supervisor.
 	try {
@@ -199,10 +227,10 @@ export async function submitCompletion(
 			"completions",
 		)
 		await fs.mkdir(dir, { recursive: true })
-		const pdfPath = path.join(dir, `${completion.id}.pdf`)
+		const pdfPath = path.join(dir, `${completionId}.pdf`)
 		await fs.writeFile(pdfPath, pdf)
 		await db.installCompletion.update({
-			where: { id: completion.id },
+			where: { id: completionId },
 			data: { completionPdfPath: pdfPath },
 		})
 	} catch {
@@ -224,9 +252,5 @@ export async function submitCompletion(
 		),
 	)
 
-	return {
-		completionId: completion.id,
-		paymentRequestId: prRow.id,
-		status: prRow.status,
-	}
+	return { completionId, paymentRequestId, status: paymentRequestStatus }
 }

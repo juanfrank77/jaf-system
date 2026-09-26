@@ -90,3 +90,99 @@ it("swaps units and leaves the original completion untouched", async () => {
 	expect(after.claroOrderNo).toBe(before.claroOrderNo)
 	expect(after.id).toBe(completionId)
 })
+
+it("does not throw when the outgoing serial has no prior SerialLocation row (pre-existing install)", async () => {
+	const untracked = `UNTRACKED-${Date.now()}`
+	const freshIn = `FRESH-IN-${Date.now()}`
+	await db.serialLocation.create({
+		data: {
+			serial: freshIn,
+			serviceCodeId: scId,
+			status: "VAN",
+			currentRef: vanId,
+		},
+	})
+	const res = await submitSwap(
+		{
+			completionId,
+			serialOut: untracked,
+			reason: "HARDWARE",
+			serialIn: freshIn,
+			newClaroOrderNo: undefined,
+			installerId,
+			vanId,
+		},
+		{ id: installerId },
+	)
+	expect(res.paymentRequestId).toBeTruthy()
+	const outLoc = await db.serialLocation.findUnique({
+		where: { serial: untracked },
+	})
+	expect(outLoc?.status).toBe("REMOVED_PENDING_RETURN")
+	const swap = await db.swapEvent.findUniqueOrThrow({
+		where: { id: res.swapId },
+	})
+	expect(swap.serialOutMatchedRecord).toBe(false)
+})
+
+it("does not throw when the incoming serial is not on the van, and flags it", async () => {
+	const outS = `OUT2-${Date.now()}`
+	const elsewhereIn = `ELSEWHERE-${Date.now()}`
+	await db.serialLocation.create({
+		data: {
+			serial: outS,
+			serviceCodeId: scId,
+			status: "INSTALLED",
+			currentRef: completionId,
+		},
+	})
+	await db.serialLocation.create({
+		data: {
+			serial: elsewhereIn,
+			serviceCodeId: scId,
+			status: "WAREHOUSE",
+			currentRef: "wh1",
+		},
+	})
+	const res = await submitSwap(
+		{
+			completionId,
+			serialOut: outS,
+			reason: "HARDWARE",
+			serialIn: elsewhereIn,
+			newClaroOrderNo: undefined,
+			installerId,
+			vanId,
+		},
+		{ id: installerId },
+	)
+	expect(
+		(await db.serialLocation.findUnique({ where: { serial: elsewhereIn } }))
+			?.status,
+	).toBe("INSTALLED")
+	const swap = await db.swapEvent.findUniqueOrThrow({
+		where: { id: res.swapId },
+	})
+	expect(swap.serialInNotOnVan).toBe(true)
+})
+
+it("does not leave an orphan SwapEvent when the transaction fails", async () => {
+	await expect(
+		submitSwap(
+			{
+				completionId,
+				serialOut: `NOPE-${Date.now()}`,
+				reason: "HARDWARE",
+				serialIn: `ALSO-NOPE-${Date.now()}`,
+				newClaroOrderNo: undefined,
+				installerId: "does-not-exist",
+				vanId,
+			},
+			{ id: "does-not-exist" },
+		),
+	).rejects.toThrow()
+	const count = await db.swapEvent.count({
+		where: { byInstallerId: "does-not-exist" },
+	})
+	expect(count).toBe(0)
+})

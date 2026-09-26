@@ -7,17 +7,30 @@ export async function releaseRestockToVan(
 	accessories: { serviceCodeId: string; qty: number }[],
 	actor: { id: string },
 ): Promise<void> {
-	const restock = await db.restockRequest.findUniqueOrThrow({
-		where: { id: restockId },
-	})
-	const ops = []
-	for (const s of serials) {
-		const loc = await db.serialLocation.findUnique({
-			where: { serial: s.serial },
+	await db.$transaction(async (tx) => {
+		// Atomic status guard: only a SUBMITTED/APPROVED restock may be released,
+		// and this transitions it to RECEIVED in the same write, so a concurrent
+		// or replayed release (refresh, double-click, back-button) can never
+		// succeed twice — updateMany's count tells us who won.
+		const claimed = await tx.restockRequest.updateMany({
+			where: { id: restockId, status: { in: ["SUBMITTED", "APPROVED"] } },
+			data: { status: "RECEIVED", releaseId: `rel-${Date.now()}` },
 		})
-		const to = nextSerialState(loc?.status ?? null, "PICKUP")
-		ops.push(
-			db.serialLocation.upsert({
+		if (claimed.count === 0) {
+			throw new Error(
+				"Restock is not releasable (already released, or still awaiting sign-off)",
+			)
+		}
+		const restock = await tx.restockRequest.findUniqueOrThrow({
+			where: { id: restockId },
+		})
+
+		for (const s of serials) {
+			const loc = await tx.serialLocation.findUnique({
+				where: { serial: s.serial },
+			})
+			const to = nextSerialState(loc?.status ?? null, "PICKUP")
+			await tx.serialLocation.upsert({
 				where: { serial: s.serial },
 				update: { status: to, currentRef: restock.vanId, since: new Date() },
 				create: {
@@ -26,10 +39,8 @@ export async function releaseRestockToVan(
 					status: to,
 					currentRef: restock.vanId,
 				},
-			}),
-		)
-		ops.push(
-			db.vanMovement.create({
+			})
+			await tx.vanMovement.create({
 				data: {
 					vanId: restock.vanId,
 					serviceCodeId: s.serviceCodeId,
@@ -39,13 +50,11 @@ export async function releaseRestockToVan(
 					refRestockId: restockId,
 					byUserId: actor.id,
 				},
-			}),
-		)
-	}
-	for (const a of accessories) {
-		if (a.qty > 0)
-			ops.push(
-				db.vanMovement.create({
+			})
+		}
+		for (const a of accessories) {
+			if (a.qty > 0)
+				await tx.vanMovement.create({
 					data: {
 						vanId: restock.vanId,
 						serviceCodeId: a.serviceCodeId,
@@ -54,14 +63,7 @@ export async function releaseRestockToVan(
 						refRestockId: restockId,
 						byUserId: actor.id,
 					},
-				}),
-			)
-	}
-	ops.push(
-		db.restockRequest.update({
-			where: { id: restockId },
-			data: { status: "RECEIVED", releaseId: `rel-${Date.now()}` },
-		}),
-	)
-	await db.$transaction(ops)
+				})
+		}
+	})
 }

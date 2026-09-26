@@ -1,6 +1,5 @@
 import type { SwapReason } from "../../generated/prisma/client"
 import { db } from "./db.server"
-import { nextSerialState } from "./van-inventory-v3"
 
 export async function submitSwap(
 	input: {
@@ -25,6 +24,11 @@ export async function submitSwap(
 	const inLoc = await db.serialLocation.findUnique({
 		where: { serial: input.serialIn },
 	})
+	// Spec §12: a mismatched record or an incoming serial not on the van are
+	// non-blocking warnings — the swap still completes. Both are field-verified
+	// corrective actions, so the transition here is intentionally permissive
+	// (unlike nextSerialState's strict guard, which exists to catch programming
+	// errors elsewhere, not to second-guess what a technician just scanned).
 	const serialOutMatchedRecord = outLoc?.currentRef === input.completionId
 	const serialInNotOnVan = !(
 		inLoc &&
@@ -35,63 +39,79 @@ export async function submitSwap(
 		(Date.now() - (completion.installedAt ?? completion.createdAt).getTime()) /
 			86_400_000,
 	)
+	const outServiceCodeId = outLoc?.serviceCodeId ?? inLoc?.serviceCodeId ?? ""
+	const inServiceCodeId = inLoc?.serviceCodeId ?? outLoc?.serviceCodeId ?? ""
 
-	const swap = await db.swapEvent.create({
-		data: {
-			completionId: input.completionId,
-			serialOut: input.serialOut,
-			serialOutPhotoPath: input.serialOutPhotoPath,
-			serialOutMatchedRecord,
-			reason: input.reason,
-			serialIn: input.serialIn,
-			serialInPhotoPath: input.serialInPhotoPath,
-			serialInNotOnVan,
-			newClaroOrderNo: input.newClaroOrderNo ?? null,
-			daysSinceInstall,
-			byInstallerId: input.installerId,
-		},
-	})
-
-	const ops = [
-		db.serialLocation.update({
-			where: { serial: input.serialOut },
+	const { swap, paymentRequestId } = await db.$transaction(async (tx) => {
+		const swap = await tx.swapEvent.create({
 			data: {
-				status: nextSerialState(outLoc?.status ?? null, "SWAP_OUT"),
+				completionId: input.completionId,
+				serialOut: input.serialOut,
+				serialOutPhotoPath: input.serialOutPhotoPath,
+				serialOutMatchedRecord,
+				reason: input.reason,
+				serialIn: input.serialIn,
+				serialInPhotoPath: input.serialInPhotoPath,
+				serialInNotOnVan,
+				newClaroOrderNo: input.newClaroOrderNo ?? null,
+				daysSinceInstall,
+				byInstallerId: input.installerId,
+			},
+		})
+
+		await tx.serialLocation.upsert({
+			where: { serial: input.serialOut },
+			update: {
+				status: "REMOVED_PENDING_RETURN",
 				currentRef: input.vanId,
 				since: new Date(),
 			},
-		}),
-		db.vanMovement.create({
+			create: {
+				serial: input.serialOut,
+				serviceCodeId: outServiceCodeId,
+				status: "REMOVED_PENDING_RETURN",
+				currentRef: input.vanId,
+			},
+		})
+		await tx.vanMovement.create({
 			data: {
 				vanId: input.vanId,
-				serviceCodeId: outLoc?.serviceCodeId ?? "",
+				serviceCodeId: outServiceCodeId,
 				qty: 1,
 				serial: input.serialOut,
 				type: "SWAP_OUT",
 				refSwapId: swap.id,
 				byUserId: actor.id,
 			},
-		}),
-		db.serialLocation.update({
+		})
+
+		await tx.serialLocation.upsert({
 			where: { serial: input.serialIn },
-			data: {
-				status: nextSerialState(inLoc?.status ?? null, "SWAP_IN"),
+			update: {
+				status: "INSTALLED",
 				currentRef: input.completionId,
 				since: new Date(),
 			},
-		}),
-		db.vanMovement.create({
+			create: {
+				serial: input.serialIn,
+				serviceCodeId: inServiceCodeId,
+				status: "INSTALLED",
+				currentRef: input.completionId,
+			},
+		})
+		await tx.vanMovement.create({
 			data: {
 				vanId: input.vanId,
-				serviceCodeId: inLoc?.serviceCodeId ?? "",
+				serviceCodeId: inServiceCodeId,
 				qty: -1,
 				serial: input.serialIn,
 				type: "SWAP_IN",
 				refSwapId: swap.id,
 				byUserId: actor.id,
 			},
-		}),
-		db.paymentRequest.create({
+		})
+
+		const paymentRequest = await tx.paymentRequest.create({
 			data: {
 				kind: "CALLBACK",
 				swapId: swap.id,
@@ -100,11 +120,9 @@ export async function submitSwap(
 				missing: [],
 				daysSinceInstall,
 			},
-		}),
-	]
-	await db.$transaction(ops)
-	const pr = await db.paymentRequest.findFirstOrThrow({
-		where: { swapId: swap.id },
+		})
+		return { swap, paymentRequestId: paymentRequest.id }
 	})
-	return { swapId: swap.id, paymentRequestId: pr.id }
+
+	return { swapId: swap.id, paymentRequestId }
 }

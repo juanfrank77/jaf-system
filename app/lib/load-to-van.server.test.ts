@@ -271,3 +271,73 @@ it("rejects a release with the same serial scanned twice, instead of crashing on
 		0,
 	)
 })
+
+it("rejects a release that provides a serial for a service code never requested, even though the requested lines are individually satisfied", async () => {
+	const requestedCode = scId
+	const unrequestedCode = (
+		await db.serviceCode.create({
+			data: {
+				claroCode: `UNREQ${Date.now()}`,
+				name: "Unrequested",
+				unitPrice: "0",
+				serialized: true,
+			},
+		})
+	).id
+	const s1 = `PHANTOM-REQ-${Date.now()}`
+	const s2 = `PHANTOM-UNREQ-${Date.now()}`
+	await db.serialLocation.create({
+		data: {
+			serial: s1,
+			serviceCodeId: requestedCode,
+			status: "WAREHOUSE",
+			currentRef: "wh1",
+		},
+	})
+	await db.serialLocation.create({
+		data: {
+			serial: s2,
+			serviceCodeId: unrequestedCode,
+			status: "WAREHOUSE",
+			currentRef: "wh1",
+		},
+	})
+	const req = await db.restockRequest.create({
+		data: {
+			vanId,
+			lines: [{ serviceCodeId: requestedCode, qty: 1 }],
+			status: "APPROVED",
+		},
+	})
+	await expect(
+		releaseRestockToVan(
+			req.id,
+			[
+				{ serial: s1, serviceCodeId: requestedCode },
+				{ serial: s2, serviceCodeId: unrequestedCode },
+			],
+			[],
+			{ id: actorId },
+		),
+	).rejects.toThrow()
+	expect(
+		(await db.restockRequest.findUniqueOrThrow({ where: { id: req.id } }))
+			.status,
+	).toBe("APPROVED")
+	expect(await db.vanMovement.count({ where: { refRestockId: req.id } })).toBe(
+		0,
+	)
+})
+
+it("rejects releasing a restock that has no lines at all", async () => {
+	const req = await db.restockRequest.create({
+		data: { vanId, lines: [], status: "APPROVED" },
+	})
+	await expect(
+		releaseRestockToVan(req.id, [], [], { id: actorId }),
+	).rejects.toThrow()
+	expect(
+		(await db.restockRequest.findUniqueOrThrow({ where: { id: req.id } }))
+			.status,
+	).toBe("APPROVED")
+})

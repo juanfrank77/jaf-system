@@ -67,13 +67,21 @@ export async function submitSwap(
 			},
 		})
 
+		// `since` drives the owed-back episode key downstream (installer
+		// supervisor notifications) — it must only move on a real transition
+		// into REMOVED_PENDING_RETURN, not on every swap against an already
+		// owed-back serial (which this upsert permissively allows; see the
+		// comment above on serialOutMatchedRecord).
 		await tx.serialLocation.upsert({
 			where: { serial: input.serialOut },
-			update: {
-				status: "REMOVED_PENDING_RETURN",
-				currentRef: input.vanId,
-				since: new Date(),
-			},
+			update:
+				outLoc?.status === "REMOVED_PENDING_RETURN"
+					? { currentRef: input.vanId }
+					: {
+							status: "REMOVED_PENDING_RETURN",
+							currentRef: input.vanId,
+							since: new Date(),
+						},
 			create: {
 				serial: input.serialOut,
 				serviceCodeId: outServiceCodeId,

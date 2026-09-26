@@ -127,7 +127,8 @@ The app itself doesn't open a configurable port out of the box — `pnpm start` 
 This migration drops four legacy tables (`ConsignmentReceipt`, `VanRestockRequest`, `install_log`, `van_inventory_transaction`) and `Van.standardStockLevels`, with no archive or backfill — verified empty against this production database before the migration was written. If you are running this against a *different* database (a restored backup, a staging instance, anything that isn't the verified production database), confirm these are still empty first:
 
 ```bash
-psql "$DATABASE_URL" \
+# reads the same DATABASE_URL migrate deploy uses from .env — not the shell env
+psql "$(grep '^DATABASE_URL=' .env | cut -d= -f2-)" \
   -c 'SELECT count(*) FROM "ConsignmentReceipt"' \
   -c 'SELECT count(*) FROM "VanRestockRequest"' \
   -c 'SELECT count(*) FROM "install_log"' \
@@ -153,11 +154,11 @@ pnpm run build                # production build
 pnpm run start                # starts the app on port 3000
 ```
 
-**`SEED_TEMP_PASSWORD` is required** — the seed script refuses to run without it. There is no built-in default password; whatever you set here becomes the shared temporary password for every account the seed creates *or updates* (real supervisors, warehouse staff, and the ~55 real installers from the roster CSV) — re-running the seed with a new value rotates every existing account's password to it, not just newly created ones.
+**`SEED_TEMP_PASSWORD` is required** — the seed script refuses to run without it. There is no built-in default password; whatever you set here becomes the shared temporary password for every account the seed *creates*. **This only applies the first time an account is seeded** — re-running `pnpm prisma db seed` (to pick up new service codes, a growing roster, etc.) never touches the password of an account that already exists. That is deliberate: `pnpm prisma db seed` is a routine, repeatable deploy step (see the checklist in §11), and if it reset passwords on every run it would silently undo any admin-issued per-account reset (`/admin/users`) or a user's own password change the moment someone reran seeding for an unrelated reason.
 
 **The installer roster CSV is not in version control** (it holds real names, employee/TOA numbers, and personal emails). Place it at `docs/JAF_Installer_Roster_seed.csv` (or point `INSTALLER_ROSTER_CSV_PATH` at wherever you keep it) before running the seed — it's gitignored, so `git pull` won't bring it over; transfer it out-of-band. The seed now fails fast if this file is missing, before any other account is written.
 
-**Rotate this password (or move to per-account resets) before real staff start touching the system.** A shared temporary password is meant to get the pilot running, not to be the permanent credential for real users. Update `SEED_TEMP_PASSWORD` in `.env` and re-run `pnpm prisma db seed` to rotate it for every seeded account, or script per-account resets if you'd rather not use a shared password at all.
+**Move every real account off this shared password before staff start touching the system.** A shared temporary password is meant to get the pilot running, not to be the permanent credential for real users. Re-running the seed does **not** change it for existing accounts (see above), so the only way to rotate it is the admin "Reset password" action at `/admin/users` for each account, or having each user set their own password once logged in. Do this once, before go-live.
 
 ---
 

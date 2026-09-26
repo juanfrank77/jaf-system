@@ -36,8 +36,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const agedSerials = rollup
 		.flatMap((r) => r.owedBackDetails)
 		.filter((o) => o.sinceDays > OWED_BACK_AGING_DAYS)
-	const docId = (o: { serial: string; since: Date | null }) =>
-		`owed-back:${o.serial}:${(o.since ?? new Date(0)).toISOString()}`
+	const docId = (o: { serial: string; since: Date }) =>
+		`owed-back:${o.serial}:${o.since.toISOString()}`
 	const docIds = agedSerials.map(docId)
 
 	if (docIds.length > 0 && supervisors.length > 0) {

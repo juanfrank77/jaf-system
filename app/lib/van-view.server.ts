@@ -73,13 +73,16 @@ export async function getVanView(vanId: string) {
 		par: parMap[serviceCodeId] ?? null,
 	}))
 	const owed = owedBack(serials, vanId).map((serial) => {
+		// owedBack derives its list from this same `serials` array, so a
+		// returned serial is always found here — a fallback would silently
+		// mask a real invariant break (e.g. owedBack drifting out of sync
+		// with this filter) instead of surfacing it.
 		const row = serials.find((s) => s.serial === serial)
+		if (!row) throw new Error(`owedBack returned unknown serial ${serial}`)
 		return {
 			serial,
-			since: row?.since ?? null,
-			sinceDays: row
-				? Math.floor((Date.now() - row.since.getTime()) / 86_400_000)
-				: 0,
+			since: row.since,
+			sinceDays: Math.floor((Date.now() - row.since.getTime()) / 86_400_000),
 		}
 	})
 	return { serialized, accessories, owedBack: owed }

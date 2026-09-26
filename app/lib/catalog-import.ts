@@ -115,7 +115,11 @@ export const SUPERVISOR_SEED = [
 		name: "Luis Rivera",
 		phone: "787-718-5863",
 	},
-	{ email: "rramos@jafcomm.local", name: "Ramón Ramos", phone: "787-533-6520" },
+	{
+		email: "rramos@jafcomm.local",
+		name: "Ramón Ramos",
+		phone: "787-533-6520",
+	},
 ] as const
 
 type BrigadeSeed = {
@@ -242,3 +246,61 @@ export const BRIGADE_SEED: BrigadeSeed[] = [
 		phone: "787-473-7410",
 	},
 ]
+
+// The two real warehouses (Phase 0 §4). `zone` is display-only (`_app.docs.$id_.sign.tsx`
+// renders "name — zone"); a region label is enough. Addresses per the warehouse specs.
+export const WAREHOUSE_SEED = [
+	{
+		name: "Guaynabo",
+		zone: "Metro",
+		location: "Calle Apama",
+	},
+	{
+		name: "Arecibo",
+		zone: "Norte",
+		location: "Calle Ramón Moncho Nieves, Sabana Hoyos",
+	},
+] as const
+
+type WarehouseStaffSeed = {
+	email: string
+	name: string
+	phone: string | null
+	warehouseName: string
+	isLead: boolean
+}
+
+// Real warehouse staff (Phase 0 §3/§4). Orlando's email is real; Frank/Gilberto have no
+// email on file, so they get realistic placeholders on jafcom.net. Lead flags: Orlando→Guaynabo,
+// Frank→Arecibo, Gilberto counter (no lead). Gilberto's warehouse is not documented — assigned to
+// Guaynabo (matches the inventory-audit spec's own seed); confirm with the client.
+export const WAREHOUSE_STAFF_SEED: WarehouseStaffSeed[] = [
+	{
+		email: "oguzman@jafcom.net",
+		name: "Orlando Guzmán",
+		phone: "939-244-6470",
+		warehouseName: "Guaynabo",
+		isLead: true,
+	},
+	{
+		email: "framos@jafcom.net",
+		name: "Frank Ramos",
+		phone: "787-612-8190",
+		warehouseName: "Arecibo",
+		isLead: true,
+	},
+	{
+		email: "gayala@jafcom.net",
+		name: "Gilberto Ayala",
+		phone: "787-932-0237",
+		warehouseName: "Guaynabo",
+		isLead: false,
+	},
+]
+
+// Backup authorizers (Phase 0 §3). Accounts are created now; their warehouse lead assignment
+// is deferred until the client confirms which warehouse(s) — checklist: "leads by assignment when confirmed".
+export const WAREHOUSE_BACKUP_SEED = [
+	{ email: "amedina@jafcom.net", name: "Alfredo Medina", phone: null },
+	{ email: "cgarcia@jafcom.net", name: "Catherine García", phone: null },
+] as const

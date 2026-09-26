@@ -1,6 +1,7 @@
 import { useEffect } from "react"
 import { useOnline } from "~/hooks/use-online"
 import { syncFieldUpdate } from "~/lib/field-sync"
+import { syncCompletionActions } from "~/lib/installer-completion-sync"
 import {
 	type CachedJob,
 	getCachedJob,
@@ -17,6 +18,13 @@ export function SyncManager() {
 		async function runSync() {
 			const actions = await getQueuedActions()
 			const hasFieldUpdates = actions.some((a) => a.action === "FIELD_UPDATE")
+			const hasInstallerCompletions = actions.some(
+				(a) => a.action === "INSTALLER_COMPLETION",
+			)
+
+			if (hasInstallerCompletions) {
+				await syncCompletionActions()
+			}
 
 			if (hasFieldUpdates) {
 				await syncQueuedActions({

@@ -18,6 +18,11 @@ export default [
 		route("admin/users", "routes/_app.admin.users.tsx"),
 		route("admin/crews", "routes/_app.admin.crews.tsx"),
 		route("admin/vans", "routes/_app.admin.vans.tsx"),
+		route("installer", "routes/_app.installer._index.tsx"),
+		route(
+			"installer/completion/new",
+			"routes/_app.installer.completion.new.tsx",
+		),
 		route("docs/new", "routes/_app.docs.new.tsx"),
 		route("docs/:id", "routes/_app.docs.$id.tsx"),
 		route("docs/:id/edit", "routes/_app.docs.$id_.edit.tsx"),

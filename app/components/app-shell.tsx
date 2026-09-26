@@ -41,6 +41,7 @@ type NavItem = {
 		| "app_shell.nav.admin_restock"
 		| "app_shell.nav.installer"
 		| "app_shell.nav.installer_supervisor"
+		| "app_shell.nav.warehouse_scan_in"
 	icon: IconSvgElement
 	roles?: Role[]
 }
@@ -110,6 +111,12 @@ const NAV_ITEMS: NavItem[] = [
 		labelKey: "app_shell.nav.installer_supervisor",
 		icon: TruckDeliveryIcon,
 		roles: ["INSTALLER_SUPERVISOR", "ADMIN"],
+	},
+	{
+		to: "/warehouse/scan-in",
+		labelKey: "app_shell.nav.warehouse_scan_in",
+		icon: TruckDeliveryIcon,
+		roles: ["WAREHOUSE", "ADMIN"],
 	},
 	{
 		to: "/comptroller",

@@ -186,3 +186,43 @@ it("does not leave an orphan SwapEvent when the transaction fails", async () => 
 	})
 	expect(count).toBe(0)
 })
+
+it("rejects swapping against a DRAFT completion", async () => {
+	const draft = await db.installCompletion.create({
+		data: {
+			idempotencyKey: `draft-${Date.now()}`,
+			claroOrderNo: "999",
+			installerId,
+			vanId,
+			status: "DRAFT",
+			address: "a",
+		},
+	})
+	const s1 = `DOUT-${Date.now()}`
+	const s2 = `DIN-${Date.now()}`
+	await db.serialLocation.create({
+		data: {
+			serial: s1,
+			serviceCodeId: scId,
+			status: "INSTALLED",
+			currentRef: draft.id,
+		},
+	})
+	await db.serialLocation.create({
+		data: { serial: s2, serviceCodeId: scId, status: "VAN", currentRef: vanId },
+	})
+	await expect(
+		submitSwap(
+			{
+				completionId: draft.id,
+				serialOut: s1,
+				reason: "HARDWARE",
+				serialIn: s2,
+				newClaroOrderNo: undefined,
+				installerId,
+				vanId,
+			},
+			{ id: installerId },
+		),
+	).rejects.toThrow()
+})

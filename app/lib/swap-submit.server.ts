@@ -18,6 +18,11 @@ export async function submitSwap(
 	const completion = await db.installCompletion.findUniqueOrThrow({
 		where: { id: input.completionId },
 	})
+	if (completion.status !== "SUBMITTED") {
+		throw new Error(
+			"Cannot swap against a completion that has not been submitted",
+		)
+	}
 	const outLoc = await db.serialLocation.findUnique({
 		where: { serial: input.serialOut },
 	})

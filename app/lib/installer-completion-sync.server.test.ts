@@ -61,4 +61,28 @@ describe("syncOne", () => {
 		expect(result.ok).toBe(false)
 		expect(result.conflict?.type).toBe("VAN_INACTIVE")
 	})
+
+	it("reattaches the queued form photo as a real file on sync", async () => {
+		vi.mocked(globalThis.fetch).mockImplementation(async (_url, init) => {
+			const body = init?.body as FormData
+			const file = body.get("formPhoto")
+			expect(file).toBeInstanceOf(File)
+			expect((file as File).name).toBe("claro-form.jpg")
+			expect((file as File).type).toBe("image/jpeg")
+			expect((file as File).size).toBeGreaterThan(0)
+			return { redirected: false, ok: true, status: 200 } as Response
+		})
+		const tinyJpegBase64 =
+			"data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/2wBDAQMDAwQDBAgEBAgQCwkLEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBD/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAj/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k="
+		await syncOne(
+			baseAction({
+				payload: {
+					claroOrderNo: "1",
+					formPhotoBase64: tinyJpegBase64,
+					formPhotoName: "claro-form.jpg",
+					formPhotoType: "image/jpeg",
+				},
+			}),
+		)
+	})
 })

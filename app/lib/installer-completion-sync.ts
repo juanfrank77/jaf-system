@@ -15,12 +15,32 @@ export async function queueCompletion(
 	})
 }
 
+function base64ToFile(dataUrl: string, name: string, type: string): File {
+	const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl
+	const binary = atob(base64)
+	const bytes = new Uint8Array(binary.length)
+	for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+	return new File([bytes], name, { type })
+}
+
 export async function syncOne(
 	a: QueuedAction,
 ): Promise<{ ok: boolean; conflict?: SyncConflict; error?: string }> {
 	const fd = new FormData()
-	for (const [k, v] of Object.entries(a.payload))
+	const { formPhotoBase64, formPhotoName, formPhotoType, ...rest } =
+		a.payload as Record<string, unknown>
+	for (const [k, v] of Object.entries(rest))
 		fd.set(k, typeof v === "string" ? v : JSON.stringify(v))
+	if (typeof formPhotoBase64 === "string" && formPhotoBase64) {
+		fd.set(
+			"formPhoto",
+			base64ToFile(
+				formPhotoBase64,
+				typeof formPhotoName === "string" ? formPhotoName : "photo.jpg",
+				typeof formPhotoType === "string" ? formPhotoType : "image/jpeg",
+			),
+		)
+	}
 	const res = await fetch("/installer/completion/new", {
 		method: "POST",
 		body: fd,

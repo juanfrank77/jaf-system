@@ -71,7 +71,7 @@ async function seedSupervisors() {
 		})
 		await db.account.upsert({
 			where: { id: `seed-${s.email}` },
-			update: {},
+			update: { password },
 			create: {
 				id: `seed-${s.email}`,
 				userId: user.id,
@@ -149,7 +149,7 @@ async function seedWarehouseStaff() {
 		})
 		await db.account.upsert({
 			where: { id: `seed-${s.email}` },
-			update: {},
+			update: { password },
 			create: {
 				id: `seed-${s.email}`,
 				userId: user.id,
@@ -187,7 +187,7 @@ async function seedWarehouseBackups() {
 		})
 		await db.account.upsert({
 			where: { id: `seed-${b.email}` },
-			update: {},
+			update: { password },
 			create: {
 				id: `seed-${b.email}`,
 				userId: user.id,
@@ -268,7 +268,7 @@ async function seedInstallers() {
 		})
 		await db.account.upsert({
 			where: { id: `seed-${r.email}` },
-			update: {},
+			update: { password },
 			create: {
 				id: `seed-${r.email}`,
 				userId: user.id,
@@ -407,7 +407,7 @@ async function seedInstallerSupervisor() {
 	})
 	await db.account.upsert({
 		where: { id: `seed-${email}` },
-		update: {},
+		update: { password },
 		create: {
 			id: `seed-${email}`,
 			userId: user.id,
@@ -423,6 +423,12 @@ async function seedInstallerSupervisor() {
 }
 
 async function main() {
+	// Fail before any write, not after 9 other steps have already committed:
+	// the roster CSV is an out-of-band transfer (gitignored, real PII), and a
+	// missing file would otherwise leave every other account seeded with the
+	// shared temp password but zero installers — a state nothing stops the
+	// deployer from continuing past.
+	await fs.access(INSTALLER_ROSTER_CSV_PATH)
 	await seedCatalog()
 	await seedSupervisors()
 	await seedBrigades()

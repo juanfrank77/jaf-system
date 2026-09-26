@@ -238,3 +238,36 @@ it("rejects a release that scans more units than the restock requested (excess)"
 		),
 	).rejects.toThrow()
 })
+
+it("rejects a release with the same serial scanned twice, instead of crashing on the unique constraint", async () => {
+	// Brand new serial (no prior SerialLocation row) is what reproduces the
+	// crash: a pre-existing serial's duplicate is silently absorbed into the
+	// updateMany path, but a new one has both copies fall into `newSerials`
+	// and collide on serialLocation's unique `serial` key in createMany.
+	const dupe = `DUPE-${Date.now()}`
+	const req = await db.restockRequest.create({
+		data: {
+			vanId,
+			lines: [{ serviceCodeId: scId, qty: 2 }],
+			status: "APPROVED",
+		},
+	})
+	await expect(
+		releaseRestockToVan(
+			req.id,
+			[
+				{ serial: dupe, serviceCodeId: scId },
+				{ serial: dupe, serviceCodeId: scId },
+			],
+			[],
+			{ id: actorId },
+		),
+	).rejects.toThrow(/duplicate/i)
+	expect(
+		(await db.restockRequest.findUniqueOrThrow({ where: { id: req.id } }))
+			.status,
+	).toBe("APPROVED")
+	expect(await db.vanMovement.count({ where: { refRestockId: req.id } })).toBe(
+		0,
+	)
+})

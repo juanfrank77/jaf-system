@@ -54,6 +54,13 @@ export async function releaseRestockToVan(
 		}
 
 		if (serials.length > 0) {
+			const seen = new Set<string>()
+			for (const s of serials) {
+				if (seen.has(s.serial)) {
+					throw new Error(`Duplicate serial ${s.serial} in release`)
+				}
+				seen.add(s.serial)
+			}
 			// One round trip for all existing rows, instead of a findUnique +
 			// upsert pair per serial: every serial here goes through the same
 			// PICKUP transition, so the only thing that varies per-serial is
@@ -63,17 +70,27 @@ export async function releaseRestockToVan(
 				where: { serial: { in: serials.map((s) => s.serial) } },
 			})
 			const existingBySerial = new Map(existing.map((l) => [l.serial, l]))
-			for (const s of serials) {
+			// nextSerialState's return value (not just its throw) drives the
+			// writes below, so a second PICKUP-like transition target can't
+			// silently diverge from what this loop actually validated. Every
+			// serial here goes through the same "PICKUP" event, and a
+			// transition's target status depends only on the event, never on
+			// the current status, so one shared value is correct.
+			const [targetStatus] = serials.map((s) =>
 				nextSerialState(
 					existingBySerial.get(s.serial)?.status ?? null,
 					"PICKUP",
-				)
-			}
+				),
+			)
 			const existingSerials = existing.map((l) => l.serial)
 			if (existingSerials.length > 0) {
 				await tx.serialLocation.updateMany({
 					where: { serial: { in: existingSerials } },
-					data: { status: "VAN", currentRef: restock.vanId, since: new Date() },
+					data: {
+						status: targetStatus,
+						currentRef: restock.vanId,
+						since: new Date(),
+					},
 				})
 			}
 			const newSerials = serials.filter((s) => !existingBySerial.has(s.serial))
@@ -82,7 +99,7 @@ export async function releaseRestockToVan(
 					data: newSerials.map((s) => ({
 						serial: s.serial,
 						serviceCodeId: s.serviceCodeId,
-						status: "VAN" as const,
+						status: targetStatus,
 						currentRef: restock.vanId,
 					})),
 				})

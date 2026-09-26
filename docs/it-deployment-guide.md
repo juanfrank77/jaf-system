@@ -135,6 +135,8 @@ pnpm run start                # starts the app on port 3000
 
 **`SEED_TEMP_PASSWORD` is required** — the seed script refuses to run without it. There is no built-in default password; whatever you set here becomes the shared temporary password for every account the seed creates or updates (real supervisors, warehouse staff, and the ~55 real installers from the roster CSV).
 
+**The installer roster CSV is not in version control** (it holds real names, employee/TOA numbers, and personal emails). Place it at `docs/JAF_Installer_Roster_seed.csv` (or point `INSTALLER_ROSTER_CSV_PATH` at wherever you keep it) before running the seed — it's gitignored, so `git pull` won't bring it over; transfer it out-of-band.
+
 **Rotate this password (or move to per-account resets) before real staff start touching the system.** A shared temporary password is meant to get the pilot running, not to be the permanent credential for real users. We can help script per-account password resets if you'd rather not do it by hand.
 
 ---

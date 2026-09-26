@@ -40,3 +40,9 @@ graphify-out
 
 # local git worktrees
 /.worktrees/
+
+# real installer PII (names, employee/TOA numbers, personal emails) — kept on
+# disk for the seed script to read, never in version control. See PR #21
+# review finding #15.
+/docs/JAF_Installer_Roster_seed.csv
+/docs/JAF_Installer_Roster_notes.md

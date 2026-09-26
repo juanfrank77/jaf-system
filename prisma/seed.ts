@@ -203,10 +203,12 @@ async function seedWarehouseBackups() {
 	)
 }
 
-const INSTALLER_ROSTER_CSV_PATH = path.resolve(
-	process.cwd(),
-	"docs/JAF_Installer_Roster_seed.csv",
-)
+// This file holds real installer PII (names, employee/TOA numbers, personal
+// emails) and is gitignored — never committed. Place it at this path (or
+// point INSTALLER_ROSTER_CSV_PATH at another location) before seeding.
+const INSTALLER_ROSTER_CSV_PATH =
+	process.env.INSTALLER_ROSTER_CSV_PATH ||
+	path.resolve(process.cwd(), "docs/JAF_Installer_Roster_seed.csv")
 
 async function seedNeedsCodePlaceholders() {
 	for (const { claroCode, name } of LIMIT_TABLE_PLACEHOLDER_CODES) {

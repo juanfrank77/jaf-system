@@ -7,7 +7,7 @@ export async function scanInReturn(
 	actor: { id: string },
 ): Promise<{ ok: boolean; reason?: string }> {
 	const loc = await db.serialLocation.findUnique({ where: { serial } })
-	if (!loc || loc.status !== "REMOVED_PENDING_RETURN")
+	if (loc?.status !== "REMOVED_PENDING_RETURN")
 		return { ok: false, reason: "NOT_OWED_BACK" }
 	const fromVanId = loc.currentRef
 	await db.$transaction([

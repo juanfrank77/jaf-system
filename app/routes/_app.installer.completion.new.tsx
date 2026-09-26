@@ -42,7 +42,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 export async function action({ request }: Route.ActionArgs) {
 	const { user, van } = await requireInstaller(request)
 	const offline = request.headers.get("X-Offline-Sync") === "true"
-	if (!van || !van.active) {
+	if (!van?.active) {
 		if (offline) return data({ conflict: "VAN_INACTIVE" }, { status: 409 })
 		return { errorKey: "installer.completion.errors.no_van" as const }
 	}

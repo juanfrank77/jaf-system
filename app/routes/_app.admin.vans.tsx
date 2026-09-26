@@ -14,45 +14,29 @@ import {
 } from "~/components/ui/select"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
-import { getActiveMaterialCodes } from "~/lib/service-codes.server"
-import { toNumberPrice } from "~/lib/utils"
 import {
 	appendVanAssignmentHistory,
 	type VanAssignmentEvent,
 } from "~/lib/van-history"
 import type { Route } from "./+types/_app.admin.vans"
 
-type StockLevel = {
-	serviceCodeId: string
-	qty: number
-}
-
 type InstallerUser = { id: string; name: string; active: boolean }
-type ServiceCodeOption = { id: string; claroCode: string; name: string }
 
 export const meta: Route.MetaFunction = () => [{ title: "Vans — JAF Ops" }]
 
 export async function loader({ request }: Route.LoaderArgs) {
 	await requireRole(request, ["ADMIN"])
 
-	const [vans, installers, serviceCodes] = await Promise.all([
+	const [vans, installers] = await Promise.all([
 		db.van.findMany({ orderBy: { name: "asc" } }),
 		db.user.findMany({
 			where: { role: "INSTALLER" },
 			orderBy: { name: "asc" },
 			select: { id: true, name: true, active: true },
 		}),
-		getActiveMaterialCodes(),
 	])
 
-	return {
-		vans,
-		installers,
-		serviceCodes: serviceCodes.map((c) => ({
-			...c,
-			unitPrice: toNumberPrice(c.unitPrice),
-		})),
-	}
+	return { vans, installers }
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -65,17 +49,6 @@ export async function action({ request }: Route.ActionArgs) {
 		const name = form.get("name")
 		const installerId = form.get("installerId")
 		const active = form.get("active") === "on"
-
-		const stockLevels: StockLevel[] = []
-		for (const [key, value] of form.entries()) {
-			if (key.startsWith("stock_")) {
-				const serviceCodeId = key.slice("stock_".length)
-				const qty = Number.parseInt(value as string, 10)
-				if (!Number.isNaN(qty) && qty >= 0) {
-					stockLevels.push({ serviceCodeId, qty })
-				}
-			}
-		}
 
 		if (typeof name !== "string" || !name.trim()) {
 			return data(
@@ -90,41 +63,15 @@ export async function action({ request }: Route.ActionArgs) {
 				typeof installerId === "string" && installerId.trim()
 					? installerId
 					: null,
-			standardStockLevels: stockLevels,
 			active,
 		}
 
 		if (intent === "update" && typeof id === "string" && id.trim()) {
 			const existing = await db.van.findUnique({ where: { id } })
-			const existingLevels = (
-				(existing?.standardStockLevels as StockLevel[]) || []
-			).filter(Boolean) as StockLevel[]
-			const mergedMap = new Map<string, number>(
-				existingLevels.map((level) => [level.serviceCodeId, level.qty]),
-			)
-			for (const level of stockLevels) {
-				mergedMap.set(level.serviceCodeId, level.qty)
-			}
-			const mergedLevels = existingLevels
-				.map((level) => ({
-					serviceCodeId: level.serviceCodeId,
-					qty: mergedMap.get(level.serviceCodeId) ?? 0,
-				}))
-				.concat(
-					Array.from(mergedMap.entries())
-						.filter(
-							([serviceCodeId]) =>
-								!existingLevels.some((l) => l.serviceCodeId === serviceCodeId),
-						)
-						.map(([serviceCodeId, qty]) => ({ serviceCodeId, qty })),
-				)
 			if (dataPayload.installerId !== existing?.installerId) {
 				await appendVanAssignmentHistory(id, dataPayload.installerId, user.id)
 			}
-			await db.van.update({
-				where: { id },
-				data: { ...dataPayload, standardStockLevels: mergedLevels },
-			})
+			await db.van.update({ where: { id }, data: dataPayload })
 		} else {
 			await db.van.create({ data: dataPayload })
 		}
@@ -154,17 +101,15 @@ export default function AdminVans({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { vans, installers, serviceCodes } = loaderData as {
+	const { vans, installers } = loaderData as {
 		vans: {
 			id: string
 			name: string
 			installerId: string | null
-			standardStockLevels: unknown
 			active: boolean
 			vanAssignmentHistory?: unknown
 		}[]
 		installers: InstallerUser[]
-		serviceCodes: ServiceCodeOption[]
 	}
 	const { t } = useTranslation()
 	const error =
@@ -203,28 +148,6 @@ export default function AdminVans({
 							</Select>
 						</div>
 					</div>
-					<div className="space-y-2">
-						<Label>{t("admin_vans.stock_levels_label")}</Label>
-						<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
-							{serviceCodes.map((code) => (
-								<div key={code.id} className="space-y-1">
-									<Label
-										htmlFor={`stock_${code.id}`}
-										className="text-xs text-slate-500"
-									>
-										{code.claroCode} — {code.name}
-									</Label>
-									<Input
-										id={`stock_${code.id}`}
-										name={`stock_${code.id}`}
-										type="number"
-										min={0}
-										defaultValue={0}
-									/>
-								</div>
-							))}
-						</div>
-					</div>
 					<div className="flex items-center gap-2">
 						<Checkbox id="active" name="active" defaultChecked />
 						<Label htmlFor="active" className="text-sm">
@@ -246,9 +169,6 @@ export default function AdminVans({
 							<th className="px-4 py-3 text-left font-medium text-slate-600">
 								{t("admin_vans.table.installer")}
 							</th>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
-								{t("admin_vans.table.stock_levels")}
-							</th>
 							<th className="px-4 py-3 text-center font-medium text-slate-600">
 								{t("admin_vans.table.active")}
 							</th>
@@ -260,27 +180,11 @@ export default function AdminVans({
 					<tbody className="divide-y">
 						{vans.map((van) => {
 							const installer = installers.find((u) => u.id === van.installerId)
-							const levels = (van.standardStockLevels as StockLevel[]) || []
 							return (
 								<tr key={van.id} className="hover:bg-slate-50">
 									<td className="px-4 py-3 font-medium">{van.name}</td>
 									<td className="px-4 py-3 text-slate-600">
 										{installer?.name ?? t("admin_vans.unassigned")}
-									</td>
-									<td className="px-4 py-3 text-xs text-slate-600">
-										{levels.length === 0
-											? t("admin_vans.no_stock_levels")
-											: levels.map((level) => {
-													const code = serviceCodes.find(
-														(c) => c.id === level.serviceCodeId,
-													)
-													return (
-														<div key={level.serviceCodeId}>
-															{code?.claroCode ?? level.serviceCodeId}:{" "}
-															{level.qty}
-														</div>
-													)
-												})}
 									</td>
 									<td className="px-4 py-3 text-center">
 										<span
@@ -307,7 +211,6 @@ export default function AdminVans({
 											<EditVanDialog
 												van={van}
 												installers={installers}
-												serviceCodes={serviceCodes}
 												history={
 													(van.vanAssignmentHistory as
 														| VanAssignmentEvent[]
@@ -322,7 +225,7 @@ export default function AdminVans({
 						{vans.length === 0 && (
 							<tr>
 								<td
-									colSpan={5}
+									colSpan={4}
 									className="px-4 py-6 text-center text-slate-400 text-sm"
 								>
 									{t("admin_vans.no_vans")}
@@ -339,24 +242,19 @@ export default function AdminVans({
 function EditVanDialog({
 	van,
 	installers,
-	serviceCodes,
 	history = [],
 }: {
 	van: {
 		id: string
 		name: string
 		installerId: string | null
-		standardStockLevels: unknown
 		active: boolean
 		vanAssignmentHistory?: unknown
 	}
 	installers: InstallerUser[]
-	serviceCodes: ServiceCodeOption[]
 	history?: { installerId: string | null; from: string | null; to: string }[]
 }) {
 	const { t } = useTranslation()
-	const levels = (van.standardStockLevels as StockLevel[]) || []
-	const levelMap = new Map(levels.map((l) => [l.serviceCodeId, l.qty]))
 
 	return (
 		<details className="group">
@@ -397,28 +295,6 @@ function EditVanDialog({
 								))}
 							</SelectContent>
 						</Select>
-					</div>
-				</div>
-				<div className="space-y-2">
-					<Label>{t("admin_vans.stock_levels_label")}</Label>
-					<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
-						{serviceCodes.map((code) => (
-							<div key={code.id} className="space-y-1">
-								<Label
-									htmlFor={`stock_${code.id}-${van.id}`}
-									className="text-xs text-slate-500"
-								>
-									{code.claroCode} — {code.name}
-								</Label>
-								<Input
-									id={`stock_${code.id}-${van.id}`}
-									name={`stock_${code.id}`}
-									type="number"
-									min={0}
-									defaultValue={levelMap.get(code.id) ?? 0}
-								/>
-							</div>
-						))}
 					</div>
 				</div>
 				<div className="flex items-center gap-2">

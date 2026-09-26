@@ -8,7 +8,6 @@ import {
 	Invoice02Icon,
 	Menu01Icon,
 	Notification01Icon,
-	PackageIcon,
 	Settings02Icon,
 	TruckDeliveryIcon,
 	UserGroup03Icon,
@@ -97,12 +96,6 @@ const NAV_ITEMS: NavItem[] = [
 		to: "/admin/vans",
 		labelKey: "app_shell.nav.admin_vans",
 		icon: TruckDeliveryIcon,
-		roles: ["ADMIN"],
-	},
-	{
-		to: "/admin/restock",
-		labelKey: "app_shell.nav.admin_restock",
-		icon: PackageIcon,
 		roles: ["ADMIN"],
 	},
 	{

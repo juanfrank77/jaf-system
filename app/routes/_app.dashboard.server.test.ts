@@ -4,7 +4,6 @@ vi.mock("~/lib/db.server", () => ({
 	db: {
 		user: { findUniqueOrThrow: vi.fn(), findMany: vi.fn() },
 		jafInvoice: { findMany: vi.fn() },
-		vanRestockRequest: { findMany: vi.fn() },
 		preCertSheet: { findMany: vi.fn() },
 		$queryRaw: vi.fn(),
 	},

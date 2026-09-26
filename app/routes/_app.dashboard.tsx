@@ -314,11 +314,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 				})
 			: []
 
-	// VanRestockRequest was dropped in the installer-v3 migration (replaced by
-	// RestockRequest, a different shape). Dashboard restock-queue display is
-	// not part of Phase 1 scope; left empty until a later phase wires it up.
-	const restockRequests: never[] = []
-
 	return {
 		stats,
 		alert,
@@ -343,7 +338,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 		crewInFieldDocs,
 		crewSentBackDocs,
 		crewSubmittedDocs,
-		restockRequests,
 	}
 }
 
@@ -369,7 +363,6 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 		crewInFieldDocs,
 		crewSentBackDocs,
 		crewSubmittedDocs,
-		restockRequests,
 	} = loaderData
 	const explainer = (loaderData as { explainer?: DashboardExplainer })
 		.explainer as DashboardExplainer
@@ -430,7 +423,6 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 			crewInFieldDocs={crewInFieldDocs}
 			crewSentBackDocs={crewSentBackDocs}
 			crewSubmittedDocs={crewSubmittedDocs}
-			restockRequests={restockRequests}
 		/>
 	)
 }

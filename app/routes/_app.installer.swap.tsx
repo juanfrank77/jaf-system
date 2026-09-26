@@ -10,12 +10,13 @@ import type { Route } from "./+types/_app.installer.swap"
 export const meta: Route.MetaFunction = () => [{ title: "Find Job — JAF Ops" }]
 
 export async function loader({ request }: Route.LoaderArgs) {
-	await requireInstaller(request)
+	const { user } = await requireInstaller(request)
 	const url = new URL(request.url)
 	const q = url.searchParams.get("q")?.trim() ?? ""
 	const results = q
 		? await db.installCompletion.findMany({
 				where: {
+					installerId: user.id,
 					OR: [
 						{ claroOrderNo: { contains: q } },
 						{ address: { contains: q, mode: "insensitive" } },

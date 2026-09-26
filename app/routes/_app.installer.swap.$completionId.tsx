@@ -33,8 +33,8 @@ const REASONS: SwapReason[] = [
 
 export async function loader({ request, params }: Route.LoaderArgs) {
 	const { user, van } = await requireInstaller(request)
-	const completion = await db.installCompletion.findUniqueOrThrow({
-		where: { id: params.completionId },
+	const completion = await db.installCompletion.findFirstOrThrow({
+		where: { id: params.completionId, installerId: user.id },
 	})
 	return { user, van, completion }
 }

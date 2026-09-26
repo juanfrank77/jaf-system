@@ -127,23 +127,15 @@ The app itself doesn't open a configurable port out of the box — `pnpm start` 
 Run these once, from the project root, with `.env` in place:
 
 ```bash
+SEED_TEMP_PASSWORD='<choose a password here>' pnpm prisma db seed  # creates users, brigades, warehouses, installers, service codes
 pnpm prisma migrate deploy    # creates all tables
-pnpm prisma db seed           # creates initial users, warehouses, service codes, IVU rate
 pnpm run build                # production build
 pnpm run start                # starts the app on port 3000
 ```
 
-**Seeded accounts** (all use password `jaf2026!`):
+**`SEED_TEMP_PASSWORD` is required** — the seed script refuses to run without it. There is no built-in default password; whatever you set here becomes the shared temporary password for every account the seed creates or updates (real supervisors, warehouse staff, and the ~55 real installers from the roster CSV).
 
-| Email | Role |
-|---|---|
-| supervisor@jaf.com | Supervisor |
-| crew@jaf.com | Crew |
-| idalia@jaf.com | Warehouse |
-| lissette@jaf.com | Finance |
-| admin@jaf.com | Admin |
-
-**Change these passwords (or replace these test accounts with real staff emails) before real users start touching the system.** These are seed/demo credentials meant to get the pilot running, not to ship to real users as-is. We can help script real-user creation if you'd rather not do it by hand.
+**Rotate this password (or move to per-account resets) before real staff start touching the system.** A shared temporary password is meant to get the pilot running, not to be the permanent credential for real users. We can help script per-account password resets if you'd rather not do it by hand.
 
 ---
 

@@ -32,6 +32,7 @@
 			"installer": "Installer",
 			"installer_supervisor": "Installer Supervisor",
 			"warehouse_scan_in": "Scan In Return",
+			"warehouse_restock": "Restocks to Release",
 			"comptroller": "Comptroller"
 		},
 		"notifications": {

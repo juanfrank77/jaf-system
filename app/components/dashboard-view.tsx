@@ -108,15 +108,6 @@ type CrewOption = { id: string; name: string }
 
 type JobTypeOption = string
 
-type RestockRequestRow = {
-	id: string
-	status: string
-	createdAt: Date
-	requestedBy: { name: string }
-	warehouse: { name: string }
-	items: unknown
-}
-
 const STATUS_BADGE_VARIANT: Record<
 	DocStatus,
 	"ok" | "warn" | "danger" | "info"
@@ -178,7 +169,6 @@ function DashboardView({
 	crewInFieldDocs = [],
 	crewSentBackDocs = [],
 	crewSubmittedDocs = [],
-	restockRequests = [],
 }: {
 	stats: DashboardStat[]
 	alert: DashboardAlert
@@ -200,7 +190,6 @@ function DashboardView({
 	crewInFieldDocs?: DashboardDocRow[]
 	crewSentBackDocs?: DashboardDocRow[]
 	crewSubmittedDocs?: DashboardDocRow[]
-	restockRequests?: RestockRequestRow[]
 }) {
 	const { t } = useTranslation()
 	const location = useLocation()
@@ -672,39 +661,6 @@ function DashboardView({
 							</div>
 							<p className="mt-1 text-xs text-muted-foreground/70">
 								{doc.jobType} — {doc.jobAddressEstimated}
-							</p>
-						</Link>
-					))}
-				</div>
-			)}
-
-			{restockRequests.length > 0 && (
-				<div className="space-y-2">
-					<div className="flex items-center justify-between">
-						<h2 className="text-sm font-semibold text-foreground">
-							{t("dashboard.restock_requests_heading", {
-								count: restockRequests.length,
-							})}
-						</h2>
-						<Badge variant="warn">{restockRequests.length}</Badge>
-					</div>
-					{restockRequests.map((req) => (
-						<Link
-							key={req.id}
-							to={`/restock/${req.id}/fulfill`}
-							className="block rounded-lg border border-transparent p-2.5 text-sm transition-colors hover:border-border hover:bg-muted/40"
-						>
-							<div className="flex items-center justify-between gap-2">
-								<span className="font-mono font-medium">
-									#{req.id.slice(-6)}
-								</span>
-								<Badge variant="warn">
-									{t("dashboard.restock_requests_badge")}
-								</Badge>
-							</div>
-							<p className="mt-1 text-xs text-muted-foreground/70">
-								{req.requestedBy?.name ?? "Installer"} —{" "}
-								{req.warehouse?.name ?? "Warehouse"}
 							</p>
 						</Link>
 					))}

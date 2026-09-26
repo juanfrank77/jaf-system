@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
 	requireInstaller: vi.fn(),
 	createRestock: vi.fn(),
 	db: {
-		restockRequest: { update: vi.fn() },
+		restockRequest: { updateMany: vi.fn() },
 	},
 }))
 
@@ -36,18 +36,30 @@ describe("POST /installer/restock", () => {
 		})
 		const req = formRequest({ intent: "approve", id: "r1" })
 		await action({ request: req, params: {} } as never).catch(() => {})
-		expect(mocks.db.restockRequest.update).not.toHaveBeenCalled()
+		expect(mocks.db.restockRequest.updateMany).not.toHaveBeenCalled()
 	})
 
-	it("an installer supervisor can approve", async () => {
+	it("an installer supervisor can approve a restock awaiting sign-off", async () => {
 		mocks.requireRole.mockResolvedValue({
 			user: { id: "sup-1", role: "INSTALLER_SUPERVISOR" },
 		})
+		mocks.db.restockRequest.updateMany.mockResolvedValue({ count: 1 })
 		const req = formRequest({ intent: "approve", id: "r1" })
 		await action({ request: req, params: {} } as never).catch(() => {})
-		expect(mocks.db.restockRequest.update).toHaveBeenCalledWith({
-			where: { id: "r1" },
+		expect(mocks.db.restockRequest.updateMany).toHaveBeenCalledWith({
+			where: { id: "r1", status: "NEEDS_SIGNOFF" },
 			data: { status: "APPROVED", approvedById: "sup-1" },
 		})
+	})
+
+	it("rejects a double-approve on a restock no longer awaiting sign-off", async () => {
+		mocks.requireRole.mockResolvedValue({
+			user: { id: "sup-1", role: "INSTALLER_SUPERVISOR" },
+		})
+		mocks.db.restockRequest.updateMany.mockResolvedValue({ count: 0 })
+		const req = formRequest({ intent: "approve", id: "r1" })
+		const res = await action({ request: req, params: {} } as never)
+		expect((res as Response).status).toBe(302)
+		expect(mocks.db.restockRequest.updateMany).toHaveBeenCalledTimes(1)
 	})
 })

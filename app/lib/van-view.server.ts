@@ -7,7 +7,16 @@ import {
 
 export async function getVanView(vanId: string) {
 	const [serials, movements, pars] = await Promise.all([
-		db.serialLocation.findMany({ where: { OR: [{ currentRef: vanId }] } }),
+		// Matches the leading column of the (status, currentRef) index — a
+		// currentRef-only filter can't use it and falls back to a full scan.
+		// VAN and REMOVED_PENDING_RETURN are the only statuses this view (and
+		// its owedBack/deriveSerializedStock consumers) ever reads for a van.
+		db.serialLocation.findMany({
+			where: {
+				status: { in: ["VAN", "REMOVED_PENDING_RETURN"] },
+				currentRef: vanId,
+			},
+		}),
 		db.vanMovement.findMany({ where: { vanId } }),
 		db.vanPar.findMany({ where: { vanId } }),
 	])
@@ -18,20 +27,41 @@ export async function getVanView(vanId: string) {
 	const accessoryStock = deriveAccessoryStock(
 		movements.filter((m) => !m.serial),
 	)
-	const serialized = Object.entries(serializedStock).map(
-		([serviceCodeId, onVan]) => ({
-			serviceCodeId,
-			onVan,
-			par: parMap[serviceCodeId] ?? null,
-		}),
+
+	// A par'd code with zero units on the van must still appear — that's
+	// precisely the case a restock exists for. Look up which par'd codes are
+	// serialized so a zero-stock one lands in the right bucket.
+	const parCodeIds = pars.map((p) => p.serviceCodeId)
+	const parCodes =
+		parCodeIds.length > 0
+			? await db.serviceCode.findMany({
+					where: { id: { in: parCodeIds } },
+					select: { id: true, serialized: true },
+				})
+			: []
+	const serializedParCodeIds = new Set(
+		parCodes.filter((c) => c.serialized).map((c) => c.id),
 	)
-	const accessories = Object.entries(accessoryStock).map(
-		([serviceCodeId, onVan]) => ({
-			serviceCodeId,
-			onVan,
-			par: parMap[serviceCodeId] ?? null,
-		}),
-	)
+
+	const serializedCodeIds = new Set([
+		...Object.keys(serializedStock),
+		...[...serializedParCodeIds],
+	])
+	const accessoryCodeIds = new Set([
+		...Object.keys(accessoryStock),
+		...parCodeIds.filter((id) => !serializedParCodeIds.has(id)),
+	])
+
+	const serialized = [...serializedCodeIds].map((serviceCodeId) => ({
+		serviceCodeId,
+		onVan: serializedStock[serviceCodeId] ?? 0,
+		par: parMap[serviceCodeId] ?? null,
+	}))
+	const accessories = [...accessoryCodeIds].map((serviceCodeId) => ({
+		serviceCodeId,
+		onVan: accessoryStock[serviceCodeId] ?? 0,
+		par: parMap[serviceCodeId] ?? null,
+	}))
 	const owed = owedBack(serials, vanId).map((serial) => {
 		const row = serials.find((s) => s.serial === serial)
 		return {
@@ -63,9 +93,11 @@ export async function getInstallerRollup() {
 				: null
 			return {
 				installerId: v.installerId ?? "",
+				vanId: v.id,
 				name: v.installer?.name ?? v.name,
 				belowPar,
 				owedBack: view.owedBack.length,
+				owedBackDetails: view.owedBack,
 				lastCompletionAt: last?.createdAt ?? null,
 			}
 		}),

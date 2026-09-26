@@ -25,6 +25,34 @@ export async function releaseRestockToVan(
 			where: { id: restockId },
 		})
 
+		// Reconcile what was actually scanned/entered against what was requested —
+		// a partial scan (missed serials) must not silently close the restock as
+		// RECEIVED (a terminal status with no re-release path), and an excess
+		// scan must not silently over-credit the van.
+		const requestedLines = restock.lines as {
+			serviceCodeId: string
+			qty: number
+		}[]
+		const providedByCode = new Map<string, number>()
+		for (const s of serials)
+			providedByCode.set(
+				s.serviceCodeId,
+				(providedByCode.get(s.serviceCodeId) ?? 0) + 1,
+			)
+		for (const a of accessories)
+			providedByCode.set(
+				a.serviceCodeId,
+				(providedByCode.get(a.serviceCodeId) ?? 0) + a.qty,
+			)
+		for (const line of requestedLines) {
+			const provided = providedByCode.get(line.serviceCodeId) ?? 0
+			if (provided !== line.qty) {
+				throw new Error(
+					`Release does not match restock line ${line.serviceCodeId}: requested ${line.qty}, provided ${provided}`,
+				)
+			}
+		}
+
 		for (const s of serials) {
 			const loc = await tx.serialLocation.findUnique({
 				where: { serial: s.serial },

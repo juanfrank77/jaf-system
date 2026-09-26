@@ -226,3 +226,41 @@ it("rejects swapping against a DRAFT completion", async () => {
 		),
 	).rejects.toThrow()
 })
+
+it("rejects swapping against another installer's completion (IDOR)", async () => {
+	const otherInstaller = await db.user.create({
+		data: {
+			email: `other-${Date.now()}@x.com`,
+			name: "Other",
+			role: "INSTALLER",
+		},
+	})
+	const s1 = `IDOR1-${Date.now()}`
+	const s2 = `IDOR2-${Date.now()}`
+	await db.serialLocation.create({
+		data: {
+			serial: s1,
+			serviceCodeId: scId,
+			status: "INSTALLED",
+			currentRef: completionId,
+		},
+	})
+	await db.serialLocation.create({
+		data: { serial: s2, serviceCodeId: scId, status: "VAN", currentRef: vanId },
+	})
+	// completionId belongs to `installerId`; a different installer submits against it.
+	await expect(
+		submitSwap(
+			{
+				completionId,
+				serialOut: s1,
+				reason: "HARDWARE",
+				serialIn: s2,
+				newClaroOrderNo: undefined,
+				installerId: otherInstaller.id,
+				vanId,
+			},
+			{ id: otherInstaller.id },
+		),
+	).rejects.toThrow()
+})

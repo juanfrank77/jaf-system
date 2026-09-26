@@ -204,6 +204,12 @@ describe("AppShell", () => {
 		expect(
 			screen.getByRole("link", { name: "Scan In Return", hidden: true }),
 		).toBeInTheDocument()
+		expect(
+			screen.getByRole("link", {
+				name: "Restocks to Release",
+				hidden: true,
+			}),
+		).toBeInTheDocument()
 	})
 
 	it("shows the unread notification count", async ({ renderStub }) => {

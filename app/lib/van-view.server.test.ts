@@ -1,6 +1,6 @@
 import { beforeAll, expect, it } from "vitest"
 import { db } from "./db.server"
-import { getVanView } from "./van-view.server"
+import { getInstallerRollup, getVanView } from "./van-view.server"
 
 let vanId: string
 let scId: string
@@ -36,3 +36,43 @@ it("derives a van view with null par when no VanPar rows exist", async () => {
 	expect(modem?.onVan).toBe(1)
 	expect(modem?.par).toBeNull()
 })
+
+it("includes a par'd accessory with zero stock instead of dropping it", async () => {
+	const wrapCode = await db.serviceCode.create({
+		data: { claroCode: `WR${Date.now()}`, name: "Wrap", unitPrice: "0" },
+	})
+	await db.vanPar.create({
+		data: { vanId, serviceCodeId: wrapCode.id, parQty: 5 },
+	})
+	const view = await getVanView(vanId)
+	const wrap = view.accessories.find((a) => a.serviceCodeId === wrapCode.id)
+	expect(wrap).toEqual({ serviceCodeId: wrapCode.id, onVan: 0, par: 5 })
+})
+
+it("includes a par'd serialized SKU with zero stock instead of dropping it", async () => {
+	const modemCode = await db.serviceCode.create({
+		data: {
+			claroCode: `MD${Date.now()}`,
+			name: "Modem2",
+			unitPrice: "0",
+			serialized: true,
+		},
+	})
+	await db.vanPar.create({
+		data: { vanId, serviceCodeId: modemCode.id, parQty: 2 },
+	})
+	const view = await getVanView(vanId)
+	const modem = view.serialized.find((s) => s.serviceCodeId === modemCode.id)
+	expect(modem).toEqual({ serviceCodeId: modemCode.id, onVan: 0, par: 2 })
+})
+
+// Dev DB has accumulated hundreds of throwaway vans from ad-hoc test fixtures
+// across this session; getInstallerRollup legitimately walks every active
+// van, so this needs more than the default timeout here. Unrelated to prod,
+// where the real fleet size is ~54.
+it("getInstallerRollup includes the vanId and owed-back details so callers don't re-derive the same van's view", async () => {
+	const rollup = await getInstallerRollup()
+	const row = rollup.find((r) => r.vanId === vanId)
+	expect(row?.vanId).toBe(vanId)
+	expect(Array.isArray(row?.owedBackDetails)).toBe(true)
+}, 30_000)

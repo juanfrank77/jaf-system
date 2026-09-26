@@ -11,6 +11,7 @@ import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { db } from "~/lib/db.server"
 import { releaseRestockToVan } from "~/lib/load-to-van.server"
+import { canReleaseToVan, rolesMatching } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import type { Route } from "./+types/_app.restock.$id_.release"
 
@@ -19,7 +20,7 @@ export const meta: Route.MetaFunction = () => [
 ]
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-	await requireRole(request, ["WAREHOUSE", "ADMIN"])
+	await requireRole(request, rolesMatching(canReleaseToVan))
 	const restock = await db.restockRequest.findUniqueOrThrow({
 		where: { id: params.id },
 		include: { van: true },
@@ -33,7 +34,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-	const { user } = await requireRole(request, ["WAREHOUSE", "ADMIN"])
+	const { user } = await requireRole(request, rolesMatching(canReleaseToVan))
 	const form = await request.formData()
 	const releaseSignature = form.get("releaseSignature") as string
 	const receiveSignature = form.get("receiveSignature") as string

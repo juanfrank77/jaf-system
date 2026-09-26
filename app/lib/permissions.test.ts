@@ -3,6 +3,7 @@ import {
 	canApproveRestock,
 	canReleaseToVan,
 	canScanInReturn,
+	rolesMatching,
 } from "./permissions"
 
 describe("installer role gates", () => {
@@ -15,5 +16,13 @@ describe("installer role gates", () => {
 		expect(canReleaseToVan("WAREHOUSE")).toBe(true)
 		expect(canScanInReturn("WAREHOUSE")).toBe(true)
 		expect(canReleaseToVan("INSTALLER")).toBe(false)
+	})
+})
+
+describe("rolesMatching", () => {
+	it("derives the allow-list from a can*() predicate", () => {
+		expect(rolesMatching(canReleaseToVan).sort()).toEqual(
+			["ADMIN", "WAREHOUSE"].sort(),
+		)
 	})
 })

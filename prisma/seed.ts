@@ -28,7 +28,12 @@ const CSV_PATH = path.resolve(
 	"docs/JAF_Service_Catalog_seed.csv",
 )
 const BATCH = 100
-const TEMP_PASSWORD = process.env.SEED_TEMP_PASSWORD || "jaf2026!"
+if (!process.env.SEED_TEMP_PASSWORD) {
+	throw new Error(
+		"SEED_TEMP_PASSWORD is required — no default credential password is shipped for seeded accounts.",
+	)
+}
+const TEMP_PASSWORD = process.env.SEED_TEMP_PASSWORD
 
 async function seedCatalog() {
 	const rows = parseCatalogCsv(await fs.readFile(CSV_PATH, "utf8"))
@@ -283,25 +288,46 @@ async function seedVansAndStock() {
 		where: { role: "INSTALLER" },
 		orderBy: { createdAt: "asc" },
 	})
-	const serialized = await db.serviceCode.findMany({
-		where: { serialized: true },
-	})
 	let n = 0
 	for (const inst of installers) {
 		const existing = await db.van.findFirst({ where: { installerId: inst.id } })
-		const van =
-			existing ??
-			(await db.van.create({
-				data: { name: `Van P-${++n} (placeholder)`, installerId: inst.id },
-			}))
+		if (existing) continue
+		await db.van.create({
+			data: { name: `Van P-${++n} (placeholder)`, installerId: inst.id },
+		})
+	}
+	// biome-ignore lint/suspicious/noConsole: CLI seed output
+	console.log(`vans: ${n} created`)
+
+	if (process.env.SEED_DEMO_STOCK !== "1") {
+		// biome-ignore lint/suspicious/noConsole: CLI seed output
+		console.log(
+			"synthetic opening stock: skipped (set SEED_DEMO_STOCK=1 to seed it)",
+		)
+		return
+	}
+
+	const vans = await db.van.findMany({
+		where: { installerId: { in: installers.map((i) => i.id) } },
+	})
+	const serialized = await db.serviceCode.findMany({
+		where: { serialized: true },
+	})
+	let created = 0
+	for (const van of vans) {
 		// Synthetic opening stock (spec §10): 2 serials per serialized SKU on the van.
+		// Idempotent per serial: a serial already seeded by a prior run is left untouched
+		// rather than re-writing its VanMovement, which would otherwise duplicate rows
+		// in the append-only ledger on every re-run of `db seed`.
 		for (const sc of serialized) {
 			for (let k = 0; k < 2; k++) {
 				const serial = `${sc.serialPrefix ?? "SN"}${van.id.slice(-4)}${k}${sc.claroCode.slice(-3)}`
-				await db.serialLocation.upsert({
+				const alreadySeeded = await db.serialLocation.findUnique({
 					where: { serial },
-					update: {},
-					create: {
+				})
+				if (alreadySeeded) continue
+				await db.serialLocation.create({
+					data: {
 						serial,
 						serviceCodeId: sc.id,
 						status: "VAN",
@@ -315,14 +341,15 @@ async function seedVansAndStock() {
 						qty: 1,
 						serial,
 						type: "ADJUST",
-						byUserId: inst.id,
+						byUserId: van.installerId as string,
 					},
 				})
+				created++
 			}
 		}
 	}
 	// biome-ignore lint/suspicious/noConsole: CLI seed output
-	console.log(`vans: ${n} created with synthetic opening stock`)
+	console.log(`synthetic opening stock: ${created} serials seeded`)
 }
 
 async function seedLimitTable() {

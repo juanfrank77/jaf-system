@@ -23,6 +23,17 @@ it("empty prefill when no par exists", async () => {
 	expect(await buildRestockPrefill(vanId)).toEqual([])
 })
 
+it("prefills a par'd code that has zero units on the van (the actual restock case)", async () => {
+	const noStockCode = await db.serviceCode.create({
+		data: { claroCode: `NS${Date.now()}`, name: "NoStock", unitPrice: "0" },
+	})
+	await db.vanPar.create({
+		data: { vanId, serviceCodeId: noStockCode.id, parQty: 3 },
+	})
+	const prefill = await buildRestockPrefill(vanId)
+	expect(prefill).toContainEqual({ serviceCodeId: noStockCode.id, qty: 3 })
+})
+
 it("over-par line goes to NEEDS_SIGNOFF", async () => {
 	await db.vanPar.create({ data: { vanId, serviceCodeId: scId, parQty: 5 } })
 	const res = await createRestock(vanId, [{ serviceCodeId: scId, qty: 99 }], {

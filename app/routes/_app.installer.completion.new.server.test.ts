@@ -118,4 +118,36 @@ describe("POST /installer/completion/new", () => {
 		})
 		expect(mocks.submitCompletion).not.toHaveBeenCalled()
 	})
+
+	it("ignores a client-supplied formPhotoPath/labelPhotoPath instead of trusting it as a real upload", async () => {
+		mocks.requireInstaller.mockResolvedValue({
+			user: { id: "inst-1" },
+			profile: { id: "p1" },
+			van: { id: "van-1", active: true },
+		})
+		mocks.submitCompletion.mockResolvedValue({
+			completionId: "c1",
+			paymentRequestId: "pr1",
+			status: "READY",
+		})
+		const req = offlineRequest({
+			idempotencyKey: "k1",
+			claroOrderNo: "430920",
+			address: "a",
+			serialUnreadable: "true",
+			accessories: "[]",
+			formPhotoPath:
+				"/tmp/jaf/uploads/completions/photos/someone-elses-photo.jpg",
+			labelPhotoPath:
+				"/tmp/jaf/uploads/completions/photos/someone-elses-label.jpg",
+		})
+		await action({ request: req, params: {}, context: {} } as never)
+		expect(mocks.submitCompletion).toHaveBeenCalledWith(
+			expect.objectContaining({
+				formPhotoPath: undefined,
+				labelPhotoPath: undefined,
+			}),
+			expect.anything(),
+		)
+	})
 })

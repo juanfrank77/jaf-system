@@ -1017,6 +1017,9 @@
 		}
 	},
 	"installer": {
+		"scan": {
+			"cant_scan": "Can't scan — take a photo instead"
+		},
 		"title": "Installer Portal",
 		"no_van": "You are not assigned to a van. Contact an administrator.",
 		"request_restock": "Request Restock",

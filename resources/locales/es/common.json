@@ -1017,6 +1017,9 @@
 		}
 	},
 	"installer": {
+		"scan": {
+			"cant_scan": "No se puede escanear — toma una foto en su lugar"
+		},
 		"title": "Portal de Instalador",
 		"no_van": "No estás asignado a una van. Contacta a un administrador.",
 		"request_restock": "Solicitar reabastecimiento",

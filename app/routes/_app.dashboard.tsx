@@ -314,33 +314,10 @@ export async function loader({ request }: Route.LoaderArgs) {
 				})
 			: []
 
-	const restockRequests =
-		user.role === "WAREHOUSE"
-			? await db.vanRestockRequest.findMany({
-					where: { status: "REQUESTED" },
-					include: { requestedBy: true, warehouse: true },
-					orderBy: { createdAt: "desc" },
-					take: 50,
-				})
-			: user.role === "INSTALLER"
-				? await db.vanRestockRequest.findMany({
-						where: {
-							requestedById: user.id,
-							status: {
-								in: [
-									"REQUESTED",
-									"PENDING_APPROVAL",
-									"APPROVED",
-									"READY",
-									"FULFILLED",
-								],
-							},
-						},
-						include: { requestedBy: true, warehouse: true },
-						orderBy: { createdAt: "desc" },
-						take: 50,
-					})
-				: []
+	// VanRestockRequest was dropped in the installer-v3 migration (replaced by
+	// RestockRequest, a different shape). Dashboard restock-queue display is
+	// not part of Phase 1 scope; left empty until a later phase wires it up.
+	const restockRequests: never[] = []
 
 	return {
 		stats,

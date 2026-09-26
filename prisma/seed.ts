@@ -71,7 +71,7 @@ async function seedSupervisors() {
 		})
 		await db.account.upsert({
 			where: { id: `seed-${s.email}` },
-			update: { password },
+			update: {},
 			create: {
 				id: `seed-${s.email}`,
 				userId: user.id,
@@ -83,7 +83,7 @@ async function seedSupervisors() {
 	}
 	// biome-ignore lint/suspicious/noConsole: CLI seed output
 	console.log(
-		`supervisors: ${SUPERVISOR_SEED.length} upserted (password set via SEED_TEMP_PASSWORD)`,
+		`supervisors: ${SUPERVISOR_SEED.length} upserted (password set via SEED_TEMP_PASSWORD for newly created accounts only)`,
 	)
 }
 
@@ -149,7 +149,7 @@ async function seedWarehouseStaff() {
 		})
 		await db.account.upsert({
 			where: { id: `seed-${s.email}` },
-			update: { password },
+			update: {},
 			create: {
 				id: `seed-${s.email}`,
 				userId: user.id,
@@ -187,7 +187,7 @@ async function seedWarehouseBackups() {
 		})
 		await db.account.upsert({
 			where: { id: `seed-${b.email}` },
-			update: { password },
+			update: {},
 			create: {
 				id: `seed-${b.email}`,
 				userId: user.id,
@@ -268,7 +268,7 @@ async function seedInstallers() {
 		})
 		await db.account.upsert({
 			where: { id: `seed-${r.email}` },
-			update: { password },
+			update: {},
 			create: {
 				id: `seed-${r.email}`,
 				userId: user.id,
@@ -280,7 +280,7 @@ async function seedInstallers() {
 	}
 	// biome-ignore lint/suspicious/noConsole: CLI seed output
 	console.log(
-		`installers: ${rows.length} upserted (password set via SEED_TEMP_PASSWORD)`,
+		`installers: ${rows.length} upserted (password set via SEED_TEMP_PASSWORD for newly created accounts only)`,
 	)
 }
 
@@ -407,7 +407,7 @@ async function seedInstallerSupervisor() {
 	})
 	await db.account.upsert({
 		where: { id: `seed-${email}` },
-		update: { password },
+		update: {},
 		create: {
 			id: `seed-${email}`,
 			userId: user.id,

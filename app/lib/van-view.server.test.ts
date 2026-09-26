@@ -122,12 +122,12 @@ it("nets accessory stock from many movement rows via DB aggregation, not an unbo
 })
 
 // Dev DB has accumulated hundreds of throwaway vans from ad-hoc test fixtures
-// across this session; getInstallerRollup legitimately walks every active
-// van, so this needs more than the default timeout here. Unrelated to prod,
-// where the real fleet size is ~54.
+// across this session (394 at last count); getInstallerRollup legitimately
+// walks every active van, so this needs more than the default timeout here.
+// Unrelated to prod, where the real fleet size is ~54.
 it("getInstallerRollup includes the vanId and owed-back details so callers don't re-derive the same van's view", async () => {
 	const rollup = await getInstallerRollup()
 	const row = rollup.find((r) => r.vanId === vanId)
 	expect(row?.vanId).toBe(vanId)
 	expect(Array.isArray(row?.owedBackDetails)).toBe(true)
-}, 30_000)
+}, 60_000)

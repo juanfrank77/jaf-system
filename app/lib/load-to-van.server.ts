@@ -33,6 +33,9 @@ export async function releaseRestockToVan(
 			serviceCodeId: string
 			qty: number
 		}[]
+		if (requestedLines.length === 0) {
+			throw new Error(`Restock ${restockId} has no lines to release`)
+		}
 		const providedByCode = new Map<string, number>()
 		for (const s of serials)
 			providedByCode.set(
@@ -49,6 +52,19 @@ export async function releaseRestockToVan(
 			if (provided !== line.qty) {
 				throw new Error(
 					`Release does not match restock line ${line.serviceCodeId}: requested ${line.qty}, provided ${provided}`,
+				)
+			}
+		}
+		// The loop above only checks each requested line is satisfied — it
+		// never checks the converse. Without this, a release could smuggle
+		// serials/accessories for a service code that was never on the
+		// restock at all and still pass (every requested line matched), which
+		// creates permanent phantom inventory for a code nobody asked for.
+		const requestedIds = new Set(requestedLines.map((l) => l.serviceCodeId))
+		for (const codeId of providedByCode.keys()) {
+			if (!requestedIds.has(codeId)) {
+				throw new Error(
+					`Release provided serial/accessory for service code ${codeId}, which is not on restock ${restockId}`,
 				)
 			}
 		}

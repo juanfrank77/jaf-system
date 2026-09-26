@@ -264,3 +264,43 @@ it("rejects swapping against another installer's completion (IDOR)", async () =>
 		),
 	).rejects.toThrow()
 })
+
+it("does not reset since when the outgoing serial is already owed-back, so its owed-back episode stays the same", async () => {
+	const alreadyOwedOut = `ALREADY-OWED-${Date.now()}`
+	const inForAlreadyOwed = `IN-FOR-ALREADY-OWED-${Date.now()}`
+	const originalSince = new Date(Date.now() - 10 * 86_400_000)
+	await db.serialLocation.create({
+		data: {
+			serial: alreadyOwedOut,
+			serviceCodeId: scId,
+			status: "REMOVED_PENDING_RETURN",
+			currentRef: vanId,
+			since: originalSince,
+		},
+	})
+	await db.serialLocation.create({
+		data: {
+			serial: inForAlreadyOwed,
+			serviceCodeId: scId,
+			status: "VAN",
+			currentRef: vanId,
+		},
+	})
+	await submitSwap(
+		{
+			completionId,
+			serialOut: alreadyOwedOut,
+			reason: "HARDWARE",
+			serialIn: inForAlreadyOwed,
+			newClaroOrderNo: undefined,
+			installerId,
+			vanId,
+		},
+		{ id: installerId },
+	)
+	const loc = await db.serialLocation.findUniqueOrThrow({
+		where: { serial: alreadyOwedOut },
+	})
+	expect(loc.status).toBe("REMOVED_PENDING_RETURN")
+	expect(loc.since).toEqual(originalSince)
+})

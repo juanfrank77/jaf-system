@@ -144,9 +144,11 @@ describe("POST /installer/restock", () => {
 		const req = formRequest({
 			lines: JSON.stringify([{ serviceCodeId: "sc-real", qty: 1.5 }]),
 		})
-		await action({ request: req, params: {} } as never)
-		expect(mocks.createRestock).toHaveBeenCalledWith("van-1", [], {
-			id: "inst-1",
-		})
+		const res = await action({ request: req, params: {} } as never)
+		// Rejecting an all-invalid submission, not silently persisting an
+		// empty restock: a lines: [] request would still reach the warehouse
+		// release queue as a real, signable, no-op RECEIVED restock.
+		expect(mocks.createRestock).not.toHaveBeenCalled()
+		expect(res).toEqual({ errorKey: "restock.errors.no_valid_lines" })
 	})
 })

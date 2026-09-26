@@ -90,6 +90,13 @@ export async function action({ request }: Route.ActionArgs) {
 		(l: { serviceCodeId: string; qty: number }) =>
 			validCodeIds.has(l.serviceCodeId) && Number.isInteger(l.qty) && l.qty > 0,
 	)
+	// Reject rather than silently submit an empty/all-invalid line set: a
+	// restock with no lines still persists as a real SUBMITTED row (nothing
+	// in createRestock's caller enforced this before), reaches the warehouse
+	// release queue, and burns a signature on a no-op release.
+	if (lines.length === 0) {
+		return { errorKey: "restock.errors.no_valid_lines" as const }
+	}
 	await createRestock(van.id, lines, { id: user.id })
 	return redirect("/installer")
 }

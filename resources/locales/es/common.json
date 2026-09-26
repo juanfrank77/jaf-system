@@ -30,6 +30,7 @@
 			"admin_vans": "Vans",
 			"admin_restock": "Aprobaciones de reabastecimiento",
 			"installer": "Instalador",
+			"installer_supervisor": "Supervisor de Instaladores",
 			"comptroller": "Contraloría"
 		},
 		"notifications": {

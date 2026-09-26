@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next"
 
-export type VanInventoryRow = {
+type VanInventoryRow = {
 	serviceCodeId: string
 	label: string
 	onVan: number

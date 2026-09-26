@@ -9,6 +9,9 @@ import {
 	parseCatalogCsv,
 	SUPERVISOR_SEED,
 	toServiceCodeData,
+	WAREHOUSE_BACKUP_SEED,
+	WAREHOUSE_SEED,
+	WAREHOUSE_STAFF_SEED,
 } from "../app/lib/catalog-import"
 import { PrismaClient } from "../generated/prisma/client"
 
@@ -101,10 +104,103 @@ async function seedBrigades() {
 	console.log(`brigades: ${BRIGADE_SEED.length} upserted`)
 }
 
+async function seedWarehouses() {
+	for (const w of WAREHOUSE_SEED) {
+		const existing = await db.warehouse.findFirst({ where: { name: w.name } })
+		if (existing)
+			await db.warehouse.update({
+				where: { id: existing.id },
+				data: { zone: w.zone, location: w.location },
+			})
+		else
+			await db.warehouse.create({
+				data: { name: w.name, zone: w.zone, location: w.location },
+			})
+	}
+	// biome-ignore lint/suspicious/noConsole: CLI seed output
+	console.log(`warehouses: ${WAREHOUSE_SEED.length} upserted`)
+}
+
+async function seedWarehouseStaff() {
+	const password = await hashPassword(TEMP_PASSWORD)
+	const warehouses = await db.warehouse.findMany({
+		select: { id: true, name: true },
+	})
+	const byName = Object.fromEntries(warehouses.map((w) => [w.name, w.id]))
+	for (const s of WAREHOUSE_STAFF_SEED) {
+		const user = await db.user.upsert({
+			where: { email: s.email },
+			update: { name: s.name, phone: s.phone, role: "WAREHOUSE" },
+			create: {
+				email: s.email,
+				name: s.name,
+				phone: s.phone,
+				role: "WAREHOUSE",
+			},
+		})
+		await db.account.upsert({
+			where: { id: `seed-${s.email}` },
+			update: {},
+			create: {
+				id: `seed-${s.email}`,
+				userId: user.id,
+				accountId: user.id,
+				providerId: "credential",
+				password,
+			},
+		})
+		const warehouseId = byName[s.warehouseName]
+		if (warehouseId)
+			await db.warehouseAssignment.upsert({
+				where: { userId_warehouseId: { userId: user.id, warehouseId } },
+				update: { isLead: s.isLead },
+				create: { userId: user.id, warehouseId, isLead: s.isLead },
+			})
+	}
+	// biome-ignore lint/suspicious/noConsole: CLI seed output
+	console.log(
+		`warehouse staff: ${WAREHOUSE_STAFF_SEED.length} upserted with assignments`,
+	)
+}
+
+async function seedWarehouseBackups() {
+	const password = await hashPassword(TEMP_PASSWORD)
+	for (const b of WAREHOUSE_BACKUP_SEED) {
+		const user = await db.user.upsert({
+			where: { email: b.email },
+			update: { name: b.name, phone: b.phone, role: "WAREHOUSE" },
+			create: {
+				email: b.email,
+				name: b.name,
+				phone: b.phone,
+				role: "WAREHOUSE",
+			},
+		})
+		await db.account.upsert({
+			where: { id: `seed-${b.email}` },
+			update: {},
+			create: {
+				id: `seed-${b.email}`,
+				userId: user.id,
+				accountId: user.id,
+				providerId: "credential",
+				password,
+			},
+		})
+	}
+	// biome-ignore lint/suspicious/noConsole: CLI seed output
+	console.log(
+		`warehouse backups: ${WAREHOUSE_BACKUP_SEED.length} upserted (no lead assignment — pending confirmation)`,
+	)
+}
+
 async function main() {
 	await seedCatalog()
 	await seedSupervisors()
 	await seedBrigades()
+	await seedWarehouses()
+	await seedWarehouseStaff()
+	await seedWarehouseBackups()
 }
 
 main()

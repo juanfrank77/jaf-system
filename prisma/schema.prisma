@@ -51,6 +51,12 @@ enum CatalogKind {
   MATERIAL
 }
 
+enum Ownership {
+  CLARO_CONSIGNED
+  JAF_PURCHASED
+  UNKNOWN
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -91,6 +97,7 @@ model User {
    notifications    Notification[]
    paymentRecords   PaymentRecord[]
    preCertSheets    PreCertSheet[]
+   warehouseAssignments WarehouseAssignment[]
 
    @@index([role, active])
 }
@@ -152,8 +159,24 @@ model Warehouse {
   invoices             JafInvoice[]
   vanRestockRequests   VanRestockRequest[]
   consignmentReceipts  ConsignmentReceipt[]
+  warehouseAssignments WarehouseAssignment[]
 
   @@index([active])
+}
+
+// Which staff are assigned to which warehouse, and who leads it.
+// Consumed by both Warehouse specs; Spec A adds the requireWarehouseLead helper.
+model WarehouseAssignment {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  warehouseId String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  isLead      Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  @@unique([userId, warehouseId])
+  @@index([warehouseId, isLead])
 }
 
 model JafInvoice {
@@ -345,6 +368,14 @@ model ServiceCode {
   act               String?
   costCenterCode    String?
   active            Boolean     @default(true)
+
+  // Material-master extensions (Phase 0). All nullable/defaulted so existing rows are untouched.
+  ownership        Ownership @default(UNKNOWN) // CLARO_CONSIGNED | JAF_PURCHASED | UNKNOWN — values blocked on Orlando; ships default
+  reparadoCode     String?   // original SAP code -> its REPARADO claroCode
+  countUnit        String?   // unit staff physically count in
+  stockUnit        String?   // unit stock is held/reported in
+  conversionFactor Decimal?  // countUnit -> stockUnit; 39 rows blocked on Orlando (null => derived stock figure stays hidden)
+  canonicalName    String?   // one canonical name per SAP code; the 21 alternates stay search-only
 
   @@index([kind, active])
 }

@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { db } from "~/lib/db.server"
+import { canReleaseToVan, rolesMatching } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import type { Route } from "./+types/_app.warehouse.restock"
 
@@ -10,7 +11,7 @@ export const meta: Route.MetaFunction = () => [
 ]
 
 export async function loader({ request }: Route.LoaderArgs) {
-	await requireRole(request, ["WAREHOUSE", "ADMIN"])
+	await requireRole(request, rolesMatching(canReleaseToVan))
 	const pending = await db.restockRequest.findMany({
 		where: { status: { in: ["SUBMITTED", "APPROVED"] } },
 		include: { van: true },

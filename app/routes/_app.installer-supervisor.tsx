@@ -23,30 +23,35 @@ export async function loader({ request }: Route.LoaderArgs) {
 		select: { id: true },
 	})
 
-	// Every aged owed-back serial × every supervisor's message, deduped
-	// against what's already been sent — computed in memory from one batch
-	// read, written in one batch insert, instead of a findFirst+create pair
-	// per (serial, supervisor) on every GET of this page.
-	const agedMessages = rollup
+	// Every aged owed-back serial × every supervisor, deduped against what's
+	// already been sent — computed in memory from one batch read, written in
+	// one batch insert, instead of a findFirst+create pair per (serial,
+	// supervisor) on every GET of this page. Deduped by a stable docId (the
+	// serial), not by the message string: the message embeds sinceDays, which
+	// increments daily, so keying on it would never match yesterday's row and
+	// would re-notify every supervisor every day past the threshold forever.
+	const agedSerials = rollup
 		.flatMap((r) => r.owedBackDetails)
 		.filter((o) => o.sinceDays > OWED_BACK_AGING_DAYS)
-		.map((o) => `Serial ${o.serial} owed back for ${o.sinceDays} days.`)
+	const docIds = agedSerials.map((o) => `owed-back:${o.serial}`)
 
-	if (agedMessages.length > 0 && supervisors.length > 0) {
+	if (docIds.length > 0 && supervisors.length > 0) {
 		const existing = await db.notification.findMany({
 			where: {
 				userId: { in: supervisors.map((s) => s.id) },
-				message: { in: agedMessages },
+				docId: { in: docIds },
 			},
-			select: { userId: true, message: true },
+			select: { userId: true, docId: true },
 		})
-		const existingKeys = new Set(
-			existing.map((e) => `${e.userId}::${e.message}`),
-		)
+		const existingKeys = new Set(existing.map((e) => `${e.userId}::${e.docId}`))
 		const toCreate = supervisors.flatMap((s) =>
-			agedMessages
-				.filter((message) => !existingKeys.has(`${s.id}::${message}`))
-				.map((message) => ({ userId: s.id, message })),
+			agedSerials
+				.filter((o) => !existingKeys.has(`${s.id}::owed-back:${o.serial}`))
+				.map((o) => ({
+					userId: s.id,
+					docId: `owed-back:${o.serial}`,
+					message: `Serial ${o.serial} owed back for ${o.sinceDays} days.`,
+				})),
 		)
 		if (toCreate.length > 0) {
 			await db.notification.createMany({ data: toCreate })

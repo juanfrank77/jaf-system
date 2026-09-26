@@ -83,7 +83,7 @@ async function seedSupervisors() {
 	}
 	// biome-ignore lint/suspicious/noConsole: CLI seed output
 	console.log(
-		`supervisors: ${SUPERVISOR_SEED.length} upserted (temporary password: ${TEMP_PASSWORD})`,
+		`supervisors: ${SUPERVISOR_SEED.length} upserted (password set via SEED_TEMP_PASSWORD)`,
 	)
 }
 
@@ -280,11 +280,26 @@ async function seedInstallers() {
 	}
 	// biome-ignore lint/suspicious/noConsole: CLI seed output
 	console.log(
-		`installers: ${rows.length} upserted (temporary password: ${TEMP_PASSWORD})`,
+		`installers: ${rows.length} upserted (password set via SEED_TEMP_PASSWORD)`,
 	)
 }
 
 async function seedVansAndStock() {
+	// Placeholder vans (spec §10) are demo/dev scaffolding, not something a
+	// real production seed should fabricate silently. Real installers whose
+	// van assignment was cleared (e.g. via admin/vans unassignment) would
+	// otherwise get a *new* placeholder van on every re-seed.
+	if (
+		process.env.SEED_DEMO_VANS !== "1" &&
+		process.env.SEED_DEMO_STOCK !== "1"
+	) {
+		// biome-ignore lint/suspicious/noConsole: CLI seed output
+		console.log(
+			"placeholder vans: skipped (set SEED_DEMO_VANS=1 or SEED_DEMO_STOCK=1 to seed them)",
+		)
+		return
+	}
+
 	// Placeholder van numbers — client has not supplied the real van→installer map (spec §10).
 	const installers = await db.user.findMany({
 		where: { role: "INSTALLER" },

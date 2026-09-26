@@ -157,6 +157,49 @@ it("rejects a release that scans fewer serials than the restock requested (parti
 	)
 })
 
+it("releases a mix of serials with and without a prior SerialLocation row in one call", async () => {
+	const known = `MIX-KNOWN-${Date.now()}`
+	const brandNew = `MIX-NEW-${Date.now()}`
+	await db.serialLocation.create({
+		data: {
+			serial: known,
+			serviceCodeId: scId,
+			status: "WAREHOUSE",
+			currentRef: "wh1",
+		},
+	})
+	const req = await db.restockRequest.create({
+		data: {
+			vanId,
+			lines: [{ serviceCodeId: scId, qty: 2 }],
+			status: "APPROVED",
+		},
+	})
+	await releaseRestockToVan(
+		req.id,
+		[
+			{ serial: known, serviceCodeId: scId },
+			{ serial: brandNew, serviceCodeId: scId },
+		],
+		[],
+		{ id: actorId },
+	)
+	expect(
+		(await db.serialLocation.findUnique({ where: { serial: known } }))?.status,
+	).toBe("VAN")
+	expect(
+		(await db.serialLocation.findUnique({ where: { serial: brandNew } }))
+			?.status,
+	).toBe("VAN")
+	expect(
+		(await db.serialLocation.findUnique({ where: { serial: brandNew } }))
+			?.currentRef,
+	).toBe(vanId)
+	expect(await db.vanMovement.count({ where: { refRestockId: req.id } })).toBe(
+		2,
+	)
+})
+
 it("rejects a release that scans more units than the restock requested (excess)", async () => {
 	const s1 = `EXC1-${Date.now()}`
 	const s2 = `EXC2-${Date.now()}`

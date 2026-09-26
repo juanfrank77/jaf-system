@@ -4,8 +4,10 @@ const mocks = vi.hoisted(() => ({
 	requireRole: vi.fn(),
 	requireInstaller: vi.fn(),
 	createRestock: vi.fn(),
+	buildRestockPrefill: vi.fn(),
+	getActiveMaterialCodes: vi.fn(),
 	db: {
-		restockRequest: { updateMany: vi.fn() },
+		restockRequest: { updateMany: vi.fn(), findMany: vi.fn() },
 	},
 }))
 
@@ -13,10 +15,16 @@ vi.mock("~/lib/permissions.server", () => ({ requireRole: mocks.requireRole }))
 vi.mock("~/lib/installer-context.server", () => ({
 	requireInstaller: mocks.requireInstaller,
 }))
-vi.mock("~/lib/restock.server", () => ({ createRestock: mocks.createRestock }))
+vi.mock("~/lib/restock.server", () => ({
+	createRestock: mocks.createRestock,
+	buildRestockPrefill: mocks.buildRestockPrefill,
+}))
+vi.mock("~/lib/service-codes.server", () => ({
+	getActiveMaterialCodes: mocks.getActiveMaterialCodes,
+}))
 vi.mock("~/lib/db.server", () => ({ db: mocks.db }))
 
-import { action } from "./_app.installer.restock"
+import { action, loader } from "./_app.installer.restock"
 
 function formRequest(entries: Record<string, string>) {
 	const form = new FormData()
@@ -26,6 +34,34 @@ function formRequest(entries: Record<string, string>) {
 		body: form,
 	})
 }
+
+describe("GET /installer/restock", () => {
+	beforeEach(() => vi.clearAllMocks())
+
+	it("gives the installer a pickable list of service codes to add lines from", async () => {
+		mocks.requireRole.mockResolvedValue({
+			user: { id: "inst-1", role: "INSTALLER" },
+		})
+		mocks.requireInstaller.mockResolvedValue({ van: { id: "van-1" } })
+		mocks.buildRestockPrefill.mockResolvedValue([])
+		mocks.getActiveMaterialCodes.mockResolvedValue([
+			{
+				id: "sc-1",
+				claroCode: "C1",
+				name: "Wrap",
+				unit: "EA",
+				unitPrice: "1.5",
+			},
+		])
+		const res = await loader({
+			request: new Request("http://localhost/installer/restock"),
+			params: {},
+		} as never)
+		expect(res.serviceCodes).toEqual([
+			{ id: "sc-1", claroCode: "C1", name: "Wrap", unit: "EA", unitPrice: 1.5 },
+		])
+	})
+})
 
 describe("POST /installer/restock", () => {
 	beforeEach(() => vi.clearAllMocks())

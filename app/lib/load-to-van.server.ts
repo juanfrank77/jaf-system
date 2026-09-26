@@ -53,45 +53,64 @@ export async function releaseRestockToVan(
 			}
 		}
 
-		for (const s of serials) {
-			const loc = await tx.serialLocation.findUnique({
-				where: { serial: s.serial },
+		if (serials.length > 0) {
+			// One round trip for all existing rows, instead of a findUnique +
+			// upsert pair per serial: every serial here goes through the same
+			// PICKUP transition, so the only thing that varies per-serial is
+			// whether a SerialLocation row already exists (update) or not
+			// (create) — both are then batched.
+			const existing = await tx.serialLocation.findMany({
+				where: { serial: { in: serials.map((s) => s.serial) } },
 			})
-			const to = nextSerialState(loc?.status ?? null, "PICKUP")
-			await tx.serialLocation.upsert({
-				where: { serial: s.serial },
-				update: { status: to, currentRef: restock.vanId, since: new Date() },
-				create: {
-					serial: s.serial,
-					serviceCodeId: s.serviceCodeId,
-					status: to,
-					currentRef: restock.vanId,
-				},
-			})
-			await tx.vanMovement.create({
-				data: {
+			const existingBySerial = new Map(existing.map((l) => [l.serial, l]))
+			for (const s of serials) {
+				nextSerialState(
+					existingBySerial.get(s.serial)?.status ?? null,
+					"PICKUP",
+				)
+			}
+			const existingSerials = existing.map((l) => l.serial)
+			if (existingSerials.length > 0) {
+				await tx.serialLocation.updateMany({
+					where: { serial: { in: existingSerials } },
+					data: { status: "VAN", currentRef: restock.vanId, since: new Date() },
+				})
+			}
+			const newSerials = serials.filter((s) => !existingBySerial.has(s.serial))
+			if (newSerials.length > 0) {
+				await tx.serialLocation.createMany({
+					data: newSerials.map((s) => ({
+						serial: s.serial,
+						serviceCodeId: s.serviceCodeId,
+						status: "VAN" as const,
+						currentRef: restock.vanId,
+					})),
+				})
+			}
+			await tx.vanMovement.createMany({
+				data: serials.map((s) => ({
 					vanId: restock.vanId,
 					serviceCodeId: s.serviceCodeId,
 					qty: 1,
 					serial: s.serial,
-					type: "PICKUP",
+					type: "PICKUP" as const,
 					refRestockId: restockId,
 					byUserId: actor.id,
-				},
+				})),
 			})
 		}
-		for (const a of accessories) {
-			if (a.qty > 0)
-				await tx.vanMovement.create({
-					data: {
-						vanId: restock.vanId,
-						serviceCodeId: a.serviceCodeId,
-						qty: a.qty,
-						type: "PICKUP",
-						refRestockId: restockId,
-						byUserId: actor.id,
-					},
-				})
+		const positiveAccessories = accessories.filter((a) => a.qty > 0)
+		if (positiveAccessories.length > 0) {
+			await tx.vanMovement.createMany({
+				data: positiveAccessories.map((a) => ({
+					vanId: restock.vanId,
+					serviceCodeId: a.serviceCodeId,
+					qty: a.qty,
+					type: "PICKUP" as const,
+					refRestockId: restockId,
+					byUserId: actor.id,
+				})),
+			})
 		}
 	})
 }

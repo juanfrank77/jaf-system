@@ -633,7 +633,6 @@ model InstallCompletion {
   gpsLat            Float?
   gpsLng            Float?
   dropFt            Int?
-  plantRefs         Json?
   accessories       Json?
   groundRod         Boolean          @default(true)
   coaxFt            Int?
@@ -642,7 +641,6 @@ model InstallCompletion {
   serialNotOnVan    Boolean          @default(false)
   modelResolved     String?
   formPhotoPath     String?
-  labelPhotoPath    String?
   extraPhotoPaths   String[]
   sigInstaller      String?
   sigInstallerAt    DateTime?

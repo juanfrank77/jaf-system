@@ -69,7 +69,7 @@ async function canAccessCompletionFile(
 		}
 		const photo = await db.installCompletion.findFirst({
 			where: {
-				OR: [{ formPhotoPath: absolutePath }, { labelPhotoPath: absolutePath }],
+				formPhotoPath: absolutePath,
 			},
 		})
 		return Boolean(photo)
@@ -85,7 +85,7 @@ async function canAccessCompletionFile(
 		const photo = await db.installCompletion.findFirst({
 			where: {
 				installerId: user.id,
-				OR: [{ formPhotoPath: absolutePath }, { labelPhotoPath: absolutePath }],
+				formPhotoPath: absolutePath,
 			},
 		})
 		return Boolean(photo)

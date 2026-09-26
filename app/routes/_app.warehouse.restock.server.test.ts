@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { canReleaseToVan, rolesMatching } from "~/lib/permissions"
 
 const mocks = vi.hoisted(() => ({
 	requireRole: vi.fn(),
@@ -15,16 +16,16 @@ import { loader } from "./_app.warehouse.restock"
 describe("GET /warehouse/restock", () => {
 	beforeEach(() => vi.clearAllMocks())
 
-	it("gates the loader to WAREHOUSE/ADMIN", async () => {
+	it("gates the loader via canReleaseToVan, not a separately hardcoded role list", async () => {
 		mocks.requireRole.mockResolvedValue({ user: { id: "wh-1" } })
 		mocks.db.restockRequest.findMany.mockResolvedValue([])
 		await loader({
 			request: new Request("http://localhost/warehouse/restock"),
 		} as never)
-		expect(mocks.requireRole).toHaveBeenCalledWith(expect.anything(), [
-			"WAREHOUSE",
-			"ADMIN",
-		])
+		expect(mocks.requireRole).toHaveBeenCalledWith(
+			expect.anything(),
+			rolesMatching(canReleaseToVan),
+		)
 	})
 
 	it("only lists SUBMITTED/APPROVED restocks", async () => {

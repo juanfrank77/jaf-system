@@ -127,8 +127,8 @@ The app itself doesn't open a configurable port out of the box — `pnpm start` 
 Run these once, from the project root, with `.env` in place:
 
 ```bash
-SEED_TEMP_PASSWORD='<choose a password here>' pnpm prisma db seed  # creates users, brigades, warehouses, installers, service codes
 pnpm prisma migrate deploy    # creates all tables
+SEED_TEMP_PASSWORD='<choose a password here>' pnpm prisma db seed  # creates users, brigades, warehouses, installers, service codes
 pnpm run build                # production build
 pnpm run start                # starts the app on port 3000
 ```

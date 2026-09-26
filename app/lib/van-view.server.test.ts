@@ -66,6 +66,43 @@ it("includes a par'd serialized SKU with zero stock instead of dropping it", asy
 	expect(modem).toEqual({ serviceCodeId: modemCode.id, onVan: 0, par: 2 })
 })
 
+it("nets accessory stock from many movement rows via DB aggregation, not an unbounded in-memory scan", async () => {
+	const wrapCode = await db.serviceCode.create({
+		data: { claroCode: `WRN${Date.now()}`, name: "WrapNet", unitPrice: "0" },
+	})
+	const byUser = await db.user.create({
+		data: { email: `vvu${Date.now()}@x.com`, name: "U", role: "WAREHOUSE" },
+	})
+	await db.vanMovement.createMany({
+		data: [
+			{
+				vanId,
+				serviceCodeId: wrapCode.id,
+				qty: 10,
+				type: "PICKUP",
+				byUserId: byUser.id,
+			},
+			{
+				vanId,
+				serviceCodeId: wrapCode.id,
+				qty: -3,
+				type: "ADJUST",
+				byUserId: byUser.id,
+			},
+			{
+				vanId,
+				serviceCodeId: wrapCode.id,
+				qty: -1,
+				type: "ADJUST",
+				byUserId: byUser.id,
+			},
+		],
+	})
+	const view = await getVanView(vanId)
+	const wrap = view.accessories.find((a) => a.serviceCodeId === wrapCode.id)
+	expect(wrap?.onVan).toBe(6)
+})
+
 // Dev DB has accumulated hundreds of throwaway vans from ad-hoc test fixtures
 // across this session; getInstallerRollup legitimately walks every active
 // van, so this needs more than the default timeout here. Unrelated to prod,

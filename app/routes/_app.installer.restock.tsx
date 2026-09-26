@@ -1,15 +1,15 @@
-import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { MaterialLineItems } from "~/components/material-line-items"
 import { Button } from "~/components/ui/button"
-import { Input } from "~/components/ui/input"
-import { Label } from "~/components/ui/label"
 import { db } from "~/lib/db.server"
 import { requireInstaller } from "~/lib/installer-context.server"
 import { canApproveRestock } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import { buildRestockPrefill, createRestock } from "~/lib/restock.server"
+import { getActiveMaterialCodes } from "~/lib/service-codes.server"
+import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.installer.restock"
 
 export const meta: Route.MetaFunction = () => [{ title: "Restock — JAF Ops" }]
@@ -22,15 +22,37 @@ export async function loader({ request }: Route.LoaderArgs) {
 	])
 	if (user.role === "INSTALLER") {
 		const { van } = await requireInstaller(request)
-		const prefill = van ? await buildRestockPrefill(van.id) : []
-		return { role: "INSTALLER" as const, van, prefill, pending: [] }
+		const [prefill, codes] = await Promise.all([
+			van ? buildRestockPrefill(van.id) : Promise.resolve([]),
+			getActiveMaterialCodes(),
+		])
+		const serviceCodes = codes.map((c) => ({
+			id: c.id,
+			claroCode: c.claroCode,
+			name: c.name,
+			unit: c.unit,
+			unitPrice: toNumberPrice(c.unitPrice),
+		}))
+		return {
+			role: "INSTALLER" as const,
+			van,
+			prefill,
+			serviceCodes,
+			pending: [],
+		}
 	}
 	const pending = await db.restockRequest.findMany({
 		where: { status: "NEEDS_SIGNOFF" },
 		include: { van: true },
 		orderBy: { submittedAt: "desc" },
 	})
-	return { role: "SUPERVISOR" as const, van: null, prefill: [], pending }
+	return {
+		role: "SUPERVISOR" as const,
+		van: null,
+		prefill: [],
+		serviceCodes: [],
+		pending,
+	}
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -57,21 +79,16 @@ export async function action({ request }: Route.ActionArgs) {
 
 	const { van } = await requireInstaller(request)
 	if (!van) return { errorKey: "installer.no_van" as const }
-	const lines = JSON.parse((form.get("lines") as string) || "[]")
+	const lines = JSON.parse((form.get("lines") as string) || "[]").filter(
+		(l: { serviceCodeId: string; qty: number }) => l.serviceCodeId && l.qty > 0,
+	)
 	await createRestock(van.id, lines, { id: user.id })
 	return redirect("/installer")
 }
 
 export default function InstallerRestock({ loaderData }: Route.ComponentProps) {
-	const { role, van, prefill, pending } = loaderData
+	const { role, van, prefill, serviceCodes, pending } = loaderData
 	const { t } = useTranslation()
-	const [lines, setLines] = useState(prefill)
-
-	function setQty(serviceCodeId: string, qty: number) {
-		setLines((prev) =>
-			prev.map((l) => (l.serviceCodeId === serviceCodeId ? { ...l, qty } : l)),
-		)
-	}
 
 	if (role !== "INSTALLER") {
 		return (
@@ -113,37 +130,11 @@ export default function InstallerRestock({ loaderData }: Route.ComponentProps) {
 				<p className="text-sm text-amber-600">{t("installer.no_van")}</p>
 			) : (
 				<Form method="post" className="space-y-4">
-					<input type="hidden" name="lines" value={JSON.stringify(lines)} />
-					<ul className="space-y-2">
-						{lines.map((l) => (
-							<li key={l.serviceCodeId} className="flex items-center gap-2">
-								<Label
-									htmlFor={`qty-${l.serviceCodeId}`}
-									className="flex-1 text-sm"
-								>
-									{l.serviceCodeId}
-								</Label>
-								<Input
-									id={`qty-${l.serviceCodeId}`}
-									type="number"
-									min={0}
-									className="w-24"
-									value={l.qty}
-									onChange={(e) =>
-										setQty(l.serviceCodeId, Number(e.target.value) || 0)
-									}
-								/>
-							</li>
-						))}
-						{lines.length === 0 && (
-							<li className="text-sm text-slate-500">
-								{t(
-									"restock.empty_prefill",
-									"No par levels set yet — add lines manually.",
-								)}
-							</li>
-						)}
-					</ul>
+					<MaterialLineItems
+						serviceCodes={serviceCodes}
+						initialItems={prefill}
+						name="lines"
+					/>
 					<Button type="submit">
 						{t("restock.submit", "Submit Restock Request")}
 					</Button>

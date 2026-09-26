@@ -23,6 +23,7 @@ export default [
 			"installer/completion/new",
 			"routes/_app.installer.completion.new.tsx",
 		),
+		route("restock/:id/release", "routes/_app.restock.$id_.release.tsx"),
 		route("docs/new", "routes/_app.docs.new.tsx"),
 		route("docs/:id", "routes/_app.docs.$id.tsx"),
 		route("docs/:id/edit", "routes/_app.docs.$id_.edit.tsx"),

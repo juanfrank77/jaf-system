@@ -6,7 +6,7 @@ import {
 } from "./van-inventory-v3"
 
 export async function getVanView(vanId: string) {
-	const [serials, movements, pars] = await Promise.all([
+	const [serials, accessoryTotals, pars] = await Promise.all([
 		// Matches the leading column of the (status, currentRef) index — a
 		// currentRef-only filter can't use it and falls back to a full scan.
 		// VAN and REMOVED_PENDING_RETURN are the only statuses this view (and
@@ -17,7 +17,14 @@ export async function getVanView(vanId: string) {
 				currentRef: vanId,
 			},
 		}),
-		db.vanMovement.findMany({ where: { vanId } }),
+		// Accessory net stock is a running balance over an append-only ledger
+		// that only ever grows — summed in the DB via groupBy instead of
+		// pulling every movement row this van has ever had into memory.
+		db.vanMovement.groupBy({
+			by: ["serviceCodeId"],
+			where: { vanId, serial: null },
+			_sum: { qty: true },
+		}),
 		db.vanPar.findMany({ where: { vanId } }),
 	])
 	const parMap = Object.fromEntries(
@@ -25,7 +32,10 @@ export async function getVanView(vanId: string) {
 	)
 	const serializedStock = deriveSerializedStock(serials, vanId)
 	const accessoryStock = deriveAccessoryStock(
-		movements.filter((m) => !m.serial),
+		accessoryTotals.map((t) => ({
+			serviceCodeId: t.serviceCodeId,
+			qty: t._sum.qty ?? 0,
+		})),
 	)
 
 	// A par'd code with zero units on the van must still appear — that's

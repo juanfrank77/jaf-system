@@ -98,7 +98,6 @@ export async function action({ request }: Route.ActionArgs) {
 			// a client-supplied string, which would let a crafted request claim
 			// an arbitrary file (including someone else's) as this record's photo.
 			formPhotoPath,
-			labelPhotoPath: undefined,
 			sigInstaller: (form.get("sigInstaller") as string) || undefined,
 			installedAt: new Date(),
 		},

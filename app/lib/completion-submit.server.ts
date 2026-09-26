@@ -22,7 +22,6 @@ type CompletionInput = {
 	serialUnreadable: boolean
 	modelResolved?: string
 	formPhotoPath?: string
-	labelPhotoPath?: string
 	extraPhotoPaths?: string[]
 	sigInstaller?: string
 	installedAt: Date
@@ -104,7 +103,6 @@ export async function submitCompletion(
 					serialNotOnVan,
 					modelResolved: i.modelResolved,
 					formPhotoPath: i.formPhotoPath,
-					labelPhotoPath: i.labelPhotoPath,
 					extraPhotoPaths: i.extraPhotoPaths ?? [],
 					sigInstaller: i.sigInstaller,
 					sigInstallerAt: i.sigInstaller ? new Date() : null,

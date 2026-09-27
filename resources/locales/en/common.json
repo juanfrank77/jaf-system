@@ -95,7 +95,8 @@
 		"errors": {
 			"invalid_materials": "The materials list could not be read",
 			"invalid_service_lines": "Service codes could not be read.",
-			"missing_fields": "Job type, address, and at least one crew member are required"
+			"missing_fields": "Job type, address, and at least one crew member are required",
+			"brigade_invalid": "That brigade is not available."
 		}
 	},
 	"admin_history": {
@@ -557,6 +558,8 @@
 		"title": "Crews & Personnel — Brigades",
 		"add_heading": "Add Brigade",
 		"name_label": "Brigade Name *",
+		"area_label": "Area *",
+		"select_area": "Select an area",
 		"members_label": "Members",
 		"active_label": "Active",
 		"active": "active",
@@ -570,14 +573,16 @@
 		"no": "No",
 		"table": {
 			"name": "Name",
+			"area": "Area",
 			"members": "Members",
 			"active": "Active",
 			"actions": "Actions"
 		},
+		"no_area": "No area set",
 		"no_members": "No members",
 		"no_crews": "No brigades yet.",
 		"errors": {
-			"invalid_fields": "Valid brigade name and member list are required.",
+			"invalid_fields": "Valid brigade name, area, and member list are required.",
 			"id_required": "Brigade id is required.",
 			"unknown_intent": "Unknown action."
 		}

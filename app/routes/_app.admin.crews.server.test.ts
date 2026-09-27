@@ -42,6 +42,7 @@ describe("POST /admin/crews", () => {
 		const form = new FormData()
 		form.set("intent", "create")
 		form.set("name", "Brigada Norte")
+		form.set("area", "NORTE")
 		form.append("memberIds", "crew-1")
 		form.append("memberIds", "crew-2")
 		form.set("active", "on")
@@ -55,10 +56,35 @@ describe("POST /admin/crews", () => {
 		expect(db.brigade.create).toHaveBeenCalledWith({
 			data: {
 				name: "Brigada Norte",
+				area: "NORTE",
 				memberIds: ["crew-1", "crew-2"],
 				active: true,
 			},
 		})
+	})
+
+	it("rejects creating a brigade without a recognized area", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "admin-1" },
+			session: {},
+		} as any)
+
+		const form = new FormData()
+		form.set("intent", "create")
+		form.set("name", "Brigada Norte")
+		form.set("area", "NOT-A-REAL-AREA")
+		form.set("active", "on")
+
+		const result = (await action({
+			request: formRequest(form),
+			params: {},
+		} as any)) as any
+
+		expect(result.init.status).toBe(400)
+		expect(result.data).toEqual({
+			errorKey: "admin_crews.errors.invalid_fields",
+		})
+		expect(db.brigade.create).not.toHaveBeenCalled()
 	})
 
 	it("updates a brigade", async () => {
@@ -72,6 +98,7 @@ describe("POST /admin/crews", () => {
 		form.set("intent", "update")
 		form.set("id", "brigade-1")
 		form.set("name", "Brigada Sur")
+		form.set("area", "SUR")
 		form.append("memberIds", "crew-3")
 
 		const result = await action({
@@ -84,6 +111,7 @@ describe("POST /admin/crews", () => {
 			where: { id: "brigade-1" },
 			data: {
 				name: "Brigada Sur",
+				area: "SUR",
 				memberIds: ["crew-3"],
 				active: false,
 			},

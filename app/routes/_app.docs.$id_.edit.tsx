@@ -12,7 +12,11 @@ import { isEditableStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import { getActiveMaterialCodes } from "~/lib/service-codes.server"
 import { parseServiceLines, type ServiceLine } from "~/lib/service-lines"
-import { assertDocInSupervisorScope } from "~/lib/supervisor-scope"
+import {
+	assertDocInSupervisorScope,
+	isBrigadeInSupervisorScope,
+	supervisorAreas,
+} from "~/lib/supervisor-scope"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id_.edit"
 
@@ -39,9 +43,13 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const [serviceCodes, brigades] = await Promise.all([
 		getActiveMaterialCodes(),
 		db.brigade.findMany({
-			where: { active: true },
+			where:
+				user.role === "SUPERVISOR"
+					? { active: true, area: { in: await supervisorAreas(db, user.id) } }
+					: { active: true },
 			orderBy: [{ area: "asc" }, { name: "asc" }],
 			select: { id: true, name: true, area: true, code: true, leadName: true },
+			take: 100,
 		}),
 	])
 	return {
@@ -96,9 +104,16 @@ export async function action({ request, params }: Route.ActionArgs) {
 		return { errorKey: "docs_edit.errors.missing_fields" }
 	}
 
-	const brigade = await db.brigade.findUniqueOrThrow({
+	const brigade = await db.brigade.findUnique({
 		where: { id: brigadeId },
 	})
+	if (!brigade) return { errorKey: "docs_edit.errors.brigade_invalid" }
+	if (
+		user.role === "SUPERVISOR" &&
+		!(await isBrigadeInSupervisorScope(db, user.id, brigade))
+	) {
+		return { errorKey: "docs_edit.errors.brigade_invalid" }
+	}
 	const assignedCrewIds = brigade.memberIds
 
 	const materialsChanged =

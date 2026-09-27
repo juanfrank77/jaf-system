@@ -38,10 +38,28 @@ export const meta = ({
 	},
 ]
 
-type AssignmentHistoryEntry = {
+// Two shapes can appear in `crewAssignmentHistory`:
+// - the legacy individual-crew reassign shape (`{ userIds, assignedById, assignedAt }`)
+// - the brigade reassign shape written by `reassignToBrigade` in
+//   `_app.docs.$id.tsx` (`{ brigadeId, by, at }`)
+type IndividualAssignmentHistoryEntry = {
 	userIds: string[]
 	assignedById?: string | null
 	assignedAt?: string
+}
+type BrigadeAssignmentHistoryEntry = {
+	brigadeId: string
+	by: string
+	at: string
+}
+type AssignmentHistoryEntry =
+	| IndividualAssignmentHistoryEntry
+	| BrigadeAssignmentHistoryEntry
+
+function hasUserIds(
+	entry: AssignmentHistoryEntry,
+): entry is IndividualAssignmentHistoryEntry {
+	return Array.isArray((entry as IndividualAssignmentHistoryEntry).userIds)
 }
 
 export async function loader({ request, params }: ComptrollerLoaderArgs) {
@@ -83,7 +101,7 @@ export async function loader({ request, params }: ComptrollerLoaderArgs) {
 	const history =
 		(doc.crewAssignmentHistory as AssignmentHistoryEntry[] | null) ?? []
 	for (const entry of history) {
-		for (const id of entry.userIds) crewIds.add(id)
+		if (hasUserIds(entry)) for (const id of entry.userIds) crewIds.add(id)
 	}
 	const crewUsers =
 		crewIds.size > 0
@@ -94,17 +112,46 @@ export async function loader({ request, params }: ComptrollerLoaderArgs) {
 			: []
 	const crewNameMap = new Map(crewUsers.map((u) => [u.id, u.name]))
 
+	const brigadeIds = [
+		...new Set(
+			history.flatMap((entry) => (hasUserIds(entry) ? [] : [entry.brigadeId])),
+		),
+	]
+	const brigades =
+		brigadeIds.length > 0
+			? await db.brigade.findMany({
+					where: { id: { in: brigadeIds } },
+					select: { id: true, name: true },
+				})
+			: []
+	const brigadeNameMap = new Map(brigades.map((b) => [b.id, b.name]))
+
 	const currentCrewNames = doc.assignedCrewIds.map(
 		(id) => crewNameMap.get(id) ?? id.slice(-6),
 	)
-	const historyWithNames = history.map((entry) => ({
-		...entry,
-		crewNames: entry.userIds.map((id) => crewNameMap.get(id) ?? id.slice(-6)),
-		assignedByName: entry.assignedById
-			? (crewNameMap.get(entry.assignedById) ?? entry.assignedById.slice(-6))
-			: null,
-		assignedAt: entry.assignedAt ? new Date(entry.assignedAt) : null,
-	}))
+	const historyWithNames = history.map((entry) => {
+		if (hasUserIds(entry)) {
+			return {
+				...entry,
+				crewNames: entry.userIds.map(
+					(id) => crewNameMap.get(id) ?? id.slice(-6),
+				),
+				assignedByName: entry.assignedById
+					? (crewNameMap.get(entry.assignedById) ??
+						entry.assignedById.slice(-6))
+					: null,
+				assignedAt: entry.assignedAt ? new Date(entry.assignedAt) : null,
+			}
+		}
+		return {
+			...entry,
+			crewNames: [
+				brigadeNameMap.get(entry.brigadeId) ?? entry.brigadeId.slice(-6),
+			],
+			assignedByName: crewNameMap.get(entry.by) ?? entry.by.slice(-6),
+			assignedAt: entry.at ? new Date(entry.at) : null,
+		}
+	})
 
 	const stage = computeFinanceStage(
 		doc,

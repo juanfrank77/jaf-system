@@ -140,12 +140,12 @@
 		"cancel_placeholder": "Razón de la cancelación (obligatorio)…",
 		"cancel_submit": "Cancelar orden de trabajo",
 		"reassign_heading": "Reasignar cuadrilla",
-		"reassign_placeholder": "Selecciona un miembro de la cuadrilla…",
+		"reassign_placeholder": "Elija una brigada…",
 		"reassign_submit": "Reasignar cuadrilla",
 		"errors": {
 			"cancel_reason_required": "Proporcione una razón para la cancelación.",
-			"reassign_required": "Seleccione un miembro de la cuadrilla.",
-			"reassign_invalid": "El miembro de la cuadrilla seleccionado no es válido.",
+			"reassign_required": "Seleccione una brigada.",
+			"reassign_invalid": "La brigada seleccionada no es válida.",
 			"resolution_note_required": "Proporcione una nota de resolución."
 		},
 		"next_action": {

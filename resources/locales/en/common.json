@@ -140,12 +140,12 @@
 		"cancel_placeholder": "Reason for cancellation (required)…",
 		"cancel_submit": "Cancel Work Order",
 		"reassign_heading": "Reassign Crew",
-		"reassign_placeholder": "Select a crew member…",
+		"reassign_placeholder": "Choose a crew…",
 		"reassign_submit": "Reassign Crew",
 		"errors": {
 			"cancel_reason_required": "Please provide a reason for cancellation.",
-			"reassign_required": "Please select a crew member.",
-			"reassign_invalid": "Selected crew member is invalid.",
+			"reassign_required": "Please select a crew.",
+			"reassign_invalid": "Selected crew is invalid.",
 			"resolution_note_required": "Please provide a resolution note."
 		},
 		"next_action": {

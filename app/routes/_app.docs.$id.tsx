@@ -31,9 +31,33 @@ import type { Route } from "./+types/_app.docs.$id"
 type MaterialLine = { serviceCodeId: string; qty: number }
 
 type CrewAssignmentEntry = {
-	userIds: string[]
-	assignedById: string
-	assignedAt: string
+	brigadeId: string
+	by: string
+	at: string
+}
+
+export function reassignToBrigade(input: {
+	doc: {
+		id: string
+		brigadeId: string | null
+		assignedCrewIds: string[]
+		crewAssignmentHistory: CrewAssignmentEntry[]
+	}
+	newBrigade: { id: string; memberIds: string[] }
+	byUserId: string
+}) {
+	return {
+		brigadeId: input.newBrigade.id,
+		assignedCrewIds: input.newBrigade.memberIds,
+		crewAssignmentHistory: [
+			...input.doc.crewAssignmentHistory,
+			{
+				brigadeId: input.newBrigade.id,
+				by: input.byUserId,
+				at: new Date().toISOString(),
+			},
+		],
+	}
 }
 
 type PreppedMaterialLine = {
@@ -84,11 +108,10 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		include: { user: true },
 		orderBy: { timestamp: "asc" },
 	})
-	const crewOptions = await db.user.findMany({
-		where: { role: "CREW", active: true },
-		orderBy: { name: "asc" },
-		take: 100,
-		select: { id: true, name: true },
+	const brigadeOptions = await db.brigade.findMany({
+		where: { active: true },
+		orderBy: [{ area: "asc" }, { name: "asc" }],
+		select: { id: true, name: true, area: true, code: true },
 	})
 	const sheet = await db.preCertSheet.findFirst({
 		where: { docId: doc.id, supersededAt: null },
@@ -104,7 +127,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		})),
 		supervisor,
 		assignedCrew,
-		crewOptions: crewOptions.map((c) => ({ id: c.id, name: c.name })),
+		brigadeOptions,
 		auditTrail,
 		stage: deriveSupervisorStage(doc, sheet),
 	}
@@ -167,29 +190,33 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	if (intent === "reassign") {
-		const newCrewId = (form.get("crewId") as string | null)?.trim() || ""
-		if (!newCrewId) return { errorKey: "docs_view.errors.reassign_required" }
-		const newCrew = await db.user.findUnique({
-			where: { id: newCrewId },
+		const newBrigadeId = (form.get("brigadeId") as string | null)?.trim() || ""
+		if (!newBrigadeId) return { errorKey: "docs_view.errors.reassign_required" }
+		const newBrigade = await db.brigade.findUnique({
+			where: { id: newBrigadeId },
 		})
-		if (newCrew?.role !== "CREW")
-			return { errorKey: "docs_view.errors.reassign_invalid" }
+		if (!newBrigade) return { errorKey: "docs_view.errors.reassign_invalid" }
 		if (isTerminalStatus(doc.status)) throw redirect(`/docs/${params.id}`)
-		const history = (
-			(doc.crewAssignmentHistory as unknown as CrewAssignmentEntry[]) || []
-		).concat([
-			{
-				userIds: [newCrewId],
-				assignedById: user.id,
-				assignedAt: new Date().toISOString(),
-			},
-		])
+		const { brigadeId, assignedCrewIds, crewAssignmentHistory } =
+			reassignToBrigade({
+				doc: {
+					id: doc.id,
+					brigadeId: doc.brigadeId,
+					assignedCrewIds: doc.assignedCrewIds,
+					crewAssignmentHistory:
+						(doc.crewAssignmentHistory as unknown as CrewAssignmentEntry[]) ||
+						[],
+				},
+				newBrigade: { id: newBrigade.id, memberIds: newBrigade.memberIds },
+				byUserId: user.id,
+			})
 		await db.$transaction([
 			db.jafInvoice.update({
 				where: { id: params.id },
 				data: {
-					assignedCrewIds: [newCrewId],
-					crewAssignmentHistory: history,
+					brigadeId,
+					assignedCrewIds,
+					crewAssignmentHistory,
 				},
 			}),
 			db.auditTrail.create({
@@ -198,17 +225,20 @@ export async function action({ request, params }: Route.ActionArgs) {
 					userId: user.id,
 					action: "CREW_REASSIGNED",
 					diffJson: {
-						from: doc.assignedCrewIds,
-						to: [newCrewId],
+						from: {
+							brigadeId: doc.brigadeId,
+							assignedCrewIds: doc.assignedCrewIds,
+						},
+						to: { brigadeId, assignedCrewIds },
 					},
 				},
 			}),
-			db.notification.create({
-				data: {
-					userId: newCrewId,
+			db.notification.createMany({
+				data: assignedCrewIds.map((memberId) => ({
+					userId: memberId,
 					docId: params.id,
 					message: `You have been reassigned to job ${doc.controlNumber}.`,
-				},
+				})),
 			}),
 		])
 		throw redirect(`/docs/${params.id}`)
@@ -335,7 +365,7 @@ export default function DocView({
 		serviceCodes,
 		supervisor,
 		assignedCrew,
-		crewOptions,
+		brigadeOptions,
 		auditTrail,
 		stage,
 	} = loaderData
@@ -655,18 +685,27 @@ export default function DocView({
 								<legend className="text-sm font-medium px-1">
 									{t("docs_view.reassign_heading")}
 								</legend>
-								<Select name="crewId" required>
+								<Select name="brigadeId" required>
 									<SelectTrigger className="w-full">
 										<SelectValue
 											placeholder={t("docs_view.reassign_placeholder")}
 										/>
 									</SelectTrigger>
 									<SelectContent>
-										{crewOptions.map((c: { id: string; name: string }) => (
-											<SelectItem key={c.id} value={c.id}>
-												{c.name}
-											</SelectItem>
-										))}
+										{brigadeOptions.map(
+											(b: {
+												id: string
+												name: string
+												area: string | null
+												code: string | null
+											}) => (
+												<SelectItem key={b.id} value={b.id}>
+													{b.name}
+													{b.code ? ` · ${b.code}` : ""}
+													{b.area ? ` (${b.area})` : ""}
+												</SelectItem>
+											),
+										)}
 									</SelectContent>
 								</Select>
 								<input type="hidden" name="intent" value="reassign" />

@@ -2,15 +2,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("~/lib/db.server", () => ({
 	db: {
-		jafInvoice: { findUniqueOrThrow: vi.fn() },
-		brigade: { findMany: vi.fn(() => Promise.resolve([])) },
+		brigade: {
+			findMany: vi.fn(() => Promise.resolve([])),
+			findUnique: vi.fn(),
+		},
 		serviceCode: { findMany: vi.fn(() => Promise.resolve([])) },
 		user: {
 			findUnique: vi.fn(),
 			findUniqueOrThrow: vi.fn(),
 			findMany: vi.fn(),
 		},
-		auditTrail: { findMany: vi.fn() },
+		auditTrail: { findMany: vi.fn(), create: vi.fn() },
+		notification: { createMany: vi.fn() },
+		jafInvoice: { findUniqueOrThrow: vi.fn(), update: vi.fn() },
+		$transaction: vi.fn((ops) => Promise.all(ops)),
 		preCertSheet: { findFirst: vi.fn(() => Promise.resolve(null)) },
 	},
 }))
@@ -21,7 +26,7 @@ vi.mock("~/lib/permissions.server", () => ({
 
 import { db } from "~/lib/db.server"
 import { requireSession } from "~/lib/permissions.server"
-import { loader } from "./_app.docs.$id"
+import { loader, reassignToBrigade } from "./_app.docs.$id"
 
 describe("GET /docs/:id", () => {
 	beforeEach(() => {
@@ -233,5 +238,40 @@ describe("GET /docs/:id", () => {
 		} as any)
 
 		expect(result.doc.status).toBe("PREPPED")
+	})
+})
+
+describe("reassignToBrigade", () => {
+	it("reassign switches brigadeId AND replaces assignedCrewIds with the new brigade's members", async () => {
+		const result = await reassignToBrigade({
+			doc: {
+				id: "d1",
+				brigadeId: "b1",
+				assignedCrewIds: ["u-old"],
+				crewAssignmentHistory: [],
+			},
+			newBrigade: { id: "b2", memberIds: ["u-a", "u-b"] },
+			byUserId: "sup1",
+		})
+		expect(result.brigadeId).toBe("b2")
+		expect(result.assignedCrewIds).toEqual(["u-a", "u-b"])
+		expect(result.crewAssignmentHistory.at(-1)).toMatchObject({
+			brigadeId: "b2",
+			by: "sup1",
+		})
+	})
+
+	it("reassign to a brigade with no members clears assignedCrewIds", async () => {
+		const result = await reassignToBrigade({
+			doc: {
+				id: "d1",
+				brigadeId: "b1",
+				assignedCrewIds: ["u-old"],
+				crewAssignmentHistory: [],
+			},
+			newBrigade: { id: "b3", memberIds: [] },
+			byUserId: "sup1",
+		})
+		expect(result.assignedCrewIds).toEqual([])
 	})
 })

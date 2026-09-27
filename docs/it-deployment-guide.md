@@ -51,7 +51,7 @@ There are no third-party SaaS dependencies at runtime. The only outbound network
    sudo -u postgres createdb jaf_operations -O jaf_app
    ```
 4. **A process manager** so the app restarts automatically on crash or server reboot. Either works:
-   - `systemd` service (recommended on Linux servers — see Section 7), or
+   - `systemd` service (recommended on Linux servers — see Section 9), or
    - `pm2` (`npm install -g pm2`)
 5. **A reverse proxy with TLS** — `nginx` or `caddy`. Caddy is the simplest if there's an internal CA or you're fine with a self-signed/internal cert. See Section 6.
 
@@ -158,7 +158,7 @@ pnpm run build                # production build
 pnpm run start                # starts the app on port 3000
 ```
 
-**`SEED_TEMP_PASSWORD` is required** — the seed script refuses to run without it. There is no built-in default password; whatever you set here becomes the shared temporary password for every account the seed *creates*. **This only applies the first time an account is seeded** — re-running `pnpm prisma db seed` (to pick up new service codes, a growing roster, etc.) never touches the password of an account that already exists. That is deliberate: `pnpm prisma db seed` is a routine, repeatable deploy step (see the checklist in §11), and if it reset passwords on every run it would silently undo any admin-issued per-account reset (`/admin/users`) or a user's own password change the moment someone reran seeding for an unrelated reason.
+**`SEED_TEMP_PASSWORD` is required** — the seed script refuses to run without it. There is no built-in default password; whatever you set here becomes the shared temporary password for every account the seed *creates*. **This only applies the first time an account is seeded** — re-running `pnpm prisma db seed` (to pick up new service codes, a growing roster, etc.) never touches the password of an account that already exists. That is deliberate: `pnpm prisma db seed` is a routine, repeatable deploy step (see the checklist in §12), and if it reset passwords on every run it would silently undo any admin-issued per-account reset (`/admin/users`) or a user's own password change the moment someone reran seeding for an unrelated reason.
 
 **The installer roster CSV is not in version control** (it holds real names, employee/TOA numbers, and personal emails). Place it at `docs/JAF_Installer_Roster_seed.csv` (or point `INSTALLER_ROSTER_CSV_PATH` at wherever you keep it) before running the seed — it's gitignored, so `git pull` won't bring it over; transfer it out-of-band. The seed now fails fast if this file is missing, before any other account is written.
 
@@ -168,7 +168,43 @@ pnpm run start                # starts the app on port 3000
 
 ---
 
-## 8. Keeping it running (process management)
+## 8. Updating an existing deployment
+
+Once the app is live, most future changes are updates to this same install, not a fresh setup — sections 3–5 don't need to be repeated. This is the routine sequence:
+
+1. **Get the new code.**
+   ```bash
+   cd /opt/jaf-operations   # or wherever this deployment lives
+   git pull origin master   # or however code is handed off for this deployment
+   ```
+
+2. **Install dependencies** (a given change may add new packages):
+   ```bash
+   pnpm install
+   ```
+
+3. **Apply pending migrations.** Always use the script, never `prisma migrate deploy` by hand — it also regenerates the Prisma client, which is gitignored and won't otherwise match the newly-pulled schema:
+   ```bash
+   ./scripts/apply-migrations.sh
+   ```
+   `migrate deploy` is idempotent and forward-only: it only runs migrations `_prisma_migrations` doesn't already record, and never rolls back. Before running it, check whether the change notes for this update call out anything destructive (a dropped table or column) — if a migration is provably dropping already-empty schema, no extra care is needed; if it might affect real data, verify row counts against this database first, the same way `installer_v3`'s original migration was verified (§7).
+
+4. **Rebuild and restart:**
+   ```bash
+   pnpm run build
+   sudo systemctl restart jaf-operations
+   sudo systemctl status jaf-operations   # confirm it came back up clean
+   ```
+
+5. **Re-seed only if there's new seed data to pick up** (a roster addition, new service codes) — it's not a required step for every update. `pnpm prisma db seed` only sets `SEED_TEMP_PASSWORD` on accounts it *creates*; it never touches an existing account's credential (§7).
+
+6. **Spot-check the affected screens** after restart, in both languages if the update touched anything user-facing — switch the language toggle to confirm nothing regressed to English-only or a raw translation key.
+
+If `git pull` isn't how code reaches this server (e.g. a zip/tarball hand-off, per §4), swap step 1 for however that hand-off works — everything from step 2 onward is the same either way.
+
+---
+
+## 9. Keeping it running (process management)
 
 Don't run `pnpm run start` in a terminal session and walk away — it'll die when the SSH session ends. Use a systemd unit so it restarts on crash and on server reboot:
 
@@ -199,7 +235,7 @@ sudo systemctl status jaf-operations
 
 ---
 
-## 9. Backups
+## 10. Backups
 
 Two things need to be backed up regularly — losing either loses real client work:
 
@@ -213,7 +249,7 @@ A daily cron job covering both, with offsite/secondary copy, is the minimum for 
 
 ---
 
-## 10. Things to flag back to us before going live with real users
+## 11. Things to flag back to us before going live with real users
 
 - There is no Dockerfile — this is a plain Node deployment, not a containerized one. If a future phase wants containers, we'll build that properly.
 - No lockfile is currently committed to the repo — confirm with us whether we're handing one off alongside the code so versions match what we tested.
@@ -221,7 +257,7 @@ A daily cron job covering both, with offsite/secondary copy, is the minimum for 
 
 ---
 
-## 11. Quick sanity checklist
+## 12. Quick sanity checklist
 
 - [ ] Node 24+, pnpm 10+, PostgreSQL installed
 - [ ] `.env` created with real `DATABASE_URL`, a freshly generated `BETTER_AUTH_SECRET`, and the correct `BETTER_AUTH_URL`

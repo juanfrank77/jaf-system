@@ -41,6 +41,9 @@ graphify-out
 # local git worktrees
 /.worktrees/
 
+# subagent-driven-development scratch workspaces
+/.superpowers/sdd/
+
 # real installer PII (names, employee/TOA numbers, personal emails) — kept on
 # disk for the seed script to read, never in version control. See PR #21
 # review finding #15.

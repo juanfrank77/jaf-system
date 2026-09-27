@@ -108,4 +108,60 @@ describe("POST /supervisor/brigades", () => {
 
 		expect(db.brigade.create).not.toHaveBeenCalled()
 	})
+
+	it("rejects updating a brigade currently in another area, even when posting one of the supervisor's own areas as the new area", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1" },
+			session: {},
+		} as any)
+		vi.mocked(supervisorAreas).mockResolvedValue(["CENTRAL"])
+		vi.mocked(db.brigade.findUniqueOrThrow).mockResolvedValue({
+			id: "brigade-1",
+			area: "METRO",
+			active: true,
+		} as any)
+
+		const form = new FormData()
+		form.set("intent", "update")
+		form.set("id", "brigade-1")
+		form.set("name", "Hijacked Brigade")
+		form.set("area", "CENTRAL")
+		form.set("code", "999")
+		form.set("active", "on")
+
+		await expect(
+			action({
+				request: formRequest(form),
+				params: {},
+			} as any),
+		).rejects.toThrow()
+
+		expect(db.brigade.update).not.toHaveBeenCalled()
+	})
+
+	it("rejects toggling a brigade currently in another area", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1" },
+			session: {},
+		} as any)
+		vi.mocked(supervisorAreas).mockResolvedValue(["CENTRAL"])
+		vi.mocked(db.brigade.findUniqueOrThrow).mockResolvedValue({
+			id: "brigade-1",
+			area: "METRO",
+			active: true,
+		} as any)
+
+		const form = new FormData()
+		form.set("intent", "toggle")
+		form.set("id", "brigade-1")
+
+		await expect(
+			action({
+				request: formRequest(form),
+				params: {},
+			} as any),
+		).rejects.toThrow()
+
+		expect(db.brigade.update).not.toHaveBeenCalled()
+	})
 })

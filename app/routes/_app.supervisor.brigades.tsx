@@ -19,7 +19,7 @@ export async function assertBrigadeAreaAllowed({
 	area,
 	supervisorAreas,
 }: {
-	area: string
+	area: string | null
 	supervisorAreas: (string | null)[]
 }) {
 	if (!supervisorAreas.includes(area)) {
@@ -89,6 +89,11 @@ export async function action({ request }: Route.ActionArgs) {
 		}
 
 		if (intent === "update" && typeof id === "string" && id.trim()) {
+			const existing = await db.brigade.findUniqueOrThrow({ where: { id } })
+			await assertBrigadeAreaAllowed({
+				area: existing.area,
+				supervisorAreas: areas,
+			})
 			await db.brigade.update({ where: { id }, data: dataPayload })
 		} else {
 			await db.brigade.create({ data: dataPayload })
@@ -105,6 +110,10 @@ export async function action({ request }: Route.ActionArgs) {
 			)
 		}
 		const existing = await db.brigade.findUniqueOrThrow({ where: { id } })
+		await assertBrigadeAreaAllowed({
+			area: existing.area,
+			supervisorAreas: areas,
+		})
 		await db.brigade.update({
 			where: { id },
 			data: { active: !existing.active },

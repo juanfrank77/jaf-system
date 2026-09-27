@@ -29,6 +29,7 @@
 			"admin_crews": "Crews",
 			"admin_vans": "Vans",
 			"supervisor_brigades": "Brigades",
+			"supervisor_variance": "Variance",
 			"admin_restock": "Restock Sign-offs",
 			"installer": "Installer",
 			"installer_supervisor": "Installer Supervisor",
@@ -612,6 +613,29 @@
 			"id_required": "Brigade id is required.",
 			"unknown_intent": "Unknown action."
 		}
+	},
+	"supervisor_variance": {
+		"title": "Material Variance",
+		"readonly_note": "Serialized returns/repair and missing-stock (LOST) signals will appear here once Spec A/Spec B ship",
+		"table": {
+			"doc": "Document",
+			"brigade": "Brigade",
+			"kinds": "Variance",
+			"lines": "Lines"
+		},
+		"kinds": {
+			"overage": "Overage",
+			"discrepancy": "Discrepancy",
+			"shortage": "Shortage"
+		},
+		"line": {
+			"code": "Code",
+			"ordered": "Ordered",
+			"installed": "Installed",
+			"delta": "Delta"
+		},
+		"no_lines": "No line detail",
+		"no_variance": "No variance to review."
 	},
 	"admin_vans": {
 		"title": "Crews & Personnel — Vans",

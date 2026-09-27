@@ -19,6 +19,7 @@ export default [
 		route("admin/crews", "routes/_app.admin.crews.tsx"),
 		route("admin/vans", "routes/_app.admin.vans.tsx"),
 		route("supervisor/brigades", "routes/_app.supervisor.brigades.tsx"),
+		route("supervisor/variance", "routes/_app.supervisor.variance.tsx"),
 		route("installer", "routes/_app.installer._index.tsx"),
 		route(
 			"installer/completion/new",

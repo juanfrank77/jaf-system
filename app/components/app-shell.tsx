@@ -38,6 +38,7 @@ type NavItem = {
 		| "app_shell.nav.admin_users"
 		| "app_shell.nav.admin_crews"
 		| "app_shell.nav.admin_vans"
+		| "app_shell.nav.supervisor_brigades"
 		| "app_shell.nav.admin_restock"
 		| "app_shell.nav.installer"
 		| "app_shell.nav.installer_supervisor"
@@ -100,6 +101,12 @@ const NAV_ITEMS: NavItem[] = [
 		labelKey: "app_shell.nav.admin_vans",
 		icon: TruckDeliveryIcon,
 		roles: ["ADMIN"],
+	},
+	{
+		to: "/supervisor/brigades",
+		labelKey: "app_shell.nav.supervisor_brigades",
+		icon: UserGroup03Icon,
+		roles: ["SUPERVISOR", "ADMIN"],
 	},
 	{
 		to: "/installer",

@@ -4,6 +4,7 @@ vi.mock("~/lib/db.server", () => ({
 	db: {
 		user: { findUniqueOrThrow: vi.fn(), findMany: vi.fn() },
 		jafInvoice: { findMany: vi.fn() },
+		brigade: { findMany: vi.fn() },
 		preCertSheet: { findMany: vi.fn() },
 		$queryRaw: vi.fn(),
 	},
@@ -50,6 +51,7 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 		} as any)
 		vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue(sup as any)
 		vi.mocked(db.user.findMany).mockResolvedValue([])
+		vi.mocked(db.brigade.findMany).mockResolvedValue([])
 		vi.mocked(db.$queryRaw).mockResolvedValue([])
 		vi.mocked(db.preCertSheet.findMany).mockResolvedValue([])
 		vi.mocked(isDashboardFiltersEnabled).mockReturnValue(false)

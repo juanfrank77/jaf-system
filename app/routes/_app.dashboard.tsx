@@ -14,6 +14,7 @@ import {
 } from "~/lib/features.server"
 import { cacheJobs } from "~/lib/offline-store"
 import { requireSession } from "~/lib/permissions.server"
+import { supervisorAreas } from "~/lib/supervisor-scope"
 import {
 	deriveSupervisorStage,
 	type SupervisorStage,
@@ -102,18 +103,29 @@ type SendBackHistoryEntry = { note?: string }
 
 async function loadSupervisorQueues(userId: string) {
 	const tolerance = await getAvisoAmountTolerance()
+	const areas = (await supervisorAreas(db, userId)).filter(
+		(a): a is string => a !== null,
+	)
+	const ownedOrInArea = {
+		OR: [
+			{ supervisorId: userId },
+			{ brigade: { is: { area: { in: areas } } } },
+		],
+	}
 	const [pending, sentBackRaw, approved] = await Promise.all([
 		db.jafInvoice.findMany({
-			where: { supervisorId: userId, status: "FIELD_UPDATED" },
+			where: { ...ownedOrInArea, status: "FIELD_UPDATED" },
 			select: queueSelect,
 			orderBy: { fieldSubmittedAt: "desc" },
 			take: 50,
 		}),
 		db.$queryRaw`
-			SELECT id, "controlNumber", "jobAddressEstimated", "jobAddressActual", "sendBackHistory"
-			FROM jaf_invoice
-			WHERE "supervisorId" = ${userId} AND status = 'SIGNED' AND jsonb_array_length("sendBackHistory") > 0
-			ORDER BY "createdAt" DESC LIMIT 50` as Promise<
+			SELECT ji.id, ji."controlNumber", ji."jobAddressEstimated", ji."jobAddressActual", ji."sendBackHistory"
+			FROM jaf_invoice ji
+			LEFT JOIN "Brigade" b ON b.id = ji."brigadeId"
+			WHERE (ji."supervisorId" = ${userId} OR b.area = ANY(${areas}))
+				AND ji.status = 'SIGNED' AND jsonb_array_length(ji."sendBackHistory") > 0
+			ORDER BY ji."createdAt" DESC LIMIT 50` as Promise<
 			{
 				id: string
 				controlNumber: string
@@ -124,7 +136,7 @@ async function loadSupervisorQueues(userId: string) {
 		>,
 		db.jafInvoice.findMany({
 			where: {
-				supervisorId: userId,
+				...ownedOrInArea,
 				supervisorApprovedAt: { not: null },
 				releasedToFinanceAt: null,
 				status: { not: "CANCELLED" },

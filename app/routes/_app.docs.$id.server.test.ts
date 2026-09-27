@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 vi.mock("~/lib/db.server", () => ({
 	db: {
 		jafInvoice: { findUniqueOrThrow: vi.fn() },
+		brigade: { findMany: vi.fn(() => Promise.resolve([])) },
 		serviceCode: { findMany: vi.fn(() => Promise.resolve([])) },
 		user: {
 			findUnique: vi.fn(),
@@ -30,13 +31,18 @@ describe("GET /docs/:id", () => {
 		} as any)
 	})
 
-	function baseDoc(status = "CREATED") {
+	function baseDoc(
+		status = "CREATED",
+		overrides: Record<string, unknown> = {},
+	) {
 		return {
 			id: "doc-1",
 			controlNumber: "JAF-1001",
 			status,
 			supervisorId: "sup-1",
 			assignedCrewIds: [],
+			brigade: null,
+			...overrides,
 		}
 	}
 
@@ -134,8 +140,52 @@ describe("GET /docs/:id", () => {
 			role: "SUPERVISOR",
 		} as any)
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
-			baseDoc("FIELD_UPDATED") as any,
+			baseDoc("FIELD_UPDATED", { supervisorId: "user-1" }) as any,
 		)
+		vi.mocked(db.auditTrail.findMany).mockResolvedValue([])
+		vi.mocked(db.user.findMany).mockResolvedValue([])
+
+		const result = await loader({
+			request: new Request("http://localhost/docs/doc-1"),
+			params: { id: "doc-1" },
+		} as any)
+
+		expect(result.doc.status).toBe("FIELD_UPDATED")
+	})
+
+	it("blocks a Supervisor from loading a doc outside their area", async () => {
+		vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
+			id: "user-1",
+			role: "SUPERVISOR",
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			baseDoc("FIELD_UPDATED", {
+				supervisorId: "other-sup",
+				brigade: { area: "SUR" },
+			}) as any,
+		)
+		vi.mocked(db.brigade.findMany).mockResolvedValue([{ area: "OESTE" }] as any)
+
+		await expect(
+			loader({
+				request: new Request("http://localhost/docs/doc-1"),
+				params: { id: "doc-1" },
+			} as any),
+		).rejects.toMatchObject({ status: 302 })
+	})
+
+	it("allows a Supervisor to load a doc in their brigade's area", async () => {
+		vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
+			id: "user-1",
+			role: "SUPERVISOR",
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			baseDoc("FIELD_UPDATED", {
+				supervisorId: "other-sup",
+				brigade: { area: "OESTE" },
+			}) as any,
+		)
+		vi.mocked(db.brigade.findMany).mockResolvedValue([{ area: "OESTE" }] as any)
 		vi.mocked(db.auditTrail.findMany).mockResolvedValue([])
 		vi.mocked(db.user.findMany).mockResolvedValue([])
 

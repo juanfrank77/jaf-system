@@ -157,7 +157,7 @@ function computeAgingBuckets(docs: DashboardDoc[]): AgingBucket {
 	}
 }
 
-function computeMaterialSignals(docs: DashboardDoc[]) {
+export function computeMaterialSignals(docs: DashboardDoc[]) {
 	let discrepancy = 0
 	let shortage = 0
 	let overage = 0

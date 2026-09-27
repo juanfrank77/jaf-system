@@ -29,6 +29,7 @@
 			"admin_crews": "Cuadrillas",
 			"admin_vans": "Vans",
 			"supervisor_brigades": "Brigadas",
+			"supervisor_variance": "Variaciones",
 			"admin_restock": "Aprobaciones de reabastecimiento",
 			"installer": "Instalador",
 			"installer_supervisor": "Supervisor de Instaladores",
@@ -612,6 +613,29 @@
 			"id_required": "Se requiere el id de la brigada.",
 			"unknown_intent": "Acción desconocida."
 		}
+	},
+	"supervisor_variance": {
+		"title": "Variación de Materiales",
+		"readonly_note": "Las señales de devolución/reparación de seriales y de existencias faltantes (LOST) aparecerán aquí cuando se implementen Spec A/Spec B",
+		"table": {
+			"doc": "Documento",
+			"brigade": "Brigada",
+			"kinds": "Variación",
+			"lines": "Líneas"
+		},
+		"kinds": {
+			"overage": "Sobrante",
+			"discrepancy": "Discrepancia",
+			"shortage": "Faltante"
+		},
+		"line": {
+			"code": "Código",
+			"ordered": "Ordenado",
+			"installed": "Instalado",
+			"delta": "Delta"
+		},
+		"no_lines": "Sin detalle de líneas",
+		"no_variance": "No hay variaciones que revisar."
 	},
 	"admin_vans": {
 		"title": "Cuadrillas y personal — Vans",

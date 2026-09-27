@@ -23,7 +23,8 @@ vi.mock("~/lib/service-codes.server", () => ({
 import { generateControlNumber } from "~/lib/control-number.server"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
-import { action } from "./_app.docs.new"
+import { getActiveMaterialCodes } from "~/lib/service-codes.server"
+import { action, loader } from "./_app.docs.new"
 
 function post(form: FormData) {
 	return new Request("http://localhost/docs/new", {
@@ -132,5 +133,48 @@ describe("POST /docs/new", () => {
 		form.set("serviceLines", "{nope")
 		const res = await action({ request: post(form), params: {} } as any)
 		expect(res).toEqual({ errorKey: "docs_new.errors.invalid_service_lines" })
+	})
+})
+
+describe("GET /docs/new", () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(getActiveMaterialCodes).mockResolvedValue([])
+		vi.mocked(db.brigade.findMany).mockResolvedValue([])
+	})
+
+	it("bounds the SUPERVISOR brigade picker to take: 100", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1", role: "SUPERVISOR" },
+			session: {},
+		} as any)
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["CENTRAL"],
+		} as any)
+
+		await loader({
+			request: new Request("http://localhost/docs/new"),
+			params: {},
+		} as any)
+
+		expect(db.brigade.findMany).toHaveBeenCalledWith(
+			expect.objectContaining({ take: 100 }),
+		)
+	})
+
+	it("does not bound the ADMIN brigade picker", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "admin-1", role: "ADMIN" },
+			session: {},
+		} as any)
+
+		await loader({
+			request: new Request("http://localhost/docs/new"),
+			params: {},
+		} as any)
+
+		expect(db.brigade.findMany).toHaveBeenCalledWith(
+			expect.objectContaining({ take: undefined }),
+		)
 	})
 })

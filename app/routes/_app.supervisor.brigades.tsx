@@ -140,6 +140,16 @@ export async function action({ request }: Route.ActionArgs) {
 					area: existing.area,
 					supervisorAreas: areas,
 				})
+				// Sharing an area grants edit access to that brigade, but not the
+				// right to re-home it into a different area — that would silently
+				// revoke the brigade owner's access to its docs (they'd fall
+				// outside the owner's supervisorAreas the moment it moves). Only
+				// the brigade's actual owner may change its area.
+				if (area !== existing.area && existing.supervisorId !== user.id) {
+					throw new BrigadeAreaNotAllowedError(
+						"Only the brigade's owner may change its area",
+					)
+				}
 				// Don't overwrite an existing owner's supervisorId just because a
 				// different in-area supervisor happens to be editing this brigade.
 				await db.brigade.update({

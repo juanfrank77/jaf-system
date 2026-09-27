@@ -25,7 +25,11 @@ vi.mock("~/lib/supervisor-scope", () => ({
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
 import { supervisorAreas } from "~/lib/supervisor-scope"
-import { action, assertBrigadeAreaAllowed } from "./_app.supervisor.brigades"
+import {
+	action,
+	assertBrigadeAreaAllowed,
+	loader,
+} from "./_app.supervisor.brigades"
 
 function formRequest(form: FormData) {
 	return new Request("http://localhost/supervisor/brigades", {
@@ -51,6 +55,56 @@ describe("assertBrigadeAreaAllowed", () => {
 		await expect(
 			assertBrigadeAreaAllowed({ area: "NORTE", supervisorAreas: [] }),
 		).rejects.toThrow()
+	})
+})
+
+describe("GET /supervisor/brigades", () => {
+	beforeEach(() => vi.clearAllMocks())
+
+	it("a supervisor with zero admin-assigned areas sees an empty list and empty areaOptions — never an ALL_AREAS fallback", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-new" },
+			session: {},
+		} as any)
+		vi.mocked(supervisorAreas).mockResolvedValue([])
+		vi.mocked(db.brigade.findMany).mockResolvedValue([])
+		vi.mocked(db.user.findMany).mockResolvedValue([])
+
+		const result = await loader({
+			request: new Request("http://localhost/supervisor/brigades"),
+			params: {},
+		} as any)
+
+		expect(db.brigade.findMany).toHaveBeenCalledWith(
+			expect.objectContaining({ where: { area: { in: [] } } }),
+		)
+		expect(result.areaOptions).toEqual([])
+		expect(result.brigades).toEqual([])
+	})
+
+	it("scopes the brigade list to the supervisor's admin-assigned areas and surfaces them as areaOptions", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1" },
+			session: {},
+		} as any)
+		vi.mocked(supervisorAreas).mockResolvedValue(["CENTRAL", "METRO"])
+		vi.mocked(db.brigade.findMany).mockResolvedValue([
+			{ id: "b1", area: "CENTRAL" },
+		] as any)
+		vi.mocked(db.user.findMany).mockResolvedValue([])
+
+		const result = await loader({
+			request: new Request("http://localhost/supervisor/brigades"),
+			params: {},
+		} as any)
+
+		expect(db.brigade.findMany).toHaveBeenCalledWith(
+			expect.objectContaining({
+				where: { area: { in: ["CENTRAL", "METRO"] } },
+			}),
+		)
+		expect(result.areaOptions).toEqual(["CENTRAL", "METRO"])
+		expect(result.brigades).toEqual([{ id: "b1", area: "CENTRAL" }])
 	})
 })
 
@@ -206,6 +260,76 @@ describe("POST /supervisor/brigades", () => {
 			errorKey: "supervisor_brigades.errors.area_not_allowed",
 		})
 		expect(db.brigade.update).not.toHaveBeenCalled()
+	})
+
+	it("rejects a supervisor changing the area of a brigade owned by a different (co-area) supervisor", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-B" },
+			session: {},
+		} as any)
+		// sup-B holds both CENTRAL and NORTE — enough to open a CENTRAL
+		// brigade they don't own and try to move it to NORTE.
+		vi.mocked(supervisorAreas).mockResolvedValue(["CENTRAL", "NORTE"])
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
+			id: "brigade-1",
+			area: "CENTRAL",
+			active: true,
+			supervisorId: "sup-A",
+			memberIds: [],
+		} as any)
+
+		const form = new FormData()
+		form.set("intent", "update")
+		form.set("id", "brigade-1")
+		form.set("name", "Brigada Central")
+		form.set("area", "NORTE")
+		form.set("active", "on")
+
+		const result = (await action({
+			request: formRequest(form),
+			params: {},
+		} as any)) as any
+
+		expect(result.init.status).toBe(403)
+		expect(result.data).toEqual({
+			errorKey: "supervisor_brigades.errors.area_not_allowed",
+		})
+		expect(db.brigade.update).not.toHaveBeenCalled()
+	})
+
+	it("allows the brigade's actual owner to move it between their own areas", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-A" },
+			session: {},
+		} as any)
+		vi.mocked(supervisorAreas).mockResolvedValue(["CENTRAL", "NORTE"])
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
+			id: "brigade-1",
+			area: "CENTRAL",
+			active: true,
+			supervisorId: "sup-A",
+			memberIds: [],
+		} as any)
+		vi.mocked(db.brigade.update).mockResolvedValue({} as any)
+
+		const form = new FormData()
+		form.set("intent", "update")
+		form.set("id", "brigade-1")
+		form.set("name", "Brigada Central")
+		form.set("area", "NORTE")
+		form.set("active", "on")
+
+		const result = await action({
+			request: formRequest(form),
+			params: {},
+		} as any).catch((r) => r)
+
+		expect(result.status).toBe(302)
+		expect(db.brigade.update).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({ area: "NORTE" }),
+			}),
+		)
 	})
 
 	it("rejects creating a brigade with a memberId that isn't a real active CREW user", async () => {

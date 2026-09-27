@@ -156,13 +156,20 @@ describe("Comptroller detail loader — crew assignment history", () => {
 			...doc,
 			assignedCrewIds: ["u-a", "u-b"],
 			crewAssignmentHistory: [
-				{ brigadeId: "b2", by: "sup1", at: "2026-01-01T00:00:00.000Z" },
+				{
+					brigadeId: "b2",
+					by: "supervisor-cuid-123456789",
+					at: "2026-01-01T00:00:00.000Z",
+				},
 			],
 			poLinks: [],
 			paymentRecords: [],
 		})
 		mocks.db.brigade.findMany.mockResolvedValue([
 			{ id: "b2", name: "Brigada Norte" },
+		])
+		mocks.db.user.findMany.mockResolvedValue([
+			{ id: "supervisor-cuid-123456789", name: "Ramón Ramos" },
 		])
 
 		const result = await loader({
@@ -172,7 +179,40 @@ describe("Comptroller detail loader — crew assignment history", () => {
 
 		expect(result.historyWithNames).toHaveLength(1)
 		expect(result.historyWithNames[0].crewNames).toEqual(["Brigada Norte"])
-		expect(result.historyWithNames[0].assignedByName).toBe("sup1")
+		expect(result.historyWithNames[0].assignedByName).toBe("Ramón Ramos")
+		expect(mocks.db.user.findMany).toHaveBeenCalledWith({
+			where: {
+				id: { in: expect.arrayContaining(["supervisor-cuid-123456789"]) },
+			},
+			select: { id: true, name: true },
+		})
+	})
+
+	it("falls back to a truncated id when the reassigning supervisor can't be resolved", async () => {
+		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue({
+			...doc,
+			assignedCrewIds: [],
+			crewAssignmentHistory: [
+				{
+					brigadeId: "b2",
+					by: "supervisor-cuid-nomatch99",
+					at: "2026-01-01T00:00:00.000Z",
+				},
+			],
+			poLinks: [],
+			paymentRecords: [],
+		})
+		mocks.db.brigade.findMany.mockResolvedValue([
+			{ id: "b2", name: "Brigada Norte" },
+		])
+		mocks.db.user.findMany.mockResolvedValue([])
+
+		const result = await loader({
+			request: new Request("http://localhost/comptroller/job-1"),
+			params: { id: "job-1" },
+		} as any)
+
+		expect(result.historyWithNames[0].assignedByName).toBe("atch99")
 	})
 
 	it("still resolves names for the legacy individual-crew history shape", async () => {

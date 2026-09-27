@@ -13,10 +13,8 @@ export const meta: Route.MetaFunction = () => [
 ]
 
 export async function loader({ request }: Route.LoaderArgs) {
-	const { user } = await requireRole(request, ["SUPERVISOR", "ADMIN"])
-	const areas = (await supervisorAreas(db, user.id)).filter(
-		(a): a is string => a !== null,
-	)
+	const { user } = await requireRole(request, ["SUPERVISOR"])
+	const areas = await supervisorAreas(db, user.id)
 
 	const docs = await db.jafInvoice.findMany({
 		where: ownedOrInArea(user.id, areas),

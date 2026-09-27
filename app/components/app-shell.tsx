@@ -107,13 +107,13 @@ const NAV_ITEMS: NavItem[] = [
 		to: "/supervisor/brigades",
 		labelKey: "app_shell.nav.supervisor_brigades",
 		icon: UserGroup03Icon,
-		roles: ["SUPERVISOR", "ADMIN"],
+		roles: ["SUPERVISOR"],
 	},
 	{
 		to: "/supervisor/variance",
 		labelKey: "app_shell.nav.supervisor_variance",
 		icon: Invoice02Icon,
-		roles: ["SUPERVISOR", "ADMIN"],
+		roles: ["SUPERVISOR"],
 	},
 	{
 		to: "/installer",

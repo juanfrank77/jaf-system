@@ -46,6 +46,21 @@ describe("assertBrigadeAreaAllowed", () => {
 			}),
 		).resolves.toBeUndefined()
 	})
+
+	it("bootstrap: a supervisor with no brigades yet may use any canonical area", async () => {
+		await expect(
+			assertBrigadeAreaAllowed({ area: "NORTE", supervisorAreas: [] }),
+		).resolves.toBeUndefined()
+	})
+
+	it("bootstrap: still rejects a made-up area even with no brigades yet", async () => {
+		await expect(
+			assertBrigadeAreaAllowed({
+				area: "NOT-A-REAL-AREA",
+				supervisorAreas: [],
+			}),
+		).rejects.toThrow()
+	})
 })
 
 describe("POST /supervisor/brigades", () => {
@@ -58,6 +73,7 @@ describe("POST /supervisor/brigades", () => {
 		} as any)
 		vi.mocked(supervisorAreas).mockResolvedValue(["CENTRAL"])
 		vi.mocked(db.brigade.create).mockResolvedValue({} as any)
+		vi.mocked(db.user.findMany).mockResolvedValue([{ id: "crew-1" }] as any)
 
 		const form = new FormData()
 		form.set("intent", "create")
@@ -99,13 +115,15 @@ describe("POST /supervisor/brigades", () => {
 		form.set("code", "205")
 		form.set("active", "on")
 
-		await expect(
-			action({
-				request: formRequest(form),
-				params: {},
-			} as any),
-		).rejects.toThrow()
+		const result = (await action({
+			request: formRequest(form),
+			params: {},
+		} as any)) as any
 
+		expect(result.init.status).toBe(403)
+		expect(result.data).toEqual({
+			errorKey: "supervisor_brigades.errors.area_not_allowed",
+		})
 		expect(db.brigade.create).not.toHaveBeenCalled()
 	})
 
@@ -120,6 +138,7 @@ describe("POST /supervisor/brigades", () => {
 			area: "METRO",
 			active: true,
 		} as any)
+		vi.mocked(db.user.findMany).mockResolvedValue([] as any)
 
 		const form = new FormData()
 		form.set("intent", "update")
@@ -129,14 +148,44 @@ describe("POST /supervisor/brigades", () => {
 		form.set("code", "999")
 		form.set("active", "on")
 
-		await expect(
-			action({
-				request: formRequest(form),
-				params: {},
-			} as any),
-		).rejects.toThrow()
+		const result = (await action({
+			request: formRequest(form),
+			params: {},
+		} as any)) as any
 
+		expect(result.init.status).toBe(403)
+		expect(result.data).toEqual({
+			errorKey: "supervisor_brigades.errors.area_not_allowed",
+		})
 		expect(db.brigade.update).not.toHaveBeenCalled()
+	})
+
+	it("rejects creating a brigade with a memberId that isn't a real active CREW user", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1" },
+			session: {},
+		} as any)
+		vi.mocked(supervisorAreas).mockResolvedValue(["CENTRAL"])
+		vi.mocked(db.user.findMany).mockResolvedValue([] as any)
+
+		const form = new FormData()
+		form.set("intent", "create")
+		form.set("name", "Brigada Central")
+		form.set("area", "CENTRAL")
+		form.set("code", "204")
+		form.append("memberIds", "not-a-real-user")
+		form.set("active", "on")
+
+		const result = (await action({
+			request: formRequest(form),
+			params: {},
+		} as any)) as any
+
+		expect(result.init.status).toBe(400)
+		expect(result.data).toEqual({
+			errorKey: "supervisor_brigades.errors.invalid_fields",
+		})
+		expect(db.brigade.create).not.toHaveBeenCalled()
 	})
 
 	it("updating a brigade does not overwrite an existing owner's supervisorId with the editing supervisor's id", async () => {
@@ -152,6 +201,7 @@ describe("POST /supervisor/brigades", () => {
 			supervisorId: "sup-A",
 		} as any)
 		vi.mocked(db.brigade.update).mockResolvedValue({} as any)
+		vi.mocked(db.user.findMany).mockResolvedValue([{ id: "crew-1" }] as any)
 
 		const form = new FormData()
 		form.set("intent", "update")
@@ -186,6 +236,7 @@ describe("POST /supervisor/brigades", () => {
 			session: {},
 		} as any)
 		vi.mocked(supervisorAreas).mockResolvedValue(["CENTRAL"])
+		vi.mocked(db.user.findMany).mockResolvedValue([{ id: "crew-1" }] as any)
 		vi.mocked(db.brigade.create).mockRejectedValue(
 			Object.assign(new Error("Unique constraint failed"), { code: "P2002" }),
 		)
@@ -225,13 +276,15 @@ describe("POST /supervisor/brigades", () => {
 		form.set("intent", "toggle")
 		form.set("id", "brigade-1")
 
-		await expect(
-			action({
-				request: formRequest(form),
-				params: {},
-			} as any),
-		).rejects.toThrow()
+		const result = (await action({
+			request: formRequest(form),
+			params: {},
+		} as any)) as any
 
+		expect(result.init.status).toBe(403)
+		expect(result.data).toEqual({
+			errorKey: "supervisor_brigades.errors.area_not_allowed",
+		})
 		expect(db.brigade.update).not.toHaveBeenCalled()
 	})
 })

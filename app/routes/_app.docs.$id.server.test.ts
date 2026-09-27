@@ -317,6 +317,67 @@ describe("POST /docs/:id (action) — supervisor scope", () => {
 
 		expect(db.jafInvoice.update).toHaveBeenCalled()
 	})
+
+	it("blocks a Supervisor from reassigning a doc to a brigade in a foreign area", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "user-1", role: "SUPERVISOR" },
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			baseDoc({ status: "SIGNED" }) as any,
+		)
+		vi.mocked(db.brigade.findMany).mockResolvedValue([{ area: "SUR" }] as any)
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
+			id: "brigade-metro",
+			area: "METRO",
+			memberIds: ["u-metro"],
+		} as any)
+
+		const form = new FormData()
+		form.set("intent", "reassign")
+		form.set("brigadeId", "brigade-metro")
+
+		const result = await action({
+			request: new Request("http://localhost/docs/doc-1", {
+				method: "POST",
+				body: form,
+			}),
+			params: { id: "doc-1" },
+		} as any)
+
+		expect(result).toEqual({ errorKey: "docs_view.errors.reassign_invalid" })
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("allows a Supervisor to reassign a doc to a brigade in their own area", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "user-1", role: "SUPERVISOR" },
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			baseDoc({ status: "SIGNED" }) as any,
+		)
+		vi.mocked(db.brigade.findMany).mockResolvedValue([{ area: "SUR" }] as any)
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
+			id: "brigade-sur",
+			area: "SUR",
+			memberIds: ["u-sur"],
+		} as any)
+
+		const form = new FormData()
+		form.set("intent", "reassign")
+		form.set("brigadeId", "brigade-sur")
+
+		await expect(
+			action({
+				request: new Request("http://localhost/docs/doc-1", {
+					method: "POST",
+					body: form,
+				}),
+				params: { id: "doc-1" },
+			} as any),
+		).rejects.toMatchObject({ status: 302 })
+
+		expect(db.jafInvoice.update).toHaveBeenCalled()
+	})
 })
 
 describe("reassignToBrigade", () => {

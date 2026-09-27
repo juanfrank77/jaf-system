@@ -101,7 +101,12 @@ export async function loader({ request, params }: ComptrollerLoaderArgs) {
 	const history =
 		(doc.crewAssignmentHistory as AssignmentHistoryEntry[] | null) ?? []
 	for (const entry of history) {
-		if (hasUserIds(entry)) for (const id of entry.userIds) crewIds.add(id)
+		if (hasUserIds(entry)) {
+			for (const id of entry.userIds) crewIds.add(id)
+			if (entry.assignedById) crewIds.add(entry.assignedById)
+		} else {
+			crewIds.add(entry.by)
+		}
 	}
 	const crewUsers =
 		crewIds.size > 0

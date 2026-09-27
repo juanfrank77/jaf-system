@@ -59,9 +59,13 @@ async function seedCatalog() {
 async function seedSupervisors() {
 	const password = await hashPassword(TEMP_PASSWORD)
 	for (const s of SUPERVISOR_SEED) {
+		// supervisorAreas is admin-managed authorization state (set via
+		// /admin/users), never re-seeded here — otherwise re-running this
+		// script would silently revert whatever an admin granted or revoked.
+		// Only a brand-new account gets the seed's default areas.
 		const user = await db.user.upsert({
 			where: { email: s.email },
-			update: { name: s.name, phone: s.phone, supervisorAreas: [...s.areas] },
+			update: { name: s.name, phone: s.phone },
 			create: {
 				email: s.email,
 				name: s.name,

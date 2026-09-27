@@ -35,7 +35,9 @@ export async function loader({ request }: Route.LoaderArgs) {
 					: { active: true },
 			orderBy: [{ area: "asc" }, { name: "asc" }],
 			select: { id: true, name: true, area: true, code: true, leadName: true },
-			take: 100,
+			// Only the supervisor-scoped picker is bounded — the ADMIN branch
+			// is intentionally unbounded, matching its pre-existing behavior.
+			take: user.role === "SUPERVISOR" ? 100 : undefined,
 		}),
 	])
 	return {

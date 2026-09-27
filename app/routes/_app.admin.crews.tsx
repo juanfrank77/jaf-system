@@ -7,6 +7,7 @@ import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
+import { ALL_AREAS } from "~/lib/supervisor-scope"
 import type { Route } from "./+types/_app.admin.crews"
 
 type CrewUser = { id: string; name: string; active: boolean }
@@ -36,12 +37,15 @@ export async function action({ request }: Route.ActionArgs) {
 	if (intent === "create" || intent === "update") {
 		const id = form.get("id")
 		const name = form.get("name")
+		const area = form.get("area")
 		const memberIds = form.getAll("memberIds")
 		const active = form.get("active") === "on"
 
 		if (
 			typeof name !== "string" ||
 			!name.trim() ||
+			typeof area !== "string" ||
+			!(ALL_AREAS as readonly string[]).includes(area) ||
 			!memberIds.every((m) => typeof m === "string")
 		) {
 			return data(
@@ -52,6 +56,7 @@ export async function action({ request }: Route.ActionArgs) {
 
 		const dataPayload = {
 			name: name.trim(),
+			area,
 			memberIds: memberIds as string[],
 			active,
 		}
@@ -91,7 +96,13 @@ export default function AdminCrews({
 	actionData,
 }: Route.ComponentProps) {
 	const { crews, crewUsers } = loaderData as {
-		crews: { id: string; name: string; memberIds: string[]; active: boolean }[]
+		crews: {
+			id: string
+			name: string
+			area: string | null
+			memberIds: string[]
+			active: boolean
+		}[]
 		crewUsers: CrewUser[]
 	}
 	const { t } = useTranslation()
@@ -111,6 +122,21 @@ export default function AdminCrews({
 					<div className="space-y-1">
 						<Label htmlFor="name">{t("admin_crews.name_label")}</Label>
 						<Input id="name" name="name" required />
+					</div>
+					<div className="space-y-1">
+						<Label htmlFor="area">{t("admin_crews.area_label")}</Label>
+						<select
+							id="area"
+							name="area"
+							required
+							className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+						>
+							{ALL_AREAS.map((a) => (
+								<option key={a} value={a}>
+									{a}
+								</option>
+							))}
+						</select>
 					</div>
 					<div className="space-y-2">
 						<p className="text-sm font-medium">
@@ -161,6 +187,9 @@ export default function AdminCrews({
 								{t("admin_crews.table.name")}
 							</th>
 							<th className="px-4 py-3 text-left font-medium text-slate-600">
+								{t("admin_crews.table.area")}
+							</th>
+							<th className="px-4 py-3 text-left font-medium text-slate-600">
 								{t("admin_crews.table.members")}
 							</th>
 							<th className="px-4 py-3 text-center font-medium text-slate-600">
@@ -179,6 +208,9 @@ export default function AdminCrews({
 							return (
 								<tr key={crew.id} className="hover:bg-slate-50">
 									<td className="px-4 py-3 font-medium">{crew.name}</td>
+									<td className="px-4 py-3 text-slate-600">
+										{crew.area ?? t("admin_crews.no_area")}
+									</td>
 									<td className="px-4 py-3 text-slate-600">
 										{members.map((m) => m.name).join(", ") ||
 											t("admin_crews.no_members")}
@@ -214,7 +246,7 @@ export default function AdminCrews({
 						{crews.length === 0 && (
 							<tr>
 								<td
-									colSpan={4}
+									colSpan={5}
 									className="px-4 py-6 text-center text-slate-400 text-sm"
 								>
 									{t("admin_crews.no_crews")}
@@ -232,7 +264,13 @@ function EditCrewDialog({
 	crew,
 	crewUsers,
 }: {
-	crew: { id: string; name: string; memberIds: string[]; active: boolean }
+	crew: {
+		id: string
+		name: string
+		area: string | null
+		memberIds: string[]
+		active: boolean
+	}
 	crewUsers: CrewUser[]
 }) {
 	const { t } = useTranslation()
@@ -254,6 +292,29 @@ function EditCrewDialog({
 						defaultValue={crew.name}
 						required
 					/>
+				</div>
+				<div className="space-y-1">
+					<Label htmlFor={`area-${crew.id}`}>
+						{t("admin_crews.area_label")}
+					</Label>
+					<select
+						id={`area-${crew.id}`}
+						name="area"
+						required
+						defaultValue={crew.area ?? ""}
+						className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+					>
+						{!crew.area && (
+							<option value="" disabled>
+								{t("admin_crews.select_area")}
+							</option>
+						)}
+						{ALL_AREAS.map((a) => (
+							<option key={a} value={a}>
+								{a}
+							</option>
+						))}
+					</select>
 				</div>
 				<div className="space-y-2">
 					<p className="text-sm font-medium">

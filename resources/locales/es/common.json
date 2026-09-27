@@ -95,7 +95,8 @@
 		"errors": {
 			"invalid_materials": "No se pudo leer la lista de materiales",
 			"invalid_service_lines": "No se pudieron leer los códigos de servicio.",
-			"missing_fields": "Se requieren tipo de trabajo, dirección y al menos un miembro de la cuadrilla"
+			"missing_fields": "Se requieren tipo de trabajo, dirección y al menos un miembro de la cuadrilla",
+			"brigade_invalid": "Esa brigada no está disponible."
 		}
 	},
 	"admin_history": {
@@ -557,6 +558,8 @@
 		"title": "Cuadrillas y personal — Brigadas",
 		"add_heading": "Agregar brigada",
 		"name_label": "Nombre de brigada *",
+		"area_label": "Área *",
+		"select_area": "Selecciona un área",
 		"members_label": "Miembros",
 		"active_label": "Activa",
 		"active": "activo",
@@ -570,14 +573,16 @@
 		"no": "No",
 		"table": {
 			"name": "Nombre",
+			"area": "Área",
 			"members": "Miembros",
 			"active": "Activa",
 			"actions": "Acciones"
 		},
+		"no_area": "Sin área",
 		"no_members": "Sin miembros",
 		"no_crews": "Aún no hay brigadas.",
 		"errors": {
-			"invalid_fields": "Se requieren nombre de brigada válido y lista de miembros.",
+			"invalid_fields": "Se requieren nombre de brigada válido, área y lista de miembros.",
 			"id_required": "Se requiere el id de la brigada.",
 			"unknown_intent": "Acción desconocida."
 		}

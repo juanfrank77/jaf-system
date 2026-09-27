@@ -5,7 +5,7 @@ vi.mock("~/lib/db.server", () => ({
 		jafInvoice: { findUniqueOrThrow: vi.fn(), update: vi.fn() },
 		auditTrail: { create: vi.fn() },
 		user: { findMany: vi.fn() },
-		brigade: { findMany: vi.fn(), findUniqueOrThrow: vi.fn() },
+		brigade: { findMany: vi.fn(), findUnique: vi.fn() },
 		$transaction: vi.fn(async (fn: any) =>
 			fn({
 				jafInvoice: { update: vi.fn() },
@@ -117,7 +117,7 @@ describe("POST /docs/:id/edit — supervisor scope", () => {
 			} as any),
 		).rejects.toMatchObject({ status: 302 })
 
-		expect(db.brigade.findUniqueOrThrow).not.toHaveBeenCalled()
+		expect(db.brigade.findUnique).not.toHaveBeenCalled()
 	})
 
 	it("allows a Supervisor to edit a doc in their brigade's area", async () => {
@@ -125,8 +125,9 @@ describe("POST /docs/:id/edit — supervisor scope", () => {
 			baseDoc() as any,
 		)
 		vi.mocked(db.brigade.findMany).mockResolvedValue([{ area: "SUR" }] as any)
-		vi.mocked(db.brigade.findUniqueOrThrow).mockResolvedValue({
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
 			id: "b1",
+			area: "SUR",
 			memberIds: ["crew-1"],
 		} as any)
 
@@ -137,6 +138,29 @@ describe("POST /docs/:id/edit — supervisor scope", () => {
 			} as any),
 		).rejects.toMatchObject({ status: 302 })
 
-		expect(db.brigade.findUniqueOrThrow).toHaveBeenCalled()
+		expect(db.brigade.findUnique).toHaveBeenCalled()
+	})
+
+	it("rejects reassigning to a brigade in a foreign area, even when the doc itself is in scope", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			baseDoc() as any,
+		)
+		vi.mocked(db.brigade.findMany).mockResolvedValue([{ area: "SUR" }] as any)
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
+			id: "b-metro",
+			area: "METRO",
+			memberIds: ["crew-metro"],
+		} as any)
+
+		const form = validForm()
+		form.set("brigadeId", "b-metro")
+
+		const result = await action({
+			request: formRequest(form),
+			params: { id: "doc-1" },
+		} as any)
+
+		expect(result).toEqual({ errorKey: "docs_edit.errors.brigade_invalid" })
+		expect(db.$transaction).not.toHaveBeenCalled()
 	})
 })

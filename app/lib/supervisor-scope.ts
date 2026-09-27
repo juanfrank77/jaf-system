@@ -1,6 +1,9 @@
 import { redirect } from "react-router"
 import type { PrismaClient } from "../../generated/prisma/client"
 
+/** The canonical area set (Global Constraints: `Brigade.area`). */
+export const ALL_AREAS = ["CENTRAL", "METRO", "NORTE", "OESTE", "SUR"] as const
+
 /**
  * The areas a supervisor owns, derived from the brigades they supervise.
  * Null-area brigades never contribute an area — a supervisor of one must
@@ -50,4 +53,21 @@ export async function assertDocInSupervisorScope(
 	const areas = await supervisorAreas(db, userId)
 	if (!doc.brigade?.area || !areas.includes(doc.brigade.area))
 		throw redirect("/dashboard")
+}
+
+/**
+ * Returns true unless the given brigade is outside the supervisor's scope —
+ * i.e. it is a real assignment target for reassigning a doc. ADMIN (or any
+ * non-SUPERVISOR role) is always allowed. Shared by every route that lets a
+ * supervisor point a doc at a brigade, so the reassign-target check can't
+ * silently drift between routes.
+ */
+export async function isBrigadeInSupervisorScope(
+	db: PrismaClient,
+	userId: string,
+	brigade: { area: string | null } | null,
+): Promise<boolean> {
+	if (!brigade) return false
+	const areas = await supervisorAreas(db, userId)
+	return !!brigade.area && areas.includes(brigade.area)
 }

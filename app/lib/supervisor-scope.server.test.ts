@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest"
-import { assertDocInSupervisorScope, supervisorAreas } from "./supervisor-scope"
+import {
+	assertDocInSupervisorScope,
+	isBrigadeInSupervisorScope,
+	supervisorAreas,
+} from "./supervisor-scope"
 
 describe("supervisorAreas", () => {
 	it("returns every area the supervisor owns (union for multi-area)", async () => {
@@ -31,5 +35,36 @@ describe("assertDocInSupervisorScope", () => {
 				brigade: { area: null },
 			}),
 		).rejects.toMatchObject({ status: 302 })
+	})
+})
+
+describe("isBrigadeInSupervisorScope", () => {
+	it("allows a brigade in one of the supervisor's own areas", async () => {
+		const db = {
+			brigade: { findMany: async () => [{ area: "SUR" }] },
+		} as any
+		expect(await isBrigadeInSupervisorScope(db, "u-1", { area: "SUR" })).toBe(
+			true,
+		)
+	})
+	it("denies a brigade in a foreign area", async () => {
+		const db = {
+			brigade: { findMany: async () => [{ area: "SUR" }] },
+		} as any
+		expect(await isBrigadeInSupervisorScope(db, "u-1", { area: "METRO" })).toBe(
+			false,
+		)
+	})
+	it("denies a null brigade", async () => {
+		const db = { brigade: { findMany: async () => [{ area: "SUR" }] } } as any
+		expect(await isBrigadeInSupervisorScope(db, "u-1", null)).toBe(false)
+	})
+	it("denies a null-area brigade even when the supervisor owns another null-area brigade", async () => {
+		const db = {
+			brigade: { findMany: async () => [{ area: null }] },
+		} as any
+		expect(await isBrigadeInSupervisorScope(db, "u-1", { area: null })).toBe(
+			false,
+		)
 	})
 })

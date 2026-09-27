@@ -49,7 +49,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 	return redirect("/admin/vans")
 }
 
-export default function RestockRelease({ loaderData }: Route.ComponentProps) {
+export default function RestockRelease({
+	loaderData,
+	actionData,
+}: Route.ComponentProps) {
 	const { restock, lines, codesById } = loaderData
 	const { t } = useTranslation()
 	const releaseSigRef = useRef<SignaturePadHandle>(null)
@@ -100,6 +103,14 @@ export default function RestockRelease({ loaderData }: Route.ComponentProps) {
 				{t("restock_release.heading", "Release Restock to Van")}
 			</h1>
 			<p className="text-sm text-slate-500">{restock.van.name}</p>
+			{actionData && "errorKey" in actionData && (
+				<p className="text-sm text-red-600">
+					{t(
+						actionData.errorKey,
+						"Both signatures are required before releasing.",
+					)}
+				</p>
+			)}
 
 			<Form
 				method="post"

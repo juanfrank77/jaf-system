@@ -1054,7 +1054,8 @@
 			"warehouse_required": "Por favor selecciona un almacén.",
 			"invalid_items": "Datos de artículos inválidos.",
 			"invalid_service_codes": "Uno o más productos seleccionados ya no están disponibles.",
-			"items_required": "Agrega al menos un artículo."
+			"items_required": "Agrega al menos un artículo.",
+			"qty_too_large": "Una o más cantidades son demasiado grandes. Redúcelas o divídelas en una solicitud separada."
 		}
 	},
 	"installer_install": {

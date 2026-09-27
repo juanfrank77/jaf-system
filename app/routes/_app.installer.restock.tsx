@@ -7,7 +7,11 @@ import { db } from "~/lib/db.server"
 import { requireInstaller } from "~/lib/installer-context.server"
 import { canApproveRestock } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
-import { buildRestockPrefill, createRestock } from "~/lib/restock.server"
+import {
+	buildRestockPrefill,
+	createRestock,
+	MAX_LINE_QTY,
+} from "~/lib/restock.server"
 import { getActiveMaterialCodes } from "~/lib/service-codes.server"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.installer.restock"
@@ -95,13 +99,30 @@ export async function action({ request }: Route.ActionArgs) {
 	// in createRestock's caller enforced this before), reaches the warehouse
 	// release queue, and burns a signature on a no-op release.
 	if (lines.length === 0) {
-		return { errorKey: "restock.errors.no_valid_lines" as const }
+		return { errorKey: "installer_restock.errors.items_required" as const }
+	}
+	// Mirror createRestock's coalesced-total ceiling here so a quantity over
+	// the maximum returns a graceful error instead of letting createRestock's
+	// throw surface as an unhandled 500 with the internal message rendered
+	// straight to the installer.
+	const coalescedQty = new Map<string, number>()
+	for (const l of lines as { serviceCodeId: string; qty: number }[]) {
+		coalescedQty.set(
+			l.serviceCodeId,
+			(coalescedQty.get(l.serviceCodeId) ?? 0) + l.qty,
+		)
+	}
+	if ([...coalescedQty.values()].some((qty) => qty > MAX_LINE_QTY)) {
+		return { errorKey: "installer_restock.errors.qty_too_large" as const }
 	}
 	await createRestock(van.id, lines, { id: user.id })
 	return redirect("/installer")
 }
 
-export default function InstallerRestock({ loaderData }: Route.ComponentProps) {
+export default function InstallerRestock({
+	loaderData,
+	actionData,
+}: Route.ComponentProps) {
 	const { role, van, prefill, serviceCodes, pending } = loaderData
 	const { t } = useTranslation()
 
@@ -145,6 +166,9 @@ export default function InstallerRestock({ loaderData }: Route.ComponentProps) {
 				<p className="text-sm text-amber-600">{t("installer.no_van")}</p>
 			) : (
 				<Form method="post" className="space-y-4">
+					{actionData && "errorKey" in actionData && (
+						<p className="text-sm text-red-600">{t(actionData.errorKey)}</p>
+					)}
 					<MaterialLineItems
 						serviceCodes={serviceCodes}
 						initialItems={prefill}

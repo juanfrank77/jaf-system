@@ -79,24 +79,42 @@ export async function action({ request }: Route.ActionArgs) {
 
 		await assertBrigadeAreaAllowed({ area, supervisorAreas: areas })
 
-		const dataPayload = {
+		const sharedPayload = {
 			name: name.trim(),
 			memberIds: memberIds as string[],
 			active,
 			area,
-			supervisorId: user.id,
 			code: typeof code === "string" && code.trim() ? code.trim() : null,
 		}
 
-		if (intent === "update" && typeof id === "string" && id.trim()) {
-			const existing = await db.brigade.findUniqueOrThrow({ where: { id } })
-			await assertBrigadeAreaAllowed({
-				area: existing.area,
-				supervisorAreas: areas,
-			})
-			await db.brigade.update({ where: { id }, data: dataPayload })
-		} else {
-			await db.brigade.create({ data: dataPayload })
+		try {
+			if (intent === "update" && typeof id === "string" && id.trim()) {
+				const existing = await db.brigade.findUniqueOrThrow({ where: { id } })
+				await assertBrigadeAreaAllowed({
+					area: existing.area,
+					supervisorAreas: areas,
+				})
+				// Don't overwrite an existing owner's supervisorId just because a
+				// different in-area supervisor happens to be editing this brigade.
+				await db.brigade.update({ where: { id }, data: sharedPayload })
+			} else {
+				await db.brigade.create({
+					data: { ...sharedPayload, supervisorId: user.id },
+				})
+			}
+		} catch (error) {
+			if (
+				error &&
+				typeof error === "object" &&
+				"code" in error &&
+				(error as { code?: string }).code === "P2002"
+			) {
+				return data(
+					{ errorKey: "supervisor_brigades.errors.duplicate_code" },
+					{ status: 400 },
+				)
+			}
+			throw error
 		}
 		return redirect("/supervisor/brigades")
 	}

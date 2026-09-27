@@ -139,6 +139,76 @@ describe("POST /supervisor/brigades", () => {
 		expect(db.brigade.update).not.toHaveBeenCalled()
 	})
 
+	it("updating a brigade does not overwrite an existing owner's supervisorId with the editing supervisor's id", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-B" },
+			session: {},
+		} as any)
+		vi.mocked(supervisorAreas).mockResolvedValue(["CENTRAL"])
+		vi.mocked(db.brigade.findUniqueOrThrow).mockResolvedValue({
+			id: "brigade-1",
+			area: "CENTRAL",
+			active: true,
+			supervisorId: "sup-A",
+		} as any)
+		vi.mocked(db.brigade.update).mockResolvedValue({} as any)
+
+		const form = new FormData()
+		form.set("intent", "update")
+		form.set("id", "brigade-1")
+		form.set("name", "Brigada Central")
+		form.set("area", "CENTRAL")
+		form.set("code", "204")
+		form.append("memberIds", "crew-1")
+		form.set("active", "on")
+
+		const result = await action({
+			request: formRequest(form),
+			params: {},
+		} as any).catch((r) => r)
+
+		expect(result.status).toBe(302)
+		expect(db.brigade.update).toHaveBeenCalledWith({
+			where: { id: "brigade-1" },
+			data: {
+				name: "Brigada Central",
+				memberIds: ["crew-1"],
+				active: true,
+				area: "CENTRAL",
+				code: "204",
+			},
+		})
+	})
+
+	it("returns a translated error instead of throwing when the contractor code collides (P2002)", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1" },
+			session: {},
+		} as any)
+		vi.mocked(supervisorAreas).mockResolvedValue(["CENTRAL"])
+		vi.mocked(db.brigade.create).mockRejectedValue(
+			Object.assign(new Error("Unique constraint failed"), { code: "P2002" }),
+		)
+
+		const form = new FormData()
+		form.set("intent", "create")
+		form.set("name", "Brigada Central")
+		form.set("area", "CENTRAL")
+		form.set("code", "204")
+		form.append("memberIds", "crew-1")
+		form.set("active", "on")
+
+		const result = (await action({
+			request: formRequest(form),
+			params: {},
+		} as any)) as any
+
+		expect(result.init.status).toBe(400)
+		expect(result.data).toEqual({
+			errorKey: "supervisor_brigades.errors.duplicate_code",
+		})
+	})
+
 	it("rejects toggling a brigade currently in another area", async () => {
 		vi.mocked(requireRole).mockResolvedValue({
 			user: { id: "sup-1" },

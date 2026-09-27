@@ -4,7 +4,7 @@ import { RouteErrorBoundary } from "~/components/error-boundary"
 import { computeMaterialSignals } from "~/lib/dashboard-stats"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
-import { supervisorAreas } from "~/lib/supervisor-scope"
+import { ownedOrInArea, supervisorAreas } from "~/lib/supervisor-scope"
 import { buildVarianceLines, collectVariance } from "~/lib/variance.server"
 import type { Route } from "./+types/_app.supervisor.variance"
 
@@ -19,9 +19,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 	)
 
 	const docs = await db.jafInvoice.findMany({
-		where: {
-			OR: [{ supervisorId: user.id }, { brigade: { area: { in: areas } } }],
-		},
+		where: ownedOrInArea(user.id, areas),
 		select: {
 			id: true,
 			controlNumber: true,
@@ -32,6 +30,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 			brigade: { select: { name: true } },
 		},
 		orderBy: { createdAt: "desc" },
+		take: 100,
 	})
 
 	const rows = collectVariance(
@@ -41,9 +40,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 			brigade: doc.brigade?.name ?? "",
 			signals: computeMaterialSignals([
 				{
-					status: "CREATED",
-					createdAt: new Date(),
-					receivableClosedAt: null,
 					estimatedMaterials: doc.estimatedMaterials,
 					materialsTaken: doc.materialsTaken,
 					materialsUsed: doc.materialsUsed,

@@ -34,6 +34,7 @@ import {
 	type ServiceLine,
 	sumLines,
 } from "~/lib/service-lines"
+import { assertDocInSupervisorScope } from "~/lib/supervisor-scope"
 import {
 	checkAvisoMatch,
 	deriveSupervisorStage,
@@ -127,7 +128,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["SUPERVISOR", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
+		include: { brigade: { select: { area: true } } },
 	})
+	if (user.role === "SUPERVISOR") {
+		await assertDocInSupervisorScope(db, user.id, doc)
+	}
 	const [serviceCodes, photos, supervisor, sheet, brigade, tolerance] =
 		await Promise.all([
 			getActiveServiceCodes(),
@@ -162,7 +167,11 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const { user } = await requireRole(request, ["SUPERVISOR", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
+		include: { brigade: { select: { area: true } } },
 	})
+	if (user.role === "SUPERVISOR") {
+		await assertDocInSupervisorScope(db, user.id, doc)
+	}
 	const form = await request.formData()
 	const intent = form.get("intent") as string
 

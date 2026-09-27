@@ -14,7 +14,7 @@ import {
 } from "~/lib/features.server"
 import { cacheJobs } from "~/lib/offline-store"
 import { requireSession } from "~/lib/permissions.server"
-import { supervisorAreas } from "~/lib/supervisor-scope"
+import { ownedOrInArea, supervisorAreas } from "~/lib/supervisor-scope"
 import {
 	deriveSupervisorStage,
 	type SupervisorStage,
@@ -37,8 +37,16 @@ type SendBackHistoryRow = {
 	sendBackHistory: unknown
 }
 
-function buildBaseWhere(role: Role, userId: string): Record<string, unknown> {
-	if (role === "SUPERVISOR") return { supervisorId: userId }
+async function buildBaseWhere(
+	role: Role,
+	userId: string,
+): Promise<Record<string, unknown>> {
+	if (role === "SUPERVISOR") {
+		const areas = (await supervisorAreas(db, userId)).filter(
+			(a): a is string => a !== null,
+		)
+		return ownedOrInArea(userId, areas)
+	}
 	if (role === "CREW") return { assignedCrewIds: { has: userId } }
 	return {} // WAREHOUSE, FINANCE, ADMIN see all
 }
@@ -106,15 +114,10 @@ async function loadSupervisorQueues(userId: string) {
 	const areas = (await supervisorAreas(db, userId)).filter(
 		(a): a is string => a !== null,
 	)
-	const ownedOrInArea = {
-		OR: [
-			{ supervisorId: userId },
-			{ brigade: { is: { area: { in: areas } } } },
-		],
-	}
+	const scope = ownedOrInArea(userId, areas)
 	const [pending, sentBackRaw, approved] = await Promise.all([
 		db.jafInvoice.findMany({
-			where: { ...ownedOrInArea, status: "FIELD_UPDATED" },
+			where: { ...scope, status: "FIELD_UPDATED" },
 			select: queueSelect,
 			orderBy: { fieldSubmittedAt: "desc" },
 			take: 50,
@@ -136,7 +139,7 @@ async function loadSupervisorQueues(userId: string) {
 		>,
 		db.jafInvoice.findMany({
 			where: {
-				...ownedOrInArea,
+				...scope,
 				supervisorApprovedAt: { not: null },
 				releasedToFinanceAt: null,
 				status: { not: "CANCELLED" },
@@ -202,7 +205,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		orderBy: { jobType: "asc" },
 	})
 
-	const baseWhere = buildBaseWhere(user.role, user.id)
+	const baseWhere = await buildBaseWhere(user.role, user.id)
 	const where: Record<string, unknown> = { ...baseWhere }
 
 	if (selectedStatus) {
@@ -244,7 +247,10 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const warehousePreppedDocs =
 		user.role === "WAREHOUSE"
 			? await db.jafInvoice.findMany({
-					where: { ...buildBaseWhere(user.role, user.id), status: "PREPPED" },
+					where: {
+						...(await buildBaseWhere(user.role, user.id)),
+						status: "PREPPED",
+					},
 					orderBy: { createdAt: "desc" },
 					take: 50,
 				})
@@ -254,7 +260,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		user.role === "WAREHOUSE"
 			? await db.jafInvoice.findMany({
 					where: {
-						...buildBaseWhere(user.role, user.id),
+						...(await buildBaseWhere(user.role, user.id)),
 						status: { in: ["CREATED", "PREPPED"] },
 						prepChangedSincePrep: true,
 					},
@@ -267,7 +273,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		user.role === "WAREHOUSE"
 			? await db.jafInvoice.findMany({
 					where: {
-						...buildBaseWhere(user.role, user.id),
+						...(await buildBaseWhere(user.role, user.id)),
 						status: { in: ["SIGNED", "FIELD_UPDATED"] },
 						materialsReturned: { equals: Prisma.DbNull },
 					},
@@ -280,7 +286,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		user.role === "CREW"
 			? await db.jafInvoice.findMany({
 					where: {
-						...buildBaseWhere(user.role, user.id),
+						...(await buildBaseWhere(user.role, user.id)),
 						status: "PREPPED",
 					},
 					orderBy: { createdAt: "desc" },
@@ -318,7 +324,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		user.role === "CREW"
 			? await db.jafInvoice.findMany({
 					where: {
-						...buildBaseWhere(user.role, user.id),
+						...(await buildBaseWhere(user.role, user.id)),
 						status: "FIELD_UPDATED",
 					},
 					orderBy: { createdAt: "desc" },

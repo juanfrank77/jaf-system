@@ -12,6 +12,21 @@ export async function supervisorAreas(db: PrismaClient, userId: string) {
 }
 
 /**
+ * Prisma where-fragment matching docs the supervisor either owns directly
+ * (`supervisorId`) or that fall within one of the areas they supervise, via
+ * their brigade's area. Shared by every supervisor-facing doc query so the
+ * scope stays consistent across the dashboard, queues, and variance screen.
+ */
+export function ownedOrInArea(userId: string, areas: string[]) {
+	return {
+		OR: [
+			{ supervisorId: userId },
+			{ brigade: { is: { area: { in: areas } } } },
+		],
+	}
+}
+
+/**
  * Throws a redirect to /dashboard unless the doc belongs to the supervisor
  * directly, or falls within one of the areas the supervisor owns.
  */

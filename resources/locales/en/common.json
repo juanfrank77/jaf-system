@@ -611,12 +611,13 @@
 		"errors": {
 			"invalid_fields": "Valid brigade name, area, and member list are required.",
 			"id_required": "Brigade id is required.",
-			"unknown_intent": "Unknown action."
+			"unknown_intent": "Unknown action.",
+			"duplicate_code": "That contractor code is already in use by another brigade."
 		}
 	},
 	"supervisor_variance": {
 		"title": "Material Variance",
-		"readonly_note": "Serialized returns/repair and missing-stock (LOST) signals will appear here once Spec A/Spec B ship",
+		"readonly_note": "Serialized returns/repair and missing-stock (LOST) signals will appear here once Spec A/Spec B ship. The overage/discrepancy/shortage badges summarize the whole document, while the line table below shows ordered-vs-installed detail per service code, so a badge without an exactly matching line row is expected, not a bug.",
 		"table": {
 			"doc": "Document",
 			"brigade": "Brigade",

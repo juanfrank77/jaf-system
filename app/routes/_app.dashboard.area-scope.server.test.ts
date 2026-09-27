@@ -209,4 +209,12 @@ describe("dashboard supervisor queues — area scoping (integration)", () => {
 		// The raw-SQL sentBack query must not throw with areas = [].
 		expect(data.supervisorQueues?.sentBack).toEqual([])
 	})
+
+	it("the main doc list (buildBaseWhere) uses the same area union as the queues — includes an in-area, not-owned doc", async () => {
+		const data = await runLoaderAs(supervisorId)
+		const ids = data.docs.map((d) => d.id)
+		expect(ids).toContain(ownDocId)
+		expect(ids).toContain(secondAreaDocId)
+		expect(ids).not.toContain(outsideDocId)
+	})
 })

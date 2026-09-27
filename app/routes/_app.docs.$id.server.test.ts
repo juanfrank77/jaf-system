@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("~/lib/db.server", () => ({
-	db: {
+vi.mock("~/lib/db.server", () => {
+	const db: any = {
 		brigade: {
 			findMany: vi.fn(() => Promise.resolve([])),
 			findUnique: vi.fn(),
@@ -13,20 +13,26 @@ vi.mock("~/lib/db.server", () => ({
 			findMany: vi.fn(),
 		},
 		auditTrail: { findMany: vi.fn(), create: vi.fn() },
-		notification: { createMany: vi.fn() },
+		notification: { createMany: vi.fn(), create: vi.fn() },
 		jafInvoice: { findUniqueOrThrow: vi.fn(), update: vi.fn() },
-		$transaction: vi.fn((ops) => Promise.all(ops)),
 		preCertSheet: { findFirst: vi.fn(() => Promise.resolve(null)) },
-	},
-}))
+	}
+	db.$transaction = vi.fn((ops: unknown) =>
+		typeof ops === "function"
+			? (ops as (tx: unknown) => unknown)(db)
+			: Promise.all(ops as Promise<unknown>[]),
+	)
+	return { db }
+})
 
 vi.mock("~/lib/permissions.server", () => ({
 	requireSession: vi.fn(),
+	requireRole: vi.fn(),
 }))
 
 import { db } from "~/lib/db.server"
-import { requireSession } from "~/lib/permissions.server"
-import { loader, reassignToBrigade } from "./_app.docs.$id"
+import { requireRole, requireSession } from "~/lib/permissions.server"
+import { action, loader, reassignToBrigade } from "./_app.docs.$id"
 
 describe("GET /docs/:id", () => {
 	beforeEach(() => {
@@ -238,6 +244,78 @@ describe("GET /docs/:id", () => {
 		} as any)
 
 		expect(result.doc.status).toBe("PREPPED")
+	})
+})
+
+describe("POST /docs/:id (action) — supervisor scope", () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+	})
+
+	function baseDoc(overrides: Record<string, unknown> = {}) {
+		return {
+			id: "doc-1",
+			controlNumber: "JAF-1001",
+			status: "FIELD_UPDATED",
+			supervisorId: "other-sup",
+			assignedCrewIds: [],
+			crewAssignmentHistory: [],
+			brigade: { area: "SUR" },
+			...overrides,
+		}
+	}
+
+	it("blocks a Supervisor from cancelling a doc outside their area", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "user-1", role: "SUPERVISOR" },
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			baseDoc() as any,
+		)
+		vi.mocked(db.brigade.findMany).mockResolvedValue([{ area: "OESTE" }] as any)
+
+		const form = new FormData()
+		form.set("intent", "cancel")
+		form.set("reason", "test")
+
+		await expect(
+			action({
+				request: new Request("http://localhost/docs/doc-1", {
+					method: "POST",
+					body: form,
+				}),
+				params: { id: "doc-1" },
+			} as any),
+		).rejects.toMatchObject({ status: 302 })
+
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("allows a Supervisor to cancel a doc in their brigade's area", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "user-1", role: "SUPERVISOR" },
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			baseDoc() as any,
+		)
+		vi.mocked(db.brigade.findMany).mockResolvedValue([{ area: "SUR" }] as any)
+		vi.mocked(db.user.findMany).mockResolvedValue([])
+
+		const form = new FormData()
+		form.set("intent", "cancel")
+		form.set("reason", "test")
+
+		await expect(
+			action({
+				request: new Request("http://localhost/docs/doc-1", {
+					method: "POST",
+					body: form,
+				}),
+				params: { id: "doc-1" },
+			} as any),
+		).rejects.toMatchObject({ status: 302 })
+
+		expect(db.jafInvoice.update).toHaveBeenCalled()
 	})
 })
 

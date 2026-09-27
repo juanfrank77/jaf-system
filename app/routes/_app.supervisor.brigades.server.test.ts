@@ -332,6 +332,33 @@ describe("POST /supervisor/brigades", () => {
 		)
 	})
 
+	it("rejects intent=update with a blank id instead of silently creating a brigade", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1" },
+			session: {},
+		} as any)
+		vi.mocked(supervisorAreas).mockResolvedValue(["CENTRAL"])
+
+		const form = new FormData()
+		form.set("intent", "update")
+		form.set("name", "Brigada Central")
+		form.set("area", "CENTRAL")
+		form.set("active", "on")
+		// no "id" field at all
+
+		const result = (await action({
+			request: formRequest(form),
+			params: {},
+		} as any)) as any
+
+		expect(result.init.status).toBe(400)
+		expect(result.data).toEqual({
+			errorKey: "supervisor_brigades.errors.id_required",
+		})
+		expect(db.brigade.create).not.toHaveBeenCalled()
+		expect(db.brigade.findUnique).not.toHaveBeenCalled()
+	})
+
 	it("rejects creating a brigade with a memberId that isn't a real active CREW user", async () => {
 		vi.mocked(requireRole).mockResolvedValue({
 			user: { id: "sup-1" },

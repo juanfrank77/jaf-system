@@ -217,7 +217,31 @@ describe("POST /admin/users", () => {
 		expect(result.status).toBe(302)
 		expect(db.user.update).toHaveBeenCalledWith({
 			where: { id: "user-1" },
-			data: { role: "FINANCE" },
+			data: { role: "FINANCE", supervisorAreas: [] },
+		})
+	})
+
+	it("does not touch supervisorAreas when promoting a user to SUPERVISOR", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "admin-1" },
+			session: {} as any,
+		})
+		vi.mocked(db.user.update).mockResolvedValue({} as any)
+
+		const form = new FormData()
+		form.set("intent", "updateRole")
+		form.set("id", "user-1")
+		form.set("role", "SUPERVISOR")
+
+		const result = await action({
+			request: formRequest(form),
+			params: {},
+		} as any).catch((r) => r)
+
+		expect(result.status).toBe(302)
+		expect(db.user.update).toHaveBeenCalledWith({
+			where: { id: "user-1" },
+			data: { role: "SUPERVISOR" },
 		})
 	})
 
@@ -226,6 +250,10 @@ describe("POST /admin/users", () => {
 			user: { id: "admin-1" },
 			session: {} as any,
 		})
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			id: "sup-1",
+			role: "SUPERVISOR",
+		} as any)
 		vi.mocked(db.user.update).mockResolvedValue({} as any)
 
 		const form = new FormData()
@@ -251,6 +279,10 @@ describe("POST /admin/users", () => {
 			user: { id: "admin-1" },
 			session: {} as any,
 		})
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			id: "sup-1",
+			role: "SUPERVISOR",
+		} as any)
 		vi.mocked(db.user.update).mockResolvedValue({} as any)
 
 		const form = new FormData()
@@ -287,6 +319,78 @@ describe("POST /admin/users", () => {
 
 		expect(result.init.status).toBe(400)
 		expect(db.user.update).not.toHaveBeenCalled()
+	})
+
+	it("returns a clean 400 (not a 500) when updateAreas targets a user id that doesn't exist", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "admin-1" },
+			session: {} as any,
+		})
+		vi.mocked(db.user.findUnique).mockResolvedValue(null)
+
+		const form = new FormData()
+		form.set("intent", "updateAreas")
+		form.set("id", "does-not-exist")
+		form.append("areas", "CENTRAL")
+
+		const result = await action({
+			request: formRequest(form),
+			params: {},
+		} as any)
+
+		expect(result.init.status).toBe(400)
+		expect(db.user.update).not.toHaveBeenCalled()
+	})
+
+	it("rejects assigning areas to a non-SUPERVISOR user", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "admin-1" },
+			session: {} as any,
+		})
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			id: "crew-1",
+			role: "CREW",
+		} as any)
+
+		const form = new FormData()
+		form.set("intent", "updateAreas")
+		form.set("id", "crew-1")
+		form.append("areas", "CENTRAL")
+
+		const result = await action({
+			request: formRequest(form),
+			params: {},
+		} as any)
+
+		expect(result.init.status).toBe(400)
+		expect(result.data).toEqual({
+			errorKey: "admin_users.errors.areas_require_supervisor",
+		})
+		expect(db.user.update).not.toHaveBeenCalled()
+	})
+
+	it("clears supervisorAreas when a supervisor is demoted to a different role", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "admin-1" },
+			session: {} as any,
+		})
+		vi.mocked(db.user.update).mockResolvedValue({} as any)
+
+		const form = new FormData()
+		form.set("intent", "updateRole")
+		form.set("id", "sup-1")
+		form.set("role", "CREW")
+
+		const result = await action({
+			request: formRequest(form),
+			params: {},
+		} as any).catch((r) => r)
+
+		expect(result.status).toBe(302)
+		expect(db.user.update).toHaveBeenCalledWith({
+			where: { id: "sup-1" },
+			data: { role: "CREW", supervisorAreas: [] },
+		})
 	})
 
 	it("prevents changing own role", async () => {

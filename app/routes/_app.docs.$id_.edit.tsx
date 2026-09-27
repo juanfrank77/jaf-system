@@ -14,8 +14,8 @@ import { getActiveMaterialCodes } from "~/lib/service-codes.server"
 import { parseServiceLines, type ServiceLine } from "~/lib/service-lines"
 import {
 	assertDocInSupervisorScope,
+	assignableBrigadesWhere,
 	isBrigadeInSupervisorScope,
-	supervisorAreas,
 } from "~/lib/supervisor-scope"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id_.edit"
@@ -40,16 +40,14 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	}
 	if (!isEditableStatus(doc.status)) throw redirect(`/docs/${params.id}`)
 
+	const brigadeArgs = await assignableBrigadesWhere(db, user)
 	const [serviceCodes, brigades] = await Promise.all([
 		getActiveMaterialCodes(),
 		db.brigade.findMany({
-			where:
-				user.role === "SUPERVISOR"
-					? { active: true, area: { in: await supervisorAreas(db, user.id) } }
-					: { active: true },
+			where: brigadeArgs.where,
 			orderBy: [{ area: "asc" }, { name: "asc" }],
 			select: { id: true, name: true, area: true, code: true, leadName: true },
-			take: 100,
+			take: brigadeArgs.take,
 		}),
 	])
 	return {

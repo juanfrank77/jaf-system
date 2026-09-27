@@ -88,8 +88,17 @@ export async function action({ request }: Route.ActionArgs) {
 		}
 		const area = areaRaw.trim()
 
+		// Branch on the stated intent, not on whether a lookup happened to
+		// find something — an update with no usable id must fail as an
+		// update, never silently become a create.
+		if (intent === "update" && (typeof id !== "string" || !id.trim())) {
+			return data(
+				{ errorKey: "supervisor_brigades.errors.id_required" },
+				{ status: 400 },
+			)
+		}
 		let existing: Awaited<ReturnType<typeof db.brigade.findUnique>> = null
-		if (intent === "update" && typeof id === "string" && id.trim()) {
+		if (intent === "update" && typeof id === "string") {
 			existing = await db.brigade.findUnique({ where: { id } })
 			if (!existing) {
 				return data(

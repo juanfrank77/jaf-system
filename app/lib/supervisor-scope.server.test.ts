@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
 	assertDocInSupervisorScope,
+	assignableBrigadesWhere,
 	isBrigadeInSupervisorScope,
 	supervisorAreas,
 } from "./supervisor-scope"
@@ -35,6 +36,14 @@ describe("supervisorAreas", () => {
 			user: { findUnique: async () => ({ supervisorAreas: ["SUR"] }) },
 		} as any
 		expect(await supervisorAreas(db, "u-1")).toEqual(["SUR"])
+	})
+	it("trims a stray untrimmed stored value rather than treating it as a distinct area", async () => {
+		const db = fakeDb(["CENTRAL "])
+		expect(await supervisorAreas(db, "u-1")).toEqual(["CENTRAL"])
+	})
+	it("drops a stored value outside the canonical area set instead of granting scope over it", async () => {
+		const db = fakeDb(["CENTRAL", "NOT-A-REAL-AREA"])
+		expect(await supervisorAreas(db, "u-1")).toEqual(["CENTRAL"])
 	})
 })
 
@@ -90,5 +99,29 @@ describe("isBrigadeInSupervisorScope", () => {
 		expect(await isBrigadeInSupervisorScope(db, "u-1", { area: null })).toBe(
 			false,
 		)
+	})
+})
+
+describe("assignableBrigadesWhere", () => {
+	it("scopes and bounds the picker for a SUPERVISOR", async () => {
+		const db = fakeDb(["CENTRAL", "METRO"])
+		expect(
+			await assignableBrigadesWhere(db, { id: "u-1", role: "SUPERVISOR" }),
+		).toEqual({
+			where: { active: true, area: { in: ["CENTRAL", "METRO"] } },
+			take: 100,
+		})
+	})
+	it("leaves the picker unscoped and unbounded for a non-SUPERVISOR (e.g. ADMIN)", async () => {
+		const db = fakeDb([])
+		expect(
+			await assignableBrigadesWhere(db, { id: "u-1", role: "ADMIN" }),
+		).toEqual({ where: { active: true }, take: undefined })
+	})
+	it("a SUPERVISOR with zero admin-assigned areas gets an empty (not unscoped) picker", async () => {
+		const db = fakeDb([])
+		expect(
+			await assignableBrigadesWhere(db, { id: "u-1", role: "SUPERVISOR" }),
+		).toEqual({ where: { active: true, area: { in: [] } }, take: 100 })
 	})
 })

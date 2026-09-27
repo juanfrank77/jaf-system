@@ -54,8 +54,16 @@ describe("dashboard supervisor queues — area scoping (integration)", () => {
 	let searchOutsideDocId: string
 
 	beforeAll(async () => {
+		// supervisorAreas is admin-managed (User.supervisorAreas), never
+		// derived from which brigades a supervisor happens to own — set it
+		// directly here, the same way an admin would via /admin/users.
 		const supervisor = await db.user.create({
-			data: { email: email("sup"), name: "Sup", role: "SUPERVISOR" },
+			data: {
+				email: email("sup"),
+				name: "Sup",
+				role: "SUPERVISOR",
+				supervisorAreas: ["SUR"],
+			},
 		})
 		supervisorId = supervisor.id
 
@@ -64,10 +72,16 @@ describe("dashboard supervisor queues — area scoping (integration)", () => {
 		})
 		otherSupervisorId = otherSupervisor.id
 
-		// Two brigades this supervisor supervises (multi-area union), plus one
-		// they do NOT supervise, all in different areas.
+		// A brigade in this supervisor's admin-assigned area (SUR) that they
+		// do NOT own directly, plus one in an area they don't cover (NORTE).
+		// Brigade.supervisorId is informational only now — it plays no role
+		// in authorization scope.
 		const brigadeSecondArea = await db.brigade.create({
-			data: { name: `Brigade-SUR-${suffix}`, area: "SUR", supervisorId },
+			data: {
+				name: `Brigade-SUR-${suffix}`,
+				area: "SUR",
+				supervisorId: otherSupervisorId,
+			},
 		})
 		const brigadeOutside = await db.brigade.create({
 			data: {

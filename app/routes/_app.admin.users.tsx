@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next"
 import { data, Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Button } from "~/components/ui/button"
+import { Checkbox } from "~/components/ui/checkbox"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import {
@@ -14,6 +15,7 @@ import {
 } from "~/components/ui/select"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
+import { ALL_AREAS } from "~/lib/supervisor-scope"
 import type { Role } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.admin.users"
 
@@ -23,6 +25,7 @@ type UserRow = {
 	email: string
 	role: string
 	active: boolean
+	supervisorAreas: string[]
 }
 
 const ROLES: { value: string; labelKey: string }[] = [
@@ -157,6 +160,29 @@ export async function action({ request }: Route.ActionArgs) {
 			data: { password: passwordHash },
 		})
 		return { resetSuccess: true }
+	}
+
+	if (intent === "updateAreas") {
+		const id = form.get("id")
+		const areas = form.getAll("areas")
+		if (
+			typeof id !== "string" ||
+			!id.trim() ||
+			!areas.every(
+				(a): a is string =>
+					typeof a === "string" && (ALL_AREAS as readonly string[]).includes(a),
+			)
+		) {
+			return data(
+				{ errorKey: "admin_users.errors.update_invalid" },
+				{ status: 400 },
+			)
+		}
+		await db.user.update({
+			where: { id },
+			data: { supervisorAreas: areas as string[] },
+		})
+		return redirect("/admin/users")
 	}
 
 	if (intent === "updateRole") {
@@ -294,6 +320,9 @@ export default function AdminUsers({
 							<th className="px-4 py-3 text-left font-medium text-slate-600">
 								{t("admin_users.table.role")}
 							</th>
+							<th className="px-4 py-3 text-left font-medium text-slate-600">
+								{t("admin_users.table.areas")}
+							</th>
 							<th className="px-4 py-3 text-center font-medium text-slate-600">
 								{t("admin_users.table.active")}
 							</th>
@@ -327,6 +356,37 @@ export default function AdminUsers({
 											{t("admin_users.update_role")}
 										</Button>
 									</Form>
+								</td>
+								<td className="px-4 py-3">
+									{user.role === "SUPERVISOR" ? (
+										<Form
+											method="post"
+											className="flex flex-wrap items-center gap-2"
+										>
+											<input type="hidden" name="intent" value="updateAreas" />
+											<input type="hidden" name="id" value={user.id} />
+											{ALL_AREAS.map((a) => (
+												<label
+													key={a}
+													htmlFor={`area-${user.id}-${a}`}
+													className="flex items-center gap-1 text-xs"
+												>
+													<Checkbox
+														id={`area-${user.id}-${a}`}
+														name="areas"
+														value={a}
+														defaultChecked={user.supervisorAreas.includes(a)}
+													/>
+													{a}
+												</label>
+											))}
+											<Button type="submit" variant="outline" size="sm">
+												{t("admin_users.save_areas")}
+											</Button>
+										</Form>
+									) : (
+										<span className="text-slate-400">—</span>
+									)}
 								</td>
 								<td className="px-4 py-3 text-center">
 									<span
@@ -368,7 +428,7 @@ export default function AdminUsers({
 						{users.length === 0 && (
 							<tr>
 								<td
-									colSpan={5}
+									colSpan={6}
 									className="px-4 py-6 text-center text-slate-400 text-sm"
 								>
 									{t("admin_users.no_users")}

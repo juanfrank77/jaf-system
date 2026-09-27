@@ -221,6 +221,74 @@ describe("POST /admin/users", () => {
 		})
 	})
 
+	it("updates a supervisor's admin-assigned areas", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "admin-1" },
+			session: {} as any,
+		})
+		vi.mocked(db.user.update).mockResolvedValue({} as any)
+
+		const form = new FormData()
+		form.set("intent", "updateAreas")
+		form.set("id", "sup-1")
+		form.append("areas", "OESTE")
+		form.append("areas", "SUR")
+
+		const result = await action({
+			request: formRequest(form),
+			params: {},
+		} as any).catch((r) => r)
+
+		expect(result.status).toBe(302)
+		expect(db.user.update).toHaveBeenCalledWith({
+			where: { id: "sup-1" },
+			data: { supervisorAreas: ["OESTE", "SUR"] },
+		})
+	})
+
+	it("allows clearing all of a supervisor's areas", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "admin-1" },
+			session: {} as any,
+		})
+		vi.mocked(db.user.update).mockResolvedValue({} as any)
+
+		const form = new FormData()
+		form.set("intent", "updateAreas")
+		form.set("id", "sup-1")
+
+		const result = await action({
+			request: formRequest(form),
+			params: {},
+		} as any).catch((r) => r)
+
+		expect(result.status).toBe(302)
+		expect(db.user.update).toHaveBeenCalledWith({
+			where: { id: "sup-1" },
+			data: { supervisorAreas: [] },
+		})
+	})
+
+	it("rejects updateAreas with a non-canonical area value", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "admin-1" },
+			session: {} as any,
+		})
+
+		const form = new FormData()
+		form.set("intent", "updateAreas")
+		form.set("id", "sup-1")
+		form.append("areas", "NOT-A-REAL-AREA")
+
+		const result = await action({
+			request: formRequest(form),
+			params: {},
+		} as any)
+
+		expect(result.init.status).toBe(400)
+		expect(db.user.update).not.toHaveBeenCalled()
+	})
+
 	it("prevents changing own role", async () => {
 		vi.mocked(requireRole).mockResolvedValue({
 			user: { id: "admin-1" },

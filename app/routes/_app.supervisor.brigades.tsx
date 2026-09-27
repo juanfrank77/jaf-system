@@ -7,7 +7,7 @@ import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
-import { ALL_AREAS, supervisorAreas } from "~/lib/supervisor-scope"
+import { supervisorAreas } from "~/lib/supervisor-scope"
 import type { Route } from "./+types/_app.supervisor.brigades"
 
 type CrewUser = { id: string; name: string; active: boolean }
@@ -18,10 +18,15 @@ export const meta: Route.MetaFunction = () => [{ title: "Brigades — JAF Ops" }
  * return a translated form error instead of a 500. */
 export class BrigadeAreaNotAllowedError extends Error {}
 
-/** Throws unless `area` is one of the supervisor's own areas. Always strict
- * — bootstrap (a brand-new supervisor's first brigade) is handled
- * separately in the action, gated on intent + a real brigade count, never
- * on this function seeing an empty area list. */
+/**
+ * Throws unless `area` is one of the supervisor's admin-assigned areas.
+ * Always strict — there is no bootstrap or ownership escape hatch. A
+ * supervisor who hasn't been granted any area yet (or the area's owner
+ * doesn't include them) can create or edit nothing until an admin grants
+ * it via /admin/users. This is deliberate: deriving eligibility from
+ * anything other than the admin-managed list is the bug class findings
+ * kept re-opening across three review rounds.
+ */
 export async function assertBrigadeAreaAllowed({
 	area,
 	supervisorAreas,
@@ -34,25 +39,6 @@ export async function assertBrigadeAreaAllowed({
 			"Area is outside the supervisor's scope",
 		)
 	}
-}
-
-/**
- * Throws unless the existing brigade being mutated (update/toggle) is
- * either owned directly by this supervisor, or falls within one of their
- * areas. Never grants access based on an empty area list — a supervisor
- * with zero area-bearing brigades (brand new, or all-null-area) has no
- * additional reach here, only over brigades they already own outright.
- */
-function assertBrigadeMutable(
-	existing: { supervisorId: string | null; area: string | null },
-	userId: string,
-	areas: string[],
-) {
-	if (existing.supervisorId === userId) return
-	if (existing.area && areas.includes(existing.area)) return
-	throw new BrigadeAreaNotAllowedError(
-		"Brigade is outside the supervisor's scope",
-	)
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -71,8 +57,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		}),
 	])
 
-	const areaOptions = areas.length > 0 ? areas : [...ALL_AREAS]
-	return { brigades, crewUsers, areaOptions }
+	return { brigades, crewUsers, areaOptions: areas }
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -84,7 +69,7 @@ export async function action({ request }: Route.ActionArgs) {
 	if (intent === "create" || intent === "update") {
 		const id = form.get("id")
 		const name = form.get("name")
-		const area = form.get("area")
+		const areaRaw = form.get("area")
 		const code = form.get("code")
 		const memberIds = form.getAll("memberIds")
 		const active = form.get("active") === "on"
@@ -92,8 +77,8 @@ export async function action({ request }: Route.ActionArgs) {
 		if (
 			typeof name !== "string" ||
 			!name.trim() ||
-			typeof area !== "string" ||
-			!area.trim() ||
+			typeof areaRaw !== "string" ||
+			!areaRaw.trim() ||
 			!memberIds.every((m): m is string => typeof m === "string")
 		) {
 			return data(
@@ -101,11 +86,18 @@ export async function action({ request }: Route.ActionArgs) {
 				{ status: 400 },
 			)
 		}
+		const area = areaRaw.trim()
 
-		const existing =
-			intent === "update" && typeof id === "string" && id.trim()
-				? await db.brigade.findUniqueOrThrow({ where: { id } })
-				: null
+		let existing: Awaited<ReturnType<typeof db.brigade.findUnique>> = null
+		if (intent === "update" && typeof id === "string" && id.trim()) {
+			existing = await db.brigade.findUnique({ where: { id } })
+			if (!existing) {
+				return data(
+					{ errorKey: "supervisor_brigades.errors.id_required" },
+					{ status: 400 },
+				)
+			}
+		}
 
 		const existingMemberIds = existing?.memberIds ?? []
 		const newMemberIds = (memberIds as string[]).filter(
@@ -125,6 +117,12 @@ export async function action({ request }: Route.ActionArgs) {
 		}
 
 		try {
+			// The submitted area must always be one of the supervisor's own —
+			// on both create AND update. (A prior fix validated this only on
+			// create, which let a supervisor re-home any brigade they could
+			// already touch into an arbitrary area in a second request.)
+			await assertBrigadeAreaAllowed({ area, supervisorAreas: areas })
+
 			const sharedPayload = {
 				name: name.trim(),
 				memberIds: memberIds as string[],
@@ -134,7 +132,14 @@ export async function action({ request }: Route.ActionArgs) {
 			}
 
 			if (existing) {
-				assertBrigadeMutable(existing, user.id, areas)
+				// The brigade's CURRENT area must also be one of the supervisor's
+				// own, independent of the area they're submitting — otherwise a
+				// supervisor could reach into a foreign-area brigade just because
+				// the new area they're posting happens to be their own.
+				await assertBrigadeAreaAllowed({
+					area: existing.area,
+					supervisorAreas: areas,
+				})
 				// Don't overwrite an existing owner's supervisorId just because a
 				// different in-area supervisor happens to be editing this brigade.
 				await db.brigade.update({
@@ -142,15 +147,6 @@ export async function action({ request }: Route.ActionArgs) {
 					data: sharedPayload,
 				})
 			} else {
-				const isBootstrap =
-					(await db.brigade.count({ where: { supervisorId: user.id } })) === 0
-				if (isBootstrap) {
-					if (!(ALL_AREAS as readonly string[]).includes(area)) {
-						throw new BrigadeAreaNotAllowedError("Area is not recognized")
-					}
-				} else {
-					await assertBrigadeAreaAllowed({ area, supervisorAreas: areas })
-				}
 				await db.brigade.create({
 					data: { ...sharedPayload, supervisorId: user.id },
 				})
@@ -186,9 +182,18 @@ export async function action({ request }: Route.ActionArgs) {
 				{ status: 400 },
 			)
 		}
+		const existing = await db.brigade.findUnique({ where: { id } })
+		if (!existing) {
+			return data(
+				{ errorKey: "supervisor_brigades.errors.id_required" },
+				{ status: 400 },
+			)
+		}
 		try {
-			const existing = await db.brigade.findUniqueOrThrow({ where: { id } })
-			assertBrigadeMutable(existing, user.id, areas)
+			await assertBrigadeAreaAllowed({
+				area: existing.area,
+				supervisorAreas: areas,
+			})
 			await db.brigade.update({
 				where: { id },
 				data: { active: !existing.active },
@@ -236,6 +241,12 @@ export default function SupervisorBrigades({
 			<h1 className="text-xl font-semibold">
 				{t("supervisor_brigades.title")}
 			</h1>
+
+			{areaOptions.length === 0 && (
+				<div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
+					{t("supervisor_brigades.no_areas_assigned")}
+				</div>
+			)}
 
 			<section className="bg-white border rounded-lg p-6 space-y-4">
 				<h2 className="text-base font-medium">
@@ -302,7 +313,9 @@ export default function SupervisorBrigades({
 							{t("supervisor_brigades.active_label")}
 						</Label>
 					</div>
-					<Button type="submit">{t("supervisor_brigades.add_submit")}</Button>
+					<Button type="submit" disabled={areaOptions.length === 0}>
+						{t("supervisor_brigades.add_submit")}
+					</Button>
 					{error && <p className="text-sm text-red-600">{t(error as never)}</p>}
 				</Form>
 			</section>

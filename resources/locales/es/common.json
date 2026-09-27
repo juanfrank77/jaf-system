@@ -28,6 +28,7 @@
 			"admin_users": "Usuarios",
 			"admin_crews": "Cuadrillas",
 			"admin_vans": "Vans",
+			"supervisor_brigades": "Brigadas",
 			"admin_restock": "Aprobaciones de reabastecimiento",
 			"installer": "Instalador",
 			"installer_supervisor": "Supervisor de Instaladores",
@@ -576,6 +577,38 @@
 		"no_crews": "Aún no hay brigadas.",
 		"errors": {
 			"invalid_fields": "Se requieren nombre de brigada válido y lista de miembros.",
+			"id_required": "Se requiere el id de la brigada.",
+			"unknown_intent": "Acción desconocida."
+		}
+	},
+	"supervisor_brigades": {
+		"title": "Mis brigadas",
+		"add_heading": "Agregar brigada",
+		"name_label": "Nombre de brigada *",
+		"area_label": "Área *",
+		"code_label": "Código de contratista",
+		"members_label": "Miembros",
+		"active_label": "Activa",
+		"active": "activo",
+		"inactive": "inactivo",
+		"add_submit": "Agregar brigada",
+		"edit": "Editar",
+		"save": "Guardar",
+		"deactivate": "Desactivar",
+		"activate": "Activar",
+		"yes": "Sí",
+		"no": "No",
+		"table": {
+			"name": "Nombre",
+			"area": "Área",
+			"members": "Miembros",
+			"active": "Activa",
+			"actions": "Acciones"
+		},
+		"no_members": "Sin miembros",
+		"no_brigades": "Aún no hay brigadas.",
+		"errors": {
+			"invalid_fields": "Se requieren nombre de brigada válido, área y lista de miembros.",
 			"id_required": "Se requiere el id de la brigada.",
 			"unknown_intent": "Acción desconocida."
 		}

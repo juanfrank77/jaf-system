@@ -13,19 +13,17 @@ export default defineConfig({
 	test: {
 		globals: true,
 		css: true,
-		// Worktrees live inside the repo root — either the manual fallback
-		// convention (.worktrees/<branch>/) or the harness's native worktree
-		// tool (.claude/worktrees/<name>/) — so without this, running from the
-		// main checkout picks up every test file twice: once here, once inside
-		// the worktree. Each worktree also has its own node_modules/generated
-		// Prisma client, so its test files fail to resolve against this
-		// checkout's, and both copies would run concurrently against the same
-		// DATABASE_URL regardless, causing unique-constraint collisions and
-		// connection-pool exhaustion between the two runs.
+		// Worktrees live under .worktrees/<branch>/ (the repo's single
+		// worktree convention — see AGENTS.md) — so without this, running from
+		// the main checkout picks up every test file twice: once here, once
+		// inside the worktree. Each worktree also has its own node_modules/
+		// generated Prisma client, so its test files fail to resolve against
+		// this checkout's, and both copies would run concurrently against the
+		// same DATABASE_URL regardless, causing unique-constraint collisions
+		// and connection-pool exhaustion between the two runs.
 		exclude: [
 			"**/node_modules/**",
 			"**/.worktrees/**",
-			"**/.claude/worktrees/**",
 		],
 		coverage: {
 			include: ["app/**"],

@@ -38,6 +38,9 @@ app/components/__screenshots__
 app/lib/__screenshots__
 graphify-out
 
+# local-only lefthook overrides (e.g. the pre-push prod build check), not for remote
+/lefthook-local.yml
+
 # local git worktrees
 /.worktrees/
 

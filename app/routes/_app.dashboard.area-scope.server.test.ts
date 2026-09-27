@@ -23,12 +23,14 @@ const baseInvoice = {
 	assignedCrewIds: [] as string[],
 }
 
-async function runLoaderAs(userId: string) {
+async function runLoaderAs(userId: string, searchParams?: string) {
 	vi.mocked(requireSession).mockResolvedValue({
 		user: { id: userId },
 	} as any)
 	return loader({
-		request: new Request("http://localhost/dashboard"),
+		request: new Request(
+			`http://localhost/dashboard${searchParams ? `?${searchParams}` : ""}`,
+		),
 		params: {},
 	} as any)
 }
@@ -46,6 +48,10 @@ describe("dashboard supervisor queues — area scoping (integration)", () => {
 
 	let emptyBrigadeSupervisorId: string
 	let emptyBrigadeOwnDocId: string
+
+	const searchToken = `SEARCHTOK${suffix}`
+	let searchOwnDocId: string
+	let searchOutsideDocId: string
 
 	beforeAll(async () => {
 		const supervisor = await db.user.create({
@@ -161,6 +167,34 @@ describe("dashboard supervisor queues — area scoping (integration)", () => {
 			})
 		).id
 
+		// Regression: a search filter must narrow the supervisor's own scope,
+		// never replace it — both docs share a search token, but one is owned
+		// by this supervisor and the other belongs to a different supervisor,
+		// in an area this supervisor does not cover.
+		searchOwnDocId = (
+			await db.jafInvoice.create({
+				data: {
+					...baseInvoice,
+					controlNumber: control("search-own"),
+					supervisorId,
+					jobAddressEstimated: `${searchToken} own address`,
+					status: "FIELD_UPDATED",
+				},
+			})
+		).id
+		searchOutsideDocId = (
+			await db.jafInvoice.create({
+				data: {
+					...baseInvoice,
+					controlNumber: control("search-outside"),
+					supervisorId: otherSupervisorId,
+					brigadeId: brigadeOutside.id,
+					jobAddressEstimated: `${searchToken} outside address`,
+					status: "FIELD_UPDATED",
+				},
+			})
+		).id
+
 		// A supervisor who owns zero brigades — areas = [] must not break the
 		// raw-SQL `ANY(${areas})` path, and must still return their own doc.
 		const emptyBrigadeSupervisor = await db.user.create({
@@ -216,5 +250,12 @@ describe("dashboard supervisor queues — area scoping (integration)", () => {
 		expect(ids).toContain(ownDocId)
 		expect(ids).toContain(secondAreaDocId)
 		expect(ids).not.toContain(outsideDocId)
+	})
+
+	it("regression: a search filter narrows a supervisor's scope, it does not replace/drop it — an out-of-area doc matching the search term must not appear", async () => {
+		const data = await runLoaderAs(supervisorId, `search=${searchToken}`)
+		const ids = data.docs.map((d) => d.id)
+		expect(ids).toContain(searchOwnDocId)
+		expect(ids).not.toContain(searchOutsideDocId)
 	})
 })

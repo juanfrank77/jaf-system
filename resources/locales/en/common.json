@@ -612,7 +612,8 @@
 			"invalid_fields": "Valid brigade name, area, and member list are required.",
 			"id_required": "Brigade id is required.",
 			"unknown_intent": "Unknown action.",
-			"duplicate_code": "That contractor code is already in use by another brigade."
+			"duplicate_code": "That contractor code is already in use by another brigade.",
+			"area_not_allowed": "That area is outside your assigned brigades."
 		}
 	},
 	"supervisor_variance": {

@@ -612,7 +612,8 @@
 			"invalid_fields": "Se requieren nombre de brigada válido, área y lista de miembros.",
 			"id_required": "Se requiere el id de la brigada.",
 			"unknown_intent": "Acción desconocida.",
-			"duplicate_code": "Ese código de contratista ya está en uso por otra brigada."
+			"duplicate_code": "Ese código de contratista ya está en uso por otra brigada.",
+			"area_not_allowed": "Esa área está fuera de tus brigadas asignadas."
 		}
 	},
 	"supervisor_variance": {

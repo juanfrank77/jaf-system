@@ -12,9 +12,21 @@ import type { Route } from "./+types/_app.supervisor.brigades"
 
 type CrewUser = { id: string; name: string; active: boolean }
 
+/** The canonical area set (Global Constraints: `Brigade.area`). */
+const ALL_AREAS = ["CENTRAL", "METRO", "NORTE", "OESTE", "SUR"] as const
+
 export const meta: Route.MetaFunction = () => [{ title: "Brigades — JAF Ops" }]
 
-/** Throws unless `area` is one of the supervisor's own areas. */
+/** Thrown by `assertBrigadeAreaAllowed` — callers catch this specifically to
+ * return a translated form error instead of a 500. */
+export class BrigadeAreaNotAllowedError extends Error {}
+
+/**
+ * Throws unless `area` is one of the supervisor's own areas — except when
+ * the supervisor owns no brigades yet (bootstrap), where any canonical area
+ * is allowed so a brand-new supervisor isn't locked out of ever creating
+ * their first brigade.
+ */
 export async function assertBrigadeAreaAllowed({
 	area,
 	supervisorAreas,
@@ -22,16 +34,20 @@ export async function assertBrigadeAreaAllowed({
 	area: string | null
 	supervisorAreas: (string | null)[]
 }) {
+	if (supervisorAreas.length === 0) {
+		if (area && (ALL_AREAS as readonly string[]).includes(area)) return
+		throw new BrigadeAreaNotAllowedError("Area is not a recognized area")
+	}
 	if (!supervisorAreas.includes(area)) {
-		throw new Error("Area is outside the supervisor's scope")
+		throw new BrigadeAreaNotAllowedError(
+			"Area is outside the supervisor's scope",
+		)
 	}
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-	const { user } = await requireRole(request, ["SUPERVISOR", "ADMIN"])
-	const areas = (await supervisorAreas(db, user.id)).filter(
-		(a): a is string => a !== null,
-	)
+	const { user } = await requireRole(request, ["SUPERVISOR"])
+	const areas = await supervisorAreas(db, user.id)
 
 	const [brigades, crewUsers] = await Promise.all([
 		db.brigade.findMany({
@@ -45,14 +61,13 @@ export async function loader({ request }: Route.LoaderArgs) {
 		}),
 	])
 
-	return { brigades, crewUsers, areas }
+	const areaOptions = areas.length > 0 ? areas : [...ALL_AREAS]
+	return { brigades, crewUsers, areaOptions }
 }
 
 export async function action({ request }: Route.ActionArgs) {
-	const { user } = await requireRole(request, ["SUPERVISOR", "ADMIN"])
-	const areas = (await supervisorAreas(db, user.id)).filter(
-		(a): a is string => a !== null,
-	)
+	const { user } = await requireRole(request, ["SUPERVISOR"])
+	const areas = await supervisorAreas(db, user.id)
 	const form = await request.formData()
 	const intent = form.get("intent")
 
@@ -77,17 +92,34 @@ export async function action({ request }: Route.ActionArgs) {
 			)
 		}
 
-		await assertBrigadeAreaAllowed({ area, supervisorAreas: areas })
-
-		const sharedPayload = {
-			name: name.trim(),
-			memberIds: memberIds as string[],
-			active,
-			area,
-			code: typeof code === "string" && code.trim() ? code.trim() : null,
+		if (memberIds.length > 0) {
+			const validMembers = await db.user.findMany({
+				where: {
+					id: { in: memberIds as string[] },
+					role: "CREW",
+					active: true,
+				},
+				select: { id: true },
+			})
+			if (validMembers.length !== new Set(memberIds).size) {
+				return data(
+					{ errorKey: "supervisor_brigades.errors.invalid_fields" },
+					{ status: 400 },
+				)
+			}
 		}
 
 		try {
+			await assertBrigadeAreaAllowed({ area, supervisorAreas: areas })
+
+			const sharedPayload = {
+				name: name.trim(),
+				memberIds: memberIds as string[],
+				active,
+				area,
+				code: typeof code === "string" && code.trim() ? code.trim() : null,
+			}
+
 			if (intent === "update" && typeof id === "string" && id.trim()) {
 				const existing = await db.brigade.findUniqueOrThrow({ where: { id } })
 				await assertBrigadeAreaAllowed({
@@ -103,6 +135,12 @@ export async function action({ request }: Route.ActionArgs) {
 				})
 			}
 		} catch (error) {
+			if (error instanceof BrigadeAreaNotAllowedError) {
+				return data(
+					{ errorKey: "supervisor_brigades.errors.area_not_allowed" },
+					{ status: 403 },
+				)
+			}
 			if (
 				error &&
 				typeof error === "object" &&
@@ -127,15 +165,25 @@ export async function action({ request }: Route.ActionArgs) {
 				{ status: 400 },
 			)
 		}
-		const existing = await db.brigade.findUniqueOrThrow({ where: { id } })
-		await assertBrigadeAreaAllowed({
-			area: existing.area,
-			supervisorAreas: areas,
-		})
-		await db.brigade.update({
-			where: { id },
-			data: { active: !existing.active },
-		})
+		try {
+			const existing = await db.brigade.findUniqueOrThrow({ where: { id } })
+			await assertBrigadeAreaAllowed({
+				area: existing.area,
+				supervisorAreas: areas,
+			})
+			await db.brigade.update({
+				where: { id },
+				data: { active: !existing.active },
+			})
+		} catch (error) {
+			if (error instanceof BrigadeAreaNotAllowedError) {
+				return data(
+					{ errorKey: "supervisor_brigades.errors.area_not_allowed" },
+					{ status: 403 },
+				)
+			}
+			throw error
+		}
 		return redirect("/supervisor/brigades")
 	}
 
@@ -149,7 +197,7 @@ export default function SupervisorBrigades({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { brigades, crewUsers, areas } = loaderData as {
+	const { brigades, crewUsers, areaOptions } = loaderData as {
 		brigades: {
 			id: string
 			name: string
@@ -159,7 +207,7 @@ export default function SupervisorBrigades({
 			code: string | null
 		}[]
 		crewUsers: CrewUser[]
-		areas: (string | null)[]
+		areaOptions: string[]
 	}
 	const { t } = useTranslation()
 	const error =
@@ -189,8 +237,8 @@ export default function SupervisorBrigades({
 							required
 							className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
 						>
-							{areas.map((a) => (
-								<option key={a} value={a ?? ""}>
+							{areaOptions.map((a) => (
+								<option key={a} value={a}>
 									{a}
 								</option>
 							))}
@@ -302,7 +350,7 @@ export default function SupervisorBrigades({
 											<EditBrigadeDialog
 												brigade={brigade}
 												crewUsers={crewUsers}
-												areas={areas}
+												areaOptions={areaOptions}
 											/>
 										</div>
 									</td>
@@ -329,7 +377,7 @@ export default function SupervisorBrigades({
 function EditBrigadeDialog({
 	brigade,
 	crewUsers,
-	areas,
+	areaOptions,
 }: {
 	brigade: {
 		id: string
@@ -340,7 +388,7 @@ function EditBrigadeDialog({
 		code: string | null
 	}
 	crewUsers: CrewUser[]
-	areas: (string | null)[]
+	areaOptions: string[]
 }) {
 	const { t } = useTranslation()
 	return (
@@ -373,8 +421,8 @@ function EditBrigadeDialog({
 						defaultValue={brigade.area ?? ""}
 						className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
 					>
-						{areas.map((a) => (
-							<option key={a} value={a ?? ""}>
+						{areaOptions.map((a) => (
+							<option key={a} value={a}>
 								{a}
 							</option>
 						))}

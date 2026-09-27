@@ -42,9 +42,7 @@ async function buildBaseWhere(
 	userId: string,
 ): Promise<Record<string, unknown>> {
 	if (role === "SUPERVISOR") {
-		const areas = (await supervisorAreas(db, userId)).filter(
-			(a): a is string => a !== null,
-		)
+		const areas = await supervisorAreas(db, userId)
 		return ownedOrInArea(userId, areas)
 	}
 	if (role === "CREW") return { assignedCrewIds: { has: userId } }
@@ -111,9 +109,7 @@ type SendBackHistoryEntry = { note?: string }
 
 async function loadSupervisorQueues(userId: string) {
 	const tolerance = await getAvisoAmountTolerance()
-	const areas = (await supervisorAreas(db, userId)).filter(
-		(a): a is string => a !== null,
-	)
+	const areas = await supervisorAreas(db, userId)
 	const scope = ownedOrInArea(userId, areas)
 	const [pending, sentBackRaw, approved] = await Promise.all([
 		db.jafInvoice.findMany({

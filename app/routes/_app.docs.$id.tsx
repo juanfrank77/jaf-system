@@ -22,7 +22,10 @@ import {
 } from "~/lib/field-update-helpers"
 import { isEditableStatus, isTerminalStatus } from "~/lib/permissions"
 import { requireRole, requireSession } from "~/lib/permissions.server"
-import { assertDocInSupervisorScope } from "~/lib/supervisor-scope"
+import {
+	assertDocInSupervisorScope,
+	supervisorAreas,
+} from "~/lib/supervisor-scope"
 import { deriveSupervisorStage } from "~/lib/supervisor-stage"
 import { toNumberPrice } from "~/lib/utils"
 import { Prisma } from "../../generated/prisma/client"
@@ -109,9 +112,13 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		orderBy: { timestamp: "asc" },
 	})
 	const brigadeOptions = await db.brigade.findMany({
-		where: { active: true },
+		where:
+			user.role === "SUPERVISOR"
+				? { active: true, area: { in: await supervisorAreas(db, user.id) } }
+				: { active: true },
 		orderBy: [{ area: "asc" }, { name: "asc" }],
 		select: { id: true, name: true, area: true, code: true },
+		take: 100,
 	})
 	const sheet = await db.preCertSheet.findFirst({
 		where: { docId: doc.id, supersededAt: null },
@@ -200,6 +207,12 @@ export async function action({ request, params }: Route.ActionArgs) {
 			where: { id: newBrigadeId },
 		})
 		if (!newBrigade) return { errorKey: "docs_view.errors.reassign_invalid" }
+		if (user.role === "SUPERVISOR") {
+			const areas = await supervisorAreas(db, user.id)
+			if (!newBrigade.area || !areas.includes(newBrigade.area)) {
+				return { errorKey: "docs_view.errors.reassign_invalid" }
+			}
+		}
 		if (isTerminalStatus(doc.status)) throw redirect(`/docs/${params.id}`)
 		const { brigadeId, assignedCrewIds, crewAssignmentHistory } =
 			reassignToBrigade({

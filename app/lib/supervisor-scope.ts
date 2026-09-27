@@ -1,14 +1,22 @@
 import { redirect } from "react-router"
 import type { PrismaClient } from "../../generated/prisma/client"
 
-/** The areas a supervisor owns, derived from the brigades they supervise. */
-export async function supervisorAreas(db: PrismaClient, userId: string) {
+/**
+ * The areas a supervisor owns, derived from the brigades they supervise.
+ * Null-area brigades never contribute an area — a supervisor of one must
+ * never gain access to every other null-area brigade in the system via
+ * this list.
+ */
+export async function supervisorAreas(
+	db: PrismaClient,
+	userId: string,
+): Promise<string[]> {
 	const brigades = await db.brigade.findMany({
 		where: { supervisorId: userId },
 		select: { area: true },
 		distinct: ["area"],
 	})
-	return brigades.map((b) => b.area)
+	return brigades.flatMap((b) => (b.area ? [b.area] : []))
 }
 
 /**
@@ -40,6 +48,6 @@ export async function assertDocInSupervisorScope(
 ) {
 	if (doc.supervisorId === userId) return
 	const areas = await supervisorAreas(db, userId)
-	if (!doc.brigade || !areas.includes(doc.brigade.area))
+	if (!doc.brigade?.area || !areas.includes(doc.brigade.area))
 		throw redirect("/dashboard")
 }

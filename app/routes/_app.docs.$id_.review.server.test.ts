@@ -7,7 +7,7 @@ vi.mock("~/lib/db.server", () => ({
 		notification: { create: vi.fn(), createMany: vi.fn() },
 		user: { findMany: vi.fn(), findUnique: vi.fn() },
 		photo: { findMany: vi.fn() },
-		brigade: { findUnique: vi.fn(), update: vi.fn() },
+		brigade: { findUnique: vi.fn(), update: vi.fn(), findMany: vi.fn() },
 		preCertSheet: {
 			findFirst: vi.fn(),
 			findMany: vi.fn(),
@@ -49,7 +49,7 @@ import {
 	getIvuRate,
 } from "~/lib/system-settings.server"
 import { saveBuffer, saveUpload } from "~/lib/uploads.server"
-import { action } from "./_app.docs.$id_.review"
+import { action, loader } from "./_app.docs.$id_.review"
 
 const CATALOG = [
 	{
@@ -131,6 +131,48 @@ const approvedDoc = {
 	fieldSubmittedAt: new Date("2026-08-26T20:12:00Z"),
 	assignedCrewIds: ["crew-1"],
 }
+
+describe("supervisor scope guard", () => {
+	const outOfAreaDoc = {
+		...approvedDoc,
+		supervisorId: "other-sup",
+		brigade: { area: "SUR" },
+	}
+
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1", role: "SUPERVISOR", name: "Edgard Ocasio" },
+			session: {},
+		} as any)
+		vi.mocked(db.brigade.findMany).mockResolvedValue([{ area: "OESTE" }] as any)
+	})
+
+	it("blocks the loader for a Supervisor outside the doc's area", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			outOfAreaDoc as any,
+		)
+		await expect(
+			loader({
+				request: new Request("http://localhost/docs/doc-1/review"),
+				params: { id: "doc-1" },
+			} as any),
+		).rejects.toMatchObject({ status: 302 })
+	})
+
+	it("blocks the action for a Supervisor outside the doc's area", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			outOfAreaDoc as any,
+		)
+		await expect(
+			action({
+				request: post(intent("send_back", { note: "test" })),
+				params: { id: "doc-1" },
+			} as any),
+		).rejects.toMatchObject({ status: 302 })
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+})
 
 describe("review: generate_jaf_invoice", () => {
 	beforeEach(() => {

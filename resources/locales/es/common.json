@@ -611,12 +611,13 @@
 		"errors": {
 			"invalid_fields": "Se requieren nombre de brigada válido, área y lista de miembros.",
 			"id_required": "Se requiere el id de la brigada.",
-			"unknown_intent": "Acción desconocida."
+			"unknown_intent": "Acción desconocida.",
+			"duplicate_code": "Ese código de contratista ya está en uso por otra brigada."
 		}
 	},
 	"supervisor_variance": {
 		"title": "Variación de Materiales",
-		"readonly_note": "Las señales de devolución/reparación de seriales y de existencias faltantes (LOST) aparecerán aquí cuando se implementen Spec A/Spec B",
+		"readonly_note": "Las señales de devolución/reparación de seriales y de existencias faltantes (LOST) aparecerán aquí cuando se implementen Spec A/Spec B. Las etiquetas de sobrante/discrepancia/faltante resumen todo el documento, mientras que la tabla de líneas debajo muestra el detalle ordenado-vs-instalado por código de servicio, así que una etiqueta sin una fila de línea exactamente correspondiente es esperado, no un error.",
 		"table": {
 			"doc": "Documento",
 			"brigade": "Brigada",

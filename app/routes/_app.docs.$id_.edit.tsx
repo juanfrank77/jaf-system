@@ -12,6 +12,7 @@ import { isEditableStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import { getActiveMaterialCodes } from "~/lib/service-codes.server"
 import { parseServiceLines, type ServiceLine } from "~/lib/service-lines"
+import { assertDocInSupervisorScope } from "~/lib/supervisor-scope"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id_.edit"
 
@@ -27,8 +28,12 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		where: { id: params.id },
 		include: {
 			supervisor: { select: { id: true, name: true } },
+			brigade: { select: { area: true } },
 		},
 	})
+	if (user.role === "SUPERVISOR") {
+		await assertDocInSupervisorScope(db, user.id, doc)
+	}
 	if (!isEditableStatus(doc.status)) throw redirect(`/docs/${params.id}`)
 
 	const [serviceCodes, brigades] = await Promise.all([
@@ -54,7 +59,11 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const { user } = await requireRole(request, ["SUPERVISOR", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
+		include: { brigade: { select: { area: true } } },
 	})
+	if (user.role === "SUPERVISOR") {
+		await assertDocInSupervisorScope(db, user.id, doc)
+	}
 	if (!isEditableStatus(doc.status)) throw redirect(`/docs/${params.id}`)
 
 	const form = await request.formData()

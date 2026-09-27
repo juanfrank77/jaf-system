@@ -137,7 +137,11 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const { user } = await requireRole(request, ["SUPERVISOR", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
+		include: { brigade: { select: { area: true } } },
 	})
+	if (user.role === "SUPERVISOR") {
+		await assertDocInSupervisorScope(db, user.id, doc)
+	}
 	if (isTerminalStatus(doc.status)) throw redirect(`/docs/${params.id}`)
 	const form = await request.formData()
 	const intent = form.get("intent") as string

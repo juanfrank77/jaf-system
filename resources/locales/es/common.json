@@ -1036,7 +1036,35 @@
 		"no_restock_requests": "No hay solicitudes de reabastecimiento activas.",
 		"installs_heading": "Mis instalaciones",
 		"no_installs": "Aún no hay instalaciones registradas.",
-		"discrepancy": "Discrepancia"
+		"discrepancy": "Discrepancia",
+		"completion": {
+			"address": "Dirección",
+			"drop_ft": "Caída (pies)",
+			"form_photo": "Foto del formulario Claro",
+			"ground_rod": "Varilla de tierra instalada",
+			"new_heading": "Nueva instalación completada",
+			"no_serial": "Ningún número de serie escaneado",
+			"order_no": "N.º de orden",
+			"scan": "Escanear",
+			"scan_heading": "Escanear módem",
+			"serial_unreadable": "Ilegible — solo foto",
+			"signature": "Firma del instalador",
+			"submit": "Enviar"
+		},
+		"no_submitted_jobs": "Aún no se han enviado trabajos.",
+		"quick_look": "{{belowPar}} bajo par · {{owedBack}} pendientes de devolución",
+		"submitted_jobs_heading": "Mis trabajos enviados",
+		"swap": {
+			"find_heading": "Buscar el trabajo original",
+			"heading": "Cambio de garantía",
+			"new_order_no": "Nuevo n.º de orden (vacío = retorno)",
+			"no_results": "No hay trabajos coincidentes",
+			"reason": "Motivo",
+			"scan_in": "Escanear número de serie entrante",
+			"scan_out": "Escanear número de serie saliente",
+			"search_placeholder": "N.º de orden, dirección o número de serie",
+			"submit": "Enviar"
+		}
 	},
 	"installer_restock": {
 		"title": "Solicitar reabastecimiento",
@@ -1129,5 +1157,45 @@
 		"col_description": "Descripción",
 		"col_ordered": "Ordenado",
 		"col_installed": "Instalado"
+	},
+	"installer_supervisor": {
+		"below_par": "Bajo par",
+		"heading": "Resumen de instaladores",
+		"installer": "Instalador",
+		"last_completion": "Última instalación",
+		"owed_back": "Pendiente de devolución"
+	},
+	"restock": {
+		"approve": "Aprobar",
+		"no_pending": "Nada pendiente de aprobación.",
+		"signoff_heading": "Reabastecimientos pendientes de aprobación",
+		"submit": "Enviar solicitud de reabastecimiento"
+	},
+	"restock_release": {
+		"scan_serial": "Escanear/ingresar número de serie",
+		"serials": "número(s) de serie",
+		"submit": "Liberar",
+		"van_signature": "Firma de recepción de la van",
+		"warehouse_signature": "Firma de liberación del almacén",
+		"heading": "Liberar reabastecimiento a la van"
+	},
+	"van_view": {
+		"item": "Artículo",
+		"on_van": "En la van",
+		"owed_back": "Pendiente de devolución",
+		"par": "Par"
+	},
+	"warehouse": {
+		"restock_list": {
+			"empty": "No hay reabastecimientos pendientes de liberación.",
+			"heading": "Reabastecimientos por liberar",
+			"release": "Liberar"
+		},
+		"scan_in": {
+			"heading": "Escanear devolución",
+			"not_owed_back": "Este número de serie no está pendiente de devolución.",
+			"submit": "Escanear entrada",
+			"success": "Devuelto exitosamente."
+		}
 	}
 }

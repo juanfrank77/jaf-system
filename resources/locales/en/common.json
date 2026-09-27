@@ -1036,7 +1036,35 @@
 		"no_restock_requests": "No active restock requests.",
 		"installs_heading": "My Installs",
 		"no_installs": "No installs logged yet.",
-		"discrepancy": "Discrepancy"
+		"discrepancy": "Discrepancy",
+		"completion": {
+			"address": "Address",
+			"drop_ft": "Drop (ft)",
+			"form_photo": "Claro form photo",
+			"ground_rod": "Ground rod installed",
+			"new_heading": "New Completion",
+			"no_serial": "No serial scanned",
+			"order_no": "Order #",
+			"scan": "Scan",
+			"scan_heading": "Scan modem",
+			"serial_unreadable": "Unreadable — photo only",
+			"signature": "Installer signature",
+			"submit": "Submit"
+		},
+		"no_submitted_jobs": "No jobs submitted yet.",
+		"quick_look": "{{belowPar}} below par · {{owedBack}} owed back",
+		"submitted_jobs_heading": "My submitted jobs",
+		"swap": {
+			"find_heading": "Find the original job",
+			"heading": "Warranty Swap",
+			"new_order_no": "New order # (blank = callback)",
+			"no_results": "No matching jobs",
+			"reason": "Reason",
+			"scan_in": "Scan serial in",
+			"scan_out": "Scan serial out",
+			"search_placeholder": "Order #, address, or serial",
+			"submit": "Submit"
+		}
 	},
 	"installer_restock": {
 		"title": "Request Restock",
@@ -1129,5 +1157,45 @@
 		"col_description": "Description",
 		"col_ordered": "Ordered",
 		"col_installed": "Installed"
+	},
+	"installer_supervisor": {
+		"below_par": "Below par",
+		"heading": "Installer Roll-up",
+		"installer": "Installer",
+		"last_completion": "Last completion",
+		"owed_back": "Owed back"
+	},
+	"restock": {
+		"approve": "Approve",
+		"no_pending": "Nothing pending sign-off.",
+		"signoff_heading": "Restocks needing sign-off",
+		"submit": "Submit Restock Request"
+	},
+	"restock_release": {
+		"heading": "Release Restock to Van",
+		"scan_serial": "Scan/enter serial",
+		"serials": "serial(s)",
+		"submit": "Release",
+		"van_signature": "Van receipt signature",
+		"warehouse_signature": "Warehouse release signature"
+	},
+	"van_view": {
+		"item": "Item",
+		"on_van": "On van",
+		"owed_back": "Owed back",
+		"par": "Par"
+	},
+	"warehouse": {
+		"restock_list": {
+			"empty": "No restocks pending release.",
+			"heading": "Restocks to Release",
+			"release": "Release"
+		},
+		"scan_in": {
+			"heading": "Scan In Return",
+			"not_owed_back": "This serial is not owed back.",
+			"submit": "Scan In",
+			"success": "Returned successfully."
+		}
 	}
 }

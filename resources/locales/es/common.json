@@ -73,7 +73,7 @@
 		"service_codes_label": "Códigos de servicio",
 		"aviso_number_label": "# de aviso Claro (si se conoce)",
 		"assigned_crew_label": "Cuadrilla asignada",
-		"select_crew_label": "Seleccione una brigada",
+		"select_crew_label": "Selecciona una brigada",
 		"select_crew_placeholder": "Elija una brigada…",
 		"estimated_materials_label": "Materiales estimados",
 		"submit": "Crear documento",
@@ -88,7 +88,7 @@
 		"submit": "Guardar cambios",
 		"job_description_label": "Descripción del trabajo",
 		"service_codes_label": "Códigos de servicio",
-		"select_crew_label": "Seleccione una brigada",
+		"select_crew_label": "Selecciona una brigada",
 		"select_crew_placeholder": "Elija una brigada…",
 		"errors": {
 			"invalid_materials": "No se pudo leer la lista de materiales",

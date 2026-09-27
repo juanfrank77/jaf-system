@@ -22,6 +22,7 @@ enum Role {
   ADMIN
   INSTALLER
   COMPTROLLER
+  INSTALLER_SUPERVISOR
 }
 
 enum DocStatus {
@@ -57,6 +58,57 @@ enum Ownership {
   UNKNOWN
 }
 
+enum SerialStatus {
+  WAREHOUSE
+  VAN
+  INSTALLED
+  REMOVED_PENDING_RETURN
+  RETURNED
+  SENT_FOR_REPAIR
+}
+
+enum VanMovementType {
+  PICKUP
+  INSTALL
+  SWAP_OUT
+  SWAP_IN
+  RETURN
+  ADJUST
+}
+
+enum CompletionStatus {
+  DRAFT
+  SUBMITTED
+}
+
+enum SwapReason {
+  HARDWARE
+  INSTALL_DEFECT
+  CUSTOMER
+  LINE
+  OTHER
+}
+
+enum PaymentRequestKind {
+  INSTALL
+  CALLBACK
+}
+
+enum PaymentRequestStatus {
+  INCOMPLETE
+  READY
+  PAID
+}
+
+enum RestockStatus {
+  DRAFT
+  SUBMITTED
+  NEEDS_SIGNOFF
+  APPROVED
+  PICKED
+  RECEIVED
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -82,15 +134,7 @@ model User {
     cancelledInvoices     JafInvoice[]        @relation("CancelledDocs")
     supervisedBrigades    Brigade[]           @relation("BrigadeSupervisor")
     releasedToFinanceInvoices JafInvoice[]    @relation("ReleasedToFinanceDocs")
-  restockRequests       VanRestockRequest[]  @relation("RestockRequests")
-  restockReleases       VanRestockRequest[]  @relation("RestockReleases")
-  restockReceivers      VanRestockRequest[]  @relation("RestockReceivers")
-  restockOverrides      VanRestockRequest[]  @relation("RestockOverrides")
-  restockApprovals      VanRestockRequest[]  @relation("RestockApprovals")
    installedVan          Van?                 @relation("VanInstaller")
-   installLogs           InstallLog[]         @relation("InstallerLogs")
-   inventoryTransactions VanInventoryTransaction[] @relation("InventoryTransactions")
-   consignmentReceipts   ConsignmentReceipt[] @relation("ConsignmentReceipts")
    systemSettings        SystemSetting[]      @relation("SystemSettings")
   auditTrail       AuditTrail[]
   photos           Photo[]
@@ -98,6 +142,14 @@ model User {
    paymentRecords   PaymentRecord[]
    preCertSheets    PreCertSheet[]
    warehouseAssignments WarehouseAssignment[]
+
+  installerProfile     InstallerProfile?   @relation("InstallerProfile")
+  vanMovements         VanMovement[]       @relation("VanMovements")
+  installCompletions   InstallCompletion[] @relation("InstallerCompletions")
+  installerSwaps       SwapEvent[]         @relation("InstallerSwaps")
+  paymentRequests      PaymentRequest[]    @relation("InstallerPaymentRequests")
+  paidPaymentRequests  PaymentRequest[]    @relation("PaidPaymentRequests")
+  restockApprovals     RestockRequest[]    @relation("RestockApprovals")
 
    @@index([role, active])
 }
@@ -157,8 +209,6 @@ model Warehouse {
   active   Boolean  @default(true)
  
   invoices             JafInvoice[]
-  vanRestockRequests   VanRestockRequest[]
-  consignmentReceipts  ConsignmentReceipt[]
   warehouseAssignments WarehouseAssignment[]
 
   @@index([active])
@@ -377,6 +427,9 @@ model ServiceCode {
   conversionFactor Decimal?  // countUnit -> stockUnit; 39 rows blocked on Orlando (null => derived stock figure stays hidden)
   canonicalName    String?   // one canonical name per SAP code; the 21 alternates stay search-only
 
+  serialized   Boolean @default(false)
+  serialPrefix String?
+
   @@index([kind, active])
 }
 
@@ -492,96 +545,167 @@ model Van {
   name                    String
   installerId             String?  @unique
   installer               User?    @relation("VanInstaller", fields: [installerId], references: [id])
-  standardStockLevels     Json     // [{ serviceCodeId, qty }]
   active                  Boolean  @default(true)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
   vanAssignmentHistory    Json?    // [{ installerId, from, to }] — append-only
 
-  inventoryTransactions VanInventoryTransaction[]
-  installLogs           InstallLog[]
+  vanPars            VanPar[]
+  vanMovements       VanMovement[]
+  installCompletions InstallCompletion[]
+  restockRequests    RestockRequest[]
 
   @@index([active])
 }
 
-model VanRestockRequest {
-  id                 String    @id @default(cuid())
-  requestedById      String
-  requestedBy        User      @relation("RestockRequests", fields: [requestedById], references: [id])
-  warehouseId        String
-  warehouse          Warehouse @relation(fields: [warehouseId], references: [id])
-  items              Json
-  // REQUESTED | PENDING_APPROVAL | APPROVED | DENIED | READY | FULFILLED
-  status             String    @default("REQUESTED")
-  requiresApproval   Boolean   @default(false)
-  approvedById       String?
-  approvedBy         User?     @relation("RestockApprovals", fields: [approvedById], references: [id])
-  approvalNote       String?
-  deniedReason       String?
-  releaseSignature   String?
-  releasedById       String?
-  releasedBy         User?     @relation("RestockReleases", fields: [releasedById], references: [id])
-  receiverSignature  String?
-  receiverSignedById String?
-  receiverSignedBy   User?     @relation("RestockReceivers", fields: [receiverSignedById], references: [id])
-  receiverSignedAt   DateTime?
-  overriddenById     String?
-  overriddenBy       User?     @relation("RestockOverrides", fields: [overriddenById], references: [id])
-  overrideSignature  String?
-  overrideAt         DateTime?
-  overrideReason     String?
-  createdAt          DateTime  @default(now())
-
-  @@index([status, createdAt])
-  @@index([requestedById, createdAt])
-  @@index([warehouseId, createdAt])
+model InstallerProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation("InstallerProfile", fields: [userId], references: [id], onDelete: Cascade)
+  jafNumber String
+  toaNumber String   @unique
+  region    String?
+  createdAt DateTime @default(now())
+  @@map("installer_profile")
 }
 
-model InstallLog {
-  id                String   @id @default(cuid())
-  installerId       String
-  installer         User     @relation("InstallerLogs", fields: [installerId], references: [id])
-  vanId             String
-  van               Van      @relation(fields: [vanId], references: [id])
-  claroJobReference String
-  serviceType       String   // CABLE_TV | WIFI | PHONE | OTHER
-  date              DateTime
-  materialsUsed     Json     // [{ serviceCodeId, qty }]
-  notes             String?
-  discrepancyFlagged Boolean @default(false)
-  createdAt         DateTime @default(now())
-
-  @@index([installerId, date])
-  @@index([vanId, date])
-  @@map("install_log")
-}
-
-model VanInventoryTransaction {
-  id            String   @id @default(cuid())
+model VanPar {
+  id            String @id @default(cuid())
   vanId         String
-  van           Van      @relation(fields: [vanId], references: [id])
+  van           Van    @relation(fields: [vanId], references: [id], onDelete: Cascade)
   serviceCodeId String
-  qty           Int      // positive for restock, negative for use/adjustment
-  type          String   // RESTOCK | INSTALL | ADJUSTMENT
-  referenceId   String?  // restock request id or install log id
-  note          String?
-  createdById   String
-  createdBy     User     @relation("InventoryTransactions", fields: [createdById], references: [id])
-  createdAt     DateTime @default(now())
-
-  @@index([vanId, serviceCodeId])
-  @@index([type, createdAt])
-  @@map("van_inventory_transaction")
+  parQty        Int
+  @@unique([vanId, serviceCodeId])
+  @@map("van_par")
 }
 
-model ConsignmentReceipt {
-  id           String    @id @default(cuid())
-  warehouseId  String
-  warehouse    Warehouse @relation(fields: [warehouseId], references: [id])
-  receivedById String
-  receivedBy   User      @relation("ConsignmentReceipts", fields: [receivedById], references: [id])
-  deliveryDate DateTime
-  items        Json
-  notes        String?
-  createdAt    DateTime  @default(now())
+model LimitTable {
+  id            String @id @default(cuid())
+  bracketFt     Int
+  serviceCodeId String
+  qty           Int
+  @@unique([bracketFt, serviceCodeId])
+  @@index([bracketFt])
+  @@map("limit_table")
+}
+
+model SerialLocation {
+  id            String       @id @default(cuid())
+  serial        String       @unique
+  serviceCodeId String
+  status        SerialStatus
+  currentRef    String       // warehouseId | vanId | completionId
+  since         DateTime     @default(now())
+  @@index([status, currentRef])
+  @@map("serial_location")
+}
+
+model VanMovement {
+  id              String          @id @default(cuid())
+  vanId           String
+  van             Van             @relation(fields: [vanId], references: [id])
+  serviceCodeId   String
+  qty             Int
+  serial          String?
+  type            VanMovementType
+  refCompletionId String?
+  refSwapId       String?
+  refRestockId    String?
+  byUserId        String
+  byUser          User            @relation("VanMovements", fields: [byUserId], references: [id])
+  at              DateTime        @default(now())
+  @@index([vanId, serviceCodeId])
+  @@index([serial])
+  @@map("van_movement")
+}
+
+model InstallCompletion {
+  id                String           @id @default(cuid())
+  idempotencyKey    String           @unique   // client-generated; blocks offline double-submit
+  claroOrderNo      String
+  installerId       String
+  installer         User             @relation("InstallerCompletions", fields: [installerId], references: [id])
+  vanId             String
+  van               Van              @relation(fields: [vanId], references: [id])
+  status            CompletionStatus @default(SUBMITTED)
+  address           String
+  addressEditLog    Json?
+  gpsLat            Float?
+  gpsLng            Float?
+  dropFt            Int?
+  accessories       Json?
+  groundRod         Boolean          @default(true)
+  coaxFt            Int?
+  serialInstalled   String?
+  serialUnreadable  Boolean          @default(false)
+  serialNotOnVan    Boolean          @default(false)
+  modelResolved     String?
+  formPhotoPath     String?
+  extraPhotoPaths   String[]
+  sigInstaller      String?
+  sigInstallerAt    DateTime?
+  submittedAt       DateTime?
+  installedAt       DateTime?
+  completionPdfPath String?
+  createdAt         DateTime         @default(now())
+  swapEvents        SwapEvent[]
+  @@index([installerId, createdAt])
+  @@index([claroOrderNo])
+  @@map("install_completion")
+}
+
+model SwapEvent {
+  id                     String            @id @default(cuid())
+  completionId           String
+  completion             InstallCompletion @relation(fields: [completionId], references: [id])
+  serialOut              String
+  serialOutPhotoPath     String?
+  serialOutMatchedRecord Boolean           @default(true)
+  reason                 SwapReason
+  serialIn               String
+  serialInPhotoPath      String?
+  serialInNotOnVan       Boolean           @default(false)
+  newClaroOrderNo        String?
+  daysSinceInstall       Int
+  submittedAt            DateTime          @default(now())
+  byInstallerId          String
+  byInstaller            User              @relation("InstallerSwaps", fields: [byInstallerId], references: [id])
+  @@index([completionId])
+  @@map("swap_event")
+}
+
+model PaymentRequest {
+  id               String               @id @default(cuid())
+  kind             PaymentRequestKind
+  completionId     String?
+  swapId           String?
+  installerId      String
+  installer        User                 @relation("InstallerPaymentRequests", fields: [installerId], references: [id])
+  status           PaymentRequestStatus @default(READY)
+  missing          String[]
+  daysSinceInstall Int?
+  attachments      Json?
+  paidAt           DateTime?
+  paidRef          String?
+  paidByUserId     String?
+  paidBy           User?                @relation("PaidPaymentRequests", fields: [paidByUserId], references: [id])
+  createdAt        DateTime             @default(now())
+  @@index([status, createdAt])
+  @@index([installerId, createdAt])
+  @@map("payment_request")
+}
+
+model RestockRequest {
+  id           String        @id @default(cuid())
+  vanId        String
+  van          Van           @relation(fields: [vanId], references: [id])
+  lines        Json          // [{ serviceCodeId, qty }]
+  status       RestockStatus @default(SUBMITTED)
+  submittedAt  DateTime      @default(now())
+  approvedById String?
+  approvedBy   User?         @relation("RestockApprovals", fields: [approvedById], references: [id])
+  releaseId    String?
+  @@index([status, submittedAt])
+  @@index([vanId, submittedAt])
+  @@map("restock_request")
 }

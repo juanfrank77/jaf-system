@@ -1,10 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-type StockLevel = {
-	serviceCodeId: string
-	qty: number
-}
-
 vi.mock("~/lib/db.server", () => ({
 	db: {
 		van: {
@@ -15,9 +10,6 @@ vi.mock("~/lib/db.server", () => ({
 			update: vi.fn(),
 		},
 		user: {
-			findMany: vi.fn(),
-		},
-		serviceCode: {
 			findMany: vi.fn(),
 		},
 		auditTrail: {
@@ -44,7 +36,7 @@ function formRequest(form: FormData) {
 describe("POST /admin/vans", () => {
 	beforeEach(() => vi.clearAllMocks())
 
-	it("creates a van with standard stock levels", async () => {
+	it("creates a van", async () => {
 		vi.mocked(requireRole).mockResolvedValue({
 			user: { id: "admin-1" },
 			session: {},
@@ -55,8 +47,6 @@ describe("POST /admin/vans", () => {
 		form.set("intent", "create")
 		form.set("name", "Van 101")
 		form.set("installerId", "installer-1")
-		form.set("stock_code-a", "10")
-		form.set("stock_code-b", "5")
 		form.set("active", "on")
 
 		const result = await action({
@@ -69,10 +59,6 @@ describe("POST /admin/vans", () => {
 			data: expect.objectContaining({
 				name: "Van 101",
 				installerId: "installer-1",
-				standardStockLevels: expect.arrayContaining([
-					{ serviceCodeId: "code-a", qty: 10 },
-					{ serviceCodeId: "code-b", qty: 5 },
-				]),
 				active: true,
 			}),
 		})
@@ -128,50 +114,6 @@ describe("POST /admin/vans", () => {
 			where: { id: "van-1" },
 			data: { active: false },
 		})
-	})
-
-	it("preserves inactive service code stock levels on update", async () => {
-		vi.mocked(requireRole).mockResolvedValue({
-			user: { id: "admin-1" },
-			session: {},
-		} as any)
-		vi.mocked(db.van.findUnique).mockResolvedValue({
-			id: "van-1",
-			installerId: "installer-1",
-			standardStockLevels: [
-				{ serviceCodeId: "inactive-code", qty: 4 },
-				{ serviceCodeId: "active-code", qty: 2 },
-			],
-		} as any)
-		vi.mocked(db.van.update).mockResolvedValue({} as any)
-
-		const form = new FormData()
-		form.set("intent", "update")
-		form.set("id", "van-1")
-		form.set("name", "Van 101")
-		form.set("installerId", "installer-1")
-		form.set("stock_active-code", "3")
-		form.set("active", "on")
-
-		const result = await action({
-			request: formRequest(form),
-			params: {},
-		} as any).catch((r) => r)
-
-		expect(result.status).toBe(302)
-		expect(db.van.update).toHaveBeenCalledWith(
-			expect.objectContaining({
-				where: { id: "van-1" },
-			}),
-		)
-		const updateCall = (db.van.update as any).mock.calls[0][0]
-		const levels = updateCall.data.standardStockLevels as StockLevel[]
-		expect(levels).toEqual(
-			expect.arrayContaining([
-				{ serviceCodeId: "inactive-code", qty: 4 },
-				{ serviceCodeId: "active-code", qty: 3 },
-			]),
-		)
 	})
 
 	it("appends history when installerId changes", async () => {

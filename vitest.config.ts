@@ -13,6 +13,12 @@ export default defineConfig({
 	test: {
 		globals: true,
 		css: true,
+		// Worktrees live inside the repo root (.worktrees/<branch>/), so without
+		// this, running from the main checkout picks up every test file twice —
+		// once here, once inside the worktree — and both copies run
+		// concurrently against the same DATABASE_URL, causing unique-constraint
+		// collisions and connection-pool exhaustion between the two runs.
+		exclude: ["**/node_modules/**", "**/.worktrees/**"],
 		coverage: {
 			include: ["app/**"],
 			reporter: ["text", "json-summary", "json"],

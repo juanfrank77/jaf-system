@@ -30,6 +30,9 @@
 			"admin_vans": "Vans",
 			"admin_restock": "Restock Sign-offs",
 			"installer": "Installer",
+			"installer_supervisor": "Installer Supervisor",
+			"warehouse_scan_in": "Scan In Return",
+			"warehouse_restock": "Restocks to Release",
 			"comptroller": "Comptroller"
 		},
 		"notifications": {
@@ -1017,6 +1020,9 @@
 		}
 	},
 	"installer": {
+		"scan": {
+			"cant_scan": "Can't scan — take a photo instead"
+		},
 		"title": "Installer Portal",
 		"no_van": "You are not assigned to a van. Contact an administrator.",
 		"request_restock": "Request Restock",
@@ -1030,7 +1036,35 @@
 		"no_restock_requests": "No active restock requests.",
 		"installs_heading": "My Installs",
 		"no_installs": "No installs logged yet.",
-		"discrepancy": "Discrepancy"
+		"discrepancy": "Discrepancy",
+		"completion": {
+			"address": "Address",
+			"drop_ft": "Drop (ft)",
+			"form_photo": "Claro form photo",
+			"ground_rod": "Ground rod installed",
+			"new_heading": "New Completion",
+			"no_serial": "No serial scanned",
+			"order_no": "Order #",
+			"scan": "Scan",
+			"scan_heading": "Scan modem",
+			"serial_unreadable": "Unreadable — photo only",
+			"signature": "Installer signature",
+			"submit": "Submit"
+		},
+		"no_submitted_jobs": "No jobs submitted yet.",
+		"quick_look": "{{belowPar}} below par · {{owedBack}} owed back",
+		"submitted_jobs_heading": "My submitted jobs",
+		"swap": {
+			"find_heading": "Find the original job",
+			"heading": "Warranty Swap",
+			"new_order_no": "New order # (blank = callback)",
+			"no_results": "No matching jobs",
+			"reason": "Reason",
+			"scan_in": "Scan serial in",
+			"scan_out": "Scan serial out",
+			"search_placeholder": "Order #, address, or serial",
+			"submit": "Submit"
+		}
 	},
 	"installer_restock": {
 		"title": "Request Restock",
@@ -1048,7 +1082,8 @@
 			"warehouse_required": "Please select a warehouse.",
 			"invalid_items": "Invalid items data.",
 			"invalid_service_codes": "One or more selected products are no longer available.",
-			"items_required": "Add at least one item."
+			"items_required": "Add at least one item.",
+			"qty_too_large": "One or more quantities are too large. Reduce them or split into a separate restock."
 		}
 	},
 	"installer_install": {
@@ -1122,5 +1157,45 @@
 		"col_description": "Description",
 		"col_ordered": "Ordered",
 		"col_installed": "Installed"
+	},
+	"installer_supervisor": {
+		"below_par": "Below par",
+		"heading": "Installer Roll-up",
+		"installer": "Installer",
+		"last_completion": "Last completion",
+		"owed_back": "Owed back"
+	},
+	"restock": {
+		"approve": "Approve",
+		"no_pending": "Nothing pending sign-off.",
+		"signoff_heading": "Restocks needing sign-off",
+		"submit": "Submit Restock Request"
+	},
+	"restock_release": {
+		"heading": "Release Restock to Van",
+		"scan_serial": "Scan/enter serial",
+		"serials": "serial(s)",
+		"submit": "Release",
+		"van_signature": "Van receipt signature",
+		"warehouse_signature": "Warehouse release signature"
+	},
+	"van_view": {
+		"item": "Item",
+		"on_van": "On van",
+		"owed_back": "Owed back",
+		"par": "Par"
+	},
+	"warehouse": {
+		"restock_list": {
+			"empty": "No restocks pending release.",
+			"heading": "Restocks to Release",
+			"release": "Release"
+		},
+		"scan_in": {
+			"heading": "Scan In Return",
+			"not_owed_back": "This serial is not owed back.",
+			"submit": "Scan In",
+			"success": "Returned successfully."
+		}
 	}
 }

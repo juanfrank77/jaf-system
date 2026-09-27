@@ -314,34 +314,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 				})
 			: []
 
-	const restockRequests =
-		user.role === "WAREHOUSE"
-			? await db.vanRestockRequest.findMany({
-					where: { status: "REQUESTED" },
-					include: { requestedBy: true, warehouse: true },
-					orderBy: { createdAt: "desc" },
-					take: 50,
-				})
-			: user.role === "INSTALLER"
-				? await db.vanRestockRequest.findMany({
-						where: {
-							requestedById: user.id,
-							status: {
-								in: [
-									"REQUESTED",
-									"PENDING_APPROVAL",
-									"APPROVED",
-									"READY",
-									"FULFILLED",
-								],
-							},
-						},
-						include: { requestedBy: true, warehouse: true },
-						orderBy: { createdAt: "desc" },
-						take: 50,
-					})
-				: []
-
 	return {
 		stats,
 		alert,
@@ -366,7 +338,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 		crewInFieldDocs,
 		crewSentBackDocs,
 		crewSubmittedDocs,
-		restockRequests,
 	}
 }
 
@@ -392,7 +363,6 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 		crewInFieldDocs,
 		crewSentBackDocs,
 		crewSubmittedDocs,
-		restockRequests,
 	} = loaderData
 	const explainer = (loaderData as { explainer?: DashboardExplainer })
 		.explainer as DashboardExplainer
@@ -453,7 +423,6 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 			crewInFieldDocs={crewInFieldDocs}
 			crewSentBackDocs={crewSentBackDocs}
 			crewSubmittedDocs={crewSubmittedDocs}
-			restockRequests={restockRequests}
 		/>
 	)
 }

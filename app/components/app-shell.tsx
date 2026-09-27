@@ -8,7 +8,6 @@ import {
 	Invoice02Icon,
 	Menu01Icon,
 	Notification01Icon,
-	PackageIcon,
 	Settings02Icon,
 	TruckDeliveryIcon,
 	UserGroup03Icon,
@@ -41,6 +40,9 @@ type NavItem = {
 		| "app_shell.nav.admin_vans"
 		| "app_shell.nav.admin_restock"
 		| "app_shell.nav.installer"
+		| "app_shell.nav.installer_supervisor"
+		| "app_shell.nav.warehouse_scan_in"
+		| "app_shell.nav.warehouse_restock"
 	icon: IconSvgElement
 	roles?: Role[]
 }
@@ -100,16 +102,28 @@ const NAV_ITEMS: NavItem[] = [
 		roles: ["ADMIN"],
 	},
 	{
-		to: "/admin/restock",
-		labelKey: "app_shell.nav.admin_restock",
-		icon: PackageIcon,
-		roles: ["ADMIN"],
-	},
-	{
 		to: "/installer",
 		labelKey: "app_shell.nav.installer",
 		icon: TruckDeliveryIcon,
 		roles: ["INSTALLER", "ADMIN"],
+	},
+	{
+		to: "/installer-supervisor",
+		labelKey: "app_shell.nav.installer_supervisor",
+		icon: TruckDeliveryIcon,
+		roles: ["INSTALLER_SUPERVISOR", "ADMIN"],
+	},
+	{
+		to: "/warehouse/scan-in",
+		labelKey: "app_shell.nav.warehouse_scan_in",
+		icon: TruckDeliveryIcon,
+		roles: ["WAREHOUSE", "ADMIN"],
+	},
+	{
+		to: "/warehouse/restock",
+		labelKey: "app_shell.nav.warehouse_restock",
+		icon: TruckDeliveryIcon,
+		roles: ["WAREHOUSE", "ADMIN"],
 	},
 	{
 		to: "/comptroller",

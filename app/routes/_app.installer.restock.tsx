@@ -1,355 +1,184 @@
-import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { data, Form, redirect } from "react-router"
+import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { MaterialLineItems } from "~/components/material-line-items"
 import { Button } from "~/components/ui/button"
-import { Input } from "~/components/ui/input"
-import { Label } from "~/components/ui/label"
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "~/components/ui/select"
-import { useOnline } from "~/hooks/use-online"
 import { db } from "~/lib/db.server"
-import { queueInstallerRestock } from "~/lib/installer-sync"
+import { requireInstaller } from "~/lib/installer-context.server"
+import { canApproveRestock } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
-import { evaluateRestockApproval, type StockLevel } from "~/lib/van-inventory"
+import {
+	buildRestockPrefill,
+	createRestock,
+	MAX_LINE_QTY,
+} from "~/lib/restock.server"
+import { getActiveMaterialCodes } from "~/lib/service-codes.server"
+import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.installer.restock"
 
-export const meta: Route.MetaFunction = () => [
-	{ title: "Request Restock — JAF Ops" },
-]
+export const meta: Route.MetaFunction = () => [{ title: "Restock — JAF Ops" }]
 
 export async function loader({ request }: Route.LoaderArgs) {
-	const { user } = await requireRole(request, ["INSTALLER", "ADMIN"])
-	const [van, warehouses, serviceCodes] = await Promise.all([
-		db.van.findUnique({ where: { installerId: user.id } }),
-		db.warehouse.findMany({ where: { active: true } }),
-		db.serviceCode.findMany({
-			where: { active: true },
-			orderBy: { claroCode: "asc" },
-		}),
+	const { user } = await requireRole(request, [
+		"INSTALLER",
+		"INSTALLER_SUPERVISOR",
+		"ADMIN",
 	])
-	if (!van) throw redirect("/installer")
-	return { van, warehouses, serviceCodes }
+	if (user.role === "INSTALLER") {
+		const { van } = await requireInstaller(request)
+		const [prefill, codes] = await Promise.all([
+			van ? buildRestockPrefill(van.id) : Promise.resolve([]),
+			getActiveMaterialCodes(),
+		])
+		const serviceCodes = codes.map((c) => ({
+			id: c.id,
+			claroCode: c.claroCode,
+			name: c.name,
+			unit: c.unit,
+			unitPrice: toNumberPrice(c.unitPrice),
+		}))
+		return {
+			role: "INSTALLER" as const,
+			van,
+			prefill,
+			serviceCodes,
+			pending: [],
+		}
+	}
+	const pending = await db.restockRequest.findMany({
+		where: { status: "NEEDS_SIGNOFF" },
+		include: { van: true },
+		orderBy: { submittedAt: "desc" },
+	})
+	return {
+		role: "SUPERVISOR" as const,
+		van: null,
+		prefill: [],
+		serviceCodes: [],
+		pending,
+	}
 }
 
 export async function action({ request }: Route.ActionArgs) {
-	const { user } = await requireRole(request, ["INSTALLER", "ADMIN"])
-	const van = await db.van.findUnique({ where: { installerId: user.id } })
-	if (!van) {
-		return data(
-			{ errorKey: "installer_restock.errors.no_van" },
-			{ status: 400 },
-		)
-	}
-
+	const { user } = await requireRole(request, [
+		"INSTALLER",
+		"INSTALLER_SUPERVISOR",
+		"ADMIN",
+	])
 	const form = await request.formData()
-	const warehouseId = (form.get("warehouseId") as string | null)?.trim() || ""
-	const itemsRaw = form.get("items") as string
+	const intent = form.get("intent")
 
-	if (!warehouseId) {
-		return data(
-			{ errorKey: "installer_restock.errors.warehouse_required" },
-			{ status: 400 },
-		)
-	}
-
-	let items: { serviceCodeId: string; qty: number }[] = []
-	try {
-		items = JSON.parse(itemsRaw).filter(
-			(i: { serviceCodeId: string; qty: number }) =>
-				i.serviceCodeId && i.qty > 0,
-		)
-	} catch {
-		return data(
-			{ errorKey: "installer_restock.errors.invalid_items" },
-			{ status: 400 },
-		)
-	}
-
-	const uniqueServiceCodeIds = Array.from(
-		new Set(items.map((i) => i.serviceCodeId)),
-	)
-	const validServiceCodes = await db.serviceCode.findMany({
-		where: { id: { in: uniqueServiceCodeIds }, active: true },
-		select: { id: true },
-	})
-	const validServiceCodeSet = new Set(validServiceCodes.map((c) => c.id))
-	const invalidServiceCodes = uniqueServiceCodeIds.filter(
-		(id) => !validServiceCodeSet.has(id),
-	)
-	if (invalidServiceCodes.length > 0) {
-		return data(
-			{ errorKey: "installer_restock.errors.invalid_service_codes" },
-			{ status: 400 },
-		)
-	}
-
-	if (items.length === 0) {
-		return data(
-			{ errorKey: "installer_restock.errors.items_required" },
-			{ status: 400 },
-		)
-	}
-
-	if (request.headers.get("X-Offline-Sync") === "true") {
-		if (!van.active) {
-			return data({ conflict: "VAN_INACTIVE" }, { status: 409 })
-		}
-		const warehouse = await db.warehouse.findUnique({
-			where: { id: warehouseId },
+	if (intent === "approve") {
+		if (!canApproveRestock(user.role)) throw redirect("/installer/restock")
+		const id = form.get("id") as string
+		// Atomic guard: only a restock still awaiting sign-off can be approved,
+		// so a replayed/double-submitted approve can never flip an already
+		// APPROVED or RECEIVED restock back to APPROVED.
+		await db.restockRequest.updateMany({
+			where: { id, status: "NEEDS_SIGNOFF" },
+			data: { status: "APPROVED", approvedById: user.id },
 		})
-		if (!warehouse?.active) {
-			return data({ conflict: "WAREHOUSE_INACTIVE" }, { status: 409 })
-		}
+		return redirect("/installer/restock")
 	}
 
-	const transactions = await db.$queryRaw<
-		{ serviceCodeId: string; qty: number }[]
-	>`
-		SELECT serviceCodeId, SUM(qty) as qty
-		FROM "VanInventoryTransaction"
-		WHERE vanId = ${van.id}
-		GROUP BY serviceCodeId
-	`
-
-	const [pendingRequests] = await Promise.all([
-		db.vanRestockRequest.findMany({
-			where: {
-				requestedById: user.id,
-				status: { in: ["REQUESTED", "PENDING_APPROVAL", "APPROVED"] },
-			},
-			select: { items: true },
-		}),
-	])
-
-	const pendingItems = (
-		pendingRequests as { items: { serviceCodeId: string; qty: number }[] }[]
-	).flatMap((r) =>
-		(r.items || []).map((i) => ({ ...i, type: "RESTOCK" as const })),
+	const { van } = await requireInstaller(request)
+	if (!van) return { errorKey: "installer.no_van" as const }
+	// A posted service code and quantity are otherwise trusted wholesale: a
+	// forged serviceCodeId becomes a permanent phantom PICKUP movement, and a
+	// non-integer qty passes qty > 0 but makes the restock unreleasable
+	// (reconciliation in load-to-van.server.ts compares exact counts).
+	const validCodeIds = new Set(
+		(await getActiveMaterialCodes()).map((c) => c.id),
 	)
-
-	const allTransactions = [
-		...transactions.map((t) => ({
-			serviceCodeId: t.serviceCodeId,
-			qty: t.qty,
-			type: "RESTOCK" as const,
-		})),
-		...pendingItems,
-	]
-
-	const { requiresApproval } = evaluateRestockApproval(
-		items,
-		allTransactions,
-		(van.standardStockLevels as StockLevel[]) || [],
+	const lines = JSON.parse((form.get("lines") as string) || "[]").filter(
+		(l: { serviceCodeId: string; qty: number }) =>
+			validCodeIds.has(l.serviceCodeId) && Number.isInteger(l.qty) && l.qty > 0,
 	)
-
-	const status = requiresApproval ? "PENDING_APPROVAL" : "REQUESTED"
-
-	const restockRequest = await db.vanRestockRequest.create({
-		data: {
-			requestedById: user.id,
-			warehouseId,
-			items,
-			status,
-			requiresApproval,
-		},
-	})
-
-	const recipients = await db.user.findMany({
-		where: {
-			role: requiresApproval ? { in: ["SUPERVISOR", "ADMIN"] } : "WAREHOUSE",
-			active: true,
-		},
-	})
-	const message = requiresApproval
-		? `Restock request #${restockRequest.id.slice(-6)} from ${van.name} requires approval.`
-		: `New restock request #${restockRequest.id.slice(-6)} from ${van.name} is ready to fulfill.`
-
-	await db.$transaction([
-		...recipients.map((u: { id: string }) =>
-			db.notification.create({
-				data: { userId: u.id, message },
-			}),
-		),
-	])
-
-	throw redirect("/installer")
+	// Reject rather than silently submit an empty/all-invalid line set: a
+	// restock with no lines still persists as a real SUBMITTED row (nothing
+	// in createRestock's caller enforced this before), reaches the warehouse
+	// release queue, and burns a signature on a no-op release.
+	if (lines.length === 0) {
+		return { errorKey: "installer_restock.errors.items_required" as const }
+	}
+	// Mirror createRestock's coalesced-total ceiling here so a quantity over
+	// the maximum returns a graceful error instead of letting createRestock's
+	// throw surface as an unhandled 500 with the internal message rendered
+	// straight to the installer.
+	const coalescedQty = new Map<string, number>()
+	for (const l of lines as { serviceCodeId: string; qty: number }[]) {
+		coalescedQty.set(
+			l.serviceCodeId,
+			(coalescedQty.get(l.serviceCodeId) ?? 0) + l.qty,
+		)
+	}
+	if ([...coalescedQty.values()].some((qty) => qty > MAX_LINE_QTY)) {
+		return { errorKey: "installer_restock.errors.qty_too_large" as const }
+	}
+	await createRestock(van.id, lines, { id: user.id })
+	return redirect("/installer")
 }
 
-export default function RequestRestock({
+export default function InstallerRestock({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { warehouses, serviceCodes } = loaderData
+	const { role, van, prefill, serviceCodes, pending } = loaderData
 	const { t } = useTranslation()
-	const errorKey =
-		actionData && "errorKey" in actionData
-			? (actionData.errorKey as string)
-			: null
-	const online = useOnline()
-	const [queued, setQueued] = useState(false)
 
-	const [lines, setLines] = useState<
-		{ _key: string; serviceCodeId: string; qty: number }[]
-	>([{ _key: "1", serviceCodeId: "", qty: 1 }])
-
-	const addLine = () =>
-		setLines([
-			...lines,
-			{ _key: String(Date.now()), serviceCodeId: "", qty: 1 },
-		])
-	const removeLine = (key: string) =>
-		setLines(lines.filter((l) => l._key !== key))
-	const updateLine = (
-		key: string,
-		patch: Partial<{ serviceCodeId: string; qty: number }>,
-	) => setLines(lines.map((l) => (l._key === key ? { ...l, ...patch } : l)))
-
-	const used = new Set(lines.map((l) => l.serviceCodeId).filter(Boolean))
-	const available = serviceCodes.filter((c) => !used.has(c.id))
+	if (role !== "INSTALLER") {
+		return (
+			<div className="space-y-4">
+				<h1 className="text-xl font-semibold">
+					{t("restock.signoff_heading", "Restocks needing sign-off")}
+				</h1>
+				<ul className="divide-y">
+					{pending.map((r) => (
+						<li key={r.id} className="py-2 flex items-center justify-between">
+							<span className="text-sm">
+								{r.van.name} — {r.id.slice(-6)}
+							</span>
+							<Form method="post">
+								<input type="hidden" name="intent" value="approve" />
+								<input type="hidden" name="id" value={r.id} />
+								<Button type="submit" size="sm">
+									{t("restock.approve", "Approve")}
+								</Button>
+							</Form>
+						</li>
+					))}
+					{pending.length === 0 && (
+						<li className="py-2 text-sm text-slate-500">
+							{t("restock.no_pending", "Nothing pending sign-off.")}
+						</li>
+					)}
+				</ul>
+			</div>
+		)
+	}
 
 	return (
-		<div className="space-y-5">
-			<h1 className="text-xl font-semibold">{t("installer_restock.title")}</h1>
-
-			{errorKey && (
-				<p className="text-sm text-red-600">{t(errorKey as never)}</p>
-			)}
-
-			{queued && (
-				<div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
-					{t("installer_restock.queued_message")}
-				</div>
-			)}
-
-			{!online && !queued && (
-				<div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
-					{t("installer_restock.offline_submit_notice")}
-				</div>
-			)}
-
-			<Form
-				method="post"
-				className="space-y-4"
-				onSubmit={(e) => {
-					if (!online) {
-						e.preventDefault()
-						const form = e.currentTarget
-						const formData = new FormData(form)
-						const warehouseId =
-							(formData.get("warehouseId") as string | null)?.trim() || ""
-						const itemsRaw = formData.get("items") as string
-						let items: { serviceCodeId: string; qty: number }[] = []
-						try {
-							items = JSON.parse(itemsRaw).filter(
-								(i: { serviceCodeId: string; qty: number }) =>
-									i.serviceCodeId && i.qty > 0,
-							)
-						} catch {
-							// ignore, validation happens on sync
-						}
-						queueInstallerRestock({ warehouseId, items }).then(() =>
-							setQueued(true),
-						)
-					}
-				}}
-			>
-				<div>
-					<Label htmlFor="warehouseId">
-						{t("installer_restock.warehouse_label")}
-					</Label>
-					<Select name="warehouseId" required>
-						<SelectTrigger id="warehouseId" className="mt-1">
-							<SelectValue
-								placeholder={t("installer_restock.warehouse_placeholder")}
-							/>
-						</SelectTrigger>
-						<SelectContent>
-							{warehouses.map((w: { id: string; name: string }) => (
-								<SelectItem key={w.id} value={w.id}>
-									{w.name}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
-				</div>
-
-				<div className="space-y-2">
-					<Label>{t("installer_restock.items_label")}</Label>
-					<input
-						type="hidden"
-						name="items"
-						value={JSON.stringify(
-							lines.map(({ serviceCodeId, qty }) => ({ serviceCodeId, qty })),
-						)}
+		<div className="space-y-4">
+			<h1 className="text-xl font-semibold">
+				{t("installer.request_restock", "Request Restock")}
+			</h1>
+			{!van ? (
+				<p className="text-sm text-amber-600">{t("installer.no_van")}</p>
+			) : (
+				<Form method="post" className="space-y-4">
+					{actionData && "errorKey" in actionData && (
+						<p className="text-sm text-red-600">{t(actionData.errorKey)}</p>
+					)}
+					<MaterialLineItems
+						serviceCodes={serviceCodes}
+						initialItems={prefill}
+						name="lines"
 					/>
-					{lines.map((line) => {
-						const selected = line.serviceCodeId
-							? serviceCodes.filter(
-									(c: { id: string }) => c.id === line.serviceCodeId,
-								)
-							: []
-						const options = [...selected, ...available]
-						return (
-							<div key={line._key} className="flex items-center gap-2">
-								<Select
-									value={line.serviceCodeId}
-									onValueChange={(v) =>
-										updateLine(line._key, { serviceCodeId: v ?? "" })
-									}
-								>
-									<SelectTrigger className="flex-1">
-										<SelectValue
-											placeholder={t("installer_restock.item_placeholder")}
-										/>
-									</SelectTrigger>
-									<SelectContent>
-										{options.map(
-											(c: { id: string; claroCode: string; name: string }) => (
-												<SelectItem key={c.id} value={c.id}>
-													{c.claroCode} — {c.name}
-												</SelectItem>
-											),
-										)}
-									</SelectContent>
-								</Select>
-								<Input
-									type="number"
-									min={1}
-									value={line.qty}
-									onChange={(e) =>
-										updateLine(line._key, {
-											qty: Number.parseInt(e.target.value, 10) || 1,
-										})
-									}
-									className="w-20"
-								/>
-								<button
-									type="button"
-									onClick={() => removeLine(line._key)}
-									className="text-slate-400 hover:text-red-600 text-lg"
-								>
-									×
-								</button>
-							</div>
-						)
-					})}
-					<Button type="button" variant="outline" size="sm" onClick={addLine}>
-						{t("installer_restock.add_item")}
+					<Button type="submit">
+						{t("restock.submit", "Submit Restock Request")}
 					</Button>
-				</div>
-
-				<Button type="submit" className="w-full">
-					{online
-						? t("installer_restock.submit")
-						: t("installer_restock.save_offline")}
-				</Button>
-			</Form>
+				</Form>
+			)}
 		</div>
 	)
 }

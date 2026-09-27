@@ -193,7 +193,22 @@ describe("AppShell", () => {
 			screen.getByRole("link", { name: "Vans", hidden: true }),
 		).toBeInTheDocument()
 		expect(
-			screen.getByRole("link", { name: "Restock Sign-offs", hidden: true }),
+			screen.getByRole("link", { name: "Installer", hidden: true }),
+		).toBeInTheDocument()
+		expect(
+			screen.getByRole("link", {
+				name: "Installer Supervisor",
+				hidden: true,
+			}),
+		).toBeInTheDocument()
+		expect(
+			screen.getByRole("link", { name: "Scan In Return", hidden: true }),
+		).toBeInTheDocument()
+		expect(
+			screen.getByRole("link", {
+				name: "Restocks to Release",
+				hidden: true,
+			}),
 		).toBeInTheDocument()
 	})
 

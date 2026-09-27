@@ -14,8 +14,8 @@ import { requireRole } from "~/lib/permissions.server"
 import { getActiveMaterialCodes } from "~/lib/service-codes.server"
 import { parseServiceLines, type ServiceLine } from "~/lib/service-lines"
 import {
+	assignableBrigadesWhere,
 	isBrigadeInSupervisorScope,
-	supervisorAreas,
 } from "~/lib/supervisor-scope"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.new"
@@ -26,18 +26,14 @@ export const meta: Route.MetaFunction = () => [
 
 export async function loader({ request }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["SUPERVISOR", "ADMIN"])
+	const brigadeArgs = await assignableBrigadesWhere(db, user)
 	const [materials, brigades] = await Promise.all([
 		getActiveMaterialCodes(),
 		db.brigade.findMany({
-			where:
-				user.role === "SUPERVISOR"
-					? { active: true, area: { in: await supervisorAreas(db, user.id) } }
-					: { active: true },
+			where: brigadeArgs.where,
 			orderBy: [{ area: "asc" }, { name: "asc" }],
 			select: { id: true, name: true, area: true, code: true, leadName: true },
-			// Only the supervisor-scoped picker is bounded — the ADMIN branch
-			// is intentionally unbounded, matching its pre-existing behavior.
-			take: user.role === "SUPERVISOR" ? 100 : undefined,
+			take: brigadeArgs.take,
 		}),
 	])
 	return {

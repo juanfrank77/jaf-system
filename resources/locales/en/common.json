@@ -554,6 +554,7 @@
 			"cannot_deactivate_self": "You cannot deactivate your own account.",
 			"cannot_change_own_role": "You cannot change your own role.",
 			"update_invalid": "Valid user id and role are required.",
+			"areas_require_supervisor": "Only supervisors can be assigned areas.",
 			"unknown_intent": "Unknown action."
 		}
 	},

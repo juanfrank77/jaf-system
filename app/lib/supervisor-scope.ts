@@ -20,7 +20,18 @@ export async function supervisorAreas(
 		where: { id: userId },
 		select: { supervisorAreas: true },
 	})
-	return user?.supervisorAreas ?? []
+	// Defensive: the stored value should already be canonical and trimmed
+	// (the admin editor validates on write), but this is authorization data —
+	// never trust it blindly. A stray non-canonical or untrimmed value (e.g.
+	// from a data-migration backfill that copied `Brigade.area` verbatim)
+	// must never silently deny every action for that supervisor, nor grant
+	// scope over an area that doesn't exist.
+	const raw = user?.supervisorAreas ?? []
+	return raw
+		.map((a) => a.trim())
+		.filter((a): a is (typeof ALL_AREAS)[number] =>
+			(ALL_AREAS as readonly string[]).includes(a),
+		)
 }
 
 /**
@@ -73,4 +84,29 @@ export async function isBrigadeInSupervisorScope(
 	if (!brigade) return false
 	const areas = await supervisorAreas(db, userId)
 	return !!brigade.area && areas.includes(brigade.area)
+}
+
+/**
+ * `db.brigade.findMany` args for the "pick a brigade to assign this job to"
+ * picker every doc-intake/edit/reassign screen renders — active brigades
+ * only, scoped and bounded for a SUPERVISOR (their own admin-assigned areas,
+ * capped so the picker can't blow up), unscoped and unbounded for anyone
+ * else (ADMIN sees every active brigade, matching its pre-existing
+ * behavior). Shared so the `active`/`take`/scope rule can't drift between
+ * routes the way it already had once. Not for the supervisor's own
+ * brigade-management screen (`/supervisor/brigades`), which intentionally
+ * shows inactive brigades too so they can be reactivated.
+ */
+export async function assignableBrigadesWhere(
+	db: PrismaClient,
+	user: { id: string; role: string },
+): Promise<{
+	where: { active: true; area?: { in: string[] } }
+	take: number | undefined
+}> {
+	if (user.role !== "SUPERVISOR") {
+		return { where: { active: true }, take: undefined }
+	}
+	const areas = await supervisorAreas(db, user.id)
+	return { where: { active: true, area: { in: areas } }, take: 100 }
 }

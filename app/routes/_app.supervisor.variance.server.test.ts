@@ -7,15 +7,16 @@ vi.mock("~/lib/db.server", () => ({
 }))
 
 vi.mock("~/lib/permissions.server", () => ({ requireRole: vi.fn() }))
-vi.mock("~/lib/supervisor-scope", () => ({
-	supervisorAreas: vi.fn(),
-	ownedOrInArea: vi.fn((userId: string, areas: string[]) => ({
-		OR: [
-			{ supervisorId: userId },
-			{ brigade: { is: { area: { in: areas } } } },
-		],
-	})),
-}))
+vi.mock("~/lib/supervisor-scope", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("~/lib/supervisor-scope")>()
+	return {
+		...actual,
+		supervisorAreas: vi.fn(),
+		// Wrap the real ownedOrInArea (not a hand-rolled copy) so this test
+		// still fails if the real predicate's shape ever changes.
+		ownedOrInArea: vi.fn(actual.ownedOrInArea),
+	}
+})
 
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"

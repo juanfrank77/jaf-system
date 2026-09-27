@@ -24,8 +24,8 @@ import { isEditableStatus, isTerminalStatus } from "~/lib/permissions"
 import { requireRole, requireSession } from "~/lib/permissions.server"
 import {
 	assertDocInSupervisorScope,
+	assignableBrigadesWhere,
 	isBrigadeInSupervisorScope,
-	supervisorAreas,
 } from "~/lib/supervisor-scope"
 import { deriveSupervisorStage } from "~/lib/supervisor-stage"
 import { toNumberPrice } from "~/lib/utils"
@@ -112,14 +112,12 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		include: { user: true },
 		orderBy: { timestamp: "asc" },
 	})
+	const brigadeArgs = await assignableBrigadesWhere(db, user)
 	const brigadeOptions = await db.brigade.findMany({
-		where:
-			user.role === "SUPERVISOR"
-				? { active: true, area: { in: await supervisorAreas(db, user.id) } }
-				: { active: true },
+		where: brigadeArgs.where,
 		orderBy: [{ area: "asc" }, { name: "asc" }],
 		select: { id: true, name: true, area: true, code: true },
-		take: 100,
+		take: brigadeArgs.take,
 	})
 	const sheet = await db.preCertSheet.findFirst({
 		where: { docId: doc.id, supersededAt: null },

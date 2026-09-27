@@ -163,11 +163,11 @@ export async function action({ request }: Route.ActionArgs) {
 	}
 
 	if (intent === "updateAreas") {
-		const id = form.get("id")
+		const idRaw = form.get("id")
 		const areas = form.getAll("areas")
 		if (
-			typeof id !== "string" ||
-			!id.trim() ||
+			typeof idRaw !== "string" ||
+			!idRaw.trim() ||
 			!areas.every(
 				(a): a is string =>
 					typeof a === "string" && (ALL_AREAS as readonly string[]).includes(a),
@@ -175,6 +175,20 @@ export async function action({ request }: Route.ActionArgs) {
 		) {
 			return data(
 				{ errorKey: "admin_users.errors.update_invalid" },
+				{ status: 400 },
+			)
+		}
+		const id = idRaw.trim()
+		const target = await db.user.findUnique({ where: { id } })
+		if (!target) {
+			return data(
+				{ errorKey: "admin_users.errors.update_invalid" },
+				{ status: 400 },
+			)
+		}
+		if (target.role !== "SUPERVISOR") {
+			return data(
+				{ errorKey: "admin_users.errors.areas_require_supervisor" },
 				{ status: 400 },
 			)
 		}
@@ -207,7 +221,13 @@ export async function action({ request }: Route.ActionArgs) {
 		}
 		await db.user.update({
 			where: { id },
-			data: { role: role as Role },
+			// Demoting away from SUPERVISOR clears the area grant — otherwise
+			// it becomes a stale, invisible-in-the-UI authorization state that
+			// silently reactivates if the user is later promoted back.
+			data: {
+				role: role as Role,
+				...(role !== "SUPERVISOR" ? { supervisorAreas: [] } : {}),
+			},
 		})
 		return redirect("/admin/users")
 	}

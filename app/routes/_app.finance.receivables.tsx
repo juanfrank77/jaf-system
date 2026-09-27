@@ -26,11 +26,8 @@ import {
 	isMissingAviso,
 	isMissingClaroPdf,
 } from "~/lib/finance-pipeline.server"
-import {
-	parsePaymentDate,
-	paymentForType,
-	recordReceivablePayment,
-} from "~/lib/payment-records.server"
+import { parsePaymentDate, paymentForType } from "~/lib/payment-records"
+import { recordReceivablePayment } from "~/lib/payment-records.server"
 import { requireRole } from "~/lib/permissions.server"
 import { getAgingAlertDays } from "~/lib/system-settings.server"
 import { formatMoney } from "~/lib/utils"

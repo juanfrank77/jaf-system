@@ -20,7 +20,8 @@ import { validateFile } from "~/lib/file-upload.server"
 import { queueCompletion } from "~/lib/installer-completion-sync"
 import { requireInstaller } from "~/lib/installer-context.server"
 import { pickBracket, prefillAccessories } from "~/lib/limit-table"
-import { getSerializedCodes, resolveSerial } from "~/lib/service-codes.server"
+import { resolveSerial } from "~/lib/service-codes"
+import { getSerializedCodes } from "~/lib/service-codes.server"
 import type { Route } from "./+types/_app.installer.completion.new"
 
 export const meta: Route.MetaFunction = () => [

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { resolveSerial } from "./service-codes.server"
+import { resolveSerial } from "./service-codes"
 
 const codes: { id: string; serialPrefix: string | null }[] = [
 	{ id: "ont-1", serialPrefix: "ALCLED" },

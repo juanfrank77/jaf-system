@@ -14,17 +14,10 @@ vi.mock("./db.server", () => ({
 	},
 }))
 
-import {
-	parsePaymentDate,
-	recordReceivablePayment,
-} from "./payment-records.server"
+import { recordReceivablePayment } from "./payment-records.server"
 
 describe("payment records", () => {
 	beforeEach(() => vi.clearAllMocks())
-	it("parses strict local dates", () => {
-		expect(parsePaymentDate("2026-02-28")?.getDate()).toBe(28)
-		expect(parsePaymentDate("2026-02-30")).toBeNull()
-	})
 	it("records a receivable payment, compatibility scalar, and audit", async () => {
 		vi.mocked(tx.paymentRecord.findUnique).mockResolvedValue(null)
 		vi.mocked(tx.paymentRecord.create).mockResolvedValue({

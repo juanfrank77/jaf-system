@@ -218,10 +218,19 @@ export async function loader({ request }: Route.LoaderArgs) {
 		where.jobType = selectedJobType
 	}
 	if (searchFilter) {
-		where.OR = [
+		const searchOr = [
 			{ avisoNumber: { contains: searchFilter, mode: "insensitive" } },
 			{ jobAddressEstimated: { contains: searchFilter, mode: "insensitive" } },
 		]
+		if (where.OR) {
+			// baseWhere already used `OR` for area-scoping (SUPERVISOR's
+			// ownedOrInArea) — nest both under `AND` so the search narrows the
+			// scope instead of silently replacing/dropping it.
+			where.AND = [{ OR: where.OR }, { OR: searchOr }]
+			delete where.OR
+		} else {
+			where.OR = searchOr
+		}
 	}
 
 	const docs = await db.jafInvoice.findMany({

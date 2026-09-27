@@ -1054,7 +1054,8 @@
 			"warehouse_required": "Please select a warehouse.",
 			"invalid_items": "Invalid items data.",
 			"invalid_service_codes": "One or more selected products are no longer available.",
-			"items_required": "Add at least one item."
+			"items_required": "Add at least one item.",
+			"qty_too_large": "One or more quantities are too large. Reduce them or split into a separate restock."
 		}
 	},
 	"installer_install": {

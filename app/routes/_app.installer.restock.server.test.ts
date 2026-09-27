@@ -18,6 +18,7 @@ vi.mock("~/lib/installer-context.server", () => ({
 vi.mock("~/lib/restock.server", () => ({
 	createRestock: mocks.createRestock,
 	buildRestockPrefill: mocks.buildRestockPrefill,
+	MAX_LINE_QTY: 1000,
 }))
 vi.mock("~/lib/service-codes.server", () => ({
 	getActiveMaterialCodes: mocks.getActiveMaterialCodes,
@@ -147,8 +148,36 @@ describe("POST /installer/restock", () => {
 		const res = await action({ request: req, params: {} } as never)
 		// Rejecting an all-invalid submission, not silently persisting an
 		// empty restock: a lines: [] request would still reach the warehouse
-		// release queue as a real, signable, no-op RECEIVED restock.
+		// release queue as a real, signable, no-op RECEIVED restock. Uses a
+		// real i18n key (installer_restock.errors.items_required exists in
+		// both locales) instead of a namespace that was never rendered.
 		expect(mocks.createRestock).not.toHaveBeenCalled()
-		expect(res).toEqual({ errorKey: "restock.errors.no_valid_lines" })
+		expect(res).toEqual({ errorKey: "installer_restock.errors.items_required" })
+	})
+
+	it("rejects, with a graceful error, a combined quantity above the maximum instead of letting createRestock's throw 500", async () => {
+		mocks.requireRole.mockResolvedValue({
+			user: { id: "inst-1", role: "INSTALLER" },
+		})
+		mocks.requireInstaller.mockResolvedValue({ van: { id: "van-1" } })
+		mocks.getActiveMaterialCodes.mockResolvedValue([
+			{
+				id: "sc-real",
+				claroCode: "C1",
+				name: "Wrap",
+				unit: "EA",
+				unitPrice: "1",
+			},
+		])
+		// Two lines, each individually under MAX_LINE_QTY, that coalesce over it.
+		const req = formRequest({
+			lines: JSON.stringify([
+				{ serviceCodeId: "sc-real", qty: 999 },
+				{ serviceCodeId: "sc-real", qty: 999 },
+			]),
+		})
+		const res = await action({ request: req, params: {} } as never)
+		expect(mocks.createRestock).not.toHaveBeenCalled()
+		expect(res).toEqual({ errorKey: "installer_restock.errors.qty_too_large" })
 	})
 })

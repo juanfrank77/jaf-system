@@ -78,3 +78,17 @@ it("rejects a line quantity above the sane per-line maximum", async () => {
 		}),
 	).rejects.toThrow()
 })
+
+it("rejects duplicate lines whose combined quantity exceeds the maximum, even though each individual line is under it", async () => {
+	// Each line alone (999) passes the per-line check; the coalesced sum
+	// (999 * 20 = 19,980) is what must be bounded, since that combined total
+	// is what actually gets persisted and later reaches the release UI's
+	// Array.from({ length }) allocation.
+	const duplicateLines = Array.from({ length: 20 }, () => ({
+		serviceCodeId: scId,
+		qty: 999,
+	}))
+	await expect(
+		createRestock(vanId, duplicateLines, { id: actorId }),
+	).rejects.toThrow()
+})

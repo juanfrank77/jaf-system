@@ -127,8 +127,12 @@ The app itself doesn't open a configurable port out of the box — `pnpm start` 
 This migration drops four legacy tables (`ConsignmentReceipt`, `VanRestockRequest`, `install_log`, `van_inventory_transaction`) and `Van.standardStockLevels`, with no archive or backfill — verified empty against this production database before the migration was written. If you are running this against a *different* database (a restored backup, a staging instance, anything that isn't the verified production database), confirm these are still empty first:
 
 ```bash
-# reads the same DATABASE_URL migrate deploy uses from .env — not the shell env
-psql "$(grep '^DATABASE_URL=' .env | cut -d= -f2-)" \
+# sources .env the same way scripts/apply-migrations.sh does, so this
+# provably checks the same database migrate deploy is about to touch —
+# a quoted DATABASE_URL (as shipped in .env.example) breaks a naive
+# grep/cut extraction, and this avoids putting the password in argv.
+set -a; source .env; set +a
+psql "$DATABASE_URL" \
   -c 'SELECT count(*) FROM "ConsignmentReceipt"' \
   -c 'SELECT count(*) FROM "VanRestockRequest"' \
   -c 'SELECT count(*) FROM "install_log"' \
@@ -159,6 +163,8 @@ pnpm run start                # starts the app on port 3000
 **The installer roster CSV is not in version control** (it holds real names, employee/TOA numbers, and personal emails). Place it at `docs/JAF_Installer_Roster_seed.csv` (or point `INSTALLER_ROSTER_CSV_PATH` at wherever you keep it) before running the seed — it's gitignored, so `git pull` won't bring it over; transfer it out-of-band. The seed now fails fast if this file is missing, before any other account is written.
 
 **Move every real account off this shared password before staff start touching the system.** A shared temporary password is meant to get the pilot running, not to be the permanent credential for real users. Re-running the seed does **not** change it for existing accounts (see above), so the only way to rotate it is the admin "Reset password" action at `/admin/users` for each account, or having each user set their own password once logged in. Do this once, before go-live.
+
+**This is not a one-time concern.** Every account a seed run *creates* — including a new installer added to the roster CSV months after go-live — starts on `SEED_TEMP_PASSWORD`, same as the original batch. There is no automatic prompt or forced-reset flag for this. Whoever runs the seed for a roster addition is responsible for following up with the same admin reset (or self-service change) for that new account before handing over credentials.
 
 ---
 
@@ -224,6 +230,7 @@ A daily cron job covering both, with offsite/secondary copy, is the minimum for 
 - [ ] `pnpm prisma migrate deploy` and `pnpm prisma db seed` run successfully
 - [ ] App running under systemd (or pm2), restarts automatically on crash/reboot
 - [ ] Seeded test account passwords changed or accounts replaced with real staff
+- [ ] Ongoing: any account created by a *later* seed run (e.g. a roster addition) gets `SEED_TEMP_PASSWORD` too — follow up with the same reset for it, every time
 - [ ] Daily backup of both the database and the uploads directory configured
 
 Once these are checked off, the app should be reachable at the HTTPS URL configured in `BETTER_AUTH_URL`, ready for the pilot group to log in.

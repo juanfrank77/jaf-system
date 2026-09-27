@@ -22,6 +22,7 @@ import {
 } from "~/lib/field-update-helpers"
 import { isEditableStatus, isTerminalStatus } from "~/lib/permissions"
 import { requireRole, requireSession } from "~/lib/permissions.server"
+import { assertDocInSupervisorScope } from "~/lib/supervisor-scope"
 import { deriveSupervisorStage } from "~/lib/supervisor-stage"
 import { toNumberPrice } from "~/lib/utils"
 import { Prisma } from "../../generated/prisma/client"
@@ -60,13 +61,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	})
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
-	})
-	const serviceCodes = await db.serviceCode.findMany()
-	const supervisor = await db.user.findUnique({
-		where: { id: doc.supervisorId },
-	})
-	const assignedCrew = await db.user.findMany({
-		where: { id: { in: doc.assignedCrewIds } },
+		include: { brigade: { select: { area: true } } },
 	})
 	if (
 		doc.status === "LC_REQUEST_GENERATED" &&
@@ -74,6 +69,16 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	) {
 		throw new Response("Not Found", { status: 404 })
 	}
+	if (user.role === "SUPERVISOR") {
+		await assertDocInSupervisorScope(db, user.id, doc)
+	}
+	const serviceCodes = await db.serviceCode.findMany()
+	const supervisor = await db.user.findUnique({
+		where: { id: doc.supervisorId },
+	})
+	const assignedCrew = await db.user.findMany({
+		where: { id: { in: doc.assignedCrewIds } },
+	})
 	const auditTrail = await db.auditTrail.findMany({
 		where: { docId: doc.id },
 		include: { user: true },

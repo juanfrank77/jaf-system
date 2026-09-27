@@ -145,7 +145,9 @@ describe("supervisor scope guard", () => {
 			user: { id: "sup-1", role: "SUPERVISOR", name: "Edgard Ocasio" },
 			session: {},
 		} as any)
-		vi.mocked(db.brigade.findMany).mockResolvedValue([{ area: "OESTE" }] as any)
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["OESTE"],
+		} as any)
 	})
 
 	it("blocks the loader for a Supervisor outside the doc's area", async () => {

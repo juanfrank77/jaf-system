@@ -7,8 +7,8 @@ const tx = {
 }
 vi.mock("~/lib/db.server", () => ({
 	db: {
-		brigade: { findUniqueOrThrow: vi.fn(), findMany: vi.fn() },
-		user: { findMany: vi.fn() },
+		brigade: { findUnique: vi.fn(), findMany: vi.fn() },
+		user: { findMany: vi.fn(), findUnique: vi.fn() },
 		$transaction: vi.fn(async (fn: any) => fn(tx)),
 	},
 }))
@@ -41,9 +41,13 @@ describe("POST /docs/new", () => {
 		} as any)
 		vi.mocked(generateControlNumber).mockResolvedValue("MAINT-260903-001")
 		vi.mocked(db.user.findMany).mockResolvedValue([{ id: "wh-1" }] as any)
-		vi.mocked(db.brigade.findUniqueOrThrow).mockResolvedValue({
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["CENTRAL"],
+		} as any)
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
 			id: "b1",
 			name: "JESUS MARTINEZ",
+			area: "CENTRAL",
 			memberIds: ["crew-1", "crew-2"],
 		} as any)
 		tx.jafInvoice.create.mockResolvedValue({ id: "doc-1" })
@@ -98,6 +102,25 @@ describe("POST /docs/new", () => {
 		form.set("serviceLines", "[]")
 		const res = await action({ request: post(form), params: {} } as any)
 		expect(res).toEqual({ errorKey: "docs_new.errors.missing_fields" })
+	})
+
+	it("rejects assigning a brigade outside the supervisor's admin-assigned areas", async () => {
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
+			id: "b-metro",
+			name: "OTHER CREW",
+			area: "METRO",
+			memberIds: ["crew-metro"],
+		} as any)
+
+		const form = new FormData()
+		form.set("jobType", "Mantenimiento")
+		form.set("jobAddressEstimated", "X")
+		form.set("brigadeId", "b-metro")
+		form.set("materials", "[]")
+		form.set("serviceLines", "[]")
+		const res = await action({ request: post(form), params: {} } as any)
+		expect(res).toEqual({ errorKey: "docs_new.errors.brigade_invalid" })
+		expect(tx.jafInvoice.create).not.toHaveBeenCalled()
 	})
 
 	it("rejects malformed service lines", async () => {

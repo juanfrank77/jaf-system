@@ -82,7 +82,8 @@
 		"errors": {
 			"invalid_materials": "Invalid materials data",
 			"invalid_service_lines": "Service codes could not be read.",
-			"missing_fields": "Job type, address, and at least one crew member are required"
+			"missing_fields": "Job type, address, and at least one crew member are required",
+			"brigade_invalid": "That brigade is not available."
 		}
 	},
 	"docs_edit": {
@@ -518,6 +519,7 @@
 		"temp_password_label": "Temporary Password *",
 		"add_submit": "Create User",
 		"update_role": "Update Role",
+		"save_areas": "Save Areas",
 		"deactivate": "Deactivate",
 		"activate": "Activate",
 		"reset_password": "Reset Password",
@@ -530,6 +532,7 @@
 			"name": "Name",
 			"email": "Email",
 			"role": "Role",
+			"areas": "Areas",
 			"active": "Active",
 			"actions": "Actions"
 		},
@@ -589,6 +592,7 @@
 	},
 	"supervisor_brigades": {
 		"title": "My Brigades",
+		"no_areas_assigned": "You haven't been assigned any areas yet. Ask an admin to assign you at least one area before you can create or edit brigades.",
 		"add_heading": "Add Brigade",
 		"name_label": "Brigade Name *",
 		"area_label": "Area *",

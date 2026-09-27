@@ -175,7 +175,9 @@ describe("GET /docs/:id", () => {
 				brigade: { area: "SUR" },
 			}) as any,
 		)
-		vi.mocked(db.brigade.findMany).mockResolvedValue([{ area: "OESTE" }] as any)
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["OESTE"],
+		} as any)
 
 		await expect(
 			loader({
@@ -196,7 +198,9 @@ describe("GET /docs/:id", () => {
 				brigade: { area: "OESTE" },
 			}) as any,
 		)
-		vi.mocked(db.brigade.findMany).mockResolvedValue([{ area: "OESTE" }] as any)
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["OESTE"],
+		} as any)
 		vi.mocked(db.auditTrail.findMany).mockResolvedValue([])
 		vi.mocked(db.user.findMany).mockResolvedValue([])
 
@@ -272,7 +276,9 @@ describe("POST /docs/:id (action) — supervisor scope", () => {
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
 			baseDoc() as any,
 		)
-		vi.mocked(db.brigade.findMany).mockResolvedValue([{ area: "OESTE" }] as any)
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["OESTE"],
+		} as any)
 
 		const form = new FormData()
 		form.set("intent", "cancel")
@@ -298,7 +304,9 @@ describe("POST /docs/:id (action) — supervisor scope", () => {
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
 			baseDoc() as any,
 		)
-		vi.mocked(db.brigade.findMany).mockResolvedValue([{ area: "SUR" }] as any)
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["SUR"],
+		} as any)
 		vi.mocked(db.user.findMany).mockResolvedValue([])
 
 		const form = new FormData()
@@ -325,7 +333,9 @@ describe("POST /docs/:id (action) — supervisor scope", () => {
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
 			baseDoc({ status: "SIGNED" }) as any,
 		)
-		vi.mocked(db.brigade.findMany).mockResolvedValue([{ area: "SUR" }] as any)
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["SUR"],
+		} as any)
 		vi.mocked(db.brigade.findUnique).mockResolvedValue({
 			id: "brigade-metro",
 			area: "METRO",
@@ -355,7 +365,9 @@ describe("POST /docs/:id (action) — supervisor scope", () => {
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
 			baseDoc({ status: "SIGNED" }) as any,
 		)
-		vi.mocked(db.brigade.findMany).mockResolvedValue([{ area: "SUR" }] as any)
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["SUR"],
+		} as any)
 		vi.mocked(db.brigade.findUnique).mockResolvedValue({
 			id: "brigade-sur",
 			area: "SUR",

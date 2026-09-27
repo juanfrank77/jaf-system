@@ -82,7 +82,8 @@
 		"errors": {
 			"invalid_materials": "Datos de materiales inválidos",
 			"invalid_service_lines": "No se pudieron leer los códigos de servicio.",
-			"missing_fields": "Se requieren tipo de trabajo, dirección y al menos un miembro de la cuadrilla"
+			"missing_fields": "Se requieren tipo de trabajo, dirección y al menos un miembro de la cuadrilla",
+			"brigade_invalid": "Esa brigada no está disponible."
 		}
 	},
 	"docs_edit": {
@@ -518,6 +519,7 @@
 		"temp_password_label": "Contraseña temporal *",
 		"add_submit": "Crear usuario",
 		"update_role": "Actualizar rol",
+		"save_areas": "Guardar áreas",
 		"deactivate": "Desactivar",
 		"activate": "Activar",
 		"reset_password": "Restablecer contraseña",
@@ -530,6 +532,7 @@
 			"name": "Nombre",
 			"email": "Correo electrónico",
 			"role": "Rol",
+			"areas": "Áreas",
 			"active": "Activo",
 			"actions": "Acciones"
 		},
@@ -589,6 +592,7 @@
 	},
 	"supervisor_brigades": {
 		"title": "Mis brigadas",
+		"no_areas_assigned": "Aún no tienes áreas asignadas. Pide a un administrador que te asigne al menos un área antes de crear o editar brigadas.",
 		"add_heading": "Agregar brigada",
 		"name_label": "Nombre de brigada *",
 		"area_label": "Área *",

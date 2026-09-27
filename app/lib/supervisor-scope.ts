@@ -5,21 +5,22 @@ import type { PrismaClient } from "../../generated/prisma/client"
 export const ALL_AREAS = ["CENTRAL", "METRO", "NORTE", "OESTE", "SUR"] as const
 
 /**
- * The areas a supervisor owns, derived from the brigades they supervise.
- * Null-area brigades never contribute an area — a supervisor of one must
- * never gain access to every other null-area brigade in the system via
- * this list.
+ * The areas a supervisor is authorized to act in. This is admin-managed
+ * data on `User.supervisorAreas` — never derived from the brigades a
+ * supervisor happens to own. `Brigade.area` and `Brigade.supervisorId` are
+ * ordinary editable fields; deriving authorization from them turns every
+ * brigade edit into a privilege-escalation primitive, which is exactly the
+ * bug class this function exists to avoid re-introducing.
  */
 export async function supervisorAreas(
 	db: PrismaClient,
 	userId: string,
 ): Promise<string[]> {
-	const brigades = await db.brigade.findMany({
-		where: { supervisorId: userId },
-		select: { area: true },
-		distinct: ["area"],
+	const user = await db.user.findUnique({
+		where: { id: userId },
+		select: { supervisorAreas: true },
 	})
-	return brigades.flatMap((b) => (b.area ? [b.area] : []))
+	return user?.supervisorAreas ?? []
 }
 
 /**
@@ -56,11 +57,13 @@ export async function assertDocInSupervisorScope(
 }
 
 /**
- * Returns true unless the given brigade is outside the supervisor's scope —
- * i.e. it is a real assignment target for reassigning a doc. ADMIN (or any
- * non-SUPERVISOR role) is always allowed. Shared by every route that lets a
- * supervisor point a doc at a brigade, so the reassign-target check can't
- * silently drift between routes.
+ * Whether `brigade` falls within the given supervisor's admin-assigned
+ * areas — i.e. whether it's a valid reassignment/edit target for them.
+ * This function only ever answers that question for a SUPERVISOR; every
+ * caller must independently gate the call on `user.role === "SUPERVISOR"`
+ * (non-supervisor roles bypass this check entirely rather than calling it).
+ * Shared by every route that lets a supervisor point a doc at a brigade, so
+ * the reassign-target check can't silently drift between routes.
  */
 export async function isBrigadeInSupervisorScope(
 	db: PrismaClient,

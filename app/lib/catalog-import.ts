@@ -104,21 +104,25 @@ export const SUPERVISOR_SEED = [
 		email: "eocasio@jafcomm.local",
 		name: "Edgard Ocasio",
 		phone: "787-444-0165",
+		areas: ["CENTRAL"],
 	},
 	{
 		email: "cgonzalez@jafcomm.local",
 		name: "Charlie González",
 		phone: "787-344-0590",
+		areas: ["METRO"],
 	},
 	{
 		email: "lrivera@jafcomm.local",
 		name: "Luis Rivera",
 		phone: "787-718-5863",
+		areas: ["NORTE"],
 	},
 	{
 		email: "rramos@jafcomm.local",
 		name: "Ramón Ramos",
 		phone: "787-533-6520",
+		areas: ["OESTE", "SUR"],
 	},
 ] as const
 

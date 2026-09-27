@@ -61,12 +61,13 @@ async function seedSupervisors() {
 	for (const s of SUPERVISOR_SEED) {
 		const user = await db.user.upsert({
 			where: { email: s.email },
-			update: { name: s.name, phone: s.phone },
+			update: { name: s.name, phone: s.phone, supervisorAreas: [...s.areas] },
 			create: {
 				email: s.email,
 				name: s.name,
 				phone: s.phone,
 				role: "SUPERVISOR",
+				supervisorAreas: [...s.areas],
 			},
 		})
 		await db.account.upsert({

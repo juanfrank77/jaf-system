@@ -4,10 +4,9 @@ vi.mock("~/lib/db.server", () => ({
 	db: {
 		brigade: {
 			findMany: vi.fn(),
-			findUniqueOrThrow: vi.fn(),
+			findUnique: vi.fn(),
 			create: vi.fn(),
 			update: vi.fn(),
-			count: vi.fn(),
 		},
 		user: {
 			findMany: vi.fn(),
@@ -21,7 +20,6 @@ vi.mock("~/lib/permissions.server", () => ({
 
 vi.mock("~/lib/supervisor-scope", () => ({
 	supervisorAreas: vi.fn(),
-	ALL_AREAS: ["CENTRAL", "METRO", "NORTE", "OESTE", "SUR"],
 }))
 
 import { db } from "~/lib/db.server"
@@ -37,7 +35,7 @@ function formRequest(form: FormData) {
 }
 
 describe("assertBrigadeAreaAllowed", () => {
-	it("a supervisor may only create a brigade in one of their own areas", async () => {
+	it("a supervisor may only create a brigade in one of their own (admin-assigned) areas", async () => {
 		await expect(
 			assertBrigadeAreaAllowed({ area: "METRO", supervisorAreas: ["CENTRAL"] }),
 		).rejects.toThrow()
@@ -49,7 +47,7 @@ describe("assertBrigadeAreaAllowed", () => {
 		).resolves.toBeUndefined()
 	})
 
-	it("is strict even when supervisorAreas is empty — no bootstrap escape hatch here", async () => {
+	it("is strict when supervisorAreas is empty — no bootstrap or ownership escape hatch", async () => {
 		await expect(
 			assertBrigadeAreaAllowed({ area: "NORTE", supervisorAreas: [] }),
 		).rejects.toThrow()
@@ -120,13 +118,35 @@ describe("POST /supervisor/brigades", () => {
 		expect(db.brigade.create).not.toHaveBeenCalled()
 	})
 
+	it("rejects a supervisor with zero admin-assigned areas creating anything, even a canonical area", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-new" },
+			session: {},
+		} as any)
+		vi.mocked(supervisorAreas).mockResolvedValue([])
+
+		const form = new FormData()
+		form.set("intent", "create")
+		form.set("name", "Brigada Nueva")
+		form.set("area", "NORTE")
+		form.set("active", "on")
+
+		const result = (await action({
+			request: formRequest(form),
+			params: {},
+		} as any)) as any
+
+		expect(result.init.status).toBe(403)
+		expect(db.brigade.create).not.toHaveBeenCalled()
+	})
+
 	it("rejects updating a brigade currently in another area, even when posting one of the supervisor's own areas as the new area", async () => {
 		vi.mocked(requireRole).mockResolvedValue({
 			user: { id: "sup-1" },
 			session: {},
 		} as any)
 		vi.mocked(supervisorAreas).mockResolvedValue(["CENTRAL"])
-		vi.mocked(db.brigade.findUniqueOrThrow).mockResolvedValue({
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
 			id: "brigade-1",
 			area: "METRO",
 			active: true,
@@ -139,6 +159,41 @@ describe("POST /supervisor/brigades", () => {
 		form.set("name", "Hijacked Brigade")
 		form.set("area", "CENTRAL")
 		form.set("code", "999")
+		form.set("active", "on")
+
+		const result = (await action({
+			request: formRequest(form),
+			params: {},
+		} as any)) as any
+
+		expect(result.init.status).toBe(403)
+		expect(result.data).toEqual({
+			errorKey: "supervisor_brigades.errors.area_not_allowed",
+		})
+		expect(db.brigade.update).not.toHaveBeenCalled()
+	})
+
+	it("CRITICAL regression: rejects updating a brigade's area to one outside the supervisor's own scope, even though they own the brigade and its current area is in scope", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1" },
+			session: {},
+		} as any)
+		vi.mocked(supervisorAreas).mockResolvedValue(["CENTRAL"])
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
+			id: "brigade-1",
+			area: "CENTRAL",
+			active: true,
+			supervisorId: "sup-1",
+			memberIds: [],
+		} as any)
+
+		const form = new FormData()
+		form.set("intent", "update")
+		form.set("id", "brigade-1")
+		form.set("name", "Brigada Central")
+		// posts a foreign area as the NEW area for a brigade they currently own
+		form.set("area", "METRO")
+		form.set("code", "204")
 		form.set("active", "on")
 
 		const result = (await action({
@@ -187,11 +242,12 @@ describe("POST /supervisor/brigades", () => {
 			session: {},
 		} as any)
 		vi.mocked(supervisorAreas).mockResolvedValue(["CENTRAL"])
-		vi.mocked(db.brigade.findUniqueOrThrow).mockResolvedValue({
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
 			id: "brigade-1",
 			area: "CENTRAL",
 			active: true,
 			supervisorId: "sup-A",
+			memberIds: [],
 		} as any)
 		vi.mocked(db.brigade.update).mockResolvedValue({} as any)
 		vi.mocked(db.user.findMany).mockResolvedValue([{ id: "crew-1" }] as any)
@@ -259,7 +315,7 @@ describe("POST /supervisor/brigades", () => {
 			session: {},
 		} as any)
 		vi.mocked(supervisorAreas).mockResolvedValue(["CENTRAL"])
-		vi.mocked(db.brigade.findUniqueOrThrow).mockResolvedValue({
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
 			id: "brigade-1",
 			area: "METRO",
 			active: true,
@@ -281,70 +337,13 @@ describe("POST /supervisor/brigades", () => {
 		expect(db.brigade.update).not.toHaveBeenCalled()
 	})
 
-	it("bootstrap: a supervisor who truly owns zero brigades may create their first one in any canonical area", async () => {
+	it("CRITICAL regression: a supervisor with zero admin-assigned areas cannot update a brigade they don't own", async () => {
 		vi.mocked(requireRole).mockResolvedValue({
 			user: { id: "sup-new" },
 			session: {},
 		} as any)
 		vi.mocked(supervisorAreas).mockResolvedValue([])
-		vi.mocked(db.brigade.count).mockResolvedValue(0)
-		vi.mocked(db.brigade.create).mockResolvedValue({} as any)
-		vi.mocked(db.user.findMany).mockResolvedValue([] as any)
-
-		const form = new FormData()
-		form.set("intent", "create")
-		form.set("name", "Brigada Nueva")
-		form.set("area", "NORTE")
-		form.set("active", "on")
-
-		const result = await action({
-			request: formRequest(form),
-			params: {},
-		} as any).catch((r) => r)
-
-		expect(result.status).toBe(302)
-		expect(db.brigade.create).toHaveBeenCalledWith({
-			data: {
-				name: "Brigada Nueva",
-				memberIds: [],
-				active: true,
-				area: "NORTE",
-				supervisorId: "sup-new",
-				code: null,
-			},
-		})
-	})
-
-	it("bootstrap escape hatch does not apply once the supervisor already owns a brigade (even an all-null-area one)", async () => {
-		vi.mocked(requireRole).mockResolvedValue({
-			user: { id: "sup-null-area" },
-			session: {},
-		} as any)
-		vi.mocked(supervisorAreas).mockResolvedValue([]) // all-null-area brigades
-		vi.mocked(db.brigade.count).mockResolvedValue(1) // owns at least one brigade
-
-		const form = new FormData()
-		form.set("intent", "create")
-		form.set("name", "Brigada Nueva")
-		form.set("area", "NORTE")
-		form.set("active", "on")
-
-		const result = (await action({
-			request: formRequest(form),
-			params: {},
-		} as any)) as any
-
-		expect(result.init.status).toBe(403)
-		expect(db.brigade.create).not.toHaveBeenCalled()
-	})
-
-	it("CRITICAL regression: a supervisor with zero area-bearing brigades cannot update a brigade they don't own, even in a canonical area", async () => {
-		vi.mocked(requireRole).mockResolvedValue({
-			user: { id: "sup-new" },
-			session: {},
-		} as any)
-		vi.mocked(supervisorAreas).mockResolvedValue([])
-		vi.mocked(db.brigade.findUniqueOrThrow).mockResolvedValue({
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
 			id: "brigade-victim",
 			area: "NORTE",
 			active: true,
@@ -371,13 +370,13 @@ describe("POST /supervisor/brigades", () => {
 		expect(db.brigade.update).not.toHaveBeenCalled()
 	})
 
-	it("CRITICAL regression: a supervisor with zero area-bearing brigades cannot toggle a brigade they don't own", async () => {
+	it("CRITICAL regression: a supervisor with zero admin-assigned areas cannot toggle a brigade they don't own", async () => {
 		vi.mocked(requireRole).mockResolvedValue({
 			user: { id: "sup-new" },
 			session: {},
 		} as any)
 		vi.mocked(supervisorAreas).mockResolvedValue([])
-		vi.mocked(db.brigade.findUniqueOrThrow).mockResolvedValue({
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
 			id: "brigade-victim",
 			area: "NORTE",
 			active: true,
@@ -397,20 +396,19 @@ describe("POST /supervisor/brigades", () => {
 		expect(db.brigade.update).not.toHaveBeenCalled()
 	})
 
-	it("a supervisor may still update their own brigade even with zero area-bearing brigades (e.g. a null-area one)", async () => {
+	it("a supervisor with zero admin-assigned areas cannot update even their own brigade — ownership no longer grants scope", async () => {
 		vi.mocked(requireRole).mockResolvedValue({
 			user: { id: "sup-1" },
 			session: {},
 		} as any)
 		vi.mocked(supervisorAreas).mockResolvedValue([])
-		vi.mocked(db.brigade.findUniqueOrThrow).mockResolvedValue({
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
 			id: "brigade-own",
 			area: null,
 			active: true,
 			supervisorId: "sup-1",
 			memberIds: [],
 		} as any)
-		vi.mocked(db.brigade.update).mockResolvedValue({} as any)
 
 		const form = new FormData()
 		form.set("intent", "update")
@@ -419,13 +417,58 @@ describe("POST /supervisor/brigades", () => {
 		form.set("area", "NORTE")
 		form.set("active", "on")
 
-		const result = await action({
+		const result = (await action({
 			request: formRequest(form),
 			params: {},
-		} as any).catch((r) => r)
+		} as any)) as any
 
-		expect(result.status).toBe(302)
-		expect(db.brigade.update).toHaveBeenCalled()
+		expect(result.init.status).toBe(403)
+		expect(db.brigade.update).not.toHaveBeenCalled()
+	})
+
+	it("returns a clean 400 (not a 500) when updating a brigade id that doesn't exist", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1" },
+			session: {},
+		} as any)
+		vi.mocked(supervisorAreas).mockResolvedValue(["CENTRAL"])
+		vi.mocked(db.brigade.findUnique).mockResolvedValue(null)
+
+		const form = new FormData()
+		form.set("intent", "update")
+		form.set("id", "does-not-exist")
+		form.set("name", "Whatever")
+		form.set("area", "CENTRAL")
+		form.set("active", "on")
+
+		const result = (await action({
+			request: formRequest(form),
+			params: {},
+		} as any)) as any
+
+		expect(result.init.status).toBe(400)
+		expect(db.brigade.update).not.toHaveBeenCalled()
+	})
+
+	it("returns a clean 400 (not a 500) when toggling a brigade id that doesn't exist", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1" },
+			session: {},
+		} as any)
+		vi.mocked(supervisorAreas).mockResolvedValue(["CENTRAL"])
+		vi.mocked(db.brigade.findUnique).mockResolvedValue(null)
+
+		const form = new FormData()
+		form.set("intent", "toggle")
+		form.set("id", "does-not-exist")
+
+		const result = (await action({
+			request: formRequest(form),
+			params: {},
+		} as any)) as any
+
+		expect(result.init.status).toBe(400)
+		expect(db.brigade.update).not.toHaveBeenCalled()
 	})
 
 	it("updating a brigade does not re-validate members that were already on it (only newly added ones)", async () => {
@@ -434,7 +477,7 @@ describe("POST /supervisor/brigades", () => {
 			session: {},
 		} as any)
 		vi.mocked(supervisorAreas).mockResolvedValue(["CENTRAL"])
-		vi.mocked(db.brigade.findUniqueOrThrow).mockResolvedValue({
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
 			id: "brigade-1",
 			area: "CENTRAL",
 			active: true,
@@ -460,5 +503,31 @@ describe("POST /supervisor/brigades", () => {
 
 		expect(result.status).toBe(302)
 		expect(db.brigade.update).toHaveBeenCalled()
+	})
+
+	it("trims the submitted area before comparing, so trailing whitespace doesn't produce an orphaned area", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1" },
+			session: {},
+		} as any)
+		vi.mocked(supervisorAreas).mockResolvedValue(["CENTRAL"])
+		vi.mocked(db.brigade.create).mockResolvedValue({} as any)
+		vi.mocked(db.user.findMany).mockResolvedValue([] as any)
+
+		const form = new FormData()
+		form.set("intent", "create")
+		form.set("name", "Brigada Central")
+		form.set("area", "CENTRAL ")
+		form.set("active", "on")
+
+		const result = await action({
+			request: formRequest(form),
+			params: {},
+		} as any).catch((r) => r)
+
+		expect(result.status).toBe(302)
+		expect(db.brigade.create).toHaveBeenCalledWith({
+			data: expect.objectContaining({ area: "CENTRAL" }),
+		})
 	})
 })

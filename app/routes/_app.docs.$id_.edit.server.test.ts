@@ -4,7 +4,7 @@ vi.mock("~/lib/db.server", () => ({
 	db: {
 		jafInvoice: { findUniqueOrThrow: vi.fn(), update: vi.fn() },
 		auditTrail: { create: vi.fn() },
-		user: { findMany: vi.fn() },
+		user: { findMany: vi.fn(), findUnique: vi.fn() },
 		brigade: { findMany: vi.fn(), findUnique: vi.fn() },
 		$transaction: vi.fn(async (fn: any) =>
 			fn({
@@ -54,7 +54,9 @@ describe("GET /docs/:id/edit — supervisor scope", () => {
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
 			baseDoc() as any,
 		)
-		vi.mocked(db.brigade.findMany).mockResolvedValue([{ area: "OESTE" }] as any)
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["OESTE"],
+		} as any)
 
 		await expect(
 			loader({
@@ -68,7 +70,9 @@ describe("GET /docs/:id/edit — supervisor scope", () => {
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
 			baseDoc() as any,
 		)
-		vi.mocked(db.brigade.findMany).mockResolvedValue([{ area: "SUR" }] as any)
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["SUR"],
+		} as any)
 
 		const result = await loader({
 			request: new Request("http://localhost/docs/doc-1/edit"),
@@ -108,7 +112,9 @@ describe("POST /docs/:id/edit — supervisor scope", () => {
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
 			baseDoc() as any,
 		)
-		vi.mocked(db.brigade.findMany).mockResolvedValue([{ area: "OESTE" }] as any)
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["OESTE"],
+		} as any)
 
 		await expect(
 			action({
@@ -124,7 +130,9 @@ describe("POST /docs/:id/edit — supervisor scope", () => {
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
 			baseDoc() as any,
 		)
-		vi.mocked(db.brigade.findMany).mockResolvedValue([{ area: "SUR" }] as any)
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["SUR"],
+		} as any)
 		vi.mocked(db.brigade.findUnique).mockResolvedValue({
 			id: "b1",
 			area: "SUR",
@@ -145,7 +153,9 @@ describe("POST /docs/:id/edit — supervisor scope", () => {
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
 			baseDoc() as any,
 		)
-		vi.mocked(db.brigade.findMany).mockResolvedValue([{ area: "SUR" }] as any)
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["SUR"],
+		} as any)
 		vi.mocked(db.brigade.findUnique).mockResolvedValue({
 			id: "b-metro",
 			area: "METRO",

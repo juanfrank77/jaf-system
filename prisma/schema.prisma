@@ -118,6 +118,13 @@ model User {
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
 
+  // Admin-managed: the areas a SUPERVISOR is authorized to act in. This is
+  // the sole source of a supervisor's authorization scope — never derive it
+  // from Brigade.area/supervisorId, which are ordinary editable fields, not
+  // an identity/authorization record. See supervisorAreas() in
+  // app/lib/supervisor-scope.ts.
+  supervisorAreas String[] @default([])
+
   // better-auth relations
   sessions  Session[]
   accounts  Account[]

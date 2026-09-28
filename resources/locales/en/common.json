@@ -292,11 +292,31 @@
 		"submit": "Save Returns",
 		"crew_reported_hint": "Crew reported {{usedQty}} used; expected return is {{expectedReturnQty}}.",
 		"discrepancy_warning": "Return qty differs from crew-reported usage.",
+		"warehouse_label": "Return to warehouse",
+		"warehouse_policy_unconfirmed": "Returning to a warehouse other than pickup is allowed, but policy for this is unconfirmed.",
+		"serial_lines_heading": "Serialized Returns",
+		"serial_label": "Serial",
+		"serial_placeholder": "Scan/enter serial",
+		"serial_reason_label": "Reason",
+		"serial_reason": {
+			"DAMAGED": "Damaged",
+			"LOST": "Lost",
+			"MISCOUNT": "Miscount",
+			"UNDER_REPORTED": "Used — under-reported"
+		},
+		"add_serial_line": "+ Add Serial Line",
+		"note_required_hint": "A note is required because received is less than expected.",
+		"success": "Returns logged.",
 		"errors": {
 			"invalid_materials": "Invalid materials data",
 			"invalid_service_codes": "One or more selected products are no longer available.",
-			"return_exceeds_taken": "Cannot return more than taken for service code {{serviceCodeId}}"
+			"return_exceeds_taken": "Cannot return more than taken for service code {{serviceCodeId}}",
+			"warehouse_required": "Select a warehouse to return to.",
+			"idempotency_key_required": "Missing idempotency key — reload and try again."
 		}
+	},
+	"returns": {
+		"note_required": "A note is required when received is less than expected."
 	},
 	"restock_fulfill": {
 		"title": "Fulfill Restock #{{id}}",

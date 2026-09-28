@@ -59,6 +59,8 @@ export function makeTracker() {
 		warehouse: [] as string[],
 		user: [] as string[],
 		serviceCode: [] as string[],
+		jafInvoice: [] as string[],
+		auditTrail: [] as string[],
 	}
 	function track<M extends keyof typeof b, R extends { id: string }>(
 		model: M,
@@ -97,6 +99,16 @@ export function makeTracker() {
 					OR: [{ id: { in: b.notification } }, { userId: { in: b.user } }],
 				},
 			})
+		// AuditTrail→JafInvoice is FK'd, and JafInvoice→Warehouse/User are FK'd, so
+		// both must go before warehouse/user cleanup below.
+		if (b.auditTrail.length || b.jafInvoice.length)
+			await db.auditTrail.deleteMany({
+				where: {
+					OR: [{ id: { in: b.auditTrail } }, { docId: { in: b.jafInvoice } }],
+				},
+			})
+		if (b.jafInvoice.length)
+			await db.jafInvoice.deleteMany({ where: { id: { in: b.jafInvoice } } })
 		if (b.warehouseAssignment.length)
 			await db.warehouseAssignment.deleteMany({
 				where: { id: { in: b.warehouseAssignment } },

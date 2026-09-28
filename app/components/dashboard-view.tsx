@@ -165,6 +165,7 @@ function DashboardView({
 	warehousePreppedDocs = [],
 	warehouseMissingDocs = [],
 	warehouseReturnsDocs = [],
+	warehouseTriageCount = 0,
 	crewPreppedDocs = [],
 	crewInFieldDocs = [],
 	crewSentBackDocs = [],
@@ -186,6 +187,7 @@ function DashboardView({
 	warehousePreppedDocs?: DashboardDocRow[]
 	warehouseMissingDocs?: DashboardDocRow[]
 	warehouseReturnsDocs?: DashboardDocRow[]
+	warehouseTriageCount?: number
 	crewPreppedDocs?: DashboardDocRow[]
 	crewInFieldDocs?: DashboardDocRow[]
 	crewSentBackDocs?: DashboardDocRow[]
@@ -664,6 +666,27 @@ function DashboardView({
 							</p>
 						</Link>
 					))}
+				</div>
+			)}
+
+			{warehouseTriageCount > 0 && (
+				<div className="space-y-2">
+					<div className="flex items-center justify-between">
+						<h2 className="text-sm font-semibold text-foreground">
+							{t("dashboard.triage_awaiting_heading", {
+								count: warehouseTriageCount,
+							})}
+						</h2>
+						<Badge variant="warn">{warehouseTriageCount}</Badge>
+					</div>
+					<Link
+						to="/warehouse/triage"
+						className="block rounded-lg border border-transparent p-2.5 text-sm transition-colors hover:border-border hover:bg-muted/40"
+					>
+						<span className="font-medium">
+							{t("dashboard.triage_awaiting_cta")}
+						</span>
+					</Link>
 				</div>
 			)}
 

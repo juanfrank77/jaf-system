@@ -1,5 +1,18 @@
 {
 	"hi": "Hello!",
+	"triage": {
+		"title": "Return Triage",
+		"empty": "No units awaiting disposition.",
+		"disposition_label": "Disposition",
+		"reason_label": "Reason",
+		"reason_placeholder": "Optional note",
+		"submit": "Save",
+		"disposition": {
+			"FAILED": "Failed → repair",
+			"GOOD": "Good → stock",
+			"NEEDS_REVIEW": "Needs review"
+		}
+	},
 	"language": {
 		"switcher_label": "Language"
 	},
@@ -888,6 +901,8 @@
 		"missing_materials_badge": "Missing stock",
 		"returns_to_log_heading": "Returns to Log ({{count}})",
 		"returns_to_log_badge": "Log returns",
+		"triage_awaiting_heading": "Awaiting Disposition ({{count}})",
+		"triage_awaiting_cta": "Triage returned units",
 		"restock_requests_heading": "Restock Requests ({{count}})",
 		"restock_requests_badge": "Restock",
 		"aviso_number": "Aviso #",

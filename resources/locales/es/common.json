@@ -1,5 +1,18 @@
 {
 	"hi": "¡Hola!",
+	"triage": {
+		"title": "Triaje de devoluciones",
+		"empty": "No hay unidades en espera de disposición.",
+		"disposition_label": "Disposición",
+		"reason_label": "Motivo",
+		"reason_placeholder": "Nota opcional",
+		"submit": "Guardar",
+		"disposition": {
+			"FAILED": "Fallida → reparación",
+			"GOOD": "Buena → inventario",
+			"NEEDS_REVIEW": "Requiere revisión"
+		}
+	},
 	"language": {
 		"switcher_label": "Idioma"
 	},
@@ -888,6 +901,8 @@
 		"missing_materials_badge": "Falta stock",
 		"returns_to_log_heading": "Devoluciones por registrar ({{count}})",
 		"returns_to_log_badge": "Registrar devoluciones",
+		"triage_awaiting_heading": "En espera de disposición ({{count}})",
+		"triage_awaiting_cta": "Triaje de unidades devueltas",
 		"restock_requests_heading": "Solicitudes de reabastecimiento ({{count}})",
 		"restock_requests_badge": "Reabastecer",
 		"aviso_number": "Aviso #",

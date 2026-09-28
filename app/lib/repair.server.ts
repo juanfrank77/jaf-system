@@ -401,3 +401,47 @@ export async function receiveRepairedUnits(args: {
 		return { intakeId: intake.id, flagged }
 	})
 }
+
+// A lead resolves a NEEDS_REVIEW hold into the repair pool (FAILED) or back to
+// stock (GOOD). dispositionSerial guards RETURNED, so this is its NEEDS_REVIEW
+// sibling with the same compare-and-swap + movement discipline.
+export async function resolveNeedsReview(args: {
+	serial: string
+	decision: "FAILED" | "GOOD"
+	reason?: string
+	byUserId: string
+	warehouseId: string
+}) {
+	const nextStatus =
+		args.decision === "FAILED" ? "AWAITING_REPAIR" : "WAREHOUSE"
+	return db.$transaction(async (tx) => {
+		const moved = await tx.serialLocation.updateMany({
+			where: { serial: args.serial, status: "NEEDS_REVIEW" },
+			data: {
+				status: nextStatus,
+				currentRef: args.warehouseId,
+				since: new Date(),
+			},
+		})
+		if (moved.count !== 1)
+			throw new Error(`serial ${args.serial}: expected status NEEDS_REVIEW`)
+		const sl = await tx.serialLocation.findUniqueOrThrow({
+			where: { serial: args.serial },
+			select: { serviceCodeId: true },
+		})
+		await tx.stockMovement.create({
+			data: {
+				kind: "SERIAL",
+				type: "DISPOSITION",
+				serial: args.serial,
+				qty: 0,
+				serviceCodeId: sl.serviceCodeId,
+				warehouseId: args.warehouseId,
+				byUserId: args.byUserId,
+				at: new Date(),
+				note: `needs-review → ${args.decision}${args.reason ? `: ${args.reason}` : ""}`,
+			},
+		})
+		return { status: nextStatus }
+	})
+}

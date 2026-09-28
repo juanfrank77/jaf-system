@@ -14,6 +14,11 @@ import {
 } from "~/lib/features.server"
 import { cacheJobs } from "~/lib/offline-store"
 import { requireSession } from "~/lib/permissions.server"
+import {
+	needsReviewCount,
+	refurbishedCount,
+	repairPoolCount,
+} from "~/lib/serial-stock"
 import { ownedOrInArea, supervisorAreas } from "~/lib/supervisor-scope"
 import {
 	deriveSupervisorStage,
@@ -287,19 +292,25 @@ export async function loader({ request }: Route.LoaderArgs) {
 				})
 			: []
 
-	const warehouseTriageCount =
-		user.role === "WAREHOUSE"
-			? await (async () => {
-					const a = await db.warehouseAssignment.findFirst({
-						where: { userId: user.id },
-						select: { warehouseId: true },
-					})
-					if (!a) return 0
-					return db.serialLocation.count({
-						where: { status: "RETURNED", currentRef: a.warehouseId },
-					})
-				})()
-			: 0
+	const warehouseSerialCounts = await (async () => {
+		if (user.role !== "WAREHOUSE")
+			return { triage: 0, repairPool: 0, needsReview: 0, refurbished: 0 }
+		const a = await db.warehouseAssignment.findFirst({
+			where: { userId: user.id },
+			select: { warehouseId: true },
+		})
+		if (!a) return { triage: 0, repairPool: 0, needsReview: 0, refurbished: 0 }
+		const [triage, repairPool, needsReview, refurbished] = await Promise.all([
+			db.serialLocation.count({
+				where: { status: "RETURNED", currentRef: a.warehouseId },
+			}),
+			repairPoolCount(a.warehouseId),
+			needsReviewCount(a.warehouseId),
+			refurbishedCount(a.warehouseId),
+		])
+		return { triage, repairPool, needsReview, refurbished }
+	})()
+	const warehouseTriageCount = warehouseSerialCounts.triage
 
 	const crewPreppedDocs =
 		user.role === "CREW"
@@ -372,6 +383,9 @@ export async function loader({ request }: Route.LoaderArgs) {
 		warehouseMissingDocs,
 		warehouseReturnsDocs,
 		warehouseTriageCount,
+		warehouseRepairPool: warehouseSerialCounts.repairPool,
+		warehouseNeedsReview: warehouseSerialCounts.needsReview,
+		warehouseRefurbished: warehouseSerialCounts.refurbished,
 		crewPreppedDocs,
 		crewInFieldDocs,
 		crewSentBackDocs,
@@ -398,6 +412,9 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 		warehouseMissingDocs,
 		warehouseReturnsDocs,
 		warehouseTriageCount,
+		warehouseRepairPool,
+		warehouseNeedsReview,
+		warehouseRefurbished,
 		crewPreppedDocs,
 		crewInFieldDocs,
 		crewSentBackDocs,
@@ -459,6 +476,9 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 			warehouseMissingDocs={warehouseMissingDocs}
 			warehouseReturnsDocs={warehouseReturnsDocs}
 			warehouseTriageCount={warehouseTriageCount}
+			warehouseRepairPool={warehouseRepairPool}
+			warehouseNeedsReview={warehouseNeedsReview}
+			warehouseRefurbished={warehouseRefurbished}
 			crewPreppedDocs={crewPreppedDocs}
 			crewInFieldDocs={crewInFieldDocs}
 			crewSentBackDocs={crewSentBackDocs}

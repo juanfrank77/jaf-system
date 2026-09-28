@@ -6,6 +6,7 @@ import {
 	createRepairBatch,
 	dispositionSerial,
 	receiveRepairedUnits,
+	resolveNeedsReview,
 	voidRepairBatch,
 } from "~/lib/repair.server"
 import { makeTracker, runToken, seedServiceCode } from "~/test/helpers"
@@ -414,5 +415,74 @@ describe("receiveRepairedUnits", () => {
 			where: { serial: liveSerial },
 		})
 		expect(sl.status).toBe("INSTALLED") // untouched
+	})
+})
+
+describe("resolveNeedsReview", () => {
+	it("FAILED sends a NEEDS_REVIEW unit to the repair pool; GOOD returns it to stock", async () => {
+		const wh = t.track(
+			"warehouse",
+			await db.warehouse.create({ data: { name: `${RUN}-NR`, zone: "N" } }),
+		)
+		const failSerial = `${RUN}-NR-f`
+		const goodSerial = `${RUN}-NR-g`
+		for (const serial of [failSerial, goodSerial]) {
+			await t.track(
+				"serialLocation",
+				await db.serialLocation.create({
+					data: {
+						serial,
+						serviceCodeId: SC_ID,
+						status: "NEEDS_REVIEW",
+						condition: "NEW",
+						currentRef: wh.id,
+						since: new Date(),
+					},
+				}),
+			)
+		}
+		const f = await resolveNeedsReview({
+			serial: failSerial,
+			decision: "FAILED",
+			byUserId: U_ID,
+			warehouseId: wh.id,
+		})
+		expect(f.status).toBe("AWAITING_REPAIR")
+		const g = await resolveNeedsReview({
+			serial: goodSerial,
+			decision: "GOOD",
+			byUserId: U_ID,
+			warehouseId: wh.id,
+		})
+		expect(g.status).toBe("WAREHOUSE")
+	})
+
+	it("aborts when the serial is not NEEDS_REVIEW", async () => {
+		const wh = t.track(
+			"warehouse",
+			await db.warehouse.create({ data: { name: `${RUN}-NR2`, zone: "N" } }),
+		)
+		const serial = `${RUN}-NR2`
+		await t.track(
+			"serialLocation",
+			await db.serialLocation.create({
+				data: {
+					serial,
+					serviceCodeId: SC_ID,
+					status: "WAREHOUSE",
+					condition: "NEW",
+					currentRef: wh.id,
+					since: new Date(),
+				},
+			}),
+		)
+		await expect(
+			resolveNeedsReview({
+				serial,
+				decision: "GOOD",
+				byUserId: U_ID,
+				warehouseId: wh.id,
+			}),
+		).rejects.toThrow(/expected status NEEDS_REVIEW/)
 	})
 })

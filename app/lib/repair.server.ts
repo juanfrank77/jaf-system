@@ -282,7 +282,7 @@ export async function generateRepairBatchDocument(batchId: string) {
 	return { documentPath }
 }
 
-const LIVE = new Set(["INSTALLED", "VAN"])
+const LIVE_STATUSES = ["INSTALLED", "VAN"] as const
 
 // id→id: original ServiceCode → its `reparadoCode` (a Claro code string) → the
 // REPARADO ServiceCode's id. `serviceCodeId` is an FK, so an unresolved code
@@ -318,8 +318,6 @@ export async function receiveRepairedUnits(args: {
 	claroReference?: string
 }) {
 	const scans = [...new Map(args.scans.map((s) => [s.serial, s])).values()] // dedupe
-	if (args.declaredCount !== scans.length && !args.mismatchNote?.trim())
-		throw new Error("mismatchNote required (declared != scanned)")
 	return db.$transaction(async (tx) => {
 		const intake = await tx.repairIntake.create({
 			data: {
@@ -332,12 +330,16 @@ export async function receiveRepairedUnits(args: {
 			},
 		})
 		const flagged: string[] = []
+		let stocked = 0
 		for (const scan of scans) {
 			const existing = await tx.serialLocation.findUnique({
 				where: { serial: scan.serial },
 				select: { status: true },
 			})
-			if (existing && LIVE.has(existing.status)) {
+			if (
+				existing &&
+				LIVE_STATUSES.includes(existing.status as "INSTALLED" | "VAN")
+			) {
 				flagged.push(scan.serial)
 				continue
 			}
@@ -345,10 +347,12 @@ export async function receiveRepairedUnits(args: {
 			// Claro scan at the route boundary.
 			const { serviceCodeId: reparadoId, needsCode } =
 				await resolveReparadoServiceCodeId(scan.serviceCodeId)
-			if (needsCode) flagged.push(scan.serial) // stocked under original code; lead fixes catalog
 			if (existing) {
-				await tx.serialLocation.update({
-					where: { serial: scan.serial },
+				// Compare-and-swap: only move it if it is still NOT live-elsewhere.
+				// Guards the TOCTOU between the read above and this write (a
+				// concurrent install, or a duplicate concurrent intake).
+				const moved = await tx.serialLocation.updateMany({
+					where: { serial: scan.serial, status: { notIn: [...LIVE_STATUSES] } },
 					data: {
 						status: "WAREHOUSE",
 						condition: "REFURBISHED",
@@ -357,6 +361,10 @@ export async function receiveRepairedUnits(args: {
 						since: new Date(),
 					},
 				})
+				if (moved.count !== 1) {
+					flagged.push(scan.serial) // raced into a live state between read and write
+					continue
+				}
 			} else {
 				await tx.serialLocation.create({
 					data: {
@@ -369,6 +377,7 @@ export async function receiveRepairedUnits(args: {
 					},
 				})
 			}
+			if (needsCode) flagged.push(scan.serial) // stocked under original code; lead fixes catalog
 			await tx.stockMovement.create({
 				data: {
 					kind: "SERIAL",
@@ -385,8 +394,14 @@ export async function receiveRepairedUnits(args: {
 						: undefined,
 				},
 			})
+			stocked++
 		}
-		if (args.declaredCount !== scans.length) {
+		// Spec §7: "scanned" = units actually stocked (REPAIR_INTAKE movements),
+		// not the raw scan count — a skipped live-elsewhere unit is a real
+		// mismatch that must be acknowledged with a note.
+		if (args.declaredCount !== stocked && !args.mismatchNote?.trim())
+			throw new Error("mismatchNote required (declared != scanned)")
+		if (args.declaredCount !== stocked) {
 			const leads = await tx.warehouseAssignment.findMany({
 				where: { warehouseId: args.warehouseId, isLead: true },
 				select: { userId: true },
@@ -394,11 +409,11 @@ export async function receiveRepairedUnits(args: {
 			await tx.notification.createMany({
 				data: leads.map((l) => ({
 					userId: l.userId,
-					message: `Repaired intake ${intake.id}: declared ${args.declaredCount}, scanned ${scans.length}.`,
+					message: `Repaired intake ${intake.id}: declared ${args.declaredCount}, stocked ${stocked}.`,
 				})),
 			})
 		}
-		return { intakeId: intake.id, flagged }
+		return { intakeId: intake.id, flagged, stocked }
 	})
 }
 

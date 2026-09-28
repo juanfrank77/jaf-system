@@ -404,10 +404,13 @@ describe("receiveRepairedUnits", () => {
 				},
 			}),
 		)
+		// 1 declared but 0 stocked (the only scan is live-elsewhere) is itself a
+		// mismatch (spec §7: scanned = units actually stocked), so a note is required.
 		const { flagged } = await receiveRepairedUnits({
 			warehouseId: wh.id,
 			declaredCount: 1,
 			scans: [{ serial: liveSerial, serviceCodeId: SC_ID }],
+			mismatchNote: "one unit not returned",
 			byUserId: U_ID,
 		})
 		expect(flagged).toContain(liveSerial)
@@ -415,6 +418,41 @@ describe("receiveRepairedUnits", () => {
 			where: { serial: liveSerial },
 		})
 		expect(sl.status).toBe("INSTALLED") // untouched
+	})
+
+	it("requires a mismatchNote when a scan is skipped live-elsewhere (stocked < declared)", async () => {
+		const wh = t.track(
+			"warehouse",
+			await db.warehouse.create({ data: { name: `${RUN}-I4`, zone: "I" } }),
+		)
+		const live = `${RUN}-I4-live`
+		const fresh = `${RUN}-I4-new`
+		await t.track(
+			"serialLocation",
+			await db.serialLocation.create({
+				data: {
+					serial: live,
+					serviceCodeId: SC_ID,
+					status: "INSTALLED",
+					condition: "NEW",
+					currentRef: "c",
+					since: new Date(),
+				},
+			}),
+		)
+		// declared 2, both scanned, but one is live-elsewhere → only 1 stocked.
+		// scans.length (2) would hide this; the check must use the stocked count.
+		await expect(
+			receiveRepairedUnits({
+				warehouseId: wh.id,
+				declaredCount: 2,
+				scans: [
+					{ serial: live, serviceCodeId: SC_ID },
+					{ serial: fresh, serviceCodeId: SC_ID },
+				],
+				byUserId: U_ID,
+			}),
+		).rejects.toThrow(/mismatchNote required/)
 	})
 })
 

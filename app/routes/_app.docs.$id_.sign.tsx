@@ -28,7 +28,6 @@ import {
 	getActiveServiceCodes,
 } from "~/lib/service-codes.server"
 import { toNumberPrice } from "~/lib/utils"
-import type { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id_.sign"
 
 type MaterialLine = { serviceCodeId: string; qty: number }
@@ -190,45 +189,54 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const overages = buildOverages(materialsTaken, estimatedMaterials)
 	const hasOverage = overages.length > 0
 
-	const statusChangeAudit = db.auditTrail.create({
-		data: {
-			docId: params.id,
-			userId: user.id,
-			action: "STATUS_CHANGED",
-			diffJson: {
-				status: { before: doc.status, after: "SIGNED" },
+	// Fetch notify users before transaction (can't query in callback)
+	const notifyUsers = hasOverage
+		? await db.user.findMany({
+				where: {
+					active: true,
+					OR: [{ id: doc.supervisorId }, { role: "ADMIN" }],
+				},
+				select: { id: true },
+			})
+		: []
+
+	await db.$transaction(async (tx) => {
+		// Update invoice to SIGNED status
+		await tx.jafInvoice.update({
+			where: { id: params.id },
+			data: {
+				status: "SIGNED",
 				warehouseId,
-				releasedById,
-				signedById,
 				materialsTaken,
+				releaseSignature,
+				releasedById,
+				releaseSignedAt: new Date(),
+				crewSignature,
+				signedById,
+				signedAt: new Date(),
+				warehouseReceiptPath: receiptPath,
 			},
-		},
-	})
+		})
 
-	const updateInvoice = db.jafInvoice.update({
-		where: { id: params.id },
-		data: {
-			status: "SIGNED",
-			warehouseId,
-			materialsTaken,
-			releaseSignature,
-			releasedById,
-			releaseSignedAt: new Date(),
-			crewSignature,
-			signedById,
-			signedAt: new Date(),
-			warehouseReceiptPath: receiptPath,
-		},
-	})
+		// Record status change audit
+		await tx.auditTrail.create({
+			data: {
+				docId: params.id,
+				userId: user.id,
+				action: "STATUS_CHANGED",
+				diffJson: {
+					status: { before: doc.status, after: "SIGNED" },
+					warehouseId,
+					releasedById,
+					signedById,
+					materialsTaken,
+				},
+			},
+		})
 
-	const ops: Prisma.PrismaPromise<unknown>[] = [
-		updateInvoice,
-		statusChangeAudit,
-	]
-
-	if (hasOverage) {
-		ops.push(
-			db.auditTrail.create({
+		// Record overage audit and notifications if applicable
+		if (hasOverage) {
+			await tx.auditTrail.create({
 				data: {
 					docId: params.id,
 					userId: user.id,
@@ -240,30 +248,37 @@ export async function action({ request, params }: Route.ActionArgs) {
 						threshold: 0,
 					},
 				},
-			}),
-		)
+			})
 
-		const notifyUsers = await db.user.findMany({
-			where: {
-				active: true,
-				OR: [{ id: doc.supervisorId }, { role: "ADMIN" }],
-			},
-			select: { id: true },
-		})
-		ops.push(
-			...notifyUsers.map((u) =>
-				db.notification.create({
+			for (const u of notifyUsers) {
+				await tx.notification.create({
 					data: {
 						userId: u.id,
 						docId: params.id,
 						message: `Job ${doc.controlNumber} was signed with material overage. Review the quantities.`,
 					},
-				}),
-			),
-		)
-	}
+				})
+			}
+		}
 
-	await db.$transaction(ops)
+		// Create RELEASE bulk movements for each material line
+		for (const line of materialsTaken as {
+			serviceCodeId: string
+			qty: number
+		}[]) {
+			await tx.stockMovement.create({
+				data: {
+					kind: "BULK",
+					type: "RELEASE",
+					warehouseId,
+					serviceCodeId: line.serviceCodeId,
+					qty: -Math.abs(line.qty),
+					byUserId: user.id,
+					refDocId: params.id,
+				},
+			})
+		}
+	})
 
 	throw redirect(`/docs/${params.id}`)
 }

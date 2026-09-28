@@ -1419,6 +1419,7 @@ export default function ReviewDoc({
 						<MaterialLineItems
 							serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
 							initialItems={taken}
+							estimatedItems={estimated}
 							readOnly
 						/>
 					</div>

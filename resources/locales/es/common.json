@@ -947,7 +947,9 @@
 	},
 	"material_line_items": {
 		"select_placeholder": "Selecciona un código de servicio...",
-		"add_service_code": "+ Agregar código de servicio"
+		"add_service_code": "+ Agregar código de servicio",
+		"more_than_estimated": "más que lo estimado",
+		"added_at_counter": "agregado en mostrador"
 	},
 	"dashboard": {
 		"title": "Panel",

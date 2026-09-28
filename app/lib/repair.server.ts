@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { db } from "~/lib/db.server"
 import { generateRepairBatchPdf } from "~/lib/pdf/repair-batch.server"
+import type { Prisma } from "../../generated/prisma/client"
 
 export type Disposition = "FAILED" | "GOOD" | "NEEDS_REVIEW"
 
@@ -25,16 +26,19 @@ export async function computeTriagePrefill(
 	return "NEEDS_REVIEW" // removed from a customer in working order
 }
 
-export async function dispositionSerial(args: {
-	serial: string
-	disposition: Disposition
-	reason?: string
-	byUserId: string
-	warehouseId: string
-}) {
+export async function dispositionSerial(
+	args: {
+		serial: string
+		disposition: Disposition
+		reason?: string
+		byUserId: string
+		warehouseId: string
+	},
+	tx?: Prisma.TransactionClient,
+) {
 	const nextStatus = DISPO_TO_STATUS[args.disposition]
-	const result = await db.$transaction(async (tx) => {
-		const updated = await tx.serialLocation.updateMany({
+	const run = async (client: Prisma.TransactionClient) => {
+		const updated = await client.serialLocation.updateMany({
 			where: { serial: args.serial, status: "RETURNED" },
 			data: {
 				status: nextStatus,
@@ -44,11 +48,11 @@ export async function dispositionSerial(args: {
 		})
 		if (updated.count !== 1)
 			throw new Error(`serial ${args.serial}: expected status RETURNED`)
-		const sl = await tx.serialLocation.findUniqueOrThrow({
+		const sl = await client.serialLocation.findUniqueOrThrow({
 			where: { serial: args.serial },
 			select: { serviceCodeId: true },
 		})
-		await tx.stockMovement.create({
+		await client.stockMovement.create({
 			data: {
 				kind: "SERIAL",
 				type: "DISPOSITION",
@@ -62,7 +66,11 @@ export async function dispositionSerial(args: {
 			},
 		})
 		return { status: nextStatus }
-	})
+	}
+	// A caller composing this into its own transaction (e.g. Spec B's
+	// returns-confirm, which writes a bulk RETURN movement + this disposition
+	// atomically) passes `tx`; otherwise this opens its own, as before.
+	const result = tx ? await run(tx) : await db.$transaction(run)
 	// Spec §8: a unit held for review notifies the warehouse lead(s) of that warehouse.
 	if (args.disposition === "NEEDS_REVIEW") {
 		const leads = await db.warehouseAssignment.findMany({

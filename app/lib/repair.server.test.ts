@@ -2,8 +2,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { db } from "~/lib/db.server"
 import {
 	computeTriagePrefill,
+	correctTriage,
 	createRepairBatch,
 	dispositionSerial,
+	voidRepairBatch,
 } from "~/lib/repair.server"
 import { makeTracker, runToken, seedServiceCode } from "~/test/helpers"
 
@@ -217,5 +219,100 @@ describe("createRepairBatch", () => {
 			where: { serial: ok },
 		})
 		expect(sl.status).toBe("AWAITING_REPAIR") // unchanged — whole tx aborted
+	})
+})
+
+describe("voidRepairBatch + correctTriage", () => {
+	async function batchOne(name: string, serial: string) {
+		const wh = t.track(
+			"warehouse",
+			await db.warehouse.create({ data: { name, zone: "V" } }),
+		)
+		await t.track(
+			"serialLocation",
+			await db.serialLocation.create({
+				data: {
+					serial,
+					serviceCodeId: SC_ID,
+					status: "AWAITING_REPAIR",
+					condition: "NEW",
+					currentRef: wh.id,
+					since: new Date(),
+				},
+			}),
+		)
+		const { batchId } = await createRepairBatch({
+			serials: [serial],
+			warehouseId: wh.id,
+			byUserId: U_ID,
+		})
+		t.track("repairBatch", { id: batchId })
+		return { wh, batchId }
+	}
+
+	it("voids a batch, returning members to AWAITING_REPAIR with a reason", async () => {
+		const serial = `${RUN}-V1`
+		const { batchId } = await batchOne(`${RUN}-V1wh`, serial)
+		await voidRepairBatch({ batchId, reason: "sent in error", byUserId: U_ID })
+		const sl = await db.serialLocation.findUniqueOrThrow({ where: { serial } })
+		expect(sl.status).toBe("AWAITING_REPAIR")
+		const batch = await db.repairBatch.findUniqueOrThrow({
+			where: { id: batchId },
+		})
+		expect(batch.status).toBe("VOIDED")
+		expect(batch.voidReason).toBe("sent in error")
+	})
+
+	it("blocks void when a member already came back", async () => {
+		const serial = `${RUN}-V2`
+		const { wh, batchId } = await batchOne(`${RUN}-V2wh`, serial)
+		await db.serialLocation.update({
+			where: { serial },
+			data: {
+				status: "WAREHOUSE",
+				condition: "REFURBISHED",
+				currentRef: wh.id,
+			},
+		})
+		await expect(
+			voidRepairBatch({ batchId, reason: "x", byUserId: U_ID }),
+		).rejects.toThrow(/already back from repair/)
+	})
+
+	it("requires a reason to void", async () => {
+		const serial = `${RUN}-V3`
+		const { batchId } = await batchOne(`${RUN}-V3wh`, serial)
+		await expect(
+			voidRepairBatch({ batchId, reason: "  ", byUserId: U_ID }),
+		).rejects.toThrow(/reason/)
+	})
+
+	it("correctTriage moves an AWAITING_REPAIR unit back to WAREHOUSE with a reason", async () => {
+		const wh = t.track(
+			"warehouse",
+			await db.warehouse.create({ data: { name: `${RUN}-C1`, zone: "V" } }),
+		)
+		const serial = `${RUN}-C1`
+		await t.track(
+			"serialLocation",
+			await db.serialLocation.create({
+				data: {
+					serial,
+					serviceCodeId: SC_ID,
+					status: "AWAITING_REPAIR",
+					condition: "NEW",
+					currentRef: wh.id,
+					since: new Date(),
+				},
+			}),
+		)
+		await correctTriage({
+			serial,
+			reason: "not actually failed",
+			byUserId: U_ID,
+			warehouseId: wh.id,
+		})
+		const sl = await db.serialLocation.findUniqueOrThrow({ where: { serial } })
+		expect(sl.status).toBe("WAREHOUSE")
 	})
 })

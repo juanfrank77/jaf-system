@@ -61,4 +61,51 @@ describe("warehouse repairs route", () => {
 		const sl = await db.serialLocation.findUniqueOrThrow({ where: { serial } })
 		expect(sl.status).toBe("WAREHOUSE")
 	})
+
+	it("rejects correct_triage from a non-lead warehouse user (lead gate)", async () => {
+		const wh = t.track(
+			"warehouse",
+			await db.warehouse.create({ data: { name: `${RUN}-ng`, zone: "R" } }),
+		)
+		const user = t.track(
+			"user",
+			await db.user.create({
+				data: { email: `${RUN}-ng@x`, role: "WAREHOUSE", name: "NG" },
+			}),
+		)
+		await t.track(
+			"warehouseAssignment",
+			await db.warehouseAssignment.create({
+				data: { userId: user.id, warehouseId: wh.id, isLead: false },
+			}),
+		)
+		mocks.requireRole.mockResolvedValue({ user })
+		const serial = `${RUN}-ng-1`
+		await t.track(
+			"serialLocation",
+			await db.serialLocation.create({
+				data: {
+					serial,
+					serviceCodeId: SC_ID,
+					status: "AWAITING_REPAIR",
+					condition: "NEW",
+					currentRef: wh.id,
+					since: new Date(),
+				},
+			}),
+		)
+		const req = new Request("http://localhost/warehouse/repairs", {
+			method: "POST",
+			body: new URLSearchParams({
+				intent: "correct_triage",
+				serial,
+				reason: "x",
+			}),
+		})
+		await expect(
+			action({ request: req, params: {}, context: {} } as never),
+		).rejects.toBeDefined()
+		const sl = await db.serialLocation.findUniqueOrThrow({ where: { serial } })
+		expect(sl.status).toBe("AWAITING_REPAIR") // unchanged — gate blocked it
+	})
 })

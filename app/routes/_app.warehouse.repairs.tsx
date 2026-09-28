@@ -63,8 +63,15 @@ export async function action({ request }: Route.ActionArgs) {
 				byUserId: user.id,
 				claroReference,
 			})
-			await generateRepairBatchDocument(batchId) // post-commit
-			return { ok: true, batchId }
+			// PDF gen is non-blocking (spec §9): a render/write failure must not
+			// fail the committed batch — the Regenerate action recovers it.
+			let docFailed = false
+			try {
+				await generateRepairBatchDocument(batchId)
+			} catch {
+				docFailed = true
+			}
+			return { ok: true, batchId, docFailed }
 		}
 		case "void_batch": {
 			await requireWarehouseLead(request, warehouseId)
@@ -81,6 +88,9 @@ export async function action({ request }: Route.ActionArgs) {
 			return { ok: true }
 		}
 		case "correct_triage": {
+			// Pulling a unit back out of the repair pool is a lead judgment call
+			// (spec §5), same authority as sending/voiding a batch.
+			await requireWarehouseLead(request, warehouseId)
 			await correctTriage({
 				serial: String(form.get("serial")),
 				reason: String(form.get("reason")),
@@ -125,7 +135,10 @@ export async function action({ request }: Route.ActionArgs) {
 	}
 }
 
-export default function Repairs({ loaderData }: Route.ComponentProps) {
+export default function Repairs({
+	loaderData,
+	actionData,
+}: Route.ComponentProps) {
 	const { t } = useTranslation()
 	const { pool, batches, onHand, intakes } = loaderData
 	return (
@@ -133,6 +146,18 @@ export default function Repairs({ loaderData }: Route.ComponentProps) {
 			<h1 className="text-lg font-semibold text-foreground">
 				{t("repairs.title")}
 			</h1>
+
+			{actionData?.batchId && (
+				<div className="rounded-lg border border-border bg-muted/40 p-2.5 text-sm">
+					{t("repairs.batch_sent", { id: actionData.batchId.slice(0, 8) })}
+					{actionData.docFailed ? ` — ${t("repairs.doc_failed")}` : ""}
+				</div>
+			)}
+			{actionData?.flagged && actionData.flagged.length > 0 && (
+				<div className="rounded-lg border border-warn/40 bg-warn/10 p-2.5 text-sm">
+					{t("repairs.flagged", { serials: actionData.flagged.join(", ") })}
+				</div>
+			)}
 
 			<section className="space-y-2">
 				<h2 className="text-sm font-semibold">
@@ -194,12 +219,14 @@ export default function Repairs({ loaderData }: Route.ComponentProps) {
 								</Badge>
 							</div>
 							<div className="flex items-center gap-2">
-								{b.documentPath && (
+								{b.status === "SENT" && (
 									<Form method="post">
 										<input type="hidden" name="intent" value="regenerate_doc" />
 										<input type="hidden" name="batchId" value={b.id} />
 										<Button type="submit" variant="outline">
-											{t("repairs.regenerate")}
+											{b.documentPath
+												? t("repairs.regenerate")
+												: t("repairs.generate_doc")}
 										</Button>
 									</Form>
 								)}

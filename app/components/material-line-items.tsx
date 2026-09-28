@@ -32,6 +32,7 @@ interface Props {
 	initialItems?: LineItem[]
 	readOnly?: boolean
 	name?: string
+	estimatedItems?: LineItem[] | undefined
 }
 
 let _counter = 0
@@ -59,6 +60,7 @@ export function MaterialLineItems({
 	initialItems = [],
 	readOnly = false,
 	name = "materials",
+	estimatedItems,
 }: Props) {
 	const { t } = useTranslation()
 	const [items, setItems] = useState<InternalItem[]>(() =>
@@ -82,6 +84,11 @@ export function MaterialLineItems({
 		qty,
 	}))
 
+	// Build estimated map for over-draw detection (only if estimatedItems provided)
+	const estimatedMap = estimatedItems
+		? new Map(estimatedItems.map((e) => [e.serviceCodeId, e.qty]))
+		: undefined
+
 	return (
 		<div className="space-y-2">
 			<input type="hidden" name={name} value={JSON.stringify(serialized)} />
@@ -89,6 +96,14 @@ export function MaterialLineItems({
 				const code = serviceCodes.find((c) => c.id === item.serviceCodeId)
 				const dropdownItems = buildDropdownItems(available, code)
 				if (readOnly) {
+					// Only compute over-draw/counter-added tags if estimatedItems was provided
+					const estimatedQty = estimatedMap?.get(item.serviceCodeId) ?? 0
+					const isOverdrawn =
+						estimatedMap && item.qty > estimatedQty && estimatedQty > 0
+					const isCounterAdded =
+						estimatedMap && !estimatedMap.has(item.serviceCodeId)
+					const overage = item.qty - estimatedQty
+
 					return (
 						<div
 							key={item._key}
@@ -104,6 +119,16 @@ export function MaterialLineItems({
 							<span className="w-20 text-right">
 								${(toNumberPrice(code?.unitPrice) * item.qty).toFixed(2)}
 							</span>
+							{isOverdrawn && (
+								<span className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded whitespace-nowrap">
+									+{overage} {t("material_line_items.more_than_estimated")}
+								</span>
+							)}
+							{isCounterAdded && (
+								<span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded whitespace-nowrap">
+									{t("material_line_items.added_at_counter")}
+								</span>
+							)}
 						</div>
 					)
 				}

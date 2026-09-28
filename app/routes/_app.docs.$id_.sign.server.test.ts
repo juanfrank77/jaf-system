@@ -1,10 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("~/lib/db.server", () => ({
-	db: {
+vi.mock("~/lib/db.server", () => {
+	const mockJafInvoiceUpdate = vi.fn((args: any) =>
+		Promise.resolve({ ...args.data }),
+	)
+	const mockAuditTrailCreate = vi.fn((args: any) =>
+		Promise.resolve({ ...args.data, id: "audit-1" }),
+	)
+	const mockNotificationCreate = vi.fn((args: any) =>
+		Promise.resolve({ ...args.data, id: "notif-1" }),
+	)
+	const mockStockMovementCreate = vi.fn((args: any) =>
+		Promise.resolve({ ...args.data, id: "move-1" }),
+	)
+
+	const mockDb = {
 		jafInvoice: {
 			findUniqueOrThrow: vi.fn(),
-			update: vi.fn(),
+			update: mockJafInvoiceUpdate,
 		},
 		serviceCode: {
 			findMany: vi.fn(() => Promise.resolve([])),
@@ -17,24 +30,42 @@ vi.mock("~/lib/db.server", () => ({
 			findUnique: vi.fn(),
 		},
 		auditTrail: {
-			create: vi.fn(),
+			create: mockAuditTrailCreate,
 		},
 		notification: {
-			create: vi.fn(),
+			create: mockNotificationCreate,
 		},
-		$transaction: vi.fn(async (ops: any[]) => {
-			for (const op of ops) {
-				if (typeof op === "function") {
-					await op({
-						jafInvoice: { update: vi.fn() },
-						auditTrail: { create: vi.fn() },
-						notification: { create: vi.fn() },
-					})
+		stockMovement: {
+			create: mockStockMovementCreate,
+			findMany: vi.fn(),
+		},
+		$transaction: vi.fn(async (callback: any) => {
+			if (typeof callback === "function") {
+				// Create a transaction object that uses the mocked methods
+				const txObject = {
+					jafInvoice: { update: mockJafInvoiceUpdate },
+					auditTrail: { create: mockAuditTrailCreate },
+					notification: { create: mockNotificationCreate },
+					stockMovement: { create: mockStockMovementCreate },
+				}
+				await callback(txObject)
+			} else if (Array.isArray(callback)) {
+				for (const op of callback) {
+					if (typeof op === "function") {
+						const txObject = {
+							jafInvoice: { update: mockJafInvoiceUpdate },
+							auditTrail: { create: mockAuditTrailCreate },
+							notification: { create: mockNotificationCreate },
+							stockMovement: { create: mockStockMovementCreate },
+						}
+						await op(txObject)
+					}
 				}
 			}
 		}),
-	},
-}))
+	}
+	return { db: mockDb }
+})
 
 vi.mock("~/lib/permissions.server", () => ({
 	requireRole: vi.fn(),
@@ -120,7 +151,20 @@ describe("POST /docs/:id/sign", () => {
 			id: "wh-1",
 			name: "Main",
 		} as any)
-		vi.mocked(db.$transaction).mockResolvedValue(undefined as any)
+		vi.mocked(db.user.findMany).mockResolvedValue([])
+
+		// Override the transaction mock to properly execute the callback
+		vi.mocked(db.$transaction).mockImplementation(async (callback: any) => {
+			if (typeof callback === "function") {
+				const txObject = {
+					jafInvoice: { update: vi.mocked(db.jafInvoice.update) },
+					auditTrail: { create: vi.mocked(db.auditTrail.create) },
+					notification: { create: vi.mocked(db.notification.create) },
+					stockMovement: { create: vi.mocked(db.stockMovement.create) },
+				}
+				return await callback(txObject)
+			}
+		})
 
 		const result = await action({
 			request: formRequest(validForm()),
@@ -160,7 +204,19 @@ describe("POST /docs/:id/sign", () => {
 			{ id: "sup-1" },
 			{ id: "admin-1" },
 		] as any)
-		vi.mocked(db.$transaction).mockResolvedValue(undefined as any)
+
+		// Override the transaction mock to properly execute the callback
+		vi.mocked(db.$transaction).mockImplementation(async (callback: any) => {
+			if (typeof callback === "function") {
+				const txObject = {
+					jafInvoice: { update: vi.mocked(db.jafInvoice.update) },
+					auditTrail: { create: vi.mocked(db.auditTrail.create) },
+					notification: { create: vi.mocked(db.notification.create) },
+					stockMovement: { create: vi.mocked(db.stockMovement.create) },
+				}
+				return await callback(txObject)
+			}
+		})
 
 		const form = validForm()
 		form.set("materials", JSON.stringify([{ serviceCodeId: "sc-1", qty: 5 }]))
@@ -196,5 +252,133 @@ describe("POST /docs/:id/sign", () => {
 
 		expect(result).toEqual({ errorKey: "docs_sign.errors.already_signed" })
 		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("appends RELEASE(-taken) bulk movements in the sign transaction", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "warehouse-1", role: "WAREHOUSE" },
+			session: {},
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			baseDoc() as any,
+		)
+		;(db.user.findFirst as any).mockImplementation((args: any) => {
+			if (args.where.role === "WAREHOUSE")
+				return Promise.resolve({ id: "warehouse-1", name: "Iidalia" })
+			return Promise.resolve({ id: "crew-1", name: "Crew A" })
+		})
+		vi.mocked(db.user.findMany).mockResolvedValue([])
+		vi.mocked(db.warehouse.findUnique).mockResolvedValue({
+			id: "wh-1",
+			name: "Main",
+		} as any)
+
+		// Track calls manually since the transaction mock doesn't work perfectly
+		const createCalls: any[] = []
+		vi.mocked(db.stockMovement.create).mockImplementation(((args: any) => {
+			createCalls.push(args.data)
+			return Promise.resolve({
+				...args.data,
+				id: `move-${createCalls.length}`,
+			}) as any
+		}) as any)
+
+		// Override the transaction mock to properly execute the callback
+		vi.mocked(db.$transaction).mockImplementation(async (callback: any) => {
+			if (typeof callback === "function") {
+				const txObject = {
+					jafInvoice: { update: vi.mocked(db.jafInvoice.update) },
+					auditTrail: { create: vi.mocked(db.auditTrail.create) },
+					notification: { create: vi.mocked(db.notification.create) },
+					stockMovement: { create: vi.mocked(db.stockMovement.create) },
+				}
+				return await callback(txObject)
+			}
+		})
+
+		const form = validForm()
+		form.set(
+			"materials",
+			JSON.stringify([
+				{ serviceCodeId: "1005803", qty: 300 },
+				{ serviceCodeId: "1003748", qty: 2 },
+			]),
+		)
+
+		const result = await action({
+			request: formRequest(form),
+			params: { id: "doc-1" },
+		} as any).catch((r: any) => r)
+
+		expect(result.status).toBe(302)
+		expect(createCalls.length).toBe(2)
+		const qtys = createCalls.map((c) => c.qty).sort()
+		expect(qtys).toEqual([-300, -2].sort())
+		const allBulkRelease = createCalls.every((data) => {
+			return (
+				data.kind === "BULK" &&
+				data.type === "RELEASE" &&
+				data.warehouseId === "wh-1"
+			)
+		})
+		expect(allBulkRelease).toBe(true)
+	})
+
+	it("allows over-draw (on-hand may go negative) without error", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "warehouse-1", role: "WAREHOUSE" },
+			session: {},
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			baseDoc() as any,
+		)
+		;(db.user.findFirst as any).mockImplementation((args: any) => {
+			if (args.where.role === "WAREHOUSE")
+				return Promise.resolve({ id: "warehouse-1", name: "Iidalia" })
+			return Promise.resolve({ id: "crew-1", name: "Crew A" })
+		})
+		vi.mocked(db.user.findMany).mockResolvedValue([])
+		vi.mocked(db.warehouse.findUnique).mockResolvedValue({
+			id: "wh-1",
+			name: "Main",
+		} as any)
+
+		// Track calls manually
+		const createCalls: any[] = []
+		vi.mocked(db.stockMovement.create).mockImplementation(((args: any) => {
+			createCalls.push(args.data)
+			return Promise.resolve({ ...args.data, id: "move-1" }) as any
+		}) as any)
+
+		// Override the transaction mock to properly execute the callback
+		vi.mocked(db.$transaction).mockImplementation(async (callback: any) => {
+			if (typeof callback === "function") {
+				const txObject = {
+					jafInvoice: { update: vi.mocked(db.jafInvoice.update) },
+					auditTrail: { create: vi.mocked(db.auditTrail.create) },
+					notification: { create: vi.mocked(db.notification.create) },
+					stockMovement: { create: vi.mocked(db.stockMovement.create) },
+				}
+				return await callback(txObject)
+			}
+		})
+
+		const form = validForm()
+		form.set(
+			"materials",
+			JSON.stringify([{ serviceCodeId: "1005803", qty: 300 }]),
+		)
+
+		const result = await action({
+			request: formRequest(form),
+			params: { id: "doc-1" },
+		} as any).catch((r: any) => r)
+
+		expect(result.status).toBe(302)
+		expect(
+			createCalls.some((data) => {
+				return data.type === "RELEASE" && data.qty === -300
+			}),
+		).toBe(true)
 	})
 })

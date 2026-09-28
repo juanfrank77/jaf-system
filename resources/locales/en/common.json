@@ -947,7 +947,9 @@
 	},
 	"material_line_items": {
 		"select_placeholder": "Select service code...",
-		"add_service_code": "+ Add Service Code"
+		"add_service_code": "+ Add Service Code",
+		"more_than_estimated": "more than listed",
+		"added_at_counter": "added at counter"
 	},
 	"dashboard": {
 		"title": "Dashboard",

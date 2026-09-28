@@ -287,6 +287,20 @@ export async function loader({ request }: Route.LoaderArgs) {
 				})
 			: []
 
+	const warehouseTriageCount =
+		user.role === "WAREHOUSE"
+			? await (async () => {
+					const a = await db.warehouseAssignment.findFirst({
+						where: { userId: user.id },
+						select: { warehouseId: true },
+					})
+					if (!a) return 0
+					return db.serialLocation.count({
+						where: { status: "RETURNED", currentRef: a.warehouseId },
+					})
+				})()
+			: 0
+
 	const crewPreppedDocs =
 		user.role === "CREW"
 			? await db.jafInvoice.findMany({
@@ -357,6 +371,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		warehousePreppedDocs,
 		warehouseMissingDocs,
 		warehouseReturnsDocs,
+		warehouseTriageCount,
 		crewPreppedDocs,
 		crewInFieldDocs,
 		crewSentBackDocs,
@@ -382,6 +397,7 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 		warehousePreppedDocs,
 		warehouseMissingDocs,
 		warehouseReturnsDocs,
+		warehouseTriageCount,
 		crewPreppedDocs,
 		crewInFieldDocs,
 		crewSentBackDocs,
@@ -442,6 +458,7 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 			warehousePreppedDocs={warehousePreppedDocs}
 			warehouseMissingDocs={warehouseMissingDocs}
 			warehouseReturnsDocs={warehouseReturnsDocs}
+			warehouseTriageCount={warehouseTriageCount}
 			crewPreppedDocs={crewPreppedDocs}
 			crewInFieldDocs={crewInFieldDocs}
 			crewSentBackDocs={crewSentBackDocs}

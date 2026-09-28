@@ -47,5 +47,8 @@ describe("ReceivePanel", () => {
 		})
 		expect(posted.form?.get("warehouseId")).toBe("wh-1")
 		expect(posted.form?.get("reference")).toBe("PO-42")
+		// Review finding E: the receive action had no idempotency key at all, so
+		// a double submit double-counted bulk on-hand. The panel must supply one.
+		expect(posted.form?.get("idempotencyKey")).toBeTruthy()
 	})
 })

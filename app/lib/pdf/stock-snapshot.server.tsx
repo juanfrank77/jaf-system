@@ -23,7 +23,7 @@ export function renderSnapshotPdf(data: {
 		canonicalName: string
 		onHand: number
 		stockUnit: string | null
-		derivedCountQty: number | null
+		derivedStockQty: number | null
 		countUnit: string | null
 	}[]
 	serial: { serviceCodeId: string; condition: string; count: number }[]
@@ -33,20 +33,23 @@ export function renderSnapshotPdf(data: {
 			<Page style={s.page}>
 				<Text style={s.h}>JAF · Stock Snapshot — {data.warehouseName}</Text>
 				<Text>As of: {data.asOfDate.toISOString().slice(0, 10)}</Text>
+				{/* Dual-UOM (spec §4.4): the ledger qty is the COUNT-unit figure;
+				    the derived one is in the STOCK unit — same convention as the
+				    on-screen StockTable, so the PDF can never read as its inverse. */}
 				<View style={s.headerRow}>
 					<Text style={s.cell}>Material</Text>
-					<Text style={s.cell}>On hand</Text>
-					<Text style={s.cell}>Count</Text>
+					<Text style={s.cell}>On hand (count)</Text>
+					<Text style={s.cell}>Stock unit</Text>
 				</View>
 				{data.bulk.map((b) => (
 					<View key={b.serviceCodeId} style={s.row}>
 						<Text style={s.cell}>{b.canonicalName}</Text>
 						<Text style={s.cell}>
-							{b.onHand} {b.stockUnit ?? ""}
+							{b.onHand} {b.countUnit ?? ""}
 						</Text>
 						<Text style={s.cell}>
-							{b.derivedCountQty != null
-								? `${b.derivedCountQty} ${b.countUnit ?? ""}`
+							{b.derivedStockQty != null
+								? `${b.derivedStockQty} ${b.stockUnit ?? ""}`
 								: "—"}
 						</Text>
 					</View>

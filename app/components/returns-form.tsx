@@ -55,27 +55,45 @@ const SERIAL_REASONS: SerialReturnReason[] = [
 	"UNDER_REPORTED",
 ]
 
+/**
+ * Expected-back lines for the form. `savedReturns` (the doc's already-recorded
+ * `materialsReturned`) wins over the computed default where present, so
+ * revisiting the page after a save shows what was actually saved rather than a
+ * fresh full-expected form that a second click would resubmit.
+ */
 function buildInitialReturnLines(
 	taken: MaterialLine[],
 	materialsUsed: { serviceCodeId: string; qty: number }[] | null,
+	savedReturns?: SavedReturnLine[],
 ): ReturnLine[] {
 	const usedMap = Object.fromEntries(
 		(materialsUsed || []).map((u) => [u.serviceCodeId, u.qty]),
+	)
+	const savedMap = new Map(
+		(savedReturns ?? []).map((r) => [r.serviceCodeId, r.returnedQty]),
 	)
 
 	return taken.map((m) => {
 		const takenQty = m.qty || 0
 		const usedQty = usedMap[m.serviceCodeId] ?? 0
 		const expectedBack = expectedBackFor(takenQty, usedQty)
+		const saved = savedMap.get(m.serviceCodeId)
 		return {
 			_key: nextReturnKey(),
 			serviceCodeId: m.serviceCodeId || "",
 			takenQty,
 			usedQty,
 			expectedBack,
-			receivedQty: expectedBack,
+			receivedQty: saved ?? expectedBack,
 		}
 	})
+}
+
+export interface SavedReturnLine {
+	serviceCodeId: string
+	takenQty: number
+	returnedQty: number
+	notes: string
 }
 
 export interface ReturnsFormData {
@@ -85,6 +103,8 @@ export interface ReturnsFormData {
 	materialsUsed: { serviceCodeId: string; qty: number }[] | null
 	warehouses: { id: string; name: string }[]
 	pickupWarehouseId: string | null
+	savedReturns?: SavedReturnLine[]
+	alreadyRecorded?: boolean
 }
 
 export interface ReturnsFormActionData {
@@ -115,6 +135,8 @@ export function ReturnsForm({
 		materialsUsed,
 		warehouses,
 		pickupWarehouseId,
+		savedReturns,
+		alreadyRecorded,
 	} = loaderData
 	const { t } = useTranslation()
 
@@ -125,7 +147,7 @@ export function ReturnsForm({
 		update: updateLine,
 		reset: resetLines,
 	} = useEditableLines<ReturnLine>(() =>
-		buildInitialReturnLines(taken, materialsUsed),
+		buildInitialReturnLines(taken, materialsUsed, savedReturns),
 	)
 
 	const {
@@ -155,7 +177,7 @@ export function ReturnsForm({
 	useEffect(() => {
 		if (actionData?.ok) {
 			setIdempotencyKey(crypto.randomUUID())
-			resetLines(buildInitialReturnLines(taken, materialsUsed))
+			resetLines(buildInitialReturnLines(taken, materialsUsed, savedReturns))
 			resetSerialLines([])
 			setDiscrepancyNote("")
 		}
@@ -195,6 +217,14 @@ export function ReturnsForm({
 	return (
 		<div className="space-y-4">
 			<h1 className="text-xl font-semibold">{t("docs_returns.title")}</h1>
+			{alreadyRecorded && (
+				<p
+					data-testid="returns-already-recorded"
+					className="rounded-md border border-amber-300 bg-amber-50 p-2 text-sm font-medium text-amber-700"
+				>
+					{t("docs_returns.already_recorded_notice")}
+				</p>
+			)}
 			<p className="text-sm text-slate-600">
 				<Trans
 					i18nKey="docs_returns.confirm_message"
@@ -406,7 +436,7 @@ export function ReturnsForm({
 						</p>
 					)}
 				</div>
-				<Button type="submit" className="w-full">
+				<Button type="submit" className="w-full" disabled={alreadyRecorded}>
 					{t("docs_returns.submit")}
 				</Button>
 			</Form>

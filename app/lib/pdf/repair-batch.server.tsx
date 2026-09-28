@@ -28,12 +28,14 @@ export async function generateRepairBatchPdf(
 		select: { serial: true, serviceCodeId: true },
 	})
 	const ids = [...new Set(members.map((m) => m.serviceCodeId))]
-	const codes = await db.serviceCode
-		.findMany({
-			where: { id: { in: ids } },
-			select: { id: true, claroCode: true, ownership: true },
-		})
-		.catch(() => [] as { id: string; claroCode: string; ownership: string }[])
+	// No `.catch(() => [])` here: swallowing a catalog read failure persisted a
+	// Claro-facing PDF with every model shown as "(unknown)". Let it throw —
+	// the caller treats PDF generation as non-blocking (`docFailed`) and the
+	// Regenerate action retries it once the catalog read works again.
+	const codes = await db.serviceCode.findMany({
+		where: { id: { in: ids } },
+		select: { id: true, claroCode: true, ownership: true },
+	})
 	const byId = new Map(codes.map((c) => [c.id, c]))
 	// Display the Claro code, not the cuid FK.
 	const claroOf = (id: string) => byId.get(id)?.claroCode ?? "(unknown)"

@@ -11,12 +11,12 @@ export type StockTableRow = {
 	onHand: number
 	stockUnit: string | null
 	countUnit: string | null
-	derivedCountQty: number | null
+	derivedStockQty: number | null
 }
 
 /**
  * Per-SAP bulk stock rows: canonical name, dual-UOM (counted-as unit ·
- * derived stock-unit figure), and a per-row trail toggle. `derivedCountQty
+ * derived stock-unit figure), and a per-row trail toggle. `derivedStockQty
  * === null` means the material has no conversion factor yet (spec §4.4) —
  * never fabricate a wrong-unit number, show "unit not set" instead.
  *
@@ -86,14 +86,14 @@ export function StockTable({
 									{r.onHand} {r.countUnit ?? ""}
 								</span>
 								<span className="flex items-center justify-end gap-1.5 text-right font-mono">
-									{r.derivedCountQty === null ? (
+									{r.derivedStockQty === null ? (
 										<>
 											<span>—</span>
 											<Badge variant="neutral">{t("stock.unit_not_set")}</Badge>
 										</>
 									) : (
 										<span>
-											= {r.derivedCountQty} {r.stockUnit}
+											= {r.derivedStockQty} {r.stockUnit}
 										</span>
 									)}
 								</span>

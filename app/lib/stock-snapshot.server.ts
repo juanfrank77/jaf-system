@@ -40,7 +40,7 @@ export async function computeSnapshotAsOf(
 			onHand: dual.ledgerQty,
 			stockUnit: dual.stockUnit,
 			countUnit: dual.countUnit,
-			derivedCountQty: dual.derivedCountQty,
+			derivedStockQty: dual.derivedStockQty,
 		}
 	})
 	const serialGrouped = await client.serialLocation.groupBy({
@@ -101,10 +101,12 @@ export async function generateSnapshotArtifacts(
 	})
 	await writeFile(documentPath, pdf)
 	const csv = [
-		"serviceCodeId,name,onHand,stockUnit,derivedCountQty,countUnit",
+		// Column order follows the dual-UOM semantics: the ledger qty is in the
+		// COUNT unit, the derived figure is in the STOCK unit (spec §4.4).
+		"serviceCodeId,name,onHand,countUnit,derivedStockQty,stockUnit",
 		...bulk.map(
 			(b) =>
-				`${b.serviceCodeId},${JSON.stringify(b.canonicalName)},${b.onHand},${b.stockUnit ?? ""},${b.derivedCountQty ?? ""},${b.countUnit ?? ""}`,
+				`${b.serviceCodeId},${JSON.stringify(b.canonicalName)},${b.onHand},${b.countUnit ?? ""},${b.derivedStockQty ?? ""},${b.stockUnit ?? ""}`,
 		),
 	].join("\n")
 	await writeFile(csvPath, csv, "utf8")

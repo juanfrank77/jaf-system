@@ -7,7 +7,6 @@ import { requireRole } from "~/lib/permissions.server"
 import { dispositionSerial } from "~/lib/repair.server"
 import {
 	computeExpectedBackLines,
-	expectedBackFor,
 	type MaterialLine,
 } from "~/lib/returns-lines"
 import { getActiveMaterialCodes } from "~/lib/service-codes.server"
@@ -29,6 +28,24 @@ export const meta = ({
 	},
 ]
 
+/** The shape this route writes into `JafInvoice.materialsReturned`. */
+type ReturnedLine = {
+	serviceCodeId: string
+	takenQty: number
+	returnedQty: number
+	notes: string
+}
+
+/** Already-saved returns for this doc, or `[]` when nothing is recorded yet. */
+function savedReturnsOf(doc: { materialsReturned: unknown }): ReturnedLine[] {
+	const raw = doc.materialsReturned
+	if (!Array.isArray(raw)) return []
+	return raw.filter(
+		(r): r is ReturnedLine =>
+			typeof r === "object" && r !== null && "serviceCodeId" in r,
+	)
+}
+
 export async function loader({ request, params }: Route.LoaderArgs) {
 	await requireRole(request, ["WAREHOUSE", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
@@ -43,6 +60,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		(doc.materialsUsed as { serviceCodeId: string; qty: number }[] | null) ||
 		null
 	const lines = computeExpectedBackLines(taken, materialsUsed)
+	// Revisiting the page after a save must show what was actually SAVED, not a
+	// blank/full-expected form — otherwise a second "Save Returns" click posts a
+	// complete second credit under a fresh idempotency key (double-credit). The
+	// action refuses a repeat confirm too (defence in depth).
+	const savedReturns = savedReturnsOf(doc)
 	return {
 		doc,
 		serviceCodes: serviceCodes.map((c) => ({
@@ -54,6 +76,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		materialsUsed,
 		warehouses,
 		pickupWarehouseId: doc.warehouseId,
+		savedReturns,
+		alreadyRecorded: savedReturns.length > 0,
 	}
 }
 
@@ -64,6 +88,24 @@ export async function action({ request, params }: Route.ActionArgs) {
 	})
 	if (!["SIGNED", "FIELD_UPDATED"].includes(doc.status)) {
 		throw redirect(`/docs/${params.id}`)
+	}
+
+	// Once returns are recorded for a doc they are final: there is no amend flow
+	// in the spec (§6/§7 describe a single returns-confirm), so a repeat confirm
+	// — a second click, a back-button resubmit, an offline replay under a FRESH
+	// idempotency key — must not post a second set of RETURN credits. The
+	// loader's prefill + the post-save redirect make this the normal path; this
+	// is the server-side guarantee behind them.
+	// (`materialsReturned` is empty for a serial-only return, so also look for
+	// the RETURNS_LOGGED audit row this action always writes.)
+	const alreadyLogged =
+		savedReturnsOf(doc).length > 0 ||
+		(await db.auditTrail.findFirst({
+			where: { docId: params.id, action: "RETURNS_LOGGED" },
+			select: { id: true },
+		})) !== null
+	if (alreadyLogged) {
+		return { errorKey: "docs_returns.errors.already_recorded" as const }
 	}
 
 	const form = await request.formData()
@@ -91,6 +133,17 @@ export async function action({ request, params }: Route.ActionArgs) {
 	if (!idempotencyKey) {
 		return { errorKey: "docs_returns.errors.idempotency_key_required" as const }
 	}
+	// The loader only offers ACTIVE warehouses, but the action must not trust
+	// the client: a fabricated id would credit a non-existent (or retired)
+	// warehouse's ledger. Cross-warehouse returns stay permissive (spec §9) —
+	// this only proves the target is real and active.
+	const returnWarehouse = await db.warehouse.findFirst({
+		where: { id: returnWarehouseId, active: true },
+		select: { id: true },
+	})
+	if (!returnWarehouse) {
+		return { errorKey: "docs_returns.errors.invalid_warehouse" as const }
+	}
 
 	const taken = (doc.materialsTaken as unknown as MaterialLine[]) || []
 	const takenMap = Object.fromEntries(
@@ -98,13 +151,19 @@ export async function action({ request, params }: Route.ActionArgs) {
 	)
 	const materialsUsed =
 		(doc.materialsUsed as { serviceCodeId: string; qty: number }[] | null) || []
-	const usedMap = Object.fromEntries(
-		materialsUsed.map((u) => [u.serviceCodeId, u.qty]),
-	)
 
 	for (const line of lines) {
 		if (!line.serviceCodeId) {
 			return { errorKey: "docs_returns.errors.invalid_materials" as const }
+		}
+		// A negative (or fractional) `received` used to be silently `Math.abs`'d
+		// into a positive ledger credit while the doc kept the raw value — the
+		// ledger and the doc's own record would disagree. Reject it instead.
+		if (!Number.isInteger(line.received) || line.received < 0) {
+			return {
+				errorKey: "docs_returns.errors.invalid_received_qty" as const,
+				errorParams: { serviceCodeId: line.serviceCodeId },
+			}
 		}
 		const takenQty = takenMap[line.serviceCodeId] ?? 0
 		if (line.received > takenQty) {
@@ -132,19 +191,27 @@ export async function action({ request, params }: Route.ActionArgs) {
 		}
 	}
 
-	const anyShort = lines.some(
-		(l) =>
-			l.received <
-			expectedBackFor(
-				takenMap[l.serviceCodeId] ?? 0,
-				usedMap[l.serviceCodeId] ?? 0,
-			),
+	// The shortfall check runs against the AUTHORITATIVE expected-back set
+	// recomputed from the doc (taken − used), not against whatever subset of
+	// lines the client chose to submit: omitting a line entirely used to skip
+	// both its RETURN credit and its note requirement. A missing line counts as
+	// a full shortfall.
+	const receivedMap = new Map<string, number>()
+	for (const l of lines) receivedMap.set(l.serviceCodeId, l.received)
+	const expectedLines = computeExpectedBackLines(taken, materialsUsed)
+	const anyShort = expectedLines.some(
+		(e) => (receivedMap.get(e.serviceCodeId) ?? 0) < e.expectedBack,
 	)
-	if (anyShort && !discrepancyNote) {
+	// A LOST or DAMAGED serialized unit is real shrinkage (spec §7) — a
+	// reasonable auditor expects a recorded reason, so it requires a note too.
+	const anySerialLoss = serialLines.some(
+		(s) => s.reason === "LOST" || s.reason === "DAMAGED",
+	)
+	if ((anyShort || anySerialLoss) && !discrepancyNote) {
 		return { errorKey: "returns.note_required" as const }
 	}
 
-	const out = await runOnce(db, idempotencyKey, "returns", async (tx) => {
+	await runOnce(db, idempotencyKey, "returns", async (tx) => {
 		for (const l of lines) {
 			if (!l.received) continue // nothing to credit
 			await tx.stockMovement.create({
@@ -153,7 +220,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 					type: "RETURN",
 					warehouseId: returnWarehouseId,
 					serviceCodeId: l.serviceCodeId,
-					qty: Math.abs(l.received),
+					// Validated non-negative above — no Math.abs coercion, so the
+					// ledger credit and the doc's `returnedQty` can never disagree.
+					qty: l.received,
 					byUserId: user.id,
 					refDocId: params.id,
 				},
@@ -165,12 +234,27 @@ export async function action({ request, params }: Route.ActionArgs) {
 				// Composes atomically with the bulk RETURN writes above — the CAS
 				// guard inside requires the serial already be RETURNED (set by the
 				// existing scan-in flow before this action ever runs).
+				//
+				// The warehouse a PHYSICAL unit's disposition is recorded under is
+				// the one the unit is actually in — `SerialLocation.currentRef`, set
+				// by scan-in to wherever it was physically scanned back. That is a
+				// different thing from `returnWarehouseId`, which is only the
+				// counter's chosen destination for the BULK credit and is allowed to
+				// differ (spec §9 permits a cross-warehouse return). Passing the
+				// credit target here tripped dispositionSerial's ownership check and
+				// 500'd every legitimate cross-warehouse damaged-serial return.
+				const owner = await tx.serialLocation.findUnique({
+					where: { serial: s.serial },
+					select: { currentRef: true },
+				})
 				await dispositionSerial(
 					{
 						serial: s.serial,
 						disposition: "FAILED",
 						byUserId: user.id,
-						warehouseId: returnWarehouseId,
+						// No row / no currentRef → let dispositionSerial raise its own
+						// clear error rather than silently inventing a warehouse.
+						warehouseId: owner?.currentRef ?? returnWarehouseId,
 					},
 					tx,
 				)
@@ -207,12 +291,26 @@ export async function action({ request, params }: Route.ActionArgs) {
 			// audit trail) only — no serial state change.
 		}
 
-		const materialsReturned = lines.map((l) => ({
-			serviceCodeId: l.serviceCodeId,
-			takenQty: takenMap[l.serviceCodeId] ?? 0,
-			returnedQty: l.received,
-			notes: "",
-		}))
+		// Recorded from the AUTHORITATIVE expected-back set (plus any extra line
+		// the counter added), so an omitted line is stored as returnedQty 0
+		// rather than vanishing from the doc's own record.
+		const extraLines = lines.filter(
+			(l) => !expectedLines.some((e) => e.serviceCodeId === l.serviceCodeId),
+		)
+		const materialsReturned = [
+			...expectedLines.map((e) => ({
+				serviceCodeId: e.serviceCodeId,
+				takenQty: e.takenQty,
+				returnedQty: receivedMap.get(e.serviceCodeId) ?? 0,
+				notes: "",
+			})),
+			...extraLines.map((l) => ({
+				serviceCodeId: l.serviceCodeId,
+				takenQty: takenMap[l.serviceCodeId] ?? 0,
+				returnedQty: l.received,
+				notes: "",
+			})),
+		]
 
 		await tx.jafInvoice.update({
 			where: { id: params.id },
@@ -236,7 +334,11 @@ export async function action({ request, params }: Route.ActionArgs) {
 		})
 	})
 
-	return { ok: true as const, deduped: out.deduped }
+	// Post-save redirect (pre-branch behaviour, restored): a successful confirm
+	// leaves the form behind entirely, so there is no second-click resubmit of
+	// the same payload under a fresh idempotency key. `out.deduped` means a
+	// replayed key wrote nothing — same destination either way.
+	throw redirect(`/docs/${params.id}`)
 }
 
 export default function ReturnsDoc({

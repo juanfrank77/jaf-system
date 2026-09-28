@@ -11,7 +11,7 @@ export type BulkStockRow = {
 	onHand: number
 	stockUnit: string | null
 	countUnit: string | null
-	derivedCountQty: number | null
+	derivedStockQty: number | null
 }
 export type SerialStockRow = {
 	serviceCodeId: string
@@ -74,6 +74,18 @@ export async function getPrepAvailable(
 	return onHand - reserved
 }
 
+/**
+ * Dual-UOM resolution (spec §4.4 / §6).
+ *
+ * The ledger quantity IS the **count unit** quantity — the unit staff
+ * physically count in (CAJAS/ROLLOS) — and `ServiceCode.conversionFactor` is
+ * defined `countUnit -> stockUnit` (see the schema's doc comment). So the
+ * derived figure is `onHand * factor`, labelled with `stockUnit`, and the UI
+ * renders "<onHand> <countUnit> = <derived> <stockUnit>".
+ *
+ * Without a factor the derived figure is `null` → callers must HIDE it
+ * ("unit not set"): never fabricate a wrong-unit number.
+ */
 export function resolveDualUom(
 	onHand: number,
 	code: {
@@ -88,7 +100,7 @@ export function resolveDualUom(
 		stockUnit: code.stockUnit,
 		countUnit: code.countUnit,
 		// null → hide the derived figure (spec §4.4): never fabricate a second unit.
-		derivedCountQty: factor && factor !== 0 ? onHand / factor : null,
+		derivedStockQty: factor && factor !== 0 ? onHand * factor : null,
 	}
 }
 
@@ -119,7 +131,7 @@ export async function getWarehouseBulkStock(
 			onHand: dual.ledgerQty,
 			stockUnit: dual.stockUnit,
 			countUnit: dual.countUnit,
-			derivedCountQty: dual.derivedCountQty,
+			derivedStockQty: dual.derivedStockQty,
 		}
 	})
 }

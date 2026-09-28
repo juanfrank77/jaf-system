@@ -4,6 +4,7 @@ import { DashboardView } from "~/components/dashboard-view"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { SupervisorDashboard } from "~/components/supervisor-dashboard"
 import {
+	computeAwaitingPickup,
 	computeDashboardStats,
 	type DashboardExplainer,
 } from "~/lib/dashboard-stats"
@@ -26,6 +27,7 @@ import {
 } from "~/lib/supervisor-stage"
 import { getAvisoAmountTolerance } from "~/lib/system-settings.server"
 import { toNumberPrice } from "~/lib/utils"
+import { resolveWarehouseScope } from "~/lib/warehouse-scope.server"
 import type { DocStatus, Role } from "../../generated/prisma/client"
 import { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.dashboard"
@@ -254,7 +256,10 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const supervisorQueues =
 		user.role === "SUPERVISOR" ? await loadSupervisorQueues(user.id) : null
 
-	const warehousePreppedDocs =
+	// Awaiting-pickup aging (spec §6, "days staged … red past 3"): the PREPPED
+	// queues are piped through computeAwaitingPickup so `aged`/`daysStaged`
+	// actually reach the view — without this the badge can never render.
+	const warehousePreppedDocs = computeAwaitingPickup(
 		user.role === "WAREHOUSE"
 			? await db.jafInvoice.findMany({
 					where: {
@@ -264,7 +269,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 					orderBy: { createdAt: "desc" },
 					take: 50,
 				})
-			: []
+			: [],
+	)
 
 	const warehouseMissingDocs =
 		user.role === "WAREHOUSE"
@@ -295,24 +301,25 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const warehouseSerialCounts = await (async () => {
 		if (user.role !== "WAREHOUSE")
 			return { triage: 0, repairPool: 0, needsReview: 0, refurbished: 0 }
-		const a = await db.warehouseAssignment.findFirst({
-			where: { userId: user.id },
-			select: { warehouseId: true },
-		})
-		if (!a) return { triage: 0, repairPool: 0, needsReview: 0, refurbished: 0 }
+		// Follows the header warehouse switch (`wh` cookie) like every other
+		// warehouse-scoped query, instead of pinning to the first assignment —
+		// otherwise switching to warehouse B left these tiles counting A.
+		const { selectedId } = await resolveWarehouseScope(db, request, user)
+		if (!selectedId)
+			return { triage: 0, repairPool: 0, needsReview: 0, refurbished: 0 }
 		const [triage, repairPool, needsReview, refurbished] = await Promise.all([
 			db.serialLocation.count({
-				where: { status: "RETURNED", currentRef: a.warehouseId },
+				where: { status: "RETURNED", currentRef: selectedId },
 			}),
-			repairPoolCount(a.warehouseId),
-			needsReviewCount(a.warehouseId),
-			refurbishedCount(a.warehouseId),
+			repairPoolCount(selectedId),
+			needsReviewCount(selectedId),
+			refurbishedCount(selectedId),
 		])
 		return { triage, repairPool, needsReview, refurbished }
 	})()
 	const warehouseTriageCount = warehouseSerialCounts.triage
 
-	const crewPreppedDocs =
+	const crewPreppedDocs = computeAwaitingPickup(
 		user.role === "CREW"
 			? await db.jafInvoice.findMany({
 					where: {
@@ -322,7 +329,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 					orderBy: { createdAt: "desc" },
 					take: 50,
 				})
-			: []
+			: [],
+	)
 
 	const crewInFieldDocs =
 		user.role === "CREW"

@@ -288,8 +288,13 @@ describe("voidRepairBatch + correctTriage", () => {
 
 	it("voids a batch, returning members to AWAITING_REPAIR with a reason", async () => {
 		const serial = `${RUN}-V1`
-		const { batchId } = await batchOne(`${RUN}-V1wh`, serial)
-		await voidRepairBatch({ batchId, reason: "sent in error", byUserId: U_ID })
+		const { wh, batchId } = await batchOne(`${RUN}-V1wh`, serial)
+		await voidRepairBatch({
+			batchId,
+			reason: "sent in error",
+			byUserId: U_ID,
+			warehouseId: wh.id,
+		})
 		const sl = await db.serialLocation.findUniqueOrThrow({ where: { serial } })
 		expect(sl.status).toBe("AWAITING_REPAIR")
 		const batch = await db.repairBatch.findUniqueOrThrow({
@@ -311,15 +316,25 @@ describe("voidRepairBatch + correctTriage", () => {
 			},
 		})
 		await expect(
-			voidRepairBatch({ batchId, reason: "x", byUserId: U_ID }),
+			voidRepairBatch({
+				batchId,
+				reason: "x",
+				byUserId: U_ID,
+				warehouseId: wh.id,
+			}),
 		).rejects.toThrow(/already back from repair/)
 	})
 
 	it("requires a reason to void", async () => {
 		const serial = `${RUN}-V3`
-		const { batchId } = await batchOne(`${RUN}-V3wh`, serial)
+		const { wh, batchId } = await batchOne(`${RUN}-V3wh`, serial)
 		await expect(
-			voidRepairBatch({ batchId, reason: "  ", byUserId: U_ID }),
+			voidRepairBatch({
+				batchId,
+				reason: "  ",
+				byUserId: U_ID,
+				warehouseId: wh.id,
+			}),
 		).rejects.toThrow(/reason/)
 	})
 
@@ -556,5 +571,257 @@ describe("resolveNeedsReview", () => {
 				warehouseId: wh.id,
 			}),
 		).rejects.toThrow(/expected status NEEDS_REVIEW/)
+	})
+})
+
+// Review finding D/E: every serial-touching service must verify the serial (or
+// batch) actually BELONGS to the warehouse the caller is acting as — otherwise
+// a lead at warehouse A silently reassigns warehouse B's unit to themselves.
+// createRepairBatch already did this; these cover the other four paths.
+describe("cross-warehouse rejection", () => {
+	async function twoWarehouses(tag: string) {
+		const mine = t.track(
+			"warehouse",
+			await db.warehouse.create({
+				data: { name: `${RUN}-${tag}-a`, zone: "X" },
+			}),
+		)
+		const theirs = t.track(
+			"warehouse",
+			await db.warehouse.create({
+				data: { name: `${RUN}-${tag}-b`, zone: "X" },
+			}),
+		)
+		return { mine, theirs }
+	}
+
+	async function seedSerial(
+		serial: string,
+		status: string,
+		currentRef: string,
+	) {
+		return t.track(
+			"serialLocation",
+			await db.serialLocation.create({
+				data: {
+					serial,
+					serviceCodeId: SC_ID,
+					status: status as "RETURNED",
+					condition: "NEW",
+					currentRef,
+					since: new Date(),
+				},
+			}),
+		)
+	}
+
+	it("dispositionSerial refuses a serial owned by another warehouse", async () => {
+		const { mine, theirs } = await twoWarehouses("XD")
+		const serial = `${RUN}-XD-1`
+		await seedSerial(serial, "RETURNED", theirs.id)
+		await expect(
+			dispositionSerial({
+				serial,
+				disposition: "GOOD",
+				byUserId: U_ID,
+				warehouseId: mine.id,
+			}),
+		).rejects.toThrow(/different warehouse/)
+		const sl = await db.serialLocation.findUniqueOrThrow({ where: { serial } })
+		expect(sl.status).toBe("RETURNED") // untouched
+		expect(sl.currentRef).toBe(theirs.id) // NOT silently reassigned
+	})
+
+	it("correctTriage refuses a serial owned by another warehouse", async () => {
+		const { mine, theirs } = await twoWarehouses("XC")
+		const serial = `${RUN}-XC-1`
+		await seedSerial(serial, "AWAITING_REPAIR", theirs.id)
+		await expect(
+			correctTriage({
+				serial,
+				reason: "not actually failed",
+				byUserId: U_ID,
+				warehouseId: mine.id,
+			}),
+		).rejects.toThrow(/different warehouse/)
+		const sl = await db.serialLocation.findUniqueOrThrow({ where: { serial } })
+		expect(sl.status).toBe("AWAITING_REPAIR")
+		expect(sl.currentRef).toBe(theirs.id)
+	})
+
+	it("resolveNeedsReview refuses a serial owned by another warehouse", async () => {
+		const { mine, theirs } = await twoWarehouses("XN")
+		const serial = `${RUN}-XN-1`
+		await seedSerial(serial, "NEEDS_REVIEW", theirs.id)
+		await expect(
+			resolveNeedsReview({
+				serial,
+				decision: "GOOD",
+				byUserId: U_ID,
+				warehouseId: mine.id,
+			}),
+		).rejects.toThrow(/different warehouse/)
+		const sl = await db.serialLocation.findUniqueOrThrow({ where: { serial } })
+		expect(sl.status).toBe("NEEDS_REVIEW")
+		expect(sl.currentRef).toBe(theirs.id)
+	})
+
+	it("voidRepairBatch refuses a batch owned by another warehouse", async () => {
+		const { mine, theirs } = await twoWarehouses("XV")
+		const serial = `${RUN}-XV-1`
+		await seedSerial(serial, "AWAITING_REPAIR", theirs.id)
+		const { batchId } = await createRepairBatch({
+			serials: [serial],
+			warehouseId: theirs.id,
+			byUserId: U_ID,
+		})
+		t.track("repairBatch", { id: batchId })
+		await expect(
+			voidRepairBatch({
+				batchId,
+				reason: "not mine to void",
+				byUserId: U_ID,
+				warehouseId: mine.id,
+			}),
+		).rejects.toThrow(/different warehouse/)
+		const batch = await db.repairBatch.findUniqueOrThrow({
+			where: { id: batchId },
+		})
+		expect(batch.status).toBe("SENT") // untouched
+	})
+})
+
+describe("receiveRepairedUnits: duplicate intake", () => {
+	it("flags a serial that is ALREADY stocked in a warehouse instead of re-counting it", async () => {
+		const wh = t.track(
+			"warehouse",
+			await db.warehouse.create({ data: { name: `${RUN}-DUP1`, zone: "I" } }),
+		)
+		const serial = `${RUN}-DUP1-s`
+		await t.track(
+			"serialLocation",
+			await db.serialLocation.create({
+				data: {
+					serial,
+					serviceCodeId: SC_ID,
+					status: "SENT_FOR_REPAIR",
+					condition: "NEW",
+					currentRef: "batchDup",
+					since: new Date(),
+				},
+			}),
+		)
+		await receiveRepairedUnits({
+			warehouseId: wh.id,
+			declaredCount: 1,
+			scans: [{ serial, serviceCodeId: SC_ID }],
+			byUserId: U_ID,
+		})
+		// A second intake of the same (now WAREHOUSE/REFURBISHED) serial must not
+		// post a second REPAIR_INTAKE movement — that double-counts refurb stock.
+		const { flagged, stocked } = await receiveRepairedUnits({
+			warehouseId: wh.id,
+			declaredCount: 1,
+			scans: [{ serial, serviceCodeId: SC_ID }],
+			mismatchNote: "duplicate scan",
+			byUserId: U_ID,
+		})
+		expect(flagged).toContain(serial)
+		expect(stocked).toBe(0)
+		expect(
+			await db.stockMovement.count({
+				where: { serial, type: "REPAIR_INTAKE" },
+			}),
+		).toBe(1)
+	})
+
+	it("posts exactly one REPAIR_INTAKE when two intakes of the same serial run CONCURRENTLY", async () => {
+		const wh = t.track(
+			"warehouse",
+			await db.warehouse.create({ data: { name: `${RUN}-DUP2`, zone: "I" } }),
+		)
+		const serial = `${RUN}-DUP2-s`
+		await t.track(
+			"serialLocation",
+			await db.serialLocation.create({
+				data: {
+					serial,
+					serviceCodeId: SC_ID,
+					status: "SENT_FOR_REPAIR",
+					condition: "NEW",
+					currentRef: "batchDup2",
+					since: new Date(),
+				},
+			}),
+		)
+		const intake = () =>
+			receiveRepairedUnits({
+				warehouseId: wh.id,
+				declaredCount: 1,
+				scans: [{ serial, serviceCodeId: SC_ID }],
+				mismatchNote: "concurrent submit",
+				byUserId: U_ID,
+			})
+		const results = await Promise.allSettled([intake(), intake()])
+		const stockedTotal = results.reduce(
+			(n, r) => n + (r.status === "fulfilled" ? r.value.stocked : 0),
+			0,
+		)
+		expect(stockedTotal).toBe(1)
+		expect(
+			await db.stockMovement.count({
+				where: { serial, type: "REPAIR_INTAKE" },
+			}),
+		).toBe(1)
+		const sl = await db.serialLocation.findUniqueOrThrow({ where: { serial } })
+		expect(sl.status).toBe("WAREHOUSE")
+		expect(sl.condition).toBe("REFURBISHED")
+	})
+})
+
+// Review finding H: the NEEDS_REVIEW lead notification was written on the
+// global `db`, outside the caller's transaction — so a composed operation that
+// rolled back still notified leads about a disposition that never committed.
+describe("dispositionSerial notification is transactional", () => {
+	it("does not notify when the caller's transaction rolls back", async () => {
+		const wh = t.track(
+			"warehouse",
+			await db.warehouse.create({ data: { name: `${RUN}-TXN`, zone: "H" } }),
+		)
+		const lead = t.track(
+			"user",
+			await db.user.create({
+				data: { email: `${RUN}-txlead@x`, role: "WAREHOUSE", name: "Lead H" },
+			}),
+		)
+		await t.track(
+			"warehouseAssignment",
+			await db.warehouseAssignment.create({
+				data: { userId: lead.id, warehouseId: wh.id, isLead: true },
+			}),
+		)
+		const serial = `${RUN}-TXN-1`
+		await seedReturned(serial, wh.id)
+
+		await expect(
+			db.$transaction(async (tx) => {
+				await dispositionSerial(
+					{
+						serial,
+						disposition: "NEEDS_REVIEW",
+						byUserId: U_ID,
+						warehouseId: wh.id,
+					},
+					tx,
+				)
+				throw new Error("caller failed after the disposition")
+			}),
+		).rejects.toThrow(/caller failed/)
+
+		expect(await db.notification.count({ where: { userId: lead.id } })).toBe(0)
+		// …and the serial itself really did roll back too.
+		expect(
+			(await db.serialLocation.findUniqueOrThrow({ where: { serial } })).status,
+		).toBe("RETURNED")
 	})
 })

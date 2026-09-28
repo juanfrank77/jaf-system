@@ -14,7 +14,7 @@ function loaderDataAt(onHand: number): StockScreenData {
 				onHand,
 				stockUnit: "FT",
 				countUnit: "ROLLOS",
-				derivedCountQty: onHand * 10,
+				derivedStockQty: onHand * 10,
 			},
 		],
 		serial: [],

@@ -21,7 +21,8 @@
 		"receive": "Record intake",
 		"onhand_heading": "Serialized On-Hand",
 		"onhand_empty": "No serialized stock on hand.",
-		"recent_intakes": "{{count}} recent intake(s)"
+		"recent_intakes": "{{count}} recent intake(s)",
+		"action_failed": "That action was blocked"
 	},
 	"stock": {
 		"title": "Stock & Audit",
@@ -50,7 +51,15 @@
 			"heading": "Receive Delivery",
 			"reference_label": "Reference (optional)",
 			"submit": "Record delivery",
-			"success": "Delivery recorded."
+			"success": "Delivery recorded.",
+			"errors": {
+				"warehouse_required": "Select a warehouse to receive into.",
+				"not_assigned": "You are not assigned to that warehouse.",
+				"idempotency_key_required": "Missing idempotency key — reload and try again.",
+				"invalid_lines": "Invalid delivery lines.",
+				"invalid_qty": "Received quantity must be a whole number of zero or more.",
+				"invalid_service_codes": "One or more materials are no longer in the active catalog."
+			}
 		},
 		"adjust": {
 			"heading": "Adjust Stock",
@@ -72,14 +81,18 @@
 		}
 	},
 	"adjust": {
-		"reason_required": "A reason is required."
+		"reason_required": "A reason is required.",
+		"invalid_delta": "Enter a whole, non-zero adjustment amount.",
+		"invalid_service_code": "That material is not in the active catalog.",
+		"idempotency_key_required": "Missing idempotency key — reload and try again."
 	},
 	"needs_review": {
 		"title": "Needs Review",
 		"empty": "No units awaiting review.",
 		"reason_placeholder": "Reason (optional)",
 		"good": "Good → stock",
-		"failed": "Failed → repair"
+		"failed": "Failed → repair",
+		"action_failed": "That action was blocked"
 	},
 	"triage": {
 		"title": "Return Triage",
@@ -88,6 +101,7 @@
 		"reason_label": "Reason",
 		"reason_placeholder": "Optional note",
 		"submit": "Save",
+		"action_failed": "That action was blocked",
 		"disposition": {
 			"FAILED": "Failed → repair",
 			"GOOD": "Good → stock",
@@ -313,11 +327,15 @@
 			"invalid_service_codes": "One or more selected products are no longer available.",
 			"return_exceeds_taken": "Cannot return more than taken for service code {{serviceCodeId}}",
 			"warehouse_required": "Select a warehouse to return to.",
-			"idempotency_key_required": "Missing idempotency key — reload and try again."
-		}
+			"idempotency_key_required": "Missing idempotency key — reload and try again.",
+			"already_recorded": "Returns were already recorded for this document.",
+			"invalid_warehouse": "That warehouse does not exist or is no longer active.",
+			"invalid_received_qty": "Returned quantity must be a whole number of zero or more (service code {{serviceCodeId}})."
+		},
+		"already_recorded_notice": "Returns were already recorded for this document. They cannot be logged again."
 	},
 	"returns": {
-		"note_required": "A note is required when received is less than expected."
+		"note_required": "A note is required when received is less than expected, or a serialized unit is lost or damaged."
 	},
 	"restock_fulfill": {
 		"title": "Fulfill Restock #{{id}}",

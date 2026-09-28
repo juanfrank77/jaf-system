@@ -73,21 +73,26 @@ describe("getBulkOnHand", () => {
 })
 
 describe("resolveDualUom", () => {
-	it("hides the derived count qty when no conversion factor", () => {
+	it("hides the derived stock qty when no conversion factor", () => {
 		const r = resolveDualUom(1240, {
 			countUnit: "ROLLOS",
 			stockUnit: "FT",
 			conversionFactor: null,
 		})
-		expect(r.derivedCountQty).toBeNull()
+		expect(r.derivedStockQty).toBeNull()
 	})
-	it("derives the count qty when a factor exists", () => {
-		const r = resolveDualUom(1000, {
+	// The factor is defined countUnit -> stockUnit (schema doc comment), and the
+	// ledger qty IS the count-unit figure — so the derived figure MULTIPLIES.
+	it("derives the stock qty as ledgerQty * factor when a factor exists", () => {
+		const r = resolveDualUom(10, {
 			countUnit: "CAJAS",
 			stockUnit: "PZA",
 			conversionFactor: 100,
 		})
-		expect(r.derivedCountQty).toBe(10)
+		expect(r.ledgerQty).toBe(10)
+		expect(r.countUnit).toBe("CAJAS")
+		expect(r.derivedStockQty).toBe(1000)
+		expect(r.stockUnit).toBe("PZA")
 	})
 })
 
@@ -135,9 +140,9 @@ describe("getWarehouseBulkStock", () => {
 		const rows = await getWarehouseBulkStock(db, wh.id)
 		const a = rows.find((r) => r.serviceCodeId === withFactor.id)
 		expect(a?.onHand).toBe(1000)
-		expect(a?.derivedCountQty).toBe(10)
+		expect(a?.derivedStockQty).toBe(100_000)
 		const b = rows.find((r) => r.serviceCodeId === noFactor.id)
 		expect(b?.onHand).toBe(500)
-		expect(b?.derivedCountQty).toBeNull()
+		expect(b?.derivedStockQty).toBeNull()
 	})
 })

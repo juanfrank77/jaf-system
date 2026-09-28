@@ -1,6 +1,11 @@
 import { screen } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 import { userEvent } from "vitest/browser"
+// `warehouse-stock.server` imports `db`/`Prisma` as TYPES only, so this pure
+// resolver is safe to pull into the browser bundle — which is the whole point
+// of this file's last test: the lib and the table must agree on which unit
+// each number carries, and only wiring one into the other proves it.
+import { resolveDualUom } from "~/lib/warehouse-stock.server"
 import { StockTable, type StockTableRow } from "./stock-table"
 
 const rows: StockTableRow[] = [
@@ -10,7 +15,7 @@ const rows: StockTableRow[] = [
 		onHand: 12,
 		stockUnit: "FT",
 		countUnit: "ROLLOS",
-		derivedCountQty: 240,
+		derivedStockQty: 240,
 	},
 	{
 		serviceCodeId: "sc-2",
@@ -18,7 +23,7 @@ const rows: StockTableRow[] = [
 		onHand: 4,
 		stockUnit: "FT",
 		countUnit: "ROLLOS",
-		derivedCountQty: null,
+		derivedStockQty: null,
 	},
 	{
 		serviceCodeId: "sc-3",
@@ -26,7 +31,7 @@ const rows: StockTableRow[] = [
 		onHand: 3,
 		stockUnit: null,
 		countUnit: "EA",
-		derivedCountQty: null,
+		derivedStockQty: null,
 	},
 ]
 
@@ -148,5 +153,50 @@ describe("StockTable", () => {
 		const row = screen.getByTestId("stock-row-sc-1")
 		await userEvent.click(row.querySelector("button") as HTMLButtonElement)
 		expect(onSelectCode).toHaveBeenCalledWith("sc-1")
+	})
+
+	// Integration guard against "two correct halves, never connected": this
+	// feeds a REAL resolveDualUom result straight into the table instead of a
+	// hand-written row, so an inverted factor (or a renamed field) in the lib
+	// fails here rather than shipping as a silently wrong unit on screen.
+	it("renders a real resolveDualUom result as <count> <countUnit> = <stock> <stockUnit>", async ({
+		renderStub,
+	}) => {
+		// 12 CAJAS of 100 PZA each = 1200 PZA. The factor is countUnit→stockUnit.
+		const dual = resolveDualUom(12, {
+			countUnit: "CAJAS",
+			stockUnit: "PZA",
+			conversionFactor: 100,
+		})
+		const liveRows: StockTableRow[] = [
+			{
+				serviceCodeId: "live-1",
+				canonicalName: "LIVE DUAL UOM MATERIAL",
+				onHand: dual.ledgerQty,
+				stockUnit: dual.stockUnit,
+				countUnit: dual.countUnit,
+				derivedStockQty: dual.derivedStockQty,
+			},
+		]
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<StockTable
+							rows={liveRows}
+							selectedCode={null}
+							onSelectCode={() => {}}
+						/>
+					),
+				},
+			],
+		})
+		const row = screen.getByTestId("stock-row-live-1")
+		expect(row).toHaveTextContent("12 CAJAS")
+		expect(row).toHaveTextContent("= 1200 PZA")
+		// The inverse convention (stock-unit on the left) must NOT appear.
+		expect(row).not.toHaveTextContent("12 PZA")
+		expect(row).not.toHaveTextContent("= 1200 CAJAS")
 	})
 })

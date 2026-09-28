@@ -38,8 +38,24 @@ export async function dispositionSerial(
 ) {
 	const nextStatus = DISPO_TO_STATUS[args.disposition]
 	const run = async (client: Prisma.TransactionClient) => {
+		// Read first so the failure is a clear message, then compare-and-swap on
+		// BOTH status and currentRef: a lead acting "as" warehouse A must never
+		// be able to disposition (and thereby silently reassign) a serial that
+		// belongs to warehouse B. Same rule as createRepairBatch below.
+		const sl = await client.serialLocation.findUniqueOrThrow({
+			where: { serial: args.serial },
+			select: { serviceCodeId: true, status: true, currentRef: true },
+		})
+		if (sl.status !== "RETURNED")
+			throw new Error(`serial ${args.serial}: expected status RETURNED`)
+		if (sl.currentRef !== args.warehouseId)
+			throw new Error(`serial ${args.serial}: belongs to a different warehouse`)
 		const updated = await client.serialLocation.updateMany({
-			where: { serial: args.serial, status: "RETURNED" },
+			where: {
+				serial: args.serial,
+				status: "RETURNED",
+				currentRef: args.warehouseId,
+			},
 			data: {
 				status: nextStatus,
 				currentRef: args.warehouseId,
@@ -48,10 +64,6 @@ export async function dispositionSerial(
 		})
 		if (updated.count !== 1)
 			throw new Error(`serial ${args.serial}: expected status RETURNED`)
-		const sl = await client.serialLocation.findUniqueOrThrow({
-			where: { serial: args.serial },
-			select: { serviceCodeId: true },
-		})
 		await client.stockMovement.create({
 			data: {
 				kind: "SERIAL",
@@ -65,28 +77,34 @@ export async function dispositionSerial(
 				note: `${args.disposition}${args.reason ? `: ${args.reason}` : ""}`,
 			},
 		})
+		// Spec §8: a unit held for review notifies that warehouse's lead(s).
+		//
+		// Written on the SAME client as the rest of this operation (this
+		// function's own transaction, or the caller's `tx`), never the global
+		// `db`. On the global client it committed independently, so a caller
+		// composing this into its own transaction — Spec B's returns-confirm —
+		// could roll back and still have notified leads about a disposition
+		// that never happened. Same discipline as createRepairBatch below.
+		if (args.disposition === "NEEDS_REVIEW") {
+			const leads = await client.warehouseAssignment.findMany({
+				where: { warehouseId: args.warehouseId, isLead: true },
+				select: { userId: true },
+			})
+			if (leads.length) {
+				await client.notification.createMany({
+					data: leads.map((l) => ({
+						userId: l.userId,
+						message: `Serial ${args.serial} is held for review before repair disposition.`,
+					})),
+				})
+			}
+		}
 		return { status: nextStatus }
 	}
 	// A caller composing this into its own transaction (e.g. Spec B's
 	// returns-confirm, which writes a bulk RETURN movement + this disposition
 	// atomically) passes `tx`; otherwise this opens its own, as before.
-	const result = tx ? await run(tx) : await db.$transaction(run)
-	// Spec §8: a unit held for review notifies the warehouse lead(s) of that warehouse.
-	if (args.disposition === "NEEDS_REVIEW") {
-		const leads = await db.warehouseAssignment.findMany({
-			where: { warehouseId: args.warehouseId, isLead: true },
-			select: { userId: true },
-		})
-		if (leads.length) {
-			await db.notification.createMany({
-				data: leads.map((l) => ({
-					userId: l.userId,
-					message: `Serial ${args.serial} is held for review before repair disposition.`,
-				})),
-			})
-		}
-	}
-	return result
+	return tx ? await run(tx) : await db.$transaction(run)
 }
 
 export async function createRepairBatch(args: {
@@ -165,12 +183,19 @@ export async function voidRepairBatch(args: {
 	batchId: string
 	reason: string
 	byUserId: string
+	/** The warehouse the acting lead is gated for — the batch must belong to it. */
+	warehouseId: string
 }) {
 	if (!args.reason.trim()) throw new Error("void reason required")
 	await db.$transaction(async (tx) => {
 		const batch = await tx.repairBatch.findUniqueOrThrow({
 			where: { id: args.batchId },
 		})
+		// The route gates the ACTING user on `warehouseId`, but the batchId comes
+		// from the form — without this a lead could void another warehouse's
+		// batch. Same cross-warehouse rejection as createRepairBatch.
+		if (batch.warehouseId !== args.warehouseId)
+			throw new Error(`batch ${args.batchId}: belongs to a different warehouse`)
 		if (batch.status !== "SENT") throw new Error("batch not in SENT state")
 		const members = await tx.stockMovement.findMany({
 			where: { refRepairBatchId: args.batchId, type: "SENT_FOR_REPAIR" },
@@ -244,8 +269,22 @@ export async function correctTriage(args: {
 }) {
 	if (!args.reason.trim()) throw new Error("correction reason required")
 	await db.$transaction(async (tx) => {
+		// Ownership check (same rule as createRepairBatch/dispositionSerial): a
+		// correction must not pull another warehouse's unit out of its pool.
+		const sl = await tx.serialLocation.findUniqueOrThrow({
+			where: { serial: args.serial },
+			select: { serviceCodeId: true, status: true, currentRef: true },
+		})
+		if (sl.status !== "AWAITING_REPAIR")
+			throw new Error(`serial ${args.serial}: expected status AWAITING_REPAIR`)
+		if (sl.currentRef !== args.warehouseId)
+			throw new Error(`serial ${args.serial}: belongs to a different warehouse`)
 		const moved = await tx.serialLocation.updateMany({
-			where: { serial: args.serial, status: "AWAITING_REPAIR" },
+			where: {
+				serial: args.serial,
+				status: "AWAITING_REPAIR",
+				currentRef: args.warehouseId,
+			},
 			data: {
 				status: "WAREHOUSE",
 				currentRef: args.warehouseId,
@@ -254,10 +293,6 @@ export async function correctTriage(args: {
 		})
 		if (moved.count !== 1)
 			throw new Error(`serial ${args.serial}: expected status AWAITING_REPAIR`)
-		const sl = await tx.serialLocation.findUniqueOrThrow({
-			where: { serial: args.serial },
-			select: { serviceCodeId: true },
-		})
 		await tx.stockMovement.create({
 			data: {
 				kind: "SERIAL",
@@ -274,7 +309,19 @@ export async function correctTriage(args: {
 	})
 }
 
-export async function generateRepairBatchDocument(batchId: string) {
+export async function generateRepairBatchDocument(
+	batchId: string,
+	/** When given, the batch must belong to this warehouse (form-supplied ids). */
+	warehouseId?: string,
+) {
+	if (warehouseId) {
+		const batch = await db.repairBatch.findUniqueOrThrow({
+			where: { id: batchId },
+			select: { warehouseId: true },
+		})
+		if (batch.warehouseId !== warehouseId)
+			throw new Error(`batch ${batchId}: belongs to a different warehouse`)
+	}
 	const bytes = await generateRepairBatchPdf(batchId)
 	const dir = join(
 		process.env.UPLOAD_DIR ?? "/tmp/jaf/uploads",
@@ -291,6 +338,19 @@ export async function generateRepairBatchDocument(batchId: string) {
 }
 
 const LIVE_STATUSES = ["INSTALLED", "VAN"] as const
+
+/**
+ * Statuses that must block a repaired-unit intake.
+ *
+ * `LIVE_STATUSES` covers "live elsewhere" (installed at a customer / on a van)
+ * — re-stocking one of those would fabricate inventory. `WAREHOUSE` is here
+ * because a unit already sitting in a warehouse is ALREADY stocked: receiving
+ * it again is a duplicate intake (a double scan, or two concurrent submits of
+ * the same intake) and would double-count the refurbished stock. The reuse
+ * path's compare-and-swap uses the same set, so a second CONCURRENT intake of
+ * the same serial loses the swap and is flagged instead of counted twice.
+ */
+const INTAKE_BLOCKED_STATUSES = [...LIVE_STATUSES, "WAREHOUSE"] as const
 
 // id→id: original ServiceCode → its `reparadoCode` (a Claro code string) → the
 // REPARADO ServiceCode's id. `serviceCodeId` is an FK, so an unresolved code
@@ -346,7 +406,7 @@ export async function receiveRepairedUnits(args: {
 			})
 			if (
 				existing &&
-				LIVE_STATUSES.includes(existing.status as "INSTALLED" | "VAN")
+				(INTAKE_BLOCKED_STATUSES as readonly string[]).includes(existing.status)
 			) {
 				flagged.push(scan.serial)
 				continue
@@ -356,11 +416,16 @@ export async function receiveRepairedUnits(args: {
 			const { serviceCodeId: reparadoId, needsCode } =
 				await resolveReparadoServiceCodeId(scan.serviceCodeId)
 			if (existing) {
-				// Compare-and-swap: only move it if it is still NOT live-elsewhere.
-				// Guards the TOCTOU between the read above and this write (a
-				// concurrent install, or a duplicate concurrent intake).
+				// Compare-and-swap: only move it if it is still neither
+				// live-elsewhere NOR already stocked in a warehouse. Guards the
+				// TOCTOU between the read above and this write (a concurrent
+				// install, or a duplicate concurrent intake of the same serial —
+				// the loser sees WAREHOUSE and is flagged, never counted twice).
 				const moved = await tx.serialLocation.updateMany({
-					where: { serial: scan.serial, status: { notIn: [...LIVE_STATUSES] } },
+					where: {
+						serial: scan.serial,
+						status: { notIn: [...INTAKE_BLOCKED_STATUSES] },
+					},
 					data: {
 						status: "WAREHOUSE",
 						condition: "REFURBISHED",
@@ -438,8 +503,21 @@ export async function resolveNeedsReview(args: {
 	const nextStatus =
 		args.decision === "FAILED" ? "AWAITING_REPAIR" : "WAREHOUSE"
 	return db.$transaction(async (tx) => {
+		// Ownership check (same rule as createRepairBatch/dispositionSerial).
+		const sl = await tx.serialLocation.findUniqueOrThrow({
+			where: { serial: args.serial },
+			select: { serviceCodeId: true, status: true, currentRef: true },
+		})
+		if (sl.status !== "NEEDS_REVIEW")
+			throw new Error(`serial ${args.serial}: expected status NEEDS_REVIEW`)
+		if (sl.currentRef !== args.warehouseId)
+			throw new Error(`serial ${args.serial}: belongs to a different warehouse`)
 		const moved = await tx.serialLocation.updateMany({
-			where: { serial: args.serial, status: "NEEDS_REVIEW" },
+			where: {
+				serial: args.serial,
+				status: "NEEDS_REVIEW",
+				currentRef: args.warehouseId,
+			},
 			data: {
 				status: nextStatus,
 				currentRef: args.warehouseId,
@@ -448,10 +526,6 @@ export async function resolveNeedsReview(args: {
 		})
 		if (moved.count !== 1)
 			throw new Error(`serial ${args.serial}: expected status NEEDS_REVIEW`)
-		const sl = await tx.serialLocation.findUniqueOrThrow({
-			where: { serial: args.serial },
-			select: { serviceCodeId: true },
-		})
 		await tx.stockMovement.create({
 			data: {
 				kind: "SERIAL",

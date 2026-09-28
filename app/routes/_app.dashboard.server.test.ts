@@ -10,6 +10,8 @@ vi.mock("~/lib/db.server", () => ({
 		jafInvoice: { findMany: vi.fn() },
 		brigade: { findMany: vi.fn() },
 		preCertSheet: { findMany: vi.fn() },
+		warehouseAssignment: { findFirst: vi.fn(), findMany: vi.fn() },
+		warehouse: { findMany: vi.fn() },
 		$queryRaw: vi.fn(),
 	},
 }))
@@ -124,5 +126,68 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 			params: {},
 		} as any)
 		expect(data.showFilters).toBe(true)
+	})
+})
+
+// Regression for the review's Critical C: `computeAwaitingPickup` existed and
+// its unit test passed, but NOTHING called it — the dashboard's PREPPED queues
+// went to the view untouched, so `doc.aged` was always undefined and the red
+// "aged" badge could never render. This asserts the WIRING, not the function.
+describe("GET /dashboard (WAREHOUSE) — awaiting-pickup aging", () => {
+	const wh = { id: "wh-user", role: "WAREHOUSE" }
+	const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000)
+
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(requireSession).mockResolvedValue({
+			user: { id: "wh-user" },
+		} as any)
+		vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue(wh as any)
+		vi.mocked(db.user.findMany).mockResolvedValue([])
+		vi.mocked(db.$queryRaw).mockResolvedValue([])
+		vi.mocked(db.warehouseAssignment.findMany).mockResolvedValue([] as any)
+		vi.mocked(db.warehouse.findMany).mockResolvedValue([] as any)
+		vi.mocked(isDashboardFiltersEnabled).mockReturnValue(false)
+	})
+
+	it("flags a prepped doc staged more than 3 days as aged in the loader's data", async () => {
+		const prepped = [
+			{
+				id: "old",
+				controlNumber: "C-OLD",
+				status: "PREPPED",
+				jobType: "M",
+				jobAddressEstimated: "A",
+				createdAt: daysAgo(9),
+				preppedAt: daysAgo(9),
+			},
+			{
+				id: "fresh",
+				controlNumber: "C-FRESH",
+				status: "PREPPED",
+				jobType: "M",
+				jobAddressEstimated: "A",
+				createdAt: daysAgo(1),
+				preppedAt: daysAgo(1),
+			},
+		]
+		vi.mocked(db.jafInvoice.findMany)
+			.mockResolvedValueOnce([] as any) // jobTypeOptions
+			.mockResolvedValueOnce([] as any) // docs list
+			.mockResolvedValueOnce(prepped as any) // warehousePreppedDocs
+			.mockResolvedValueOnce([] as any) // warehouseMissingDocs
+			.mockResolvedValueOnce([] as any) // warehouseReturnsDocs
+
+		const data = await loader({
+			request: new Request("http://localhost/dashboard"),
+			params: {},
+		} as any)
+
+		const old = data.warehousePreppedDocs.find((d) => d.id === "old")
+		const fresh = data.warehousePreppedDocs.find((d) => d.id === "fresh")
+		expect(old?.aged).toBe(true)
+		expect(old?.daysStaged).toBe(9)
+		expect(fresh?.aged).toBe(false)
+		expect(fresh?.daysStaged).toBe(1)
 	})
 })

@@ -5,6 +5,7 @@ import {
 	correctTriage,
 	createRepairBatch,
 	dispositionSerial,
+	receiveRepairedUnits,
 	voidRepairBatch,
 } from "~/lib/repair.server"
 import { makeTracker, runToken, seedServiceCode } from "~/test/helpers"
@@ -314,5 +315,104 @@ describe("voidRepairBatch + correctTriage", () => {
 		})
 		const sl = await db.serialLocation.findUniqueOrThrow({ where: { serial } })
 		expect(sl.status).toBe("WAREHOUSE")
+	})
+})
+
+describe("receiveRepairedUnits", () => {
+	it("intake reuses a SENT_FOR_REPAIR serial (history-link) and creates a new one otherwise", async () => {
+		const wh = t.track(
+			"warehouse",
+			await db.warehouse.create({ data: { name: `${RUN}-I1`, zone: "I" } }),
+		)
+		const oldSerial = `${RUN}-I-old`
+		const newSerial = `${RUN}-I-new`
+		await t.track(
+			"serialLocation",
+			await db.serialLocation.create({
+				data: {
+					serial: oldSerial,
+					serviceCodeId: SC_ID,
+					status: "SENT_FOR_REPAIR",
+					condition: "NEW",
+					currentRef: "batchX",
+					since: new Date(),
+				},
+			}),
+		)
+		const { intakeId } = await receiveRepairedUnits({
+			warehouseId: wh.id,
+			declaredCount: 2,
+			scans: [
+				{ serial: oldSerial, serviceCodeId: SC_ID },
+				{ serial: newSerial, serviceCodeId: SC_ID },
+			],
+			byUserId: U_ID,
+		})
+		const reused = await db.serialLocation.findUniqueOrThrow({
+			where: { serial: oldSerial },
+		})
+		expect(reused.status).toBe("WAREHOUSE")
+		expect(reused.condition).toBe("REFURBISHED")
+		const trail = await db.stockMovement.findMany({
+			where: { serial: oldSerial },
+			orderBy: { at: "asc" },
+		})
+		expect(trail.at(-1)?.type).toBe("REPAIR_INTAKE")
+		const created = await db.serialLocation.findUniqueOrThrow({
+			where: { serial: newSerial },
+		})
+		t.track("serialLocation", created)
+		expect(created.condition).toBe("REFURBISHED")
+		const scanned = await db.stockMovement.count({
+			where: { refRepairIntakeId: intakeId, type: "REPAIR_INTAKE" },
+		})
+		expect(scanned).toBe(2)
+	})
+
+	it("requires a note when declared != scanned", async () => {
+		const wh = t.track(
+			"warehouse",
+			await db.warehouse.create({ data: { name: `${RUN}-I2`, zone: "I" } }),
+		)
+		await expect(
+			receiveRepairedUnits({
+				warehouseId: wh.id,
+				declaredCount: 10,
+				scans: [{ serial: `${RUN}-I-9`, serviceCodeId: SC_ID }],
+				byUserId: U_ID,
+			}),
+		).rejects.toThrow(/mismatchNote required/)
+	})
+
+	it("flags a serial that is live elsewhere instead of overwriting it", async () => {
+		const wh = t.track(
+			"warehouse",
+			await db.warehouse.create({ data: { name: `${RUN}-I3`, zone: "I" } }),
+		)
+		const liveSerial = `${RUN}-I-live`
+		await t.track(
+			"serialLocation",
+			await db.serialLocation.create({
+				data: {
+					serial: liveSerial,
+					serviceCodeId: SC_ID,
+					status: "INSTALLED",
+					condition: "NEW",
+					currentRef: "someCompletion",
+					since: new Date(),
+				},
+			}),
+		)
+		const { flagged } = await receiveRepairedUnits({
+			warehouseId: wh.id,
+			declaredCount: 1,
+			scans: [{ serial: liveSerial, serviceCodeId: SC_ID }],
+			byUserId: U_ID,
+		})
+		expect(flagged).toContain(liveSerial)
+		const sl = await db.serialLocation.findUniqueOrThrow({
+			where: { serial: liveSerial },
+		})
+		expect(sl.status).toBe("INSTALLED") // untouched
 	})
 })

@@ -4,6 +4,7 @@ import { RouteErrorBoundary } from "~/components/error-boundary"
 import { db } from "~/lib/db.server"
 import { isComptrollerEnabled } from "~/lib/features.server"
 import { requireSession } from "~/lib/permissions.server"
+import { resolveWarehouseScope } from "~/lib/warehouse-scope.server"
 import type { Route } from "./+types/_app"
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -16,20 +17,28 @@ export async function loader({ request }: Route.LoaderArgs) {
 		orderBy: { createdAt: "desc" },
 		take: 10,
 	})
+	// Warehouse/admin users get the multi-warehouse header switch (renders only
+	// when they have >1 assignment).
+	const warehouseScope =
+		user.role === "WAREHOUSE" || user.role === "ADMIN"
+			? await resolveWarehouseScope(db, request, user)
+			: null
 	return {
 		user: { name: user.name, role: user.role },
 		notifications,
 		comptrollerEnabled: isComptrollerEnabled(),
+		warehouseScope,
 	}
 }
 
 export default function AppShellRoute({ loaderData }: Route.ComponentProps) {
-	const { user, notifications, comptrollerEnabled } = loaderData
+	const { user, notifications, comptrollerEnabled, warehouseScope } = loaderData
 	return (
 		<AppShell
 			user={user}
 			notifications={notifications}
 			comptrollerEnabled={comptrollerEnabled}
+			warehouseScope={warehouseScope ?? undefined}
 		>
 			<Outlet />
 		</AppShell>

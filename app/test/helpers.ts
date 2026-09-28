@@ -58,6 +58,7 @@ export function makeTracker() {
 		warehouseAssignment: [] as string[],
 		warehouse: [] as string[],
 		user: [] as string[],
+		serviceCode: [] as string[],
 	}
 	function track<M extends keyof typeof b, R extends { id: string }>(
 		model: M,
@@ -104,6 +105,50 @@ export function makeTracker() {
 			await db.warehouse.deleteMany({ where: { id: { in: b.warehouse } } })
 		if (b.user.length)
 			await db.user.deleteMany({ where: { id: { in: b.user } } })
+		// serviceCodeId is a plain column (no DB FK), so ServiceCode rows can be
+		// removed last, order-independent.
+		if (b.serviceCode.length)
+			await db.serviceCode.deleteMany({ where: { id: { in: b.serviceCode } } })
 	}
 	return { track, cleanup }
+}
+
+/** Create a fresh warehouse for a test (unique name). */
+export async function seedWarehouse(name?: string) {
+	return db.warehouse.create({
+		data: { name: name ?? runToken("WH"), zone: "Z" },
+	})
+}
+
+/**
+ * Create/refresh a ServiceCode (material) with optional dual-UOM fields.
+ * Defaults to a per-run-unique claroCode so tests never mutate a real catalog
+ * row. Returns the row — key movements/serials by its `.id`, never the Claro
+ * string.
+ */
+export async function seedMaterial(
+	opts: {
+		claroCode?: string
+		name?: string
+		unitPrice?: number
+		countUnit?: string | null
+		stockUnit?: string | null
+		conversionFactor?: number | null
+		serialized?: boolean
+	} = {},
+) {
+	const claroCode = opts.claroCode ?? runToken("MAT")
+	const fields = {
+		name: opts.name ?? `Test ${claroCode}`,
+		unitPrice: opts.unitPrice ?? 0,
+		countUnit: opts.countUnit ?? null,
+		stockUnit: opts.stockUnit ?? null,
+		conversionFactor: opts.conversionFactor ?? null,
+		serialized: opts.serialized ?? false,
+	}
+	return db.serviceCode.upsert({
+		where: { claroCode },
+		update: fields,
+		create: { claroCode, ...fields },
+	})
 }

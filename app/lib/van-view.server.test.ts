@@ -91,7 +91,7 @@ it("nets accessory stock from many movement rows via DB aggregation, not an unbo
 	const byUser = await db.user.create({
 		data: { email: `vvu${Date.now()}@x.com`, name: "U", role: "WAREHOUSE" },
 	})
-	await db.vanMovement.createMany({
+	await db.stockMovement.createMany({
 		data: [
 			{
 				vanId,

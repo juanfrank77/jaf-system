@@ -20,7 +20,7 @@ export async function getVanView(vanId: string) {
 		// Accessory net stock is a running balance over an append-only ledger
 		// that only ever grows — summed in the DB via groupBy instead of
 		// pulling every movement row this van has ever had into memory.
-		db.vanMovement.groupBy({
+		db.stockMovement.groupBy({
 			by: ["serviceCodeId"],
 			where: { vanId, serial: null },
 			_sum: { qty: true },

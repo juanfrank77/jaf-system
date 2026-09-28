@@ -19,9 +19,10 @@ export async function scanInReturn(
 				since: new Date(),
 			},
 		}),
-		db.vanMovement.create({
+		db.stockMovement.create({
 			data: {
 				vanId: fromVanId,
+				kind: "SERIAL",
 				serviceCodeId: loc.serviceCodeId,
 				qty: -1,
 				serial,

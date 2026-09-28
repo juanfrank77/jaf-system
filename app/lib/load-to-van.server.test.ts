@@ -61,7 +61,7 @@ it("moves a warehouse serial onto the van and closes the restock", async () => {
 		(await db.restockRequest.findUnique({ where: { id: restockId } }))?.status,
 	).toBe("RECEIVED")
 	expect(
-		await db.vanMovement.count({ where: { serial, type: "PICKUP" } }),
+		await db.stockMovement.count({ where: { serial, type: "PICKUP" } }),
 	).toBe(1)
 })
 
@@ -84,7 +84,7 @@ it("rejects releasing a restock that is still awaiting over-par sign-off", async
 		),
 	).rejects.toThrow()
 	expect(
-		await db.vanMovement.count({ where: { refRestockId: needsSignoff.id } }),
+		await db.stockMovement.count({ where: { refRestockId: needsSignoff.id } }),
 	).toBe(0)
 	expect(
 		(
@@ -111,9 +111,9 @@ it("rejects releasing the same restock twice (no replay, no double-counted acces
 			id: actorId,
 		}),
 	).rejects.toThrow()
-	expect(await db.vanMovement.count({ where: { refRestockId: req.id } })).toBe(
-		1,
-	)
+	expect(
+		await db.stockMovement.count({ where: { refRestockId: req.id } }),
+	).toBe(1)
 })
 
 it("rejects a release that scans fewer serials than the restock requested (partial fulfillment)", async () => {
@@ -152,9 +152,9 @@ it("rejects a release that scans fewer serials than the restock requested (parti
 		(await db.restockRequest.findUniqueOrThrow({ where: { id: req.id } }))
 			.status,
 	).toBe("APPROVED")
-	expect(await db.vanMovement.count({ where: { refRestockId: req.id } })).toBe(
-		0,
-	)
+	expect(
+		await db.stockMovement.count({ where: { refRestockId: req.id } }),
+	).toBe(0)
 })
 
 it("releases a mix of serials with and without a prior SerialLocation row in one call", async () => {
@@ -195,9 +195,9 @@ it("releases a mix of serials with and without a prior SerialLocation row in one
 		(await db.serialLocation.findUnique({ where: { serial: brandNew } }))
 			?.currentRef,
 	).toBe(vanId)
-	expect(await db.vanMovement.count({ where: { refRestockId: req.id } })).toBe(
-		2,
-	)
+	expect(
+		await db.stockMovement.count({ where: { refRestockId: req.id } }),
+	).toBe(2)
 })
 
 it("rejects a release that scans more units than the restock requested (excess)", async () => {
@@ -267,9 +267,9 @@ it("rejects a release with the same serial scanned twice, instead of crashing on
 		(await db.restockRequest.findUniqueOrThrow({ where: { id: req.id } }))
 			.status,
 	).toBe("APPROVED")
-	expect(await db.vanMovement.count({ where: { refRestockId: req.id } })).toBe(
-		0,
-	)
+	expect(
+		await db.stockMovement.count({ where: { refRestockId: req.id } }),
+	).toBe(0)
 })
 
 it("rejects a release that provides a serial for a service code never requested, even though the requested lines are individually satisfied", async () => {
@@ -324,9 +324,9 @@ it("rejects a release that provides a serial for a service code never requested,
 		(await db.restockRequest.findUniqueOrThrow({ where: { id: req.id } }))
 			.status,
 	).toBe("APPROVED")
-	expect(await db.vanMovement.count({ where: { refRestockId: req.id } })).toBe(
-		0,
-	)
+	expect(
+		await db.stockMovement.count({ where: { refRestockId: req.id } }),
+	).toBe(0)
 })
 
 it("rejects releasing a restock that has no lines at all", async () => {

@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { db } from "~/lib/db.server"
-import { computeTriagePrefill, dispositionSerial } from "~/lib/repair.server"
+import {
+	computeTriagePrefill,
+	createRepairBatch,
+	dispositionSerial,
+} from "~/lib/repair.server"
 import { makeTracker, runToken, seedServiceCode } from "~/test/helpers"
 
 // serviceCodeId is an FK → ServiceCode.id (a cuid). Resolve a real row once.
@@ -128,5 +132,90 @@ describe("triage disposition", () => {
 describe("computeTriagePrefill", () => {
 	it("defaults to GOOD when the serial was never swapped out (unused van stock)", async () => {
 		expect(await computeTriagePrefill(`${RUN}-never-swapped`)).toBe("GOOD")
+	})
+})
+
+describe("createRepairBatch", () => {
+	it("batches only AWAITING_REPAIR units in the same warehouse", async () => {
+		const wh = t.track(
+			"warehouse",
+			await db.warehouse.create({ data: { name: `${RUN}-B1`, zone: "B" } }),
+		)
+		const serials = [`${RUN}-B1a`, `${RUN}-B1b`]
+		for (const s of serials)
+			await t.track(
+				"serialLocation",
+				await db.serialLocation.create({
+					data: {
+						serial: s,
+						serviceCodeId: SC_ID,
+						status: "AWAITING_REPAIR",
+						condition: "NEW",
+						currentRef: wh.id,
+						since: new Date(),
+					},
+				}),
+			)
+		const { batchId } = await createRepairBatch({
+			serials,
+			warehouseId: wh.id,
+			byUserId: U_ID,
+		})
+		t.track("repairBatch", { id: batchId })
+		const members = await db.stockMovement.findMany({
+			where: { refRepairBatchId: batchId, type: "SENT_FOR_REPAIR" },
+		})
+		expect(members).toHaveLength(2)
+		const sl = await db.serialLocation.findUniqueOrThrow({
+			where: { serial: serials[0] },
+		})
+		expect(sl.status).toBe("SENT_FOR_REPAIR")
+		expect(sl.currentRef).toBe(batchId)
+	})
+
+	it("rejects a GOOD/non-AWAITING unit and commits nothing (CAS)", async () => {
+		const wh = t.track(
+			"warehouse",
+			await db.warehouse.create({ data: { name: `${RUN}-B2`, zone: "B" } }),
+		)
+		const ok = `${RUN}-B3`
+		const bad = `${RUN}-B4`
+		await t.track(
+			"serialLocation",
+			await db.serialLocation.create({
+				data: {
+					serial: ok,
+					serviceCodeId: SC_ID,
+					status: "AWAITING_REPAIR",
+					condition: "NEW",
+					currentRef: wh.id,
+					since: new Date(),
+				},
+			}),
+		)
+		await t.track(
+			"serialLocation",
+			await db.serialLocation.create({
+				data: {
+					serial: bad,
+					serviceCodeId: SC_ID,
+					status: "WAREHOUSE",
+					condition: "NEW",
+					currentRef: wh.id,
+					since: new Date(),
+				},
+			}),
+		)
+		await expect(
+			createRepairBatch({
+				serials: [ok, bad],
+				warehouseId: wh.id,
+				byUserId: U_ID,
+			}),
+		).rejects.toThrow(/expected status AWAITING_REPAIR/)
+		const sl = await db.serialLocation.findUniqueOrThrow({
+			where: { serial: ok },
+		})
+		expect(sl.status).toBe("AWAITING_REPAIR") // unchanged — whole tx aborted
 	})
 })

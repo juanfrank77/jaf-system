@@ -33,6 +33,47 @@ export async function getBulkOnHand(
 	return agg._sum.qty ?? 0
 }
 
+/**
+ * Live prep-time availability preview: on-hand at `warehouseId` minus
+ * reserved qty from every currently-PREPPED (staged-but-not-released) doc,
+ * summed ACROSS ALL WAREHOUSES.
+ *
+ * A PREPPED doc has no `warehouseId` yet — it's only set at sign/pickup
+ * (crew may pull from a different zone warehouse than the one that prepped
+ * it), so which warehouse will eventually absorb its release is unknown at
+ * prep time. Subtracting the all-warehouse reserved total from a single
+ * warehouse's on-hand is deliberately conservative: it never overstates
+ * availability, though it may understate it when two warehouses are both
+ * prepping the same material — an acceptable trade, since over-draw is
+ * already allowed everywhere else in this spec; under-availability here is
+ * just a more cautious number, never a blocked action.
+ *
+ * Reads `preppedQty` off the stored PrepLine — the actual shape
+ * `_app.docs.$id_.prep.tsx`'s action writes to `preppedMaterials` (not the
+ * bare `qty` field of an estimatedMaterials-style line).
+ */
+export async function getPrepAvailable(
+	client: StockClient,
+	warehouseId: string,
+	serviceCodeId: string,
+): Promise<number> {
+	const onHand = await getBulkOnHand(client, warehouseId, serviceCodeId)
+	const staged = await client.jafInvoice.findMany({
+		where: { status: "PREPPED" },
+		select: { preppedMaterials: true },
+	})
+	const reserved = staged
+		.flatMap(
+			(s) =>
+				(s.preppedMaterials as
+					| { serviceCodeId: string; preppedQty: number }[]
+					| null) ?? [],
+		)
+		.filter((m) => m.serviceCodeId === serviceCodeId)
+		.reduce((a, m) => a + (m.preppedQty ?? 0), 0)
+	return onHand - reserved
+}
+
 export function resolveDualUom(
 	onHand: number,
 	code: {

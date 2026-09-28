@@ -269,6 +269,7 @@
 		"substitute_with": "Substitute With",
 		"substitute_placeholder": "Select substitution...",
 		"missing_flag": "Missing / Out of Stock",
+		"available": "Available",
 		"line_notes": "Notes",
 		"line_notes_placeholder": "Substitution reason, damage, etc.",
 		"add_line": "+ Add Line",

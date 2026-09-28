@@ -21,6 +21,8 @@ import { requireRole } from "~/lib/permissions.server"
 import { getActiveMaterialCodes } from "~/lib/service-codes.server"
 import { useEditableLines } from "~/lib/use-editable-lines"
 import { toNumberPrice } from "~/lib/utils"
+import { resolveWarehouseScope } from "~/lib/warehouse-scope.server"
+import { getPrepAvailable, resolveDualUom } from "~/lib/warehouse-stock.server"
 import type { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id_.prep"
 
@@ -53,12 +55,59 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	if (!canTransition(doc.status, "PREPPED", user.role))
 		throw redirect(`/docs/${params.id}`)
 	const serviceCodes = await getActiveMaterialCodes()
+
+	// Live preview only, never a stored commitment: the doc's eventual pickup
+	// warehouse isn't set until sign (crew may pull from a different zone
+	// warehouse), so this previews availability at the acting counter user's
+	// own currently-selected warehouse scope (Task 4) — never doc.warehouseId,
+	// which is null at this stage for every doc.
+	const { selectedId: warehouseId } = await resolveWarehouseScope(
+		db,
+		request,
+		user,
+	)
+	const estimated =
+		(doc.estimatedMaterials as { serviceCodeId: string; qty: number }[]) || []
+	const codeById = new Map(serviceCodes.map((c) => [c.id, c]))
+	const availability: Record<
+		string,
+		{
+			available: number
+			countUnit: string | null
+			stockUnit: string | null
+			derivedAvailable: number | null
+		}
+	> = {}
+	if (warehouseId) {
+		const uniqueIds = new Set(
+			estimated.map((m) => m.serviceCodeId).filter(Boolean),
+		)
+		for (const codeId of uniqueIds) {
+			const available = await getPrepAvailable(db, warehouseId, codeId)
+			const code = codeById.get(codeId)
+			const dual = resolveDualUom(available, {
+				countUnit: code?.countUnit ?? null,
+				stockUnit: code?.stockUnit ?? null,
+				conversionFactor: code?.conversionFactor
+					? Number(code.conversionFactor)
+					: null,
+			})
+			availability[codeId] = {
+				available,
+				countUnit: dual.countUnit,
+				stockUnit: dual.stockUnit,
+				derivedAvailable: dual.derivedCountQty,
+			}
+		}
+	}
+
 	return {
 		doc,
 		serviceCodes: serviceCodes.map((c) => ({
 			...c,
 			unitPrice: toNumberPrice(c.unitPrice),
 		})),
+		availability,
 	}
 }
 
@@ -110,7 +159,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 				},
 			}),
 		])
-		return { missingFlagged: true }
+		// flag_missing is async/non-blocking: it notifies the supervisor but
+		// never forces the doc into a release-blocking state — the same doc can
+		// still be re-submitted (adjust/substitute) and reach PREPPED normally.
+		return { missingFlagged: true, blocksRelease: false as const }
 	}
 
 	await db.$transaction([
@@ -150,7 +202,7 @@ export default function PrepDoc({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { doc, serviceCodes } = loaderData
+	const { doc, serviceCodes, availability } = loaderData
 	const error = actionData as { errorKey?: ParseKeys } | undefined
 	const { t } = useTranslation()
 	const estimated =
@@ -271,6 +323,23 @@ export default function PrepDoc({
 									/>
 								</div>
 							</div>
+
+							{(() => {
+								const avail = availability[line.serviceCodeId]
+								if (!avail) return null
+								return (
+									<p className="text-xs text-slate-500">
+										{t("docs_prep.available")}: {avail.available}{" "}
+										{avail.countUnit ?? ""}
+										{avail.derivedAvailable !== null && (
+											<>
+												{" "}
+												= {avail.derivedAvailable} {avail.stockUnit}
+											</>
+										)}
+									</p>
+								)
+							})()}
 
 							{line.missing && substitutionOptions.length > 0 && (
 								<div>

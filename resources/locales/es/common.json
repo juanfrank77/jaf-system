@@ -269,6 +269,7 @@
 		"substitute_with": "Sustituir por",
 		"substitute_placeholder": "Selecciona sustitución...",
 		"missing_flag": "Faltante / Sin stock",
+		"available": "Disponible",
 		"line_notes": "Notas",
 		"line_notes_placeholder": "Razón de sustitución, daño, etc.",
 		"add_line": "+ Agregar línea",

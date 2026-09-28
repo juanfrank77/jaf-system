@@ -18,6 +18,7 @@ import {
 	WAREHOUSE_STAFF_SEED,
 } from "../app/lib/catalog-import"
 import { PrismaClient } from "../generated/prisma/client"
+import { seedWarehouseStartingBalances } from "./seed-warehouse-stock"
 
 const db = new PrismaClient({
 	adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -496,6 +497,7 @@ async function main() {
 	await seedVansAndStock()
 	await seedLimitTable()
 	await seedDemoSerials()
+	await seedWarehouseStartingBalances(db)
 }
 
 main()

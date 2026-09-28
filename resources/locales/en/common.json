@@ -23,6 +23,57 @@
 		"onhand_empty": "No serialized stock on hand.",
 		"recent_intakes": "{{count}} recent intake(s)"
 	},
+	"stock": {
+		"title": "Stock & Audit",
+		"no_warehouse": "No warehouse assigned.",
+		"search_label": "Search materials",
+		"search_placeholder": "Search by name…",
+		"kit_filter_label": "Kit / used-in only",
+		"unit_not_set": "unit not set",
+		"empty": "No bulk stock for this warehouse.",
+		"view_trail": "View trail",
+		"hide_trail": "Hide",
+		"serial_register": {
+			"title": "Serial Register",
+			"empty": "No serialized stock on hand.",
+			"condition": {
+				"NEW": "New",
+				"REFURBISHED": "Refurbished"
+			}
+		},
+		"trail": {
+			"title": "Movement Trail",
+			"loading": "Loading…",
+			"empty": "No movements yet."
+		},
+		"receive": {
+			"heading": "Receive Delivery",
+			"reference_label": "Reference (optional)",
+			"submit": "Record delivery",
+			"success": "Delivery recorded."
+		},
+		"adjust": {
+			"heading": "Adjust Stock",
+			"material_label": "Material",
+			"delta_label": "Delta (+/-)",
+			"reason_label": "Reason",
+			"submit": "Post adjustment",
+			"success": "Adjustment posted."
+		},
+		"snapshot": {
+			"heading": "Snapshot As-Of",
+			"as_of_label": "As of date",
+			"submit": "Create snapshot",
+			"recent_heading": "Recent Snapshots",
+			"empty": "No snapshots yet.",
+			"regenerate": "Regenerate",
+			"download_pdf": "PDF",
+			"download_csv": "CSV"
+		}
+	},
+	"adjust": {
+		"reason_required": "A reason is required."
+	},
 	"needs_review": {
 		"title": "Needs Review",
 		"empty": "No units awaiting review.",
@@ -78,6 +129,7 @@
 			"installer_supervisor": "Installer Supervisor",
 			"warehouse_scan_in": "Scan In Return",
 			"warehouse_restock": "Restocks to Release",
+			"warehouse_stock": "Stock",
 			"comptroller": "Comptroller"
 		},
 		"notifications": {

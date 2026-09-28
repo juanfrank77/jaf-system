@@ -117,6 +117,30 @@ async function canAccessRepairBatchFile(
 	return false
 }
 
+async function canAccessSnapshotFile(
+	relativePath: string,
+	user: { id: string; role: string },
+): Promise<boolean> {
+	const m = relativePath.match(/^snapshots\/([^/]+)\.(pdf|csv)$/)
+	if (!m) return false
+	const snap = await db.stockSnapshot.findUnique({
+		where: { id: m[1] },
+		select: { warehouseId: true },
+	})
+	if (!snap) return false
+	if (user.role === "ADMIN") return true
+	if (user.role === "WAREHOUSE") {
+		const a = await db.warehouseAssignment.findUnique({
+			where: {
+				userId_warehouseId: { userId: user.id, warehouseId: snap.warehouseId },
+			},
+			select: { userId: true },
+		})
+		return Boolean(a)
+	}
+	return false
+}
+
 export async function loader({ request, params }: Route.LoaderArgs) {
 	const session = await requireSession(request)
 	const user = await db.user.findUniqueOrThrow({
@@ -139,6 +163,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		if (!allowed) return new Response("Forbidden", { status: 403 })
 	} else if (relativePath.startsWith("repair-batches/")) {
 		const allowed = await canAccessRepairBatchFile(relativePath, user)
+		if (!allowed) return new Response("Forbidden", { status: 403 })
+	} else if (relativePath.startsWith("snapshots/")) {
+		const allowed = await canAccessSnapshotFile(relativePath, user)
 		if (!allowed) return new Response("Forbidden", { status: 403 })
 	} else {
 		const docId = extractDocId(relativePath)
@@ -170,7 +197,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 					? "image/png"
 					: ext === ".jpg" || ext === ".jpeg"
 						? "image/jpeg"
-						: "application/octet-stream"
+						: ext === ".csv"
+							? "text/csv"
+							: "application/octet-stream"
 		return new Response(new Uint8Array(bytes), {
 			headers: { "Content-Type": contentType },
 		})

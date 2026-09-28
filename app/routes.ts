@@ -36,6 +36,7 @@ export default [
 		route("warehouse/triage", "routes/_app.warehouse.triage.tsx"),
 		route("warehouse/repairs", "routes/_app.warehouse.repairs.tsx"),
 		route("warehouse/needs-review", "routes/_app.warehouse.needs-review.tsx"),
+		route("warehouse/stock", "routes/_app.warehouse.stock.tsx"),
 		route("warehouse/stock/receive", "routes/_app.warehouse.stock.receive.tsx"),
 		route("warehouse/stock/adjust", "routes/_app.warehouse.stock.adjust.tsx"),
 		route(
@@ -69,6 +70,7 @@ export default [
 	]),
 	route("files/*", "routes/files.$.tsx"),
 	route("api/service-codes", "routes/api.service-codes.tsx"),
+	route("api/warehouse-stock-trail", "routes/api.warehouse-stock-trail.tsx"),
 	route("api/auth/*", "routes/api.auth.$.tsx"),
 	route("sign-out", "routes/action.sign-out.tsx"),
 	route("notifications/:id/read", "routes/action.notifications.$id.read.tsx"),

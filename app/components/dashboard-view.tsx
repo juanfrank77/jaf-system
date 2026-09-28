@@ -102,6 +102,8 @@ type DashboardDocRow = {
 	materialsTaken?: unknown
 	materialsUsed?: unknown
 	materialsReturned?: unknown
+	aged?: boolean
+	daysStaged?: number
 }
 
 type CrewOption = { id: string; name: string }
@@ -465,9 +467,16 @@ function DashboardView({
 								<span className="font-mono font-medium">
 									{doc.controlNumber}
 								</span>
-								<Badge variant="info">
-									{t("dashboard.ready_for_pickup_badge")}
-								</Badge>
+								<div className="flex items-center gap-2">
+									{doc.aged && (
+										<Badge variant="danger">
+											{t("dashboard.aged_pickup_badge")}
+										</Badge>
+									)}
+									<Badge variant="info">
+										{t("dashboard.ready_for_pickup_badge")}
+									</Badge>
+								</div>
 							</div>
 							<p className="mt-1 text-xs text-muted-foreground/70">
 								{doc.jobType} — {doc.jobAddressEstimated}
@@ -599,9 +608,16 @@ function DashboardView({
 								<span className="font-mono font-medium">
 									{doc.controlNumber}
 								</span>
-								<Badge variant="info">
-									{t("dashboard.prepped_awaiting_badge")}
-								</Badge>
+								<div className="flex items-center gap-2">
+									{doc.aged && (
+										<Badge variant="danger">
+											{t("dashboard.aged_pickup_badge")}
+										</Badge>
+									)}
+									<Badge variant="info">
+										{t("dashboard.prepped_awaiting_badge")}
+									</Badge>
+								</div>
 							</div>
 							<p className="mt-1 text-xs text-muted-foreground/70">
 								{doc.jobType} — {doc.jobAddressEstimated}

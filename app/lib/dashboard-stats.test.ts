@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { computeDashboardStats } from "./dashboard-stats"
+import { computeAwaitingPickup, computeDashboardStats } from "./dashboard-stats"
 
 const doc = (
 	status: string,
@@ -265,5 +265,20 @@ describe("computeDashboardStats", () => {
 			labelKey: "dashboard.stat.aging_po_wait_count",
 			value: 0,
 		})
+	})
+})
+
+describe("computeAwaitingPickup", () => {
+	it("flags a prepped doc staged more than 3 days as aged", () => {
+		const rows = computeAwaitingPickup([
+			{ id: "d1", status: "PREPPED", preppedAt: dayAgo(5) },
+			{ id: "d2", status: "PREPPED", preppedAt: dayAgo(1) },
+			{ id: "d3", status: "PREPPED", preppedAt: dayAgo(3) },
+			{ id: "d4", status: "PREPPED", preppedAt: dayAgo(4) },
+		])
+		expect(rows.find((r) => r.id === "d1")!.aged).toBe(true) // 5 days > 3
+		expect(rows.find((r) => r.id === "d2")!.aged).toBe(false) // 1 day <= 3
+		expect(rows.find((r) => r.id === "d3")!.aged).toBe(false) // 3 days = 3, not > 3
+		expect(rows.find((r) => r.id === "d4")!.aged).toBe(true) // 4 days > 3
 	})
 })

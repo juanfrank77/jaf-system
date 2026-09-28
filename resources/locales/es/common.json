@@ -995,6 +995,7 @@
 		"sent_back_note": "Nota: {{note}}",
 		"ready_for_pickup_heading": "Listos para recoger ({{count}})",
 		"ready_for_pickup_badge": "Listo para recoger",
+		"aged_pickup_badge": "Envejecido > 3 días",
 		"in_the_field_heading": "En el campo ({{count}})",
 		"in_the_field_badge": "En el campo",
 		"crew_sent_back_heading": "Devueltos ({{count}})",

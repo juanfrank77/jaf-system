@@ -995,6 +995,7 @@
 		"sent_back_note": "Note: {{note}}",
 		"ready_for_pickup_heading": "Ready for Pickup ({{count}})",
 		"ready_for_pickup_badge": "Ready for pickup",
+		"aged_pickup_badge": "Aged > 3 days",
 		"in_the_field_heading": "In the Field ({{count}})",
 		"in_the_field_badge": "In the field",
 		"crew_sent_back_heading": "Sent Back ({{count}})",

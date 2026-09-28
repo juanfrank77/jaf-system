@@ -292,11 +292,31 @@
 		"submit": "Guardar devoluciones",
 		"crew_reported_hint": "La cuadrilla reportó {{usedQty}} usados; se espera devolver {{expectedReturnQty}}.",
 		"discrepancy_warning": "La cantidad devuelta difiere del uso reportado por la cuadrilla.",
+		"warehouse_label": "Devolver al almacén",
+		"warehouse_policy_unconfirmed": "Se permite devolver a un almacén distinto al de retiro, pero la política para esto no está confirmada.",
+		"serial_lines_heading": "Devoluciones serializadas",
+		"serial_label": "Serial",
+		"serial_placeholder": "Escanea o ingresa el serial",
+		"serial_reason_label": "Motivo",
+		"serial_reason": {
+			"DAMAGED": "Dañado",
+			"LOST": "Perdido",
+			"MISCOUNT": "Conteo erróneo",
+			"UNDER_REPORTED": "Usado — sub-reportado"
+		},
+		"add_serial_line": "+ Agregar línea serializada",
+		"note_required_hint": "Se requiere una nota porque lo recibido es menor a lo esperado.",
+		"success": "Devoluciones registradas.",
 		"errors": {
 			"invalid_materials": "Datos de materiales inválidos",
 			"invalid_service_codes": "Uno o más productos seleccionados ya no están disponibles.",
-			"return_exceeds_taken": "No se puede devolver más de lo retirado para el código de servicio {{serviceCodeId}}"
+			"return_exceeds_taken": "No se puede devolver más de lo retirado para el código de servicio {{serviceCodeId}}",
+			"warehouse_required": "Selecciona un almacén de destino.",
+			"idempotency_key_required": "Falta la clave de idempotencia — recarga e intenta de nuevo."
 		}
+	},
+	"returns": {
+		"note_required": "Se requiere una nota cuando lo recibido es menor a lo esperado."
 	},
 	"restock_fulfill": {
 		"title": "Cumplir reabastecimiento #{{id}}",

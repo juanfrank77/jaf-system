@@ -1,37 +1,21 @@
-import type { ParseKeys } from "i18next"
-import type { ComponentProps } from "react"
-import { Trans, useTranslation } from "react-i18next"
-import { Form, redirect } from "react-router"
+import { redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
-import { MaterialLineItems } from "~/components/material-line-items"
-import { Button } from "~/components/ui/button"
-import { Input } from "~/components/ui/input"
-import { Label } from "~/components/ui/label"
-import { Textarea } from "~/components/ui/textarea"
+import { ReturnsForm } from "~/components/returns-form"
 import { db } from "~/lib/db.server"
+import { runOnce } from "~/lib/idempotency.server"
 import { requireRole } from "~/lib/permissions.server"
+import { dispositionSerial } from "~/lib/repair.server"
+import {
+	computeExpectedBackLines,
+	expectedBackFor,
+	type MaterialLine,
+} from "~/lib/returns-lines"
 import { getActiveMaterialCodes } from "~/lib/service-codes.server"
-import { useEditableLines } from "~/lib/use-editable-lines"
 import { toNumberPrice } from "~/lib/utils"
 import type { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id_.returns"
 
-interface ReturnLine {
-	_key: string
-	serviceCodeId: string
-	takenQty: number
-	returnedQty: number
-	notes: string
-}
-
-type MaterialLine = { serviceCodeId: string; qty: number }
-
-type MaterialServiceCode = ComponentProps<
-	typeof MaterialLineItems
->["serviceCodes"][number]
-
-let _returnCounter = 0
-const nextReturnKey = () => `return-${(_returnCounter++).toString()}`
+type SerialReturnReason = "DAMAGED" | "LOST" | "MISCOUNT" | "UNDER_REPORTED"
 
 export const meta = ({
 	data,
@@ -53,11 +37,12 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	if (!["SIGNED", "FIELD_UPDATED"].includes(doc.status))
 		throw redirect(`/docs/${params.id}`)
 	const serviceCodes = await getActiveMaterialCodes()
+	const warehouses = await db.warehouse.findMany({ where: { active: true } })
 	const taken = (doc.materialsTaken as unknown as MaterialLine[]) || []
-	const existingReturns = (doc.materialsReturned as ReturnLine[] | null) || null
 	const materialsUsed =
 		(doc.materialsUsed as { serviceCodeId: string; qty: number }[] | null) ||
 		null
+	const lines = computeExpectedBackLines(taken, materialsUsed)
 	return {
 		doc,
 		serviceCodes: serviceCodes.map((c) => ({
@@ -65,8 +50,10 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			unitPrice: toNumberPrice(c.unitPrice),
 		})),
 		taken,
-		existingReturns,
+		lines,
 		materialsUsed,
+		warehouses,
+		pickupWarehouseId: doc.warehouseId,
 	}
 }
 
@@ -80,40 +67,56 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	const form = await request.formData()
-	// Signed quantities are immutable after pickup. Ignore any attempt to overwrite them.
+	// Signed quantities are immutable after pickup — this route never accepts
+	// a client-supplied materialsTaken.
 	form.delete("materialsTaken")
-	const materialsReturnedRaw = form.get("materialsReturned") as string
-	const returnNote = (form.get("returnNote") as string | null)?.trim() || null
 
-	let materialsReturned: ReturnLine[] = []
+	let lines: { serviceCodeId: string; received: number }[] = []
+	let serialLines: { serial: string; reason: SerialReturnReason | string }[] =
+		[]
 	try {
-		materialsReturned = JSON.parse(materialsReturnedRaw)
+		lines = JSON.parse(String(form.get("lines") ?? "[]"))
+		serialLines = JSON.parse(String(form.get("serialLines") ?? "[]"))
 	} catch {
-		return { errorKey: "docs_returns.errors.invalid_materials" }
+		return { errorKey: "docs_returns.errors.invalid_materials" as const }
+	}
+
+	const returnWarehouseId = String(form.get("returnWarehouseId") ?? "").trim()
+	const idempotencyKey = String(form.get("idempotencyKey") ?? "").trim()
+	const discrepancyNote = String(form.get("discrepancyNote") ?? "").trim()
+
+	if (!returnWarehouseId) {
+		return { errorKey: "docs_returns.errors.warehouse_required" as const }
+	}
+	if (!idempotencyKey) {
+		return { errorKey: "docs_returns.errors.idempotency_key_required" as const }
 	}
 
 	const taken = (doc.materialsTaken as unknown as MaterialLine[]) || []
 	const takenMap = Object.fromEntries(
 		taken.map((t) => [t.serviceCodeId, t.qty]),
 	)
+	const materialsUsed =
+		(doc.materialsUsed as { serviceCodeId: string; qty: number }[] | null) || []
+	const usedMap = Object.fromEntries(
+		materialsUsed.map((u) => [u.serviceCodeId, u.qty]),
+	)
 
-	for (const line of materialsReturned) {
+	for (const line of lines) {
 		if (!line.serviceCodeId) {
-			return { errorKey: "docs_returns.errors.invalid_materials" }
+			return { errorKey: "docs_returns.errors.invalid_materials" as const }
 		}
 		const takenQty = takenMap[line.serviceCodeId] ?? 0
-		if (line.returnedQty > takenQty) {
+		if (line.received > takenQty) {
 			return {
-				errorKey: "docs_returns.errors.return_exceeds_taken",
+				errorKey: "docs_returns.errors.return_exceeds_taken" as const,
 				errorParams: { serviceCodeId: line.serviceCodeId },
 			}
 		}
-		// Preserve the actual signed-out quantity even if the client sent a different value.
-		line.takenQty = takenQty
 	}
 
 	const uniqueServiceCodeIds = Array.from(
-		new Set(materialsReturned.map((i) => i.serviceCodeId).filter(Boolean)),
+		new Set(lines.map((l) => l.serviceCodeId).filter(Boolean)),
 	)
 	if (uniqueServiceCodeIds.length > 0) {
 		const validServiceCodes = await db.serviceCode.findMany({
@@ -125,251 +128,122 @@ export async function action({ request, params }: Route.ActionArgs) {
 			(id) => !validServiceCodeSet.has(id),
 		)
 		if (invalidServiceCodes.length > 0) {
-			return { errorKey: "docs_returns.errors.invalid_service_codes" }
+			return { errorKey: "docs_returns.errors.invalid_service_codes" as const }
 		}
 	}
 
-	await db.$transaction([
-		db.jafInvoice.update({
+	const anyShort = lines.some(
+		(l) =>
+			l.received <
+			expectedBackFor(
+				takenMap[l.serviceCodeId] ?? 0,
+				usedMap[l.serviceCodeId] ?? 0,
+			),
+	)
+	if (anyShort && !discrepancyNote) {
+		return { errorKey: "returns.note_required" as const }
+	}
+
+	const out = await runOnce(db, idempotencyKey, "returns", async (tx) => {
+		for (const l of lines) {
+			if (!l.received) continue // nothing to credit
+			await tx.stockMovement.create({
+				data: {
+					kind: "BULK",
+					type: "RETURN",
+					warehouseId: returnWarehouseId,
+					serviceCodeId: l.serviceCodeId,
+					qty: Math.abs(l.received),
+					byUserId: user.id,
+					refDocId: params.id,
+				},
+			})
+		}
+
+		for (const s of serialLines) {
+			if (s.reason === "DAMAGED") {
+				// Composes atomically with the bulk RETURN writes above — the CAS
+				// guard inside requires the serial already be RETURNED (set by the
+				// existing scan-in flow before this action ever runs).
+				await dispositionSerial(
+					{
+						serial: s.serial,
+						disposition: "FAILED",
+						byUserId: user.id,
+						warehouseId: returnWarehouseId,
+					},
+					tx,
+				)
+			} else if (s.reason === "LOST") {
+				const moved = await tx.serialLocation.updateMany({
+					where: { serial: s.serial, status: "RETURNED" },
+					data: {
+						status: "LOST",
+						currentRef: returnWarehouseId,
+						since: new Date(),
+					},
+				})
+				if (moved.count !== 1)
+					throw new Error(`serial ${s.serial}: expected status RETURNED`)
+				const sl = await tx.serialLocation.findUniqueOrThrow({
+					where: { serial: s.serial },
+					select: { serviceCodeId: true },
+				})
+				await tx.stockMovement.create({
+					data: {
+						kind: "SERIAL",
+						type: "DISPOSITION",
+						serial: s.serial,
+						qty: 0,
+						serviceCodeId: sl.serviceCodeId,
+						warehouseId: returnWarehouseId,
+						byUserId: user.id,
+						refDocId: params.id,
+						note: `LOST${discrepancyNote ? `: ${discrepancyNote}` : ""}`,
+					},
+				})
+			}
+			// MISCOUNT / UNDER_REPORTED: recorded below (materialsReturned +
+			// audit trail) only — no serial state change.
+		}
+
+		const materialsReturned = lines.map((l) => ({
+			serviceCodeId: l.serviceCodeId,
+			takenQty: takenMap[l.serviceCodeId] ?? 0,
+			returnedQty: l.received,
+			notes: "",
+		}))
+
+		await tx.jafInvoice.update({
 			where: { id: params.id },
 			data: {
 				materialsReturned:
 					materialsReturned as unknown as Prisma.InputJsonValue,
 			},
-		}),
-		db.auditTrail.create({
+		})
+		await tx.auditTrail.create({
 			data: {
 				docId: params.id,
 				userId: user.id,
 				action: "RETURNS_LOGGED",
 				diffJson: {
-					materialsReturned:
-						materialsReturned as unknown as Prisma.InputJsonValue,
-					returnNote,
-					shortage: materialsReturned.some(
-						(line) => line.returnedQty < line.takenQty,
-					),
-				},
+					returnWarehouseId,
+					lines,
+					serialLines,
+					discrepancyNote: discrepancyNote || null,
+				} as unknown as Prisma.InputJsonValue,
 			},
-		}),
-	])
-
-	throw redirect(`/docs/${params.id}`)
-}
-
-function buildInitialReturnLines(
-	taken: MaterialLine[],
-	existingReturns: ReturnLine[] | null,
-	materialsUsed: { serviceCodeId: string; qty: number }[] | null,
-): ReturnLine[] {
-	const usedMap = Object.fromEntries(
-		(materialsUsed || []).map((u) => [u.serviceCodeId, u.qty]),
-	)
-
-	if (existingReturns && existingReturns.length > 0) {
-		return existingReturns.map((line) => ({
-			_key: nextReturnKey(),
-			serviceCodeId: line.serviceCodeId || "",
-			takenQty: line.takenQty || 0,
-			returnedQty: typeof line.returnedQty === "number" ? line.returnedQty : 0,
-			notes: line.notes || "",
-		}))
-	}
-
-	return taken.map((m) => {
-		const takenQty = m.qty || 0
-		const usedQty = usedMap[m.serviceCodeId] ?? 0
-		const returnedQty = Math.max(0, takenQty - usedQty)
-		return {
-			_key: nextReturnKey(),
-			serviceCodeId: m.serviceCodeId || "",
-			takenQty,
-			returnedQty,
-			notes: "",
-		}
+		})
 	})
+
+	return { ok: true as const, deduped: out.deduped }
 }
 
 export default function ReturnsDoc({
 	loaderData,
 	actionData,
-}: {
-	loaderData: {
-		doc: { controlNumber: string }
-		serviceCodes: MaterialServiceCode[]
-		taken: MaterialLine[]
-		existingReturns: ReturnLine[] | null
-		materialsUsed: { serviceCodeId: string; qty: number }[] | null
-	}
-	actionData?: { errorKey?: string; errorParams?: Record<string, string> }
-}) {
-	const { doc, serviceCodes, taken, existingReturns, materialsUsed } =
-		loaderData
-	const { t } = useTranslation()
-
-	const {
-		items: lines,
-		add: pushLine,
-		remove: removeLine,
-		update: updateLine,
-		serialized,
-	} = useEditableLines<ReturnLine>(() =>
-		buildInitialReturnLines(taken, existingReturns, materialsUsed),
-	)
-
-	const addLine = () =>
-		pushLine({
-			_key: nextReturnKey(),
-			serviceCodeId: "",
-			takenQty: 0,
-			returnedQty: 0,
-			notes: "",
-		})
-
-	return (
-		<div className="space-y-4">
-			<h1 className="text-xl font-semibold">{t("docs_returns.title")}</h1>
-			<p className="text-sm text-slate-600">
-				<Trans
-					i18nKey="docs_returns.confirm_message"
-					values={{ controlNumber: doc.controlNumber }}
-					components={{ strong: <strong /> }}
-				/>
-			</p>
-
-			<div className="space-y-3">
-				{lines.map((line, index) => {
-					const code = serviceCodes.find((c) => c.id === line.serviceCodeId)
-					const actualUsage = Math.max(
-						(line.takenQty || 0) - (line.returnedQty || 0),
-						0,
-					)
-					const usedQty = materialsUsed
-						? (materialsUsed.find((u) => u.serviceCodeId === line.serviceCodeId)
-								?.qty ?? null)
-						: null
-					const expectedReturnQty =
-						usedQty != null ? Math.max(0, (line.takenQty || 0) - usedQty) : null
-					const differsFromCrewReport =
-						expectedReturnQty != null && line.returnedQty !== expectedReturnQty
-
-					return (
-						<div key={line._key} className="border rounded-lg p-3 space-y-2">
-							<div className="flex items-center gap-2">
-								<MaterialLineItems
-									serviceCodes={serviceCodes}
-									initialItems={[
-										{
-											serviceCodeId: line.serviceCodeId,
-											qty: line.takenQty,
-										},
-									]}
-									readOnly
-								/>
-								<button
-									type="button"
-									onClick={() => removeLine(index)}
-									className="text-slate-400 hover:text-red-600 text-lg"
-								>
-									×
-								</button>
-							</div>
-
-							<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-								<div>
-									<Label className="text-xs text-slate-500">
-										{t("docs_returns.taken_qty")}
-									</Label>
-									<Input
-										type="number"
-										min={0}
-										value={line.takenQty}
-										disabled
-										className="mt-1 bg-slate-50"
-									/>
-								</div>
-								<div>
-									<Label className="text-xs text-slate-500">
-										{t("docs_returns.returned_qty")}
-									</Label>
-									<Input
-										type="number"
-										min={0}
-										value={line.returnedQty}
-										onChange={(e) =>
-											updateLine(index, {
-												returnedQty: parseInt(e.target.value, 10) || 0,
-											})
-										}
-										className="mt-1"
-									/>
-									{expectedReturnQty != null && (
-										<p className="mt-1 text-xs text-slate-500">
-											{t("docs_returns.crew_reported_hint", {
-												usedQty,
-												expectedReturnQty,
-											})}
-										</p>
-									)}
-									{differsFromCrewReport && (
-										<p className="mt-1 text-xs font-medium text-amber-600">
-											{t("docs_returns.discrepancy_warning")}
-										</p>
-									)}
-								</div>
-							</div>
-
-							<p className="text-xs text-slate-600">
-								{t("docs_returns.actual_usage")}: {actualUsage} {code?.unit}
-							</p>
-
-							<div>
-								<Label className="text-xs text-slate-500">
-									{t("docs_returns.line_notes")}
-								</Label>
-								<Textarea
-									value={line.notes}
-									onChange={(e) => updateLine(index, { notes: e.target.value })}
-									placeholder={t("docs_returns.line_notes_placeholder")}
-									rows={2}
-									className="mt-1"
-								/>
-							</div>
-						</div>
-					)
-				})}
-			</div>
-
-			<Button type="button" variant="outline" size="sm" onClick={addLine}>
-				{t("docs_returns.add_line")}
-			</Button>
-
-			<Form method="post" className="space-y-2">
-				<input type="hidden" name="materialsReturned" value={serialized} />
-				<div>
-					<Label htmlFor="returnNote">
-						{t("docs_returns.return_note_label")}
-					</Label>
-					<Textarea
-						id="returnNote"
-						name="returnNote"
-						rows={2}
-						placeholder={t("docs_returns.return_note_placeholder")}
-						className="mt-1"
-					/>
-				</div>
-				<Button type="submit" className="w-full">
-					{t("docs_returns.submit")}
-				</Button>
-			</Form>
-
-			{actionData?.errorKey && (
-				<p className="text-sm text-red-600">
-					{t(actionData.errorKey as ParseKeys, actionData.errorParams)}
-				</p>
-			)}
-		</div>
-	)
+}: Route.ComponentProps) {
+	return <ReturnsForm loaderData={loaderData} actionData={actionData} />
 }
 
 export function ErrorBoundary({ error }: { error: unknown }) {

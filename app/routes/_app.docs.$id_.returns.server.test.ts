@@ -1,231 +1,224 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
-
-vi.mock("~/lib/db.server", () => ({
-	db: {
-		jafInvoice: {
-			findUniqueOrThrow: vi.fn(),
-			update: vi.fn(),
-		},
-		serviceCode: {
-			findMany: vi.fn(),
-		},
-		auditTrail: {
-			create: vi.fn(),
-		},
-		$transaction: vi.fn(async (ops: any[]) => {
-			for (const op of ops) await op
-		}),
-	},
-}))
-
-vi.mock("~/lib/permissions.server", () => ({
-	requireRole: vi.fn(),
-}))
-
+import { afterAll, describe, expect, it, vi } from "vitest"
 import { db } from "~/lib/db.server"
-import { requireRole } from "~/lib/permissions.server"
+import { getBulkOnHand } from "~/lib/warehouse-stock.server"
+import {
+	makeTracker,
+	runToken,
+	seedMaterial,
+	seedUser,
+	seedWarehouse,
+} from "~/test/helpers"
+
+const mocks = vi.hoisted(() => ({ requireRole: vi.fn() }))
+vi.mock("~/lib/permissions.server", () => ({ requireRole: mocks.requireRole }))
+
 import { action, loader } from "./_app.docs.$id_.returns"
 
-function formRequest(form: FormData, id = "doc-1") {
-	return new Request(`http://localhost/docs/${id}/returns`, {
-		method: "POST",
-		body: form,
-	})
-}
+const t = makeTracker()
+afterAll(async () => {
+	await t.cleanup()
+})
 
-function baseDoc(overrides: Record<string, unknown> = {}) {
-	return {
-		id: "doc-1",
-		status: "SIGNED",
-		controlNumber: "JAF-2026-1004",
-		materialsTaken: [{ serviceCodeId: "sc-1", qty: 10 }],
-		materialsUsed: null,
-		materialsReturned: null,
-		...overrides,
-	}
-}
+type Line = { serviceCodeId: string; qty: number }
 
-describe("GET /docs/:id/returns", () => {
-	beforeEach(() => {
-		vi.clearAllMocks()
-	})
-
-	it("returns existing returns and materialsUsed to the client", async () => {
-		vi.mocked(requireRole).mockResolvedValue({
-			user: { id: "wh-1", role: "WAREHOUSE" },
-			session: {},
-		} as any)
-		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
-			baseDoc({
-				materialsReturned: [
-					{
-						serviceCodeId: "sc-1",
-						takenQty: 10,
-						returnedQty: 3,
-						notes: "leftover",
-					},
-				],
-				materialsUsed: [{ serviceCodeId: "sc-1", qty: 7 }],
-			}) as any,
+/** Seed a FIELD_UPDATED doc with `materialsTaken`/`materialsUsed`, plus the
+ * pickup warehouse and a ServiceCode row per referenced serviceCodeId (so the
+ * action's active-service-code check passes for literal ids like "1005803"). */
+async function seedFieldUpdatedDoc(opts: { taken: Line[]; used: Line[] }) {
+	const warehouse = t.track("warehouse", await seedWarehouse())
+	const supervisor = t.track("user", await seedUser({ role: "SUPERVISOR" }))
+	const user = t.track("user", await seedUser({ role: "WAREHOUSE" }))
+	const serviceCodeIds = new Set([
+		...opts.taken.map((l) => l.serviceCodeId),
+		...opts.used.map((l) => l.serviceCodeId),
+	])
+	for (const id of serviceCodeIds) {
+		t.track(
+			"serviceCode",
+			await db.serviceCode.upsert({
+				where: { id },
+				update: { active: true },
+				create: {
+					id,
+					claroCode: runToken(`CC-${id}`),
+					name: `Test ${id}`,
+					unitPrice: 0,
+					active: true,
+				},
+			}),
 		)
-		vi.mocked(db.serviceCode.findMany).mockResolvedValue([] as any)
-
-		const result = await loader({
-			request: new Request("http://localhost/docs/doc-1/returns"),
-			params: { id: "doc-1" },
-		} as any)
-
-		expect(result.existingReturns).toEqual([
-			{
-				serviceCodeId: "sc-1",
-				takenQty: 10,
-				returnedQty: 3,
-				notes: "leftover",
+	}
+	const doc = t.track(
+		"jafInvoice",
+		await db.jafInvoice.create({
+			data: {
+				controlNumber: runToken("JAF"),
+				status: "FIELD_UPDATED",
+				jobType: "INSTALL",
+				jobAddressEstimated: "123 Test St",
+				estimatedMaterials: [],
+				assignedCrewIds: [],
+				supervisorId: supervisor.id,
+				warehouseId: warehouse.id,
+				materialsTaken: opts.taken,
+				materialsUsed: opts.used,
 			},
-		])
-		expect(result.materialsUsed).toEqual([{ serviceCodeId: "sc-1", qty: 7 }])
+		}),
+	)
+	return { doc, warehouse, supervisor, user }
+}
+
+/** Seed a FIELD_UPDATED doc (no bulk lines) plus SerialLocation rows already in
+ * RETURNED status — the pre-condition set by the existing scan-in flow before
+ * this route's action ever runs. */
+async function seedFieldUpdatedDocWithSerials(serials: string[]) {
+	const sc = t.track("serviceCode", await seedMaterial({ serialized: true }))
+	const { doc, warehouse, supervisor, user } = await seedFieldUpdatedDoc({
+		taken: [],
+		used: [],
+	})
+	for (const serial of serials) {
+		t.track(
+			"serialLocation",
+			await db.serialLocation.create({
+				data: {
+					serial,
+					serviceCodeId: sc.id,
+					status: "RETURNED",
+					currentRef: warehouse.id,
+				},
+			}),
+		)
+	}
+	return { doc, warehouse, supervisor, user, serviceCode: sc }
+}
+
+function formFor(body: Record<string, unknown>) {
+	const form = new URLSearchParams()
+	form.set("idempotencyKey", String(body.idempotencyKey ?? ""))
+	form.set("returnWarehouseId", String(body.returnWarehouseId ?? ""))
+	form.set("lines", JSON.stringify(body.lines ?? []))
+	form.set("serialLines", JSON.stringify(body.serialLines ?? []))
+	if (body.discrepancyNote)
+		form.set("discrepancyNote", String(body.discrepancyNote))
+	return form
+}
+
+async function confirmReturns(
+	doc: { id: string },
+	body: Record<string, unknown>,
+) {
+	return action({
+		request: new Request(`http://x/docs/${doc.id}/returns`, {
+			method: "POST",
+			body: formFor(body),
+		}),
+		params: { id: doc.id },
+		context: {},
+	} as never)
+}
+
+describe("returns: pre-fill", () => {
+	afterAll(() => vi.clearAllMocks())
+
+	it("pre-fills expected-back as taken - used (never 0)", async () => {
+		mocks.requireRole.mockResolvedValue({
+			user: { id: "irrelevant", role: "WAREHOUSE" },
+		})
+		const { doc } = await seedFieldUpdatedDoc({
+			taken: [{ serviceCodeId: "1005803", qty: 300 }],
+			used: [{ serviceCodeId: "1005803", qty: 260 }],
+		})
+		const data = await loader({
+			request: new Request(`http://x/docs/${doc.id}/returns`),
+			params: { id: doc.id },
+			context: {},
+		} as never)
+		expect(
+			data.lines.find((l) => l.serviceCodeId === "1005803")?.expectedBack,
+		).toBe(40)
 	})
 })
 
-describe("POST /docs/:id/returns", () => {
-	beforeEach(() => {
-		vi.clearAllMocks()
-	})
+describe("returns: confirm action", () => {
+	afterAll(() => vi.clearAllMocks())
 
-	it("logs returns and updates the document", async () => {
-		vi.mocked(requireRole).mockResolvedValue({
-			user: { id: "wh-1", role: "WAREHOUSE" },
-			session: {},
-		} as any)
-		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
-			baseDoc() as any,
-		)
-		vi.mocked(db.serviceCode.findMany).mockResolvedValue([
-			{ id: "sc-1" },
-		] as any)
-
-		const form = new FormData()
-		form.set(
-			"materialsReturned",
-			JSON.stringify([
-				{
-					serviceCodeId: "sc-1",
-					takenQty: 999,
-					returnedQty: 3,
-					notes: "some leftover",
-				},
-			]),
-		)
-
-		await expect(
-			action({
-				request: formRequest(form),
-				params: { id: "doc-1" },
-			} as any),
-		).rejects.toMatchObject({ status: 302 })
-
-		const updateCall = (db.jafInvoice.update as any).mock.calls[0][0]
-		expect(updateCall.data.materialsReturned).toEqual([
-			{
-				serviceCodeId: "sc-1",
-				takenQty: 10,
-				returnedQty: 3,
-				notes: "some leftover",
-			},
-		])
-	})
-
-	it("rejects returnedQty greater than takenQty", async () => {
-		vi.mocked(requireRole).mockResolvedValue({
-			user: { id: "wh-1", role: "WAREHOUSE" },
-			session: {},
-		} as any)
-		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
-			baseDoc() as any,
-		)
-
-		const form = new FormData()
-		form.set(
-			"materialsReturned",
-			JSON.stringify([
-				{
-					serviceCodeId: "sc-1",
-					takenQty: 10,
-					returnedQty: 11,
-					notes: "",
-				},
-			]),
-		)
-
-		const result = await action({
-			request: formRequest(form),
-			params: { id: "doc-1" },
-		} as any)
-
-		expect(result).toMatchObject({
-			errorKey: "docs_returns.errors.return_exceeds_taken",
+	it("requires a note when received < expected and posts RETURN(+received)", async () => {
+		const { doc, warehouse, user } = await seedFieldUpdatedDoc({
+			taken: [{ serviceCodeId: "1005803", qty: 300 }],
+			used: [{ serviceCodeId: "1005803", qty: 260 }],
 		})
-		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+		mocks.requireRole.mockResolvedValue({ user })
+		const noNote = (await confirmReturns(doc, {
+			idempotencyKey: runToken("r1"),
+			returnWarehouseId: warehouse.id,
+			lines: [{ serviceCodeId: "1005803", received: 30 }],
+		})) as { errorKey?: string }
+		expect(noNote.errorKey).toBe("returns.note_required")
+
+		const ok = (await confirmReturns(doc, {
+			idempotencyKey: runToken("r2"),
+			returnWarehouseId: warehouse.id,
+			lines: [{ serviceCodeId: "1005803", received: 30 }],
+			discrepancyNote: "1 damaged on site",
+		})) as { ok?: boolean }
+		expect(ok.ok).toBe(true)
+		expect(await getBulkOnHand(db, warehouse.id, "1005803")).toBe(30)
 	})
 
-	it("ignores attempts to overwrite signed taken quantities", async () => {
-		vi.mocked(requireRole).mockResolvedValue({
-			user: { id: "wh-1", role: "WAREHOUSE" },
-			session: {},
-		} as any)
-		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
-			baseDoc() as any,
-		)
-		vi.mocked(db.serviceCode.findMany).mockResolvedValue([
-			{ id: "sc-1" },
-		] as any)
-
-		const form = new FormData()
-		form.set(
-			"materialsTaken",
-			JSON.stringify([{ serviceCodeId: "sc-1", qty: 99 }]),
-		)
-		form.set(
-			"materialsReturned",
-			JSON.stringify([
-				{
-					serviceCodeId: "sc-1",
-					takenQty: 99,
-					returnedQty: 2,
-					notes: "",
-				},
-			]),
-		)
-
-		await expect(
-			action({
-				request: formRequest(form),
-				params: { id: "doc-1" },
-			} as any),
-		).rejects.toMatchObject({ status: 302 })
-
-		const updateCall = (db.jafInvoice.update as any).mock.calls[0][0]
-		expect(updateCall.data.materialsReturned[0].takenQty).toBe(10)
+	it("routes a damaged serialized line to Spec A triage and a lost one to LOST", async () => {
+		const { doc, warehouse, user } = await seedFieldUpdatedDocWithSerials([
+			"S-DMG",
+			"S-LOST",
+		])
+		mocks.requireRole.mockResolvedValue({ user })
+		await confirmReturns(doc, {
+			idempotencyKey: runToken("r3"),
+			returnWarehouseId: warehouse.id,
+			lines: [],
+			serialLines: [
+				{ serial: "S-DMG", reason: "DAMAGED" },
+				{ serial: "S-LOST", reason: "LOST" },
+			],
+		})
+		// dispositionSerial's compare-and-swap moves a FAILED-triaged serial from
+		// RETURNED -> AWAITING_REPAIR (repair.server.ts DISPO_TO_STATUS), not a
+		// no-op on RETURNED — the brief's own literal assertion here was stale
+		// (an earlier draft's imagined helper), per the task's correction notice.
+		expect(
+			(
+				await db.serialLocation.findUniqueOrThrow({
+					where: { serial: "S-DMG" },
+				})
+			).status,
+		).toBe("AWAITING_REPAIR")
+		expect(
+			(
+				await db.serialLocation.findUniqueOrThrow({
+					where: { serial: "S-LOST" },
+				})
+			).status,
+		).toBe("LOST")
 	})
 
-	it("rejects non-authorized status", async () => {
-		vi.mocked(requireRole).mockResolvedValue({
-			user: { id: "wh-1", role: "WAREHOUSE" },
-			session: {},
-		} as any)
-		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
-			baseDoc({ status: "CREATED" }) as any,
-		)
-
-		const form = new FormData()
-		form.set("materialsReturned", JSON.stringify([]))
-
-		await expect(
-			action({
-				request: formRequest(form),
-				params: { id: "doc-1" },
-			} as any),
-		).rejects.toMatchObject({ status: 302 })
-		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	it("dedupes a replayed confirm", async () => {
+		const { doc, warehouse, user } = await seedFieldUpdatedDoc({
+			taken: [{ serviceCodeId: "1005803", qty: 10 }],
+			used: [{ serviceCodeId: "1005803", qty: 0 }],
+		})
+		mocks.requireRole.mockResolvedValue({ user })
+		const key = runToken("r4")
+		const body = {
+			idempotencyKey: key,
+			returnWarehouseId: warehouse.id,
+			lines: [{ serviceCodeId: "1005803", received: 10 }],
+		}
+		await confirmReturns(doc, body)
+		await confirmReturns(doc, body)
+		expect(
+			await db.stockMovement.count({
+				where: { type: "RETURN", refDocId: doc.id },
+			}),
+		).toBe(1)
 	})
 })

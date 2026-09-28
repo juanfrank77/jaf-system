@@ -281,3 +281,123 @@ export async function generateRepairBatchDocument(batchId: string) {
 	})
 	return { documentPath }
 }
+
+const LIVE = new Set(["INSTALLED", "VAN"])
+
+// id→id: original ServiceCode → its `reparadoCode` (a Claro code string) → the
+// REPARADO ServiceCode's id. `serviceCodeId` is an FK, so an unresolved code
+// must NOT invent a dangling string: keep the original id and flag `needsCode`
+// (surfaced for a catalog fix).
+export async function resolveReparadoServiceCodeId(
+	originalServiceCodeId: string,
+) {
+	const original = await db.serviceCode
+		.findUnique({
+			where: { id: originalServiceCodeId },
+			select: { reparadoCode: true },
+		})
+		.catch(() => null)
+	if (original?.reparadoCode) {
+		const reparado = await db.serviceCode
+			.findUnique({
+				where: { claroCode: original.reparadoCode },
+				select: { id: true },
+			})
+			.catch(() => null)
+		if (reparado) return { serviceCodeId: reparado.id, needsCode: false }
+	}
+	return { serviceCodeId: originalServiceCodeId, needsCode: true }
+}
+
+export async function receiveRepairedUnits(args: {
+	warehouseId: string
+	declaredCount: number
+	scans: { serial: string; serviceCodeId: string }[]
+	mismatchNote?: string
+	byUserId: string
+	claroReference?: string
+}) {
+	const scans = [...new Map(args.scans.map((s) => [s.serial, s])).values()] // dedupe
+	if (args.declaredCount !== scans.length && !args.mismatchNote?.trim())
+		throw new Error("mismatchNote required (declared != scanned)")
+	return db.$transaction(async (tx) => {
+		const intake = await tx.repairIntake.create({
+			data: {
+				warehouseId: args.warehouseId,
+				receivedById: args.byUserId,
+				receivedAt: new Date(),
+				declaredCount: args.declaredCount,
+				mismatchNote: args.mismatchNote,
+				claroReference: args.claroReference,
+			},
+		})
+		const flagged: string[] = []
+		for (const scan of scans) {
+			const existing = await tx.serialLocation.findUnique({
+				where: { serial: scan.serial },
+				select: { status: true },
+			})
+			if (existing && LIVE.has(existing.status)) {
+				flagged.push(scan.serial)
+				continue
+			}
+			// scan.serviceCodeId is the ORIGINAL code, resolved from the physical
+			// Claro scan at the route boundary.
+			const { serviceCodeId: reparadoId, needsCode } =
+				await resolveReparadoServiceCodeId(scan.serviceCodeId)
+			if (needsCode) flagged.push(scan.serial) // stocked under original code; lead fixes catalog
+			if (existing) {
+				await tx.serialLocation.update({
+					where: { serial: scan.serial },
+					data: {
+						status: "WAREHOUSE",
+						condition: "REFURBISHED",
+						serviceCodeId: reparadoId,
+						currentRef: args.warehouseId,
+						since: new Date(),
+					},
+				})
+			} else {
+				await tx.serialLocation.create({
+					data: {
+						serial: scan.serial,
+						serviceCodeId: reparadoId,
+						status: "WAREHOUSE",
+						condition: "REFURBISHED",
+						currentRef: args.warehouseId,
+						since: new Date(),
+					},
+				})
+			}
+			await tx.stockMovement.create({
+				data: {
+					kind: "SERIAL",
+					type: "REPAIR_INTAKE",
+					serial: scan.serial,
+					qty: 0,
+					serviceCodeId: reparadoId,
+					warehouseId: args.warehouseId,
+					refRepairIntakeId: intake.id,
+					byUserId: args.byUserId,
+					at: new Date(),
+					note: needsCode
+						? "REPARADO code unresolved — stocked under original code, needs catalog fix"
+						: undefined,
+				},
+			})
+		}
+		if (args.declaredCount !== scans.length) {
+			const leads = await tx.warehouseAssignment.findMany({
+				where: { warehouseId: args.warehouseId, isLead: true },
+				select: { userId: true },
+			})
+			await tx.notification.createMany({
+				data: leads.map((l) => ({
+					userId: l.userId,
+					message: `Repaired intake ${intake.id}: declared ${args.declaredCount}, scanned ${scans.length}.`,
+				})),
+			})
+		}
+		return { intakeId: intake.id, flagged }
+	})
+}

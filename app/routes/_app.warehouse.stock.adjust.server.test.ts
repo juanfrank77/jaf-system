@@ -82,6 +82,52 @@ describe("adjust-with-reason", () => {
 		expect(moves[0].note).toBe("cycle count")
 	})
 
+	// Review finding E: `String(form.get("idempotencyKey"))` on a MISSING field
+	// produced the literal "null" — one fixed key shared by every such request,
+	// so the first adjust succeeded and every later one silently deduped while
+	// reporting success (and wrote nothing).
+	it("rejects a missing idempotency key instead of coercing null into a fixed key", async () => {
+		const { wh, user, sc } = await seedAt(true)
+		mocks.requireRole.mockResolvedValue({ user })
+		const res = (await action({
+			request: postForm({
+				warehouseId: wh.id,
+				serviceCodeId: sc.id,
+				delta: "-5",
+				reason: "cycle count",
+			}),
+			params: {},
+			context: {},
+		} as never)) as { errorKey?: string }
+		expect(res.errorKey).toBe("adjust.idempotency_key_required")
+		expect(
+			await db.stockMovement.count({ where: { serviceCodeId: sc.id } }),
+		).toBe(0)
+		// The old bug in one assertion: "null" must never be a usable key.
+		expect(
+			await db.idempotencyKey.findUnique({ where: { key: "null" } }),
+		).toBeNull()
+	})
+
+	it("rejects an unknown/inactive serviceCodeId", async () => {
+		const { wh, user } = await seedAt(true)
+		mocks.requireRole.mockResolvedValue({ user })
+		const key = runToken("k")
+		keys.push(key)
+		const res = (await action({
+			request: postForm({
+				idempotencyKey: key,
+				warehouseId: wh.id,
+				serviceCodeId: "not-a-real-code",
+				delta: "-5",
+				reason: "cycle count",
+			}),
+			params: {},
+			context: {},
+		} as never)) as { errorKey?: string }
+		expect(res.errorKey).toBe("adjust.invalid_service_code")
+	})
+
 	it("forbids a non-lead counter", async () => {
 		const { wh, user, sc } = await seedAt(false)
 		mocks.requireRole.mockResolvedValue({ user })

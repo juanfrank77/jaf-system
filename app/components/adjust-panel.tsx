@@ -28,7 +28,11 @@ export function AdjustPanel({
 	const { t } = useTranslation()
 	const fetcher = useFetcher<{
 		ok?: boolean
-		errorKey?: "adjust.reason_required"
+		errorKey?:
+			| "adjust.reason_required"
+			| "adjust.invalid_delta"
+			| "adjust.invalid_service_code"
+			| "adjust.idempotency_key_required"
 		deduped?: boolean
 	}>()
 	const revalidator = useRevalidator()

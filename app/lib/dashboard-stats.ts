@@ -121,25 +121,29 @@ function computeAgingDays(createdAt: Date): number {
 	return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)))
 }
 
-export function computeAwaitingPickup(
-	docs: Array<{
-		id: string
-		status: string
-		preppedAt: Date
-	}>,
-): Array<{
-	id: string
-	status: string
-	preppedAt: Date
-	daysStaged: number
-	aged: boolean
-}> {
+const PICKUP_AGING_THRESHOLD_DAYS = 3
+
+/**
+ * Awaiting-pickup aging (spec §6): days staged since prep, red past 3.
+ *
+ * Generic over the row so the dashboard loader can pipe its real PREPPED doc
+ * rows straight through without losing any field the view needs — the whole
+ * point of the wiring: a pure-function unit test alone passed happily while
+ * nothing in the app ever called this, so `doc.aged` was always undefined and
+ * the badge could never render.
+ *
+ * `preppedAt` is nullable in the schema; a doc with no prep timestamp simply
+ * has no age (never flagged) rather than being dropped from the queue.
+ */
+export function computeAwaitingPickup<T extends { preppedAt: Date | null }>(
+	docs: T[],
+): Array<T & { daysStaged: number; aged: boolean }> {
 	return docs.map((doc) => {
-		const daysStaged = computeAgingDays(doc.preppedAt)
+		const daysStaged = doc.preppedAt ? computeAgingDays(doc.preppedAt) : 0
 		return {
 			...doc,
 			daysStaged,
-			aged: daysStaged > 3,
+			aged: daysStaged > PICKUP_AGING_THRESHOLD_DAYS,
 		}
 	})
 }

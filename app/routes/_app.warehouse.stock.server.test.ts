@@ -85,7 +85,7 @@ describe("stock & audit loader", () => {
 		expect(data.bulk.map((b) => b.serviceCodeId)).toContain(noFactor.id)
 		expect(data.bulk.map((b) => b.serviceCodeId)).not.toContain(other.id)
 		expect(
-			data.bulk.find((b) => b.serviceCodeId === noFactor.id)?.derivedCountQty,
+			data.bulk.find((b) => b.serviceCodeId === noFactor.id)?.derivedStockQty,
 		).toBeNull()
 		expect(data.selectedId).toBe(guaynabo.id)
 		expect(data.warehouses.map((w) => w.id).sort()).toEqual(

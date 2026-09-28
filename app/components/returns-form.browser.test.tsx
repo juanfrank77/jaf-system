@@ -91,4 +91,37 @@ describe("ReturnsForm — post-success resubmit (review fix)", () => {
 		expect(submittedLines[1]).toEqual([{ serviceCodeId: "sc-1", received: 40 }])
 		expect(submittedLines[0]).not.toEqual(submittedLines[1])
 	})
+
+	it("prefills the ALREADY-SAVED returns on a revisit and disables resubmitting", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					loader: async () => ({
+						...loaderData(),
+						savedReturns: [
+							{
+								serviceCodeId: "sc-1",
+								takenQty: 40,
+								returnedQty: 30,
+								notes: "",
+							},
+						],
+						alreadyRecorded: true,
+					}),
+					Component: () => {
+						const data = useLoaderData() as ReturnsFormData
+						return <ReturnsForm loaderData={data} />
+					},
+				},
+			],
+		})
+		// 30 (what was saved), not 40 (the full expected-back default) — a blank
+		// full form here is exactly what let a second click double-credit.
+		expect(screen.getByLabelText("Returned Qty")).toHaveValue(30)
+		expect(screen.getByTestId("returns-already-recorded")).toBeInTheDocument()
+		expect(screen.getByRole("button", { name: "Save Returns" })).toBeDisabled()
+	})
 })

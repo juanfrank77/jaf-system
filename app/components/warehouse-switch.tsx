@@ -21,7 +21,15 @@ export function WarehouseSwitch({
 			defaultValue={selectedId}
 			className="rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-foreground"
 			onChange={(e) => {
-				document.cookie = `wh=${e.target.value}; path=/`
+				// Written from JS (so no HttpOnly — the server reads it only as a
+				// UI preference, never as an authorization decision: every loader
+				// still resolves it against the user's own assignments).
+				// SameSite=Lax blocks cross-site submission; Secure is added
+				// whenever the page itself is served over HTTPS.
+				const secure = window.location.protocol === "https:" ? "; Secure" : ""
+				document.cookie = `wh=${encodeURIComponent(
+					e.target.value,
+				)}; path=/; max-age=31536000; SameSite=Lax${secure}`
 				submit(null, { method: "get" })
 			}}
 		>

@@ -29,9 +29,15 @@ export function ReceivePanel({
 	materialCodes: MaterialCode[]
 }) {
 	const { t } = useTranslation()
-	const fetcher = useFetcher<{ ok: boolean }>()
+	const fetcher = useFetcher<{ ok?: boolean; errorKey?: string }>()
 	const revalidator = useRevalidator()
-	const [resetToken, setResetToken] = useState(0)
+	// Doubles as the form's reset key: rotating it on success remounts the
+	// (cleared) line items AND mints a fresh idempotency key, so a double
+	// submit of the SAME delivery is deduped server-side (runOnce) instead of
+	// double-counting bulk on-hand.
+	const [idempotencyKey, setIdempotencyKey] = useState(() =>
+		crypto.randomUUID(),
+	)
 	const wasSubmitting = useRef(false)
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: fetcher/revalidator identity is stable; react to fetcher.state/data only
@@ -40,7 +46,7 @@ export function ReceivePanel({
 		if (fetcher.state === "idle" && wasSubmitting.current) {
 			wasSubmitting.current = false
 			if (fetcher.data?.ok) {
-				setResetToken((k) => k + 1)
+				setIdempotencyKey(crypto.randomUUID())
 				revalidator.revalidate()
 			}
 		}
@@ -53,10 +59,11 @@ export function ReceivePanel({
 				<fetcher.Form
 					method="post"
 					action="/warehouse/stock/receive"
-					key={resetToken}
+					key={idempotencyKey}
 					className="space-y-2"
 				>
 					<input type="hidden" name="warehouseId" value={warehouseId} />
+					<input type="hidden" name="idempotencyKey" value={idempotencyKey} />
 					<label className="block text-sm" htmlFor="stock-receive-reference">
 						<span className="mb-1 block text-muted-foreground">
 							{t("stock.receive.reference_label")}
@@ -66,6 +73,11 @@ export function ReceivePanel({
 					<MaterialLineItems serviceCodes={materialCodes} name="lines" />
 					<Button type="submit">{t("stock.receive.submit")}</Button>
 				</fetcher.Form>
+				{fetcher.data?.errorKey && (
+					<p className="text-xs text-status-danger">
+						{t(fetcher.data.errorKey as never)}
+					</p>
+				)}
 				{fetcher.data?.ok && (
 					<p className="text-xs text-status-ok">{t("stock.receive.success")}</p>
 				)}

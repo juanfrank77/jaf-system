@@ -96,7 +96,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 				available,
 				countUnit: dual.countUnit,
 				stockUnit: dual.stockUnit,
-				derivedAvailable: dual.derivedCountQty,
+				derivedAvailable: dual.derivedStockQty,
 			}
 		}
 	}

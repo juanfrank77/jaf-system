@@ -104,18 +104,34 @@ function formFor(body: Record<string, unknown>) {
 	return form
 }
 
+/**
+ * Run the confirm action. A SUCCESSFUL confirm now ends in a post-save
+ * `throw redirect("/docs/:id")` (pre-branch behaviour, restored so a second
+ * click can't resubmit the same payload under a fresh idempotency key), so the
+ * thrown Response is caught and surfaced as `{ redirectedTo }`.
+ */
 async function confirmReturns(
 	doc: { id: string },
 	body: Record<string, unknown>,
-) {
-	return action({
-		request: new Request(`http://x/docs/${doc.id}/returns`, {
-			method: "POST",
-			body: formFor(body),
-		}),
-		params: { id: doc.id },
-		context: {},
-	} as never)
+): Promise<{
+	errorKey?: string
+	errorParams?: Record<string, string>
+	redirectedTo?: string
+}> {
+	try {
+		return (await action({
+			request: new Request(`http://x/docs/${doc.id}/returns`, {
+				method: "POST",
+				body: formFor(body),
+			}),
+			params: { id: doc.id },
+			context: {},
+		} as never)) as { errorKey?: string }
+	} catch (e) {
+		if (e instanceof Response)
+			return { redirectedTo: e.headers.get("location") ?? "" }
+		throw e
+	}
 }
 
 describe("returns: pre-fill", () => {
@@ -149,21 +165,43 @@ describe("returns: confirm action", () => {
 			used: [{ serviceCodeId: "1005803", qty: 260 }],
 		})
 		mocks.requireRole.mockResolvedValue({ user })
-		const noNote = (await confirmReturns(doc, {
+		const noNote = await confirmReturns(doc, {
 			idempotencyKey: runToken("r1"),
 			returnWarehouseId: warehouse.id,
 			lines: [{ serviceCodeId: "1005803", received: 30 }],
-		})) as { errorKey?: string }
+		})
 		expect(noNote.errorKey).toBe("returns.note_required")
 
-		const ok = (await confirmReturns(doc, {
+		const ok = await confirmReturns(doc, {
 			idempotencyKey: runToken("r2"),
 			returnWarehouseId: warehouse.id,
 			lines: [{ serviceCodeId: "1005803", received: 30 }],
 			discrepancyNote: "1 damaged on site",
-		})) as { ok?: boolean }
-		expect(ok.ok).toBe(true)
+		})
+		expect(ok.redirectedTo).toBe(`/docs/${doc.id}`)
 		expect(await getBulkOnHand(db, warehouse.id, "1005803")).toBe(30)
+	})
+
+	it("requires a note for a LOST/DAMAGED serialized line (spec §7 shrinkage)", async () => {
+		const { doc, warehouse, user } = await seedFieldUpdatedDocWithSerials([
+			`${runToken("S")}-NONOTE`,
+		])
+		mocks.requireRole.mockResolvedValue({ user })
+		const serial = (
+			await db.serialLocation.findFirstOrThrow({
+				where: { currentRef: warehouse.id, status: "RETURNED" },
+			})
+		).serial
+		const res = await confirmReturns(doc, {
+			idempotencyKey: runToken("r-serial-nonote"),
+			returnWarehouseId: warehouse.id,
+			lines: [],
+			serialLines: [{ serial, reason: "LOST" }],
+		})
+		expect(res.errorKey).toBe("returns.note_required")
+		expect(
+			(await db.serialLocation.findUniqueOrThrow({ where: { serial } })).status,
+		).toBe("RETURNED")
 	})
 
 	it("routes a damaged serialized line to Spec A triage and a lost one to LOST", async () => {
@@ -180,6 +218,7 @@ describe("returns: confirm action", () => {
 				{ serial: "S-DMG", reason: "DAMAGED" },
 				{ serial: "S-LOST", reason: "LOST" },
 			],
+			discrepancyNote: "1 damaged, 1 never came back",
 		})
 		// dispositionSerial's compare-and-swap moves a FAILED-triaged serial from
 		// RETURNED -> AWAITING_REPAIR (repair.server.ts DISPO_TO_STATUS), not a
@@ -201,6 +240,63 @@ describe("returns: confirm action", () => {
 		).toBe("LOST")
 	})
 
+	// The ownership check inside `dispositionSerial` requires the serial's own
+	// `currentRef` to equal the `warehouseId` it is called with. `returnWarehouseId`
+	// is a DIFFERENT concept — the counter's chosen destination for the BULK
+	// credit, which spec §9 explicitly permits to differ from where the unit
+	// physically sits — so passing it here made a legitimate cross-warehouse
+	// return throw an uncaught Error (a raw 500). A physical serial's disposition
+	// must always be scoped to the serial's OWN location (set by scan-in).
+	it("dispositions a DAMAGED serial under its OWN warehouse while crediting the chosen one", async () => {
+		const sc = t.track("serviceCode", await seedMaterial({ serialized: true }))
+		const {
+			doc,
+			warehouse: serialWh,
+			user,
+		} = await seedFieldUpdatedDoc({
+			taken: [{ serviceCodeId: "1005803", qty: 10 }],
+			used: [{ serviceCodeId: "1005803", qty: 0 }],
+		})
+		// The bulk credit is routed somewhere OTHER than where the serial lives.
+		const creditWh = t.track("warehouse", await seedWarehouse())
+		mocks.requireRole.mockResolvedValue({ user })
+		const serial = runToken("S-XWH")
+		t.track(
+			"serialLocation",
+			await db.serialLocation.create({
+				data: {
+					serial,
+					serviceCodeId: sc.id,
+					status: "RETURNED",
+					currentRef: serialWh.id, // scanned in at the PICKUP warehouse
+				},
+			}),
+		)
+		const res = await confirmReturns(doc, {
+			idempotencyKey: runToken("r-xwh"),
+			returnWarehouseId: creditWh.id,
+			lines: [{ serviceCodeId: "1005803", received: 10 }],
+			serialLines: [{ serial, reason: "DAMAGED" }],
+			discrepancyNote: "damaged, credit routed to the other warehouse",
+		})
+		// Used to escape as a raw 500 rather than redirect.
+		expect(res.redirectedTo).toBe(`/docs/${doc.id}`)
+
+		const sl = await db.serialLocation.findUniqueOrThrow({ where: { serial } })
+		expect(sl.status).toBe("AWAITING_REPAIR")
+		expect(sl.currentRef).toBe(serialWh.id) // stays with its own warehouse
+		const dispo = await db.stockMovement.findFirstOrThrow({
+			where: { serial, type: "DISPOSITION" },
+		})
+		expect(dispo.warehouseId).toBe(serialWh.id)
+		// ...and the bulk credit still lands at the CHOSEN warehouse, same txn.
+		const bulk = await db.stockMovement.findFirstOrThrow({
+			where: { type: "RETURN", refDocId: doc.id, kind: "BULK" },
+		})
+		expect(bulk.warehouseId).toBe(creditWh.id)
+		expect(await getBulkOnHand(db, creditWh.id, "1005803")).toBe(10)
+	})
+
 	it("dedupes a replayed confirm", async () => {
 		const { doc, warehouse, user } = await seedFieldUpdatedDoc({
 			taken: [{ serviceCodeId: "1005803", qty: 10 }],
@@ -220,5 +316,118 @@ describe("returns: confirm action", () => {
 				where: { type: "RETURN", refDocId: doc.id },
 			}),
 		).toBe(1)
+	})
+
+	// The review's Critical B: the reset-on-success rotates the idempotency key,
+	// so a second click is NOT a replay — nothing deduped it, and it posted a
+	// complete second set of RETURN credits. The action must refuse outright
+	// once the doc has returns recorded (there is no amend flow in the spec).
+	it("refuses a second confirm under a DIFFERENT idempotency key (no double-credit)", async () => {
+		const { doc, warehouse, user } = await seedFieldUpdatedDoc({
+			taken: [{ serviceCodeId: "1005803", qty: 10 }],
+			used: [{ serviceCodeId: "1005803", qty: 0 }],
+		})
+		mocks.requireRole.mockResolvedValue({ user })
+		const lines = [{ serviceCodeId: "1005803", received: 10 }]
+		const first = await confirmReturns(doc, {
+			idempotencyKey: runToken("r5a"),
+			returnWarehouseId: warehouse.id,
+			lines,
+		})
+		expect(first.redirectedTo).toBe(`/docs/${doc.id}`)
+		const second = await confirmReturns(doc, {
+			idempotencyKey: runToken("r5b"), // a FRESH key — runOnce cannot dedupe it
+			returnWarehouseId: warehouse.id,
+			lines,
+		})
+		expect(second.errorKey).toBe("docs_returns.errors.already_recorded")
+		expect(
+			await db.stockMovement.count({
+				where: { type: "RETURN", refDocId: doc.id },
+			}),
+		).toBe(1)
+		expect(await getBulkOnHand(db, warehouse.id, "1005803")).toBe(10)
+	})
+
+	it("re-shows the SAVED returns on a revisit, not a blank full-expected form", async () => {
+		const { doc, warehouse, user } = await seedFieldUpdatedDoc({
+			taken: [{ serviceCodeId: "1005803", qty: 10 }],
+			used: [{ serviceCodeId: "1005803", qty: 0 }],
+		})
+		mocks.requireRole.mockResolvedValue({ user })
+		await confirmReturns(doc, {
+			idempotencyKey: runToken("r6"),
+			returnWarehouseId: warehouse.id,
+			lines: [{ serviceCodeId: "1005803", received: 6 }],
+			discrepancyNote: "4 short",
+		})
+		const data = await loader({
+			request: new Request(`http://x/docs/${doc.id}/returns`),
+			params: { id: doc.id },
+			context: {},
+		} as never)
+		expect(data.alreadyRecorded).toBe(true)
+		expect(
+			data.savedReturns.find((r) => r.serviceCodeId === "1005803")?.returnedQty,
+		).toBe(6)
+	})
+})
+
+describe("returns: action-level validation (review fixes)", () => {
+	afterAll(() => vi.clearAllMocks())
+
+	it("rejects a fabricated / inactive returnWarehouseId", async () => {
+		const { doc, user } = await seedFieldUpdatedDoc({
+			taken: [{ serviceCodeId: "1005803", qty: 5 }],
+			used: [{ serviceCodeId: "1005803", qty: 0 }],
+		})
+		mocks.requireRole.mockResolvedValue({ user })
+		const res = await confirmReturns(doc, {
+			idempotencyKey: runToken("r7"),
+			returnWarehouseId: "definitely-not-a-warehouse",
+			lines: [{ serviceCodeId: "1005803", received: 5 }],
+		})
+		expect(res.errorKey).toBe("docs_returns.errors.invalid_warehouse")
+		expect(await db.stockMovement.count({ where: { refDocId: doc.id } })).toBe(
+			0,
+		)
+	})
+
+	it("rejects a negative received qty instead of Math.abs-ing it into a credit", async () => {
+		const { doc, warehouse, user } = await seedFieldUpdatedDoc({
+			taken: [{ serviceCodeId: "1005803", qty: 5 }],
+			used: [{ serviceCodeId: "1005803", qty: 0 }],
+		})
+		mocks.requireRole.mockResolvedValue({ user })
+		const res = await confirmReturns(doc, {
+			idempotencyKey: runToken("r8"),
+			returnWarehouseId: warehouse.id,
+			lines: [{ serviceCodeId: "1005803", received: -5 }],
+			discrepancyNote: "nonsense",
+		})
+		expect(res.errorKey).toBe("docs_returns.errors.invalid_received_qty")
+		expect(await getBulkOnHand(db, warehouse.id, "1005803")).toBe(0)
+	})
+
+	it("treats an OMITTED expected line as a shortfall (note still required)", async () => {
+		const { doc, warehouse, user } = await seedFieldUpdatedDoc({
+			taken: [
+				{ serviceCodeId: "1005803", qty: 10 },
+				{ serviceCodeId: "1005804", qty: 4 },
+			],
+			used: [{ serviceCodeId: "1005803", qty: 0 }],
+		})
+		mocks.requireRole.mockResolvedValue({ user })
+		// The client submits only the first line — the second (expected back 4)
+		// is silently dropped. That used to pass with no note and no movement.
+		const res = await confirmReturns(doc, {
+			idempotencyKey: runToken("r9"),
+			returnWarehouseId: warehouse.id,
+			lines: [{ serviceCodeId: "1005803", received: 10 }],
+		})
+		expect(res.errorKey).toBe("returns.note_required")
+		expect(await db.stockMovement.count({ where: { refDocId: doc.id } })).toBe(
+			0,
+		)
 	})
 })

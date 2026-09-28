@@ -15,14 +15,19 @@ import {
 } from "~/lib/repair.server"
 import { serializedOnHand } from "~/lib/serial-stock"
 import { requireWarehouseLead } from "~/lib/warehouse-lead.server"
-import { getActiveWarehouseId } from "~/lib/warehouse-scope.server"
+import { resolveWarehouseScope } from "~/lib/warehouse-scope.server"
 import type { Route } from "./+types/_app.warehouse.repairs"
 
 export const meta: Route.MetaFunction = () => [{ title: "Repairs — JAF Ops" }]
 
 export async function loader({ request }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["WAREHOUSE", "ADMIN"])
-	const warehouseId = await getActiveWarehouseId(user.id)
+	// Honors the header warehouse switch (`wh` cookie) like every Spec B
+	// screen; ADMIN resolves to all active warehouses rather than throwing.
+	const { selectedId } = await resolveWarehouseScope(db, request, user)
+	// A user with no warehouse at all (e.g. an ADMIN before any warehouse
+	// exists) gets empty queues, never the bare-Error 500 the old helper threw.
+	const warehouseId = selectedId ?? "__no_warehouse__"
 	const [pool, batches, onHand, intakes] = await Promise.all([
 		db.serialLocation.findMany({
 			where: { status: "AWAITING_REPAIR", currentRef: warehouseId },
@@ -44,12 +49,68 @@ export async function loader({ request }: Route.LoaderArgs) {
 	return { pool, batches, onHand, intakes }
 }
 
-export async function action({ request }: Route.ActionArgs) {
+/**
+ * One flat result shape for every branch, so the UI can read `batchId` /
+ * `flagged` / `errorKey` without a discriminated-union dance.
+ */
+type RepairsActionResult = {
+	ok?: boolean
+	batchId?: string
+	docFailed?: boolean
+	intakeId?: string
+	flagged?: string[]
+	errorKey?: "stock.no_warehouse" | "repairs.action_failed"
+	errorDetail?: string | null
+}
+
+export async function action({
+	request,
+}: Route.ActionArgs): Promise<RepairsActionResult> {
 	const { user } = await requireRole(request, ["WAREHOUSE", "ADMIN"])
-	const warehouseId = await getActiveWarehouseId(user.id)
+	const { selectedId: warehouseId } = await resolveWarehouseScope(
+		db,
+		request,
+		user,
+	)
+	if (!warehouseId) {
+		return { errorKey: "stock.no_warehouse" as const, errorDetail: null }
+	}
 	const form = await request.formData()
 	const intent = String(form.get("intent"))
 
+	// The repair services throw plain Errors for every domain rejection (CAS
+	// drift naming the serial, void-blocked, missing reason, cross-warehouse).
+	// Nothing caught them, so they reached the error boundary as raw 500s — the
+	// spec wants "blocked with a clear message" / "a structured error naming the
+	// drifted serial". Translate them into the route's errorKey convention and
+	// carry the service's own message as the detail.
+	try {
+		return await runIntent({ request, form, intent, warehouseId, user })
+	} catch (e) {
+		if (e instanceof Response) throw e // redirects from requireWarehouseLead
+		if (e instanceof Error) {
+			return {
+				errorKey: "repairs.action_failed" as const,
+				errorDetail: e.message,
+			}
+		}
+		throw e
+	}
+}
+
+async function runIntent({
+	request,
+	form,
+	intent,
+	warehouseId,
+	user,
+}: {
+	request: Request
+	form: FormData
+	intent: string
+	warehouseId: string
+	user: { id: string }
+}): Promise<RepairsActionResult> {
 	switch (intent) {
 		case "create_batch": {
 			await requireWarehouseLead(request, warehouseId)
@@ -79,12 +140,18 @@ export async function action({ request }: Route.ActionArgs) {
 				batchId: String(form.get("batchId")),
 				reason: String(form.get("reason")),
 				byUserId: user.id,
+				// The batchId is form-supplied: the service rejects a batch that
+				// belongs to another warehouse than the one we are lead-gated for.
+				warehouseId,
 			})
 			return { ok: true }
 		}
 		case "regenerate_doc": {
 			await requireWarehouseLead(request, warehouseId)
-			await generateRepairBatchDocument(String(form.get("batchId")))
+			await generateRepairBatchDocument(
+				String(form.get("batchId")),
+				warehouseId,
+			)
 			return { ok: true }
 		}
 		case "correct_triage": {
@@ -147,6 +214,15 @@ export default function Repairs({
 				{t("repairs.title")}
 			</h1>
 
+			{actionData?.errorKey && (
+				<div
+					data-testid="repairs-error"
+					className="rounded-lg border border-status-danger/40 bg-status-danger/10 p-2.5 text-sm text-status-danger"
+				>
+					{t(actionData.errorKey)}
+					{actionData.errorDetail ? `: ${actionData.errorDetail}` : ""}
+				</div>
+			)}
 			{actionData?.batchId && (
 				<div className="rounded-lg border border-border bg-muted/40 p-2.5 text-sm">
 					{t("repairs.batch_sent", { id: actionData.batchId.slice(0, 8) })}

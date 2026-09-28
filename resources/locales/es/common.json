@@ -21,7 +21,8 @@
 		"receive": "Registrar entrada",
 		"onhand_heading": "Serializados en inventario",
 		"onhand_empty": "No hay inventario serializado disponible.",
-		"recent_intakes": "{{count}} entrada(s) reciente(s)"
+		"recent_intakes": "{{count}} entrada(s) reciente(s)",
+		"action_failed": "Esa acción fue bloqueada"
 	},
 	"stock": {
 		"title": "Inventario y auditoría",
@@ -50,7 +51,15 @@
 			"heading": "Recibir entrega",
 			"reference_label": "Referencia (opcional)",
 			"submit": "Registrar entrega",
-			"success": "Entrega registrada."
+			"success": "Entrega registrada.",
+			"errors": {
+				"warehouse_required": "Seleccione un almacén para recibir.",
+				"not_assigned": "Usted no está asignado a ese almacén.",
+				"idempotency_key_required": "Falta la clave de idempotencia — recargue e intente de nuevo.",
+				"invalid_lines": "Líneas de entrega inválidas.",
+				"invalid_qty": "La cantidad recibida debe ser un número entero de cero o más.",
+				"invalid_service_codes": "Uno o más materiales ya no están en el catálogo activo."
+			}
 		},
 		"adjust": {
 			"heading": "Ajustar inventario",
@@ -72,14 +81,18 @@
 		}
 	},
 	"adjust": {
-		"reason_required": "Se requiere un motivo."
+		"reason_required": "Se requiere un motivo.",
+		"invalid_delta": "Ingrese una cantidad de ajuste entera y distinta de cero.",
+		"invalid_service_code": "Ese material no está en el catálogo activo.",
+		"idempotency_key_required": "Falta la clave de idempotencia — recargue e intente de nuevo."
 	},
 	"needs_review": {
 		"title": "Requiere revisión",
 		"empty": "No hay unidades en espera de revisión.",
 		"reason_placeholder": "Motivo (opcional)",
 		"good": "Buena → inventario",
-		"failed": "Fallida → reparación"
+		"failed": "Fallida → reparación",
+		"action_failed": "Esa acción fue bloqueada"
 	},
 	"triage": {
 		"title": "Triaje de devoluciones",
@@ -88,6 +101,7 @@
 		"reason_label": "Motivo",
 		"reason_placeholder": "Nota opcional",
 		"submit": "Guardar",
+		"action_failed": "Esa acción fue bloqueada",
 		"disposition": {
 			"FAILED": "Fallida → reparación",
 			"GOOD": "Buena → inventario",
@@ -313,11 +327,15 @@
 			"invalid_service_codes": "Uno o más productos seleccionados ya no están disponibles.",
 			"return_exceeds_taken": "No se puede devolver más de lo retirado para el código de servicio {{serviceCodeId}}",
 			"warehouse_required": "Selecciona un almacén de destino.",
-			"idempotency_key_required": "Falta la clave de idempotencia — recarga e intenta de nuevo."
-		}
+			"idempotency_key_required": "Falta la clave de idempotencia — recarga e intenta de nuevo.",
+			"already_recorded": "Las devoluciones ya fueron registradas para este documento.",
+			"invalid_warehouse": "Ese almacén no existe o ya no está activo.",
+			"invalid_received_qty": "La cantidad devuelta debe ser un número entero de cero o más (código {{serviceCodeId}})."
+		},
+		"already_recorded_notice": "Las devoluciones ya fueron registradas para este documento. No se pueden registrar otra vez."
 	},
 	"returns": {
-		"note_required": "Se requiere una nota cuando lo recibido es menor a lo esperado."
+		"note_required": "Se requiere una nota cuando lo recibido es menor a lo esperado, o cuando una unidad serializada se pierde o daña."
 	},
 	"restock_fulfill": {
 		"title": "Cumplir reabastecimiento #{{id}}",

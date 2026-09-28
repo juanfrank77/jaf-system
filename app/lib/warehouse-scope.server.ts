@@ -4,10 +4,19 @@ import type { Prisma } from "../../generated/prisma/client"
 type DB = Prisma.TransactionClient | typeof db
 
 function readCookie(header: string | null, name: string): string | undefined {
-	return header
+	const raw = header
 		?.split(";")
 		.map((c) => c.trim().split("="))
 		.find(([k]) => k === name)?.[1]
+	// The switch writes the value URL-encoded; decode defensively (a malformed
+	// value is treated as absent, not thrown — it is only a UI preference and
+	// is validated against the user's assignments below either way).
+	if (raw === undefined) return undefined
+	try {
+		return decodeURIComponent(raw)
+	} catch {
+		return undefined
+	}
 }
 
 /**
@@ -30,6 +39,14 @@ export async function resolveWarehouseScope(
 			: (
 					await client.warehouseAssignment.findMany({
 						where: { userId: user.id },
+						// Deterministic order matters: with no `wh` cookie the default
+						// selection is `warehouses[0]`, and that default is now the
+						// warehouse a triage disposition / repair-batch WRITE is
+						// attributed to. Unordered, Postgres could return either
+						// assignment first and the same user could write under a
+						// different warehouse run to run. "Oldest assignment wins" is
+						// the rule the deleted `getActiveWarehouseId` used.
+						orderBy: { createdAt: "asc" },
 						include: { warehouse: { select: { id: true, name: true } } },
 					})
 				).map((a) => a.warehouse)
@@ -40,17 +57,26 @@ export async function resolveWarehouseScope(
 }
 
 /**
- * The warehouse a user acts in. Spec A assumes a single assignment per
- * warehouse worker; Spec B adds the multi-warehouse header switch on top of
- * this. Throws when the user has no assignment (callers gate on WAREHOUSE role
- * first, and warehouse workers are seeded with an assignment).
+ * Is this user assigned to this warehouse at all (lead or counter)?
+ *
+ * The counter-level actions (receive) take `warehouseId` from the POST body,
+ * so they must verify assignment membership — `requireWarehouseLead` would be
+ * the wrong gate there (spec §5 puts receiving at Counter level). ADMIN is
+ * handled by callers (ADMIN = all warehouses, §4.6).
  */
-export async function getActiveWarehouseId(userId: string): Promise<string> {
-	const a = await db.warehouseAssignment.findFirst({
-		where: { userId },
-		orderBy: { createdAt: "asc" },
-		select: { warehouseId: true },
+export async function isWarehouseMember(userId: string, warehouseId: string) {
+	const a = await db.warehouseAssignment.findUnique({
+		where: { userId_warehouseId: { userId, warehouseId } },
+		select: { id: true },
 	})
-	if (!a) throw new Error(`user ${userId} has no warehouse assignment`)
-	return a.warehouseId
+	return a !== null
 }
+
+// NOTE: `getActiveWarehouseId` (first assignment by createdAt, throws with no
+// assignment) used to live here and was used by Spec A's triage / repairs /
+// needs-review / dashboard. It ignored the `wh` cookie, so the header switch
+// was silently a no-op on those screens — a lead could switch to warehouse B
+// and still have a disposition written under warehouse A — and its bare throw
+// became an unhandled 500 for an ADMIN (who has no WarehouseAssignment row).
+// Every caller now uses `resolveWarehouseScope` above; do not reintroduce a
+// second scoping helper.

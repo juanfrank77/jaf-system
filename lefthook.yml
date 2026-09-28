@@ -6,5 +6,8 @@ pre-commit:
       stage_fixed: true
     typecheck:
       run: pnpm run typecheck
+
+pre-push:
+  commands:
     test:
       run: pnpm vitest run --project="server tests"

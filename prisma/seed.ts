@@ -428,6 +428,54 @@ async function seedInstallerSupervisor() {
 	)
 }
 
+// Synthetic serials that exercise the serial-repair loop for demos and a
+// future e2e. Guarded by SEED_DEMO=1 so prod seeds never gain fake serials;
+// idempotent (upsert by serial). References the Phase 0 Guaynabo warehouse and
+// any serialized ServiceCode.
+async function seedDemoSerials() {
+	if (process.env.SEED_DEMO !== "1") return
+	const wh = await db.warehouse.findFirst({
+		where: { name: { contains: "Guaynabo" } },
+		select: { id: true },
+	})
+	const code = await db.serviceCode.findFirst({
+		where: { serialized: true },
+		select: { id: true },
+	})
+	if (!wh || !code) {
+		// biome-ignore lint/suspicious/noConsole: CLI seed output
+		console.log(
+			"demo serials skipped (no Guaynabo warehouse or serialized code)",
+		)
+		return
+	}
+	const demo: {
+		serial: string
+		status: "RETURNED" | "AWAITING_REPAIR" | "NEEDS_REVIEW"
+		condition: "NEW" | "REFURBISHED"
+	}[] = [
+		{ serial: "SER-DEMO-1", status: "RETURNED", condition: "NEW" },
+		{ serial: "SER-DEMO-2", status: "AWAITING_REPAIR", condition: "NEW" },
+		{ serial: "SER-DEMO-3", status: "NEEDS_REVIEW", condition: "NEW" },
+	]
+	for (const d of demo) {
+		await db.serialLocation.upsert({
+			where: { serial: d.serial },
+			update: {},
+			create: {
+				serial: d.serial,
+				serviceCodeId: code.id,
+				status: d.status,
+				condition: d.condition,
+				currentRef: wh.id,
+				since: new Date(),
+			},
+		})
+	}
+	// biome-ignore lint/suspicious/noConsole: CLI seed output
+	console.log(`demo serials: ${demo.length} upserted at Guaynabo (SEED_DEMO=1)`)
+}
+
 async function main() {
 	// Fail before any write, not after 9 other steps have already committed:
 	// the roster CSV is an out-of-band transfer (gitignored, real PII), and a
@@ -447,6 +495,7 @@ async function main() {
 	await seedInstallers()
 	await seedVansAndStock()
 	await seedLimitTable()
+	await seedDemoSerials()
 }
 
 main()

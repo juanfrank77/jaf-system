@@ -152,7 +152,12 @@ export default function Repairs({ loaderData }: Route.ComponentProps) {
 										key={u.serial}
 										className="flex items-center gap-2 text-sm"
 									>
-										<input type="checkbox" name="serial" value={u.serial} />
+										<input
+											type="checkbox"
+											name="serial"
+											value={u.serial}
+											data-testid={`pool-select-${u.serial}`}
+										/>
 										<span className="font-mono">{u.serial}</span>
 									</label>
 								))}

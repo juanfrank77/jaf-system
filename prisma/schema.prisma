@@ -4,14 +4,14 @@
 // Get a free hosted Postgres database in seconds: `npx create-db`
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider        = "prisma-client"
+  output          = "../generated/prisma"
   previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-	provider = "postgresql"
-	extensions = [pg_trgm]
+  provider   = "postgresql"
+  extensions = [pg_trgm]
 }
 
 enum Role {
@@ -65,15 +65,39 @@ enum SerialStatus {
   REMOVED_PENDING_RETURN
   RETURNED
   SENT_FOR_REPAIR
+  NEEDS_REVIEW
+  AWAITING_REPAIR
+  LOST
 }
 
-enum VanMovementType {
+enum StockMovementType {
   PICKUP
   INSTALL
   SWAP_OUT
   SWAP_IN
   RETURN
   ADJUST
+  RECEIVE
+  RELEASE
+  STARTING_BALANCE
+  DISPOSITION
+  SENT_FOR_REPAIR
+  REPAIR_INTAKE
+}
+
+enum MovementKind {
+  SERIAL
+  BULK
+}
+
+enum SerialCondition {
+  NEW
+  REFURBISHED
+}
+
+enum RepairBatchStatus {
+  SENT
+  VOIDED
 }
 
 enum CompletionStatus {
@@ -126,39 +150,45 @@ model User {
   supervisorAreas String[] @default([])
 
   // better-auth relations
-  sessions  Session[]
-  accounts  Account[]
+  sessions Session[]
+  accounts Account[]
 
-  supervisedInvoices    JafInvoice[]         @relation("SupervisorDocs")
-  preppedInvoices       JafInvoice[]         @relation("PreppedDocs")
-  releasedInvoices      JafInvoice[]         @relation("ReleasedDocs")
-  signedInvoices        JafInvoice[]         @relation("SignedDocs")
-  completedInvoices     JafInvoice[]         @relation("CompletedDocs")
-  overriddenInvoices    JafInvoice[]         @relation("OverriddenDocs")
-   lcApprovedInvoices    JafInvoice[]         @relation("LcApprovedDocs")
-   financeVerifiedInvoices JafInvoice[]       @relation("FinanceVerifiedDocs")
-    closedReceivables     JafInvoice[]        @relation("ClosedReceivables")
-    cancelledInvoices     JafInvoice[]        @relation("CancelledDocs")
-    supervisedBrigades    Brigade[]           @relation("BrigadeSupervisor")
-    releasedToFinanceInvoices JafInvoice[]    @relation("ReleasedToFinanceDocs")
-   installedVan          Van?                 @relation("VanInstaller")
-   systemSettings        SystemSetting[]      @relation("SystemSettings")
-  auditTrail       AuditTrail[]
-  photos           Photo[]
-   notifications    Notification[]
-   paymentRecords   PaymentRecord[]
-   preCertSheets    PreCertSheet[]
-   warehouseAssignments WarehouseAssignment[]
+  supervisedInvoices        JafInvoice[]          @relation("SupervisorDocs")
+  preppedInvoices           JafInvoice[]          @relation("PreppedDocs")
+  releasedInvoices          JafInvoice[]          @relation("ReleasedDocs")
+  signedInvoices            JafInvoice[]          @relation("SignedDocs")
+  completedInvoices         JafInvoice[]          @relation("CompletedDocs")
+  overriddenInvoices        JafInvoice[]          @relation("OverriddenDocs")
+  lcApprovedInvoices        JafInvoice[]          @relation("LcApprovedDocs")
+  financeVerifiedInvoices   JafInvoice[]          @relation("FinanceVerifiedDocs")
+  closedReceivables         JafInvoice[]          @relation("ClosedReceivables")
+  cancelledInvoices         JafInvoice[]          @relation("CancelledDocs")
+  supervisedBrigades        Brigade[]             @relation("BrigadeSupervisor")
+  releasedToFinanceInvoices JafInvoice[]          @relation("ReleasedToFinanceDocs")
+  installedVan              Van?                  @relation("VanInstaller")
+  systemSettings            SystemSetting[]       @relation("SystemSettings")
+  auditTrail                AuditTrail[]
+  photos                    Photo[]
+  notifications             Notification[]
+  paymentRecords            PaymentRecord[]
+  preCertSheets             PreCertSheet[]
+  warehouseAssignments      WarehouseAssignment[]
 
-  installerProfile     InstallerProfile?   @relation("InstallerProfile")
-  vanMovements         VanMovement[]       @relation("VanMovements")
-  installCompletions   InstallCompletion[] @relation("InstallerCompletions")
-  installerSwaps       SwapEvent[]         @relation("InstallerSwaps")
-  paymentRequests      PaymentRequest[]    @relation("InstallerPaymentRequests")
-  paidPaymentRequests  PaymentRequest[]    @relation("PaidPaymentRequests")
-  restockApprovals     RestockRequest[]    @relation("RestockApprovals")
+  installerProfile    InstallerProfile?   @relation("InstallerProfile")
+  stockMovements      StockMovement[]     @relation("StockMovements")
+  installCompletions  InstallCompletion[] @relation("InstallerCompletions")
+  installerSwaps      SwapEvent[]         @relation("InstallerSwaps")
+  paymentRequests     PaymentRequest[]    @relation("InstallerPaymentRequests")
+  paidPaymentRequests PaymentRequest[]    @relation("PaidPaymentRequests")
+  restockApprovals    RestockRequest[]    @relation("RestockApprovals")
 
-   @@index([role, active])
+  createdRepairBatches    RepairBatch[]   @relation("RepairBatchCreator")
+  voidedRepairBatches     RepairBatch[]   @relation("RepairBatchVoider")
+  repairIntakesReceived   RepairIntake[]  @relation("RepairIntakeReceiver")
+  stockDeliveriesReceived StockDelivery[] @relation("StockDeliveryReceiver")
+  stockSnapshotsGenerated StockSnapshot[] @relation("StockSnapshotGenerator")
+
+  @@index([role, active])
 }
 
 model Session {
@@ -177,20 +207,20 @@ model Session {
 }
 
 model Account {
-  id                String  @id @default(cuid())
-  userId            String
-  accountId         String
-  providerId        String
-  accessToken       String?
-  refreshToken      String?
-  idToken           String?
-  accessTokenExpiresAt DateTime?
+  id                    String    @id @default(cuid())
+  userId                String
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
   refreshTokenExpiresAt DateTime?
-  scope             String?
-  password          String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([providerId, accountId])
   @@index([userId])
@@ -209,14 +239,20 @@ model Verification {
 }
 
 model Warehouse {
-  id       String   @id @default(cuid())
+  id       String  @id @default(cuid())
   name     String
   zone     String
   location String?
-  active   Boolean  @default(true)
- 
+  active   Boolean @default(true)
+
   invoices             JafInvoice[]
   warehouseAssignments WarehouseAssignment[]
+
+  stockMovements  StockMovement[] @relation("WarehouseMovements")
+  repairBatches   RepairBatch[]   @relation("WarehouseRepairBatches")
+  repairIntakes   RepairIntake[]  @relation("WarehouseRepairIntakes")
+  stockDeliveries StockDelivery[] @relation("WarehouseStockDeliveries")
+  stockSnapshots  StockSnapshot[] @relation("WarehouseStockSnapshots")
 
   @@index([active])
 }
@@ -242,41 +278,41 @@ model JafInvoice {
   status        DocStatus @default(CREATED)
 
   // Supervisor fills at intake
-  jobType             String
-  jobAddressEstimated String
-   estimatedMaterials  Json
-   assignedCrewIds     String[]
-   crewAssignmentHistory Json?    // [{ userIds, assignedById, assignedAt }] — recorded at assignment changes
-   supervisorId        String
-  supervisor          User     @relation("SupervisorDocs", fields: [supervisorId], references: [id])
-  avisoNumber         String?
-  createdAt           DateTime @default(now())
+  jobType               String
+  jobAddressEstimated   String
+  estimatedMaterials    Json
+  assignedCrewIds       String[]
+  crewAssignmentHistory Json? // [{ userIds, assignedById, assignedAt }] — recorded at assignment changes
+  supervisorId          String
+  supervisor            User     @relation("SupervisorDocs", fields: [supervisorId], references: [id])
+  avisoNumber           String?
+  createdAt             DateTime @default(now())
 
   // Warehouse prep (Step 2)
-  preppedAt   DateTime?
-  preppedById String?
-   preppedBy   User?    @relation("PreppedDocs", fields: [preppedById], references: [id])
-   prepChangedSincePrep Boolean @default(false)
-   preppedMaterials  Json?
-   materialsReturned Json?
+  preppedAt            DateTime?
+  preppedById          String?
+  preppedBy            User?     @relation("PreppedDocs", fields: [preppedById], references: [id])
+  prepChangedSincePrep Boolean   @default(false)
+  preppedMaterials     Json?
+  materialsReturned    Json?
 
-   // Dual signature at warehouse pickup (Step 3) — materialsTaken locked after this
+  // Dual signature at warehouse pickup (Step 3) — materialsTaken locked after this
   // warehouseId set here, not at prep — crew may pull from a different zone warehouse
   warehouseId      String?
   warehouse        Warehouse? @relation(fields: [warehouseId], references: [id])
   materialsTaken   Json?
-  releaseSignature String?    // base64 — warehouse person signs (gives)
+  releaseSignature String? // base64 — warehouse person signs (gives)
   releasedById     String?
   releasedBy       User?      @relation("ReleasedDocs", fields: [releasedById], references: [id])
   releaseSignedAt  DateTime?
-  crewSignature    String?    // base64 — crew member signs (receives)
+  crewSignature    String? // base64 — crew member signs (receives)
   signedById       String?
   signedBy         User?      @relation("SignedDocs", fields: [signedById], references: [id])
   signedAt         DateTime?
 
   // Admin override
   overriddenById    String?
-  overriddenBy      User?    @relation("OverriddenDocs", fields: [overriddenById], references: [id])
+  overriddenBy      User?     @relation("OverriddenDocs", fields: [overriddenById], references: [id])
   overrideSignature String?
   overrideAt        DateTime?
   overrideReason    String?
@@ -285,26 +321,26 @@ model JafInvoice {
   cancellationReason String?
   cancelledAt        DateTime?
   cancelledById      String?
-  cancelledBy        User?    @relation("CancelledDocs", fields: [cancelledById], references: [id])
+  cancelledBy        User?     @relation("CancelledDocs", fields: [cancelledById], references: [id])
 
   // Send-back history: Supervisor→Crew and Finance→Supervisor. Array of
   // { fromStatus, toStatus, note, byUserId, createdAt } kept for audit.
-  sendBackHistory    Json?
+  sendBackHistory Json?
 
-   // Crew field update (Step 4)
-   jobAddressActual String?
-   addressCorrections Json?    // [{ original, corrected, correctedById, correctedAt, gps? }]
-   gpsCoordinates   Json?     // { lat, lng, accuracy, capturedAt }
-   materialsUsed    Json?
-   fieldNotes       String?
-   startedAt        DateTime? // time on site start
-   endedAt          DateTime? // time on site end
-   completionSignature String? // base64 — crew lead signs completion
-   completedById    String?
-   completedBy      User?     @relation("CompletedDocs", fields: [completedById], references: [id])
-   completionSignedAt DateTime?
-   completedAt      DateTime?
-   fieldSubmittedAt DateTime?
+  // Crew field update (Step 4)
+  jobAddressActual    String?
+  addressCorrections  Json? // [{ original, corrected, correctedById, correctedAt, gps? }]
+  gpsCoordinates      Json? // { lat, lng, accuracy, capturedAt }
+  materialsUsed       Json?
+  fieldNotes          String?
+  startedAt           DateTime? // time on site start
+  endedAt             DateTime? // time on site end
+  completionSignature String? // base64 — crew lead signs completion
+  completedById       String?
+  completedBy         User?     @relation("CompletedDocs", fields: [completedById], references: [id])
+  completionSignedAt  DateTime?
+  completedAt         DateTime?
+  fieldSubmittedAt    DateTime?
 
   // Supervisor approval + Claro submission (Step 5)
   supervisorApprovedAt DateTime?
@@ -312,59 +348,59 @@ model JafInvoice {
   claroPdfPath         String?
   claroUploadedAt      DateTime?
 
-   // Lissette generates LC (Step 6)
-   lcRequestPdfPath String?
-   lcGeneratedAt    DateTime?
-   lcApprovedById   String?
-   lcApprovedBy     User?     @relation("LcApprovedDocs", fields: [lcApprovedById], references: [id])
+  // Lissette generates LC (Step 6)
+  lcRequestPdfPath String?
+  lcGeneratedAt    DateTime?
+  lcApprovedById   String?
+  lcApprovedBy     User?     @relation("LcApprovedDocs", fields: [lcApprovedById], references: [id])
 
-   // Finance pipeline (Phase 2)
-   financeVerifiedAt      DateTime?
-   financeVerifiedById    String?
-   financeVerifiedBy      User?      @relation("FinanceVerifiedDocs", fields: [financeVerifiedById], references: [id])
-   financeSendBackNotes   Json?      // [{ note, byUserId, createdAt }] — Finance→Supervisor Aviso issues
-   pbccRequestPdfPath     String?
-   pbccRequestSentAt      DateTime?
-   karmenCopySentAt       DateTime?
-   finalClaroDocPath      String?
-   finalClaroUploadedAt   DateTime?
+  // Finance pipeline (Phase 2)
+  financeVerifiedAt    DateTime?
+  financeVerifiedById  String?
+  financeVerifiedBy    User?     @relation("FinanceVerifiedDocs", fields: [financeVerifiedById], references: [id])
+  financeSendBackNotes Json? // [{ note, byUserId, createdAt }] — Finance→Supervisor Aviso issues
+  pbccRequestPdfPath   String?
+  pbccRequestSentAt    DateTime?
+  karmenCopySentAt     DateTime?
+  finalClaroDocPath    String?
+  finalClaroUploadedAt DateTime?
 
-   // Payment tracking (receivables dashboard)
-   advanceReceivedAt      DateTime?
-   advanceAmount          Decimal?
-   finalPaymentReceivedAt DateTime?
-   finalPaymentAmount     Decimal?
-   receivableClosedAt     DateTime?
-   receivableClosedById   String?
-   receivableClosedBy     User?     @relation("ClosedReceivables", fields: [receivableClosedById], references: [id])
+  // Payment tracking (receivables dashboard)
+  advanceReceivedAt      DateTime?
+  advanceAmount          Decimal?
+  finalPaymentReceivedAt DateTime?
+  finalPaymentAmount     Decimal?
+  receivableClosedAt     DateTime?
+  receivableClosedById   String?
+  receivableClosedBy     User?     @relation("ClosedReceivables", fields: [receivableClosedById], references: [id])
 
-   // Generated documents
-   warehouseReceiptPath String?
-   jafInvoicePdfPath    String?    // supervisor-generated JAF invoice (for the Claro Aviso)
-   
-   // Phase 3 - supervisor layer
-   brigadeId              String?
-   brigade                Brigade?  @relation(fields: [brigadeId], references: [id])
-   jobDescription         String?
-   serviceLines           Json?     // [{ serviceCodeId, claroCode, accountCode, name, qty }] ordered at intake
-   installedServiceLines  Json?     // same shape, crew's installed qty
-   jafInvoiceGeneratedAt  DateTime?
-   jafInvoiceLines        Json?     // [{ serviceCodeId, claroCode, accountCode, name, unit, qty, unitPrice, lineAmount }]
-   jafInvoiceLineTotal    Decimal?  // pre-IVU line sum
-   avisoDocPath           String?   // uploaded Aviso PDF (distinct from claroPdfPath)
-   avisoLines             Json?     // [{ serviceCodeId, claroCode, qty, unitPrice, lineAmount }]
-   avisoLineTotal         Decimal?
-   avisoMatchedAt         DateTime? // set only when the amount gate passes
-   contractorAccountCode  String?   // copied from Brigade.code at sub-contractor signature
-   releasedToFinanceAt    DateTime?
-   releasedToFinanceById  String?
-   releasedToFinanceBy    User?     @relation("ReleasedToFinanceDocs", fields: [releasedToFinanceById], references: [id])
+  // Generated documents
+  warehouseReceiptPath String?
+  jafInvoicePdfPath    String? // supervisor-generated JAF invoice (for the Claro Aviso)
 
-   preCertSheets PreCertSheet[]
-   auditTrail AuditTrail[]
-   photos     Photo[]
-   poLinks    PoLink[]
-   paymentRecords PaymentRecord[]
+  // Phase 3 - supervisor layer
+  brigadeId             String?
+  brigade               Brigade?  @relation(fields: [brigadeId], references: [id])
+  jobDescription        String?
+  serviceLines          Json? // [{ serviceCodeId, claroCode, accountCode, name, qty }] ordered at intake
+  installedServiceLines Json? // same shape, crew's installed qty
+  jafInvoiceGeneratedAt DateTime?
+  jafInvoiceLines       Json? // [{ serviceCodeId, claroCode, accountCode, name, unit, qty, unitPrice, lineAmount }]
+  jafInvoiceLineTotal   Decimal? // pre-IVU line sum
+  avisoDocPath          String? // uploaded Aviso PDF (distinct from claroPdfPath)
+  avisoLines            Json? // [{ serviceCodeId, claroCode, qty, unitPrice, lineAmount }]
+  avisoLineTotal        Decimal?
+  avisoMatchedAt        DateTime? // set only when the amount gate passes
+  contractorAccountCode String? // copied from Brigade.code at sub-contractor signature
+  releasedToFinanceAt   DateTime?
+  releasedToFinanceById String?
+  releasedToFinanceBy   User?     @relation("ReleasedToFinanceDocs", fields: [releasedToFinanceById], references: [id])
+
+  preCertSheets  PreCertSheet[]
+  auditTrail     AuditTrail[]
+  photos         Photo[]
+  poLinks        PoLink[]
+  paymentRecords PaymentRecord[]
 
   @@index([status, lcGeneratedAt])
   @@index([status, financeVerifiedAt, pbccRequestSentAt, advanceReceivedAt])
@@ -384,21 +420,21 @@ model AuditTrail {
   doc       JafInvoice @relation(fields: [docId], references: [id])
   userId    String
   user      User       @relation(fields: [userId], references: [id])
-  action    String   // e.g. "STATUS_CHANGED", "FIELD_UPDATED"
-  diffJson  Json     // {field, before, after}
+  action    String // e.g. "STATUS_CHANGED", "FIELD_UPDATED"
+  diffJson  Json // {field, before, after}
   timestamp DateTime   @default(now())
 
   @@index([docId, timestamp])
 }
 
 model Photo {
-  id           String      @id @default(cuid())
+  id           String     @id @default(cuid())
   docId        String
-  doc          JafInvoice  @relation(fields: [docId], references: [id])
+  doc          JafInvoice @relation(fields: [docId], references: [id])
   uploadedById String
-  uploadedBy   User        @relation(fields: [uploadedById], references: [id])
-  localPath    String      // /var/jaf/uploads/photos/<docId>/<filename>
-  takenAt      DateTime    @default(now())
+  uploadedBy   User       @relation(fields: [uploadedById], references: [id])
+  localPath    String // /var/jaf/uploads/photos/<docId>/<filename>
+  takenAt      DateTime   @default(now())
   tag          PhotoTag?
 
   @@index([docId])
@@ -407,11 +443,11 @@ model Photo {
 model ServiceCode {
   id                String      @id @default(cuid())
   claroCode         String      @unique // e.g. "34006428"
-  name              String          // catalog description,  e.g. "TRANSFER STITCH DE POSTESMC"
+  name              String // catalog description,  e.g. "TRANSFER STITCH DE POSTESMC"
   description       String?
   kind              CatalogKind @default(MATERIAL)
-  unit              String?      // EA, FT, SQFT, TRAMO (SPAN); null when the catalog has none
-  unitPrice         Decimal     // = jaf_price (what JAF      invoices Claro)
+  unit              String? // EA, FT, SQFT, TRAMO (SPAN); null when the catalog has none
+  unitPrice         Decimal // = jaf_price (what JAF      invoices Claro)
   claroBasePrice    Decimal?
   upliftFactor      Decimal?
   contractorPrice   Decimal?
@@ -428,11 +464,11 @@ model ServiceCode {
 
   // Material-master extensions (Phase 0). All nullable/defaulted so existing rows are untouched.
   ownership        Ownership @default(UNKNOWN) // CLARO_CONSIGNED | JAF_PURCHASED | UNKNOWN — values blocked on Orlando; ships default
-  reparadoCode     String?   // original SAP code -> its REPARADO claroCode
-  countUnit        String?   // unit staff physically count in
-  stockUnit        String?   // unit stock is held/reported in
-  conversionFactor Decimal?  // countUnit -> stockUnit; 39 rows blocked on Orlando (null => derived stock figure stays hidden)
-  canonicalName    String?   // one canonical name per SAP code; the 21 alternates stay search-only
+  reparadoCode     String? // original SAP code -> its REPARADO claroCode
+  countUnit        String? // unit staff physically count in
+  stockUnit        String? // unit stock is held/reported in
+  conversionFactor Decimal? // countUnit -> stockUnit; 39 rows blocked on Orlando (null => derived stock figure stays hidden)
+  canonicalName    String? // one canonical name per SAP code; the 21 alternates stay search-only
 
   serialized   Boolean @default(false)
   serialPrefix String?
@@ -441,14 +477,14 @@ model ServiceCode {
 }
 
 model PoLink {
-  id               String @id @default(cuid())
+  id               String     @id @default(cuid())
   docId            String
   doc              JafInvoice @relation(fields: [docId], references: [id])
   claroPONumber    String
   acceptanceNumber String?
   poDate           DateTime?
   amount           Decimal?
-  createdAt        DateTime @default(now())
+  createdAt        DateTime   @default(now())
 
   @@index([docId])
 }
@@ -458,19 +494,19 @@ model PreCertSheet {
   docId                 String
   doc                   JafInvoice @relation(fields: [docId], references: [id])
   version               Int
-  supersededAt          DateTime?  // null = active sheet
+  supersededAt          DateTime? // null = active sheet
   avisoNumber           String?
   certifiedAddress      String
   title                 String
-  issuedOn              DateTime   // "Fecha": the field update date
-  lines                 Json       // PreCertLine[] — see app/lib/service-lines.ts
+  issuedOn              DateTime // "Fecha": the field update date
+  lines                 Json // PreCertLine[] — see app/lib/service-lines.ts
   priceListRevision     String?
   total                 Decimal
   sigSupervisorUserId   String?
   sigSupervisorName     String?
-  sigSupervisorImage    String?    // base64 data URL
+  sigSupervisorImage    String? // base64 data URL
   sigSupervisorAt       DateTime?
-  sigSubcontractorCode  String?    // brigade code
+  sigSubcontractorCode  String? // brigade code
   sigSubcontractorName  String?
   sigSubcontractorImage String?
   sigSubcontractorAt    DateTime?
@@ -480,7 +516,7 @@ model PreCertSheet {
   sigClaroAt            DateTime?
   pdfPath               String?
   issuedAt              DateTime   @default(now())
-  issuedById		String
+  issuedById            String
   issuedBy              User       @relation(fields: [issuedById], references: [id])
 
   @@unique([docId, version])
@@ -489,19 +525,19 @@ model PreCertSheet {
 }
 
 model PaymentRecord {
-  id           String    @id @default(cuid())
+  id           String      @id @default(cuid())
   jobId        String
-  job          JafInvoice @relation(fields: [jobId], references: [id])
+  job          JafInvoice  @relation(fields: [jobId], references: [id])
   type         PaymentType
   amount       Decimal
   date         DateTime
   recordedById String
-  recordedBy   User      @relation(fields: [recordedById], references: [id])
+  recordedBy   User        @relation(fields: [recordedById], references: [id])
   note         String?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime    @default(now())
 
-  @@index([jobId, type])
   @@unique([jobId, type])
+  @@index([jobId, type])
   @@map("payment_record")
 }
 
@@ -531,7 +567,7 @@ model Brigade {
   id           String   @id @default(cuid())
   name         String
   code         String?  @unique // Carmen's contractor/payroll number, e.g. "204"
-  area         String?          // CENTRAL, METRO, NORTE, OESTE, SUR
+  area         String? // CENTRAL, METRO, NORTE, OESTE, SUR
   supervisorId String?
   supervisor   User?    @relation("BrigadeSupervisor", fields: [supervisorId], references: [id])
   leadName     String?
@@ -548,17 +584,17 @@ model Brigade {
 }
 
 model Van {
-  id                      String   @id @default(cuid())
-  name                    String
-  installerId             String?  @unique
-  installer               User?    @relation("VanInstaller", fields: [installerId], references: [id])
-  active                  Boolean  @default(true)
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
-  vanAssignmentHistory    Json?    // [{ installerId, from, to }] — append-only
+  id                   String   @id @default(cuid())
+  name                 String
+  installerId          String?  @unique
+  installer            User?    @relation("VanInstaller", fields: [installerId], references: [id])
+  active               Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  vanAssignmentHistory Json? // [{ installerId, from, to }] — append-only
 
   vanPars            VanPar[]
-  vanMovements       VanMovement[]
+  stockMovements     StockMovement[]
   installCompletions InstallCompletion[]
   restockRequests    RestockRequest[]
 
@@ -573,6 +609,7 @@ model InstallerProfile {
   toaNumber String   @unique
   region    String?
   createdAt DateTime @default(now())
+
   @@map("installer_profile")
 }
 
@@ -582,6 +619,7 @@ model VanPar {
   van           Van    @relation(fields: [vanId], references: [id], onDelete: Cascade)
   serviceCodeId String
   parQty        Int
+
   @@unique([vanId, serviceCodeId])
   @@map("van_par")
 }
@@ -591,44 +629,127 @@ model LimitTable {
   bracketFt     Int
   serviceCodeId String
   qty           Int
+
   @@unique([bracketFt, serviceCodeId])
   @@index([bracketFt])
   @@map("limit_table")
 }
 
 model SerialLocation {
-  id            String       @id @default(cuid())
-  serial        String       @unique
+  id            String          @id @default(cuid())
+  serial        String          @unique
   serviceCodeId String
   status        SerialStatus
-  currentRef    String       // warehouseId | vanId | completionId
-  since         DateTime     @default(now())
+  condition     SerialCondition @default(NEW)
+  currentRef    String // warehouseId | vanId | completionId
+  since         DateTime        @default(now())
+
   @@index([status, currentRef])
   @@map("serial_location")
 }
 
-model VanMovement {
-  id              String          @id @default(cuid())
-  vanId           String
-  van             Van             @relation(fields: [vanId], references: [id])
-  serviceCodeId   String
-  qty             Int
-  serial          String?
-  type            VanMovementType
-  refCompletionId String?
-  refSwapId       String?
-  refRestockId    String?
-  byUserId        String
-  byUser          User            @relation("VanMovements", fields: [byUserId], references: [id])
-  at              DateTime        @default(now())
+// stock_movement_location_ck (exactly one of vanId/warehouseId) is a hand-maintained CHECK in the warehouse_foundation migration — Prisma cannot express it; preserve it on any future migration hand-edit.
+model StockMovement {
+  id                String            @id @default(cuid())
+  vanId             String?
+  van               Van?              @relation(fields: [vanId], references: [id], onDelete: Restrict)
+  warehouseId       String?
+  warehouse         Warehouse?        @relation("WarehouseMovements", fields: [warehouseId], references: [id], onDelete: Restrict)
+  kind              MovementKind      @default(SERIAL)
+  serviceCodeId     String
+  qty               Int
+  serial            String?
+  type              StockMovementType
+  refCompletionId   String?
+  refSwapId         String?
+  refRestockId      String?
+  refRepairBatchId  String?
+  refRepairIntakeId String?
+  refDeliveryId     String?
+  refDocId          String?
+  byUserId          String
+  byUser            User              @relation("StockMovements", fields: [byUserId], references: [id])
+  at                DateTime          @default(now())
+
   @@index([vanId, serviceCodeId])
   @@index([serial])
-  @@map("van_movement")
+  @@index([warehouseId, serviceCodeId])
+  @@map("stock_movement")
+}
+
+model RepairBatch {
+  id             String            @id @default(cuid())
+  warehouseId    String
+  warehouse      Warehouse         @relation("WarehouseRepairBatches", fields: [warehouseId], references: [id])
+  status         RepairBatchStatus @default(SENT)
+  createdById    String
+  createdBy      User              @relation("RepairBatchCreator", fields: [createdById], references: [id])
+  sentAt         DateTime
+  documentPath   String?
+  claroReference String?
+  notes          String?
+  voidedById     String?
+  voidedBy       User?             @relation("RepairBatchVoider", fields: [voidedById], references: [id])
+  voidedAt       DateTime?
+  voidReason     String?
+
+  @@index([warehouseId, status])
+}
+
+model RepairIntake {
+  id             String    @id @default(cuid())
+  warehouseId    String
+  warehouse      Warehouse @relation("WarehouseRepairIntakes", fields: [warehouseId], references: [id])
+  receivedById   String
+  receivedBy     User      @relation("RepairIntakeReceiver", fields: [receivedById], references: [id])
+  receivedAt     DateTime
+  declaredCount  Int
+  documentPath   String?
+  mismatchNote   String?
+  claroReference String?
+  notes          String?
+
+  @@index([warehouseId])
+}
+
+model StockDelivery {
+  id           String    @id @default(cuid())
+  warehouseId  String
+  warehouse    Warehouse @relation("WarehouseStockDeliveries", fields: [warehouseId], references: [id])
+  receivedById String
+  receivedBy   User      @relation("StockDeliveryReceiver", fields: [receivedById], references: [id])
+  receivedAt   DateTime  @default(now())
+  reference    String?
+  notes        String?
+
+  @@index([warehouseId, receivedAt])
+}
+
+model StockSnapshot {
+  id            String    @id @default(cuid())
+  warehouseId   String
+  warehouse     Warehouse @relation("WarehouseStockSnapshots", fields: [warehouseId], references: [id])
+  asOfDate      DateTime
+  generatedById String
+  generatedBy   User      @relation("StockSnapshotGenerator", fields: [generatedById], references: [id])
+  generatedAt   DateTime  @default(now())
+  documentPath  String?
+  csvPath       String?
+
+  @@index([warehouseId, asOfDate])
+}
+
+model IdempotencyKey {
+  key       String   @id
+  scope     String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
 }
 
 model InstallCompletion {
   id                String           @id @default(cuid())
-  idempotencyKey    String           @unique   // client-generated; blocks offline double-submit
+  idempotencyKey    String           @unique // client-generated; blocks offline double-submit
   claroOrderNo      String
   installerId       String
   installer         User             @relation("InstallerCompletions", fields: [installerId], references: [id])
@@ -656,6 +777,7 @@ model InstallCompletion {
   completionPdfPath String?
   createdAt         DateTime         @default(now())
   swapEvents        SwapEvent[]
+
   @@index([installerId, createdAt])
   @@index([claroOrderNo])
   @@map("install_completion")
@@ -677,6 +799,7 @@ model SwapEvent {
   submittedAt            DateTime          @default(now())
   byInstallerId          String
   byInstaller            User              @relation("InstallerSwaps", fields: [byInstallerId], references: [id])
+
   @@index([completionId])
   @@map("swap_event")
 }
@@ -697,6 +820,7 @@ model PaymentRequest {
   paidByUserId     String?
   paidBy           User?                @relation("PaidPaymentRequests", fields: [paidByUserId], references: [id])
   createdAt        DateTime             @default(now())
+
   @@index([status, createdAt])
   @@index([installerId, createdAt])
   @@map("payment_request")
@@ -706,12 +830,13 @@ model RestockRequest {
   id           String        @id @default(cuid())
   vanId        String
   van          Van           @relation(fields: [vanId], references: [id])
-  lines        Json          // [{ serviceCodeId, qty }]
+  lines        Json // [{ serviceCodeId, qty }]
   status       RestockStatus @default(SUBMITTED)
   submittedAt  DateTime      @default(now())
   approvedById String?
   approvedBy   User?         @relation("RestockApprovals", fields: [approvedById], references: [id])
   releaseId    String?
+
   @@index([status, submittedAt])
   @@index([vanId, submittedAt])
   @@map("restock_request")

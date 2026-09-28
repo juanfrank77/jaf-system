@@ -121,9 +121,10 @@ export async function submitCompletion(
 					where: { serial: i.serialInstalled },
 					data: { status: to, currentRef: completion.id, since: new Date() },
 				})
-				await tx.vanMovement.create({
+				await tx.stockMovement.create({
 					data: {
 						vanId: i.vanId,
+						kind: "SERIAL",
 						serviceCodeId: loc?.serviceCodeId ?? "",
 						qty: -1,
 						serial: i.serialInstalled,
@@ -136,9 +137,10 @@ export async function submitCompletion(
 			// Accessories: one INSTALL movement per line.
 			for (const a of i.accessories) {
 				if (a.qty > 0)
-					await tx.vanMovement.create({
+					await tx.stockMovement.create({
 						data: {
 							vanId: i.vanId,
+							kind: "BULK",
 							serviceCodeId: a.serviceCodeId,
 							qty: -a.qty,
 							type: "INSTALL",

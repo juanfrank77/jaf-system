@@ -1,6 +1,6 @@
 import type {
 	SerialStatus,
-	VanMovementType,
+	StockMovementType,
 } from "../../generated/prisma/client"
 
 export function deriveAccessoryStock(
@@ -39,9 +39,13 @@ export function owedBack(
 		.map((s) => s.serial)
 }
 
-const TRANSITIONS: Record<
-	VanMovementType,
-	{ from: (SerialStatus | null)[]; to: SerialStatus }
+// Partial: only Installer-issued movement types have a serial-state
+// transition rule here. The warehouse-only movement types added in the
+// warehouse foundation schema (RECEIVE, RELEASE, STARTING_BALANCE,
+// DISPOSITION, SENT_FOR_REPAIR, REPAIR_INTAKE) are handled by warehouse
+// logic elsewhere and never reach this function.
+const TRANSITIONS: Partial<
+	Record<StockMovementType, { from: (SerialStatus | null)[]; to: SerialStatus }>
 > = {
 	PICKUP: { from: ["WAREHOUSE", null], to: "VAN" },
 	INSTALL: { from: ["VAN"], to: "INSTALLED" },
@@ -64,10 +68,10 @@ const TRANSITIONS: Record<
 
 export function nextSerialState(
 	current: SerialStatus | null,
-	event: VanMovementType,
+	event: StockMovementType,
 ): SerialStatus {
 	const rule = TRANSITIONS[event]
-	if (!rule.from.includes(current))
+	if (!rule?.from.includes(current))
 		throw new Error(
 			`Illegal serial transition: ${current ?? "none"} –${event}→`,
 		)

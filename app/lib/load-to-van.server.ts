@@ -120,9 +120,10 @@ export async function releaseRestockToVan(
 					})),
 				})
 			}
-			await tx.vanMovement.createMany({
+			await tx.stockMovement.createMany({
 				data: serials.map((s) => ({
 					vanId: restock.vanId,
+					kind: "SERIAL" as const,
 					serviceCodeId: s.serviceCodeId,
 					qty: 1,
 					serial: s.serial,
@@ -134,9 +135,10 @@ export async function releaseRestockToVan(
 		}
 		const positiveAccessories = accessories.filter((a) => a.qty > 0)
 		if (positiveAccessories.length > 0) {
-			await tx.vanMovement.createMany({
+			await tx.stockMovement.createMany({
 				data: positiveAccessories.map((a) => ({
 					vanId: restock.vanId,
+					kind: "BULK" as const,
 					serviceCodeId: a.serviceCodeId,
 					qty: a.qty,
 					type: "PICKUP" as const,

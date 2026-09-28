@@ -89,9 +89,10 @@ export async function submitSwap(
 				currentRef: input.vanId,
 			},
 		})
-		await tx.vanMovement.create({
+		await tx.stockMovement.create({
 			data: {
 				vanId: input.vanId,
+				kind: "SERIAL",
 				serviceCodeId: outServiceCodeId,
 				qty: 1,
 				serial: input.serialOut,
@@ -115,9 +116,10 @@ export async function submitSwap(
 				currentRef: input.completionId,
 			},
 		})
-		await tx.vanMovement.create({
+		await tx.stockMovement.create({
 			data: {
 				vanId: input.vanId,
+				kind: "SERIAL",
 				serviceCodeId: inServiceCodeId,
 				qty: -1,
 				serial: input.serialIn,

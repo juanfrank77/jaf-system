@@ -339,7 +339,7 @@ async function seedVansAndStock() {
 	for (const van of vans) {
 		// Synthetic opening stock (spec §10): 2 serials per serialized SKU on the van.
 		// Idempotent per serial: a serial already seeded by a prior run is left untouched
-		// rather than re-writing its VanMovement, which would otherwise duplicate rows
+		// rather than re-writing its StockMovement, which would otherwise duplicate rows
 		// in the append-only ledger on every re-run of `db seed`.
 		for (const sc of serialized) {
 			for (let k = 0; k < 2; k++) {
@@ -356,9 +356,10 @@ async function seedVansAndStock() {
 						currentRef: van.id,
 					},
 				})
-				await db.vanMovement.create({
+				await db.stockMovement.create({
 					data: {
 						vanId: van.id,
+						kind: "SERIAL",
 						serviceCodeId: sc.id,
 						qty: 1,
 						serial,

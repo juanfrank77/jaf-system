@@ -44,7 +44,7 @@ it("returns an owed-back serial and writes a RETURN movement", async () => {
 		(await db.serialLocation.findUnique({ where: { serial } }))?.status,
 	).toBe("RETURNED")
 	expect(
-		await db.vanMovement.count({ where: { serial, type: "RETURN" } }),
+		await db.stockMovement.count({ where: { serial, type: "RETURN" } }),
 	).toBe(1)
 })
 

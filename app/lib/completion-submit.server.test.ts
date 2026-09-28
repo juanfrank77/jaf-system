@@ -55,7 +55,7 @@ it("installs a serial, writes movement, creates a READY payment request", async 
 	expect(res.status).toBe("READY")
 	const loc = await db.serialLocation.findUnique({ where: { serial } })
 	expect(loc?.status).toBe("INSTALLED")
-	const mv = await db.vanMovement.findFirst({
+	const mv = await db.stockMovement.findFirst({
 		where: { serial, type: "INSTALL" },
 	})
 	expect(mv).not.toBeNull()
@@ -90,7 +90,7 @@ it("is idempotent: same key returns the same completion, no duplicate", async ()
 	const b = await submitCompletion(input, { id: installerId })
 	expect(b.completionId).toBe(a.completionId)
 	expect(
-		await db.vanMovement.count({ where: { serial: s2, type: "INSTALL" } }),
+		await db.stockMovement.count({ where: { serial: s2, type: "INSTALL" } }),
 	).toBe(1)
 })
 
@@ -145,7 +145,7 @@ it("leaves no orphan InstallCompletion when the transaction fails", async () => 
 				sigInstaller: "data:image/png;base64,AAA",
 				installedAt: new Date(),
 			},
-			// A byUserId that doesn't exist violates VanMovement's FK — this must
+			// A byUserId that doesn't exist violates StockMovement's FK — this must
 			// roll back the InstallCompletion too, not just the movement.
 			{ id: "does-not-exist" },
 		),

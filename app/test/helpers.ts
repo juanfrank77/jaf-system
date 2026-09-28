@@ -34,3 +34,76 @@ export async function seedServiceCode(
 		},
 	})
 }
+
+/** A unique token for a test file run — server tests share one (Neon dev) DB. */
+export function runToken(prefix = "T") {
+	return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`
+}
+
+/**
+ * Tracks rows created by a test file and deletes them in `afterAll`, so the
+ * shared Neon dev database (also the demo DB) is not polluted with fixtures.
+ * Deletion runs children → parents to respect FKs (StockMovement→Warehouse is
+ * `onDelete: Restrict`; Notification→User is restricted too).
+ */
+export function makeTracker() {
+	const b = {
+		stockMovement: [] as string[],
+		serialLocation: [] as string[],
+		repairIntake: [] as string[],
+		repairBatch: [] as string[],
+		stockSnapshot: [] as string[],
+		stockDelivery: [] as string[],
+		notification: [] as string[],
+		warehouseAssignment: [] as string[],
+		warehouse: [] as string[],
+		user: [] as string[],
+	}
+	function track<M extends keyof typeof b, R extends { id: string }>(
+		model: M,
+		row: R,
+	): R {
+		b[model].push(row.id)
+		return row
+	}
+	async function cleanup() {
+		// Tables with a warehouseId FK (onDelete: Restrict) are cleared by
+		// warehouseId, not just tracked id — services create extra rows (e.g.
+		// DISPOSITION movements) the test never sees, and any leftover would
+		// block the warehouse delete.
+		const whFilter = (idList: string[]) =>
+			b.warehouse.length
+				? { OR: [{ id: { in: idList } }, { warehouseId: { in: b.warehouse } }] }
+				: { id: { in: idList } }
+		if (b.stockMovement.length || b.warehouse.length)
+			await db.stockMovement.deleteMany({ where: whFilter(b.stockMovement) })
+		if (b.serialLocation.length)
+			await db.serialLocation.deleteMany({
+				where: { id: { in: b.serialLocation } },
+			})
+		if (b.repairIntake.length || b.warehouse.length)
+			await db.repairIntake.deleteMany({ where: whFilter(b.repairIntake) })
+		if (b.repairBatch.length || b.warehouse.length)
+			await db.repairBatch.deleteMany({ where: whFilter(b.repairBatch) })
+		if (b.stockSnapshot.length || b.warehouse.length)
+			await db.stockSnapshot.deleteMany({ where: whFilter(b.stockSnapshot) })
+		if (b.stockDelivery.length || b.warehouse.length)
+			await db.stockDelivery.deleteMany({ where: whFilter(b.stockDelivery) })
+		// Also remove service-created notifications addressed to tracked users.
+		if (b.notification.length || b.user.length)
+			await db.notification.deleteMany({
+				where: {
+					OR: [{ id: { in: b.notification } }, { userId: { in: b.user } }],
+				},
+			})
+		if (b.warehouseAssignment.length)
+			await db.warehouseAssignment.deleteMany({
+				where: { id: { in: b.warehouseAssignment } },
+			})
+		if (b.warehouse.length)
+			await db.warehouse.deleteMany({ where: { id: { in: b.warehouse } } })
+		if (b.user.length)
+			await db.user.deleteMany({ where: { id: { in: b.user } } })
+	}
+	return { track, cleanup }
+}

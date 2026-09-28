@@ -667,6 +667,7 @@ model StockMovement {
   refRepairIntakeId String?
   refDeliveryId     String?
   refDocId          String?
+  note              String? // audit note/reason: DISPOSITION / batch-void / triage-correction (Spec A), ADJUST / STARTING_BALANCE (Spec B)
   byUserId          String
   byUser            User              @relation("StockMovements", fields: [byUserId], references: [id])
   at                DateTime          @default(now())

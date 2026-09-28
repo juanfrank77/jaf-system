@@ -120,6 +120,25 @@ export async function seedWarehouse(name?: string) {
 	})
 }
 
+/** Create a user with a unique email. */
+export async function seedUser(opts: { role?: string; name?: string } = {}) {
+	return db.user.create({
+		data: {
+			email: `${runToken("u")}@x.test`,
+			name: opts.name ?? "Test User",
+			role: (opts.role ?? "WAREHOUSE") as
+				| "WAREHOUSE"
+				| "ADMIN"
+				| "SUPERVISOR"
+				| "CREW"
+				| "FINANCE"
+				| "COMPTROLLER"
+				| "INSTALLER"
+				| "INSTALLER_SUPERVISOR",
+		},
+	})
+}
+
 /**
  * Create/refresh a ServiceCode (material) with optional dual-UOM fields.
  * Defaults to a per-run-unique claroCode so tests never mutate a real catalog

@@ -24,6 +24,7 @@ import { cn } from "~/lib/utils"
 import { LanguageSwitcher } from "~/library/language-switcher"
 import type { Role } from "../../generated/prisma/client"
 import { OfflineIndicator } from "./offline-indicator"
+import { WarehouseSwitch } from "./warehouse-switch"
 
 type NavItem = {
 	to: string
@@ -313,6 +314,7 @@ function AppShell({
 	user,
 	notifications,
 	comptrollerEnabled,
+	warehouseScope,
 	children,
 }: {
 	user: { name: string; role: Role }
@@ -323,6 +325,10 @@ function AppShell({
 		createdAt: Date
 	}[]
 	comptrollerEnabled?: boolean
+	warehouseScope?: {
+		warehouses: { id: string; name: string }[]
+		selectedId?: string
+	}
 	children: React.ReactNode
 }) {
 	const [drawerOpen, setDrawerOpen] = useState(false)
@@ -358,6 +364,12 @@ function AppShell({
 					<div className="flex-1" />
 					<div className="flex items-center gap-3 text-sm text-muted-foreground">
 						<OfflineIndicator />
+						{warehouseScope && (
+							<WarehouseSwitch
+								warehouses={warehouseScope.warehouses}
+								selectedId={warehouseScope.selectedId}
+							/>
+						)}
 						<span className="font-medium text-foreground">{user.name}</span>
 						<span className="rounded-md bg-muted px-2 py-0.5 text-xs font-semibold">
 							{user.role}

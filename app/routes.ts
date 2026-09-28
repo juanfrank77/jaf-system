@@ -34,6 +34,8 @@ export default [
 		route("warehouse/scan-in", "routes/_app.warehouse.scan-in.tsx"),
 		route("warehouse/restock", "routes/_app.warehouse.restock.tsx"),
 		route("warehouse/triage", "routes/_app.warehouse.triage.tsx"),
+		route("warehouse/repairs", "routes/_app.warehouse.repairs.tsx"),
+		route("warehouse/needs-review", "routes/_app.warehouse.needs-review.tsx"),
 		route("installer/van", "routes/_app.installer.van.tsx"),
 		route("installer-supervisor", "routes/_app.installer-supervisor.tsx"),
 		route("installer/restock", "routes/_app.installer.restock.tsx"),

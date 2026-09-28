@@ -1,5 +1,31 @@
 {
 	"hi": "Hello!",
+	"repairs": {
+		"title": "Repairs",
+		"pool_heading": "Repair Pool ({{count}})",
+		"pool_empty": "No units awaiting a repair batch.",
+		"create_batch": "Send batch to Claro",
+		"claro_reference": "Claro reference",
+		"batches_heading": "Repair Batches ({{count}})",
+		"regenerate": "Regenerate document",
+		"void": "Void",
+		"void_reason": "Void reason",
+		"intake_heading": "Receive Repaired Units",
+		"declared_count": "Declared count (from Claro)",
+		"scans_label": "Scans (one per line: serial,claroCode)",
+		"mismatch_note": "Mismatch note (if declared ≠ scanned)",
+		"receive": "Record intake",
+		"onhand_heading": "Serialized On-Hand",
+		"onhand_empty": "No serialized stock on hand.",
+		"recent_intakes": "{{count}} recent intake(s)"
+	},
+	"needs_review": {
+		"title": "Needs Review",
+		"empty": "No units awaiting review.",
+		"reason_placeholder": "Reason (optional)",
+		"good": "Good → stock",
+		"failed": "Failed → repair"
+	},
 	"triage": {
 		"title": "Return Triage",
 		"empty": "No units awaiting disposition.",
@@ -903,6 +929,9 @@
 		"returns_to_log_badge": "Log returns",
 		"triage_awaiting_heading": "Awaiting Disposition ({{count}})",
 		"triage_awaiting_cta": "Triage returned units",
+		"repair_pool_tile": "Repair Pool ({{count}})",
+		"needs_review_tile": "Needs Review ({{count}})",
+		"refurbished_tile": "Refurbished In Stock ({{count}})",
 		"restock_requests_heading": "Restock Requests ({{count}})",
 		"restock_requests_badge": "Restock",
 		"aviso_number": "Aviso #",

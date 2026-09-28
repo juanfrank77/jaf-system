@@ -166,6 +166,9 @@ function DashboardView({
 	warehouseMissingDocs = [],
 	warehouseReturnsDocs = [],
 	warehouseTriageCount = 0,
+	warehouseRepairPool = 0,
+	warehouseNeedsReview = 0,
+	warehouseRefurbished = 0,
 	crewPreppedDocs = [],
 	crewInFieldDocs = [],
 	crewSentBackDocs = [],
@@ -188,6 +191,9 @@ function DashboardView({
 	warehouseMissingDocs?: DashboardDocRow[]
 	warehouseReturnsDocs?: DashboardDocRow[]
 	warehouseTriageCount?: number
+	warehouseRepairPool?: number
+	warehouseNeedsReview?: number
+	warehouseRefurbished?: number
 	crewPreppedDocs?: DashboardDocRow[]
 	crewInFieldDocs?: DashboardDocRow[]
 	crewSentBackDocs?: DashboardDocRow[]
@@ -686,6 +692,31 @@ function DashboardView({
 						<span className="font-medium">
 							{t("dashboard.triage_awaiting_cta")}
 						</span>
+					</Link>
+				</div>
+			)}
+
+			{(warehouseRepairPool > 0 ||
+				warehouseNeedsReview > 0 ||
+				warehouseRefurbished > 0) && (
+				<div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+					<Link
+						to="/warehouse/repairs"
+						className="rounded-lg border border-border p-3 text-sm transition-colors hover:bg-muted/40"
+					>
+						{t("dashboard.repair_pool_tile", { count: warehouseRepairPool })}
+					</Link>
+					<Link
+						to="/warehouse/needs-review"
+						className="rounded-lg border border-border p-3 text-sm transition-colors hover:bg-muted/40"
+					>
+						{t("dashboard.needs_review_tile", { count: warehouseNeedsReview })}
+					</Link>
+					<Link
+						to="/warehouse/repairs"
+						className="rounded-lg border border-border p-3 text-sm transition-colors hover:bg-muted/40"
+					>
+						{t("dashboard.refurbished_tile", { count: warehouseRefurbished })}
 					</Link>
 				</div>
 			)}

@@ -1,5 +1,31 @@
 {
 	"hi": "¡Hola!",
+	"repairs": {
+		"title": "Reparaciones",
+		"pool_heading": "Fila de reparación ({{count}})",
+		"pool_empty": "No hay unidades en espera de un lote de reparación.",
+		"create_batch": "Enviar lote a Claro",
+		"claro_reference": "Referencia de Claro",
+		"batches_heading": "Lotes de reparación ({{count}})",
+		"regenerate": "Regenerar documento",
+		"void": "Anular",
+		"void_reason": "Motivo de anulación",
+		"intake_heading": "Recibir unidades reparadas",
+		"declared_count": "Cantidad declarada (de Claro)",
+		"scans_label": "Escaneos (uno por línea: serial,claroCode)",
+		"mismatch_note": "Nota de discrepancia (si declarado ≠ escaneado)",
+		"receive": "Registrar entrada",
+		"onhand_heading": "Serializados en inventario",
+		"onhand_empty": "No hay inventario serializado disponible.",
+		"recent_intakes": "{{count}} entrada(s) reciente(s)"
+	},
+	"needs_review": {
+		"title": "Requiere revisión",
+		"empty": "No hay unidades en espera de revisión.",
+		"reason_placeholder": "Motivo (opcional)",
+		"good": "Buena → inventario",
+		"failed": "Fallida → reparación"
+	},
 	"triage": {
 		"title": "Triaje de devoluciones",
 		"empty": "No hay unidades en espera de disposición.",
@@ -903,6 +929,9 @@
 		"returns_to_log_badge": "Registrar devoluciones",
 		"triage_awaiting_heading": "En espera de disposición ({{count}})",
 		"triage_awaiting_cta": "Triaje de unidades devueltas",
+		"repair_pool_tile": "Fila de reparación ({{count}})",
+		"needs_review_tile": "Requiere revisión ({{count}})",
+		"refurbished_tile": "Reacondicionados en inventario ({{count}})",
 		"restock_requests_heading": "Solicitudes de reabastecimiento ({{count}})",
 		"restock_requests_badge": "Reabastecer",
 		"aviso_number": "Aviso #",

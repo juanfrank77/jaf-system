@@ -121,6 +121,29 @@ function computeAgingDays(createdAt: Date): number {
 	return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)))
 }
 
+export function computeAwaitingPickup(
+	docs: Array<{
+		id: string
+		status: string
+		preppedAt: Date
+	}>,
+): Array<{
+	id: string
+	status: string
+	preppedAt: Date
+	daysStaged: number
+	aged: boolean
+}> {
+	return docs.map((doc) => {
+		const daysStaged = computeAgingDays(doc.preppedAt)
+		return {
+			...doc,
+			daysStaged,
+			aged: daysStaged > 3,
+		}
+	})
+}
+
 const PO_WAIT_THRESHOLD_DAYS = 180
 const CLARO_WAIT_THRESHOLD_DAYS = 180
 

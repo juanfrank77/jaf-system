@@ -90,6 +90,7 @@ export default function Triage({ loaderData }: Route.ComponentProps) {
 								<select
 									name="disposition"
 									defaultValue={u.prefill}
+									data-testid={`disposition-${u.serial}`}
 									className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
 								>
 									{DISPOSITIONS.map((d) => (

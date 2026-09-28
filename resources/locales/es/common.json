@@ -23,6 +23,57 @@
 		"onhand_empty": "No hay inventario serializado disponible.",
 		"recent_intakes": "{{count}} entrada(s) reciente(s)"
 	},
+	"stock": {
+		"title": "Inventario y auditoría",
+		"no_warehouse": "No tiene un almacén asignado.",
+		"search_label": "Buscar materiales",
+		"search_placeholder": "Buscar por nombre…",
+		"kit_filter_label": "Solo kit / usado en",
+		"unit_not_set": "unidad no configurada",
+		"empty": "No hay inventario a granel para este almacén.",
+		"view_trail": "Ver historial",
+		"hide_trail": "Ocultar",
+		"serial_register": {
+			"title": "Registro de seriales",
+			"empty": "No hay inventario serializado disponible.",
+			"condition": {
+				"NEW": "Nuevo",
+				"REFURBISHED": "Reacondicionado"
+			}
+		},
+		"trail": {
+			"title": "Historial de movimientos",
+			"loading": "Cargando…",
+			"empty": "Todavía no hay movimientos."
+		},
+		"receive": {
+			"heading": "Recibir entrega",
+			"reference_label": "Referencia (opcional)",
+			"submit": "Registrar entrega",
+			"success": "Entrega registrada."
+		},
+		"adjust": {
+			"heading": "Ajustar inventario",
+			"material_label": "Material",
+			"delta_label": "Delta (+/-)",
+			"reason_label": "Motivo",
+			"submit": "Registrar ajuste",
+			"success": "Ajuste registrado."
+		},
+		"snapshot": {
+			"heading": "Instantánea a la fecha",
+			"as_of_label": "Fecha de corte",
+			"submit": "Crear instantánea",
+			"recent_heading": "Instantáneas recientes",
+			"empty": "Todavía no hay instantáneas.",
+			"regenerate": "Regenerar",
+			"download_pdf": "PDF",
+			"download_csv": "CSV"
+		}
+	},
+	"adjust": {
+		"reason_required": "Se requiere un motivo."
+	},
 	"needs_review": {
 		"title": "Requiere revisión",
 		"empty": "No hay unidades en espera de revisión.",
@@ -78,6 +129,7 @@
 			"installer_supervisor": "Supervisor de Instaladores",
 			"warehouse_scan_in": "Registrar Devolución",
 			"warehouse_restock": "Reabastecimientos por Liberar",
+			"warehouse_stock": "Inventario",
 			"comptroller": "Contraloría"
 		},
 		"notifications": {

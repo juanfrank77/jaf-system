@@ -93,6 +93,30 @@ async function canAccessCompletionFile(
 	return false
 }
 
+async function canAccessRepairBatchFile(
+	relativePath: string,
+	user: { id: string; role: string },
+): Promise<boolean> {
+	const m = relativePath.match(/^repair-batches\/([^/]+)\.pdf$/)
+	if (!m) return false
+	const batch = await db.repairBatch.findUnique({
+		where: { id: m[1] },
+		select: { warehouseId: true },
+	})
+	if (!batch) return false
+	if (user.role === "ADMIN") return true
+	if (user.role === "WAREHOUSE") {
+		const a = await db.warehouseAssignment.findUnique({
+			where: {
+				userId_warehouseId: { userId: user.id, warehouseId: batch.warehouseId },
+			},
+			select: { userId: true },
+		})
+		return Boolean(a)
+	}
+	return false
+}
+
 export async function loader({ request, params }: Route.LoaderArgs) {
 	const session = await requireSession(request)
 	const user = await db.user.findUniqueOrThrow({
@@ -112,6 +136,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const relativePath = params["*"] ?? ""
 	if (relativePath.startsWith("completions/")) {
 		const allowed = await canAccessCompletionFile(relativePath, filePath, user)
+		if (!allowed) return new Response("Forbidden", { status: 403 })
+	} else if (relativePath.startsWith("repair-batches/")) {
+		const allowed = await canAccessRepairBatchFile(relativePath, user)
 		if (!allowed) return new Response("Forbidden", { status: 403 })
 	} else {
 		const docId = extractDocId(relativePath)

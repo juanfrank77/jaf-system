@@ -1,4 +1,7 @@
+import { mkdir, writeFile } from "node:fs/promises"
+import { join } from "node:path"
 import { db } from "~/lib/db.server"
+import { generateRepairBatchPdf } from "~/lib/pdf/repair-batch.server"
 
 export type Disposition = "FAILED" | "GOOD" | "NEEDS_REVIEW"
 
@@ -261,4 +264,20 @@ export async function correctTriage(args: {
 			},
 		})
 	})
+}
+
+export async function generateRepairBatchDocument(batchId: string) {
+	const bytes = await generateRepairBatchPdf(batchId)
+	const dir = join(
+		process.env.UPLOAD_DIR ?? "/tmp/jaf/uploads",
+		"repair-batches",
+	)
+	await mkdir(dir, { recursive: true })
+	const documentPath = join(dir, `${batchId}.pdf`)
+	await writeFile(documentPath, bytes)
+	await db.repairBatch.update({
+		where: { id: batchId },
+		data: { documentPath },
+	})
+	return { documentPath }
 }

@@ -149,3 +149,116 @@ export async function createRepairBatch(args: {
 		return { batchId: batch.id }
 	})
 }
+
+export async function voidRepairBatch(args: {
+	batchId: string
+	reason: string
+	byUserId: string
+}) {
+	if (!args.reason.trim()) throw new Error("void reason required")
+	await db.$transaction(async (tx) => {
+		const batch = await tx.repairBatch.findUniqueOrThrow({
+			where: { id: args.batchId },
+		})
+		if (batch.status !== "SENT") throw new Error("batch not in SENT state")
+		const members = await tx.stockMovement.findMany({
+			where: { refRepairBatchId: args.batchId, type: "SENT_FOR_REPAIR" },
+			select: { serial: true },
+		})
+		for (const m of members) {
+			const serial = m.serial
+			if (!serial) continue
+			const back = await tx.serialLocation.updateMany({
+				where: { serial, status: "SENT_FOR_REPAIR", currentRef: args.batchId },
+				data: {
+					status: "AWAITING_REPAIR",
+					currentRef: batch.warehouseId,
+					since: new Date(),
+				},
+			})
+			if (back.count !== 1)
+				throw new Error(`serial ${serial}: already back from repair`)
+			const sl = await tx.serialLocation.findUniqueOrThrow({
+				where: { serial },
+				select: { serviceCodeId: true },
+			})
+			await tx.stockMovement.create({
+				data: {
+					kind: "SERIAL",
+					type: "DISPOSITION",
+					serial,
+					qty: 0,
+					serviceCodeId: sl.serviceCodeId,
+					warehouseId: batch.warehouseId,
+					refRepairBatchId: args.batchId,
+					byUserId: args.byUserId,
+					at: new Date(),
+					note: `batch void: ${args.reason}`,
+				},
+			})
+		}
+		await tx.repairBatch.update({
+			where: { id: args.batchId },
+			data: {
+				status: "VOIDED",
+				voidedById: args.byUserId,
+				voidedAt: new Date(),
+				voidReason: args.reason,
+			},
+		})
+		const leads = await tx.warehouseAssignment.findMany({
+			where: { warehouseId: batch.warehouseId, isLead: true },
+			select: { userId: true },
+		})
+		const admins = await tx.user.findMany({
+			where: { role: "ADMIN" },
+			select: { id: true },
+		})
+		await tx.notification.createMany({
+			data: [
+				...new Set([...leads.map((l) => l.userId), ...admins.map((a) => a.id)]),
+			].map((userId) => ({
+				userId,
+				message: `Repair batch ${args.batchId} voided.`,
+			})),
+		})
+	})
+}
+
+export async function correctTriage(args: {
+	serial: string
+	reason: string
+	byUserId: string
+	warehouseId: string
+}) {
+	if (!args.reason.trim()) throw new Error("correction reason required")
+	await db.$transaction(async (tx) => {
+		const moved = await tx.serialLocation.updateMany({
+			where: { serial: args.serial, status: "AWAITING_REPAIR" },
+			data: {
+				status: "WAREHOUSE",
+				currentRef: args.warehouseId,
+				since: new Date(),
+			},
+		})
+		if (moved.count !== 1)
+			throw new Error(`serial ${args.serial}: expected status AWAITING_REPAIR`)
+		const sl = await tx.serialLocation.findUniqueOrThrow({
+			where: { serial: args.serial },
+			select: { serviceCodeId: true },
+		})
+		await tx.stockMovement.create({
+			data: {
+				kind: "SERIAL",
+				type: "DISPOSITION",
+				serial: args.serial,
+				qty: 0,
+				serviceCodeId: sl.serviceCodeId,
+				warehouseId: args.warehouseId,
+				byUserId: args.byUserId,
+				at: new Date(),
+				note: `triage correction: ${args.reason}`,
+			},
+		})
+	})
+}

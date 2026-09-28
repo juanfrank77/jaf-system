@@ -131,6 +131,40 @@ describe("triage disposition", () => {
 		const notes = await db.notification.findMany({ where: { userId: lead.id } })
 		expect(notes.length).toBeGreaterThanOrEqual(1)
 	})
+
+	it("composes into a caller-supplied transaction (rolls back with it)", async () => {
+		const wh = t.track(
+			"warehouse",
+			await db.warehouse.create({ data: { name: `${RUN}-4`, zone: "D" } }),
+		)
+		const serial = `${RUN}-S4`
+		await seedReturned(serial, wh.id)
+
+		await expect(
+			db.$transaction(async (tx) => {
+				await dispositionSerial(
+					{
+						serial,
+						disposition: "FAILED",
+						byUserId: U_ID,
+						warehouseId: wh.id,
+					},
+					tx,
+				)
+				throw new Error("rollback")
+			}),
+		).rejects.toThrow("rollback")
+
+		// If dispositionSerial had opened its own internal transaction instead of
+		// using the one it was given, its writes would have committed despite the
+		// caller's rollback.
+		const sl = await db.serialLocation.findUniqueOrThrow({ where: { serial } })
+		expect(sl.status).toBe("RETURNED")
+		const moves = await db.stockMovement.findMany({
+			where: { serial, type: "DISPOSITION" },
+		})
+		expect(moves).toHaveLength(0)
+	})
 })
 
 describe("computeTriagePrefill", () => {

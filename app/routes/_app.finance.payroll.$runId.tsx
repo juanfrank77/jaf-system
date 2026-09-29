@@ -1,5 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises"
-import { join } from "node:path"
+import { randomUUID } from "node:crypto"
 import { useTranslation } from "react-i18next"
 import { Form, Link, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
@@ -10,7 +9,9 @@ import { validateFile } from "~/lib/file-upload.server"
 import { buildJournalBlocks, closePayrollRun } from "~/lib/payroll-run.server"
 import { generateProductionJournalPdf } from "~/lib/pdf/production-journal.server"
 import { requireRole } from "~/lib/permissions.server"
+import { saveUpload } from "~/lib/uploads.server"
 import { formatMoney } from "~/lib/utils"
+import type { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.finance.payroll.$runId"
 
 export const meta: Route.MetaFunction = () => [
@@ -36,6 +37,28 @@ const INVOICE_SELECT = {
 } as const
 
 /**
+ * A run's invoices, in the ONE order the journal is ever rendered in.
+ *
+ * `buildJournalBlocks` accumulates `adjNetRunning` across blocks in first-seen
+ * order, so the order of this relation decides the block order and therefore
+ * every value in the "Adj. net (running)" column. Without an explicit
+ * `orderBy`, Postgres returns rows in whatever order the plan happens to
+ * produce — which can differ between two page loads of the same run, and
+ * between the screen and a PDF printed from it. That column is what finance
+ * reconciles against, so a shifting total is a correctness problem.
+ *
+ * `releasedToFinanceAt` alone is not a total order: a batch of jobs is
+ * released together, so ties would still reorder. `id` is the tiebreaker.
+ *
+ * Shared by the loader and the PDF branch on purpose — the printed journal has
+ * to agree with the screen, and a duplicated literal is how they would drift.
+ */
+const RUN_INVOICES = {
+	select: INVOICE_SELECT,
+	orderBy: [{ releasedToFinanceAt: "asc" }, { id: "asc" }],
+} satisfies Prisma.PayrollRun$invoicesArgs
+
+/**
  * `validateFile(file, "file")` only enforces blocked extensions and the 40MB
  * cap — unlike its "pdf"/"photo" branches it does NOT check MIME type. Evidence
  * for a payroll close is a scanned ACH confirmation, so the accepted types are
@@ -46,7 +69,22 @@ const ALLOWED_EVIDENCE_MIME = [
 	"image/jpeg",
 	"image/png",
 	"image/webp",
-]
+] as const
+
+type EvidenceMime = (typeof ALLOWED_EVIDENCE_MIME)[number]
+
+/** `Array.includes` does not narrow, so gate the MIME through a real guard. */
+function isEvidenceMime(value: string): value is EvidenceMime {
+	return (ALLOWED_EVIDENCE_MIME as readonly string[]).includes(value)
+}
+
+/** Extension for each allow-listed MIME — never taken from the client filename. */
+const EVIDENCE_MIME_EXT: Record<EvidenceMime, string> = {
+	"application/pdf": ".pdf",
+	"image/jpeg": ".jpg",
+	"image/png": ".png",
+	"image/webp": ".webp",
+}
 
 /**
  * `t()` is keyed by a strict literal union of the locale resources, so the
@@ -69,7 +107,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])
 	const run = await db.payrollRun.findUniqueOrThrow({
 		where: { id: params.runId },
-		include: { invoices: { select: INVOICE_SELECT } },
+		include: { invoices: RUN_INVOICES },
 	})
 	const blocks = buildJournalBlocks(run.invoices)
 	return { user, run, blocks }
@@ -83,7 +121,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	if (intent === "download_journal_pdf") {
 		const run = await db.payrollRun.findUniqueOrThrow({
 			where: { id: params.runId },
-			include: { invoices: { select: INVOICE_SELECT } },
+			include: { invoices: RUN_INVOICES },
 		})
 		const blocks = buildJournalBlocks(run.invoices)
 		const bytes = await generateProductionJournalPdf(run, blocks)
@@ -114,16 +152,32 @@ export async function action({ request, params }: Route.ActionArgs) {
 		if (!validation.valid) {
 			return { errorKey: "finance_payroll.errors.invalid_evidence" }
 		}
-		if (!ALLOWED_EVIDENCE_MIME.includes(evidence.type)) {
+		if (!isEvidenceMime(evidence.type)) {
 			return { errorKey: "finance_payroll.errors.invalid_evidence" }
 		}
-		const dir = join(
-			process.env.UPLOAD_DIR ?? "/tmp/jaf/uploads",
+		// Prove the run exists BEFORE writing anything to disk — otherwise a
+		// request naming a non-existent run still leaves a file behind.
+		const targetRun = await db.payrollRun.findUnique({
+			where: { id: params.runId as string },
+			select: { id: true },
+		})
+		if (!targetRun) {
+			throw new Response("Not Found", { status: 404 })
+		}
+		// The on-disk name is derived from the run id and a random UUID, never
+		// from `evidence.name`: that name is client-controlled, and
+		// `path.join` normalises `..` segments straight out of the upload dir
+		// (`../../../../tmp/x.pdf` resolves outside it). The extension comes
+		// from the already-allow-listed MIME, not from the client either. This
+		// matches the sanitising done by the other two upload sites
+		// (`_app.docs.$id_.field.tsx`, `_app.installer.completion.new.tsx`).
+		// `files.$.tsx` still resolves the run id from the `<runId>-` prefix.
+		const ext = EVIDENCE_MIME_EXT[evidence.type as EvidenceMime]
+		evidencePath = await saveUpload(
 			"payroll-runs",
+			`${targetRun.id}-${randomUUID()}${ext}`,
+			evidence,
 		)
-		await mkdir(dir, { recursive: true })
-		evidencePath = join(dir, `${params.runId}-${evidence.name}`)
-		await writeFile(evidencePath, Buffer.from(await evidence.arrayBuffer()))
 	}
 
 	await closePayrollRun({

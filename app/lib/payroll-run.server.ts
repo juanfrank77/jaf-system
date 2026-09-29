@@ -1,7 +1,7 @@
 import {
 	type ContractorPaymentLine,
 	computeContractorPayment,
-	resolveContractorAccount,
+	resolveContractorAccounts,
 	toContractorPaymentLines,
 } from "~/lib/contractor-payment.server"
 import { db } from "~/lib/db.server"
@@ -18,13 +18,58 @@ import type { Prisma } from "../../generated/prisma/client"
  * `contractorAccountCode` still matches this query and still appears on
  * L1 — `generateRun` skips it (leaving it open) rather than this query
  * hiding it.
+ *
+ * `packetView` exists for one caller: the L2 packet, whose window is
+ * deliberately WIDER than L1's. It has to keep serving a job that was already
+ * swept into an open, unpaid run, so finance can read the frozen figures off
+ * it, and it has to keep serving a job that already has its LC request
+ * generated — both are past the point where L1 would list them, but finance
+ * still opens them. So `packetView` drops the `LC_REQUEST_GENERATED`
+ * exclusion, the `payrollRunId: null` clause and the PBCC_ADVANCE absence.
+ *
+ * What it deliberately does NOT drop: the `CANCELLED` exclusion, "was released
+ * to finance", and "is not already closed". Those are the clauses that say
+ * whether the job is on Arm A at all, so every future tightening of them
+ * reaches the packet view without having to be applied a second time. The
+ * CANCELLED guard in particular used to reach this loader through
+ * `computeFinanceStage` and was lost when that gate was replaced by an inline
+ * restatement of the predicate.
+ *
+ * All of this lives here so the relaxation reads as a decision rather than an
+ * accident, and there is exactly one definition of "on Arm A".
  */
-export function armAOpenWhere(): Prisma.JafInvoiceWhereInput {
+export function armAOpenWhere(
+	opts: { packetView?: boolean } = {},
+): Prisma.JafInvoiceWhereInput {
 	return {
+		// Terminal statuses must be excluded here, in the one shared predicate.
+		// Cancellation is only blocked once a doc is ALREADY terminal
+		// (`docs.$id.tsx` checks `isTerminalStatus` before cancelling), and the
+		// cancel transaction never clears `releasedToFinanceAt` — so a doc
+		// cancelled after release keeps a non-null `releasedToFinanceAt` and
+		// would otherwise satisfy every other clause here, get its amounts
+		// frozen, and be batch-confirmed as paid. This also restores the guard
+		// the old L1 query carried (`status: { notIn: [...] }`).
+		//
+		// `LC_REQUEST_GENERATED` is excluded from the L1/sweep view only: a job
+		// whose credit-line request is already out is not pending Arm A payment.
+		// The packet view keeps serving it (see `packetView` above).
+		status: {
+			notIn: opts.packetView
+				? ["CANCELLED"]
+				: ["LC_REQUEST_GENERATED", "CANCELLED"],
+		},
 		releasedToFinanceAt: { not: null },
 		payablesClosedAt: null,
-		payrollRunId: null,
-		paymentRecords: { none: { type: "PBCC_ADVANCE" } },
+		// "Not yet claimed" — what makes a job sweepable exactly once. Dropped
+		// in the packet view so finance can still open a job that has already
+		// been swept or that carries a legacy PBCC advance.
+		...(opts.packetView
+			? {}
+			: {
+					payrollRunId: null,
+					paymentRecords: { none: { type: "PBCC_ADVANCE" } },
+				}),
 	}
 }
 
@@ -40,6 +85,12 @@ export async function generateRun(opts: {
 	// Resolve accounts before opening the transaction — a job whose code
 	// doesn't resolve to any seeded ContractorAccount is left out of
 	// `toSweep` entirely (stays open, stays visible on L1, per Review Focus).
+	// One query for the whole batch, not one per candidate: the candidate set
+	// is unbounded (see the deploy guide's §7 note), so this loop is the
+	// widest in the feature.
+	const resolved = await resolveContractorAccounts(
+		candidates.map((c) => c.contractorAccountCode),
+	)
 	const toSweep: Array<{
 		id: string
 		lines: ContractorPaymentLine[]
@@ -47,7 +98,8 @@ export async function generateRun(opts: {
 		sharePercent: number
 	}> = []
 	for (const doc of candidates) {
-		const account = await resolveContractorAccount(doc.contractorAccountCode)
+		if (!doc.contractorAccountCode) continue
+		const account = resolved.get(doc.contractorAccountCode)
 		if (!account) continue
 		toSweep.push({
 			id: doc.id,
@@ -99,6 +151,8 @@ export async function generateRun(opts: {
  * Shared by Lissette's paper-based "batch-confirm" fallback (`confirmedByFallback:
  * true`) and by Phase 5's Carmen screen, which calls it with
  * `confirmedByFallback: false` so the two paths stay on one transaction.
+ *
+ * Throws 409 if the run is already closed — see the conditional claim below.
  */
 export async function closePayrollRun(opts: {
 	runId: string
@@ -113,8 +167,19 @@ export async function closePayrollRun(opts: {
 	})
 
 	await db.$transaction(async (tx) => {
-		await tx.payrollRun.update({
-			where: { id: opts.runId },
+		// The close is a single CONDITIONAL transition, not an unconditional
+		// write. Only an open run (unpaid, unreversed) can be claimed, and the
+		// claim is the guard: two overlapping batch_confirm calls serialize on
+		// this row's lock, and the second re-checks the WHERE on wake, matches
+		// zero rows, and is rejected. This is the same shape as the per-row
+		// conditional claim in `generateRun`.
+		//
+		// Without it the only protection was the React component hiding the form
+		// once `paidAt` is set, so a double-submit, a replay, or a stale tab
+		// re-stamped the ACH date/paidBy/ACH ref/evidence path on the run AND on
+		// every member invoice, and notified every FINANCE user a second time.
+		const claimed = await tx.payrollRun.updateMany({
+			where: { id: opts.runId, paidAt: null, reversedAt: null },
 			data: {
 			paidAt: opts.achDate,
 			paidById: opts.paidById,
@@ -122,6 +187,9 @@ export async function closePayrollRun(opts: {
 				confirmedByFallback: opts.confirmedByFallback,
 			},
 		})
+		if (claimed.count === 0) {
+			throw new Response("Payroll run is already closed", { status: 409 })
+		}
 		await tx.jafInvoice.updateMany({
 			where: { payrollRunId: opts.runId },
 			data: {

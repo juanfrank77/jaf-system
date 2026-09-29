@@ -137,8 +137,24 @@ export function makeTracker() {
 			})
 		if (b.warehouse.length)
 			await db.warehouse.deleteMany({ where: { id: { in: b.warehouse } } })
-		if (b.user.length)
-			await db.user.deleteMany({ where: { id: { in: b.user } } })
+		if (b.user.length) {
+			// `closePayrollRun` fans a Notification out to every active FINANCE
+			// user in the database, so a sibling test file running in parallel
+			// against the shared dev DB can insert one for our tracked users
+			// *after* the notification sweep above and before this delete. Re-clear
+			// and retry to absorb that window instead of failing the whole suite.
+			for (let attempt = 0; ; attempt++) {
+				try {
+					await db.user.deleteMany({ where: { id: { in: b.user } } })
+					break
+				} catch (err) {
+					if (attempt >= 2) throw err
+					await db.notification.deleteMany({
+						where: { userId: { in: b.user } },
+					})
+				}
+			}
+		}
 		// serviceCodeId is a plain column (no DB FK), so ServiceCode rows can be
 		// removed last, order-independent.
 		if (b.serviceCode.length)
@@ -238,6 +254,50 @@ export async function seedContractorAccount(
 			brigadeId: overrides.brigadeId ?? null,
 		},
 	})
+}
+
+/**
+ * Create a JafInvoice already swept into a PayrollRun, with its Arm A payment
+ * figures frozen — i.e. the state `generateRun` leaves behind.
+ *
+ * Loader/viewer tests should use this rather than calling `generateRun`
+ * directly: the sweep is a GLOBAL operation over every Arm-A-open job in the
+ * shared dev DB, so calling it from more than one test file makes them race
+ * for the same candidate pool and steal each other's fixtures. Only
+ * `payroll-run.server.test.ts` — the single file that tests the sweep itself —
+ * calls it.
+ */
+export async function seedSweptInvoice(
+	opts: {
+		generatedById: string
+		contractorAccountId: string
+		runLabel?: string
+		grossPayable?: number
+		retentionAmount?: number
+		netPayable?: number
+	} = { generatedById: "", contractorAccountId: "" },
+) {
+	const run = await db.payrollRun.create({
+		data: {
+			label: opts.runLabel ?? runToken("RUN"),
+			generatedById: opts.generatedById,
+		},
+	})
+	const gross = opts.grossPayable ?? 0
+	const retention = opts.retentionAmount ?? 0
+	const invoice = await seedFinanceableInvoice({
+		contractorAccountId: opts.contractorAccountId,
+		payrollRunId: run.id,
+	})
+	await db.jafInvoice.update({
+		where: { id: invoice.id },
+		data: {
+			grossPayable: gross,
+			retentionAmount: retention,
+			netPayable: opts.netPayable ?? 0,
+		},
+	})
+	return { run, invoice }
 }
 
 /**

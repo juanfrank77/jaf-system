@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Badge } from "~/components/ui/badge"
-import { resolveContractorAccount } from "~/lib/contractor-payment.server"
+import { resolveContractorAccounts } from "~/lib/contractor-payment.server"
 import { db } from "~/lib/db.server"
 import { armAOpenWhere } from "~/lib/payroll-run.server"
 import { requireRole } from "~/lib/permissions.server"
@@ -34,24 +34,28 @@ export async function loader({ request }: Route.LoaderArgs) {
 			brigade: { select: { leadName: true, name: true } },
 		},
 	})
-	const jobs = await Promise.all(
-		docs.map(async (d) => ({
-			id: d.id,
-			controlNumber: d.controlNumber,
-			avisoNumber: d.avisoNumber,
-			contractorLabel:
-				d.preCertSheets[0]?.sigSubcontractorName ??
-				d.brigade?.leadName ??
-				d.brigade?.name ??
-				null,
-			netPayable: d.netPayable != null ? toNumberPrice(d.netPayable) : null,
-			releasedAt: d.releasedToFinanceAt,
-			// Not yet swept into a run, so resolved live for the row's badge —
-			// this does NOT persist contractorAccountId (only generateRun does).
-			accountResolved:
-				(await resolveContractorAccount(d.contractorAccountCode)) !== null,
-		})),
+	// One query for every distinct code on the page instead of one per row
+	// (up to 200 round-trips just to render the "unmapped" badge).
+	const resolved = await resolveContractorAccounts(
+		docs.map((d) => d.contractorAccountCode),
 	)
+	const jobs = docs.map((d) => ({
+		id: d.id,
+		controlNumber: d.controlNumber,
+		avisoNumber: d.avisoNumber,
+		contractorLabel:
+			d.preCertSheets[0]?.sigSubcontractorName ??
+			d.brigade?.leadName ??
+			d.brigade?.name ??
+			null,
+		netPayable: d.netPayable != null ? toNumberPrice(d.netPayable) : null,
+		releasedAt: d.releasedToFinanceAt,
+		// Not yet swept into a run, so resolved live for the row's badge —
+		// this does NOT persist contractorAccountId (only generateRun does).
+		accountResolved: d.contractorAccountCode
+			? resolved.has(d.contractorAccountCode)
+			: false,
+	}))
 	return { user, jobs }
 }
 

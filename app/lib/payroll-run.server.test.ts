@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it } from "vitest"
+import { afterAll, describe, expect, it, vi } from "vitest"
 import { db } from "~/lib/db.server"
 import {
 	buildJournalBlocks,
@@ -11,6 +11,29 @@ import {
 	seedFinanceableInvoice,
 	seedUser,
 } from "~/test/helpers"
+
+const mocks = vi.hoisted(() => ({ requireRole: vi.fn() }))
+vi.mock("~/lib/permissions.server", () => ({ requireRole: mocks.requireRole }))
+
+// generateRun is a GLOBAL sweep over the shared dev database. Every test that
+// calls it — directly or through a route action — lives in this one file so
+// they run sequentially in a single worker and cannot steal each other's
+// fixtures by racing for the same candidate pool.
+import { action as generateRunAction } from "~/routes/_app.finance.payroll"
+import { loader as pbccLoader } from "~/routes/_app.finance.pbcc.$id"
+import { loader as queueLoader } from "~/routes/_app.finance.queue"
+
+const ONE_LINE_100 = [
+	{
+		serviceCodeId: "sc1",
+		claroCode: "X",
+		name: "X",
+		unit: "EA",
+		qty: 1,
+		unitPrice: 100,
+		lineAmount: 100,
+	},
+]
 
 const t = makeTracker()
 afterAll(() => t.cleanup())
@@ -46,7 +69,9 @@ describe("generateRun", () => {
 		})
 		t.track("payrollRun", run as { id: string })
 
-		expect(sweptCount).toBe(1)
+		// generateRun sweeps every Arm-A-open job in the shared dev DB, so the
+		// only stable assertion is about *this* job, not the global count.
+		expect(sweptCount).toBeGreaterThanOrEqual(1)
 		const reloaded = await db.jafInvoice.findUniqueOrThrow({
 			where: { id: doc.id },
 		})
@@ -59,7 +84,7 @@ describe("generateRun", () => {
 	it("never sweeps a job already in an open run (idempotent)", async () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		const account = t.track("contractorAccount", await seedContractorAccount())
-		t.track(
+		const doc = t.track(
 			"jafInvoice",
 			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
 		)
@@ -71,8 +96,15 @@ describe("generateRun", () => {
 		// that row FKs generatedById -> User, so it must be tracked for cleanup.
 		t.track("payrollRun", second.run as { id: string })
 
-		expect(first.sweptCount).toBe(1)
-		expect(second.sweptCount).toBe(0)
+		const afterFirst = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: doc.id },
+		})
+		expect(afterFirst.payrollRunId).toBe(first.run.id)
+		// The second generate must not re-claim the job the first already took.
+		const afterSecond = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: doc.id },
+		})
+		expect(afterSecond.payrollRunId).toBe(first.run.id)
 	})
 
 	it("under true concurrency, a job is swept into exactly one run, not both (Review Focus)", async () => {
@@ -90,17 +122,28 @@ describe("generateRun", () => {
 		t.track("payrollRun", a.run as { id: string })
 		t.track("payrollRun", b.run as { id: string })
 
-		// Exactly one of the two runs claimed the job — total swept is 1, not 2.
-		expect(a.sweptCount + b.sweptCount).toBe(1)
+		// Exactly one of the two runs claimed the job. Asserted as per-run
+		// membership rather than a global swept count: generateRun sweeps every
+		// Arm-A-open job in the shared dev DB, so other test files contribute
+		// rows and the total is not this test's to assert on.
 		const reloaded = await db.jafInvoice.findUniqueOrThrow({
 			where: { id: doc.id },
 		})
 		expect([a.run.id, b.run.id]).toContain(reloaded.payrollRunId)
+
+		const inRun = async (runId: string) =>
+			(
+				await db.payrollRun.findUniqueOrThrow({
+					where: { id: runId },
+					include: { invoices: { select: { id: true } } },
+				})
+			).invoices.some((i) => i.id === doc.id)
+		expect(await inRun(a.run.id)).not.toBe(await inRun(b.run.id))
 	})
 
 	it("excludes a job whose contractorAccountCode does not resolve to any ContractorAccount", async () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
-		t.track(
+		const doc = t.track(
 			"jafInvoice",
 			await seedFinanceableInvoice({
 				contractorAccountId: null,
@@ -108,12 +151,15 @@ describe("generateRun", () => {
 			}),
 		)
 
-		const { run, sweptCount } = await generateRun({
+		const { run } = await generateRun({
 			generatedById: finance.id,
 			label: "R-unmapped",
 		})
 		t.track("payrollRun", run as { id: string })
-		expect(sweptCount).toBe(0)
+		const reloaded = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: doc.id },
+		})
+		expect(reloaded.payrollRunId).toBeNull()
 	})
 
 	it("excludes a job that already has a PBCC_ADVANCE payment record (legacy boundary)", async () => {
@@ -137,12 +183,15 @@ describe("generateRun", () => {
 			}),
 		)
 
-		const { run, sweptCount } = await generateRun({
+		const { run } = await generateRun({
 			generatedById: finance.id,
 			label: "R-legacy",
 		})
 		t.track("payrollRun", run as { id: string })
-		expect(sweptCount).toBe(0)
+		const reloaded = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: doc.id },
+		})
+		expect(reloaded.payrollRunId).toBeNull()
 	})
 })
 
@@ -209,6 +258,75 @@ describe("closePayrollRun", () => {
 		for (const n of notifications) t.track("notification", n)
 		expect(notifications.some((n) => n.message.includes(run.label))).toBe(true)
 	})
+
+	it("rejects a replayed close instead of re-stamping and re-notifying (Review Focus)", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		const account = t.track("contractorAccount", await seedContractorAccount())
+		const invoice = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
+		)
+		const { run } = await generateRun({
+			generatedById: finance.id,
+			label: "R-replay",
+		})
+		t.track("payrollRun", run as { id: string })
+
+		await closePayrollRun({
+			runId: run.id,
+			paidById: finance.id,
+			achDate: new Date("2026-09-12"),
+			achRef: "REF-FIRST",
+			evidencePath: "/uploads/payroll-runs/first.pdf",
+			confirmedByFallback: true,
+		})
+		const afterFirst = await db.payrollRun.findUniqueOrThrow({
+			where: { id: run.id },
+		})
+		const firstPaidAt = afterFirst.paidAt
+		const firstMember = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: invoice.id },
+		})
+		const firstNotifs = await db.notification.findMany({
+			where: { userId: finance.id },
+		})
+		for (const n of firstNotifs) t.track("notification", n)
+
+		// The replay carries different values — a stale tab resubmitting after
+		// someone else already closed the run.
+		await expect(
+			closePayrollRun({
+				runId: run.id,
+				paidById: finance.id,
+				achDate: new Date("2026-10-30"),
+				achRef: "REF-SECOND",
+				evidencePath: "/uploads/payroll-runs/second.pdf",
+				confirmedByFallback: true,
+			}),
+		).rejects.toMatchObject({ status: 409 })
+
+		const afterReplay = await db.payrollRun.findUniqueOrThrow({
+			where: { id: run.id },
+		})
+		expect(afterReplay.paidAt).toEqual(firstPaidAt)
+		expect(afterReplay.paidAchRef).toBe("REF-FIRST")
+		expect(afterReplay.evidencePath).toBe("/uploads/payroll-runs/first.pdf")
+
+		const afterReplayMember = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: invoice.id },
+		})
+		expect(afterReplayMember.payablesClosedAt).toEqual(
+			firstMember.payablesClosedAt,
+		)
+		expect(afterReplayMember.payablesClosedById).toBe(
+			firstMember.payablesClosedById,
+		)
+
+		const afterReplayNotifs = await db.notification.findMany({
+			where: { userId: finance.id },
+		})
+		expect(afterReplayNotifs.length).toBe(firstNotifs.length)
+	})
 })
 
 describe("buildJournalBlocks", () => {
@@ -266,5 +384,184 @@ describe("buildJournalBlocks", () => {
 			},
 		])
 		expect(blocks).toEqual([])
+	})
+})
+
+describe("L3 generate_run action", () => {
+	it("creates a run and redirects to it", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		mocks.requireRole.mockResolvedValue({ user: finance })
+		const account = t.track("contractorAccount", await seedContractorAccount())
+		t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
+		)
+
+		const form = new URLSearchParams({ intent: "generate_run", label: "Run B" })
+		let redirected: string | null = null
+		try {
+			await generateRunAction({
+				request: new Request("http://localhost/finance/payroll", {
+					method: "POST",
+					body: form,
+				}),
+				params: {},
+				context: {},
+			} as never)
+		} catch (response) {
+			if (response instanceof Response)
+				redirected = response.headers.get("Location")
+		}
+		expect(redirected).toMatch(/^\/finance\/payroll\//)
+		const created = await db.payrollRun.findFirst({ where: { label: "Run B" } })
+		if (created) t.track("payrollRun", created)
+		expect(created).not.toBeNull()
+	})
+})
+
+describe("armAOpenWhere terminal-status guard", () => {
+	it("excludes a job cancelled after it was released to finance", async () => {
+		// Cancel is only blocked once a doc is ALREADY terminal, so a doc at
+		// CLARO_UPLOADED that was released can still be cancelled — and the
+		// cancel never clears releasedToFinanceAt. Without a status guard such a
+		// job satisfies every other clause and gets frozen and paid.
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		const account = t.track("contractorAccount", await seedContractorAccount())
+		const cancelled = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				status: "CANCELLED",
+				contractorAccountCode: account.code,
+			}),
+		)
+		const lcFinal = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				status: "LC_REQUEST_GENERATED",
+				contractorAccountCode: account.code,
+			}),
+		)
+
+		const { run } = await generateRun({
+			generatedById: finance.id,
+			label: "R-cancelled",
+		})
+		t.track("payrollRun", run as { id: string })
+
+		for (const doc of [cancelled, lcFinal]) {
+			const reloaded = await db.jafInvoice.findUniqueOrThrow({
+				where: { id: doc.id },
+			})
+			expect(reloaded.payrollRunId).toBeNull()
+		}
+	})
+})
+
+// ---------------------------------------------------------------------------
+// The two loader tests whose fixtures must stay Arm-A-open live HERE, not in
+// their route files. `armAOpenWhere()` is a global predicate over the shared dev
+// DB, and `generateRun` claims every row it matches. A test that asserts "this
+// job is still open on Arm A" is therefore racing every other file that calls
+// the sweep. Keeping all such tests in this one file makes them sequential.
+// ---------------------------------------------------------------------------
+
+describe("armAOpenWhere consumers (kept here so they cannot race the sweep)", () => {
+	it("L1 lists Arm-A-open jobs, flags an unmapped contractor code, and excludes a closed one", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		mocks.requireRole.mockResolvedValue({ user: finance })
+		const account = t.track("contractorAccount", await seedContractorAccount())
+		const mapped = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
+		)
+		const unmapped = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({ contractorAccountCode: "NOT-MAPPED" }),
+		)
+		const closed = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+				payablesClosedAt: new Date(),
+			}),
+		)
+
+		const result = await queueLoader({
+			request: new Request("http://localhost/finance/queue"),
+			params: {},
+			context: {},
+		} as never)
+
+		const ids = result.jobs.map((j: { id: string }) => j.id)
+		expect(ids).toContain(mapped.id)
+		expect(ids).toContain(unmapped.id)
+		expect(ids).not.toContain(closed.id)
+		expect(
+			result.jobs.find((j: { id: string }) => j.id === unmapped.id)
+				?.accountResolved,
+		).toBe(false)
+		expect(
+			result.jobs.find((j: { id: string }) => j.id === mapped.id)
+				?.accountResolved,
+		).toBe(true)
+	})
+
+	it("L1 resolves every contractor code in one query, not one per row (Review Focus)", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		mocks.requireRole.mockResolvedValue({ user: finance })
+		const account = t.track("contractorAccount", await seedContractorAccount())
+		for (let i = 0; i < 6; i++) {
+			t.track(
+				"jafInvoice",
+				await seedFinanceableInvoice({
+					contractorAccountCode: i % 2 === 0 ? account.code : "NOT-MAPPED",
+				}),
+			)
+		}
+
+		const findMany = vi.spyOn(db.contractorAccount, "findMany")
+		const findUnique = vi.spyOn(db.contractorAccount, "findUnique")
+		try {
+			await queueLoader({
+				request: new Request("http://localhost/finance/queue"),
+				params: {},
+				context: {},
+			} as never)
+			expect(findMany).toHaveBeenCalledTimes(1)
+			expect(findUnique).not.toHaveBeenCalled()
+		} finally {
+			findMany.mockRestore()
+			findUnique.mockRestore()
+		}
+	})
+
+	// This exercises the L2 (pbcc) loader, but it lives here rather than in
+	// `_app.finance.pbcc.$id.server.test.ts` for the same reason: it seeds an
+	// Arm-A-open invoice, and the sibling file's `generateRun` sweep would
+	// claim it and freeze its figures mid-assertion.
+	it("loader live-computes the contractor payment for a job not yet swept into a run", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		mocks.requireRole.mockResolvedValue({ user: finance })
+		const account = t.track(
+			"contractorAccount",
+			await seedContractorAccount({ sharePercent: 0.65 }),
+		)
+		const doc = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+				jafInvoiceLines: ONE_LINE_100,
+			}),
+		)
+
+		const result = await pbccLoader({
+			request: new Request(`http://localhost/finance/pbcc/${doc.id}`),
+			params: { id: doc.id },
+			context: {},
+		} as never)
+
+		expect(result.payment.grossPayable).toBeCloseTo(100, 2)
+		expect(result.payment.netPayable).toBeCloseTo(100 * 0.65 - 10, 2)
+		expect(result.frozen).toBe(false)
 	})
 })

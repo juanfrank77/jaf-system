@@ -106,6 +106,83 @@ describe("files loader access control", () => {
 	})
 })
 
+describe("files loader — payroll run evidence (Review Focus)", () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+		mocks.requireSession.mockResolvedValue({ user: { id: "user-1" } })
+	})
+
+	// The file itself does not exist, so an authorised request falls through to
+	// the 404 at the end of the loader. Asserting "not 403" is what separates
+	// "authorised" from "blocked", which is the only thing under test here.
+	function loadEvidence() {
+		return loader({
+			request: requestFor("/files/payroll-runs/run-1-evidence.pdf"),
+			params: { "*": "payroll-runs/run-1-evidence.pdf" },
+		} as any)
+	}
+
+	it("blocks a disabled Comptroller from payroll ACH evidence", async () => {
+		mocks.isComptrollerEnabled.mockReturnValue(false)
+		mocks.db.user.findUniqueOrThrow.mockResolvedValue({
+			id: "user-1",
+			role: "COMPTROLLER",
+		} as any)
+
+		const result = await loadEvidence()
+
+		expect(result.status).toBe(403)
+	})
+
+	it("allows an enabled Comptroller", async () => {
+		mocks.isComptrollerEnabled.mockReturnValue(true)
+		mocks.db.user.findUniqueOrThrow.mockResolvedValue({
+			id: "user-1",
+			role: "COMPTROLLER",
+		} as any)
+
+		const result = await loadEvidence()
+
+		expect(result.status).not.toBe(403)
+	})
+
+	it("still allows Finance access when Comptroller is disabled", async () => {
+		mocks.isComptrollerEnabled.mockReturnValue(false)
+		mocks.db.user.findUniqueOrThrow.mockResolvedValue({
+			id: "user-1",
+			role: "FINANCE",
+		} as any)
+
+		const result = await loadEvidence()
+
+		expect(result.status).not.toBe(403)
+	})
+
+	it("still allows Admin access when Comptroller is disabled", async () => {
+		mocks.isComptrollerEnabled.mockReturnValue(false)
+		mocks.db.user.findUniqueOrThrow.mockResolvedValue({
+			id: "user-1",
+			role: "ADMIN",
+		} as any)
+
+		const result = await loadEvidence()
+
+		expect(result.status).not.toBe(403)
+	})
+
+	it("blocks a role with no finance access even when Comptroller is enabled", async () => {
+		mocks.isComptrollerEnabled.mockReturnValue(true)
+		mocks.db.user.findUniqueOrThrow.mockResolvedValue({
+			id: "user-1",
+			role: "SUPERVISOR",
+		} as any)
+
+		const result = await loadEvidence()
+
+		expect(result.status).toBe(403)
+	})
+})
+
 describe("files loader — install completion files", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()

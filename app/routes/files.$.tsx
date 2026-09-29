@@ -143,8 +143,14 @@ async function canAccessSnapshotFile(
 
 /**
  * ACH evidence uploaded against a payroll run close, stored as
- * `payroll-runs/<runId>-<name>`. Finance-only: the file is a bank confirmation,
- * and the run id prefix is only honoured for the finance-side roles.
+ * `payroll-runs/<runId>-<uuid>.<ext>`. Finance-only: the file is a bank
+ * confirmation, and the run id prefix is only honoured for the finance-side
+ * roles.
+ *
+ * COMPTROLLER is gated on the same feature flag as every other branch in this
+ * file and in the finance routes. Without that, a deployment with the
+ * comptroller feature switched off still has a read path to the `payroll-runs/`
+ * bank confirmations — the one branch that was missing it.
  */
 async function canAccessPayrollRunFile(
 	relativePath: string,
@@ -152,11 +158,8 @@ async function canAccessPayrollRunFile(
 ): Promise<boolean> {
 	const m = relativePath.match(/^payroll-runs\/([^/]+)-/)
 	if (!m) return false
-	return (
-		user.role === "ADMIN" ||
-		user.role === "FINANCE" ||
-		user.role === "COMPTROLLER"
-	)
+	if (user.role === "COMPTROLLER") return isComptrollerEnabled()
+	return user.role === "ADMIN" || user.role === "FINANCE"
 }
 
 export async function loader({ request, params }: Route.LoaderArgs) {

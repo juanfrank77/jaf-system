@@ -142,6 +142,60 @@ psql "$DATABASE_URL" \
 
 All five counts must be 0. If any is non-zero, stop — that data is unrecoverable once `migrate deploy` runs below.
 
+### The finance migration is additive, but it has one operational precondition
+
+Unlike the migration above, the finance ("Arm A") migration does not drop
+anything. It adds `payrollRunId`, `payablesClosedAt`, `grossPayable`,
+`retentionAmount`, `netPayable` and `contractorShareLines` to `jaf_invoice`,
+and creates the `PayrollRun` and `ContractorAccount` tables. **It does not
+backfill anything** — every pre-existing job row comes out of it with
+`payrollRunId` and `payablesClosedAt` as `NULL`.
+
+That is fine for the schema, but it has a consequence you need to act on
+before anyone uses the payroll screen. The payroll sweep has **no date
+floor**: "Generate run" takes every job that was released to finance, isn't
+closed, and isn't already in a run — with no lower bound on *when* it was
+released. On a database with real history that is the whole released
+backlog, not just the jobs that are genuinely outstanding.
+
+So on the first run after this update, jobs that were released to finance
+years ago and were settled by hand in the meantime would be swept too: their
+contractor amounts get frozen onto the row, they get a `payrollRunId`, they
+appear on the run detail screen, and they can then be confirmed as paid in a
+single action.
+
+**Decide what to do with the historical backlog before anyone clicks
+"Generate run".** To see the size of it (read-only, safe to run whenever):
+
+```bash
+set -a; source .env; set +a
+psql "$DATABASE_URL" -c "
+  SELECT count(*) AS arm_a_open,
+         min(\"releasedToFinanceAt\") AS oldest_released,
+         max(\"releasedToFinanceAt\") AS newest_released
+  FROM \"jaf_invoice\"
+  WHERE \"status\" NOT IN ('LC_REQUEST_GENERATED', 'CANCELLED')
+    AND \"releasedToFinanceAt\" IS NOT NULL
+    AND \"payablesClosedAt\" IS NULL
+    AND \"payrollRunId\" IS NULL;"
+```
+
+That count slightly over-estimates: the sweep also skips jobs carrying a
+`PBCC_ADVANCE` payment record. It is close enough to decide with.
+
+Then pick one, with us:
+
+- **Close out the settled history** — set `payablesClosedAt` on the jobs that
+  were already handled outside this system, so the sweep skips them and picks
+  up only genuinely-outstanding work. This writes to real job rows, so agree
+  the exact `WHERE` with us first and take a backup (§10) before running it.
+- **Start the sweep from a cutoff date** — we add a
+  `releasedToFinanceAt >= <date>` floor to the shared predicate so anything
+  released before that date is never swept. Simpler and reversible, but it
+  also keeps those old jobs off the L1 queue screen.
+
+Until one of those is done: deploy as normal, but don't generate a run.
+
 Add `SEED_TEMP_PASSWORD` to `.env` (do not pass it inline on the command line — it would persist in shell history and be readable via `ps` for the life of the process):
 
 ```bash
@@ -188,6 +242,8 @@ Once the app is live, most future changes are updates to this same install, not 
    ./scripts/apply-migrations.sh
    ```
    `migrate deploy` is idempotent and forward-only: it only runs migrations `_prisma_migrations` doesn't already record, and never rolls back. Before running it, check whether the change notes for this update call out anything destructive (a dropped table or column) — if a migration is provably dropping already-empty schema, no extra care is needed; if it might affect real data, verify row counts against this database first, the same way `installer_v3`'s original migration was verified (§7).
+
+   One migration is additive rather than destructive, but still needs a decision from us before the app is used: the finance migration backfills nothing, so the first payroll run afterwards would sweep the entire historical released backlog, not just outstanding work. See **§7, "The finance migration is additive, but it has one operational precondition"** — resolve it before anyone clicks "Generate run".
 
 4. **Rebuild and restart:**
    ```bash
@@ -264,6 +320,7 @@ A daily cron job covering both, with offsite/secondary copy, is the minimum for 
 - [ ] `UPLOAD_DIR` points to a persistent directory, not `/tmp`, and is writable by the app user
 - [ ] HTTPS reverse proxy in front of the app, reachable from pilot users' devices
 - [ ] `pnpm prisma migrate deploy` and `pnpm prisma db seed` run successfully
+- [ ] Before the finance update: historical released-to-finance backlog resolved (closed out or cutoff date agreed) so the first payroll run can't sweep years of settled jobs — see §7
 - [ ] App running under systemd (or pm2), restarts automatically on crash/reboot
 - [ ] Seeded test account passwords changed or accounts replaced with real staff
 - [ ] Ongoing: any account created by a *later* seed run (e.g. a roster addition) gets `SEED_TEMP_PASSWORD` too — follow up with the same reset for it, every time

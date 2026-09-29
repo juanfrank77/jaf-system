@@ -21,6 +21,7 @@ import {
 	isMissingAviso,
 	isMissingClaroPdf,
 } from "~/lib/finance-pipeline.server"
+import { armAOpenWhere } from "~/lib/payroll-run.server"
 import { generatePbccRequestPdf } from "~/lib/pdf/pbcc-request.server"
 import { isTerminalStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
@@ -38,8 +39,15 @@ export const meta: Route.MetaFunction = ({ data }) => [
 
 export async function loader({ request, params }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])
-	const doc = await db.jafInvoice.findUniqueOrThrow({
-		where: { id: params.id },
+	// The Arm A-open gate, single-sourced instead of restated inline. The
+	// packet view is deliberately wider than L1's — it still serves a job
+	// already swept into an open, unpaid run, so finance can read the frozen
+	// figures off it, and a job whose LC request is already generated. The
+	// clauses that decide whether a job is on Arm A at all are inherited, so
+	// the CANCELLED guard this loader used to get from `computeFinanceStage` is
+	// back: a cancelled job is not on Arm A and belongs back on L1.
+	const doc = await db.jafInvoice.findFirst({
+		where: { id: params.id, ...armAOpenWhere({ packetView: true }) },
 		include: {
 			supervisor: true,
 			poLinks: true,
@@ -47,12 +55,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			preCertSheets: { orderBy: { version: "desc" }, take: 1 },
 		},
 	})
-	// Arm A open check, replacing the old `computeFinanceStage` gate: this phase
-	// owns the closable loop, so a job that is closed or was never released is
-	// simply not on Arm A any more.
-	if (doc.payablesClosedAt || !doc.releasedToFinanceAt) {
-		throw redirect("/finance/queue")
-	}
+	// this phase owns the closable loop, so a job that is closed or was never
+	// released is simply not on Arm A any more.
+	if (!doc) throw redirect("/finance/queue")
 
 	const serviceCodes = await db.serviceCode.findMany()
 	const codeMap = Object.fromEntries(

@@ -18,6 +18,7 @@ import {
 	WAREHOUSE_STAFF_SEED,
 } from "../app/lib/catalog-import"
 import { PrismaClient } from "../generated/prisma/client"
+import { seedContractorAccounts } from "./seed-contractor-accounts"
 import { seedWarehouseStartingBalances } from "./seed-warehouse-stock"
 
 const db = new PrismaClient({
@@ -487,6 +488,7 @@ async function main() {
 	await seedCatalog()
 	await seedSupervisors()
 	await seedBrigades()
+	await seedContractorAccounts(db)
 	await seedWarehouses()
 	await seedWarehouseStaff()
 	await seedWarehouseBackups()

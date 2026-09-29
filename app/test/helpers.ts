@@ -61,6 +61,10 @@ export function makeTracker() {
 		serviceCode: [] as string[],
 		jafInvoice: [] as string[],
 		auditTrail: [] as string[],
+		paymentRecord: [] as string[],
+		payrollRun: [] as string[],
+		contractorAccount: [] as string[],
+		brigade: [] as string[],
 	}
 	function track<M extends keyof typeof b, R extends { id: string }>(
 		model: M,
@@ -107,8 +111,26 @@ export function makeTracker() {
 					OR: [{ id: { in: b.auditTrail } }, { docId: { in: b.jafInvoice } }],
 				},
 			})
+		// PaymentRecord→JafInvoice is FK'd, so it goes before the invoice rows below.
+		if (b.paymentRecord.length)
+			await db.paymentRecord.deleteMany({
+				where: { id: { in: b.paymentRecord } },
+			})
 		if (b.jafInvoice.length)
 			await db.jafInvoice.deleteMany({ where: { id: { in: b.jafInvoice } } })
+		// Arm A parents: JafInvoice→PayrollRun/ContractorAccount/Brigade are
+		// nullable FKs with NoAction referential action, so the invoice rows must
+		// already be gone (above) before these can be deleted. Each of these in
+		// turn FKs to `user` (PayrollRun.generatedById/paidById/reversedById,
+		// Brigade.supervisorId), so they must go before `user` cleanup below.
+		if (b.payrollRun.length)
+			await db.payrollRun.deleteMany({ where: { id: { in: b.payrollRun } } })
+		if (b.contractorAccount.length)
+			await db.contractorAccount.deleteMany({
+				where: { id: { in: b.contractorAccount } },
+			})
+		if (b.brigade.length)
+			await db.brigade.deleteMany({ where: { id: { in: b.brigade } } })
 		if (b.warehouseAssignment.length)
 			await db.warehouseAssignment.deleteMany({
 				where: { id: { in: b.warehouseAssignment } },
@@ -181,5 +203,92 @@ export async function seedMaterial(
 		where: { claroCode },
 		update: fields,
 		create: { claroCode, ...fields },
+	})
+}
+
+/** Create an active Brigade with a unique code. */
+export async function seedBrigade(
+	overrides: { name?: string; code?: string; area?: string } = {},
+) {
+	const code = overrides.code ?? runToken("BRI")
+	return db.brigade.create({
+		data: {
+			name: overrides.name ?? `Test Brigade ${code}`,
+			code,
+			area: overrides.area ?? "METRO",
+			memberIds: [],
+			active: true,
+		},
+	})
+}
+
+/** Create a ContractorAccount, optionally linked to a Brigade. */
+export async function seedContractorAccount(
+	overrides: {
+		code?: string
+		label?: string
+		brigadeId?: string
+	} = {},
+) {
+	const code = overrides.code ?? runToken("ACC")
+	return db.contractorAccount.create({
+		data: {
+			code,
+			label: overrides.label ?? `Test Contractor ${code}`,
+			brigadeId: overrides.brigadeId ?? null,
+		},
+	})
+}
+
+/**
+ * Create a JafInvoice shaped like a real job that just landed in L1 —
+ * released to finance, not yet Arm-A-closed, with resolvable invoice lines.
+ *
+ * `supervisorId` is a required FK on JafInvoice, so the fixture creates its own
+ * supervisor when not given one. Pass a caller-created (and caller-tracked) user
+ * to keep that row out of the shared dev DB's leftovers.
+ */
+export async function seedFinanceableInvoice(
+	overrides: {
+		status?: string
+		supervisorId?: string
+		contractorAccountId?: string | null
+		contractorAccountCode?: string | null
+		jafInvoiceLines?: {
+			serviceCodeId: string
+			claroCode: string
+			name: string
+			unit: string
+			qty: number
+			unitPrice: number
+			lineAmount: number
+		}[]
+		releasedToFinanceAt?: Date | null
+		payablesClosedAt?: Date | null
+		payrollRunId?: string | null
+	} = {},
+) {
+	const supervisorId =
+		overrides.supervisorId ?? (await seedUser({ role: "SUPERVISOR" })).id
+	return db.jafInvoice.create({
+		data: {
+			controlNumber: runToken("JAF"),
+			status: (overrides.status ?? "SUPERVISOR_APPROVED") as never,
+			jobType: "INSTALL",
+			jobAddressEstimated: "123 Test St",
+			estimatedMaterials: [],
+			assignedCrewIds: [],
+			supervisorId,
+			releasedToFinanceAt:
+				overrides.releasedToFinanceAt === undefined
+					? new Date()
+					: overrides.releasedToFinanceAt,
+			avisoMatchedAt: new Date(),
+			jafInvoiceLines: (overrides.jafInvoiceLines ?? []) as never,
+			contractorAccountId: overrides.contractorAccountId ?? null,
+			contractorAccountCode: overrides.contractorAccountCode ?? null,
+			payablesClosedAt: overrides.payablesClosedAt ?? null,
+			payrollRunId: overrides.payrollRunId ?? null,
+		},
 	})
 }

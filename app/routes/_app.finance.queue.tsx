@@ -2,84 +2,81 @@ import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Badge } from "~/components/ui/badge"
+import { resolveContractorAccount } from "~/lib/contractor-payment.server"
 import { db } from "~/lib/db.server"
+import { armAOpenWhere } from "~/lib/payroll-run.server"
 import { requireRole } from "~/lib/permissions.server"
 import { formatMoney, toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.finance.queue"
 
 export const meta: Route.MetaFunction = () => [
-	{ title: "Payment request queue — JAF Ops" },
+	{ title: "Packets in — JAF Ops" },
 ]
 
 export async function loader({ request }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])
 	const docs = await db.jafInvoice.findMany({
-		where: {
-			releasedToFinanceAt: { not: null },
-			status: { notIn: ["LC_REQUEST_GENERATED", "CANCELLED"] },
-		},
+		where: armAOpenWhere(),
+		orderBy: { releasedToFinanceAt: "asc" },
+		take: 200,
 		select: {
 			id: true,
 			controlNumber: true,
 			avisoNumber: true,
-			jafInvoiceLineTotal: true,
 			releasedToFinanceAt: true,
+			netPayable: true,
 			contractorAccountCode: true,
-			brigade: { select: { name: true, leadName: true } },
 			preCertSheets: {
-				where: { supersededAt: null },
-				select: {
-					sigSubcontractorName: true,
-					sigClaroAt: true,
-					sigClaroScanPath: true,
-				},
+				orderBy: { version: "desc" },
 				take: 1,
+				select: { sigSubcontractorName: true },
 			},
+			brigade: { select: { leadName: true, name: true } },
 		},
-		orderBy: { releasedToFinanceAt: "desc" },
-		take: 200,
 	})
-	const rows = docs.map((d) => {
-		const sheet = d.preCertSheets[0]
-		return {
+	const jobs = await Promise.all(
+		docs.map(async (d) => ({
 			id: d.id,
 			controlNumber: d.controlNumber,
 			avisoNumber: d.avisoNumber,
-			contractorName:
-				sheet?.sigSubcontractorName ??
+			contractorLabel:
+				d.preCertSheets[0]?.sigSubcontractorName ??
 				d.brigade?.leadName ??
 				d.brigade?.name ??
-				"—",
-			contractorCode: d.contractorAccountCode,
-			amount: toNumberPrice(d.jafInvoiceLineTotal),
+				null,
+			netPayable: d.netPayable != null ? toNumberPrice(d.netPayable) : null,
 			releasedAt: d.releasedToFinanceAt,
-			claroSigned: !!(sheet?.sigClaroAt || sheet?.sigClaroScanPath),
-		}
-	})
-	const claroAcceptancePct =
-		rows.length === 0
-			? null
-			: Math.round(
-					(rows.filter((r) => r.claroSigned).length / rows.length) * 100,
-				)
-	return { user, rows, claroAcceptancePct }
+			// Not yet swept into a run, so resolved live for the row's badge —
+			// this does NOT persist contractorAccountId (only generateRun does).
+			accountResolved:
+				(await resolveContractorAccount(d.contractorAccountCode)) !== null,
+		})),
+	)
+	return { user, jobs }
 }
 
 export default function FinanceQueue({ loaderData }: Route.ComponentProps) {
-	const { rows, claroAcceptancePct } = loaderData
+	const { jobs } = loaderData
 	const { t } = useTranslation()
+	const newPackets = jobs.filter((j) => j.netPayable == null).length
+	const awaitingPayroll = jobs.length
 	return (
 		<div className="space-y-4">
 			<div className="flex items-center justify-between">
 				<h1 className="text-xl font-semibold">{t("finance_queue.title")}</h1>
-				{claroAcceptancePct != null && (
-					<span className="text-xs bg-slate-100 px-3 py-1 rounded-full">
-						{t("finance_queue.claro_pct", { pct: claroAcceptancePct })}
+				<div className="flex gap-2 text-xs">
+					<span className="bg-slate-100 px-3 py-1 rounded-full">
+						{t("finance_queue.stat.new_packets", { count: newPackets })}
 					</span>
-				)}
+					<span className="bg-slate-100 px-3 py-1 rounded-full">
+						{t("finance_queue.stat.awaiting_payroll", {
+							count: awaitingPayroll,
+						})}
+					</span>
+				</div>
 			</div>
 			<p className="text-sm text-slate-500">{t("finance_queue.hint")}</p>
-			{rows.length === 0 ? (
+			{jobs.length === 0 ? (
 				<p className="text-sm text-slate-400">{t("finance_queue.empty")}</p>
 			) : (
 				<div className="overflow-x-auto bg-white border rounded-lg">
@@ -96,27 +93,25 @@ export default function FinanceQueue({ loaderData }: Route.ComponentProps) {
 							</tr>
 						</thead>
 						<tbody>
-							{rows.map((r) => (
+							{jobs.map((r) => (
 								<tr
 									key={r.id}
 									className="border-b last:border-0 hover:bg-muted/40"
 								>
 									<td className="p-2 font-mono">
-										<Link to={`/finance/verify/${r.id}`} className="underline">
+										<Link to={`/finance/pbcc/${r.id}`} className="underline">
 											{r.controlNumber}
 										</Link>
 									</td>
 									<td className="p-2">{r.avisoNumber ?? "—"}</td>
-									<td className="p-2">
-										{r.contractorName}
-										{r.contractorCode ? ` · ${r.contractorCode}` : ""}
+									<td className="p-2">{r.contractorLabel ?? "—"}</td>
+									<td className="p-2 text-right">
+										{r.netPayable == null ? "—" : formatMoney(r.netPayable)}
 									</td>
-									<td className="p-2 text-right">{formatMoney(r.amount)}</td>
 									<td className="p-2 space-x-1">
-										<Badge variant="ok">{t("finance_queue.complete")}</Badge>
-										{!r.claroSigned && (
+										{!r.accountResolved && (
 											<Badge variant="warn">
-												{t("finance_queue.no_claro_sig")}
+												{t("finance_queue.account_unmapped")}
 											</Badge>
 										)}
 									</td>

@@ -3,7 +3,15 @@ import path from "node:path"
 import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
+import {
+	type ContractorPayment,
+	type ContractorShareLine,
+	computeContractorPayment,
+	resolveContractorAccount,
+	toContractorPaymentLines,
+} from "~/lib/contractor-payment.server"
 import { db } from "~/lib/db.server"
 import { sendInternalEmail } from "~/lib/email.server"
 import {
@@ -36,19 +44,16 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			supervisor: true,
 			poLinks: true,
 			paymentRecords: { select: { type: true } },
+			preCertSheets: { orderBy: { version: "desc" }, take: 1 },
 		},
 	})
-	if (isTerminalStatus(doc.status)) {
-		throw redirect("/finance/receivables")
+	// Arm A open check, replacing the old `computeFinanceStage` gate: this phase
+	// owns the closable loop, so a job that is closed or was never released is
+	// simply not on Arm A any more.
+	if (doc.payablesClosedAt || !doc.releasedToFinanceAt) {
+		throw redirect("/finance/queue")
 	}
-	const stage = computeFinanceStage(
-		doc,
-		doc.poLinks.length > 0,
-		doc.paymentRecords,
-	)
-	if (stage !== "PBCC_REQUEST_PENDING") {
-		throw redirect(`/finance/receivables`)
-	}
+
 	const serviceCodes = await db.serviceCode.findMany()
 	const codeMap = Object.fromEntries(
 		serviceCodes.map((c) => [
@@ -61,7 +66,38 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		getLcPbccAdvanceRate(),
 	])
 	const amount = invoiceTotalUsed(doc, codeMap, ivuRate)
-	return { doc, user, serviceCodes, amount, ivuRate, lcPbccAdvanceRate }
+
+	// A job already swept into a run (grossPayable set) has its payment
+	// frozen — show that, never live-recompute it, so a later catalog price
+	// change can't appear to move an already-generated run's figures.
+	const account = await resolveContractorAccount(doc.contractorAccountCode)
+	const frozen = doc.grossPayable != null
+	const payment: ContractorPayment = frozen
+		? {
+				contractorShareLines: (doc.contractorShareLines ??
+					[]) as unknown as ContractorShareLine[],
+				grossPayable: toNumberPrice(doc.grossPayable),
+				retentionAmount: toNumberPrice(doc.retentionAmount),
+				netPayable: toNumberPrice(doc.netPayable),
+			}
+		: computeContractorPayment(
+				toContractorPaymentLines(doc.jafInvoiceLines),
+				account?.sharePercent ?? 0.65,
+			)
+
+	return {
+		doc,
+		user,
+		serviceCodes,
+		amount,
+		ivuRate,
+		lcPbccAdvanceRate,
+		payment,
+		frozen,
+		contractorAccountResolved: frozen || account !== null,
+		missingAviso: isMissingAviso(doc),
+		missingClaroPdf: isMissingClaroPdf(doc),
+	}
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
@@ -79,6 +115,30 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 	const form = await request.formData()
 	const intent = form.get("intent")
+
+	// Escape hatch: Lissette sends the PBCC packet by hand (outside the system)
+	// because the bank-format invoice/schedule generators don't exist yet. This
+	// must work even when the Aviso/Claro PDFs the auto-generator insists on are
+	// missing — recording "sent" is precisely the case it exists for.
+	if (intent === "mark_sent_by_hand") {
+		const note = (form.get("note") as string | null)?.trim() || null
+		await db.$transaction([
+			db.jafInvoice.update({
+				where: { id: params.id },
+				data: { pbccRequestSentAt: new Date() },
+			}),
+			db.auditTrail.create({
+				data: {
+					docId: params.id,
+					userId: user.id,
+					action: "PBCC_SENT_BY_HAND",
+					diffJson: { note },
+				},
+			}),
+		])
+		return { ok: true }
+	}
+
 	if (intent !== "generate_pbcc")
 		return { errorKey: "finance_pbcc.errors.unknown_intent" }
 	const stage = computeFinanceStage(
@@ -177,7 +237,15 @@ export async function action({ request, params }: Route.ActionArgs) {
 }
 
 export default function PbccRequest({ loaderData }: Route.ComponentProps) {
-	const { doc, amount, ivuRate, lcPbccAdvanceRate } = loaderData
+	const {
+		doc,
+		amount,
+		ivuRate,
+		lcPbccAdvanceRate,
+		payment,
+		frozen,
+		contractorAccountResolved,
+	} = loaderData
 	const { t } = useTranslation()
 
 	return (
@@ -218,12 +286,79 @@ export default function PbccRequest({ loaderData }: Route.ComponentProps) {
 				</p>
 			</div>
 
+			{/* Arm A — contractor payment. Live-computed until the job is swept
+			    into a payroll run, then read back frozen off the invoice. */}
+			<div className="bg-white border rounded-lg p-4 space-y-2 text-sm">
+				<div className="flex items-center gap-2">
+					<h2 className="font-semibold">
+						{t("finance_pbcc.contractor_payment")}
+					</h2>
+					{frozen ? (
+						<Badge variant="ok">{t("finance_pbcc.frozen")}</Badge>
+					) : (
+						<Badge>{t("finance_pbcc.estimated")}</Badge>
+					)}
+					{!contractorAccountResolved && (
+						<Badge variant="warn">{t("finance_pbcc.account_unmapped")}</Badge>
+					)}
+				</div>
+				<table className="w-full">
+					<tbody>
+						<tr>
+							<td className="text-slate-500">{t("finance_pbcc.gross")}</td>
+							<td className="text-right font-mono">
+								{formatMoney(payment.grossPayable)}
+							</td>
+						</tr>
+						<tr>
+							<td className="text-slate-500">{t("finance_pbcc.retention")}</td>
+							<td className="text-right font-mono">
+								{formatMoney(payment.retentionAmount)}
+							</td>
+						</tr>
+						<tr className="font-semibold">
+							<td>{t("finance_pbcc.net")}</td>
+							<td className="text-right font-mono">
+								{formatMoney(payment.netPayable)}
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+
 			<p className="text-sm text-muted-foreground">{t("finance_pbcc.hint")}</p>
 
-			<Form method="post">
-				<input type="hidden" name="intent" value="generate_pbcc" />
-				<Button type="submit">{t("finance_pbcc.generate_and_download")}</Button>
-			</Form>
+			{/* The bank-format invoice / bank Excel schedule have no generator yet —
+			    both are explicitly blocked rather than silently missing. */}
+			<div className="bg-white border rounded-lg p-4 space-y-2 text-sm">
+				<p className="text-slate-600">
+					{t("finance_pbcc.bank_invoice_blocked")}
+				</p>
+				<p className="text-slate-600">
+					{t("finance_pbcc.bank_schedule_blocked")}
+				</p>
+			</div>
+
+			<div className="flex flex-wrap items-center gap-2">
+				<Form method="post">
+					<input type="hidden" name="intent" value="generate_pbcc" />
+					<Button type="submit" disabled>
+						{t("finance_pbcc.generate_and_download")}
+					</Button>
+				</Form>
+				<Form method="post" className="flex items-center gap-2">
+					<input type="hidden" name="intent" value="mark_sent_by_hand" />
+					<input
+						type="text"
+						name="note"
+						placeholder={t("finance_pbcc.sent_by_hand_note")}
+						className="border rounded px-2 py-1 text-sm"
+					/>
+					<Button type="submit" variant="secondary">
+						{t("finance_pbcc.mark_sent_by_hand")}
+					</Button>
+				</Form>
+			</div>
 		</div>
 	)
 }

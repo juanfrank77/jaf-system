@@ -33,6 +33,7 @@ type NavItem = {
 		| "app_shell.nav.new_document"
 		| "app_shell.nav.receivables"
 		| "app_shell.nav.finance_queue"
+		| "app_shell.nav.finance_payroll"
 		| "app_shell.nav.admin_settings"
 		| "app_shell.nav.catalog"
 		| "app_shell.nav.comptroller"
@@ -66,6 +67,12 @@ const NAV_ITEMS: NavItem[] = [
 	{
 		to: "/finance/queue",
 		labelKey: "app_shell.nav.finance_queue",
+		icon: Invoice02Icon,
+		roles: ["FINANCE", "ADMIN"],
+	},
+	{
+		to: "/finance/payroll",
+		labelKey: "app_shell.nav.finance_payroll",
 		icon: Invoice02Icon,
 		roles: ["FINANCE", "ADMIN"],
 	},

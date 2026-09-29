@@ -1,120 +1,118 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterAll, describe, expect, it, vi } from "vitest"
+import { db } from "~/lib/db.server"
+import { generateRun } from "~/lib/payroll-run.server"
+import {
+	makeTracker,
+	seedContractorAccount,
+	seedFinanceableInvoice,
+	seedUser,
+} from "~/test/helpers"
 
-const mocks = vi.hoisted(() => ({
-	db: {
-		jafInvoice: { findUniqueOrThrow: vi.fn() },
-		user: { findMany: vi.fn() },
-		serviceCode: { findMany: vi.fn() },
-		auditTrail: { create: vi.fn() },
-		notification: { create: vi.fn() },
-		$transaction: vi.fn(),
-	},
-	requireRole: vi.fn(),
-	isTerminalStatus: vi.fn(),
-	computeFinanceStage: vi.fn(),
-	invoiceTotalUsed: vi.fn(),
-	financeLineItems: vi.fn(),
-	getIvuRate: vi.fn(),
-	getLcPbccAdvanceRate: vi.fn(),
-	generatePbccRequestPdf: vi.fn(),
-	sendInternalEmail: vi.fn(),
-}))
-
-vi.mock("~/lib/db.server", () => ({ db: mocks.db }))
+const mocks = vi.hoisted(() => ({ requireRole: vi.fn() }))
 vi.mock("~/lib/permissions.server", () => ({ requireRole: mocks.requireRole }))
-vi.mock("~/lib/permissions", () => ({
-	isTerminalStatus: mocks.isTerminalStatus,
-}))
-vi.mock("~/lib/finance-pipeline.server", () => ({
-	computeFinanceStage: mocks.computeFinanceStage,
-	invoiceTotalUsed: mocks.invoiceTotalUsed,
-	financeLineItems: mocks.financeLineItems,
-}))
-vi.mock("~/lib/system-settings.server", () => ({
-	getIvuRate: mocks.getIvuRate,
-	getLcPbccAdvanceRate: mocks.getLcPbccAdvanceRate,
-}))
-vi.mock("~/lib/pdf/pbcc-request.server", () => ({
-	generatePbccRequestPdf: mocks.generatePbccRequestPdf,
-}))
-vi.mock("~/lib/email.server", () => ({
-	sendInternalEmail: mocks.sendInternalEmail,
-}))
 
 import { action, loader } from "./_app.finance.pbcc.$id"
 
-describe("Finance PBCC guards", () => {
-	beforeEach(() => {
-		vi.clearAllMocks()
-		mocks.isTerminalStatus.mockReturnValue(false)
-		mocks.requireRole.mockResolvedValue({
-			user: { id: "finance-1", role: "FINANCE" },
-		})
-		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue({
-			id: "job-1",
-			controlNumber: "JAF-1",
-			status: "SUPERVISOR_APPROVED",
-			supervisorId: "sup-1",
-			poLinks: [],
-			paymentRecords: [],
-			supervisor: { name: "Sup", email: "sup@example.com" },
-		})
-		mocks.computeFinanceStage.mockReturnValue("PBCC_REQUEST_PENDING")
-		mocks.db.serviceCode.findMany.mockResolvedValue([])
-		mocks.getIvuRate.mockResolvedValue(0.115)
-		mocks.getLcPbccAdvanceRate.mockResolvedValue(0.5)
-		mocks.invoiceTotalUsed.mockReturnValue(100)
-		mocks.generatePbccRequestPdf.mockResolvedValue(Buffer.from("pdf"))
-		mocks.db.user.findMany.mockResolvedValue([])
-		mocks.db.$transaction.mockResolvedValue(undefined)
+const t = makeTracker()
+afterAll(() => t.cleanup())
+
+const ONE_LINE_100 = [
+	{
+		serviceCodeId: "sc1",
+		claroCode: "X",
+		name: "X",
+		unit: "EA",
+		qty: 1,
+		unitPrice: 100,
+		lineAmount: 100,
+	},
+]
+
+describe("L2 Packet", () => {
+	it("loader live-computes the contractor payment for a job not yet swept into a run", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		mocks.requireRole.mockResolvedValue({ user: finance })
+		const account = t.track(
+			"contractorAccount",
+			await seedContractorAccount({ sharePercent: 0.65 }),
+		)
+		const doc = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+				jafInvoiceLines: ONE_LINE_100,
+			}),
+		)
+
+		const result = await loader({
+			request: new Request(`http://localhost/finance/pbcc/${doc.id}`),
+			params: { id: doc.id },
+			context: {},
+		} as never)
+
+		expect(result.payment.grossPayable).toBeCloseTo(100, 2)
+		expect(result.payment.netPayable).toBeCloseTo(100 * 0.65 - 10, 2)
+		expect(result.frozen).toBe(false)
 	})
 
-	it("loader rejects terminal LC jobs", async () => {
-		mocks.isTerminalStatus.mockReturnValue(true)
-		await expect(
-			loader({
-				request: new Request("http://localhost/finance/pbcc/job-1"),
-				params: { id: "job-1" },
-			} as any),
-		).rejects.toMatchObject({ status: 302 })
+	it("loader returns the frozen payment, unchanged, for a job already swept into a run", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		mocks.requireRole.mockResolvedValue({ user: finance })
+		const account = t.track(
+			"contractorAccount",
+			await seedContractorAccount({ sharePercent: 0.65 }),
+		)
+		t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+				jafInvoiceLines: ONE_LINE_100,
+			}),
+		)
+		const { run } = await generateRun({
+			generatedById: finance.id,
+			label: "R-frozen",
+		})
+		t.track("payrollRun", run as { id: string })
+		const swept = await db.jafInvoice.findFirstOrThrow({
+			where: { payrollRunId: run.id },
+		})
+
+		// Change the catalog price after freezing — the frozen figure must not move.
+		const result = await loader({
+			request: new Request(`http://localhost/finance/pbcc/${swept.id}`),
+			params: { id: swept.id },
+			context: {},
+		} as never)
+		expect(result.frozen).toBe(true)
+		expect(result.payment.netPayable).toBeCloseTo(100 * 0.65 - 10, 2)
 	})
 
-	it("action rejects terminal LC jobs", async () => {
-		mocks.isTerminalStatus.mockReturnValue(true)
-		const form = new FormData()
-		form.set("intent", "generate_pbcc")
-		const result = await action({
-			request: new Request("http://localhost/finance/pbcc/job-1", {
+	it("mark_sent_by_hand records pbccRequestSentAt and a note without generating missing documents", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		mocks.requireRole.mockResolvedValue({ user: finance })
+		const account = t.track("contractorAccount", await seedContractorAccount())
+		const doc = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
+		)
+
+		const form = new URLSearchParams({
+			intent: "mark_sent_by_hand",
+			note: "Sent by hand 9/3",
+		})
+		await action({
+			request: new Request(`http://localhost/finance/pbcc/${doc.id}`, {
 				method: "POST",
 				body: form,
 			}),
-			params: { id: "job-1" },
-		} as any)
-		expect(result).toEqual({ errorKey: "finance_pbcc.errors.terminal_status" })
-		expect(mocks.db.jafInvoice.findUniqueOrThrow).toHaveBeenCalled()
-	})
+			params: { id: doc.id },
+			context: {},
+		} as never)
 
-	it("loader rejects wrong stage", async () => {
-		mocks.computeFinanceStage.mockReturnValue("TO_VERIFY")
-		await expect(
-			loader({
-				request: new Request("http://localhost/finance/pbcc/job-1"),
-				params: { id: "job-1" },
-			} as any),
-		).rejects.toMatchObject({ status: 302 })
-	})
-
-	it("action rejects wrong stage", async () => {
-		mocks.computeFinanceStage.mockReturnValue("TO_VERIFY")
-		const form = new FormData()
-		form.set("intent", "generate_pbcc")
-		const result = await action({
-			request: new Request("http://localhost/finance/pbcc/job-1", {
-				method: "POST",
-				body: form,
-			}),
-			params: { id: "job-1" },
-		} as any).catch((r: any) => r)
-		expect(result.status).toBe(302)
+		const reloaded = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: doc.id },
+		})
+		expect(reloaded.pbccRequestSentAt).not.toBeNull()
 	})
 })

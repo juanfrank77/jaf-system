@@ -141,6 +141,24 @@ async function canAccessSnapshotFile(
 	return false
 }
 
+/**
+ * ACH evidence uploaded against a payroll run close, stored as
+ * `payroll-runs/<runId>-<name>`. Finance-only: the file is a bank confirmation,
+ * and the run id prefix is only honoured for the finance-side roles.
+ */
+async function canAccessPayrollRunFile(
+	relativePath: string,
+	user: { id: string; role: string },
+): Promise<boolean> {
+	const m = relativePath.match(/^payroll-runs\/([^/]+)-/)
+	if (!m) return false
+	return (
+		user.role === "ADMIN" ||
+		user.role === "FINANCE" ||
+		user.role === "COMPTROLLER"
+	)
+}
+
 export async function loader({ request, params }: Route.LoaderArgs) {
 	const session = await requireSession(request)
 	const user = await db.user.findUniqueOrThrow({
@@ -166,6 +184,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		if (!allowed) return new Response("Forbidden", { status: 403 })
 	} else if (relativePath.startsWith("snapshots/")) {
 		const allowed = await canAccessSnapshotFile(relativePath, user)
+		if (!allowed) return new Response("Forbidden", { status: 403 })
+	} else if (relativePath.startsWith("payroll-runs/")) {
+		const allowed = await canAccessPayrollRunFile(relativePath, user)
 		if (!allowed) return new Response("Forbidden", { status: 403 })
 	} else {
 		const docId = extractDocId(relativePath)

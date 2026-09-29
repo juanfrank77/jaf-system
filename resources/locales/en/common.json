@@ -144,7 +144,8 @@
 			"warehouse_scan_in": "Scan In Return",
 			"warehouse_restock": "Restocks to Release",
 			"warehouse_stock": "Stock",
-			"comptroller": "Comptroller"
+			"comptroller": "Comptroller",
+			"finance_payroll": "Awaiting payroll"
 		},
 		"notifications": {
 			"bell_label": "Notifications",
@@ -886,17 +887,19 @@
 		}
 	},
 	"finance_queue": {
-		"title": "Payment request queue",
-		"hint": "Packets released by supervisors. A job appears here only when complete.",
+		"title": "Packets in",
+		"hint": "Jobs released by supervisors and still open on Arm A payroll. A job disappears here once its payroll run is closed.",
 		"empty": "No packets waiting.",
-		"claro_pct": "{{pct}}% with Claro field acceptance",
-		"complete": "Complete",
-		"no_claro_sig": "No Claro sig",
+		"account_unmapped": "Contractor account not mapped",
+		"stat": {
+			"new_packets": "New packets: {{count}}",
+			"awaiting_payroll": "Awaiting payroll: {{count}}"
+		},
 		"col": {
 			"work_order": "Work order",
 			"aviso": "Aviso",
 			"contractor": "Contractor",
-			"amount": "Amount",
+			"amount": "Net payable",
 			"packet": "Packet"
 		}
 	},
@@ -952,7 +955,18 @@
 		"errors": {
 			"unknown_intent": "Unknown action.",
 			"terminal_status": "This job is no longer editable."
-		}
+		},
+		"contractor_payment": "Contractor payment (Arm A)",
+		"frozen": "Frozen in run",
+		"estimated": "Estimated",
+		"account_unmapped": "Contractor account not mapped",
+		"gross": "Gross payable",
+		"retention": "10% retention",
+		"net": "Net payable",
+		"bank_invoice_blocked": "Bank-format invoice — blocked: sample bank invoice not yet received from Lissette.",
+		"bank_schedule_blocked": "Bank's Excel schedule — blocked: blank template not yet received.",
+		"mark_sent_by_hand": "Mark sent by hand, outside the system",
+		"sent_by_hand_note": "Note (optional)"
 	},
 	"finance_po": {
 		"title": "Claro PO & Final Document",
@@ -1408,5 +1422,36 @@
 			"submit": "Scan In",
 			"success": "Returned successfully."
 		}
+	},
+	"finance_payroll": {
+		"title": "Awaiting payroll",
+		"run_label_placeholder": "Run label (e.g. 9/10)",
+		"generate_run": "Generate run ({{count}} open)",
+		"run_row": "{{label}} — {{count}} jobs — generated {{date}}",
+		"overdue": "{{days}}d, overdue",
+		"errors": {
+			"unknown_intent": "Unknown action.",
+			"missing_fields": "ACH date and ACH reference are both required.",
+			"invalid_date": "That ACH date could not be read.",
+			"invalid_evidence": "Evidence must be a PDF or image of the signed ACH confirmation."
+		},
+		"back": "Back to awaiting payroll",
+		"open": "Open — not yet paid",
+		"paid_on": "Paid on {{date}} (ACH {{ref}})",
+		"placeholder": "placeholder",
+		"download_journal_pdf": "⬇ Journal PDF",
+		"col": {
+			"acct": "Acct",
+			"contractor": "Contractor",
+			"gross": "Gross",
+			"net": "Net",
+			"retention": "10% ret.",
+			"adj_net": "Adj. net (running)"
+		},
+		"batch_confirm": "Batch-confirm from paper",
+		"batch_confirm_submit": "Close run from paper",
+		"ach_date": "ACH date",
+		"ach_ref": "ACH ref",
+		"evidence": "Evidence (PDF/image)"
 	}
 }

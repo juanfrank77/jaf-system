@@ -356,9 +356,7 @@ const INTAKE_BLOCKED_STATUSES = [...LIVE_STATUSES, "WAREHOUSE"] as const
 // REPARADO ServiceCode's id. `serviceCodeId` is an FK, so an unresolved code
 // must NOT invent a dangling string: keep the original id and flag `needsCode`
 // (surfaced for a catalog fix).
-export async function resolveReparadoServiceCodeId(
-	originalServiceCodeId: string,
-) {
+async function resolveReparadoServiceCodeId(originalServiceCodeId: string) {
 	const original = await db.serviceCode
 		.findUnique({
 			where: { id: originalServiceCodeId },

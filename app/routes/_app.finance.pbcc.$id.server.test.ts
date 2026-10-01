@@ -32,8 +32,8 @@ describe("L2 Packet", () => {
 			contractorAccountId: account.id,
 			runLabel: "R-frozen",
 			grossPayable: 100,
-			retentionAmount: 10,
-			netPayable: 100 * 0.65 - 10,
+			retentionAmount: 100 * 0.65 * 0.1,
+			netPayable: 100 * 0.65 * 0.9,
 		})
 		t.track("payrollRun", run)
 		t.track("jafInvoice", swept)
@@ -45,7 +45,7 @@ describe("L2 Packet", () => {
 			context: {},
 		} as never)
 		expect(result.frozen).toBe(true)
-		expect(result.payment.netPayable).toBeCloseTo(100 * 0.65 - 10, 2)
+		expect(result.payment.netPayable).toBeCloseTo(100 * 0.65 * 0.9, 2)
 	})
 
 	it("mark_sent_by_hand records pbccRequestSentAt and a note without generating missing documents", async () => {
@@ -136,8 +136,8 @@ describe("L2 Packet", () => {
 			contractorAccountId: account.id,
 			runLabel: "R-packet-frozen",
 			grossPayable: 100,
-			retentionAmount: 10,
-			netPayable: 100 * 0.65 - 10,
+			retentionAmount: 100 * 0.65 * 0.1,
+			netPayable: 100 * 0.65 * 0.9,
 		})
 		t.track("payrollRun", { id: invoice.payrollRunId as string })
 		t.track("jafInvoice", invoice)
@@ -226,8 +226,8 @@ describe("L2 Packet", () => {
 			contractorAccountId: account.id,
 			runLabel: "R-price-change",
 			grossPayable: 100,
-			retentionAmount: 10,
-			netPayable: 100 * 0.65 - 10,
+			retentionAmount: 100 * 0.65 * 0.1,
+			netPayable: 100 * 0.65 * 0.9,
 		})
 		t.track("payrollRun", run)
 		t.track("jafInvoice", swept)
@@ -262,6 +262,6 @@ describe("L2 Packet", () => {
 		} as never)
 		expect(result.frozen).toBe(true)
 		expect(result.payment.grossPayable).toBeCloseTo(100, 2)
-		expect(result.payment.netPayable).toBeCloseTo(100 * 0.65 - 10, 2)
+		expect(result.payment.netPayable).toBeCloseTo(100 * 0.65 * 0.9, 2)
 	})
 })

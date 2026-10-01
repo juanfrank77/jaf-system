@@ -41,9 +41,10 @@ describe("journal ordering", () => {
 			const args = findUnique.mock.calls[0]?.[0] as {
 				include?: { invoices?: { orderBy?: unknown } }
 			}
-			// `adjNetRunning` accumulates in this order, so it has to be
-			// explicit — and releasedToFinanceAt alone is not a total order,
-			// because a batch of jobs is released together.
+			// `buildJournalBlocks` sorts blocks by brigade code and jobs by
+			// controlNumber internally, so the DB row order only needs to be
+			// deterministic — it affects which invoices fall into which block
+			// but not the running totals (which restart per brigade).
 			expect(args.include?.invoices?.orderBy).toEqual([
 				{ releasedToFinanceAt: "asc" },
 				{ id: "asc" },
@@ -104,8 +105,8 @@ describe("L3 run detail", () => {
 			contractorAccountId: account.id,
 			runLabel: "Run detail",
 			grossPayable: 100,
-			retentionAmount: 10,
-			netPayable: 100 * 0.65 - 10,
+			retentionAmount: 100 * 0.65 * 0.1,
+			netPayable: 100 * 0.65 * 0.9,
 		})
 		t.track("payrollRun", run)
 		t.track("jafInvoice", invoice)
@@ -119,10 +120,10 @@ describe("L3 run detail", () => {
 		// test files' jobs can land in this run. Assert our block is present with
 		// the right figures rather than that it is the only one.
 		const block = result.blocks.find(
-			(b: { accountCode: string }) => b.accountCode === "009",
+			(b: { brigadeCode: string }) => b.brigadeCode === "009",
 		)
 		expect(block).toBeDefined()
-		expect(block?.contractorLabel).toBe("Jesús Martínez")
+		expect(block?.brigadeLabel).toBe("Jesús Martínez")
 		expect(block?.gross).toBeCloseTo(100, 2)
 	})
 
@@ -135,8 +136,8 @@ describe("L3 run detail", () => {
 			contractorAccountId: account.id,
 			runLabel: "Run confirm",
 			grossPayable: 100,
-			retentionAmount: 10,
-			netPayable: 100 * 0.65 - 10,
+			retentionAmount: 100 * 0.65 * 0.1,
+			netPayable: 100 * 0.65 * 0.9,
 		})
 		t.track("payrollRun", run)
 		t.track("jafInvoice", invoice)
@@ -187,8 +188,8 @@ describe("L3 run detail", () => {
 			contractorAccountId: account.id,
 			runLabel: "Run traversal",
 			grossPayable: 100,
-			retentionAmount: 10,
-			netPayable: 100 * 0.65 - 10,
+			retentionAmount: 100 * 0.65 * 0.1,
+			netPayable: 100 * 0.65 * 0.9,
 		})
 		t.track("payrollRun", run)
 		t.track("jafInvoice", invoice)
@@ -243,8 +244,8 @@ describe("L3 run detail", () => {
 			contractorAccountId: account.id,
 			runLabel: "Run evidence",
 			grossPayable: 100,
-			retentionAmount: 10,
-			netPayable: 100 * 0.65 - 10,
+			retentionAmount: 100 * 0.65 * 0.1,
+			netPayable: 100 * 0.65 * 0.9,
 		})
 		t.track("payrollRun", run)
 		t.track("jafInvoice", invoice)

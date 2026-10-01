@@ -16,7 +16,6 @@ import {
 	FINANCEABLE_STATUSES,
 	fetchInvoiceTotalContext,
 	invoiceTotalUsed,
-	isMissingAviso,
 	isMissingClaroPdf,
 } from "~/lib/finance-pipeline.server"
 import { isTerminalStatus } from "~/lib/permissions"
@@ -73,7 +72,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		amount,
 		ivuRate,
 		tolerance,
-		missingAviso: isMissingAviso(doc),
 		missingClaroPdf: isMissingClaroPdf(doc),
 		sendBackNotes: (doc.financeSendBackNotes as SendBackNote[]) || [],
 		prefilledAvisoAmount:
@@ -113,7 +111,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 		return { errorKey: "finance_verify.errors.invalid_stage" }
 
 	if (intent === "verify") {
-		if (isMissingAviso(doc) || isMissingClaroPdf(doc)) {
+		if (isMissingClaroPdf(doc)) {
 			return { errorKey: "finance_verify.billing_blocked" }
 		}
 		if (
@@ -264,7 +262,6 @@ export default function FinanceVerify({
 		amount,
 		ivuRate,
 		tolerance,
-		missingAviso,
 		missingClaroPdf,
 		sendBackNotes,
 		prefilledAvisoAmount,
@@ -293,7 +290,6 @@ export default function FinanceVerify({
 		: null
 
 	const cannotVerify =
-		missingAviso ||
 		missingClaroPdf ||
 		stage !== "TO_VERIFY" ||
 		doc.status === "LC_REQUEST_GENERATED"
@@ -336,16 +332,13 @@ export default function FinanceVerify({
 				</p>
 			</div>
 
-			{(missingAviso || missingClaroPdf) && (
+			{missingClaroPdf && (
 				<div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
 					<p className="font-medium text-amber-900">
 						{t("finance_verify.billing_blocked")}
 					</p>
 					<ul className="text-sm text-amber-800 list-disc list-inside">
-						{missingAviso && <li>{t("finance_verify.blocked_aviso")}</li>}
-						{missingClaroPdf && (
-							<li>{t("finance_verify.blocked_claro_pdf")}</li>
-						)}
+						<li>{t("finance_verify.blocked_claro_pdf")}</li>
 					</ul>
 				</div>
 			)}

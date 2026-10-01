@@ -37,6 +37,7 @@ vite.config.ts.*
 app/components/__screenshots__
 app/lib/__screenshots__
 graphify-out
+snapshots/
 
 # local-only lefthook overrides (e.g. the pre-push prod build check), not for remote
 /lefthook-local.yml
@@ -52,3 +53,4 @@ graphify-out
 # review finding #15.
 /docs/JAF_Installer_Roster_seed.csv
 /docs/JAF_Installer_Roster_notes.md
+/docs/JAF_Package

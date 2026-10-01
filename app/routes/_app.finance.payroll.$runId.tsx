@@ -22,16 +22,12 @@ const INVOICE_SELECT = {
 	id: true,
 	controlNumber: true,
 	avisoNumber: true,
-	grossPayable: true,
-	retentionAmount: true,
-	netPayable: true,
+	contractorShareLines: true,
 	contractorAccount: {
 		select: {
 			id: true,
 			code: true,
 			label: true,
-			winpayEmployeeCode: true,
-			isPlaceholder: true,
 		},
 	},
 } as const
@@ -39,19 +35,15 @@ const INVOICE_SELECT = {
 /**
  * A run's invoices, in the ONE order the journal is ever rendered in.
  *
- * `buildJournalBlocks` accumulates `adjNetRunning` across blocks in first-seen
- * order, so the order of this relation decides the block order and therefore
- * every value in the "Adj. net (running)" column. Without an explicit
- * `orderBy`, Postgres returns rows in whatever order the plan happens to
- * produce — which can differ between two page loads of the same run, and
- * between the screen and a PDF printed from it. That column is what finance
- * reconciles against, so a shifting total is a correctness problem.
+ * `buildJournalBlocks` sorts blocks by brigade code and jobs by controlNumber
+ * internally, so the DB row order only needs to be deterministic. We order by
+ * `releasedToFinanceAt` (batch release) with `id` as a tiebreaker so the same
+ * set of invoices renders identically on every page load — the running
+ * totals in the PDF are derived from this set, so a shifting order would
+ * produce a different journal between the screen and a PDF printed from it.
  *
- * `releasedToFinanceAt` alone is not a total order: a batch of jobs is
- * released together, so ties would still reorder. `id` is the tiebreaker.
- *
- * Shared by the loader and the PDF branch on purpose — the printed journal has
- * to agree with the screen, and a duplicated literal is how they would drift.
+ * Shared by the loader and the PDF branch on purpose — the printed journal
+ * has to agree with the screen, and a duplicated literal is how they drift.
  */
 const RUN_INVOICES = {
 	select: INVOICE_SELECT,
@@ -233,8 +225,7 @@ export default function FinancePayrollRunDetail({
 				<table className="w-full text-sm">
 					<thead>
 						<tr className="text-xs text-slate-500 text-left border-b">
-							<th className="p-2">{t("finance_payroll.col.acct")}</th>
-							<th className="p-2">{t("finance_payroll.col.contractor")}</th>
+							<th className="p-2">{t("finance_payroll.col.brigade")}</th>
 							<th className="p-2 text-right">
 								{t("finance_payroll.col.gross")}
 							</th>
@@ -243,29 +234,16 @@ export default function FinancePayrollRunDetail({
 								{t("finance_payroll.col.retention")}
 							</th>
 							<th className="p-2 text-right">
-								{t("finance_payroll.col.adj_net")}
+								{t("finance_payroll.col.total_sc")}
 							</th>
 						</tr>
 					</thead>
 					<tbody>
 						{blocks.map((block) => (
-							<tr
-								key={block.contractorAccountId}
-								className="border-b last:border-0"
-							>
-								<td className="p-2 font-mono">{block.accountCode}</td>
+							<tr key={block.brigadeCode} className="border-b last:border-0">
 								<td className="p-2">
-									{block.contractorLabel}
-									{block.winpayEmployeeCode ? (
-										<span className="ml-1 text-xs text-slate-500">
-											{block.winpayEmployeeCode}
-											{block.isPlaceholder && (
-												<Badge variant="warn">
-													{t("finance_payroll.placeholder")}
-												</Badge>
-											)}
-										</span>
-									) : null}
+									<span className="font-mono">{block.brigadeCode}</span>{" "}
+									<span className="text-slate-500">{block.brigadeLabel}</span>
 								</td>
 								<td className="p-2 text-right font-mono">
 									{formatMoney(block.gross)}
@@ -277,10 +255,30 @@ export default function FinancePayrollRunDetail({
 									{formatMoney(block.retention)}
 								</td>
 								<td className="p-2 text-right font-mono">
-									{formatMoney(block.adjNetRunning)}
+									{formatMoney(block.totalSC)}
 								</td>
 							</tr>
 						))}
+						<tr className="font-semibold border-t">
+							<td colSpan={5} className="p-2">
+								{t("finance_payroll.grand_total")}
+							</td>
+						</tr>
+						<tr className="border-t-2 border-slate-900">
+							<td className="p-2 font-mono">—</td>
+							<td className="p-2 text-right font-mono">
+								{formatMoney(blocks.reduce((s, b) => s + b.gross, 0))}
+							</td>
+							<td className="p-2 text-right font-mono">
+								{formatMoney(blocks.reduce((s, b) => s + b.net, 0))}
+							</td>
+							<td className="p-2 text-right font-mono">
+								{formatMoney(blocks.reduce((s, b) => s + b.retention, 0))}
+							</td>
+							<td className="p-2 text-right font-mono">
+								{formatMoney(blocks.reduce((s, b) => s + b.totalSC, 0))}
+							</td>
+						</tr>
 					</tbody>
 				</table>
 			</div>

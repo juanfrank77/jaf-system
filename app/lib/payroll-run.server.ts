@@ -214,86 +214,148 @@ export async function closePayrollRun(opts: {
 	return { closedCount: run.invoices.length }
 }
 
-export type JournalRow = {
+export type JournalLine = {
+	claroCode: string
+	description: string
+	qty: number
+	unitPrice: number
+	gross: number
+	net: number
+	pctRet: number
+	retention: number
+	adjNet: number
+}
+
+export type JournalJob = {
 	invoiceId: string
 	controlNumber: string
 	avisoNumber: string | null
-	claroCode: string
-}
-
-export type JournalBlock = {
-	contractorAccountId: string
-	accountCode: string
-	contractorLabel: string
-	winpayEmployeeCode: string | null
-	isPlaceholder: boolean
+	lines: JournalLine[]
 	gross: number
 	net: number
 	retention: number
+	adjNet: number
+	/** Running adj. net after this job, within the same brigade. */
 	adjNetRunning: number
-	rows: JournalRow[]
+}
+
+export type JournalBlock = {
+	brigadeCode: string
+	brigadeLabel: string
+	gross: number
+	net: number
+	retention: number
+	/** Final running adj. net for this brigade (= Total SC line). */
+	totalSC: number
+	jobs: JournalJob[]
 }
 
 /**
- * Group a run's invoices into one block per contractor account, with a running
- * cumulative "Adj. net" across the blocks in first-seen order — the figure the
- * paper Production Journal carries down the page.
+ * Group a run's invoices into one block per brigade (via its contractor
+ * account), with per-job sub-totals and per-line detail — the structure the
+ * paper Production Journal carries: brigade → job → service line.
  *
- * Pure: it reads the already-frozen per-invoice amounts, so a later catalog
- * price change can never move a generated run's journal.
+ * Rules from docs/JAF_Finance_answer_Journey.pdf Part 1 § "How the report is built":
+ *  - Columns: ASSOC/code · DESCRIPTION · QTY · UNIT PRICE · GROSS · NET ·
+ *    Pct. RET. (always 0.00) · 10% RET. · ADJ. NET
+ *  - Net = Gross × 0.65; Retention = Net × 0.10; Adj. Net = Net − Retention
+ *    (all truncated to cents per line)
+ *  - Sub Total: Gross, Net, Ret summed per job; Adj. Net = running total
+ *    within the brigade
+ *  - Total SC: ends each brigade; running restarts at the next brigade
+ *  - Order: brigades by number, jobs by M-number (controlNumber) inside
+ *
+ * Pure: it reads the already-frozen per-invoice amounts and the
+ * `contractorShareLines` snapshot, so a later catalog price change can never
+ * move a generated run's journal.
  */
 export function buildJournalBlocks(
 	invoices: Array<{
 		id: string
 		controlNumber: string
 		avisoNumber: string | null
-		grossPayable: unknown
-		retentionAmount: unknown
-		netPayable: unknown
 		contractorAccount: {
 			id: string
 			code: string
 			label: string
-			winpayEmployeeCode: string | null
-			isPlaceholder: boolean
 		} | null
+		contractorShareLines: unknown
 	}>,
 ): JournalBlock[] {
-	const byAccount = new Map<string, JournalBlock>()
+	const byBrigade = new Map<string, JournalBlock>()
 	for (const doc of invoices) {
 		if (!doc.contractorAccount) continue
 		const acc = doc.contractorAccount
-		let block = byAccount.get(acc.id)
+		let block = byBrigade.get(acc.code)
 		if (!block) {
 			block = {
-				contractorAccountId: acc.id,
-				accountCode: acc.code,
-				contractorLabel: acc.label,
-				winpayEmployeeCode: acc.winpayEmployeeCode,
-				isPlaceholder: acc.isPlaceholder,
+				brigadeCode: acc.code,
+				brigadeLabel: acc.label,
 				gross: 0,
 				net: 0,
 				retention: 0,
-				adjNetRunning: 0,
-				rows: [],
+				totalSC: 0,
+				jobs: [],
 			}
-			byAccount.set(acc.id, block)
+			byBrigade.set(acc.code, block)
 		}
-		block.gross += toNumberPrice(doc.grossPayable)
-		block.retention += toNumberPrice(doc.retentionAmount)
-		block.net += toNumberPrice(doc.netPayable)
-		block.rows.push({
+
+		const lines: JournalLine[] = parseShareLines(doc.contractorShareLines)
+		const gross = lines.reduce((s, l) => s + l.gross, 0)
+		const net = lines.reduce((s, l) => s + l.net, 0)
+		const retention = lines.reduce((s, l) => s + l.retention, 0)
+		const adjNet = lines.reduce((s, l) => s + l.adjNet, 0)
+
+		block.gross += gross
+		block.net += net
+		block.retention += retention
+
+		block.jobs.push({
 			invoiceId: doc.id,
 			controlNumber: doc.controlNumber,
 			avisoNumber: doc.avisoNumber,
-			claroCode: "",
+			lines,
+			gross,
+			net,
+			retention,
+			adjNet,
+			adjNetRunning: 0,
 		})
 	}
-	const blocks = [...byAccount.values()]
-	let running = 0
+
+	const blocks = [...byBrigade.values()].sort((a, b) =>
+		a.brigadeCode.localeCompare(b.brigadeCode),
+	)
 	for (const block of blocks) {
-		running += block.net
-		block.adjNetRunning = running
+		block.jobs.sort((a, b) => a.controlNumber.localeCompare(b.controlNumber))
+		// Running adj. net restarts at each brigade (PDF Part 1 § "Brigade total").
+		let running = 0
+		for (const job of block.jobs) {
+			running += job.adjNet
+			job.adjNetRunning = running
+		}
+		block.totalSC = running
 	}
 	return blocks
+}
+
+const PCT_RET_DEFAULT = 0
+
+function parseShareLines(value: unknown): JournalLine[] {
+	if (!Array.isArray(value)) return []
+	return value.map((raw) => {
+		const line = (raw ?? {}) as Record<string, unknown>
+		return {
+			claroCode: String(line.claroCode ?? ""),
+			description: String(line.name ?? ""),
+			qty: toNumberPrice(line.qty),
+			unitPrice: toNumberPrice(line.unitPrice),
+			gross: toNumberPrice(line.gross),
+			net: toNumberPrice(line.net),
+			pctRet:
+				toNumberPrice(line.pctRet ?? line.pctRetention ?? 0) || PCT_RET_DEFAULT,
+			retention: toNumberPrice(line.retention),
+			adjNet: toNumberPrice(line.adjNet),
+		}
+	})
 }

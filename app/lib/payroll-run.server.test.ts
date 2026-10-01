@@ -330,57 +330,78 @@ describe("closePayrollRun", () => {
 })
 
 describe("buildJournalBlocks", () => {
-	it("groups by contractor account and computes a running cumulative Adj. Net across blocks", () => {
+	it("groups by brigade, with per-line detail and running adj. net per brigade", () => {
 		const blocks = buildJournalBlocks([
 			{
 				id: "i1",
-				controlNumber: "JAF-1",
+				controlNumber: "M-JAF-1",
 				avisoNumber: "A1",
-				grossPayable: 2104.4,
-				retentionAmount: 136.79,
-				netPayable: 1231.07,
 				contractorAccount: {
 					id: "acc1",
 					code: "009",
 					label: "Jesús Martínez",
-					winpayEmployeeCode: "E-0231",
-					isPlaceholder: true,
 				},
+				contractorShareLines: [
+					{
+						claroCode: "34012039",
+						name: "REMOCION BAJANTE GPON",
+						qty: 1,
+						unitPrice: 100,
+						gross: 100,
+						sharePercent: 0.65,
+						net: 65,
+						retention: 6.5,
+						adjNet: 58.5,
+					},
+				],
 			},
 			{
 				id: "i2",
-				controlNumber: "JAF-2",
+				controlNumber: "M-JAF-2",
 				avisoNumber: "A2",
-				grossPayable: 3061.4,
-				retentionAmount: 198.99,
-				netPayable: 1790.92,
 				contractorAccount: {
 					id: "acc2",
 					code: "041",
 					label: "Dino Castillo",
-					winpayEmployeeCode: "E-0187",
-					isPlaceholder: true,
 				},
+				contractorShareLines: [
+					{
+						claroCode: "34012040",
+						name: "REEMPLAZO DE BAJANTE",
+						qty: 1,
+						unitPrice: 200,
+						gross: 200,
+						sharePercent: 0.65,
+						net: 130,
+						retention: 13,
+						adjNet: 117,
+					},
+				],
 			},
 		])
 
 		expect(blocks).toHaveLength(2)
-		expect(blocks[0].accountCode).toBe("009")
-		expect(blocks[0].adjNetRunning).toBeCloseTo(1231.07, 2)
-		expect(blocks[1].adjNetRunning).toBeCloseTo(1231.07 + 1790.92, 2)
-		expect(blocks[0].rows.map((r) => r.invoiceId)).toEqual(["i1"])
+		// Sorted by brigade code
+		expect(blocks[0].brigadeCode).toBe("009")
+		expect(blocks[1].brigadeCode).toBe("041")
+		// adjNetRunning restarts per brigade
+		expect(blocks[0].jobs[0].adjNetRunning).toBeCloseTo(58.5, 2)
+		expect(blocks[0].totalSC).toBeCloseTo(58.5, 2)
+		expect(blocks[1].jobs[0].adjNetRunning).toBeCloseTo(117, 2)
+		expect(blocks[1].totalSC).toBeCloseTo(117, 2)
+		// Per-line detail preserved
+		expect(blocks[0].jobs[0].lines[0].claroCode).toBe("34012039")
+		expect(blocks[0].jobs[0].lines[0].description).toBe("REMOCION BAJANTE GPON")
 	})
 
 	it("skips an invoice with no resolved contractor account rather than throwing", () => {
 		const blocks = buildJournalBlocks([
 			{
 				id: "i1",
-				controlNumber: "JAF-1",
+				controlNumber: "M-JAF-1",
 				avisoNumber: null,
-				grossPayable: 100,
-				retentionAmount: 10,
-				netPayable: 55,
 				contractorAccount: null,
+				contractorShareLines: [],
 			},
 		])
 		expect(blocks).toEqual([])
@@ -561,7 +582,7 @@ describe("armAOpenWhere consumers (kept here so they cannot race the sweep)", ()
 		} as never)
 
 		expect(result.payment.grossPayable).toBeCloseTo(100, 2)
-		expect(result.payment.netPayable).toBeCloseTo(100 * 0.65 - 10, 2)
+		expect(result.payment.netPayable).toBeCloseTo(100 * 0.65 * 0.9, 2)
 		expect(result.frozen).toBe(false)
 	})
 })

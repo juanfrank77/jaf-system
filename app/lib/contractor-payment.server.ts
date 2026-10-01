@@ -1,5 +1,5 @@
 import { db } from "~/lib/db.server"
-import { toNumberPrice } from "~/lib/utils"
+import { toNumberPrice, truncateCents } from "~/lib/utils"
 
 export type ContractorPaymentLine = {
 	serviceCodeId: string
@@ -13,6 +13,8 @@ export type ContractorShareLine = ContractorPaymentLine & {
 	gross: number
 	sharePercent: number
 	net: number
+	retention: number
+	adjNet: number
 }
 
 export type ContractorPayment = {
@@ -53,15 +55,32 @@ export function toContractorPaymentLines(
 	})
 }
 
+/**
+ * Compute the brigade's share of an invoice.
+ *
+ * Rules (from docs/JAF_Finance_answer Journey.pdf Part 1):
+ *   Net       = Gross × sharePercent, truncated to cents
+ *   Retention = Net × 10%, truncated to cents  (NOT 10% of gross)
+ *   Adj. Net  = Gross × sharePercent × 0.90, truncated to cents
+ *
+ * Per-line values are truncated independently; the totals are the
+ * sums of those truncated per-line values — matching the paper
+ * Production Journal, which accumulates "Adj. net (running)" down
+ * the page from truncated line totals.
+ */
 export function computeContractorPayment(
 	lines: ContractorPaymentLine[],
 	sharePercent: number,
 ): ContractorPayment {
 	const contractorShareLines: ContractorShareLine[] = (lines ?? []).map(
 		(line) => {
-			const gross = toNumberPrice(line.qty) * toNumberPrice(line.jafPrice)
-			const net = gross * sharePercent
-			return { ...line, gross, sharePercent, net }
+			const gross = truncateCents(
+				toNumberPrice(line.qty) * toNumberPrice(line.jafPrice),
+			)
+			const net = truncateCents(gross * sharePercent)
+			const retention = truncateCents(net * RETENTION_RATE)
+			const adjNet = truncateCents(gross * sharePercent * (1 - RETENTION_RATE))
+			return { ...line, gross, sharePercent, net, retention, adjNet }
 		},
 	)
 	const grossPayable = contractorShareLines.reduce((sum, l) => sum + l.gross, 0)
@@ -69,8 +88,10 @@ export function computeContractorPayment(
 		(sum, l) => sum + l.net,
 		0,
 	)
-	const retentionAmount = grossPayable * RETENTION_RATE
-	const netPayable = netBeforeRetention - retentionAmount
+	const retentionAmount = truncateCents(netBeforeRetention * RETENTION_RATE)
+	const netPayable = truncateCents(
+		grossPayable * sharePercent * (1 - RETENTION_RATE),
+	)
 	return { contractorShareLines, grossPayable, retentionAmount, netPayable }
 }
 

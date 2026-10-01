@@ -7,28 +7,52 @@ describe("generateProductionJournalPdf", () => {
 			{ label: "Run 9/10", generatedAt: new Date("2026-09-10") },
 			[
 				{
-					contractorAccountId: "acc1",
-					accountCode: "009",
-					contractorLabel: "Jesús Martínez",
-					winpayEmployeeCode: "E-0231",
-					isPlaceholder: true,
-					gross: 2104.4,
-					net: 1367.86,
-					retention: 136.79,
-					adjNetRunning: 1231.07,
-					rows: [
+					brigadeCode: "016",
+					brigadeLabel: "CARLOS MARTINEZ",
+					gross: 118.45,
+					net: 76.99,
+					retention: 7.69,
+					totalSC: 69.28,
+					jobs: [
 						{
 							invoiceId: "i1",
-							controlNumber: "JAF-1",
-							avisoNumber: "A1",
-							claroCode: "34006301",
+							controlNumber: "M-3545",
+							avisoNumber: "10354739",
+							lines: [
+								{
+									claroCode: "34012039",
+									description: "REMOCION BAJANTE GPON",
+									qty: 1,
+									unitPrice: 23.0,
+									gross: 23.0,
+									net: 14.95,
+									pctRet: 0,
+									retention: 1.49,
+									adjNet: 13.45,
+								},
+								{
+									claroCode: "34012040",
+									description: "REEMPLAZO DE BAJANTE FRONTAL",
+									qty: 1,
+									unitPrice: 95.45,
+									gross: 95.45,
+									net: 62.04,
+									pctRet: 0,
+									retention: 6.2,
+									adjNet: 55.83,
+								},
+							],
+							gross: 118.45,
+							net: 76.99,
+							retention: 7.69,
+							adjNet: 69.28,
+							adjNetRunning: 69.28,
 						},
 					],
 				},
 			],
 		)
 		expect(bytes.length).toBeGreaterThan(0)
-		// PDF magic bytes
 		expect(bytes.subarray(0, 4).toString("utf-8")).toBe("%PDF")
 	})
 

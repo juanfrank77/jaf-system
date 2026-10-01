@@ -23,7 +23,6 @@ import {
 	fetchInvoiceTotalContext,
 	financeStageAlertDays,
 	invoiceTotalUsed,
-	isMissingAviso,
 	isMissingClaroPdf,
 } from "~/lib/finance-pipeline.server"
 import { parsePaymentDate, paymentForType } from "~/lib/payment-records"
@@ -100,7 +99,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 			alertDays,
 			isAlert,
 			amount,
-			missingAviso: isMissingAviso(inv),
 			missingClaroPdf: isMissingClaroPdf(inv),
 			advanceAmount:
 				advancePayment?.amount != null ? Number(advancePayment.amount) : null,
@@ -401,9 +399,9 @@ export default function FinancePipeline({
 										})}
 									</span>
 								)}
-								{(row.missingAviso || row.missingClaroPdf) && (
+								{row.missingClaroPdf && (
 									<span className="text-amber-700">
-										{t("finance_receivables.missing_docs")}
+										{t("finance_receivables.missing_claro_pdf")}
 									</span>
 								)}
 							</div>

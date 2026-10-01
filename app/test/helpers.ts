@@ -1,4 +1,5 @@
 import { db } from "~/lib/db.server"
+import { toNumberPrice, truncateCents } from "~/lib/utils"
 
 /**
  * Find-or-create a `ServiceCode` by its Claro code, returning the row.
@@ -271,6 +272,7 @@ export async function seedSweptInvoice(
 	opts: {
 		generatedById: string
 		contractorAccountId: string
+		contractorAccountCode?: string
 		runLabel?: string
 		grossPayable?: number
 		retentionAmount?: number
@@ -289,12 +291,35 @@ export async function seedSweptInvoice(
 		contractorAccountId: opts.contractorAccountId,
 		payrollRunId: run.id,
 	})
+	// Build a minimal contractorShareLines consistent with the frozen totals
+	// so buildJournalBlocks (which now reads shareLines, not the frozen
+	// total columns) has per-line detail to render.
+	const account = await db.contractorAccount.findUnique({
+		where: { id: opts.contractorAccountId },
+		select: { sharePercent: true },
+	})
+	const sharePercent = toNumberPrice(account?.sharePercent ?? 0.65)
 	await db.jafInvoice.update({
 		where: { id: invoice.id },
 		data: {
 			grossPayable: gross,
 			retentionAmount: retention,
 			netPayable: opts.netPayable ?? 0,
+			contractorShareLines: [
+				{
+					serviceCodeId: "test-sc",
+					claroCode: "TEST-LINE",
+					name: "Test Service Line",
+					qty: 1,
+					unitPrice: gross / 1,
+					lineAmount: gross,
+					gross,
+					sharePercent,
+					net: truncateCents(gross * sharePercent),
+					retention: truncateCents(gross * sharePercent * 0.1),
+					adjNet: truncateCents(gross * sharePercent * 0.9),
+				},
+			] as never,
 		},
 	})
 	return { run, invoice }

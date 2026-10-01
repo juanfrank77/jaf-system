@@ -18,7 +18,6 @@ import {
 	computeFinanceStage,
 	financeLineItems,
 	invoiceTotalUsed,
-	isMissingAviso,
 	isMissingClaroPdf,
 } from "~/lib/finance-pipeline.server"
 import { armAOpenWhere } from "~/lib/payroll-run.server"
@@ -100,7 +99,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		payment,
 		frozen,
 		contractorAccountResolved: frozen || account !== null,
-		missingAviso: isMissingAviso(doc),
 		missingClaroPdf: isMissingClaroPdf(doc),
 	}
 }
@@ -154,7 +152,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	if (stage !== "PBCC_REQUEST_PENDING") {
 		throw redirect(`/finance/receivables`)
 	}
-	if (isMissingAviso(doc) || isMissingClaroPdf(doc)) {
+	if (isMissingClaroPdf(doc)) {
 		throw redirect(`/finance/receivables`)
 	}
 
@@ -250,8 +248,14 @@ export default function PbccRequest({ loaderData }: Route.ComponentProps) {
 		payment,
 		frozen,
 		contractorAccountResolved,
+		missingClaroPdf,
 	} = loaderData
 	const { t } = useTranslation()
+
+	const preCertSheet = doc.preCertSheets?.[0]
+	const supervName = preCertSheet?.sigSupervisorName ?? "—"
+	const subconName = preCertSheet?.sigSubcontractorName ?? "—"
+	const claroName = preCertSheet?.sigClaroName ?? "—"
 
 	return (
 		<div className="space-y-5">
@@ -306,6 +310,9 @@ export default function PbccRequest({ loaderData }: Route.ComponentProps) {
 					{!contractorAccountResolved && (
 						<Badge variant="warn">{t("finance_pbcc.account_unmapped")}</Badge>
 					)}
+					{missingClaroPdf && (
+						<Badge variant="warn">{t("finance_pbcc.missing_claro_pdf")}</Badge>
+					)}
 				</div>
 				<table className="w-full">
 					<tbody>
@@ -342,6 +349,40 @@ export default function PbccRequest({ loaderData }: Route.ComponentProps) {
 				<p className="text-slate-600">
 					{t("finance_pbcc.bank_schedule_blocked")}
 				</p>
+			</div>
+
+			{/* Pre-certification sheet: Doc 3, with three signer names. */}
+			<div className="bg-white border rounded-lg p-4 space-y-2 text-sm">
+				{preCertSheet?.pdfPath ? (
+					<div className="flex items-center justify-between">
+						<div>
+							<h2 className="font-semibold">
+								{t("finance_pbcc.precert_title")}
+							</h2>
+							{preCertSheet && (
+								<p className="text-xs text-slate-600 mt-1">
+									{t("finance_pbcc.precert_signers", {
+										supervisor: supervName,
+										contractor: subconName,
+										claro: claroName,
+									})}
+								</p>
+							)}
+						</div>
+						<a
+							href={`/files/precert/${doc.id}-v${preCertSheet.version}.pdf`}
+							className="text-primary underline text-sm"
+						>
+							{t("finance_pbcc.precert_download")}
+						</a>
+					</div>
+				) : (
+					<div className="flex items-center justify-between">
+						<p className="font-medium text-amber-900">
+							{t("finance_pbcc.precert_missing")}
+						</p>
+					</div>
+				)}
 			</div>
 
 			<div className="flex flex-wrap items-center gap-2">

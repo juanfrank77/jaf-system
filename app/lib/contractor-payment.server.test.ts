@@ -24,14 +24,14 @@ describe("computeContractorPayment", () => {
 			],
 			0.65,
 		)
-		expect(result.grossPayable).toBeCloseTo(211.72, 2)
-		// 5 × 42.343 = 211.715 gross; × 0.65 = 137.61475 net.
+		// 5 × 42.343 = 211.715 gross; truncated to 211.71
+		expect(result.grossPayable).toBeCloseTo(211.71, 2)
+		// Net = truncate(211.715 × 0.65, 2) = truncate(137.61475, 2) = 137.61
 		expect(result.contractorShareLines[0].net).toBeCloseTo(137.61, 2)
-		expect(result.retentionAmount).toBeCloseTo(21.17, 2) // 10% of gross
-		expect(result.netPayable).toBeCloseTo(
-			result.grossPayable * 0.65 - result.retentionAmount,
-			2,
-		)
+		// Retention = 10% of NET (not gross): truncate(137.61475 × 0.10, 2) = truncate(13.761475, 2) = 13.76
+		expect(result.retentionAmount).toBeCloseTo(13.76, 2)
+		// netPayable = truncate(211.715 × 0.65 × 0.90, 2) = truncate(123.853275, 2) = 123.85
+		expect(result.netPayable).toBeCloseTo(123.85, 2)
 	})
 
 	it("computes at an overridden 0.80 share (equipment sub-accounts)", () => {
@@ -47,9 +47,10 @@ describe("computeContractorPayment", () => {
 			],
 			0.8,
 		)
+		// Net = 500 × 0.8 = 400; Retention = 10% of net = 40; netPayable = 400 − 40 = 360
 		expect(result.contractorShareLines[0].net).toBeCloseTo(400, 2)
-		expect(result.retentionAmount).toBeCloseTo(50, 2) // 10% of 500 gross
-		expect(result.netPayable).toBeCloseTo(400 - 50, 2)
+		expect(result.retentionAmount).toBeCloseTo(40, 2) // 10% of NET (not gross)
+		expect(result.netPayable).toBeCloseTo(360, 2)
 	})
 
 	it("returns all zeros for an empty line list, never throws", () => {

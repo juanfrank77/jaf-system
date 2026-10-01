@@ -2,7 +2,11 @@ import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Badge } from "~/components/ui/badge"
-import { resolveContractorAccounts } from "~/lib/contractor-payment.server"
+import {
+	computeContractorPayment,
+	resolveContractorAccounts,
+	toContractorPaymentLines,
+} from "~/lib/contractor-payment.server"
 import { db } from "~/lib/db.server"
 import { armAOpenWhere } from "~/lib/payroll-run.server"
 import { requireRole } from "~/lib/permissions.server"
@@ -12,6 +16,22 @@ import type { Route } from "./+types/_app.finance.queue"
 export const meta: Route.MetaFunction = () => [
 	{ title: "Packets in — JAF Ops" },
 ]
+
+type QueueJob = {
+	id: string
+	controlNumber: string
+	avisoNumber: string | null
+	contractorLabel: string | null
+	/** Gross invoice total (live-computed est. for unswept, frozen for swept). */
+	gross: number
+	/** Brigade's payable: gross × 0.65 × 0.90, truncated to cents. */
+	estPayable: number
+	/** True when the job has been swept into a payroll run (frozen figures). */
+	frozen: boolean
+	releasedAt: Date | null
+	accountResolved: boolean
+	missingClaroPdf: boolean
+}
 
 export async function loader({ request }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])
@@ -23,8 +43,11 @@ export async function loader({ request }: Route.LoaderArgs) {
 			id: true,
 			controlNumber: true,
 			avisoNumber: true,
+			claroPdfPath: true,
 			releasedToFinanceAt: true,
+			grossPayable: true,
 			netPayable: true,
+			jafInvoiceLines: true,
 			contractorAccountCode: true,
 			preCertSheets: {
 				orderBy: { version: "desc" },
@@ -39,42 +62,107 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const resolved = await resolveContractorAccounts(
 		docs.map((d) => d.contractorAccountCode),
 	)
-	const jobs = docs.map((d) => ({
-		id: d.id,
-		controlNumber: d.controlNumber,
-		avisoNumber: d.avisoNumber,
-		contractorLabel:
-			d.preCertSheets[0]?.sigSubcontractorName ??
-			d.brigade?.leadName ??
-			d.brigade?.name ??
-			null,
-		netPayable: d.netPayable != null ? toNumberPrice(d.netPayable) : null,
-		releasedAt: d.releasedToFinanceAt,
-		// Not yet swept into a run, so resolved live for the row's badge —
-		// this does NOT persist contractorAccountId (only generateRun does).
-		accountResolved: d.contractorAccountCode
-			? resolved.has(d.contractorAccountCode)
-			: false,
-	}))
-	return { user, jobs }
+	const jobs: QueueJob[] = docs.map((d) => {
+		const frozen = d.grossPayable != null
+		const sharePercent =
+			resolved.get(d.contractorAccountCode ?? "")?.sharePercent ?? 0.65
+		const payment = frozen
+			? {
+					grossPayable: toNumberPrice(d.grossPayable),
+					netPayable: toNumberPrice(d.netPayable),
+					retentionAmount: 0,
+					contractorShareLines: [],
+				}
+			: computeContractorPayment(
+					toContractorPaymentLines(d.jafInvoiceLines),
+					sharePercent,
+				)
+		return {
+			id: d.id,
+			controlNumber: d.controlNumber,
+			avisoNumber: d.avisoNumber,
+			contractorLabel:
+				d.preCertSheets[0]?.sigSubcontractorName ??
+				d.brigade?.leadName ??
+				d.brigade?.name ??
+				null,
+			gross: payment.grossPayable,
+			estPayable: payment.netPayable,
+			frozen,
+			releasedAt: d.releasedToFinanceAt,
+			// Not yet swept into a run, so resolved live for the row's badge —
+			// this does NOT persist contractorAccountId (only generateRun does).
+			accountResolved: d.contractorAccountCode
+				? resolved.has(d.contractorAccountCode)
+				: false,
+			missingClaroPdf: !d.claroPdfPath || d.claroPdfPath.trim() === "",
+		}
+	})
+
+	// Awaiting payroll: jobs already swept into an open run that Carmen has not
+	// marked PAID yet. These are NOT on the L1 table — they live on L3 — but the
+	// tile shows their count and aggregate est. payable (frozen figures).
+	const awaitingPayrollDocs = await db.jafInvoice.findMany({
+		where: {
+			payrollRunId: { not: null },
+			payablesClosedAt: null,
+		},
+		select: {
+			grossPayable: true,
+			netPayable: true,
+		},
+	})
+	const awaitingPayrollCount = awaitingPayrollDocs.length
+	const awaitingPayrollGross = awaitingPayrollDocs.reduce(
+		(sum, d) => sum + toNumberPrice(d.grossPayable),
+		0,
+	)
+	const awaitingPayrollEst = awaitingPayrollDocs.reduce(
+		(sum, d) => sum + toNumberPrice(d.netPayable),
+		0,
+	)
+
+	// New packets: jobs released to finance, not yet swept into a run.
+	const newPacketGross = jobs.reduce((sum, j) => sum + j.gross, 0)
+	const newPacketEst = jobs.reduce((sum, j) => sum + j.estPayable, 0)
+	return {
+		user,
+		jobs,
+		tiles: {
+			newPackets: {
+				count: jobs.length,
+				gross: newPacketGross,
+				estPayable: newPacketEst,
+			},
+			awaitingPayroll: {
+				count: awaitingPayrollCount,
+				gross: awaitingPayrollGross,
+				estPayable: awaitingPayrollEst,
+			},
+		},
+	}
 }
 
 export default function FinanceQueue({ loaderData }: Route.ComponentProps) {
-	const { jobs } = loaderData
+	const { jobs, tiles } = loaderData
 	const { t } = useTranslation()
-	const newPackets = jobs.filter((j) => j.netPayable == null).length
-	const awaitingPayroll = jobs.length
 	return (
 		<div className="space-y-4">
 			<div className="flex items-center justify-between">
 				<h1 className="text-xl font-semibold">{t("finance_queue.title")}</h1>
 				<div className="flex gap-2 text-xs">
 					<span className="bg-slate-100 px-3 py-1 rounded-full">
-						{t("finance_queue.stat.new_packets", { count: newPackets })}
+						{t("finance_queue.stat.new_packets_summary", {
+							count: tiles.newPackets.count,
+							gross: formatMoney(tiles.newPackets.gross),
+							est: formatMoney(tiles.newPackets.estPayable),
+						})}
 					</span>
 					<span className="bg-slate-100 px-3 py-1 rounded-full">
-						{t("finance_queue.stat.awaiting_payroll", {
-							count: awaitingPayroll,
+						{t("finance_queue.stat.awaiting_payroll_summary", {
+							count: tiles.awaitingPayroll.count,
+							gross: formatMoney(tiles.awaitingPayroll.gross),
+							est: formatMoney(tiles.awaitingPayroll.estPayable),
 						})}
 					</span>
 				</div>
@@ -91,7 +179,10 @@ export default function FinanceQueue({ loaderData }: Route.ComponentProps) {
 								<th className="p-2">{t("finance_queue.col.aviso")}</th>
 								<th className="p-2">{t("finance_queue.col.contractor")}</th>
 								<th className="p-2 text-right">
-									{t("finance_queue.col.amount")}
+									{t("finance_queue.col.gross")}
+								</th>
+								<th className="p-2 text-right">
+									{t("finance_queue.col.est_payable")}
 								</th>
 								<th className="p-2">{t("finance_queue.col.packet")}</th>
 							</tr>
@@ -109,13 +200,28 @@ export default function FinanceQueue({ loaderData }: Route.ComponentProps) {
 									</td>
 									<td className="p-2">{r.avisoNumber ?? "—"}</td>
 									<td className="p-2">{r.contractorLabel ?? "—"}</td>
-									<td className="p-2 text-right">
-										{r.netPayable == null ? "—" : formatMoney(r.netPayable)}
+									<td className="p-2 text-right font-mono">
+										{formatMoney(r.gross)}
+									</td>
+									<td className="p-2 text-right font-mono">
+										{r.frozen
+											? formatMoney(r.estPayable)
+											: `${formatMoney(r.estPayable)} ${t("finance_queue.est_label")}`}
 									</td>
 									<td className="p-2 space-x-1">
+										{!r.frozen && (
+											<Badge variant="info">
+												{t("finance_queue.est_label")}
+											</Badge>
+										)}
 										{!r.accountResolved && (
 											<Badge variant="warn">
 												{t("finance_queue.account_unmapped")}
+											</Badge>
+										)}
+										{r.missingClaroPdf && (
+											<Badge variant="warn">
+												{t("finance_queue.missing_claro_pdf")}
 											</Badge>
 										)}
 									</td>

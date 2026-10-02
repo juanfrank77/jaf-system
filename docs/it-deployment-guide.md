@@ -142,6 +142,7 @@ psql "$DATABASE_URL" \
 
 All five counts must be 0. If any is non-zero, stop — that data is unrecoverable once `migrate deploy` runs below.
 
+
 ### The finance migration is additive, but it has one operational precondition
 
 Unlike the migration above, the finance ("Arm A") migration does not drop
@@ -237,11 +238,20 @@ Once the app is live, most future changes are updates to this same install, not 
    pnpm install
    ```
 
-3. **Apply pending migrations.** Always use the script, never `prisma migrate deploy` by hand — it also regenerates the Prisma client, which is gitignored and won't otherwise match the newly-pulled schema:
+3. **Build** — before migrating, not after:
    ```bash
+   pnpm run build
+   ```
+
+4. **Stop the service, apply pending migrations, start it again.** Always use the script, never `prisma migrate deploy` by hand — it also regenerates the Prisma client, which is gitignored and won't otherwise match the newly-pulled schema:
+   ```bash
+   sudo systemctl stop jaf-operations
    ./scripts/apply-migrations.sh
+   sudo systemctl start jaf-operations
+   sudo systemctl status jaf-operations   # confirm it came back up clean
    ```
    `migrate deploy` is idempotent and forward-only: it only runs migrations `_prisma_migrations` doesn't already record, and never rolls back. Before running it, check whether the change notes for this update call out anything destructive (a dropped table or column) — if a migration is provably dropping already-empty schema, no extra care is needed; if it might affect real data, verify row counts against this database first, the same way `installer_v3`'s original migration was verified (§7).
+
 
    One migration is additive rather than destructive, but still needs a decision from us before the app is used: the finance migration backfills nothing, so the first payroll run afterwards would sweep the entire historical released backlog, not just outstanding work. See **§7, "The finance migration is additive, but it has one operational precondition"** — resolve it before anyone clicks "Generate run".
 

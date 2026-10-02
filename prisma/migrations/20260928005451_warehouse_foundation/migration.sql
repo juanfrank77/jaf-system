@@ -1,6 +1,10 @@
 -- Warehouse foundation: rename the van-scoped ledger to the unified `stock_movement`
 -- ledger (DATA-PRESERVING), extend it, and add the warehouse tables/enums.
 --
+-- This is the SINGLE, COMPLETE warehouse schema change (rename + extend + `note` +
+-- warehouse tables/enums). It must not be split across several migrations, and it must
+-- not be regenerated.
+--
 -- Hand-edited from Prisma's generated DROP/CREATE to `ALTER ... RENAME` so existing
 -- prod `van_movement` rows survive. This migration + the renamed application code must
 -- deploy together (a rename is not backward-compatible). Do NOT let a future
@@ -37,7 +41,8 @@ ALTER INDEX "van_movement_serial_idx" RENAME TO "stock_movement_serial_idx";
 ALTER TABLE "stock_movement" RENAME CONSTRAINT "van_movement_vanId_fkey" TO "stock_movement_vanId_fkey";
 ALTER TABLE "stock_movement" RENAME CONSTRAINT "van_movement_byUserId_fkey" TO "stock_movement_byUserId_fkey";
 
--- 6. Extend the ledger: new columns + make vanId nullable (warehouse rows have no van).
+-- 6. Extend the ledger: new columns (including `note`) + make vanId nullable
+--    (warehouse rows have no van).
 ALTER TABLE "stock_movement"
   ADD COLUMN     "warehouseId" TEXT,
   ADD COLUMN     "kind" "MovementKind" NOT NULL DEFAULT 'SERIAL',
@@ -45,6 +50,7 @@ ALTER TABLE "stock_movement"
   ADD COLUMN     "refRepairIntakeId" TEXT,
   ADD COLUMN     "refDeliveryId" TEXT,
   ADD COLUMN     "refDocId" TEXT,
+  ADD COLUMN     "note" TEXT,
   ALTER COLUMN "vanId" DROP NOT NULL;
 
 -- 7. One-time backfill: existing accessory (non-serialized) rows are BULK.

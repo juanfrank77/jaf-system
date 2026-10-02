@@ -22,7 +22,7 @@ async function seedOwnBrigades(count: number) {
 async function accountFor(brigadeId: string, code: string) {
 	return db.contractorAccount.findFirst({
 		where: { brigadeId, code },
-		select: { id: true, sharePercent: true, brigadeId: true, code: true },
+		select: { id: true, active: true, brigadeId: true, code: true },
 	})
 }
 
@@ -34,7 +34,7 @@ describe("seedContractorAccounts", () => {
 		for (const brigade of brigades) {
 			const account = await accountFor(brigade.id, brigade.code as string)
 			expect(account).not.toBeNull()
-			expect(account?.sharePercent.toString()).toBe("0.65")
+			expect(account?.active).toBe(true)
 			expect(account?.brigadeId).toBe(brigade.id)
 			// Track it so cleanup removes the row before the brigade.
 			if (account) t.track("contractorAccount", account)
@@ -60,5 +60,24 @@ describe("seedContractorAccounts", () => {
 		})) {
 			t.track("contractorAccount", a)
 		}
+	})
+
+	it("deactivates the account when the brigade is deactivated", async () => {
+		const brigade = t.track("brigade", await seedBrigade())
+		await seedContractorAccounts(db)
+
+		const account = await accountFor(brigade.id, brigade.code as string)
+		expect(account).not.toBeNull()
+		expect(account?.active).toBe(true)
+		if (account) t.track("contractorAccount", account)
+
+		await db.brigade.update({
+			where: { id: brigade.id },
+			data: { active: false },
+		})
+		await seedContractorAccounts(db)
+
+		const after = await accountFor(brigade.id, brigade.code as string)
+		expect(after?.active).toBe(false)
 	})
 })

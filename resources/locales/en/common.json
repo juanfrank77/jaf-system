@@ -905,7 +905,15 @@
 			"gross": "Gross",
 			"est_payable": "Est. payable",
 			"packet": "Packet"
-		}
+		},
+		"pagination": {
+			"summary": "{{from}}–{{to}} of {{total}}",
+			"page": "Page {{current}} of {{total}}",
+			"prev": "Prev",
+			"next": "Next"
+		},
+		"generate_run_selected": "Generate run ({{count}} selected)",
+		"select_hint": "Untick jobs you want to hold back — only checked jobs enter the run."
 	},
 	"finance_verify": {
 		"aviso_amount_prefilled": "Aviso amount {{amount}} captured and matched by the supervisor.",

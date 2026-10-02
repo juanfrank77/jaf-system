@@ -41,10 +41,7 @@ afterAll(() => t.cleanup())
 describe("generateRun", () => {
 	it("sweeps every Arm-A-open invoice into a new run, resolving and freezing its contractor account + payment", async () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
-		const account = t.track(
-			"contractorAccount",
-			await seedContractorAccount({ sharePercent: 0.65 }),
-		)
+		const account = t.track("contractorAccount", await seedContractorAccount())
 		const doc = t.track(
 			"jafInvoice",
 			await seedFinanceableInvoice({
@@ -160,6 +157,75 @@ describe("generateRun", () => {
 			where: { id: doc.id },
 		})
 		expect(reloaded.payrollRunId).toBeNull()
+	})
+
+	it("excludes a job whose brigade account is inactive (deactivated brigade)", async () => {
+		// PDF Part 3 §14.4 (OPEN): an inactive account is not swept — the job
+		// stays open on L1 visible to finance — but already-swept runs close
+		// regardless, so the brigade still gets paid for released work.
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		const account = t.track(
+			"contractorAccount",
+			await seedContractorAccount({ code: "BRG-INACT", active: false }),
+		)
+		const doc = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+			}),
+		)
+
+		const { run } = await generateRun({
+			generatedById: finance.id,
+			label: "R-inactive",
+		})
+		t.track("payrollRun", run as { id: string })
+		const reloaded = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: doc.id },
+		})
+		// Inactive accounts are filtered out by resolveContractorAccounts, so
+		// the job is left open — not claimed by this run.
+		expect(reloaded.payrollRunId).toBeNull()
+	})
+
+	it("sweep only the selected job IDs when selectedIds is provided (§15.4)", async () => {
+		// PDF Part 3 §15.4: Lissette can untick jobs before generating. Only the
+		// selected subset enters the run; the rest stay open on L1.
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		const account = t.track(
+			"contractorAccount",
+			await seedContractorAccount({ code: "BRG-SELECT" }),
+		)
+		const keep = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+			}),
+		)
+		const swept = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+			}),
+		)
+
+		const { run } = await generateRun({
+			generatedById: finance.id,
+			label: "R-selective",
+			selectedIds: [swept.id],
+		})
+		t.track("payrollRun", run as { id: string })
+
+		const sweptAfter = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: swept.id },
+		})
+		expect(sweptAfter.payrollRunId).toBe(run.id)
+
+		const keptAfter = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: keep.id },
+		})
+		// The unticked job stays open on L1 — not swept.
+		expect(keptAfter.payrollRunId).toBeNull()
 	})
 
 	it("excludes a job that already has a PBCC_ADVANCE payment record (legacy boundary)", async () => {
@@ -563,10 +629,7 @@ describe("armAOpenWhere consumers (kept here so they cannot race the sweep)", ()
 	it("loader live-computes the contractor payment for a job not yet swept into a run", async () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		mocks.requireRole.mockResolvedValue({ user: finance })
-		const account = t.track(
-			"contractorAccount",
-			await seedContractorAccount({ sharePercent: 0.65 }),
-		)
+		const account = t.track("contractorAccount", await seedContractorAccount())
 		const doc = t.track(
 			"jafInvoice",
 			await seedFinanceableInvoice({

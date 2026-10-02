@@ -23,7 +23,7 @@ describe("finance test fixtures", () => {
 			await seedContractorAccount({ brigadeId: brigade.id }),
 		)
 		expect(account.brigadeId).toBe(brigade.id)
-		expect(account.sharePercent.toString()).toBe("0.65")
+		expect(account.active).toBe(true)
 	})
 
 	it("seedFinanceableInvoice creates a released, unclosed, financeable job", async () => {

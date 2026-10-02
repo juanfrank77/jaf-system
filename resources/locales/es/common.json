@@ -905,7 +905,15 @@
 			"gross": "Bruto",
 			"est_payable": "Est. a pagar",
 			"packet": "Paquete"
-		}
+		},
+		"pagination": {
+			"summary": "{{from}}–{{to}} de {{total}}",
+			"page": "Página {{current}} de {{total}}",
+			"prev": "Anterior",
+			"next": "Siguiente"
+		},
+		"generate_run_selected": "Generar corrida ({{count}} seleccionados)",
+		"select_hint": "Desmarque los trabajos que desea posponer; solo los marcados ingresan a la corrida."
 	},
 	"finance_verify": {
 		"aviso_amount_prefilled": "Monto del Aviso {{amount}} capturado y cotejado por el supervisor.",

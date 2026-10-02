@@ -38,7 +38,18 @@ export async function action({ request }: Route.ActionArgs) {
 	const label =
 		(form.get("label") as string | null)?.trim() ||
 		new Date().toLocaleDateString()
-	const { run } = await generateRun({ generatedById: user.id, label })
+	// PDF Part 3 §15.4: Lissette can untick jobs before generating. The L1 queue
+	// submits selected IDs; when none are sent we default to "everything ready"
+	// (all Arm-A-open jobs).
+	const selectedIdsRaw = form.get("selectedIds") as string | null
+	const selectedIds = selectedIdsRaw
+		? selectedIdsRaw.split(",").filter(Boolean)
+		: undefined
+	const { run } = await generateRun({
+		generatedById: user.id,
+		label,
+		selectedIds,
+	})
 	throw redirect(`/finance/payroll/${run.id}`)
 }
 

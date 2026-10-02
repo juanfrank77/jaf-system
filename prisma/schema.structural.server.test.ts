@@ -13,8 +13,6 @@ describe("Arm A schema", () => {
 				data: { code: runToken("ACC"), label: "Test Contractor" },
 			}),
 		)
-		expect(account.sharePercent.toString()).toBe("0.65")
-		expect(account.isPlaceholder).toBe(true)
 		expect(account.active).toBe(true)
 	})
 

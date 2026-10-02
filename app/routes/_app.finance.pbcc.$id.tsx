@@ -84,10 +84,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 				retentionAmount: toNumberPrice(doc.retentionAmount),
 				netPayable: toNumberPrice(doc.netPayable),
 			}
-		: computeContractorPayment(
-				toContractorPaymentLines(doc.jafInvoiceLines),
-				account?.sharePercent ?? 0.65,
-			)
+		: computeContractorPayment(toContractorPaymentLines(doc.jafInvoiceLines))
 
 	return {
 		doc,

@@ -1,6 +1,12 @@
 import { db } from "~/lib/db.server"
 import { toNumberPrice, truncateCents } from "~/lib/utils"
 
+/** Fixed brigade share of a JAF invoice. There are no per-account or per-line
+ * overrides — see docs/JAF_Finance_answer_Journey.pdf Part 2 §009D/80%.
+ * Snapshotted onto each contractorShareLines row at sweep time so a later
+ * catalog or rate change never rewrites an already-generated run. */
+export const CONTRACTOR_SHARE_PERCENT = 0.65
+
 export type ContractorPaymentLine = {
 	serviceCodeId: string
 	claroCode: string
@@ -58,10 +64,10 @@ export function toContractorPaymentLines(
 /**
  * Compute the brigade's share of an invoice.
  *
- * Rules (from docs/JAF_Finance_answer Journey.pdf Part 1):
- *   Net       = Gross × sharePercent, truncated to cents
+ * Rules (from docs/JAF_Finance_answer_Journey.pdf Part 1 § "How the report is built"):
+ *   Net       = Gross × 0.65 (CONTRACTOR_SHARE_PERCENT), truncated to cents
  *   Retention = Net × 10%, truncated to cents  (NOT 10% of gross)
- *   Adj. Net  = Gross × sharePercent × 0.90, truncated to cents
+ *   Adj. Net  = Gross × 0.65 × 0.90, truncated to cents
  *
  * Per-line values are truncated independently; the totals are the
  * sums of those truncated per-line values — matching the paper
@@ -70,17 +76,25 @@ export function toContractorPaymentLines(
  */
 export function computeContractorPayment(
 	lines: ContractorPaymentLine[],
-	sharePercent: number,
 ): ContractorPayment {
 	const contractorShareLines: ContractorShareLine[] = (lines ?? []).map(
 		(line) => {
 			const gross = truncateCents(
 				toNumberPrice(line.qty) * toNumberPrice(line.jafPrice),
 			)
-			const net = truncateCents(gross * sharePercent)
+			const net = truncateCents(gross * CONTRACTOR_SHARE_PERCENT)
 			const retention = truncateCents(net * RETENTION_RATE)
-			const adjNet = truncateCents(gross * sharePercent * (1 - RETENTION_RATE))
-			return { ...line, gross, sharePercent, net, retention, adjNet }
+			const adjNet = truncateCents(
+				gross * CONTRACTOR_SHARE_PERCENT * (1 - RETENTION_RATE),
+			)
+			return {
+				...line,
+				gross,
+				sharePercent: CONTRACTOR_SHARE_PERCENT,
+				net,
+				retention,
+				adjNet,
+			}
 		},
 	)
 	const grossPayable = contractorShareLines.reduce((sum, l) => sum + l.gross, 0)
@@ -90,24 +104,24 @@ export function computeContractorPayment(
 	)
 	const retentionAmount = truncateCents(netBeforeRetention * RETENTION_RATE)
 	const netPayable = truncateCents(
-		grossPayable * sharePercent * (1 - RETENTION_RATE),
+		grossPayable * CONTRACTOR_SHARE_PERCENT * (1 - RETENTION_RATE),
 	)
 	return { contractorShareLines, grossPayable, retentionAmount, netPayable }
 }
 
 export async function resolveContractorAccount(
 	contractorAccountCode: string | null | undefined,
-): Promise<{ id: string; sharePercent: number } | null> {
+): Promise<{ id: string } | null> {
 	if (!contractorAccountCode) return null
-	const account = await db.contractorAccount.findUnique({
-		where: { code: contractorAccountCode },
-		select: { id: true, sharePercent: true },
+	const account = await db.contractorAccount.findFirst({
+		where: { code: contractorAccountCode, active: true },
+		select: { id: true },
 	})
 	if (!account) return null
-	return { id: account.id, sharePercent: toNumberPrice(account.sharePercent) }
+	return { id: account.id }
 }
 
-type ResolvedContractorAccount = { id: string; sharePercent: number }
+type ResolvedContractorAccount = { id: string }
 
 /**
  * Resolve a batch of `contractorAccountCode`s in ONE query, keyed by code.
@@ -121,10 +135,12 @@ type ResolvedContractorAccount = { id: string; sharePercent: number }
  * winner between two accounts; `get` returning `undefined` is exactly the
  * "unmapped" case the callers already handle.
  *
- * Deliberately identical in behaviour to the single-code resolver — including
- * NOT filtering on `active`. Filtering inactive accounts out changes which jobs
- * the sweep claims, so it is a separate decision, not something to smuggle in
- * with a performance change.
+ * Filtering on `active: true` (from the PDF Part 3 §14.4 default): a job whose
+ * brigade has been deactivated is left out of the result map, so
+ * `generateRun` skips it rather than sweeping it. The job stays open on L1 and
+ * visible — it is not hidden — so the brigade still gets paid for work already
+ * released (jobs already in a run are frozen and will close regardless), but
+ * no NEW work can be swept under a deactivated brigade.
  */
 export async function resolveContractorAccounts(
 	codes: ReadonlyArray<string | null | undefined>,
@@ -132,13 +148,8 @@ export async function resolveContractorAccounts(
 	const distinct = [...new Set(codes.filter((c): c is string => !!c))]
 	if (distinct.length === 0) return new Map()
 	const accounts = await db.contractorAccount.findMany({
-		where: { code: { in: distinct } },
-		select: { id: true, code: true, sharePercent: true },
+		where: { code: { in: distinct }, active: true },
+		select: { id: true, code: true },
 	})
-	return new Map(
-		accounts.map((a) => [
-			a.code,
-			{ id: a.id, sharePercent: toNumberPrice(a.sharePercent) },
-		]),
-	)
+	return new Map(accounts.map((a) => [a.code, { id: a.id }]))
 }

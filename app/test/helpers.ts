@@ -1,5 +1,6 @@
+import { CONTRACTOR_SHARE_PERCENT } from "~/lib/contractor-payment.server"
 import { db } from "~/lib/db.server"
-import { toNumberPrice, truncateCents } from "~/lib/utils"
+import { truncateCents } from "~/lib/utils"
 
 /**
  * Find-or-create a `ServiceCode` by its Claro code, returning the row.
@@ -245,6 +246,7 @@ export async function seedContractorAccount(
 		code?: string
 		label?: string
 		brigadeId?: string
+		active?: boolean
 	} = {},
 ) {
 	const code = overrides.code ?? runToken("ACC")
@@ -253,6 +255,7 @@ export async function seedContractorAccount(
 			code,
 			label: overrides.label ?? `Test Contractor ${code}`,
 			brigadeId: overrides.brigadeId ?? null,
+			active: overrides.active ?? true,
 		},
 	})
 }
@@ -294,11 +297,7 @@ export async function seedSweptInvoice(
 	// Build a minimal contractorShareLines consistent with the frozen totals
 	// so buildJournalBlocks (which now reads shareLines, not the frozen
 	// total columns) has per-line detail to render.
-	const account = await db.contractorAccount.findUnique({
-		where: { id: opts.contractorAccountId },
-		select: { sharePercent: true },
-	})
-	const sharePercent = toNumberPrice(account?.sharePercent ?? 0.65)
+	const sharePercent = CONTRACTOR_SHARE_PERCENT
 	await db.jafInvoice.update({
 		where: { id: invoice.id },
 		data: {

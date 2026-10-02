@@ -21,10 +21,7 @@ describe("L2 Packet", () => {
 	it("loader returns the frozen payment, unchanged, for a job already swept into a run", async () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		mocks.requireRole.mockResolvedValue({ user: finance })
-		const account = t.track(
-			"contractorAccount",
-			await seedContractorAccount({ sharePercent: 0.65 }),
-		)
+		const account = t.track("contractorAccount", await seedContractorAccount())
 		// Simulate the swept state directly rather than calling generateRun:
 		// the sweep is global and would race other test files for candidates.
 		const { run, invoice: swept } = await seedSweptInvoice({
@@ -127,10 +124,7 @@ describe("L2 Packet", () => {
 		// are only reachable here, so a swept job must stay loadable.
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		mocks.requireRole.mockResolvedValue({ user: finance })
-		const account = t.track(
-			"contractorAccount",
-			await seedContractorAccount({ sharePercent: 0.65 }),
-		)
+		const account = t.track("contractorAccount", await seedContractorAccount())
 		const { invoice } = await seedSweptInvoice({
 			generatedById: finance.id,
 			contractorAccountId: account.id,
@@ -217,10 +211,7 @@ describe("L2 Packet", () => {
 	it("keeps a swept job's frozen figures when its catalog price and lines change (Review Focus)", async () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		mocks.requireRole.mockResolvedValue({ user: finance })
-		const account = t.track(
-			"contractorAccount",
-			await seedContractorAccount({ sharePercent: 0.65 }),
-		)
+		const account = t.track("contractorAccount", await seedContractorAccount())
 		const { run, invoice: swept } = await seedSweptInvoice({
 			generatedById: finance.id,
 			contractorAccountId: account.id,

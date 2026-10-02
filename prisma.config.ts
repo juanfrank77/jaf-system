@@ -11,5 +11,9 @@ export default defineConfig({
 	},
 	datasource: {
 		url: process.env["DATABASE_URL"],
+		// Only needed by `prisma migrate diff --from-migrations` / `migrate dev`, which
+		// replay the chain into a throwaway database. Supply it via the gitignored .env
+		// (SHADOW_DATABASE_URL) and never commit a URL here.
+		shadowDatabaseUrl: process.env["SHADOW_DATABASE_URL"],
 	},
 })

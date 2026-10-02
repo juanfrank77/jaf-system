@@ -14,9 +14,6 @@ CREATE TABLE "ContractorAccount" (
     "code" TEXT NOT NULL,
     "label" TEXT NOT NULL,
     "brigadeId" TEXT,
-    "sharePercent" DECIMAL(65,30) NOT NULL DEFAULT 0.65,
-    "winpayEmployeeCode" TEXT,
-    "isPlaceholder" BOOLEAN NOT NULL DEFAULT true,
     "active" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -31,7 +28,6 @@ CREATE TABLE "PayrollRun" (
     "generatedById" TEXT NOT NULL,
     "paidAt" TIMESTAMP(3),
     "paidById" TEXT,
-    "paidAchRef" TEXT,
     "evidencePath" TEXT,
     "confirmedByFallback" BOOLEAN NOT NULL DEFAULT false,
     "reversedAt" TIMESTAMP(3),

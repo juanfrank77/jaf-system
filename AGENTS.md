@@ -40,4 +40,45 @@ use a harness's native worktree tool that places them elsewhere (e.g. under
 `.claude/worktrees/`), since those are not excluded and would run every test
 file twice. Don't run the full test suite from inside a worktree and expect
 it to also validate the main checkout, or vice versa — each worktree has its
-own `node_modules` and generated Prisma client.
+  own `node_modules` and generated Prisma client.
+
+## Keeping schema and migrations in sync
+
+There is no automated drift check in CI, so this is kept in sync by hand. After
+editing `prisma/schema.prisma` or any migration, replay the whole chain into a
+scratch database and diff it against the schema:
+
+```bash
+# DATABASE_URL = the scratch database; SHADOW_DATABASE_URL = a second, throwaway
+# one (both in the gitignored .env — never commit a URL).
+pnpm prisma migrate deploy
+
+pnpm prisma migrate diff \
+  --from-migrations prisma/migrations \
+  --to-schema prisma/schema.prisma \
+  --exit-code
+```
+
+No output and exit code 0 means the chain and the schema agree. **Any SQL output
+means they disagree — fix one before merging.** "No shadow database configured"
+is a *failed* check, not a pass; without `SHADOW_DATABASE_URL` Prisma silently
+creates and abandons a `prisma_migrate_shadow_db_*` database each run.
+
+Two rules, in order of how expensive they are to get wrong:
+
+- **Never edit a migration that prod has already applied.** Prod's
+  `_prisma_migrations` records a checksum; changing the file makes the chain
+  diverge from the database and forces a destructive reset
+  (`docs/phase2-audit.md`, "Do not edit applied migrations"). The same goes for a
+  migration hand-edited away
+  from Prisma's generated SQL — e.g. `warehouse_foundation` uses
+  `ALTER ... RENAME` so the production `van_movement` ledger survives; a
+  `migrate dev` regeneration would rewrite it to `DROP`/`CREATE` and destroy
+  that data.
+- **Editing or deleting a migration prod has *not* run yet is safe**, and is the
+  intended way to keep the history tidy. Squashing two undeployed migrations
+  into one is the right move when a second one only adds a column to a table the
+  first one created. Check what prod has actually applied before assuming:
+  `git ls-tree origin/master:prisma/migrations` plus the prod
+  `_prisma_migrations` rows.
+

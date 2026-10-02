@@ -142,6 +142,34 @@ psql "$DATABASE_URL" \
 
 All five counts must be 0. If any is non-zero, stop — that data is unrecoverable once `migrate deploy` runs below.
 
+### Pre/post row counts for the warehouse rename
+
+The `20260928005451_warehouse_foundation` migration **renames** `van_movement` to `stock_movement` and backfills `kind` (`serial IS NULL` → `BULK`). It is data-preserving by construction, but it is a rename of a production ledger, so take a backup first (§10) and record these counts before you start:
+
+```bash
+set -a; source .env; set +a
+
+# BEFORE
+psql "$DATABASE_URL" \
+  -c 'SELECT count(*) AS total FROM "van_movement"' \
+  -c 'SELECT count(*) AS serial_null FROM "van_movement" WHERE "serial" IS NULL' \
+  -c 'SELECT count(*) AS null_van FROM "van_movement" WHERE "vanId" IS NULL'   # expect 0
+```
+
+Write the numbers down. After `migrate deploy` (§8 step 4), run:
+
+```bash
+# AFTER
+psql "$DATABASE_URL" \
+  -c 'SELECT count(*) AS total FROM "stock_movement"' \
+  -c 'SELECT count(*) AS null_van FROM "stock_movement" WHERE "vanId" IS NULL' \
+  -c 'SELECT count(*) AS bulk FROM "stock_movement" WHERE "kind" = '"'"'BULK'"'"''
+```
+
+- `total` must equal the "before" `total`. A smaller number means rows were lost in the rename — stop and restore from backup.
+- `null_van` must be 0. The migration adds a `CHECK` (`stock_movement_location_ck`) requiring exactly one of `vanId` / `warehouseId` per row, so a non-zero value would have blocked the migration outright; running the query confirms it.
+- `bulk` must equal the "before" `serial_null`. That is the direct check on the migration's backfill step: every accessory (non-serialized) row becomes `BULK`, every serialized row stays `SERIAL`.
+
 Add `SEED_TEMP_PASSWORD` to `.env` (do not pass it inline on the command line — it would persist in shell history and be readable via `ps` for the life of the process):
 
 ```bash
@@ -183,18 +211,21 @@ Once the app is live, most future changes are updates to this same install, not 
    pnpm install
    ```
 
-3. **Apply pending migrations.** Always use the script, never `prisma migrate deploy` by hand — it also regenerates the Prisma client, which is gitignored and won't otherwise match the newly-pulled schema:
+3. **Build** — before migrating, not after:
    ```bash
+   pnpm run build
+   ```
+
+4. **Stop the service, apply pending migrations, start it again.** Always use the script, never `prisma migrate deploy` by hand — it also regenerates the Prisma client, which is gitignored and won't otherwise match the newly-pulled schema:
+   ```bash
+   sudo systemctl stop jaf-operations
    ./scripts/apply-migrations.sh
+   sudo systemctl start jaf-operations
+   sudo systemctl status jaf-operations   # confirm it came back up clean
    ```
    `migrate deploy` is idempotent and forward-only: it only runs migrations `_prisma_migrations` doesn't already record, and never rolls back. Before running it, check whether the change notes for this update call out anything destructive (a dropped table or column) — if a migration is provably dropping already-empty schema, no extra care is needed; if it might affect real data, verify row counts against this database first, the same way `installer_v3`'s original migration was verified (§7).
 
-4. **Rebuild and restart:**
-   ```bash
-   pnpm run build
-   sudo systemctl restart jaf-operations
-   sudo systemctl status jaf-operations   # confirm it came back up clean
-   ```
+   **Why build first, and why the service is down across the migrate:** the warehouse update carries a `van_movement` → `stock_movement` rename. A rename is not backward-compatible — the currently-running build queries `van_movement`, which stops existing the instant `migrate deploy` commits. Building first means the new binary is ready before the schema moves under the old one; stopping the service means nothing queries the table across the rename. The stop window is seconds (build already done, migrations are two and both are fast). The same lock also covers the migration's `ADD CONSTRAINT ... CHECK`, which scans the table.
 
 5. **Re-seed only if there's new seed data to pick up** (a roster addition, new service codes) — it's not a required step for every update. `pnpm prisma db seed` only sets `SEED_TEMP_PASSWORD` on accounts it *creates*; it never touches an existing account's credential (§7).
 

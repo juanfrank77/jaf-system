@@ -95,7 +95,6 @@ export async function generateRun(opts: {
 		id: string
 		lines: ContractorPaymentLine[]
 		accountId: string
-		sharePercent: number
 	}> = []
 	for (const doc of candidates) {
 		if (!doc.contractorAccountCode) continue
@@ -105,7 +104,6 @@ export async function generateRun(opts: {
 			id: doc.id,
 			lines: toContractorPaymentLines(doc.jafInvoiceLines),
 			accountId: account.id,
-			sharePercent: account.sharePercent,
 		})
 	}
 
@@ -123,7 +121,7 @@ export async function generateRun(opts: {
 		})
 		let swept = 0
 		for (const doc of toSweep) {
-			const payment = computeContractorPayment(doc.lines, doc.sharePercent)
+			const payment = computeContractorPayment(doc.lines)
 			const result = await tx.jafInvoice.updateMany({
 				where: { id: doc.id, payrollRunId: null },
 				data: {
@@ -181,9 +179,9 @@ export async function closePayrollRun(opts: {
 		const claimed = await tx.payrollRun.updateMany({
 			where: { id: opts.runId, paidAt: null, reversedAt: null },
 			data: {
-			paidAt: opts.achDate,
-			paidById: opts.paidById,
-			evidencePath: opts.evidencePath ?? null,
+				paidAt: opts.achDate,
+				paidById: opts.paidById,
+				evidencePath: opts.evidencePath ?? null,
 				confirmedByFallback: opts.confirmedByFallback,
 			},
 		})

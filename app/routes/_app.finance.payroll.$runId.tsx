@@ -48,7 +48,7 @@ const INVOICE_SELECT = {
 const RUN_INVOICES = {
 	select: INVOICE_SELECT,
 	orderBy: [{ releasedToFinanceAt: "asc" }, { id: "asc" }],
-} satisfies Prisma.PayrollRun$invoicesArgs
+} as const satisfies Prisma.PayrollRun$invoicesArgs
 
 /**
  * `validateFile(file, "file")` only enforces blocked extensions and the 40MB

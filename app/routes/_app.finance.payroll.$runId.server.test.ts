@@ -127,7 +127,7 @@ describe("L3 run detail", () => {
 		expect(block?.gross).toBeCloseTo(100, 2)
 	})
 
-	it("batch_confirm requires achDate, then closes the run (achRef optional)", async () => {
+	it("batch_confirm requires achDate, then closes the run", async () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		mocks.requireRole.mockResolvedValue({ user: finance })
 		const account = t.track("contractorAccount", await seedContractorAccount())
@@ -156,7 +156,6 @@ describe("L3 run detail", () => {
 		const validFields = new URLSearchParams({
 			intent: "batch_confirm",
 			achDate: "2026-09-12",
-			achRef: "20260912-JAF-015",
 		})
 		let redirected: string | null = null
 		try {
@@ -177,48 +176,6 @@ describe("L3 run detail", () => {
 			where: { id: run.id },
 		})
 		expect(reloaded.confirmedByFallback).toBe(true)
-		expect(reloaded.paidAchRef).toBe("20260912-JAF-015")
-	})
-
-	it("batch_confirm closes the run without an achRef (Carmen just clicks PAID)", async () => {
-		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
-		mocks.requireRole.mockResolvedValue({ user: finance })
-		const account = t.track("contractorAccount", await seedContractorAccount())
-		const { run, invoice } = await seedSweptInvoice({
-			generatedById: finance.id,
-			contractorAccountId: account.id,
-			runLabel: "Run no-ref",
-			grossPayable: 100,
-			retentionAmount: 100 * 0.65 * 0.1,
-			netPayable: 100 * 0.65 * 0.9,
-		})
-		t.track("payrollRun", run)
-		t.track("jafInvoice", invoice)
-
-		const form = new URLSearchParams({
-			intent: "batch_confirm",
-			achDate: "2026-09-12",
-		})
-		let redirected: string | null = null
-		try {
-			await action({
-				request: new Request(`http://localhost/finance/payroll/${run.id}`, {
-					method: "POST",
-					body: form,
-				}),
-				params: { runId: run.id },
-				context: {},
-			} as never)
-		} catch (response) {
-			if (response instanceof Response)
-				redirected = response.headers.get("Location")
-		}
-		expect(redirected).toBe("/finance/payroll")
-		const reloaded = await db.payrollRun.findUniqueOrThrow({
-			where: { id: run.id },
-		})
-		expect(reloaded.paidAt).not.toBeNull()
-		expect(reloaded.paidAchRef).toBeNull()
 	})
 
 	it("never writes evidence outside the upload dir, whatever the filename claims", async () => {
@@ -241,7 +198,6 @@ describe("L3 run detail", () => {
 		const form = new FormData()
 		form.set("intent", "batch_confirm")
 		form.set("achDate", "2026-09-12")
-		form.set("achRef", "REF-TRAVERSAL")
 		form.append(
 			"evidence",
 			new File(["%PDF-1.4 fake"], "../../../../../../tmp/pwned.pdf", {
@@ -297,7 +253,6 @@ describe("L3 run detail", () => {
 		const form = new FormData()
 		form.set("intent", "batch_confirm")
 		form.set("achDate", "2026-09-12")
-		form.set("achRef", "REF-EV")
 		// Extension is allowed by validateFile's "file" branch, so only the
 		// explicit MIME check can catch this.
 		form.append(

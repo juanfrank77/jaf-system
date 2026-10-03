@@ -188,21 +188,21 @@ describe("generateRun", () => {
 		expect(reloaded.payrollRunId).toBeNull()
 	})
 
-	it("sweep only the selected job IDs when selectedIds is provided (§15.4)", async () => {
-		// PDF Part 3 §15.4: Lissette can untick jobs before generating. Only the
-		// selected subset enters the run; the rest stay open on L1.
+	it("sweeps every Arm-A-open invoice in the candidate set", async () => {
+		// PDF Part 3 §15.4: the sweep takes every job that is Arm-A-open —
+		// released, not closed, no PBCC advance, no payroll run yet.
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		const account = t.track(
 			"contractorAccount",
-			await seedContractorAccount({ code: "BRG-SELECT" }),
+			await seedContractorAccount({ code: "BRG-SWEEP" }),
 		)
-		const keep = t.track(
+		const docA = t.track(
 			"jafInvoice",
 			await seedFinanceableInvoice({
 				contractorAccountCode: account.code,
 			}),
 		)
-		const swept = t.track(
+		const docB = t.track(
 			"jafInvoice",
 			await seedFinanceableInvoice({
 				contractorAccountCode: account.code,
@@ -211,21 +211,18 @@ describe("generateRun", () => {
 
 		const { run } = await generateRun({
 			generatedById: finance.id,
-			label: "R-selective",
-			selectedIds: [swept.id],
+			label: "R-all",
 		})
 		t.track("payrollRun", run as { id: string })
 
-		const sweptAfter = await db.jafInvoice.findUniqueOrThrow({
-			where: { id: swept.id },
+		const reloadA = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: docA.id },
 		})
-		expect(sweptAfter.payrollRunId).toBe(run.id)
-
-		const keptAfter = await db.jafInvoice.findUniqueOrThrow({
-			where: { id: keep.id },
+		const reloadB = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: docB.id },
 		})
-		// The unticked job stays open on L1 — not swept.
-		expect(keptAfter.payrollRunId).toBeNull()
+		expect(reloadA.payrollRunId).toBe(run.id)
+		expect(reloadB.payrollRunId).toBe(run.id)
 	})
 
 	it("excludes a job that already has a PBCC_ADVANCE payment record (legacy boundary)", async () => {
@@ -279,7 +276,6 @@ describe("closePayrollRun", () => {
 			runId: run.id,
 			paidById: finance.id,
 			achDate: new Date("2026-09-12"),
-			achRef: "20260912-JAF-015",
 			confirmedByFallback: true,
 		})
 		expect(closedCount).toBe(1)
@@ -288,7 +284,6 @@ describe("closePayrollRun", () => {
 			where: { id: run.id },
 		})
 		expect(reloadedRun.paidAt).not.toBeNull()
-		expect(reloadedRun.paidAchRef).toBe("20260912-JAF-015")
 		expect(reloadedRun.confirmedByFallback).toBe(true)
 
 		const members = await db.jafInvoice.findMany({
@@ -314,7 +309,6 @@ describe("closePayrollRun", () => {
 			runId: run.id,
 			paidById: finance.id,
 			achDate: new Date(),
-			achRef: "REF",
 			confirmedByFallback: true,
 		})
 
@@ -342,7 +336,6 @@ describe("closePayrollRun", () => {
 			runId: run.id,
 			paidById: finance.id,
 			achDate: new Date("2026-09-12"),
-			achRef: "REF-FIRST",
 			evidencePath: "/uploads/payroll-runs/first.pdf",
 			confirmedByFallback: true,
 		})
@@ -365,7 +358,6 @@ describe("closePayrollRun", () => {
 				runId: run.id,
 				paidById: finance.id,
 				achDate: new Date("2026-10-30"),
-				achRef: "REF-SECOND",
 				evidencePath: "/uploads/payroll-runs/second.pdf",
 				confirmedByFallback: true,
 			}),
@@ -375,7 +367,6 @@ describe("closePayrollRun", () => {
 			where: { id: run.id },
 		})
 		expect(afterReplay.paidAt).toEqual(firstPaidAt)
-		expect(afterReplay.paidAchRef).toBe("REF-FIRST")
 		expect(afterReplay.evidencePath).toBe("/uploads/payroll-runs/first.pdf")
 
 		const afterReplayMember = await db.jafInvoice.findUniqueOrThrow({

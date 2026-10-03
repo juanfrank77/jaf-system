@@ -154,6 +154,7 @@ anything. It adds `payrollRunId`, `payablesClosedAt`, `contractorAccountId`,
 not backfill anything — every pre-existing job row comes out of it with
 `payrollRunId`, `payablesClosedAt`, `contractorAccountId` and
 `contractorAccount` as `NULL`.
+<<<<<<< Updated upstream
 
 That is fine for the schema, but it has a consequence you need to act on
 before anyone uses the payroll screen. The payroll sweep has **no date
@@ -204,6 +205,8 @@ anything. It adds `payrollRunId`, `payablesClosedAt`, `grossPayable`,
 and creates the `PayrollRun` and `ContractorAccount` tables. **It does not
 backfill anything** — every pre-existing job row comes out of it with
 `payrollRunId` and `payablesClosedAt` as `NULL`.
+=======
+>>>>>>> Stashed changes
 
 That is fine for the schema, but it has a consequence you need to act on
 before anyone uses the payroll screen. The payroll sweep has **no date
@@ -239,16 +242,12 @@ That count slightly over-estimates: the sweep also skips jobs carrying a
 
 Then pick one, with us:
 
-- **Close out the settled history** — set `payablesClosedAt` on the jobs that
-  were already handled outside this system, so the sweep skips them and picks
-  up only genuinely-outstanding work. This writes to real job rows, so agree
-  the exact `WHERE` with us first and take a backup (§10) before running it.
-- **Start the sweep from a cutoff date** — we add a
-  `releasedToFinanceAt >= <date>` floor to the shared predicate so anything
-  released before that date is never swept. Simpler and reversible, but it
-  also keeps those old jobs off the L1 queue screen.
+	- **Close out the settled history** — set `payablesClosedAt` on the jobs that
+	  were already handled outside this system, so the sweep skips them and picks
+	  up only genuinely-outstanding work. This writes to real job rows, so agree
+	  the exact `WHERE` with us first and take a backup (§10) before running it.
 
-Until one of those is done: deploy as normal, but don't generate a run.
+Until that is done: deploy as normal, but don't generate a run.
 
 Add `SEED_TEMP_PASSWORD` to `.env` (do not pass it inline on the command line — it would persist in shell history and be readable via `ps` for the life of the process):
 
@@ -305,16 +304,21 @@ Once the app is live, most future changes are updates to this same install, not 
    ```
    `migrate deploy` is idempotent and forward-only: it only runs migrations `_prisma_migrations` doesn't already record, and never rolls back. Before running it, check whether the change notes for this update call out anything destructive (a dropped table or column) — if a migration is provably dropping already-empty schema, no extra care is needed; if it might affect real data, verify row counts against this database first, the same way `installer_v3`'s original migration was verified (§7).
 
+<<<<<<< Updated upstream
 
 
    One migration is additive rather than destructive, but still needs a decision from us before the app is used: the finance migration backfills nothing, so the first payroll run afterwards would sweep the entire historical released backlog, not just outstanding work. See **§7, "The finance migration is additive, but it has one operational precondition"** — resolve it before anyone clicks "Generate run".
+=======
+   One migration is additive rather than destructive, but still needs a decision from us before the app is used: the finance migration backfills nothing, so the first payroll run afterwards would sweep the entire historical released backlog, not just outstanding work. See **§7, "The finance migration is additive, but it has one operational precondition"** — resolve it before anyone clicks "Generate run". The read-only backlog-count query, the close-out SQL, and the full step sequence are in `docs/prod-finance-rollout.md` (with `docs/prod-finance-rollout.sql` for review) — both files are deleted once the rollout is confirmed.
+>>>>>>> Stashed changes
 
-4. **Rebuild and restart:**
+5. **Rebuild and restart:**
    ```bash
    pnpm run build
    sudo systemctl restart jaf-operations
    sudo systemctl status jaf-operations   # confirm it came back up clean
    ```
+<<<<<<< Updated upstream
 
 5. **Rebuild and restart:**
    ```bash
@@ -323,6 +327,13 @@ Once the app is live, most future changes are updates to this same install, not 
    sudo systemctl status jaf-operations   # confirm it came back up clean
    ```
    **Why build first, and why the service is down across the migrate:** the warehouse update carries a `van_movement` → `stock_movement` rename. A rename is not backward-compatible — the currently-running build queries `van_movement`, which stops existing the instant `migrate deploy` commits. Building first means the new binary is ready before the schema moves under the old one; stopping the service means nothing queries the table across the rename. The stop window is seconds (build already done, migrations are three and all three are fast). The same lock also covers the migration's `ADD CONSTRAINT ... CHECK`, which scans the table.
+=======
+   **Why build first, and why the service is down across the migrate:** the warehouse update carries a `van_movement` → `stock_movement` rename. A rename is not backward-compatible — the currently-running build queries `van_movement`, which stops existing the instant `migrate deploy` commits. Building first means the new binary is ready before the schema moves under the old one; stopping the service means nothing queries the table across the rename. The stop window is seconds (build already done, migrations are three and
+all three are fast). The same lock also covers the migration's
+`ADD CONSTRAINT ... CHECK`, which scans the table.
+
+6. **Re-seed** — `pnpm prisma db seed` is **required** for this update, not optional. `ContractorAccount` rows come only from `seedContractorAccounts` (`prisma/seed.ts:491`), and a brigade with no account can never sweep. `pnpm prisma db seed` only sets `SEED_TEMP_PASSWORD` on accounts it *creates*; it never touches an existing account's credential (§7).
+>>>>>>> Stashed changes
 
 6. **Re-seed** — `pnpm prisma db seed` is **required** for this update, not optional. `ContractorAccount` rows come only from `seedContractorAccounts` (`prisma/seed.ts:491`), and a brigade with no account can never sweep. `pnpm prisma db seed` only sets `SEED_TEMP_PASSWORD` on accounts it *creates*; it never touches an existing account's credential (§7).
 

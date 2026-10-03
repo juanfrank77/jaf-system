@@ -5,16 +5,16 @@ import type { PrismaClient } from "../generated/prisma/client"
  *
  * `JafInvoice.contractorAccountCode` is copied from `Brigade.code` at
  * sub-contractor signature, and `resolveContractorAccounts` resolves that code
- * against these rows at sweep time — so an active brigade with no account here
- * is a job the sweep can never pick up (it stays open on L1, flagged
- * "account not mapped").
+ * against these rows at sweep time — so a brigade with no account here is a
+ * job the sweep can never pick up (it stays open on L1, flagged "account not
+ * mapped").
  *
- * `active` is synced from the brigade so that deactivating a brigade (PDF Part 3
- * §14.4, OPEN — waiting on Monica) also deactivates its account. An inactive
- * account is filtered out by `resolveContractorAccounts`, which means jobs under
- * a deactivated brigade stay open on L1 and are NOT swept into a new run — but
- * jobs already swept into a run are frozen and will close regardless, so the
- * brigade still gets paid for work already released.
+ * `active` is synced from the brigade, which is the "takes new work" half of
+ * q&a 14.4. It gates the assignment pickers in supervisor-scope.ts and the
+ * L1 queue — a deactivated brigade is unassignable — but it is NOT swept
+ * out of `generateRun`. The sweep resolves the account regardless of active,
+ * so the brigade still gets paid for work already released. Jobs already in a
+ * run are frozen and close regardless.
  *
  * Idempotent: upsert on the unique `code`. Lives in its own module (like
  * `seed-warehouse-stock.ts`) rather than in `seed.ts` so tests can import and

@@ -114,7 +114,7 @@ export async function resolveContractorAccount(
 ): Promise<{ id: string } | null> {
 	if (!contractorAccountCode) return null
 	const account = await db.contractorAccount.findFirst({
-		where: { code: contractorAccountCode, active: true },
+		where: { code: contractorAccountCode },
 		select: { id: true },
 	})
 	if (!account) return null
@@ -135,12 +135,12 @@ type ResolvedContractorAccount = { id: string }
  * winner between two accounts; `get` returning `undefined` is exactly the
  * "unmapped" case the callers already handle.
  *
- * Filtering on `active: true` (from the PDF Part 3 §14.4 default): a job whose
- * brigade has been deactivated is left out of the result map, so
- * `generateRun` skips it rather than sweeping it. The job stays open on L1 and
- * visible — it is not hidden — so the brigade still gets paid for work already
- * released (jobs already in a run are frozen and will close regardless), but
- * no NEW work can be swept under a deactivated brigade.
+ * `active` here means "takes new work" (q&a 14.4), not "payable". The
+ * assignment pickers in supervisor-scope.ts are the "no new work" half of 14.4
+ * and filter on active there. This half removes the active filter so that a
+ * deactivated brigade's open jobs are still swept, frozen, and closed — the
+ * brigade still gets paid for work already released, while the pickers keep it
+ * off any new job.
  */
 export async function resolveContractorAccounts(
 	codes: ReadonlyArray<string | null | undefined>,
@@ -148,7 +148,7 @@ export async function resolveContractorAccounts(
 	const distinct = [...new Set(codes.filter((c): c is string => !!c))]
 	if (distinct.length === 0) return new Map()
 	const accounts = await db.contractorAccount.findMany({
-		where: { code: { in: distinct }, active: true },
+		where: { code: { in: distinct } },
 		select: { id: true, code: true },
 	})
 	return new Map(accounts.map((a) => [a.code, { id: a.id }]))

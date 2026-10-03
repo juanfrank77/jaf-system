@@ -124,4 +124,31 @@ describe("assignableBrigadesWhere", () => {
 			await assignableBrigadesWhere(db, { id: "u-1", role: "SUPERVISOR" }),
 		).toEqual({ where: { active: true, area: { in: [] } }, take: 100 })
 	})
+
+	it("excludes inactive brigades from the picker (14.4 — no new work, not payment)", async () => {
+		const db = {
+			user: {
+				findUnique: async () => ({ supervisorAreas: ["CENTRAL"] }),
+			},
+			brigade: {
+				findMany: async (args: any) => {
+					const w = args?.where ?? {}
+					const rows = [
+						{ id: "b1", name: "Active", area: "CENTRAL", active: true },
+						{ id: "b2", name: "Inactive", area: "CENTRAL", active: false },
+					]
+					return rows
+						.filter((r) => (w.active === false ? !r.active : r.active))
+						.filter((r) => !w.area || w.area.in?.includes(r.area))
+				},
+			},
+		} as any
+		const { where } = await assignableBrigadesWhere(db, {
+			id: "u-1",
+			role: "SUPERVISOR",
+		})
+		const result = await db.brigade.findMany(where as any)
+		expect(result).toHaveLength(1)
+		expect(result[0].id).toBe("b1")
+	})
 })

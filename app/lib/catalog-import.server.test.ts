@@ -53,14 +53,16 @@ describe("parseCatalogCsv", () => {
 })
 
 describe("seed constants", () => {
-	it("has 4 supervisors and 14 brigades, 13 with codes", () => {
+	it("has 4 supervisors and 14 brigades, 14 with codes", () => {
 		expect(SUPERVISOR_SEED).toHaveLength(4)
 		expect(BRIGADE_SEED).toHaveLength(14)
-		expect(BRIGADE_SEED.filter((b) => b.code).length).toBe(13)
+		expect(BRIGADE_SEED.filter((b) => b.code).length).toBe(14)
 		expect(BRIGADE_SEED.find((b) => b.name === "JESUS MARTINEZ")?.code).toBe(
 			"204",
 		)
-		expect(BRIGADE_SEED.find((b) => b.name === "ZARIEL GARAY")?.code).toBeNull()
+		expect(BRIGADE_SEED.find((b) => b.name === "ZARIEL SIERRA")?.code).toBe(
+			"274",
+		)
 		for (const b of BRIGADE_SEED) {
 			expect(SUPERVISOR_SEED.map((s) => s.email)).toContain(b.supervisorEmail)
 		}

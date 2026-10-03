@@ -84,6 +84,7 @@ Create a `.env` file in the project root (`/opt/jaf-operations/.env`). This file
 | `BETTER_AUTH_SECRET` | (random 32+ char string) | Signs session cookies. Generate with `openssl rand -base64 32`. **Keep this secret and never reuse it across environments.** |
 | `BETTER_AUTH_URL` | `https://jaf.internal.client-domain.com` | The public HTTPS URL users will hit. Must match exactly (scheme + host), or login/sessions will break. |
 | `UPLOAD_DIR` | `/var/lib/jaf-operations/uploads` | Where job photos, signature images, and generated PDFs are stored. **See note below.** |
+| `ENABLE_COMPTROLLER` | `false` | Unset or `false` to hide the dormant `/comptroller` screens, `/comptroller` nav item, COMPTROLLER file reads, and COMPTROLLER's receivables view — including the `payroll-runs/` branch in `files.$.tsx`. **Does not gate Lissette's Arm A screens** (`/finance/*`). |
 
 **Connection-string gotcha — `DATABASE_URL`:** Prisma parses this URL strictly. If the database password (or username) contains any of these characters — `@  /  ?  #  %  &  +  =` or a space — they **must be percent-encoded**, or Prisma throws `P1013: invalid port number in database URL`. The port itself is fine; the special characters truncate the URL before `:port`, so Prisma reads an empty/non-numeric port. Encode them as: `@`→`%40`, `#`→`%23`, `?`→`%3F`, `/`→`%2F`, `%`→`%25`, `&`→`%26`, `+`→`%2B`, `=`→`%3D`, space→`%20`.
 
@@ -142,6 +143,58 @@ psql "$DATABASE_URL" \
 
 All five counts must be 0. If any is non-zero, stop — that data is unrecoverable once `migrate deploy` runs below.
 
+### The finance migration is additive, but it has one operational precondition
+
+Unlike the migration above, the finance ("Arm A") migration does not drop
+anything. It adds `payrollRunId`, `payablesClosedAt`, `contractorAccountId`,
+`contractorAccount`, `grossPayable`, `retentionAmount`, `netPayable` and
+`contractorShareLines` to `jaf_invoice`, and creates the `PayrollRun` and
+`ContractorAccount` tables. It does **not** add `paidAchRef` to `PayrollRun`
+(per 15.2 — the single ACH ref per run is no longer needed). It also does
+not backfill anything — every pre-existing job row comes out of it with
+`payrollRunId`, `payablesClosedAt`, `contractorAccountId` and
+`contractorAccount` as `NULL`.
+
+That is fine for the schema, but it has a consequence you need to act on
+before anyone uses the payroll screen. The payroll sweep has **no date
+floor**: "Generate run" takes every job that was released to finance, isn't
+closed, and isn't already in a run — with no lower bound on *when* it was
+released. On a database with real history that is the whole released
+backlog, not just the jobs that are genuinely outstanding.
+
+So on the first run after this update, jobs that were released to finance
+years ago and were settled by hand in the meantime would be swept too: their
+contractor amounts get frozen onto the row, they get a `payrollRunId`, they
+appear on the run detail screen, and they can then be confirmed as paid in a
+single action.
+
+**Decide what to do with the historical backlog before anyone clicks
+"Generate run".** To see the size of it (read-only, safe to run whenever):
+
+```bash
+set -a; source .env; set +a
+psql "$DATABASE_URL" -c "
+  SELECT count(*) AS arm_a_open,
+         min(\"releasedToFinanceAt\") AS oldest_released,
+         max(\"releasedToFinanceAt\") AS newest_released
+  FROM \"jaf_invoice\"
+  WHERE \"status\" NOT IN ('LC_REQUEST_GENERATED', 'CANCELLED')
+    AND \"releasedToFinanceAt\" IS NOT NULL
+    AND \"payablesClosedAt\" IS NULL
+    AND \"payrollRunId\" IS NULL;"
+```
+
+That count slightly over-estimates: the sweep also skips jobs carrying a
+`PBCC_ADVANCE` payment record. It is close enough to decide with.
+
+Then pick one, with us:
+
+	- **Close out the settled history** — set `payablesClosedAt` on the jobs that
+	  were already handled outside this system, so the sweep skips them and picks
+	  up only genuinely-outstanding work. This writes to real job rows, so agree
+	  the exact `WHERE` with us first and take a backup (§10) before running it.
+
+Until that is done: deploy as normal, but don't generate a run.
 
 ### The finance migration is additive, but it has one operational precondition
 
@@ -253,6 +306,7 @@ Once the app is live, most future changes are updates to this same install, not 
    `migrate deploy` is idempotent and forward-only: it only runs migrations `_prisma_migrations` doesn't already record, and never rolls back. Before running it, check whether the change notes for this update call out anything destructive (a dropped table or column) — if a migration is provably dropping already-empty schema, no extra care is needed; if it might affect real data, verify row counts against this database first, the same way `installer_v3`'s original migration was verified (§7).
 
 
+
    One migration is additive rather than destructive, but still needs a decision from us before the app is used: the finance migration backfills nothing, so the first payroll run afterwards would sweep the entire historical released backlog, not just outstanding work. See **§7, "The finance migration is additive, but it has one operational precondition"** — resolve it before anyone clicks "Generate run".
 
 4. **Rebuild and restart:**
@@ -262,9 +316,17 @@ Once the app is live, most future changes are updates to this same install, not 
    sudo systemctl status jaf-operations   # confirm it came back up clean
    ```
 
-5. **Re-seed only if there's new seed data to pick up** (a roster addition, new service codes) — it's not a required step for every update. `pnpm prisma db seed` only sets `SEED_TEMP_PASSWORD` on accounts it *creates*; it never touches an existing account's credential (§7).
+5. **Rebuild and restart:**
+   ```bash
+   pnpm run build
+   sudo systemctl restart jaf-operations
+   sudo systemctl status jaf-operations   # confirm it came back up clean
+   ```
+   **Why build first, and why the service is down across the migrate:** the warehouse update carries a `van_movement` → `stock_movement` rename. A rename is not backward-compatible — the currently-running build queries `van_movement`, which stops existing the instant `migrate deploy` commits. Building first means the new binary is ready before the schema moves under the old one; stopping the service means nothing queries the table across the rename. The stop window is seconds (build already done, migrations are three and all three are fast). The same lock also covers the migration's `ADD CONSTRAINT ... CHECK`, which scans the table.
 
-6. **Spot-check the affected screens** after restart, in both languages if the update touched anything user-facing — switch the language toggle to confirm nothing regressed to English-only or a raw translation key.
+6. **Re-seed** — `pnpm prisma db seed` is **required** for this update, not optional. `ContractorAccount` rows come only from `seedContractorAccounts` (`prisma/seed.ts:491`), and a brigade with no account can never sweep. `pnpm prisma db seed` only sets `SEED_TEMP_PASSWORD` on accounts it *creates*; it never touches an existing account's credential (§7).
+
+7. **Spot-check the affected screens** after restart, in both languages if the update touched anything user-facing — switch the language toggle to confirm nothing regressed to English-only or a raw translation key.
 
 If `git pull` isn't how code reaches this server (e.g. a zip/tarball hand-off, per §4), swap step 1 for however that hand-off works — everything from step 2 onward is the same either way.
 
@@ -330,7 +392,7 @@ A daily cron job covering both, with offsite/secondary copy, is the minimum for 
 - [ ] `UPLOAD_DIR` points to a persistent directory, not `/tmp`, and is writable by the app user
 - [ ] HTTPS reverse proxy in front of the app, reachable from pilot users' devices
 - [ ] `pnpm prisma migrate deploy` and `pnpm prisma db seed` run successfully
-- [ ] Before the finance update: historical released-to-finance backlog resolved (closed out or cutoff date agreed) so the first payroll run can't sweep years of settled jobs — see §7
+- [ ] Before the finance update: historical released-to-finance backlog resolved (close out the settled history before generating the first payroll run) so the first payroll run can't sweep years of settled jobs — see §7 and the rollout runbook (`docs/prod-finance-rollout.md`)
 - [ ] App running under systemd (or pm2), restarts automatically on crash/reboot
 - [ ] Seeded test account passwords changed or accounts replaced with real staff
 - [ ] Ongoing: any account created by a *later* seed run (e.g. a roster addition) gets `SEED_TEMP_PASSWORD` too — follow up with the same reset for it, every time

@@ -135,7 +135,12 @@ type BrigadeSeed = {
 	phone: string | null
 }
 
-// Source: docs/LIST OF BRIGADES AND SUPERVISORS.xlsx (27 Aug) + docs/Brigades_Code_From_Carmen.png
+// Source: `BRIGADE_SEED` codes come from docs/Brigades_Code_From_Carmen.txt
+// (transcribed from Carmen's PNG; declared as the code authority). Which
+// brigades are active, plus their `area`, `supervisorEmail` and `phone`,
+// come from docs/LIST OF BRIGADES AND SUPERVISORS.xlsx (titled
+// "LISTADO DE SUPERVISORES Y BRIGADAS ACTIVAS"). The three identical
+// copies under 06, Lissette Cintron and Forms and Worker Lists all agree.
 export const BRIGADE_SEED: BrigadeSeed[] = [
 	{
 		name: "DINO CASTILLO",
@@ -154,11 +159,11 @@ export const BRIGADE_SEED: BrigadeSeed[] = [
 		phone: "787-450-5291",
 	},
 	{
-		name: "ZARIEL GARAY",
-		code: null,
+		name: "ZARIEL SIERRA",
+		code: "274",
 		area: "CENTRAL",
 		supervisorEmail: "eocasio@jafcomm.local",
-		leadName: "Zariel Garay",
+		leadName: "Zariel Sierra",
 		phone: "787-405-5513",
 	},
 	{

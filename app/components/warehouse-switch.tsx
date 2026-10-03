@@ -27,6 +27,7 @@ export function WarehouseSwitch({
 				// SameSite=Lax blocks cross-site submission; Secure is added
 				// whenever the page itself is served over HTTPS.
 				const secure = window.location.protocol === "https:" ? "; Secure" : ""
+				// biome-ignore lint/suspicious/noDocumentCookie: intentional UI-preference cookie; SameSite=Lax + Secure when HTTPS
 				document.cookie = `wh=${encodeURIComponent(
 					e.target.value,
 				)}; path=/; max-age=31536000; SameSite=Lax${secure}`

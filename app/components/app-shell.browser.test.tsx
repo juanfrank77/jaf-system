@@ -26,6 +26,31 @@ describe("AppShell", () => {
 		expect(screen.getByText("SUPERVISOR")).toBeInTheDocument()
 	})
 
+	it("shows the theme toggle and no J badge in the header", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<AppShell
+							user={{ name: "Jose Alfaro", role: "SUPERVISOR" }}
+							notifications={[]}
+						>
+							<p>content</p>
+						</AppShell>
+					),
+				},
+			],
+		})
+		const header = screen.getByRole("banner")
+		expect(
+			within(header).getByRole("button", { name: /^Theme:/ }),
+		).toBeInTheDocument()
+		expect(within(header).queryByText("J")).not.toBeInTheDocument()
+	})
+
 	it("renders children in the main content slot", async ({ renderStub }) => {
 		await renderStub({
 			entries: [

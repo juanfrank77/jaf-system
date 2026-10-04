@@ -163,7 +163,8 @@
 		"close_menu": "Cerrar menú de navegación",
 		"primary_nav": "Principal",
 		"primary_nav_mobile": "Principal (móvil)",
-		"navigation_dialog": "Navegación"
+		"navigation_dialog": "Navegación",
+		"theme": { "label": "Tema", "system": "Sistema", "light": "Claro", "dark": "Oscuro" }
 	},
 	"login": {
 		"title": "JAF Operations",

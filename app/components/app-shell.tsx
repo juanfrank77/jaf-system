@@ -22,6 +22,7 @@ import { Form, Link, useLocation } from "react-router"
 import { Button } from "~/components/ui/button"
 import { cn } from "~/lib/utils"
 import { LanguageSwitcher } from "~/library/language-switcher"
+import { ThemeToggle } from "~/library/theme-toggle"
 import type { Role } from "../../generated/prisma/client"
 import { OfflineIndicator } from "./offline-indicator"
 import { WarehouseSwitch } from "./warehouse-switch"
@@ -359,13 +360,7 @@ function AppShell({
 							className="size-5"
 						/>
 					</Dialog.Trigger>
-					<Link
-						to="/dashboard"
-						className="flex items-center gap-2 font-bold tracking-tight"
-					>
-						<span className="flex size-7 items-center justify-center rounded-lg bg-primary text-sm font-extrabold text-primary-foreground">
-							J
-						</span>
+					<Link to="/dashboard" className="font-bold tracking-tight">
 						JAF Ops
 					</Link>
 					<div className="flex-1" />
@@ -383,6 +378,7 @@ function AppShell({
 						</span>
 						<LanguageSwitcher />
 						<NotificationBell notifications={notifications} />
+						<ThemeToggle />
 						<Form method="post" action="/sign-out">
 							<Button type="submit" variant="ghost" size="sm">
 								{t("app_shell.sign_out")}

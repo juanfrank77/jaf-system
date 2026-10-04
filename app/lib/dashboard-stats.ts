@@ -39,6 +39,8 @@ export type DashboardStatLabelKey =
 	| "dashboard.stat.total_documents"
 	| "dashboard.stat.open_receivables"
 	| "dashboard.stat.awaiting_claro_upload"
+	| "dashboard.stat.missing_aviso"
+	| "dashboard.stat.blocked"
 	| "dashboard.stat.stage_awaiting_warehouse"
 	| "dashboard.stat.stage_awaiting_crew"
 	| "dashboard.stat.stage_pending_review"

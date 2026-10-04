@@ -236,6 +236,7 @@
 		"back_to_work_order": "Back to work order"
 	},
 	"docs_view": {
+		"aviso_pending": "Not yet — entered at the Aviso step",
 		"address": "Address",
 		"address_corrections": "Address corrections",
 		"time_on_site": "Time on site",
@@ -1033,6 +1034,21 @@
 	},
 	"dashboard": {
 		"title": "Dashboard",
+		"supervisor_scope_one": "{{areas}} · {{count}} crew",
+		"supervisor_scope_other": "{{areas}} · {{count}} crews",
+		"more_metrics": "More metrics",
+		"all_work_orders": "All work orders",
+		"since": {
+			"submitted": "Submitted {{ago}}",
+			"returned": "Returned {{ago}}",
+			"approved": "Approved {{ago}}"
+		},
+		"ago": {
+			"just_now": "just now",
+			"minutes": "{{count}}m ago",
+			"hours": "{{count}}h ago",
+			"days": "{{count}}d ago"
+		},
 		"no_documents": "No documents yet.",
 		"queue": {
 			"pending_review": "Pending review — crew submitted",
@@ -1075,6 +1091,8 @@
 		"restock_requests_badge": "Restock",
 		"aviso_number": "Aviso #",
 		"stat": {
+			"missing_aviso": "Missing Aviso",
+			"blocked": "Blocked",
 			"open_documents": "Open documents",
 			"awaiting_warehouse": "Awaiting warehouse",
 			"awaiting_crew": "Awaiting crew",

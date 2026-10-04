@@ -5,6 +5,7 @@ import { RouteErrorBoundary } from "~/components/error-boundary"
 import {
 	computeAwaitingPickup,
 	computeDashboardStats,
+	computeMaterialSignals,
 	type DashboardExplainer,
 } from "~/lib/dashboard-stats"
 import { db } from "~/lib/db.server"
@@ -64,6 +65,9 @@ type QueueRow = {
 	stage: SupervisorStage
 	amount: number | null
 	note?: string | null
+	/** When the job entered this queue (submitted / returned / approved). */
+	since: Date | null
+	qtyDiscrepancy: boolean
 }
 
 const queueSelect = {
@@ -81,6 +85,11 @@ const queueSelect = {
 	avisoMatchedAt: true,
 	releasedToFinanceAt: true,
 	sendBackHistory: true,
+	fieldSubmittedAt: true,
+	estimatedMaterials: true,
+	materialsTaken: true,
+	materialsUsed: true,
+	materialsReturned: true,
 	brigade: { select: { name: true } },
 } as const
 
@@ -91,9 +100,14 @@ function toRow(
 		jobAddressEstimated: string
 		jobAddressActual?: string | null
 		jafInvoiceLineTotal?: unknown
+		estimatedMaterials?: unknown
+		materialsTaken?: unknown
+		materialsUsed?: unknown
+		materialsReturned?: unknown
 		brigade?: { name: string } | null
 	},
 	stage: SupervisorStage,
+	since: Date | null,
 	note?: string | null,
 ): QueueRow {
 	return {
@@ -108,10 +122,12 @@ function toRow(
 				? null
 				: toNumberPrice(d.jafInvoiceLineTotal),
 		note,
+		since,
+		qtyDiscrepancy: computeMaterialSignals([d as never]).discrepancy > 0,
 	}
 }
 
-type SendBackHistoryEntry = { note?: string }
+type SendBackHistoryEntry = { note?: string; createdAt?: string }
 
 async function loadSupervisorQueues(userId: string) {
 	const tolerance = await getAvisoAmountTolerance()
@@ -151,27 +167,44 @@ async function loadSupervisorQueues(userId: string) {
 			take: 100,
 		}),
 	])
-	const pendingReview = pending.map((d) => toRow(d, "APPROVE"))
+	const pendingReview = pending.map((d) =>
+		toRow(d, "APPROVE", d.fieldSubmittedAt),
+	)
 	const sentBack = sentBackRaw.map((d) => {
 		const h = Array.isArray(d.sendBackHistory)
 			? (d.sendBackHistory as SendBackHistoryEntry[])
 			: []
-		return toRow(d, "FIELD", h.at(-1)?.note ?? null)
+		const returnedAt = h.at(-1)?.createdAt
+		return toRow(
+			d,
+			"FIELD",
+			returnedAt ? new Date(returnedAt) : null,
+			h.at(-1)?.note ?? null,
+		)
 	})
 	const missingAviso: QueueRow[] = []
 	const blocked: QueueRow[] = []
 	for (const d of approved) {
 		const stage = deriveSupervisorStage(d, null)
 		if (d.avisoMatchedAt) continue
-		if (d.avisoLineTotal == null) missingAviso.push(toRow(d, stage))
+		if (d.avisoLineTotal == null)
+			missingAviso.push(toRow(d, stage, d.supervisorApprovedAt))
 		else if (
 			Math.abs(
 				toNumberPrice(d.avisoLineTotal) - toNumberPrice(d.jafInvoiceLineTotal),
 			) > tolerance
 		)
-			blocked.push(toRow(d, "AVISO"))
+			blocked.push(toRow(d, "AVISO", d.supervisorApprovedAt))
 	}
 	return { pendingReview, sentBack, missingAviso, blocked }
+}
+
+async function loadSupervisorScope(userId: string) {
+	const areas = await supervisorAreas(db, userId)
+	const brigadeCount = await db.brigade.count({
+		where: { active: true, area: { in: areas } },
+	})
+	return { areas, brigadeCount }
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -247,13 +280,29 @@ export async function loader({ request }: Route.LoaderArgs) {
 			? docs
 			: docs.filter((d) => d.status !== "LC_REQUEST_GENERATED")
 
-	const { stats, alert, explainer } =
-		user.role === "SUPERVISOR"
-			? { stats: [], alert: null, explainer: null }
-			: computeDashboardStats(user.role, visibleDocs)
+	// The supervisor's tiles describe their whole scope, so a filter that
+	// narrows the list must not also shrink the counts.
+	const hasFilters =
+		!!selectedStatus || !!selectedCrew || !!selectedJobType || !!searchFilter
+	const statsDocs =
+		user.role === "SUPERVISOR" && hasFilters
+			? (
+					await db.jafInvoice.findMany({
+						where: baseWhere,
+						orderBy: { createdAt: "desc" },
+						take: 50,
+					})
+				).filter((d) => d.status !== "LC_REQUEST_GENERATED")
+			: visibleDocs
+	const { stats, alert, explainer } = computeDashboardStats(
+		user.role,
+		statsDocs,
+	)
 
 	const supervisorQueues =
 		user.role === "SUPERVISOR" ? await loadSupervisorQueues(user.id) : null
+	const supervisorScope =
+		user.role === "SUPERVISOR" ? await loadSupervisorScope(user.id) : null
 
 	// Awaiting-pickup aging (spec §6, "days staged … red past 3"): the PREPPED
 	// queues are piped through computeAwaitingPickup so `aged`/`daysStaged`
@@ -378,6 +427,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		pendingReviewDocs: [],
 		sentBackDocs: [],
 		supervisorQueues,
+		supervisorScope,
 		showFilters: isDashboardFiltersEnabled(),
 		crewOptions,
 		jobTypeOptions: jobTypeOptions
@@ -410,6 +460,7 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 		pendingReviewDocs,
 		sentBackDocs,
 		supervisorQueues,
+		supervisorScope,
 		showFilters,
 		crewOptions,
 		jobTypeOptions,
@@ -466,6 +517,7 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 		<RoleDashboard
 			role={role}
 			supervisorQueues={supervisorQueues}
+			supervisorScope={supervisorScope}
 			stats={stats}
 			alert={alert}
 			explainer={explainer}

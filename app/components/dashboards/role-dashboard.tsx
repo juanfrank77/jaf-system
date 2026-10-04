@@ -7,6 +7,7 @@ import { InstallerDashboard } from "./installer-dashboard"
 import {
 	SupervisorDashboard,
 	type SupervisorQueues,
+	type SupervisorScope,
 } from "./supervisor-dashboard"
 import type { DashboardViewProps } from "./types"
 import { WarehouseDashboard } from "./warehouse-dashboard"
@@ -14,15 +15,23 @@ import { WarehouseDashboard } from "./warehouse-dashboard"
 type RoleDashboardProps = DashboardViewProps & {
 	role: Role
 	supervisorQueues: SupervisorQueues | null
+	supervisorScope?: SupervisorScope | null
 }
 
 export function RoleDashboard({
 	role,
 	supervisorQueues,
+	supervisorScope = null,
 	...view
 }: RoleDashboardProps) {
 	if (role === "SUPERVISOR" && supervisorQueues) {
-		return <SupervisorDashboard queues={supervisorQueues} />
+		return (
+			<SupervisorDashboard
+				queues={supervisorQueues}
+				scope={supervisorScope}
+				view={view}
+			/>
+		)
 	}
 	switch (role) {
 		case "CREW":

@@ -13,7 +13,7 @@ import {
 	seedWarehouse,
 } from "~/test/helpers"
 
-const _RUN = runToken("SS")
+const RUN = runToken("SS")
 const t = makeTracker()
 let U_ID: string
 

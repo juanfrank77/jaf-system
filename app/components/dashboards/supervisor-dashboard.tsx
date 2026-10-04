@@ -33,6 +33,7 @@ export type SupervisorScope = { areas: string[]; brigadeCount: number }
 export type SupervisorQueues = {
 	pendingReview: QueueRow[]
 	sentBack: QueueRow[]
+	approved: QueueRow[]
 	missingAviso: QueueRow[]
 	blocked: QueueRow[]
 }
@@ -76,7 +77,7 @@ function Queue({
 }: {
 	titleKey: ParseKeys
 	rows: QueueRow[]
-	variant: "warn" | "danger" | "info"
+	variant: "ok" | "warn" | "danger" | "info"
 	href: (r: QueueRow) => string
 	since: SinceKind
 }) {
@@ -261,6 +262,13 @@ export function SupervisorDashboard({
 				variant="info"
 				href={(r) => `/docs/${r.id}`}
 				since="returned"
+			/>
+			<Queue
+				titleKey="dashboard.queue.approved"
+				rows={queues.approved}
+				variant="ok"
+				href={(r) => `/docs/${r.id}`}
+				since="approved"
 			/>
 			<Queue
 				titleKey="dashboard.queue.missing_aviso"

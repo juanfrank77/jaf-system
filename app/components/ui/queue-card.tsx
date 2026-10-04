@@ -12,7 +12,7 @@ function QueueCard({
 }: {
 	title: React.ReactNode
 	count: number
-	variant: "warn" | "danger" | "info"
+	variant: "ok" | "warn" | "danger" | "info"
 	empty?: React.ReactNode
 	className?: string
 	children?: React.ReactNode

@@ -5,6 +5,7 @@ import { RoleDashboard } from "./role-dashboard"
 const base = { stats: [], alert: null, explainer: null, docs: [] }
 const emptyQueues = {
 	pendingReview: [],
+	approved: [],
 	sentBack: [],
 	missingAviso: [],
 	blocked: [],
@@ -40,15 +41,15 @@ describe("RoleDashboard", () => {
 		})
 	}
 
-	it("renders the four supervisor queues and the work-order list for SUPERVISOR", async ({
+	it("renders the five supervisor queues and the work-order list for SUPERVISOR", async ({
 		renderStub,
 	}) => {
 		await mount(renderStub, <RoleDashboard {...supervisor} {...base} />)
 		expect(
 			screen.getByRole("heading", { level: 1, name: "Dashboard" }),
 		).toBeInTheDocument()
-		// four queue cards + "All work orders"
-		expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(5)
+		// five queue cards + "All work orders"
+		expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(6)
 		expect(
 			screen.getByRole("heading", { level: 2, name: "All work orders" }),
 		).toBeInTheDocument()

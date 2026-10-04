@@ -1053,8 +1053,9 @@
 		"queue": {
 			"pending_review": "Pendiente de revisión — brigada entregó",
 			"sent_back": "Devuelto a la brigada",
-			"missing_aviso": "Aprobado · falta Aviso",
-			"blocked": "Bloqueado · Aviso ≠ factura",
+			"approved": "Aprobado",
+			"missing_aviso": "Falta Aviso",
+			"blocked": "Bloqueado · Aviso ≠ Factura",
 			"empty": "Nada por aquí."
 		},
 		"col": {
@@ -1497,6 +1498,6 @@
 		"batch_confirm": "Confirmación en lote desde papel",
 		"batch_confirm_submit": "Cerrar corrida desde papel",
 		"paid_date": "Fecha de pago",
-				"evidence": "Evidencia (PDF/imagen)"
+		"evidence": "Evidencia (PDF/imagen)"
 	}
 }

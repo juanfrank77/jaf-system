@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto"
+import fs from "node:fs/promises"
 import { useTranslation } from "react-i18next"
 import { Form, Link, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
@@ -89,6 +90,7 @@ const ERROR_KEYS = {
 	"finance_payroll.errors.missing_fields":
 		"finance_payroll.errors.missing_fields",
 	"finance_payroll.errors.invalid_date": "finance_payroll.errors.invalid_date",
+	"finance_payroll.errors.future_date": "finance_payroll.errors.future_date",
 	"finance_payroll.errors.invalid_evidence":
 		"finance_payroll.errors.invalid_evidence",
 } as const
@@ -120,7 +122,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 		return new Response(new Uint8Array(bytes), {
 			headers: {
 				"Content-Type": "application/pdf",
-				"Content-Disposition": `attachment; filename="journal-${run.label}.pdf"`,
+				"Content-Disposition": `attachment; filename="journal-${run.label.replace(/[^A-Za-z0-9._-]+/g, "_")}.pdf"`,
 			},
 		})
 	}
@@ -128,13 +130,22 @@ export async function action({ request, params }: Route.ActionArgs) {
 	if (intent !== "batch_confirm")
 		return { errorKey: "finance_payroll.errors.unknown_intent" }
 
-	const achDateRaw = (form.get("achDate") as string | null)?.trim()
-	if (!achDateRaw) {
+	const paidDateRaw = (form.get("paidDate") as string | null)?.trim()
+	if (!paidDateRaw) {
 		return { errorKey: "finance_payroll.errors.missing_fields" }
 	}
-	const achDate = new Date(achDateRaw)
-	if (Number.isNaN(achDate.getTime())) {
+	// `<input type="date">` posts YYYY-MM-DD. `new Date("YYYY-MM-DD")` is UTC
+	// midnight, which renders as the previous day in Puerto Rico (UTC-4), so
+	// anchor the date at local noon instead.
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(paidDateRaw)) {
 		return { errorKey: "finance_payroll.errors.invalid_date" }
+	}
+	const paidDate = new Date(`${paidDateRaw}T12:00:00`)
+	if (Number.isNaN(paidDate.getTime())) {
+		return { errorKey: "finance_payroll.errors.invalid_date" }
+	}
+	if (paidDate.getTime() > Date.now()) {
+		return { errorKey: "finance_payroll.errors.future_date" }
 	}
 
 	let evidencePath: string | null = null
@@ -172,13 +183,20 @@ export async function action({ request, params }: Route.ActionArgs) {
 		)
 	}
 
-	await closePayrollRun({
-		runId: params.runId as string,
-		paidById: user.id,
-		achDate,
-		evidencePath,
-		confirmedByFallback: true,
-	})
+	try {
+		await closePayrollRun({
+			runId: params.runId as string,
+			paidById: user.id,
+			paidDate,
+			evidencePath,
+			confirmedByFallback: true,
+		})
+	} catch (e) {
+		// The close was rejected (already closed, lost a race, ...): don't leave
+		// the just-written evidence file orphaned on disk.
+		if (evidencePath) await fs.unlink(evidencePath).catch(() => {})
+		throw e
+	}
 	throw redirect("/finance/payroll")
 }
 
@@ -295,10 +313,10 @@ export default function FinancePayrollRunDetail({
 					</h2>
 					<div className="flex flex-wrap items-center gap-2 text-sm">
 						<label className="flex items-center gap-1">
-							{t("finance_payroll.ach_date")}
+							{t("finance_payroll.paid_date")}
 							<input
 								type="date"
-								name="achDate"
+								name="paidDate"
 								required
 								className="border rounded px-2 py-1"
 							/>

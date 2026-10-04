@@ -1,8 +1,10 @@
 import { afterAll, describe, expect, it, vi } from "vitest"
 import { db } from "~/lib/db.server"
 import {
+	armAOpenWhere,
 	buildJournalBlocks,
 	closePayrollRun,
+	EmptyRunError,
 	generateRun,
 } from "~/lib/payroll-run.server"
 import {
@@ -159,10 +161,7 @@ describe("generateRun", () => {
 		expect(reloaded.payrollRunId).toBeNull()
 	})
 
-	it("excludes a job whose brigade account is inactive (deactivated brigade)", async () => {
-		// PDF Part 3 §14.4 (OPEN): an inactive account is not swept — the job
-		// stays open on L1 visible to finance — but already-swept runs close
-		// regardless, so the brigade still gets paid for released work.
+	it("still sweeps a job whose brigade account is inactive (q&a 14.4: deactivation blocks new work, not payment)", async () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		const account = t.track(
 			"contractorAccount",
@@ -183,9 +182,58 @@ describe("generateRun", () => {
 		const reloaded = await db.jafInvoice.findUniqueOrThrow({
 			where: { id: doc.id },
 		})
-		// Inactive accounts are filtered out by resolveContractorAccounts, so
-		// the job is left open — not claimed by this run.
-		expect(reloaded.payrollRunId).toBeNull()
+		expect(reloaded.payrollRunId).toBe(run.id)
+		expect(reloaded.contractorAccountId).toBe(account.id)
+	})
+
+	it("holds back a job named in excludeIds; it stays open for the next run (q&a 15.4/15.5)", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		const account = t.track(
+			"contractorAccount",
+			await seedContractorAccount({ code: "BRG-HOLD" }),
+		)
+		const kept = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
+		)
+		const held = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
+		)
+
+		const { run } = await generateRun({
+			generatedById: finance.id,
+			label: "R-hold",
+			excludeIds: [held.id],
+		})
+		t.track("payrollRun", run as { id: string })
+
+		const keptAfter = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: kept.id },
+		})
+		const heldAfter = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: held.id },
+		})
+		expect(keptAfter.payrollRunId).toBe(run.id)
+		expect(heldAfter.payrollRunId).toBeNull()
+		expect(heldAfter.grossPayable).toBeNull()
+	})
+
+	it("refuses to create an empty run and writes nothing", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		const open = await db.jafInvoice.findMany({
+			where: armAOpenWhere(),
+			select: { id: true },
+		})
+		const runsBefore = await db.payrollRun.count()
+		await expect(
+			generateRun({
+				generatedById: finance.id,
+				label: "R-empty",
+				excludeIds: open.map((o) => o.id),
+			}),
+		).rejects.toBeInstanceOf(EmptyRunError)
+		expect(await db.payrollRun.count()).toBe(runsBefore)
 	})
 
 	it("sweeps every Arm-A-open invoice in the candidate set", async () => {
@@ -275,7 +323,7 @@ describe("closePayrollRun", () => {
 		const { closedCount } = await closePayrollRun({
 			runId: run.id,
 			paidById: finance.id,
-			achDate: new Date("2026-09-12"),
+			paidDate: new Date("2026-09-12"),
 			confirmedByFallback: true,
 		})
 		expect(closedCount).toBe(1)
@@ -308,7 +356,7 @@ describe("closePayrollRun", () => {
 		await closePayrollRun({
 			runId: run.id,
 			paidById: finance.id,
-			achDate: new Date(),
+			paidDate: new Date(),
 			confirmedByFallback: true,
 		})
 
@@ -335,7 +383,7 @@ describe("closePayrollRun", () => {
 		await closePayrollRun({
 			runId: run.id,
 			paidById: finance.id,
-			achDate: new Date("2026-09-12"),
+			paidDate: new Date("2026-09-12"),
 			evidencePath: "/uploads/payroll-runs/first.pdf",
 			confirmedByFallback: true,
 		})
@@ -357,7 +405,7 @@ describe("closePayrollRun", () => {
 			closePayrollRun({
 				runId: run.id,
 				paidById: finance.id,
-				achDate: new Date("2026-10-30"),
+				paidDate: new Date("2026-10-30"),
 				evidencePath: "/uploads/payroll-runs/second.pdf",
 				confirmedByFallback: true,
 			}),

@@ -1,5 +1,4 @@
 import {
-	type ContractorPaymentLine,
 	computeContractorPayment,
 	resolveContractorAccounts,
 	toContractorPaymentLines,
@@ -73,12 +72,56 @@ export function armAOpenWhere(
 	}
 }
 
+/** Thrown (before anything is written) when a run would contain no jobs. */
+export class EmptyRunError extends Error {
+	constructor() {
+		super("No sweepable jobs for this payroll run")
+		this.name = "EmptyRunError"
+	}
+}
+
+/**
+ * Open jobs a run could actually sweep: on Arm A and mapped to a contractor
+ * account. A job with an unmapped code stays open and visible on L1 (with a
+ * badge) but sweeps to nothing, so it must not inflate the "Generate run (N)"
+ * count. Uses the same predicate and the same resolver as `generateRun`.
+ */
+export async function countSweepableJobs(
+	excludeIds: ReadonlyArray<string> = [],
+): Promise<number> {
+	const docs = await db.jafInvoice.findMany({
+		where: {
+			...armAOpenWhere(),
+			...(excludeIds.length ? { id: { notIn: [...excludeIds] } } : {}),
+		},
+		select: { contractorAccountCode: true },
+	})
+	const resolved = await resolveContractorAccounts(
+		docs.map((d) => d.contractorAccountCode),
+	)
+	return docs.filter(
+		(d) => d.contractorAccountCode && resolved.has(d.contractorAccountCode),
+	).length
+}
+
+/**
+ * Sweep the open Arm A jobs into one payroll run.
+ *
+ * Default is "everything ready" (q&a 15.4); `excludeIds` is the jobs Lissette
+ * unticked on L1 to hold back from this report. They stay open and visible.
+ * Throws `EmptyRunError`, writing nothing, when no job would be swept.
+ */
 export async function generateRun(opts: {
 	generatedById: string
 	label: string
+	excludeIds?: ReadonlyArray<string>
 }): Promise<{ run: { id: string; label: string }; sweptCount: number }> {
+	const excludeIds = opts.excludeIds ?? []
 	const candidates = await db.jafInvoice.findMany({
-		where: armAOpenWhere(),
+		where: {
+			...armAOpenWhere(),
+			...(excludeIds.length ? { id: { notIn: [...excludeIds] } } : {}),
+		},
 		select: { id: true, jafInvoiceLines: true, contractorAccountCode: true },
 	})
 
@@ -93,7 +136,7 @@ export async function generateRun(opts: {
 	)
 	const toSweep: Array<{
 		id: string
-		lines: ContractorPaymentLine[]
+		payment: ReturnType<typeof computeContractorPayment>
 		accountId: string
 	}> = []
 	for (const doc of candidates) {
@@ -102,10 +145,15 @@ export async function generateRun(opts: {
 		if (!account) continue
 		toSweep.push({
 			id: doc.id,
-			lines: toContractorPaymentLines(doc.jafInvoiceLines),
+			// Computed here, outside the transaction, so the transaction only
+			// holds the writes.
+			payment: computeContractorPayment(
+				toContractorPaymentLines(doc.jafInvoiceLines),
+			),
 			accountId: account.id,
 		})
 	}
+	if (toSweep.length === 0) throw new EmptyRunError()
 
 	// Each row's write is its own conditional update (`updateMany` +
 	// `payrollRunId: null` in the WHERE, not a plain `update`), not a single
@@ -115,56 +163,63 @@ export async function generateRun(opts: {
 	// (row-level lock, Read Committed re-checks the WHERE on wake): whichever
 	// commits first claims the row; the second's `updateMany` then matches
 	// zero rows for it and simply doesn't count it.
-	const run = await db.$transaction(async (tx) => {
-		const created = await tx.payrollRun.create({
-			data: { label: opts.label, generatedById: opts.generatedById },
-		})
-		let swept = 0
-		for (const doc of toSweep) {
-			const payment = computeContractorPayment(doc.lines)
-			const result = await tx.jafInvoice.updateMany({
-				where: { id: doc.id, payrollRunId: null },
-				data: {
-					payrollRunId: created.id,
-					contractorAccountId: doc.accountId,
-					contractorShareLines: payment.contractorShareLines as never,
-					grossPayable: payment.grossPayable,
-					retentionAmount: payment.retentionAmount,
-					netPayable: payment.netPayable,
-				},
+	const run = await db.$transaction(
+		async (tx) => {
+			const created = await tx.payrollRun.create({
+				data: { label: opts.label, generatedById: opts.generatedById },
 			})
-			swept += result.count
-		}
-		return { created, swept }
-	})
+			let swept = 0
+			for (const doc of toSweep) {
+				const { payment } = doc
+				const result = await tx.jafInvoice.updateMany({
+					where: { id: doc.id, payrollRunId: null },
+					data: {
+						payrollRunId: created.id,
+						contractorAccountId: doc.accountId,
+						contractorShareLines: payment.contractorShareLines as never,
+						grossPayable: payment.grossPayable,
+						retentionAmount: payment.retentionAmount,
+						netPayable: payment.netPayable,
+					},
+				})
+				swept += result.count
+			}
+			// Every candidate was claimed by a concurrent run: roll back rather than
+			// leave an empty run that could be marked paid.
+			if (swept === 0) throw new EmptyRunError()
+			return { created, swept }
+			// The first run sweeps the whole released backlog (one write per job), so
+			// the 5s interactive-transaction default is not enough.
+		},
+		{ timeout: 120_000, maxWait: 10_000 },
+	)
 
 	return { run: run.created, sweptCount: run.swept }
 }
 
 /**
- * Close a payroll run: stamp the ACH payment on the run, stamp
+ * Close a payroll run (Carmen's PAID): stamp `paidAt` on the run, stamp
  * `payablesClosedAt`/`payablesClosedById` on every member invoice (which is
  * what removes them from Arm A and therefore from L1), and notify FINANCE.
+ * No ACH reference is kept — Carmen pays outside the system (q&a 15.2).
  *
- * Shared by Lissette's paper-based "batch-confirm" fallback (`confirmedByFallback:
- * true`) and by Phase 5's Carmen screen, which calls it with
- * `confirmedByFallback: false` so the two paths stay on one transaction.
+ * Today the screen calls it with `confirmedByFallback: true`; a later phase's
+ * dedicated Carmen screen is expected to pass `false` so both paths stay on one
+ * transaction. `reversedAt` / `reversedById` / `reverseReason` on PayrollRun are
+ * the schema hook for the admin-only reversal planned for Phase 5 (q&a 15.5);
+ * nothing writes them yet.
  *
  * Throws 409 if the run is already closed — see the conditional claim below.
  */
 export async function closePayrollRun(opts: {
 	runId: string
 	paidById: string
-	achDate: Date
+	/** The date the run was paid; stamped on `PayrollRun.paidAt`. */
+	paidDate: Date
 	evidencePath?: string | null
 	confirmedByFallback: boolean
 }): Promise<{ closedCount: number }> {
-	const run = await db.payrollRun.findUniqueOrThrow({
-		where: { id: opts.runId },
-		include: { invoices: { select: { id: true } } },
-	})
-
-	await db.$transaction(async (tx) => {
+	const closedCount = await db.$transaction(async (tx) => {
 		// The close is a single CONDITIONAL transition, not an unconditional
 		// write. Only an open run (unpaid, unreversed) can be claimed, and the
 		// claim is the guard: two overlapping batch_confirm calls serialize on
@@ -174,12 +229,12 @@ export async function closePayrollRun(opts: {
 		//
 		// Without it the only protection was the React component hiding the form
 		// once `paidAt` is set, so a double-submit, a replay, or a stale tab
-		// re-stamped the ACH date/paidBy/ACH ref/evidence path on the run AND on
+		// re-stamped the paid date/paidBy/evidence path on the run AND on
 		// every member invoice, and notified every FINANCE user a second time.
 		const claimed = await tx.payrollRun.updateMany({
 			where: { id: opts.runId, paidAt: null, reversedAt: null },
 			data: {
-				paidAt: opts.achDate,
+				paidAt: opts.paidDate,
 				paidById: opts.paidById,
 				evidencePath: opts.evidencePath ?? null,
 				confirmedByFallback: opts.confirmedByFallback,
@@ -188,12 +243,17 @@ export async function closePayrollRun(opts: {
 		if (claimed.count === 0) {
 			throw new Response("Payroll run is already closed", { status: 409 })
 		}
-		await tx.jafInvoice.updateMany({
+		const closed = await tx.jafInvoice.updateMany({
 			where: { payrollRunId: opts.runId },
 			data: {
-				payablesClosedAt: opts.achDate,
+				// When the system closed the job, not the user-typed pay date.
+				payablesClosedAt: new Date(),
 				payablesClosedById: opts.paidById,
 			},
+		})
+		const { label } = await tx.payrollRun.findUniqueOrThrow({
+			where: { id: opts.runId },
+			select: { label: true },
 		})
 		const financeUsers = await tx.user.findMany({
 			where: { role: "FINANCE", active: true },
@@ -203,13 +263,14 @@ export async function closePayrollRun(opts: {
 			await tx.notification.createMany({
 				data: financeUsers.map((u) => ({
 					userId: u.id,
-					message: `Run ${run.label} paid — ${run.invoices.length} Avisos payroll confirmed.`,
+					message: `Run ${label} paid — ${closed.count} Avisos payroll confirmed.`,
 				})),
 			})
 		}
+		return closed.count
 	})
 
-	return { closedCount: run.invoices.length }
+	return { closedCount }
 }
 
 export type JournalLine = {

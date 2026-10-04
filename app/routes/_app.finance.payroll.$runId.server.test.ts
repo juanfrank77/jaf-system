@@ -127,7 +127,7 @@ describe("L3 run detail", () => {
 		expect(block?.gross).toBeCloseTo(100, 2)
 	})
 
-	it("batch_confirm requires achDate, then closes the run", async () => {
+	it("batch_confirm requires paidDate, then closes the run", async () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		mocks.requireRole.mockResolvedValue({ user: finance })
 		const account = t.track("contractorAccount", await seedContractorAccount())
@@ -155,7 +155,7 @@ describe("L3 run detail", () => {
 
 		const validFields = new URLSearchParams({
 			intent: "batch_confirm",
-			achDate: "2026-09-12",
+			paidDate: "2026-09-12",
 		})
 		let redirected: string | null = null
 		try {
@@ -197,7 +197,7 @@ describe("L3 run detail", () => {
 		// ".." segments out of the upload dir, so this must not reach the FS.
 		const form = new FormData()
 		form.set("intent", "batch_confirm")
-		form.set("achDate", "2026-09-12")
+		form.set("paidDate", "2026-09-12")
 		form.append(
 			"evidence",
 			new File(["%PDF-1.4 fake"], "../../../../../../tmp/pwned.pdf", {
@@ -252,7 +252,7 @@ describe("L3 run detail", () => {
 		// and the action would never see an upload at all.
 		const form = new FormData()
 		form.set("intent", "batch_confirm")
-		form.set("achDate", "2026-09-12")
+		form.set("paidDate", "2026-09-12")
 		// Extension is allowed by validateFile's "file" branch, so only the
 		// explicit MIME check can catch this.
 		form.append(

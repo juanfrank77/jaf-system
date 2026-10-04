@@ -1447,13 +1447,15 @@
 		"overdue": "{{days}}d, atrasada",
 		"errors": {
 			"unknown_intent": "Acción desconocida.",
-			"missing_fields": "Se requieren la fecha del ACH y la referencia del ACH.",
-			"invalid_date": "No se pudo interpretar esa fecha de ACH.",
-			"invalid_evidence": "La evidencia debe ser un PDF o imagen de la confirmación del ACH firmada."
+			"missing_fields": "Se requiere la fecha de pago.",
+			"invalid_date": "No se pudo interpretar esa fecha.",
+			"future_date": "La fecha de pago no puede estar en el futuro.",
+			"empty_run": "No se pudo agregar ningún trabajo a la corrida: todos los trabajos listos están retenidos o no tienen cuenta de contratista asignada.",
+			"invalid_evidence": "La evidencia debe ser un PDF o una imagen."
 		},
 		"back": "Volver a nómina pendiente",
 		"open": "Abierta — aún no pagada",
-		"paid_on": "Pagada el {{date}} (ACH {{ref}})",
+		"paid_on": "Pagada el {{date}}",
 		"download_journal_pdf": "⬇ Journal en PDF",
 		"col": {
 			"brigade": "Brigada",
@@ -1465,8 +1467,7 @@
 		"grand_total": "Gran total",
 		"batch_confirm": "Confirmación en lote desde papel",
 		"batch_confirm_submit": "Cerrar corrida desde papel",
-		"ach_date": "Fecha del ACH",
-		"ach_ref": "Ref. del ACH",
-		"evidence": "Evidencia (PDF/imagen)"
+		"paid_date": "Fecha de pago",
+				"evidence": "Evidencia (PDF/imagen)"
 	}
 }

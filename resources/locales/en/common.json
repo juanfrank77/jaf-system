@@ -1447,13 +1447,15 @@
 		"overdue": "{{days}}d, overdue",
 		"errors": {
 			"unknown_intent": "Unknown action.",
-			"missing_fields": "ACH date and ACH reference are both required.",
-			"invalid_date": "That ACH date could not be read.",
-			"invalid_evidence": "Evidence must be a PDF or image of the signed ACH confirmation."
+			"missing_fields": "The paid date is required.",
+			"invalid_date": "That date could not be read.",
+			"future_date": "The paid date cannot be in the future.",
+			"empty_run": "No jobs could be added to a run — every ready job is held back or has no contractor account mapped.",
+			"invalid_evidence": "Evidence must be a PDF or image."
 		},
 		"back": "Back to awaiting payroll",
 		"open": "Open — not yet paid",
-		"paid_on": "Paid on {{date}} (ACH {{ref}})",
+		"paid_on": "Paid on {{date}}",
 		"download_journal_pdf": "⬇ Journal PDF",
 		"col": {
 			"brigade": "Brigade",
@@ -1465,8 +1467,7 @@
 		"grand_total": "Grand Total",
 		"batch_confirm": "Batch-confirm from paper",
 		"batch_confirm_submit": "Close run from paper",
-		"ach_date": "ACH date",
-		"ach_ref": "ACH ref",
+		"paid_date": "Paid date",
 		"evidence": "Evidence (PDF/image)"
 	}
 }

@@ -128,18 +128,31 @@ export const SUPERVISOR_SEED = [
 
 type BrigadeSeed = {
 	name: string
+	/** The brigade's number on the paper Production Journal (q&a 14.1); `null`
+	 * until the client confirms it. */
 	code: string | null
-	area: string
-	supervisorEmail: string
+	area: string | null
+	supervisorEmail: string | null
 	leadName: string
 	phone: string | null
+	/** Defaults to true. Only false for a brigade with journal work that is not
+	 * on the active roster. */
+	active?: boolean
 }
 
-// Source: docs/LIST OF BRIGADES AND SUPERVISORS.xlsx (27 Aug) + docs/Brigades_Code_From_Carmen.png
+// Source: `code` is the brigade number printed on the Production Journal, as
+// confirmed by the client (docs/JAF_Package/finace-work-q&a.md, answer 14.1).
+// Four active brigades have no confirmed number yet (Dino Castillo, Samuel
+// González, Carlos Rodríguez, IR Communication & Construction): they stay
+// `code: null` and get a number from the brigades screen once it is known —
+// saving it there creates their ContractorAccount. Which brigades are active,
+// plus their `area`, `supervisorEmail` and `phone`, come from
+// docs/LIST OF BRIGADES AND SUPERVISORS.xlsx ("LISTADO DE SUPERVISORES Y
+// BRIGADAS ACTIVAS").
 export const BRIGADE_SEED: BrigadeSeed[] = [
 	{
 		name: "DINO CASTILLO",
-		code: "209",
+		code: null,
 		area: "CENTRAL",
 		supervisorEmail: "eocasio@jafcomm.local",
 		leadName: "Dino Castillo",
@@ -147,23 +160,23 @@ export const BRIGADE_SEED: BrigadeSeed[] = [
 	},
 	{
 		name: "ALEXIS DIAZ",
-		code: "206",
+		code: "025",
 		area: "CENTRAL",
 		supervisorEmail: "eocasio@jafcomm.local",
 		leadName: "Alexis Diaz",
 		phone: "787-450-5291",
 	},
 	{
-		name: "ZARIEL GARAY",
-		code: null,
+		name: "ZARIEL SIERRA",
+		code: "178",
 		area: "CENTRAL",
 		supervisorEmail: "eocasio@jafcomm.local",
-		leadName: "Zariel Garay",
+		leadName: "Zariel Sierra",
 		phone: "787-405-5513",
 	},
 	{
 		name: "JESUS MARTINEZ",
-		code: "204",
+		code: "009",
 		area: "CENTRAL",
 		supervisorEmail: "eocasio@jafcomm.local",
 		leadName: "Jesús Martínez",
@@ -171,7 +184,7 @@ export const BRIGADE_SEED: BrigadeSeed[] = [
 	},
 	{
 		name: "SAMUEL GONZALEZ",
-		code: "261",
+		code: null,
 		area: "METRO",
 		supervisorEmail: "cgonzalez@jafcomm.local",
 		leadName: "Samuel González",
@@ -179,7 +192,7 @@ export const BRIGADE_SEED: BrigadeSeed[] = [
 	},
 	{
 		name: "ANGEL JIMENEZ",
-		code: "226",
+		code: "124",
 		area: "METRO",
 		supervisorEmail: "cgonzalez@jafcomm.local",
 		leadName: "Ángel Jiménez",
@@ -187,7 +200,7 @@ export const BRIGADE_SEED: BrigadeSeed[] = [
 	},
 	{
 		name: "IR COMMUNICATION & CONSTRUCTION",
-		code: "256",
+		code: null,
 		area: "METRO",
 		supervisorEmail: "cgonzalez@jafcomm.local",
 		leadName: "IR Communication & Construction",
@@ -195,7 +208,7 @@ export const BRIGADE_SEED: BrigadeSeed[] = [
 	},
 	{
 		name: "CARLOS MARTINEZ",
-		code: "218",
+		code: "016",
 		area: "NORTE",
 		supervisorEmail: "lrivera@jafcomm.local",
 		leadName: "Carlos Martínez",
@@ -203,7 +216,7 @@ export const BRIGADE_SEED: BrigadeSeed[] = [
 	},
 	{
 		name: "CARLOS RODRIGUEZ",
-		code: "269",
+		code: null,
 		area: "NORTE",
 		supervisorEmail: "lrivera@jafcomm.local",
 		leadName: "Carlos Rodríguez",
@@ -211,7 +224,7 @@ export const BRIGADE_SEED: BrigadeSeed[] = [
 	},
 	{
 		name: "FERNANDO ROSARIO",
-		code: "214",
+		code: "011",
 		area: "NORTE",
 		supervisorEmail: "lrivera@jafcomm.local",
 		leadName: "Fernando Rosario",
@@ -219,7 +232,7 @@ export const BRIGADE_SEED: BrigadeSeed[] = [
 	},
 	{
 		name: "MIGUEL PEREZ",
-		code: "272",
+		code: "176",
 		area: "NORTE",
 		supervisorEmail: "lrivera@jafcomm.local",
 		leadName: "Miguel Pérez",
@@ -227,7 +240,7 @@ export const BRIGADE_SEED: BrigadeSeed[] = [
 	},
 	{
 		name: "LEONARDO RAMOS",
-		code: "223",
+		code: "102",
 		area: "OESTE",
 		supervisorEmail: "rramos@jafcomm.local",
 		leadName: "Leonardo Ramos",
@@ -235,7 +248,7 @@ export const BRIGADE_SEED: BrigadeSeed[] = [
 	},
 	{
 		name: "JUAN GARCIA",
-		code: "203",
+		code: "019",
 		area: "OESTE",
 		supervisorEmail: "rramos@jafcomm.local",
 		leadName: "Juan García",
@@ -243,11 +256,23 @@ export const BRIGADE_SEED: BrigadeSeed[] = [
 	},
 	{
 		name: "EDELMIRO BURGOS",
-		code: "202",
+		code: "024",
 		area: "SUR",
 		supervisorEmail: "rramos@jafcomm.local",
 		leadName: "Edelmiro Burgos",
 		phone: "787-473-7410",
+	},
+	// Has work on the journal but is not on the active roster (q&a 14.1), so it
+	// is seeded inactive with no area or supervisor: it can be paid for released
+	// work but is never assignable.
+	{
+		name: "JOSE A RIOS RIVERA",
+		code: "141",
+		area: null,
+		supervisorEmail: null,
+		leadName: "José A. Ríos Rivera",
+		phone: null,
+		active: false,
 	},
 ]
 

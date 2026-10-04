@@ -238,6 +238,57 @@ describe("review: generate_jaf_invoice", () => {
 		})
 	})
 
+	it("uses the flat 65% contractor rate even when a service code carries a different contractorFactor", async () => {
+		const nonStandardDoc = {
+			...approvedDoc,
+			serviceLines: [
+				{
+					serviceCodeId: "c1",
+					claroCode: "34006301",
+					accountCode: "610",
+					name: "TRANSFER ATTCH DE POSTESMC",
+					qty: 5,
+				},
+			],
+			installedServiceLines: [
+				{
+					serviceCodeId: "c1",
+					claroCode: "34006301",
+					accountCode: "610",
+					name: "TRANSFER ATTCH DE POSTESMC",
+					qty: 5,
+				},
+			],
+		}
+		vi.mocked(getActiveServiceCodes).mockResolvedValue([
+			{
+				id: "c1",
+				claroCode: "34006301",
+				name: "TRANSFER ATTCH DE POSTESMC",
+				accountCode: "610",
+				unit: "EA",
+				unitPrice: "42.3430",
+				contractorFactor: "0.80",
+				priceListRevision: "REV 2023-04-21",
+			},
+		] as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			nonStandardDoc as any,
+		)
+		await action({
+			request: post(intent("generate_jaf_invoice")),
+			params: { id: "doc-1" },
+		} as any).catch(() => {})
+		const pdfArgs = vi.mocked(generateJafInvoicePdf).mock.calls[0][0]
+		expect(pdfArgs.contractorShare).toEqual({
+			factor: 0.65,
+			amount: 137.62,
+			retention: 13.76,
+			net: 123.86,
+			brigadeName: "JESUS MARTINEZ",
+		})
+	})
+
 	it("refuses when there are no installed service lines", async () => {
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
 			...approvedDoc,

@@ -18,6 +18,7 @@ import {
 	WAREHOUSE_STAFF_SEED,
 } from "../app/lib/catalog-import"
 import { PrismaClient } from "../generated/prisma/client"
+import { seedContractorAccounts } from "./seed-contractor-accounts"
 import { seedWarehouseStartingBalances } from "./seed-warehouse-stock"
 
 const db = new PrismaClient({
@@ -103,10 +104,12 @@ async function seedBrigades() {
 		const data = {
 			code: b.code,
 			area: b.area,
-			supervisorId: byEmail[b.supervisorEmail] ?? null,
+			supervisorId: b.supervisorEmail
+				? (byEmail[b.supervisorEmail] ?? null)
+				: null,
 			leadName: b.leadName,
 			phone: b.phone,
-			active: true,
+			active: b.active ?? true,
 		}
 		const existing = await db.brigade.findFirst({ where: { name: b.name } })
 		if (existing) await db.brigade.update({ where: { id: existing.id }, data })
@@ -487,6 +490,7 @@ async function main() {
 	await seedCatalog()
 	await seedSupervisors()
 	await seedBrigades()
+	await seedContractorAccounts(db)
 	await seedWarehouses()
 	await seedWarehouseStaff()
 	await seedWarehouseBackups()

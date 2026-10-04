@@ -141,6 +141,27 @@ async function canAccessSnapshotFile(
 	return false
 }
 
+/**
+ * ACH evidence uploaded against a payroll run close, stored as
+ * `payroll-runs/<runId>-<uuid>.<ext>`. Finance-only: the file is a bank
+ * confirmation, and the run id prefix is only honoured for the finance-side
+ * roles.
+ *
+ * COMPTROLLER is gated on the same feature flag as every other branch in this
+ * file and in the finance routes. Without that, a deployment with the
+ * comptroller feature switched off still has a read path to the `payroll-runs/`
+ * bank confirmations — the one branch that was missing it.
+ */
+async function canAccessPayrollRunFile(
+	relativePath: string,
+	user: { id: string; role: string },
+): Promise<boolean> {
+	const m = relativePath.match(/^payroll-runs\/([^/]+)-/)
+	if (!m) return false
+	if (user.role === "COMPTROLLER") return isComptrollerEnabled()
+	return user.role === "ADMIN" || user.role === "FINANCE"
+}
+
 export async function loader({ request, params }: Route.LoaderArgs) {
 	const session = await requireSession(request)
 	const user = await db.user.findUniqueOrThrow({
@@ -166,6 +187,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		if (!allowed) return new Response("Forbidden", { status: 403 })
 	} else if (relativePath.startsWith("snapshots/")) {
 		const allowed = await canAccessSnapshotFile(relativePath, user)
+		if (!allowed) return new Response("Forbidden", { status: 403 })
+	} else if (relativePath.startsWith("payroll-runs/")) {
+		const allowed = await canAccessPayrollRunFile(relativePath, user)
 		if (!allowed) return new Response("Forbidden", { status: 403 })
 	} else {
 		const docId = extractDocId(relativePath)

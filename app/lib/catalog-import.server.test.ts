@@ -53,15 +53,37 @@ describe("parseCatalogCsv", () => {
 })
 
 describe("seed constants", () => {
-	it("has 4 supervisors and 14 brigades, 13 with codes", () => {
+	it("has 4 supervisors and 15 brigades, 11 with confirmed numbers", () => {
 		expect(SUPERVISOR_SEED).toHaveLength(4)
-		expect(BRIGADE_SEED).toHaveLength(14)
-		expect(BRIGADE_SEED.filter((b) => b.code).length).toBe(13)
-		expect(BRIGADE_SEED.find((b) => b.name === "JESUS MARTINEZ")?.code).toBe(
-			"204",
-		)
-		expect(BRIGADE_SEED.find((b) => b.name === "ZARIEL GARAY")?.code).toBeNull()
-		for (const b of BRIGADE_SEED) {
+		expect(BRIGADE_SEED).toHaveLength(15)
+		expect(BRIGADE_SEED.filter((b) => b.code)).toHaveLength(11)
+		const code = (name: string) =>
+			BRIGADE_SEED.find((b) => b.name === name)?.code
+		// q&a 14.1: the numbers printed on the paper Production Journal.
+		expect(code("JESUS MARTINEZ")).toBe("009")
+		expect(code("ALEXIS DIAZ")).toBe("025")
+		expect(code("ZARIEL SIERRA")).toBe("178")
+		expect(code("JOSE A RIOS RIVERA")).toBe("141")
+		// Active brigades whose number is not confirmed yet.
+		for (const name of [
+			"DINO CASTILLO",
+			"SAMUEL GONZALEZ",
+			"CARLOS RODRIGUEZ",
+			"IR COMMUNICATION & CONSTRUCTION",
+		])
+			expect(code(name)).toBeNull()
+	})
+
+	it("brigade codes are unique, and only José Ríos is inactive", () => {
+		const codes = BRIGADE_SEED.map((b) => b.code).filter(Boolean)
+		expect(new Set(codes).size).toBe(codes.length)
+		expect(
+			BRIGADE_SEED.filter((b) => b.active === false).map((b) => b.name),
+		).toEqual(["JOSE A RIOS RIVERA"])
+	})
+
+	it("every brigade with a supervisor points at a seeded supervisor", () => {
+		for (const b of BRIGADE_SEED.filter((b) => b.supervisorEmail)) {
 			expect(SUPERVISOR_SEED.map((s) => s.email)).toContain(b.supervisorEmail)
 		}
 	})

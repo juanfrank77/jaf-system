@@ -182,6 +182,12 @@ model User {
   paidPaymentRequests PaymentRequest[]    @relation("PaidPaymentRequests")
   restockApprovals    RestockRequest[]    @relation("RestockApprovals")
 
+  // Arm A (payroll) — Finance-Billing Arm A phase, back-relations
+  payablesClosedDocs   JafInvoice[] @relation("PayablesClosedDocs")
+  payrollRunGenerator  PayrollRun[] @relation("PayrollRunGenerator")
+  payrollRunPaidBy     PayrollRun[] @relation("PayrollRunPaidBy")
+  payrollRunReversedBy PayrollRun[] @relation("PayrollRunReversedBy")
+
   createdRepairBatches    RepairBatch[]   @relation("RepairBatchCreator")
   voidedRepairBatches     RepairBatch[]   @relation("RepairBatchVoider")
   repairIntakesReceived   RepairIntake[]  @relation("RepairIntakeReceiver")
@@ -396,6 +402,19 @@ model JafInvoice {
   releasedToFinanceById String?
   releasedToFinanceBy   User?     @relation("ReleasedToFinanceDocs", fields: [releasedToFinanceById], references: [id])
 
+  // Arm A (payroll) — Finance-Billing Arm A phase
+  payablesClosedAt     DateTime?
+  payablesClosedById   String?
+  payablesClosedBy     User?              @relation("PayablesClosedDocs", fields: [payablesClosedById], references: [id])
+  contractorAccountId  String?
+  contractorAccount    ContractorAccount? @relation(fields: [contractorAccountId], references: [id])
+  contractorShareLines Json?
+  grossPayable         Decimal?
+  retentionAmount      Decimal?
+  netPayable           Decimal?
+  payrollRunId         String?
+  payrollRun           PayrollRun?        @relation(fields: [payrollRunId], references: [id])
+
   preCertSheets  PreCertSheet[]
   auditTrail     AuditTrail[]
   photos         Photo[]
@@ -408,6 +427,8 @@ model JafInvoice {
   @@index([createdAt])
   @@index([brigadeId])
   @@index([releasedToFinanceAt])
+  @@index([payrollRunId])
+  @@index([contractorAccountId])
   @@index([assignedCrewIds(ops: ArrayOps)], type: Gin)
   @@index([avisoNumber(ops: raw("gin_trgm_ops"))], type: Gin)
   @@index([jobAddressEstimated(ops: raw("gin_trgm_ops"))], type: Gin)
@@ -577,10 +598,50 @@ model Brigade {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  invoices JafInvoice[]
+  invoices           JafInvoice[]
+  contractorAccounts ContractorAccount[]
 
   @@index([active])
   @@index([supervisorId])
+}
+
+model ContractorAccount {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  label     String
+  brigadeId String?
+  brigade   Brigade? @relation(fields: [brigadeId], references: [id])
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  invoices JafInvoice[]
+
+  @@index([active])
+}
+
+model PayrollRun {
+  id                  String    @id @default(cuid())
+  label               String
+  generatedAt         DateTime  @default(now())
+  generatedById       String
+  generatedBy         User      @relation("PayrollRunGenerator", fields: [generatedById], references: [id])
+  paidAt              DateTime?
+  paidById            String?
+  paidBy              User?     @relation("PayrollRunPaidBy", fields: [paidById], references: [id])
+  evidencePath        String?
+  confirmedByFallback Boolean   @default(false)
+  // Reversal is an admin-only action planned for Phase 5 (finance q&a 15.5).
+  // Nothing writes these three columns yet; they are kept now so that phase
+  // does not need another migration. Open-run queries already filter on
+  // `reversedAt: null`.
+  reversedAt          DateTime?
+  reversedById        String?
+  reversedBy          User?     @relation("PayrollRunReversedBy", fields: [reversedById], references: [id])
+  reverseReason       String?
+
+  invoices JafInvoice[]
+
+  @@index([generatedAt])
 }
 
 model Van {

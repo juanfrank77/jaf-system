@@ -1,120 +1,311 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterAll, describe, expect, it, vi } from "vitest"
+import { db } from "~/lib/db.server"
+import {
+	makeTracker,
+	seedContractorAccount,
+	seedFinanceableInvoice,
+	seedServiceCode,
+	seedSweptInvoice,
+	seedUser,
+} from "~/test/helpers"
 
-const mocks = vi.hoisted(() => ({
-	db: {
-		jafInvoice: { findUniqueOrThrow: vi.fn() },
-		user: { findMany: vi.fn() },
-		serviceCode: { findMany: vi.fn() },
-		auditTrail: { create: vi.fn() },
-		notification: { create: vi.fn() },
-		$transaction: vi.fn(),
-	},
-	requireRole: vi.fn(),
-	isTerminalStatus: vi.fn(),
-	computeFinanceStage: vi.fn(),
-	invoiceTotalUsed: vi.fn(),
-	financeLineItems: vi.fn(),
-	getIvuRate: vi.fn(),
-	getLcPbccAdvanceRate: vi.fn(),
-	generatePbccRequestPdf: vi.fn(),
-	sendInternalEmail: vi.fn(),
-}))
-
-vi.mock("~/lib/db.server", () => ({ db: mocks.db }))
+const mocks = vi.hoisted(() => ({ requireRole: vi.fn() }))
 vi.mock("~/lib/permissions.server", () => ({ requireRole: mocks.requireRole }))
-vi.mock("~/lib/permissions", () => ({
-	isTerminalStatus: mocks.isTerminalStatus,
-}))
-vi.mock("~/lib/finance-pipeline.server", () => ({
-	computeFinanceStage: mocks.computeFinanceStage,
-	invoiceTotalUsed: mocks.invoiceTotalUsed,
-	financeLineItems: mocks.financeLineItems,
-}))
-vi.mock("~/lib/system-settings.server", () => ({
-	getIvuRate: mocks.getIvuRate,
-	getLcPbccAdvanceRate: mocks.getLcPbccAdvanceRate,
-}))
-vi.mock("~/lib/pdf/pbcc-request.server", () => ({
-	generatePbccRequestPdf: mocks.generatePbccRequestPdf,
-}))
-vi.mock("~/lib/email.server", () => ({
-	sendInternalEmail: mocks.sendInternalEmail,
-}))
 
 import { action, loader } from "./_app.finance.pbcc.$id"
 
-describe("Finance PBCC guards", () => {
-	beforeEach(() => {
-		vi.clearAllMocks()
-		mocks.isTerminalStatus.mockReturnValue(false)
-		mocks.requireRole.mockResolvedValue({
-			user: { id: "finance-1", role: "FINANCE" },
+const t = makeTracker()
+afterAll(() => t.cleanup())
+
+describe("L2 Packet", () => {
+	it("loader returns the frozen payment, unchanged, for a job already swept into a run", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		mocks.requireRole.mockResolvedValue({ user: finance })
+		const account = t.track("contractorAccount", await seedContractorAccount())
+		// Simulate the swept state directly rather than calling generateRun:
+		// the sweep is global and would race other test files for candidates.
+		const { run, invoice: swept } = await seedSweptInvoice({
+			generatedById: finance.id,
+			contractorAccountId: account.id,
+			runLabel: "R-frozen",
+			grossPayable: 100,
+			retentionAmount: 100 * 0.65 * 0.1,
+			netPayable: 100 * 0.65 * 0.9,
 		})
-		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue({
-			id: "job-1",
-			controlNumber: "JAF-1",
-			status: "SUPERVISOR_APPROVED",
-			supervisorId: "sup-1",
-			poLinks: [],
-			paymentRecords: [],
-			supervisor: { name: "Sup", email: "sup@example.com" },
-		})
-		mocks.computeFinanceStage.mockReturnValue("PBCC_REQUEST_PENDING")
-		mocks.db.serviceCode.findMany.mockResolvedValue([])
-		mocks.getIvuRate.mockResolvedValue(0.115)
-		mocks.getLcPbccAdvanceRate.mockResolvedValue(0.5)
-		mocks.invoiceTotalUsed.mockReturnValue(100)
-		mocks.generatePbccRequestPdf.mockResolvedValue(Buffer.from("pdf"))
-		mocks.db.user.findMany.mockResolvedValue([])
-		mocks.db.$transaction.mockResolvedValue(undefined)
+		t.track("payrollRun", run)
+		t.track("jafInvoice", swept)
+
+		// Change the catalog price after freezing — the frozen figure must not move.
+		const result = await loader({
+			request: new Request(`http://localhost/finance/pbcc/${swept.id}`),
+			params: { id: swept.id },
+			context: {},
+		} as never)
+		expect(result.frozen).toBe(true)
+		expect(result.payment.netPayable).toBeCloseTo(100 * 0.65 * 0.9, 2)
 	})
 
-	it("loader rejects terminal LC jobs", async () => {
-		mocks.isTerminalStatus.mockReturnValue(true)
+	it("mark_sent_by_hand records pbccRequestSentAt and a note without generating missing documents", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		mocks.requireRole.mockResolvedValue({ user: finance })
+		const account = t.track("contractorAccount", await seedContractorAccount())
+		const doc = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
+		)
+
+		const form = new URLSearchParams({
+			intent: "mark_sent_by_hand",
+			note: "Sent by hand 9/3",
+		})
+		await action({
+			request: new Request(`http://localhost/finance/pbcc/${doc.id}`, {
+				method: "POST",
+				body: form,
+			}),
+			params: { id: doc.id },
+			context: {},
+		} as never)
+
+		const reloaded = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: doc.id },
+		})
+		expect(reloaded.pbccRequestSentAt).not.toBeNull()
+	})
+
+	it("mark_sent_by_hand is idempotent: a second click adds no duplicate audit row", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		mocks.requireRole.mockResolvedValue({ user: finance })
+		const account = t.track("contractorAccount", await seedContractorAccount())
+		const doc = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
+		)
+		const submit = () =>
+			action({
+				request: new Request(`http://localhost/finance/pbcc/${doc.id}`, {
+					method: "POST",
+					body: new URLSearchParams({ intent: "mark_sent_by_hand" }),
+				}),
+				params: { id: doc.id },
+				context: {},
+			} as never)
+		await submit()
+		await submit()
+		const audits = await db.auditTrail.count({
+			where: { docId: doc.id, action: "PBCC_SENT_BY_HAND" },
+		})
+		expect(audits).toBe(1)
+	})
+
+	it("mark_sent_by_hand refuses a job that is not on Arm A (already closed)", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		mocks.requireRole.mockResolvedValue({ user: finance })
+		const doc = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({ payablesClosedAt: new Date() }),
+		)
+		let location: string | null = null
+		try {
+			await action({
+				request: new Request(`http://localhost/finance/pbcc/${doc.id}`, {
+					method: "POST",
+					body: new URLSearchParams({ intent: "mark_sent_by_hand" }),
+				}),
+				params: { id: doc.id },
+				context: {},
+			} as never)
+		} catch (response) {
+			if (response instanceof Response)
+				location = response.headers.get("Location")
+		}
+		expect(location).toBe("/finance/queue")
+		const reloaded = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: doc.id },
+		})
+		expect(reloaded.pbccRequestSentAt).toBeNull()
+	})
+
+	// --- Guards carried over from the pre-Arm-A suite. The stage gate moved out
+	// of the loader (replaced by the Arm A open condition), so the two loader
+	// cases are restated against that gate; the two action cases are unchanged
+	// and must keep guarding the auto-generator.
+
+	it("loader redirects a job that is no longer on Arm A (closed or never released)", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		mocks.requireRole.mockResolvedValue({ user: finance })
+
+		const closed = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({ payablesClosedAt: new Date() }),
+		)
+		const neverReleased = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({ releasedToFinanceAt: null }),
+		)
+
+		for (const doc of [closed, neverReleased]) {
+			await expect(
+				loader({
+					request: new Request(`http://localhost/finance/pbcc/${doc.id}`),
+					params: { id: doc.id },
+					context: {},
+				} as never),
+			).rejects.toMatchObject({ status: 302 })
+		}
+	})
+
+	it("loader serves an Arm-A-open job regardless of its finance-pipeline stage", async () => {
+		// The Arm A open check replaced the stage gate, so a job that computeFinanceStage
+		// would reject still loads here — this is the intended behaviour change.
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		mocks.requireRole.mockResolvedValue({ user: finance })
+		const doc = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({ status: "LC_REQUEST_GENERATED" }),
+		)
+		const result = await loader({
+			request: new Request(`http://localhost/finance/pbcc/${doc.id}`),
+			params: { id: doc.id },
+			context: {},
+		} as never)
+		expect(result.doc.id).toBe(doc.id)
+	})
+
+	it("loader still serves a job already swept into an open, unpaid run (Review Focus)", async () => {
+		// The packet view is deliberately wider than L1's: the frozen figures
+		// are only reachable here, so a swept job must stay loadable.
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		mocks.requireRole.mockResolvedValue({ user: finance })
+		const account = t.track("contractorAccount", await seedContractorAccount())
+		const { invoice } = await seedSweptInvoice({
+			generatedById: finance.id,
+			contractorAccountId: account.id,
+			runLabel: "R-packet-frozen",
+			grossPayable: 100,
+			retentionAmount: 100 * 0.65 * 0.1,
+			netPayable: 100 * 0.65 * 0.9,
+		})
+		t.track("payrollRun", { id: invoice.payrollRunId as string })
+		t.track("jafInvoice", invoice)
+
+		const result = await loader({
+			request: new Request(`http://localhost/finance/pbcc/${invoice.id}`),
+			params: { id: invoice.id },
+			context: {},
+		} as never)
+
+		expect(result.doc.id).toBe(invoice.id)
+		expect(result.frozen).toBe(true)
+	})
+
+	it("loader refuses a job cancelled after release (Review Focus)", async () => {
+		// Cancelling does not clear releasedToFinanceAt, so without the shared
+		// predicate's status guard this job would still load here — the CANCELLED
+		// exclusion used to reach this loader via computeFinanceStage and was
+		// lost when the gate was restated inline.
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		mocks.requireRole.mockResolvedValue({ user: finance })
+		const doc = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({ status: "CANCELLED" }),
+		)
+		expect(doc.releasedToFinanceAt).not.toBeNull()
+
 		await expect(
 			loader({
-				request: new Request("http://localhost/finance/pbcc/job-1"),
-				params: { id: "job-1" },
-			} as any),
+				request: new Request(`http://localhost/finance/pbcc/${doc.id}`),
+				params: { id: doc.id },
+				context: {},
+			} as never),
 		).rejects.toMatchObject({ status: 302 })
 	})
 
 	it("action rejects terminal LC jobs", async () => {
-		mocks.isTerminalStatus.mockReturnValue(true)
-		const form = new FormData()
-		form.set("intent", "generate_pbcc")
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		mocks.requireRole.mockResolvedValue({ user: finance })
+		const doc = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({ status: "CANCELLED" }),
+		)
+		const form = new URLSearchParams({ intent: "generate_pbcc" })
 		const result = await action({
-			request: new Request("http://localhost/finance/pbcc/job-1", {
+			request: new Request(`http://localhost/finance/pbcc/${doc.id}`, {
 				method: "POST",
 				body: form,
 			}),
-			params: { id: "job-1" },
-		} as any)
+			params: { id: doc.id },
+			context: {},
+		} as never)
 		expect(result).toEqual({ errorKey: "finance_pbcc.errors.terminal_status" })
-		expect(mocks.db.jafInvoice.findUniqueOrThrow).toHaveBeenCalled()
 	})
 
-	it("loader rejects wrong stage", async () => {
-		mocks.computeFinanceStage.mockReturnValue("TO_VERIFY")
-		await expect(
-			loader({
-				request: new Request("http://localhost/finance/pbcc/job-1"),
-				params: { id: "job-1" },
-			} as any),
-		).rejects.toMatchObject({ status: 302 })
-	})
-
-	it("action rejects wrong stage", async () => {
-		mocks.computeFinanceStage.mockReturnValue("TO_VERIFY")
-		const form = new FormData()
-		form.set("intent", "generate_pbcc")
+	it("action rejects wrong stage (auto-generator still stage-gated)", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		mocks.requireRole.mockResolvedValue({ user: finance })
+		// No Aviso lines recorded, so computeFinanceStage never reaches
+		// PBCC_REQUEST_PENDING even though the job is Arm-A-open.
+		const doc = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({ contractorAccountCode: null }),
+		)
+		const form = new URLSearchParams({ intent: "generate_pbcc" })
 		const result = await action({
-			request: new Request("http://localhost/finance/pbcc/job-1", {
+			request: new Request(`http://localhost/finance/pbcc/${doc.id}`, {
 				method: "POST",
 				body: form,
 			}),
-			params: { id: "job-1" },
-		} as any).catch((r: any) => r)
-		expect(result.status).toBe(302)
+			params: { id: doc.id },
+			context: {},
+		} as never).catch((r: unknown) => r)
+		expect(result).toMatchObject({ status: 302 })
+	})
+
+	it("keeps a swept job's frozen figures when its catalog price and lines change (Review Focus)", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		mocks.requireRole.mockResolvedValue({ user: finance })
+		const account = t.track("contractorAccount", await seedContractorAccount())
+		const { run, invoice: swept } = await seedSweptInvoice({
+			generatedById: finance.id,
+			contractorAccountId: account.id,
+			runLabel: "R-price-change",
+			grossPayable: 100,
+			retentionAmount: 100 * 0.65 * 0.1,
+			netPayable: 100 * 0.65 * 0.9,
+		})
+		t.track("payrollRun", run)
+		t.track("jafInvoice", swept)
+
+		// Rewrite both the catalog price and the job's own line snapshot after
+		// the run was generated. The frozen figures must not move.
+		const serviceCode = t.track(
+			"serviceCode",
+			await seedServiceCode("PBCC-FREEZE-CHECK", { unitPrice: 999 }),
+		)
+		await db.jafInvoice.update({
+			where: { id: swept.id },
+			data: {
+				jafInvoiceLines: [
+					{
+						serviceCodeId: serviceCode.id,
+						claroCode: "PBCC-FREEZE-CHECK",
+						name: "Repriced",
+						unit: "EA",
+						qty: 9,
+						unitPrice: 999,
+						lineAmount: 8991,
+					},
+				],
+			},
+		})
+
+		const result = await loader({
+			request: new Request(`http://localhost/finance/pbcc/${swept.id}`),
+			params: { id: swept.id },
+			context: {},
+		} as never)
+		expect(result.frozen).toBe(true)
+		expect(result.payment.grossPayable).toBeCloseTo(100, 2)
+		expect(result.payment.netPayable).toBeCloseTo(100 * 0.65 * 0.9, 2)
 	})
 })

@@ -405,7 +405,6 @@ export default function DocView({
 	const isApproved = APPROVED_STATUSES.includes(
 		doc.status as (typeof APPROVED_STATUSES)[number],
 	)
-	const missingAviso = isApproved && !doc.avisoNumber
 	const missingClaroPdf = isApproved && !doc.claroPdfPath
 
 	return (
@@ -423,7 +422,7 @@ export default function DocView({
 				</span>
 			</div>
 
-			{(missingAviso || missingClaroPdf) && (
+			{missingClaroPdf && (
 				<div className="bg-status-warn-soft border border-status-warn/30 rounded-lg p-4 space-y-2">
 					<div className="flex items-start gap-3">
 						<span className="text-status-warn text-lg" aria-hidden>
@@ -434,16 +433,8 @@ export default function DocView({
 								{t("docs_view.billing_blocked")}
 							</p>
 							<ul className="text-sm text-status-warn list-disc list-inside">
-								{missingAviso && (
-									<li>{t("docs_view.billing_blocked_aviso")}</li>
-								)}
-								{missingClaroPdf && (
-									<li>{t("docs_view.billing_blocked_claro_pdf")}</li>
-								)}
+								<li>{t("docs_view.billing_blocked_claro_pdf")}</li>
 							</ul>
-							<p className="text-xs text-status-warn">
-								{t("docs_view.billing_blocked_hint")}
-							</p>
 						</div>
 					</div>
 				</div>

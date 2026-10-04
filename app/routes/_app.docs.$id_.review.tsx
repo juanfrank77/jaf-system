@@ -16,6 +16,7 @@ import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Pill } from "~/components/ui/pill"
 import { Textarea } from "~/components/ui/textarea"
+import { CONTRACTOR_SHARE_PERCENT } from "~/lib/contractor-payment.server"
 import { db } from "~/lib/db.server"
 import { validateFile } from "~/lib/file-upload.server"
 import { generateJafInvoicePdf } from "~/lib/pdf/jaf-invoice.server"
@@ -269,20 +270,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 		const lineTotal = sumLines(lines)
 		const ivuRate = await getIvuRate()
-		const factors = installed.map((l) =>
-			toNumberPrice(codeMap[l.serviceCodeId]?.contractorFactor),
-		)
-		const factor = factors.find((f) => f > 0) ?? 0.65
-		const contractorAmount = round2(
-			lines.reduce(
-				(s, l) =>
-					s +
-					l.lineAmount *
-						(toNumberPrice(codeMap[l.serviceCodeId]?.contractorFactor) ||
-							factor),
-				0,
-			),
-		)
+		const factor = CONTRACTOR_SHARE_PERCENT
+		const contractorAmount = round2(lineTotal * factor)
 		const retention = round2(contractorAmount * 0.1)
 		const brigade = doc.brigadeId
 			? await db.brigade.findUnique({ where: { id: doc.brigadeId } })

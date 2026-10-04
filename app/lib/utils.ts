@@ -35,3 +35,19 @@ export function toNumberPrice(value: unknown): number {
 export function formatMoney(amount: unknown, currency = "$"): string {
 	return `${currency}${toNumberPrice(amount).toFixed(2)}`
 }
+
+/**
+ * Truncate a number to `places` decimal places by dropping digits beyond,
+ * not rounding — matches the paper Production Journal's cent handling.
+ *
+ * See docs/JAF_Finance_answer Journey.pdf Part 1:
+ * "Cents are truncated, not rounded: 62.0425 → 62.04; 6.204 → 6.20;
+ *  55.836 → 55.83 (not 55.84)"
+ */
+export function truncateCents(value: number, places = 2): number {
+	const factor = 10 ** places
+	// `value * factor` carries float error (0.29 * 100 = 28.999999999999996),
+	// which a bare Math.trunc would turn into a lost cent. Settle it at 6
+	// extra digits first; real inputs never carry that much precision.
+	return Math.trunc(Number((value * factor).toFixed(6))) / factor
+}

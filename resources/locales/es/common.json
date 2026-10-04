@@ -144,7 +144,8 @@
 			"warehouse_scan_in": "Registrar Devolución",
 			"warehouse_restock": "Reabastecimientos por Liberar",
 			"warehouse_stock": "Inventario",
-			"comptroller": "Contraloría"
+			"comptroller": "Contraloría",
+			"finance_payroll": "Nómina pendiente"
 		},
 		"notifications": {
 			"bell_label": "Notificaciones",
@@ -257,9 +258,8 @@
 		"missing_materials_resolve": "Resolver materiales faltantes",
 		"full_history": "Historial completo",
 		"billing_blocked": "Bloqueado para facturación",
-		"billing_blocked_aviso": "Falta # de Aviso Claro — ingréselo después de crear la orden en Claro.",
 		"billing_blocked_claro_pdf": "Falta PDF de orden de trabajo Claro — cárguelo después de crearla en Claro.",
-		"billing_blocked_hint": "Se requieren el # de Aviso y el PDF de Claro antes de que Finanzas pueda facturar este trabajo.",
+		"billing_blocked_hint": "Se requiere el PDF de Claro antes de que Finanzas pueda facturar este trabajo.",
 		"cancel_heading": "Cancelar orden de trabajo",
 		"cancel_placeholder": "Razón de la cancelación (obligatorio)…",
 		"cancel_submit": "Cancelar orden de trabajo",
@@ -858,7 +858,7 @@
 		"age_days": "{{count}}d",
 		"amount_label": "Monto",
 		"po_mismatch": "Discrepancia PO: {{poAmount}}",
-		"missing_docs": "Falta Aviso # o PDF de Claro",
+		"missing_claro_pdf": "Falta PDF de Claro",
 		"verify": "Verificar",
 		"generate_pbcc": "Generar solicitud PBCC",
 		"upload_final_doc": "Cargar documento final",
@@ -897,19 +897,34 @@
 		}
 	},
 	"finance_queue": {
-		"title": "Cola de solicitudes de pago",
-		"hint": "Paquetes liberados por supervisores. Un trabajo aparece aquí solo cuando está completo.",
+		"title": "Paquetes entrantes",
+		"hint": "Trabajos liberados por supervisores y aún abiertos en la nómina del Brazo A. Un trabajo desaparece aquí cuando se cierra su corrida de nómina.",
 		"empty": "No hay paquetes en espera.",
-		"claro_pct": "{{pct}}% con aceptación de campo de Claro",
-		"complete": "Completo",
-		"no_claro_sig": "Sin firma Claro",
+		"account_unmapped": "Cuenta de contratista no asignada",
+		"missing_claro_pdf": "Falta PDF de Claro",
+		"est_label": "est.",
+		"stat": {
+			"new_packets": "Paquetes nuevos: {{count}}",
+			"awaiting_payroll": "Pendientes de nómina: {{count}}",
+			"new_packets_summary": "{{count}} paquetes · {{gross}} bruto · {{est}} est.",
+			"awaiting_payroll_summary": "{{count}} pendientes · {{gross}} bruto · {{est}} a pagar"
+		},
 		"col": {
 			"work_order": "Orden",
 			"aviso": "Aviso",
 			"contractor": "Contratista",
-			"amount": "Monto",
+			"gross": "Bruto",
+			"est_payable": "Est. a pagar",
 			"packet": "Paquete"
-		}
+		},
+		"pagination": {
+			"summary": "{{from}}–{{to}} de {{total}}",
+			"page": "Página {{current}} de {{total}}",
+			"prev": "Anterior",
+			"next": "Siguiente"
+		},
+		"generate_run_selected": "Generar corrida ({{count}} seleccionados)",
+		"select_hint": "Desmarque los trabajos que desea posponer; solo los marcados ingresan a la corrida."
 	},
 	"finance_verify": {
 		"aviso_amount_prefilled": "Monto del Aviso {{amount}} capturado y cotejado por el supervisor.",
@@ -919,7 +934,6 @@
 		"ivu_rate": "Tasa de IVU: {{rate}}%",
 		"tolerance": "Tolerancia permitida: {{tolerance}}",
 		"billing_blocked": "No se puede verificar — documentos de facturación incompletos",
-		"blocked_aviso": "Falta # de Aviso Claro",
 		"blocked_claro_pdf": "Falta PDF de orden de trabajo Claro",
 		"jaf_invoice": "Factura JAF",
 		"download": "Descargar",
@@ -936,7 +950,7 @@
 		"aviso_amount_placeholder": "0.00",
 		"verify_note_placeholder": "Nota de verificación opcional…",
 		"mark_verified": "Marcar verificado",
-		"cannot_verify_hint": "El supervisor debe agregar el Aviso # y cargar el PDF de Claro antes de verificar.",
+		"cannot_verify_hint": "El supervisor debe cargar el PDF de Claro antes de verificar.",
 		"send_back_placeholder": "Explica el problema del Aviso al supervisor…",
 		"send_back": "Devolver al supervisor",
 		"back": "Volver al pipeline",
@@ -963,7 +977,23 @@
 		"errors": {
 			"unknown_intent": "Acción desconocida.",
 			"terminal_status": "Este trabajo ya no es editable."
-		}
+		},
+		"contractor_payment": "Pago al contratista (Brazo A)",
+		"frozen": "Congelado en la corrida",
+		"estimated": "Estimado",
+		"account_unmapped": "Cuenta de contratista no asignada",
+		"missing_claro_pdf": "Falta PDF de Claro",
+		"gross": "Bruto a pagar",
+		"retention": "Retención 10%",
+		"net": "Neto a pagar",
+		"bank_invoice_blocked": "Factura en formato bancario — bloqueado: aún no se ha recibido de Lissette la factura bancaria de muestra.",
+		"bank_schedule_blocked": "Plantilla Excel del banco — bloqueado: aún no se ha recibido la plantilla en blanco.",
+		"mark_sent_by_hand": "Marcar enviado a mano, fuera del sistema",
+		"sent_by_hand_note": "Nota (opcional)",
+		"precert_title": "Hoja de pre-certificación",
+		"precert_download": "Descargar hoja de pre-certificación",
+		"precert_signers": "Firmado por: {{supervisor}}, {{contractor}}, {{claro}}",
+		"precert_missing": "Falta hoja de pre-certificación"
 	},
 	"finance_po": {
 		"title": "PO de Claro y documento final",
@@ -1419,5 +1449,36 @@
 			"submit": "Escanear entrada",
 			"success": "Devuelto exitosamente."
 		}
+	},
+	"finance_payroll": {
+		"title": "Nómina pendiente",
+		"run_label_placeholder": "Etiqueta de la corrida (ej. 9/10)",
+		"generate_run": "Generar corrida ({{count}} abiertas)",
+		"run_row": "{{label}} — {{count}} trabajos — generada {{date}}",
+		"overdue": "{{days}}d, atrasada",
+		"errors": {
+			"unknown_intent": "Acción desconocida.",
+			"missing_fields": "Se requiere la fecha de pago.",
+			"invalid_date": "No se pudo interpretar esa fecha.",
+			"future_date": "La fecha de pago no puede estar en el futuro.",
+			"empty_run": "No se pudo agregar ningún trabajo a la corrida: todos los trabajos listos están retenidos o no tienen cuenta de contratista asignada.",
+			"invalid_evidence": "La evidencia debe ser un PDF o una imagen."
+		},
+		"back": "Volver a nómina pendiente",
+		"open": "Abierta — aún no pagada",
+		"paid_on": "Pagada el {{date}}",
+		"download_journal_pdf": "⬇ Journal en PDF",
+		"col": {
+			"brigade": "Brigada",
+			"gross": "Bruto",
+			"net": "Neto",
+			"retention": "Ret. 10%",
+			"total_sc": "Total SC"
+		},
+		"grand_total": "Gran total",
+		"batch_confirm": "Confirmación en lote desde papel",
+		"batch_confirm_submit": "Cerrar corrida desde papel",
+		"paid_date": "Fecha de pago",
+				"evidence": "Evidencia (PDF/imagen)"
 	}
 }

@@ -144,7 +144,8 @@
 			"warehouse_scan_in": "Scan In Return",
 			"warehouse_restock": "Restocks to Release",
 			"warehouse_stock": "Stock",
-			"comptroller": "Comptroller"
+			"comptroller": "Comptroller",
+			"finance_payroll": "Awaiting payroll"
 		},
 		"notifications": {
 			"bell_label": "Notifications",
@@ -257,9 +258,8 @@
 		"missing_materials_resolve": "Resolve Missing Materials",
 		"full_history": "Full History",
 		"billing_blocked": "Blocked from Billing",
-		"billing_blocked_aviso": "Missing Claro Aviso # — enter it after creating the work order in Claro's portal.",
 		"billing_blocked_claro_pdf": "Missing Claro work-order PDF — upload it after creating the work order in Claro's portal.",
-		"billing_blocked_hint": "Both the Aviso # and Claro PDF are required before Finance can bill this job.",
+		"billing_blocked_hint": "The Claro PDF is required before Finance can bill this job.",
 		"cancel_heading": "Cancel Work Order",
 		"cancel_placeholder": "Reason for cancellation (required)…",
 		"cancel_submit": "Cancel Work Order",
@@ -858,7 +858,7 @@
 		"age_days": "{{count}}d",
 		"amount_label": "Amount",
 		"po_mismatch": "PO mismatch: {{poAmount}}",
-		"missing_docs": "Missing Aviso # or Claro PDF",
+		"missing_claro_pdf": "Missing Claro PDF",
 		"verify": "Verify",
 		"generate_pbcc": "Generate PBCC Request",
 		"upload_final_doc": "Upload Final Doc",
@@ -897,19 +897,34 @@
 		}
 	},
 	"finance_queue": {
-		"title": "Payment request queue",
-		"hint": "Packets released by supervisors. A job appears here only when complete.",
+		"title": "Packets in",
+		"hint": "Jobs released by supervisors and still open on Arm A payroll. A job disappears here once its payroll run is closed.",
 		"empty": "No packets waiting.",
-		"claro_pct": "{{pct}}% with Claro field acceptance",
-		"complete": "Complete",
-		"no_claro_sig": "No Claro sig",
+		"account_unmapped": "Contractor account not mapped",
+		"missing_claro_pdf": "Missing Claro PDF",
+		"est_label": "est.",
+		"stat": {
+			"new_packets": "New packets: {{count}}",
+			"awaiting_payroll": "Awaiting payroll: {{count}}",
+			"new_packets_summary": "{{count}} packets · {{gross}} gross · {{est}} est.",
+			"awaiting_payroll_summary": "{{count}} awaiting · {{gross}} gross · {{est}} payable"
+		},
 		"col": {
 			"work_order": "Work order",
 			"aviso": "Aviso",
 			"contractor": "Contractor",
-			"amount": "Amount",
+			"gross": "Gross",
+			"est_payable": "Est. payable",
 			"packet": "Packet"
-		}
+		},
+		"pagination": {
+			"summary": "{{from}}–{{to}} of {{total}}",
+			"page": "Page {{current}} of {{total}}",
+			"prev": "Prev",
+			"next": "Next"
+		},
+		"generate_run_selected": "Generate run ({{count}} selected)",
+		"select_hint": "Untick jobs you want to hold back — only checked jobs enter the run."
 	},
 	"finance_verify": {
 		"aviso_amount_prefilled": "Aviso amount {{amount}} captured and matched by the supervisor.",
@@ -919,7 +934,6 @@
 		"ivu_rate": "IVU rate: {{rate}}%",
 		"tolerance": "Allowed tolerance: {{tolerance}}",
 		"billing_blocked": "Cannot verify — billing documents incomplete",
-		"blocked_aviso": "Missing Claro Aviso #",
 		"blocked_claro_pdf": "Missing Claro work-order PDF",
 		"jaf_invoice": "JAF Invoice",
 		"download": "Download",
@@ -936,7 +950,7 @@
 		"aviso_amount_placeholder": "0.00",
 		"verify_note_placeholder": "Optional verification note…",
 		"mark_verified": "Mark Verified",
-		"cannot_verify_hint": "The supervisor must add the Aviso # and upload the Claro PDF before verification.",
+		"cannot_verify_hint": "The supervisor must upload the Claro PDF before verification.",
 		"send_back_placeholder": "Explain the Aviso issue to the supervisor…",
 		"send_back": "Send Back to Supervisor",
 		"back": "Back to pipeline",
@@ -963,7 +977,23 @@
 		"errors": {
 			"unknown_intent": "Unknown action.",
 			"terminal_status": "This job is no longer editable."
-		}
+		},
+		"contractor_payment": "Contractor payment (Arm A)",
+		"frozen": "Frozen in run",
+		"estimated": "Estimated",
+		"account_unmapped": "Contractor account not mapped",
+		"missing_claro_pdf": "Missing Claro PDF",
+		"gross": "Gross payable",
+		"retention": "10% retention",
+		"net": "Net payable",
+		"bank_invoice_blocked": "Bank-format invoice — blocked: sample bank invoice not yet received from Lissette.",
+		"bank_schedule_blocked": "Bank's Excel schedule — blocked: blank template not yet received.",
+		"mark_sent_by_hand": "Mark sent by hand, outside the system",
+		"sent_by_hand_note": "Note (optional)",
+		"precert_title": "Pre-certification sheet",
+		"precert_download": "Download pre-cert sheet",
+		"precert_signers": "Signed by: {{supervisor}}, {{contractor}}, {{claro}}",
+		"precert_missing": "Pre-cert sheet missing"
 	},
 	"finance_po": {
 		"title": "Claro PO & Final Document",
@@ -1419,5 +1449,36 @@
 			"submit": "Scan In",
 			"success": "Returned successfully."
 		}
+	},
+	"finance_payroll": {
+		"title": "Awaiting payroll",
+		"run_label_placeholder": "Run label (e.g. 9/10)",
+		"generate_run": "Generate run ({{count}} open)",
+		"run_row": "{{label}} — {{count}} jobs — generated {{date}}",
+		"overdue": "{{days}}d, overdue",
+		"errors": {
+			"unknown_intent": "Unknown action.",
+			"missing_fields": "The paid date is required.",
+			"invalid_date": "That date could not be read.",
+			"future_date": "The paid date cannot be in the future.",
+			"empty_run": "No jobs could be added to a run — every ready job is held back or has no contractor account mapped.",
+			"invalid_evidence": "Evidence must be a PDF or image."
+		},
+		"back": "Back to awaiting payroll",
+		"open": "Open — not yet paid",
+		"paid_on": "Paid on {{date}}",
+		"download_journal_pdf": "⬇ Journal PDF",
+		"col": {
+			"brigade": "Brigade",
+			"gross": "Gross",
+			"net": "Net",
+			"retention": "10% ret.",
+			"total_sc": "Total SC"
+		},
+		"grand_total": "Grand Total",
+		"batch_confirm": "Batch-confirm from paper",
+		"batch_confirm_submit": "Close run from paper",
+		"paid_date": "Paid date",
+		"evidence": "Evidence (PDF/image)"
 	}
 }

@@ -16,6 +16,13 @@ describe("navGroupsFor", () => {
 		expect(tos(navGroupsFor("CREW"))).toEqual([["overview", ["/dashboard"]]])
 	})
 
+	it("groups FINANCE items under overview and money, with payroll between queue and receivables", () => {
+		expect(tos(navGroupsFor("FINANCE"))).toEqual([
+			["overview", ["/dashboard"]],
+			["money", ["/finance/queue", "/finance/payroll", "/finance/receivables"]],
+		])
+	})
+
 	it("omits empty groups and keeps a fixed group order for ADMIN", () => {
 		const keys = navGroupsFor("ADMIN", { comptrollerEnabled: true }).map(
 			(g) => g.key,

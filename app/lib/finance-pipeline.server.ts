@@ -165,12 +165,6 @@ export function invoiceTotalUsed(
 	return subtotal + subtotal * ivuRate
 }
 
-export function isMissingAviso(
-	invoice: Pick<JafInvoice, "avisoNumber">,
-): boolean {
-	return !invoice.avisoNumber || invoice.avisoNumber.trim() === ""
-}
-
 export function isMissingClaroPdf(
 	invoice: Pick<JafInvoice, "claroPdfPath">,
 ): boolean {
@@ -201,7 +195,6 @@ export type FinancePipelineRow = {
 	alertDays: number | null
 	isAlert: boolean
 	amount: number
-	missingAviso: boolean
 	missingClaroPdf: boolean
 	advanceAmount: number | null
 	finalPaymentAmount: number | null

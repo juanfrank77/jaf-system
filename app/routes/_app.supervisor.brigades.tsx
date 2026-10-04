@@ -5,6 +5,7 @@ import { Button, buttonVariants } from "~/components/ui/button"
 import { Checkbox } from "~/components/ui/checkbox"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
+import { syncContractorAccount } from "~/lib/contractor-account-sync"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
 import { supervisorAreas } from "~/lib/supervisor-scope"
@@ -161,14 +162,16 @@ export async function action({ request }: Route.ActionArgs) {
 				}
 				// Don't overwrite an existing owner's supervisorId just because a
 				// different in-area supervisor happens to be editing this brigade.
-				await db.brigade.update({
+				const saved = await db.brigade.update({
 					where: { id: existing.id },
 					data: sharedPayload,
 				})
+				await syncContractorAccount(db, saved)
 			} else {
-				await db.brigade.create({
+				const saved = await db.brigade.create({
 					data: { ...sharedPayload, supervisorId: user.id },
 				})
+				await syncContractorAccount(db, saved)
 			}
 		} catch (error) {
 			if (error instanceof BrigadeAreaNotAllowedError) {
@@ -213,10 +216,11 @@ export async function action({ request }: Route.ActionArgs) {
 				area: existing.area,
 				supervisorAreas: areas,
 			})
-			await db.brigade.update({
+			const toggled = await db.brigade.update({
 				where: { id },
 				data: { active: !existing.active },
 			})
+			await syncContractorAccount(db, toggled)
 		} catch (error) {
 			if (error instanceof BrigadeAreaNotAllowedError) {
 				return data(

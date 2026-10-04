@@ -914,7 +914,7 @@ function AvisoCaptureForm({
 				{doc.avisoDocPath && (
 					<a
 						href={`/files/aviso-docs/${doc.id}-aviso.pdf`}
-						className="text-primary underline text-sm"
+						className="text-accent-text underline text-sm"
 					>
 						{t("docs_review.download")}
 					</a>
@@ -1058,7 +1058,7 @@ function SignatureBlock({
 			/>
 			<button
 				type="button"
-				className="text-xs text-muted-foreground hover:text-muted-foreground"
+				className="text-xs text-muted-foreground hover:text-foreground"
 				onClick={() => setCleared((c) => c + 1)}
 			>
 				{t("precert.clear_signature")}
@@ -1093,7 +1093,7 @@ function PreCertPanel({
 				{sheet?.pdfPath && (
 					<a
 						href={`/files/precert/${doc.id}-v${sheet.version}.pdf`}
-						className="text-primary underline"
+						className="text-accent-text underline"
 					>
 						{t("precert.download")}
 					</a>
@@ -1230,7 +1230,7 @@ function PreCertPanel({
 							{sheet.sigClaroScanPath && (
 								<a
 									href={`/files/precert/${doc.id}-claro-scan.jpg`}
-									className="text-primary underline text-xs"
+									className="text-accent-text underline text-xs"
 								>
 									{t("precert.download")}
 								</a>
@@ -1552,7 +1552,7 @@ export default function ReviewDoc({
 						{doc.jafInvoicePdfPath && (
 							<a
 								href={`/files/jaf-invoices/${doc.id}-jaf-invoice.pdf`}
-								className="text-primary underline text-sm"
+								className="text-accent-text underline text-sm"
 							>
 								{t("docs_review.download")}
 							</a>

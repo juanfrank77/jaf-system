@@ -48,6 +48,12 @@ const TEXT_PAIRS: [string, string][] = [
 	["status-danger-solid-foreground", "status-danger-solid"],
 ]
 
+// Non-text UI components (focus ring) need 3:1, WCAG 1.4.11.
+const UI_PAIRS: [string, string][] = [
+	["ring", "card"],
+	["ring", "background"],
+]
+
 describe.each([
 	["light", /:root\s*\{([^}]*)\}/],
 	["dark", /\.dark\s*\{([^}]*)\}/],
@@ -57,5 +63,10 @@ describe.each([
 		expect(vars[fg], `--${fg} missing or not a 6-digit hex`).toBeDefined()
 		expect(vars[bg], `--${bg} missing or not a 6-digit hex`).toBeDefined()
 		expect(ratio(vars[fg], vars[bg])).toBeGreaterThanOrEqual(4.5)
+	})
+	it.each(UI_PAIRS)("%s against %s is at least 3:1", (fg, bg) => {
+		expect(vars[fg], `--${fg} missing or not a 6-digit hex`).toBeDefined()
+		expect(vars[bg], `--${bg} missing or not a 6-digit hex`).toBeDefined()
+		expect(ratio(vars[fg], vars[bg])).toBeGreaterThanOrEqual(3)
 	})
 })

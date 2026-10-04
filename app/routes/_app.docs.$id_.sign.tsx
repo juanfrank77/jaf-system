@@ -419,7 +419,7 @@ export default function SignDoc({
 						<button
 							type="button"
 							onClick={() => releaseRef.current?.clear()}
-							className="text-xs text-muted-foreground mt-1 hover:text-muted-foreground"
+							className="text-xs text-muted-foreground mt-1 hover:text-foreground"
 						>
 							{t("docs_sign.clear")}
 						</button>
@@ -458,7 +458,7 @@ export default function SignDoc({
 						<button
 							type="button"
 							onClick={() => crewRef.current?.clear()}
-							className="text-xs text-muted-foreground mt-1 hover:text-muted-foreground"
+							className="text-xs text-muted-foreground mt-1 hover:text-foreground"
 						>
 							{t("docs_sign.clear")}
 						</button>

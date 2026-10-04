@@ -390,7 +390,7 @@ export default function FinancePo({
 						href={finalDocUrl}
 						target="_blank"
 						rel="noreferrer"
-						className="text-primary underline text-sm"
+						className="text-accent-text underline text-sm"
 					>
 						{t("finance_po.download_final_doc")}
 					</a>

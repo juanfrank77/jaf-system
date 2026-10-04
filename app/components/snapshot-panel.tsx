@@ -34,13 +34,13 @@ function SnapshotRow({ snapshot }: { snapshot: SnapshotRowData }) {
 			{snapshot.documentPath && snapshot.csvPath ? (
 				<span className="flex gap-3">
 					<a
-						className="text-primary underline"
+						className="text-accent-text underline"
 						href={`/files/snapshots/${snapshot.id}.pdf`}
 					>
 						{t("stock.snapshot.download_pdf")}
 					</a>
 					<a
-						className="text-primary underline"
+						className="text-accent-text underline"
 						href={`/files/snapshots/${snapshot.id}.csv`}
 					>
 						{t("stock.snapshot.download_csv")}

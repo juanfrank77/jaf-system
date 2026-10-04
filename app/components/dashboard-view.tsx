@@ -788,7 +788,7 @@ function DashboardView({
 												{t("dashboard.signal.shortage")}
 											</Badge>
 										)}
-										<span className="ml-1 text-xs font-medium text-primary">
+										<span className="ml-1 text-xs font-medium text-accent-text">
 											{t("dashboard.action.review_signal")}
 										</span>
 									</div>

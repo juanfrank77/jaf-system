@@ -679,4 +679,59 @@ describe("AppShell", () => {
 		await renderShell(renderStub, "SUPERVISOR")
 		expect(screen.queryByTestId("tab-bar")).not.toBeInTheDocument()
 	})
+
+	it("keeps the Installer tab active on nested paths, never Dashboard", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			props: { initialEntries: ["/installer/van"] },
+			entries: [
+				{
+					path: "/installer/van",
+					Component: () => (
+						<AppShell
+							user={{ name: "Ines", role: "INSTALLER" }}
+							notifications={[]}
+						>
+							<p>content</p>
+						</AppShell>
+					),
+				},
+			],
+		})
+		const bar = within(screen.getByTestId("tab-bar"))
+		expect(bar.getByRole("link", { name: "Installer" })).toHaveAttribute(
+			"aria-current",
+			"page",
+		)
+		expect(bar.getByRole("link", { name: "Dashboard" })).not.toHaveAttribute(
+			"aria-current",
+		)
+	})
+
+	it("marks Dashboard active on /dashboard in the tab bar", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			props: { initialEntries: ["/dashboard"] },
+			entries: [
+				{
+					path: "/dashboard",
+					Component: () => (
+						<AppShell
+							user={{ name: "Ines", role: "INSTALLER" }}
+							notifications={[]}
+						>
+							<p>content</p>
+						</AppShell>
+					),
+				},
+			],
+		})
+		expect(
+			within(screen.getByTestId("tab-bar")).getByRole("link", {
+				name: "Dashboard",
+			}),
+		).toHaveAttribute("aria-current", "page")
+	})
 })

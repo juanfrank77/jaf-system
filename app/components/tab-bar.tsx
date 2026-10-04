@@ -21,7 +21,10 @@ export function TabBar({
 			className="fixed inset-x-0 bottom-0 z-30 flex border-t border-border bg-card pb-[env(safe-area-inset-bottom)] md:hidden"
 		>
 			{items.map((item) => {
-				const active = location.pathname === item.to
+				const active =
+					location.pathname === item.to ||
+					(item.to !== "/dashboard" &&
+						location.pathname.startsWith(`${item.to}/`))
 				return (
 					<Link
 						key={item.to}

@@ -357,7 +357,7 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 						<li>
 							<a
 								href={`/files/receipts/${doc.id}-receipt.pdf`}
-								className="text-primary underline"
+								className="text-accent-text underline"
 							>
 								{t("admin_history.warehouse_receipt")}
 							</a>
@@ -367,7 +367,7 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 						<li>
 							<a
 								href={`/files/jaf-invoices/${doc.id}-jaf-invoice.pdf`}
-								className="text-primary underline"
+								className="text-accent-text underline"
 							>
 								{t("admin_history.jaf_invoice")}
 							</a>
@@ -377,7 +377,7 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 						<li>
 							<a
 								href={`/files/claro-pdfs/${doc.id}-claro.pdf`}
-								className="text-primary underline"
+								className="text-accent-text underline"
 							>
 								{t("admin_history.claro_work_order")}
 							</a>
@@ -387,7 +387,7 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 						<li>
 							<Link
 								to={`/docs/${doc.id}/lc`}
-								className="text-primary underline"
+								className="text-accent-text underline"
 							>
 								{t("admin_history.lc_request")}
 							</Link>

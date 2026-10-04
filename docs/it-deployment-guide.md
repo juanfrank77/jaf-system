@@ -271,7 +271,7 @@ Once the app is live, most future changes are updates to this same install, not 
    sudo systemctl restart jaf-operations
    sudo systemctl status jaf-operations   # confirm it came back up clean
    ```
-   **Why build first, and why the service is down across the migrate:** the warehouse update carries a `van_movement` → `stock_movement` rename. A rename is not backward-compatible — the currently-running build queries `van_movement`, which stops existing the instant `migrate deploy` commits. Building first means the new binary is ready before the schema moves under the old one; stopping the service means nothing queries the table across the rename. The stop window is seconds (build already done, migrations are three and all three are fast). The same lock also covers the migration's `ADD CONSTRAINT ... CHECK`, which scans the table.
+   **Why build first, and why the service is down across the migrate:** a schema change can land under a binary that doesn't expect it, so build the new binary first and keep the service stopped while the migration runs. For the Finance update the migration is a single additive one (`finance_billing_arm_a`: new tables, nullable columns, indexes, foreign keys — no renames and no drops; the earlier `van_movement` → `stock_movement` rename shipped with the Warehouse update and is already applied), so the stop window is seconds. Keep the stop/start sequence anyway: it is the same procedure every update uses.
 
 6. **Re-seed only if there's new seed data to pick up** (a roster addition, new service codes) — it's not a required step for every update. `pnpm prisma db seed` only sets `SEED_TEMP_PASSWORD` on accounts it *creates*; it never touches an existing account's credential (§7).
 

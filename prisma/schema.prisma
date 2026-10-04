@@ -630,6 +630,10 @@ model PayrollRun {
   paidBy              User?     @relation("PayrollRunPaidBy", fields: [paidById], references: [id])
   evidencePath        String?
   confirmedByFallback Boolean   @default(false)
+  // Reversal is an admin-only action planned for Phase 5 (finance q&a 15.5).
+  // Nothing writes these three columns yet; they are kept now so that phase
+  // does not need another migration. Open-run queries already filter on
+  // `reversedAt: null`.
   reversedAt          DateTime?
   reversedById        String?
   reversedBy          User?     @relation("PayrollRunReversedBy", fields: [reversedById], references: [id])

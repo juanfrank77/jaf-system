@@ -3,8 +3,8 @@
 Run this once, line by line, by an admin logged into the production server.
 Nothing in this runbook touches production until Section C.
 
-**Every statement is idempotent: re-running a completed section is safe.**
-Sections A and the Section E preview are read-only.
+**Re-running a completed section is safe** (Section E2 is guarded so a second
+run changes nothing). Section A and the Section E1 preview are read-only.
 No `DELETE`, no `DROP`, no `TRUNCATE`, no `prisma migrate reset` / `db push` /
 `migrate dev` against prod.
 Nothing is wired into `package.json` or CI — this is a manual, one-time
@@ -67,13 +67,21 @@ Re-run the Section A brigade query and confirm the row now reads
 Reference `docs/it-deployment-guide.md` §8: build first, stop the service
 across migrate + start, `pnpm prisma migrate deploy`, start.
 
-This deploy applies **three** migrations
-(`20260927135328_add_supervisor_areas`,
- `20260928005451_warehouse_foundation`,
- `20260929140000_finance_billing_arm_a`).
+Prod is already at `20260928005451_warehouse_foundation` (the Supervisor and
+Warehouse work). This deploy applies **one** new migration,
+`20260929140000_finance_billing_arm_a` — purely additive (two tables, eight
+nullable columns on `jaf_invoice`, indexes and foreign keys; no renames, no
+drops).
 
-`warehouse_foundation` renames `van_movement` to `stock_movement`, which is
-why the build must happen before the stop.
+Confirm that before deploying:
+
+```sql
+SELECT migration_name FROM "_prisma_migrations" ORDER BY finished_at DESC LIMIT 3;
+-- expect the newest to be 20260928005451_warehouse_foundation
+```
+
+`pnpm prisma migrate deploy` should then report exactly one migration applied.
+If prod lags behind, stop and escalate — do not edit any migration.
 
 ---
 
@@ -82,8 +90,10 @@ why the build must happen before the stop.
 `pnpm prisma db seed`
 
 It is **not** optional: `ContractorAccount` rows come only from
-`seedContractorAccounts` (`prisma/seed.ts:491`), and a brigade with no
-account can never be swept.
+`seedContractorAccounts` (called from `prisma/seed.ts`), and a brigade with no
+account can never be swept. The seed is the same repeatable step the deploy
+guide already uses (§7); make sure `SEED_DEMO` is **not** set, so no demo
+serials are written to prod.
 
 Re-run the Section A queries and confirm:
 
@@ -104,27 +114,26 @@ action.
 Require the §10 backup first, and stop and escalate if the preview count
 differs from what the client agreed.
 
+Two inputs are needed, and the client must agree on both before you run
+anything:
+
+- the **cutoff date**: every job released to Finance before it is "settled
+  history" (already paid outside the system);
+- an **admin user id** to record as the closer:
+  `SELECT id, email FROM "User" WHERE role = 'ADMIN' AND active;`
+
+The statements are in `docs/prod-finance-rollout.sql` (Section E), run with
+`psql`; set the two inputs at the top of that file before running it.
+
 ### E1. Preview first — do not proceed until it matches
 
-```sql
-SELECT id, "controlNumber", "releasedToFinanceAt"
-  FROM "jaf_invoice"
- WHERE <CLIENT-AGREED PREDICATE FOR SETTLED HISTORY>
-   AND "payrollRunId" IS NULL
-   AND "payablesClosedAt" IS NULL;
-```
-
-Record the number. Do not proceed until it matches what the client agreed.
+Records the number of jobs that would be closed. Stop and escalate if it does
+not match what the client agreed.
 
 ### E2. Only after the preview count is agreed and a backup exists
 
-```sql
-UPDATE "jaf_invoice"
-   SET "payablesClosedAt" = now(), "payablesClosedById" = <AN ADMIN USER ID>
- WHERE <CLIENT-AGREED PREDICATE FOR SETTLED HISTORY>
-   AND "payrollRunId" IS NULL
-   AND "payablesClosedAt" IS NULL;
-```
+Runs in one transaction, prints the number of rows updated, and ends with
+`ROLLBACK` — change it to `COMMIT` only once the count is confirmed.
 
 ---
 

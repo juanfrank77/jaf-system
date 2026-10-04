@@ -73,6 +73,59 @@ describe("L2 Packet", () => {
 		expect(reloaded.pbccRequestSentAt).not.toBeNull()
 	})
 
+	it("mark_sent_by_hand is idempotent: a second click adds no duplicate audit row", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		mocks.requireRole.mockResolvedValue({ user: finance })
+		const account = t.track("contractorAccount", await seedContractorAccount())
+		const doc = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
+		)
+		const submit = () =>
+			action({
+				request: new Request(`http://localhost/finance/pbcc/${doc.id}`, {
+					method: "POST",
+					body: new URLSearchParams({ intent: "mark_sent_by_hand" }),
+				}),
+				params: { id: doc.id },
+				context: {},
+			} as never)
+		await submit()
+		await submit()
+		const audits = await db.auditTrail.count({
+			where: { docId: doc.id, action: "PBCC_SENT_BY_HAND" },
+		})
+		expect(audits).toBe(1)
+	})
+
+	it("mark_sent_by_hand refuses a job that is not on Arm A (already closed)", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		mocks.requireRole.mockResolvedValue({ user: finance })
+		const doc = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({ payablesClosedAt: new Date() }),
+		)
+		let location: string | null = null
+		try {
+			await action({
+				request: new Request(`http://localhost/finance/pbcc/${doc.id}`, {
+					method: "POST",
+					body: new URLSearchParams({ intent: "mark_sent_by_hand" }),
+				}),
+				params: { id: doc.id },
+				context: {},
+			} as never)
+		} catch (response) {
+			if (response instanceof Response)
+				location = response.headers.get("Location")
+		}
+		expect(location).toBe("/finance/queue")
+		const reloaded = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: doc.id },
+		})
+		expect(reloaded.pbccRequestSentAt).toBeNull()
+	})
+
 	// --- Guards carried over from the pre-Arm-A suite. The stage gate moved out
 	// of the loader (replaced by the Arm A open condition), so the two loader
 	// cases are restated against that gate; the two action cases are unchanged

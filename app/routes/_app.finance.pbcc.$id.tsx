@@ -121,6 +121,14 @@ export async function action({ request, params }: Route.ActionArgs) {
 	// must work even when the Aviso/Claro PDFs the auto-generator insists on are
 	// missing — recording "sent" is precisely the case it exists for.
 	if (intent === "mark_sent_by_hand") {
+		// Same gate the loader uses: only a job that is on Arm A can be marked,
+		// and a second click (double-submit, stale tab) is a no-op rather than a
+		// duplicate audit row.
+		const onArmA = await db.jafInvoice.count({
+			where: { id: params.id, ...armAOpenWhere({ packetView: true }) },
+		})
+		if (onArmA === 0) throw redirect("/finance/queue")
+		if (doc.pbccRequestSentAt) return { ok: true }
 		const note = (form.get("note") as string | null)?.trim() || null
 		await db.$transaction([
 			db.jafInvoice.update({
@@ -383,6 +391,10 @@ export default function PbccRequest({ loaderData }: Route.ComponentProps) {
 			</div>
 
 			<div className="flex flex-wrap items-center gap-2">
+				{/* Disabled on purpose until the Excel-schedule template exists
+				    (q&a 13.2): the bank-format generators are pending, so Lissette
+				    marks the packet "sent by hand" instead. The generate_pbcc
+				    action is kept for when the template lands. */}
 				<Form method="post">
 					<input type="hidden" name="intent" value="generate_pbcc" />
 					<Button type="submit" disabled>

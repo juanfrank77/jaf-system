@@ -46,7 +46,9 @@ describe("AppShell", () => {
 		})
 		const header = screen.getByRole("banner")
 		expect(
-			within(header).getByRole("button", { name: /^Theme:/ }),
+			within(header).getByRole("button", {
+				name: /^Switch to (dark|light) theme$/,
+			}),
 		).toBeInTheDocument()
 		expect(within(header).queryByText("J")).not.toBeInTheDocument()
 	})

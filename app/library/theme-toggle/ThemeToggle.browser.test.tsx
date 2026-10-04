@@ -21,58 +21,49 @@ describe("ThemeToggle", () => {
 		document.documentElement.classList.remove("dark")
 	})
 
-	it("starts on system and cycles light → dark → system", async ({
+	const toDark = { name: "Switch to dark theme" }
+	const toLight = { name: "Switch to light theme" }
+
+	it("defaults to light and toggles light -> dark -> light", async ({
 		renderStub,
 	}) => {
 		await mount(renderStub)
-		const button = screen.getByRole("button", { name: "Theme: System" })
-		await userEvent.click(button)
-		expect(
-			screen.getByRole("button", { name: "Theme: Light" }),
-		).toBeInTheDocument()
+		const button = screen.getByRole("button", toDark)
 		expect(document.documentElement.classList.contains("dark")).toBe(false)
-		await userEvent.click(screen.getByRole("button", { name: "Theme: Light" }))
-		expect(
-			screen.getByRole("button", { name: "Theme: Dark" }),
-		).toBeInTheDocument()
+		await userEvent.click(button)
+		expect(screen.getByRole("button", toLight)).toBeInTheDocument()
 		expect(document.documentElement.classList.contains("dark")).toBe(true)
 		expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe("dark")
-		await userEvent.click(screen.getByRole("button", { name: "Theme: Dark" }))
-		expect(
-			screen.getByRole("button", { name: "Theme: System" }),
-		).toBeInTheDocument()
+		await userEvent.click(screen.getByRole("button", toLight))
+		expect(screen.getByRole("button", toDark)).toBeInTheDocument()
+		expect(document.documentElement.classList.contains("dark")).toBe(false)
+		expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe("light")
 	})
 
-	it("restores a stored dark preference without resetting it to system", async ({
+	it("restores a stored dark preference without resetting it", async ({
 		renderStub,
 	}) => {
 		window.localStorage.setItem(THEME_STORAGE_KEY, "dark")
 		await mount(renderStub)
-		expect(
-			await screen.findByRole("button", { name: "Theme: Dark" }),
-		).toBeInTheDocument()
+		expect(await screen.findByRole("button", toLight)).toBeInTheDocument()
 		expect(document.documentElement.classList.contains("dark")).toBe(true)
 	})
 
-	it("treats a garbage stored value as system", async ({ renderStub }) => {
-		window.localStorage.setItem(THEME_STORAGE_KEY, "purple")
-		await mount(renderStub)
-		expect(
-			await screen.findByRole("button", { name: "Theme: System" }),
-		).toBeInTheDocument()
-		await userEvent.click(screen.getByRole("button", { name: "Theme: System" }))
-		expect(
-			await screen.findByRole("button", { name: "Theme: Light" }),
-		).toBeInTheDocument()
-	})
+	for (const value of ["purple", "system"]) {
+		it(`treats stored ${value} as light`, async ({ renderStub }) => {
+			window.localStorage.setItem(THEME_STORAGE_KEY, value)
+			await mount(renderStub)
+			expect(await screen.findByRole("button", toDark)).toBeInTheDocument()
+			expect(document.documentElement.classList.contains("dark")).toBe(false)
+		})
+	}
 
 	it("still switches when storage writes throw", async ({ renderStub }) => {
 		vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
 			throw new Error("denied")
 		})
 		await mount(renderStub)
-		await userEvent.click(screen.getByRole("button", { name: "Theme: System" }))
-		await userEvent.click(screen.getByRole("button", { name: "Theme: Light" }))
+		await userEvent.click(screen.getByRole("button", toDark))
 		expect(document.documentElement.classList.contains("dark")).toBe(true)
 	})
 })

@@ -24,11 +24,17 @@ describe("themeInitScript", () => {
 		expect(document.documentElement.classList.contains("dark")).toBe(false)
 	})
 
-	it("follows the OS for a garbage stored value", () => {
-		window.localStorage.setItem(THEME_STORAGE_KEY, "purple")
+	it.each(["purple", "system", "light"])(
+		"stays light for stored %s regardless of the OS",
+		(value) => {
+			window.localStorage.setItem(THEME_STORAGE_KEY, value)
+			run()
+			expect(document.documentElement.classList.contains("dark")).toBe(false)
+		},
+	)
+
+	it("stays light when nothing is stored", () => {
 		run()
-		expect(document.documentElement.classList.contains("dark")).toBe(
-			window.matchMedia("(prefers-color-scheme: dark)").matches,
-		)
+		expect(document.documentElement.classList.contains("dark")).toBe(false)
 	})
 })

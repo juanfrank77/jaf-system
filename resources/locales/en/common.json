@@ -164,7 +164,19 @@
 		"primary_nav": "Primary",
 		"primary_nav_mobile": "Primary (mobile)",
 		"navigation_dialog": "Navigation",
-		"theme": { "label": "Theme", "system": "System", "light": "Light", "dark": "Dark" }
+		"theme": {
+			"label": "Theme",
+			"system": "System",
+			"light": "Light",
+			"dark": "Dark"
+		},
+		"group": {
+			"work": "Work",
+			"money": "Finance",
+			"stock": "Warehouse",
+			"field": "Field",
+			"admin": "Administration"
+		}
 	},
 	"login": {
 		"title": "JAF Operations",

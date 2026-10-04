@@ -81,7 +81,7 @@
 	--destructive: #b52b2b;
 	--border: #e1e0d9;
 	--input: #e1e0d9;
-	--ring: #51a1bc;
+	--ring: #276f88;
 	--chart-1: oklch(0.87 0 0);
 	--chart-2: oklch(0.556 0 0);
 	--chart-3: oklch(0.439 0 0);
@@ -97,7 +97,7 @@
 	--sidebar-accent: #fcfcfb;
 	--sidebar-accent-foreground: #111110;
 	--sidebar-border: #e1e0d9;
-	--sidebar-ring: #51a1bc;
+	--sidebar-ring: #276f88;
 	--status-info: #185fa5;
 	--status-info-soft: #e6f1fb;
 	--status-warn: #854f0b;

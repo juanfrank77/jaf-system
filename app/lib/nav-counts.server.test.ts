@@ -23,7 +23,10 @@ describe("loadNavCounts", () => {
 		const counts = await loadNavCounts({ id: "sup-1", role: "SUPERVISOR" })
 		expect(counts).toEqual({ "/dashboard": { value: 3, tone: "critical" } })
 		expect(db.jafInvoice.count).toHaveBeenCalledWith({
-			where: expect.objectContaining({ status: "FIELD_UPDATED" }),
+			where: expect.objectContaining({
+				status: "FIELD_UPDATED",
+				OR: expect.any(Array),
+			}),
 		})
 	})
 

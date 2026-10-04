@@ -60,6 +60,10 @@ describe("ThemeToggle", () => {
 		expect(
 			await screen.findByRole("button", { name: "Theme: System" }),
 		).toBeInTheDocument()
+		await userEvent.click(screen.getByRole("button", { name: "Theme: System" }))
+		expect(
+			await screen.findByRole("button", { name: "Theme: Light" }),
+		).toBeInTheDocument()
 	})
 
 	it("still switches when storage writes throw", async ({ renderStub }) => {

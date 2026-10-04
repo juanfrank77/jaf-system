@@ -688,7 +688,7 @@ export default function FieldUpdate({
 					<button
 						type="button"
 						onClick={() => signatureRef.current?.clear()}
-						className="text-xs text-muted-foreground hover:text-muted-foreground"
+						className="text-xs text-muted-foreground hover:text-foreground"
 					>
 						{t("docs_field.clear_signature")}
 					</button>

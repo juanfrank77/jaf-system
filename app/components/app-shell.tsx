@@ -169,7 +169,7 @@ function NotificationBell({
 									<input type="hidden" name="redirectTo" value={redirectTo} />
 									<button
 										type="submit"
-										className="text-xs font-medium text-primary hover:underline"
+										className="text-xs font-medium text-accent-text hover:underline"
 									>
 										{t("app_shell.notifications.mark_all_read")}
 									</button>

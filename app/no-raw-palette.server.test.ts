@@ -17,10 +17,10 @@ function* tsxFiles(dir: string): Generator<string> {
 }
 
 const RAW =
-	/\b(?:text|bg|border|divide|ring|from|via|to|fill|stroke|outline|decoration|placeholder|accent|caret)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}\b|\bbg-white\b/g
+	/\b(?:text|bg|border|divide|ring|from|via|to|fill|stroke|outline|decoration|placeholder|accent|caret)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}\b|\bbg-white\b|\btext-primary\b(?!-foreground)/g
 
 describe("no raw palette classes", () => {
-	it("uses semantic tokens instead of Tailwind palette colours", () => {
+	it("uses semantic tokens instead of Tailwind palette colours or bare text-primary (use text-accent-text)", () => {
 		const offenders: string[] = []
 		for (const file of tsxFiles(APP)) {
 			const hits = readFileSync(file, "utf8").match(RAW)

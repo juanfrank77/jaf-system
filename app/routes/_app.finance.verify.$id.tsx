@@ -376,7 +376,7 @@ export default function FinanceVerify({
 								href={jafInvoiceUrl}
 								target="_blank"
 								rel="noreferrer"
-								className="ml-2 text-primary underline"
+								className="ml-2 text-accent-text underline"
 							>
 								{t("finance_verify.download")}
 							</a>

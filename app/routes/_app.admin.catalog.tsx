@@ -155,7 +155,7 @@ export default function AdminCatalog({ loaderData }: Route.ComponentProps) {
 			<h1 className="text-xl font-semibold">{t("admin_catalog.title")}</h1>
 
 			{/* Add code form */}
-			<section className="bg-white border rounded-lg p-6 space-y-4">
+			<section className="bg-card border rounded-lg p-6 space-y-4">
 				<h2 className="text-base font-medium">
 					{t("admin_catalog.add_heading")}
 				</h2>
@@ -205,29 +205,29 @@ export default function AdminCatalog({ loaderData }: Route.ComponentProps) {
 			</section>
 
 			{/* Service codes table */}
-			<section className="bg-white border rounded-lg overflow-hidden">
+			<section className="bg-card border rounded-lg overflow-hidden">
 				<table className="w-full text-sm">
-					<thead className="bg-slate-50 border-b">
+					<thead className="bg-muted border-b">
 						<tr>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
+							<th className="px-4 py-3 text-left font-medium text-muted-foreground">
 								{t("admin_catalog.table.claro_code")}
 							</th>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
+							<th className="px-4 py-3 text-left font-medium text-muted-foreground">
 								{t("admin_catalog.table.name")}
 							</th>
-							<th className="px-4 py-3 text-right font-medium text-slate-600">
+							<th className="px-4 py-3 text-right font-medium text-muted-foreground">
 								{t("admin_catalog.table.unit_price")}
 							</th>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
+							<th className="px-4 py-3 text-left font-medium text-muted-foreground">
 								{t("admin_catalog.table.account_code")}
 							</th>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
+							<th className="px-4 py-3 text-left font-medium text-muted-foreground">
 								{t("admin_catalog.table.dept")}
 							</th>
-							<th className="px-4 py-3 text-center font-medium text-slate-600">
+							<th className="px-4 py-3 text-center font-medium text-muted-foreground">
 								{t("admin_catalog.table.active")}
 							</th>
-							<th className="px-4 py-3 text-center font-medium text-slate-600">
+							<th className="px-4 py-3 text-center font-medium text-muted-foreground">
 								{t("admin_catalog.table.actions")}
 							</th>
 						</tr>
@@ -235,7 +235,7 @@ export default function AdminCatalog({ loaderData }: Route.ComponentProps) {
 					<tbody className="divide-y">
 						{codes.map((code) =>
 							editingId === code.id ? (
-								<tr key={code.id} className="bg-slate-50">
+								<tr key={code.id} className="bg-muted">
 									<td className="px-4 py-3">
 										<Input
 											name="claroCode"
@@ -281,8 +281,8 @@ export default function AdminCatalog({ loaderData }: Route.ComponentProps) {
 										<span
 											className={
 												code.active
-													? "text-green-600 font-medium"
-													: "text-slate-400"
+													? "text-status-ok font-medium"
+													: "text-muted-foreground"
 											}
 										>
 											{code.active
@@ -311,24 +311,24 @@ export default function AdminCatalog({ loaderData }: Route.ComponentProps) {
 									</td>
 								</tr>
 							) : (
-								<tr key={code.id} className="hover:bg-slate-50">
+								<tr key={code.id} className="hover:bg-muted">
 									<td className="px-4 py-3 font-mono">{code.claroCode}</td>
 									<td className="px-4 py-3">{code.name}</td>
 									<td className="px-4 py-3 text-right">
 										{toNumberPrice(code.unitPrice).toFixed(2)}
 									</td>
-									<td className="px-4 py-3 text-slate-500">
+									<td className="px-4 py-3 text-muted-foreground">
 										{code.accountCode ?? "—"}
 									</td>
-									<td className="px-4 py-3 text-slate-500">
+									<td className="px-4 py-3 text-muted-foreground">
 										{code.dept ?? "—"}
 									</td>
 									<td className="px-4 py-3 text-center">
 										<span
 											className={
 												code.active
-													? "text-green-600 font-medium"
-													: "text-slate-400"
+													? "text-status-ok font-medium"
+													: "text-muted-foreground"
 											}
 										>
 											{code.active
@@ -364,7 +364,7 @@ export default function AdminCatalog({ loaderData }: Route.ComponentProps) {
 							<tr>
 								<td
 									colSpan={7}
-									className="px-4 py-6 text-center text-slate-400 text-sm"
+									className="px-4 py-6 text-center text-muted-foreground text-sm"
 								>
 									{t("admin_catalog.no_codes")}
 								</td>

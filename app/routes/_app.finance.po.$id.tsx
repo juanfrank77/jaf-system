@@ -254,28 +254,36 @@ export default function FinancePo({
 	return (
 		<div className="space-y-5">
 			<h1 className="text-xl font-semibold">{t("finance_po.title")}</h1>
-			<p className="font-mono text-sm text-slate-500">{doc.controlNumber}</p>
+			<p className="font-mono text-sm text-muted-foreground">
+				{doc.controlNumber}
+			</p>
 
-			<div className="bg-white border rounded-lg p-4 space-y-2 text-sm">
+			<div className="bg-card border rounded-lg p-4 space-y-2 text-sm">
 				<p>
-					<span className="text-slate-500">{t("finance_po.job_type")}:</span>{" "}
+					<span className="text-muted-foreground">
+						{t("finance_po.job_type")}:
+					</span>{" "}
 					{doc.jobType}
 				</p>
 				<p>
-					<span className="text-slate-500">{t("finance_po.address")}:</span>{" "}
+					<span className="text-muted-foreground">
+						{t("finance_po.address")}:
+					</span>{" "}
 					{doc.jobAddressActual || doc.jobAddressEstimated}
 				</p>
 				<p>
-					<span className="text-slate-500">{t("finance_po.amount")}:</span>{" "}
+					<span className="text-muted-foreground">
+						{t("finance_po.amount")}:
+					</span>{" "}
 					{formatMoney(amount)}
 				</p>
-				<p className="text-xs text-slate-400">
+				<p className="text-xs text-muted-foreground">
 					{t("finance_po.ivu_rate", { rate: (ivuRate * 100).toFixed(1) })}
 				</p>
 			</div>
 
 			{poLinks.length > 0 && (
-				<div className="bg-white border rounded-lg p-4 space-y-2 text-sm">
+				<div className="bg-card border rounded-lg p-4 space-y-2 text-sm">
 					<h2 className="font-medium">{t("finance_po.recorded_pos")}</h2>
 					{poLinks.map((po) => (
 						<div key={po.id} className="flex justify-between">
@@ -290,7 +298,7 @@ export default function FinancePo({
 				<Form
 					method="post"
 					encType="multipart/form-data"
-					className="bg-white border rounded-lg p-4 space-y-3"
+					className="bg-card border rounded-lg p-4 space-y-3"
 				>
 					<h2 className="font-medium text-sm">
 						{t("finance_po.record_po_heading")}
@@ -322,7 +330,7 @@ export default function FinancePo({
 								min="0"
 								placeholder={t("finance_po.amount_placeholder")}
 							/>
-							<p className="text-xs text-slate-500">
+							<p className="text-xs text-muted-foreground">
 								{t("finance_po.amount_hint")}
 							</p>
 						</div>
@@ -340,18 +348,18 @@ export default function FinancePo({
 						{t("finance_po.record_po")}
 					</Button>
 					{error?.errorKey && (
-						<p className="text-sm text-red-600">
+						<p className="text-sm text-status-danger">
 							{t(error.errorKey as ParseKeys)}
 						</p>
 					)}
 					{error?.errorMessage && (
-						<p className="text-sm text-red-600">{error.errorMessage}</p>
+						<p className="text-sm text-status-danger">{error.errorMessage}</p>
 					)}
 				</Form>
 			)}
 
 			{poLinks.length > 0 && !doc.finalClaroDocPath && (
-				<div className="bg-white border rounded-lg p-4 space-y-3">
+				<div className="bg-card border rounded-lg p-4 space-y-3">
 					<h2 className="font-medium text-sm">
 						{t("finance_po.generate_final_doc_heading")}
 					</h2>
@@ -363,7 +371,7 @@ export default function FinancePo({
 						<Button type="submit">{t("finance_po.generate_final_doc")}</Button>
 					</Form>
 					{error?.errorKey && (
-						<p className="text-sm text-red-600">
+						<p className="text-sm text-status-danger">
 							{t(error.errorKey as ParseKeys)}
 						</p>
 					)}
@@ -371,7 +379,7 @@ export default function FinancePo({
 			)}
 
 			{finalDocUrl && (
-				<div className="bg-white border rounded-lg p-4 space-y-3">
+				<div className="bg-card border rounded-lg p-4 space-y-3">
 					<h2 className="font-medium text-sm">
 						{t("finance_po.final_doc_heading")}
 					</h2>
@@ -386,7 +394,7 @@ export default function FinancePo({
 					>
 						{t("finance_po.download_final_doc")}
 					</a>
-					<p className="text-xs text-slate-400">
+					<p className="text-xs text-muted-foreground">
 						{t("finance_po.uploaded_on", {
 							date: doc.finalClaroUploadedAt
 								? new Date(doc.finalClaroUploadedAt).toLocaleDateString()

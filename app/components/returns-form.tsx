@@ -220,12 +220,12 @@ export function ReturnsForm({
 			{alreadyRecorded && (
 				<p
 					data-testid="returns-already-recorded"
-					className="rounded-md border border-amber-300 bg-amber-50 p-2 text-sm font-medium text-amber-700"
+					className="rounded-md border border-status-warn/30 bg-status-warn-soft p-2 text-sm font-medium text-status-warn"
 				>
 					{t("docs_returns.already_recorded_notice")}
 				</p>
 			)}
-			<p className="text-sm text-slate-600">
+			<p className="text-sm text-muted-foreground">
 				<Trans
 					i18nKey="docs_returns.confirm_message"
 					values={{ controlNumber: doc.controlNumber }}
@@ -251,7 +251,7 @@ export function ReturnsForm({
 					</SelectContent>
 				</Select>
 				{isCrossWarehouse && (
-					<p className="text-xs font-medium text-amber-600">
+					<p className="text-xs font-medium text-status-warn">
 						{t("docs_returns.warehouse_policy_unconfirmed")}
 					</p>
 				)}
@@ -278,7 +278,7 @@ export function ReturnsForm({
 								<button
 									type="button"
 									onClick={() => removeLine(index)}
-									className="text-slate-400 hover:text-red-600 text-lg"
+									className="text-muted-foreground hover:text-status-danger text-lg"
 								>
 									×
 								</button>
@@ -286,7 +286,7 @@ export function ReturnsForm({
 
 							<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
 								<div>
-									<Label className="text-xs text-slate-500">
+									<Label className="text-xs text-muted-foreground">
 										{t("docs_returns.taken_qty")}
 									</Label>
 									<Input
@@ -294,13 +294,13 @@ export function ReturnsForm({
 										min={0}
 										value={line.takenQty}
 										disabled
-										className="mt-1 bg-slate-50"
+										className="mt-1 bg-muted"
 									/>
 								</div>
 								<div>
 									<Label
 										htmlFor={`received-qty-${line._key}`}
-										className="text-xs text-slate-500"
+										className="text-xs text-muted-foreground"
 									>
 										{t("docs_returns.returned_qty")}
 									</Label>
@@ -316,21 +316,21 @@ export function ReturnsForm({
 										}
 										className="mt-1"
 									/>
-									<p className="mt-1 text-xs text-slate-500">
+									<p className="mt-1 text-xs text-muted-foreground">
 										{t("docs_returns.crew_reported_hint", {
 											usedQty: line.usedQty,
 											expectedReturnQty: line.expectedBack,
 										})}
 									</p>
 									{differsFromExpected && (
-										<p className="mt-1 text-xs font-medium text-amber-600">
+										<p className="mt-1 text-xs font-medium text-status-warn">
 											{t("docs_returns.discrepancy_warning")}
 										</p>
 									)}
 								</div>
 							</div>
 
-							<p className="text-xs text-slate-600">
+							<p className="text-xs text-muted-foreground">
 								{t("docs_returns.actual_usage")}: {line.usedQty} {code?.unit}
 							</p>
 						</div>
@@ -352,7 +352,7 @@ export function ReturnsForm({
 						className="flex flex-col gap-2 border rounded-lg p-3 sm:flex-row sm:items-end"
 					>
 						<div className="flex-1">
-							<Label className="text-xs text-slate-500">
+							<Label className="text-xs text-muted-foreground">
 								{t("docs_returns.serial_label")}
 							</Label>
 							<Input
@@ -365,7 +365,7 @@ export function ReturnsForm({
 							/>
 						</div>
 						<div className="flex-1">
-							<Label className="text-xs text-slate-500">
+							<Label className="text-xs text-muted-foreground">
 								{t("docs_returns.serial_reason_label")}
 							</Label>
 							<Select
@@ -391,7 +391,7 @@ export function ReturnsForm({
 						<button
 							type="button"
 							onClick={() => removeSerialLine(index)}
-							className="text-slate-400 hover:text-red-600 text-lg"
+							className="text-muted-foreground hover:text-status-danger text-lg"
 						>
 							×
 						</button>
@@ -431,7 +431,7 @@ export function ReturnsForm({
 						className="mt-1"
 					/>
 					{anyShort && (
-						<p className="mt-1 text-xs text-amber-600">
+						<p className="mt-1 text-xs text-status-warn">
 							{t("docs_returns.note_required_hint")}
 						</p>
 					)}
@@ -442,12 +442,12 @@ export function ReturnsForm({
 			</Form>
 
 			{actionData?.errorKey && (
-				<p className="text-sm text-red-600">
+				<p className="text-sm text-status-danger">
 					{t(actionData.errorKey as ParseKeys, actionData.errorParams)}
 				</p>
 			)}
 			{actionData?.ok && (
-				<p className="text-sm text-green-600">{t("docs_returns.success")}</p>
+				<p className="text-sm text-status-ok">{t("docs_returns.success")}</p>
 			)}
 		</div>
 	)

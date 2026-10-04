@@ -31,13 +31,15 @@ export function OfflineIndicator() {
 	return (
 		<div
 			className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-full ${
-				online ? "bg-amber-100 text-amber-800" : "bg-red-100 text-red-800"
+				online
+					? "bg-status-warn-soft text-status-warn"
+					: "bg-status-danger-soft text-status-danger"
 			}`}
 			role="status"
 			aria-live="polite"
 		>
 			<span
-				className={`size-2 rounded-full ${online ? "bg-amber-500" : "bg-red-500"}`}
+				className={`size-2 rounded-full ${online ? "bg-status-warn" : "bg-status-danger-solid"}`}
 			/>
 			{online
 				? t("offline_indicator.sync_pending", { count: pendingCount })

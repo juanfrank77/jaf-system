@@ -109,7 +109,7 @@ export function MaterialLineItems({
 							key={item._key}
 							className="flex items-center gap-3 text-sm py-1 border-b last:border-0"
 						>
-							<span className="font-mono text-xs text-slate-500">
+							<span className="font-mono text-xs text-muted-foreground">
 								{code?.claroCode}
 							</span>
 							<span className="flex-1">{code?.name ?? "—"}</span>
@@ -120,12 +120,12 @@ export function MaterialLineItems({
 								${(toNumberPrice(code?.unitPrice) * item.qty).toFixed(2)}
 							</span>
 							{isOverdrawn && (
-								<span className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded whitespace-nowrap">
+								<span className="text-xs bg-status-warn-soft text-status-warn px-2 py-1 rounded whitespace-nowrap">
 									+{overage} {t("material_line_items.more_than_estimated")}
 								</span>
 							)}
 							{isCounterAdded && (
-								<span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded whitespace-nowrap">
+								<span className="text-xs bg-status-info-soft text-status-info px-2 py-1 rounded whitespace-nowrap">
 									{t("material_line_items.added_at_counter")}
 								</span>
 							)}
@@ -162,7 +162,7 @@ export function MaterialLineItems({
 						<button
 							type="button"
 							onClick={() => removeItem(item._key)}
-							className="text-slate-400 hover:text-red-600 text-lg"
+							className="text-muted-foreground hover:text-status-danger text-lg"
 						>
 							×
 						</button>

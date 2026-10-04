@@ -148,7 +148,7 @@ export default function InstallerRestock({
 						</li>
 					))}
 					{pending.length === 0 && (
-						<li className="py-2 text-sm text-slate-500">
+						<li className="py-2 text-sm text-muted-foreground">
 							{t("restock.no_pending", "Nothing pending sign-off.")}
 						</li>
 					)}
@@ -163,11 +163,13 @@ export default function InstallerRestock({
 				{t("installer.request_restock", "Request Restock")}
 			</h1>
 			{!van ? (
-				<p className="text-sm text-amber-600">{t("installer.no_van")}</p>
+				<p className="text-sm text-status-warn">{t("installer.no_van")}</p>
 			) : (
 				<Form method="post" className="space-y-4">
 					{actionData && "errorKey" in actionData && (
-						<p className="text-sm text-red-600">{t(actionData.errorKey)}</p>
+						<p className="text-sm text-status-danger">
+							{t(actionData.errorKey)}
+						</p>
 					)}
 					<MaterialLineItems
 						serviceCodes={serviceCodes}

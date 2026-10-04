@@ -102,9 +102,9 @@ export default function RestockRelease({
 			<h1 className="text-xl font-semibold">
 				{t("restock_release.heading", "Release Restock to Van")}
 			</h1>
-			<p className="text-sm text-slate-500">{restock.van.name}</p>
+			<p className="text-sm text-muted-foreground">{restock.van.name}</p>
 			{actionData && "errorKey" in actionData && (
-				<p className="text-sm text-red-600">
+				<p className="text-sm text-status-danger">
 					{t(
 						actionData.errorKey,
 						"Both signatures are required before releasing.",

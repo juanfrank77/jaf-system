@@ -283,10 +283,10 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 const AGE_COLOR = (days: number, isAlert: boolean) => {
-	if (isAlert) return "text-red-600 font-semibold"
-	if (days > 90) return "text-orange-600"
-	if (days > 60) return "text-yellow-700"
-	return "text-slate-700"
+	if (isAlert) return "text-status-danger font-semibold"
+	if (days > 90) return "text-status-warn"
+	if (days > 60) return "text-status-warn"
+	return "text-foreground"
 }
 
 function StageBadge({ stage }: { stage: FinanceStage }) {
@@ -327,7 +327,9 @@ export default function FinancePipeline({
 			</div>
 
 			{error?.errorKey && (
-				<p className="text-sm text-red-600">{t(error.errorKey as ParseKeys)}</p>
+				<p className="text-sm text-status-danger">
+					{t(error.errorKey as ParseKeys)}
+				</p>
 			)}
 
 			{/* Stage totals */}
@@ -395,14 +397,14 @@ export default function FinancePipeline({
 									{formatMoney(row.amount)}
 								</span>
 								{row.poMismatch && row.poAmount !== null && (
-									<span className="text-amber-700">
+									<span className="text-status-warn">
 										{t("finance_receivables.po_mismatch", {
 											poAmount: formatMoney(row.poAmount),
 										})}
 									</span>
 								)}
 								{(row.missingAviso || row.missingClaroPdf) && (
-									<span className="text-amber-700">
+									<span className="text-status-warn">
 										{t("finance_receivables.missing_docs")}
 									</span>
 								)}

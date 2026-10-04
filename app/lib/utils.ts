@@ -46,5 +46,8 @@ export function formatMoney(amount: unknown, currency = "$"): string {
  */
 export function truncateCents(value: number, places = 2): number {
 	const factor = 10 ** places
-	return Math.trunc(value * factor) / factor
+	// `value * factor` carries float error (0.29 * 100 = 28.999999999999996),
+	// which a bare Math.trunc would turn into a lost cent. Settle it at 6
+	// extra digits first; real inputs never carry that much precision.
+	return Math.trunc(Number((value * factor).toFixed(6))) / factor
 }

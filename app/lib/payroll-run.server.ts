@@ -256,8 +256,8 @@ export type JournalBlock = {
  * Rules from docs/JAF_Finance_answer_Journey.pdf Part 1 § "How the report is built":
  *  - Columns: ASSOC/code · DESCRIPTION · QTY · UNIT PRICE · GROSS · NET ·
  *    Pct. RET. (always 0.00) · 10% RET. · ADJ. NET
- *  - Net = Gross × 0.65; Retention = Net × 0.10; Adj. Net = Net − Retention
- *    (all truncated to cents per line)
+ *  - Net = Gross × 0.65; Retention = Net × 0.10; Adj. Net = Gross × 0.585
+ *    (all truncated to cents per line — see computeContractorPayment)
  *  - Sub Total: Gross, Net, Ret summed per job; Adj. Net = running total
  *    within the brigade
  *  - Total SC: ends each brigade; running restarts at the next brigade

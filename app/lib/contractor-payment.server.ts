@@ -1,5 +1,9 @@
 import { db } from "~/lib/db.server"
-import { toNumberPrice, truncateCents } from "~/lib/utils"
+import { toNumberPrice } from "~/lib/utils"
+import { Prisma } from "../../generated/prisma/client"
+
+const { Decimal } = Prisma
+type Decimal = Prisma.Decimal
 
 /** Fixed brigade share of a JAF invoice. There are no per-account or per-line
  * overrides — see docs/JAF_Finance_answer_Journey.pdf Part 2 §009D/80%.
@@ -31,6 +35,13 @@ export type ContractorPayment = {
 }
 
 const RETENTION_RATE = 0.1
+
+/** Truncate (never round) an exact decimal to whole cents. Money here is
+ * computed in `Decimal`, not `number`: `Math.trunc(0.29 * 100) / 100` is 0.28
+ * and `4.35` gives 4.34, which would short a brigade a cent on exact values. */
+function cents(value: Decimal): Decimal {
+	return value.toDecimalPlaces(2, Decimal.ROUND_DOWN)
+}
 
 /**
  * Map a `JafInvoice.jafInvoiceLines` JSON value into the shape the payment
@@ -69,44 +80,55 @@ export function toContractorPaymentLines(
  *   Retention = Net × 10%, truncated to cents  (NOT 10% of gross)
  *   Adj. Net  = Gross × 0.65 × 0.90, truncated to cents
  *
- * Per-line values are truncated independently; the totals are the
- * sums of those truncated per-line values — matching the paper
- * Production Journal, which accumulates "Adj. net (running)" down
- * the page from truncated line totals.
+ * Adj. Net is truncated from gross, not derived as Net − Retention: the two
+ * can differ by a cent, and the client's worked example ($118.45 gross →
+ * $69.29) is the truncated gross × 0.585 figure.
+ *
+ * Per-line values are truncated independently, and every job-level total is
+ * the sum of those truncated per-line values — so the stored figures, the L1
+ * tiles, the packet and the Production Journal always agree. `netPayable` is
+ * the sum of the lines' Adj. Net (what the brigade is actually paid).
  */
 export function computeContractorPayment(
 	lines: ContractorPaymentLine[],
 ): ContractorPayment {
+	const share = new Decimal(CONTRACTOR_SHARE_PERCENT)
+	const retentionRate = new Decimal(RETENTION_RATE)
+	const keep = new Decimal(1).minus(retentionRate)
+
+	let grossPayable = new Decimal(0)
+	let retentionAmount = new Decimal(0)
+	let netPayable = new Decimal(0)
+
 	const contractorShareLines: ContractorShareLine[] = (lines ?? []).map(
 		(line) => {
-			const gross = truncateCents(
-				toNumberPrice(line.qty) * toNumberPrice(line.jafPrice),
+			const gross = cents(
+				new Decimal(toNumberPrice(line.qty)).times(
+					toNumberPrice(line.jafPrice),
+				),
 			)
-			const net = truncateCents(gross * CONTRACTOR_SHARE_PERCENT)
-			const retention = truncateCents(net * RETENTION_RATE)
-			const adjNet = truncateCents(
-				gross * CONTRACTOR_SHARE_PERCENT * (1 - RETENTION_RATE),
-			)
+			const net = cents(gross.times(share))
+			const retention = cents(net.times(retentionRate))
+			const adjNet = cents(gross.times(share).times(keep))
+			grossPayable = grossPayable.plus(gross)
+			retentionAmount = retentionAmount.plus(retention)
+			netPayable = netPayable.plus(adjNet)
 			return {
 				...line,
-				gross,
+				gross: gross.toNumber(),
 				sharePercent: CONTRACTOR_SHARE_PERCENT,
-				net,
-				retention,
-				adjNet,
+				net: net.toNumber(),
+				retention: retention.toNumber(),
+				adjNet: adjNet.toNumber(),
 			}
 		},
 	)
-	const grossPayable = contractorShareLines.reduce((sum, l) => sum + l.gross, 0)
-	const netBeforeRetention = contractorShareLines.reduce(
-		(sum, l) => sum + l.net,
-		0,
-	)
-	const retentionAmount = truncateCents(netBeforeRetention * RETENTION_RATE)
-	const netPayable = truncateCents(
-		grossPayable * CONTRACTOR_SHARE_PERCENT * (1 - RETENTION_RATE),
-	)
-	return { contractorShareLines, grossPayable, retentionAmount, netPayable }
+	return {
+		contractorShareLines,
+		grossPayable: grossPayable.toNumber(),
+		retentionAmount: retentionAmount.toNumber(),
+		netPayable: netPayable.toNumber(),
+	}
 }
 
 export async function resolveContractorAccount(

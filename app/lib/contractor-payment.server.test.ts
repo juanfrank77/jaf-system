@@ -36,6 +36,57 @@ describe("computeContractorPayment", () => {
 		)
 	})
 
+	it("matches the client's worked example: $118.45 gross → $69.29", () => {
+		const result = computeContractorPayment([
+			{
+				serviceCodeId: "s",
+				claroCode: "c",
+				name: "n",
+				qty: 1,
+				jafPrice: 118.45,
+			},
+		])
+		expect(result.grossPayable).toBe(118.45)
+		expect(result.netPayable).toBe(69.29)
+	})
+
+	it("does not lose a cent on exact amounts (float truncation)", () => {
+		// Math.trunc(0.29 * 100) / 100 === 0.28 and 4.35 → 4.34 in plain floats.
+		for (const price of [0.29, 1.15, 4.35, 8.2, 16.4]) {
+			const { grossPayable } = computeContractorPayment([
+				{
+					serviceCodeId: "s",
+					claroCode: "c",
+					name: "n",
+					qty: 1,
+					jafPrice: price,
+				},
+			])
+			expect(grossPayable).toBe(price)
+		}
+	})
+
+	it("stored totals are exactly the sums of the per-line values", () => {
+		const lines = [
+			{ qty: 1, jafPrice: 0.58 },
+			{ qty: 3, jafPrice: 1.07 },
+			{ qty: 7, jafPrice: 12.345 },
+			{ qty: 2, jafPrice: 99.99 },
+		].map((l, i) => ({
+			serviceCodeId: `s${i}`,
+			claroCode: `c${i}`,
+			name: "n",
+			...l,
+		}))
+		const r = computeContractorPayment(lines)
+		const sum = (f: (l: (typeof r.contractorShareLines)[number]) => number) =>
+			Math.round(r.contractorShareLines.reduce((a, l) => a + f(l), 0) * 100) /
+			100
+		expect(r.grossPayable).toBe(sum((l) => l.gross))
+		expect(r.retentionAmount).toBe(sum((l) => l.retention))
+		expect(r.netPayable).toBe(sum((l) => l.adjNet))
+	})
+
 	it("returns all zeros for an empty line list, never throws", () => {
 		const result = computeContractorPayment([])
 		expect(result.contractorShareLines).toEqual([])
@@ -55,13 +106,13 @@ describe("resolveContractorAccount", () => {
 		expect(resolved?.id).toBe(account.id)
 	})
 
-	it("returns null for an inactive account", async () => {
-		t.track(
+	it("still resolves an inactive account (q&a 14.4: deactivation blocks new work, not payment)", async () => {
+		const account = t.track(
 			"contractorAccount",
 			await seedContractorAccount({ code: "T-INACTIVE", active: false }),
 		)
 		const resolved = await resolveContractorAccount("T-INACTIVE")
-		expect(resolved).toBeNull()
+		expect(resolved?.id).toBe(account.id)
 	})
 
 	it("returns null for an unmapped code", async () => {
@@ -76,7 +127,7 @@ describe("resolveContractorAccount", () => {
 })
 
 describe("resolveContractorAccounts", () => {
-	it("resolves every distinct active code and keys the result by code", async () => {
+	it("resolves every distinct code and keys the result by code", async () => {
 		const a = t.track(
 			"contractorAccount",
 			await seedContractorAccount({ code: "B-001" }),
@@ -85,8 +136,8 @@ describe("resolveContractorAccounts", () => {
 			"contractorAccount",
 			await seedContractorAccount({ code: "B-002" }),
 		)
-		// Inactive account — should NOT appear in the map.
-		t.track(
+		// Inactive account — still resolves (q&a 14.4).
+		const inactive = t.track(
 			"contractorAccount",
 			await seedContractorAccount({ code: "B-INACT", active: false }),
 		)
@@ -103,9 +154,9 @@ describe("resolveContractorAccounts", () => {
 
 		expect(resolved.get("B-001")?.id).toBe(a.id)
 		expect(resolved.get("B-002")?.id).toBe(b.id)
-		expect(resolved.has("B-INACT")).toBe(false)
+		expect(resolved.get("B-INACT")?.id).toBe(inactive.id)
 		expect(resolved.has("NOT-A-REAL-CODE")).toBe(false)
-		expect(resolved.size).toBe(2)
+		expect(resolved.size).toBe(3)
 	})
 
 	it("queries once, not once per code (Review Focus)", async () => {

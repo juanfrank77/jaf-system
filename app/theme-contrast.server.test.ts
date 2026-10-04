@@ -52,6 +52,8 @@ const TEXT_PAIRS: [string, string][] = [
 const UI_PAIRS: [string, string][] = [
 	["ring", "card"],
 	["ring", "background"],
+	["primary", "background"],
+	["primary", "card"],
 ]
 
 describe.each([

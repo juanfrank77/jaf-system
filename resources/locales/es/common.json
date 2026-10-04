@@ -165,10 +165,8 @@
 		"primary_nav_mobile": "Principal (móvil)",
 		"navigation_dialog": "Navegación",
 		"theme": {
-			"label": "Tema",
-			"system": "Sistema",
-			"light": "Claro",
-			"dark": "Oscuro"
+			"switch_to_dark": "Cambiar a tema oscuro",
+			"switch_to_light": "Cambiar a tema claro"
 		},
 		"group": {
 			"work": "Trabajo",

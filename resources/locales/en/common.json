@@ -1053,8 +1053,9 @@
 		"queue": {
 			"pending_review": "Pending review — crew submitted",
 			"sent_back": "Sent back to crew",
-			"missing_aviso": "Approved · missing Aviso",
-			"blocked": "Blocked · Aviso ≠ invoice",
+			"approved": "Approved",
+			"missing_aviso": "Missing Aviso",
+			"blocked": "Blocked · Aviso ≠ Invoice",
 			"empty": "Nothing here."
 		},
 		"col": {

@@ -251,7 +251,7 @@ function AppShell({
 	return (
 		<Dialog.Root open={drawerOpen} onOpenChange={setDrawerOpen}>
 			<div className="min-h-screen bg-background">
-				<header className="sticky top-0 z-30 flex items-center gap-3.5 border-b border-border bg-card px-4.5 py-2.5">
+				<header className="sticky top-0 z-30 flex items-center gap-2 border-b border-border bg-card px-3 sm:gap-3.5 sm:px-4.5 py-2.5">
 					<Dialog.Trigger
 						className="-ml-1.5 flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground md:hidden"
 						aria-label={t("app_shell.open_menu")}
@@ -266,7 +266,7 @@ function AppShell({
 						JAF Ops
 					</Link>
 					<div className="flex-1" />
-					<div className="flex items-center gap-3 text-sm text-muted-foreground">
+					<div className="flex items-center gap-2 text-sm text-muted-foreground sm:gap-3">
 						<OfflineIndicator />
 						{warehouseScope && (
 							<WarehouseSwitch
@@ -274,8 +274,10 @@ function AppShell({
 								selectedId={warehouseScope.selectedId}
 							/>
 						)}
-						<span className="font-medium text-foreground">{user.name}</span>
-						<span className="rounded-md bg-muted px-2 py-0.5 text-xs font-semibold">
+						<span className="hidden font-medium text-foreground sm:inline">
+							{user.name}
+						</span>
+						<span className="hidden rounded-md bg-muted px-2 py-0.5 text-xs font-semibold sm:inline">
 							{user.role}
 						</span>
 						<LanguageSwitcher />
@@ -332,8 +334,11 @@ function AppShell({
 							<span className="flex size-8 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">
 								{initials(user.name)}
 							</span>
-							<div className="text-sm font-semibold text-sidebar-foreground">
-								{user.name}
+							<div>
+								<div className="text-sm font-semibold text-sidebar-foreground">
+									{user.name}
+								</div>
+								<div className="text-xs text-muted-foreground">{user.role}</div>
 							</div>
 						</div>
 						<Dialog.Close

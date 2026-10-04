@@ -182,21 +182,32 @@ async function loadSupervisorQueues(userId: string) {
 			h.at(-1)?.note ?? null,
 		)
 	})
+	const approvedRows: QueueRow[] = []
 	const missingAviso: QueueRow[] = []
 	const blocked: QueueRow[] = []
 	for (const d of approved) {
 		const stage = deriveSupervisorStage(d, null)
-		if (d.avisoMatchedAt) continue
-		if (d.avisoLineTotal == null)
+		if (d.avisoMatchedAt) {
+			approvedRows.push(toRow(d, stage, d.supervisorApprovedAt))
+		} else if (d.avisoLineTotal == null) {
 			missingAviso.push(toRow(d, stage, d.supervisorApprovedAt))
-		else if (
+		} else if (
 			Math.abs(
 				toNumberPrice(d.avisoLineTotal) - toNumberPrice(d.jafInvoiceLineTotal),
 			) > tolerance
-		)
+		) {
 			blocked.push(toRow(d, "AVISO", d.supervisorApprovedAt))
+		} else {
+			approvedRows.push(toRow(d, stage, d.supervisorApprovedAt))
+		}
 	}
-	return { pendingReview, sentBack, missingAviso, blocked }
+	return {
+		pendingReview,
+		sentBack,
+		approved: approvedRows,
+		missingAviso,
+		blocked,
+	}
 }
 
 async function loadSupervisorScope(userId: string) {

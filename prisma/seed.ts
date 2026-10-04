@@ -104,10 +104,12 @@ async function seedBrigades() {
 		const data = {
 			code: b.code,
 			area: b.area,
-			supervisorId: byEmail[b.supervisorEmail] ?? null,
+			supervisorId: b.supervisorEmail
+				? (byEmail[b.supervisorEmail] ?? null)
+				: null,
 			leadName: b.leadName,
 			phone: b.phone,
-			active: true,
+			active: b.active ?? true,
 		}
 		const existing = await db.brigade.findFirst({ where: { name: b.name } })
 		if (existing) await db.brigade.update({ where: { id: existing.id }, data })

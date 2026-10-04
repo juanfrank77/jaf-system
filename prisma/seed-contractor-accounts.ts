@@ -1,3 +1,4 @@
+import { syncContractorAccount } from "../app/lib/contractor-account-sync"
 import type { PrismaClient } from "../generated/prisma/client"
 
 /**
@@ -27,21 +28,7 @@ export async function seedContractorAccounts(db: PrismaClient): Promise<void> {
 	})
 	let upserted = 0
 	for (const brigade of brigades) {
-		await db.contractorAccount.upsert({
-			where: { code: brigade.code as string },
-			update: {
-				brigadeId: brigade.id,
-				label: brigade.name,
-				active: brigade.active,
-			},
-			create: {
-				code: brigade.code as string,
-				label: brigade.name,
-				brigadeId: brigade.id,
-				active: brigade.active,
-			},
-		})
-		upserted++
+		if (await syncContractorAccount(db, brigade)) upserted++
 	}
 	// biome-ignore lint/suspicious/noConsole: seed output
 	console.log(`contractor accounts: ${upserted} upserted`)

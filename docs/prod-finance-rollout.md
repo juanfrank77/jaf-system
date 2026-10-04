@@ -20,10 +20,10 @@ confirmed.
 ```sql
 SELECT id, name, code FROM "Brigade"
  WHERE code IS NULL OR name ILIKE 'ZARIEL%';
--- expect: one row, name = 'ZARIEL SIERRA', code = '274' after Section B
+-- expect: one row, name = 'ZARIEL SIERRA' after Section B
 
 SELECT count(*) AS brigades FROM "Brigade";
--- expect: 14
+-- expect: 14 before the seed, 15 after (it adds the inactive José A Ríos Rivera)
 
 SELECT DISTINCT "contractorAccountCode"
   FROM "jaf_invoice"
@@ -32,10 +32,10 @@ SELECT DISTINCT "contractorAccountCode"
 -- expect: 0 rows
 
 SELECT count(*) AS accounts FROM "ContractorAccount";
--- expect: 0 before seeding, 14 after Section D
+-- expect: 0 before seeding, 11 after Section D
 
-SELECT code, label, "brigadeId" FROM "ContractorAccount" ORDER BY code;
--- expect: 14 rows after Section D, with '274 | ZARIEL SIERRA'
+SELECT code, label, active, "brigadeId" FROM "ContractorAccount" ORDER BY code;
+-- expect after Section D: 009, 011, 016, 019, 024, 025, 102, 124, 141, 176, 178
 ```
 
 A `contractorAccountCode` set with no matching row is the only thing that
@@ -50,15 +50,17 @@ handled by the `no new work` half of q&a 14.4.
 Run **before** `pnpm prisma db seed`.
 
 ```sql
-UPDATE "Brigade" SET code = '274', name = 'ZARIEL SIERRA'
- WHERE code IS NULL AND name ILIKE 'ZARIEL%';
+UPDATE "Brigade" SET name = 'ZARIEL SIERRA'
+ WHERE name ILIKE 'ZARIEL%' AND name <> 'ZARIEL SIERRA';
 ```
 
-Idempotent and safe whether or not a seed already applied the code.
-Jobs reference brigades by `id`, so renaming disturbs no history.
+The seed matches brigades by name, so a leftover `ZARIEL GARAY` row would be
+duplicated rather than updated; the seed then sets its number (178). Expect
+`UPDATE 1` the first time and `UPDATE 0` after; more than 1 means stop and
+escalate. Jobs reference brigades by `id`, so renaming disturbs no history.
 
 Re-run the Section A brigade query and confirm the row now reads
-`ZARIEL SIERRA | 274`.
+`ZARIEL SIERRA`.
 
 ---
 
@@ -95,10 +97,34 @@ account can never be swept. The seed is the same repeatable step the deploy
 guide already uses (§7); make sure `SEED_DEMO` is **not** set, so no demo
 serials are written to prod.
 
+The seed now sets each brigade's number to the one printed on the paper
+Production Journal (finance q&a 14.1) — it **replaces** the codes prod
+currently has — and creates a `ContractorAccount` for each brigade that has a
+number: 11 of the 15 brigades. Four active brigades (Dino Castillo, Samuel
+González, Carlos Rodríguez, IR Communication & Construction) have no confirmed
+number yet and are left without one; José A Ríos Rivera (141) is seeded
+inactive because he has work on the journal but is not on the active roster.
+
 Re-run the Section A queries and confirm:
 
-- Brigade count is **still 14**, not 15 — no brigade was duplicated.
-- `274 | ZARIEL SIERRA` now appears in `ContractorAccount`.
+- Brigade count is **15** (14 + José A Ríos Rivera) — no other brigade was
+  duplicated.
+- `ContractorAccount` holds exactly the 11 numbers listed in Section A.
+
+---
+
+## Section D2 — re-point open jobs at the new numbers
+
+A job copies its brigade's number when the sub-contractor signs, so jobs signed
+before the seed still carry the old number and would show **"account not
+mapped"** on L1. Run Section D2 of `docs/prod-finance-rollout.sql`: it previews,
+then re-points every job that is not yet in a run and not yet closed, by
+brigade. Settled history is untouched, and it is safe to run again — run it
+again whenever a missing brigade number is confirmed and entered on the
+brigades screen (that screen creates the `ContractorAccount` itself).
+
+Confirm in L1 that no job (other than those of the four brigades without a
+number) shows "account not mapped".
 
 ---
 

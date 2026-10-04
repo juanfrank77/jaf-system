@@ -3,6 +3,7 @@ import { AppShell } from "~/components/app-shell"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { db } from "~/lib/db.server"
 import { isComptrollerEnabled } from "~/lib/features.server"
+import { loadNavCounts } from "~/lib/nav-counts.server"
 import { requireSession } from "~/lib/permissions.server"
 import { resolveWarehouseScope } from "~/lib/warehouse-scope.server"
 import type { Route } from "./+types/_app"
@@ -23,22 +24,26 @@ export async function loader({ request }: Route.LoaderArgs) {
 		user.role === "WAREHOUSE" || user.role === "ADMIN"
 			? await resolveWarehouseScope(db, request, user)
 			: null
+	const navCounts = await loadNavCounts({ id: user.id, role: user.role })
 	return {
 		user: { name: user.name, role: user.role },
 		notifications,
 		comptrollerEnabled: isComptrollerEnabled(),
 		warehouseScope,
+		navCounts,
 	}
 }
 
 export default function AppShellRoute({ loaderData }: Route.ComponentProps) {
-	const { user, notifications, comptrollerEnabled, warehouseScope } = loaderData
+	const { user, notifications, comptrollerEnabled, warehouseScope, navCounts } =
+		loaderData
 	return (
 		<AppShell
 			user={user}
 			notifications={notifications}
 			comptrollerEnabled={comptrollerEnabled}
 			warehouseScope={warehouseScope ?? undefined}
+			navCounts={navCounts}
 		>
 			<Outlet />
 		</AppShell>

@@ -2,19 +2,10 @@ import { Dialog } from "@base-ui/react/dialog"
 import { Popover } from "@base-ui/react/popover"
 import {
 	Cancel01Icon,
-	DashboardSquare01Icon,
-	FileAddIcon,
-	GridViewIcon,
-	Invoice02Icon,
 	Menu01Icon,
 	Notification01Icon,
-	Settings02Icon,
-	TruckDeliveryIcon,
-	UserGroup03Icon,
-	UserIcon,
-	Wallet01Icon,
 } from "@hugeicons/core-free-icons"
-import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react"
+import { HugeiconsIcon } from "@hugeicons/react"
 import type { TFunction } from "i18next"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -24,137 +15,16 @@ import { cn } from "~/lib/utils"
 import { LanguageSwitcher } from "~/library/language-switcher"
 import { ThemeToggle } from "~/library/theme-toggle"
 import type { Role } from "../../generated/prisma/client"
+import {
+	GROUP_LABEL_KEY,
+	type NavCount,
+	type NavGroup,
+	navGroupsFor,
+	tabBarItemsFor,
+} from "./nav-model"
 import { OfflineIndicator } from "./offline-indicator"
+import { TabBar } from "./tab-bar"
 import { WarehouseSwitch } from "./warehouse-switch"
-
-type NavItem = {
-	to: string
-	labelKey:
-		| "app_shell.nav.dashboard"
-		| "app_shell.nav.new_document"
-		| "app_shell.nav.receivables"
-		| "app_shell.nav.finance_queue"
-		| "app_shell.nav.admin_settings"
-		| "app_shell.nav.catalog"
-		| "app_shell.nav.comptroller"
-		| "app_shell.nav.admin_users"
-		| "app_shell.nav.admin_crews"
-		| "app_shell.nav.admin_vans"
-		| "app_shell.nav.supervisor_brigades"
-		| "app_shell.nav.supervisor_variance"
-		| "app_shell.nav.admin_restock"
-		| "app_shell.nav.installer"
-		| "app_shell.nav.installer_supervisor"
-		| "app_shell.nav.warehouse_scan_in"
-		| "app_shell.nav.warehouse_restock"
-		| "app_shell.nav.warehouse_stock"
-	icon: IconSvgElement
-	roles?: Role[]
-}
-
-const NAV_ITEMS: NavItem[] = [
-	{
-		to: "/dashboard",
-		labelKey: "app_shell.nav.dashboard",
-		icon: DashboardSquare01Icon,
-	},
-	{
-		to: "/docs/new",
-		labelKey: "app_shell.nav.new_document",
-		icon: FileAddIcon,
-		roles: ["SUPERVISOR", "ADMIN"],
-	},
-	{
-		to: "/finance/queue",
-		labelKey: "app_shell.nav.finance_queue",
-		icon: Invoice02Icon,
-		roles: ["FINANCE", "ADMIN"],
-	},
-	{
-		to: "/finance/receivables",
-		labelKey: "app_shell.nav.receivables",
-		icon: Invoice02Icon,
-		roles: ["FINANCE", "ADMIN"],
-	},
-	{
-		to: "/admin/settings",
-		labelKey: "app_shell.nav.admin_settings",
-		icon: Settings02Icon,
-		roles: ["ADMIN"],
-	},
-	{
-		to: "/admin/catalog",
-		labelKey: "app_shell.nav.catalog",
-		icon: GridViewIcon,
-		roles: ["ADMIN"],
-	},
-	{
-		to: "/admin/users",
-		labelKey: "app_shell.nav.admin_users",
-		icon: UserIcon,
-		roles: ["ADMIN"],
-	},
-	{
-		to: "/admin/crews",
-		labelKey: "app_shell.nav.admin_crews",
-		icon: UserGroup03Icon,
-		roles: ["ADMIN"],
-	},
-	{
-		to: "/admin/vans",
-		labelKey: "app_shell.nav.admin_vans",
-		icon: TruckDeliveryIcon,
-		roles: ["ADMIN"],
-	},
-	{
-		to: "/supervisor/brigades",
-		labelKey: "app_shell.nav.supervisor_brigades",
-		icon: UserGroup03Icon,
-		roles: ["SUPERVISOR"],
-	},
-	{
-		to: "/supervisor/variance",
-		labelKey: "app_shell.nav.supervisor_variance",
-		icon: Invoice02Icon,
-		roles: ["SUPERVISOR"],
-	},
-	{
-		to: "/installer",
-		labelKey: "app_shell.nav.installer",
-		icon: TruckDeliveryIcon,
-		roles: ["INSTALLER", "ADMIN"],
-	},
-	{
-		to: "/installer-supervisor",
-		labelKey: "app_shell.nav.installer_supervisor",
-		icon: TruckDeliveryIcon,
-		roles: ["INSTALLER_SUPERVISOR", "ADMIN"],
-	},
-	{
-		to: "/warehouse/scan-in",
-		labelKey: "app_shell.nav.warehouse_scan_in",
-		icon: TruckDeliveryIcon,
-		roles: ["WAREHOUSE", "ADMIN"],
-	},
-	{
-		to: "/warehouse/restock",
-		labelKey: "app_shell.nav.warehouse_restock",
-		icon: TruckDeliveryIcon,
-		roles: ["WAREHOUSE", "ADMIN"],
-	},
-	{
-		to: "/warehouse/stock",
-		labelKey: "app_shell.nav.warehouse_stock",
-		icon: GridViewIcon,
-		roles: ["WAREHOUSE", "ADMIN"],
-	},
-	{
-		to: "/comptroller",
-		labelKey: "app_shell.nav.comptroller",
-		icon: Wallet01Icon,
-		roles: ["COMPTROLLER", "ADMIN"],
-	},
-]
 
 function initials(name: string) {
 	return name
@@ -165,12 +35,31 @@ function initials(name: string) {
 		.join("")
 }
 
+function NavPill({ count }: { count?: NavCount }) {
+	if (!count || count.value <= 0) return null
+	return (
+		<span
+			data-testid="nav-pill"
+			className={cn(
+				"ml-auto rounded-md px-1.5 py-px text-[11px] font-semibold tabular-nums",
+				count.tone === "critical"
+					? "bg-status-danger-solid text-status-danger-solid-foreground"
+					: "text-muted-foreground",
+			)}
+		>
+			{count.value > 99 ? "99+" : count.value}
+		</span>
+	)
+}
+
 function NavList({
-	items,
+	groups,
+	counts,
 	onNavigate,
 	"aria-label": ariaLabel,
 }: {
-	items: NavItem[]
+	groups: NavGroup[]
+	counts?: Record<string, NavCount>
 	onNavigate?: () => void
 	"aria-label": string
 }) {
@@ -178,30 +67,43 @@ function NavList({
 	const { t } = useTranslation()
 	return (
 		<nav aria-label={ariaLabel} className="flex flex-col gap-1">
-			{items.map((item) => {
-				const active = location.pathname === item.to
+			{groups.map((group) => {
+				const labelKey = GROUP_LABEL_KEY[group.key]
 				return (
-					<Link
-						key={item.to}
-						to={item.to}
-						onClick={onNavigate}
-						className={cn(
-							"flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-sidebar-foreground",
-							active
-								? "bg-sidebar-accent text-sidebar-accent-foreground"
-								: "hover:bg-sidebar-accent/60",
+					<div key={group.key} className="flex flex-col gap-1">
+						{labelKey && (
+							<p className="px-2.5 pt-4 pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground">
+								{t(labelKey)}
+							</p>
 						)}
-					>
-						<HugeiconsIcon
-							icon={item.icon}
-							strokeWidth={2}
-							className={cn(
-								"size-4 shrink-0",
-								!active && "text-muted-foreground",
-							)}
-						/>
-						{t(item.labelKey)}
-					</Link>
+						{group.items.map((item) => {
+							const active = location.pathname === item.to
+							return (
+								<Link
+									key={item.to}
+									to={item.to}
+									onClick={onNavigate}
+									className={cn(
+										"flex items-center gap-2.5 rounded-lg border px-2.5 py-2 text-sm font-medium text-sidebar-foreground",
+										active
+											? "border-sidebar-border bg-sidebar-accent font-semibold text-sidebar-accent-foreground shadow-card"
+											: "border-transparent hover:bg-sidebar-accent/60",
+									)}
+								>
+									<HugeiconsIcon
+										icon={item.icon}
+										strokeWidth={2}
+										className={cn(
+											"size-4 shrink-0",
+											!active && "text-muted-foreground",
+										)}
+									/>
+									{t(item.labelKey)}
+									<NavPill count={counts?.[item.to]} />
+								</Link>
+							)
+						})}
+					</div>
 				)
 			})}
 		</nav>
@@ -323,6 +225,7 @@ function AppShell({
 	notifications,
 	comptrollerEnabled,
 	warehouseScope,
+	navCounts,
 	children,
 }: {
 	user: { name: string; role: Role }
@@ -337,14 +240,13 @@ function AppShell({
 		warehouses: { id: string; name: string }[]
 		selectedId?: string
 	}
+	navCounts?: Record<string, NavCount>
 	children: React.ReactNode
 }) {
 	const [drawerOpen, setDrawerOpen] = useState(false)
 	const { t } = useTranslation()
-	const items = NAV_ITEMS.filter((item) => {
-		if (item.to.startsWith("/comptroller") && !comptrollerEnabled) return false
-		return !item.roles || item.roles.includes(user.role)
-	})
+	const groups = navGroupsFor(user.role, { comptrollerEnabled })
+	const tabItems = tabBarItemsFor(user.role, { comptrollerEnabled })
 
 	return (
 		<Dialog.Root open={drawerOpen} onOpenChange={setDrawerOpen}>
@@ -387,7 +289,7 @@ function AppShell({
 					</div>
 				</header>
 				<div className="flex min-h-[calc(100vh-51px)]">
-					<aside className="hidden w-56 shrink-0 border-r border-sidebar-border bg-sidebar p-3 md:block">
+					<aside className="hidden w-60 shrink-0 border-r border-sidebar-border bg-sidebar p-3 md:block">
 						<div className="mb-2 flex items-center gap-2.5 rounded-lg px-2.5 py-2">
 							<span className="flex size-8 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">
 								{initials(user.name)}
@@ -396,12 +298,25 @@ function AppShell({
 								{user.name}
 							</div>
 						</div>
-						<NavList items={items} aria-label={t("app_shell.primary_nav")} />
+						<NavList
+							groups={groups}
+							counts={navCounts}
+							aria-label={t("app_shell.primary_nav")}
+						/>
 					</aside>
-					<main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:px-8">
+					<main
+						className={cn(
+							"mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:px-8",
+							tabItems.length > 0 && "pb-24 md:pb-6",
+						)}
+					>
 						{children}
 					</main>
 				</div>
+				<TabBar
+					items={tabItems}
+					aria-label={t("app_shell.primary_nav_mobile")}
+				/>
 			</div>
 			<Dialog.Portal>
 				<Dialog.Backdrop
@@ -433,7 +348,8 @@ function AppShell({
 						</Dialog.Close>
 					</div>
 					<NavList
-						items={items}
+						groups={groups}
+						counts={navCounts}
 						onNavigate={() => setDrawerOpen(false)}
 						aria-label={t("app_shell.primary_nav_mobile")}
 					/>

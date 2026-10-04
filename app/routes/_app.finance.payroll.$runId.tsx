@@ -230,7 +230,7 @@ export default function FinancePayrollRunDetail({
 				<Badge variant="warn">{t("finance_payroll.open")}</Badge>
 			)}
 
-			{error && <p className="text-sm text-red-600">{error}</p>}
+			{error && <p className="text-sm text-status-danger">{error}</p>}
 
 			<Form method="post">
 				<input type="hidden" name="intent" value="download_journal_pdf" />
@@ -239,10 +239,10 @@ export default function FinancePayrollRunDetail({
 				</Button>
 			</Form>
 
-			<div className="overflow-x-auto bg-white border rounded-lg">
+			<div className="overflow-x-auto bg-card border rounded-lg">
 				<table className="w-full text-sm">
 					<thead>
-						<tr className="text-xs text-slate-500 text-left border-b">
+						<tr className="text-xs text-muted-foreground text-left border-b">
 							<th className="p-2">{t("finance_payroll.col.brigade")}</th>
 							<th className="p-2 text-right">
 								{t("finance_payroll.col.gross")}
@@ -261,7 +261,9 @@ export default function FinancePayrollRunDetail({
 							<tr key={block.brigadeCode} className="border-b last:border-0">
 								<td className="p-2">
 									<span className="font-mono">{block.brigadeCode}</span>{" "}
-									<span className="text-slate-500">{block.brigadeLabel}</span>
+									<span className="text-muted-foreground">
+										{block.brigadeLabel}
+									</span>
 								</td>
 								<td className="p-2 text-right font-mono">
 									{formatMoney(block.gross)}
@@ -282,7 +284,7 @@ export default function FinancePayrollRunDetail({
 								{t("finance_payroll.grand_total")}
 							</td>
 						</tr>
-						<tr className="border-t-2 border-slate-900">
+						<tr className="border-t-2 border-foreground">
 							<td className="p-2 font-mono">—</td>
 							<td className="p-2 text-right font-mono">
 								{formatMoney(blocks.reduce((s, b) => s + b.gross, 0))}
@@ -305,7 +307,7 @@ export default function FinancePayrollRunDetail({
 				<Form
 					method="post"
 					encType="multipart/form-data"
-					className="bg-white border rounded-lg p-4 space-y-2"
+					className="bg-card border rounded-lg p-4 space-y-2"
 				>
 					<input type="hidden" name="intent" value="batch_confirm" />
 					<h2 className="font-semibold text-sm">

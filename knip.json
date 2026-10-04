@@ -13,7 +13,7 @@
 	],
 	"ignoreDependencies":	[
 		"@epic-web/client-hints",
-		"@fontsource-variable/figtree",
+		"@fontsource-variable/geist",
 		"i18next-http-backend",
 		"pretty-cache-header",
 		"shadcn",

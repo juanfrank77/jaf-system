@@ -62,40 +62,42 @@ export default function SupervisorVariance({
 			<h1 className="text-xl font-semibold">
 				{t("supervisor_variance.title")}
 			</h1>
-			<p className="text-sm text-slate-500">
+			<p className="text-sm text-muted-foreground">
 				{t("supervisor_variance.readonly_note")}
 			</p>
 
-			<section className="bg-white border rounded-lg overflow-hidden">
+			<section className="bg-card border rounded-lg overflow-hidden">
 				<table className="w-full text-sm">
-					<thead className="bg-slate-50 border-b">
+					<thead className="bg-muted border-b">
 						<tr>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
+							<th className="px-4 py-3 text-left font-medium text-muted-foreground">
 								{t("supervisor_variance.table.doc")}
 							</th>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
+							<th className="px-4 py-3 text-left font-medium text-muted-foreground">
 								{t("supervisor_variance.table.brigade")}
 							</th>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
+							<th className="px-4 py-3 text-left font-medium text-muted-foreground">
 								{t("supervisor_variance.table.kinds")}
 							</th>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
+							<th className="px-4 py-3 text-left font-medium text-muted-foreground">
 								{t("supervisor_variance.table.lines")}
 							</th>
 						</tr>
 					</thead>
 					<tbody className="divide-y">
 						{rows.map((row) => (
-							<tr key={row.docId} className="align-top hover:bg-slate-50">
+							<tr key={row.docId} className="align-top hover:bg-muted">
 								<td className="px-4 py-3 font-medium">
 									<Link
 										to={`/docs/${row.docId}/review`}
-										className="text-blue-600 hover:underline"
+										className="text-status-info hover:underline"
 									>
 										{row.claroOrderNo}
 									</Link>
 								</td>
-								<td className="px-4 py-3 text-slate-600">{row.brigade}</td>
+								<td className="px-4 py-3 text-muted-foreground">
+									{row.brigade}
+								</td>
 								<td className="px-4 py-3">
 									<div className="flex flex-wrap gap-1">
 										{row.kinds.map((kind) => (
@@ -103,10 +105,10 @@ export default function SupervisorVariance({
 												key={kind}
 												className={
 													kind === "overage"
-														? "rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700"
+														? "rounded-full bg-status-info-soft px-2 py-0.5 text-xs font-medium text-status-info"
 														: kind === "shortage"
-															? "rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700"
-															: "rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700"
+															? "rounded-full bg-status-danger-soft px-2 py-0.5 text-xs font-medium text-status-danger"
+															: "rounded-full bg-status-warn-soft px-2 py-0.5 text-xs font-medium text-status-warn"
 												}
 											>
 												{t(`supervisor_variance.kinds.${kind}`)}
@@ -114,15 +116,15 @@ export default function SupervisorVariance({
 										))}
 									</div>
 								</td>
-								<td className="px-4 py-3 text-slate-600">
+								<td className="px-4 py-3 text-muted-foreground">
 									{row.lines.length === 0 ? (
-										<span className="text-slate-400">
+										<span className="text-muted-foreground">
 											{t("supervisor_variance.no_lines")}
 										</span>
 									) : (
 										<table className="w-full text-xs">
 											<thead>
-												<tr className="text-slate-500">
+												<tr className="text-muted-foreground">
 													<th className="pr-3 text-left font-medium">
 														{t("supervisor_variance.line.code")}
 													</th>
@@ -148,8 +150,8 @@ export default function SupervisorVariance({
 																line.delta === 0
 																	? ""
 																	: line.delta > 0
-																		? "text-blue-700 font-medium"
-																		: "text-red-700 font-medium"
+																		? "text-status-info font-medium"
+																		: "text-status-danger font-medium"
 															}
 														>
 															{line.delta > 0 ? `+${line.delta}` : line.delta}
@@ -166,7 +168,7 @@ export default function SupervisorVariance({
 							<tr>
 								<td
 									colSpan={4}
-									className="px-4 py-6 text-center text-slate-400 text-sm"
+									className="px-4 py-6 text-center text-muted-foreground text-sm"
 								>
 									{t("supervisor_variance.no_variance")}
 								</td>

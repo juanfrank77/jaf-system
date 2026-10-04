@@ -79,7 +79,7 @@ export default function InstallerSupervisorRollup({
 			</h1>
 			<table className="w-full text-sm">
 				<thead>
-					<tr className="text-left text-slate-500">
+					<tr className="text-left text-muted-foreground">
 						<th className="px-3 py-1 font-medium">
 							{t("installer_supervisor.installer", "Installer")}
 						</th>

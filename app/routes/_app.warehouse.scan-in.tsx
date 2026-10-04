@@ -91,7 +91,7 @@ export default function WarehouseScanIn({
 				</Button>
 			</Form>
 			{actionData && !actionData.ok && (
-				<p className="text-sm text-red-600">
+				<p className="text-sm text-status-danger">
 					{t(
 						"warehouse.scan_in.not_owed_back",
 						"This serial is not owed back.",
@@ -99,7 +99,7 @@ export default function WarehouseScanIn({
 				</p>
 			)}
 			{actionData?.ok && (
-				<p className="text-sm text-green-600">
+				<p className="text-sm text-status-ok">
 					{t("warehouse.scan_in.success", "Returned successfully.")}
 				</p>
 			)}

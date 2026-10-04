@@ -265,29 +265,37 @@ export default function PbccRequest({ loaderData }: Route.ComponentProps) {
 	return (
 		<div className="space-y-5">
 			<h1 className="text-xl font-semibold">{t("finance_pbcc.title")}</h1>
-			<p className="font-mono text-sm text-slate-500">{doc.controlNumber}</p>
+			<p className="font-mono text-sm text-muted-foreground">
+				{doc.controlNumber}
+			</p>
 
-			<div className="bg-white border rounded-lg p-4 space-y-2 text-sm">
+			<div className="bg-card border rounded-lg p-4 space-y-2 text-sm">
 				<p>
-					<span className="text-slate-500">{t("finance_pbcc.job_type")}:</span>{" "}
+					<span className="text-muted-foreground">
+						{t("finance_pbcc.job_type")}:
+					</span>{" "}
 					{doc.jobType}
 				</p>
 				<p>
-					<span className="text-slate-500">{t("finance_pbcc.address")}:</span>{" "}
+					<span className="text-muted-foreground">
+						{t("finance_pbcc.address")}:
+					</span>{" "}
 					{doc.jobAddressActual || doc.jobAddressEstimated}
 				</p>
 				<p>
-					<span className="text-slate-500">
+					<span className="text-muted-foreground">
 						{t("finance_pbcc.aviso_number")}:
 					</span>{" "}
 					{doc.avisoNumber || "—"}
 				</p>
 				<p>
-					<span className="text-slate-500">{t("finance_pbcc.amount")}:</span>{" "}
+					<span className="text-muted-foreground">
+						{t("finance_pbcc.amount")}:
+					</span>{" "}
 					{formatMoney(amount)}
 				</p>
 				<p>
-					<span className="text-slate-500">
+					<span className="text-muted-foreground">
 						{t("finance_pbcc.advance", {
 							rate: (lcPbccAdvanceRate * 100).toFixed(1),
 						})}
@@ -295,14 +303,14 @@ export default function PbccRequest({ loaderData }: Route.ComponentProps) {
 					</span>{" "}
 					{formatMoney(amount * lcPbccAdvanceRate)}
 				</p>
-				<p className="text-xs text-slate-400">
+				<p className="text-xs text-muted-foreground">
 					{t("finance_pbcc.ivu_rate", { rate: (ivuRate * 100).toFixed(1) })}
 				</p>
 			</div>
 
 			{/* Arm A — contractor payment. Live-computed until the job is swept
 			    into a payroll run, then read back frozen off the invoice. */}
-			<div className="bg-white border rounded-lg p-4 space-y-2 text-sm">
+			<div className="bg-card border rounded-lg p-4 space-y-2 text-sm">
 				<div className="flex items-center gap-2">
 					<h2 className="font-semibold">
 						{t("finance_pbcc.contractor_payment")}
@@ -322,13 +330,17 @@ export default function PbccRequest({ loaderData }: Route.ComponentProps) {
 				<table className="w-full">
 					<tbody>
 						<tr>
-							<td className="text-slate-500">{t("finance_pbcc.gross")}</td>
+							<td className="text-muted-foreground">
+								{t("finance_pbcc.gross")}
+							</td>
 							<td className="text-right font-mono">
 								{formatMoney(payment.grossPayable)}
 							</td>
 						</tr>
 						<tr>
-							<td className="text-slate-500">{t("finance_pbcc.retention")}</td>
+							<td className="text-muted-foreground">
+								{t("finance_pbcc.retention")}
+							</td>
 							<td className="text-right font-mono">
 								{formatMoney(payment.retentionAmount)}
 							</td>
@@ -347,17 +359,17 @@ export default function PbccRequest({ loaderData }: Route.ComponentProps) {
 
 			{/* The bank-format invoice / bank Excel schedule have no generator yet —
 			    both are explicitly blocked rather than silently missing. */}
-			<div className="bg-white border rounded-lg p-4 space-y-2 text-sm">
-				<p className="text-slate-600">
+			<div className="bg-card border rounded-lg p-4 space-y-2 text-sm">
+				<p className="text-muted-foreground">
 					{t("finance_pbcc.bank_invoice_blocked")}
 				</p>
-				<p className="text-slate-600">
+				<p className="text-muted-foreground">
 					{t("finance_pbcc.bank_schedule_blocked")}
 				</p>
 			</div>
 
 			{/* Pre-certification sheet: Doc 3, with three signer names. */}
-			<div className="bg-white border rounded-lg p-4 space-y-2 text-sm">
+			<div className="bg-card border rounded-lg p-4 space-y-2 text-sm">
 				{preCertSheet?.pdfPath ? (
 					<div className="flex items-center justify-between">
 						<div>
@@ -365,7 +377,7 @@ export default function PbccRequest({ loaderData }: Route.ComponentProps) {
 								{t("finance_pbcc.precert_title")}
 							</h2>
 							{preCertSheet && (
-								<p className="text-xs text-slate-600 mt-1">
+								<p className="text-xs text-muted-foreground mt-1">
 									{t("finance_pbcc.precert_signers", {
 										supervisor: supervName,
 										contractor: subconName,
@@ -376,14 +388,14 @@ export default function PbccRequest({ loaderData }: Route.ComponentProps) {
 						</div>
 						<a
 							href={`/files/precert/${doc.id}-v${preCertSheet.version}.pdf`}
-							className="text-primary underline text-sm"
+							className="text-accent-text underline text-sm"
 						>
 							{t("finance_pbcc.precert_download")}
 						</a>
 					</div>
 				) : (
 					<div className="flex items-center justify-between">
-						<p className="font-medium text-amber-900">
+						<p className="font-medium text-status-warn">
 							{t("finance_pbcc.precert_missing")}
 						</p>
 					</div>

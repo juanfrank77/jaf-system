@@ -83,7 +83,7 @@ export default function LoginPage() {
 					/>
 				</div>
 				{data?.errorKey && (
-					<p className="text-sm text-red-600">
+					<p className="text-sm text-status-danger">
 						{t(data.errorKey, { count: data.errorCount })}
 					</p>
 				)}

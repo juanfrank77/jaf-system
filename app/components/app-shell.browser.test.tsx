@@ -26,6 +26,33 @@ describe("AppShell", () => {
 		expect(screen.getByText("SUPERVISOR")).toBeInTheDocument()
 	})
 
+	it("shows the theme toggle and no J badge in the header", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<AppShell
+							user={{ name: "Jose Alfaro", role: "SUPERVISOR" }}
+							notifications={[]}
+						>
+							<p>content</p>
+						</AppShell>
+					),
+				},
+			],
+		})
+		const header = screen.getByRole("banner")
+		expect(
+			within(header).getByRole("button", {
+				name: /^Switch to (dark|light) theme$/,
+			}),
+		).toBeInTheDocument()
+		expect(within(header).queryByText("J")).not.toBeInTheDocument()
+	})
+
 	it("renders children in the main content slot", async ({ renderStub }) => {
 		await renderStub({
 			entries: [
@@ -584,5 +611,129 @@ describe("AppShell", () => {
 				screen.queryByRole("dialog", { name: "Navigation" }),
 			).not.toBeInTheDocument()
 		})
+	})
+
+	const renderShell = (
+		renderStub: any,
+		role: "SUPERVISOR" | "CREW" | "INSTALLER",
+		navCounts?: Record<string, { value: number; tone: "critical" | "neutral" }>,
+	) =>
+		renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<AppShell
+							user={{ name: "Jose Alfaro", role }}
+							notifications={[]}
+							navCounts={navCounts}
+						>
+							<p>content</p>
+						</AppShell>
+					),
+				},
+			],
+		})
+
+	it("renders a count pill and hides zero counts", async ({ renderStub }) => {
+		await renderShell(renderStub, "SUPERVISOR", {
+			"/dashboard": { value: 3, tone: "critical" },
+		})
+		expect(screen.getByTestId("nav-pill")).toHaveTextContent("3")
+	})
+
+	it("hides the pill when the count is 0", async ({ renderStub }) => {
+		await renderShell(renderStub, "SUPERVISOR", {
+			"/dashboard": { value: 0, tone: "critical" },
+		})
+		expect(screen.queryByTestId("nav-pill")).not.toBeInTheDocument()
+	})
+
+	it("caps large counts at 99+", async ({ renderStub }) => {
+		await renderShell(renderStub, "SUPERVISOR", {
+			"/dashboard": { value: 120, tone: "critical" },
+		})
+		expect(screen.getByTestId("nav-pill")).toHaveTextContent("99+")
+	})
+
+	it("shows the group label for SUPERVISOR's work items", async ({
+		renderStub,
+	}) => {
+		await renderShell(renderStub, "SUPERVISOR")
+		expect(screen.getByText("Work")).toBeInTheDocument()
+	})
+
+	it("shows a phone tab bar for INSTALLER but not SUPERVISOR or CREW", async ({
+		renderStub,
+	}) => {
+		await renderShell(renderStub, "INSTALLER")
+		expect(screen.getByTestId("tab-bar")).toBeInTheDocument()
+	})
+
+	it("renders no tab bar for CREW (only one nav item)", async ({
+		renderStub,
+	}) => {
+		await renderShell(renderStub, "CREW")
+		expect(screen.queryByTestId("tab-bar")).not.toBeInTheDocument()
+	})
+
+	it("renders no tab bar for SUPERVISOR", async ({ renderStub }) => {
+		await renderShell(renderStub, "SUPERVISOR")
+		expect(screen.queryByTestId("tab-bar")).not.toBeInTheDocument()
+	})
+
+	it("keeps the Installer tab active on nested paths, never Dashboard", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			props: { initialEntries: ["/installer/van"] },
+			entries: [
+				{
+					path: "/installer/van",
+					Component: () => (
+						<AppShell
+							user={{ name: "Ines", role: "INSTALLER" }}
+							notifications={[]}
+						>
+							<p>content</p>
+						</AppShell>
+					),
+				},
+			],
+		})
+		const bar = within(screen.getByTestId("tab-bar"))
+		expect(bar.getByRole("link", { name: "Installer" })).toHaveAttribute(
+			"aria-current",
+			"page",
+		)
+		expect(bar.getByRole("link", { name: "Dashboard" })).not.toHaveAttribute(
+			"aria-current",
+		)
+	})
+
+	it("marks Dashboard active on /dashboard in the tab bar", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			props: { initialEntries: ["/dashboard"] },
+			entries: [
+				{
+					path: "/dashboard",
+					Component: () => (
+						<AppShell
+							user={{ name: "Ines", role: "INSTALLER" }}
+							notifications={[]}
+						>
+							<p>content</p>
+						</AppShell>
+					),
+				},
+			],
+		})
+		expect(
+			within(screen.getByTestId("tab-bar")).getByRole("link", {
+				name: "Dashboard",
+			}),
+		).toHaveAttribute("aria-current", "page")
 	})
 })

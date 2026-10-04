@@ -90,7 +90,7 @@ export default function SwapOutIn({ loaderData }: Route.ComponentProps) {
 			<h1 className="text-xl font-semibold">
 				{t("installer.swap.heading", "Warranty Swap")}
 			</h1>
-			<p className="text-sm text-slate-500">
+			<p className="text-sm text-muted-foreground">
 				{completion.claroOrderNo} — {completion.address}
 			</p>
 

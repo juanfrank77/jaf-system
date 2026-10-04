@@ -338,7 +338,7 @@ export default function NewCompletion({ loaderData }: Route.ComponentProps) {
 			</form>
 
 			{!van && (
-				<p className="text-sm text-amber-600">{t("installer.no_van")}</p>
+				<p className="text-sm text-status-warn">{t("installer.no_van")}</p>
 			)}
 		</div>
 	)

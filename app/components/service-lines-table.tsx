@@ -36,7 +36,7 @@ export function ServiceLinesTable({
 			)}
 			<table className="w-full text-sm">
 				<thead>
-					<tr className="text-left text-xs text-slate-500 border-b">
+					<tr className="text-left text-xs text-muted-foreground border-b">
 						<th className="py-1">{t("service_picker.col_code")}</th>
 						<th className="py-1">{t("service_picker.col_description")}</th>
 						<th className="py-1 text-right">

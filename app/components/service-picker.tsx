@@ -73,9 +73,9 @@ export function ServicePicker({
 				aria-label={t("service_picker.search_placeholder")}
 			/>
 			{query.trim().length >= 2 && (
-				<div className="border rounded-lg bg-white max-h-64 overflow-y-auto text-sm">
+				<div className="border rounded-lg bg-card max-h-64 overflow-y-auto text-sm">
 					{results.length === 0 ? (
-						<p className="p-2 text-slate-500">
+						<p className="p-2 text-muted-foreground">
 							{t("service_picker.no_results")}
 						</p>
 					) : (
@@ -85,19 +85,19 @@ export function ServicePicker({
 									<button
 										type="button"
 										onClick={() => add(r)}
-										className="w-full text-left px-2 py-1.5 hover:bg-slate-50 flex items-center gap-3"
+										className="w-full text-left px-2 py-1.5 hover:bg-muted flex items-center gap-3"
 									>
-										<span className="font-mono text-xs text-slate-500">
+										<span className="font-mono text-xs text-muted-foreground">
 											{r.claroCode}
 										</span>
 										<span className="flex-1">{r.name}</span>
-										<span className="text-xs text-slate-500">
+										<span className="text-xs text-muted-foreground">
 											{t("service_picker.account")} {r.accountCode ?? "—"} ·{" "}
 											{r.unit ?? "—"} · ${r.unitPrice.toFixed(2)}
 										</span>
 									</button>
 									{nameCounts[r.name] > 1 && (
-										<p className="px-2 pb-1 text-xs text-amber-700">
+										<p className="px-2 pb-1 text-xs text-status-warn">
 											{t("service_picker.same_description_hint")}
 										</p>
 									)}
@@ -105,7 +105,7 @@ export function ServicePicker({
 							))}
 						</ul>
 					)}
-					<p className="px-2 py-1 text-xs text-slate-400 border-t">
+					<p className="px-2 py-1 text-xs text-muted-foreground border-t">
 						{t("service_picker.results_count", {
 							shown: results.length,
 							total,
@@ -114,11 +114,11 @@ export function ServicePicker({
 				</div>
 			)}
 			<div className="border rounded-lg p-2 space-y-1">
-				<p className="text-xs font-medium text-slate-600">
+				<p className="text-xs font-medium text-muted-foreground">
 					{t("service_picker.selected_heading")}
 				</p>
 				{lines.length === 0 && (
-					<p className="text-xs text-slate-400">
+					<p className="text-xs text-muted-foreground">
 						{t("service_picker.none_selected")}
 					</p>
 				)}
@@ -127,11 +127,11 @@ export function ServicePicker({
 						key={l.serviceCodeId}
 						className="flex items-center gap-2 text-sm"
 					>
-						<span className="font-mono text-xs text-slate-500">
+						<span className="font-mono text-xs text-muted-foreground">
 							{l.claroCode}
 						</span>
 						<span className="flex-1">{l.name}</span>
-						<span className="text-xs text-slate-500">
+						<span className="text-xs text-muted-foreground">
 							{l.accountCode ?? "—"}
 						</span>
 						<Input
@@ -150,7 +150,7 @@ export function ServicePicker({
 						<button
 							type="button"
 							onClick={() => remove(l.serviceCodeId)}
-							className="text-slate-400 hover:text-red-600"
+							className="text-muted-foreground hover:text-status-danger"
 							aria-label={t("service_picker.remove")}
 						>
 							×

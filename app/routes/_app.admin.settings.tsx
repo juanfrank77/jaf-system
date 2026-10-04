@@ -126,11 +126,11 @@ export default function AdminSettings({
 		<div className="space-y-6 max-w-sm">
 			<h1 className="text-xl font-semibold">{t("admin_settings.title")}</h1>
 
-			<div className="bg-white border rounded-lg p-4 space-y-3">
+			<div className="bg-card border rounded-lg p-4 space-y-3">
 				<h2 className="font-medium text-sm">
 					{t("admin_settings.ivu_heading")}
 				</h2>
-				<p className="text-xs text-slate-500">
+				<p className="text-xs text-muted-foreground">
 					{t("admin_settings.ivu_description", {
 						current: (ivuRate * 100).toFixed(1),
 					})}
@@ -150,9 +150,11 @@ export default function AdminSettings({
 							required
 						/>
 					</div>
-					{error && <p className="text-sm text-red-600">{t(error as never)}</p>}
+					{error && (
+						<p className="text-sm text-status-danger">{t(error as never)}</p>
+					)}
 					{success && (
-						<p className="text-sm text-green-600">
+						<p className="text-sm text-status-ok">
 							{t("admin_settings.saved")}
 						</p>
 					)}
@@ -162,11 +164,11 @@ export default function AdminSettings({
 				</Form>
 			</div>
 
-			<div className="bg-white border rounded-lg p-4 space-y-3">
+			<div className="bg-card border rounded-lg p-4 space-y-3">
 				<h2 className="font-medium text-sm">
 					{t("admin_settings.lc_pbcc_heading")}
 				</h2>
-				<p className="text-xs text-slate-500">
+				<p className="text-xs text-muted-foreground">
 					{t("admin_settings.lc_pbcc_description", {
 						current: (lcPbccAdvanceRate * 100).toFixed(1),
 					})}
@@ -188,9 +190,11 @@ export default function AdminSettings({
 							required
 						/>
 					</div>
-					{error && <p className="text-sm text-red-600">{t(error as never)}</p>}
+					{error && (
+						<p className="text-sm text-status-danger">{t(error as never)}</p>
+					)}
 					{successLcPbccAdvance && (
-						<p className="text-sm text-green-600">
+						<p className="text-sm text-status-ok">
 							{t("admin_settings.saved")}
 						</p>
 					)}
@@ -200,11 +204,11 @@ export default function AdminSettings({
 				</Form>
 			</div>
 
-			<div className="bg-white border rounded-lg p-4 space-y-3">
+			<div className="bg-card border rounded-lg p-4 space-y-3">
 				<h2 className="font-medium text-sm">
 					{t("admin_settings.aging_heading")}
 				</h2>
-				<p className="text-xs text-slate-500">
+				<p className="text-xs text-muted-foreground">
 					{t("admin_settings.aging_description", {
 						current: agingAlertDays,
 					})}
@@ -225,9 +229,11 @@ export default function AdminSettings({
 							required
 						/>
 					</div>
-					{error && <p className="text-sm text-red-600">{t(error as never)}</p>}
+					{error && (
+						<p className="text-sm text-status-danger">{t(error as never)}</p>
+					)}
 					{successAging && (
-						<p className="text-sm text-green-600">
+						<p className="text-sm text-status-ok">
 							{t("admin_settings.saved")}
 						</p>
 					)}
@@ -237,11 +243,11 @@ export default function AdminSettings({
 				</Form>
 			</div>
 
-			<div className="bg-white border rounded-lg p-4 space-y-3">
+			<div className="bg-card border rounded-lg p-4 space-y-3">
 				<h2 className="font-medium text-sm">
 					{t("admin_settings.tolerance_heading")}
 				</h2>
-				<p className="text-xs text-slate-500">
+				<p className="text-xs text-muted-foreground">
 					{t("admin_settings.tolerance_description", {
 						current: formatMoney(avisoAmountTolerance),
 					})}
@@ -262,9 +268,11 @@ export default function AdminSettings({
 							required
 						/>
 					</div>
-					{error && <p className="text-sm text-red-600">{t(error as never)}</p>}
+					{error && (
+						<p className="text-sm text-status-danger">{t(error as never)}</p>
+					)}
 					{successTolerance && (
-						<p className="text-sm text-green-600">
+						<p className="text-sm text-status-ok">
 							{t("admin_settings.saved")}
 						</p>
 					)}

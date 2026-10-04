@@ -70,7 +70,7 @@ export default function FinancePayrollList({
 		<div className="p-6 space-y-4">
 			<h1 className="text-2xl font-bold">{t("finance_payroll.title")}</h1>
 			{actionData?.errorKey && (
-				<p className="text-sm text-red-600">
+				<p className="text-sm text-status-danger">
 					{actionData.errorKey === "finance_payroll.errors.empty_run"
 						? t("finance_payroll.errors.empty_run")
 						: t("finance_payroll.errors.unknown_intent")}
@@ -98,7 +98,7 @@ export default function FinancePayrollList({
 					return (
 						<li
 							key={run.id}
-							className={ageDays > 14 ? "text-red-600" : undefined}
+							className={ageDays > 14 ? "text-status-danger" : undefined}
 						>
 							<Link to={`/finance/payroll/${run.id}`} className="underline">
 								{t("finance_payroll.run_row", {

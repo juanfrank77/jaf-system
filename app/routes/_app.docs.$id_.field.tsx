@@ -430,7 +430,7 @@ export default function FieldUpdate({
 
 	return (
 		<div className="space-y-5">
-			<div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+			<div className="bg-status-info-soft border border-status-info/30 rounded-lg p-3 text-sm text-status-info">
 				<Trans
 					i18nKey="docs_field.offline_notice"
 					components={{ strong: <strong /> }}
@@ -438,38 +438,40 @@ export default function FieldUpdate({
 			</div>
 
 			{latestSendBack && (
-				<div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
-					<p className="font-medium text-amber-900">
+				<div className="bg-status-warn-soft border border-status-warn/30 rounded-lg p-3 text-sm">
+					<p className="font-medium text-status-warn">
 						{t("docs_field.sent_back_by", {
 							name: sentByName ?? t("docs_field.sent_back_by_unknown"),
 						})}
 					</p>
-					<p className="mt-1 text-amber-800">{latestSendBack.note}</p>
-					<p className="mt-1 text-xs text-amber-700/80">
+					<p className="mt-1 text-status-warn">{latestSendBack.note}</p>
+					<p className="mt-1 text-xs text-status-warn/80">
 						{new Date(latestSendBack.createdAt).toLocaleString()}
 					</p>
 				</div>
 			)}
 
 			<h1 className="text-xl font-semibold">{t("docs_field.title")}</h1>
-			<p className="text-sm font-mono text-slate-500">{doc.controlNumber}</p>
+			<p className="text-sm font-mono text-muted-foreground">
+				{doc.controlNumber}
+			</p>
 
 			{corrections.length > 0 && (
-				<div className="bg-slate-50 border rounded-lg p-3 text-sm space-y-2">
-					<p className="font-medium text-slate-700">
+				<div className="bg-muted border rounded-lg p-3 text-sm space-y-2">
+					<p className="font-medium text-foreground">
 						{t("docs_field.address_history_heading")}
 					</p>
 					<ul className="space-y-1">
 						{corrections.map((c) => (
 							<li
 								key={`${c.original}-${c.corrected}-${c.correctedAt}`}
-								className="text-xs text-slate-600"
+								className="text-xs text-muted-foreground"
 							>
 								<span className="line-through">{c.original}</span>
 								{" → "}
 								<span className="font-medium">{c.corrected}</span>
 								{c.gps && (
-									<span className="ml-1 text-slate-400">
+									<span className="ml-1 text-muted-foreground">
 										({c.gps.lat.toFixed(4)}, {c.gps.lng.toFixed(4)})
 									</span>
 								)}
@@ -480,13 +482,13 @@ export default function FieldUpdate({
 			)}
 
 			{queued && (
-				<div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
+				<div className="bg-status-ok-soft border border-status-ok/30 rounded-lg p-3 text-sm text-status-ok">
 					{t("docs_field.queued_message")}
 				</div>
 			)}
 
 			{!online && !queued && (
-				<div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+				<div className="bg-status-warn-soft border border-status-warn/30 rounded-lg p-3 text-sm text-status-warn">
 					{t("docs_field.offline_submit_notice")}
 				</div>
 			)}
@@ -521,9 +523,11 @@ export default function FieldUpdate({
 							? t("docs_field.gps_captured")
 							: t("docs_field.gps_capture")}
 					</Button>
-					{gpsError && <p className="text-xs text-red-600 mt-1">{gpsError}</p>}
+					{gpsError && (
+						<p className="text-xs text-status-danger mt-1">{gpsError}</p>
+					)}
 					{gpsCoordinates && (
-						<p className="text-xs text-slate-500 mt-1">
+						<p className="text-xs text-muted-foreground mt-1">
 							{t("docs_field.gps_saved")}
 						</p>
 					)}
@@ -558,7 +562,7 @@ export default function FieldUpdate({
 							{t("docs_field.stop_timer")}
 						</Button>
 						{timeOnSite && (
-							<span className="text-sm font-medium text-slate-700">
+							<span className="text-sm font-medium text-foreground">
 								{t("docs_field.time_on_site_value", { duration: timeOnSite })}
 							</span>
 						)}
@@ -568,7 +572,7 @@ export default function FieldUpdate({
 				{ordered.length > 0 && (
 					<div className="border rounded-lg p-3 space-y-2">
 						<Label>{t("docs_field.services_performed_label")}</Label>
-						<p className="text-xs text-slate-500">
+						<p className="text-xs text-muted-foreground">
 							{t("docs_field.services_performed_hint")}
 						</p>
 						<ServiceLinesTable
@@ -583,12 +587,12 @@ export default function FieldUpdate({
 
 				<div className="border rounded-lg p-3 space-y-3">
 					<Label>{t("docs_field.materials_used_label")}</Label>
-					<p className="text-xs text-slate-500">
+					<p className="text-xs text-muted-foreground">
 						{t("docs_field.materials_used_hint")}
 					</p>
 					{taken.length > 0 && (
-						<div className="bg-slate-50 rounded p-2">
-							<p className="text-xs font-medium text-slate-600 mb-1">
+						<div className="bg-muted rounded p-2">
+							<p className="text-xs font-medium text-muted-foreground mb-1">
 								{t("docs_field.taken_reference_label")}
 							</p>
 							<MaterialLineItems
@@ -599,7 +603,7 @@ export default function FieldUpdate({
 						</div>
 					)}
 					<div>
-						<p className="text-xs font-medium text-slate-600 mb-1">
+						<p className="text-xs font-medium text-muted-foreground mb-1">
 							{t("docs_field.used_entry_label")}
 						</p>
 						<MaterialLineItems
@@ -609,7 +613,7 @@ export default function FieldUpdate({
 						/>
 					</div>
 					{estimated.length > 0 && (
-						<p className="text-xs text-slate-500">
+						<p className="text-xs text-muted-foreground">
 							{t("docs_field.ordered_vs_installed_hint")}
 						</p>
 					)}
@@ -619,7 +623,7 @@ export default function FieldUpdate({
 					<Label htmlFor="discrepancyNote">
 						{t("docs_field.discrepancy_note_label")}
 					</Label>
-					<p className="text-xs text-slate-500 mb-1">
+					<p className="text-xs text-muted-foreground mb-1">
 						{t("docs_field.discrepancy_note_hint")}
 					</p>
 					<Textarea
@@ -646,7 +650,7 @@ export default function FieldUpdate({
 
 				<div>
 					<Label>{t("docs_field.photos_before_label")}</Label>
-					<p className="text-xs text-slate-500 mb-1">
+					<p className="text-xs text-muted-foreground mb-1">
 						{t("docs_field.photos_before_hint")}
 					</p>
 					<input
@@ -656,12 +660,12 @@ export default function FieldUpdate({
 						accept="image/*"
 						multiple
 						capture="environment"
-						className="block w-full text-sm text-slate-500 mt-1"
+						className="block w-full text-sm text-muted-foreground mt-1"
 					/>
 				</div>
 				<div>
 					<Label>{t("docs_field.photos_after_label")}</Label>
-					<p className="text-xs text-slate-500 mb-1">
+					<p className="text-xs text-muted-foreground mb-1">
 						{t("docs_field.photos_after_hint")}
 					</p>
 					<input
@@ -671,32 +675,32 @@ export default function FieldUpdate({
 						accept="image/*"
 						multiple
 						capture="environment"
-						className="block w-full text-sm text-slate-500 mt-1"
+						className="block w-full text-sm text-muted-foreground mt-1"
 					/>
 				</div>
 
 				<div className="border rounded-lg p-3 space-y-2">
 					<Label>{t("docs_field.completion_signature_label")}</Label>
-					<p className="text-xs text-slate-500">
+					<p className="text-xs text-muted-foreground">
 						{t("docs_field.completion_signature_hint")}
 					</p>
 					<SignaturePad ref={signatureRef} width={320} height={120} />
 					<button
 						type="button"
 						onClick={() => signatureRef.current?.clear()}
-						className="text-xs text-slate-400 hover:text-slate-600"
+						className="text-xs text-muted-foreground hover:text-foreground"
 					>
 						{t("docs_field.clear_signature")}
 					</button>
 				</div>
 
 				{error?.errorKey && (
-					<p className="text-sm text-red-600">
+					<p className="text-sm text-status-danger">
 						{t(error.errorKey, error.errorParams)}
 					</p>
 				)}
 				{error?.errorMessage && (
-					<p className="text-sm text-red-600">{error.errorMessage}</p>
+					<p className="text-sm text-status-danger">{error.errorMessage}</p>
 				)}
 
 				<Button type="submit" className="w-full">

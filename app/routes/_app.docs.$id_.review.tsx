@@ -903,7 +903,7 @@ function AvisoCaptureForm({
 				{doc.avisoDocPath && (
 					<a
 						href={`/files/aviso-docs/${doc.id}-aviso.pdf`}
-						className="text-primary underline text-sm"
+						className="text-accent-text underline text-sm"
 					>
 						{t("docs_review.download")}
 					</a>
@@ -911,7 +911,7 @@ function AvisoCaptureForm({
 			</div>
 			<table className="w-full text-sm">
 				<thead>
-					<tr className="text-left text-xs text-slate-500 border-b">
+					<tr className="text-left text-xs text-muted-foreground border-b">
 						<th className="py-1">{t("docs_review.table.code")}</th>
 						<th className="py-1">{t("docs_review.table.description")}</th>
 						<th className="py-1 text-right">
@@ -982,7 +982,7 @@ function AvisoCaptureForm({
 				<Textarea id="lineNote" name="lineNote" rows={2} className="mt-1" />
 			</div>
 			{error?.errorKey === "docs_review.errors.aviso_amount_mismatch" ? (
-				<p className="text-sm text-red-600">
+				<p className="text-sm text-status-danger">
 					{t("docs_review.errors.aviso_amount_mismatch", {
 						avisoTotal: formatMoney(error.avisoTotal ?? 0),
 						invoiceTotal: formatMoney(error.invoiceTotal ?? 0),
@@ -991,9 +991,11 @@ function AvisoCaptureForm({
 					})}
 				</p>
 			) : error?.errorMessage ? (
-				<p className="text-sm text-red-600">{error.errorMessage}</p>
+				<p className="text-sm text-status-danger">{error.errorMessage}</p>
 			) : error?.errorKey ? (
-				<p className="text-sm text-red-600">{t(error.errorKey as ParseKeys)}</p>
+				<p className="text-sm text-status-danger">
+					{t(error.errorKey as ParseKeys)}
+				</p>
 			) : null}
 			<Button type="submit" disabled={locked}>
 				{t("docs_review_steps.save_aviso")}
@@ -1041,11 +1043,11 @@ function SignatureBlock({
 				ref={padRef}
 				width={280}
 				height={90}
-				className="w-full border rounded bg-white"
+				className="w-full border rounded bg-card"
 			/>
 			<button
 				type="button"
-				className="text-xs text-slate-400 hover:text-slate-600"
+				className="text-xs text-muted-foreground hover:text-foreground"
 				onClick={() => setCleared((c) => c + 1)}
 			>
 				{t("precert.clear_signature")}
@@ -1080,7 +1082,7 @@ function PreCertPanel({
 				{sheet?.pdfPath && (
 					<a
 						href={`/files/precert/${doc.id}-v${sheet.version}.pdf`}
-						className="text-primary underline"
+						className="text-accent-text underline"
 					>
 						{t("precert.download")}
 					</a>
@@ -1088,7 +1090,7 @@ function PreCertPanel({
 			</div>
 			<table className="w-full text-sm">
 				<thead>
-					<tr className="text-left text-xs text-slate-500 border-b">
+					<tr className="text-left text-xs text-muted-foreground border-b">
 						<th className="py-1">{t("service_picker.col_code")}</th>
 						<th className="py-1">{t("service_picker.col_description")}</th>
 						<th className="py-1 text-right">
@@ -1105,7 +1107,7 @@ function PreCertPanel({
 							<td className="py-1">
 								{l.description}
 								{l.editReason && (
-									<span className="block text-xs text-amber-700">
+									<span className="block text-xs text-status-warn">
 										{l.editReason}
 									</span>
 								)}
@@ -1159,7 +1161,7 @@ function PreCertPanel({
 								<img src={sheet.sigSupervisorImage} alt="" className="h-12" />
 							)}
 							<p className="text-xs">{sheet.sigSupervisorName}</p>
-							<p className="text-xs text-slate-400">
+							<p className="text-xs text-muted-foreground">
 								{sheet.sigSupervisorAt
 									? new Date(sheet.sigSupervisorAt).toLocaleDateString()
 									: ""}
@@ -1206,7 +1208,7 @@ function PreCertPanel({
 					labelKey="precert.sig_claro"
 					encType="multipart/form-data"
 				>
-					<p className="text-xs text-slate-500">
+					<p className="text-xs text-muted-foreground">
 						{t("precert.claro_optional")}
 					</p>
 					{sheet?.sigClaroAt ? (
@@ -1217,7 +1219,7 @@ function PreCertPanel({
 							{sheet.sigClaroScanPath && (
 								<a
 									href={`/files/precert/${doc.id}-claro-scan.jpg`}
-									className="text-primary underline text-xs"
+									className="text-accent-text underline text-xs"
 								>
 									{t("precert.download")}
 								</a>
@@ -1233,9 +1235,11 @@ function PreCertPanel({
 				</SignatureBlock>
 			</div>
 			{error?.errorKey ? (
-				<p className="text-sm text-red-600">{t(error.errorKey as ParseKeys)}</p>
+				<p className="text-sm text-status-danger">
+					{t(error.errorKey as ParseKeys)}
+				</p>
 			) : error?.errorMessage ? (
-				<p className="text-sm text-red-600">{error.errorMessage}</p>
+				<p className="text-sm text-status-danger">{error.errorMessage}</p>
 			) : null}
 			{!doc.releasedToFinanceAt && (
 				<Form method="post" className="pt-1">
@@ -1243,7 +1247,7 @@ function PreCertPanel({
 					<Button type="submit" variant="outline" size="sm">
 						{t("precert.regenerate")}
 					</Button>
-					<p className="text-xs text-slate-400 mt-1">
+					<p className="text-xs text-muted-foreground mt-1">
 						{t("precert.regenerate_hint")}
 					</p>
 				</Form>
@@ -1267,7 +1271,7 @@ function FourColumnTable({
 	return (
 		<table className="w-full text-sm">
 			<thead>
-				<tr className="text-left text-xs text-slate-500 border-b">
+				<tr className="text-left text-xs text-muted-foreground border-b">
 					<th className="py-1">{t("service_picker.col_code")}</th>
 					<th className="py-1 text-right">{t("release.col_ordered")}</th>
 					<th className="py-1 text-right">{t("release.col_installed")}</th>
@@ -1297,7 +1301,7 @@ function FourColumnTable({
 							<td className="py-1 text-right">{chg ?? "—"}</td>
 							<td
 								className={`py-1 text-right ${
-									allEqual ? "text-green-700" : "text-amber-700"
+									allEqual ? "text-status-ok" : "text-status-warn"
 								}`}
 							>
 								{allEqual ? t("release.match") : t("release.mismatch")}
@@ -1355,24 +1359,26 @@ export default function ReviewDoc({
 	return (
 		<div className="space-y-5">
 			<h1 className="text-xl font-semibold">{t("docs_review.title")}</h1>
-			<p className="font-mono text-sm text-slate-500">{doc.controlNumber}</p>
+			<p className="font-mono text-sm text-muted-foreground">
+				{doc.controlNumber}
+			</p>
 			<StepRail stage={stage} />
 
 			{/* A — Approve */}
-			<section className="bg-white border rounded-lg p-4 space-y-3">
+			<section className="bg-card border rounded-lg p-4 space-y-3">
 				<h2 className="font-medium text-sm">
 					{t("docs_review_steps.approve_heading")}
 				</h2>
 				<div className="text-sm space-y-1">
 					<p>
-						<span className="text-slate-500">
+						<span className="text-muted-foreground">
 							{t("docs_review.estimated_address")}:
 						</span>{" "}
 						{doc.jobAddressEstimated}
 					</p>
 					{doc.jobAddressActual && (
 						<p>
-							<span className="text-slate-500">
+							<span className="text-muted-foreground">
 								{t("docs_review.actual_address")}:
 							</span>{" "}
 							{doc.jobAddressActual}
@@ -1380,7 +1386,7 @@ export default function ReviewDoc({
 					)}
 					{doc.fieldNotes && (
 						<p>
-							<span className="text-slate-500">
+							<span className="text-muted-foreground">
 								{t("docs_review.field_notes")}:
 							</span>{" "}
 							{doc.fieldNotes}
@@ -1392,7 +1398,7 @@ export default function ReviewDoc({
 				)}
 				<div className="grid grid-cols-3 gap-3 text-sm">
 					<div className="border rounded-lg p-3">
-						<p className="text-xs text-slate-500 mb-1">
+						<p className="text-xs text-muted-foreground mb-1">
 							{t("docs_review.estimated")}
 						</p>
 						<MaterialLineItems
@@ -1402,7 +1408,7 @@ export default function ReviewDoc({
 						/>
 					</div>
 					<div className="border rounded-lg p-3">
-						<p className="text-xs text-slate-500 mb-1">
+						<p className="text-xs text-muted-foreground mb-1">
 							{t("docs_review.taken")}
 						</p>
 						<MaterialLineItems
@@ -1413,7 +1419,7 @@ export default function ReviewDoc({
 						/>
 					</div>
 					<div className="border rounded-lg p-3">
-						<p className="text-xs text-slate-500 mb-1">
+						<p className="text-xs text-muted-foreground mb-1">
 							{t("docs_review.used")}
 						</p>
 						<MaterialLineItems
@@ -1466,7 +1472,7 @@ export default function ReviewDoc({
 						<h3 className="font-medium text-sm">
 							{t("docs_review.send_back_heading")}
 						</h3>
-						<p className="text-xs text-slate-500">
+						<p className="text-xs text-muted-foreground">
 							{t("docs_review.send_back_hint")}
 						</p>
 						<Textarea name="note" rows={2} required />
@@ -1483,14 +1489,14 @@ export default function ReviewDoc({
 				stage !== "WAREHOUSE" &&
 				stage !== "FIELD" &&
 				stage !== "APPROVE" && (
-					<section className="bg-white border rounded-lg p-4 space-y-3">
+					<section className="bg-card border rounded-lg p-4 space-y-3">
 						<h2 className="font-medium text-sm">
 							{t("docs_review_steps.invoice_heading")}
 						</h2>
 						{invoiceLines.length > 0 && (
 							<table className="w-full text-sm">
 								<thead>
-									<tr className="text-left text-xs text-slate-500 border-b">
+									<tr className="text-left text-xs text-muted-foreground border-b">
 										<th className="py-1">{t("docs_review.table.code")}</th>
 										<th className="py-1">
 											{t("docs_review.table.description")}
@@ -1535,7 +1541,7 @@ export default function ReviewDoc({
 						{doc.jafInvoicePdfPath && (
 							<a
 								href={`/files/jaf-invoices/${doc.id}-jaf-invoice.pdf`}
-								className="text-primary underline text-sm"
+								className="text-accent-text underline text-sm"
 							>
 								{t("docs_review.download")}
 							</a>
@@ -1559,11 +1565,11 @@ export default function ReviewDoc({
 
 			{/* C — Aviso & match */}
 			{doc.jafInvoiceGeneratedAt && (
-				<section className="bg-white border rounded-lg p-4 space-y-3">
+				<section className="bg-card border rounded-lg p-4 space-y-3">
 					<h2 className="font-medium text-sm">
 						{t("docs_review_steps.aviso_heading")}
 					</h2>
-					<p className="text-xs text-slate-500">
+					<p className="text-xs text-muted-foreground">
 						{t("docs_review_steps.aviso_hint")}
 					</p>
 					<AvisoCaptureForm
@@ -1588,7 +1594,7 @@ export default function ReviewDoc({
 					) : null}
 					{doc.status === "SUPERVISOR_APPROVED" && (
 						<details>
-							<summary className="text-xs text-slate-500 cursor-pointer">
+							<summary className="text-xs text-muted-foreground cursor-pointer">
 								{t("docs_review_steps.claro_pdf_optional")}
 							</summary>
 							<Form
@@ -1614,7 +1620,7 @@ export default function ReviewDoc({
 
 			{/* D — Pre-cert sheet */}
 			{doc.avisoMatchedAt && (
-				<section className="bg-white border rounded-lg p-4 space-y-3">
+				<section className="bg-card border rounded-lg p-4 space-y-3">
 					<h2 className="font-medium text-sm">{t("precert.heading")}</h2>
 					{!sheet ? (
 						<Form method="post">
@@ -1634,7 +1640,7 @@ export default function ReviewDoc({
 
 			{/* E — Release */}
 			{doc.avisoMatchedAt && (
-				<section className="bg-white border rounded-lg p-4 space-y-3">
+				<section className="bg-card border rounded-lg p-4 space-y-3">
 					<h2 className="font-medium text-sm">{t("release.heading")}</h2>
 					<FourColumnTable
 						ordered={ordered}
@@ -1646,12 +1652,12 @@ export default function ReviewDoc({
 						{gate.conditions.map((c) => (
 							<li
 								key={c.key}
-								className={c.ok ? "text-green-700" : "text-slate-500"}
+								className={c.ok ? "text-status-ok" : "text-muted-foreground"}
 							>
 								{c.ok ? "✓" : "–"} {t(CONDITION_KEYS[c.key])}
 							</li>
 						))}
-						<li className="text-slate-500">
+						<li className="text-muted-foreground">
 							– {t("release.condition.claro_badge")}
 							{sheet?.sigClaroAt
 								? " ✓"
@@ -1660,7 +1666,7 @@ export default function ReviewDoc({
 					</ul>
 					{error?.errorKey === "docs_review.errors.release_blocked" &&
 						error.conditions && (
-							<p className="text-sm text-red-600">
+							<p className="text-sm text-status-danger">
 								{t("docs_review.errors.release_blocked")}
 							</p>
 						)}
@@ -1678,7 +1684,7 @@ export default function ReviewDoc({
 							</Button>
 						</Form>
 					)}
-					<p className="text-xs text-slate-400">
+					<p className="text-xs text-muted-foreground">
 						{t("docs_review.supervisor")}: {supervisor?.name ?? user.name}
 					</p>
 				</section>

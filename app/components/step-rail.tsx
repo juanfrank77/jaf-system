@@ -28,10 +28,11 @@ export function StepRail({ stage }: { stage: SupervisorStage }) {
 					aria-current={i === current ? "step" : undefined}
 					className={cn(
 						"px-2 py-1 rounded-full border",
-						i < current && "bg-green-50 border-green-200 text-green-800",
+						i < current &&
+							"bg-status-ok-soft border-status-ok/30 text-status-ok",
 						i === current &&
-							"bg-blue-600 border-blue-600 text-white font-medium",
-						i > current && "bg-white border-slate-200 text-slate-400",
+							"bg-primary border-primary text-primary-foreground font-medium",
+						i > current && "bg-card border-border text-muted-foreground",
 					)}
 				>
 					{i + 1}. {t(LABEL_KEYS[s])}

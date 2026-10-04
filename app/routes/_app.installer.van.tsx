@@ -45,7 +45,7 @@ export default function MyVan({ loaderData }: Route.ComponentProps) {
 	const { t } = useTranslation()
 
 	if (!van) {
-		return <p className="text-sm text-amber-600">{t("installer.no_van")}</p>
+		return <p className="text-sm text-status-warn">{t("installer.no_van")}</p>
 	}
 
 	return (

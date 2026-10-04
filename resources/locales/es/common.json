@@ -164,7 +164,18 @@
 		"close_menu": "Cerrar menú de navegación",
 		"primary_nav": "Principal",
 		"primary_nav_mobile": "Principal (móvil)",
-		"navigation_dialog": "Navegación"
+		"navigation_dialog": "Navegación",
+		"theme": {
+			"switch_to_dark": "Cambiar a tema oscuro",
+			"switch_to_light": "Cambiar a tema claro"
+		},
+		"group": {
+			"work": "Trabajo",
+			"money": "Finanzas",
+			"stock": "Almacén",
+			"field": "Campo",
+			"admin": "Administración"
+		}
 	},
 	"login": {
 		"title": "JAF Operations",

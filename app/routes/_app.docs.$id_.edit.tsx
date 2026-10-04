@@ -185,7 +185,9 @@ export default function EditDoc({ loaderData }: Route.ComponentProps) {
 	return (
 		<div className="space-y-5">
 			<h1 className="text-xl font-semibold">{t("docs_edit.title")}</h1>
-			<p className="font-mono text-sm text-slate-500">{doc.controlNumber}</p>
+			<p className="font-mono text-sm text-muted-foreground">
+				{doc.controlNumber}
+			</p>
 			<Form method="post" className="space-y-4">
 				<div>
 					<Label htmlFor="jobType">{t("docs_new.job_type_label")}</Label>
@@ -256,7 +258,7 @@ export default function EditDoc({ loaderData }: Route.ComponentProps) {
 						name="brigadeId"
 						required
 						defaultValue={doc.brigadeId ?? ""}
-						className="mt-1 w-full border rounded-md h-9 px-2 text-sm bg-white"
+						className="mt-1 w-full border rounded-md h-9 px-2 text-sm bg-card"
 					>
 						<option value="" disabled>
 							{t("docs_edit.select_crew_placeholder")}

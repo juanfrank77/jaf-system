@@ -258,7 +258,7 @@ export default function AdminUsers({
 		<div className="space-y-8">
 			<h1 className="text-xl font-semibold">{t("admin_users.title")}</h1>
 
-			<section className="bg-white border rounded-lg p-6 space-y-4">
+			<section className="bg-card border rounded-lg p-6 space-y-4">
 				<h2 className="text-base font-medium">
 					{t("admin_users.add_heading")}
 				</h2>
@@ -304,12 +304,14 @@ export default function AdminUsers({
 						</div>
 					</div>
 					<Button type="submit">{t("admin_users.add_submit")}</Button>
-					{error && <p className="text-sm text-red-600">{t(error as never)}</p>}
+					{error && (
+						<p className="text-sm text-status-danger">{t(error as never)}</p>
+					)}
 				</Form>
 			</section>
 
 			{resetSuccess && (
-				<div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
+				<div className="bg-status-warn-soft border border-status-warn/30 rounded-lg p-4 text-sm text-status-warn">
 					<p className="font-medium">
 						{t("admin_users.reset_password_notice")}
 					</p>
@@ -327,33 +329,33 @@ export default function AdminUsers({
 				</div>
 			)}
 
-			<section className="bg-white border rounded-lg overflow-hidden">
+			<section className="bg-card border rounded-lg overflow-hidden">
 				<table className="w-full text-sm">
-					<thead className="bg-slate-50 border-b">
+					<thead className="bg-muted border-b">
 						<tr>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
+							<th className="px-4 py-3 text-left font-medium text-muted-foreground">
 								{t("admin_users.table.name")}
 							</th>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
+							<th className="px-4 py-3 text-left font-medium text-muted-foreground">
 								{t("admin_users.table.email")}
 							</th>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
+							<th className="px-4 py-3 text-left font-medium text-muted-foreground">
 								{t("admin_users.table.role")}
 							</th>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
+							<th className="px-4 py-3 text-left font-medium text-muted-foreground">
 								{t("admin_users.table.areas")}
 							</th>
-							<th className="px-4 py-3 text-center font-medium text-slate-600">
+							<th className="px-4 py-3 text-center font-medium text-muted-foreground">
 								{t("admin_users.table.active")}
 							</th>
-							<th className="px-4 py-3 text-center font-medium text-slate-600">
+							<th className="px-4 py-3 text-center font-medium text-muted-foreground">
 								{t("admin_users.table.actions")}
 							</th>
 						</tr>
 					</thead>
 					<tbody className="divide-y">
 						{users.map((user) => (
-							<tr key={user.id} className="hover:bg-slate-50">
+							<tr key={user.id} className="hover:bg-muted">
 								<td className="px-4 py-3">{user.name}</td>
 								<td className="px-4 py-3">{user.email}</td>
 								<td className="px-4 py-3">
@@ -405,15 +407,15 @@ export default function AdminUsers({
 											</Button>
 										</Form>
 									) : (
-										<span className="text-slate-400">—</span>
+										<span className="text-muted-foreground">—</span>
 									)}
 								</td>
 								<td className="px-4 py-3 text-center">
 									<span
 										className={
 											user.active
-												? "text-green-600 font-medium"
-												: "text-slate-400"
+												? "text-status-ok font-medium"
+												: "text-muted-foreground"
 										}
 									>
 										{user.active ? t("admin_users.yes") : t("admin_users.no")}
@@ -449,7 +451,7 @@ export default function AdminUsers({
 							<tr>
 								<td
 									colSpan={6}
-									className="px-4 py-6 text-center text-slate-400 text-sm"
+									className="px-4 py-6 text-center text-muted-foreground text-sm"
 								>
 									{t("admin_users.no_users")}
 								</td>

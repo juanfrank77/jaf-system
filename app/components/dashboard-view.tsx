@@ -10,6 +10,7 @@ import { Link, useLocation } from "react-router"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent } from "~/components/ui/card"
+import { EmptyState } from "~/components/ui/empty-state"
 import { Input } from "~/components/ui/input"
 import { Pill } from "~/components/ui/pill"
 import {
@@ -239,8 +240,8 @@ function DashboardView({
 			</div>
 
 			{showFilters && (
-				<div className="bg-white border rounded-lg p-3 space-y-3">
-					<div className="flex items-center gap-2 text-sm font-medium text-slate-600">
+				<div className="bg-card border rounded-lg p-3 space-y-3">
+					<div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
 						<HugeiconsIcon
 							icon={FilterIcon}
 							strokeWidth={2}
@@ -340,7 +341,7 @@ function DashboardView({
 							<HugeiconsIcon
 								icon={SearchIcon}
 								strokeWidth={2}
-								className="absolute left-2.5 top-2.5 size-4 text-slate-400"
+								className="absolute left-2.5 top-2.5 size-4 text-muted-foreground"
 							/>
 							<Input
 								name="search"
@@ -432,7 +433,7 @@ function DashboardView({
 									<Badge variant="warn">{t("dashboard.sent_back_badge")}</Badge>
 								</div>
 								{latest && (
-									<p className="mt-1 text-xs text-slate-600 line-clamp-2">
+									<p className="mt-1 text-xs text-muted-foreground line-clamp-2">
 										{t("dashboard.sent_back_note", {
 											note: latest.note,
 										})}
@@ -543,7 +544,7 @@ function DashboardView({
 									<Badge variant="warn">{t("dashboard.sent_back_badge")}</Badge>
 								</div>
 								{latest && (
-									<p className="mt-1 text-xs text-slate-600 line-clamp-2">
+									<p className="mt-1 text-xs text-muted-foreground line-clamp-2">
 										{t("dashboard.sent_back_note", {
 											note: latest.note,
 										})}
@@ -740,9 +741,7 @@ function DashboardView({
 			<Card>
 				<CardContent className="space-y-2 p-3">
 					{docs.length === 0 && (
-						<p className="p-2 text-sm text-muted-foreground">
-							{t("dashboard.no_documents")}
-						</p>
+						<EmptyState>{t("dashboard.no_documents")}</EmptyState>
 					)}
 					{docs.map((doc) => {
 						const overage = hasOverage(doc)
@@ -789,7 +788,7 @@ function DashboardView({
 												{t("dashboard.signal.shortage")}
 											</Badge>
 										)}
-										<span className="ml-1 text-xs font-medium text-primary">
+										<span className="ml-1 text-xs font-medium text-accent-text">
 											{t("dashboard.action.review_signal")}
 										</span>
 									</div>

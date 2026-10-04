@@ -415,24 +415,24 @@ export default function DocView({
 			<div className="flex items-center justify-between">
 				<div>
 					<h1 className="font-mono font-bold text-lg">{doc.controlNumber}</h1>
-					<p className="text-sm text-slate-500">{doc.jobType}</p>
+					<p className="text-sm text-muted-foreground">{doc.jobType}</p>
 				</div>
-				<span className="text-xs bg-slate-100 px-3 py-1 rounded-full font-medium">
+				<span className="text-xs bg-muted px-3 py-1 rounded-full font-medium">
 					{doc.status.replace(/_/g, " ")}
 				</span>
 			</div>
 
 			{missingClaroPdf && (
-				<div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-2">
+				<div className="bg-status-warn-soft border border-status-warn/30 rounded-lg p-4 space-y-2">
 					<div className="flex items-start gap-3">
-						<span className="text-amber-600 text-lg" aria-hidden>
+						<span className="text-status-warn text-lg" aria-hidden>
 							⚠
 						</span>
 						<div className="space-y-1">
-							<p className="font-medium text-amber-900">
+							<p className="font-medium text-status-warn">
 								{t("docs_view.billing_blocked")}
 							</p>
-							<ul className="text-sm text-amber-800 list-disc list-inside">
+							<ul className="text-sm text-status-warn list-disc list-inside">
 								<li>{t("docs_view.billing_blocked_claro_pdf")}</li>
 							</ul>
 						</div>
@@ -440,19 +440,21 @@ export default function DocView({
 				</div>
 			)}
 
-			<section className="bg-white border rounded-lg p-4 space-y-2 text-sm">
+			<section className="bg-card border rounded-lg p-4 space-y-2 text-sm">
 				<p>
-					<span className="text-slate-500">{t("docs_view.address")}:</span>{" "}
+					<span className="text-muted-foreground">
+						{t("docs_view.address")}:
+					</span>{" "}
 					{doc.jobAddressActual || doc.jobAddressEstimated}
 					{gps && (
-						<span className="ml-1 text-slate-400">
+						<span className="ml-1 text-muted-foreground">
 							({gps.lat.toFixed(4)}, {gps.lng.toFixed(4)})
 						</span>
 					)}
 				</p>
 				{corrections.length > 0 && (
 					<div className="pt-2 border-t">
-						<p className="text-slate-500 text-xs mb-1">
+						<p className="text-muted-foreground text-xs mb-1">
 							{t("docs_view.address_corrections")}
 						</p>
 						<ul className="space-y-1">
@@ -461,13 +463,13 @@ export default function DocView({
 									key={`${c.original}-${c.corrected}-${c.correctedAt}`}
 									className="text-xs"
 								>
-									<span className="line-through text-slate-400">
+									<span className="line-through text-muted-foreground">
 										{c.original}
 									</span>
 									{" → "}
 									<span className="font-medium">{c.corrected}</span>
 									{c.gps && (
-										<span className="ml-1 text-slate-400">
+										<span className="ml-1 text-muted-foreground">
 											({c.gps.lat.toFixed(4)}, {c.gps.lng.toFixed(4)})
 										</span>
 									)}
@@ -478,7 +480,7 @@ export default function DocView({
 				)}
 				{doc.avisoNumber && (
 					<p>
-						<span className="text-slate-500">
+						<span className="text-muted-foreground">
 							{t("docs_view.aviso_number")}:
 						</span>{" "}
 						{doc.avisoNumber}
@@ -501,22 +503,26 @@ export default function DocView({
 						</Form>
 					)}
 				<p>
-					<span className="text-slate-500">{t("docs_view.supervisor")}:</span>{" "}
+					<span className="text-muted-foreground">
+						{t("docs_view.supervisor")}:
+					</span>{" "}
 					{supervisor?.name}
 				</p>
 				<p>
-					<span className="text-slate-500">{t("docs_view.crew")}:</span>{" "}
+					<span className="text-muted-foreground">{t("docs_view.crew")}:</span>{" "}
 					{assignedCrew.map((c) => c.name).join(", ")}
 				</p>
 				<p>
-					<span className="text-slate-500">{t("docs_view.created")}:</span>{" "}
+					<span className="text-muted-foreground">
+						{t("docs_view.created")}:
+					</span>{" "}
 					{new Date(doc.createdAt).toLocaleString()}
 				</p>
 			</section>
 
 			{estimated.length > 0 && (
-				<section className="bg-white border rounded-lg p-4">
-					<h2 className="text-sm font-medium mb-2 text-slate-600">
+				<section className="bg-card border rounded-lg p-4">
+					<h2 className="text-sm font-medium mb-2 text-muted-foreground">
 						{t("docs_view.estimated_materials")}
 					</h2>
 					<MaterialLineItems
@@ -528,8 +534,8 @@ export default function DocView({
 			)}
 
 			{taken.length > 0 && (
-				<section className="bg-white border rounded-lg p-4">
-					<h2 className="text-sm font-medium mb-2 text-slate-600">
+				<section className="bg-card border rounded-lg p-4">
+					<h2 className="text-sm font-medium mb-2 text-muted-foreground">
 						{t("docs_view.materials_taken")}
 					</h2>
 					<MaterialLineItems
@@ -548,8 +554,8 @@ export default function DocView({
 			)}
 
 			{used.length > 0 && (
-				<section className="bg-white border rounded-lg p-4 space-y-3">
-					<h2 className="text-sm font-medium mb-2 text-slate-600">
+				<section className="bg-card border rounded-lg p-4 space-y-3">
+					<h2 className="text-sm font-medium mb-2 text-muted-foreground">
 						{t("docs_view.materials_used")}
 					</h2>
 					<MaterialLineItems
@@ -558,19 +564,19 @@ export default function DocView({
 						readOnly
 					/>
 					{doc.startedAt && doc.endedAt && (
-						<p className="text-sm text-slate-600">
-							<span className="text-slate-500">
+						<p className="text-sm text-muted-foreground">
+							<span className="text-muted-foreground">
 								{t("docs_view.time_on_site")}:
 							</span>{" "}
 							{formatTimeOnSite(doc.startedAt, doc.endedAt)}
 						</p>
 					)}
 					{doc.fieldNotes && (
-						<p className="text-sm text-slate-600">{doc.fieldNotes}</p>
+						<p className="text-sm text-muted-foreground">{doc.fieldNotes}</p>
 					)}
 					{doc.completionSignature && (
 						<div>
-							<p className="text-xs text-slate-500 mb-1">
+							<p className="text-xs text-muted-foreground mb-1">
 								{t("docs_view.completion_signature")}
 							</p>
 							<img
@@ -606,7 +612,7 @@ export default function DocView({
 				doc.status === "CREATED" &&
 				doc.prepChangedSincePrep && (
 					<div className="space-y-2 pt-2 border-t">
-						<p className="text-sm font-medium text-amber-700">
+						<p className="text-sm font-medium text-status-warn">
 							{t("docs_view.missing_materials_heading")}
 						</p>
 						{(() => {
@@ -626,7 +632,10 @@ export default function DocView({
 											(c) => c.id === line.serviceCodeId,
 										)
 										return (
-											<p key={line._key} className="text-xs text-slate-600">
+											<p
+												key={line._key}
+												className="text-xs text-muted-foreground"
+											>
 												{code?.claroCode} — {code?.name}:{" "}
 												{line.substitutedWith ? `substituted` : `missing`}
 												{line.notes ? ` (${line.notes})` : ""}
@@ -651,7 +660,7 @@ export default function DocView({
 							</Button>
 						</Form>
 						{error?.errorKey && (
-							<p className="text-sm text-red-600">
+							<p className="text-sm text-status-danger">
 								{t(error.errorKey as ParseKeys)}
 							</p>
 						)}
@@ -724,7 +733,7 @@ export default function DocView({
 
 						<Form method="post" className="space-y-2">
 							<fieldset className="border rounded-lg p-3 space-y-2">
-								<legend className="text-sm font-medium px-1 text-red-700">
+								<legend className="text-sm font-medium px-1 text-status-danger">
 									{t("docs_view.cancel_heading")}
 								</legend>
 								<Textarea
@@ -739,7 +748,7 @@ export default function DocView({
 								</Button>
 							</fieldset>
 							{error?.errorKey && (
-								<p className="text-sm text-red-600">
+								<p className="text-sm text-status-danger">
 									{t(error.errorKey as ParseKeys)}
 								</p>
 							)}

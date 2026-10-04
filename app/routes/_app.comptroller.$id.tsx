@@ -430,7 +430,7 @@ export default function ComptrollerDetail({
 							</Badge>
 						)}
 					</div>
-					<p className="font-mono text-sm text-slate-500">
+					<p className="font-mono text-sm text-muted-foreground">
 						{doc.controlNumber}
 					</p>
 				</div>
@@ -443,10 +443,12 @@ export default function ComptrollerDetail({
 			</div>
 
 			{error?.errorKey && (
-				<p className="text-sm text-red-600">{t(error.errorKey as ParseKeys)}</p>
+				<p className="text-sm text-status-danger">
+					{t(error.errorKey as ParseKeys)}
+				</p>
 			)}
 			{success?.successKey && (
-				<p className="text-sm text-green-700">
+				<p className="text-sm text-status-ok">
 					{t(success.successKey as ParseKeys)}
 				</p>
 			)}
@@ -455,25 +457,25 @@ export default function ComptrollerDetail({
 				<Card>
 					<CardContent className="space-y-2 p-4 text-sm">
 						<p>
-							<span className="text-slate-500">
+							<span className="text-muted-foreground">
 								{t("comptroller_detail.job_type")}:
 							</span>{" "}
 							{doc.jobType}
 						</p>
 						<p>
-							<span className="text-slate-500">
+							<span className="text-muted-foreground">
 								{t("comptroller_detail.address")}:
 							</span>{" "}
 							{doc.jobAddressActual || doc.jobAddressEstimated}
 						</p>
 						<p>
-							<span className="text-slate-500">
+							<span className="text-muted-foreground">
 								{t("comptroller_detail.supervisor")}:
 							</span>{" "}
 							{doc.supervisor?.name ?? "—"}
 						</p>
 						<p>
-							<span className="text-slate-500">
+							<span className="text-muted-foreground">
 								{t("comptroller_detail.current_crew")}:
 							</span>{" "}
 							{currentCrewNames.join(", ")}
@@ -483,13 +485,13 @@ export default function ComptrollerDetail({
 				<Card>
 					<CardContent className="space-y-2 p-4 text-sm">
 						<p>
-							<span className="text-slate-500">
+							<span className="text-muted-foreground">
 								{t("comptroller_detail.invoice_amount")}:
 							</span>{" "}
 							<span className="font-medium">{formatMoney(amount)}</span>
 						</p>
 						<p>
-							<span className="text-slate-500">
+							<span className="text-muted-foreground">
 								{t("comptroller_detail.expected_advance", {
 									rate: (lcPbccAdvanceRate * 100).toFixed(1),
 								})}
@@ -498,7 +500,7 @@ export default function ComptrollerDetail({
 							{formatMoney(expectedAdvance)}
 						</p>
 						<p>
-							<span className="text-slate-500">
+							<span className="text-muted-foreground">
 								{t("comptroller_detail.advance_status")}:
 							</span>{" "}
 							{advanceReceived
@@ -506,7 +508,7 @@ export default function ComptrollerDetail({
 								: t("comptroller_detail.status_pending")}
 						</p>
 						<p>
-							<span className="text-slate-500">
+							<span className="text-muted-foreground">
 								{t("comptroller_detail.final_status")}:
 							</span>{" "}
 							{finalReceived
@@ -514,7 +516,7 @@ export default function ComptrollerDetail({
 								: t("comptroller_detail.status_pending")}
 						</p>
 						<p>
-							<span className="text-slate-500">
+							<span className="text-muted-foreground">
 								{t("comptroller_detail.crew_payment_status")}:
 							</span>{" "}
 							{crewPaid
@@ -576,7 +578,7 @@ export default function ComptrollerDetail({
 									})}
 								</p>
 								{hasAdvanceDiscrepancy && (
-									<p className="text-xs text-red-700">
+									<p className="text-xs text-status-danger">
 										{t("comptroller_detail.discrepancy_notice", {
 											expected: formatMoney(expectedAdvance),
 										})}
@@ -789,7 +791,7 @@ export default function ComptrollerDetail({
 						<div className="overflow-x-auto">
 							<table className="w-full text-sm">
 								<thead>
-									<tr className="text-left text-slate-500 border-b">
+									<tr className="text-left text-muted-foreground border-b">
 										<th className="pb-1">
 											{t("comptroller_detail.table.date")}
 										</th>

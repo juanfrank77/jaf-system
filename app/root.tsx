@@ -12,6 +12,7 @@ import { RouteErrorBoundary } from "~/components/error-boundary"
 import { SyncManager } from "~/components/sync-manager"
 import type { Route } from "./+types/root"
 import "./app.css"
+import { themeInitScript } from "./lib/theme"
 import i18next, { lngCookie } from "./localization/i18n.server"
 
 export const handle = {
@@ -38,10 +39,12 @@ export async function loader({ request }: Route.LoaderArgs) {
 export function Layout({ children }: { children: React.ReactNode }) {
 	const { i18n } = useTranslation()
 	return (
-		<html lang={i18n.language} dir={i18n.dir()}>
+		<html lang={i18n.language} dir={i18n.dir()} suppressHydrationWarning>
 			<head>
 				<meta charSet="utf-8" />
 				<meta name="viewport" content="width=device-width, initial-scale=1" />
+				{/* biome-ignore lint/security/noDangerouslySetInnerHtml: static, app-owned constant (no user input) */}
+				<script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
 				<Meta />
 				<Links />
 			</head>

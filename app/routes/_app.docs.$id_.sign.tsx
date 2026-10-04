@@ -345,9 +345,11 @@ export default function SignDoc({
 	return (
 		<div className="space-y-5">
 			<h1 className="text-xl font-semibold">{t("docs_sign.title")}</h1>
-			<p className="text-sm font-mono text-slate-500">{doc.controlNumber}</p>
+			<p className="text-sm font-mono text-muted-foreground">
+				{doc.controlNumber}
+			</p>
 
-			<div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+			<div className="bg-status-warn-soft border border-status-warn/30 rounded-lg p-3 text-sm text-status-warn">
 				{t("docs_sign.review_notice")}
 			</div>
 
@@ -389,10 +391,10 @@ export default function SignDoc({
 							<p className="text-sm font-medium mb-1">
 								{t("docs_sign.release_signature_heading")}
 							</p>
-							<p className="text-xs text-slate-500 mb-2">
+							<p className="text-xs text-muted-foreground mb-2">
 								{t("docs_sign.release_signature_subtext")}
 							</p>
-							<Label className="text-xs text-slate-500">
+							<Label className="text-xs text-muted-foreground">
 								{t("docs_sign.release_signer_label")}
 							</Label>
 							<Select
@@ -417,7 +419,7 @@ export default function SignDoc({
 						<button
 							type="button"
 							onClick={() => releaseRef.current?.clear()}
-							className="text-xs text-slate-400 mt-1 hover:text-slate-600"
+							className="text-xs text-muted-foreground mt-1 hover:text-foreground"
 						>
 							{t("docs_sign.clear")}
 						</button>
@@ -428,10 +430,10 @@ export default function SignDoc({
 							<p className="text-sm font-medium mb-1">
 								{t("docs_sign.crew_signature_heading")}
 							</p>
-							<p className="text-xs text-slate-500 mb-2">
+							<p className="text-xs text-muted-foreground mb-2">
 								{t("docs_sign.crew_signature_subtext")}
 							</p>
-							<Label className="text-xs text-slate-500">
+							<Label className="text-xs text-muted-foreground">
 								{t("docs_sign.crew_signer_label")}
 							</Label>
 							<Select
@@ -456,7 +458,7 @@ export default function SignDoc({
 						<button
 							type="button"
 							onClick={() => crewRef.current?.clear()}
-							className="text-xs text-slate-400 mt-1 hover:text-slate-600"
+							className="text-xs text-muted-foreground mt-1 hover:text-foreground"
 						>
 							{t("docs_sign.clear")}
 						</button>
@@ -464,7 +466,7 @@ export default function SignDoc({
 				</div>
 
 				{error?.errorKey && (
-					<p className="text-sm text-red-600">{t(error.errorKey)}</p>
+					<p className="text-sm text-status-danger">{t(error.errorKey)}</p>
 				)}
 
 				<Button type="submit" className="w-full">

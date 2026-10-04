@@ -299,14 +299,14 @@ export default function FinanceVerify({
 			<div className="flex items-center justify-between">
 				<div>
 					<h1 className="text-xl font-semibold">{t("finance_verify.title")}</h1>
-					<p className="font-mono text-sm text-slate-500">
+					<p className="font-mono text-sm text-muted-foreground">
 						{doc.controlNumber} — {doc.jobType}
 					</p>
 				</div>
 				<span
 					className={cn(
-						"text-xs bg-slate-100 px-3 py-1 rounded-full font-medium",
-						stage === "TO_VERIFY" && "bg-blue-100 text-blue-800",
+						"text-xs bg-muted px-3 py-1 rounded-full font-medium",
+						stage === "TO_VERIFY" && "bg-status-info-soft text-status-info",
 					)}
 				>
 					{stage?.replace(/_/g, " ")}
@@ -327,31 +327,31 @@ export default function FinanceVerify({
 				<p>
 					{t("finance_verify.ivu_rate", { rate: (ivuRate * 100).toFixed(1) })}
 				</p>
-				<p className="text-xs text-slate-500">
+				<p className="text-xs text-muted-foreground">
 					{t("finance_verify.tolerance", { tolerance: formatMoney(tolerance) })}
 				</p>
 			</div>
 
 			{missingClaroPdf && (
-				<div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-					<p className="font-medium text-amber-900">
+				<div className="bg-status-warn-soft border border-status-warn/30 rounded-lg p-4">
+					<p className="font-medium text-status-warn">
 						{t("finance_verify.billing_blocked")}
 					</p>
-					<ul className="text-sm text-amber-800 list-disc list-inside">
+					<ul className="text-sm text-status-warn list-disc list-inside">
 						<li>{t("finance_verify.blocked_claro_pdf")}</li>
 					</ul>
 				</div>
 			)}
 
 			{error?.errorKey === "finance_verify.errors.amount_mismatch" && (
-				<div className="bg-red-50 border border-red-200 rounded-lg p-4">
-					<p className="font-medium text-red-900">
+				<div className="bg-status-danger-soft border border-status-danger-line rounded-lg p-4">
+					<p className="font-medium text-status-danger">
 						{t("finance_verify.amount_mismatch", {
 							difference: formatMoney(error.difference ?? 0),
 							tolerance: formatMoney(error.tolerance ?? 0),
 						})}
 					</p>
-					<p className="text-sm text-red-800 mt-1">
+					<p className="text-sm text-status-danger mt-1">
 						{t("finance_verify.amount_mismatch_detail", {
 							avisoAmount: formatMoney(Number(error.avisoAmount ?? 0)),
 							invoiceTotal: formatMoney(error.invoiceTotal ?? 0),
@@ -361,7 +361,7 @@ export default function FinanceVerify({
 			)}
 
 			<div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-				<div className="bg-white border rounded-lg p-4 space-y-3">
+				<div className="bg-card border rounded-lg p-4 space-y-3">
 					<h2 className="text-sm font-medium">
 						{t("finance_verify.jaf_invoice")}
 						{jafInvoiceUrl && (
@@ -369,7 +369,7 @@ export default function FinanceVerify({
 								href={jafInvoiceUrl}
 								target="_blank"
 								rel="noreferrer"
-								className="ml-2 text-primary underline"
+								className="ml-2 text-accent-text underline"
 							>
 								{t("finance_verify.download")}
 							</a>
@@ -377,25 +377,25 @@ export default function FinanceVerify({
 					</h2>
 					<div className="text-sm space-y-1">
 						<p>
-							<span className="text-slate-500">
+							<span className="text-muted-foreground">
 								{t("finance_verify.job_type")}:
 							</span>{" "}
 							{doc.jobType}
 						</p>
 						<p>
-							<span className="text-slate-500">
+							<span className="text-muted-foreground">
 								{t("finance_verify.address")}:
 							</span>{" "}
 							{doc.jobAddressActual || doc.jobAddressEstimated}
 						</p>
 						<p>
-							<span className="text-slate-500">
+							<span className="text-muted-foreground">
 								{t("finance_verify.aviso_number")}:
 							</span>{" "}
 							{doc.avisoNumber || "—"}
 						</p>
 						<p>
-							<span className="text-slate-500">
+							<span className="text-muted-foreground">
 								{t("finance_verify.supervisor")}:
 							</span>{" "}
 							{loaderData.doc.supervisor?.name}
@@ -408,7 +408,7 @@ export default function FinanceVerify({
 					/>
 				</div>
 
-				<div className="bg-white border rounded-lg p-4 space-y-3">
+				<div className="bg-card border rounded-lg p-4 space-y-3">
 					<h2 className="text-sm font-medium">
 						{t("finance_verify.claro_work_order")}
 					</h2>
@@ -419,7 +419,7 @@ export default function FinanceVerify({
 							title={t("finance_verify.claro_pdf_title")}
 						/>
 					) : (
-						<p className="text-sm text-slate-400">
+						<p className="text-sm text-muted-foreground">
 							{t("finance_verify.no_claro_pdf")}
 						</p>
 					)}
@@ -427,14 +427,14 @@ export default function FinanceVerify({
 			</div>
 
 			{sendBackNotes.length > 0 && (
-				<div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-2">
-					<h3 className="text-sm font-medium text-amber-900">
+				<div className="bg-status-warn-soft border border-status-warn/30 rounded-lg p-4 space-y-2">
+					<h3 className="text-sm font-medium text-status-warn">
 						{t("finance_verify.previous_send_backs")}
 					</h3>
 					{sendBackNotes.map((note) => (
 						<p
 							key={`${note.createdAt}-${note.note}`}
-							className="text-sm text-amber-800"
+							className="text-sm text-status-warn"
 						>
 							{new Date(note.createdAt).toLocaleString()} — {note.note}
 						</p>
@@ -453,7 +453,7 @@ export default function FinanceVerify({
 								</Label>
 								<p
 									id="avisoAmountPrefilled"
-									className="mt-1 text-sm font-medium text-green-800 bg-green-50 border border-green-200 rounded px-2 py-1"
+									className="mt-1 text-sm font-medium text-status-ok bg-status-ok-soft border border-status-ok/30 rounded px-2 py-1"
 								>
 									{t("finance_verify.aviso_amount_prefilled", {
 										amount: formatMoney(prefilledAvisoAmount),
@@ -476,7 +476,7 @@ export default function FinanceVerify({
 									className="mt-1"
 									required
 								/>
-								<p className="text-xs text-slate-500 mt-1">
+								<p className="text-xs text-muted-foreground mt-1">
 									{t("finance_verify.aviso_amount_hint")}
 								</p>
 							</div>
@@ -490,7 +490,7 @@ export default function FinanceVerify({
 							{t("finance_verify.mark_verified")}
 						</Button>
 						{cannotVerify && (
-							<p className="text-sm text-amber-700">
+							<p className="text-sm text-status-warn">
 								{t("finance_verify.cannot_verify_hint")}
 							</p>
 						)}
@@ -508,7 +508,7 @@ export default function FinanceVerify({
 						</Button>
 						{error?.errorKey &&
 							error.errorKey !== "finance_verify.errors.amount_mismatch" && (
-								<p className="text-sm text-red-600">
+								<p className="text-sm text-status-danger">
 									{t(error.errorKey as ParseKeys)}
 								</p>
 							)}

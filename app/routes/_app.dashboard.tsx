@@ -1,8 +1,7 @@
 import { useEffect } from "react"
 import { redirect } from "react-router"
-import { DashboardView } from "~/components/dashboard-view"
+import { RoleDashboard } from "~/components/dashboards/role-dashboard"
 import { RouteErrorBoundary } from "~/components/error-boundary"
-import { SupervisorDashboard } from "~/components/supervisor-dashboard"
 import {
 	computeAwaitingPickup,
 	computeDashboardStats,
@@ -371,6 +370,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 			: []
 
 	return {
+		role: user.role,
 		stats,
 		alert,
 		explainer,
@@ -403,6 +403,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 export default function Dashboard({ loaderData }: Route.ComponentProps) {
 	const {
+		role,
 		stats,
 		alert,
 		docs,
@@ -461,12 +462,10 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 		crewSubmittedDocs,
 	])
 
-	if (supervisorQueues) {
-		return <SupervisorDashboard queues={supervisorQueues} />
-	}
-
 	return (
-		<DashboardView
+		<RoleDashboard
+			role={role}
+			supervisorQueues={supervisorQueues}
 			stats={stats}
 			alert={alert}
 			explainer={explainer}

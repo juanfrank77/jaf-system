@@ -262,12 +262,12 @@ export default function SupervisorBrigades({
 			</h1>
 
 			{areaOptions.length === 0 && (
-				<div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
+				<div className="bg-status-warn-soft border border-status-warn/30 rounded-lg p-4 text-sm text-status-warn">
 					{t("supervisor_brigades.no_areas_assigned")}
 				</div>
 			)}
 
-			<section className="bg-white border rounded-lg p-6 space-y-4">
+			<section className="bg-card border rounded-lg p-6 space-y-4">
 				<h2 className="text-base font-medium">
 					{t("supervisor_brigades.add_heading")}
 				</h2>
@@ -314,7 +314,7 @@ export default function SupervisorBrigades({
 									/>
 									<span>
 										{u.name}{" "}
-										<span className="text-slate-400">
+										<span className="text-muted-foreground">
 											(
 											{u.active
 												? t("supervisor_brigades.active")
@@ -335,27 +335,29 @@ export default function SupervisorBrigades({
 					<Button type="submit" disabled={areaOptions.length === 0}>
 						{t("supervisor_brigades.add_submit")}
 					</Button>
-					{error && <p className="text-sm text-red-600">{t(error as never)}</p>}
+					{error && (
+						<p className="text-sm text-status-danger">{t(error as never)}</p>
+					)}
 				</Form>
 			</section>
 
-			<section className="bg-white border rounded-lg overflow-hidden">
+			<section className="bg-card border rounded-lg overflow-hidden">
 				<table className="w-full text-sm">
-					<thead className="bg-slate-50 border-b">
+					<thead className="bg-muted border-b">
 						<tr>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
+							<th className="px-4 py-3 text-left font-medium text-muted-foreground">
 								{t("supervisor_brigades.table.name")}
 							</th>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
+							<th className="px-4 py-3 text-left font-medium text-muted-foreground">
 								{t("supervisor_brigades.table.area")}
 							</th>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
+							<th className="px-4 py-3 text-left font-medium text-muted-foreground">
 								{t("supervisor_brigades.table.members")}
 							</th>
-							<th className="px-4 py-3 text-center font-medium text-slate-600">
+							<th className="px-4 py-3 text-center font-medium text-muted-foreground">
 								{t("supervisor_brigades.table.active")}
 							</th>
-							<th className="px-4 py-3 text-center font-medium text-slate-600">
+							<th className="px-4 py-3 text-center font-medium text-muted-foreground">
 								{t("supervisor_brigades.table.actions")}
 							</th>
 						</tr>
@@ -366,10 +368,12 @@ export default function SupervisorBrigades({
 								brigade.memberIds.includes(u.id),
 							)
 							return (
-								<tr key={brigade.id} className="hover:bg-slate-50">
+								<tr key={brigade.id} className="hover:bg-muted">
 									<td className="px-4 py-3 font-medium">{brigade.name}</td>
-									<td className="px-4 py-3 text-slate-600">{brigade.area}</td>
-									<td className="px-4 py-3 text-slate-600">
+									<td className="px-4 py-3 text-muted-foreground">
+										{brigade.area}
+									</td>
+									<td className="px-4 py-3 text-muted-foreground">
 										{members.map((m) => m.name).join(", ") ||
 											t("supervisor_brigades.no_members")}
 									</td>
@@ -377,8 +381,8 @@ export default function SupervisorBrigades({
 										<span
 											className={
 												brigade.active
-													? "text-green-600 font-medium"
-													: "text-slate-400"
+													? "text-status-ok font-medium"
+													: "text-muted-foreground"
 											}
 										>
 											{brigade.active
@@ -411,7 +415,7 @@ export default function SupervisorBrigades({
 							<tr>
 								<td
 									colSpan={5}
-									className="px-4 py-6 text-center text-slate-400 text-sm"
+									className="px-4 py-6 text-center text-muted-foreground text-sm"
 								>
 									{t("supervisor_brigades.no_brigades")}
 								</td>
@@ -507,7 +511,7 @@ function EditBrigadeDialog({
 								/>
 								<span>
 									{u.name}{" "}
-									<span className="text-slate-400">
+									<span className="text-muted-foreground">
 										(
 										{u.active
 											? t("supervisor_brigades.active")

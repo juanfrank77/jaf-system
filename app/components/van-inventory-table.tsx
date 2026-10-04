@@ -21,10 +21,13 @@ export function VanInventoryTable({
 	function Row(r: VanInventoryRow) {
 		const low = r.par != null && r.onVan < r.par
 		return (
-			<tr key={r.serviceCodeId} className={low ? "bg-amber-50" : undefined}>
+			<tr
+				key={r.serviceCodeId}
+				className={low ? "bg-status-warn-soft" : undefined}
+			>
 				<td className="px-3 py-2 text-sm">{r.label}</td>
 				<td className="px-3 py-2 text-sm text-right">{r.onVan}</td>
-				<td className="px-3 py-2 text-sm text-right text-slate-500">
+				<td className="px-3 py-2 text-sm text-right text-muted-foreground">
 					{r.par ?? "—"}
 				</td>
 			</tr>
@@ -35,7 +38,7 @@ export function VanInventoryTable({
 		<div className="space-y-6">
 			<table className="w-full text-sm">
 				<thead>
-					<tr className="text-left text-slate-500">
+					<tr className="text-left text-muted-foreground">
 						<th className="px-3 py-1 font-medium">
 							{t("van_view.item", "Item")}
 						</th>

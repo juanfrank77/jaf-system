@@ -203,7 +203,7 @@ export default function NewDoc({
 						name="brigadeId"
 						required
 						defaultValue=""
-						className="mt-1 w-full border rounded-md h-9 px-2 text-sm bg-white"
+						className="mt-1 w-full border rounded-md h-9 px-2 text-sm bg-card"
 					>
 						<option value="" disabled>
 							{t("docs_new.select_crew_placeholder")}
@@ -218,7 +218,7 @@ export default function NewDoc({
 					</select>
 				</div>
 				{error?.errorKey && (
-					<p className="text-sm text-red-600">{t(error.errorKey)}</p>
+					<p className="text-sm text-status-danger">{t(error.errorKey)}</p>
 				)}
 				<Button type="submit" className="w-full">
 					{t("docs_new.submit")}

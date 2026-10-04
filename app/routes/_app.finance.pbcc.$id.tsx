@@ -183,29 +183,37 @@ export default function PbccRequest({ loaderData }: Route.ComponentProps) {
 	return (
 		<div className="space-y-5">
 			<h1 className="text-xl font-semibold">{t("finance_pbcc.title")}</h1>
-			<p className="font-mono text-sm text-slate-500">{doc.controlNumber}</p>
+			<p className="font-mono text-sm text-muted-foreground">
+				{doc.controlNumber}
+			</p>
 
-			<div className="bg-white border rounded-lg p-4 space-y-2 text-sm">
+			<div className="bg-card border rounded-lg p-4 space-y-2 text-sm">
 				<p>
-					<span className="text-slate-500">{t("finance_pbcc.job_type")}:</span>{" "}
+					<span className="text-muted-foreground">
+						{t("finance_pbcc.job_type")}:
+					</span>{" "}
 					{doc.jobType}
 				</p>
 				<p>
-					<span className="text-slate-500">{t("finance_pbcc.address")}:</span>{" "}
+					<span className="text-muted-foreground">
+						{t("finance_pbcc.address")}:
+					</span>{" "}
 					{doc.jobAddressActual || doc.jobAddressEstimated}
 				</p>
 				<p>
-					<span className="text-slate-500">
+					<span className="text-muted-foreground">
 						{t("finance_pbcc.aviso_number")}:
 					</span>{" "}
 					{doc.avisoNumber || "—"}
 				</p>
 				<p>
-					<span className="text-slate-500">{t("finance_pbcc.amount")}:</span>{" "}
+					<span className="text-muted-foreground">
+						{t("finance_pbcc.amount")}:
+					</span>{" "}
 					{formatMoney(amount)}
 				</p>
 				<p>
-					<span className="text-slate-500">
+					<span className="text-muted-foreground">
 						{t("finance_pbcc.advance", {
 							rate: (lcPbccAdvanceRate * 100).toFixed(1),
 						})}
@@ -213,7 +221,7 @@ export default function PbccRequest({ loaderData }: Route.ComponentProps) {
 					</span>{" "}
 					{formatMoney(amount * lcPbccAdvanceRate)}
 				</p>
-				<p className="text-xs text-slate-400">
+				<p className="text-xs text-muted-foreground">
 					{t("finance_pbcc.ivu_rate", { rate: (ivuRate * 100).toFixed(1) })}
 				</p>
 			</div>

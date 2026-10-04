@@ -60,7 +60,7 @@ export default function SwapFind({ loaderData }: Route.ComponentProps) {
 					</li>
 				))}
 				{q && results.length === 0 && (
-					<li className="py-2 text-sm text-slate-500">
+					<li className="py-2 text-sm text-muted-foreground">
 						{t("installer.swap.no_results", "No matching jobs")}
 					</li>
 				)}

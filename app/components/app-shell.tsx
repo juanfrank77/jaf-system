@@ -250,7 +250,7 @@ function NotificationBell({
 					className="size-5"
 				/>
 				{notifications.length > 0 && (
-					<span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-status-danger text-[10px] text-white">
+					<span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-status-danger-solid text-[10px] text-status-danger-solid-foreground">
 						{notifications.length}
 					</span>
 				)}

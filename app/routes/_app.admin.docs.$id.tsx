@@ -129,7 +129,7 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 			<div className="flex items-start justify-between">
 				<div>
 					<h1 className="font-mono font-bold text-lg">{doc.controlNumber}</h1>
-					<p className="text-sm text-slate-500">{doc.jobType}</p>
+					<p className="text-sm text-muted-foreground">{doc.jobType}</p>
 				</div>
 				<Badge variant={STATUS_BADGE_VARIANT[doc.status]}>
 					{doc.status.replace(/_/g, " ")}
@@ -137,36 +137,36 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 			</div>
 
 			<section className="grid grid-cols-2 gap-3 text-sm">
-				<div className="bg-white border rounded-lg p-3">
-					<span className="text-xs text-slate-500">
+				<div className="bg-card border rounded-lg p-3">
+					<span className="text-xs text-muted-foreground">
 						{t("docs_view.address")}
 					</span>
 					<p>{doc.jobAddressEstimated}</p>
 					{doc.jobAddressActual && (
 						<p className="mt-1">
-							<span className="text-xs text-slate-500">
+							<span className="text-xs text-muted-foreground">
 								{t("docs_review.actual_address")}:
 							</span>{" "}
 							{doc.jobAddressActual}
 						</p>
 					)}
 				</div>
-				<div className="bg-white border rounded-lg p-3 space-y-1">
+				<div className="bg-card border rounded-lg p-3 space-y-1">
 					<p>
-						<span className="text-xs text-slate-500">
+						<span className="text-xs text-muted-foreground">
 							{t("docs_view.supervisor")}
 						</span>{" "}
 						{name(doc.supervisorId)}
 					</p>
 					<p>
-						<span className="text-xs text-slate-500">
+						<span className="text-xs text-muted-foreground">
 							{t("docs_view.crew")}
 						</span>{" "}
 						{doc.assignedCrewIds.map(name).join(", ")}
 					</p>
 					{doc.avisoNumber && (
 						<p>
-							<span className="text-xs text-slate-500">
+							<span className="text-xs text-muted-foreground">
 								{t("docs_view.aviso_number")}
 							</span>
 							{", "}
@@ -174,36 +174,36 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 						</p>
 					)}
 					{doc.cancelledById && (
-						<p className="text-red-700">
+						<p className="text-status-danger">
 							Cancelled by {name(doc.cancelledById)} — {doc.cancellationReason}
 						</p>
 					)}
 				</div>
 			</section>
 
-			<section className="bg-white border rounded-lg p-4">
-				<h2 className="text-sm font-semibold text-slate-700 mb-3">
+			<section className="bg-card border rounded-lg p-4">
+				<h2 className="text-sm font-semibold text-foreground mb-3">
 					{t("admin_history.timeline_heading")}
 				</h2>
 				{doc.auditTrail.length === 0 && (
-					<p className="text-sm text-slate-400">
+					<p className="text-sm text-muted-foreground">
 						{t("admin_history.no_events")}
 					</p>
 				)}
-				<ol className="relative border-l border-slate-200 ml-px">
+				<ol className="relative border-l border-border ml-px">
 					{doc.auditTrail.map((a) => (
 						<li key={a.id} className="relative mb-4 ml-4">
-							<div className="absolute -left-1.5 mt-1.5 h-3 w-3 rounded-full bg-blue-500" />
-							<time className="text-xs text-slate-500">
+							<div className="absolute -left-1.5 mt-1.5 h-3 w-3 rounded-full bg-status-info" />
+							<time className="text-xs text-muted-foreground">
 								{new Date(a.timestamp).toLocaleString()}
 							</time>
-							<span className="text-xs text-slate-500">
+							<span className="text-xs text-muted-foreground">
 								{" "}
 								{a.user?.name ?? "?"}:{" "}
 							</span>
 							<span className="text-sm font-medium">{a.action}</span>
 							{a.action !== "STATUS_CHANGED" && (
-								<span className="text-sm text-slate-700">
+								<span className="text-sm text-foreground">
 									{" — "}
 									{actionSummary(a.action, a.diffJson as AuditDiff)}
 								</span>
@@ -214,13 +214,13 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 			</section>
 
 			{sendBack.length > 0 && (
-				<section className="bg-white border rounded-lg p-4">
-					<h2 className="text-sm font-semibold text-slate-700 mb-2">
+				<section className="bg-card border rounded-lg p-4">
+					<h2 className="text-sm font-semibold text-foreground mb-2">
 						{t("admin_history.send_backs_heading")}
 					</h2>
 					<table className="w-full text-xs">
 						<thead>
-							<tr className="text-left text-slate-500 border-b">
+							<tr className="text-left text-muted-foreground border-b">
 								<th className="pb-1">Date</th>
 								<th className="pb-1">From</th>
 								<th className="pb-1">To</th>
@@ -248,18 +248,18 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 				</section>
 			)}
 
-			<section className="bg-white border rounded-lg p-4">
-				<h2 className="text-sm font-semibold text-slate-700 mb-2">
+			<section className="bg-card border rounded-lg p-4">
+				<h2 className="text-sm font-semibold text-foreground mb-2">
 					{t("admin_history.payments_heading")}
 				</h2>
 				{doc.paymentRecords.length === 0 ? (
-					<p className="text-sm text-slate-400">
+					<p className="text-sm text-muted-foreground">
 						{t("admin_history.no_payments")}
 					</p>
 				) : (
 					<table className="w-full text-xs">
 						<thead>
-							<tr className="text-left text-slate-500 border-b">
+							<tr className="text-left text-muted-foreground border-b">
 								<th className="pb-1">Date</th>
 								<th className="pb-1">Type</th>
 								<th className="pb-1 text-right">Amount</th>
@@ -305,13 +305,13 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 			</section>
 
 			{(estimated.length > 0 || taken.length > 0 || used.length > 0) && (
-				<section className="bg-white border rounded-lg p-4 space-y-4">
-					<h2 className="text-sm font-semibold text-slate-700">
+				<section className="bg-card border rounded-lg p-4 space-y-4">
+					<h2 className="text-sm font-semibold text-foreground">
 						{t("admin_history.materials_heading")}
 					</h2>
 					{estimated.length > 0 && (
 						<>
-							<p className="text-xs text-slate-500">
+							<p className="text-xs text-muted-foreground">
 								{t("docs_review.estimated")}
 							</p>
 							<MaterialLineItems
@@ -323,7 +323,9 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 					)}
 					{taken.length > 0 && (
 						<>
-							<p className="text-xs text-slate-500">{t("docs_review.taken")}</p>
+							<p className="text-xs text-muted-foreground">
+								{t("docs_review.taken")}
+							</p>
 							<MaterialLineItems
 								serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
 								initialItems={taken}
@@ -333,7 +335,9 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 					)}
 					{used.length > 0 && (
 						<>
-							<p className="text-xs text-slate-500">{t("docs_review.used")}</p>
+							<p className="text-xs text-muted-foreground">
+								{t("docs_review.used")}
+							</p>
 							<MaterialLineItems
 								serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
 								initialItems={used}
@@ -344,8 +348,8 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 				</section>
 			)}
 
-			<section className="bg-white border rounded-lg p-4">
-				<h2 className="text-sm font-semibold text-slate-700 mb-2">
+			<section className="bg-card border rounded-lg p-4">
+				<h2 className="text-sm font-semibold text-foreground mb-2">
 					{t("admin_history.documents_heading")}
 				</h2>
 				<ul className="text-sm space-y-1">

@@ -242,7 +242,7 @@ export default function PrepDoc({
 	return (
 		<div className="space-y-4">
 			<h1 className="text-xl font-semibold">{t("docs_prep.title")}</h1>
-			<p className="text-sm text-slate-600">
+			<p className="text-sm text-muted-foreground">
 				<Trans
 					i18nKey="docs_prep.confirm_message"
 					values={{ controlNumber: doc.controlNumber }}
@@ -252,7 +252,7 @@ export default function PrepDoc({
 
 			{(actionData as { missingFlagged?: boolean } | undefined)
 				?.missingFlagged && (
-				<div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+				<div className="bg-status-warn-soft border border-status-warn/30 rounded-lg p-3 text-sm text-status-warn">
 					{t("docs_prep.missing_flagged_notice")}
 				</div>
 			)}
@@ -283,7 +283,7 @@ export default function PrepDoc({
 								<button
 									type="button"
 									onClick={() => removeLine(index)}
-									className="text-slate-400 hover:text-red-600 text-lg"
+									className="text-muted-foreground hover:text-status-danger text-lg"
 								>
 									×
 								</button>
@@ -291,7 +291,7 @@ export default function PrepDoc({
 
 							<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
 								<div>
-									<Label className="text-xs text-slate-500">
+									<Label className="text-xs text-muted-foreground">
 										{t("docs_prep.estimated_qty")}
 									</Label>
 									<Input
@@ -307,7 +307,7 @@ export default function PrepDoc({
 									/>
 								</div>
 								<div>
-									<Label className="text-xs text-slate-500">
+									<Label className="text-xs text-muted-foreground">
 										{t("docs_prep.prepped_qty")}
 									</Label>
 									<Input
@@ -328,7 +328,7 @@ export default function PrepDoc({
 								const avail = availability[line.serviceCodeId]
 								if (!avail) return null
 								return (
-									<p className="text-xs text-slate-500">
+									<p className="text-xs text-muted-foreground">
 										{t("docs_prep.available")}: {avail.available}{" "}
 										{avail.countUnit ?? ""}
 										{avail.derivedAvailable !== null && (
@@ -343,7 +343,7 @@ export default function PrepDoc({
 
 							{line.missing && substitutionOptions.length > 0 && (
 								<div>
-									<Label className="text-xs text-slate-500">
+									<Label className="text-xs text-muted-foreground">
 										{t("docs_prep.substitute_with")}
 									</Label>
 									<Select
@@ -387,7 +387,7 @@ export default function PrepDoc({
 							</div>
 
 							<div>
-								<Label className="text-xs text-slate-500">
+								<Label className="text-xs text-muted-foreground">
 									{t("docs_prep.line_notes")}
 								</Label>
 								<Textarea
@@ -408,7 +408,7 @@ export default function PrepDoc({
 			</Button>
 
 			{missingCount > 0 && (
-				<p className="text-sm text-amber-700">
+				<p className="text-sm text-status-warn">
 					{t("docs_prep.missing_count", { count: missingCount })}
 				</p>
 			)}
@@ -423,7 +423,7 @@ export default function PrepDoc({
 			</Form>
 
 			{error?.errorKey && (
-				<p className="text-sm text-red-600">{t(error.errorKey)}</p>
+				<p className="text-sm text-status-danger">{t(error.errorKey)}</p>
 			)}
 		</div>
 	)

@@ -119,7 +119,7 @@ export default function AdminVans({
 		<div className="space-y-8">
 			<h1 className="text-xl font-semibold">{t("admin_vans.title")}</h1>
 
-			<section className="bg-white border rounded-lg p-6 space-y-4">
+			<section className="bg-card border rounded-lg p-6 space-y-4">
 				<h2 className="text-base font-medium">{t("admin_vans.add_heading")}</h2>
 				<Form method="post" className="space-y-4">
 					<input type="hidden" name="intent" value="create" />
@@ -155,24 +155,26 @@ export default function AdminVans({
 						</Label>
 					</div>
 					<Button type="submit">{t("admin_vans.add_submit")}</Button>
-					{error && <p className="text-sm text-red-600">{t(error as never)}</p>}
+					{error && (
+						<p className="text-sm text-status-danger">{t(error as never)}</p>
+					)}
 				</Form>
 			</section>
 
-			<section className="bg-white border rounded-lg overflow-hidden">
+			<section className="bg-card border rounded-lg overflow-hidden">
 				<table className="w-full text-sm">
-					<thead className="bg-slate-50 border-b">
+					<thead className="bg-muted border-b">
 						<tr>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
+							<th className="px-4 py-3 text-left font-medium text-muted-foreground">
 								{t("admin_vans.table.name")}
 							</th>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
+							<th className="px-4 py-3 text-left font-medium text-muted-foreground">
 								{t("admin_vans.table.installer")}
 							</th>
-							<th className="px-4 py-3 text-center font-medium text-slate-600">
+							<th className="px-4 py-3 text-center font-medium text-muted-foreground">
 								{t("admin_vans.table.active")}
 							</th>
-							<th className="px-4 py-3 text-center font-medium text-slate-600">
+							<th className="px-4 py-3 text-center font-medium text-muted-foreground">
 								{t("admin_vans.table.actions")}
 							</th>
 						</tr>
@@ -181,17 +183,17 @@ export default function AdminVans({
 						{vans.map((van) => {
 							const installer = installers.find((u) => u.id === van.installerId)
 							return (
-								<tr key={van.id} className="hover:bg-slate-50">
+								<tr key={van.id} className="hover:bg-muted">
 									<td className="px-4 py-3 font-medium">{van.name}</td>
-									<td className="px-4 py-3 text-slate-600">
+									<td className="px-4 py-3 text-muted-foreground">
 										{installer?.name ?? t("admin_vans.unassigned")}
 									</td>
 									<td className="px-4 py-3 text-center">
 										<span
 											className={
 												van.active
-													? "text-green-600 font-medium"
-													: "text-slate-400"
+													? "text-status-ok font-medium"
+													: "text-muted-foreground"
 											}
 										>
 											{van.active ? t("admin_vans.yes") : t("admin_vans.no")}
@@ -226,7 +228,7 @@ export default function AdminVans({
 							<tr>
 								<td
 									colSpan={4}
-									className="px-4 py-6 text-center text-slate-400 text-sm"
+									className="px-4 py-6 text-center text-muted-foreground text-sm"
 								>
 									{t("admin_vans.no_vans")}
 								</td>
@@ -312,10 +314,10 @@ function EditVanDialog({
 				</Button>
 				{history.length > 0 && (
 					<div className="mt-4 space-y-1">
-						<p className="text-xs font-medium text-slate-500">
+						<p className="text-xs font-medium text-muted-foreground">
 							{t("admin_vans.history_heading")}
 						</p>
-						<ul className="space-y-1 text-xs text-slate-600">
+						<ul className="space-y-1 text-xs text-muted-foreground">
 							{history.map((entry) => {
 								const installer = installers.find(
 									(u) => u.id === entry.installerId,

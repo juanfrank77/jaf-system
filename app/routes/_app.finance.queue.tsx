@@ -73,19 +73,21 @@ export default function FinanceQueue({ loaderData }: Route.ComponentProps) {
 			<div className="flex items-center justify-between">
 				<h1 className="text-xl font-semibold">{t("finance_queue.title")}</h1>
 				{claroAcceptancePct != null && (
-					<span className="text-xs bg-slate-100 px-3 py-1 rounded-full">
+					<span className="text-xs bg-muted px-3 py-1 rounded-full">
 						{t("finance_queue.claro_pct", { pct: claroAcceptancePct })}
 					</span>
 				)}
 			</div>
-			<p className="text-sm text-slate-500">{t("finance_queue.hint")}</p>
+			<p className="text-sm text-muted-foreground">{t("finance_queue.hint")}</p>
 			{rows.length === 0 ? (
-				<p className="text-sm text-slate-400">{t("finance_queue.empty")}</p>
+				<p className="text-sm text-muted-foreground">
+					{t("finance_queue.empty")}
+				</p>
 			) : (
-				<div className="overflow-x-auto bg-white border rounded-lg">
+				<div className="overflow-x-auto bg-card border rounded-lg">
 					<table className="w-full text-sm">
 						<thead>
-							<tr className="text-xs text-slate-500 text-left border-b">
+							<tr className="text-xs text-muted-foreground text-left border-b">
 								<th className="p-2">{t("finance_queue.col.work_order")}</th>
 								<th className="p-2">{t("finance_queue.col.aviso")}</th>
 								<th className="p-2">{t("finance_queue.col.contractor")}</th>

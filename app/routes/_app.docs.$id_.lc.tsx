@@ -178,33 +178,39 @@ export default function LcView({ loaderData }: Route.ComponentProps) {
 	return (
 		<div className="space-y-5">
 			<h1 className="text-xl font-semibold">{t("docs_lc.title")}</h1>
-			<p className="font-mono text-sm text-slate-500">{doc.controlNumber}</p>
-			<p className="text-xs text-slate-400">
+			<p className="font-mono text-sm text-muted-foreground">
+				{doc.controlNumber}
+			</p>
+			<p className="text-xs text-muted-foreground">
 				{t("docs_lc.ivu_rate", { rate: (ivuRate * 100).toFixed(1) })}
 			</p>
 
 			<div className="grid grid-cols-2 gap-4">
-				<div className="bg-white border rounded-lg p-4">
+				<div className="bg-card border rounded-lg p-4">
 					<h2 className="text-sm font-medium mb-2">
 						{t("docs_lc.jaf_invoice")}
 					</h2>
 					<div className="text-sm space-y-1">
 						<p>
-							<span className="text-slate-500">{t("docs_lc.job")}:</span>{" "}
+							<span className="text-muted-foreground">{t("docs_lc.job")}:</span>{" "}
 							{doc.jobType}
 						</p>
 						<p>
-							<span className="text-slate-500">{t("docs_lc.address")}:</span>{" "}
+							<span className="text-muted-foreground">
+								{t("docs_lc.address")}:
+							</span>{" "}
 							{doc.jobAddressActual ?? doc.jobAddressEstimated}
 						</p>
 						<p>
-							<span className="text-slate-500">
+							<span className="text-muted-foreground">
 								{t("docs_lc.aviso_number")}:
 							</span>{" "}
 							{doc.avisoNumber ?? "—"}
 						</p>
 						<p>
-							<span className="text-slate-500">{t("docs_lc.supervisor")}:</span>{" "}
+							<span className="text-muted-foreground">
+								{t("docs_lc.supervisor")}:
+							</span>{" "}
 							{loaderData.supervisor?.name}
 						</p>
 					</div>
@@ -216,7 +222,7 @@ export default function LcView({ loaderData }: Route.ComponentProps) {
 						/>
 					</div>
 				</div>
-				<div className="bg-white border rounded-lg p-4">
+				<div className="bg-card border rounded-lg p-4">
 					<h2 className="text-sm font-medium mb-2">
 						{t("docs_lc.claro_pdf_title")}
 					</h2>
@@ -227,7 +233,7 @@ export default function LcView({ loaderData }: Route.ComponentProps) {
 							title={t("docs_lc.claro_pdf_iframe_title")}
 						/>
 					) : (
-						<p className="text-sm text-slate-400">
+						<p className="text-sm text-muted-foreground">
 							{t("docs_lc.no_claro_pdf")}
 						</p>
 					)}
@@ -246,7 +252,9 @@ export default function LcView({ loaderData }: Route.ComponentProps) {
 					<Button type="submit">{t("docs_lc.generate_schedule")}</Button>
 				</Form>
 			</div>
-			<p className="text-xs text-slate-400">{t("docs_lc.footer_note")}</p>
+			<p className="text-xs text-muted-foreground">
+				{t("docs_lc.footer_note")}
+			</p>
 		</div>
 	)
 }

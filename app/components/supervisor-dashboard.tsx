@@ -47,17 +47,19 @@ function Queue({
 }) {
 	const { t } = useTranslation()
 	return (
-		<section className="bg-white border rounded-lg p-3 space-y-2">
+		<section className="bg-card border rounded-lg p-3 space-y-2">
 			<div className="flex items-center justify-between">
 				<h2 className="text-sm font-semibold">{t(titleKey)}</h2>
 				<Badge variant={variant}>{rows.length}</Badge>
 			</div>
 			{rows.length === 0 ? (
-				<p className="text-xs text-slate-400">{t("dashboard.queue.empty")}</p>
+				<p className="text-xs text-muted-foreground">
+					{t("dashboard.queue.empty")}
+				</p>
 			) : (
 				<table className="w-full text-sm">
 					<thead>
-						<tr className="text-xs text-slate-500 text-left border-b">
+						<tr className="text-xs text-muted-foreground text-left border-b">
 							<th className="py-1">{t("dashboard.col.work_order")}</th>
 							<th className="py-1">{t("dashboard.col.address")}</th>
 							<th className="py-1">{t("dashboard.col.crew")}</th>
@@ -85,7 +87,7 @@ function Queue({
 								<td className="py-1.5">
 									{t(STAGE_KEY[r.stage])}
 									{r.note ? (
-										<span className="block text-xs text-amber-700">
+										<span className="block text-xs text-status-warn">
 											{r.note}
 										</span>
 									) : null}

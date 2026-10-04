@@ -51,10 +51,10 @@ export default function InstallerHome({ loaderData }: Route.ComponentProps) {
 		<div className="space-y-6">
 			<div>
 				<h1 className="text-xl font-semibold">{installer.name}</h1>
-				<p className="text-sm text-slate-500">
+				<p className="text-sm text-muted-foreground">
 					{van ? van.name : t("installer.no_van")}
 				</p>
-				<p className="text-xs text-slate-500">
+				<p className="text-xs text-muted-foreground">
 					{t(
 						"installer.quick_look",
 						"{{belowPar}} below par · {{owedBack}} owed back",
@@ -69,7 +69,7 @@ export default function InstallerHome({ loaderData }: Route.ComponentProps) {
 			<div className="flex flex-wrap gap-2">
 				<Link
 					to="/installer/completion/new"
-					className="inline-flex items-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+					className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
 				>
 					＋ {t("installer.completion.new_heading", "New Completion")}
 				</Link>
@@ -98,13 +98,13 @@ export default function InstallerHome({ loaderData }: Route.ComponentProps) {
 							className="py-2 flex items-center justify-between text-sm"
 						>
 							<span>{j.claroOrderNo}</span>
-							<span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs">
+							<span className="rounded-full bg-muted px-2 py-0.5 text-xs">
 								{j.pill}
 							</span>
 						</li>
 					))}
 					{jobs.length === 0 && (
-						<li className="py-2 text-sm text-slate-500">
+						<li className="py-2 text-sm text-muted-foreground">
 							{t("installer.no_submitted_jobs", "No jobs submitted yet.")}
 						</li>
 					)}

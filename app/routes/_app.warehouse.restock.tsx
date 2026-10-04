@@ -44,7 +44,7 @@ export default function WarehouseRestockList({
 					</li>
 				))}
 				{pending.length === 0 && (
-					<li className="py-2 text-sm text-slate-500">
+					<li className="py-2 text-sm text-muted-foreground">
 						{t("warehouse.restock_list.empty", "No restocks pending release.")}
 					</li>
 				)}

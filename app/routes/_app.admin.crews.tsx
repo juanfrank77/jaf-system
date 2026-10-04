@@ -113,7 +113,7 @@ export default function AdminCrews({
 		<div className="space-y-8">
 			<h1 className="text-xl font-semibold">{t("admin_crews.title")}</h1>
 
-			<section className="bg-white border rounded-lg p-6 space-y-4">
+			<section className="bg-card border rounded-lg p-6 space-y-4">
 				<h2 className="text-base font-medium">
 					{t("admin_crews.add_heading")}
 				</h2>
@@ -156,7 +156,7 @@ export default function AdminCrews({
 									/>
 									<span>
 										{u.name}{" "}
-										<span className="text-slate-400">
+										<span className="text-muted-foreground">
 											(
 											{u.active
 												? t("admin_crews.active")
@@ -175,27 +175,29 @@ export default function AdminCrews({
 						</Label>
 					</div>
 					<Button type="submit">{t("admin_crews.add_submit")}</Button>
-					{error && <p className="text-sm text-red-600">{t(error as never)}</p>}
+					{error && (
+						<p className="text-sm text-status-danger">{t(error as never)}</p>
+					)}
 				</Form>
 			</section>
 
-			<section className="bg-white border rounded-lg overflow-hidden">
+			<section className="bg-card border rounded-lg overflow-hidden">
 				<table className="w-full text-sm">
-					<thead className="bg-slate-50 border-b">
+					<thead className="bg-muted border-b">
 						<tr>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
+							<th className="px-4 py-3 text-left font-medium text-muted-foreground">
 								{t("admin_crews.table.name")}
 							</th>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
+							<th className="px-4 py-3 text-left font-medium text-muted-foreground">
 								{t("admin_crews.table.area")}
 							</th>
-							<th className="px-4 py-3 text-left font-medium text-slate-600">
+							<th className="px-4 py-3 text-left font-medium text-muted-foreground">
 								{t("admin_crews.table.members")}
 							</th>
-							<th className="px-4 py-3 text-center font-medium text-slate-600">
+							<th className="px-4 py-3 text-center font-medium text-muted-foreground">
 								{t("admin_crews.table.active")}
 							</th>
-							<th className="px-4 py-3 text-center font-medium text-slate-600">
+							<th className="px-4 py-3 text-center font-medium text-muted-foreground">
 								{t("admin_crews.table.actions")}
 							</th>
 						</tr>
@@ -206,12 +208,12 @@ export default function AdminCrews({
 								crew.memberIds.includes(u.id),
 							)
 							return (
-								<tr key={crew.id} className="hover:bg-slate-50">
+								<tr key={crew.id} className="hover:bg-muted">
 									<td className="px-4 py-3 font-medium">{crew.name}</td>
-									<td className="px-4 py-3 text-slate-600">
+									<td className="px-4 py-3 text-muted-foreground">
 										{crew.area ?? t("admin_crews.no_area")}
 									</td>
-									<td className="px-4 py-3 text-slate-600">
+									<td className="px-4 py-3 text-muted-foreground">
 										{members.map((m) => m.name).join(", ") ||
 											t("admin_crews.no_members")}
 									</td>
@@ -219,8 +221,8 @@ export default function AdminCrews({
 										<span
 											className={
 												crew.active
-													? "text-green-600 font-medium"
-													: "text-slate-400"
+													? "text-status-ok font-medium"
+													: "text-muted-foreground"
 											}
 										>
 											{crew.active ? t("admin_crews.yes") : t("admin_crews.no")}
@@ -247,7 +249,7 @@ export default function AdminCrews({
 							<tr>
 								<td
 									colSpan={5}
-									className="px-4 py-6 text-center text-slate-400 text-sm"
+									className="px-4 py-6 text-center text-muted-foreground text-sm"
 								>
 									{t("admin_crews.no_crews")}
 								</td>
@@ -335,7 +337,7 @@ function EditCrewDialog({
 								/>
 								<span>
 									{u.name}{" "}
-									<span className="text-slate-400">
+									<span className="text-muted-foreground">
 										(
 										{u.active
 											? t("admin_crews.active")

@@ -47,7 +47,7 @@ function ErrorFallback({ error }: ErrorFallbackProps) {
 					<div>
 						<Link
 							to="/"
-							className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-6 py-3 text-white hover:bg-indigo-700"
+							className="inline-flex items-center justify-center rounded-md bg-primary px-6 py-3 text-primary-foreground hover:bg-primary/90"
 						>
 							{t("navigation.home")}
 						</Link>

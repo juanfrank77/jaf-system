@@ -313,7 +313,7 @@ export default function ComptrollerDashboard({
 						</p>
 						<p className="text-lg font-semibold">{incomingDocs.length}</p>
 						{unreadCount > 0 && (
-							<p className="text-xs text-amber-700">
+							<p className="text-xs text-status-warn">
 								{t("comptroller_dashboard.stat.unread_docs", {
 									count: unreadCount,
 								})}

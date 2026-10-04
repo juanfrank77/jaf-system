@@ -239,8 +239,8 @@ function DashboardView({
 			</div>
 
 			{showFilters && (
-				<div className="bg-white border rounded-lg p-3 space-y-3">
-					<div className="flex items-center gap-2 text-sm font-medium text-slate-600">
+				<div className="bg-card border rounded-lg p-3 space-y-3">
+					<div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
 						<HugeiconsIcon
 							icon={FilterIcon}
 							strokeWidth={2}
@@ -340,7 +340,7 @@ function DashboardView({
 							<HugeiconsIcon
 								icon={SearchIcon}
 								strokeWidth={2}
-								className="absolute left-2.5 top-2.5 size-4 text-slate-400"
+								className="absolute left-2.5 top-2.5 size-4 text-muted-foreground"
 							/>
 							<Input
 								name="search"
@@ -432,7 +432,7 @@ function DashboardView({
 									<Badge variant="warn">{t("dashboard.sent_back_badge")}</Badge>
 								</div>
 								{latest && (
-									<p className="mt-1 text-xs text-slate-600 line-clamp-2">
+									<p className="mt-1 text-xs text-muted-foreground line-clamp-2">
 										{t("dashboard.sent_back_note", {
 											note: latest.note,
 										})}
@@ -543,7 +543,7 @@ function DashboardView({
 									<Badge variant="warn">{t("dashboard.sent_back_badge")}</Badge>
 								</div>
 								{latest && (
-									<p className="mt-1 text-xs text-slate-600 line-clamp-2">
+									<p className="mt-1 text-xs text-muted-foreground line-clamp-2">
 										{t("dashboard.sent_back_note", {
 											note: latest.note,
 										})}

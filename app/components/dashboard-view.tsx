@@ -10,6 +10,7 @@ import { Link, useLocation } from "react-router"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent } from "~/components/ui/card"
+import { EmptyState } from "~/components/ui/empty-state"
 import { Input } from "~/components/ui/input"
 import { Pill } from "~/components/ui/pill"
 import {
@@ -740,9 +741,7 @@ function DashboardView({
 			<Card>
 				<CardContent className="space-y-2 p-3">
 					{docs.length === 0 && (
-						<p className="p-2 text-sm text-muted-foreground">
-							{t("dashboard.no_documents")}
-						</p>
+						<EmptyState>{t("dashboard.no_documents")}</EmptyState>
 					)}
 					{docs.map((doc) => {
 						const overage = hasOverage(doc)

@@ -13,7 +13,7 @@ function Stat({
 		<div
 			data-slot="stat"
 			className={cn(
-				"rounded-xl border border-border bg-card p-4 shadow",
+				"rounded-xl border border-border bg-card p-4 shadow-card",
 				className,
 			)}
 		>

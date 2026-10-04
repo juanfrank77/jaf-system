@@ -145,28 +145,18 @@ All five counts must be 0. If any is non-zero, stop — that data is unrecoverab
 
 ### The finance migration is additive, but it has one operational precondition
 
-Unlike the migration above, the finance ("Arm A") migration does not drop
-anything. It adds `payrollRunId`, `payablesClosedAt`, `contractorAccountId`,
+Unlike the migration above, the finance ("Arm A") migration does not drop anything. It adds `payrollRunId`, `payablesClosedAt`, `contractorAccountId`,
 `contractorAccount`, `grossPayable`, `retentionAmount`, `netPayable` and
 `contractorShareLines` to `jaf_invoice`, and creates the `PayrollRun` and
-`ContractorAccount` tables. It does **not** add `paidAchRef` to `PayrollRun`
-(per 15.2 — the single ACH ref per run is no longer needed). It also does
-not backfill anything — every pre-existing job row comes out of it with
-`payrollRunId`, `payablesClosedAt`, `contractorAccountId` and
+`ContractorAccount` tables. It does **not** add `paidAchRef` to `PayrollRun`. 
+It also does not backfill anything — every pre-existing job row comes out of  it with `payrollRunId`, `payablesClosedAt`, `contractorAccountId` and
 `contractorAccount` as `NULL`.
-<<<<<<< Updated upstream
 
-That is fine for the schema, but it has a consequence you need to act on
-before anyone uses the payroll screen. The payroll sweep has **no date
-floor**: "Generate run" takes every job that was released to finance, isn't
-closed, and isn't already in a run — with no lower bound on *when* it was
-released. On a database with real history that is the whole released
-backlog, not just the jobs that are genuinely outstanding.
 
-So on the first run after this update, jobs that were released to finance
-years ago and were settled by hand in the meantime would be swept too: their
-contractor amounts get frozen onto the row, they get a `payrollRunId`, they
-appear on the run detail screen, and they can then be confirmed as paid in a
+That is fine for the schema, but it has a consequence you need to act on before anyone uses the payroll screen. The payroll sweep has **no date floor**: "Generate run" takes every job that was released to finance, isn't closed, and isn't already in a run — with no lower bound on *when* it was released. On a database with real history that is the whole released backlog, not just the jobs that are genuinely outstanding.
+
+So on the first run after this update, jobs that were released to finance years ago and were settled by hand in the meantime would be swept too: their
+contractor amounts get frozen onto the row, they get a `payrollRunId`, they appear on the run detail screen, and they can then be confirmed as paid in a
 single action.
 
 **Decide what to do with the historical backlog before anyone clicks
@@ -185,69 +175,37 @@ psql "$DATABASE_URL" -c "
     AND \"payrollRunId\" IS NULL;"
 ```
 
-That count slightly over-estimates: the sweep also skips jobs carrying a
-`PBCC_ADVANCE` payment record. It is close enough to decide with.
-
-Then pick one, with us:
-
-	- **Close out the settled history** — set `payablesClosedAt` on the jobs that
-	  were already handled outside this system, so the sweep skips them and picks
-	  up only genuinely-outstanding work. This writes to real job rows, so agree
-	  the exact `WHERE` with us first and take a backup (§10) before running it.
+That count slightly over-estimates: the sweep also skips jobs carrying a `PBCC_ADVANCE` payment record. It is close enough to decide with.
 
 Until that is done: deploy as normal, but don't generate a run.
 
-### The finance migration is additive, but it has one operational precondition
+### Pre/post row counts for the warehouse rename
 
-Unlike the migration above, the finance ("Arm A") migration does not drop
-anything. It adds `payrollRunId`, `payablesClosedAt`, `grossPayable`,
-`retentionAmount`, `netPayable` and `contractorShareLines` to `jaf_invoice`,
-and creates the `PayrollRun` and `ContractorAccount` tables. **It does not
-backfill anything** — every pre-existing job row comes out of it with
-`payrollRunId` and `payablesClosedAt` as `NULL`.
-=======
->>>>>>> Stashed changes
-
-That is fine for the schema, but it has a consequence you need to act on
-before anyone uses the payroll screen. The payroll sweep has **no date
-floor**: "Generate run" takes every job that was released to finance, isn't
-closed, and isn't already in a run — with no lower bound on *when* it was
-released. On a database with real history that is the whole released
-backlog, not just the jobs that are genuinely outstanding.
-
-So on the first run after this update, jobs that were released to finance
-years ago and were settled by hand in the meantime would be swept too: their
-contractor amounts get frozen onto the row, they get a `payrollRunId`, they
-appear on the run detail screen, and they can then be confirmed as paid in a
-single action.
-
-**Decide what to do with the historical backlog before anyone clicks
-"Generate run".** To see the size of it (read-only, safe to run whenever):
+The `20260928005451_warehouse_foundation` migration **renames** `van_movement` to `stock_movement` and backfills `kind` (`serial IS NULL` → `BULK`). It is data-preserving by construction, but it is a rename of a production ledger, so take a backup first (§10) and record these counts before you start:
 
 ```bash
 set -a; source .env; set +a
-psql "$DATABASE_URL" -c "
-  SELECT count(*) AS arm_a_open,
-         min(\"releasedToFinanceAt\") AS oldest_released,
-         max(\"releasedToFinanceAt\") AS newest_released
-  FROM \"jaf_invoice\"
-  WHERE \"status\" NOT IN ('LC_REQUEST_GENERATED', 'CANCELLED')
-    AND \"releasedToFinanceAt\" IS NOT NULL
-    AND \"payablesClosedAt\" IS NULL
-    AND \"payrollRunId\" IS NULL;"
+
+# BEFORE
+psql "$DATABASE_URL" \
+  -c 'SELECT count(*) AS total FROM "van_movement"' \
+  -c 'SELECT count(*) AS serial_null FROM "van_movement" WHERE "serial" IS NULL' \
+  -c 'SELECT count(*) AS null_van FROM "van_movement" WHERE "vanId" IS NULL'   # expect 0
 ```
 
-That count slightly over-estimates: the sweep also skips jobs carrying a
-`PBCC_ADVANCE` payment record. It is close enough to decide with.
+Write the numbers down. After `migrate deploy` (§8 step 4), run:
 
-Then pick one, with us:
+```bash
+# AFTER
+psql "$DATABASE_URL" \
+  -c 'SELECT count(*) AS total FROM "stock_movement"' \
+  -c 'SELECT count(*) AS null_van FROM "stock_movement" WHERE "vanId" IS NULL' \
+  -c 'SELECT count(*) AS bulk FROM "stock_movement" WHERE "kind" = '"'"'BULK'"'"''
+```
 
-	- **Close out the settled history** — set `payablesClosedAt` on the jobs that
-	  were already handled outside this system, so the sweep skips them and picks
-	  up only genuinely-outstanding work. This writes to real job rows, so agree
-	  the exact `WHERE` with us first and take a backup (§10) before running it.
-
-Until that is done: deploy as normal, but don't generate a run.
+- `total` must equal the "before" `total`. A smaller number means rows were lost in the rename — stop and restore from backup.
+- `null_van` must be 0. The migration adds a `CHECK` (`stock_movement_location_ck`) requiring exactly one of `vanId` / `warehouseId` per row, so a non-zero value would have blocked the migration outright; running the query confirms it.
+- `bulk` must equal the "before" `serial_null`. That is the direct check on the migration's backfill step: every accessory (non-serialized) row becomes `BULK`, every serialized row stays `SERIAL`.
 
 Add `SEED_TEMP_PASSWORD` to `.env` (do not pass it inline on the command line — it would persist in shell history and be readable via `ps` for the life of the process):
 
@@ -304,21 +262,8 @@ Once the app is live, most future changes are updates to this same install, not 
    ```
    `migrate deploy` is idempotent and forward-only: it only runs migrations `_prisma_migrations` doesn't already record, and never rolls back. Before running it, check whether the change notes for this update call out anything destructive (a dropped table or column) — if a migration is provably dropping already-empty schema, no extra care is needed; if it might affect real data, verify row counts against this database first, the same way `installer_v3`'s original migration was verified (§7).
 
-<<<<<<< Updated upstream
 
-
-   One migration is additive rather than destructive, but still needs a decision from us before the app is used: the finance migration backfills nothing, so the first payroll run afterwards would sweep the entire historical released backlog, not just outstanding work. See **§7, "The finance migration is additive, but it has one operational precondition"** — resolve it before anyone clicks "Generate run".
-=======
    One migration is additive rather than destructive, but still needs a decision from us before the app is used: the finance migration backfills nothing, so the first payroll run afterwards would sweep the entire historical released backlog, not just outstanding work. See **§7, "The finance migration is additive, but it has one operational precondition"** — resolve it before anyone clicks "Generate run". The read-only backlog-count query, the close-out SQL, and the full step sequence are in `docs/prod-finance-rollout.md` (with `docs/prod-finance-rollout.sql` for review) — both files are deleted once the rollout is confirmed.
->>>>>>> Stashed changes
-
-5. **Rebuild and restart:**
-   ```bash
-   pnpm run build
-   sudo systemctl restart jaf-operations
-   sudo systemctl status jaf-operations   # confirm it came back up clean
-   ```
-<<<<<<< Updated upstream
 
 5. **Rebuild and restart:**
    ```bash
@@ -327,15 +272,8 @@ Once the app is live, most future changes are updates to this same install, not 
    sudo systemctl status jaf-operations   # confirm it came back up clean
    ```
    **Why build first, and why the service is down across the migrate:** the warehouse update carries a `van_movement` → `stock_movement` rename. A rename is not backward-compatible — the currently-running build queries `van_movement`, which stops existing the instant `migrate deploy` commits. Building first means the new binary is ready before the schema moves under the old one; stopping the service means nothing queries the table across the rename. The stop window is seconds (build already done, migrations are three and all three are fast). The same lock also covers the migration's `ADD CONSTRAINT ... CHECK`, which scans the table.
-=======
-   **Why build first, and why the service is down across the migrate:** the warehouse update carries a `van_movement` → `stock_movement` rename. A rename is not backward-compatible — the currently-running build queries `van_movement`, which stops existing the instant `migrate deploy` commits. Building first means the new binary is ready before the schema moves under the old one; stopping the service means nothing queries the table across the rename. The stop window is seconds (build already done, migrations are three and
-all three are fast). The same lock also covers the migration's
-`ADD CONSTRAINT ... CHECK`, which scans the table.
 
-6. **Re-seed** — `pnpm prisma db seed` is **required** for this update, not optional. `ContractorAccount` rows come only from `seedContractorAccounts` (`prisma/seed.ts:491`), and a brigade with no account can never sweep. `pnpm prisma db seed` only sets `SEED_TEMP_PASSWORD` on accounts it *creates*; it never touches an existing account's credential (§7).
->>>>>>> Stashed changes
-
-6. **Re-seed** — `pnpm prisma db seed` is **required** for this update, not optional. `ContractorAccount` rows come only from `seedContractorAccounts` (`prisma/seed.ts:491`), and a brigade with no account can never sweep. `pnpm prisma db seed` only sets `SEED_TEMP_PASSWORD` on accounts it *creates*; it never touches an existing account's credential (§7).
+6. **Re-seed only if there's new seed data to pick up** (a roster addition, new service codes) — it's not a required step for every update. `pnpm prisma db seed` only sets `SEED_TEMP_PASSWORD` on accounts it *creates*; it never touches an existing account's credential (§7).
 
 7. **Spot-check the affected screens** after restart, in both languages if the update touched anything user-facing — switch the language toggle to confirm nothing regressed to English-only or a raw translation key.
 

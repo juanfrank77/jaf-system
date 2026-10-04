@@ -68,17 +68,14 @@ Two rules, in order of how expensive they are to get wrong:
 
 - **Never edit a migration that prod has already applied.** Prod's
   `_prisma_migrations` records a checksum; changing the file makes the chain
-  diverge from the database and forces a destructive reset
-  (`docs/phase2-audit.md`, "Do not edit applied migrations"). The same goes for a
-  migration hand-edited away
-  from Prisma's generated SQL — e.g. `warehouse_foundation` uses
-  `ALTER ... RENAME` so the production `van_movement` ledger survives; a
-  `migrate dev` regeneration would rewrite it to `DROP`/`CREATE` and destroy
-  that data.
+  diverge from the database and forces a destructive reset. The same goes for a
+  migration hand-edited away from Prisma's generated SQL — e.g. 
+  `warehouse_foundation` uses `ALTER ... RENAME` so the production `van_movement` 
+  ledger survives; a `migrate dev` regeneration would rewrite it to 
+  `DROP`/`CREATE` and destroy that data.
 - **Editing or deleting a migration prod has *not* run yet is safe**, and is the
   intended way to keep the history tidy. Squashing two undeployed migrations
   into one is the right move when a second one only adds a column to a table the
   first one created. Check what prod has actually applied before assuming:
-  `git ls-tree origin/master:prisma/migrations` plus the prod
-  `_prisma_migrations` rows.
+  `git ls-tree origin/master:prisma/migrations`.
 

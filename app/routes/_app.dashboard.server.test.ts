@@ -8,7 +8,7 @@ vi.mock("~/lib/db.server", () => ({
 			findUnique: vi.fn(),
 		},
 		jafInvoice: { findMany: vi.fn() },
-		brigade: { findMany: vi.fn() },
+		brigade: { findMany: vi.fn(), count: vi.fn() },
 		preCertSheet: { findMany: vi.fn() },
 		warehouseAssignment: { findFirst: vi.fn(), findMany: vi.fn() },
 		warehouse: { findMany: vi.fn() },
@@ -61,12 +61,13 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 			supervisorAreas: [],
 		} as any)
 		vi.mocked(db.brigade.findMany).mockResolvedValue([])
+		vi.mocked(db.brigade.count).mockResolvedValue(0)
 		vi.mocked(db.$queryRaw).mockResolvedValue([])
 		vi.mocked(db.preCertSheet.findMany).mockResolvedValue([])
 		vi.mocked(isDashboardFiltersEnabled).mockReturnValue(false)
 	})
 
-	it("returns the four queues and no stats", async () => {
+	it("returns the four queues alongside the stat tiles", async () => {
 		vi.mocked(db.jafInvoice.findMany)
 			.mockResolvedValueOnce([]) // jobTypeOptions
 			.mockResolvedValueOnce([]) // docs list
@@ -80,7 +81,7 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 			request: new Request("http://localhost/dashboard"),
 			params: {},
 		} as any)
-		expect(data.stats).toEqual([])
+		expect(data.stats).toHaveLength(14)
 		expect(data.showFilters).toBe(false)
 		expect(data.supervisorQueues!.pendingReview.map((r) => r.id)).toEqual(["p"])
 		expect(data.supervisorQueues!.missingAviso.map((r) => r.id)).toEqual(["m"])

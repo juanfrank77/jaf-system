@@ -392,6 +392,46 @@ describe("POST /docs/:id (action) — supervisor scope", () => {
 	})
 })
 
+describe("POST /docs/:id (action) — Aviso entry", () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+	})
+
+	// The Aviso is captured on the review page (step 7), with its document and
+	// line match. A second writer here could set a number the match never saw.
+	it("no longer writes an Aviso number from the work-order page", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1", role: "SUPERVISOR" },
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			id: "doc-1",
+			controlNumber: "JAF-1001",
+			status: "SUPERVISOR_APPROVED",
+			supervisorId: "sup-1",
+			assignedCrewIds: [],
+			crewAssignmentHistory: [],
+			brigade: null,
+		} as any)
+
+		const form = new FormData()
+		form.set("intent", "edit_aviso")
+		form.set("avisoNumber", "10353961")
+
+		await expect(
+			action({
+				request: new Request("http://localhost/docs/doc-1", {
+					method: "POST",
+					body: form,
+				}),
+				params: { id: "doc-1" },
+			} as any),
+		).rejects.toMatchObject({ status: 302 })
+
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+		expect(db.auditTrail.create).not.toHaveBeenCalled()
+	})
+})
+
 describe("reassignToBrigade", () => {
 	it("reassign switches brigadeId AND replaces assignedCrewIds with the new brigade's members", async () => {
 		const result = await reassignToBrigade({

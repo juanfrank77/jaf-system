@@ -236,6 +236,7 @@
 		"back_to_work_order": "Volver a la orden de trabajo"
 	},
 	"docs_view": {
+		"aviso_pending": "Aún no — se ingresa en el paso del Aviso",
 		"address": "Dirección",
 		"address_corrections": "Correcciones de dirección",
 		"time_on_site": "Tiempo en sitio",
@@ -1033,6 +1034,21 @@
 	},
 	"dashboard": {
 		"title": "Panel",
+		"supervisor_scope_one": "{{areas}} · {{count}} brigada",
+		"supervisor_scope_other": "{{areas}} · {{count}} brigadas",
+		"more_metrics": "Más métricas",
+		"all_work_orders": "Todas las órdenes",
+		"since": {
+			"submitted": "Entregado {{ago}}",
+			"returned": "Devuelto {{ago}}",
+			"approved": "Aprobado {{ago}}"
+		},
+		"ago": {
+			"just_now": "justo ahora",
+			"minutes": "hace {{count}} min",
+			"hours": "hace {{count}} h",
+			"days": "hace {{count}} d"
+		},
 		"no_documents": "Aún no hay documentos.",
 		"queue": {
 			"pending_review": "Pendiente de revisión — brigada entregó",
@@ -1075,6 +1091,8 @@
 		"restock_requests_badge": "Reabastecer",
 		"aviso_number": "Aviso #",
 		"stat": {
+			"missing_aviso": "Falta Aviso",
+			"blocked": "Bloqueado",
 			"open_documents": "Documentos abiertos",
 			"awaiting_warehouse": "Esperando almacén",
 			"awaiting_crew": "Esperando cuadrilla",

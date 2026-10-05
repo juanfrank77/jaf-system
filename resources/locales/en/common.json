@@ -208,7 +208,7 @@
 		"service_codes_label": "Service codes",
 		"aviso_number_label": "Claro Aviso # (if known)",
 		"assigned_crew_label": "Assigned Crew",
-		"estimated_materials_label": "Estimated Materials",
+		"estimated_materials_label": "Materials to prep",
 		"callout_title": "Step 1 · You",
 		"callout_body": "A job came in from Claro. Describe it, pick the service codes, choose a crew. On submit it goes to the warehouse and the crew at the same time.",
 		"work_order_label": "JAF Work Order #",
@@ -220,7 +220,7 @@
 		"flow_prefix": "On submit",
 		"flow_warehouse": "Warehouse — prep",
 		"flow_crew": "Crew — dispatch",
-		"estimated_materials_hint": "Physical materials the warehouse should prep for this job — separate from the service codes above.",
+		"estimated_materials_hint": "Physical materials the warehouse should prep for this job — separate from the service codes above. Search by name or code.",
 		"submit": "Create Work Order",
 		"errors": {
 			"aviso_invalid": "The Aviso number must be exactly 8 digits.",
@@ -1057,6 +1057,16 @@
 			"record_po_first": "Record a PO before generating the final document.",
 			"terminal_status": "This job is no longer editable."
 		}
+	},
+	"material_picker": {
+		"results_count": "{{shown}} of {{total}} materials shown",
+		"search_placeholder": "type a material — \"cable\", \"poste\", \"splice\"…",
+		"no_results": "No materials match.",
+		"col_code": "Code",
+		"col_description": "Material",
+		"col_unit": "Unit",
+		"col_qty": "Qty",
+		"empty": "No materials yet. Add the physical materials the warehouse should prep for this job."
 	},
 	"material_line_items": {
 		"select_placeholder": "Select material...",

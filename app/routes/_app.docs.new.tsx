@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { CrewPicker } from "~/components/crew-picker"
 import { RouteErrorBoundary } from "~/components/error-boundary"
-import { MaterialLineItems } from "~/components/material-line-items"
+import { MaterialPicker } from "~/components/material-picker"
 import { ServicePicker } from "~/components/service-picker"
 import { StepRail } from "~/components/step-rail"
 import { Button } from "~/components/ui/button"
@@ -265,7 +265,7 @@ export default function NewDoc({
 							<Label>{t("docs_new.estimated_materials_label")}</Label>
 							<Hint>{t("docs_new.estimated_materials_hint")}</Hint>
 							<div className="mt-1">
-								<MaterialLineItems serviceCodes={serviceCodes} />
+								<MaterialPicker materials={serviceCodes} />
 							</div>
 						</div>
 						{error?.errorKey && (

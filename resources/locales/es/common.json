@@ -208,7 +208,7 @@
 		"service_codes_label": "Códigos de servicio",
 		"aviso_number_label": "# de aviso Claro (si se conoce)",
 		"assigned_crew_label": "Cuadrilla asignada",
-		"estimated_materials_label": "Materiales estimados",
+		"estimated_materials_label": "Materiales a preparar",
 		"callout_title": "Paso 1 · Usted",
 		"callout_body": "Entró un trabajo de Claro. Descríbalo, elija los códigos de servicio y escoja una brigada. Al enviar, va al almacén y a la brigada a la vez.",
 		"work_order_label": "# de orden de trabajo JAF",
@@ -220,7 +220,7 @@
 		"flow_prefix": "Al enviar",
 		"flow_warehouse": "Almacén — preparar",
 		"flow_crew": "Brigada — despachar",
-		"estimated_materials_hint": "Materiales físicos que el almacén debe preparar para este trabajo — aparte de los códigos de servicio de arriba.",
+		"estimated_materials_hint": "Materiales físicos que el almacén debe preparar para este trabajo — aparte de los códigos de servicio de arriba. Busque por nombre o código.",
 		"submit": "Crear orden de trabajo",
 		"errors": {
 			"aviso_invalid": "El número de Aviso debe tener exactamente 8 dígitos.",
@@ -1057,6 +1057,16 @@
 			"record_po_first": "Registra un PO antes de generar el documento final.",
 			"terminal_status": "Este trabajo ya no es editable."
 		}
+	},
+	"material_picker": {
+		"results_count": "{{shown}} de {{total}} materiales mostrados",
+		"search_placeholder": "escriba un material — \"cable\", \"poste\", \"splice\"…",
+		"no_results": "Ningún material coincide.",
+		"col_code": "Código",
+		"col_description": "Material",
+		"col_unit": "Unidad",
+		"col_qty": "Cant.",
+		"empty": "Aún no hay materiales. Agregue los materiales físicos que el almacén debe preparar para este trabajo."
 	},
 	"material_line_items": {
 		"select_placeholder": "Selecciona un material...",

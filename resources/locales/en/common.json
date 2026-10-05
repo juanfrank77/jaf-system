@@ -188,19 +188,42 @@
 			"rate_limited_other": "Too many login attempts. Try again in {{count}} seconds."
 		}
 	},
+	"crew_picker": {
+		"share": "Share this job with other crews",
+		"single": "Back to one crew",
+		"select_all": "Select all crews",
+		"clear": "Clear",
+		"selected_count_one": "{{count}} crew selected",
+		"selected_count_other": "{{count}} crews selected",
+		"lead": "Lead",
+		"make_lead": "Make lead",
+		"payment_note_title": "Payment goes to the lead brigade only",
+		"payment_note_body": "{{lead}} is the lead. Only the lead is paid through the system. Finance splits shared jobs manually. The other crews can see and work the job."
+	},
 	"docs_new": {
-		"title": "New JAF Invoice",
+		"title": "New Work Order",
 		"job_type_label": "Job Type",
 		"job_address_label": "Job Address (estimated)",
 		"job_description_label": "Job description",
 		"service_codes_label": "Service codes",
 		"aviso_number_label": "Claro Aviso # (if known)",
 		"assigned_crew_label": "Assigned Crew",
-		"select_crew_label": "Select a crew",
-		"select_crew_placeholder": "Choose a crew…",
 		"estimated_materials_label": "Estimated Materials",
-		"submit": "Create Document",
+		"callout_title": "Step 1 · You",
+		"callout_body": "A job came in from Claro. Describe it, pick the service codes, choose a crew. On submit it goes to the warehouse and the crew at the same time.",
+		"work_order_label": "JAF Work Order #",
+		"work_order_auto": "Assigned on create",
+		"work_order_hint": "Assigned automatically. Not the invoice, not the Aviso.",
+		"aviso_hint": "8 digits, e.g. 10353961. If Claro gave you the Aviso with the job, enter it. Otherwise it is entered at step 6.",
+		"job_address_hint": "Estimated — the crew corrects it on site.",
+		"crew_hint": "Only your area’s brigades are listed.",
+		"flow_prefix": "On submit",
+		"flow_warehouse": "Warehouse — prep",
+		"flow_crew": "Crew — dispatch",
+		"estimated_materials_hint": "Physical materials the warehouse should prep for this job — separate from the service codes above.",
+		"submit": "Create Work Order",
 		"errors": {
+			"aviso_invalid": "The Aviso number must be exactly 8 digits.",
 			"invalid_materials": "Invalid materials data",
 			"invalid_service_lines": "Service codes could not be read.",
 			"missing_fields": "Job type, address, and at least one crew member are required",
@@ -212,9 +235,8 @@
 		"submit": "Save Changes",
 		"job_description_label": "Job description",
 		"service_codes_label": "Service codes",
-		"select_crew_label": "Select a crew",
-		"select_crew_placeholder": "Choose a crew…",
 		"errors": {
+			"aviso_invalid": "The Aviso number must be exactly 8 digits.",
 			"invalid_materials": "The materials list could not be read",
 			"invalid_service_lines": "Service codes could not be read.",
 			"missing_fields": "Job type, address, and at least one crew member are required",
@@ -1027,8 +1049,9 @@
 		}
 	},
 	"material_line_items": {
-		"select_placeholder": "Select service code...",
-		"add_service_code": "+ Add Service Code",
+		"select_placeholder": "Select material...",
+		"add_material": "+ Add material",
+		"remove": "Remove material",
 		"more_than_estimated": "more than listed",
 		"added_at_counter": "added at counter"
 	},
@@ -1437,6 +1460,12 @@
 		"owed_back": "Owed back"
 	},
 	"restock": {
+		"col_account": "Acct",
+		"col_qty": "Qty",
+		"col_unit": "Unit",
+		"col_unit_price": "Unit price",
+		"col_line": "Line",
+		"subtotal": "Estimated subtotal (pre-IVU)",
 		"approve": "Approve",
 		"no_pending": "Nothing pending sign-off.",
 		"signoff_heading": "Restocks needing sign-off",

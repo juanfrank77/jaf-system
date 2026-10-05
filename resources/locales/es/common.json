@@ -188,19 +188,42 @@
 			"rate_limited_other": "Demasiados intentos de inicio de sesión. Inténtalo de nuevo en {{count}} segundos."
 		}
 	},
+	"crew_picker": {
+		"share": "Compartir este trabajo con otras brigadas",
+		"single": "Volver a una sola brigada",
+		"select_all": "Seleccionar todas las brigadas",
+		"clear": "Limpiar",
+		"selected_count_one": "{{count}} brigada seleccionada",
+		"selected_count_other": "{{count}} brigadas seleccionadas",
+		"lead": "Líder",
+		"make_lead": "Hacer líder",
+		"payment_note_title": "El pago va solo a la brigada líder",
+		"payment_note_body": "{{lead}} es la líder. Solo la líder recibe pago a través del sistema. Finanzas divide manualmente los trabajos compartidos. Las otras brigadas pueden ver y trabajar la orden."
+	},
 	"docs_new": {
-		"title": "Nueva factura JAF",
+		"title": "Nueva orden de trabajo",
 		"job_type_label": "Tipo de trabajo",
 		"job_address_label": "Dirección del trabajo (estimada)",
 		"job_description_label": "Descripción del trabajo",
 		"service_codes_label": "Códigos de servicio",
 		"aviso_number_label": "# de aviso Claro (si se conoce)",
 		"assigned_crew_label": "Cuadrilla asignada",
-		"select_crew_label": "Selecciona una brigada",
-		"select_crew_placeholder": "Elija una brigada…",
 		"estimated_materials_label": "Materiales estimados",
-		"submit": "Crear documento",
+		"callout_title": "Paso 1 · Usted",
+		"callout_body": "Entró un trabajo de Claro. Descríbalo, elija los códigos de servicio y escoja una brigada. Al enviar, va al almacén y a la brigada a la vez.",
+		"work_order_label": "# de orden de trabajo JAF",
+		"work_order_auto": "Se asigna al crear",
+		"work_order_hint": "Se asigna automáticamente. No es la factura ni el Aviso.",
+		"aviso_hint": "8 dígitos, p. ej. 10353961. Si Claro le dio el Aviso con el trabajo, anótelo. Si no, se anota en el paso 6.",
+		"job_address_hint": "Estimada — la brigada la corrige en sitio.",
+		"crew_hint": "Solo se listan las brigadas de su área.",
+		"flow_prefix": "Al enviar",
+		"flow_warehouse": "Almacén — preparar",
+		"flow_crew": "Brigada — despachar",
+		"estimated_materials_hint": "Materiales físicos que el almacén debe preparar para este trabajo — aparte de los códigos de servicio de arriba.",
+		"submit": "Crear orden de trabajo",
 		"errors": {
+			"aviso_invalid": "El número de Aviso debe tener exactamente 8 dígitos.",
 			"invalid_materials": "Datos de materiales inválidos",
 			"invalid_service_lines": "No se pudieron leer los códigos de servicio.",
 			"missing_fields": "Se requieren tipo de trabajo, dirección y al menos un miembro de la cuadrilla",
@@ -212,9 +235,8 @@
 		"submit": "Guardar cambios",
 		"job_description_label": "Descripción del trabajo",
 		"service_codes_label": "Códigos de servicio",
-		"select_crew_label": "Selecciona una brigada",
-		"select_crew_placeholder": "Elija una brigada…",
 		"errors": {
+			"aviso_invalid": "El número de Aviso debe tener exactamente 8 dígitos.",
 			"invalid_materials": "No se pudo leer la lista de materiales",
 			"invalid_service_lines": "No se pudieron leer los códigos de servicio.",
 			"missing_fields": "Se requieren tipo de trabajo, dirección y al menos un miembro de la cuadrilla",
@@ -1027,8 +1049,9 @@
 		}
 	},
 	"material_line_items": {
-		"select_placeholder": "Selecciona un código de servicio...",
-		"add_service_code": "+ Agregar código de servicio",
+		"select_placeholder": "Selecciona un material...",
+		"add_material": "+ Agregar material",
+		"remove": "Quitar material",
 		"more_than_estimated": "más que lo estimado",
 		"added_at_counter": "agregado en mostrador"
 	},
@@ -1437,6 +1460,12 @@
 		"owed_back": "Pendiente de devolución"
 	},
 	"restock": {
+		"col_account": "Cuenta",
+		"col_qty": "Cant.",
+		"col_unit": "Unidad",
+		"col_unit_price": "Precio unit.",
+		"col_line": "Línea",
+		"subtotal": "Subtotal estimado (antes de IVU)",
 		"approve": "Aprobar",
 		"no_pending": "Nada pendiente de aprobación.",
 		"signoff_heading": "Reabastecimientos pendientes de aprobación",

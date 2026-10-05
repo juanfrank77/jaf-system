@@ -1,14 +1,19 @@
 import type { ParseKeys } from "i18next"
 import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
+import { CrewPicker } from "~/components/crew-picker"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { ServicePicker } from "~/components/service-picker"
+import { StepRail } from "~/components/step-rail"
 import { Button } from "~/components/ui/button"
+import { Card, CardContent } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
+import { PageHeader } from "~/components/ui/page-header"
 import { Textarea } from "~/components/ui/textarea"
 import { generateControlNumber } from "~/lib/control-number.server"
+import { buildCrewAssignment, parseBrigadeIds } from "~/lib/crew-assignment"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
 import { getActiveMaterialCodes } from "~/lib/service-codes.server"
@@ -21,7 +26,7 @@ import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.new"
 
 export const meta: Route.MetaFunction = () => [
-	{ title: "New Document — JAF Ops" },
+	{ title: "New Work Order — JAF Ops" },
 ]
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -56,7 +61,8 @@ export async function action({ request }: Route.ActionArgs) {
 	).trim()
 	const jobDescription =
 		(form.get("jobDescription") as string | null)?.trim() || null
-	const brigadeId = (form.get("brigadeId") as string | null)?.trim() || null
+	const brigadeIds = parseBrigadeIds(form)
+	const avisoNumber = (form.get("avisoNumber") as string | null)?.trim() || null
 	const materialsRaw = (form.get("materials") as string) || "[]"
 
 	let estimatedMaterials: { serviceCodeId: string; qty: number }[] = []
@@ -76,21 +82,29 @@ export async function action({ request }: Route.ActionArgs) {
 		return { errorKey: "docs_new.errors.invalid_service_lines" }
 	}
 
-	if (!jobType || !jobAddressEstimated || !brigadeId) {
+	if (!jobType || !jobAddressEstimated || brigadeIds.length === 0) {
 		return { errorKey: "docs_new.errors.missing_fields" }
 	}
 
-	const brigade = await db.brigade.findUnique({
-		where: { id: brigadeId },
-	})
-	if (!brigade) return { errorKey: "docs_new.errors.brigade_invalid" }
-	if (
-		user.role === "SUPERVISOR" &&
-		!(await isBrigadeInSupervisorScope(db, user.id, brigade))
-	) {
-		return { errorKey: "docs_new.errors.brigade_invalid" }
+	if (avisoNumber && !/^\d{8}$/.test(avisoNumber)) {
+		return { errorKey: "docs_new.errors.aviso_invalid" }
 	}
-	const assignedCrewIds = brigade.memberIds
+
+	const brigades = await Promise.all(
+		brigadeIds.map((id) => db.brigade.findUnique({ where: { id } })),
+	)
+	for (const brigade of brigades) {
+		if (!brigade) return { errorKey: "docs_new.errors.brigade_invalid" }
+		if (
+			user.role === "SUPERVISOR" &&
+			!(await isBrigadeInSupervisorScope(db, user.id, brigade))
+		) {
+			return { errorKey: "docs_new.errors.brigade_invalid" }
+		}
+	}
+	const { brigadeId, assignedCrewIds } = buildCrewAssignment(
+		brigades as NonNullable<(typeof brigades)[number]>[],
+	)
 	const controlNumber = await generateControlNumber()
 	const warehouse = await db.user.findMany({
 		where: { role: "WAREHOUSE", active: true },
@@ -104,19 +118,21 @@ export async function action({ request }: Route.ActionArgs) {
 				jobType,
 				jobAddressEstimated,
 				jobDescription,
+				avisoNumber,
 				estimatedMaterials,
 				serviceLines,
 				brigadeId,
 				assignedCrewIds,
 				supervisorId: user.id,
-				crewAssignmentHistory: JSON.stringify([
+				crewAssignmentHistory: [
 					{
 						userIds: assignedCrewIds,
 						brigadeId,
+						brigadeIds,
 						assignedById: user.id,
 						assignedAt: new Date().toISOString(),
 					},
-				]),
+				],
 			},
 		})
 		await tx.auditTrail.create({
@@ -127,6 +143,7 @@ export async function action({ request }: Route.ActionArgs) {
 				diffJson: {
 					status: { before: null, after: "CREATED" },
 					brigadeId,
+					brigadeIds,
 					serviceLines,
 				},
 			},
@@ -152,80 +169,128 @@ export default function NewDoc({
 	const error = actionData as { errorKey?: ParseKeys } | undefined
 	const { t } = useTranslation()
 	return (
-		<div className="space-y-5">
-			<h1 className="text-xl font-semibold">{t("docs_new.title")}</h1>
-			<Form method="post" className="space-y-4">
-				<div>
-					<Label htmlFor="jobAddressEstimated">
-						{t("docs_new.job_address_label")}
-					</Label>
-					<Input
-						id="jobAddressEstimated"
-						name="jobAddressEstimated"
-						placeholder="Calle X, Barrio Y, Municipio"
-						required
-					/>
-				</div>
-				<div>
-					<Label htmlFor="jobType">{t("docs_new.job_type_label")}</Label>
-					<Input
-						id="jobType"
-						name="jobType"
-						placeholder="Mantenimiento, Instalación..."
-						required
-					/>
-				</div>
-				<div>
-					<Label htmlFor="jobDescription">
-						{t("docs_new.job_description_label")}
-					</Label>
-					<Textarea
-						id="jobDescription"
-						name="jobDescription"
-						rows={2}
-						required
-					/>
-				</div>
-				<div>
-					<Label>{t("docs_new.service_codes_label")}</Label>
-					<ServicePicker />
-				</div>
-				<div>
-					<Label>{t("docs_new.estimated_materials_label")}</Label>
-					<div className="mt-1">
-						<MaterialLineItems serviceCodes={serviceCodes} />
-					</div>
-				</div>
-				<div>
-					<Label htmlFor="brigadeId">{t("docs_new.select_crew_label")}</Label>
-					<select
-						id="brigadeId"
-						name="brigadeId"
-						required
-						defaultValue=""
-						className="mt-1 w-full border rounded-md h-9 px-2 text-sm bg-card"
-					>
-						<option value="" disabled>
-							{t("docs_new.select_crew_placeholder")}
-						</option>
-						{brigades.map((b) => (
-							<option key={b.id} value={b.id}>
-								{b.name}
-								{b.code ? ` · ${b.code}` : ""}
-								{b.area ? ` (${b.area})` : ""}
-							</option>
-						))}
-					</select>
-				</div>
-				{error?.errorKey && (
-					<p className="text-sm text-status-danger">{t(error.errorKey)}</p>
-				)}
-				<Button type="submit" className="w-full">
-					{t("docs_new.submit")}
-				</Button>
+		<div className="space-y-4">
+			<PageHeader title={t("docs_new.title")} />
+			<StepRail stage="INTAKE" />
+			<div className="rounded-xl border border-border bg-card px-3 py-2 text-sm">
+				<span className="font-semibold">{t("docs_new.callout_title")}</span>
+				<span className="ml-2 text-muted-foreground">
+					{t("docs_new.callout_body")}
+				</span>
+			</div>
+			<Form method="post">
+				<Card>
+					<CardContent className="space-y-5">
+						<div className="grid gap-4 md:grid-cols-2">
+							<div>
+								<Label htmlFor="workOrderNumber">
+									{t("docs_new.work_order_label")}
+								</Label>
+								<Input
+									id="workOrderNumber"
+									value={t("docs_new.work_order_auto")}
+									readOnly
+									disabled
+									className="mt-1 font-mono"
+								/>
+								<Hint>{t("docs_new.work_order_hint")}</Hint>
+							</div>
+							<div>
+								<Label htmlFor="avisoNumber">
+									{t("docs_new.aviso_number_label")}
+								</Label>
+								<Input
+									id="avisoNumber"
+									name="avisoNumber"
+									inputMode="numeric"
+									pattern="\d{8}"
+									maxLength={8}
+									placeholder="10353961"
+									className="mt-1 font-mono"
+								/>
+								<Hint>{t("docs_new.aviso_hint")}</Hint>
+							</div>
+						</div>
+						<div className="grid gap-4 md:grid-cols-2">
+							<div>
+								<Label htmlFor="jobType">{t("docs_new.job_type_label")}</Label>
+								<Input
+									id="jobType"
+									name="jobType"
+									placeholder="Mantenimiento, Instalación..."
+									required
+									className="mt-1"
+								/>
+							</div>
+							<div>
+								<Label htmlFor="jobAddressEstimated">
+									{t("docs_new.job_address_label")}
+								</Label>
+								<Input
+									id="jobAddressEstimated"
+									name="jobAddressEstimated"
+									placeholder="Calle X, Barrio Y, Municipio"
+									required
+									className="mt-1"
+								/>
+								<Hint>{t("docs_new.job_address_hint")}</Hint>
+							</div>
+						</div>
+						<div>
+							<Label htmlFor="jobDescription">
+								{t("docs_new.job_description_label")}
+							</Label>
+							<Textarea
+								id="jobDescription"
+								name="jobDescription"
+								rows={2}
+								required
+								className="mt-1"
+							/>
+						</div>
+						<div>
+							<Label>{t("docs_new.assigned_crew_label")}</Label>
+							<div className="mt-1">
+								<CrewPicker brigades={brigades} />
+							</div>
+							<Hint>{t("docs_new.crew_hint")}</Hint>
+						</div>
+						<div>
+							<Label>{t("docs_new.service_codes_label")}</Label>
+							<div className="mt-1">
+								<ServicePicker />
+							</div>
+						</div>
+						<div>
+							<Label>{t("docs_new.estimated_materials_label")}</Label>
+							<Hint>{t("docs_new.estimated_materials_hint")}</Hint>
+							<div className="mt-1">
+								<MaterialLineItems serviceCodes={serviceCodes} />
+							</div>
+						</div>
+						{error?.errorKey && (
+							<p className="text-sm text-status-danger">{t(error.errorKey)}</p>
+						)}
+						<div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+							<span>{t("docs_new.flow_prefix")}:</span>
+							<span className="rounded-md bg-muted px-2.5 py-1">
+								{t("docs_new.flow_warehouse")}
+							</span>
+							<span>+</span>
+							<span className="rounded-md bg-muted px-2.5 py-1">
+								{t("docs_new.flow_crew")}
+							</span>
+						</div>
+						<Button type="submit">{t("docs_new.submit")}</Button>
+					</CardContent>
+				</Card>
 			</Form>
 		</div>
 	)
+}
+
+function Hint({ children }: { children: React.ReactNode }) {
+	return <p className="mt-1 text-xs text-muted-foreground">{children}</p>
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {

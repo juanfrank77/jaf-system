@@ -1,4 +1,3 @@
-import path from "node:path"
 import type { ParseKeys } from "i18next"
 import { type ComponentProps, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -1449,19 +1448,22 @@ export default function ReviewDoc({
 				conditions?: { key: string; ok: boolean }[]
 		  }
 		| undefined
-	const estimated = (doc.estimatedMaterials as unknown as MaterialLine[]) || []
-	const taken = (doc.materialsTaken as unknown as MaterialLine[]) || []
-	const used = (doc.materialsUsed as unknown as MaterialLine[]) || []
+	// Json columns: tolerate null or a malformed non-array value
+	const asLines = (v: unknown) =>
+		Array.isArray(v) ? (v as MaterialLine[]) : []
+	const estimated = asLines(doc.estimatedMaterials)
+	const taken = asLines(doc.materialsTaken)
+	const used = asLines(doc.materialsUsed)
 	const ordered = (doc.serviceLines as ServiceLine[] | null) ?? []
 	const installed = (doc.installedServiceLines as ServiceLine[] | null) ?? []
 	const invoiceLines = (doc.jafInvoiceLines as InvoiceLine[] | null) ?? []
 	const avisoLines = (doc.avisoLines as AvisoLine[] | null) ?? []
 	const precertLines = (sheet?.lines as PreCertLine[] | undefined) ?? undefined
 
-	// Extract basenames for photos in JSX (avoid path module in client bundle)
+	// Basenames for photos; plain string split because `node:path` is not available in the client bundle
 	const photoItems = photos.map((p) => ({
 		id: p.id,
-		basename: path.basename(p.localPath),
+		basename: p.localPath.split(/[\\/]/).pop() ?? p.localPath,
 		tag: p.tag,
 		takenAt: String(p.takenAt),
 	}))

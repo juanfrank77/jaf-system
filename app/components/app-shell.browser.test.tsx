@@ -72,7 +72,7 @@ describe("AppShell", () => {
 		expect(screen.getByText("dashboard body")).toBeInTheDocument()
 	})
 
-	it("shows + New Document for SUPERVISOR but not Admin links", async ({
+	it("shows + Work Order for SUPERVISOR but not Admin links", async ({
 		renderStub,
 	}) => {
 		await renderStub({
@@ -91,7 +91,7 @@ describe("AppShell", () => {
 			],
 		})
 		expect(
-			screen.getByRole("link", { name: "+ New Document", hidden: true }),
+			screen.getByRole("link", { name: "+ Work Order", hidden: true }),
 		).toBeInTheDocument()
 		expect(
 			screen.queryByRole("link", { name: "Admin Settings", hidden: true }),
@@ -121,7 +121,7 @@ describe("AppShell", () => {
 			screen.getByRole("link", { name: "Dashboard", hidden: true }),
 		).toBeInTheDocument()
 		expect(
-			screen.queryByRole("link", { name: "+ New Document", hidden: true }),
+			screen.queryByRole("link", { name: "+ Work Order", hidden: true }),
 		).not.toBeInTheDocument()
 		expect(
 			screen.queryByRole("link", { name: "Receivables", hidden: true }),
@@ -199,7 +199,7 @@ describe("AppShell", () => {
 			screen.getByRole("link", { name: "Dashboard", hidden: true }),
 		).toBeInTheDocument()
 		expect(
-			screen.getByRole("link", { name: "+ New Document", hidden: true }),
+			screen.getByRole("link", { name: "+ Work Order", hidden: true }),
 		).toBeInTheDocument()
 		expect(
 			screen.getByRole("link", { name: "Finance Pipeline", hidden: true }),
@@ -521,7 +521,7 @@ describe("AppShell", () => {
 			within(drawer).getByRole("link", { name: "Dashboard" }),
 		).toBeInTheDocument()
 		expect(
-			within(drawer).getByRole("link", { name: "+ New Document" }),
+			within(drawer).getByRole("link", { name: "+ Work Order" }),
 		).toBeInTheDocument()
 		expect(
 			within(drawer).queryByRole("link", { name: "Admin Settings" }),

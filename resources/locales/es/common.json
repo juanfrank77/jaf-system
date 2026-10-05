@@ -128,7 +128,7 @@
 	"app_shell": {
 		"nav": {
 			"dashboard": "Panel",
-			"new_document": "+ Nuevo documento",
+			"new_document": "+ Orden de trabajo",
 			"receivables": "Pipeline de Finanzas",
 			"finance_queue": "Solicitudes de pago",
 			"admin_settings": "Configuración de administrador",

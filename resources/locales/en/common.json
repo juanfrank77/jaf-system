@@ -510,7 +510,6 @@
 		},
 		"approve_job_heading": "Approve Job",
 		"aviso_number_confirm_label": "Claro Aviso # (confirm or add)",
-		"notes_for_finance_label": "Notes for Lissette",
 		"approve": "Approve",
 		"send_to_finance_heading": "Send to Finance",
 		"send_to_finance_hint": "This will notify the Finance team to begin verification and billing.",
@@ -527,6 +526,7 @@
 		"send_back_heading": "Send Back to Crew",
 		"send_back_hint": "Add a note explaining what the crew needs to fix. The job returns to the crew's field queue.",
 		"send_back": "Send Back",
+		"send_back_cancel": "Cancel",
 		"errors": {
 			"pdf_required": "Please select the Claro PDF to upload",
 			"send_back_note_required": "A note explaining the send-back is required.",

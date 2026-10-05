@@ -510,7 +510,6 @@
 		},
 		"approve_job_heading": "Aprobar trabajo",
 		"aviso_number_confirm_label": "# de aviso Claro (confirmar o agregar)",
-		"notes_for_finance_label": "Notas para Lissette",
 		"approve": "Aprobar",
 		"send_to_finance_heading": "Enviar a Finanzas",
 		"send_to_finance_hint": "Esto notificará al equipo de Finanzas para comenzar la verificación y facturación.",
@@ -527,6 +526,7 @@
 		"send_back_heading": "Devolver a la cuadrilla",
 		"send_back_hint": "Agrega una nota explicando qué debe corregir la cuadrilla. El trabajo regresa a la cola de campo de la cuadrilla.",
 		"send_back": "Devolver",
+		"send_back_cancel": "Cancelar",
 		"errors": {
 			"pdf_required": "Por favor selecciona el PDF de Claro para cargar",
 			"send_back_note_required": "Se requiere una nota explicando la devolución.",

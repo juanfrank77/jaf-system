@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form } from "react-router"
 import { MaterialLineItems } from "~/components/material-line-items"
@@ -188,7 +189,7 @@ export function OrderedVsInstalledCard({
 	)
 }
 
-/** Approve (when FIELD_UPDATED) and send back (note required). */
+/** Approve (when FIELD_UPDATED) and send back (note required, revealed on demand). */
 export function ReviewActionsCard({
 	canApprove,
 	canSendBack,
@@ -197,42 +198,59 @@ export function ReviewActionsCard({
 	canSendBack: boolean
 }) {
 	const { t } = useTranslation()
+	const [sendingBack, setSendingBack] = useState(false)
 	if (!canApprove && !canSendBack) return null
 	return (
 		<Card>
 			<CardContent className="space-y-4">
-				{canApprove && (
-					<Form method="post" className="space-y-3">
-						<div>
-							<Label htmlFor="claroNotes">
-								{t("docs_review.notes_for_finance_label")}
-							</Label>
-							<Textarea id="claroNotes" name="claroNotes" rows={2} />
-						</div>
-						<input type="hidden" name="intent" value="approve" />
-						<Button type="submit" className="w-full">
-							✓ {t("docs_review.approve_field_work")}
+				<div className="flex flex-wrap gap-3">
+					{canApprove && (
+						<Form method="post" className="flex-[2]">
+							<input type="hidden" name="intent" value="approve" />
+							<Button type="submit" className="w-full">
+								✓ {t("docs_review.approve_field_work")}
+							</Button>
+						</Form>
+					)}
+					{canSendBack && !sendingBack && (
+						<Button
+							type="button"
+							variant="outline"
+							className="flex-1"
+							onClick={() => setSendingBack(true)}
+						>
+							↩ {t("docs_review.send_back_heading")}
 						</Button>
-					</Form>
-				)}
-				{canSendBack && (
-					<Form
-						method="post"
-						className={
-							canApprove ? "space-y-2 border-t border-border pt-4" : "space-y-2"
-						}
-					>
+					)}
+				</div>
+				{canSendBack && sendingBack && (
+					<Form method="post" className="space-y-2 border-t border-border pt-4">
 						<Label htmlFor="sendBackNote">
 							{t("docs_review.send_back_heading")}
 						</Label>
-						<Textarea id="sendBackNote" name="note" rows={2} required />
+						<Textarea
+							id="sendBackNote"
+							name="note"
+							rows={2}
+							required
+							autoFocus
+						/>
 						<p className="text-xs text-muted-foreground">
 							{t("docs_review.send_back_hint")}
 						</p>
 						<input type="hidden" name="intent" value="send_back" />
-						<Button type="submit" variant="outline">
-							↩ {t("docs_review.send_back")}
-						</Button>
+						<div className="flex gap-2">
+							<Button type="submit" variant="outline">
+								↩ {t("docs_review.send_back")}
+							</Button>
+							<Button
+								type="button"
+								variant="ghost"
+								onClick={() => setSendingBack(false)}
+							>
+								{t("docs_review.send_back_cancel")}
+							</Button>
+						</div>
 					</Form>
 				)}
 			</CardContent>

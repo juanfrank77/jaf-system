@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it, vi } from "vitest"
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 import { db } from "~/lib/db.server"
 
 // Integration test against the real (test) Postgres DB — the dashboard's
@@ -225,6 +225,36 @@ describe("dashboard supervisor queues — area scoping (integration)", () => {
 				},
 			})
 		).id
+	})
+
+	// Everything this suite creates is tagged with `suffix`; delete it so the
+	// shared test DB does not accumulate fixtures across runs. FK order:
+	// docs → brigades → users.
+	afterAll(async () => {
+		const docs = await db.jafInvoice.findMany({
+			where: {
+				controlNumber: { endsWith: `-${suffix}`, startsWith: "DASH-SCOPE-" },
+			},
+			select: { id: true },
+		})
+		const docIds = docs.map((d) => d.id)
+		await db.$transaction([
+			db.auditTrail.deleteMany({ where: { docId: { in: docIds } } }),
+			db.jafInvoice.deleteMany({ where: { id: { in: docIds } } }),
+			db.brigade.deleteMany({
+				where: {
+					OR: [
+						{ name: `Brigade-SUR-${suffix}` },
+						{ name: `Brigade-NORTE-${suffix}` },
+					],
+				},
+			}),
+			db.user.deleteMany({
+				where: {
+					email: { startsWith: "dash-scope-", endsWith: `-${suffix}@x.com` },
+				},
+			}),
+		])
 	})
 
 	it("includes docs owned directly and docs in a supervised (non-owned) brigade area, excludes out-of-area docs, in pendingReview", async () => {

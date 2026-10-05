@@ -559,8 +559,16 @@
 		"materials_detail": "Materials: estimated, taken, used",
 		"approve_field_work": "Approve field work",
 		"submitted_by": "submitted by {{name}}",
-		"callout_approve_title": "Step 4 of 8 · You",
-		"callout_approve_body": "Check the corrected address, the photos and the installed quantities. Approve, or send back with a note."
+		"callout_approve_title": "Step {{n}} of {{total}} · You",
+		"callout_approve_body": "Check the corrected address, the photos and the installed quantities. Approve, or send back with a note.",
+		"callout_invoice_title": "Step {{n}} of {{total}} · You",
+		"callout_invoice_body": "The invoice is built from what was installed, at catalog prices. Take this number into Claro's system to create the Aviso, then come back.",
+		"callout_aviso_title": "Step {{n}} of {{total}} · You",
+		"callout_aviso_body": "Enter the Aviso number, upload the document. The system compares it line by line with the invoice.",
+		"callout_precert_title": "Step {{n}} of {{total}} · You + the contractor",
+		"callout_precert_body": "Every field below already exists in the system. Sign, get the sub-contractor's signature, and release.",
+		"callout_release_title": "Step {{n}} of {{total}} · You",
+		"callout_release_body": "Seven conditions, checked by the system. When they are all green, one click sends the packet to Lissette."
 	},
 	"step_rail": {
 		"aria": "Work order progress",

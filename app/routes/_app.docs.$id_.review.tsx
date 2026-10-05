@@ -53,6 +53,7 @@ import {
 	panelForStep,
 	resolveStepView,
 } from "~/lib/supervisor-stage"
+	SUPERVISOR_STAGES,
 import {
 	getAvisoAmountTolerance,
 	getIvuRate,
@@ -1236,6 +1237,20 @@ function PreCertPanel({
 							name="reason"
 							placeholder={t("precert.reason_placeholder")}
 							className="flex-1 min-w-[10rem]"
+	// The one-line "Step N of 9" callout under the rail. Approve only shows while
+	// it is the live step; later screens show it whenever they can be acted on.
+	const calloutKey =
+		view === "APPROVE"
+			? stage === "APPROVE"
+				? "approve"
+				: null
+			: interactive &&
+					(view === "INVOICE" ||
+						view === "AVISO" ||
+						view === "PRECERT" ||
+						view === "RELEASE")
+				? (view.toLowerCase() as "invoice" | "aviso" | "precert" | "release")
+				: null
 							required
 						/>
 						<Button type="submit" size="sm" variant="outline">
@@ -1501,10 +1516,15 @@ export default function ReviewDoc({
 					</Link>
 				</Pill>
 			)}
-			{stage === "APPROVE" && view === "APPROVE" && (
+			{calloutKey && (
 				<Pill variant="info">
-					<b>{t("docs_review.callout_approve_title")}</b>{" "}
-					{t("docs_review.callout_approve_body")}
+					<b>
+						{t(`docs_review.callout_${calloutKey}_title`, {
+							n: SUPERVISOR_STAGES.indexOf(view) + 1,
+							total: SUPERVISOR_STAGES.length,
+						})}
+					</b>{" "}
+					{t(`docs_review.callout_${calloutKey}_body`)}
 				</Pill>
 			)}
 

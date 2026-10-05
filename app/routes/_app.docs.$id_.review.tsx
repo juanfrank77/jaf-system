@@ -2,6 +2,7 @@ import type { ParseKeys } from "i18next"
 import { type ComponentProps, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, Link, redirect } from "react-router"
+import { AvisoMatchCard } from "~/components/aviso-match"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import type { MaterialLineItems } from "~/components/material-line-items"
 import {
@@ -52,8 +53,8 @@ import {
 	evaluateReleaseGate,
 	panelForStep,
 	resolveStepView,
-} from "~/lib/supervisor-stage"
 	SUPERVISOR_STAGES,
+} from "~/lib/supervisor-stage"
 import {
 	getAvisoAmountTolerance,
 	getIvuRate,
@@ -64,13 +65,6 @@ import type { PreCertSheet, Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id_.review"
 
 type MaterialLine = { serviceCodeId: string; qty: number }
-
-type AvisoRow = {
-	serviceCodeId: string
-	claroCode: string
-	qty: number
-	unitPrice: number
-}
 
 type SendBackHistoryEntry = {
 	fromStatus: string
@@ -912,197 +906,52 @@ const CONDITION_KEYS = {
 	contractor_code: "release.condition.contractor_code",
 } as const
 
-function AvisoCaptureForm({
-	doc,
-	invoiceLines,
-	error,
-	tolerance,
-	readOnly = false,
-}: {
-	doc: Route.ComponentProps["loaderData"]["doc"]
-	invoiceLines: InvoiceLine[]
-	readOnly?: boolean
-	error: {
-		errorKey?: string
-		errorMessage?: string
-		invoiceTotal?: number
-		avisoTotal?: number
-		difference?: number
-		tolerance?: number
-	} | null
-	tolerance: number
-}) {
-	const { t } = useTranslation()
-	const stored = (doc.avisoLines as AvisoLine[] | null) ?? []
-	const [rows, setRows] = useState<AvisoRow[]>(
-		invoiceLines.map((l) => ({
-			serviceCodeId: l.serviceCodeId,
-			claroCode: l.claroCode,
-			qty:
-				stored.find((s) => s.serviceCodeId === l.serviceCodeId)?.qty ?? l.qty,
-			unitPrice:
-				stored.find((s) => s.serviceCodeId === l.serviceCodeId)?.unitPrice ??
-				l.unitPrice,
-		})),
-	)
-	const locked = !!doc.releasedToFinanceAt
-	return (
-		<Form method="post" encType="multipart/form-data" className="space-y-3">
-			<fieldset disabled={readOnly} className="space-y-3 min-w-0">
-				<input type="hidden" name="intent" value="save_aviso" />
-				<div className="flex flex-wrap items-end gap-3">
-					<div>
-						<Label htmlFor="avisoNumber" className="text-xs">
-							{t("docs_review.aviso_number")}
-						</Label>
-						<Input
-							id="avisoNumber"
-							name="avisoNumber"
-							defaultValue={doc.avisoNumber ?? ""}
-							className="w-40"
-						/>
-					</div>
-					<div>
-						<Label htmlFor="avisoPdf" className="text-xs">
-							{t("docs_review_steps.aviso_pdf_label")}
-						</Label>
-						<Input
-							id="avisoPdf"
-							type="file"
-							name="avisoPdf"
-							accept="application/pdf"
-							className="w-64"
-						/>
-					</div>
-					{doc.avisoDocPath && (
-						<a
-							href={`/files/aviso-docs/${doc.id}-aviso.pdf`}
-							className="text-accent-text underline text-sm"
-						>
-							{t("docs_review.download")}
-						</a>
-					)}
-				</div>
-				<table className="w-full text-sm">
-					<thead>
-						<tr className="text-left text-xs text-muted-foreground border-b">
-							<th className="py-1">{t("docs_review.table.code")}</th>
-							<th className="py-1">{t("docs_review.table.description")}</th>
-							<th className="py-1 text-right">
-								{t("docs_review_steps.charged_qty")}
-							</th>
-							<th className="py-1 text-right">
-								{t("docs_review_steps.aviso_unit_price")}
-							</th>
-						</tr>
-					</thead>
-					<tbody>
-						{rows.map((r, i) => (
-							<tr key={r.serviceCodeId} className="border-b last:border-0">
-								<td className="py-1 font-mono text-xs">{r.claroCode}</td>
-								<td className="py-1">
-									{
-										invoiceLines.find(
-											(l) => l.serviceCodeId === r.serviceCodeId,
-										)?.name
-									}
-								</td>
-								<td className="py-1 text-right">
-									<Input
-										type="number"
-										min={0}
-										value={r.qty}
-										className="w-20 ml-auto"
-										onChange={(e) =>
-											setRows(
-												rows.map((row, j) =>
-													j === i
-														? {
-																...row,
-																qty: Number.parseInt(e.target.value, 10) || 0,
-															}
-														: row,
-												),
-											)
-										}
-									/>
-								</td>
-								<td className="py-1 text-right">
-									<Input
-										type="number"
-										step="0.0001"
-										min={0}
-										value={r.unitPrice}
-										className="w-28 ml-auto"
-										onChange={(e) =>
-											setRows(
-												rows.map((row, j) =>
-													j === i
-														? { ...row, unitPrice: Number(e.target.value) || 0 }
-														: row,
-												),
-											)
-										}
-									/>
-								</td>
-							</tr>
-						))}
-					</tbody>
-				</table>
-				<input type="hidden" name="avisoLines" value={JSON.stringify(rows)} />
-				<div>
-					<Label htmlFor="lineNote" className="text-xs">
-						{t("docs_review_steps.line_note_hint")}
-					</Label>
-					<Textarea id="lineNote" name="lineNote" rows={2} className="mt-1" />
-				</div>
-				{error?.errorKey === "docs_review.errors.aviso_amount_mismatch" ? (
-					<p className="text-sm text-status-danger">
-						{t("docs_review.errors.aviso_amount_mismatch", {
-							avisoTotal: formatMoney(error.avisoTotal ?? 0),
-							invoiceTotal: formatMoney(error.invoiceTotal ?? 0),
-							difference: formatMoney(error.difference ?? 0),
-							tolerance: formatMoney(error.tolerance ?? tolerance),
-						})}
-					</p>
-				) : error?.errorMessage ? (
-					<p className="text-sm text-status-danger">{error.errorMessage}</p>
-				) : error?.errorKey ? (
-					<p className="text-sm text-status-danger">
-						{t(error.errorKey as ParseKeys)}
-					</p>
-				) : null}
-				{!readOnly && (
-					<Button type="submit" disabled={locked}>
-						{t("docs_review_steps.save_aviso")}
-					</Button>
-				)}
-			</fieldset>
-		</Form>
-	)
-}
-
 function SignatureBlock({
 	intent,
 	labelKey,
 	children,
+	signed,
+	optional = false,
 	encType,
 	readOnly = false,
 }: {
 	intent: string
 	labelKey: ParseKeys
-	children: React.ReactNode
+	/** Fields above the pad (name, contractor code, scan upload). */
+	children?: React.ReactNode
+	/** Present once this party has signed: replaces the form with a summary. */
+	signed?: React.ReactNode
+	optional?: boolean
 	encType?: "multipart/form-data"
 	readOnly?: boolean
 }) {
 	const { t } = useTranslation()
 	const padRef = useRef<SignaturePadHandle>(null)
 	const [cleared, setCleared] = useState(0)
-	if (readOnly) {
+	const header = (
+		<div className="flex items-start justify-between gap-2">
+			<p className="text-sm font-medium">{t(labelKey)}</p>
+			{signed ? (
+				<span className="shrink-0 rounded-full bg-status-ok-soft px-2 py-0.5 text-xs font-medium text-status-ok">
+					✓ {t("precert.signed")}
+				</span>
+			) : (
+				<span className="text-xs text-muted-foreground">
+					{optional ? t("precert.optional") : t("precert.required")}
+				</span>
+			)}
+		</div>
+	)
+	const box = "flex-1 min-w-[14rem] border rounded-lg p-3 space-y-3"
+	if (signed || readOnly) {
 		return (
-			<div className="flex-1 min-w-[12rem] border rounded-lg p-3 space-y-2">
-				<p className="text-xs font-medium">{t(labelKey)}</p>
-				{children}
+			<div className={box}>
+				{header}
+				{signed ?? (
+					<p className="text-xs text-muted-foreground">
+						{t("precert.not_captured")}
+					</p>
+				)}
 			</div>
 		)
 	}
@@ -1110,39 +959,51 @@ function SignatureBlock({
 		<Form
 			method="post"
 			encType={encType}
-			className="flex-1 min-w-[12rem] border rounded-lg p-3 space-y-2"
+			className={box}
 			onSubmit={(e) => {
 				const pad = padRef.current
-				const input = e.currentTarget.elements.namedItem(
+				const form = e.currentTarget
+				const input = form.elements.namedItem(
 					"signature",
 				) as HTMLInputElement | null
-				if (!pad || pad.isEmpty()) {
+				const scan = form.elements.namedItem("scan") as HTMLInputElement | null
+				const hasScan = !!scan?.files?.length
+				if ((!pad || pad.isEmpty()) && !hasScan) {
 					e.preventDefault()
-				} else if (input) {
+				} else if (input && pad && !pad.isEmpty()) {
 					input.value = pad.toDataURL()
 				}
 			}}
 		>
 			<input type="hidden" name="intent" value={intent} />
-			<p className="text-xs font-medium">{t(labelKey)}</p>
+			<input type="hidden" name="signature" />
+			{header}
 			{children}
-			<SignaturePad
-				key={cleared}
-				ref={padRef}
-				width={280}
-				height={90}
-				className="w-full border rounded bg-card"
-			/>
-			<button
-				type="button"
-				className="text-xs text-muted-foreground hover:text-foreground"
-				onClick={() => setCleared((c) => c + 1)}
-			>
-				{t("precert.clear_signature")}
-			</button>
-			<Button type="submit" size="sm" variant="outline" className="w-full">
-				{t("precert.sign")}
-			</Button>
+			<div className="space-y-1">
+				<SignaturePad
+					key={cleared}
+					ref={padRef}
+					width={280}
+					height={90}
+					className="w-full border rounded bg-card"
+				/>
+				<p className="text-xs text-muted-foreground">
+					{t("precert.sign_here")}
+				</p>
+			</div>
+			<div className="flex items-center gap-2">
+				<Button
+					type="button"
+					size="sm"
+					variant="ghost"
+					onClick={() => setCleared((c) => c + 1)}
+				>
+					{t("precert.clear_signature")}
+				</Button>
+				<Button type="submit" size="sm" className="ml-auto">
+					{t("precert.sign")}
+				</Button>
+			</div>
 		</Form>
 	)
 }
@@ -1189,8 +1050,8 @@ function PreCertPanel({
 						<th className="py-1 text-right">
 							{t("service_picker.col_installed")}
 						</th>
-						<th className="py-1 text-right">Cant.</th>
-						<th className="py-1 text-right">Costo</th>
+						<th className="py-1 text-right">{t("precert.col_qty")}</th>
+						<th className="py-1 text-right">{t("precert.col_cost")}</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -1213,7 +1074,7 @@ function PreCertPanel({
 				</tbody>
 			</table>
 			<p className="text-sm text-right font-medium">
-				TOTAL {formatMoney(sheet?.total ?? 0)}
+				{t("precert.total")} {formatMoney(sheet?.total ?? 0)}
 			</p>
 			{!readOnly &&
 				!locked &&
@@ -1237,20 +1098,6 @@ function PreCertPanel({
 							name="reason"
 							placeholder={t("precert.reason_placeholder")}
 							className="flex-1 min-w-[10rem]"
-	// The one-line "Step N of 9" callout under the rail. Approve only shows while
-	// it is the live step; later screens show it whenever they can be acted on.
-	const calloutKey =
-		view === "APPROVE"
-			? stage === "APPROVE"
-				? "approve"
-				: null
-			: interactive &&
-					(view === "INVOICE" ||
-						view === "AVISO" ||
-						view === "PRECERT" ||
-						view === "RELEASE")
-				? (view.toLowerCase() as "invoice" | "aviso" | "precert" | "release")
-				: null
 							required
 						/>
 						<Button type="submit" size="sm" variant="outline">
@@ -1258,97 +1105,118 @@ function PreCertPanel({
 						</Button>
 					</Form>
 				))}
+			<div className="space-y-2 pt-1">
+				<h3 className="text-sm font-medium">{t("precert.signatures")}</h3>
+				{!readOnly && (
+					<p className="text-xs text-muted-foreground">
+						{t("precert.signatures_hint")}
+					</p>
+				)}
+			</div>
 			<div className="flex flex-wrap gap-3">
 				<SignatureBlock
 					intent="sign_precert_supervisor"
 					labelKey="precert.sig_supervisor"
 					readOnly={readOnly}
-				>
-					{sheet?.sigSupervisorName ? (
-						<div className="space-y-1">
-							{sheet.sigSupervisorImage && (
-								<img src={sheet.sigSupervisorImage} alt="" className="h-12" />
-							)}
-							<p className="text-xs">{sheet.sigSupervisorName}</p>
-							<p className="text-xs text-muted-foreground">
-								{sheet.sigSupervisorAt
-									? new Date(sheet.sigSupervisorAt).toLocaleDateString()
-									: ""}
-							</p>
-						</div>
-					) : readOnly ? (
-						notCaptured
-					) : null}
-				</SignatureBlock>
+					signed={
+						sheet?.sigSupervisorName ? (
+							<div className="space-y-1">
+								{sheet.sigSupervisorImage && (
+									<img
+										src={sheet.sigSupervisorImage}
+										alt=""
+										className="h-12 rounded border bg-white"
+									/>
+								)}
+								<p className="text-sm">{sheet.sigSupervisorName}</p>
+								<p className="text-xs text-muted-foreground">
+									{sheet.sigSupervisorAt
+										? new Date(sheet.sigSupervisorAt).toLocaleDateString()
+										: ""}
+								</p>
+							</div>
+						) : undefined
+					}
+				/>
 				<SignatureBlock
 					intent="sign_precert_subcontractor"
 					labelKey="precert.sig_subcontractor"
 					readOnly={readOnly}
+					signed={
+						sheet?.sigSubcontractorName ? (
+							<div className="space-y-1">
+								{sheet.sigSubcontractorImage && (
+									<img
+										src={sheet.sigSubcontractorImage}
+										alt=""
+										className="h-12 rounded border bg-white"
+									/>
+								)}
+								<p className="text-sm">
+									{sheet.sigSubcontractorName} · {sheet.sigSubcontractorCode}
+								</p>
+							</div>
+						) : undefined
+					}
 				>
-					{sheet?.sigSubcontractorName ? (
-						<div className="space-y-1">
-							{sheet.sigSubcontractorImage && (
-								<img
-									src={sheet.sigSubcontractorImage}
-									alt=""
-									className="h-12"
-								/>
-							)}
-							<p className="text-xs">
-								{sheet.sigSubcontractorName} · {sheet.sigSubcontractorCode}
-							</p>
-						</div>
-					) : readOnly ? (
-						notCaptured
-					) : (
-						<>
-							<Input
-								name="signerName"
-								placeholder={t("precert.signer_name")}
-								defaultValue={brigade?.leadName ?? ""}
-							/>
-							{!brigade?.code && (
-								<Input
-									name="contractorCode"
-									placeholder={t("precert.contractor_code")}
-									required
-								/>
-							)}
-						</>
+					<Input
+						name="signerName"
+						aria-label={t("precert.signer_name")}
+						placeholder={t("precert.signer_name")}
+						defaultValue={brigade?.leadName ?? ""}
+					/>
+					{!brigade?.code && (
+						<Input
+							name="contractorCode"
+							placeholder={t("precert.contractor_code")}
+							required
+						/>
 					)}
 				</SignatureBlock>
 				<SignatureBlock
 					intent="sign_precert_claro"
 					labelKey="precert.sig_claro"
 					encType="multipart/form-data"
+					optional
 					readOnly={readOnly}
+					signed={
+						sheet?.sigClaroAt ? (
+							<div className="space-y-1">
+								{sheet.sigClaroImage && (
+									<img
+										src={sheet.sigClaroImage}
+										alt=""
+										className="h-12 rounded border bg-white"
+									/>
+								)}
+								{sheet.sigClaroScanPath && (
+									<a
+										href={`/files/precert/${doc.id}-claro-scan.jpg`}
+										className="text-accent-text underline text-xs"
+									>
+										{t("precert.download")}
+									</a>
+								)}
+								<p className="text-sm">{sheet.sigClaroName}</p>
+							</div>
+						) : undefined
+					}
 				>
 					<p className="text-xs text-muted-foreground">
 						{t("precert.claro_optional")}
 					</p>
-					{sheet?.sigClaroAt ? (
-						<div className="space-y-1">
-							{sheet.sigClaroImage && (
-								<img src={sheet.sigClaroImage} alt="" className="h-12" />
-							)}
-							{sheet.sigClaroScanPath && (
-								<a
-									href={`/files/precert/${doc.id}-claro-scan.jpg`}
-									className="text-accent-text underline text-xs"
-								>
-									{t("precert.download")}
-								</a>
-							)}
-							<p className="text-xs">{sheet.sigClaroName}</p>
-						</div>
-					) : readOnly ? (
-						notCaptured
-					) : (
-						<>
-							<Input name="signerName" placeholder={t("precert.signer_name")} />
-							<input type="file" name="scan" accept="image/*,application/pdf" />
-						</>
-					)}
+					<Input
+						name="signerName"
+						aria-label={t("precert.signer_name")}
+						placeholder={t("precert.signer_name")}
+					/>
+					<Input
+						type="file"
+						name="scan"
+						accept="image/*,application/pdf"
+						aria-label={t("precert.upload_scan")}
+						className="h-auto py-1.5 text-xs"
+					/>
 				</SignatureBlock>
 			</div>
 			{error?.errorKey ? (
@@ -1359,75 +1227,35 @@ function PreCertPanel({
 				<p className="text-sm text-status-danger">{error.errorMessage}</p>
 			) : null}
 			{!readOnly && !doc.releasedToFinanceAt && (
-				<Form method="post" className="pt-1">
-					<input type="hidden" name="intent" value="generate_precert" />
-					<Button type="submit" variant="outline" size="sm">
-						{t("precert.regenerate")}
-					</Button>
-					<p className="text-xs text-muted-foreground mt-1">
-						{t("precert.regenerate_hint")}
+				<div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+					<Form
+						method="post"
+						onSubmit={(e) => {
+							if (locked && !window.confirm(t("precert.regenerate_confirm")))
+								e.preventDefault()
+						}}
+					>
+						<input type="hidden" name="intent" value="generate_precert" />
+						<Button type="submit" variant="ghost" size="sm">
+							{t("precert.regenerate")}
+						</Button>
+						<p className="text-xs text-muted-foreground">
+							{t("precert.regenerate_hint")}
+						</p>
+					</Form>
+					<p className="max-w-xs text-right text-xs text-muted-foreground">
+						{t("precert.continue_hint")}
 					</p>
-				</Form>
+				</div>
+			)}
+			{readOnly && sheet?.sigSupervisorAt && sheet?.sigSubcontractorAt && (
+				<div className="flex justify-end border-t pt-3">
+					<Link to="?step=RELEASE" className={buttonVariants({})}>
+						{t("precert.continue_release")}
+					</Link>
+				</div>
 			)}
 		</div>
-	)
-}
-
-function FourColumnTable({
-	ordered,
-	installed,
-	certified,
-	charged,
-}: {
-	ordered: ServiceLine[]
-	installed: ServiceLine[]
-	certified: PreCertLine[] | undefined
-	charged: AvisoLine[] | null
-}) {
-	const { t } = useTranslation()
-	return (
-		<table className="w-full text-sm">
-			<thead>
-				<tr className="text-left text-xs text-muted-foreground border-b">
-					<th className="py-1">{t("service_picker.col_code")}</th>
-					<th className="py-1 text-right">{t("release.col_ordered")}</th>
-					<th className="py-1 text-right">{t("release.col_installed")}</th>
-					<th className="py-1 text-right">{t("release.col_certified")}</th>
-					<th className="py-1 text-right">{t("release.col_charged")}</th>
-					<th className="py-1 text-right">Status</th>
-				</tr>
-			</thead>
-			<tbody>
-				{ordered.map((l) => {
-					const inst = installed.find(
-						(x) => x.serviceCodeId === l.serviceCodeId,
-					)?.qty
-					const cert = certified?.find(
-						(x) => x.serviceCodeId === l.serviceCodeId,
-					)?.certifiedQty
-					const chg = charged?.find(
-						(x) => x.serviceCodeId === l.serviceCodeId,
-					)?.qty
-					const allEqual = l.qty === inst && l.qty === cert && l.qty === chg
-					return (
-						<tr key={l.serviceCodeId} className="border-b last:border-0">
-							<td className="py-1 font-mono text-xs">{l.claroCode}</td>
-							<td className="py-1 text-right">{l.qty}</td>
-							<td className="py-1 text-right">{inst ?? "—"}</td>
-							<td className="py-1 text-right">{cert ?? "—"}</td>
-							<td className="py-1 text-right">{chg ?? "—"}</td>
-							<td
-								className={`py-1 text-right ${
-									allEqual ? "text-status-ok" : "text-status-warn"
-								}`}
-							>
-								{allEqual ? t("release.match") : t("release.mismatch")}
-							</td>
-						</tr>
-					)
-				})}
-			</tbody>
-		</table>
 	)
 }
 
@@ -1485,6 +1313,20 @@ export default function ReviewDoc({
 	const corrections =
 		(doc.addressCorrections as AddressCorrection[] | null) ?? []
 	const panel = panelForStep(view)
+	// The one-line "Step N of 9" callout under the rail. Approve only shows while
+	// it is the live step; later screens show it whenever they can be acted on.
+	const calloutKey =
+		view === "APPROVE"
+			? stage === "APPROVE"
+				? "approve"
+				: null
+			: interactive &&
+					(view === "INVOICE" ||
+						view === "AVISO" ||
+						view === "PRECERT" ||
+						view === "RELEASE")
+				? (view.toLowerCase() as "invoice" | "aviso" | "precert" | "release")
+				: null
 	// Once an Aviso number or lines are saved the invoice is what was keyed into
 	// Claro, so it can no longer be regenerated from here.
 	const avisoStarted = !!doc.avisoNumber || doc.avisoLines != null
@@ -1718,37 +1560,26 @@ export default function ReviewDoc({
 
 			{/* C — Aviso & match */}
 			{panel === "AVISO" && doc.jafInvoiceGeneratedAt && (
-				<section className="bg-card border rounded-lg p-4 space-y-3">
-					<h2 className="font-medium text-sm">
-						{t("docs_review_steps.aviso_heading")}
-					</h2>
-					<p className="text-xs text-muted-foreground">
-						{t("docs_review_steps.aviso_hint")}
-					</p>
-					<AvisoCaptureForm
-						doc={doc}
-						invoiceLines={invoiceLines}
-						error={error ?? null}
-						tolerance={tolerance}
-						readOnly={!interactive}
-					/>
-					{doc.avisoMatchedAt ? (
-						<Pill variant="info" icon="✓">
-							{t("docs_review_steps.amount_match_ok", {
-								total: formatMoney(doc.avisoLineTotal),
-							})}
-						</Pill>
-					) : doc.avisoLineTotal != null ? (
-						<Pill variant="warn" icon="⚠">
-							{t("docs_review_steps.amount_match_blocked", {
-								aviso: formatMoney(doc.avisoLineTotal),
-								invoice: formatMoney(doc.jafInvoiceLineTotal),
-							})}
-						</Pill>
-					) : null}
+				<AvisoMatchCard
+					docId={doc.id}
+					avisoNumber={doc.avisoNumber}
+					avisoDocPath={doc.avisoDocPath}
+					storedLines={avisoLines}
+					locked={!!doc.releasedToFinanceAt}
+					invoiceLines={invoiceLines}
+					ordered={ordered}
+					certified={precertLines}
+					catalogPrices={Object.fromEntries(
+						serviceCodes.map((c) => [c.id, c.unitPrice]),
+					)}
+					tolerance={tolerance}
+					error={error ?? null}
+					readOnly={!interactive}
+					started={avisoStarted}
+				>
 					{interactive && doc.status === "SUPERVISOR_APPROVED" && (
-						<details>
-							<summary className="text-xs text-muted-foreground cursor-pointer">
+						<details className="pt-3">
+							<summary className="cursor-pointer text-xs text-muted-foreground">
 								{t("docs_review_steps.claro_pdf_optional")}
 							</summary>
 							<Form
@@ -1769,7 +1600,7 @@ export default function ReviewDoc({
 							</Form>
 						</details>
 					)}
-				</section>
+				</AvisoMatchCard>
 			)}
 
 			{/* D — Pre-cert sheet */}
@@ -1799,12 +1630,6 @@ export default function ReviewDoc({
 			{panel === "RELEASE" && doc.avisoMatchedAt && (
 				<section className="bg-card border rounded-lg p-4 space-y-3">
 					<h2 className="font-medium text-sm">{t("release.heading")}</h2>
-					<FourColumnTable
-						ordered={ordered}
-						installed={installed}
-						certified={precertLines}
-						charged={avisoLines}
-					/>
 					<ul className="text-sm space-y-1">
 						{gate.conditions.map((c) => (
 							<li

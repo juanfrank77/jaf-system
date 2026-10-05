@@ -1,4 +1,3 @@
-import path from "node:path"
 import type { ParseKeys } from "i18next"
 import { type ComponentProps, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -1350,10 +1349,10 @@ export default function ReviewDoc({
 	const avisoLines = (doc.avisoLines as AvisoLine[] | null) ?? []
 	const precertLines = (sheet?.lines as PreCertLine[] | undefined) ?? undefined
 
-	// Extract basenames for photos in JSX (avoid path module in client bundle)
+	// Basenames for photos; plain string split because `node:path` is not available in the client bundle
 	const photoItems = photos.map((p) => ({
 		id: p.id,
-		basename: path.basename(p.localPath),
+		basename: p.localPath.split(/[\\/]/).pop() ?? p.localPath,
 	}))
 
 	return (

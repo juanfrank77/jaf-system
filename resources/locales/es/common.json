@@ -288,11 +288,21 @@
 		"cancel_submit": "Cancelar orden de trabajo",
 		"reassign_heading": "Reasignar cuadrilla",
 		"reassign_placeholder": "Elija una brigada…",
-		"reassign_submit": "Reasignar cuadrilla",
+		"reassign_submit": "Reasignar",
+		"reassign_current": "(actual)",
+		"reassign_hint": "Permitido hasta que la orden se cancele o se cierre. Cada reasignación queda en el historial de la cuadrilla.",
+		"reassign_shared_intro": "Este trabajo está compartido por {{count}} brigadas (líder: {{lead}}).",
+		"reassign_replace_warning": "Reasignar a {{target}} quitará a {{removed}} y dejará a {{target}} como único pagador.",
+		"reassign_change_lead_hint": "O mantenga las {{count}} brigadas y solo haga a {{target}} la líder y pagadora.",
+		"reassign_change_lead": "Cambiar líder",
+		"reassign_replace_all": "Reemplazar todas las brigadas",
+		"reassign_confirm_submit": "Reasignar",
+		"reassign_cancel": "Cancelar",
 		"errors": {
 			"cancel_reason_required": "Proporcione una razón para la cancelación.",
 			"reassign_required": "Seleccione una brigada.",
 			"reassign_invalid": "La brigada seleccionada no es válida.",
+			"lead_locked": "Ya no se puede cambiar la líder: el pagador quedó fijado al firmar la hoja de pre-certificación.",
 			"resolution_note_required": "Proporcione una nota de resolución."
 		},
 		"next_action": {
@@ -1450,6 +1460,12 @@
 		"col_code": "Servicio",
 		"col_description": "Descripción",
 		"col_ordered": "Ordenado",
+		"col_account": "Cuenta",
+		"col_qty": "Cant.",
+		"col_unit": "Unidad",
+		"col_unit_price": "Precio unit.",
+		"col_line": "Línea",
+		"subtotal": "Subtotal estimado (antes de IVU)",
 		"col_installed": "Instalado"
 	},
 	"installer_supervisor": {
@@ -1460,12 +1476,6 @@
 		"owed_back": "Pendiente de devolución"
 	},
 	"restock": {
-		"col_account": "Cuenta",
-		"col_qty": "Cant.",
-		"col_unit": "Unidad",
-		"col_unit_price": "Precio unit.",
-		"col_line": "Línea",
-		"subtotal": "Subtotal estimado (antes de IVU)",
 		"approve": "Aprobar",
 		"no_pending": "Nada pendiente de aprobación.",
 		"signoff_heading": "Reabastecimientos pendientes de aprobación",

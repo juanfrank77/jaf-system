@@ -57,6 +57,47 @@ describe("GET /docs/:id", () => {
 		}
 	}
 
+	describe("catalog prices in the payload", () => {
+		const catalogRow = {
+			id: "sc-1",
+			claroCode: "34006428",
+			name: "TRANSFER STITCH",
+			unit: "EA",
+			unitPrice: "42.3430",
+			contractorPrice: "20.0000",
+			claroBasePrice: "30.0000",
+		}
+
+		async function loadAs(role: string) {
+			vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
+				id: "user-1",
+				role,
+			} as any)
+			vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+				baseDoc("SIGNED", { assignedCrewIds: ["user-1"] }) as any,
+			)
+			vi.mocked(db.serviceCode.findMany).mockResolvedValue([catalogRow] as any)
+			vi.mocked(db.auditTrail.findMany).mockResolvedValue([])
+			vi.mocked(db.user.findMany).mockResolvedValue([])
+			return loader({
+				request: new Request("http://localhost/docs/doc-1"),
+				params: { id: "doc-1" },
+			} as any)
+		}
+
+		it.each(["CREW", "WAREHOUSE"])("sends %s no price fields", async (role) => {
+			const { serviceCodes } = await loadAs(role)
+			expect(serviceCodes).toHaveLength(1)
+			for (const k of ["unitPrice", "contractorPrice", "claroBasePrice"])
+				expect(k in serviceCodes[0]!).toBe(false)
+		})
+
+		it("still sends an admin the unit price", async () => {
+			const { serviceCodes } = await loadAs("ADMIN")
+			expect(serviceCodes[0]?.unitPrice).toBe(42.343)
+		})
+	})
+
 	it("allows a Finance user to load an LC_REQUEST_GENERATED doc", async () => {
 		vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
 			id: "user-1",

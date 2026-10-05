@@ -28,9 +28,11 @@ import {
 import { validateFile } from "~/lib/file-upload.server"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
-import { getActiveMaterialCodes } from "~/lib/service-codes.server"
+import {
+	getActiveMaterialCodes,
+	serviceCodesForRole,
+} from "~/lib/service-codes.server"
 import type { ServiceLine } from "~/lib/service-lines"
-import { toNumberPrice } from "~/lib/utils"
 import type { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id_.field"
 
@@ -94,10 +96,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	return {
 		doc,
 		user,
-		serviceCodes: serviceCodes.map((c) => ({
-			...c,
-			unitPrice: toNumberPrice(c.unitPrice),
-		})),
+		serviceCodes: serviceCodesForRole(user.role, serviceCodes),
 		latestSendBack,
 		sentByName: sentBy?.name ?? null,
 	}

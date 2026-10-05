@@ -26,6 +26,7 @@ import { requireRole } from "~/lib/permissions.server"
 import {
 	getActiveMaterialCodes,
 	getActiveServiceCodes,
+	serviceCodesForRole,
 } from "~/lib/service-codes.server"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id_.sign"
@@ -60,10 +61,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	return {
 		doc,
 		user,
-		serviceCodes: serviceCodes.map((c) => ({
-			...c,
-			unitPrice: toNumberPrice(c.unitPrice),
-		})),
+		serviceCodes: serviceCodesForRole(user.role, serviceCodes),
 		warehouses,
 		warehouseUsers,
 		crewUsers,

@@ -2,7 +2,7 @@ import path from "node:path"
 import type { ParseKeys } from "i18next"
 import { type ComponentProps, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Form, redirect } from "react-router"
+import { Form, Link, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import type { MaterialLineItems } from "~/components/material-line-items"
 import {
@@ -17,7 +17,7 @@ import {
 } from "~/components/signature-pad"
 import { StepRail } from "~/components/step-rail"
 import { Badge } from "~/components/ui/badge"
-import { Button } from "~/components/ui/button"
+import { Button, buttonVariants } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Pill } from "~/components/ui/pill"
@@ -47,6 +47,8 @@ import {
 	checkAvisoMatch,
 	deriveSupervisorStage,
 	evaluateReleaseGate,
+	panelForStep,
+	resolveStepView,
 } from "~/lib/supervisor-stage"
 import {
 	getAvisoAmountTolerance,
@@ -166,6 +168,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		])
 	const correctorNames = Object.fromEntries(people.map((u) => [u.id, u.name]))
 	const stage = deriveSupervisorStage(doc, sheet)
+	const { view, interactive } = resolveStepView(
+		stage,
+		!!doc.avisoNumber || doc.avisoLines != null,
+		new URL(request.url).searchParams.get("step"),
+	)
 	const gate = evaluateReleaseGate(doc, sheet, photos)
 	return {
 		doc,
@@ -179,6 +186,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		sheet,
 		brigade,
 		stage,
+		view,
+		interactive,
 		gate,
 		tolerance,
 		correctorNames,
@@ -870,9 +879,11 @@ function AvisoCaptureForm({
 	invoiceLines,
 	error,
 	tolerance,
+	readOnly = false,
 }: {
 	doc: Route.ComponentProps["loaderData"]["doc"]
 	invoiceLines: InvoiceLine[]
+	readOnly?: boolean
 	error: {
 		errorKey?: string
 		errorMessage?: string
@@ -899,131 +910,136 @@ function AvisoCaptureForm({
 	const locked = !!doc.releasedToFinanceAt
 	return (
 		<Form method="post" encType="multipart/form-data" className="space-y-3">
-			<input type="hidden" name="intent" value="save_aviso" />
-			<div className="flex flex-wrap items-end gap-3">
-				<div>
-					<Label htmlFor="avisoNumber" className="text-xs">
-						{t("docs_review.aviso_number")}
-					</Label>
-					<Input
-						id="avisoNumber"
-						name="avisoNumber"
-						defaultValue={doc.avisoNumber ?? ""}
-						className="w-40"
-					/>
+			<fieldset disabled={readOnly} className="space-y-3 min-w-0">
+				<input type="hidden" name="intent" value="save_aviso" />
+				<div className="flex flex-wrap items-end gap-3">
+					<div>
+						<Label htmlFor="avisoNumber" className="text-xs">
+							{t("docs_review.aviso_number")}
+						</Label>
+						<Input
+							id="avisoNumber"
+							name="avisoNumber"
+							defaultValue={doc.avisoNumber ?? ""}
+							className="w-40"
+						/>
+					</div>
+					<div>
+						<Label htmlFor="avisoPdf" className="text-xs">
+							{t("docs_review_steps.aviso_pdf_label")}
+						</Label>
+						<Input
+							id="avisoPdf"
+							type="file"
+							name="avisoPdf"
+							accept="application/pdf"
+							className="w-64"
+						/>
+					</div>
+					{doc.avisoDocPath && (
+						<a
+							href={`/files/aviso-docs/${doc.id}-aviso.pdf`}
+							className="text-accent-text underline text-sm"
+						>
+							{t("docs_review.download")}
+						</a>
+					)}
 				</div>
-				<div>
-					<Label htmlFor="avisoPdf" className="text-xs">
-						{t("docs_review_steps.aviso_pdf_label")}
-					</Label>
-					<Input
-						id="avisoPdf"
-						type="file"
-						name="avisoPdf"
-						accept="application/pdf"
-						className="w-64"
-					/>
-				</div>
-				{doc.avisoDocPath && (
-					<a
-						href={`/files/aviso-docs/${doc.id}-aviso.pdf`}
-						className="text-accent-text underline text-sm"
-					>
-						{t("docs_review.download")}
-					</a>
-				)}
-			</div>
-			<table className="w-full text-sm">
-				<thead>
-					<tr className="text-left text-xs text-muted-foreground border-b">
-						<th className="py-1">{t("docs_review.table.code")}</th>
-						<th className="py-1">{t("docs_review.table.description")}</th>
-						<th className="py-1 text-right">
-							{t("docs_review_steps.charged_qty")}
-						</th>
-						<th className="py-1 text-right">
-							{t("docs_review_steps.aviso_unit_price")}
-						</th>
-					</tr>
-				</thead>
-				<tbody>
-					{rows.map((r, i) => (
-						<tr key={r.serviceCodeId} className="border-b last:border-0">
-							<td className="py-1 font-mono text-xs">{r.claroCode}</td>
-							<td className="py-1">
-								{
-									invoiceLines.find((l) => l.serviceCodeId === r.serviceCodeId)
-										?.name
-								}
-							</td>
-							<td className="py-1 text-right">
-								<Input
-									type="number"
-									min={0}
-									value={r.qty}
-									className="w-20 ml-auto"
-									onChange={(e) =>
-										setRows(
-											rows.map((row, j) =>
-												j === i
-													? {
-															...row,
-															qty: Number.parseInt(e.target.value, 10) || 0,
-														}
-													: row,
-											),
-										)
-									}
-								/>
-							</td>
-							<td className="py-1 text-right">
-								<Input
-									type="number"
-									step="0.0001"
-									min={0}
-									value={r.unitPrice}
-									className="w-28 ml-auto"
-									onChange={(e) =>
-										setRows(
-											rows.map((row, j) =>
-												j === i
-													? { ...row, unitPrice: Number(e.target.value) || 0 }
-													: row,
-											),
-										)
-									}
-								/>
-							</td>
+				<table className="w-full text-sm">
+					<thead>
+						<tr className="text-left text-xs text-muted-foreground border-b">
+							<th className="py-1">{t("docs_review.table.code")}</th>
+							<th className="py-1">{t("docs_review.table.description")}</th>
+							<th className="py-1 text-right">
+								{t("docs_review_steps.charged_qty")}
+							</th>
+							<th className="py-1 text-right">
+								{t("docs_review_steps.aviso_unit_price")}
+							</th>
 						</tr>
-					))}
-				</tbody>
-			</table>
-			<input type="hidden" name="avisoLines" value={JSON.stringify(rows)} />
-			<div>
-				<Label htmlFor="lineNote" className="text-xs">
-					{t("docs_review_steps.line_note_hint")}
-				</Label>
-				<Textarea id="lineNote" name="lineNote" rows={2} className="mt-1" />
-			</div>
-			{error?.errorKey === "docs_review.errors.aviso_amount_mismatch" ? (
-				<p className="text-sm text-status-danger">
-					{t("docs_review.errors.aviso_amount_mismatch", {
-						avisoTotal: formatMoney(error.avisoTotal ?? 0),
-						invoiceTotal: formatMoney(error.invoiceTotal ?? 0),
-						difference: formatMoney(error.difference ?? 0),
-						tolerance: formatMoney(error.tolerance ?? tolerance),
-					})}
-				</p>
-			) : error?.errorMessage ? (
-				<p className="text-sm text-status-danger">{error.errorMessage}</p>
-			) : error?.errorKey ? (
-				<p className="text-sm text-status-danger">
-					{t(error.errorKey as ParseKeys)}
-				</p>
-			) : null}
-			<Button type="submit" disabled={locked}>
-				{t("docs_review_steps.save_aviso")}
-			</Button>
+					</thead>
+					<tbody>
+						{rows.map((r, i) => (
+							<tr key={r.serviceCodeId} className="border-b last:border-0">
+								<td className="py-1 font-mono text-xs">{r.claroCode}</td>
+								<td className="py-1">
+									{
+										invoiceLines.find(
+											(l) => l.serviceCodeId === r.serviceCodeId,
+										)?.name
+									}
+								</td>
+								<td className="py-1 text-right">
+									<Input
+										type="number"
+										min={0}
+										value={r.qty}
+										className="w-20 ml-auto"
+										onChange={(e) =>
+											setRows(
+												rows.map((row, j) =>
+													j === i
+														? {
+																...row,
+																qty: Number.parseInt(e.target.value, 10) || 0,
+															}
+														: row,
+												),
+											)
+										}
+									/>
+								</td>
+								<td className="py-1 text-right">
+									<Input
+										type="number"
+										step="0.0001"
+										min={0}
+										value={r.unitPrice}
+										className="w-28 ml-auto"
+										onChange={(e) =>
+											setRows(
+												rows.map((row, j) =>
+													j === i
+														? { ...row, unitPrice: Number(e.target.value) || 0 }
+														: row,
+												),
+											)
+										}
+									/>
+								</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+				<input type="hidden" name="avisoLines" value={JSON.stringify(rows)} />
+				<div>
+					<Label htmlFor="lineNote" className="text-xs">
+						{t("docs_review_steps.line_note_hint")}
+					</Label>
+					<Textarea id="lineNote" name="lineNote" rows={2} className="mt-1" />
+				</div>
+				{error?.errorKey === "docs_review.errors.aviso_amount_mismatch" ? (
+					<p className="text-sm text-status-danger">
+						{t("docs_review.errors.aviso_amount_mismatch", {
+							avisoTotal: formatMoney(error.avisoTotal ?? 0),
+							invoiceTotal: formatMoney(error.invoiceTotal ?? 0),
+							difference: formatMoney(error.difference ?? 0),
+							tolerance: formatMoney(error.tolerance ?? tolerance),
+						})}
+					</p>
+				) : error?.errorMessage ? (
+					<p className="text-sm text-status-danger">{error.errorMessage}</p>
+				) : error?.errorKey ? (
+					<p className="text-sm text-status-danger">
+						{t(error.errorKey as ParseKeys)}
+					</p>
+				) : null}
+				{!readOnly && (
+					<Button type="submit" disabled={locked}>
+						{t("docs_review_steps.save_aviso")}
+					</Button>
+				)}
+			</fieldset>
 		</Form>
 	)
 }
@@ -1033,15 +1049,25 @@ function SignatureBlock({
 	labelKey,
 	children,
 	encType,
+	readOnly = false,
 }: {
 	intent: string
 	labelKey: ParseKeys
 	children: React.ReactNode
 	encType?: "multipart/form-data"
+	readOnly?: boolean
 }) {
 	const { t } = useTranslation()
 	const padRef = useRef<SignaturePadHandle>(null)
 	const [cleared, setCleared] = useState(0)
+	if (readOnly) {
+		return (
+			<div className="flex-1 min-w-[12rem] border rounded-lg p-3 space-y-2">
+				<p className="text-xs font-medium">{t(labelKey)}</p>
+				{children}
+			</div>
+		)
+	}
 	return (
 		<Form
 			method="post"
@@ -1088,7 +1114,9 @@ function PreCertPanel({
 	doc,
 	brigade,
 	error,
+	readOnly = false,
 }: {
+	readOnly?: boolean
 	sheet: Route.ComponentProps["loaderData"]["sheet"]
 	doc: Route.ComponentProps["loaderData"]["doc"]
 	brigade: Route.ComponentProps["loaderData"]["brigade"]
@@ -1097,6 +1125,9 @@ function PreCertPanel({
 	const { t } = useTranslation()
 	const lines = (sheet?.lines as PreCertLine[] | null) ?? []
 	const locked = !!sheet?.sigSupervisorAt
+	const notCaptured = (
+		<p className="text-xs text-muted-foreground">{t("precert.not_captured")}</p>
+	)
 	return (
 		<div className="space-y-3">
 			<div className="flex flex-wrap items-center justify-between gap-2 text-sm">
@@ -1146,7 +1177,8 @@ function PreCertPanel({
 			<p className="text-sm text-right font-medium">
 				TOTAL {formatMoney(sheet?.total ?? 0)}
 			</p>
-			{!locked &&
+			{!readOnly &&
+				!locked &&
 				lines.map((l) => (
 					<Form
 						key={l.serviceCodeId}
@@ -1178,6 +1210,7 @@ function PreCertPanel({
 				<SignatureBlock
 					intent="sign_precert_supervisor"
 					labelKey="precert.sig_supervisor"
+					readOnly={readOnly}
 				>
 					{sheet?.sigSupervisorName ? (
 						<div className="space-y-1">
@@ -1191,11 +1224,14 @@ function PreCertPanel({
 									: ""}
 							</p>
 						</div>
+					) : readOnly ? (
+						notCaptured
 					) : null}
 				</SignatureBlock>
 				<SignatureBlock
 					intent="sign_precert_subcontractor"
 					labelKey="precert.sig_subcontractor"
+					readOnly={readOnly}
 				>
 					{sheet?.sigSubcontractorName ? (
 						<div className="space-y-1">
@@ -1210,6 +1246,8 @@ function PreCertPanel({
 								{sheet.sigSubcontractorName} · {sheet.sigSubcontractorCode}
 							</p>
 						</div>
+					) : readOnly ? (
+						notCaptured
 					) : (
 						<>
 							<Input
@@ -1231,6 +1269,7 @@ function PreCertPanel({
 					intent="sign_precert_claro"
 					labelKey="precert.sig_claro"
 					encType="multipart/form-data"
+					readOnly={readOnly}
 				>
 					<p className="text-xs text-muted-foreground">
 						{t("precert.claro_optional")}
@@ -1250,6 +1289,8 @@ function PreCertPanel({
 							)}
 							<p className="text-xs">{sheet.sigClaroName}</p>
 						</div>
+					) : readOnly ? (
+						notCaptured
 					) : (
 						<>
 							<Input name="signerName" placeholder={t("precert.signer_name")} />
@@ -1265,7 +1306,7 @@ function PreCertPanel({
 			) : error?.errorMessage ? (
 				<p className="text-sm text-status-danger">{error.errorMessage}</p>
 			) : null}
-			{!doc.releasedToFinanceAt && (
+			{!readOnly && !doc.releasedToFinanceAt && (
 				<Form method="post" className="pt-1">
 					<input type="hidden" name="intent" value="generate_precert" />
 					<Button type="submit" variant="outline" size="sm">
@@ -1351,6 +1392,8 @@ export default function ReviewDoc({
 		sheet,
 		brigade,
 		stage,
+		view,
+		interactive,
 		gate,
 		tolerance,
 		correctorNames,
@@ -1385,6 +1428,7 @@ export default function ReviewDoc({
 	}))
 	const corrections =
 		(doc.addressCorrections as AddressCorrection[] | null) ?? []
+	const panel = panelForStep(view)
 
 	return (
 		<div className="space-y-5">
@@ -1399,8 +1443,21 @@ export default function ReviewDoc({
 				{doc.fieldSubmittedAt &&
 					` · ${new Date(doc.fieldSubmittedAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}`}
 			</p>
-			<StepRail stage={stage} />
-			{stage === "APPROVE" && (
+			<StepRail stage={stage} view={view} />
+			{!interactive && (
+				<Pill variant="info" icon="🔒">
+					<b>{t("docs_review.readonly_title")}</b>{" "}
+					{t("docs_review.readonly_body")}{" "}
+					<Link to="." className="underline">
+						{t("docs_review.readonly_back")}
+					</Link>
+					{" · "}
+					<Link to={`/docs/${doc.id}`} className="underline">
+						{t("docs_review.readonly_work_order")}
+					</Link>
+				</Pill>
+			)}
+			{stage === "APPROVE" && view === "APPROVE" && (
 				<Pill variant="info">
 					<b>{t("docs_review.callout_approve_title")}</b>{" "}
 					{t("docs_review.callout_approve_body")}
@@ -1408,109 +1465,112 @@ export default function ReviewDoc({
 			)}
 
 			{/* A — Approve */}
-			<AddressCard
-				estimated={doc.jobAddressEstimated}
-				corrections={corrections}
-				correctorNames={correctorNames}
-				notes={doc.fieldNotes}
-			/>
-			<PhotosCard docId={doc.id} photos={photoItems} />
-			<OrderedVsInstalledCard
-				ordered={ordered}
-				installed={installed}
-				estimated={estimated}
-				taken={taken}
-				used={used}
-				serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
-			/>
-			<ReviewActionsCard
-				canApprove={doc.status === "FIELD_UPDATED"}
-				canSendBack={
-					doc.status === "FIELD_UPDATED" || doc.status === "SUPERVISOR_APPROVED"
-				}
-			/>
+			{panel === "APPROVE" && (
+				<>
+					<AddressCard
+						estimated={doc.jobAddressEstimated}
+						corrections={corrections}
+						correctorNames={correctorNames}
+						notes={doc.fieldNotes}
+					/>
+					<PhotosCard docId={doc.id} photos={photoItems} />
+					<OrderedVsInstalledCard
+						ordered={ordered}
+						installed={installed}
+						estimated={estimated}
+						taken={taken}
+						used={used}
+						serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
+					/>
+					{interactive && (
+						<ReviewActionsCard
+							canApprove={doc.status === "FIELD_UPDATED"}
+							canSendBack={
+								doc.status === "FIELD_UPDATED" ||
+								doc.status === "SUPERVISOR_APPROVED"
+							}
+						/>
+					)}
+				</>
+			)}
 
 			{/* B — Invoice */}
-			{stage !== "INTAKE" &&
-				stage !== "WAREHOUSE" &&
-				stage !== "FIELD" &&
-				stage !== "APPROVE" && (
-					<section className="bg-card border rounded-lg p-4 space-y-3">
-						<h2 className="font-medium text-sm">
-							{t("docs_review_steps.invoice_heading")}
-						</h2>
-						{invoiceLines.length > 0 && (
-							<table className="w-full text-sm">
-								<thead>
-									<tr className="text-left text-xs text-muted-foreground border-b">
-										<th className="py-1">{t("docs_review.table.code")}</th>
-										<th className="py-1">
-											{t("docs_review.table.description")}
-										</th>
-										<th className="py-1 text-right">
-											{t("docs_review.table.qty")}
-										</th>
-										<th className="py-1 text-right">
-											{t("docs_review_steps.unit_price")}
-										</th>
-										<th className="py-1 text-right">
-											{t("docs_review_steps.line_amount")}
-										</th>
+			{panel === "INVOICE" && (
+				<section className="bg-card border rounded-lg p-4 space-y-3">
+					<h2 className="font-medium text-sm">
+						{t("docs_review_steps.invoice_heading")}
+					</h2>
+					{invoiceLines.length > 0 && (
+						<table className="w-full text-sm">
+							<thead>
+								<tr className="text-left text-xs text-muted-foreground border-b">
+									<th className="py-1">{t("docs_review.table.code")}</th>
+									<th className="py-1">{t("docs_review.table.description")}</th>
+									<th className="py-1 text-right">
+										{t("docs_review.table.qty")}
+									</th>
+									<th className="py-1 text-right">
+										{t("docs_review_steps.unit_price")}
+									</th>
+									<th className="py-1 text-right">
+										{t("docs_review_steps.line_amount")}
+									</th>
+								</tr>
+							</thead>
+							<tbody>
+								{invoiceLines.map((l) => (
+									<tr key={l.serviceCodeId} className="border-b last:border-0">
+										<td className="py-1 font-mono text-xs">{l.claroCode}</td>
+										<td className="py-1">{l.name}</td>
+										<td className="py-1 text-right">{l.qty}</td>
+										<td className="py-1 text-right">
+											${l.unitPrice.toFixed(4)}
+										</td>
+										<td className="py-1 text-right">
+											${l.lineAmount.toFixed(2)}
+										</td>
 									</tr>
-								</thead>
-								<tbody>
-									{invoiceLines.map((l) => (
-										<tr
-											key={l.serviceCodeId}
-											className="border-b last:border-0"
-										>
-											<td className="py-1 font-mono text-xs">{l.claroCode}</td>
-											<td className="py-1">{l.name}</td>
-											<td className="py-1 text-right">{l.qty}</td>
-											<td className="py-1 text-right">
-												${l.unitPrice.toFixed(4)}
-											</td>
-											<td className="py-1 text-right">
-												${l.lineAmount.toFixed(2)}
-											</td>
-										</tr>
-									))}
-								</tbody>
-							</table>
-						)}
-						{doc.jafInvoiceLineTotal != null && (
-							<p className="text-sm text-right">
-								{t("docs_review_steps.line_sum_pre_ivu")}:{" "}
-								<strong>{formatMoney(doc.jafInvoiceLineTotal)}</strong>
-							</p>
-						)}
-						{doc.jafInvoicePdfPath && (
-							<a
-								href={`/files/jaf-invoices/${doc.id}-jaf-invoice.pdf`}
-								className="text-accent-text underline text-sm"
-							>
-								{t("docs_review.download")}
-							</a>
-						)}
-						{!doc.avisoMatchedAt && (
-							<Form method="post">
-								<input
-									type="hidden"
-									name="intent"
-									value="generate_jaf_invoice"
-								/>
-								<Button type="submit" variant="outline" size="sm">
-									{doc.jafInvoiceGeneratedAt
-										? t("docs_review_steps.regenerate_invoice")
-										: t("docs_review.generate_jaf_invoice")}
-								</Button>
-							</Form>
-						)}
-					</section>
-				)}
+								))}
+							</tbody>
+						</table>
+					)}
+					{doc.jafInvoiceLineTotal != null && (
+						<p className="text-sm text-right">
+							{t("docs_review_steps.line_sum_pre_ivu")}:{" "}
+							<strong>{formatMoney(doc.jafInvoiceLineTotal)}</strong>
+						</p>
+					)}
+					{doc.jafInvoicePdfPath && (
+						<a
+							href={`/files/jaf-invoices/${doc.id}-jaf-invoice.pdf`}
+							className="text-accent-text underline text-sm"
+						>
+							{t("docs_review.download")}
+						</a>
+					)}
+					{interactive && !doc.avisoMatchedAt && (
+						<Form method="post">
+							<input type="hidden" name="intent" value="generate_jaf_invoice" />
+							<Button type="submit" variant="outline" size="sm">
+								{doc.jafInvoiceGeneratedAt
+									? t("docs_review_steps.regenerate_invoice")
+									: t("docs_review.generate_jaf_invoice")}
+							</Button>
+						</Form>
+					)}
+					{interactive && stage === "AVISO" && (
+						<Link
+							to="?step=AVISO"
+							className={buttonVariants({ className: "w-full" })}
+						>
+							{t("docs_review_steps.continue_to_aviso")}
+						</Link>
+					)}
+				</section>
+			)}
 
 			{/* C — Aviso & match */}
-			{doc.jafInvoiceGeneratedAt && (
+			{panel === "AVISO" && doc.jafInvoiceGeneratedAt && (
 				<section className="bg-card border rounded-lg p-4 space-y-3">
 					<h2 className="font-medium text-sm">
 						{t("docs_review_steps.aviso_heading")}
@@ -1523,6 +1583,7 @@ export default function ReviewDoc({
 						invoiceLines={invoiceLines}
 						error={error ?? null}
 						tolerance={tolerance}
+						readOnly={!interactive}
 					/>
 					{doc.avisoMatchedAt ? (
 						<Pill variant="info" icon="✓">
@@ -1538,7 +1599,7 @@ export default function ReviewDoc({
 							})}
 						</Pill>
 					) : null}
-					{doc.status === "SUPERVISOR_APPROVED" && (
+					{interactive && doc.status === "SUPERVISOR_APPROVED" && (
 						<details>
 							<summary className="text-xs text-muted-foreground cursor-pointer">
 								{t("docs_review_steps.claro_pdf_optional")}
@@ -1565,27 +1626,30 @@ export default function ReviewDoc({
 			)}
 
 			{/* D — Pre-cert sheet */}
-			{doc.avisoMatchedAt && (
+			{panel === "PRECERT" && doc.avisoMatchedAt && (
 				<section className="bg-card border rounded-lg p-4 space-y-3">
 					<h2 className="font-medium text-sm">{t("precert.heading")}</h2>
 					{!sheet ? (
-						<Form method="post">
-							<input type="hidden" name="intent" value="generate_precert" />
-							<Button type="submit">{t("precert.generate")}</Button>
-						</Form>
+						interactive && (
+							<Form method="post">
+								<input type="hidden" name="intent" value="generate_precert" />
+								<Button type="submit">{t("precert.generate")}</Button>
+							</Form>
+						)
 					) : (
 						<PreCertPanel
 							sheet={sheet}
 							doc={doc}
 							brigade={brigade}
 							error={error ?? null}
+							readOnly={!interactive}
 						/>
 					)}
 				</section>
 			)}
 
 			{/* E — Release */}
-			{doc.avisoMatchedAt && (
+			{panel === "RELEASE" && doc.avisoMatchedAt && (
 				<section className="bg-card border rounded-lg p-4 space-y-3">
 					<h2 className="font-medium text-sm">{t("release.heading")}</h2>
 					<FourColumnTable
@@ -1622,14 +1686,14 @@ export default function ReviewDoc({
 								date: new Date(doc.releasedToFinanceAt).toLocaleString(),
 							})}
 						</Pill>
-					) : (
+					) : interactive ? (
 						<Form method="post">
 							<input type="hidden" name="intent" value="release_to_finance" />
 							<Button type="submit" disabled={!gate.ok} className="w-full">
 								{t("release.button")}
 							</Button>
 						</Form>
-					)}
+					) : null}
 					<p className="text-xs text-muted-foreground">
 						{t("docs_review.supervisor")}: {supervisor?.name ?? user.name}
 					</p>

@@ -3,6 +3,8 @@ import {
 	checkAvisoMatch,
 	deriveSupervisorStage,
 	evaluateReleaseGate,
+	panelForStep,
+	resolveStepView,
 } from "./supervisor-stage"
 
 const now = new Date()
@@ -183,5 +185,55 @@ describe("evaluateReleaseGate", () => {
 		)
 		expect(r.conditions.find((c) => c.key === "precert_signed")?.ok).toBe(false)
 		expect(evaluateReleaseGate(good, null, photos).ok).toBe(false)
+	})
+})
+
+describe("resolveStepView", () => {
+	it("defaults to the derived stage and is interactive there", () => {
+		expect(resolveStepView("PRECERT", true, null)).toEqual({
+			view: "PRECERT",
+			interactive: true,
+		})
+	})
+	it("keeps the invoice screen until an Aviso is started", () => {
+		expect(resolveStepView("AVISO", false, null)).toEqual({
+			view: "INVOICE",
+			interactive: true,
+		})
+		expect(resolveStepView("AVISO", true, null)).toEqual({
+			view: "AVISO",
+			interactive: true,
+		})
+	})
+	it("lets the invoice screen continue forward to the current stage", () => {
+		expect(resolveStepView("AVISO", false, "AVISO")).toEqual({
+			view: "AVISO",
+			interactive: true,
+		})
+	})
+	it("makes earlier reached steps read-only", () => {
+		expect(resolveStepView("RELEASE", true, "AVISO")).toEqual({
+			view: "AVISO",
+			interactive: false,
+		})
+		expect(resolveStepView("RELEASE", true, "APPROVE")).toEqual({
+			view: "APPROVE",
+			interactive: false,
+		})
+	})
+	it("ignores steps not yet reached, pre-approval steps and junk", () => {
+		expect(resolveStepView("AVISO", true, "RELEASE").view).toBe("AVISO")
+		expect(resolveStepView("RELEASE", true, "FIELD").view).toBe("RELEASE")
+		expect(resolveStepView("PRECERT", true, "NOPE").view).toBe("PRECERT")
+	})
+})
+
+describe("panelForStep", () => {
+	it("folds pre-approval steps into Approve and Released into Release", () => {
+		expect(panelForStep("INTAKE")).toBe("APPROVE")
+		expect(panelForStep("FIELD")).toBe("APPROVE")
+		expect(panelForStep("APPROVE")).toBe("APPROVE")
+		expect(panelForStep("INVOICE")).toBe("INVOICE")
+		expect(panelForStep("RELEASED")).toBe("RELEASE")
 	})
 })

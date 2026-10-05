@@ -485,6 +485,10 @@
 		}
 	},
 	"docs_review": {
+		"readonly_title": "Completed step.",
+		"readonly_body": "This is a read-only look back; nothing can be changed here.",
+		"readonly_back": "Back to the current step",
+		"readonly_work_order": "Work order (to edit)",
 		"title": "Supervisor Review",
 		"estimated": "Estimated",
 		"taken": "Taken (Signed)",
@@ -571,6 +575,7 @@
 		"released": "In Finance"
 	},
 	"docs_review_steps": {
+		"continue_to_aviso": "Continue to Aviso →",
 		"approve_heading": "Step A — Field work",
 		"invoice_heading": "Step B — JAF invoice, from installed quantities",
 		"unit_price": "Unit (JAF)",

@@ -485,6 +485,10 @@
 		}
 	},
 	"docs_review": {
+		"readonly_title": "Paso completado.",
+		"readonly_body": "Esta es una vista de solo lectura; aquí no se puede cambiar nada.",
+		"readonly_back": "Volver al paso actual",
+		"readonly_work_order": "Orden de trabajo (para editar)",
 		"title": "Revisión del supervisor",
 		"estimated": "Estimado",
 		"taken": "Retirado (firmado)",
@@ -571,6 +575,7 @@
 		"released": "En Finanzas"
 	},
 	"docs_review_steps": {
+		"continue_to_aviso": "Continuar al Aviso →",
 		"approve_heading": "Paso A — Trabajo de campo",
 		"invoice_heading": "Paso B — Factura JAF, de cantidades instaladas",
 		"unit_price": "Unitario (JAF)",

@@ -15,6 +15,7 @@ import {
 	SelectValue,
 } from "~/components/ui/select"
 import { Textarea } from "~/components/ui/textarea"
+import { isUnassignedCrew } from "~/lib/crew-scope"
 import { db } from "~/lib/db.server"
 import {
 	type AddressCorrection,
@@ -95,6 +96,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		doc.status === "LC_REQUEST_GENERATED" &&
 		!["FINANCE", "ADMIN"].includes(user.role)
 	) {
+		throw new Response("Not Found", { status: 404 })
+	}
+	if (isUnassignedCrew(user, doc)) {
 		throw new Response("Not Found", { status: 404 })
 	}
 	if (user.role === "SUPERVISOR") {

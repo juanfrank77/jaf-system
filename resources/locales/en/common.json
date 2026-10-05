@@ -575,8 +575,18 @@
 		"released": "In Finance"
 	},
 	"docs_review_steps": {
+		"download_pdf": "Download PDF",
 		"continue_to_aviso": "Continue to Aviso →",
 		"approve_heading": "Step A — Field work",
+		"invoice_title": "JAF Invoice",
+		"invoice_subtitle": "JAF Communications Inc. · {{number}} · {{date}}",
+		"ivu_row": "+ IVU {{rate}}%",
+		"invoice_total": "Invoice total",
+		"contractor_share": "Contractor share {{percent}}% → {{name}}",
+		"information_only": "information only",
+		"retention_row": "less {{percent}}% retention at payroll",
+		"next_aviso_title": "Next: create the Aviso in Claro.",
+		"next_aviso_body": "Open Claro's system, key in this invoice and create the Aviso. Then, attach the number and the Aviso on the next screen.",
 		"invoice_heading": "Step B — JAF invoice, from installed quantities",
 		"unit_price": "Unit (JAF)",
 		"line_amount": "Line",

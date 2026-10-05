@@ -575,8 +575,18 @@
 		"released": "En Finanzas"
 	},
 	"docs_review_steps": {
+		"download_pdf": "Descargar PDF",
 		"continue_to_aviso": "Continuar al Aviso →",
 		"approve_heading": "Paso A — Trabajo de campo",
+		"invoice_title": "Factura JAF",
+		"invoice_subtitle": "JAF Communications Inc. · {{number}} · {{date}}",
+		"ivu_row": "+ IVU {{rate}}%",
+		"invoice_total": "Total de la factura",
+		"contractor_share": "Participación del contratista {{percent}}% → {{name}}",
+		"information_only": "solo informativo",
+		"retention_row": "menos {{percent}}% de retención en nómina",
+		"next_aviso_title": "Siguiente: cree el Aviso en Claro.",
+		"next_aviso_body": "Abra el sistema de Claro, ingrese esta factura y cree el Aviso. Luego, adjunte el número y el Aviso en la siguiente pantalla.",
 		"invoice_heading": "Paso B — Factura JAF, de cantidades instaladas",
 		"unit_price": "Unitario (JAF)",
 		"line_amount": "Línea",

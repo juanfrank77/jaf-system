@@ -18,11 +18,15 @@ import {
 import { StepRail } from "~/components/step-rail"
 import { Badge } from "~/components/ui/badge"
 import { Button, buttonVariants } from "~/components/ui/button"
+import { Card, CardContent, CardHeader } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Pill } from "~/components/ui/pill"
 import { Textarea } from "~/components/ui/textarea"
-import { CONTRACTOR_SHARE_PERCENT } from "~/lib/contractor-payment.server"
+import {
+	CONTRACTOR_SHARE_PERCENT,
+	RETENTION_RATE,
+} from "~/lib/contractor-payment.server"
 import { db } from "~/lib/db.server"
 import type { AddressCorrection } from "~/lib/field-update-helpers"
 import { validateFile } from "~/lib/file-upload.server"
@@ -123,6 +127,11 @@ const activeSheet = (docId: string) =>
 		orderBy: { version: "desc" },
 	})
 
+const invoiceNumberFor = (doc: {
+	avisoNumber: string | null
+	controlNumber: string
+}) => `M2026-${doc.avisoNumber ?? doc.controlNumber}`
+
 const isSig = (v: unknown) =>
 	typeof v === "string" && v.startsWith("data:image") && v !== "data:,"
 
@@ -174,6 +183,36 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		new URL(request.url).searchParams.get("step"),
 	)
 	const gate = evaluateReleaseGate(doc, sheet, photos)
+	const lineTotal =
+		doc.jafInvoiceLineTotal != null
+			? toNumberPrice(doc.jafInvoiceLineTotal)
+			: null
+	let invoiceSummary: {
+		number: string
+		lineTotal: number
+		ivuRate: number
+		ivu: number
+		total: number
+		sharePercent: number
+		contractor: number
+		retentionPercent: number
+		contractorNet: number
+	} | null = null
+	if (lineTotal != null) {
+		const ivuRate = await getIvuRate()
+		const contractor = round2(lineTotal * CONTRACTOR_SHARE_PERCENT)
+		invoiceSummary = {
+			number: invoiceNumberFor(doc),
+			lineTotal,
+			ivuRate,
+			ivu: round2(lineTotal * ivuRate),
+			total: round2(lineTotal + round2(lineTotal * ivuRate)),
+			sharePercent: CONTRACTOR_SHARE_PERCENT,
+			contractor,
+			retentionPercent: RETENTION_RATE,
+			contractorNet: round2(contractor - round2(contractor * RETENTION_RATE)),
+		}
+	}
 	return {
 		doc,
 		user,
@@ -189,6 +228,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		view,
 		interactive,
 		gate,
+		invoiceSummary,
 		tolerance,
 		correctorNames,
 		submittedBy: doc.completedById
@@ -310,9 +350,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 			? await db.brigade.findUnique({ where: { id: doc.brigadeId } })
 			: null
 
-		const invoiceNumber = doc.avisoNumber
-			? `M2026-${doc.avisoNumber}`
-			: `M2026-${doc.controlNumber}`
+		const invoiceNumber = invoiceNumberFor(doc)
 		const pdf = await generateJafInvoicePdf({
 			controlNumber: doc.controlNumber,
 			avisoNumber: doc.avisoNumber,
@@ -1395,6 +1433,7 @@ export default function ReviewDoc({
 		view,
 		interactive,
 		gate,
+		invoiceSummary,
 		tolerance,
 		correctorNames,
 		submittedBy,
@@ -1429,6 +1468,9 @@ export default function ReviewDoc({
 	const corrections =
 		(doc.addressCorrections as AddressCorrection[] | null) ?? []
 	const panel = panelForStep(view)
+	// Once an Aviso number or lines are saved the invoice is what was keyed into
+	// Claro, so it can no longer be regenerated from here.
+	const avisoStarted = !!doc.avisoNumber || doc.avisoLines != null
 
 	return (
 		<div className="space-y-5">
@@ -1496,77 +1538,160 @@ export default function ReviewDoc({
 
 			{/* B — Invoice */}
 			{panel === "INVOICE" && (
-				<section className="bg-card border rounded-lg p-4 space-y-3">
-					<h2 className="font-medium text-sm">
-						{t("docs_review_steps.invoice_heading")}
-					</h2>
-					{invoiceLines.length > 0 && (
-						<table className="w-full text-sm">
-							<thead>
-								<tr className="text-left text-xs text-muted-foreground border-b">
-									<th className="py-1">{t("docs_review.table.code")}</th>
-									<th className="py-1">{t("docs_review.table.description")}</th>
-									<th className="py-1 text-right">
-										{t("docs_review.table.qty")}
-									</th>
-									<th className="py-1 text-right">
-										{t("docs_review_steps.unit_price")}
-									</th>
-									<th className="py-1 text-right">
-										{t("docs_review_steps.line_amount")}
-									</th>
-								</tr>
-							</thead>
-							<tbody>
-								{invoiceLines.map((l) => (
-									<tr key={l.serviceCodeId} className="border-b last:border-0">
-										<td className="py-1 font-mono text-xs">{l.claroCode}</td>
-										<td className="py-1">{l.name}</td>
-										<td className="py-1 text-right">{l.qty}</td>
-										<td className="py-1 text-right">
-											${l.unitPrice.toFixed(4)}
-										</td>
-										<td className="py-1 text-right">
-											${l.lineAmount.toFixed(2)}
-										</td>
+				<Card>
+					<CardHeader className="items-start">
+						<div>
+							<div className="text-base font-bold">
+								{t("docs_review_steps.invoice_title")}
+							</div>
+							{invoiceSummary && doc.jafInvoiceGeneratedAt && (
+								<div className="mt-0.5 text-xs font-normal text-muted-foreground">
+									{t("docs_review_steps.invoice_subtitle", {
+										number: invoiceSummary.number,
+										date: new Date(
+											doc.jafInvoiceGeneratedAt,
+										).toLocaleDateString(),
+									})}
+								</div>
+							)}
+						</div>
+					</CardHeader>
+					<CardContent className="space-y-3">
+						{invoiceLines.length > 0 && (
+							<table className="w-full text-sm">
+								<thead>
+									<tr className="border-b text-left text-xs text-muted-foreground">
+										<th className="py-1.5">{t("docs_review.table.code")}</th>
+										<th className="py-1.5">
+											{t("docs_review.table.description")}
+										</th>
+										<th className="py-1.5 text-right">
+											{t("docs_review.table.qty")}
+										</th>
+										<th className="py-1.5 text-right">
+											{t("docs_review_steps.unit_price")}
+										</th>
+										<th className="py-1.5 text-right">
+											{t("docs_review_steps.line_amount")}
+										</th>
 									</tr>
-								))}
-							</tbody>
-						</table>
-					)}
-					{doc.jafInvoiceLineTotal != null && (
-						<p className="text-sm text-right">
-							{t("docs_review_steps.line_sum_pre_ivu")}:{" "}
-							<strong>{formatMoney(doc.jafInvoiceLineTotal)}</strong>
-						</p>
-					)}
-					{doc.jafInvoicePdfPath && (
-						<a
-							href={`/files/jaf-invoices/${doc.id}-jaf-invoice.pdf`}
-							className="text-accent-text underline text-sm"
-						>
-							{t("docs_review.download")}
-						</a>
-					)}
-					{interactive && !doc.avisoMatchedAt && (
-						<Form method="post">
-							<input type="hidden" name="intent" value="generate_jaf_invoice" />
-							<Button type="submit" variant="outline" size="sm">
-								{doc.jafInvoiceGeneratedAt
-									? t("docs_review_steps.regenerate_invoice")
-									: t("docs_review.generate_jaf_invoice")}
-							</Button>
-						</Form>
-					)}
-					{interactive && stage === "AVISO" && (
-						<Link
-							to="?step=AVISO"
-							className={buttonVariants({ className: "w-full" })}
-						>
-							{t("docs_review_steps.continue_to_aviso")}
-						</Link>
-					)}
-				</section>
+								</thead>
+								<tbody className="tabular-nums">
+									{invoiceLines.map((l) => (
+										<tr
+											key={l.serviceCodeId}
+											className="border-b last:border-0"
+										>
+											<td className="py-1.5 font-mono text-xs font-semibold">
+												{l.claroCode}
+											</td>
+											<td className="py-1.5">{l.name}</td>
+											<td className="py-1.5 text-right">{l.qty}</td>
+											<td className="py-1.5 text-right">
+												${l.unitPrice.toFixed(4)}
+											</td>
+											<td className="py-1.5 text-right">
+												${l.lineAmount.toFixed(2)}
+											</td>
+										</tr>
+									))}
+								</tbody>
+								{invoiceSummary && (
+									<tfoot className="tabular-nums">
+										<tr>
+											<td colSpan={4} className="pr-6 pt-5 pb-1.5 text-right">
+												{t("docs_review_steps.line_sum_pre_ivu")}
+											</td>
+											<td className="pt-5 pb-1.5 text-right font-semibold">
+												{formatMoney(invoiceSummary.lineTotal)}
+											</td>
+										</tr>
+										<tr className="text-status-warn">
+											<td colSpan={4} className="py-1.5 pr-6 text-right">
+												{t("docs_review_steps.ivu_row", {
+													rate: round2(invoiceSummary.ivuRate * 100),
+												})}
+											</td>
+											<td className="py-1.5 text-right">
+												{formatMoney(invoiceSummary.ivu)}
+											</td>
+										</tr>
+										<tr className="border-t font-semibold">
+											<td colSpan={4} className="pr-6 pt-3 pb-1.5 text-right">
+												{t("docs_review_steps.invoice_total")}
+											</td>
+											<td className="pt-3 pb-1.5 text-right text-base">
+												{formatMoney(invoiceSummary.total)}
+											</td>
+										</tr>
+										<tr className="text-muted-foreground">
+											<td colSpan={4} className="pr-6 pt-6 pb-1.5 text-right">
+												{t("docs_review_steps.contractor_share", {
+													percent: round2(invoiceSummary.sharePercent * 100),
+													name: brigade?.name ?? "—",
+												})}{" "}
+												<span className="text-xs italic">
+													{t("docs_review_steps.information_only")}
+												</span>
+											</td>
+											<td className="pt-6 pb-1.5 text-right">
+												{formatMoney(invoiceSummary.contractor)}
+											</td>
+										</tr>
+										<tr className="text-muted-foreground">
+											<td colSpan={4} className="py-1.5 pr-6 text-right">
+												{t("docs_review_steps.retention_row", {
+													percent: round2(
+														invoiceSummary.retentionPercent * 100,
+													),
+												})}
+											</td>
+											<td className="py-1.5 text-right">
+												{formatMoney(invoiceSummary.contractorNet)}
+											</td>
+										</tr>
+									</tfoot>
+								)}
+							</table>
+						)}
+						{doc.jafInvoicePdfPath && (
+							<a
+								href={`/files/jaf-invoices/${doc.id}-jaf-invoice.pdf`}
+								className="text-accent-text underline text-sm"
+							>
+								{t("docs_review.download")}
+							</a>
+						)}
+						{interactive && !doc.avisoMatchedAt && !avisoStarted && (
+							<Form method="post">
+								<input
+									type="hidden"
+									name="intent"
+									value="generate_jaf_invoice"
+								/>
+								<Button type="submit" variant="outline" size="sm">
+									{doc.jafInvoiceGeneratedAt
+										? t("docs_review_steps.regenerate_invoice")
+										: t("docs_review.generate_jaf_invoice")}
+								</Button>
+							</Form>
+						)}
+						{interactive && invoiceLines.length > 0 && !doc.avisoMatchedAt && (
+							<Pill variant="warn" icon="→">
+								<b>{t("docs_review_steps.next_aviso_title")}</b>{" "}
+								{t("docs_review_steps.next_aviso_body")}
+							</Pill>
+						)}
+						{interactive && stage === "AVISO" && (
+							<Link
+								to="?step=AVISO"
+								className={buttonVariants({ className: "w-full" })}
+							>
+								{t("docs_review_steps.continue_to_aviso")}
+							</Link>
+						)}
+					</CardContent>
+				</Card>
 			)}
 
 			{/* C — Aviso & match */}

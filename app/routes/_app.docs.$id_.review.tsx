@@ -4,13 +4,19 @@ import { type ComponentProps, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
-import { MaterialLineItems } from "~/components/material-line-items"
-import { ServiceLinesTable } from "~/components/service-lines-table"
+import type { MaterialLineItems } from "~/components/material-line-items"
+import {
+	AddressCard,
+	OrderedVsInstalledCard,
+	PhotosCard,
+	ReviewActionsCard,
+} from "~/components/review-field-work"
 import {
 	SignaturePad,
 	type SignaturePadHandle,
 } from "~/components/signature-pad"
 import { StepRail } from "~/components/step-rail"
+import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
@@ -18,6 +24,7 @@ import { Pill } from "~/components/ui/pill"
 import { Textarea } from "~/components/ui/textarea"
 import { CONTRACTOR_SHARE_PERCENT } from "~/lib/contractor-payment.server"
 import { db } from "~/lib/db.server"
+import type { AddressCorrection } from "~/lib/field-update-helpers"
 import { validateFile } from "~/lib/file-upload.server"
 import { generateJafInvoicePdf } from "~/lib/pdf/jaf-invoice.server"
 import { generatePreCertSheetPdf } from "~/lib/pdf/pre-cert-sheet.server"
@@ -134,7 +141,15 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	if (user.role === "SUPERVISOR") {
 		await assertDocInSupervisorScope(db, user.id, doc)
 	}
-	const [serviceCodes, photos, supervisor, sheet, brigade, tolerance] =
+	const personIds = [
+		...new Set([
+			...((doc.addressCorrections as AddressCorrection[] | null) ?? []).map(
+				(c) => c.correctedById,
+			),
+			...(doc.completedById ? [doc.completedById] : []),
+		]),
+	]
+	const [serviceCodes, photos, supervisor, sheet, brigade, tolerance, people] =
 		await Promise.all([
 			getActiveServiceCodes(),
 			db.photo.findMany({ where: { docId: params.id } }),
@@ -144,7 +159,12 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 				? db.brigade.findUnique({ where: { id: doc.brigadeId } })
 				: Promise.resolve(null),
 			getAvisoAmountTolerance(),
+			db.user.findMany({
+				where: { id: { in: personIds } },
+				select: { id: true, name: true },
+			}),
 		])
+	const correctorNames = Object.fromEntries(people.map((u) => [u.id, u.name]))
 	const stage = deriveSupervisorStage(doc, sheet)
 	const gate = evaluateReleaseGate(doc, sheet, photos)
 	return {
@@ -161,6 +181,10 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		stage,
 		gate,
 		tolerance,
+		correctorNames,
+		submittedBy: doc.completedById
+			? (correctorNames[doc.completedById] ?? null)
+			: null,
 	}
 }
 
@@ -1329,6 +1353,8 @@ export default function ReviewDoc({
 		stage,
 		gate,
 		tolerance,
+		correctorNames,
+		submittedBy,
 	} = loaderData
 	const { t } = useTranslation()
 	const error = actionData as
@@ -1354,135 +1380,55 @@ export default function ReviewDoc({
 	const photoItems = photos.map((p) => ({
 		id: p.id,
 		basename: path.basename(p.localPath),
+		tag: p.tag,
+		takenAt: String(p.takenAt),
 	}))
+	const corrections =
+		(doc.addressCorrections as AddressCorrection[] | null) ?? []
 
 	return (
 		<div className="space-y-5">
-			<h1 className="text-xl font-semibold">{t("docs_review.title")}</h1>
-			<p className="font-mono text-sm text-muted-foreground">
-				{doc.controlNumber}
+			<div className="flex flex-wrap items-center justify-between gap-2">
+				<h1 className="font-mono text-xl font-semibold">{doc.controlNumber}</h1>
+				<Badge variant="info">{doc.status.replace(/_/g, " ")}</Badge>
+			</div>
+			<p className="text-sm text-muted-foreground">
+				{doc.jobType}
+				{submittedBy &&
+					` · ${t("docs_review.submitted_by", { name: submittedBy })}`}
+				{doc.fieldSubmittedAt &&
+					` · ${new Date(doc.fieldSubmittedAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}`}
 			</p>
 			<StepRail stage={stage} />
+			{stage === "APPROVE" && (
+				<Pill variant="info">
+					<b>{t("docs_review.callout_approve_title")}</b>{" "}
+					{t("docs_review.callout_approve_body")}
+				</Pill>
+			)}
 
 			{/* A — Approve */}
-			<section className="bg-card border rounded-lg p-4 space-y-3">
-				<h2 className="font-medium text-sm">
-					{t("docs_review_steps.approve_heading")}
-				</h2>
-				<div className="text-sm space-y-1">
-					<p>
-						<span className="text-muted-foreground">
-							{t("docs_review.estimated_address")}:
-						</span>{" "}
-						{doc.jobAddressEstimated}
-					</p>
-					{doc.jobAddressActual && (
-						<p>
-							<span className="text-muted-foreground">
-								{t("docs_review.actual_address")}:
-							</span>{" "}
-							{doc.jobAddressActual}
-						</p>
-					)}
-					{doc.fieldNotes && (
-						<p>
-							<span className="text-muted-foreground">
-								{t("docs_review.field_notes")}:
-							</span>{" "}
-							{doc.fieldNotes}
-						</p>
-					)}
-				</div>
-				{ordered.length > 0 && (
-					<ServiceLinesTable lines={ordered} installed={installed} />
-				)}
-				<div className="grid grid-cols-3 gap-3 text-sm">
-					<div className="border rounded-lg p-3">
-						<p className="text-xs text-muted-foreground mb-1">
-							{t("docs_review.estimated")}
-						</p>
-						<MaterialLineItems
-							serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
-							initialItems={estimated}
-							readOnly
-						/>
-					</div>
-					<div className="border rounded-lg p-3">
-						<p className="text-xs text-muted-foreground mb-1">
-							{t("docs_review.taken")}
-						</p>
-						<MaterialLineItems
-							serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
-							initialItems={taken}
-							estimatedItems={estimated}
-							readOnly
-						/>
-					</div>
-					<div className="border rounded-lg p-3">
-						<p className="text-xs text-muted-foreground mb-1">
-							{t("docs_review.used")}
-						</p>
-						<MaterialLineItems
-							serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
-							initialItems={used}
-							readOnly
-						/>
-					</div>
-				</div>
-				{photoItems.length > 0 && (
-					<div>
-						<p className="text-sm font-medium mb-2">
-							{t("docs_review.job_photos", { count: photoItems.length })}
-						</p>
-						<div className="grid grid-cols-3 gap-2">
-							{photoItems.map((p) => (
-								<a
-									key={p.id}
-									href={`/files/photos/${doc.id}/${p.basename}`}
-									target="_blank"
-									rel="noreferrer"
-								>
-									<img
-										src={`/files/photos/${doc.id}/${p.basename}`}
-										alt={t("docs_review.job_site_alt")}
-										className="w-full h-24 object-cover rounded border"
-									/>
-								</a>
-							))}
-						</div>
-					</div>
-				)}
-				{doc.status === "FIELD_UPDATED" && (
-					<Form method="post" className="space-y-3 border-t pt-3">
-						<div>
-							<Label htmlFor="claroNotes">
-								{t("docs_review.notes_for_finance_label")}
-							</Label>
-							<Textarea id="claroNotes" name="claroNotes" rows={2} />
-						</div>
-						<input type="hidden" name="intent" value="approve" />
-						<Button type="submit" className="w-full">
-							{t("docs_review.approve")}
-						</Button>
-					</Form>
-				)}
-				{(doc.status === "FIELD_UPDATED" ||
-					doc.status === "SUPERVISOR_APPROVED") && (
-					<Form method="post" className="space-y-2 border-t pt-3">
-						<h3 className="font-medium text-sm">
-							{t("docs_review.send_back_heading")}
-						</h3>
-						<p className="text-xs text-muted-foreground">
-							{t("docs_review.send_back_hint")}
-						</p>
-						<Textarea name="note" rows={2} required />
-						<input type="hidden" name="intent" value="send_back" />
-						<Button type="submit" variant="outline">
-							{t("docs_review.send_back")}
-						</Button>
-					</Form>
-				)}
-			</section>
+			<AddressCard
+				estimated={doc.jobAddressEstimated}
+				corrections={corrections}
+				correctorNames={correctorNames}
+				notes={doc.fieldNotes}
+			/>
+			<PhotosCard docId={doc.id} photos={photoItems} />
+			<OrderedVsInstalledCard
+				ordered={ordered}
+				installed={installed}
+				estimated={estimated}
+				taken={taken}
+				used={used}
+				serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
+			/>
+			<ReviewActionsCard
+				canApprove={doc.status === "FIELD_UPDATED"}
+				canSendBack={
+					doc.status === "FIELD_UPDATED" || doc.status === "SUPERVISOR_APPROVED"
+				}
+			/>
 
 			{/* B — Invoice */}
 			{stage !== "INTAKE" &&

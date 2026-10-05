@@ -544,7 +544,19 @@
 			"signature_required": "Se requiere una firma.",
 			"contractor_code_required": "Esta brigada no tiene código de contratista. Ingréselo para firmar.",
 			"release_blocked": "El paquete está incompleto. Vea la lista de condiciones."
-		}
+		},
+		"certified_address": "Dirección certificada",
+		"certified_address_corrected": "Dirección certificada — corregida por la cuadrilla",
+		"corrected_by": "Corregida por {{name}} · {{when}}",
+		"photo_tag_BEFORE": "Antes",
+		"photo_tag_AFTER": "Después",
+		"ordered_vs_installed": "Ordenado vs Instalado",
+		"per_service_code": "por código de servicio",
+		"materials_detail": "Materiales: estimado, retirado, utilizado",
+		"approve_field_work": "Aprobar trabajo de campo",
+		"submitted_by": "enviado por {{name}}",
+		"callout_approve_title": "Paso 4 de 8 · Usted",
+		"callout_approve_body": "Revise la dirección corregida, las fotos y las cantidades instaladas. Apruebe, o devuelva con una nota."
 	},
 	"step_rail": {
 		"aria": "Progreso de la orden",
@@ -1476,7 +1488,8 @@
 		"col_unit_price": "Precio unit.",
 		"col_line": "Línea",
 		"subtotal": "Subtotal estimado (antes de IVU)",
-		"col_installed": "Instalado"
+		"col_installed": "Instalado",
+		"col_difference": "Diferencia"
 	},
 	"installer_supervisor": {
 		"below_par": "Bajo par",

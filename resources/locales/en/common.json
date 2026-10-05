@@ -544,7 +544,19 @@
 			"signature_required": "A signature is required.",
 			"contractor_code_required": "This crew has no contractor code. Enter it to sign.",
 			"release_blocked": "The packet is incomplete. See the checklist."
-		}
+		},
+		"certified_address": "Certified address",
+		"certified_address_corrected": "Certified address — corrected by crew",
+		"corrected_by": "Corrected by {{name}} · {{when}}",
+		"photo_tag_BEFORE": "Before",
+		"photo_tag_AFTER": "After",
+		"ordered_vs_installed": "Ordered vs Installed",
+		"per_service_code": "per service code",
+		"materials_detail": "Materials: estimated, taken, used",
+		"approve_field_work": "Approve field work",
+		"submitted_by": "submitted by {{name}}",
+		"callout_approve_title": "Step 4 of 8 · You",
+		"callout_approve_body": "Check the corrected address, the photos and the installed quantities. Approve, or send back with a note."
 	},
 	"step_rail": {
 		"aria": "Work order progress",
@@ -1476,7 +1488,8 @@
 		"col_unit_price": "Unit price",
 		"col_line": "Line",
 		"subtotal": "Estimated subtotal (pre-IVU)",
-		"col_installed": "Installed"
+		"col_installed": "Installed",
+		"col_difference": "Difference"
 	},
 	"installer_supervisor": {
 		"below_par": "Below par",

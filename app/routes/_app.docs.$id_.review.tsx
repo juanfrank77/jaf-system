@@ -1340,9 +1340,12 @@ export default function ReviewDoc({
 				conditions?: { key: string; ok: boolean }[]
 		  }
 		| undefined
-	const estimated = (doc.estimatedMaterials as unknown as MaterialLine[]) || []
-	const taken = (doc.materialsTaken as unknown as MaterialLine[]) || []
-	const used = (doc.materialsUsed as unknown as MaterialLine[]) || []
+	// Json columns: tolerate null or a malformed non-array value
+	const asLines = (v: unknown) =>
+		Array.isArray(v) ? (v as MaterialLine[]) : []
+	const estimated = asLines(doc.estimatedMaterials)
+	const taken = asLines(doc.materialsTaken)
+	const used = asLines(doc.materialsUsed)
 	const ordered = (doc.serviceLines as ServiceLine[] | null) ?? []
 	const installed = (doc.installedServiceLines as ServiceLine[] | null) ?? []
 	const invoiceLines = (doc.jafInvoiceLines as InvoiceLine[] | null) ?? []

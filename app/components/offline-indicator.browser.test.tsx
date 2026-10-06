@@ -78,4 +78,30 @@ describe("ConnectionDot", () => {
 		expect(dots[0]).toHaveAttribute("data-state", "pending")
 		expect(dots[1]).toHaveAttribute("data-state", "synced")
 	})
+
+	it("carries the same text as the bar as a tooltip", async ({
+		renderStub,
+	}) => {
+		await mount(
+			renderStub,
+			<div>
+				<ConnectionDot state={{ online: true, pendingCount: 0 }} />
+				<ConnectionDot state={{ online: true, pendingCount: 3 }} />
+				<ConnectionDot state={{ online: false, pendingCount: 0 }} />
+				<ConnectionDot state={{ online: false, pendingCount: 2 }} />
+			</div>,
+		)
+		const dots = document.querySelectorAll('[data-slot="connection-dot"]')
+		expect(dots[0]).toHaveAttribute("title", "Online — everything synced")
+		expect(dots[1]).toHaveAttribute("title", "3 changes pending sync")
+		expect(dots[2]).toHaveAttribute(
+			"title",
+			"Offline — changes will sync when you reconnect",
+		)
+		expect(dots[3]).toHaveAttribute(
+			"title",
+			"Offline — 2 changes waiting to sync",
+		)
+		expect(dots[0]).not.toHaveAttribute("aria-label")
+	})
 })

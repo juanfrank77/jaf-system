@@ -78,7 +78,7 @@ vi.mock("~/lib/pdf/warehouse-receipt.server", () => ({
 import { db } from "~/lib/db.server"
 import { generateWarehouseReceiptPdf } from "~/lib/pdf/warehouse-receipt.server"
 import { requireRole } from "~/lib/permissions.server"
-import { action } from "./_app.docs.$id_.sign"
+import { action, loader } from "./_app.docs.$id_.sign"
 
 function formRequest(form: FormData, id = "doc-1") {
 	return new Request(`http://localhost/docs/${id}/sign`, {
@@ -380,5 +380,41 @@ describe("POST /docs/:id/sign", () => {
 				return data.type === "RELEASE" && data.qty === -300
 			}),
 		).toBe(true)
+	})
+})
+
+describe("crew assignment scope on /docs/:id/sign", () => {
+	beforeEach(() => vi.clearAllMocks())
+
+	function unassignedCrewSetup() {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "crew-9", role: "CREW" },
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			id: "doc-1",
+			status: "PREPPED",
+			assignedCrewIds: ["crew-1"],
+		} as any)
+	}
+
+	it("404s the loader for a crew member not assigned to the job", async () => {
+		unassignedCrewSetup()
+		const thrown = await loader({
+			request: new Request("http://localhost/docs/doc-1/sign"),
+			params: { id: "doc-1" },
+		} as any).catch((e: unknown) => e)
+		expect((thrown as Response).status).toBe(404)
+		expect(await (thrown as Response).text()).toBe("NOT_ASSIGNED")
+	})
+
+	it("404s the action and writes nothing for an unassigned crew member", async () => {
+		unassignedCrewSetup()
+		await expect(
+			action({
+				request: formRequest(new FormData()),
+				params: { id: "doc-1" },
+			} as any),
+		).rejects.toMatchObject({ status: 404 })
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
 	})
 })

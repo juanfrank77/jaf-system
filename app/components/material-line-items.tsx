@@ -1,3 +1,5 @@
+import { Cancel01Icon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Button } from "~/components/ui/button"
@@ -165,16 +167,21 @@ export function MaterialLineItems({
 						<button
 							type="button"
 							onClick={() => removeItem(item._key)}
-							className="text-muted-foreground hover:text-status-danger text-lg"
+							aria-label={t("material_line_items.remove")}
+							className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:border-status-danger hover:bg-status-danger-soft hover:text-status-danger"
 						>
-							×
+							<HugeiconsIcon
+								icon={Cancel01Icon}
+								strokeWidth={2}
+								className="size-4"
+							/>
 						</button>
 					</div>
 				)
 			})}
 			{!readOnly && (
 				<Button type="button" variant="outline" size="sm" onClick={addItem}>
-					{t("material_line_items.add_service_code")}
+					{t("material_line_items.add_material")}
 				</Button>
 			)}
 		</div>

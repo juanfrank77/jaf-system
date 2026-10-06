@@ -34,7 +34,7 @@ export type ContractorPayment = {
 	netPayable: number
 }
 
-const RETENTION_RATE = 0.1
+export const RETENTION_RATE = 0.1
 
 /** Truncate (never round) an exact decimal to whole cents. Money here is
  * computed in `Decimal`, not `number`: `Math.trunc(0.29 * 100) / 100` is 0.28

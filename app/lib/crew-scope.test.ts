@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest"
-import { isUnassignedCrew } from "./crew-scope"
+import {
+	isNotAssignedError,
+	isUnassignedCrew,
+	notAssignedResponse,
+} from "./crew-scope"
 
 describe("isUnassignedCrew", () => {
 	const doc = { assignedCrewIds: ["crew-1", "crew-2"] }
@@ -24,4 +28,26 @@ describe("isUnassignedCrew", () => {
 			expect(isUnassignedCrew({ id: "x", role }, doc)).toBe(false)
 		},
 	)
+})
+
+describe("notAssignedResponse", () => {
+	it("is a 404 whose body marks it as not-assigned, with no job data", async () => {
+		const res = notAssignedResponse()
+		expect(res.status).toBe(404)
+		expect(await res.text()).toBe("NOT_ASSIGNED")
+	})
+
+	it("is recognised by isNotAssignedError once react-router wraps it", () => {
+		expect(isNotAssignedError({ status: 404, data: "NOT_ASSIGNED" })).toBe(true)
+	})
+
+	it.each([
+		{ status: 404, data: "Not Found" },
+		{ status: 403, data: "NOT_ASSIGNED" },
+		new Error("NOT_ASSIGNED"),
+		null,
+		undefined,
+	])("does not mistake %o for a not-assigned error", (err) => {
+		expect(isNotAssignedError(err)).toBe(false)
+	})
 })

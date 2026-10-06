@@ -16,7 +16,7 @@ import {
 	buildCrewAssignment,
 	readHistory,
 } from "~/lib/crew-assignment"
-import { isUnassignedCrew } from "~/lib/crew-scope"
+import { isUnassignedCrew, notAssignedResponse } from "~/lib/crew-scope"
 import { db } from "~/lib/db.server"
 import {
 	type AddressCorrection,
@@ -101,9 +101,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	) {
 		throw new Response("Not Found", { status: 404 })
 	}
-	if (isUnassignedCrew(user, doc)) {
-		throw new Response("Not Found", { status: 404 })
-	}
+	if (isUnassignedCrew(user, doc)) throw notAssignedResponse()
 	if (user.role === "SUPERVISOR") {
 		await assertDocInSupervisorScope(db, user.id, doc)
 	}

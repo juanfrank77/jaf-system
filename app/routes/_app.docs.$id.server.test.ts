@@ -57,7 +57,7 @@ describe("GET /docs/:id", () => {
 		}
 	}
 
-	it("404s a crew member who is not assigned to the job", async () => {
+	it("404s a crew member who is not assigned to the job, marked not-assigned", async () => {
 		vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
 			id: "crew-9",
 			role: "CREW",
@@ -66,12 +66,13 @@ describe("GET /docs/:id", () => {
 			baseDoc("PREPPED", { assignedCrewIds: ["crew-1"] }) as any,
 		)
 
-		await expect(
-			loader({
-				request: new Request("http://localhost/docs/doc-1"),
-				params: { id: "doc-1" },
-			} as any),
-		).rejects.toMatchObject({ status: 404 })
+		const thrown = await loader({
+			request: new Request("http://localhost/docs/doc-1"),
+			params: { id: "doc-1" },
+		} as any).catch((e: unknown) => e)
+		expect(thrown).toBeInstanceOf(Response)
+		expect((thrown as Response).status).toBe(404)
+		expect(await (thrown as Response).text()).toBe("NOT_ASSIGNED")
 	})
 
 	it("lets an assigned crew member load the job", async () => {

@@ -399,12 +399,12 @@ describe("crew assignment scope on /docs/:id/sign", () => {
 
 	it("404s the loader for a crew member not assigned to the job", async () => {
 		unassignedCrewSetup()
-		await expect(
-			loader({
-				request: new Request("http://localhost/docs/doc-1/sign"),
-				params: { id: "doc-1" },
-			} as any),
-		).rejects.toMatchObject({ status: 404 })
+		const thrown = await loader({
+			request: new Request("http://localhost/docs/doc-1/sign"),
+			params: { id: "doc-1" },
+		} as any).catch((e: unknown) => e)
+		expect((thrown as Response).status).toBe(404)
+		expect(await (thrown as Response).text()).toBe("NOT_ASSIGNED")
 	})
 
 	it("404s the action and writes nothing for an unassigned crew member", async () => {

@@ -1,10 +1,11 @@
+import type { TFunction } from "i18next"
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useOnline } from "~/hooks/use-online"
 import { getQueuedActions } from "~/lib/offline-store"
 import { cn } from "~/lib/utils"
 
-export type ConnectionState = { online: boolean; pendingCount: number }
+type ConnectionState = { online: boolean; pendingCount: number }
 
 type DotState = "synced" | "pending" | "offline"
 
@@ -49,21 +50,25 @@ const DOT: Record<DotState, string> = {
 	offline: "bg-status-danger-solid",
 }
 
+const connectionText = (state: ConnectionState, t: TFunction): string => {
+	const kind = dotState(state)
+	return kind === "synced"
+		? t("offline_indicator.synced")
+		: kind === "pending"
+			? t("offline_indicator.sync_pending", { count: state.pendingCount })
+			: state.pendingCount > 0
+				? t("offline_indicator.offline_pending", {
+						count: state.pendingCount,
+					})
+				: t("offline_indicator.offline")
+}
+
 /** Always-visible bar under the header: the crew needs to see "offline" and
  * "N updates waiting" most when the signal is bad. */
 export function ConnectionBar({ state }: { state: ConnectionState }) {
 	const { t } = useTranslation()
 	const kind = dotState(state)
-	const text =
-		kind === "synced"
-			? t("offline_indicator.synced")
-			: kind === "pending"
-				? t("offline_indicator.sync_pending", { count: state.pendingCount })
-				: state.pendingCount > 0
-					? t("offline_indicator.offline_pending", {
-							count: state.pendingCount,
-						})
-					: t("offline_indicator.offline")
+	const text = connectionText(state, t)
 	return (
 		<div
 			role="status"
@@ -75,16 +80,20 @@ export function ConnectionBar({ state }: { state: ConnectionState }) {
 			)}
 		>
 			<span className={cn("size-2 shrink-0 rounded-full", DOT[kind])} />
-			<span className="min-w-0 truncate">{text}</span>
+			<span className="min-w-0 truncate" title={text}>
+				{text}
+			</span>
 		</div>
 	)
 }
 
 /** The only connection cue left in the header. The bar carries the words. */
 export function ConnectionDot({ state }: { state: ConnectionState }) {
+	const { t } = useTranslation()
 	const kind = dotState(state)
 	return (
 		<span
+			title={connectionText(state, t)}
 			data-slot="connection-dot"
 			data-state={kind}
 			aria-hidden="true"

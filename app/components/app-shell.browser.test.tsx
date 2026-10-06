@@ -31,6 +31,30 @@ describe("AppShell", () => {
 			within(header).queryByText("Online — everything synced"),
 		).not.toBeInTheDocument()
 	})
+	it("does not overflow the viewport when the page content is short", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<AppShell
+							user={{ name: "Jose Alfaro", role: "SUPERVISOR" }}
+							notifications={[]}
+						>
+							<p>content</p>
+						</AppShell>
+					),
+				},
+			],
+		})
+		await screen.findByText("Online — everything synced")
+		expect(document.documentElement.scrollHeight).toBeLessThanOrEqual(
+			window.innerHeight,
+		)
+	})
+
 	it("shows the user's name and role", async ({ renderStub }) => {
 		await renderStub({
 			entries: [

@@ -1,61 +1,79 @@
-import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
-import { SUPERVISOR_STAGES, type SupervisorStage } from "~/lib/supervisor-stage"
 import { cn } from "~/lib/utils"
 
-const LABEL_KEYS = {
-	INTAKE: "step_rail.intake",
-	WAREHOUSE: "step_rail.warehouse",
-	FIELD: "step_rail.field",
-	APPROVE: "step_rail.approve",
-	INVOICE: "step_rail.invoice",
-	AVISO: "step_rail.aviso",
-	PRECERT: "step_rail.precert",
-	RELEASE: "step_rail.release",
-	RELEASED: "step_rail.released",
-} as const
+export type RailStep = {
+	key: string
+	/** Already translated. */
+	label: string
+	/** Reached steps link back to their read-only screen. Never applied to the
+	 * current step or a locked one. */
+	href?: string
+	/** Not reachable yet for this role: greyed out, never a link. */
+	locked?: boolean
+	/** The step belongs to the viewer ("You"). */
+	mine?: boolean
+}
 
-// `stage` is how far the job has actually got; `view` is the step on screen.
-// Reached supervisor steps (Approve onward) link back to their read-only
-// screen.
+type RailState = "done" | "current" | "todo" | "locked"
+
 export function StepRail({
-	stage,
-	view = stage,
+	steps,
+	current,
+	ariaLabel,
+	compact = false,
 }: {
-	stage: SupervisorStage
-	view?: SupervisorStage
+	steps: RailStep[]
+	/** Index into `steps` of the step on screen. Out of range means no step is
+	 * current. */
+	current: number
+	ariaLabel: string
+	/** One equal-width row for a phone: labels truncate instead of wrapping. */
+	compact?: boolean
 }) {
-	const { t } = useTranslation()
-	const current = SUPERVISOR_STAGES.indexOf(view)
-	const reached = SUPERVISOR_STAGES.indexOf(stage)
-	const first = SUPERVISOR_STAGES.indexOf("APPROVE")
 	return (
 		<ol
-			className="flex flex-wrap gap-1 text-xs"
-			aria-label={t("step_rail.aria")}
+			aria-label={ariaLabel}
+			data-compact={compact || undefined}
+			className={cn(
+				"flex gap-1 text-xs",
+				compact ? "flex-nowrap" : "flex-wrap",
+			)}
 		>
-			{SUPERVISOR_STAGES.map((s, i) => {
+			{steps.map((step, i) => {
+				const state: RailState = step.locked
+					? "locked"
+					: i === current
+						? "current"
+						: i < current
+							? "done"
+							: "todo"
 				const label = (
 					<>
-						{i + 1}. {t(LABEL_KEYS[s])}
+						{i + 1}. {step.label}
 					</>
 				)
-				const lookBack = i >= first && i <= reached && i !== current
+				const linked = step.href && state !== "current" && state !== "locked"
 				return (
 					<li
-						key={s}
-						aria-current={i === current ? "step" : undefined}
+						key={step.key}
+						data-state={state}
+						data-mine={step.mine || undefined}
+						aria-current={state === "current" ? "step" : undefined}
 						className={cn(
-							"px-2 py-1 rounded-full border",
-							i < current &&
+							"rounded-full border px-2 py-1",
+							compact && "min-w-0 flex-1 truncate px-1 text-center text-[10px]",
+							step.mine && "font-semibold",
+							state === "done" &&
 								"bg-status-ok-soft border-status-ok/30 text-status-ok",
-							i === current &&
+							state === "current" &&
 								"bg-primary border-primary text-primary-foreground font-medium",
-							i > current && "bg-card border-border text-muted-foreground",
+							state === "todo" && "bg-card border-border text-muted-foreground",
+							state === "locked" &&
+								"bg-muted border-border text-muted-foreground/60",
 						)}
 					>
-						{lookBack ? (
-							<Link to={`?step=${s}`} className="hover:underline">
+						{linked ? (
+							<Link to={step.href as string} className="hover:underline">
 								{label}
 							</Link>
 						) : (

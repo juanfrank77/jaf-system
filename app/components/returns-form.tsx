@@ -274,6 +274,7 @@ export function ReturnsForm({
 										},
 									]}
 									readOnly
+									showPrice={false}
 								/>
 								<button
 									type="button"

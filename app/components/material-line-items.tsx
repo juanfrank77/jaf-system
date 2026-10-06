@@ -36,6 +36,9 @@ interface Props {
 	readOnly?: boolean
 	name?: string
 	estimatedItems?: LineItem[] | undefined
+	/** Print `unit price x qty` per line in read-only mode. Defaults to true;
+	 * the column is also skipped for any line whose catalog row has no price. */
+	showPrice?: boolean
 }
 
 let _counter = 0
@@ -64,6 +67,7 @@ export function MaterialLineItems({
 	readOnly = false,
 	name = "materials",
 	estimatedItems,
+	showPrice = true,
 }: Props) {
 	const { t } = useTranslation()
 	const [items, setItems] = useState<InternalItem[]>(() =>
@@ -119,7 +123,7 @@ export function MaterialLineItems({
 							<span className="w-16 text-right">
 								{item.qty} {code?.unit}
 							</span>
-							{code?.unitPrice !== undefined && (
+							{showPrice && code?.unitPrice !== undefined && (
 								<span className="w-20 text-right">
 									${(toNumberPrice(code.unitPrice) * item.qty).toFixed(2)}
 								</span>

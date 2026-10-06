@@ -11,10 +11,12 @@ export function ServiceLinesTable({
 	lines,
 	installed,
 	editableName,
+	showDifference,
 }: {
 	lines: ServiceLine[]
 	installed?: ServiceLine[]
 	editableName?: string
+	showDifference?: boolean
 }) {
 	const { t } = useTranslation()
 	const initial = lines.map((l) => ({
@@ -45,30 +47,51 @@ export function ServiceLinesTable({
 						<th className="py-1 text-right">
 							{t("service_picker.col_installed")}
 						</th>
+						{showDifference && (
+							<th className="py-1 text-right">
+								{t("service_picker.col_difference")}
+							</th>
+						)}
 					</tr>
 				</thead>
 				<tbody>
-					{lines.map((l, i) => (
-						<tr key={l.serviceCodeId} className="border-b last:border-0">
-							<td className="py-1 font-mono text-xs">{l.claroCode}</td>
-							<td className="py-1">{l.name}</td>
-							<td className="py-1 text-right">{l.qty}</td>
-							<td className="py-1 text-right">
-								{editableName ? (
-									<Input
-										type="number"
-										min={0}
-										value={rows[i].qty}
-										className="w-20 ml-auto"
-										onChange={(e) => updateQty(i, e.target.value)}
-									/>
-								) : (
-									(installed?.find((x) => x.serviceCodeId === l.serviceCodeId)
-										?.qty ?? "—")
+					{lines.map((l, i) => {
+						const installedQty = installed?.find(
+							(x) => x.serviceCodeId === l.serviceCodeId,
+						)?.qty
+						const diff = installedQty === undefined ? 0 : installedQty - l.qty
+						return (
+							<tr key={l.serviceCodeId} className="border-b last:border-0">
+								<td className="py-1 font-mono text-xs">{l.claroCode}</td>
+								<td className="py-1">{l.name}</td>
+								<td className="py-1 text-right">{l.qty}</td>
+								<td className="py-1 text-right">
+									{editableName ? (
+										<Input
+											type="number"
+											min={0}
+											value={rows[i].qty}
+											className="w-20 ml-auto"
+											onChange={(e) => updateQty(i, e.target.value)}
+										/>
+									) : (
+										(installedQty ?? "—")
+									)}
+								</td>
+								{showDifference && (
+									<td
+										className={
+											diff === 0
+												? "py-1 text-right text-status-ok"
+												: "py-1 text-right font-medium text-status-warn"
+										}
+									>
+										{diff === 0 ? "—" : diff > 0 ? `+${diff}` : diff}
+									</td>
 								)}
-							</td>
-						</tr>
-					))}
+							</tr>
+						)
+					})}
 				</tbody>
 			</table>
 		</div>

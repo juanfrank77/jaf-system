@@ -8,6 +8,8 @@ const pillVariants = cva(
 			variant: {
 				info: "bg-status-info-soft text-foreground",
 				warn: "bg-status-warn-soft text-foreground",
+				ok: "bg-status-ok-soft text-foreground",
+				danger: "bg-status-danger-soft text-foreground",
 			},
 		},
 	},

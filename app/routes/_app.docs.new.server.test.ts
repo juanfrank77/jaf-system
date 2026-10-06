@@ -95,6 +95,107 @@ describe("POST /docs/new", () => {
 		})
 	})
 
+	function validForm(aviso?: string) {
+		const form = new FormData()
+		form.set("jobType", "Mantenimiento")
+		form.set("jobAddressEstimated", "CAM 906 Yabucoa")
+		form.set("brigadeId", "b1")
+		form.set("materials", "[]")
+		form.set("serviceLines", "[]")
+		if (aviso !== undefined) form.set("avisoNumber", aviso)
+		return form
+	}
+
+	it("stores an 8-digit Aviso number when one is given", async () => {
+		const res = await action({
+			request: post(validForm(" 10353961 ")),
+			params: {},
+		} as any).catch((r) => r)
+		expect(res.status).toBe(302)
+		expect(tx.jafInvoice.create).toHaveBeenCalledWith({
+			data: expect.objectContaining({ avisoNumber: "10353961" }),
+		})
+	})
+
+	it("leaves avisoNumber null when the field is blank or absent", async () => {
+		for (const form of [validForm(""), validForm()]) {
+			tx.jafInvoice.create.mockClear()
+			await action({ request: post(form), params: {} } as any).catch((r) => r)
+			expect(tx.jafInvoice.create).toHaveBeenCalledWith({
+				data: expect.objectContaining({ avisoNumber: null }),
+			})
+		}
+	})
+
+	it("rejects an Aviso number that is not 8 digits", async () => {
+		const res = await action({
+			request: post(validForm("1035396")),
+			params: {},
+		} as any)
+		expect(res).toEqual({ errorKey: "docs_new.errors.aviso_invalid" })
+		expect(tx.jafInvoice.create).not.toHaveBeenCalled()
+	})
+
+	describe("several brigades", () => {
+		const brigades: Record<string, any> = {
+			b1: { id: "b1", name: "A", area: "CENTRAL", memberIds: ["u1", "u2"] },
+			b2: { id: "b2", name: "B", area: "CENTRAL", memberIds: ["u2", "u3"] },
+			bx: { id: "bx", name: "X", area: "METRO", memberIds: ["u9"] },
+		}
+		function multiForm(ids: string[]) {
+			const form = validForm()
+			form.delete("brigadeId")
+			for (const id of ids) form.append("brigadeId", id)
+			return form
+		}
+		beforeEach(() => {
+			vi.mocked(db.brigade.findUnique).mockImplementation(
+				(async ({ where }: any) => brigades[where.id] ?? null) as any,
+			)
+		})
+
+		it("makes the first the lead, unions the crews, and records every brigade", async () => {
+			const res = await action({
+				request: post(multiForm(["b2", "b1"])),
+				params: {},
+			} as any).catch((r) => r)
+			expect(res.status).toBe(302)
+			const { data } = tx.jafInvoice.create.mock.calls[0][0]
+			expect(data.brigadeId).toBe("b2")
+			expect(data.assignedCrewIds).toEqual(["u2", "u3", "u1"])
+			expect(data.crewAssignmentHistory).toEqual([
+				expect.objectContaining({
+					brigadeId: "b2",
+					brigadeIds: ["b2", "b1"],
+					userIds: ["u2", "u3", "u1"],
+					assignedById: "sup-1",
+				}),
+			])
+			expect(tx.auditTrail.create).toHaveBeenCalledWith({
+				data: expect.objectContaining({
+					diffJson: expect.objectContaining({ brigadeIds: ["b2", "b1"] }),
+				}),
+			})
+		})
+
+		it("rejects the whole assignment if any brigade is outside the supervisor's areas", async () => {
+			const res = await action({
+				request: post(multiForm(["b1", "bx"])),
+				params: {},
+			} as any)
+			expect(res).toEqual({ errorKey: "docs_new.errors.brigade_invalid" })
+			expect(tx.jafInvoice.create).not.toHaveBeenCalled()
+		})
+
+		it("rejects an unknown brigade id", async () => {
+			const res = await action({
+				request: post(multiForm(["b1", "nope"])),
+				params: {},
+			} as any)
+			expect(res).toEqual({ errorKey: "docs_new.errors.brigade_invalid" })
+		})
+	})
+
 	it("rejects a missing brigade", async () => {
 		const form = new FormData()
 		form.set("jobType", "Mantenimiento")

@@ -1,12 +1,22 @@
+import type { ParseKeys } from "i18next"
 import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
+import { CrewPicker } from "~/components/crew-picker"
 import { RouteErrorBoundary } from "~/components/error-boundary"
-import { MaterialLineItems } from "~/components/material-line-items"
+import { MaterialPicker } from "~/components/material-picker"
 import { ServicePicker } from "~/components/service-picker"
 import { Button } from "~/components/ui/button"
+import { Card, CardContent } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
+import { PageHeader } from "~/components/ui/page-header"
 import { Textarea } from "~/components/ui/textarea"
+import {
+	assignedBrigadeIds,
+	buildCrewAssignment,
+	parseBrigadeIds,
+	readHistory,
+} from "~/lib/crew-assignment"
 import { db } from "~/lib/db.server"
 import { isEditableStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
@@ -18,6 +28,7 @@ import {
 	isBrigadeInSupervisorScope,
 } from "~/lib/supervisor-scope"
 import { toNumberPrice } from "~/lib/utils"
+import type { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id_.edit"
 
 export const meta: Route.MetaFunction = ({ data }) => [
@@ -50,14 +61,32 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			take: brigadeArgs.take,
 		}),
 	])
+	const lineIds = ((doc.serviceLines as ServiceLine[] | null) ?? []).map(
+		(l) => l.serviceCodeId,
+	)
+	const lineCodes =
+		lineIds.length > 0
+			? await db.serviceCode.findMany({
+					where: { id: { in: lineIds } },
+					select: { id: true, unit: true, unitPrice: true },
+				})
+			: []
+	const serviceLineMeta = Object.fromEntries(
+		lineCodes.map((c) => [
+			c.id,
+			{ unit: c.unit, unitPrice: toNumberPrice(c.unitPrice) },
+		]),
+	)
 	return {
 		doc,
 		user,
+		serviceLineMeta,
 		serviceCodes: serviceCodes.map((c) => ({
 			...c,
 			unitPrice: toNumberPrice(c.unitPrice),
 		})),
 		brigades,
+		assignedBrigadeIds: assignedBrigadeIds(doc),
 	}
 }
 
@@ -77,7 +106,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const jobAddressEstimated = (form.get("jobAddressEstimated") as string).trim()
 	const jobDescription =
 		(form.get("jobDescription") as string | null)?.trim() || null
-	const brigadeId = (form.get("brigadeId") as string | null)?.trim() || null
+	const brigadeIds = parseBrigadeIds(form)
 	const avisoNumber = (form.get("avisoNumber") as string | null)?.trim() || null
 	const materialsRaw = (form.get("materials") as string) || "[]"
 
@@ -98,21 +127,35 @@ export async function action({ request, params }: Route.ActionArgs) {
 		return { errorKey: "docs_edit.errors.invalid_service_lines" }
 	}
 
-	if (!jobType || !jobAddressEstimated || !brigadeId) {
+	if (!jobType || !jobAddressEstimated || brigadeIds.length === 0) {
 		return { errorKey: "docs_edit.errors.missing_fields" }
 	}
 
-	const brigade = await db.brigade.findUnique({
-		where: { id: brigadeId },
-	})
-	if (!brigade) return { errorKey: "docs_edit.errors.brigade_invalid" }
 	if (
-		user.role === "SUPERVISOR" &&
-		!(await isBrigadeInSupervisorScope(db, user.id, brigade))
+		avisoNumber &&
+		avisoNumber !== doc.avisoNumber &&
+		!/^\d{8}$/.test(avisoNumber)
 	) {
-		return { errorKey: "docs_edit.errors.brigade_invalid" }
+		return { errorKey: "docs_edit.errors.aviso_invalid" }
 	}
-	const assignedCrewIds = brigade.memberIds
+
+	const brigades = await Promise.all(
+		brigadeIds.map((id) => db.brigade.findUnique({ where: { id } })),
+	)
+	for (const brigade of brigades) {
+		if (!brigade) return { errorKey: "docs_edit.errors.brigade_invalid" }
+		if (
+			user.role === "SUPERVISOR" &&
+			!(await isBrigadeInSupervisorScope(db, user.id, brigade))
+		) {
+			return { errorKey: "docs_edit.errors.brigade_invalid" }
+		}
+	}
+	const { brigadeId, assignedCrewIds } = buildCrewAssignment(
+		brigades as NonNullable<(typeof brigades)[number]>[],
+	)
+	const crewChanged =
+		JSON.stringify(brigadeIds) !== JSON.stringify(assignedBrigadeIds(doc))
 
 	const materialsChanged =
 		JSON.stringify(estimatedMaterials) !==
@@ -129,6 +172,22 @@ export async function action({ request, params }: Route.ActionArgs) {
 				serviceLines,
 				brigadeId,
 				assignedCrewIds,
+				// Only record a new assignment when the brigades (or the lead)
+				// actually changed; a plain re-save leaves the history alone.
+				...(crewChanged && {
+					crewAssignmentHistory: [
+						...(readHistory(
+							doc.crewAssignmentHistory,
+						) as Prisma.InputJsonObject[]),
+						{
+							userIds: assignedCrewIds,
+							brigadeId,
+							brigadeIds,
+							assignedById: user.id,
+							assignedAt: new Date().toISOString(),
+						},
+					],
+				}),
 				avisoNumber,
 				// PRD §2.7: editing materials after prep started → flag for re-confirm.
 				prepChangedSincePrep:
@@ -153,6 +212,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 						"assignedCrewIds",
 						"avisoNumber",
 					],
+					brigadeIds,
 					materialsChanged,
 					prepChangedSincePrep: doc.status === "PREPPED" && materialsChanged,
 				},
@@ -179,105 +239,132 @@ export async function action({ request, params }: Route.ActionArgs) {
 	throw redirect(`/docs/${params.id}`)
 }
 
-export default function EditDoc({ loaderData }: Route.ComponentProps) {
-	const { doc, serviceCodes, brigades } = loaderData
+export default function EditDoc({
+	loaderData,
+	actionData,
+}: Route.ComponentProps) {
+	const { doc, serviceCodes, serviceLineMeta, brigades, assignedBrigadeIds } =
+		loaderData
+	const error = actionData as { errorKey?: ParseKeys } | undefined
 	const { t } = useTranslation()
 	return (
-		<div className="space-y-5">
-			<h1 className="text-xl font-semibold">{t("docs_edit.title")}</h1>
-			<p className="font-mono text-sm text-muted-foreground">
-				{doc.controlNumber}
-			</p>
-			<Form method="post" className="space-y-4">
-				<div>
-					<Label htmlFor="jobType">{t("docs_new.job_type_label")}</Label>
-					<Input
-						id="jobType"
-						name="jobType"
-						defaultValue={doc.jobType}
-						required
-					/>
-				</div>
-				<div>
-					<Label htmlFor="jobAddressEstimated">
-						{t("docs_new.job_address_label")}
-					</Label>
-					<Input
-						id="jobAddressEstimated"
-						name="jobAddressEstimated"
-						defaultValue={doc.jobAddressEstimated}
-						required
-					/>
-				</div>
-				<div>
-					<Label htmlFor="jobDescription">
-						{t("docs_edit.job_description_label")}
-					</Label>
-					<Textarea
-						id="jobDescription"
-						name="jobDescription"
-						rows={2}
-						defaultValue={doc.jobDescription ?? ""}
-					/>
-				</div>
-				<div>
-					<Label htmlFor="avisoNumber">
-						{t("docs_new.aviso_number_label")}
-					</Label>
-					<Input
-						id="avisoNumber"
-						name="avisoNumber"
-						defaultValue={doc.avisoNumber ?? ""}
-						placeholder="10333185"
-					/>
-				</div>
-				<div>
-					<Label>{t("docs_edit.service_codes_label")}</Label>
-					<ServicePicker
-						initialLines={(doc.serviceLines as ServiceLine[]) ?? []}
-					/>
-				</div>
-				<div>
-					<Label>{t("docs_new.estimated_materials_label")}</Label>
-					<div className="mt-1">
-						<MaterialLineItems
-							serviceCodes={serviceCodes}
-							initialItems={
-								(doc.estimatedMaterials as {
-									serviceCodeId: string
-									qty: number
-								}[]) ?? []
-							}
-						/>
-					</div>
-				</div>
-				<div>
-					<Label htmlFor="brigadeId">{t("docs_edit.select_crew_label")}</Label>
-					<select
-						id="brigadeId"
-						name="brigadeId"
-						required
-						defaultValue={doc.brigadeId ?? ""}
-						className="mt-1 w-full border rounded-md h-9 px-2 text-sm bg-card"
-					>
-						<option value="" disabled>
-							{t("docs_edit.select_crew_placeholder")}
-						</option>
-						{brigades.map((b) => (
-							<option key={b.id} value={b.id}>
-								{b.name}
-								{b.code ? ` · ${b.code}` : ""}
-								{b.area ? ` (${b.area})` : ""}
-							</option>
-						))}
-					</select>
-				</div>
-				<Button type="submit" className="w-full">
-					{t("docs_edit.submit")}
-				</Button>
+		<div className="space-y-4">
+			<PageHeader title={t("docs_edit.title")} />
+			<Form method="post">
+				<Card>
+					<CardContent className="space-y-5">
+						<div className="grid gap-4 md:grid-cols-2">
+							<div>
+								<Label htmlFor="workOrderNumber">
+									{t("docs_new.work_order_label")}
+								</Label>
+								<Input
+									id="workOrderNumber"
+									value={doc.controlNumber}
+									readOnly
+									disabled
+									className="mt-1 font-mono"
+								/>
+							</div>
+							<div>
+								<Label htmlFor="avisoNumber">
+									{t("docs_new.aviso_number_label")}
+								</Label>
+								<Input
+									id="avisoNumber"
+									name="avisoNumber"
+									defaultValue={doc.avisoNumber ?? ""}
+									inputMode="numeric"
+									placeholder="10353961"
+									className="mt-1 font-mono"
+								/>
+								<Hint>{t("docs_new.aviso_hint")}</Hint>
+							</div>
+						</div>
+						<div className="grid gap-4 md:grid-cols-2">
+							<div>
+								<Label htmlFor="jobType">{t("docs_new.job_type_label")}</Label>
+								<Input
+									id="jobType"
+									name="jobType"
+									defaultValue={doc.jobType}
+									required
+									className="mt-1"
+								/>
+							</div>
+							<div>
+								<Label htmlFor="jobAddressEstimated">
+									{t("docs_new.job_address_label")}
+								</Label>
+								<Input
+									id="jobAddressEstimated"
+									name="jobAddressEstimated"
+									defaultValue={doc.jobAddressEstimated}
+									required
+									className="mt-1"
+								/>
+								<Hint>{t("docs_new.job_address_hint")}</Hint>
+							</div>
+						</div>
+						<div>
+							<Label htmlFor="jobDescription">
+								{t("docs_edit.job_description_label")}
+							</Label>
+							<Textarea
+								id="jobDescription"
+								name="jobDescription"
+								rows={2}
+								defaultValue={doc.jobDescription ?? ""}
+								className="mt-1"
+							/>
+						</div>
+						<div>
+							<Label>{t("docs_new.assigned_crew_label")}</Label>
+							<div className="mt-1">
+								<CrewPicker
+									brigades={brigades}
+									initialSelected={assignedBrigadeIds}
+								/>
+							</div>
+							<Hint>{t("docs_new.crew_hint")}</Hint>
+						</div>
+						<div>
+							<Label>{t("docs_edit.service_codes_label")}</Label>
+							<div className="mt-1">
+								<ServicePicker
+									initialLines={(doc.serviceLines as ServiceLine[]) ?? []}
+									initialMeta={serviceLineMeta}
+								/>
+							</div>
+						</div>
+						<div>
+							<Label>{t("docs_new.estimated_materials_label")}</Label>
+							<Hint>{t("docs_new.estimated_materials_hint")}</Hint>
+							<div className="mt-1">
+								<MaterialPicker
+									materials={serviceCodes}
+									initialItems={
+										(doc.estimatedMaterials as {
+											serviceCodeId: string
+											qty: number
+										}[]) ?? []
+									}
+								/>
+							</div>
+						</div>
+						{error?.errorKey && (
+							<p className="text-sm text-status-danger">{t(error.errorKey)}</p>
+						)}
+						<Button type="submit">{t("docs_edit.submit")}</Button>
+					</CardContent>
+				</Card>
 			</Form>
 		</div>
 	)
+}
+
+function Hint({ children }: { children: React.ReactNode }) {
+	return <p className="mt-1 text-xs text-muted-foreground">{children}</p>
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {

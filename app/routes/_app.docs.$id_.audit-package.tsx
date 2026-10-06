@@ -1,3 +1,4 @@
+import { assignedBrigadeIds } from "~/lib/crew-assignment"
 import { db } from "~/lib/db.server"
 import { generateAuditPackagePdf } from "~/lib/pdf/audit-package.server"
 import { requireRole } from "~/lib/permissions.server"
@@ -12,6 +13,18 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			auditTrail: { include: { user: true }, orderBy: { timestamp: "asc" } },
 			warehouse: true,
 		},
+	})
+	const brigadeIds = assignedBrigadeIds(doc)
+	const brigadeRows =
+		brigadeIds.length > 0
+			? await db.brigade.findMany({
+					where: { id: { in: brigadeIds } },
+					select: { id: true, name: true, code: true },
+				})
+			: []
+	const brigades = brigadeIds.flatMap((id, i) => {
+		const b = brigadeRows.find((r) => r.id === id)
+		return b ? [{ name: b.name, code: b.code, lead: i === 0 }] : []
 	})
 	const serviceCodes = await db.serviceCode.findMany()
 	const codeMap = Object.fromEntries(
@@ -35,6 +48,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			releaseSignature: doc.releaseSignature,
 			crewSignature: doc.crewSignature,
 			warehouseName: doc.warehouse?.name ?? null,
+			brigades,
 			materialsTaken:
 				(doc.materialsTaken as { serviceCodeId: string; qty: number }[]) ?? [],
 			materialsUsed:

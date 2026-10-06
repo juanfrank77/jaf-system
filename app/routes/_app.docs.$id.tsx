@@ -2,19 +2,20 @@ import type { ParseKeys } from "i18next"
 import type { ComponentProps } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, Link, redirect } from "react-router"
+import { AssignedCrew } from "~/components/assigned-crew"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialLineItems } from "~/components/material-line-items"
+import { ReassignForm } from "~/components/reassign-form"
 import { StepRail } from "~/components/step-rail"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "~/components/ui/select"
+import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
+import {
+	assignedBrigadeIds,
+	buildCrewAssignment,
+	readHistory,
+} from "~/lib/crew-assignment"
 import { isUnassignedCrew } from "~/lib/crew-scope"
 import { db } from "~/lib/db.server"
 import {
@@ -37,6 +38,7 @@ type MaterialLine = { serviceCodeId: string; qty: number }
 
 type CrewAssignmentEntry = {
 	brigadeId: string
+	brigadeIds?: string[]
 	by: string
 	at: string
 }
@@ -58,6 +60,7 @@ export function reassignToBrigade(input: {
 			...input.doc.crewAssignmentHistory,
 			{
 				brigadeId: input.newBrigade.id,
+				brigadeIds: [input.newBrigade.id],
 				by: input.byUserId,
 				at: new Date().toISOString(),
 			},
@@ -128,6 +131,18 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		orderBy: { version: "desc" },
 		select: { sigSupervisorAt: true, sigSubcontractorAt: true },
 	})
+	const brigadeIds = assignedBrigadeIds(doc)
+	const brigadeRows =
+		brigadeIds.length > 0
+			? await db.brigade.findMany({
+					where: { id: { in: brigadeIds } },
+					select: { id: true, name: true, code: true },
+				})
+			: []
+	const assignedBrigades = brigadeIds.flatMap((id, i) => {
+		const b = brigadeRows.find((r) => r.id === id)
+		return b ? [{ id: b.id, name: b.name, code: b.code, lead: i === 0 }] : []
+	})
 	return {
 		doc,
 		user,
@@ -137,6 +152,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		})),
 		supervisor,
 		assignedCrew,
+		assignedBrigades,
 		brigadeOptions,
 		auditTrail,
 		stage: deriveSupervisorStage(doc, sheet),
@@ -223,9 +239,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 					id: doc.id,
 					brigadeId: doc.brigadeId,
 					assignedCrewIds: doc.assignedCrewIds,
-					crewAssignmentHistory:
-						(doc.crewAssignmentHistory as unknown as CrewAssignmentEntry[]) ||
-						[],
+					crewAssignmentHistory: readHistory(
+						doc.crewAssignmentHistory,
+					) as unknown as CrewAssignmentEntry[],
 				},
 				newBrigade: { id: newBrigade.id, memberIds: newBrigade.memberIds },
 				byUserId: user.id,
@@ -259,6 +275,72 @@ export async function action({ request, params }: Route.ActionArgs) {
 					docId: params.id,
 					message: `You have been reassigned to job ${doc.controlNumber}.`,
 				})),
+			}),
+		])
+		throw redirect(`/docs/${params.id}`)
+	}
+
+	if (intent === "change_lead") {
+		const newLeadId = (form.get("brigadeId") as string | null)?.trim() || ""
+		if (!newLeadId) return { errorKey: "docs_view.errors.reassign_required" }
+		const current = assignedBrigadeIds(doc)
+		// Only a brigade already on the job can take over as lead; this keeps
+		// every crew and moves only the payee.
+		if (!current.includes(newLeadId))
+			return { errorKey: "docs_view.errors.reassign_invalid" }
+		if (isTerminalStatus(doc.status)) throw redirect(`/docs/${params.id}`)
+		// The payee is copied into contractorAccountCode at the pre-cert
+		// signature; moving the lead afterwards would not move the payment.
+		if (doc.contractorAccountCode)
+			return { errorKey: "docs_view.errors.lead_locked" }
+		const brigadeIds = [newLeadId, ...current.filter((id) => id !== newLeadId)]
+		const rows = await db.brigade.findMany({
+			where: { id: { in: brigadeIds } },
+		})
+		const ordered = brigadeIds.flatMap(
+			(id) => rows.find((r) => r.id === id) ?? [],
+		)
+		if (ordered.length !== brigadeIds.length)
+			return { errorKey: "docs_view.errors.reassign_invalid" }
+		// The doc-level scope guard only covers the current lead; an Admin may
+		// have put out-of-area brigades on the job, so the incoming payee must
+		// be in scope too.
+		if (
+			user.role === "SUPERVISOR" &&
+			!(await isBrigadeInSupervisorScope(db, user.id, ordered[0]))
+		)
+			return { errorKey: "docs_view.errors.reassign_invalid" }
+		const { brigadeId, assignedCrewIds } = buildCrewAssignment(ordered)
+		await db.$transaction([
+			db.jafInvoice.update({
+				where: { id: params.id },
+				data: {
+					brigadeId,
+					assignedCrewIds,
+					crewAssignmentHistory: [
+						...(readHistory(
+							doc.crewAssignmentHistory,
+						) as Prisma.InputJsonObject[]),
+						{
+							userIds: assignedCrewIds,
+							brigadeId,
+							brigadeIds,
+							assignedById: user.id,
+							assignedAt: new Date().toISOString(),
+						},
+					],
+				},
+			}),
+			db.auditTrail.create({
+				data: {
+					docId: params.id,
+					userId: user.id,
+					action: "CREW_LEAD_CHANGED",
+					diffJson: {
+						from: { brigadeId: doc.brigadeId, brigadeIds: current },
+						to: { brigadeId, brigadeIds },
+					},
+				},
 			}),
 		])
 		throw redirect(`/docs/${params.id}`)
@@ -365,6 +447,7 @@ export default function DocView({
 		serviceCodes,
 		supervisor,
 		assignedCrew,
+		assignedBrigades,
 		brigadeOptions,
 		auditTrail,
 		stage,
@@ -478,10 +561,10 @@ export default function DocView({
 					</span>{" "}
 					{supervisor?.name}
 				</p>
-				<p>
-					<span className="text-muted-foreground">{t("docs_view.crew")}:</span>{" "}
-					{assignedCrew.map((c) => c.name).join(", ")}
-				</p>
+				<AssignedCrew
+					brigades={assignedBrigades}
+					memberNames={assignedCrew.map((c) => c.name)}
+				/>
 				<p>
 					<span className="text-muted-foreground">
 						{t("docs_view.created")}:
@@ -666,57 +749,27 @@ export default function DocView({
 			{(user.role === "SUPERVISOR" || user.role === "ADMIN") &&
 				!isTerminalStatus(doc.status) && (
 					<div className="space-y-3 pt-2 border-t">
-						<Form method="post" className="space-y-2">
-							<fieldset className="border rounded-lg p-3 space-y-2">
-								<legend className="text-sm font-medium px-1">
-									{t("docs_view.reassign_heading")}
-								</legend>
-								<Select name="brigadeId" required>
-									<SelectTrigger className="w-full">
-										<SelectValue
-											placeholder={t("docs_view.reassign_placeholder")}
-										/>
-									</SelectTrigger>
-									<SelectContent>
-										{brigadeOptions.map(
-											(b: {
-												id: string
-												name: string
-												area: string | null
-												code: string | null
-											}) => (
-												<SelectItem key={b.id} value={b.id}>
-													{b.name}
-													{b.code ? ` · ${b.code}` : ""}
-													{b.area ? ` (${b.area})` : ""}
-												</SelectItem>
-											),
-										)}
-									</SelectContent>
-								</Select>
-								<input type="hidden" name="intent" value="reassign" />
-								<Button type="submit" variant="outline" size="sm">
-									{t("docs_view.reassign_submit")}
-								</Button>
-							</fieldset>
-						</Form>
+						<ReassignForm
+							leadLocked={!!doc.contractorAccountCode}
+							brigadeOptions={brigadeOptions}
+							assignedBrigades={assignedBrigades}
+						/>
 
 						<Form method="post" className="space-y-2">
-							<fieldset className="border rounded-lg p-3 space-y-2">
-								<legend className="text-sm font-medium px-1 text-status-danger">
-									{t("docs_view.cancel_heading")}
-								</legend>
-								<Textarea
-									name="reason"
-									placeholder={t("docs_view.cancel_placeholder")}
-									rows={2}
-									required
-								/>
-								<input type="hidden" name="intent" value="cancel" />
-								<Button type="submit" variant="destructive" size="sm">
-									{t("docs_view.cancel_submit")}
-								</Button>
-							</fieldset>
+							<Label htmlFor="cancelReason">
+								{t("docs_view.cancel_heading")}
+							</Label>
+							<Input
+								id="cancelReason"
+								name="reason"
+								placeholder={t("docs_view.cancel_placeholder")}
+								required
+								className="h-11 px-4"
+							/>
+							<input type="hidden" name="intent" value="cancel" />
+							<Button type="submit" variant="destructive" className="h-10 px-5">
+								{t("docs_view.cancel_submit")}
+							</Button>
 							{error?.errorKey && (
 								<p className="text-sm text-status-danger">
 									{t(error.errorKey as ParseKeys)}

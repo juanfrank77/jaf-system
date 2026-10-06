@@ -1,8 +1,11 @@
+import { Cancel01Icon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useFetcher } from "react-router"
 import { Input } from "~/components/ui/input"
 import type { ServiceLine } from "~/lib/service-lines"
+import { formatMoney } from "~/lib/utils"
 
 type Result = {
 	id: string
@@ -16,14 +19,23 @@ type Result = {
 export function ServicePicker({
 	name = "serviceLines",
 	initialLines = [],
+	initialMeta = {},
 }: {
 	name?: string
 	initialLines?: ServiceLine[]
+	/** Catalog unit/price for the initial lines, so a saved table shows prices. */
+	initialMeta?: Record<string, { unit: string | null; unitPrice: number }>
 }) {
 	const { t } = useTranslation()
 	const fetcher = useFetcher<{ results: Result[]; total: number }>()
 	const [query, setQuery] = useState("")
 	const [lines, setLines] = useState<ServiceLine[]>(initialLines)
+	// Catalog unit/price for display only: the persisted ServiceLine stays
+	// price-free. Callers supply it for saved lines; added lines get it here.
+	const [meta, setMeta] =
+		useState<Record<string, { unit: string | null; unitPrice: number }>>(
+			initialMeta,
+		)
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: fetcher identity is stable; re-run on query only
 	useEffect(() => {
@@ -53,11 +65,17 @@ export function ServicePicker({
 				qty: 1,
 			},
 		])
+		setMeta({ ...meta, [r.id]: { unit: r.unit, unitPrice: r.unitPrice } })
 		setQuery("")
 	}
 	function setQty(id: string, qty: number) {
 		setLines(lines.map((l) => (l.serviceCodeId === id ? { ...l, qty } : l)))
 	}
+	const priced = lines.every((l) => meta[l.serviceCodeId])
+	const subtotal = lines.reduce(
+		(sum, l) => sum + l.qty * (meta[l.serviceCodeId]?.unitPrice ?? 0),
+		0,
+	)
 	function remove(id: string) {
 		setLines(lines.filter((l) => l.serviceCodeId !== id))
 	}
@@ -91,9 +109,13 @@ export function ServicePicker({
 											{r.claroCode}
 										</span>
 										<span className="flex-1">{r.name}</span>
-										<span className="text-xs text-muted-foreground">
-											{t("service_picker.account")} {r.accountCode ?? "—"} ·{" "}
-											{r.unit ?? "—"} · ${r.unitPrice.toFixed(2)}
+										<span className="flex shrink-0 items-center gap-1.5 text-xs">
+											<span className="rounded-md bg-status-warn-soft px-1.5 py-0.5 font-medium text-status-warn">
+												{t("service_picker.account")} {r.accountCode ?? "—"}
+											</span>
+											<span className="rounded-md bg-muted px-1.5 py-0.5 text-muted-foreground">
+												{r.unit ?? "—"} · {formatMoney(r.unitPrice)}
+											</span>
 										</span>
 									</button>
 									{nameCounts[r.name] > 1 && (
@@ -113,50 +135,108 @@ export function ServicePicker({
 					</p>
 				</div>
 			)}
-			<div className="border rounded-lg p-2 space-y-1">
-				<p className="text-xs font-medium text-muted-foreground">
-					{t("service_picker.selected_heading")}
-				</p>
-				{lines.length === 0 && (
-					<p className="text-xs text-muted-foreground">
-						{t("service_picker.none_selected")}
-					</p>
-				)}
-				{lines.map((l) => (
-					<div
-						key={l.serviceCodeId}
-						className="flex items-center gap-2 text-sm"
-					>
-						<span className="font-mono text-xs text-muted-foreground">
-							{l.claroCode}
-						</span>
-						<span className="flex-1">{l.name}</span>
-						<span className="text-xs text-muted-foreground">
-							{l.accountCode ?? "—"}
-						</span>
-						<Input
-							type="number"
-							min={1}
-							value={l.qty}
-							aria-label={t("service_picker.qty")}
-							onChange={(e) =>
-								setQty(
-									l.serviceCodeId,
-									Math.max(1, parseInt(e.target.value, 10) || 1),
-								)
-							}
-							className="w-20"
-						/>
-						<button
-							type="button"
-							onClick={() => remove(l.serviceCodeId)}
-							className="text-muted-foreground hover:text-status-danger"
-							aria-label={t("service_picker.remove")}
-						>
-							×
-						</button>
-					</div>
-				))}
+			<div className="overflow-x-auto rounded-lg border">
+				<table className="w-full text-sm">
+					<thead>
+						<tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
+							<th className="px-2 py-1.5">{t("service_picker.col_code")}</th>
+							<th className="px-2 py-1.5">
+								{t("service_picker.col_description")}
+							</th>
+							<th className="px-2 py-1.5">{t("service_picker.col_account")}</th>
+							<th className="px-2 py-1.5 text-right">
+								{t("service_picker.col_qty")}
+							</th>
+							<th className="px-2 py-1.5 text-right">
+								{t("service_picker.col_unit")}
+							</th>
+							<th className="px-2 py-1.5 text-right">
+								{t("service_picker.col_unit_price")}
+							</th>
+							<th className="px-2 py-1.5 text-right">
+								{t("service_picker.col_line")}
+							</th>
+							<th className="w-12" />
+						</tr>
+					</thead>
+					<tbody>
+						{lines.length === 0 && (
+							<tr>
+								<td
+									colSpan={8}
+									className="px-2 py-3 text-xs text-muted-foreground"
+								>
+									{t("service_picker.none_selected")}
+								</td>
+							</tr>
+						)}
+						{lines.map((l) => {
+							const m = meta[l.serviceCodeId]
+							return (
+								<tr key={l.serviceCodeId} className="border-b last:border-0">
+									<td className="px-2 py-1.5 font-mono text-xs">
+										{l.claroCode}
+									</td>
+									<td className="px-2 py-1.5">{l.name}</td>
+									<td className="px-2 py-1.5 font-mono text-xs">
+										{l.accountCode ?? "—"}
+									</td>
+									<td className="px-2 py-1.5 text-right">
+										<Input
+											type="number"
+											min={1}
+											value={l.qty}
+											aria-label={t("service_picker.qty")}
+											onChange={(e) =>
+												setQty(
+													l.serviceCodeId,
+													Math.max(1, parseInt(e.target.value, 10) || 1),
+												)
+											}
+											className="ml-auto w-20"
+										/>
+									</td>
+									<td className="px-2 py-1.5 text-right font-mono text-xs">
+										{m ? (m.unit ?? "—") : "—"}
+									</td>
+									<td className="px-2 py-1.5 text-right">
+										{m ? formatMoney(m.unitPrice) : "—"}
+									</td>
+									<td className="px-2 py-1.5 text-right font-medium">
+										{m ? formatMoney(l.qty * m.unitPrice) : "—"}
+									</td>
+									<td className="px-2 py-1.5 text-right">
+										<button
+											type="button"
+											onClick={() => remove(l.serviceCodeId)}
+											className="flex size-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:border-status-danger hover:bg-status-danger-soft hover:text-status-danger"
+											aria-label={t("service_picker.remove")}
+										>
+											<HugeiconsIcon
+												icon={Cancel01Icon}
+												strokeWidth={2}
+												className="size-4"
+											/>
+										</button>
+									</td>
+								</tr>
+							)
+						})}
+					</tbody>
+					{lines.length > 0 && priced && (
+						<tfoot>
+							<tr className="border-t bg-muted/40 font-semibold">
+								<td colSpan={6} className="px-2 py-1.5 text-right">
+									{t("service_picker.subtotal")}
+								</td>
+								<td className="px-2 py-1.5 text-right">
+									{formatMoney(subtotal)}
+								</td>
+								<td />
+							</tr>
+						</tfoot>
+					)}
+				</table>
 			</div>
 		</div>
 	)

@@ -23,7 +23,8 @@ describe("AppShell", () => {
 		})
 		const header = screen.getByRole("banner")
 		expect(within(header).getByText("Jose Alfaro")).toBeInTheDocument()
-		expect(screen.getByText("SUPERVISOR")).toBeInTheDocument()
+		expect(within(header).getByText("Supervisor")).toBeInTheDocument()
+		expect(within(header).queryByText("SUPERVISOR")).not.toBeInTheDocument()
 	})
 
 	it("shows the theme toggle and no J badge in the header", async ({

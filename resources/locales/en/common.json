@@ -130,6 +130,16 @@
 		}
 	},
 	"app_shell": {
+		"role": {
+			"SUPERVISOR": "Supervisor",
+			"CREW": "Crew",
+			"WAREHOUSE": "Warehouse",
+			"FINANCE": "Finance",
+			"ADMIN": "Admin",
+			"INSTALLER": "Installer",
+			"COMPTROLLER": "Comptroller",
+			"INSTALLER_SUPERVISOR": "Installer supervisor"
+		},
 		"nav": {
 			"dashboard": "Dashboard",
 			"new_document": "+ Work Order",

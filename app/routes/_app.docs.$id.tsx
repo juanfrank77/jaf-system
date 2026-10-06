@@ -6,7 +6,7 @@ import { AssignedCrew } from "~/components/assigned-crew"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { ReassignForm } from "~/components/reassign-form"
-import { StepRail } from "~/components/step-rail"
+import { SupervisorStepRail } from "~/components/supervisor-step-rail"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
@@ -472,7 +472,7 @@ export default function DocView({
 	return (
 		<div className="space-y-5">
 			{(user.role === "SUPERVISOR" || user.role === "ADMIN") && (
-				<StepRail stage={stage} />
+				<SupervisorStepRail stage={stage} />
 			)}
 			<div className="flex items-center justify-between">
 				<div>

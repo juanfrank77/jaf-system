@@ -15,7 +15,7 @@ import {
 	SignaturePad,
 	type SignaturePadHandle,
 } from "~/components/signature-pad"
-import { StepRail } from "~/components/step-rail"
+import { SupervisorStepRail } from "~/components/supervisor-step-rail"
 import { Badge } from "~/components/ui/badge"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { Card, CardContent, CardHeader } from "~/components/ui/card"
@@ -1344,7 +1344,7 @@ export default function ReviewDoc({
 				{doc.fieldSubmittedAt &&
 					` · ${new Date(doc.fieldSubmittedAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}`}
 			</p>
-			<StepRail stage={stage} view={view} />
+			<SupervisorStepRail stage={stage} view={view} />
 			{!interactive && (
 				<Pill variant="info" icon="🔒">
 					<b>{t("docs_review.readonly_title")}</b>{" "}

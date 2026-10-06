@@ -5,7 +5,7 @@ import { CrewPicker } from "~/components/crew-picker"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialPicker } from "~/components/material-picker"
 import { ServicePicker } from "~/components/service-picker"
-import { StepRail } from "~/components/step-rail"
+import { SupervisorStepRail } from "~/components/supervisor-step-rail"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
@@ -171,7 +171,7 @@ export default function NewDoc({
 	return (
 		<div className="space-y-4">
 			<PageHeader title={t("docs_new.title")} />
-			<StepRail stage="INTAKE" />
+			<SupervisorStepRail stage="INTAKE" />
 			<div className="rounded-xl border border-border bg-card px-3 py-2 text-sm">
 				<span className="font-semibold">{t("docs_new.callout_title")}</span>
 				<span className="ml-2 text-muted-foreground">

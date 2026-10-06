@@ -68,6 +68,60 @@ export function deriveSupervisorStage(
 	}
 }
 
+/** The screen a supervisor is looking at, and whether it accepts actions. */
+export type StepView = {
+	view: SupervisorStage
+	/** Only the current step (and the invoice until the Aviso is started) can
+	 * be acted on; every earlier step is a read-only look back. */
+	interactive: boolean
+}
+
+const stageIndex = (s: SupervisorStage) => SUPERVISOR_STAGES.indexOf(s)
+
+/**
+ * Which step's screen to show. Defaults to the derived stage, except that a
+ * generated invoice keeps its own screen ("Continue to Aviso") until an Aviso
+ * number or lines are saved. `requested` (from `?step=`) may only point at a
+ * supervisor step (APPROVE onward) that has already been reached.
+ */
+export function resolveStepView(
+	stage: SupervisorStage,
+	avisoStarted: boolean,
+	requested: string | null,
+): StepView {
+	const fallback: SupervisorStage =
+		stage === "AVISO" && !avisoStarted ? "INVOICE" : stage
+	const asked = SUPERVISOR_STAGES.find((s) => s === requested)
+	const reachable =
+		asked !== undefined &&
+		stageIndex(asked) >= stageIndex("APPROVE") &&
+		stageIndex(asked) <= stageIndex(stage)
+	// A requested view of the default screen is just the default.
+	const view = reachable ? asked : fallback
+	return {
+		view,
+		interactive: view === stage || (view === "INVOICE" && stage === "AVISO"),
+	}
+}
+
+/** Which panel renders for a step: everything up to Approve shares the
+ * Approve screen, and "In Finance" shows the release summary. */
+export function panelForStep(
+	view: SupervisorStage,
+): "APPROVE" | "INVOICE" | "AVISO" | "PRECERT" | "RELEASE" {
+	switch (view) {
+		case "INVOICE":
+		case "AVISO":
+		case "PRECERT":
+			return view
+		case "RELEASE":
+		case "RELEASED":
+			return "RELEASE"
+		default:
+			return "APPROVE"
+	}
+}
+
 type AvisoMatchResult = {
 	amountOk: boolean
 	difference: number

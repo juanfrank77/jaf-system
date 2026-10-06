@@ -22,7 +22,11 @@ import {
 	navGroupsFor,
 	tabBarItemsFor,
 } from "./nav-model"
-import { OfflineIndicator } from "./offline-indicator"
+import {
+	ConnectionBar,
+	ConnectionDot,
+	useConnectionState,
+} from "./offline-indicator"
 import { TabBar } from "./tab-bar"
 import { WarehouseSwitch } from "./warehouse-switch"
 
@@ -244,6 +248,7 @@ function AppShell({
 	children: React.ReactNode
 }) {
 	const [drawerOpen, setDrawerOpen] = useState(false)
+	const connection = useConnectionState()
 	const { t } = useTranslation()
 	const groups = navGroupsFor(user.role, { comptrollerEnabled })
 	const tabItems = tabBarItemsFor(user.role, { comptrollerEnabled })
@@ -267,7 +272,7 @@ function AppShell({
 					</Link>
 					<div className="flex-1" />
 					<div className="flex items-center gap-2 text-sm text-muted-foreground sm:gap-3">
-						<OfflineIndicator />
+						<ConnectionDot state={connection} />
 						{warehouseScope && (
 							<WarehouseSwitch
 								warehouses={warehouseScope.warehouses}
@@ -290,6 +295,7 @@ function AppShell({
 						</Form>
 					</div>
 				</header>
+				<ConnectionBar state={connection} />
 				<div className="flex min-h-[calc(100vh-51px)]">
 					<aside className="hidden w-60 shrink-0 border-r border-sidebar-border bg-sidebar p-3 md:block">
 						<div className="mb-2 flex items-center gap-2.5 rounded-lg px-2.5 py-2">

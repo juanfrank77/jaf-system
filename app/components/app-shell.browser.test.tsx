@@ -5,6 +5,32 @@ import { userEvent } from "vitest/browser"
 import { AppShell } from "./app-shell"
 
 describe("AppShell", () => {
+	it("shows the connection bar under the header, not inside it", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<AppShell
+							user={{ name: "Jose Alfaro", role: "SUPERVISOR" }}
+							notifications={[]}
+						>
+							<p>content</p>
+						</AppShell>
+					),
+				},
+			],
+		})
+		const header = screen.getByRole("banner")
+		expect(
+			await screen.findByText("Online — everything synced"),
+		).toBeInTheDocument()
+		expect(
+			within(header).queryByText("Online — everything synced"),
+		).not.toBeInTheDocument()
+	})
 	it("shows the user's name and role", async ({ renderStub }) => {
 		await renderStub({
 			entries: [

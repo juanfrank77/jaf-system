@@ -598,6 +598,7 @@ export default function FieldUpdate({
 								serviceCodes={serviceCodes}
 								initialItems={taken}
 								readOnly
+								showPrice={false}
 							/>
 						</div>
 					)}

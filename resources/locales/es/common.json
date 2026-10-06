@@ -1334,6 +1334,9 @@
 		"cancelled": "Cancelado"
 	},
 	"offline_indicator": {
+		"synced": "En línea — todo sincronizado",
+		"offline_pending_one": "Sin conexión — {{count}} cambio esperando sincronizar",
+		"offline_pending_other": "Sin conexión — {{count}} cambios esperando sincronizar",
 		"offline": "Sin conexión — los cambios se sincronizarán al reconectar",
 		"sync_pending_one": "{{count}} cambio pendiente de sincronización",
 		"sync_pending_other": "{{count}} cambios pendientes de sincronización"

@@ -500,6 +500,45 @@ describe("POST /docs/:id (action) — change lead", () => {
 		expect(db.jafInvoice.update).not.toHaveBeenCalled()
 	})
 
+	it("blocks a Supervisor from promoting an on-job brigade outside their areas", async () => {
+		const outOfScope = { id: "b4", area: "METRO", memberIds: ["u5"] }
+		members.b4 = outOfScope
+		try {
+			vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+				shared({
+					assignedCrewIds: ["u1", "u2", "u5"],
+					crewAssignmentHistory: [{ brigadeId: "b1", brigadeIds: ["b1", "b4"] }],
+				}) as any,
+			)
+			const res = await run("change_lead", "b4")
+			expect(res).toEqual({ errorKey: "docs_view.errors.reassign_invalid" })
+			expect(db.jafInvoice.update).not.toHaveBeenCalled()
+		} finally {
+			delete members.b4
+		}
+	})
+
+	it("lets an Admin promote a brigade in any area", async () => {
+		const outOfScope = { id: "b4", area: "METRO", memberIds: ["u5"] }
+		members.b4 = outOfScope
+		try {
+			vi.mocked(requireRole).mockResolvedValue({
+				user: { id: "admin-1", role: "ADMIN" },
+			} as any)
+			vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+				shared({
+					assignedCrewIds: ["u1", "u2", "u5"],
+					crewAssignmentHistory: [{ brigadeId: "b1", brigadeIds: ["b1", "b4"] }],
+				}) as any,
+			)
+			const res = await run("change_lead", "b4")
+			expect(res.status).toBe(302)
+			expect(db.jafInvoice.update).toHaveBeenCalled()
+		} finally {
+			delete members.b4
+		}
+	})
+
 	it("refuses once the payee is fixed by the pre-cert signature", async () => {
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
 			shared({ contractorAccountCode: "206" }) as any,

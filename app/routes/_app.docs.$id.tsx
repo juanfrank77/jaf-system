@@ -298,6 +298,14 @@ export async function action({ request, params }: Route.ActionArgs) {
 		)
 		if (ordered.length !== brigadeIds.length)
 			return { errorKey: "docs_view.errors.reassign_invalid" }
+		// The doc-level scope guard only covers the current lead; an Admin may
+		// have put out-of-area brigades on the job, so the incoming payee must
+		// be in scope too.
+		if (
+			user.role === "SUPERVISOR" &&
+			!(await isBrigadeInSupervisorScope(db, user.id, ordered[0]))
+		)
+			return { errorKey: "docs_view.errors.reassign_invalid" }
 		const { brigadeId, assignedCrewIds } = buildCrewAssignment(ordered)
 		await db.$transaction([
 			db.jafInvoice.update({

@@ -16,6 +16,7 @@ import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
 import { useOnline } from "~/hooks/use-online"
+import { isUnassignedCrew } from "~/lib/crew-scope"
 import { db } from "~/lib/db.server"
 import { queueFieldUpdate } from "~/lib/field-sync"
 import {
@@ -79,8 +80,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	})
 	if (!canTransition(doc.status, "FIELD_UPDATED", user.role))
 		throw redirect(`/docs/${params.id}`)
-	if (user.role === "CREW" && !doc.assignedCrewIds.includes(user.id))
-		throw redirect(`/docs/${params.id}`)
+	if (isUnassignedCrew(user, doc)) throw redirect(`/docs/${params.id}`)
 	const serviceCodes = await getActiveMaterialCodes()
 	const sendBackHistory =
 		(doc.sendBackHistory as unknown as SendBackEntry[] | null) ?? []
@@ -117,7 +117,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 		}
 		throw redirect(`/docs/${params.id}`)
 	}
-	if (user.role === "CREW" && !doc.assignedCrewIds.includes(user.id)) {
+	if (isUnassignedCrew(user, doc)) {
 		if (request.headers.get("X-Offline-Sync") === "true") {
 			return data({ conflict: "REASSIGNED" }, { status: 409 })
 		}

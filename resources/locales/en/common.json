@@ -123,6 +123,10 @@
 		"500": {
 			"title": "Something went wrong!",
 			"description": "An unexpected error occurred on the server."
+		},
+		"not_assigned": {
+			"title": "This job isn't assigned to you",
+			"description": "It may have been reassigned to another crew. Go back to your dashboard to see your current jobs, or ask your supervisor if you think this is a mistake."
 		}
 	},
 	"app_shell": {

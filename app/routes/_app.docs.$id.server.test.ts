@@ -57,6 +57,43 @@ describe("GET /docs/:id", () => {
 		}
 	}
 
+	it("404s a crew member who is not assigned to the job, marked not-assigned", async () => {
+		vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
+			id: "crew-9",
+			role: "CREW",
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			baseDoc("PREPPED", { assignedCrewIds: ["crew-1"] }) as any,
+		)
+
+		const thrown = await loader({
+			request: new Request("http://localhost/docs/doc-1"),
+			params: { id: "doc-1" },
+		} as any).catch((e: unknown) => e)
+		expect(thrown).toBeInstanceOf(Response)
+		expect((thrown as Response).status).toBe(404)
+		expect(await (thrown as Response).text()).toBe("NOT_ASSIGNED")
+	})
+
+	it("lets an assigned crew member load the job", async () => {
+		vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
+			id: "crew-1",
+			role: "CREW",
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			baseDoc("PREPPED", { assignedCrewIds: ["crew-1"] }) as any,
+		)
+		vi.mocked(db.auditTrail.findMany).mockResolvedValue([])
+		vi.mocked(db.user.findMany).mockResolvedValue([])
+
+		const result = await loader({
+			request: new Request("http://localhost/docs/doc-1"),
+			params: { id: "doc-1" },
+		} as any)
+
+		expect(result.doc.id).toBe("doc-1")
+	})
+
 	it("allows a Finance user to load an LC_REQUEST_GENERATED doc", async () => {
 		vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
 			id: "user-1",
@@ -244,13 +281,13 @@ describe("GET /docs/:id", () => {
 		])
 	})
 
-	it("allows a Crew user to load a normal doc", async () => {
+	it("allows an assigned Crew user to load a normal doc", async () => {
 		vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
 			id: "user-1",
 			role: "CREW",
 		} as any)
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
-			baseDoc("SIGNED") as any,
+			baseDoc("SIGNED", { assignedCrewIds: ["user-1"] }) as any,
 		)
 		vi.mocked(db.auditTrail.findMany).mockResolvedValue([])
 		vi.mocked(db.user.findMany).mockResolvedValue([])
@@ -507,7 +544,9 @@ describe("POST /docs/:id (action) — change lead", () => {
 			vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
 				shared({
 					assignedCrewIds: ["u1", "u2", "u5"],
-					crewAssignmentHistory: [{ brigadeId: "b1", brigadeIds: ["b1", "b4"] }],
+					crewAssignmentHistory: [
+						{ brigadeId: "b1", brigadeIds: ["b1", "b4"] },
+					],
 				}) as any,
 			)
 			const res = await run("change_lead", "b4")
@@ -528,7 +567,9 @@ describe("POST /docs/:id (action) — change lead", () => {
 			vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
 				shared({
 					assignedCrewIds: ["u1", "u2", "u5"],
-					crewAssignmentHistory: [{ brigadeId: "b1", brigadeIds: ["b1", "b4"] }],
+					crewAssignmentHistory: [
+						{ brigadeId: "b1", brigadeIds: ["b1", "b4"] },
+					],
 				}) as any,
 			)
 			const res = await run("change_lead", "b4")

@@ -19,6 +19,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "~/components/ui/select"
+import { isUnassignedCrew, notAssignedResponse } from "~/lib/crew-scope"
 import { db } from "~/lib/db.server"
 import { generateWarehouseReceiptPdf } from "~/lib/pdf/warehouse-receipt.server"
 import { canTransition } from "~/lib/permissions"
@@ -45,6 +46,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
+	if (isUnassignedCrew(user, doc)) throw notAssignedResponse()
 	if (!canTransition(doc.status, "SIGNED", user.role))
 		throw redirect(`/docs/${params.id}`)
 	const serviceCodes = await getActiveMaterialCodes()
@@ -100,6 +102,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
+	if (isUnassignedCrew(user, doc)) throw notAssignedResponse()
 	if (!canTransition(doc.status, "SIGNED", user.role))
 		throw redirect(`/docs/${params.id}`)
 

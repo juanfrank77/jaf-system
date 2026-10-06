@@ -123,6 +123,10 @@
 		"500": {
 			"title": "¡Algo salió mal!",
 			"description": "Ocurrió un error inesperado en el servidor."
+		},
+		"not_assigned": {
+			"title": "No tienes asignado este trabajo",
+			"description": "Puede que se haya reasignado a otra brigada. Vuelve a tu panel para ver tus trabajos actuales, o consulta a tu supervisor si crees que es un error."
 		}
 	},
 	"app_shell": {

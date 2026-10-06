@@ -26,7 +26,8 @@ interface ServiceCode {
 	claroCode: string
 	name: string
 	unit: string | null
-	unitPrice: number
+	/** Absent for price-blind roles (crew, warehouse): then no price is shown. */
+	unitPrice?: number
 }
 
 interface Props {
@@ -118,9 +119,11 @@ export function MaterialLineItems({
 							<span className="w-16 text-right">
 								{item.qty} {code?.unit}
 							</span>
-							<span className="w-20 text-right">
-								${(toNumberPrice(code?.unitPrice) * item.qty).toFixed(2)}
-							</span>
+							{code?.unitPrice !== undefined && (
+								<span className="w-20 text-right">
+									${(toNumberPrice(code.unitPrice) * item.qty).toFixed(2)}
+								</span>
+							)}
 							{isOverdrawn && (
 								<span className="text-xs bg-status-warn-soft text-status-warn px-2 py-1 rounded whitespace-nowrap">
 									+{overage} {t("material_line_items.more_than_estimated")}

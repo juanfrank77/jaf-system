@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("~/lib/db.server", () => ({
-	db: { serviceCode: { count: vi.fn() } },
+	db: { serviceCode: { count: vi.fn() }, user: { findUnique: vi.fn() } },
 }))
 vi.mock("~/lib/permissions.server", () => ({ requireSession: vi.fn() }))
-vi.mock("~/lib/service-codes.server", () => ({ searchServiceCodes: vi.fn() }))
+vi.mock("~/lib/service-codes.server", async (importOriginal) => ({
+	...(await importOriginal<typeof import("~/lib/service-codes.server")>()),
+	searchServiceCodes: vi.fn(),
+}))
 
 import { db } from "~/lib/db.server"
 import { requireSession } from "~/lib/permissions.server"
@@ -12,7 +15,12 @@ import { searchServiceCodes } from "~/lib/service-codes.server"
 import { loader } from "./api.service-codes"
 
 describe("GET /api/service-codes", () => {
-	beforeEach(() => vi.clearAllMocks())
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			role: "SUPERVISOR",
+		} as any)
+	})
 
 	it("returns every match with account, unit and price — never picks one", async () => {
 		vi.mocked(requireSession).mockResolvedValue({ user: { id: "u1" } } as any)
@@ -71,5 +79,40 @@ describe("GET /api/service-codes", () => {
 			params: {},
 		} as any)
 		expect((await (res as Response).json()).results).toEqual([])
+	})
+	const hit = {
+		id: "c1",
+		claroCode: "34006301",
+		name: "TRANSFER ATTCH DE POSTESMC",
+		accountCode: "610",
+		unit: "EA",
+		unitPrice: "42.3430",
+	}
+
+	it.each(["CREW", "WAREHOUSE"])("omits unitPrice for %s", async (role) => {
+		vi.mocked(requireSession).mockResolvedValue({ user: { id: "u1" } } as any)
+		vi.mocked(db.user.findUnique).mockResolvedValue({ role } as any)
+		vi.mocked(db.serviceCode.count).mockResolvedValue(1)
+		vi.mocked(searchServiceCodes).mockResolvedValue([hit] as any)
+		const res = await loader({
+			request: new Request("http://localhost/api/service-codes?q=t"),
+			params: {},
+		} as any)
+		const body = await (res as Response).json()
+		expect(body.results).toHaveLength(1)
+		expect("unitPrice" in body.results[0]).toBe(false)
+	})
+
+	it("omits unitPrice when the viewer cannot be found (fails closed)", async () => {
+		vi.mocked(requireSession).mockResolvedValue({ user: { id: "u1" } } as any)
+		vi.mocked(db.user.findUnique).mockResolvedValue(null)
+		vi.mocked(db.serviceCode.count).mockResolvedValue(1)
+		vi.mocked(searchServiceCodes).mockResolvedValue([hit] as any)
+		const res = await loader({
+			request: new Request("http://localhost/api/service-codes?q=t"),
+			params: {},
+		} as any)
+		const body = await (res as Response).json()
+		expect("unitPrice" in body.results[0]).toBe(false)
 	})
 })

@@ -9,8 +9,10 @@ import {
 	computeExpectedBackLines,
 	type MaterialLine,
 } from "~/lib/returns-lines"
-import { getActiveMaterialCodes } from "~/lib/service-codes.server"
-import { toNumberPrice } from "~/lib/utils"
+import {
+	getActiveMaterialCodes,
+	serviceCodesForRole,
+} from "~/lib/service-codes.server"
 import type { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id_.returns"
 
@@ -47,7 +49,7 @@ function savedReturnsOf(doc: { materialsReturned: unknown }): ReturnedLine[] {
 }
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-	await requireRole(request, ["WAREHOUSE", "ADMIN"])
+	const { user } = await requireRole(request, ["WAREHOUSE", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
@@ -67,10 +69,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const savedReturns = savedReturnsOf(doc)
 	return {
 		doc,
-		serviceCodes: serviceCodes.map((c) => ({
-			...c,
-			unitPrice: toNumberPrice(c.unitPrice),
-		})),
+		serviceCodes: serviceCodesForRole(user.role, serviceCodes),
 		taken,
 		lines,
 		materialsUsed,

@@ -18,9 +18,11 @@ import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
-import { getActiveMaterialCodes } from "~/lib/service-codes.server"
+import {
+	getActiveMaterialCodes,
+	serviceCodesForRole,
+} from "~/lib/service-codes.server"
 import { useEditableLines } from "~/lib/use-editable-lines"
-import { toNumberPrice } from "~/lib/utils"
 import { resolveWarehouseScope } from "~/lib/warehouse-scope.server"
 import { getPrepAvailable, resolveDualUom } from "~/lib/warehouse-stock.server"
 import type { Prisma } from "../../generated/prisma/client"
@@ -103,10 +105,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
 	return {
 		doc,
-		serviceCodes: serviceCodes.map((c) => ({
-			...c,
-			unitPrice: toNumberPrice(c.unitPrice),
-		})),
+		serviceCodes: serviceCodesForRole(user.role, serviceCodes),
 		availability,
 	}
 }

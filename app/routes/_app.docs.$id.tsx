@@ -24,13 +24,13 @@ import {
 } from "~/lib/field-update-helpers"
 import { isEditableStatus, isTerminalStatus } from "~/lib/permissions"
 import { requireRole, requireSession } from "~/lib/permissions.server"
+import { serviceCodesForRole } from "~/lib/service-codes.server"
 import {
 	assertDocInSupervisorScope,
 	assignableBrigadesWhere,
 	isBrigadeInSupervisorScope,
 } from "~/lib/supervisor-scope"
 import { deriveSupervisorStage } from "~/lib/supervisor-stage"
-import { toNumberPrice } from "~/lib/utils"
 import { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id"
 
@@ -144,10 +144,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	return {
 		doc,
 		user,
-		serviceCodes: serviceCodes.map((c) => ({
-			...c,
-			unitPrice: toNumberPrice(c.unitPrice),
-		})),
+		serviceCodes: serviceCodesForRole(user.role, serviceCodes),
 		supervisor,
 		assignedCrew,
 		assignedBrigades,

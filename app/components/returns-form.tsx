@@ -22,7 +22,7 @@ export type ReturnsFormServiceCode = {
 	claroCode: string
 	name: string
 	unit: string | null
-	unitPrice: number
+	unitPrice?: number
 }
 
 interface ReturnLine {

@@ -130,6 +130,16 @@
 		}
 	},
 	"app_shell": {
+		"role": {
+			"SUPERVISOR": "Supervisor",
+			"CREW": "Brigada",
+			"WAREHOUSE": "Almacén",
+			"FINANCE": "Finanzas",
+			"ADMIN": "Administrador",
+			"INSTALLER": "Instalador",
+			"COMPTROLLER": "Contraloría",
+			"INSTALLER_SUPERVISOR": "Supervisor de Instaladores"
+		},
 		"nav": {
 			"dashboard": "Panel",
 			"new_document": "+ Orden de trabajo",

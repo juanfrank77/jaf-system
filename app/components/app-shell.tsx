@@ -278,7 +278,7 @@ function AppShell({
 							{user.name}
 						</span>
 						<span className="hidden rounded-md bg-muted px-2 py-0.5 text-xs font-semibold sm:inline">
-							{user.role}
+							{t(`app_shell.role.${user.role}`)}
 						</span>
 						<LanguageSwitcher />
 						<NotificationBell notifications={notifications} />
@@ -338,7 +338,9 @@ function AppShell({
 								<div className="text-sm font-semibold text-sidebar-foreground">
 									{user.name}
 								</div>
-								<div className="text-xs text-muted-foreground">{user.role}</div>
+								<div className="text-xs text-muted-foreground">
+									{t(`app_shell.role.${user.role}`)}
+								</div>
 							</div>
 						</div>
 						<Dialog.Close

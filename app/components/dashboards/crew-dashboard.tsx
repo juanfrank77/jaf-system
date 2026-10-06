@@ -8,5 +8,5 @@ import type {
 export function CrewDashboard(
 	props: BaseDashboardProps & Pick<DashboardViewProps, CrewOnlyKeys>,
 ) {
-	return <DashboardView {...props} />
+	return <DashboardView {...props} showBilling={false} />
 }

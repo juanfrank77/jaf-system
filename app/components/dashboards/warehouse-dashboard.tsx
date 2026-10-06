@@ -8,5 +8,5 @@ import type {
 export function WarehouseDashboard(
 	props: BaseDashboardProps & Pick<DashboardViewProps, WarehouseOnlyKeys>,
 ) {
-	return <DashboardView {...props} />
+	return <DashboardView {...props} showBilling={false} />
 }

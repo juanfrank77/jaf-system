@@ -92,7 +92,15 @@ const STATUS_BADGE_VARIANT: Record<
 	CANCELLED: "danger",
 }
 
-export function DashboardDocList({ docs }: { docs: DashboardDocRow[] }) {
+export function DashboardDocList({
+	docs,
+	showBilling = true,
+}: {
+	docs: DashboardDocRow[]
+	/** Billing detail (raw status enum, Aviso number) is for supervisor and
+	 * finance. Warehouse and crew pass false. */
+	showBilling?: boolean
+}) {
 	const { t } = useTranslation()
 	return (
 		<Card>
@@ -116,7 +124,11 @@ export function DashboardDocList({ docs }: { docs: DashboardDocRow[] }) {
 								</span>
 								<div className="flex items-center gap-2">
 									<Badge variant={STATUS_BADGE_VARIANT[doc.status]}>
-										{doc.status.replace(/_/g, " ")}
+										{showBilling
+											? doc.status.replace(/_/g, " ")
+											: t(`dashboard.status_plain.${doc.status}`, {
+													defaultValue: doc.status.replace(/_/g, " "),
+												})}
 									</Badge>
 									<HugeiconsIcon
 										icon={ChevronRightIcon}
@@ -150,7 +162,7 @@ export function DashboardDocList({ docs }: { docs: DashboardDocRow[] }) {
 									</span>
 								</div>
 							)}
-							{doc.avisoNumber && (
+							{showBilling && doc.avisoNumber && (
 								<p className="mt-1 text-xs text-muted-foreground/70">
 									{t("dashboard.aviso_number")} {doc.avisoNumber}
 								</p>

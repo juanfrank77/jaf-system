@@ -1153,6 +1153,16 @@
 		"added_at_counter": "added at counter"
 	},
 	"dashboard": {
+		"status_plain": {
+			"CREATED": "New",
+			"PREPPED": "Prepped",
+			"SIGNED": "Picked up",
+			"FIELD_UPDATED": "Submitted",
+			"SUPERVISOR_APPROVED": "Approved",
+			"CLARO_UPLOADED": "Approved",
+			"LC_REQUEST_GENERATED": "Approved",
+			"CANCELLED": "Cancelled"
+		},
 		"title": "Dashboard",
 		"supervisor_scope_one": "{{areas}} · {{count}} crew",
 		"supervisor_scope_other": "{{areas}} · {{count}} crews",

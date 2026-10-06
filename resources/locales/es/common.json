@@ -1153,6 +1153,16 @@
 		"added_at_counter": "agregado en mostrador"
 	},
 	"dashboard": {
+		"status_plain": {
+			"CREATED": "Nuevo",
+			"PREPPED": "Preparado",
+			"SIGNED": "Recogido",
+			"FIELD_UPDATED": "Enviado",
+			"SUPERVISOR_APPROVED": "Aprobado",
+			"CLARO_UPLOADED": "Aprobado",
+			"LC_REQUEST_GENERATED": "Aprobado",
+			"CANCELLED": "Cancelado"
+		},
 		"title": "Panel",
 		"supervisor_scope_one": "{{areas}} · {{count}} brigada",
 		"supervisor_scope_other": "{{areas}} · {{count}} brigadas",

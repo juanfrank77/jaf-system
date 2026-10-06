@@ -34,6 +34,7 @@ function DashboardView({
 	explainer,
 	docs,
 	showFilters = false,
+	showBilling = true,
 	pendingReviewDocs = [],
 	sentBackDocs = [],
 	crewOptions = [],
@@ -59,6 +60,7 @@ function DashboardView({
 	explainer: DashboardExplainer
 	docs: DashboardDocRow[]
 	showFilters?: boolean
+	showBilling?: boolean
 	pendingReviewDocs?: DashboardDocRow[]
 	sentBackDocs?: DashboardDocRow[]
 	crewOptions?: CrewOption[]
@@ -497,7 +499,7 @@ function DashboardView({
 				</div>
 			)}
 
-			<DashboardDocList docs={docs} />
+			<DashboardDocList docs={docs} showBilling={showBilling} />
 		</div>
 	)
 }

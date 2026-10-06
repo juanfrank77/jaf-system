@@ -17,6 +17,8 @@ const supervisor = {
 	supervisorQueues: emptyQueues,
 }
 
+const finance = { role: "FINANCE" as const, supervisorQueues: null }
+
 const mount = (renderStub: any, ui: React.ReactElement) =>
 	renderStub({ entries: [{ path: "/", Component: () => ui }] })
 
@@ -53,6 +55,44 @@ describe("RoleDashboard", () => {
 		expect(
 			screen.getByRole("heading", { level: 2, name: "All work orders" }),
 		).toBeInTheDocument()
+	})
+
+	const billedDoc = {
+		id: "d1",
+		controlNumber: "JAF-1",
+		status: "CLARO_UPLOADED" as const,
+		jobType: "Install",
+		jobAddressEstimated: "Calle 1",
+		createdAt: new Date("2026-10-01T12:00:00Z"),
+		avisoNumber: "12345678",
+	}
+
+	for (const role of ["WAREHOUSE", "CREW"] as const) {
+		it(`hides the Aviso number from the ${role} document list`, async ({
+			renderStub,
+		}) => {
+			await mount(
+				renderStub,
+				<RoleDashboard
+					role={role}
+					supervisorQueues={null}
+					{...base}
+					docs={[billedDoc]}
+				/>,
+			)
+			expect(screen.getByText("JAF-1")).toBeInTheDocument()
+			expect(screen.queryByText(/12345678/)).not.toBeInTheDocument()
+		})
+	}
+
+	it("keeps the Aviso number on the FINANCE document list", async ({
+		renderStub,
+	}) => {
+		await mount(
+			renderStub,
+			<RoleDashboard {...finance} {...base} docs={[billedDoc]} />,
+		)
+		expect(screen.getByText(/12345678/)).toBeInTheDocument()
 	})
 })
 

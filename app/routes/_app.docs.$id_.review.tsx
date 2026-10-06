@@ -18,6 +18,7 @@ import {
 import { SupervisorStepRail } from "~/components/supervisor-step-rail"
 import { Badge } from "~/components/ui/badge"
 import { Button, buttonVariants } from "~/components/ui/button"
+import { Callout } from "~/components/ui/callout"
 import { Card, CardContent, CardHeader } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
@@ -1359,15 +1360,14 @@ export default function ReviewDoc({
 				</Pill>
 			)}
 			{calloutKey && (
-				<Pill variant="info">
-					<b>
-						{t(`docs_review.callout_${calloutKey}_title`, {
-							n: SUPERVISOR_STAGES.indexOf(view) + 1,
-							total: SUPERVISOR_STAGES.length,
-						})}
-					</b>{" "}
+				<Callout
+					title={t(`docs_review.callout_${calloutKey}_title`, {
+						n: SUPERVISOR_STAGES.indexOf(view) + 1,
+						total: SUPERVISOR_STAGES.length,
+					})}
+				>
 					{t(`docs_review.callout_${calloutKey}_body`)}
-				</Pill>
+				</Callout>
 			)}
 
 			{/* A — Approve */}

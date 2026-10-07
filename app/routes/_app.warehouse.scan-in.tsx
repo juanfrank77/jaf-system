@@ -4,6 +4,7 @@ import { Form } from "react-router"
 import { BarcodeScanner } from "~/components/barcode-scanner"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Button } from "~/components/ui/button"
+import { Callout } from "~/components/ui/callout"
 import {
 	Select,
 	SelectContent,
@@ -11,6 +12,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "~/components/ui/select"
+import { WarehouseStepRail } from "~/components/warehouse-step-rail"
 import { db } from "~/lib/db.server"
 import { canScanInReturn, rolesMatching } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
@@ -48,6 +50,10 @@ export default function WarehouseScanIn({
 			<h1 className="text-xl font-semibold">
 				{t("warehouse.scan_in.heading", "Scan In Return")}
 			</h1>
+			<WarehouseStepRail current="SCAN_IN" />
+			<Callout title={t("warehouse_flow.callout.scan_in_title")}>
+				{t("warehouse_flow.callout.scan_in_body")}
+			</Callout>
 			<Form method="post" className="space-y-4">
 				<input type="hidden" name="serial" value={serial} />
 				<input type="hidden" name="warehouseId" value={warehouseId} />
@@ -91,17 +97,29 @@ export default function WarehouseScanIn({
 				</Button>
 			</Form>
 			{actionData && !actionData.ok && (
-				<p className="text-sm text-status-danger">
-					{t(
+				<Callout
+					title={t(
 						"warehouse.scan_in.not_owed_back",
 						"This serial is not owed back.",
 					)}
-				</p>
+					tone="danger"
+				>
+					{t(
+						"warehouse_flow.callout.scan_in_not_owed_body",
+						"Scan the serial of a unit that is owed back to this warehouse — the unit drops off the installer's owed-back list the moment it is scanned in.",
+					)}
+				</Callout>
 			)}
 			{actionData?.ok && (
-				<p className="text-sm text-status-ok">
-					{t("warehouse.scan_in.success", "Returned successfully.")}
-				</p>
+				<Callout
+					title={t("warehouse.scan_in.success", "Returned successfully.")}
+					tone="ok"
+				>
+					{t(
+						"warehouse_flow.callout.scan_in_done_body",
+						"Unit location updated to this warehouse. It is off the installer's owed-back list and back in your serialized stock.",
+					)}
+				</Callout>
 			)}
 		</div>
 	)

@@ -3,7 +3,9 @@ import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { BarcodeScanner } from "~/components/barcode-scanner"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { InstallerLoopRail } from "~/components/installer-loop-rail"
 import { Button } from "~/components/ui/button"
+import { Callout } from "~/components/ui/callout"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import {
@@ -87,6 +89,10 @@ export default function SwapOutIn({ loaderData }: Route.ComponentProps) {
 
 	return (
 		<div className="space-y-6 max-w-xl">
+			<InstallerLoopRail current="SWAP" />
+			<Callout title={t("installer.installer_flow.callout.swap_title")}>
+				{t("installer.installer_flow.callout.swap_body")}
+			</Callout>
 			<h1 className="text-xl font-semibold">
 				{t("installer.swap.heading", "Warranty Swap")}
 			</h1>

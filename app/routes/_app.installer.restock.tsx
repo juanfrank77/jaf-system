@@ -1,8 +1,10 @@
 import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { InstallerLoopRail } from "~/components/installer-loop-rail"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { Button } from "~/components/ui/button"
+import { Callout } from "~/components/ui/callout"
 import { db } from "~/lib/db.server"
 import { requireInstaller } from "~/lib/installer-context.server"
 import { canApproveRestock } from "~/lib/permissions"
@@ -159,6 +161,10 @@ export default function InstallerRestock({
 
 	return (
 		<div className="space-y-4">
+			<InstallerLoopRail current="RESTOCK" />
+			<Callout title={t("installer.installer_flow.callout.restock_title")}>
+				{t("installer.installer_flow.callout.restock_body")}
+			</Callout>
 			<h1 className="text-xl font-semibold">
 				{t("installer.request_restock", "Request Restock")}
 			</h1>

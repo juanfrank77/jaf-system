@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { InstallerLoopRail } from "~/components/installer-loop-rail"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
 import { getInstallerRollup } from "~/lib/van-view.server"
@@ -74,6 +75,7 @@ export default function InstallerSupervisorRollup({
 
 	return (
 		<div className="space-y-4">
+			<InstallerLoopRail current="VAN" />
 			<h1 className="text-xl font-semibold">
 				{t("installer_supervisor.heading", "Installer Roll-up")}
 			</h1>

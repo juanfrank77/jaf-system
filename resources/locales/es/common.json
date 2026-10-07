@@ -417,7 +417,6 @@
 	},
 	"docs_sign": {
 		"title": "Recogida en almacén — Firma doble",
-		"review_notice": "Revisa los materiales a continuación. Tanto el almacén como la cuadrilla deben firmar. Una vez firmada, esta lista queda bloqueada permanentemente.",
 		"warehouse_label": "Almacén",
 		"warehouse_placeholder": "Selecciona un almacén...",
 		"materials_taken_label": "Materiales retirados",
@@ -452,7 +451,8 @@
 	},
 	"docs_field": {
 		"title": "Actualización de campo",
-		"offline_notice": "<strong>Funciona sin conexión.</strong> Si pierdes la conexión, tus cambios se guardan localmente y se sincronizan al reconectar.",
+		"offline_title": "Funciona sin conexión",
+		"offline_notice": "Si pierdes la conexión, tus cambios se guardan localmente y se sincronizan al reconectar.",
 		"sent_back_by": "Devuelto por {{name}}",
 		"sent_back_by_unknown": "tu supervisor",
 		"actual_address_label": "Dirección real del trabajo",
@@ -489,7 +489,9 @@
 		"clear_signature": "Borrar firma",
 		"submit": "Enviar actualización de campo",
 		"save_offline": "Guardar para sincronizar después",
+		"queued_title": "Guardado sin conexión",
 		"queued_message": "Actualización de campo guardada. Se sincronizará automáticamente al reconectar.",
+		"offline_submit_title": "Sin conexión",
 		"offline_submit_notice": "Estás sin conexión. Toca Guardar para sincronizar después y la actualización se subirá cuando tengas señal.",
 		"errors": {
 			"invalid_materials": "Datos de materiales inválidos",
@@ -1478,6 +1480,35 @@
 			"scan_out": "Escanear número de serie saliente",
 			"search_placeholder": "N.º de orden, dirección o número de serie",
 			"submit": "Enviar"
+		},
+		"installer_flow": {
+			"aria": "Ciclo de trabajo del instalador",
+			"loop": {
+				"home": "Inicio",
+				"new": "Nuevo trabajo",
+				"swap": "Cambio",
+				"van": "Mi van",
+				"restock": "Reabastecimiento"
+			},
+			"completion": {
+				"aria": "Pasos de la instalación",
+				"order": "1. Orden",
+				"scan": "2. Escanear módem",
+				"materials": "3. Caída y materiales",
+				"sign": "4. Formulario y firma"
+			},
+			"callout": {
+				"home_title": "Tu van",
+				"home_body": "Inicia una nueva instalación o un cambio de garantía. Mi van muestra lo que hay a bordo y lo que debes devolver.",
+				"new_title": "Paso 1 · Tú",
+				"new_body": "Número de orden, dirección y luego escanea el módem. Cada paso se guarda localmente — nada se pierde si se cae la conexión.",
+				"swap_title": "Paso 2 · Tú",
+				"swap_body": "Busca el trabajo original, escanea la unidad que sale y la que entra. El registro original no se edita — esto es un nuevo evento sobre él.",
+				"van_title": "Tu van",
+				"van_body": "Se deriva de cada movimiento: lo que hay a bordo, lo que está bajo par y lo que debes devolver al almacén.",
+				"restock_title": "Reabastecimiento",
+				"restock_body": "Se prellena al par cuando existen datos de par. Una línea que supera el par necesita aprobación antes de ir al almacén."
+			}
 		}
 	},
 	"installer_restock": {
@@ -1619,33 +1650,22 @@
 			"success": "Devuelto exitosamente."
 		}
 	},
-	"warehouse_flow": {
-		"aria": "Circuito de trabajo del almacén",
+	"job_flow": {
+		"aria": "Progreso del trabajo",
 		"step": {
-			"scan_in": "Entrada",
-			"triage": "Clasificación",
-			"review": "Revisión",
-			"repairs": "Reparaciones",
-			"restock": "Reabastecimiento",
-			"stock": "Inventario y auditoría"
+			"created": "Creado",
+			"prep": "Preparación",
+			"release": "Entrega",
+			"field": "Trabajo de campo",
+			"return": "Devolución",
+			"close": "Supervisor · Finanzas"
 		},
 		"callout": {
-			"scan_in_title": "Paso 1 · Tú",
-			"scan_in_body": "Toda unidad que regresa se escanea aquí — su ubicación se actualiza en cuanto el código de barras se lee.",
-			"scan_in_not_owed_body": "Escanea el número de serie de una unidad pendiente de devolución a este almacén — la unidad sale de la lista de devolución del instalador en cuanto se escanea.",
-			"scan_in_done_body": "Ubicación actualizada a este almacén. La unidad salió de la lista de devolución y volvió a tu inventario serializado.",
-			"triage_title": "Paso 2 · Tú",
-			"triage_body": "Las unidades en buen estado vuelven al inventario, las fallidas van al grupo de reparación y lo incierto se retiene para el líder.",
-			"review_title": "Paso 3 · Líder",
-			"review_body": "Resolver una retención es decisión del líder — una línea faltante cambia lo que la cuadrilla puede hacer en sitio.",
-			"repairs_title": "Paso 4 · Tú",
-			"repairs_body": "Las unidades fallidas viajan en un lote de reparación de Claro. Envía el lote y registra la recepción cuando las unidades reparadas regresen.",
-			"restock_title": "Paso 5 · Traspaso",
-			"restock_body": "Los reabastecimientos aprobados se liberan a la van con la doble firma — el inventario de la van se mueve cuando ambos firman.",
-			"repairs_sent_body": "El lote está con Claro. Registra la recepción aquí cuando las unidades reparadas regresen.",
-			"repairs_doc_failed_body": "El lote se envió, pero su documento no se generó. Regenera el documento desde la lista de lotes.",
-			"stock_title": "Paso 6 · Auditoría",
-			"stock_body": "Cada movimiento lleva actor, hora y trabajo. Los ajustes requieren una razón; las instantáneas defienden el conteo ante auditoría."
+			"sign_title": "Paso 3 · Tú + Cuadrilla",
+			"sign_title_crew": "Paso 3 · Tú + Almacén",
+			"sign_body": "Cuenta cada línea juntos en una pantalla. La cuadrilla puede tomar más — cambia la cantidad. Ambos firman. La lista queda bloqueada para todos.",
+			"field_title": "Paso 4 · Tú",
+			"field_body": "Haz el trabajo y luego regístralo aquí: dirección real, GPS, materiales utilizados, fotos y tu firma. Lo que guardes sin conexión se sincroniza al reconectar."
 		}
 	},
 	"finance_payroll": {

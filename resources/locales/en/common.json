@@ -417,7 +417,6 @@
 	},
 	"docs_sign": {
 		"title": "Warehouse Pickup — Dual Signature",
-		"review_notice": "Review materials below. Both warehouse and crew must sign. Once signed, this list is permanently locked.",
 		"warehouse_label": "Warehouse",
 		"warehouse_placeholder": "Select warehouse...",
 		"materials_taken_label": "Materials Taken",
@@ -452,7 +451,8 @@
 	},
 	"docs_field": {
 		"title": "Field Update",
-		"offline_notice": "<strong>Offline capable.</strong> If you lose connection, your changes save locally and sync when you reconnect.",
+		"offline_title": "Offline capable",
+		"offline_notice": "If you lose connection, your changes save locally and sync when you reconnect.",
 		"sent_back_by": "Sent back by {{name}}",
 		"sent_back_by_unknown": "your supervisor",
 		"actual_address_label": "Actual Job Address",
@@ -489,7 +489,9 @@
 		"clear_signature": "Clear signature",
 		"submit": "Submit Field Update",
 		"save_offline": "Save for later sync",
+		"queued_title": "Saved offline",
 		"queued_message": "Field update saved. It will sync automatically when you reconnect.",
+		"offline_submit_title": "Offline",
 		"offline_submit_notice": "You are offline. Tap Save for later sync and the update will upload when you have signal.",
 		"errors": {
 			"invalid_materials": "Invalid materials data",
@@ -1478,6 +1480,35 @@
 			"scan_out": "Scan serial out",
 			"search_placeholder": "Order #, address, or serial",
 			"submit": "Submit"
+		},
+		"installer_flow": {
+			"aria": "Installer work loop",
+			"loop": {
+				"home": "Home",
+				"new": "New job",
+				"swap": "Swap",
+				"van": "My van",
+				"restock": "Restock"
+			},
+			"completion": {
+				"aria": "Completion steps",
+				"order": "1. Order",
+				"scan": "2. Scan modem",
+				"materials": "3. Drop & materials",
+				"sign": "4. Form & sign"
+			},
+			"callout": {
+				"home_title": "Your van",
+				"home_body": "Start a new completion or a warranty swap. My van shows what is on board and what you owe back.",
+				"new_title": "Step 1 · You",
+				"new_body": "Order number, address, then scan the modem. Every step saves locally — nothing is lost if the connection drops.",
+				"swap_title": "Step 2 · You",
+				"swap_body": "Find the original job, scan the unit coming out and the unit going in. The original record is never edited — this is a new event on it.",
+				"van_title": "Your van",
+				"van_body": "Derived from every movement: what is on board, what is below par, and what you owe back to the warehouse.",
+				"restock_title": "Restock",
+				"restock_body": "Pre-filled to par when par data exists. A line pushing above par needs sign-off before it goes to the warehouse."
+			}
 		}
 	},
 	"installer_restock": {
@@ -1619,33 +1650,22 @@
 			"success": "Returned successfully."
 		}
 	},
-	"warehouse_flow": {
-		"aria": "Warehouse work loop",
+	"job_flow": {
+		"aria": "Job progress",
 		"step": {
-			"scan_in": "Scan in",
-			"triage": "Triage",
-			"review": "Needs review",
-			"repairs": "Repairs",
-			"restock": "Restock",
-			"stock": "Stock & audit"
+			"created": "Created",
+			"prep": "Prep",
+			"release": "Release",
+			"field": "Field work",
+			"return": "Return",
+			"close": "Supervisor · Finance"
 		},
 		"callout": {
-			"scan_in_title": "Step 1 · You",
-			"scan_in_body": "Every unit that comes back is scanned here — its location updates the moment the barcode reads.",
-			"scan_in_not_owed_body": "Scan the serial of a unit that is owed back to this warehouse — the unit drops off the installer's owed-back list the moment it is scanned in.",
-			"scan_in_done_body": "Unit location updated to this warehouse. It is off the installer's owed-back list and back in your serialized stock.",
-			"triage_title": "Step 2 · You",
-			"triage_body": "Good units go back to stock, failures go to the repair pool, and anything uncertain is held for the lead.",
-			"review_title": "Step 3 · Lead",
-			"review_body": "Resolving a hold is a lead judgment call — a short line changes what the crew can do on site.",
-			"repairs_title": "Step 4 · You",
-			"repairs_body": "Failed units travel in a Claro repair batch. Send the batch, then record the intake when the repaired units come back.",
-			"restock_title": "Step 5 · Handoff",
-			"restock_body": "Approved restocks release to the van through the dual-signature release — van stock moves when both sign.",
-			"repairs_sent_body": "The batch is with Claro. Record the intake here when the repaired units come back.",
-			"repairs_doc_failed_body": "The batch was sent, but its document did not render. Regenerate it from the batch list below.",
-			"stock_title": "Step 6 · Audit",
-			"stock_body": "Every movement carries actor, time and job. Adjustments need a reason; snapshots defend the count against audit."
+			"sign_title": "Step 3 · You + Crew",
+			"sign_title_crew": "Step 3 · You + Warehouse",
+			"sign_body": "Count each line together on one screen. The crew may take more — change the number. Both sign. The list locks for everyone.",
+			"field_title": "Step 4 · You",
+			"field_body": "Do the job, then log it here: actual address, GPS, materials used, photos and your signature. What you save offline syncs when you reconnect."
 		}
 	},
 	"finance_payroll": {

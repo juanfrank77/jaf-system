@@ -4,12 +4,14 @@ import { useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { data, redirect } from "react-router"
 import { BarcodeScanner } from "~/components/barcode-scanner"
+import { CompletionStepRail } from "~/components/completion-step-rail"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import {
 	SignaturePad,
 	type SignaturePadHandle,
 } from "~/components/signature-pad"
 import { Button } from "~/components/ui/button"
+import { Callout } from "~/components/ui/callout"
 import { Checkbox } from "~/components/ui/checkbox"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
@@ -19,6 +21,7 @@ import { db } from "~/lib/db.server"
 import { validateFile } from "~/lib/file-upload.server"
 import { queueCompletion } from "~/lib/installer-completion-sync"
 import { requireInstaller } from "~/lib/installer-context.server"
+import type { CompletionStep } from "~/lib/installer-steps"
 import { pickBracket, prefillAccessories } from "~/lib/limit-table"
 import { resolveSerial } from "~/lib/service-codes"
 import { getSerializedCodes } from "~/lib/service-codes.server"
@@ -134,6 +137,17 @@ export default function NewCompletion({ loaderData }: Route.ComponentProps) {
 					bracket,
 				)
 			: []
+	const [formPhotoName, setFormPhotoName] = useState("")
+	const step: CompletionStep =
+		!claroOrderNo || !address
+			? "ORDER"
+			: !serial && !serialUnreadable
+				? "SCAN"
+				: dropFt === ""
+					? "MATERIALS"
+					: !formPhotoName
+						? "SIGN"
+						: "SIGN"
 
 	function handleDecode(text: string) {
 		setSerial(text)
@@ -148,6 +162,10 @@ export default function NewCompletion({ loaderData }: Route.ComponentProps) {
 			<h1 className="text-xl font-semibold">
 				{t("installer.completion.new_heading", "New Completion")}
 			</h1>
+			<CompletionStepRail current={step} />
+			<Callout title={t("installer.installer_flow.callout.new_title")}>
+				{t("installer.installer_flow.callout.new_body")}
+			</Callout>
 
 			<form
 				method="post"
@@ -322,6 +340,7 @@ export default function NewCompletion({ loaderData }: Route.ComponentProps) {
 						type="file"
 						accept="image/*"
 						required
+						onChange={(e) => setFormPhotoName(e.target.files?.[0]?.name ?? "")}
 					/>
 				</div>
 

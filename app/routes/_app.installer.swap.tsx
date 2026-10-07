@@ -2,6 +2,8 @@ import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, Link } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { InstallerLoopRail } from "~/components/installer-loop-rail"
+import { Callout } from "~/components/ui/callout"
 import { Input } from "~/components/ui/input"
 import { db } from "~/lib/db.server"
 import { requireInstaller } from "~/lib/installer-context.server"
@@ -37,6 +39,10 @@ export default function SwapFind({ loaderData }: Route.ComponentProps) {
 
 	return (
 		<div className="space-y-4 max-w-xl">
+			<InstallerLoopRail current="SWAP" />
+			<Callout title={t("installer.installer_flow.callout.swap_title")}>
+				{t("installer.installer_flow.callout.swap_body")}
+			</Callout>
 			<h1 className="text-xl font-semibold">
 				{t("installer.swap.find_heading", "Find the original job")}
 			</h1>

@@ -1722,6 +1722,24 @@
 			"done_body": "Los tres pagos están registrados. Finanzas cierra el trabajo."
 		}
 	},
+	"job_flow": {
+		"aria": "Progreso del trabajo",
+		"step": {
+			"created": "Creado",
+			"prep": "Preparación",
+			"release": "Entrega",
+			"field": "Trabajo de campo",
+			"return": "Devolución",
+			"close": "Supervisor · Finanzas"
+		},
+		"callout": {
+			"sign_title": "Paso 3 · Tú + Cuadrilla",
+			"sign_title_crew": "Paso 3 · Tú + Almacén",
+			"sign_body": "Cuenta cada línea juntos en una pantalla. La cuadrilla puede tomar más — cambia la cantidad. Ambos firman. La lista queda bloqueada para todos.",
+			"field_title": "Paso 4 · Tú",
+			"field_body": "Haz el trabajo y luego regístralo aquí: dirección real, GPS, materiales utilizados, fotos y tu firma. Lo que guardes sin conexión se sincroniza al reconectar."
+		}
+	},
 	"finance_payroll": {
 		"title": "Nómina pendiente",
 		"run_label_placeholder": "Etiqueta de la corrida (ej. 9/10)",

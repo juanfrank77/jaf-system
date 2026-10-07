@@ -1722,6 +1722,24 @@
 			"stock_body": "Every movement carries actor, time and job. Adjustments need a reason; snapshots defend the count against audit."
 		}
 	},
+	"job_flow": {
+		"aria": "Job progress",
+		"step": {
+			"created": "Created",
+			"prep": "Prep",
+			"release": "Release",
+			"field": "Field work",
+			"return": "Return",
+			"close": "Supervisor · Finance"
+		},
+		"callout": {
+			"sign_title": "Step 3 · You + Crew",
+			"sign_title_crew": "Step 3 · You + Warehouse",
+			"sign_body": "Count each line together on one screen. The crew may take more — change the number. Both sign. The list locks for everyone.",
+			"field_title": "Step 4 · You",
+			"field_body": "Do the job, then log it here: actual address, GPS, materials used, photos and your signature. What you save offline syncs when you reconnect."
+		}
+	},
 	"finance_payroll": {
 		"title": "Awaiting payroll",
 		"run_label_placeholder": "Run label (e.g. 9/10)",

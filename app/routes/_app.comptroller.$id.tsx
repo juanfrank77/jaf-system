@@ -1,13 +1,16 @@
 import type { ParseKeys } from "i18next"
 import { useTranslation } from "react-i18next"
 import { data, Form, Link } from "react-router"
+import { ComptrollerStepRail } from "~/components/comptroller-step-rail"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Badge } from "~/components/ui/badge"
 import { Button, buttonVariants } from "~/components/ui/button"
+import { Callout } from "~/components/ui/callout"
 import { Card, CardContent } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
+import { nextComptrollerStep } from "~/lib/comptroller-steps"
 import { db } from "~/lib/db.server"
 import { sendInternalEmail } from "~/lib/email.server"
 import { isComptrollerEnabled } from "~/lib/features.server"
@@ -383,6 +386,27 @@ export async function action({ request, params }: ComptrollerLoaderArgs) {
 	return { successKey: "comptroller_detail.success.crew_payment_recorded" }
 }
 
+/** Callout copy for the next payment still to record ("DONE" once all three
+ * are in). Literal keys, so the typed i18n check can see them. */
+const STEP_CALLOUT = {
+	ADVANCE: {
+		title: "comptroller_flow.callout.advance_title",
+		body: "comptroller_flow.callout.advance_body",
+	},
+	CREW: {
+		title: "comptroller_flow.callout.crew_title",
+		body: "comptroller_flow.callout.crew_body",
+	},
+	FINAL: {
+		title: "comptroller_flow.callout.final_title",
+		body: "comptroller_flow.callout.final_body",
+	},
+	DONE: {
+		title: "comptroller_flow.callout.done_title",
+		body: "comptroller_flow.callout.done_body",
+	},
+} as const
+
 export default function ComptrollerDetail({
 	loaderData,
 	actionData,
@@ -405,6 +429,12 @@ export default function ComptrollerDetail({
 		unreadNotificationId,
 	} = loaderData
 	const { t } = useTranslation()
+	const nextStep = nextComptrollerStep({
+		advanceReceived,
+		crewPaid,
+		finalReceived,
+	})
+	const stepCallout = STEP_CALLOUT[nextStep ?? "DONE"]
 	const error = actionData as { errorKey?: string } | null
 	const success = actionData as { successKey?: string } | null
 
@@ -441,6 +471,10 @@ export default function ComptrollerDetail({
 					{t("comptroller_detail.back")}
 				</Link>
 			</div>
+			<ComptrollerStepRail current={nextStep} />
+			<Callout tone={nextStep ? "info" : "ok"} title={t(stepCallout.title)}>
+				{t(stepCallout.body)}
+			</Callout>
 
 			{error?.errorKey && (
 				<p className="text-sm text-status-danger">

@@ -1642,6 +1642,26 @@
 			"pipeline_body": "Record payments as they land and Close once both exist. A half-closed job is the normal state, not an error."
 		}
 	},
+	"comptroller_flow": {
+		"aria": "Comptroller payments",
+		"step": {
+			"advance": "PBCC advance",
+			"crew": "Crew payment",
+			"final": "Claro final"
+		},
+		"callout": {
+			"dashboard_title": "Your three payments",
+			"dashboard_body": "Every job needs the PBCC advance, the crew payment and Claro's final payment recorded. Finance creates each row; you record that the money moved.",
+			"advance_title": "Step 1 · You",
+			"advance_body": "Record the PBCC advance when the deposit shows in the bank.",
+			"crew_title": "Step 2 · You",
+			"crew_body": "Record the crew payment when the crew has been paid.",
+			"final_title": "Step 3 · You",
+			"final_body": "Record Claro's final payment when it arrives. Finance can then close the job.",
+			"done_title": "All recorded · Handoff",
+			"done_body": "All three payments are recorded. Finance closes the job."
+		}
+	},
 	"finance_payroll": {
 		"title": "Awaiting payroll",
 		"run_label_placeholder": "Run label (e.g. 9/10)",

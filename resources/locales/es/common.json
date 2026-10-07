@@ -1642,6 +1642,26 @@
 			"pipeline_body": "Registra los pagos según lleguen y Cierra cuando existan ambos. Un trabajo medio cerrado es el estado normal, no un error."
 		}
 	},
+	"comptroller_flow": {
+		"aria": "Pagos de Contraloría",
+		"step": {
+			"advance": "Adelanto PBCC",
+			"crew": "Pago a la brigada",
+			"final": "Final de Claro"
+		},
+		"callout": {
+			"dashboard_title": "Tus tres pagos",
+			"dashboard_body": "Cada trabajo necesita registrados el adelanto PBCC, el pago a la brigada y el pago final de Claro. Finanzas crea cada fila; tú registras que el dinero se movió.",
+			"advance_title": "Paso 1 · Tú",
+			"advance_body": "Registra el adelanto PBCC cuando el depósito aparezca en el banco.",
+			"crew_title": "Paso 2 · Tú",
+			"crew_body": "Registra el pago a la brigada cuando ya se le haya pagado.",
+			"final_title": "Paso 3 · Tú",
+			"final_body": "Registra el pago final de Claro cuando llegue. Finanzas ya puede cerrar el trabajo.",
+			"done_title": "Todo registrado · Traspaso",
+			"done_body": "Los tres pagos están registrados. Finanzas cierra el trabajo."
+		}
+	},
 	"finance_payroll": {
 		"title": "Nómina pendiente",
 		"run_label_placeholder": "Etiqueta de la corrida (ej. 9/10)",

@@ -1693,6 +1693,35 @@
 			"done_body": "All three payments are recorded. Finance closes the job."
 		}
 	},
+	"warehouse_flow": {
+		"aria": "Warehouse work loop",
+		"step": {
+			"scan_in": "Scan in",
+			"triage": "Triage",
+			"review": "Needs review",
+			"repairs": "Repairs",
+			"restock": "Restock",
+			"stock": "Stock & audit"
+		},
+		"callout": {
+			"scan_in_title": "Step 1 · You",
+			"scan_in_body": "Every unit that comes back is scanned here — its location updates the moment the barcode reads.",
+			"scan_in_not_owed_body": "Scan the serial of a unit that is owed back to this warehouse — the unit drops off the installer's owed-back list the moment it is scanned in.",
+			"scan_in_done_body": "Unit location updated to this warehouse. It is off the installer's owed-back list and back in your serialized stock.",
+			"triage_title": "Step 2 · You",
+			"triage_body": "Good units go back to stock, failures go to the repair pool, and anything uncertain is held for the lead.",
+			"review_title": "Step 3 · Lead",
+			"review_body": "Resolving a hold is a lead judgment call — a short line changes what the crew can do on site.",
+			"repairs_title": "Step 4 · You",
+			"repairs_body": "Failed units travel in a Claro repair batch. Send the batch, then record the intake when the repaired units come back.",
+			"restock_title": "Step 5 · Handoff",
+			"restock_body": "Approved restocks release to the van through the dual-signature release — van stock moves when both sign.",
+			"repairs_sent_body": "The batch is with Claro. Record the intake here when the repaired units come back.",
+			"repairs_doc_failed_body": "The batch was sent, but its document did not render. Regenerate it from the batch list below.",
+			"stock_title": "Step 6 · Audit",
+			"stock_body": "Every movement carries actor, time and job. Adjustments need a reason; snapshots defend the count against audit."
+		}
+	},
 	"finance_payroll": {
 		"title": "Awaiting payroll",
 		"run_label_placeholder": "Run label (e.g. 9/10)",

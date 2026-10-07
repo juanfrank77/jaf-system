@@ -3,8 +3,10 @@ import fs from "node:fs/promises"
 import { useTranslation } from "react-i18next"
 import { Form, Link, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { FinanceStepRail } from "~/components/finance-step-rail"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
+import { Callout } from "~/components/ui/callout"
 import { db } from "~/lib/db.server"
 import { validateFile } from "~/lib/file-upload.server"
 import { buildJournalBlocks, closePayrollRun } from "~/lib/payroll-run.server"
@@ -220,6 +222,10 @@ export default function FinancePayrollRunDetail({
 					{t("finance_payroll.back")}
 				</Link>
 			</div>
+			<FinanceStepRail current="PAYROLL" />
+			<Callout title={t("finance_flow.callout.payroll_title")}>
+				{t("finance_flow.callout.payroll_body")}
+			</Callout>
 			{run.paidAt ? (
 				<Badge variant="ok">
 					{t("finance_payroll.paid_on", {

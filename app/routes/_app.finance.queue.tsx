@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, Link } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { FinanceStepRail } from "~/components/finance-step-rail"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
+import { Callout } from "~/components/ui/callout"
 import {
 	computeContractorPayment,
 	resolveContractorAccounts,
@@ -181,6 +183,10 @@ export default function FinanceQueue({ loaderData }: Route.ComponentProps) {
 					</Link>
 				</div>
 			</div>
+			<FinanceStepRail current="PACKETS" />
+			<Callout title={t("finance_flow.callout.queue_title")}>
+				{t("finance_flow.callout.queue_body")}
+			</Callout>
 			<p className="text-sm text-muted-foreground">{t("finance_queue.hint")}</p>
 			{jobs.length === 0 ? (
 				<p className="text-sm text-muted-foreground">

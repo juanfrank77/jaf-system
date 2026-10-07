@@ -3,8 +3,10 @@ import type { ComponentProps } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { FinanceStepRail } from "~/components/finance-step-rail"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { Button, buttonVariants } from "~/components/ui/button"
+import { Callout } from "~/components/ui/callout"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
@@ -312,6 +314,10 @@ export default function FinanceVerify({
 					{stage?.replace(/_/g, " ")}
 				</span>
 			</div>
+			<FinanceStepRail current="PACKETS" />
+			<Callout title={t("finance_flow.callout.verify_title")}>
+				{t("finance_flow.callout.verify_body")}
+			</Callout>
 
 			<div className="text-sm">
 				<p>

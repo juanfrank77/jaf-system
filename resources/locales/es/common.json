@@ -1619,6 +1619,29 @@
 			"success": "Devuelto exitosamente."
 		}
 	},
+	"finance_flow": {
+		"aria": "Ciclo de trabajo de finanzas",
+		"step": {
+			"packets": "Paquetes",
+			"payroll": "Nómina",
+			"po": "PO de Claro",
+			"pipeline": "Cuentas por cobrar"
+		},
+		"callout": {
+			"queue_title": "Paso 1 · Tú",
+			"queue_body": "Lee el paquete, confirma el pago al contratista que calculó el sistema y arma la solicitud de adelanto PBCC. El diario recoge el trabajo en la próxima corrida de nómina.",
+			"verify_title": "Paso 1 · Tú",
+			"verify_body": "Revisa el paquete contra los montos que calculó el sistema antes de armar la solicitud PBCC.",
+			"pbcc_title": "Paso 1 · Tú",
+			"pbcc_body": "La solicitud PBCC lleva la factura en formato del banco y el Aviso. Contraloría registra el adelanto cuando llegan los fondos.",
+			"payroll_title": "Paso 2 · Traspaso",
+			"payroll_body": "Arma la corrida quincenal; Contraloría paga a las brigadas y confirma. Cada Aviso de la corrida pasa aquí a nómina confirmada.",
+			"po_title": "Paso 3 · Tú",
+			"po_body": "Registra la PO de Claro contra el Aviso — un Aviso puede tener varias POs. El saldo se deriva, nunca se escribe.",
+			"pipeline_title": "Paso 4 · Traspaso",
+			"pipeline_body": "Registra los pagos según lleguen y Cierra cuando existan ambos. Un trabajo medio cerrado es el estado normal, no un error."
+		}
+	},
 	"finance_payroll": {
 		"title": "Nómina pendiente",
 		"run_label_placeholder": "Etiqueta de la corrida (ej. 9/10)",

@@ -1619,6 +1619,29 @@
 			"success": "Returned successfully."
 		}
 	},
+	"finance_flow": {
+		"aria": "Finance work loop",
+		"step": {
+			"packets": "Packets",
+			"payroll": "Payroll",
+			"po": "Claro PO",
+			"pipeline": "Receivables"
+		},
+		"callout": {
+			"queue_title": "Step 1 · You",
+			"queue_body": "Read the packet, confirm the contractor payment the system computed, then build the PBCC advance request. The journal picks the job up on the next payroll run.",
+			"verify_title": "Step 1 · You",
+			"verify_body": "Check the packet against the amounts the system computed before building the PBCC request.",
+			"pbcc_title": "Step 1 · You",
+			"pbcc_body": "The PBCC request carries the bank-format invoice and the Aviso. The Comptroller records the advance when the funds arrive.",
+			"payroll_title": "Step 2 · Handoff",
+			"payroll_body": "Build the fortnightly run; the Comptroller pays the brigades and confirms. Every Aviso in the run flips to payroll confirmed here.",
+			"po_title": "Step 3 · You",
+			"po_body": "Record the Claro PO against the Aviso — one Aviso can carry several POs. The balance is derived, never typed.",
+			"pipeline_title": "Step 4 · Handoff",
+			"pipeline_body": "Record payments as they land and Close once both exist. A half-closed job is the normal state, not an error."
+		}
+	},
 	"finance_payroll": {
 		"title": "Awaiting payroll",
 		"run_label_placeholder": "Run label (e.g. 9/10)",

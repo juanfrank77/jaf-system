@@ -1,7 +1,9 @@
 import { useTranslation } from "react-i18next"
 import { Form, Link, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { FinanceStepRail } from "~/components/finance-step-rail"
 import { Button } from "~/components/ui/button"
+import { Callout } from "~/components/ui/callout"
 import { db } from "~/lib/db.server"
 import {
 	countSweepableJobs,
@@ -69,6 +71,10 @@ export default function FinancePayrollList({
 	return (
 		<div className="p-6 space-y-4">
 			<h1 className="text-2xl font-bold">{t("finance_payroll.title")}</h1>
+			<FinanceStepRail current="PAYROLL" />
+			<Callout title={t("finance_flow.callout.payroll_title")}>
+				{t("finance_flow.callout.payroll_body")}
+			</Callout>
 			{actionData?.errorKey && (
 				<p className="text-sm text-status-danger">
 					{actionData.errorKey === "finance_payroll.errors.empty_run"

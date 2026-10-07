@@ -10,7 +10,10 @@ function Callout({
 	children,
 }: {
 	title: string
-	tone?: "info" | "warn"
+	/** `danger` is the red banner (e.g. a supervisor's sent-back
+	 * note); `warn` for alerts; `ok` for completed handoffs;
+	 * `info` for step/handoff notes. */
+	tone?: "info" | "warn" | "danger" | "ok"
 	icon?: React.ReactNode
 	className?: string
 	children: React.ReactNode

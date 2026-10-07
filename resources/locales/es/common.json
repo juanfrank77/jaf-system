@@ -417,7 +417,6 @@
 	},
 	"docs_sign": {
 		"title": "Recogida en almacén — Firma doble",
-		"review_notice": "Revisa los materiales a continuación. Tanto el almacén como la cuadrilla deben firmar. Una vez firmada, esta lista queda bloqueada permanentemente.",
 		"warehouse_label": "Almacén",
 		"warehouse_placeholder": "Selecciona un almacén...",
 		"materials_taken_label": "Materiales retirados",
@@ -452,7 +451,8 @@
 	},
 	"docs_field": {
 		"title": "Actualización de campo",
-		"offline_notice": "<strong>Funciona sin conexión.</strong> Si pierdes la conexión, tus cambios se guardan localmente y se sincronizan al reconectar.",
+		"offline_title": "Funciona sin conexión",
+		"offline_notice": "Si pierdes la conexión, tus cambios se guardan localmente y se sincronizan al reconectar.",
 		"sent_back_by": "Devuelto por {{name}}",
 		"sent_back_by_unknown": "tu supervisor",
 		"actual_address_label": "Dirección real del trabajo",
@@ -489,7 +489,9 @@
 		"clear_signature": "Borrar firma",
 		"submit": "Enviar actualización de campo",
 		"save_offline": "Guardar para sincronizar después",
+		"queued_title": "Guardado sin conexión",
 		"queued_message": "Actualización de campo guardada. Se sincronizará automáticamente al reconectar.",
+		"offline_submit_title": "Sin conexión",
 		"offline_submit_notice": "Estás sin conexión. Toca Guardar para sincronizar después y la actualización se subirá cuando tengas señal.",
 		"errors": {
 			"invalid_materials": "Datos de materiales inválidos",
@@ -1617,6 +1619,24 @@
 			"not_owed_back": "Este número de serie no está pendiente de devolución.",
 			"submit": "Escanear entrada",
 			"success": "Devuelto exitosamente."
+		}
+	},
+	"job_flow": {
+		"aria": "Progreso del trabajo",
+		"step": {
+			"created": "Creado",
+			"prep": "Preparación",
+			"release": "Entrega",
+			"field": "Trabajo de campo",
+			"return": "Devolución",
+			"close": "Supervisor · Finanzas"
+		},
+		"callout": {
+			"sign_title": "Paso 3 · Tú + Cuadrilla",
+			"sign_title_crew": "Paso 3 · Tú + Almacén",
+			"sign_body": "Cuenta cada línea juntos en una pantalla. La cuadrilla puede tomar más — cambia la cantidad. Ambos firman. La lista queda bloqueada para todos.",
+			"field_title": "Paso 4 · Tú",
+			"field_body": "Haz el trabajo y luego regístralo aquí: dirección real, GPS, materiales utilizados, fotos y tu firma. Lo que guardes sin conexión se sincroniza al reconectar."
 		}
 	},
 	"finance_payroll": {

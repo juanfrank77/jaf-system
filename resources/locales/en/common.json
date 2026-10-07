@@ -417,7 +417,6 @@
 	},
 	"docs_sign": {
 		"title": "Warehouse Pickup — Dual Signature",
-		"review_notice": "Review materials below. Both warehouse and crew must sign. Once signed, this list is permanently locked.",
 		"warehouse_label": "Warehouse",
 		"warehouse_placeholder": "Select warehouse...",
 		"materials_taken_label": "Materials Taken",
@@ -452,7 +451,8 @@
 	},
 	"docs_field": {
 		"title": "Field Update",
-		"offline_notice": "<strong>Offline capable.</strong> If you lose connection, your changes save locally and sync when you reconnect.",
+		"offline_title": "Offline capable",
+		"offline_notice": "If you lose connection, your changes save locally and sync when you reconnect.",
 		"sent_back_by": "Sent back by {{name}}",
 		"sent_back_by_unknown": "your supervisor",
 		"actual_address_label": "Actual Job Address",
@@ -489,7 +489,9 @@
 		"clear_signature": "Clear signature",
 		"submit": "Submit Field Update",
 		"save_offline": "Save for later sync",
+		"queued_title": "Saved offline",
 		"queued_message": "Field update saved. It will sync automatically when you reconnect.",
+		"offline_submit_title": "Offline",
 		"offline_submit_notice": "You are offline. Tap Save for later sync and the update will upload when you have signal.",
 		"errors": {
 			"invalid_materials": "Invalid materials data",
@@ -1617,6 +1619,24 @@
 			"not_owed_back": "This serial is not owed back.",
 			"submit": "Scan In",
 			"success": "Returned successfully."
+		}
+	},
+	"job_flow": {
+		"aria": "Job progress",
+		"step": {
+			"created": "Created",
+			"prep": "Prep",
+			"release": "Release",
+			"field": "Field work",
+			"return": "Return",
+			"close": "Supervisor · Finance"
+		},
+		"callout": {
+			"sign_title": "Step 3 · You + Crew",
+			"sign_title_crew": "Step 3 · You + Warehouse",
+			"sign_body": "Count each line together on one screen. The crew may take more — change the number. Both sign. The list locks for everyone.",
+			"field_title": "Step 4 · You",
+			"field_body": "Do the job, then log it here: actual address, GPS, materials used, photos and your signature. What you save offline syncs when you reconnect."
 		}
 	},
 	"finance_payroll": {

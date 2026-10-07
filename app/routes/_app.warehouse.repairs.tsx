@@ -3,7 +3,9 @@ import { Form } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
+import { Callout } from "~/components/ui/callout"
 import { Card, CardContent } from "~/components/ui/card"
+import { WarehouseStepRail } from "~/components/warehouse-step-rail"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
 import {
@@ -213,6 +215,10 @@ export default function Repairs({
 			<h1 className="text-lg font-semibold text-foreground">
 				{t("repairs.title")}
 			</h1>
+			<WarehouseStepRail current="REPAIRS" />
+			<Callout title={t("warehouse_flow.callout.repairs_title")}>
+				{t("warehouse_flow.callout.repairs_body")}
+			</Callout>
 
 			{actionData?.errorKey && (
 				<div
@@ -224,10 +230,31 @@ export default function Repairs({
 				</div>
 			)}
 			{actionData?.batchId && (
-				<div className="rounded-lg border border-border bg-muted/40 p-2.5 text-sm">
-					{t("repairs.batch_sent", { id: actionData.batchId.slice(0, 8) })}
-					{actionData.docFailed ? ` — ${t("repairs.doc_failed")}` : ""}
-				</div>
+				<Callout
+					title={t("repairs.batch_sent", {
+						id: actionData.batchId.slice(0, 8),
+					})}
+					tone="ok"
+				>
+					{t(
+						"warehouse_flow.callout.repairs_sent_body",
+						"The batch is with Claro. Record the intake here when the repaired units come back.",
+					)}
+				</Callout>
+			)}
+			{actionData?.docFailed && (
+				<Callout
+					title={t(
+						"repairs.doc_failed",
+						"document generation failed — use Regenerate",
+					)}
+					tone="warn"
+				>
+					{t(
+						"warehouse_flow.callout.repairs_doc_failed_body",
+						"The batch was sent, but its document did not render. Regenerate it from the batch list below.",
+					)}
+				</Callout>
 			)}
 			{actionData?.flagged && actionData.flagged.length > 0 && (
 				<div className="rounded-lg border border-warn/40 bg-warn/10 p-2.5 text-sm">

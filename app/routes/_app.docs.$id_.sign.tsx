@@ -5,12 +5,14 @@ import { useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, redirect, useSubmit } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { JobStepRail } from "~/components/job-step-rail"
 import { MaterialLineItems } from "~/components/material-line-items"
 import {
 	SignaturePad,
 	type SignaturePadHandle,
 } from "~/components/signature-pad"
 import { Button } from "~/components/ui/button"
+import { Callout } from "~/components/ui/callout"
 import { Label } from "~/components/ui/label"
 import {
 	Select,
@@ -350,9 +352,16 @@ export default function SignDoc({
 				{doc.controlNumber}
 			</p>
 
-			<div className="bg-status-warn-soft border border-status-warn/30 rounded-lg p-3 text-sm text-status-warn">
-				{t("docs_sign.review_notice")}
-			</div>
+			<JobStepRail docId={doc.id} current="RELEASE" role={user.role} />
+			<Callout
+				title={t(
+					user.role === "CREW"
+						? "job_flow.callout.sign_title_crew"
+						: "job_flow.callout.sign_title",
+				)}
+			>
+				{t("job_flow.callout.sign_body")}
+			</Callout>
 
 			<Form method="post" onSubmit={handleSubmit} className="space-y-5">
 				<div>

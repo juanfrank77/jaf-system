@@ -2,9 +2,10 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import type { ParseKeys } from "i18next"
 import { useRef, useState } from "react"
-import { Trans, useTranslation } from "react-i18next"
+import { useTranslation } from "react-i18next"
 import { data, Form, redirect, useSubmit } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { JobStepRail } from "~/components/job-step-rail"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { ServiceLinesTable } from "~/components/service-lines-table"
 import {
@@ -12,6 +13,7 @@ import {
 	type SignaturePadHandle,
 } from "~/components/signature-pad"
 import { Button } from "~/components/ui/button"
+import { Callout } from "~/components/ui/callout"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
@@ -305,7 +307,8 @@ export default function FieldUpdate({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { doc, serviceCodes, latestSendBack, sentByName } = loaderData
+	const { doc, serviceCodes, user, latestSendBack, sentByName } =
+		loaderData
 	const taken = (doc.materialsTaken as MaterialLine[] | null) ?? []
 	const used = (doc.materialsUsed as MaterialLine[] | null) ?? []
 	const estimated = (doc.estimatedMaterials as MaterialLine[] | null) ?? []
@@ -429,31 +432,33 @@ export default function FieldUpdate({
 
 	return (
 		<div className="space-y-5">
-			<div className="bg-status-info-soft border border-status-info/30 rounded-lg p-3 text-sm text-status-info">
-				<Trans
-					i18nKey="docs_field.offline_notice"
-					components={{ strong: <strong /> }}
-				/>
-			</div>
-
-			{latestSendBack && (
-				<div className="bg-status-warn-soft border border-status-warn/30 rounded-lg p-3 text-sm">
-					<p className="font-medium text-status-warn">
-						{t("docs_field.sent_back_by", {
-							name: sentByName ?? t("docs_field.sent_back_by_unknown"),
-						})}
-					</p>
-					<p className="mt-1 text-status-warn">{latestSendBack.note}</p>
-					<p className="mt-1 text-xs text-status-warn/80">
-						{new Date(latestSendBack.createdAt).toLocaleString()}
-					</p>
-				</div>
-			)}
-
 			<h1 className="text-xl font-semibold">{t("docs_field.title")}</h1>
 			<p className="text-sm font-mono text-muted-foreground">
 				{doc.controlNumber}
 			</p>
+
+			<JobStepRail docId={doc.id} current="FIELD" role={user.role} />
+			<Callout title={t("job_flow.callout.field_title")}>
+				{t("job_flow.callout.field_body")}
+			</Callout>
+
+			{latestSendBack && (
+				<Callout
+					tone="danger"
+					title={t("docs_field.sent_back_by", {
+						name: sentByName ?? t("docs_field.sent_back_by_unknown"),
+					})}
+				>
+					{latestSendBack.note}{" "}
+					<span className="text-xs opacity-80">
+						{new Date(latestSendBack.createdAt).toLocaleString()}
+					</span>
+				</Callout>
+			)}
+
+			<Callout tone="info" title={t("docs_field.offline_title")}>
+				{t("docs_field.offline_notice")}
+			</Callout>
 
 			{corrections.length > 0 && (
 				<div className="bg-muted border rounded-lg p-3 text-sm space-y-2">
@@ -481,15 +486,15 @@ export default function FieldUpdate({
 			)}
 
 			{queued && (
-				<div className="bg-status-ok-soft border border-status-ok/30 rounded-lg p-3 text-sm text-status-ok">
+				<Callout tone="ok" title={t("docs_field.queued_title")}>
 					{t("docs_field.queued_message")}
-				</div>
+				</Callout>
 			)}
 
 			{!online && !queued && (
-				<div className="bg-status-warn-soft border border-status-warn/30 rounded-lg p-3 text-sm text-status-warn">
+				<Callout tone="warn" title={t("docs_field.offline_submit_title")}>
 					{t("docs_field.offline_submit_notice")}
-				</div>
+				</Callout>
 			)}
 
 			<Form

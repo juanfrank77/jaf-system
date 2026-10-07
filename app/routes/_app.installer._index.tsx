@@ -1,6 +1,8 @@
 import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { InstallerLoopRail } from "~/components/installer-loop-rail"
+import { Callout } from "~/components/ui/callout"
 import { db } from "~/lib/db.server"
 import { requireInstaller } from "~/lib/installer-context.server"
 import { getVanView } from "~/lib/van-view.server"
@@ -49,6 +51,10 @@ export default function InstallerHome({ loaderData }: Route.ComponentProps) {
 
 	return (
 		<div className="space-y-6">
+			<InstallerLoopRail current="HOME" />
+			<Callout title={t("installer.installer_flow.callout.home_title")}>
+				{t("installer.installer_flow.callout.home_body")}
+			</Callout>
 			<div>
 				<h1 className="text-xl font-semibold">{installer.name}</h1>
 				<p className="text-sm text-muted-foreground">

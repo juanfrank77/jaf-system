@@ -417,7 +417,6 @@
 	},
 	"docs_sign": {
 		"title": "Warehouse Pickup — Dual Signature",
-		"review_notice": "Review materials below. Both warehouse and crew must sign. Once signed, this list is permanently locked.",
 		"warehouse_label": "Warehouse",
 		"warehouse_placeholder": "Select warehouse...",
 		"materials_taken_label": "Materials Taken",
@@ -452,7 +451,8 @@
 	},
 	"docs_field": {
 		"title": "Field Update",
-		"offline_notice": "<strong>Offline capable.</strong> If you lose connection, your changes save locally and sync when you reconnect.",
+		"offline_title": "Offline capable",
+		"offline_notice": "If you lose connection, your changes save locally and sync when you reconnect.",
 		"sent_back_by": "Sent back by {{name}}",
 		"sent_back_by_unknown": "your supervisor",
 		"actual_address_label": "Actual Job Address",
@@ -489,7 +489,9 @@
 		"clear_signature": "Clear signature",
 		"submit": "Submit Field Update",
 		"save_offline": "Save for later sync",
+		"queued_title": "Saved offline",
 		"queued_message": "Field update saved. It will sync automatically when you reconnect.",
+		"offline_submit_title": "Offline",
 		"offline_submit_notice": "You are offline. Tap Save for later sync and the update will upload when you have signal.",
 		"errors": {
 			"invalid_materials": "Invalid materials data",
@@ -1478,6 +1480,35 @@
 			"scan_out": "Scan serial out",
 			"search_placeholder": "Order #, address, or serial",
 			"submit": "Submit"
+		},
+		"installer_flow": {
+			"aria": "Installer work loop",
+			"loop": {
+				"home": "Home",
+				"new": "New job",
+				"swap": "Swap",
+				"van": "My van",
+				"restock": "Restock"
+			},
+			"completion": {
+				"aria": "Completion steps",
+				"order": "1. Order",
+				"scan": "2. Scan modem",
+				"materials": "3. Drop & materials",
+				"sign": "4. Form & sign"
+			},
+			"callout": {
+				"home_title": "Your van",
+				"home_body": "Start a new completion or a warranty swap. My van shows what is on board and what you owe back.",
+				"new_title": "Step 1 · You",
+				"new_body": "Order number, address, then scan the modem. Every step saves locally — nothing is lost if the connection drops.",
+				"swap_title": "Step 2 · You",
+				"swap_body": "Find the original job, scan the unit coming out and the unit going in. The original record is never edited — this is a new event on it.",
+				"van_title": "Your van",
+				"van_body": "Derived from every movement: what is on board, what is below par, and what you owe back to the warehouse.",
+				"restock_title": "Restock",
+				"restock_body": "Pre-filled to par when par data exists. A line pushing above par needs sign-off before it goes to the warehouse."
+			}
 		}
 	},
 	"installer_restock": {

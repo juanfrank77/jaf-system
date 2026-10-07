@@ -1,7 +1,9 @@
 import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { InstallerLoopRail } from "~/components/installer-loop-rail"
 import { Button } from "~/components/ui/button"
+import { Callout } from "~/components/ui/callout"
 import { VanInventoryTable } from "~/components/van-inventory-table"
 import { db } from "~/lib/db.server"
 import { requireInstaller } from "~/lib/installer-context.server"
@@ -50,6 +52,10 @@ export default function MyVan({ loaderData }: Route.ComponentProps) {
 
 	return (
 		<div className="space-y-6">
+			<InstallerLoopRail current="VAN" />
+			<Callout title={t("installer.installer_flow.callout.van_title")}>
+				{t("installer.installer_flow.callout.van_body")}
+			</Callout>
 			<div className="flex items-center justify-between">
 				<h1 className="text-xl font-semibold">
 					{t("installer.my_van_heading", "My Van")}

@@ -2,7 +2,9 @@ import { useTranslation } from "react-i18next"
 import { Form } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Button } from "~/components/ui/button"
+import { Callout } from "~/components/ui/callout"
 import { Card, CardContent } from "~/components/ui/card"
+import { WarehouseStepRail } from "~/components/warehouse-step-rail"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
 import { resolveNeedsReview } from "~/lib/repair.server"
@@ -91,6 +93,10 @@ export default function NeedsReview({
 			<h1 className="text-lg font-semibold text-foreground">
 				{t("needs_review.title")}
 			</h1>
+			<WarehouseStepRail current="REVIEW" />
+			<Callout title={t("warehouse_flow.callout.review_title")} tone="warn">
+				{t("warehouse_flow.callout.review_body")}
+			</Callout>
 			{actionData?.errorKey && (
 				<div
 					data-testid="needs-review-error"

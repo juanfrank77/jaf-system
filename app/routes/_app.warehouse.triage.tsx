@@ -3,7 +3,9 @@ import { Form } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
+import { Callout } from "~/components/ui/callout"
 import { Card, CardContent } from "~/components/ui/card"
+import { WarehouseStepRail } from "~/components/warehouse-step-rail"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
 import {
@@ -109,6 +111,10 @@ export default function Triage({
 			<h1 className="text-lg font-semibold text-foreground">
 				{t("triage.title")}
 			</h1>
+			<WarehouseStepRail current="TRIAGE" />
+			<Callout title={t("warehouse_flow.callout.triage_title")}>
+				{t("warehouse_flow.callout.triage_body")}
+			</Callout>
 			{actionData?.errorKey && (
 				<div
 					data-testid="triage-error"

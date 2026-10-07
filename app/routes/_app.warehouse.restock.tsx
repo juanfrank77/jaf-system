@@ -1,6 +1,8 @@
 import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { Callout } from "~/components/ui/callout"
+import { WarehouseStepRail } from "~/components/warehouse-step-rail"
 import { db } from "~/lib/db.server"
 import { canReleaseToVan, rolesMatching } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
@@ -31,6 +33,10 @@ export default function WarehouseRestockList({
 			<h1 className="text-xl font-semibold">
 				{t("warehouse.restock_list.heading", "Restocks to Release")}
 			</h1>
+			<WarehouseStepRail current="RESTOCK" />
+			<Callout title={t("warehouse_flow.callout.restock_title")}>
+				{t("warehouse_flow.callout.restock_body")}
+			</Callout>
 			<ul className="divide-y">
 				{pending.map((r) => (
 					<li key={r.id} className="py-2 flex items-center justify-between">

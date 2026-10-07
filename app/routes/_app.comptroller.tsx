@@ -1,8 +1,10 @@
 import { useTranslation } from "react-i18next"
 import { data, Form, Link } from "react-router"
+import { ComptrollerStepRail } from "~/components/comptroller-step-rail"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Badge } from "~/components/ui/badge"
 import { Button, buttonVariants } from "~/components/ui/button"
+import { Callout } from "~/components/ui/callout"
 import { Card, CardContent } from "~/components/ui/card"
 import { db } from "~/lib/db.server"
 import { isComptrollerEnabled } from "~/lib/features.server"
@@ -304,6 +306,10 @@ export default function ComptrollerDashboard({
 					{t("comptroller_dashboard.role_label")}
 				</span>
 			</div>
+			<ComptrollerStepRail current={null} />
+			<Callout title={t("comptroller_flow.callout.dashboard_title")}>
+				{t("comptroller_flow.callout.dashboard_body")}
+			</Callout>
 
 			<div className="grid grid-cols-2 gap-3 md:grid-cols-4">
 				<Card>

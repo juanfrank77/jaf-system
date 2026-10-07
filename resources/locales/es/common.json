@@ -1650,22 +1650,47 @@
 			"success": "Devuelto exitosamente."
 		}
 	},
-	"job_flow": {
-		"aria": "Progreso del trabajo",
+	"finance_flow": {
+		"aria": "Ciclo de trabajo de finanzas",
 		"step": {
-			"created": "Creado",
-			"prep": "Preparación",
-			"release": "Entrega",
-			"field": "Trabajo de campo",
-			"return": "Devolución",
-			"close": "Supervisor · Finanzas"
+			"packets": "Paquetes",
+			"payroll": "Nómina",
+			"po": "PO de Claro",
+			"pipeline": "Cuentas por cobrar"
 		},
 		"callout": {
-			"sign_title": "Paso 3 · Tú + Cuadrilla",
-			"sign_title_crew": "Paso 3 · Tú + Almacén",
-			"sign_body": "Cuenta cada línea juntos en una pantalla. La cuadrilla puede tomar más — cambia la cantidad. Ambos firman. La lista queda bloqueada para todos.",
-			"field_title": "Paso 4 · Tú",
-			"field_body": "Haz el trabajo y luego regístralo aquí: dirección real, GPS, materiales utilizados, fotos y tu firma. Lo que guardes sin conexión se sincroniza al reconectar."
+			"queue_title": "Paso 1 · Tú",
+			"queue_body": "Lee el paquete, confirma el pago al contratista que calculó el sistema y arma la solicitud de adelanto PBCC. El diario recoge el trabajo en la próxima corrida de nómina.",
+			"verify_title": "Paso 1 · Tú",
+			"verify_body": "Revisa el paquete contra los montos que calculó el sistema antes de armar la solicitud PBCC.",
+			"pbcc_title": "Paso 1 · Tú",
+			"pbcc_body": "La solicitud PBCC lleva la factura en formato del banco y el Aviso. Contraloría registra el adelanto cuando llegan los fondos.",
+			"payroll_title": "Paso 2 · Traspaso",
+			"payroll_body": "Arma la corrida quincenal; Contraloría paga a las brigadas y confirma. Cada Aviso de la corrida pasa aquí a nómina confirmada.",
+			"po_title": "Paso 3 · Tú",
+			"po_body": "Registra la PO de Claro contra el Aviso — un Aviso puede tener varias POs. El saldo se deriva, nunca se escribe.",
+			"pipeline_title": "Paso 4 · Traspaso",
+			"pipeline_body": "Registra los pagos según lleguen y Cierra cuando existan ambos. Un trabajo medio cerrado es el estado normal, no un error."
+		}
+	},
+	"comptroller_flow": {
+		"aria": "Pagos de Contraloría",
+		"step": {
+			"advance": "Adelanto PBCC",
+			"crew": "Pago a la brigada",
+			"final": "Final de Claro"
+		},
+		"callout": {
+			"dashboard_title": "Tus tres pagos",
+			"dashboard_body": "Cada trabajo necesita registrados el adelanto PBCC, el pago a la brigada y el pago final de Claro. Finanzas crea cada fila; tú registras que el dinero se movió.",
+			"advance_title": "Paso 1 · Tú",
+			"advance_body": "Registra el adelanto PBCC cuando el depósito aparezca en el banco.",
+			"crew_title": "Paso 2 · Tú",
+			"crew_body": "Registra el pago a la brigada cuando ya se le haya pagado.",
+			"final_title": "Paso 3 · Tú",
+			"final_body": "Registra el pago final de Claro cuando llegue. Finanzas ya puede cerrar el trabajo.",
+			"done_title": "Todo registrado · Traspaso",
+			"done_body": "Los tres pagos están registrados. Finanzas cierra el trabajo."
 		}
 	},
 	"finance_payroll": {

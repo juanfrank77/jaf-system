@@ -3,8 +3,10 @@ import path from "node:path"
 import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { FinanceStepRail } from "~/components/finance-step-rail"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
+import { Callout } from "~/components/ui/callout"
 import {
 	type ContractorPayment,
 	type ContractorShareLine,
@@ -268,6 +270,10 @@ export default function PbccRequest({ loaderData }: Route.ComponentProps) {
 			<p className="font-mono text-sm text-muted-foreground">
 				{doc.controlNumber}
 			</p>
+			<FinanceStepRail current="PACKETS" />
+			<Callout title={t("finance_flow.callout.pbcc_title")}>
+				{t("finance_flow.callout.pbcc_body")}
+			</Callout>
 
 			<div className="bg-card border rounded-lg p-4 space-y-2 text-sm">
 				<p>

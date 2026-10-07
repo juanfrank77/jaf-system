@@ -1650,22 +1650,47 @@
 			"success": "Returned successfully."
 		}
 	},
-	"job_flow": {
-		"aria": "Job progress",
+	"finance_flow": {
+		"aria": "Finance work loop",
 		"step": {
-			"created": "Created",
-			"prep": "Prep",
-			"release": "Release",
-			"field": "Field work",
-			"return": "Return",
-			"close": "Supervisor · Finance"
+			"packets": "Packets",
+			"payroll": "Payroll",
+			"po": "Claro PO",
+			"pipeline": "Receivables"
 		},
 		"callout": {
-			"sign_title": "Step 3 · You + Crew",
-			"sign_title_crew": "Step 3 · You + Warehouse",
-			"sign_body": "Count each line together on one screen. The crew may take more — change the number. Both sign. The list locks for everyone.",
-			"field_title": "Step 4 · You",
-			"field_body": "Do the job, then log it here: actual address, GPS, materials used, photos and your signature. What you save offline syncs when you reconnect."
+			"queue_title": "Step 1 · You",
+			"queue_body": "Read the packet, confirm the contractor payment the system computed, then build the PBCC advance request. The journal picks the job up on the next payroll run.",
+			"verify_title": "Step 1 · You",
+			"verify_body": "Check the packet against the amounts the system computed before building the PBCC request.",
+			"pbcc_title": "Step 1 · You",
+			"pbcc_body": "The PBCC request carries the bank-format invoice and the Aviso. The Comptroller records the advance when the funds arrive.",
+			"payroll_title": "Step 2 · Handoff",
+			"payroll_body": "Build the fortnightly run; the Comptroller pays the brigades and confirms. Every Aviso in the run flips to payroll confirmed here.",
+			"po_title": "Step 3 · You",
+			"po_body": "Record the Claro PO against the Aviso — one Aviso can carry several POs. The balance is derived, never typed.",
+			"pipeline_title": "Step 4 · Handoff",
+			"pipeline_body": "Record payments as they land and Close once both exist. A half-closed job is the normal state, not an error."
+		}
+	},
+	"comptroller_flow": {
+		"aria": "Comptroller payments",
+		"step": {
+			"advance": "PBCC advance",
+			"crew": "Crew payment",
+			"final": "Claro final"
+		},
+		"callout": {
+			"dashboard_title": "Your three payments",
+			"dashboard_body": "Every job needs the PBCC advance, the crew payment and Claro's final payment recorded. Finance creates each row; you record that the money moved.",
+			"advance_title": "Step 1 · You",
+			"advance_body": "Record the PBCC advance when the deposit shows in the bank.",
+			"crew_title": "Step 2 · You",
+			"crew_body": "Record the crew payment when the crew has been paid.",
+			"final_title": "Step 3 · You",
+			"final_body": "Record Claro's final payment when it arrives. Finance can then close the job.",
+			"done_title": "All recorded · Handoff",
+			"done_body": "All three payments are recorded. Finance closes the job."
 		}
 	},
 	"finance_payroll": {

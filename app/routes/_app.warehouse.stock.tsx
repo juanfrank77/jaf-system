@@ -1,5 +1,8 @@
+import { useTranslation } from "react-i18next"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { StockScreen } from "~/components/stock-screen"
+import { Callout } from "~/components/ui/callout"
+import { WarehouseStepRail } from "~/components/warehouse-step-rail"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
 import { getActiveMaterialCodes } from "~/lib/service-codes.server"
@@ -100,7 +103,16 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export default function StockAndAudit({ loaderData }: Route.ComponentProps) {
-	return <StockScreen {...loaderData} />
+	const { t } = useTranslation()
+	return (
+		<div className="mx-auto w-full max-w-3xl space-y-4 p-4">
+			<WarehouseStepRail current="STOCK" />
+			<Callout title={t("warehouse_flow.callout.stock_title")}>
+				{t("warehouse_flow.callout.stock_body")}
+			</Callout>
+			<StockScreen {...loaderData} />
+		</div>
+	)
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {

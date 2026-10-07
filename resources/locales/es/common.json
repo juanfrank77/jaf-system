@@ -1619,6 +1619,35 @@
 			"success": "Devuelto exitosamente."
 		}
 	},
+	"warehouse_flow": {
+		"aria": "Circuito de trabajo del almacén",
+		"step": {
+			"scan_in": "Entrada",
+			"triage": "Clasificación",
+			"review": "Revisión",
+			"repairs": "Reparaciones",
+			"restock": "Reabastecimiento",
+			"stock": "Inventario y auditoría"
+		},
+		"callout": {
+			"scan_in_title": "Paso 1 · Tú",
+			"scan_in_body": "Toda unidad que regresa se escanea aquí — su ubicación se actualiza en cuanto el código de barras se lee.",
+			"scan_in_not_owed_body": "Escanea el número de serie de una unidad pendiente de devolución a este almacén — la unidad sale de la lista de devolución del instalador en cuanto se escanea.",
+			"scan_in_done_body": "Ubicación actualizada a este almacén. La unidad salió de la lista de devolución y volvió a tu inventario serializado.",
+			"triage_title": "Paso 2 · Tú",
+			"triage_body": "Las unidades en buen estado vuelven al inventario, las fallidas van al grupo de reparación y lo incierto se retiene para el líder.",
+			"review_title": "Paso 3 · Líder",
+			"review_body": "Resolver una retención es decisión del líder — una línea faltante cambia lo que la cuadrilla puede hacer en sitio.",
+			"repairs_title": "Paso 4 · Tú",
+			"repairs_body": "Las unidades fallidas viajan en un lote de reparación de Claro. Envía el lote y registra la recepción cuando las unidades reparadas regresen.",
+			"restock_title": "Paso 5 · Traspaso",
+			"restock_body": "Los reabastecimientos aprobados se liberan a la van con la doble firma — el inventario de la van se mueve cuando ambos firman.",
+			"repairs_sent_body": "El lote está con Claro. Registra la recepción aquí cuando las unidades reparadas regresen.",
+			"repairs_doc_failed_body": "El lote se envió, pero su documento no se generó. Regenera el documento desde la lista de lotes.",
+			"stock_title": "Paso 6 · Auditoría",
+			"stock_body": "Cada movimiento lleva actor, hora y trabajo. Los ajustes requieren una razón; las instantáneas defienden el conteo ante auditoría."
+		}
+	},
 	"finance_payroll": {
 		"title": "Nómina pendiente",
 		"run_label_placeholder": "Etiqueta de la corrida (ej. 9/10)",

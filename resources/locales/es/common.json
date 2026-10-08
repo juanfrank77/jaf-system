@@ -1744,6 +1744,15 @@
 		"heading": "Liberar reabastecimiento a la van"
 	},
 	"van_view": {
+		"low": "bajo",
+		"serialized": "Unidades con serial",
+		"accessories": "Accesorios",
+		"empty": "Aún no hay inventario registrado. Tu van se llena cuando el almacén la carga y baja cuando instalas.",
+		"removed_today": "retirada hoy",
+		"removed_days_ago_one": "retirada hace {{count}} día",
+		"removed_days_ago_other": "retirada hace {{count}} días",
+		"pending_scan_in": "pendiente de escaneo en el almacén",
+		"request_restock": "Pedir reposición (prellenada según el par) →",
 		"item": "Artículo",
 		"on_van": "En la van",
 		"owed_back": "Pendiente de devolución",

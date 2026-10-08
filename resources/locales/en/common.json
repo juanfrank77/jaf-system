@@ -1744,6 +1744,15 @@
 		"warehouse_signature": "Warehouse release signature"
 	},
 	"van_view": {
+		"low": "low",
+		"serialized": "Serialized units",
+		"accessories": "Accessories",
+		"empty": "No inventory tracked yet. Your van fills as the warehouse loads it and drops as you install.",
+		"removed_today": "removed today",
+		"removed_days_ago_one": "removed {{count}} day ago",
+		"removed_days_ago_other": "removed {{count}} days ago",
+		"pending_scan_in": "pending scan-in at the warehouse",
+		"request_restock": "Request restock (pre-filled to par) →",
 		"item": "Item",
 		"on_van": "On van",
 		"owed_back": "Owed back",

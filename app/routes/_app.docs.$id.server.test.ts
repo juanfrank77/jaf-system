@@ -126,6 +126,64 @@ describe("GET /docs/:id", () => {
 		expect(res.correctorNames).toEqual({ "crew-2": "Ana Crew" })
 	})
 
+	describe("billing information by role", () => {
+		const billed = {
+			avisoNumber: "AV-9",
+			claroPdfPath: "/x.pdf",
+			avisoLines: [{ unitPrice: 4 }],
+			advanceAmount: "100",
+			contractorAccountCode: "009",
+			jafInvoiceLineTotal: "55",
+			retentionAmount: "5",
+		}
+		async function loadAs(role: string) {
+			vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
+				id: "user-1",
+				role,
+			} as any)
+			vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+				baseDoc("SUPERVISOR_APPROVED", {
+					assignedCrewIds: ["user-1"],
+					...billed,
+				}) as any,
+			)
+			vi.mocked(db.auditTrail.findMany).mockResolvedValue([
+				{
+					id: "a1",
+					action: "AVISO_ENTERED",
+					diffJson: { avisoNumber: "AV-9" },
+					user: { name: "Sup" },
+				},
+			] as any)
+			vi.mocked(db.user.findMany).mockResolvedValue([])
+			return loader({
+				request: new Request("http://localhost/docs/doc-1"),
+				params: { id: "doc-1" },
+			} as any)
+		}
+
+		it.each(["CREW", "INSTALLER"])(
+			"does not send %s any billing field or audit payload",
+			async (role) => {
+				const res = await loadAs(role)
+				for (const k of Object.keys(billed))
+					expect((res.doc as any)[k]).toBeNull()
+				expect(res.auditTrail[0].diffJson).toBeNull()
+				expect(JSON.stringify(res)).not.toContain("AV-9")
+			},
+		)
+
+		it.each(["ADMIN", "FINANCE"])(
+			"still sends %s the billing fields",
+			async (role) => {
+				const res = await loadAs(role)
+				expect(res.doc.avisoNumber).toBe("AV-9")
+				expect((res.doc as any).advanceAmount).toBe("100")
+				expect(res.auditTrail[0].diffJson).toEqual({ avisoNumber: "AV-9" })
+			},
+		)
+	})
+
 	describe("send-back banner data", () => {
 		const entry = {
 			createdAt: "2026-10-01T10:00:00.000Z",

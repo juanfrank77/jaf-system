@@ -31,7 +31,7 @@ describe("GET /installer", () => {
 				kind: "INSTALL",
 				status: "READY",
 				completionId: "c1",
-				createdAt: new Date(),
+				createdAt: new Date("2026-10-01T12:00:00Z"),
 			},
 		])
 		mocks.db.installCompletion.findMany.mockResolvedValue([
@@ -47,5 +47,6 @@ describe("GET /installer", () => {
 		const res = await loader({ request: req, params: {}, context: {} } as never)
 		expect(res.jobs[0].pill).toBe("READY")
 		expect(res.jobs[0].claroOrderNo).toBe("430920")
+		expect(res.jobs[0].submittedAt).toBe("2026-10-01T12:00:00.000Z")
 	})
 })

@@ -31,6 +31,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 			: "—",
 		kind: r.kind,
 		pill: r.status,
+		submittedAt: r.createdAt.toISOString(),
 	}))
 	const view = van
 		? await getVanView(van.id)
@@ -55,7 +56,7 @@ const STATUS_VARIANT: Record<string, "ok" | "warn" | "info"> = {
 
 export default function InstallerHome({ loaderData }: Route.ComponentProps) {
 	const { installer, van, jobs, quickLook } = loaderData
-	const { t } = useTranslation()
+	const { t, i18n } = useTranslation()
 
 	return (
 		<div className="space-y-6">
@@ -119,6 +120,9 @@ export default function InstallerHome({ loaderData }: Route.ComponentProps) {
 								<th className="py-1 font-medium">
 									{t("installer.home.col_type")}
 								</th>
+								<th className="py-1 font-medium">
+									{t("installer.home.col_date")}
+								</th>
 								<th className="py-1 text-right font-medium">
 									{t("installer.home.col_status")}
 								</th>
@@ -132,6 +136,9 @@ export default function InstallerHome({ loaderData }: Route.ComponentProps) {
 										{t(`installer.home.kind.${j.kind}`, {
 											defaultValue: j.kind,
 										})}
+									</td>
+									<td className="py-2.5 text-muted-foreground">
+										{new Date(j.submittedAt).toLocaleDateString(i18n.language)}
 									</td>
 									<td className="py-2.5 text-right">
 										<Badge variant={STATUS_VARIANT[j.pill] ?? "neutral"}>

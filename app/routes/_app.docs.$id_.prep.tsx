@@ -369,6 +369,10 @@ export default function PrepDoc({
 										{t("docs_prep.substitute_with")}
 									</Label>
 									<Select
+										items={substitutionOptions.map((c) => ({
+											value: c.id,
+											label: `${c.claroCode} — ${c.name}`,
+										}))}
 										value={line.substitutedWith ?? ""}
 										onValueChange={(v) =>
 											updateLine(index, {

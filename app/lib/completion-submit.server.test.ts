@@ -289,3 +289,100 @@ it("logs a line edited down to zero without an INSTALL row", async () => {
 	})
 	expect(rows.map((r) => r.type)).toEqual(["ADJUST"])
 })
+
+it("stores serialNotOnVan=true for a serial that is not on this van, and leaves its location alone", async () => {
+	const other = await db.van.create({ data: { name: `Van O ${Date.now()}` } })
+	const elsewhere = `ALCLED-X${Date.now()}`
+	await db.serialLocation.create({
+		data: {
+			serial: elsewhere,
+			serviceCodeId: modemCodeId,
+			status: "VAN",
+			currentRef: other.id,
+		},
+	})
+	const res = await submitCompletion(
+		{
+			idempotencyKey: `k-nov-${Date.now()}`,
+			claroOrderNo: "4",
+			installerId,
+			vanId,
+			address: "a",
+			accessories: [],
+			groundRod: true,
+			serialInstalled: elsewhere,
+			serialUnreadable: false,
+			formPhotoPath: "/tmp/f.jpg",
+			sigInstaller: "data:image/png;base64,AAA",
+			installedAt: new Date(),
+		},
+		{ id: installerId },
+	)
+	// Warning only: the completion still goes through.
+	expect(res.status).toBe("READY")
+	const row = await db.installCompletion.findUniqueOrThrow({
+		where: { id: res.completionId },
+	})
+	expect(row.serialNotOnVan).toBe(true)
+	const loc = await db.serialLocation.findUnique({
+		where: { serial: elsewhere },
+	})
+	expect(loc?.status).toBe("VAN")
+})
+
+it("stores serialNotOnVan=true for a serial unknown to the system, false for one on the van", async () => {
+	const unknown = await submitCompletion(
+		{
+			idempotencyKey: `k-unk-${Date.now()}`,
+			claroOrderNo: "5",
+			installerId,
+			vanId,
+			address: "a",
+			accessories: [],
+			groundRod: true,
+			serialInstalled: `NOSUCH${Date.now()}`,
+			serialUnreadable: false,
+			installedAt: new Date(),
+		},
+		{ id: installerId },
+	)
+	expect(
+		(
+			await db.installCompletion.findUniqueOrThrow({
+				where: { id: unknown.completionId },
+			})
+		).serialNotOnVan,
+	).toBe(true)
+
+	const onVanSerial = `ALCLED-OK${Date.now()}`
+	await db.serialLocation.create({
+		data: {
+			serial: onVanSerial,
+			serviceCodeId: modemCodeId,
+			status: "VAN",
+			currentRef: vanId,
+		},
+	})
+	const ok = await submitCompletion(
+		{
+			idempotencyKey: `k-ok-${Date.now()}`,
+			claroOrderNo: "6",
+			installerId,
+			vanId,
+			address: "a",
+			accessories: [],
+			groundRod: true,
+			serialInstalled: onVanSerial,
+			serialUnreadable: false,
+			installedAt: new Date(),
+		},
+		{ id: installerId },
+	)
+	expect(
+		(
+			await db.installCompletion.findUniqueOrThrow({
+				where: { id: ok.completionId },
+			})
+		).serialNotOnVan,
+	).toBe(false)
+})

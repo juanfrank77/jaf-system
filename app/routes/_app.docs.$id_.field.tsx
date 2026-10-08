@@ -1,12 +1,13 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import type { ParseKeys } from "i18next"
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { data, Form, redirect, useSubmit } from "react-router"
+import { data, Form, redirect, useNavigation, useSubmit } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { JobStepRail } from "~/components/job-step-rail"
 import { MaterialLineItems } from "~/components/material-line-items"
+import { type CapturedPhoto, PhotoCapture } from "~/components/photo-capture"
 import { ServiceLinesTable } from "~/components/service-lines-table"
 import {
 	SignaturePad,
@@ -307,8 +308,7 @@ export default function FieldUpdate({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { doc, serviceCodes, user, latestSendBack, sentByName } =
-		loaderData
+	const { doc, serviceCodes, user, latestSendBack, sentByName } = loaderData
 	const taken = (doc.materialsTaken as MaterialLine[] | null) ?? []
 	const used = (doc.materialsUsed as MaterialLine[] | null) ?? []
 	const estimated = (doc.estimatedMaterials as MaterialLine[] | null) ?? []
@@ -325,7 +325,13 @@ export default function FieldUpdate({
 		| undefined
 	const online = useOnline()
 	const submit = useSubmit()
+	const navigation = useNavigation()
+	const busy = navigation.state !== "idle"
 	const [queued, setQueued] = useState(false)
+	// Client-side check shown inline (an alert() is a modal OS dialog in the
+	// installed app and the message is gone as soon as it is dismissed).
+	const [clientErrorKey, setClientErrorKey] = useState<ParseKeys | null>(null)
+	const errorRef = useRef<HTMLDivElement>(null)
 
 	const signatureRef = useRef<SignaturePadHandle>(null)
 	const [startedAt, setStartedAt] = useState<string | null>(
@@ -339,6 +345,25 @@ export default function FieldUpdate({
 		doc.gpsCoordinates ? JSON.stringify(doc.gpsCoordinates) : null,
 	)
 	const [gpsError, setGpsError] = useState<string | null>(null)
+	const [photosBefore, setPhotosBefore] = useState<CapturedPhoto[]>([])
+	const [photosAfter, setPhotosAfter] = useState<CapturedPhoto[]>([])
+	const [usedItems, setUsedItems] = useState<MaterialLine[]>(
+		used.length > 0 ? used : taken,
+	)
+
+	// The address the server will diff against on submit (see the action).
+	const baselineAddress = doc.jobAddressActual || doc.jobAddressEstimated
+	const [address, setAddress] = useState(baselineAddress)
+	const addressChanged = address.trim() !== baselineAddress.trim()
+
+	const shownErrorKey = clientErrorKey ?? error?.errorKey
+	const shownErrorMessage = clientErrorKey ? undefined : error?.errorMessage
+	const hasError = Boolean(shownErrorKey || shownErrorMessage)
+	// biome-ignore lint/correctness/useExhaustiveDependencies: scroll only when an error appears or changes
+	useEffect(() => {
+		if (hasError)
+			errorRef.current?.scrollIntoView({ block: "center", behavior: "smooth" })
+	}, [hasError, shownErrorKey, shownErrorMessage, error])
 
 	function handleCaptureGps() {
 		setGpsError(null)
@@ -373,17 +398,39 @@ export default function FieldUpdate({
 
 	const timeOnSite = formatTimeOnSite(startedAt, endedAt)
 
+	// What the crew still has to bring back: signed out minus used.
+	const usedById = new Map(usedItems.map((i) => [i.serviceCodeId, i.qty]))
+	const bringBack = taken
+		.map((line) => {
+			const code = serviceCodes.find((c) => c.id === line.serviceCodeId)
+			return {
+				id: line.serviceCodeId,
+				qty: line.qty - (usedById.get(line.serviceCodeId) ?? 0),
+				name: code?.name ?? "",
+				unit: code?.unit ?? "",
+			}
+		})
+		.filter((line) => line.qty > 0)
+
 	async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
 		e.preventDefault()
 		const form = e.currentTarget
 		const signature = signatureRef.current?.toDataURL()
-		if (!signature || signature === "data:,") {
-			alert(t("docs_field.errors.completion_signature_required"))
+		if (!signature || signatureRef.current?.isEmpty()) {
+			setClientErrorKey("docs_field.errors.completion_signature_required")
 			return
 		}
+		setClientErrorKey(null)
 
 		const formData = new FormData(form)
 		formData.set("completionSignature", signature)
+		// The photos live in component state (thumbnails, remove), not in a file input.
+		formData.delete("photosBefore")
+		formData.delete("photosAfter")
+		for (const p of photosBefore)
+			formData.append("photosBefore", p.file, p.file.name)
+		for (const p of photosAfter)
+			formData.append("photosAfter", p.file, p.file.name)
 
 		if (online) {
 			submit(formData, { method: "post", encType: "multipart/form-data" })
@@ -391,21 +438,19 @@ export default function FieldUpdate({
 		}
 
 		// Offline: queue the field update.
-		const photosBefore: { name: string; base64: string; type: string }[] = []
-		const photosAfter: { name: string; base64: string; type: string }[] = []
-		const beforeInputs = formData.getAll("photosBefore") as File[]
-		const afterInputs = formData.getAll("photosAfter") as File[]
-		for (const file of beforeInputs) {
+		const queuedBefore: { name: string; base64: string; type: string }[] = []
+		const queuedAfter: { name: string; base64: string; type: string }[] = []
+		for (const file of formData.getAll("photosBefore") as File[]) {
 			if (file.size === 0) continue
-			photosBefore.push({
+			queuedBefore.push({
 				name: file.name,
 				type: file.type,
 				base64: await fileToBase64(file),
 			})
 		}
-		for (const file of afterInputs) {
+		for (const file of formData.getAll("photosAfter") as File[]) {
 			if (file.size === 0) continue
-			photosAfter.push({
+			queuedAfter.push({
 				name: file.name,
 				type: file.type,
 				base64: await fileToBase64(file),
@@ -424,8 +469,8 @@ export default function FieldUpdate({
 			startedAt: (formData.get("startedAt") as string) || null,
 			endedAt: (formData.get("endedAt") as string) || null,
 			gpsCoordinates: (formData.get("gpsCoordinates") as string) || null,
-			photosBefore,
-			photosAfter,
+			photosBefore: queuedBefore,
+			photosAfter: queuedAfter,
 		})
 		setQueued(true)
 	}
@@ -456,35 +501,6 @@ export default function FieldUpdate({
 				</Callout>
 			)}
 
-			<Callout tone="info" title={t("docs_field.offline_title")}>
-				{t("docs_field.offline_notice")}
-			</Callout>
-
-			{corrections.length > 0 && (
-				<div className="bg-muted border rounded-lg p-3 text-sm space-y-2">
-					<p className="font-medium text-foreground">
-						{t("docs_field.address_history_heading")}
-					</p>
-					<ul className="space-y-1">
-						{corrections.map((c) => (
-							<li
-								key={`${c.original}-${c.corrected}-${c.correctedAt}`}
-								className="text-xs text-muted-foreground"
-							>
-								<span className="line-through">{c.original}</span>
-								{" → "}
-								<span className="font-medium">{c.corrected}</span>
-								{c.gps && (
-									<span className="ml-1 text-muted-foreground">
-										({c.gps.lat.toFixed(4)}, {c.gps.lng.toFixed(4)})
-									</span>
-								)}
-							</li>
-						))}
-					</ul>
-				</div>
-			)}
-
 			{queued && (
 				<Callout tone="ok" title={t("docs_field.queued_title")}>
 					{t("docs_field.queued_message")}
@@ -503,54 +519,120 @@ export default function FieldUpdate({
 				className="space-y-4"
 				onSubmit={handleSubmit}
 			>
-				<div>
-					<Label htmlFor="jobAddressActual">
-						{t("docs_field.actual_address_label")}
-					</Label>
-					<Input
-						id="jobAddressActual"
-						name="jobAddressActual"
-						defaultValue={doc.jobAddressActual || doc.jobAddressEstimated}
-						required
-					/>
-				</div>
+				<div className="border rounded-lg p-3 space-y-3">
+					<div className="space-y-1">
+						<Label htmlFor="jobAddressActual">
+							{t("docs_field.actual_address_label")}
+						</Label>
+						<Input
+							id="jobAddressActual"
+							name="jobAddressActual"
+							value={address}
+							onChange={(e) => setAddress(e.target.value)}
+							className="h-11 text-base"
+							required
+						/>
+					</div>
 
-				<div>
-					<Button
-						type="button"
-						variant="outline"
-						size="sm"
-						onClick={handleCaptureGps}
-						disabled={!!gpsCoordinates}
-					>
-						{gpsCoordinates
-							? t("docs_field.gps_captured")
-							: t("docs_field.gps_capture")}
-					</Button>
-					{gpsError && (
-						<p className="text-xs text-status-danger mt-1">{gpsError}</p>
+					{addressChanged && (
+						<div
+							data-testid="address-diff"
+							className="rounded-lg bg-status-info-soft p-2.5 text-sm"
+						>
+							<p className="break-words">
+								<span className="text-muted-foreground line-through">
+									{baselineAddress}
+								</span>
+								{" → "}
+								<b>{address.trim()}</b>
+							</p>
+							<p className="mt-1 text-xs text-muted-foreground">
+								{t("docs_field.address_diff_hint")}
+							</p>
+						</div>
 					)}
-					{gpsCoordinates && (
-						<p className="text-xs text-muted-foreground mt-1">
-							{t("docs_field.gps_saved")}
-						</p>
+
+					{corrections.length > 0 && (
+						<div className="space-y-1">
+							<p className="text-xs font-medium text-foreground">
+								{t("docs_field.address_history_heading")}
+							</p>
+							<ul className="space-y-1.5">
+								{corrections.map((c) => (
+									<li
+										key={`${c.original}-${c.corrected}-${c.correctedAt}`}
+										className="rounded-lg bg-muted p-2 text-xs"
+									>
+										<p className="break-words">
+											<span className="text-muted-foreground line-through">
+												{c.original}
+											</span>
+											{" → "}
+											<span className="font-medium">{c.corrected}</span>
+										</p>
+										<p className="mt-0.5 text-muted-foreground">
+											{t(
+												c.correctedById === user.id
+													? "docs_field.address_edited_by_you"
+													: "docs_field.address_edited_by_other",
+												{
+													when: new Date(c.correctedAt).toLocaleString([], {
+														dateStyle: "short",
+														timeStyle: "short",
+													}),
+												},
+											)}
+											{c.gps &&
+												` · ${t("docs_field.address_gps", {
+													lat: c.gps.lat.toFixed(4),
+													lng: c.gps.lng.toFixed(4),
+												})}`}
+										</p>
+									</li>
+								))}
+							</ul>
+						</div>
 					)}
-					<input
-						type="hidden"
-						name="gpsCoordinates"
-						value={gpsCoordinates ?? ""}
-					/>
+
+					<div>
+						<Button
+							type="button"
+							variant="outline"
+							size="lg"
+							className="h-11 text-base"
+							onClick={handleCaptureGps}
+							disabled={!!gpsCoordinates}
+						>
+							{gpsCoordinates
+								? t("docs_field.gps_captured")
+								: t("docs_field.gps_capture")}
+						</Button>
+						{gpsError && (
+							<p className="text-xs text-status-danger mt-1">{gpsError}</p>
+						)}
+						{gpsCoordinates && (
+							<p className="text-xs text-muted-foreground mt-1">
+								{t("docs_field.gps_saved")}
+							</p>
+						)}
+						<input
+							type="hidden"
+							name="gpsCoordinates"
+							value={gpsCoordinates ?? ""}
+						/>
+					</div>
 				</div>
 
 				<div className="border rounded-lg p-3 space-y-2">
 					<Label>{t("docs_field.time_on_site_label")}</Label>
-					<div className="flex items-center gap-2">
+					<div className="flex flex-wrap items-center gap-2">
 						<input type="hidden" name="startedAt" value={startedAt ?? ""} />
 						<input type="hidden" name="endedAt" value={endedAt ?? ""} />
 						<Button
 							type="button"
 							variant="outline"
-							size="sm"
+							size="lg"
+							className="h-11 text-base"
 							onClick={handleStart}
 							disabled={!!startedAt}
 						>
@@ -559,7 +641,8 @@ export default function FieldUpdate({
 						<Button
 							type="button"
 							variant="outline"
-							size="sm"
+							size="lg"
+							className="h-11 text-base"
 							onClick={handleStop}
 							disabled={!startedAt || !!endedAt}
 						>
@@ -571,6 +654,29 @@ export default function FieldUpdate({
 							</span>
 						)}
 					</div>
+				</div>
+
+				<div className="border rounded-lg p-3 space-y-2">
+					<Label>{t("docs_field.photos_before_label")}</Label>
+					<p className="text-xs text-muted-foreground">
+						{t("docs_field.photos_before_hint")}
+					</p>
+					<PhotoCapture
+						photos={photosBefore}
+						onChange={setPhotosBefore}
+						tag={t("docs_field.photo_tag_before")}
+					/>
+				</div>
+				<div className="border rounded-lg p-3 space-y-2">
+					<Label>{t("docs_field.photos_after_label")}</Label>
+					<p className="text-xs text-muted-foreground">
+						{t("docs_field.photos_after_hint")}
+					</p>
+					<PhotoCapture
+						photos={photosAfter}
+						onChange={setPhotosAfter}
+						tag={t("docs_field.photo_tag_after")}
+					/>
 				</div>
 
 				{ordered.length > 0 && (
@@ -594,29 +700,26 @@ export default function FieldUpdate({
 					<p className="text-xs text-muted-foreground">
 						{t("docs_field.materials_used_hint")}
 					</p>
-					{taken.length > 0 && (
-						<div className="bg-muted rounded p-2">
-							<p className="text-xs font-medium text-muted-foreground mb-1">
-								{t("docs_field.taken_reference_label")}
-							</p>
-							<MaterialLineItems
-								serviceCodes={serviceCodes}
-								initialItems={taken}
-								readOnly
-								showPrice={false}
-							/>
-						</div>
+					<MaterialLineItems
+						serviceCodes={serviceCodes}
+						initialItems={used.length > 0 ? used : taken}
+						name="materialsUsed"
+						touch
+						estimatedItems={taken.length > 0 ? taken : undefined}
+						listedLabel={t("docs_field.took_label")}
+						tags={false}
+						onItemsChange={setUsedItems}
+					/>
+					{taken.length > 0 && bringBack.length > 0 && (
+						<Callout tone="warn" title={t("docs_field.bring_back_title")}>
+							{bringBack
+								.map((l) => `${l.qty}${l.unit ? ` ${l.unit}` : ""} ${l.name}`)
+								.join(" · ")}
+							<span className="mt-0.5 block text-xs text-muted-foreground">
+								{t("docs_field.bring_back_hint")}
+							</span>
+						</Callout>
 					)}
-					<div>
-						<p className="text-xs font-medium text-muted-foreground mb-1">
-							{t("docs_field.used_entry_label")}
-						</p>
-						<MaterialLineItems
-							serviceCodes={serviceCodes}
-							initialItems={used.length > 0 ? used : taken}
-							name="materialsUsed"
-						/>
-					</div>
 					{estimated.length > 0 && (
 						<p className="text-xs text-muted-foreground">
 							{t("docs_field.ordered_vs_installed_hint")}
@@ -653,64 +756,54 @@ export default function FieldUpdate({
 					/>
 				</div>
 
-				<div>
-					<Label>{t("docs_field.photos_before_label")}</Label>
-					<p className="text-xs text-muted-foreground mb-1">
-						{t("docs_field.photos_before_hint")}
-					</p>
-					<input
-						id="photosBefore"
-						name="photosBefore"
-						type="file"
-						accept="image/*"
-						multiple
-						capture="environment"
-						className="block w-full text-sm text-muted-foreground mt-1"
-					/>
-				</div>
-				<div>
-					<Label>{t("docs_field.photos_after_label")}</Label>
-					<p className="text-xs text-muted-foreground mb-1">
-						{t("docs_field.photos_after_hint")}
-					</p>
-					<input
-						id="photosAfter"
-						name="photosAfter"
-						type="file"
-						accept="image/*"
-						multiple
-						capture="environment"
-						className="block w-full text-sm text-muted-foreground mt-1"
-					/>
-				</div>
-
 				<div className="border rounded-lg p-3 space-y-2">
 					<Label>{t("docs_field.completion_signature_label")}</Label>
 					<p className="text-xs text-muted-foreground">
 						{t("docs_field.completion_signature_hint")}
 					</p>
-					<SignaturePad ref={signatureRef} width={320} height={120} />
-					<button
+					<SignaturePad
+						ref={signatureRef}
+						height={160}
+						onChange={(isEmpty) => {
+							if (!isEmpty) setClientErrorKey(null)
+						}}
+					/>
+					<Button
 						type="button"
+						variant="ghost"
+						size="lg"
+						className="h-11 text-base"
 						onClick={() => signatureRef.current?.clear()}
-						className="text-xs text-muted-foreground hover:text-foreground"
 					>
 						{t("docs_field.clear_signature")}
-					</button>
+					</Button>
 				</div>
 
-				{error?.errorKey && (
-					<p className="text-sm text-status-danger">
-						{t(error.errorKey, error.errorParams)}
-					</p>
-				)}
-				{error?.errorMessage && (
-					<p className="text-sm text-status-danger">{error.errorMessage}</p>
+				{hasError && (
+					<div ref={errorRef} role="alert">
+						<Callout tone="danger" title={t("docs_field.error_title")}>
+							{shownErrorKey
+								? t(shownErrorKey, error?.errorParams)
+								: shownErrorMessage}
+						</Callout>
+					</div>
 				)}
 
-				<Button type="submit" className="w-full">
-					{online ? t("docs_field.submit") : t("docs_field.save_offline")}
+				<Button
+					type="submit"
+					size="lg"
+					className="h-12 w-full text-base"
+					disabled={busy}
+				>
+					{busy
+						? t("docs_field.submitting")
+						: online
+							? t("docs_field.submit")
+							: t("docs_field.save_offline")}
 				</Button>
+				<p className="text-center text-xs text-muted-foreground">
+					{t("docs_field.offline_footnote")}
+				</p>
 			</Form>
 		</div>
 	)

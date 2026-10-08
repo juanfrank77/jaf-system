@@ -30,7 +30,7 @@ function row() {
 }
 
 describe("serviceCodesForRole", () => {
-	it.each(["CREW", "WAREHOUSE"])(
+	it.each(["CREW", "WAREHOUSE", "INSTALLER"])(
 		"removes every price field for %s and keeps the rest",
 		(role) => {
 			const [out] = serviceCodesForRole(role, [row()]) as any[]
@@ -65,6 +65,7 @@ describe("isPriceBlind", () => {
 	it("is true only for crew and warehouse", () => {
 		expect(isPriceBlind("CREW")).toBe(true)
 		expect(isPriceBlind("WAREHOUSE")).toBe(true)
+		expect(isPriceBlind("INSTALLER")).toBe(true)
 		expect(isPriceBlind("SUPERVISOR")).toBe(false)
 		expect(isPriceBlind("ADMIN")).toBe(false)
 	})

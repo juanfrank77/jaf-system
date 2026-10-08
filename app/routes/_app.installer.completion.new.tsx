@@ -36,7 +36,10 @@ import {
 } from "~/lib/offline-store"
 import { refuse } from "~/lib/offline-validation.server"
 import { resolveSerial } from "~/lib/service-codes"
-import { getSerializedCodes } from "~/lib/service-codes.server"
+import {
+	getSerializedCodes,
+	serviceCodesForRole,
+} from "~/lib/service-codes.server"
 import type { Route } from "./+types/_app.installer.completion.new"
 
 export const meta: Route.MetaFunction = () => [
@@ -73,7 +76,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 		van,
 		brackets,
 		limitRows,
-		serializedCodes,
+		// Model resolution needs the prefix and name, never the price.
+		serializedCodes: serviceCodesForRole(user.role, serializedCodes),
 		accessoryCodes,
 		vanSerials: vanSerialRows.map((r) => r.serial),
 	}

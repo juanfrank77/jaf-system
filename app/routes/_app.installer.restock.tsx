@@ -15,8 +15,10 @@ import {
 	createRestock,
 	MAX_LINE_QTY,
 } from "~/lib/restock.server"
-import { getActiveMaterialCodes } from "~/lib/service-codes.server"
-import { toNumberPrice } from "~/lib/utils"
+import {
+	getActiveMaterialCodes,
+	serviceCodesForRole,
+} from "~/lib/service-codes.server"
 import type { Route } from "./+types/_app.installer.restock"
 
 // submitted -> (needs sign-off if above par) -> approved -> picked -> received
@@ -65,12 +67,12 @@ export async function loader({ request }: Route.LoaderArgs) {
 				signoff: r.status === "NEEDS_SIGNOFF" || r.approvedById !== null,
 			}
 		})
-		const serviceCodes = codes.map((c) => ({
+		// Price-blind for installers: the picker needs only these fields.
+		const serviceCodes = serviceCodesForRole(user.role, codes).map((c) => ({
 			id: c.id,
 			claroCode: c.claroCode,
 			name: c.name,
 			unit: c.unit,
-			unitPrice: toNumberPrice(c.unitPrice),
 		}))
 		return {
 			role: "INSTALLER" as const,

@@ -98,6 +98,51 @@ describe("GET /docs/:id", () => {
 		})
 	})
 
+	describe("send-back banner data", () => {
+		const entry = {
+			createdAt: "2026-10-01T10:00:00.000Z",
+			byUserId: "sup-1",
+			fromStatus: "FIELD_UPDATED",
+			toStatus: "SIGNED",
+			note: "Photos are blurry",
+		}
+
+		async function loadSent(status: string) {
+			vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
+				id: "user-1",
+				role: "CREW",
+			} as any)
+			vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+				baseDoc(status, {
+					assignedCrewIds: ["user-1"],
+					sendBackHistory: [entry],
+				}) as any,
+			)
+			vi.mocked(db.user.findUnique).mockResolvedValue({
+				id: "sup-1",
+				name: "Sam Supervisor",
+			} as any)
+			vi.mocked(db.auditTrail.findMany).mockResolvedValue([])
+			vi.mocked(db.user.findMany).mockResolvedValue([])
+			return loader({
+				request: new Request("http://localhost/docs/doc-1"),
+				params: { id: "doc-1" },
+			} as any)
+		}
+
+		it("returns the latest send-back and who sent it while the job is back at SIGNED", async () => {
+			const res = await loadSent("SIGNED")
+			expect(res.latestSendBack?.note).toBe("Photos are blurry")
+			expect(res.sentByName).toBe("Sam Supervisor")
+		})
+
+		it("returns no send-back once the job was resubmitted", async () => {
+			const res = await loadSent("FIELD_UPDATED")
+			expect(res.latestSendBack).toBeNull()
+			expect(res.sentByName).toBeNull()
+		})
+	})
+
 	it("404s a crew member who is not assigned to the job, marked not-assigned", async () => {
 		vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
 			id: "crew-9",

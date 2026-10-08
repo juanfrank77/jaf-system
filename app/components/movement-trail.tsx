@@ -22,13 +22,16 @@ type TrailRow = {
 export function MovementTrail({
 	warehouseId,
 	serviceCodeId,
+	unit,
 	onClose,
 }: {
 	warehouseId: string
 	serviceCodeId: string
+	/** Count unit of the material (qty is ledger/count-unit). */
+	unit?: string | null
 	onClose: () => void
 }) {
-	const { t } = useTranslation()
+	const { t, i18n } = useTranslation()
 	const fetcher = useFetcher<{ trail: TrailRow[] }>()
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: fetcher identity is stable; re-run only when the code/warehouse pair changes
@@ -69,10 +72,15 @@ export function MovementTrail({
 							>
 								<span className="font-medium">{m.actor}</span>
 								<span className="text-muted-foreground">
-									{new Date(m.at).toLocaleString()}
+									{new Date(m.at).toLocaleString(i18n.language)}
 								</span>
-								<span>{m.type}</span>
-								<span className="font-mono">{m.qty}</span>
+								<span>
+									{t(`stock.movement_type.${m.type}`, { defaultValue: m.type })}
+								</span>
+								<span className="font-mono">
+									{m.qty > 0 ? `+${m.qty}` : m.qty}
+									{unit ? ` ${unit}` : ""}
+								</span>
 								<span className="text-muted-foreground">
 									{m.job ?? m.note ?? "—"}
 								</span>

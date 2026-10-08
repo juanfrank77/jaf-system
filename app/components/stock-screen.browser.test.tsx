@@ -15,6 +15,8 @@ function loaderDataAt(onHand: number): StockScreenData {
 				stockUnit: "FT",
 				countUnit: "ROLLOS",
 				derivedStockQty: onHand * 10,
+				claroCode: "SAP-1",
+				lastMovement: null,
 			},
 		],
 		serial: [],

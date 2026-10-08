@@ -54,8 +54,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 		}
 	}
 
-	const [bulk, serial, isLead, snapshots, materialCodesRaw] = await Promise.all(
-		[
+	const [bulkBase, serial, isLead, snapshots, materialCodesRaw, lastMovements] =
+		await Promise.all([
 			getWarehouseBulkStock(db, selectedId),
 			getWarehouseSerialStock(db, selectedId),
 			user.role === "ADMIN"
@@ -67,13 +67,29 @@ export async function loader({ request }: Route.LoaderArgs) {
 				take: 5,
 			}),
 			getActiveMaterialCodes(),
-		],
-	)
+			// Latest bulk movement per material (type + time) for the table's
+			// "last movement" column. Read-only; one row per serviceCodeId.
+			db.stockMovement.findMany({
+				where: { kind: "BULK", warehouseId: selectedId },
+				orderBy: { at: "desc" },
+				distinct: ["serviceCodeId"],
+				select: { serviceCodeId: true, type: true, at: true },
+			}),
+		])
 
 	// SerialLocation keys serviceCodeId without a relation (same convention as
 	// triage.tsx), so resolve display names for the serial-register here.
 	const codes = await db.serviceCode.findMany({
-		where: { id: { in: [...new Set(serial.map((s) => s.serviceCodeId))] } },
+		where: {
+			id: {
+				in: [
+					...new Set([
+						...serial.map((s) => s.serviceCodeId),
+						...bulkBase.map((b) => b.serviceCodeId),
+					]),
+				],
+			},
+		},
 		select: { id: true, claroCode: true, canonicalName: true, name: true },
 	})
 	const serialCodeNames = Object.fromEntries(
@@ -82,6 +98,17 @@ export async function loader({ request }: Route.LoaderArgs) {
 			{ claroCode: c.claroCode, name: c.canonicalName ?? c.name },
 		]),
 	)
+	const lastByCode = new Map(lastMovements.map((m) => [m.serviceCodeId, m]))
+	const bulk = bulkBase.map((b) => {
+		const last = lastByCode.get(b.serviceCodeId)
+		return {
+			...b,
+			claroCode: serialCodeNames[b.serviceCodeId]?.claroCode ?? "",
+			lastMovement: last
+				? { type: last.type, at: last.at.toISOString() }
+				: null,
+		}
+	})
 	const materialCodes = materialCodesRaw.map((c) => ({
 		id: c.id,
 		claroCode: c.claroCode,

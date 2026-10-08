@@ -504,6 +504,7 @@
 		"offline_submit_notice": "Estás sin conexión. Toca Guardar para sincronizar después y la actualización se subirá cuando tengas señal.",
 		"errors": {
 			"invalid_materials": "Datos de materiales inválidos",
+			"used_exceeds_took": "No puedes usar más de lo que te llevaste. Baja la cantidad a lo que se firmó en la recogida.",
 			"discrepancy_note_required": "Se requiere una nota de discrepancia cuando las cantidades instaladas difieren de lo firmado en salida.",
 			"completion_signature_required": "Se requiere la firma de completado.",
 			"invalid_service_lines": "No se pudieron leer las cantidades de servicio instaladas."

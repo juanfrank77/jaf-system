@@ -504,6 +504,7 @@
 		"offline_submit_notice": "You are offline. Tap Save for later sync and the update will upload when you have signal.",
 		"errors": {
 			"invalid_materials": "Invalid materials data",
+			"used_exceeds_took": "You can't use more than you took. Lower the quantity to what was signed out at pickup.",
 			"discrepancy_note_required": "A discrepancy note is required when installed quantities differ from signed-out quantities.",
 			"completion_signature_required": "Completion signature is required.",
 			"invalid_service_lines": "Installed service quantities could not be read."

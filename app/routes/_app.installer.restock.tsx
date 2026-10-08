@@ -3,6 +3,7 @@ import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { InstallerLoopRail } from "~/components/installer-loop-rail"
 import { MaterialLineItems } from "~/components/material-line-items"
+import { StepRail } from "~/components/step-rail"
 import { Button } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
 import { db } from "~/lib/db.server"
@@ -18,6 +19,16 @@ import { getActiveMaterialCodes } from "~/lib/service-codes.server"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.installer.restock"
 
+// submitted -> (needs sign-off if above par) -> approved -> picked -> received
+const TRAIL = ["SUBMITTED", "APPROVED", "PICKED", "RECEIVED"] as const
+const TRAIL_WITH_SIGNOFF = [
+	"SUBMITTED",
+	"NEEDS_SIGNOFF",
+	"APPROVED",
+	"PICKED",
+	"RECEIVED",
+] as const
+
 export const meta: Route.MetaFunction = () => [{ title: "Restock — JAF Ops" }]
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -28,10 +39,32 @@ export async function loader({ request }: Route.LoaderArgs) {
 	])
 	if (user.role === "INSTALLER") {
 		const { van } = await requireInstaller(request)
-		const [prefill, codes] = await Promise.all([
+		const [prefill, codes, own] = await Promise.all([
 			van ? buildRestockPrefill(van.id) : Promise.resolve([]),
 			getActiveMaterialCodes(),
+			// The installer's own recent requests, so "did it go through" is not
+			// a phone call.
+			van
+				? db.restockRequest.findMany({
+						where: { vanId: van.id },
+						orderBy: { submittedAt: "desc" },
+						take: 5,
+					})
+				: Promise.resolve([]),
 		])
+		const requests = own.map((r) => {
+			const lines =
+				(r.lines as { serviceCodeId: string; qty: number }[] | null) ?? []
+			return {
+				id: r.id,
+				status: r.status,
+				submittedAt: r.submittedAt.toISOString(),
+				lineCount: lines.length,
+				units: lines.reduce((n, l) => n + l.qty, 0),
+				// A sign-off step happened (or is pending) when it needed one.
+				signoff: r.status === "NEEDS_SIGNOFF" || r.approvedById !== null,
+			}
+		})
 		const serviceCodes = codes.map((c) => ({
 			id: c.id,
 			claroCode: c.claroCode,
@@ -44,6 +77,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 			van,
 			prefill,
 			serviceCodes,
+			requests,
 			pending: [],
 		}
 	}
@@ -57,6 +91,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		van: null,
 		prefill: [],
 		serviceCodes: [],
+		requests: [],
 		pending,
 	}
 }
@@ -125,8 +160,8 @@ export default function InstallerRestock({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { role, van, prefill, serviceCodes, pending } = loaderData
-	const { t } = useTranslation()
+	const { role, van, prefill, serviceCodes, requests, pending } = loaderData
+	const { t, i18n } = useTranslation()
 
 	if (role !== "INSTALLER") {
 		return (
@@ -168,6 +203,11 @@ export default function InstallerRestock({
 			<h1 className="text-xl font-semibold">
 				{t("installer.request_restock", "Request Restock")}
 			</h1>
+			{van && (
+				<p className="text-sm text-muted-foreground">
+					{t("installer_restock.van_header", { van: van.name })}
+				</p>
+			)}
 			{!van ? (
 				<p className="text-sm text-status-warn">{t("installer.no_van")}</p>
 			) : (
@@ -181,11 +221,68 @@ export default function InstallerRestock({
 						serviceCodes={serviceCodes}
 						initialItems={prefill}
 						name="lines"
+						touch
 					/>
+					<p className="text-xs text-muted-foreground">
+						{t("installer_restock.tap_hint")}
+					</p>
 					<Button type="submit">
 						{t("restock.submit", "Submit Restock Request")}
 					</Button>
 				</Form>
+			)}
+
+			{van && (
+				<section className="space-y-2">
+					<h2 className="text-sm font-medium">
+						{t("installer.restock_requests_heading")}
+					</h2>
+					{requests.length === 0 ? (
+						<p className="text-sm text-muted-foreground">
+							{t("installer.no_restock_requests")}
+						</p>
+					) : (
+						<ul className="space-y-3">
+							{requests.map((r) => {
+								const steps: readonly (typeof TRAIL_WITH_SIGNOFF)[number][] =
+									r.signoff ? TRAIL_WITH_SIGNOFF : TRAIL
+								return (
+									<li
+										key={r.id}
+										className="space-y-2 rounded-lg border bg-card p-3"
+									>
+										<p className="text-sm">
+											{new Date(r.submittedAt).toLocaleDateString(
+												i18n.language,
+											)}{" "}
+											·{" "}
+											{t("installer_restock.request_summary", {
+												lines: r.lineCount,
+												units: r.units,
+											})}
+										</p>
+										<StepRail
+											ariaLabel={t("installer_restock.trail_aria")}
+											current={steps.indexOf(
+												r.status === "DRAFT" ? "SUBMITTED" : r.status,
+											)}
+											compact
+											steps={steps.map((s) => ({
+												key: s,
+												label: t(`installer_restock.status.${s}`),
+											}))}
+										/>
+										{r.status === "NEEDS_SIGNOFF" && (
+											<p className="text-sm font-medium text-status-warn">
+												{t("installer_restock.needs_signoff_note")}
+											</p>
+										)}
+									</li>
+								)
+							})}
+						</ul>
+					)}
+				</section>
 			)}
 		</div>
 	)

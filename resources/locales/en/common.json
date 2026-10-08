@@ -1624,6 +1624,18 @@
 		}
 	},
 	"installer_restock": {
+		"van_header": "{{van}} · pre-filled to par",
+		"tap_hint": "Tap a quantity to change it before sending.",
+		"request_summary": "{{lines}} items · {{units}} units",
+		"trail_aria": "Restock request status",
+		"needs_signoff_note": "Needs sign-off: this request is above par and waits for the installer supervisor before the warehouse can pick it.",
+		"status": {
+			"SUBMITTED": "Submitted",
+			"NEEDS_SIGNOFF": "Needs sign-off",
+			"APPROVED": "Approved",
+			"PICKED": "Picked",
+			"RECEIVED": "Received"
+		},
 		"title": "Request Restock",
 		"warehouse_label": "Warehouse",
 		"warehouse_placeholder": "Select warehouse…",

@@ -1624,6 +1624,8 @@
 		}
 	},
 	"installer_restock": {
+		"sent_title": "Request sent",
+		"sent_body": "It is in your list below. If it is above par it waits for sign-off before the warehouse picks it.",
 		"van_header": "{{van}} · pre-filled to par",
 		"tap_hint": "Tap a quantity to change it before sending.",
 		"request_summary": "{{lines}} items · {{units}} units",

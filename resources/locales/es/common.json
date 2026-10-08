@@ -1624,6 +1624,8 @@
 		}
 	},
 	"installer_restock": {
+		"sent_title": "Solicitud enviada",
+		"sent_body": "Ya está en tu lista de abajo. Si está por encima del par, espera aprobación antes de que el almacén la prepare.",
 		"van_header": "{{van}} · prellenado según el par",
 		"tap_hint": "Toca una cantidad para cambiarla antes de enviar.",
 		"request_summary": "{{lines}} artículos · {{units}} unidades",

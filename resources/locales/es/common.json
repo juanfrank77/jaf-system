@@ -1499,7 +1499,12 @@
 			"scan_heading": "Escanear módem",
 			"serial_unreadable": "Ilegible — solo foto",
 			"signature": "Firma del instalador",
-			"submit": "Enviar"
+			"submit": "Enviar",
+			"next": "Siguiente",
+			"back": "Atrás",
+			"model_unknown_title": "Modelo no reconocido.",
+			"model_unknown_body": "Este serial no coincide con un modelo de módem conocido. Revisa el escaneo; puedes continuar.",
+			"accessories_summary": "Accesorios prellenados para el rango de {{bracket}} pies: {{count}} líneas, {{units}} unidades."
 		},
 		"no_submitted_jobs": "Aún no se han enviado trabajos.",
 		"quick_look": "{{belowPar}} bajo par · {{owedBack}} pendientes de devolución",

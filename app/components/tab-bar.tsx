@@ -23,7 +23,8 @@ export function TabBar({
 			{items.map((item) => {
 				const active =
 					location.pathname === item.to ||
-					(item.to !== "/dashboard" &&
+					(!item.exact &&
+						item.to !== "/dashboard" &&
 						location.pathname.startsWith(`${item.to}/`))
 				return (
 					<Link
@@ -31,7 +32,7 @@ export function TabBar({
 						to={item.to}
 						aria-current={active ? "page" : undefined}
 						className={cn(
-							"flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium",
+							"flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium",
 							active ? "text-accent-text" : "text-muted-foreground",
 						)}
 					>

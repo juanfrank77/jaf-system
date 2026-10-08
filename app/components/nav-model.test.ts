@@ -57,10 +57,19 @@ describe("tabBarItemsFor", () => {
 		expect(tabBarItemsFor("CREW")).toEqual([])
 	})
 
-	it("lists INSTALLER's items", () => {
-		expect(tabBarItemsFor("INSTALLER").map((i) => i.to)).toEqual([
-			"/dashboard",
+	it("gives INSTALLER Home, New job and My van", () => {
+		const tabs = tabBarItemsFor("INSTALLER")
+		expect(tabs.map((i) => i.to)).toEqual([
 			"/installer",
+			"/installer/completion/new",
+			"/installer/van",
 		])
+		expect(tabs.map((i) => i.labelKey)).toEqual([
+			"app_shell.nav.installer_home",
+			"app_shell.nav.installer_new_job",
+			"app_shell.nav.installer_van",
+		])
+		// Home is exact so it is not active on every /installer/* page.
+		expect(tabs[0].exact).toBe(true)
 	})
 })

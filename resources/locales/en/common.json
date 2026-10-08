@@ -1508,7 +1508,7 @@
 			"scan_heading": "Scan modem",
 			"serial_unreadable": "Unreadable — photo only",
 			"signature": "Installer signature",
-			"submit": "Submit",
+			"submit": "Submit completion",
 			"next": "Next",
 			"back": "Back",
 			"model_unknown_title": "Model not recognized.",
@@ -1528,7 +1528,30 @@
 				"address_required": "Enter the address.",
 				"invalid_accessories": "The accessory quantities could not be read. Go back to the materials step and try again."
 			},
-			"accessories_summary": "Accessories pre-filled for the {{bracket}} ft bracket: {{count}} lines, {{units}} units."
+			"accessories_summary": "Accessories pre-filled for the {{bracket}} ft bracket: {{count}} lines, {{units}} units.",
+			"installer_label": "Installer",
+			"date_label": "Date",
+			"auto": "(auto)",
+			"scan_prompt": "Point the camera at the barcode",
+			"scan_again": "Scan again",
+			"scan_hint": "serial + photo in one shot",
+			"serial_label": "Serial (from scan)",
+			"model_label": "Model (resolved)",
+			"model_unresolved": "Not recognized",
+			"scan_captured": "scan captured · {{time}}",
+			"accessories_hint": "Tap a number to change it. Changes are logged.",
+			"required": "required",
+			"form_photo_alt": "Photo of the signed Claro form",
+			"form_photo_prompt": "Photograph the signed form",
+			"form_photo_hint": "the client signed the paper",
+			"form_photo_saved": "form photo saved · {{time}}",
+			"clear_signature": "Clear signature",
+			"next_to": {
+				"ORDER": "Next → scan the modem",
+				"SCAN": "Next → drop & materials",
+				"MATERIALS": "Next → paperwork",
+				"SIGN": "Submit completion"
+			}
 		},
 		"no_submitted_jobs": "No jobs submitted yet.",
 		"quick_look": "{{belowPar}} below par · {{owedBack}} owed back",
@@ -1584,22 +1607,27 @@
 			},
 			"completion": {
 				"aria": "Completion steps",
-				"order": "1. Order",
-				"scan": "2. Scan modem",
-				"materials": "3. Drop & materials",
-				"sign": "4. Form & sign"
+				"order": "Order",
+				"scan": "Scan modem",
+				"materials": "Drop & materials",
+				"sign": "Form & sign"
 			},
 			"callout": {
 				"home_title": "Your van",
 				"home_body": "Start a new completion or a warranty swap. My van shows what is on board and what you owe back.",
-				"new_title": "Step 1 · You",
-				"new_body": "Order number, address, then scan the modem. Every step saves locally — nothing is lost if the connection drops.",
 				"swap_title": "Step 2 · You",
 				"swap_body": "Find the original job, scan the unit coming out and the unit going in. The original record is never edited — this is a new event on it.",
 				"van_title": "Your van",
 				"van_body": "Derived from every movement: what is on board, what is below par, and what you owe back to the warehouse.",
 				"restock_title": "Restock",
 				"restock_body": "Pre-filled to par when par data exists. A line pushing above par needs sign-off before it goes to the warehouse."
+			},
+			"completion_step": {
+				"title": "Step {{n}} of {{total}}",
+				"ORDER": "Claro order number and the address. Every step saves locally — nothing is lost if the connection drops.",
+				"SCAN": "Scan the modem box: the serial and its photo in one shot. The serial is scanned, never typed.",
+				"MATERIALS": "Enter the drop footage and the accessory list fills from the limit table. Tap a number to change it.",
+				"SIGN": "Photo of the signed Claro form (the client signed the paper) and your own signature, then submit."
 			}
 		},
 		"home": {

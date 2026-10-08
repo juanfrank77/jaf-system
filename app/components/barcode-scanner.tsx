@@ -86,6 +86,8 @@ export function BarcodeScanner({
 			<Button
 				type="button"
 				variant="outline"
+				size="lg"
+				className="h-11 w-full text-base"
 				onClick={() => {
 					const next = attempts + 1
 					setAttempts(next)

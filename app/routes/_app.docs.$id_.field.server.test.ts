@@ -6,6 +6,10 @@ vi.mock("~/lib/db.server", () => ({
 			findUniqueOrThrow: vi.fn(),
 			update: vi.fn(),
 		},
+		user: {
+			findUnique: vi.fn(),
+			findMany: vi.fn(),
+		},
 		photo: {
 			create: vi.fn(),
 		},
@@ -30,13 +34,18 @@ vi.mock("~/lib/db.server", () => ({
 	},
 }))
 
+vi.mock("~/lib/service-codes.server", () => ({
+	getActiveMaterialCodes: vi.fn(async () => []),
+	serviceCodesForRole: (_role: string, codes: unknown[]) => codes,
+}))
+
 vi.mock("~/lib/permissions.server", () => ({
 	requireRole: vi.fn(),
 }))
 
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
-import { action } from "./_app.docs.$id_.field"
+import { action, loader } from "./_app.docs.$id_.field"
 
 function formRequest(form: FormData, id = "doc-1") {
 	return new Request(`http://localhost/docs/${id}/field`, {
@@ -344,5 +353,31 @@ describe("POST /docs/:id/field", () => {
 			validationError: "docs_field.errors.used_exceeds_took",
 		})
 		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("loader exposes the names of whoever edited the address", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "crew-1", role: "CREW" },
+			session: {},
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...baseDoc(),
+			addressCorrections: [
+				{
+					original: "a",
+					corrected: "b",
+					correctedById: "crew-2",
+					correctedAt: "2026-10-01T10:00:00.000Z",
+				},
+			],
+		} as any)
+		vi.mocked(db.user.findMany).mockResolvedValue([
+			{ id: "crew-2", name: "Ana Crew" },
+		] as any)
+		const res = await loader({
+			request: new Request("http://localhost/docs/doc-1/field"),
+			params: { id: "doc-1" },
+		} as any)
+		expect(res.correctorNames).toEqual({ "crew-2": "Ana Crew" })
 	})
 })

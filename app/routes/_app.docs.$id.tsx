@@ -159,9 +159,24 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const sentBy = latestSendBack
 		? await db.user.findUnique({ where: { id: latestSendBack.byUserId } })
 		: null
+	const correctorIds = [
+		...new Set(
+			((doc.addressCorrections as AddressCorrection[] | null) ?? []).map(
+				(c) => c.correctedById,
+			),
+		),
+	]
+	const correctors =
+		correctorIds.length > 0
+			? await db.user.findMany({
+					where: { id: { in: correctorIds } },
+					select: { id: true, name: true },
+				})
+			: []
 	return {
 		doc,
 		user,
+		correctorNames: Object.fromEntries(correctors.map((u) => [u.id, u.name])),
 		latestSendBack,
 		sentByName: sentBy?.name ?? null,
 		serviceCodes: serviceCodesForRole(user.role, serviceCodes),
@@ -468,6 +483,7 @@ export default function DocView({
 		stage,
 		latestSendBack,
 		sentByName,
+		correctorNames,
 	} = loaderData
 	const error = actionData as
 		| { errorKey?: string; errorMessage?: string }
@@ -480,12 +496,8 @@ export default function DocView({
 	const corrections =
 		(doc.addressCorrections as AddressCorrection[] | null) || []
 	const gps = doc.gpsCoordinates as { lat: number; lng: number } | null
-	// Names only for people already in the payload; anyone else shows generically.
-	const correctorName = (id: string) =>
-		id === user.id
-			? user.name
-			: (assignedCrew.find((c) => c.id === id)?.name ??
-				(supervisor?.id === id ? supervisor.name : undefined))
+	const correctorName = (id: string): string | undefined =>
+		correctorNames[id] ?? (id === user.id ? user.name : undefined)
 
 	const APPROVED_STATUSES = [
 		"SUPERVISOR_APPROVED",

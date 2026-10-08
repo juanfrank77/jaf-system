@@ -513,6 +513,7 @@
 		},
 		"address_diff_hint": "This change is logged with your name and the time when you submit.",
 		"address_edited_by_you": "Edited by you · {{when}}",
+		"address_edited_by_name": "Edited by {{name}} · {{when}}",
 		"address_edited_by_other": "Edited by another crew member · {{when}}",
 		"address_gps": "GPS {{lat}}, {{lng}}",
 		"photo_tag_before": "BEFORE",

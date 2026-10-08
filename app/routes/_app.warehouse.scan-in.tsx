@@ -61,6 +61,7 @@ export default function WarehouseScanIn({
 				<input type="hidden" name="serial" value={serial} />
 				<input type="hidden" name="warehouseId" value={warehouseId} />
 				<Select
+					items={warehouses.map((w) => ({ value: w.id, label: w.name }))}
 					value={warehouseId}
 					onValueChange={(v) => setWarehouseId(v ?? "")}
 				>

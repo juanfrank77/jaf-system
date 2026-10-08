@@ -6,14 +6,15 @@ import { Callout } from "~/components/ui/callout"
 import { Card, CardContent } from "~/components/ui/card"
 import { WarehouseStepRail } from "~/components/warehouse-step-rail"
 import { db } from "~/lib/db.server"
+import { pageTitle } from "~/lib/page-title"
 import { requireRole } from "~/lib/permissions.server"
 import { resolveNeedsReview } from "~/lib/repair.server"
 import { requireWarehouseLead } from "~/lib/warehouse-lead.server"
 import { resolveWarehouseScope } from "~/lib/warehouse-scope.server"
 import type { Route } from "./+types/_app.warehouse.needs-review"
 
-export const meta: Route.MetaFunction = () => [
-	{ title: "Needs Review — JAF Ops" },
+export const meta: Route.MetaFunction = ({ matches }) => [
+	{ title: pageTitle(matches, "page_title.needs_review") },
 ]
 
 export async function loader({ request }: Route.LoaderArgs) {

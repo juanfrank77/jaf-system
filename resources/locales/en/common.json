@@ -331,6 +331,19 @@
 			"default": "Next Action"
 		}
 	},
+	"page_title": {
+		"needs_review": "Needs Review",
+		"restocks_to_release": "Restocks to Release",
+		"stock": "Stock & Audit",
+		"repairs": "Repairs",
+		"scan_in": "Scan In",
+		"triage": "Triage",
+		"release_restock": "Release Restock",
+		"dashboard": "Dashboard",
+		"prep": "Prep Materials",
+		"sign": "Capture Signature",
+		"returns": "Log Returns"
+	},
 	"docs_prep": {
 		"title": "Prep Materials",
 		"confirm_message": "Confirm that materials for <strong>{{controlNumber}}</strong> have been staged and are ready for crew pickup.",
@@ -1219,6 +1232,8 @@
 		"sent_back_note": "Note: {{note}}",
 		"ready_for_pickup_heading": "Ready for Pickup ({{count}})",
 		"ready_for_pickup_badge": "Ready for pickup",
+		"days_staged_one": "{{count}} day",
+		"days_staged_other": "{{count}} days",
 		"aged_pickup_badge": "Aged > 3 days",
 		"in_the_field_heading": "In the Field ({{count}})",
 		"in_the_field_badge": "In the field",

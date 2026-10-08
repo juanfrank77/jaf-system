@@ -331,6 +331,19 @@
 			"default": "Próxima acción"
 		}
 	},
+	"page_title": {
+		"needs_review": "Requiere revisión",
+		"restocks_to_release": "Reposiciones por liberar",
+		"stock": "Inventario y auditoría",
+		"repairs": "Reparaciones",
+		"scan_in": "Escanear entrada",
+		"triage": "Triaje",
+		"release_restock": "Liberar reposición",
+		"dashboard": "Panel",
+		"prep": "Preparar materiales",
+		"sign": "Capturar firma",
+		"returns": "Registrar devoluciones"
+	},
 	"docs_prep": {
 		"title": "Preparar materiales",
 		"confirm_message": "Confirma que los materiales de <strong>{{controlNumber}}</strong> han sido preparados y están listos para que la cuadrilla los recoja.",
@@ -1219,6 +1232,8 @@
 		"sent_back_note": "Nota: {{note}}",
 		"ready_for_pickup_heading": "Listos para recoger ({{count}})",
 		"ready_for_pickup_badge": "Listo para recoger",
+		"days_staged_one": "{{count}} día",
+		"days_staged_other": "{{count}} días",
 		"aged_pickup_badge": "Envejecido > 3 días",
 		"in_the_field_heading": "En el campo ({{count}})",
 		"in_the_field_badge": "En el campo",

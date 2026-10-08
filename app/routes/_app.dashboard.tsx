@@ -14,6 +14,7 @@ import {
 	isDashboardFiltersEnabled,
 } from "~/lib/features.server"
 import { cacheJobs } from "~/lib/offline-store"
+import { pageTitle } from "~/lib/page-title"
 import { requireSession } from "~/lib/permissions.server"
 import {
 	needsReviewCount,
@@ -32,7 +33,9 @@ import type { DocStatus, Role } from "../../generated/prisma/client"
 import { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.dashboard"
 
-export const meta: Route.MetaFunction = () => [{ title: "Dashboard — JAF Ops" }]
+export const meta: Route.MetaFunction = ({ matches }) => [
+	{ title: pageTitle(matches, "page_title.dashboard") },
+]
 
 type SendBackHistoryRow = {
 	id: string

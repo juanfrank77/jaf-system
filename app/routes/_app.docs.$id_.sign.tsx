@@ -23,6 +23,7 @@ import {
 } from "~/components/ui/select"
 import { isUnassignedCrew, notAssignedResponse } from "~/lib/crew-scope"
 import { db } from "~/lib/db.server"
+import { pageTitle } from "~/lib/page-title"
 import { generateWarehouseReceiptPdf } from "~/lib/pdf/warehouse-receipt.server"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
@@ -36,11 +37,11 @@ import type { Route } from "./+types/_app.docs.$id_.sign"
 
 type MaterialLine = { serviceCodeId: string; qty: number }
 
-export const meta: Route.MetaFunction = ({ data }) => [
+export const meta: Route.MetaFunction = ({ data, matches }) => [
 	{
 		title: data
-			? `${data.doc.controlNumber} — Capture Signature — JAF Ops`
-			: "JAF Ops",
+			? pageTitle(matches, "page_title.sign", data.doc.controlNumber)
+			: pageTitle(matches),
 	},
 ]
 

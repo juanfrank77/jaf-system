@@ -14,12 +14,15 @@ import {
 } from "~/components/ui/select"
 import { WarehouseStepRail } from "~/components/warehouse-step-rail"
 import { db } from "~/lib/db.server"
+import { pageTitle } from "~/lib/page-title"
 import { canScanInReturn, rolesMatching } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import { scanInReturn } from "~/lib/scan-in.server"
 import type { Route } from "./+types/_app.warehouse.scan-in"
 
-export const meta: Route.MetaFunction = () => [{ title: "Scan In — JAF Ops" }]
+export const meta: Route.MetaFunction = ({ matches }) => [
+	{ title: pageTitle(matches, "page_title.scan_in") },
+]
 
 export async function loader({ request }: Route.LoaderArgs) {
 	await requireRole(request, rolesMatching(canScanInReturn))

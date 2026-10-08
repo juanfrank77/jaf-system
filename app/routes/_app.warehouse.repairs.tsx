@@ -7,6 +7,7 @@ import { Callout } from "~/components/ui/callout"
 import { Card, CardContent } from "~/components/ui/card"
 import { WarehouseStepRail } from "~/components/warehouse-step-rail"
 import { db } from "~/lib/db.server"
+import { pageTitle } from "~/lib/page-title"
 import { requireRole } from "~/lib/permissions.server"
 import {
 	correctTriage,
@@ -20,7 +21,9 @@ import { requireWarehouseLead } from "~/lib/warehouse-lead.server"
 import { resolveWarehouseScope } from "~/lib/warehouse-scope.server"
 import type { Route } from "./+types/_app.warehouse.repairs"
 
-export const meta: Route.MetaFunction = () => [{ title: "Repairs — JAF Ops" }]
+export const meta: Route.MetaFunction = ({ matches }) => [
+	{ title: pageTitle(matches, "page_title.repairs") },
+]
 
 export async function loader({ request }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["WAREHOUSE", "ADMIN"])

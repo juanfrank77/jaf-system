@@ -4,6 +4,7 @@ import { StockScreen } from "~/components/stock-screen"
 import { Callout } from "~/components/ui/callout"
 import { WarehouseStepRail } from "~/components/warehouse-step-rail"
 import { db } from "~/lib/db.server"
+import { pageTitle } from "~/lib/page-title"
 import { requireRole } from "~/lib/permissions.server"
 import { getActiveMaterialCodes } from "~/lib/service-codes.server"
 import { toNumberPrice } from "~/lib/utils"
@@ -15,8 +16,8 @@ import {
 } from "~/lib/warehouse-stock.server"
 import type { Route } from "./+types/_app.warehouse.stock"
 
-export const meta: Route.MetaFunction = () => [
-	{ title: "Stock & Audit — JAF Ops" },
+export const meta: Route.MetaFunction = ({ matches }) => [
+	{ title: pageTitle(matches, "page_title.stock") },
 ]
 
 // Screen loader: scopes bulk + serialized stock to the selected warehouse

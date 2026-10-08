@@ -17,6 +17,7 @@ import {
 } from "~/components/ui/select"
 import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
+import { pageTitle } from "~/lib/page-title"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import {
@@ -42,11 +43,11 @@ interface PrepLine {
 let _prepCounter = 0
 const nextPrepKey = () => `prep-${(_prepCounter++).toString()}`
 
-export const meta: Route.MetaFunction = ({ data }) => [
+export const meta: Route.MetaFunction = ({ data, matches }) => [
 	{
 		title: data
-			? `${data.doc.controlNumber} — Prep Materials — JAF Ops`
-			: "JAF Ops",
+			? pageTitle(matches, "page_title.prep", data.doc.controlNumber)
+			: pageTitle(matches),
 	},
 ]
 

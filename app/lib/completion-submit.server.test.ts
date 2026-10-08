@@ -220,3 +220,72 @@ it("recovers the winner's row instead of throwing when a concurrent submit alrea
 		await db.installCompletion.count({ where: { idempotencyKey: key } }),
 	).toBe(1)
 })
+
+it("writes a zero-qty ADJUST log row only for accessory lines edited from the prefill", async () => {
+	const mk = (n: string) =>
+		db.serviceCode.create({
+			data: {
+				claroCode: `A${n}${Date.now()}`,
+				name: `Acc ${n}`,
+				unitPrice: "0",
+			},
+		})
+	const [kept, edited] = await Promise.all([mk("1"), mk("2")])
+	const res = await submitCompletion(
+		{
+			idempotencyKey: `k-acc-${Date.now()}`,
+			claroOrderNo: "2",
+			installerId,
+			vanId,
+			address: "a",
+			accessories: [
+				{ serviceCodeId: kept.id, prefilledQty: 3, qty: 3 },
+				{ serviceCodeId: edited.id, prefilledQty: 4, qty: 6 },
+			],
+			groundRod: true,
+			serialUnreadable: true,
+			installedAt: new Date(),
+		},
+		{ id: installerId },
+	)
+	const rows = await db.stockMovement.findMany({
+		where: { refCompletionId: res.completionId },
+	})
+	const adjusts = rows.filter((r) => r.type === "ADJUST")
+	expect(adjusts).toHaveLength(1)
+	expect(adjusts[0]).toMatchObject({
+		serviceCodeId: edited.id,
+		qty: 0,
+		kind: "BULK",
+		vanId,
+	})
+	expect(adjusts[0].note).toContain("prefilled 4")
+	expect(adjusts[0].note).toContain("final 6")
+	// Stock still moves by the final quantity, one INSTALL row per line.
+	const installs = rows.filter((r) => r.type === "INSTALL")
+	expect(installs.map((r) => r.qty).sort((a, b) => a - b)).toEqual([-6, -3])
+})
+
+it("logs a line edited down to zero without an INSTALL row", async () => {
+	const code = await db.serviceCode.create({
+		data: { claroCode: `Z${Date.now()}`, name: "Acc Z", unitPrice: "0" },
+	})
+	const res = await submitCompletion(
+		{
+			idempotencyKey: `k-zero-${Date.now()}`,
+			claroOrderNo: "3",
+			installerId,
+			vanId,
+			address: "a",
+			accessories: [{ serviceCodeId: code.id, prefilledQty: 2, qty: 0 }],
+			groundRod: true,
+			serialUnreadable: true,
+			installedAt: new Date(),
+		},
+		{ id: installerId },
+	)
+	const rows = await db.stockMovement.findMany({
+		where: { refCompletionId: res.completionId },
+	})
+	expect(rows.map((r) => r.type)).toEqual(["ADJUST"])
+})

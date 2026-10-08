@@ -1507,6 +1507,11 @@
 			"back": "Back",
 			"model_unknown_title": "Model not recognized.",
 			"model_unknown_body": "This serial doesn't match a known modem model. Check the scan; you can still continue.",
+			"serial_not_on_van_title": "Serial not on this van.",
+			"serial_not_on_van_body": "This serial isn't in your van's stock. You can still continue; the warehouse will see the mismatch.",
+			"accessory_prefilled": "Pre-filled: {{qty}}",
+			"accessory_edited": "edited",
+			"address_diff_hint": "This change is logged with your name and the time when you submit.",
 			"accessories_summary": "Accessories pre-filled for the {{bracket}} ft bracket: {{count}} lines, {{units}} units."
 		},
 		"no_submitted_jobs": "No jobs submitted yet.",

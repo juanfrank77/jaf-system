@@ -3,6 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const mocks = vi.hoisted(() => ({
 	requireInstaller: vi.fn(),
 	submitCompletion: vi.fn(),
+	db: {
+		limitTable: { findMany: vi.fn() },
+		serviceCode: { findMany: vi.fn() },
+		serialLocation: { findMany: vi.fn() },
+	},
+	getSerializedCodes: vi.fn(),
 }))
 
 vi.mock("~/lib/installer-context.server", () => ({
@@ -12,7 +18,12 @@ vi.mock("~/lib/completion-submit.server", () => ({
 	submitCompletion: mocks.submitCompletion,
 }))
 
-import { action } from "./_app.installer.completion.new"
+vi.mock("~/lib/db.server", () => ({ db: mocks.db }))
+vi.mock("~/lib/service-codes.server", () => ({
+	getSerializedCodes: mocks.getSerializedCodes,
+}))
+
+import { action, loader } from "./_app.installer.completion.new"
 
 function offlineRequest(entries: Record<string, string>) {
 	const form = new FormData()
@@ -146,5 +157,86 @@ describe("POST /installer/completion/new", () => {
 			}),
 			expect.anything(),
 		)
+	})
+
+	describe("address edit log", () => {
+		async function submitWith(extra: Record<string, string>) {
+			mocks.requireInstaller.mockResolvedValue({
+				user: { id: "inst-1" },
+				profile: { id: "p1" },
+				van: { id: "van-1", active: true },
+			})
+			mocks.submitCompletion.mockResolvedValue({
+				completionId: "c1",
+				paymentRequestId: "pr1",
+				status: "READY",
+			})
+			await action({
+				request: offlineRequest({
+					idempotencyKey: "k1",
+					claroOrderNo: "430920",
+					address: "Calle Sol 12",
+					serialUnreadable: "true",
+					accessories: "[]",
+					...extra,
+				}),
+				params: {},
+				context: {},
+			} as never)
+			return mocks.submitCompletion.mock.calls[0][0]
+		}
+
+		it("logs who and when, stamped by the server, when the address changed", async () => {
+			const input = await submitWith({ addressOriginal: "Calle Sol 21" })
+			expect(input.address).toBe("Calle Sol 12")
+			expect(input.addressEditLog).toHaveLength(1)
+			expect(input.addressEditLog[0]).toMatchObject({
+				original: "Calle Sol 21",
+				corrected: "Calle Sol 12",
+				correctedById: "inst-1",
+			})
+			expect(typeof input.addressEditLog[0].correctedAt).toBe("string")
+		})
+
+		it("writes no log when the address was not changed", async () => {
+			const input = await submitWith({ addressOriginal: "Calle Sol 12" })
+			expect(input.addressEditLog).toBeUndefined()
+		})
+
+		it("writes no log when no original address was sent", async () => {
+			const input = await submitWith({})
+			expect(input.addressEditLog).toBeUndefined()
+		})
+	})
+
+	describe("loader", () => {
+		it("returns the accessory code names and the serials on this van", async () => {
+			mocks.requireInstaller.mockResolvedValue({
+				user: { id: "inst-1" },
+				van: { id: "van-1", active: true },
+			})
+			mocks.db.limitTable.findMany.mockResolvedValue([
+				{ bracketFt: 100, serviceCodeId: "sc-1", qty: 2 },
+			])
+			mocks.getSerializedCodes.mockResolvedValue([])
+			mocks.db.serviceCode.findMany.mockResolvedValue([
+				{ id: "sc-1", claroCode: "1020002", name: "Tie Wrap", unit: "EA" },
+			])
+			mocks.db.serialLocation.findMany.mockResolvedValue([
+				{ serial: "ALCLED1" },
+			])
+			const res = await loader({
+				request: new Request("http://localhost/installer/completion/new"),
+				params: {},
+				context: {},
+			} as never)
+			expect(res.vanSerials).toEqual(["ALCLED1"])
+			expect(res.accessoryCodes[0].name).toBe("Tie Wrap")
+			expect(mocks.db.serialLocation.findMany).toHaveBeenCalledWith(
+				expect.objectContaining({
+					where: { status: "VAN", currentRef: "van-1" },
+				}),
+			)
+		})
 	})
 })

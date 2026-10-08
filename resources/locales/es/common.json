@@ -1507,6 +1507,11 @@
 			"back": "Atrás",
 			"model_unknown_title": "Modelo no reconocido.",
 			"model_unknown_body": "Este serial no coincide con un modelo de módem conocido. Revisa el escaneo; puedes continuar.",
+			"serial_not_on_van_title": "Serial que no está en esta van.",
+			"serial_not_on_van_body": "Este serial no está en el inventario de tu van. Puedes continuar; el almacén verá la diferencia.",
+			"accessory_prefilled": "Prellenado: {{qty}}",
+			"accessory_edited": "editado",
+			"address_diff_hint": "Este cambio se registra con tu nombre y la hora al enviar.",
 			"accessories_summary": "Accesorios prellenados para el rango de {{bracket}} pies: {{count}} líneas, {{units}} unidades."
 		},
 		"no_submitted_jobs": "Aún no se han enviado trabajos.",

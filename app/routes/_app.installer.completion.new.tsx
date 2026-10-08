@@ -15,9 +15,14 @@ import { Callout } from "~/components/ui/callout"
 import { Checkbox } from "~/components/ui/checkbox"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
+import { QtyStepper } from "~/components/ui/qty-stepper"
 import { useOnline } from "~/hooks/use-online"
 import { submitCompletion } from "~/lib/completion-submit.server"
 import { db } from "~/lib/db.server"
+import {
+	buildAddressCorrection,
+	mergeAddressCorrections,
+} from "~/lib/field-update-helpers"
 import { validateFile } from "~/lib/file-upload.server"
 import { queueCompletion } from "~/lib/installer-completion-sync"
 import { requireInstaller } from "~/lib/installer-context.server"
@@ -40,7 +45,31 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const brackets = [...new Set(limitRows.map((r) => r.bracketFt))].sort(
 		(a, b) => a - b,
 	)
-	return { user, van, brackets, limitRows, serializedCodes }
+	// Names for the accessory lines, and the serials this van is carrying so
+	// the scan step can warn (not block) when a scanned serial is not on it.
+	const [accessoryCodes, vanSerialRows] = await Promise.all([
+		db.serviceCode.findMany({
+			where: {
+				id: { in: [...new Set(limitRows.map((r) => r.serviceCodeId))] },
+			},
+			select: { id: true, claroCode: true, name: true, unit: true },
+		}),
+		van
+			? db.serialLocation.findMany({
+					where: { status: "VAN", currentRef: van.id },
+					select: { serial: true },
+				})
+			: Promise.resolve([]),
+	])
+	return {
+		user,
+		van,
+		brackets,
+		limitRows,
+		serializedCodes,
+		accessoryCodes,
+		vanSerials: vanSerialRows.map((r) => r.serial),
+	}
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -62,6 +91,22 @@ export async function action({ request }: Route.ActionArgs) {
 	if (typeof addressRaw !== "string" || !addressRaw.trim()) {
 		return { errorKey: "installer.completion.errors.address_required" as const }
 	}
+
+	// Same edit-log pattern as the crew field page: the client says what the
+	// address was before it was changed; the server stamps who and when.
+	const addressOriginal = (form.get("addressOriginal") as string | null)?.trim()
+	const addressFinal = addressRaw.trim()
+	const addressEditLog =
+		addressOriginal && addressOriginal !== addressFinal
+			? mergeAddressCorrections({
+					existing: null,
+					correction: buildAddressCorrection({
+						original: addressOriginal,
+						corrected: addressFinal,
+						correctedById: user.id,
+					}),
+				})
+			: undefined
 
 	const accessories = JSON.parse((form.get("accessories") as string) || "[]")
 
@@ -90,7 +135,8 @@ export async function action({ request }: Route.ActionArgs) {
 			claroOrderNo: (form.get("claroOrderNo") as string).trim(),
 			installerId: user.id,
 			vanId: van.id,
-			address: (form.get("address") as string).trim(),
+			address: addressFinal,
+			addressEditLog,
 			dropFt: form.get("dropFt") ? Number(form.get("dropFt")) : undefined,
 			accessories,
 			groundRod: form.get("groundRod") !== "false",
@@ -112,7 +158,14 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function NewCompletion({ loaderData }: Route.ComponentProps) {
-	const { van, brackets, limitRows, serializedCodes } = loaderData
+	const {
+		van,
+		brackets,
+		limitRows,
+		serializedCodes,
+		accessoryCodes,
+		vanSerials,
+	} = loaderData
 	const { t } = useTranslation()
 	const online = useOnline()
 	const sigRef = useRef<SignaturePadHandle>(null)
@@ -126,6 +179,14 @@ export default function NewCompletion({ loaderData }: Route.ComponentProps) {
 	const [idempotencyKey] = useState(() => crypto.randomUUID())
 
 	const bracket = dropFt === "" ? null : pickBracket(Number(dropFt), brackets)
+	// The installer confirms or amends the pre-filled quantities. Edits belong
+	// to the bracket they were made in; a new drop footage starts from the
+	// table again.
+	const [edits, setEdits] = useState<{
+		bracket: number | null
+		qty: Record<string, number>
+	}>({ bracket: null, qty: {} })
+	const activeEdits = edits.bracket === bracket ? edits.qty : {}
 	const accessories =
 		bracket != null
 			? prefillAccessories(
@@ -135,8 +196,14 @@ export default function NewCompletion({ loaderData }: Route.ComponentProps) {
 						qty: r.qty,
 					})),
 					bracket,
-				)
+				).map((a) => ({ ...a, qty: activeEdits[a.serviceCodeId] ?? a.qty }))
 			: []
+	const accessoryCodeById = new Map(accessoryCodes.map((c) => [c.id, c]))
+	// The address as it was when the installer first moved past step 1; a later
+	// change is shown as a diff and logged on submit.
+	const [addressBaseline, setAddressBaseline] = useState<string | null>(null)
+	const addressChanged =
+		addressBaseline !== null && address.trim() !== addressBaseline
 	const [formPhotoName, setFormPhotoName] = useState("")
 	// Four gated steps. Every panel stays mounted (hidden) so nothing typed or
 	// scanned is lost when going back; Next unlocks only when the step's
@@ -190,6 +257,7 @@ export default function NewCompletion({ loaderData }: Route.ComponentProps) {
 							idempotencyKey,
 							claroOrderNo,
 							address,
+							addressOriginal: addressBaseline ?? "",
 							dropFt: dropFt === "" ? "" : String(dropFt),
 							accessories: JSON.stringify(accessories),
 							serialInstalled: serialUnreadable ? "" : serial,
@@ -246,6 +314,11 @@ export default function NewCompletion({ loaderData }: Route.ComponentProps) {
 				/>
 				<input type="hidden" name="modelResolved" value={modelResolved ?? ""} />
 				<input type="hidden" name="sigInstaller" value="" />
+				<input
+					type="hidden"
+					name="addressOriginal"
+					value={addressBaseline ?? ""}
+				/>
 
 				<div className={panel(0)}>
 					<div className="space-y-1">
@@ -275,6 +348,24 @@ export default function NewCompletion({ loaderData }: Route.ComponentProps) {
 							onChange={(e) => setAddress(e.target.value)}
 						/>
 					</div>
+
+					{addressChanged && (
+						<div
+							data-testid="address-diff"
+							className="rounded-lg bg-status-info-soft p-2.5 text-sm"
+						>
+							<p className="break-words">
+								<span className="text-muted-foreground line-through">
+									{addressBaseline}
+								</span>
+								{" → "}
+								<b>{address.trim()}</b>
+							</p>
+							<p className="mt-1 text-xs text-muted-foreground">
+								{t("installer.completion.address_diff_hint")}
+							</p>
+						</div>
+					)}
 				</div>
 
 				<div className={panel(1)}>
@@ -313,6 +404,17 @@ export default function NewCompletion({ loaderData }: Route.ComponentProps) {
 							</div>
 						)}
 					</div>
+
+					{serial !== "" &&
+						!serialUnreadable &&
+						!vanSerials.includes(serial) && (
+							<Callout
+								tone="warn"
+								title={t("installer.completion.serial_not_on_van_title")}
+							>
+								{t("installer.completion.serial_not_on_van_body")}
+							</Callout>
+						)}
 
 					{serial !== "" && !serialUnreadable && !modelResolved && (
 						<Callout
@@ -356,13 +458,60 @@ export default function NewCompletion({ loaderData }: Route.ComponentProps) {
 					</div>
 
 					{bracket != null && (
-						<p className="rounded-lg bg-muted p-3 text-sm">
-							{t("installer.completion.accessories_summary", {
-								count: accessories.length,
-								units: accessories.reduce((n, a) => n + a.qty, 0),
-								bracket,
-							})}
-						</p>
+						<div className="space-y-2">
+							<p className="rounded-lg bg-muted p-3 text-sm">
+								{t("installer.completion.accessories_summary", {
+									count: accessories.length,
+									units: accessories.reduce((n, a) => n + a.qty, 0),
+									bracket,
+								})}
+							</p>
+							<ul>
+								{accessories.map((a) => {
+									const code = accessoryCodeById.get(a.serviceCodeId)
+									const name = code?.name ?? a.serviceCodeId
+									const edited = a.qty !== a.prefilledQty
+									return (
+										<li
+											key={a.serviceCodeId}
+											className="flex items-center justify-between gap-3 border-b py-2 last:border-0"
+										>
+											<div className="min-w-0">
+												<p className="text-sm font-medium leading-snug">
+													{name}
+												</p>
+												{code && (
+													<p className="font-mono text-xs text-muted-foreground">
+														{code.claroCode}
+													</p>
+												)}
+												<p className="text-xs text-muted-foreground">
+													{t("installer.completion.accessory_prefilled", {
+														qty: a.prefilledQty,
+													})}
+													{edited && (
+														<span className="ml-2 rounded bg-status-warn-soft px-1.5 py-0.5 font-medium text-status-warn">
+															{t("installer.completion.accessory_edited")}
+														</span>
+													)}
+												</p>
+											</div>
+											<QtyStepper
+												value={a.qty}
+												onChange={(qty) =>
+													setEdits({
+														bracket,
+														qty: { ...activeEdits, [a.serviceCodeId]: qty },
+													})
+												}
+												label={name}
+												invalid={edited}
+											/>
+										</li>
+									)
+								})}
+							</ul>
+						</div>
 					)}
 				</div>
 
@@ -422,7 +571,11 @@ export default function NewCompletion({ loaderData }: Route.ComponentProps) {
 							size="lg"
 							className="h-12 flex-[2] text-base"
 							disabled={!stepComplete[stepIndex]}
-							onClick={() => setStepIndex(stepIndex + 1)}
+							onClick={() => {
+								if (stepIndex === 0 && addressBaseline === null)
+									setAddressBaseline(address.trim())
+								setStepIndex(stepIndex + 1)
+							}}
 						>
 							{t("installer.completion.next", "Next")}
 						</Button>

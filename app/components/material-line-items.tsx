@@ -8,6 +8,7 @@ import { QtyStepper } from "~/components/ui/qty-stepper"
 import {
 	Select,
 	SelectContent,
+	SelectItem,
 	SelectTrigger,
 	SelectValue,
 } from "~/components/ui/select"
@@ -196,7 +197,13 @@ export function MaterialLineItems({
 								placeholder={t("material_line_items.select_placeholder")}
 							/>
 						</SelectTrigger>
-						<SelectContent />
+						<SelectContent>
+							{dropdownItems.map((c) => (
+								<SelectItem key={c.value} value={c.value}>
+									{c.label}
+								</SelectItem>
+							))}
+						</SelectContent>
 					</Select>
 				)
 				const removeButton = (

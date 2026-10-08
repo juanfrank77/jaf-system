@@ -1512,6 +1512,13 @@
 			"accessory_prefilled": "Pre-filled: {{qty}}",
 			"accessory_edited": "edited",
 			"address_diff_hint": "This change is logged with your name and the time when you submit.",
+			"errors": {
+				"title": "Can't submit yet",
+				"no_van": "You are not assigned to an active van. Contact an administrator.",
+				"order_no_required": "Enter the Claro order number.",
+				"address_required": "Enter the address.",
+				"invalid_accessories": "The accessory quantities could not be read. Go back to the materials step and try again."
+			},
 			"accessories_summary": "Accessories pre-filled for the {{bracket}} ft bracket: {{count}} lines, {{units}} units."
 		},
 		"no_submitted_jobs": "No jobs submitted yet.",

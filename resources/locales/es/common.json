@@ -1512,6 +1512,13 @@
 			"accessory_prefilled": "Prellenado: {{qty}}",
 			"accessory_edited": "editado",
 			"address_diff_hint": "Este cambio se registra con tu nombre y la hora al enviar.",
+			"errors": {
+				"title": "Aún no se puede enviar",
+				"no_van": "No tienes una van activa asignada. Contacta a un administrador.",
+				"order_no_required": "Escribe el número de orden de Claro.",
+				"address_required": "Escribe la dirección.",
+				"invalid_accessories": "No se pudieron leer las cantidades de accesorios. Vuelve al paso de materiales e inténtalo de nuevo."
+			},
 			"accessories_summary": "Accesorios prellenados para el rango de {{bracket}} pies: {{count}} líneas, {{units}} unidades."
 		},
 		"no_submitted_jobs": "Aún no se han enviado trabajos.",

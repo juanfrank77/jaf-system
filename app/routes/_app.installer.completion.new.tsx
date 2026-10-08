@@ -72,6 +72,56 @@ export async function loader({ request }: Route.LoaderArgs) {
 	}
 }
 
+async function resolveAccessories(
+	raw: string,
+	dropFt: number | undefined,
+): Promise<
+	{ serviceCodeId: string; prefilledQty: number; qty: number }[] | null
+> {
+	let parsed: unknown
+	try {
+		parsed = JSON.parse(raw)
+	} catch {
+		return null
+	}
+	if (!Array.isArray(parsed)) return null
+	const submitted = new Map<string, number>()
+	for (const line of parsed) {
+		if (
+			!line ||
+			typeof line.serviceCodeId !== "string" ||
+			!line.serviceCodeId ||
+			!Number.isInteger(line.qty) ||
+			line.qty < 0 ||
+			line.qty > 10_000 ||
+			submitted.has(line.serviceCodeId)
+		)
+			return null
+		submitted.set(line.serviceCodeId, line.qty)
+	}
+	const limitRows =
+		dropFt !== undefined && Number.isFinite(dropFt)
+			? await db.limitTable.findMany()
+			: []
+	const brackets = [...new Set(limitRows.map((r) => r.bracketFt))]
+	const prefill =
+		brackets.length > 0
+			? prefillAccessories(limitRows, pickBracket(dropFt as number, brackets))
+			: []
+	const prefilled = new Map(
+		prefill.map((p) => [p.serviceCodeId, p.prefilledQty]),
+	)
+	// A prefilled line the client left out was edited down to nothing.
+	const lines = [...new Set([...prefilled.keys(), ...submitted.keys()])].map(
+		(serviceCodeId) => ({
+			serviceCodeId,
+			prefilledQty: prefilled.get(serviceCodeId) ?? 0,
+			qty: submitted.get(serviceCodeId) ?? 0,
+		}),
+	)
+	return lines
+}
+
 export async function action({ request }: Route.ActionArgs) {
 	const { user, van } = await requireInstaller(request)
 	const offline = request.headers.get("X-Offline-Sync") === "true"
@@ -108,7 +158,20 @@ export async function action({ request }: Route.ActionArgs) {
 				})
 			: undefined
 
-	const accessories = JSON.parse((form.get("accessories") as string) || "[]")
+	// The client only says what quantity it wants per code. What the limit
+	// table pre-filled is recomputed here from the drop footage, so a forged
+	// prefilledQty cannot hide an edit.
+	const dropFtRaw = form.get("dropFt")
+	const dropFt = dropFtRaw ? Number(dropFtRaw) : undefined
+	const accessories = await resolveAccessories(
+		(form.get("accessories") as string) || "[]",
+		dropFt,
+	)
+	if (!accessories) {
+		return {
+			errorKey: "installer.completion.errors.invalid_accessories" as const,
+		}
+	}
 
 	let formPhotoPath: string | undefined
 	const formPhoto = form.get("formPhoto")
@@ -137,7 +200,7 @@ export async function action({ request }: Route.ActionArgs) {
 			vanId: van.id,
 			address: addressFinal,
 			addressEditLog,
-			dropFt: form.get("dropFt") ? Number(form.get("dropFt")) : undefined,
+			dropFt,
 			accessories,
 			groundRod: form.get("groundRod") !== "false",
 			serialInstalled: (form.get("serialInstalled") as string) || undefined,
@@ -157,7 +220,10 @@ export async function action({ request }: Route.ActionArgs) {
 	throw redirect("/installer")
 }
 
-export default function NewCompletion({ loaderData }: Route.ComponentProps) {
+export default function NewCompletion({
+	loaderData,
+	actionData,
+}: Route.ComponentProps) {
 	const {
 		van,
 		brackets,
@@ -236,6 +302,16 @@ export default function NewCompletion({ loaderData }: Route.ComponentProps) {
 			<Callout title={t("installer.installer_flow.callout.new_title")}>
 				{t("installer.installer_flow.callout.new_body")}
 			</Callout>
+
+			{actionData && (
+				<Callout tone="danger" title={t("installer.completion.errors.title")}>
+					{"errorKey" in actionData && actionData.errorKey
+						? t(actionData.errorKey)
+						: "errorMessage" in actionData
+							? actionData.errorMessage
+							: null}
+				</Callout>
+			)}
 
 			<form
 				method="post"

@@ -49,3 +49,44 @@ describe("MaterialLineItems read-only price column", () => {
 		expect(screen.queryByText(/\$/)).not.toBeInTheDocument()
 	})
 })
+
+describe("MaterialLineItems touch (pickup) mode", () => {
+	const codes = [
+		{ id: "c1", claroCode: "1043", name: "Span clamp", unit: "PZA" },
+		{ id: "c2", claroCode: "1044", name: "Tape", unit: "PZA" },
+	]
+
+	it("shows Listed, unit and the amber/blue tags", async ({ renderStub }) => {
+		await mount(
+			renderStub,
+			<MaterialLineItems
+				serviceCodes={codes}
+				initialItems={[
+					{ serviceCodeId: "c1", qty: 6 },
+					{ serviceCodeId: "c2", qty: 2 },
+				]}
+				estimatedItems={[{ serviceCodeId: "c1", qty: 4 }]}
+				touch
+			/>,
+		)
+		expect(screen.getByText("+2 more than listed")).toBeInTheDocument()
+		expect(screen.getByText("added at counter")).toBeInTheDocument()
+		expect(screen.getAllByText("PZA").length).toBeGreaterThan(0)
+	})
+
+	it("hides the tags when tags is false", async ({ renderStub }) => {
+		await mount(
+			renderStub,
+			<MaterialLineItems
+				serviceCodes={codes}
+				initialItems={[{ serviceCodeId: "c1", qty: 6 }]}
+				estimatedItems={[{ serviceCodeId: "c1", qty: 4 }]}
+				listedLabel="Took"
+				tags={false}
+				touch
+			/>,
+		)
+		expect(screen.getByText(/Took/)).toBeInTheDocument()
+		expect(screen.queryByText(/more than listed/)).not.toBeInTheDocument()
+	})
+})

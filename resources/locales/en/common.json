@@ -498,7 +498,19 @@
 			"discrepancy_note_required": "A discrepancy note is required when installed quantities differ from signed-out quantities.",
 			"completion_signature_required": "Completion signature is required.",
 			"invalid_service_lines": "Installed service quantities could not be read."
-		}
+		},
+		"address_diff_hint": "This change is logged with your name and the time when you submit.",
+		"address_edited_by_you": "Edited by you · {{when}}",
+		"address_edited_by_other": "Edited by another crew member · {{when}}",
+		"address_gps": "GPS {{lat}}, {{lng}}",
+		"photo_tag_before": "BEFORE",
+		"photo_tag_after": "AFTER",
+		"took_label": "Took",
+		"bring_back_title": "Bring back to the warehouse:",
+		"bring_back_hint": "Took minus used. The warehouse expects these.",
+		"error_title": "Can't submit yet",
+		"submitting": "Sending…",
+		"offline_footnote": "No signal? It saves on the phone and sends itself when you're back online."
 	},
 	"docs_review": {
 		"readonly_title": "Completed step.",
@@ -1162,7 +1174,8 @@
 		"add_material": "+ Add material",
 		"remove": "Remove material",
 		"more_than_estimated": "more than listed",
-		"added_at_counter": "added at counter"
+		"added_at_counter": "added at counter",
+		"listed": "Listed"
 	},
 	"dashboard": {
 		"status_plain": {
@@ -1770,5 +1783,13 @@
 		"batch_confirm_submit": "Close run from paper",
 		"paid_date": "Paid date",
 		"evidence": "Evidence (PDF/image)"
+	},
+	"qty_stepper": {
+		"decrease": "Decrease",
+		"increase": "Increase"
+	},
+	"photo_capture": {
+		"take": "Take photo",
+		"remove": "Remove photo"
 	}
 }

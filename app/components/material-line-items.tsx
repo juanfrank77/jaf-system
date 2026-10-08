@@ -1,9 +1,10 @@
 import { Cancel01Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
+import { QtyStepper } from "~/components/ui/qty-stepper"
 import {
 	Select,
 	SelectContent,
@@ -39,6 +40,16 @@ interface Props {
 	/** Print `unit price x qty` per line in read-only mode. Defaults to true;
 	 * the column is also skipped for any line whose catalog row has no price. */
 	showPrice?: boolean
+	/** Phone layout for editable rows: full-width picker, 44 px stepper and
+	 * remove button, 16 px text. */
+	touch?: boolean
+	/** Caption for `estimatedItems` in editable mode. Defaults to "Listed". */
+	listedLabel?: string
+	/** Editable mode only: print the amber "+N more than listed" and blue
+	 * "added at counter" tags. Off where "more" is not the normal case. */
+	tags?: boolean
+	/** Called with the current lines whenever they change (editable mode). */
+	onItemsChange?: (items: LineItem[]) => void
 }
 
 let _counter = 0
@@ -68,6 +79,10 @@ export function MaterialLineItems({
 	name = "materials",
 	estimatedItems,
 	showPrice = true,
+	touch = false,
+	listedLabel,
+	tags = true,
+	onItemsChange,
 }: Props) {
 	const { t } = useTranslation()
 	const [items, setItems] = useState<InternalItem[]>(() =>
@@ -90,6 +105,14 @@ export function MaterialLineItems({
 		serviceCodeId,
 		qty,
 	}))
+
+	const onItemsChangeRef = useRef(onItemsChange)
+	onItemsChangeRef.current = onItemsChange
+	useEffect(() => {
+		onItemsChangeRef.current?.(
+			items.map(({ serviceCodeId, qty }) => ({ serviceCodeId, qty })),
+		)
+	}, [items])
 
 	// Build estimated map for over-draw detection (only if estimatedItems provided)
 	const estimatedMap = estimatedItems
@@ -141,22 +164,102 @@ export function MaterialLineItems({
 						</div>
 					)
 				}
+				const listedQty = estimatedMap?.get(item.serviceCodeId)
+				const overListed =
+					listedQty !== undefined && listedQty > 0 && item.qty > listedQty
+				const addedAtCounter =
+					estimatedMap !== undefined &&
+					item.serviceCodeId !== "" &&
+					listedQty === undefined
+				const picker = (
+					<Select
+						items={dropdownItems}
+						value={item.serviceCodeId}
+						onValueChange={(v) =>
+							updateItem(item._key, { serviceCodeId: v ?? "" })
+						}
+					>
+						<SelectTrigger
+							className={touch ? "h-11 min-w-0 flex-1 text-base" : "flex-1"}
+						>
+							<SelectValue
+								placeholder={t("material_line_items.select_placeholder")}
+							/>
+						</SelectTrigger>
+						<SelectContent />
+					</Select>
+				)
+				const removeButton = (
+					<button
+						type="button"
+						onClick={() => removeItem(item._key)}
+						aria-label={t("material_line_items.remove")}
+						className={`flex shrink-0 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:border-status-danger hover:bg-status-danger-soft hover:text-status-danger ${touch ? "size-11" : "size-9"}`}
+					>
+						<HugeiconsIcon
+							icon={Cancel01Icon}
+							strokeWidth={2}
+							className="size-4"
+						/>
+					</button>
+				)
+				if (touch) {
+					return (
+						<div
+							key={item._key}
+							className="space-y-2 rounded-lg border border-border bg-card p-2"
+						>
+							<div className="flex items-center gap-2">
+								{picker}
+								{removeButton}
+							</div>
+							<div className="flex items-center justify-between gap-2">
+								<div className="min-w-0 text-xs text-muted-foreground">
+									{estimatedMap && (
+										<p>
+											{listedLabel ?? t("material_line_items.listed")}:{" "}
+											<b className="text-foreground">
+												{listedQty !== undefined
+													? `${listedQty}${code?.unit ? ` ${code.unit}` : ""}`
+													: "—"}
+											</b>
+										</p>
+									)}
+									{tags && overListed && listedQty !== undefined && (
+										<span className="mt-1 inline-block rounded bg-status-warn-soft px-2 py-0.5 font-medium text-status-warn">
+											+{item.qty - listedQty}{" "}
+											{t("material_line_items.more_than_estimated")}
+										</span>
+									)}
+									{tags && addedAtCounter && (
+										<span className="mt-1 inline-block rounded bg-status-info-soft px-2 py-0.5 font-medium text-status-info">
+											{t("material_line_items.added_at_counter")}
+										</span>
+									)}
+								</div>
+								<div className="flex items-center gap-2">
+									<QtyStepper
+										value={item.qty}
+										min={1}
+										onChange={(qty) => updateItem(item._key, { qty })}
+										label={
+											code?.name ?? t("material_line_items.select_placeholder")
+										}
+										invalid={overListed}
+									/>
+									{code?.unit && (
+										<span className="w-9 text-xs font-medium text-muted-foreground">
+											{code.unit}
+										</span>
+									)}
+								</div>
+							</div>
+						</div>
+					)
+				}
 				return (
 					<div key={item._key} className="flex items-center gap-2">
-						<Select
-							items={dropdownItems}
-							value={item.serviceCodeId}
-							onValueChange={(v) =>
-								updateItem(item._key, { serviceCodeId: v ?? "" })
-							}
-						>
-							<SelectTrigger className="flex-1">
-								<SelectValue
-									placeholder={t("material_line_items.select_placeholder")}
-								/>
-							</SelectTrigger>
-							<SelectContent />
-						</Select>
+						{picker}
 						<Input
 							type="number"
 							min={1}
@@ -168,23 +271,21 @@ export function MaterialLineItems({
 							}
 							className="w-20"
 						/>
-						<button
-							type="button"
-							onClick={() => removeItem(item._key)}
-							aria-label={t("material_line_items.remove")}
-							className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:border-status-danger hover:bg-status-danger-soft hover:text-status-danger"
-						>
-							<HugeiconsIcon
-								icon={Cancel01Icon}
-								strokeWidth={2}
-								className="size-4"
-							/>
-						</button>
+						{code?.unit && (
+							<span className="text-xs text-muted-foreground">{code.unit}</span>
+						)}
+						{removeButton}
 					</div>
 				)
 			})}
 			{!readOnly && (
-				<Button type="button" variant="outline" size="sm" onClick={addItem}>
+				<Button
+					type="button"
+					variant="outline"
+					size={touch ? "lg" : "sm"}
+					className={touch ? "h-11 w-full text-base" : undefined}
+					onClick={addItem}
+				>
 					{t("material_line_items.add_material")}
 				</Button>
 			)}

@@ -18,6 +18,8 @@ export function InstallerLoopRail({ current }: { current: InstallerLoopStep }) {
 			ariaLabel={t("installer.installer_flow.aria")}
 			current={index}
 			touch
+			compact
+			numbered={false}
 			steps={INSTALLER_LOOP_STEPS.map((step, i) => ({
 				key: step,
 				href: i === index ? undefined : INSTALLER_LOOP_HREF[step],

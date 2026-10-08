@@ -22,6 +22,7 @@ export function StepRail({
 	ariaLabel,
 	compact = false,
 	touch = false,
+	numbered = true,
 }: {
 	steps: RailStep[]
 	/** Index into `steps` of the step on screen. Out of range means no step is
@@ -32,6 +33,9 @@ export function StepRail({
 	compact?: boolean
 	/** Every step is at least 44 px tall so a linked step is a thumb target. */
 	touch?: boolean
+	/** Prefix each label with its position. Off for a navigation rail where
+	 * the numbers are clutter. */
+	numbered?: boolean
 }) {
 	return (
 		<ol
@@ -52,7 +56,8 @@ export function StepRail({
 							: "todo"
 				const label = (
 					<>
-						{i + 1}. {step.label}
+						{numbered ? `${i + 1}. ` : ""}
+						{step.label}
 					</>
 				)
 				const linked = step.href && state !== "current" && state !== "locked"
@@ -64,8 +69,10 @@ export function StepRail({
 						aria-current={state === "current" ? "step" : undefined}
 						className={cn(
 							"rounded-full border px-2 py-1",
-							touch && "flex min-h-11 items-center justify-center px-3",
+							touch && "flex min-h-11 items-center justify-center",
+							touch && !compact && "px-3",
 							compact && "min-w-0 flex-1 truncate px-1 text-center text-[10px]",
+							touch && compact && "text-[11px]",
 							step.mine && "font-semibold",
 							state === "done" &&
 								"bg-status-ok-soft border-status-ok/30 text-status-ok",
@@ -81,7 +88,7 @@ export function StepRail({
 								to={step.href as string}
 								className={cn(
 									"hover:underline",
-									touch && "flex min-h-11 items-center",
+									touch && "flex min-h-11 w-full items-center justify-center",
 								)}
 							>
 								{label}

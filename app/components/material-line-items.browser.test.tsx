@@ -1,5 +1,6 @@
-import { fireEvent, screen } from "@testing-library/react"
+import { fireEvent, screen, waitFor } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
+import { userEvent } from "vitest/browser"
 import { MaterialLineItems } from "./material-line-items"
 
 const priced = [
@@ -107,5 +108,49 @@ describe("MaterialLineItems touch (pickup) mode", () => {
 		const input = screen.getByRole("textbox", { name: "Span clamp" })
 		fireEvent.change(input, { target: { value: "9" } })
 		expect((input as HTMLInputElement).value).toBe("4")
+	})
+})
+
+describe("MaterialLineItems picking a material", () => {
+	const codes = [
+		{ id: "c1", claroCode: "1043", name: "Span clamp", unit: "PZA" },
+		{ id: "c2", claroCode: "1044", name: "Tape", unit: "PZA" },
+	]
+
+	async function pickTape(renderStub: any, touch: boolean) {
+		await mount(
+			renderStub,
+			<MaterialLineItems
+				serviceCodes={codes}
+				initialItems={[]}
+				name="lines"
+				touch={touch}
+			/>,
+		)
+		await userEvent.click(screen.getByRole("button", { name: /add material/i }))
+		await userEvent.click(screen.getByRole("combobox"))
+		// The catalog is actually listed...
+		expect(
+			await screen.findByRole("option", { name: /Span clamp/ }),
+		).toBeInTheDocument()
+		// ...and choosing one puts it on the line.
+		await userEvent.click(screen.getByRole("option", { name: /Tape/ }))
+		await waitFor(() =>
+			expect(screen.getByRole("combobox")).toHaveTextContent(/Tape/),
+		)
+		const hidden = document.querySelector<HTMLInputElement>(
+			'input[name="lines"]',
+		)
+		expect(JSON.parse(hidden?.value ?? "[]")).toEqual([
+			{ serviceCodeId: "c2", qty: 1 },
+		])
+	}
+
+	it("works in touch mode (restock, pickup, field)", async ({ renderStub }) => {
+		await pickTape(renderStub, true)
+	})
+
+	it("works in desktop mode", async ({ renderStub }) => {
+		await pickTape(renderStub, false)
 	})
 })

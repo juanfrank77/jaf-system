@@ -447,7 +447,12 @@
 			"crew_signer_invalid": "El firmante de la cuadrilla seleccionado no es válido",
 			"already_signed": "Los materiales ya están firmados y bloqueados",
 			"invalid_materials": "Datos de materiales inválidos"
-		}
+		},
+		"more_is_normal": "Llevar más de lo listado es normal. El supervisor ve la diferencia en la revisión.",
+		"sig_prompt": "Firma aquí con el dedo",
+		"signed": "Firmado",
+		"lock_note": "Cuando ambos firman, la lista se bloquea para todos, incluido el almacén.",
+		"error_title": "Aún no se puede firmar"
 	},
 	"docs_field": {
 		"title": "Actualización de campo",

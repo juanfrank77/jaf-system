@@ -1,7 +1,7 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import type { ParseKeys } from "i18next"
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, redirect, useSubmit } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
@@ -309,36 +309,53 @@ export default function SignDoc({
 	)
 	const submit = useSubmit()
 	const { t } = useTranslation()
+	// Inline, not alert(): a modal OS dialog in the installed app, gone once dismissed.
+	const [clientErrorKey, setClientErrorKey] = useState<ParseKeys | null>(null)
+	const [releaseSigned, setReleaseSigned] = useState(false)
+	const [crewSigned, setCrewSigned] = useState(false)
+	const errorRef = useRef<HTMLDivElement>(null)
+	const shownErrorKey = clientErrorKey ?? error?.errorKey
+	// biome-ignore lint/correctness/useExhaustiveDependencies: scroll only when an error appears or changes
+	useEffect(() => {
+		if (shownErrorKey)
+			errorRef.current?.scrollIntoView({ block: "center", behavior: "smooth" })
+	}, [shownErrorKey, error])
+
+	function fail(key: ParseKeys) {
+		setClientErrorKey(key)
+	}
 
 	function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
 		e.preventDefault()
 		if (!warehouseId) {
-			alert(t("docs_sign.alerts.select_warehouse"))
+			fail("docs_sign.alerts.select_warehouse")
 			return
 		}
 		if (!releasedById) {
-			alert(t("docs_sign.alerts.release_signer_required"))
+			fail("docs_sign.alerts.release_signer_required")
 			return
 		}
 		if (!signedById) {
-			alert(t("docs_sign.alerts.crew_signer_required"))
+			fail("docs_sign.alerts.crew_signer_required")
 			return
 		}
 		if (releaseRef.current?.isEmpty()) {
-			alert(t("docs_sign.alerts.release_signature_required"))
+			fail("docs_sign.alerts.release_signature_required")
 			return
 		}
 		if (crewRef.current?.isEmpty()) {
-			alert(t("docs_sign.alerts.crew_signature_required"))
+			fail("docs_sign.alerts.crew_signature_required")
 			return
 		}
+		setClientErrorKey(null)
 		const formData = new FormData(e.currentTarget)
 		const releasePad = releaseRef.current
 		const crewPad = crewRef.current
 		if (!releasePad || !crewPad) return
 		formData.set("releaseSignature", releasePad.toDataURL())
 		formData.set("crewSignature", crewPad.toDataURL())
-		formData.set("materials", JSON.stringify(items))
+		// "materials" comes from MaterialLineItems' own hidden input, so the
+		// quantities the crew changed at the counter are the ones that get signed.
 		formData.set("warehouseId", warehouseId)
 		formData.set("releasedById", releasedById)
 		formData.set("signedById", signedById)
@@ -370,7 +387,7 @@ export default function SignDoc({
 						value={warehouseId}
 						onValueChange={(v) => setWarehouseId(v ?? "")}
 					>
-						<SelectTrigger className="mt-1">
+						<SelectTrigger className="mt-1 h-11 w-full text-base">
 							<SelectValue placeholder={t("docs_sign.warehouse_placeholder")} />
 						</SelectTrigger>
 						<SelectContent>
@@ -389,10 +406,15 @@ export default function SignDoc({
 						<MaterialLineItems
 							serviceCodes={serviceCodes}
 							initialItems={items}
+							estimatedItems={items}
 							readOnly={false}
 							name="materials"
+							touch
 						/>
 					</div>
+					<p className="mt-2 text-xs text-muted-foreground">
+						{t("docs_sign.more_is_normal")}
+					</p>
 				</div>
 
 				<div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -411,7 +433,7 @@ export default function SignDoc({
 								value={releasedById}
 								onValueChange={(v) => setReleasedById(v ?? "")}
 							>
-								<SelectTrigger className="mt-1">
+								<SelectTrigger className="mt-1 h-11 w-full text-base">
 									<SelectValue
 										placeholder={t("docs_sign.release_signer_placeholder")}
 									/>
@@ -425,14 +447,25 @@ export default function SignDoc({
 								</SelectContent>
 							</Select>
 						</div>
-						<SignaturePad ref={releaseRef} width={320} height={120} />
-						<button
+						<SignaturePad
+							ref={releaseRef}
+							height={140}
+							onChange={(empty) => setReleaseSigned(!empty)}
+						/>
+						<p className="text-xs text-muted-foreground">
+							{releaseSigned
+								? t("docs_sign.signed")
+								: t("docs_sign.sig_prompt")}
+						</p>
+						<Button
 							type="button"
+							variant="ghost"
+							size="lg"
+							className="h-11 text-base"
 							onClick={() => releaseRef.current?.clear()}
-							className="text-xs text-muted-foreground mt-1 hover:text-foreground"
 						>
 							{t("docs_sign.clear")}
-						</button>
+						</Button>
 					</div>
 
 					<div className="border rounded-lg p-3 space-y-3">
@@ -450,7 +483,7 @@ export default function SignDoc({
 								value={signedById}
 								onValueChange={(v) => setSignedById(v ?? "")}
 							>
-								<SelectTrigger className="mt-1">
+								<SelectTrigger className="mt-1 h-11 w-full text-base">
 									<SelectValue
 										placeholder={t("docs_sign.crew_signer_placeholder")}
 									/>
@@ -464,22 +497,39 @@ export default function SignDoc({
 								</SelectContent>
 							</Select>
 						</div>
-						<SignaturePad ref={crewRef} width={320} height={120} />
-						<button
+						<SignaturePad
+							ref={crewRef}
+							height={140}
+							onChange={(empty) => setCrewSigned(!empty)}
+						/>
+						<p className="text-xs text-muted-foreground">
+							{crewSigned ? t("docs_sign.signed") : t("docs_sign.sig_prompt")}
+						</p>
+						<Button
 							type="button"
+							variant="ghost"
+							size="lg"
+							className="h-11 text-base"
 							onClick={() => crewRef.current?.clear()}
-							className="text-xs text-muted-foreground mt-1 hover:text-foreground"
 						>
 							{t("docs_sign.clear")}
-						</button>
+						</Button>
 					</div>
 				</div>
 
-				{error?.errorKey && (
-					<p className="text-sm text-status-danger">{t(error.errorKey)}</p>
+				<p className="text-xs text-muted-foreground">
+					🔒 {t("docs_sign.lock_note")}
+				</p>
+
+				{shownErrorKey && (
+					<div ref={errorRef} role="alert">
+						<Callout tone="danger" title={t("docs_sign.error_title")}>
+							{t(shownErrorKey)}
+						</Callout>
+					</div>
 				)}
 
-				<Button type="submit" className="w-full">
+				<Button type="submit" size="lg" className="h-12 w-full text-base">
 					{t("docs_sign.submit")}
 				</Button>
 			</Form>

@@ -6,6 +6,8 @@ import {
 	parseCatalogCsv,
 	SUPERVISOR_SEED,
 	toServiceCodeData,
+	WAREHOUSE_BACKUP_SEED,
+	WAREHOUSE_STAFF_SEED,
 } from "./catalog-import"
 
 const csvPath = path.resolve(
@@ -59,12 +61,18 @@ describe("seed constants", () => {
 		expect(BRIGADE_SEED.filter((b) => b.code)).toHaveLength(11)
 		const code = (name: string) =>
 			BRIGADE_SEED.find((b) => b.name === name)?.code
-		// q&a 14.1: the numbers printed on the paper Production Journal.
+		// q&a 14.1: the numbers printed on the paper Production Journal, paired
+		// with the full name the journal prints — not Carmen's registry, which
+		// disagrees on nearly every brigade.
 		expect(code("JESUS MARTINEZ")).toBe("009")
 		expect(code("ALEXIS DIAZ")).toBe("025")
-		expect(code("ZARIEL SIERRA")).toBe("178")
+		expect(code("ZARIEL GARAY SIERRA")).toBe("178")
 		expect(code("JOSE A RIOS RIVERA")).toBe("141")
-		// Active brigades whose number is not confirmed yet.
+		expect(code("JUAN GARCIA PEREZ")).toBe("019")
+		expect(code("ANGEL D JIMENEZ")).toBe("124")
+		expect(code("MIGUEL PEREZ VARGAS")).toBe("176")
+		// Active brigades whose number is not confirmed yet. Carmen's registry has
+		// 209/261/256 for three of them, but nothing confirms them.
 		for (const name of [
 			"DINO CASTILLO",
 			"SAMUEL GONZALEZ",
@@ -86,5 +94,17 @@ describe("seed constants", () => {
 		for (const b of BRIGADE_SEED.filter((b) => b.supervisorEmail)) {
 			expect(SUPERVISOR_SEED.map((s) => s.email)).toContain(b.supervisorEmail)
 		}
+	})
+
+	it("uses routable jafcom.net addresses for every seeded login", () => {
+		// `.local` can never receive mail, so a password reset for a `.local`
+		// account is undeliverable and the account is locked out for good. Every
+		// seeded address must be on the real domain.
+		const addresses = [
+			...SUPERVISOR_SEED.map((s) => s.email),
+			...WAREHOUSE_STAFF_SEED.map((s) => s.email),
+			...WAREHOUSE_BACKUP_SEED.map((s) => s.email),
+		]
+		for (const email of addresses) expect(email).toMatch(/@jafcom\.net$/)
 	})
 })

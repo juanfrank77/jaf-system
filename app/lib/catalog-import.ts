@@ -99,27 +99,39 @@ export function toServiceCodeData(
 /** The three fabricated demo codes from the old seed. Deactivated, never deleted. */
 export const LEGACY_DEMO_CODES = ["34006428", "34006429", "34006430"]
 
+// Maintenance supervisors, one per area on the roster.
+// Addresses: `charlie@` and `irivera@` are the pair on file per the client's
+// account review; `eocasio@` and `rramos@` are Alex's own suggestions on
+// "3. Alex IT.pdf", which he marked CONFIRM OR CORRECT and has not returned.
+// UNCONFIRMED: `irivera@jafcom.net` does not match the supervisor it belongs to
+// (Luis Rivera) and our own admin mockup flagged it as possibly belonging to the
+// departed installer clerk — Alex must confirm before go-live. A wrong address
+// here is unrecoverable in practice: these four sign in by email address, and
+// `.local` (which this seed used until now) can never receive a password reset,
+// so a mistyped address means a locked-out account with no recovery path.
+// `BRIGADE_SEED.supervisorEmail` must use these same four strings — it is the
+// only thing that links a brigade to its supervisor.
 export const SUPERVISOR_SEED = [
 	{
-		email: "eocasio@jafcomm.local",
+		email: "eocasio@jafcom.net",
 		name: "Edgard Ocasio",
 		phone: "787-444-0165",
 		areas: ["CENTRAL"],
 	},
 	{
-		email: "cgonzalez@jafcomm.local",
+		email: "charlie@jafcom.net",
 		name: "Charlie González",
 		phone: "787-344-0590",
 		areas: ["METRO"],
 	},
 	{
-		email: "lrivera@jafcomm.local",
+		email: "irivera@jafcom.net",
 		name: "Luis Rivera",
 		phone: "787-718-5863",
 		areas: ["NORTE"],
 	},
 	{
-		email: "rramos@jafcomm.local",
+		email: "rramos@jafcom.net",
 		name: "Ramón Ramos",
 		phone: "787-533-6520",
 		areas: ["OESTE", "SUR"],
@@ -141,20 +153,36 @@ type BrigadeSeed = {
 }
 
 // Source: `code` is the brigade number printed on the Production Journal, as
-// confirmed by the client (docs/JAF_Package/finace-work-q&a.md, answer 14.1).
+// confirmed by the client (docs/JAF_Package/finace-work-q&a.md, answer 14.1) —
+// NOT the number in `Brigades_Code_From_Carmen.png`. Carmen's sheet is a
+// contractor registry running 202-275 and disagrees with the journal on almost
+// every brigade (Carmen 204 Jesus Martinez vs journal 009; 218 Carlos Martinez
+// vs 016; 226 Angel D Jimenez vs 124; 202 Edelmiro Burgos vs 024; 247 Jose A
+// Rios Rivera vs 141; 272 Miguel Perez Contractor LLC vs 176). Where the two
+// sources disagree the journal wins, because it is what the report Lissette
+// actually sends Carmen and what `jaf_invoice.contractorAccountCode` is matched
+// against. Carmen's sheet is still the only source for a brigade the journal
+// never printed — it carries 209 Dino Castillo, 261 Samuel A Gonzalez and 256
+// IR Communication, none of which q&a 14.1 confirmed.
+// `name` is the full name as the journal prints it (14.1), which is longer than
+// the roster's short form for four brigades: Zariel Garay Sierra, Juan Garcia
+// Perez, Angel D. Jimenez and Miguel Perez Vargas. The roster (Lissette's sheet)
+// and the journal disagree on all four, and the journal wins because it is what
+// the report Lissette actually sends Carmen.
 // Four active brigades have no confirmed number yet (Dino Castillo, Samuel
 // González, Carlos Rodríguez, IR Communication & Construction): they stay
-// `code: null` and get a number from the brigades screen once it is known —
-// saving it there creates their ContractorAccount. Which brigades are active,
-// plus their `area`, `supervisorEmail` and `phone`, come from
-// docs/LIST OF BRIGADES AND SUPERVISORS.xlsx ("LISTADO DE SUPERVISORES Y
-// BRIGADAS ACTIVAS").
+// `code: null`, get no ContractorAccount, and take a number on the brigades
+// screen once it is known — saving it there creates their account. Until then
+// their released jobs cannot be swept into a payroll run.
+// Which brigades are active, plus their `area`, `supervisorEmail` and `phone`,
+// come from docs/LIST OF BRIGADES AND SUPERVISORS.xlsx ("LISTADO DE
+// SUPERVISORES Y BRIGADAS ACTIVAS").
 export const BRIGADE_SEED: BrigadeSeed[] = [
 	{
 		name: "DINO CASTILLO",
 		code: null,
 		area: "CENTRAL",
-		supervisorEmail: "eocasio@jafcomm.local",
+		supervisorEmail: "eocasio@jafcom.net",
 		leadName: "Dino Castillo",
 		phone: "787-617-0975",
 	},
@@ -162,15 +190,15 @@ export const BRIGADE_SEED: BrigadeSeed[] = [
 		name: "ALEXIS DIAZ",
 		code: "025",
 		area: "CENTRAL",
-		supervisorEmail: "eocasio@jafcomm.local",
+		supervisorEmail: "eocasio@jafcom.net",
 		leadName: "Alexis Diaz",
 		phone: "787-450-5291",
 	},
 	{
-		name: "ZARIEL SIERRA",
+		name: "ZARIEL GARAY SIERRA",
 		code: "178",
 		area: "CENTRAL",
-		supervisorEmail: "eocasio@jafcomm.local",
+		supervisorEmail: "eocasio@jafcom.net",
 		leadName: "Zariel Sierra",
 		phone: "787-405-5513",
 	},
@@ -178,7 +206,7 @@ export const BRIGADE_SEED: BrigadeSeed[] = [
 		name: "JESUS MARTINEZ",
 		code: "009",
 		area: "CENTRAL",
-		supervisorEmail: "eocasio@jafcomm.local",
+		supervisorEmail: "eocasio@jafcom.net",
 		leadName: "Jesús Martínez",
 		phone: "787-647-6842",
 	},
@@ -186,15 +214,15 @@ export const BRIGADE_SEED: BrigadeSeed[] = [
 		name: "SAMUEL GONZALEZ",
 		code: null,
 		area: "METRO",
-		supervisorEmail: "cgonzalez@jafcomm.local",
+		supervisorEmail: "charlie@jafcom.net",
 		leadName: "Samuel González",
 		phone: null,
 	},
 	{
-		name: "ANGEL JIMENEZ",
+		name: "ANGEL D JIMENEZ",
 		code: "124",
 		area: "METRO",
-		supervisorEmail: "cgonzalez@jafcomm.local",
+		supervisorEmail: "charlie@jafcom.net",
 		leadName: "Ángel Jiménez",
 		phone: "787-628-1544",
 	},
@@ -202,7 +230,7 @@ export const BRIGADE_SEED: BrigadeSeed[] = [
 		name: "IR COMMUNICATION & CONSTRUCTION",
 		code: null,
 		area: "METRO",
-		supervisorEmail: "cgonzalez@jafcomm.local",
+		supervisorEmail: "charlie@jafcom.net",
 		leadName: "IR Communication & Construction",
 		phone: "939-274-0636",
 	},
@@ -210,7 +238,7 @@ export const BRIGADE_SEED: BrigadeSeed[] = [
 		name: "CARLOS MARTINEZ",
 		code: "016",
 		area: "NORTE",
-		supervisorEmail: "lrivera@jafcomm.local",
+		supervisorEmail: "irivera@jafcom.net",
 		leadName: "Carlos Martínez",
 		phone: "787-345-1460",
 	},
@@ -218,7 +246,7 @@ export const BRIGADE_SEED: BrigadeSeed[] = [
 		name: "CARLOS RODRIGUEZ",
 		code: null,
 		area: "NORTE",
-		supervisorEmail: "lrivera@jafcomm.local",
+		supervisorEmail: "irivera@jafcom.net",
 		leadName: "Carlos Rodríguez",
 		phone: null,
 	},
@@ -226,15 +254,15 @@ export const BRIGADE_SEED: BrigadeSeed[] = [
 		name: "FERNANDO ROSARIO",
 		code: "011",
 		area: "NORTE",
-		supervisorEmail: "lrivera@jafcomm.local",
+		supervisorEmail: "irivera@jafcom.net",
 		leadName: "Fernando Rosario",
 		phone: "939-717-1607",
 	},
 	{
-		name: "MIGUEL PEREZ",
+		name: "MIGUEL PEREZ VARGAS",
 		code: "176",
 		area: "NORTE",
-		supervisorEmail: "lrivera@jafcomm.local",
+		supervisorEmail: "irivera@jafcom.net",
 		leadName: "Miguel Pérez",
 		phone: null,
 	},
@@ -242,15 +270,15 @@ export const BRIGADE_SEED: BrigadeSeed[] = [
 		name: "LEONARDO RAMOS",
 		code: "102",
 		area: "OESTE",
-		supervisorEmail: "rramos@jafcomm.local",
+		supervisorEmail: "rramos@jafcom.net",
 		leadName: "Leonardo Ramos",
 		phone: "787-382-8419",
 	},
 	{
-		name: "JUAN GARCIA",
+		name: "JUAN GARCIA PEREZ",
 		code: "019",
 		area: "OESTE",
-		supervisorEmail: "rramos@jafcomm.local",
+		supervisorEmail: "rramos@jafcom.net",
 		leadName: "Juan García",
 		phone: "787-800-4744",
 	},
@@ -258,7 +286,7 @@ export const BRIGADE_SEED: BrigadeSeed[] = [
 		name: "EDELMIRO BURGOS",
 		code: "024",
 		area: "SUR",
-		supervisorEmail: "rramos@jafcomm.local",
+		supervisorEmail: "rramos@jafcom.net",
 		leadName: "Edelmiro Burgos",
 		phone: "787-473-7410",
 	},
@@ -276,8 +304,15 @@ export const BRIGADE_SEED: BrigadeSeed[] = [
 	},
 ]
 
-// The two real warehouses (Phase 0 §4). `zone` is display-only (`_app.docs.$id_.sign.tsx`
-// renders "name — zone"); a region label is enough. Addresses per the warehouse specs.
+// The two real warehouses (Phase 0 §4). Both the names and the addresses come
+// from Orlando's own email (JAF_WareHouse_Manager_email_orlando.png): "Almacén #1
+// Guaynabo: Calle Apama, Guaynabo PR" and "Almacén #2 Arecibo: Calle Ramon Moncho
+// Nieves, Sabana Hoyos, Arecibo PR". Note our own mockups say "Calle Ajanta" and
+// "Calle Ramón Morcelo Nieves" — those are transcription errors in the design
+// samples, not a second source. `zone` is display-only
+// (`_app.docs.$id_.sign.tsx` renders "name — zone"); a region label is enough.
+// seedWarehouses updates `location` on an existing row, so a corrected address
+// lands on re-seed.
 export const WAREHOUSE_SEED = [
 	{
 		name: "Guaynabo",
@@ -299,10 +334,19 @@ type WarehouseStaffSeed = {
 	isLead: boolean
 }
 
-// Real warehouse staff (Phase 0 §3/§4). Orlando's email is real; Frank/Gilberto have no
-// email on file, so they get realistic placeholders on jafcom.net. Lead flags: Orlando→Guaynabo,
-// Frank→Arecibo, Gilberto counter (no lead). Gilberto's warehouse is not documented — assigned to
-// Guaynabo (matches the inventory-audit spec's own seed); confirm with the client.
+// Real warehouse staff (Phase 0 §3/§4). ONLY Orlando's address is real — it is
+// in his own email to JAF ("JAF_WareHouse_Manager_email_orlando.png"), which
+// also gives the two warehouse addresses below. Frank Ramos and Gilberto Ayala
+// appear only in our own design mockups, never in a client document: Orlando's
+// data-request form ("2. orlando Wearhouse.pdf") asks who now covers the counter
+// since Idamis Rivera left and leaves it blank, so `framos@` / `gayala@` are
+// constructed from the name pattern and are UNCONFIRMED. Each seeded account
+// gets a credential, so these are logins that exist in production on a guess.
+// Lead flags: Orlando→Guaynabo, Frank→Arecibo, Gilberto counter (no lead).
+// Gilberto's warehouse is not documented — assigned to Guaynabo; confirm.
+// Orlando's form also asks who can authorise a release when he and Idamis are
+// both out, and does not answer it: that is the gap WAREHOUSE_BACKUP_SEED below
+// was invented to fill.
 export const WAREHOUSE_STAFF_SEED: WarehouseStaffSeed[] = [
 	{
 		email: "oguzman@jafcom.net",
@@ -329,6 +373,10 @@ export const WAREHOUSE_STAFF_SEED: WarehouseStaffSeed[] = [
 
 // Backup authorizers (Phase 0 §3). Accounts are created now; their warehouse lead assignment
 // is deferred until the client confirms which warehouse(s) — checklist: "leads by assignment when confirmed".
+// UNCONFIRMED, like the Frank/Gilberto addresses above: both names appear in the
+// "to me, Catherine, Alfredo" recipient line of Orlando's warehouse email, but no
+// document gives a surname or an address for either, so `amedina@` / `cgarcia@`
+// and the surnames are inferred. Each one becomes a real login in production.
 export const WAREHOUSE_BACKUP_SEED = [
 	{ email: "amedina@jafcom.net", name: "Alfredo Medina", phone: null },
 	{ email: "cgarcia@jafcom.net", name: "Catherine García", phone: null },
@@ -368,14 +416,21 @@ export function parseInstallerRosterCsv(text: string): InstallerRosterRow[] {
 	return out
 }
 
-// Orlando's per-order accessory ceiling by drop-footage bracket
-// (docs/JAF_Package/06 Fee, Material and Crew Codes/Limite de materiales por orden .xlsx).
-// None of the 7 accessory names in that sheet (JOTAS, MORDAZAS, SPAN CLAMP, HOOK,
-// TORNILLO HOOK, TIE WRAP, MOUNTING) match a claroCode in the 934-row service catalog —
-// they aren't Claro-billed line items, so no SAP code exists for them yet (spec §15:
-// "Tie-wrap/Mounting SAP codes ... Orlando ... placeholder codes + needsCode"). Seeded
-// under synthetic NEEDS_CODE_* claroCodes (see seedNeedsCodePlaceholders in prisma/seed.ts)
-// so the bracket-prefill demo is exercisable; swap in the real SAP codes once Orlando confirms.
+// Orlando's per-order accessory ceiling by drop-footage bracket, transcribed
+// from his email (JAF_WareHouse_Manager_email_orlando.png) and
+// `Limite de materiales por orden .xlsx` — all 10 brackets and 7 limits match.
+// Neither document has been confirmed back by Orlando, and the accessory names
+// (JOTAS, MORDAZAS, SPAN CLAMP, HOOK, TORNILLO HOOK, TIE WRAP, MOUNTING) match
+// no claroCode in the 934-row service catalog — they aren't Claro-billed line
+// items, so no SAP code exists for any of them (spec §15: "Tie-wrap/Mounting
+// SAP codes ... Orlando ... placeholder codes + needsCode").
+// The rows are attached to synthetic NEEDS_CODE_* codes, which `seed.ts` creates
+// INACTIVE. That is deliberate: they exist so `seedLimitTable` has something to
+// attach to and the real quantities are ready when Orlando confirms them, but an
+// active placeholder would be selectable as job material (they are the only
+// MATERIAL rows in the catalog) and `getActiveServiceCodes` filters on `active`
+// alone, so one could be installed and reach a real JAF invoice at $0.00. The
+// cost is that material dropdowns are empty until the SAP codes are confirmed.
 export const LIMIT_TABLE_SEED: {
 	bracketFt: number
 	claroCode: string
@@ -416,6 +471,7 @@ export const LIMIT_TABLE_SEED: {
 
 // The 7 NEEDS_CODE_* accessory placeholders LIMIT_TABLE_SEED references, so seedLimitTable
 // has a ServiceCode row to attach to (none of these have a real Claro SAP code yet).
+// Seeded inactive — see the LIMIT_TABLE_SEED note above for why.
 export const LIMIT_TABLE_PLACEHOLDER_CODES: {
 	claroCode: string
 	name: string
@@ -435,7 +491,8 @@ export const LIMIT_TABLE_PLACEHOLDER_CODES: {
 // Serial-prefix → SKU resolution for the serialized modem/ONT/STB units. No source in the
 // package names real Claro SAP codes for hardware serials (the 934-row catalog is
 // Claro-billed service/labor line items, not an equipment SKU list) — synthetic, same
-// tier as the placeholder van assignment + opening stock (spec §10/§15).
+// tier as the placeholder van assignment + opening stock (spec §10/§15), and seeded
+// inactive for the same reason as the NEEDS_CODE_* accessories above.
 export const SERIALIZED_PREFIXES: {
 	prefix: string
 	claroCode: string

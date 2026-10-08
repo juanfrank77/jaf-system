@@ -102,6 +102,7 @@ async function seedBrigades() {
 	const byEmail = Object.fromEntries(supervisors.map((s) => [s.email, s.id]))
 	for (const b of BRIGADE_SEED) {
 		const data = {
+			name: b.name,
 			code: b.code,
 			area: b.area,
 			supervisorId: b.supervisorEmail
@@ -111,12 +112,19 @@ async function seedBrigades() {
 			phone: b.phone,
 			active: b.active ?? true,
 		}
-		const existing = await db.brigade.findFirst({ where: { name: b.name } })
+		// Key on `code` where the brigade has one, NOT on `name`: `Brigade.name`
+		// carries no unique constraint, so a name-keyed lookup that misses (a
+		// corrected spelling, a renamed brigade) silently `create`s a second row
+		// for the same brigade and orphans every job referencing the original.
+		// Keying on the unique `code` makes a miss impossible once prod has the
+		// confirmed numbers, and `name` is written on update so a corrected name
+		// lands in place instead of forking the row. Brigades with no confirmed
+		// number yet still fall back to the name — the only handle they have.
+		const existing = b.code
+			? await db.brigade.findFirst({ where: { code: b.code } })
+			: await db.brigade.findFirst({ where: { name: b.name } })
 		if (existing) await db.brigade.update({ where: { id: existing.id }, data })
-		else
-			await db.brigade.create({
-				data: { name: b.name, memberIds: [], ...data },
-			})
+		else await db.brigade.create({ data: { memberIds: [], ...data } })
 	}
 	// biome-ignore lint/suspicious/noConsole: CLI seed output
 	console.log(`brigades: ${BRIGADE_SEED.length} upserted`)
@@ -223,13 +231,19 @@ async function seedNeedsCodePlaceholders() {
 	for (const { claroCode, name } of LIMIT_TABLE_PLACEHOLDER_CODES) {
 		await db.serviceCode.upsert({
 			where: { claroCode },
-			update: {},
+			// Inactive, and re-asserted on every run: these are stand-ins with no
+			// real Claro SAP code. Left active they are selectable as job material
+			// (the only MATERIAL rows in the catalog), and `getActiveServiceCodes`
+			// filters on `active` alone — so one could be installed and then bill
+			// $0.00 on a real JAF invoice. `update` matters: a row seeded active by
+			// an earlier run stays active otherwise.
+			update: { active: false },
 			create: {
 				claroCode,
 				name,
 				kind: "MATERIAL",
 				unitPrice: "0",
-				active: true,
+				active: false,
 			},
 		})
 	}
@@ -239,13 +253,13 @@ async function seedSerializedFlags() {
 	for (const { prefix, claroCode, name } of SERIALIZED_PREFIXES) {
 		await db.serviceCode.upsert({
 			where: { claroCode },
-			update: { serialized: true, serialPrefix: prefix },
+			update: { serialized: true, serialPrefix: prefix, active: false },
 			create: {
 				claroCode,
 				name,
 				kind: "MATERIAL",
 				unitPrice: "0",
-				active: true,
+				active: false,
 				serialized: true,
 				serialPrefix: prefix,
 			},

@@ -480,6 +480,12 @@ export default function DocView({
 	const corrections =
 		(doc.addressCorrections as AddressCorrection[] | null) || []
 	const gps = doc.gpsCoordinates as { lat: number; lng: number } | null
+	// Names only for people already in the payload; anyone else shows generically.
+	const correctorName = (id: string) =>
+		id === user.id
+			? user.name
+			: (assignedCrew.find((c) => c.id === id)?.name ??
+				(supervisor?.id === id ? supervisor.name : undefined))
 
 	const APPROVED_STATUSES = [
 		"SUPERVISOR_APPROVED",
@@ -591,6 +597,17 @@ export default function DocView({
 											({c.gps.lat.toFixed(4)}, {c.gps.lng.toFixed(4)})
 										</span>
 									)}
+									<span className="block text-muted-foreground">
+										{t("docs_view.address_edited_by", {
+											name:
+												correctorName(c.correctedById) ??
+												t("docs_view.address_edited_by_unknown"),
+											when: new Date(c.correctedAt).toLocaleString([], {
+												dateStyle: "short",
+												timeStyle: "short",
+											}),
+										})}
+									</span>
 								</li>
 							))}
 						</ul>

@@ -274,6 +274,8 @@
 	"docs_view": {
 		"aviso_pending": "Not yet — entered at the Aviso step",
 		"address": "Address",
+		"address_edited_by": "Edited by {{name}} · {{when}}",
+		"address_edited_by_unknown": "someone",
 		"address_corrections": "Address corrections",
 		"time_on_site": "Time on site",
 		"aviso_number": "Aviso #",

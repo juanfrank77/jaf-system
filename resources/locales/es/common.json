@@ -274,6 +274,8 @@
 	"docs_view": {
 		"aviso_pending": "Aún no — se ingresa en el paso del Aviso",
 		"address": "Dirección",
+		"address_edited_by": "Editado por {{name}} · {{when}}",
+		"address_edited_by_unknown": "alguien",
 		"address_corrections": "Correcciones de dirección",
 		"time_on_site": "Tiempo en sitio",
 		"aviso_number": "# de aviso",

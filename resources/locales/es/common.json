@@ -1341,6 +1341,20 @@
 			"installer_awaiting_warehouse": "Esperando acción de almacén",
 			"installer_awaiting_pickup": "Recoge restock listo",
 			"installer_no_actions": "Sin acciones del instalador pendientes"
+		},
+		"crew": {
+			"title": "Mis trabajos",
+			"subtitle_open_one": "{{count}} abierto",
+			"subtitle_open_other": "{{count}} abiertos",
+			"empty": "Tu brigada aún no tiene trabajos asignados.",
+			"sent_back_note": "Devuelto: {{note}}",
+			"status": {
+				"sent_back": "DEVUELTO",
+				"ready": "LISTO PARA RECOGER",
+				"on_site": "EN EL SITIO",
+				"submitted": "ENVIADO",
+				"approved": "APROBADO"
+			}
 		}
 	},
 	"docs_status": {

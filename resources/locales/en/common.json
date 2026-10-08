@@ -447,7 +447,12 @@
 			"crew_signer_invalid": "Selected crew signer is not valid",
 			"already_signed": "Materials are already signed and locked",
 			"invalid_materials": "Invalid materials data"
-		}
+		},
+		"more_is_normal": "Taking more than listed is normal. The supervisor sees the difference at review.",
+		"sig_prompt": "Sign here with your finger",
+		"signed": "Signed",
+		"lock_note": "Once both sign, the list locks for everyone, warehouse included.",
+		"error_title": "Can't sign yet"
 	},
 	"docs_field": {
 		"title": "Field Update",

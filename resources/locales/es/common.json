@@ -1551,6 +1551,7 @@
 		},
 		"home": {
 			"col_order": "Orden",
+			"col_date": "Fecha",
 			"col_type": "Tipo",
 			"col_status": "Estado",
 			"kind": {

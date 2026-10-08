@@ -372,6 +372,7 @@ export default function SignDoc({
 				<div>
 					<Label>{t("docs_sign.warehouse_label")}</Label>
 					<Select
+						items={warehouses.map((w) => ({ value: w.id, label: w.name }))}
 						value={warehouseId}
 						onValueChange={(v) => setWarehouseId(v ?? "")}
 					>

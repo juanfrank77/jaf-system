@@ -8,6 +8,7 @@ import { MaterialLineItems } from "~/components/material-line-items"
 import { ReassignForm } from "~/components/reassign-form"
 import { SupervisorStepRail } from "~/components/supervisor-step-rail"
 import { Button, buttonVariants } from "~/components/ui/button"
+import { Callout } from "~/components/ui/callout"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
@@ -483,6 +484,26 @@ export default function DocView({
 					{doc.status.replace(/_/g, " ")}
 				</span>
 			</div>
+
+			{user.role === "CREW" &&
+				doc.status === "FIELD_UPDATED" &&
+				doc.fieldSubmittedAt && (
+					<Callout
+						tone="ok"
+						icon="✓"
+						title={t("docs_view.submitted_title", {
+							control: doc.controlNumber,
+							time: new Date(doc.fieldSubmittedAt).toLocaleString([], {
+								dateStyle: "short",
+								timeStyle: "short",
+							}),
+						})}
+					>
+						{t("docs_view.submitted_body", {
+							name: supervisor?.name ?? t("docs_field.sent_back_by_unknown"),
+						})}
+					</Callout>
+				)}
 
 			{missingClaroPdf && (
 				<div className="bg-status-warn-soft border border-status-warn/30 rounded-lg p-4 space-y-2">

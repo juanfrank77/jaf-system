@@ -19,9 +19,15 @@ vi.mock("~/lib/completion-submit.server", () => ({
 }))
 
 vi.mock("~/lib/db.server", () => ({ db: mocks.db }))
-vi.mock("~/lib/service-codes.server", () => ({
-	getSerializedCodes: mocks.getSerializedCodes,
-}))
+vi.mock("~/lib/service-codes.server", async () => {
+	const actual = await vi.importActual<
+		typeof import("~/lib/service-codes.server")
+	>("~/lib/service-codes.server")
+	return {
+		getSerializedCodes: mocks.getSerializedCodes,
+		serviceCodesForRole: actual.serviceCodesForRole,
+	}
+})
 
 import { action, loader } from "./_app.installer.completion.new"
 
@@ -312,6 +318,44 @@ describe("POST /installer/completion/new", () => {
 	})
 
 	describe("loader", () => {
+		async function loadAs(role: string) {
+			mocks.requireInstaller.mockResolvedValue({
+				user: { id: "u1", role },
+				van: { id: "van-1", active: true },
+			})
+			mocks.db.limitTable.findMany.mockResolvedValue([])
+			mocks.getSerializedCodes.mockResolvedValue([
+				{
+					id: "m1",
+					claroCode: "ALCLED",
+					name: "ONT",
+					serialPrefix: "ALCLED",
+					unitPrice: "42.5",
+					contractorPrice: "20",
+					claroBasePrice: "30",
+				},
+			])
+			mocks.db.serviceCode.findMany.mockResolvedValue([])
+			mocks.db.serialLocation.findMany.mockResolvedValue([])
+			return loader({
+				request: new Request("http://localhost/installer/completion/new"),
+				params: {},
+				context: {},
+			} as never)
+		}
+
+		it("sends an installer no price field on the serialized codes", async () => {
+			const res = await loadAs("INSTALLER")
+			expect(res.serializedCodes[0]).toMatchObject({ serialPrefix: "ALCLED" })
+			for (const k of ["unitPrice", "contractorPrice", "claroBasePrice"])
+				expect(k in res.serializedCodes[0]).toBe(false)
+		})
+
+		it("still sends an admin the unit price", async () => {
+			const res = await loadAs("ADMIN")
+			expect(res.serializedCodes[0]).toMatchObject({ unitPrice: 42.5 })
+		})
+
 		it("returns the accessory code names and the serials on this van", async () => {
 			mocks.requireInstaller.mockResolvedValue({
 				user: { id: "inst-1" },

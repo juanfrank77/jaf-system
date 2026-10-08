@@ -20,9 +20,15 @@ vi.mock("~/lib/restock.server", () => ({
 	buildRestockPrefill: mocks.buildRestockPrefill,
 	MAX_LINE_QTY: 1000,
 }))
-vi.mock("~/lib/service-codes.server", () => ({
-	getActiveMaterialCodes: mocks.getActiveMaterialCodes,
-}))
+vi.mock("~/lib/service-codes.server", async () => {
+	const actual = await vi.importActual<
+		typeof import("~/lib/service-codes.server")
+	>("~/lib/service-codes.server")
+	return {
+		getActiveMaterialCodes: mocks.getActiveMaterialCodes,
+		serviceCodesForRole: actual.serviceCodesForRole,
+	}
+})
 vi.mock("~/lib/db.server", () => ({ db: mocks.db }))
 
 import { action, loader } from "./_app.installer.restock"
@@ -59,9 +65,49 @@ describe("GET /installer/restock", () => {
 			request: new Request("http://localhost/installer/restock"),
 			params: {},
 		} as never)
+		// No price field of any kind reaches an installer.
+		expect(JSON.stringify(res)).not.toMatch(/price|Price|1\.5/)
 		expect(res.serviceCodes).toEqual([
-			{ id: "sc-1", claroCode: "C1", name: "Wrap", unit: "EA", unitPrice: 1.5 },
+			{ id: "sc-1", claroCode: "C1", name: "Wrap", unit: "EA" },
 		])
+	})
+})
+
+describe("GET /installer/restock — prices", () => {
+	beforeEach(() => vi.clearAllMocks())
+
+	it("never sends an installer a price, and an admin/supervisor gets no catalog here at all", async () => {
+		mocks.requireRole.mockResolvedValue({
+			user: { id: "inst-1", role: "INSTALLER" },
+		})
+		mocks.requireInstaller.mockResolvedValue({ van: { id: "van-1" } })
+		mocks.db.restockRequest.findMany.mockResolvedValue([])
+		mocks.buildRestockPrefill.mockResolvedValue([])
+		mocks.getActiveMaterialCodes.mockResolvedValue([
+			{
+				id: "sc-1",
+				claroCode: "C1",
+				name: "Wrap",
+				unit: "EA",
+				unitPrice: "9.99",
+				contractorPrice: "5",
+				claroBasePrice: "7",
+			},
+		])
+		const res = await loader({
+			request: new Request("http://localhost/installer/restock"),
+			params: {},
+		} as never)
+		expect(JSON.stringify(res)).not.toMatch(/9\.99|rice/)
+
+		mocks.requireRole.mockResolvedValue({
+			user: { id: "sup-1", role: "INSTALLER_SUPERVISOR" },
+		})
+		const sup = await loader({
+			request: new Request("http://localhost/installer/restock"),
+			params: {},
+		} as never)
+		expect(sup.serviceCodes).toEqual([])
 	})
 })
 

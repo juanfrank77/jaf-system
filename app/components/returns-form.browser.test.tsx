@@ -124,4 +124,34 @@ describe("ReturnsForm — post-success resubmit (review fix)", () => {
 		expect(screen.getByTestId("returns-already-recorded")).toBeInTheDocument()
 		expect(screen.getByRole("button", { name: "Save Returns" })).toBeDisabled()
 	})
+
+	it("shows the translated serial reason in the closed select, not the raw enum", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					loader: async () => loaderData(),
+					Component: () => {
+						const data = useLoaderData() as ReturnsFormData
+						return <ReturnsForm loaderData={data} actionData={undefined} />
+					},
+				},
+			],
+		})
+
+		await userEvent.click(
+			screen.getByRole("button", { name: "+ Add Serial Line" }),
+		)
+		const reasonTrigger = () =>
+			screen.getAllByRole("combobox").at(-1) as HTMLElement
+		await userEvent.click(reasonTrigger())
+		await userEvent.click(await screen.findByRole("option", { name: "Lost" }))
+
+		await waitFor(() => {
+			expect(reasonTrigger()).toHaveTextContent("Lost")
+		})
+		expect(screen.queryByText("LOST")).not.toBeInTheDocument()
+	})
 })

@@ -371,6 +371,10 @@ export function ReturnsForm({
 								{t("docs_returns.serial_reason_label")}
 							</Label>
 							<Select
+								items={SERIAL_REASONS.map((reason) => ({
+									value: reason,
+									label: t(`docs_returns.serial_reason.${reason}`),
+								}))}
 								value={line.reason}
 								onValueChange={(v) =>
 									updateSerialLine(index, {

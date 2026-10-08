@@ -1543,6 +1543,20 @@
 				"restock_title": "Reabastecimiento",
 				"restock_body": "Se prellena al par cuando existen datos de par. Una línea que supera el par necesita aprobación antes de ir al almacén."
 			}
+		},
+		"home": {
+			"col_order": "Orden",
+			"col_type": "Tipo",
+			"col_status": "Estado",
+			"kind": {
+				"INSTALL": "Instalación",
+				"CALLBACK": "Visita de seguimiento"
+			},
+			"status": {
+				"INCOMPLETE": "Falta documentación",
+				"READY": "En cola de pago",
+				"PAID": "Pagado"
+			}
 		}
 	},
 	"installer_restock": {

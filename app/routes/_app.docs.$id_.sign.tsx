@@ -416,6 +416,10 @@ export default function SignDoc({
 								{t("docs_sign.release_signer_label")}
 							</Label>
 							<Select
+								items={warehouseUsers.map((u) => ({
+									value: u.id,
+									label: u.name,
+								}))}
 								value={releasedById}
 								onValueChange={(v) => setReleasedById(v ?? "")}
 							>
@@ -455,6 +459,7 @@ export default function SignDoc({
 								{t("docs_sign.crew_signer_label")}
 							</Label>
 							<Select
+								items={crewUsers.map((u) => ({ value: u.id, label: u.name }))}
 								value={signedById}
 								onValueChange={(v) => setSignedById(v ?? "")}
 							>

@@ -11,7 +11,7 @@ export type QueuedAction = {
 	createdAt: string
 	/** Set when the server refused the action on validation. It stays in the
 	 * queue but is never retried; the crew has to fix it and send again. */
-	rejection?: { errorKey: string; at: string }
+	rejection?: { errorKey?: string; message?: string; at: string }
 }
 
 export type CachedJob = {
@@ -132,7 +132,7 @@ export async function removeQueuedAction(id: string): Promise<void> {
 
 export async function markActionRejected(
 	id: string,
-	errorKey: string,
+	reason: { errorKey?: string; message?: string },
 ): Promise<void> {
 	const store = await withStore(QUEUE_STORE, "readwrite")
 	const action = (await requestToPromise(store.get(id))) as
@@ -142,7 +142,7 @@ export async function markActionRejected(
 	await requestToPromise(
 		store.put({
 			...action,
-			rejection: { errorKey, at: new Date().toISOString() },
+			rejection: { ...reason, at: new Date().toISOString() },
 		}),
 	)
 }
@@ -166,7 +166,7 @@ export async function syncQueuedActions({
 		ok: boolean
 		conflict?: SyncConflict
 		error?: string
-		rejected?: { errorKey: string }
+		rejected?: { errorKey?: string; message?: string }
 	}>
 	onConflict?: (conflict: SyncConflict) => void
 }): Promise<{
@@ -189,7 +189,7 @@ export async function syncQueuedActions({
 		const result = await syncOne(action)
 		if (result.rejected) {
 			rejected++
-			await markActionRejected(action.id, result.rejected.errorKey)
+			await markActionRejected(action.id, result.rejected)
 			continue
 		}
 		if (result.conflict) {

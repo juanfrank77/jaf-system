@@ -1,6 +1,7 @@
 import fs from "node:fs/promises"
 import path from "node:path"
-import { useRef, useState } from "react"
+import type { ParseKeys } from "i18next"
+import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { data, redirect } from "react-router"
 import { BarcodeScanner } from "~/components/barcode-scanner"
@@ -28,6 +29,12 @@ import { queueCompletion } from "~/lib/installer-completion-sync"
 import { requireInstaller } from "~/lib/installer-context.server"
 import { COMPLETION_STEPS, type CompletionStep } from "~/lib/installer-steps"
 import { pickBracket, prefillAccessories } from "~/lib/limit-table"
+import {
+	getQueuedActions,
+	type QueuedAction,
+	removeQueuedAction,
+} from "~/lib/offline-store"
+import { refuse } from "~/lib/offline-validation.server"
 import { resolveSerial } from "~/lib/service-codes"
 import { getSerializedCodes } from "~/lib/service-codes.server"
 import type { Route } from "./+types/_app.installer.completion.new"
@@ -127,19 +134,23 @@ export async function action({ request }: Route.ActionArgs) {
 	const offline = request.headers.get("X-Offline-Sync") === "true"
 	if (!van?.active) {
 		if (offline) return data({ conflict: "VAN_INACTIVE" }, { status: 409 })
-		return { errorKey: "installer.completion.errors.no_van" as const }
+		return refuse(request, {
+			errorKey: "installer.completion.errors.no_van" as const,
+		})
 	}
 	const form = await request.formData()
 
 	const claroOrderNoRaw = form.get("claroOrderNo")
 	if (typeof claroOrderNoRaw !== "string" || !claroOrderNoRaw.trim()) {
-		return {
+		return refuse(request, {
 			errorKey: "installer.completion.errors.order_no_required" as const,
-		}
+		})
 	}
 	const addressRaw = form.get("address")
 	if (typeof addressRaw !== "string" || !addressRaw.trim()) {
-		return { errorKey: "installer.completion.errors.address_required" as const }
+		return refuse(request, {
+			errorKey: "installer.completion.errors.address_required" as const,
+		})
 	}
 
 	// Same edit-log pattern as the crew field page: the client says what the
@@ -168,16 +179,17 @@ export async function action({ request }: Route.ActionArgs) {
 		dropFt,
 	)
 	if (!accessories) {
-		return {
+		return refuse(request, {
 			errorKey: "installer.completion.errors.invalid_accessories" as const,
-		}
+		})
 	}
 
 	let formPhotoPath: string | undefined
 	const formPhoto = form.get("formPhoto")
 	if (formPhoto instanceof File && formPhoto.size > 0) {
 		const validation = validateFile(formPhoto, "photo")
-		if (!validation.valid) return { errorMessage: validation.error }
+		if (!validation.valid)
+			return refuse(request, { errorMessage: validation.error })
 		const dir = path.join(
 			process.env.UPLOAD_DIR || "/tmp/jaf/uploads",
 			"completions",
@@ -243,6 +255,17 @@ export default function NewCompletion({
 	const [claroOrderNo, setClaroOrderNo] = useState("")
 	const [address, setAddress] = useState("")
 	const [idempotencyKey] = useState(() => crypto.randomUUID())
+	// Offline completions the server refused on validation: kept, never retried.
+	const [rejected, setRejected] = useState<QueuedAction[]>([])
+	useEffect(() => {
+		getQueuedActions()
+			.then((all) =>
+				setRejected(
+					all.filter((a) => a.action === "INSTALLER_COMPLETION" && a.rejection),
+				),
+			)
+			.catch(() => {})
+	}, [])
 
 	const bracket = dropFt === "" ? null : pickBracket(Number(dropFt), brackets)
 	// The installer confirms or amends the pre-filled quantities. Edits belong
@@ -302,6 +325,37 @@ export default function NewCompletion({
 			<Callout title={t("installer.installer_flow.callout.new_title")}>
 				{t("installer.installer_flow.callout.new_body")}
 			</Callout>
+
+			{rejected.length > 0 && (
+				<Callout tone="danger" title={t("installer.completion.rejected_title")}>
+					<ul className="space-y-2">
+						{rejected.map((r) => (
+							<li key={r.id} className="flex items-start justify-between gap-2">
+								<span>
+									<span className="font-mono">
+										{String(r.payload.claroOrderNo ?? "")}
+									</span>{" "}
+									{r.rejection?.errorKey
+										? t(r.rejection.errorKey as ParseKeys)
+										: r.rejection?.message}
+								</span>
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									onClick={async () => {
+										await removeQueuedAction(r.id).catch(() => {})
+										setRejected((all) => all.filter((x) => x.id !== r.id))
+									}}
+								>
+									{t("installer.completion.rejected_discard")}
+								</Button>
+							</li>
+						))}
+					</ul>
+					{t("installer.completion.rejected_hint")}
+				</Callout>
+			)}
 
 			{actionData && (
 				<Callout tone="danger" title={t("installer.completion.errors.title")}>

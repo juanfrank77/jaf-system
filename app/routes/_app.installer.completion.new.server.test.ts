@@ -108,8 +108,11 @@ describe("POST /installer/completion/new", () => {
 			accessories: "[]",
 		})
 		const res = await action({ request: req, params: {}, context: {} } as never)
-		expect(res).toEqual({
-			errorKey: "installer.completion.errors.order_no_required",
+		expect(res).toMatchObject({
+			data: {
+				validationError: "installer.completion.errors.order_no_required",
+			},
+			init: { status: 422 },
 		})
 		expect(mocks.submitCompletion).not.toHaveBeenCalled()
 	})
@@ -127,8 +130,9 @@ describe("POST /installer/completion/new", () => {
 			accessories: "[]",
 		})
 		const res = await action({ request: req, params: {}, context: {} } as never)
-		expect(res).toEqual({
-			errorKey: "installer.completion.errors.address_required",
+		expect(res).toMatchObject({
+			data: { validationError: "installer.completion.errors.address_required" },
+			init: { status: 422 },
 		})
 		expect(mocks.submitCompletion).not.toHaveBeenCalled()
 	})
@@ -186,12 +190,16 @@ describe("POST /installer/completion/new", () => {
 				context: {},
 			} as never)
 		}
+		// These requests are offline replays, so the refusal is a 422.
 		const invalid = {
-			errorKey: "installer.completion.errors.invalid_accessories",
+			data: {
+				validationError: "installer.completion.errors.invalid_accessories",
+			},
+			init: { status: 422 },
 		}
 
 		it("rejects malformed JSON instead of crashing", async () => {
-			expect(await post({ accessories: "{bad" })).toEqual(invalid)
+			expect(await post({ accessories: "{bad" })).toMatchObject(invalid)
 			expect(mocks.submitCompletion).not.toHaveBeenCalled()
 		})
 
@@ -206,7 +214,7 @@ describe("POST /installer/completion/new", () => {
 				'[{"serviceCodeId":"sc-1","qty":1},{"serviceCodeId":"sc-1","qty":2}]',
 			],
 		])("rejects %s", async (_n, accessories) => {
-			expect(await post({ accessories })).toEqual(invalid)
+			expect(await post({ accessories })).toMatchObject(invalid)
 			expect(mocks.submitCompletion).not.toHaveBeenCalled()
 		})
 
@@ -331,6 +339,78 @@ describe("POST /installer/completion/new", () => {
 					where: { status: "VAN", currentRef: "van-1" },
 				}),
 			)
+		})
+	})
+
+	describe("offline-sync replays answer validation errors with a 422", () => {
+		const base = {
+			idempotencyKey: "k1",
+			claroOrderNo: "430920",
+			address: "a",
+			serialUnreadable: "true",
+			accessories: "[]",
+		}
+		async function replay(entries: Record<string, string | File>) {
+			mocks.requireInstaller.mockResolvedValue({
+				user: { id: "inst-1" },
+				van: { id: "van-1", active: true },
+			})
+			const form = new FormData()
+			for (const [k, v] of Object.entries(entries)) form.set(k, v)
+			return (await action({
+				request: new Request("http://localhost/installer/completion/new", {
+					method: "POST",
+					body: form,
+					headers: { "X-Offline-Sync": "true" },
+				}),
+				params: {},
+				context: {},
+			} as never)) as any
+		}
+
+		it.each([
+			["order number", { claroOrderNo: " " }, "order_no_required"],
+			["address", { address: "" }, "address_required"],
+			["accessories", { accessories: "{bad" }, "invalid_accessories"],
+		])("missing/invalid %s", async (_n, patch, key) => {
+			const res = await replay({ ...base, ...patch })
+			expect(res.init?.status).toBe(422)
+			expect(res.data).toEqual({
+				validationError: `installer.completion.errors.${key}`,
+			})
+			expect(mocks.submitCompletion).not.toHaveBeenCalled()
+		})
+
+		it("a form photo that fails file validation carries its message", async () => {
+			const res = await replay({
+				...base,
+				formPhoto: new File(["x"], "a.txt", { type: "text/plain" }),
+			})
+			expect(res.init?.status).toBe(422)
+			expect(res.data).toEqual({
+				validationMessage: "Photo must be JPEG, PNG, WebP, or HEIC",
+			})
+		})
+
+		it("a normal post keeps the plain error", async () => {
+			mocks.requireInstaller.mockResolvedValue({
+				user: { id: "inst-1" },
+				van: { id: "van-1", active: true },
+			})
+			const form = new FormData()
+			for (const [k, v] of Object.entries({ ...base, address: "" }))
+				form.set(k, v)
+			const res = await action({
+				request: new Request("http://localhost/installer/completion/new", {
+					method: "POST",
+					body: form,
+				}),
+				params: {},
+				context: {},
+			} as never)
+			expect(res).toEqual({
+				errorKey: "installer.completion.errors.address_required",
+			})
 		})
 	})
 })

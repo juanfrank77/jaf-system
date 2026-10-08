@@ -85,4 +85,34 @@ describe("syncOne", () => {
 			}),
 		)
 	})
+
+	it("returns rejected (not ok) when the server refuses with a 422 error key", async () => {
+		vi.mocked(globalThis.fetch).mockResolvedValue({
+			redirected: false,
+			ok: false,
+			status: 422,
+			json: async () => ({
+				validationError: "installer.completion.errors.invalid_accessories",
+			}),
+		} as Response)
+		expect(await syncOne(baseAction())).toEqual({
+			ok: false,
+			rejected: {
+				errorKey: "installer.completion.errors.invalid_accessories",
+			},
+		})
+	})
+
+	it("returns rejected with the message for a 422 raw message", async () => {
+		vi.mocked(globalThis.fetch).mockResolvedValue({
+			redirected: false,
+			ok: false,
+			status: 422,
+			json: async () => ({ validationMessage: "Photo must be JPEG" }),
+		} as Response)
+		expect(await syncOne(baseAction())).toEqual({
+			ok: false,
+			rejected: { message: "Photo must be JPEG" },
+		})
+	})
 })

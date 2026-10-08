@@ -37,7 +37,7 @@ export async function syncFieldUpdate(
 	ok: boolean
 	conflict?: SyncConflict
 	error?: string
-	rejected?: { errorKey: string }
+	rejected?: { errorKey?: string; message?: string }
 }> {
 	if (currentJob.status === "CANCELLED") {
 		return {
@@ -119,9 +119,12 @@ export async function syncFieldUpdate(
 		if (response.status === 422) {
 			const body = (await response.json().catch(() => ({}))) as {
 				validationError?: string
+				validationMessage?: string
 			}
 			if (body.validationError)
 				return { ok: false, rejected: { errorKey: body.validationError } }
+			if (body.validationMessage)
+				return { ok: false, rejected: { message: body.validationMessage } }
 		}
 
 		if (response.redirected || response.ok) {

@@ -380,4 +380,80 @@ describe("POST /docs/:id/field", () => {
 		} as any)
 		expect(res.correctorNames).toEqual({ "crew-2": "Ana Crew" })
 	})
+
+	describe("offline-sync replays answer validation errors with a 422", () => {
+		function replay(form: FormData) {
+			return action({
+				request: new Request("http://localhost/docs/doc-1/field", {
+					method: "POST",
+					body: form,
+					headers: { "X-Offline-Sync": "true" },
+				}),
+				params: { id: "doc-1" },
+			} as any) as Promise<any>
+		}
+		async function expect422(form: FormData, body: unknown) {
+			asCrewWithDoc()
+			const res = await replay(form)
+			expect(res.init?.status).toBe(422)
+			expect(res.data).toEqual(body)
+			expect(db.jafInvoice.update).not.toHaveBeenCalled()
+		}
+
+		it("completion signature required", async () => {
+			const form = usedForm([{ serviceCodeId: "sc-1", qty: 5 }])
+			form.set("completionSignature", "")
+			await expect422(form, {
+				validationError: "docs_field.errors.completion_signature_required",
+			})
+		})
+
+		it("invalid materials JSON", async () => {
+			const form = usedForm([])
+			form.set("materialsUsed", "{bad")
+			await expect422(form, {
+				validationError: "docs_field.errors.invalid_materials",
+			})
+		})
+
+		it("invalid installed service lines", async () => {
+			const form = usedForm([{ serviceCodeId: "sc-1", qty: 5 }])
+			form.set("installedServiceLines", "{bad")
+			await expect422(form, {
+				validationError: "docs_field.errors.invalid_service_lines",
+			})
+		})
+
+		it("discrepancy note required", async () => {
+			const form = usedForm([{ serviceCodeId: "sc-1", qty: 3 }])
+			form.delete("discrepancyNote")
+			await expect422(form, {
+				validationError: "docs_field.errors.discrepancy_note_required",
+			})
+		})
+
+		it("a photo that fails file validation carries its message", async () => {
+			const form = usedForm([{ serviceCodeId: "sc-1", qty: 5 }])
+			form.append(
+				"photosBefore",
+				new File(["x"], "a.txt", { type: "text/plain" }),
+			)
+			await expect422(form, {
+				validationMessage: "Photo must be JPEG, PNG, WebP, or HEIC",
+			})
+		})
+
+		it("a normal (non-offline) post still gets the plain error", async () => {
+			asCrewWithDoc()
+			const form = usedForm([{ serviceCodeId: "sc-1", qty: 3 }])
+			form.delete("discrepancyNote")
+			const res = await action({
+				request: formRequest(form),
+				params: { id: "doc-1" },
+			} as any)
+			expect(res).toEqual({
+				errorKey: "docs_field.errors.discrepancy_note_required",
+			})
+		})
+	})
 })

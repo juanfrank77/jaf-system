@@ -35,6 +35,7 @@ import {
 	type QueuedAction,
 	removeQueuedAction,
 } from "~/lib/offline-store"
+import { refuse } from "~/lib/offline-validation.server"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import {
@@ -166,7 +167,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const gpsRaw = form.get("gpsCoordinates") as string | null
 
 	if (!completionSignature || completionSignature === "data:,") {
-		return { errorKey: "docs_field.errors.completion_signature_required" }
+		return refuse(request, {
+			errorKey: "docs_field.errors.completion_signature_required" as const,
+		})
 	}
 
 	let materialsUsed: MaterialLine[] = []
@@ -175,7 +178,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 			(i: MaterialLine) => i.serviceCodeId && i.qty > 0,
 		)
 	} catch {
-		return { errorKey: "docs_field.errors.invalid_materials" }
+		return refuse(request, {
+			errorKey: "docs_field.errors.invalid_materials" as const,
+		})
 	}
 
 	// Zero is a legitimate installed quantity, so this does not use
@@ -203,7 +208,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 					qty: Number(l.qty),
 				}))
 		} catch {
-			return { errorKey: "docs_field.errors.invalid_service_lines" }
+			return refuse(request, {
+				errorKey: "docs_field.errors.invalid_service_lines" as const,
+			})
 		}
 	}
 
@@ -211,21 +218,17 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 	// A crew cannot use more of a code than it signed out at pickup.
 	if (exceedsTaken(taken, materialsUsed)) {
-		// A queued offline update is replayed by a background fetch with no page
-		// to show an error on, so it gets a distinct status the sync can act on.
-		if (request.headers.get("X-Offline-Sync") === "true") {
-			return data(
-				{ validationError: "docs_field.errors.used_exceeds_took" },
-				{ status: 422 },
-			)
-		}
-		return { errorKey: "docs_field.errors.used_exceeds_took" }
+		return refuse(request, {
+			errorKey: "docs_field.errors.used_exceeds_took" as const,
+		})
 	}
 
 	const quantityDiscrepancies = buildQuantityDiscrepancies(taken, materialsUsed)
 	const hasQuantityDiscrepancy = quantityDiscrepancies.length > 0
 	if (hasQuantityDiscrepancy && !discrepancyNote) {
-		return { errorKey: "docs_field.errors.discrepancy_note_required" }
+		return refuse(request, {
+			errorKey: "docs_field.errors.discrepancy_note_required" as const,
+		})
 	}
 
 	// Handle photo uploads
@@ -242,7 +245,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 	for (const { file } of allPhotos) {
 		if (file.size === 0) continue
 		const validation = validateFile(file, "photo")
-		if (!validation.valid) return { errorMessage: validation.error }
+		if (!validation.valid)
+			return refuse(request, { errorMessage: validation.error })
 	}
 
 	const photoPaths: { path: string; tag: "BEFORE" | "AFTER" }[] = []
@@ -375,11 +379,11 @@ export default function FieldUpdate({
 	const busy = navigation.state !== "idle"
 	const [queued, setQueued] = useState(false)
 	// An offline update for this job that the server refused on validation.
-	const [rejected, setRejected] = useState<QueuedAction | null>(null)
+	const [rejected, setRejected] = useState<QueuedAction[]>([])
 	useEffect(() => {
 		getQueuedActions()
 			.then((all) =>
-				setRejected(all.find((a) => a.docId === doc.id && a.rejection) ?? null),
+				setRejected(all.filter((a) => a.docId === doc.id && a.rejection)),
 			)
 			.catch(() => {})
 	}, [doc.id])
@@ -477,9 +481,11 @@ export default function FieldUpdate({
 		}
 		setClientErrorKey(null)
 		// Sending again replaces the refused offline update.
-		if (rejected) {
-			await removeQueuedAction(rejected.id).catch(() => {})
-			setRejected(null)
+		if (rejected.length > 0) {
+			await Promise.all(
+				rejected.map((r) => removeQueuedAction(r.id).catch(() => {})),
+			)
+			setRejected([])
 		}
 
 		const formData = new FormData(form)
@@ -561,9 +567,17 @@ export default function FieldUpdate({
 				</Callout>
 			)}
 
-			{rejected?.rejection && (
+			{rejected.length > 0 && (
 				<Callout tone="danger" title={t("docs_field.rejected_offline_title")}>
-					{t(rejected.rejection.errorKey as ParseKeys)}{" "}
+					<ul className="list-disc pl-4">
+						{rejected.map((r) => (
+							<li key={r.id}>
+								{r.rejection?.errorKey
+									? t(r.rejection.errorKey as ParseKeys)
+									: r.rejection?.message}
+							</li>
+						))}
+					</ul>
 					{t("docs_field.rejected_offline_hint")}
 				</Callout>
 			)}

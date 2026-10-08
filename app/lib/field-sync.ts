@@ -33,7 +33,12 @@ export async function queueFieldUpdate(
 export async function syncFieldUpdate(
 	action: QueuedAction,
 	currentJob: CachedJob,
-): Promise<{ ok: boolean; conflict?: SyncConflict; error?: string }> {
+): Promise<{
+	ok: boolean
+	conflict?: SyncConflict
+	error?: string
+	rejected?: { errorKey: string }
+}> {
 	if (currentJob.status === "CANCELLED") {
 		return {
 			ok: false,
@@ -107,6 +112,16 @@ export async function syncFieldUpdate(
 							: "This job was reassigned or modified while you were offline.",
 				},
 			}
+		}
+
+		// Validation refusal (e.g. used more than taken): not a conflict and not
+		// a transient failure, so it must not be retried or dropped.
+		if (response.status === 422) {
+			const body = (await response.json().catch(() => ({}))) as {
+				validationError?: string
+			}
+			if (body.validationError)
+				return { ok: false, rejected: { errorKey: body.validationError } }
 		}
 
 		if (response.redirected || response.ok) {

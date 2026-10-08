@@ -501,6 +501,8 @@
 		"queued_title": "Saved offline",
 		"queued_message": "Field update saved. It will sync automatically when you reconnect.",
 		"offline_submit_title": "Offline",
+		"rejected_offline_title": "Your offline update was not accepted",
+		"rejected_offline_hint": "It was not sent. Fix the quantities below and send it again; nothing from the refused update is kept except what you re-enter.",
 		"offline_submit_notice": "You are offline. Tap Save for later sync and the update will upload when you have signal.",
 		"errors": {
 			"invalid_materials": "Invalid materials data",

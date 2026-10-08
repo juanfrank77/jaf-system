@@ -327,4 +327,22 @@ describe("POST /docs/:id/field", () => {
 			blocksFinance: false,
 		})
 	})
+
+	it("answers an offline-sync replay of used above taken with a distinct 422", async () => {
+		asCrewWithDoc()
+		const req = new Request("http://localhost/docs/doc-1/field", {
+			method: "POST",
+			body: usedForm([{ serviceCodeId: "sc-1", qty: 10 }]),
+			headers: { "X-Offline-Sync": "true" },
+		})
+		const res = (await action({
+			request: req,
+			params: { id: "doc-1" },
+		} as any)) as any
+		expect(res.init?.status).toBe(422)
+		expect(res.data).toEqual({
+			validationError: "docs_field.errors.used_exceeds_took",
+		})
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
 })

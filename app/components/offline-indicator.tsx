@@ -22,7 +22,8 @@ export function useConnectionState(): ConnectionState {
 		let mounted = true
 		const refresh = async () => {
 			const actions = await getQueuedActions()
-			if (mounted) setPendingCount(actions.length)
+			// A refused update is waiting on the crew, not on the network.
+			if (mounted) setPendingCount(actions.filter((a) => !a.rejection).length)
 		}
 		refresh()
 		if (online) refresh()

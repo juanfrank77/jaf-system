@@ -486,7 +486,9 @@ export default function NewCompletion({
 						!vanSerials.includes(serial) && (
 							<Callout
 								tone="warn"
-								title={t("installer.completion.serial_not_on_van_title")}
+								title={t("installer.completion.serial_not_on_van_title", {
+									van: van?.name ?? "",
+								})}
 							>
 								{t("installer.completion.serial_not_on_van_body")}
 							</Callout>

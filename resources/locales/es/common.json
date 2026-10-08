@@ -328,7 +328,9 @@
 			"generate_lc": "Generar solicitud de LC",
 			"continue_review": "Continuar pasos del supervisor",
 			"default": "Próxima acción"
-		}
+		},
+		"submitted_title": "{{control}} enviado · {{time}}",
+		"submitted_body": "{{name}} fue notificado. Lo verás aquí si algo necesita corrección."
 	},
 	"docs_prep": {
 		"title": "Preparar materiales",

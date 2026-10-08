@@ -12,6 +12,7 @@ import { Callout } from "~/components/ui/callout"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
+import { canSeeBilling, hideBilling } from "~/lib/billing-visibility"
 import {
 	assignedBrigadeIds,
 	buildCrewAssignment,
@@ -174,7 +175,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 				})
 			: []
 	return {
-		doc,
+		doc: hideBilling(doc, user.role),
 		user,
 		correctorNames: Object.fromEntries(correctors.map((u) => [u.id, u.name])),
 		latestSendBack,
@@ -184,7 +185,10 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		assignedCrew,
 		assignedBrigades,
 		brigadeOptions,
-		auditTrail,
+		// diffJson can carry aviso numbers and amounts.
+		auditTrail: canSeeBilling(user.role)
+			? auditTrail
+			: auditTrail.map((a) => ({ ...a, diffJson: null })),
 		stage: deriveSupervisorStage(doc, sheet),
 	}
 }
@@ -507,7 +511,8 @@ export default function DocView({
 	const isApproved = APPROVED_STATUSES.includes(
 		doc.status as (typeof APPROVED_STATUSES)[number],
 	)
-	const missingClaroPdf = isApproved && !doc.claroPdfPath
+	const showBilling = canSeeBilling(user.role)
+	const missingClaroPdf = showBilling && isApproved && !doc.claroPdfPath
 
 	return (
 		<div className="space-y-5">
@@ -625,16 +630,18 @@ export default function DocView({
 						</ul>
 					</div>
 				)}
-				<p>
-					<span className="text-muted-foreground">
-						{t("docs_view.aviso_number")}:
-					</span>{" "}
-					{doc.avisoNumber ?? (
+				{showBilling && (
+					<p>
 						<span className="text-muted-foreground">
-							{t("docs_view.aviso_pending")}
-						</span>
-					)}
-				</p>
+							{t("docs_view.aviso_number")}:
+						</span>{" "}
+						{doc.avisoNumber ?? (
+							<span className="text-muted-foreground">
+								{t("docs_view.aviso_pending")}
+							</span>
+						)}
+					</p>
+				)}
 				<p>
 					<span className="text-muted-foreground">
 						{t("docs_view.supervisor")}:

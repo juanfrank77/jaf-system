@@ -1341,6 +1341,20 @@
 			"installer_awaiting_warehouse": "Awaiting warehouse action",
 			"installer_awaiting_pickup": "Pick up ready restock",
 			"installer_no_actions": "No installer actions pending"
+		},
+		"crew": {
+			"title": "My jobs",
+			"subtitle_open_one": "{{count}} open",
+			"subtitle_open_other": "{{count}} open",
+			"empty": "No jobs assigned to your brigade yet.",
+			"sent_back_note": "Sent back: {{note}}",
+			"status": {
+				"sent_back": "SENT BACK",
+				"ready": "READY FOR PICKUP",
+				"on_site": "ON SITE",
+				"submitted": "SUBMITTED",
+				"approved": "APPROVED"
+			}
 		}
 	},
 	"docs_status": {

@@ -37,6 +37,14 @@ import type { Route } from "./+types/_app.docs.$id"
 
 type MaterialLine = { serviceCodeId: string; qty: number }
 
+type SendBackEntry = {
+	createdAt: string
+	byUserId: string
+	fromStatus: string
+	toStatus: string
+	note: string
+}
+
 type CrewAssignmentEntry = {
 	brigadeId: string
 	brigadeIds?: string[]
@@ -142,9 +150,20 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		const b = brigadeRows.find((r) => r.id === id)
 		return b ? [{ id: b.id, name: b.name, code: b.code, lead: i === 0 }] : []
 	})
+	// Only a job that is still waiting on the fix (back at SIGNED) carries an
+	// active send-back; once it is resubmitted the banner goes away.
+	const sendBackHistory =
+		(doc.sendBackHistory as unknown as SendBackEntry[] | null) ?? []
+	const latest = sendBackHistory.at(-1) ?? null
+	const latestSendBack = doc.status === "SIGNED" ? latest : null
+	const sentBy = latestSendBack
+		? await db.user.findUnique({ where: { id: latestSendBack.byUserId } })
+		: null
 	return {
 		doc,
 		user,
+		latestSendBack,
+		sentByName: sentBy?.name ?? null,
 		serviceCodes: serviceCodesForRole(user.role, serviceCodes),
 		supervisor,
 		assignedCrew,
@@ -447,6 +466,8 @@ export default function DocView({
 		brigadeOptions,
 		auditTrail,
 		stage,
+		latestSendBack,
+		sentByName,
 	} = loaderData
 	const error = actionData as
 		| { errorKey?: string; errorMessage?: string }
@@ -484,6 +505,20 @@ export default function DocView({
 					{doc.status.replace(/_/g, " ")}
 				</span>
 			</div>
+
+			{latestSendBack && (
+				<Callout
+					tone="danger"
+					title={t("docs_field.sent_back_by", {
+						name: sentByName ?? t("docs_field.sent_back_by_unknown"),
+					})}
+				>
+					{latestSendBack.note}{" "}
+					<span className="text-xs opacity-80">
+						{new Date(latestSendBack.createdAt).toLocaleString()}
+					</span>
+				</Callout>
+			)}
 
 			{user.role === "CREW" &&
 				doc.status === "FIELD_UPDATED" &&

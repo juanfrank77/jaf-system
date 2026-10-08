@@ -2,6 +2,7 @@ import {
 	DashboardSquare01Icon,
 	FileAddIcon,
 	GridViewIcon,
+	Home01Icon,
 	Invoice02Icon,
 	Settings02Icon,
 	TruckDeliveryIcon,
@@ -29,6 +30,9 @@ export type NavLabelKey =
 	| "app_shell.nav.admin_restock"
 	| "app_shell.nav.installer"
 	| "app_shell.nav.installer_supervisor"
+	| "app_shell.nav.installer_home"
+	| "app_shell.nav.installer_new_job"
+	| "app_shell.nav.installer_van"
 	| "app_shell.nav.warehouse_scan_in"
 	| "app_shell.nav.warehouse_restock"
 	| "app_shell.nav.warehouse_stock"
@@ -50,6 +54,8 @@ export type NavItem = {
 	icon: IconSvgElement
 	group: NavGroupKey
 	roles?: Role[]
+	/** Active only on this exact path (a Home tab must not light up on every sub-page). */
+	exact?: boolean
 }
 export type NavGroup = { key: NavGroupKey; items: NavItem[] }
 
@@ -219,11 +225,36 @@ export function navGroupsFor(
 
 const TAB_BAR_ROLES: readonly Role[] = ["CREW", "INSTALLER"]
 
+// The installer's phone tabs are their own list, not the sidebar items:
+// Swap and Restock stay reachable from Home and My van.
+const INSTALLER_TABS: NavItem[] = [
+	{
+		to: "/installer",
+		labelKey: "app_shell.nav.installer_home",
+		icon: Home01Icon,
+		group: "field",
+		exact: true,
+	},
+	{
+		to: "/installer/completion/new",
+		labelKey: "app_shell.nav.installer_new_job",
+		icon: FileAddIcon,
+		group: "field",
+	},
+	{
+		to: "/installer/van",
+		labelKey: "app_shell.nav.installer_van",
+		icon: TruckDeliveryIcon,
+		group: "field",
+	},
+]
+
 export function tabBarItemsFor(
 	role: Role,
 	opts: { comptrollerEnabled?: boolean } = {},
 ): NavItem[] {
 	if (!TAB_BAR_ROLES.includes(role)) return []
+	if (role === "INSTALLER") return INSTALLER_TABS
 	const items = visibleItems(role, opts)
 	return items.length >= 2 ? items.slice(0, 4) : []
 }

@@ -733,14 +733,12 @@ describe("AppShell", () => {
 		expect(screen.queryByTestId("tab-bar")).not.toBeInTheDocument()
 	})
 
-	it("keeps the Installer tab active on nested paths, never Dashboard", async ({
-		renderStub,
-	}) => {
+	async function installerAt(renderStub: any, path: string) {
 		await renderStub({
-			props: { initialEntries: ["/installer/van"] },
+			props: { initialEntries: [path] },
 			entries: [
 				{
-					path: "/installer/van",
+					path,
 					Component: () => (
 						<AppShell
 							user={{ name: "Ines", role: "INSTALLER" }}
@@ -752,39 +750,48 @@ describe("AppShell", () => {
 				},
 			],
 		})
-		const bar = within(screen.getByTestId("tab-bar"))
-		expect(bar.getByRole("link", { name: "Installer" })).toHaveAttribute(
+		return within(screen.getByTestId("tab-bar"))
+	}
+
+	it("shows Home, New job and My van tabs for INSTALLER", async ({
+		renderStub,
+	}) => {
+		const bar = await installerAt(renderStub, "/installer")
+		expect(bar.getAllByRole("link").map((l) => l.textContent)).toEqual([
+			"Home",
+			"New job",
+			"My van",
+		])
+		expect(bar.getByRole("link", { name: "Home" })).toHaveAttribute(
 			"aria-current",
 			"page",
 		)
-		expect(bar.getByRole("link", { name: "Dashboard" })).not.toHaveAttribute(
+	})
+
+	it("keeps My van active on /installer/van and Home inactive", async ({
+		renderStub,
+	}) => {
+		const bar = await installerAt(renderStub, "/installer/van")
+		expect(bar.getByRole("link", { name: "My van" })).toHaveAttribute(
+			"aria-current",
+			"page",
+		)
+		expect(bar.getByRole("link", { name: "Home" })).not.toHaveAttribute(
 			"aria-current",
 		)
 	})
 
-	it("marks Dashboard active on /dashboard in the tab bar", async ({
-		renderStub,
-	}) => {
-		await renderStub({
-			props: { initialEntries: ["/dashboard"] },
-			entries: [
-				{
-					path: "/dashboard",
-					Component: () => (
-						<AppShell
-							user={{ name: "Ines", role: "INSTALLER" }}
-							notifications={[]}
-						>
-							<p>content</p>
-						</AppShell>
-					),
-				},
-			],
-		})
-		expect(
-			within(screen.getByTestId("tab-bar")).getByRole("link", {
-				name: "Dashboard",
-			}),
-		).toHaveAttribute("aria-current", "page")
+	it("marks New job active on the completion form", async ({ renderStub }) => {
+		const bar = await installerAt(renderStub, "/installer/completion/new")
+		expect(bar.getByRole("link", { name: "New job" })).toHaveAttribute(
+			"aria-current",
+			"page",
+		)
+	})
+
+	it("lights no tab on Swap (reached from Home)", async ({ renderStub }) => {
+		const bar = await installerAt(renderStub, "/installer/swap")
+		for (const l of bar.getAllByRole("link"))
+			expect(l).not.toHaveAttribute("aria-current")
 	})
 })

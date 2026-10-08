@@ -1499,7 +1499,12 @@
 			"scan_heading": "Scan modem",
 			"serial_unreadable": "Unreadable — photo only",
 			"signature": "Installer signature",
-			"submit": "Submit"
+			"submit": "Submit",
+			"next": "Next",
+			"back": "Back",
+			"model_unknown_title": "Model not recognized.",
+			"model_unknown_body": "This serial doesn't match a known modem model. Check the scan; you can still continue.",
+			"accessories_summary": "Accessories pre-filled for the {{bracket}} ft bracket: {{count}} lines, {{units}} units."
 		},
 		"no_submitted_jobs": "No jobs submitted yet.",
 		"quick_look": "{{belowPar}} below par · {{owedBack}} owed back",

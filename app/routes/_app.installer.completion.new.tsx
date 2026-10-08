@@ -21,7 +21,7 @@ import { db } from "~/lib/db.server"
 import { validateFile } from "~/lib/file-upload.server"
 import { queueCompletion } from "~/lib/installer-completion-sync"
 import { requireInstaller } from "~/lib/installer-context.server"
-import type { CompletionStep } from "~/lib/installer-steps"
+import { COMPLETION_STEPS, type CompletionStep } from "~/lib/installer-steps"
 import { pickBracket, prefillAccessories } from "~/lib/limit-table"
 import { resolveSerial } from "~/lib/service-codes"
 import { getSerializedCodes } from "~/lib/service-codes.server"
@@ -138,16 +138,19 @@ export default function NewCompletion({ loaderData }: Route.ComponentProps) {
 				)
 			: []
 	const [formPhotoName, setFormPhotoName] = useState("")
-	const step: CompletionStep =
-		!claroOrderNo || !address
-			? "ORDER"
-			: !serial && !serialUnreadable
-				? "SCAN"
-				: dropFt === ""
-					? "MATERIALS"
-					: !formPhotoName
-						? "SIGN"
-						: "SIGN"
+	// Four gated steps. Every panel stays mounted (hidden) so nothing typed or
+	// scanned is lost when going back; Next unlocks only when the step's
+	// required capture is done.
+	const [stepIndex, setStepIndex] = useState(0)
+	const step: CompletionStep = COMPLETION_STEPS[stepIndex]
+	const stepComplete = [
+		claroOrderNo.trim() !== "" && address.trim() !== "",
+		serial !== "" || serialUnreadable,
+		dropFt !== "",
+		formPhotoName !== "",
+	]
+	const isLast = stepIndex === COMPLETION_STEPS.length - 1
+	const panel = (i: number) => (stepIndex === i ? "space-y-4" : "hidden")
 
 	function handleDecode(text: string) {
 		setSerial(text)
@@ -244,116 +247,187 @@ export default function NewCompletion({ loaderData }: Route.ComponentProps) {
 				<input type="hidden" name="modelResolved" value={modelResolved ?? ""} />
 				<input type="hidden" name="sigInstaller" value="" />
 
-				<div className="space-y-1">
-					<Label htmlFor="claroOrderNo">
-						{t("installer.completion.order_no", "Order #")}
-					</Label>
-					<Input
-						id="claroOrderNo"
-						name="claroOrderNo"
-						required
-						value={claroOrderNo}
-						onChange={(e) => setClaroOrderNo(e.target.value)}
-					/>
-				</div>
-
-				<div className="space-y-1">
-					<Label htmlFor="address">
-						{t("installer.completion.address", "Address")}
-					</Label>
-					<Input
-						id="address"
-						name="address"
-						required
-						value={address}
-						onChange={(e) => setAddress(e.target.value)}
-					/>
-				</div>
-
-				<div className="space-y-2">
-					<Label>{t("installer.completion.scan_heading", "Scan modem")}</Label>
-					{scanning ? (
-						<BarcodeScanner
-							onDecode={handleDecode}
-							onGiveUp={() => {
-								setSerialUnreadable(true)
-								setScanning(false)
-							}}
+				<div className={panel(0)}>
+					<div className="space-y-1">
+						<Label htmlFor="claroOrderNo">
+							{t("installer.completion.order_no", "Order #")}
+						</Label>
+						<Input
+							id="claroOrderNo"
+							name="claroOrderNo"
+							className="h-11 text-base"
+							required
+							value={claroOrderNo}
+							onChange={(e) => setClaroOrderNo(e.target.value)}
 						/>
-					) : (
-						<div className="flex items-center gap-2">
-							<span className="text-sm">
-								{serialUnreadable
-									? t(
-											"installer.completion.serial_unreadable",
-											"Unreadable — photo only",
-										)
-									: serial ||
-										t("installer.completion.no_serial", "No serial scanned")}
-							</span>
-							<Button
-								type="button"
-								variant="outline"
-								onClick={() => setScanning(true)}
-							>
-								{t("installer.completion.scan", "Scan")}
-							</Button>
-						</div>
+					</div>
+
+					<div className="space-y-1">
+						<Label htmlFor="address">
+							{t("installer.completion.address", "Address")}
+						</Label>
+						<Input
+							id="address"
+							name="address"
+							className="h-11 text-base"
+							required
+							value={address}
+							onChange={(e) => setAddress(e.target.value)}
+						/>
+					</div>
+				</div>
+
+				<div className={panel(1)}>
+					<div className="space-y-2">
+						<Label>
+							{t("installer.completion.scan_heading", "Scan modem")}
+						</Label>
+						{scanning ? (
+							<BarcodeScanner
+								onDecode={handleDecode}
+								onGiveUp={() => {
+									setSerialUnreadable(true)
+									setScanning(false)
+								}}
+							/>
+						) : (
+							<div className="flex items-center gap-2">
+								<span className="text-sm">
+									{serialUnreadable
+										? t(
+												"installer.completion.serial_unreadable",
+												"Unreadable — photo only",
+											)
+										: serial ||
+											t("installer.completion.no_serial", "No serial scanned")}
+								</span>
+								<Button
+									type="button"
+									variant="outline"
+									size="lg"
+									className="h-11 text-base"
+									onClick={() => setScanning(true)}
+								>
+									{t("installer.completion.scan", "Scan")}
+								</Button>
+							</div>
+						)}
+					</div>
+
+					{serial !== "" && !serialUnreadable && !modelResolved && (
+						<Callout
+							tone="warn"
+							title={t("installer.completion.model_unknown_title")}
+						>
+							{t("installer.completion.model_unknown_body")}
+						</Callout>
 					)}
 				</div>
 
-				<div className="space-y-1">
-					<Label htmlFor="dropFt">
-						{t("installer.completion.drop_ft", "Drop (ft)")}
-					</Label>
-					<Input
-						id="dropFt"
-						name="dropFt"
-						type="number"
-						min={0}
-						value={dropFt}
-						onChange={(e) =>
-							setDropFt(e.target.value === "" ? "" : Number(e.target.value))
-						}
-					/>
+				<div className={panel(2)}>
+					<div className="space-y-1">
+						<Label htmlFor="dropFt">
+							{t("installer.completion.drop_ft", "Drop (ft)")}
+						</Label>
+						<Input
+							id="dropFt"
+							name="dropFt"
+							type="number"
+							inputMode="numeric"
+							className="h-11 text-base"
+							min={0}
+							value={dropFt}
+							onChange={(e) =>
+								setDropFt(e.target.value === "" ? "" : Number(e.target.value))
+							}
+						/>
+					</div>
+
+					<div className="flex items-center gap-2">
+						<Checkbox
+							id="groundRod"
+							name="groundRod"
+							defaultChecked
+							value="true"
+						/>
+						<Label htmlFor="groundRod" className="text-sm">
+							{t("installer.completion.ground_rod", "Ground rod installed")}
+						</Label>
+					</div>
+
+					{bracket != null && (
+						<p className="rounded-lg bg-muted p-3 text-sm">
+							{t("installer.completion.accessories_summary", {
+								count: accessories.length,
+								units: accessories.reduce((n, a) => n + a.qty, 0),
+								bracket,
+							})}
+						</p>
+					)}
 				</div>
 
-				<div className="flex items-center gap-2">
-					<Checkbox
-						id="groundRod"
-						name="groundRod"
-						defaultChecked
-						value="true"
-					/>
-					<Label htmlFor="groundRod" className="text-sm">
-						{t("installer.completion.ground_rod", "Ground rod installed")}
-					</Label>
+				<div className={panel(3)}>
+					<div className="space-y-1">
+						<Label htmlFor="formPhoto">
+							{t("installer.completion.form_photo", "Claro form photo")}
+						</Label>
+						<Input
+							id="formPhoto"
+							name="formPhoto"
+							type="file"
+							accept="image/*"
+							capture="environment"
+							className="h-auto text-base"
+							required
+							onChange={(e) =>
+								setFormPhotoName(e.target.files?.[0]?.name ?? "")
+							}
+						/>
+					</div>
+
+					<div className="space-y-1">
+						<Label>
+							{t("installer.completion.signature", "Installer signature")}
+						</Label>
+						<SignaturePad ref={sigRef} />
+					</div>
 				</div>
 
-				<div className="space-y-1">
-					<Label htmlFor="formPhoto">
-						{t("installer.completion.form_photo", "Claro form photo")}
-					</Label>
-					<Input
-						id="formPhoto"
-						name="formPhoto"
-						type="file"
-						accept="image/*"
-						required
-						onChange={(e) => setFormPhotoName(e.target.files?.[0]?.name ?? "")}
-					/>
+				<div className="flex gap-2">
+					{stepIndex > 0 && (
+						<Button
+							type="button"
+							variant="outline"
+							size="lg"
+							className="h-12 flex-1 text-base"
+							onClick={() => setStepIndex(stepIndex - 1)}
+						>
+							{t("installer.completion.back", "Back")}
+						</Button>
+					)}
+					{isLast ? (
+						<Button
+							key="submit"
+							type="submit"
+							size="lg"
+							className="h-12 flex-[2] text-base"
+							disabled={!stepComplete[stepIndex]}
+						>
+							{t("installer.completion.submit", "Submit")}
+						</Button>
+					) : (
+						<Button
+							key="next"
+							type="button"
+							size="lg"
+							className="h-12 flex-[2] text-base"
+							disabled={!stepComplete[stepIndex]}
+							onClick={() => setStepIndex(stepIndex + 1)}
+						>
+							{t("installer.completion.next", "Next")}
+						</Button>
+					)}
 				</div>
-
-				<div className="space-y-1">
-					<Label>
-						{t("installer.completion.signature", "Installer signature")}
-					</Label>
-					<SignaturePad ref={sigRef} />
-				</div>
-
-				<Button type="submit">
-					{t("installer.completion.submit", "Submit")}
-				</Button>
 			</form>
 
 			{!van && (

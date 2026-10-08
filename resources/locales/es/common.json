@@ -1624,6 +1624,18 @@
 		}
 	},
 	"installer_restock": {
+		"van_header": "{{van}} · prellenado según el par",
+		"tap_hint": "Toca una cantidad para cambiarla antes de enviar.",
+		"request_summary": "{{lines}} artículos · {{units}} unidades",
+		"trail_aria": "Estado de la solicitud de reposición",
+		"needs_signoff_note": "Necesita aprobación: esta solicitud está por encima del par y espera al supervisor de instaladores antes de que el almacén la prepare.",
+		"status": {
+			"SUBMITTED": "Enviada",
+			"NEEDS_SIGNOFF": "Necesita aprobación",
+			"APPROVED": "Aprobada",
+			"PICKED": "Preparada",
+			"RECEIVED": "Recibida"
+		},
 		"title": "Solicitar reabastecimiento",
 		"warehouse_label": "Almacén",
 		"warehouse_placeholder": "Selecciona un almacén…",

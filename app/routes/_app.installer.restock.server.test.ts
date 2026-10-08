@@ -44,6 +44,7 @@ describe("GET /installer/restock", () => {
 			user: { id: "inst-1", role: "INSTALLER" },
 		})
 		mocks.requireInstaller.mockResolvedValue({ van: { id: "van-1" } })
+		mocks.db.restockRequest.findMany.mockResolvedValue([])
 		mocks.buildRestockPrefill.mockResolvedValue([])
 		mocks.getActiveMaterialCodes.mockResolvedValue([
 			{
@@ -61,6 +62,90 @@ describe("GET /installer/restock", () => {
 		expect(res.serviceCodes).toEqual([
 			{ id: "sc-1", claroCode: "C1", name: "Wrap", unit: "EA", unitPrice: 1.5 },
 		])
+	})
+})
+
+describe("GET /installer/restock — own requests", () => {
+	beforeEach(() => vi.clearAllMocks())
+
+	it("lists the installer's own requests with status, totals and whether sign-off applies", async () => {
+		mocks.requireRole.mockResolvedValue({
+			user: { id: "inst-1", role: "INSTALLER" },
+		})
+		mocks.requireInstaller.mockResolvedValue({ van: { id: "van-1" } })
+		mocks.buildRestockPrefill.mockResolvedValue([])
+		mocks.getActiveMaterialCodes.mockResolvedValue([])
+		mocks.db.restockRequest.findMany.mockResolvedValue([
+			{
+				id: "r1",
+				status: "NEEDS_SIGNOFF",
+				submittedAt: new Date("2026-10-01T12:00:00Z"),
+				lines: [
+					{ serviceCodeId: "a", qty: 2 },
+					{ serviceCodeId: "b", qty: 3 },
+				],
+				approvedById: null,
+			},
+			{
+				id: "r2",
+				status: "PICKED",
+				submittedAt: new Date("2026-09-20T12:00:00Z"),
+				lines: [{ serviceCodeId: "a", qty: 1 }],
+				approvedById: "sup-1",
+			},
+			{
+				id: "r3",
+				status: "SUBMITTED",
+				submittedAt: new Date("2026-09-10T12:00:00Z"),
+				lines: [],
+				approvedById: null,
+			},
+		])
+		const res = await loader({
+			request: new Request("http://localhost/installer/restock"),
+			params: {},
+		} as never)
+		expect(mocks.db.restockRequest.findMany).toHaveBeenCalledWith(
+			expect.objectContaining({ where: { vanId: "van-1" } }),
+		)
+		expect(res.requests).toEqual([
+			{
+				id: "r1",
+				status: "NEEDS_SIGNOFF",
+				submittedAt: "2026-10-01T12:00:00.000Z",
+				lineCount: 2,
+				units: 5,
+				signoff: true,
+			},
+			{
+				id: "r2",
+				status: "PICKED",
+				submittedAt: "2026-09-20T12:00:00.000Z",
+				lineCount: 1,
+				units: 1,
+				signoff: true,
+			},
+			{
+				id: "r3",
+				status: "SUBMITTED",
+				submittedAt: "2026-09-10T12:00:00.000Z",
+				lineCount: 0,
+				units: 0,
+				signoff: false,
+			},
+		])
+	})
+
+	it("gives a supervisor no personal requests", async () => {
+		mocks.requireRole.mockResolvedValue({
+			user: { id: "sup-1", role: "INSTALLER_SUPERVISOR" },
+		})
+		mocks.db.restockRequest.findMany.mockResolvedValue([])
+		const res = await loader({
+			request: new Request("http://localhost/installer/restock"),
+			params: {},
+		} as never)
+		expect(res.requests).toEqual([])
 	})
 })
 

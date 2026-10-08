@@ -182,6 +182,16 @@
 			"title": "Notifications",
 			"empty": "No new notifications",
 			"mark_all_read": "Mark all as read",
+			"messages": {
+				"restock_over_par": "Restock {{id}} needs over-par sign-off.",
+				"prep_missing": "Job {{job}} has missing materials flagged during prep. Please review.",
+				"prep_ready": "Job {{job}} is prepped and ready for pickup. Please sign at warehouse.",
+				"sign_overage": "Job {{job}} was signed with material overage. Review the quantities.",
+				"repair_held": "Serial {{serial}} is held for review before repair disposition.",
+				"repair_sent": "Repair batch {{batch}} sent ({{count}} units).",
+				"repair_voided": "Repair batch {{batch}} voided.",
+				"repair_intake": "Repaired intake {{intake}}: declared {{declared}}, stocked {{stocked}}."
+			},
 			"time": {
 				"just_now": "just now",
 				"minutes_ago": "{{count}}m ago",
@@ -357,7 +367,8 @@
 		"dashboard": "Dashboard",
 		"prep": "Prep Materials",
 		"sign": "Capture Signature",
-		"returns": "Log Returns"
+		"returns": "Log Returns",
+		"installer_restock": "Restock"
 	},
 	"docs_prep": {
 		"title": "Prep Materials",

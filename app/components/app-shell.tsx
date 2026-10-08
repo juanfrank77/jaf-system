@@ -11,6 +11,7 @@ import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, Link, useLocation } from "react-router"
 import { Button } from "~/components/ui/button"
+import { localizeNotification } from "~/lib/notification-message"
 import { cn } from "~/lib/utils"
 import { LanguageSwitcher } from "~/library/language-switcher"
 import { ThemeToggle } from "~/library/theme-toggle"
@@ -203,7 +204,7 @@ function NotificationBell({
 												className="w-full rounded-md px-2 py-2 text-left text-sm hover:bg-muted"
 											>
 												<span className="block text-foreground">
-													{notification.message}
+													{localizeNotification(notification.message, t)}
 												</span>
 												<span
 													aria-hidden="true"

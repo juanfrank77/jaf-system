@@ -54,6 +54,8 @@ export type NavItem = {
 	icon: IconSvgElement
 	group: NavGroupKey
 	roles?: Role[]
+	/** Roles that never see this item even though `roles` is open. */
+	hideFor?: Role[]
 	/** Active only on this exact path (a Home tab must not light up on every sub-page). */
 	exact?: boolean
 }
@@ -82,6 +84,8 @@ const NAV_ITEMS: NavItem[] = [
 		labelKey: "app_shell.nav.dashboard",
 		icon: DashboardSquare01Icon,
 		group: "overview",
+		// The installer's home is /installer.
+		hideFor: ["INSTALLER"],
 	},
 	{
 		to: "/docs/new",
@@ -208,6 +212,7 @@ function visibleItems(role: Role, opts: { comptrollerEnabled?: boolean }) {
 	return NAV_ITEMS.filter((item) => {
 		if (item.to.startsWith("/comptroller") && !opts.comptrollerEnabled)
 			return false
+		if (item.hideFor?.includes(role)) return false
 		return !item.roles || item.roles.includes(role)
 	})
 }

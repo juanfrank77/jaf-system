@@ -1543,6 +1543,20 @@
 				"restock_title": "Restock",
 				"restock_body": "Pre-filled to par when par data exists. A line pushing above par needs sign-off before it goes to the warehouse."
 			}
+		},
+		"home": {
+			"col_order": "Order",
+			"col_type": "Type",
+			"col_status": "Status",
+			"kind": {
+				"INSTALL": "Install",
+				"CALLBACK": "Callback"
+			},
+			"status": {
+				"INCOMPLETE": "Missing paperwork",
+				"READY": "In payment queue",
+				"PAID": "Paid"
+			}
 		}
 	},
 	"installer_restock": {

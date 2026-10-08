@@ -236,6 +236,7 @@ export function ReturnsForm({
 			<div className="space-y-1">
 				<Label>{t("docs_returns.warehouse_label")}</Label>
 				<Select
+					items={warehouses.map((w) => ({ value: w.id, label: w.name }))}
 					value={returnWarehouseId}
 					onValueChange={(v) => setReturnWarehouseId(v ?? "")}
 				>

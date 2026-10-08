@@ -49,3 +49,39 @@ describe("MaterialLineItems read-only price column", () => {
 		expect(screen.queryByText(/\$/)).not.toBeInTheDocument()
 	})
 })
+
+describe("MaterialLineItems editable counter view", () => {
+	const codes = [
+		{ id: "c1", claroCode: "1043", name: "Cable", unit: "FT" },
+		{ id: "c2", claroCode: "1044", name: "Tape", unit: "PZA" },
+	]
+
+	it("shows the listed qty and an amber tag when taken exceeds it", async ({
+		renderStub,
+	}) => {
+		await mount(
+			renderStub,
+			<MaterialLineItems
+				serviceCodes={codes}
+				initialItems={[{ serviceCodeId: "c1", qty: 5 }]}
+				estimatedItems={[{ serviceCodeId: "c1", qty: 3 }]}
+			/>,
+		)
+		expect(screen.getByTestId("listed-qty")).toHaveTextContent("Listed: 3")
+		expect(screen.getByText(/\+2/)).toHaveTextContent("more than listed")
+	})
+
+	it("tags a line that was not listed as added at counter", async ({
+		renderStub,
+	}) => {
+		await mount(
+			renderStub,
+			<MaterialLineItems
+				serviceCodes={codes}
+				initialItems={[{ serviceCodeId: "c2", qty: 2 }]}
+				estimatedItems={[{ serviceCodeId: "c1", qty: 3 }]}
+			/>,
+		)
+		expect(screen.getByText("added at counter")).toBeInTheDocument()
+	})
+})

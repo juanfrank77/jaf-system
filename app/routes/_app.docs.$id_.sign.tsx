@@ -304,7 +304,11 @@ export default function SignDoc({
 	const [signedById, setSignedById] = useState(
 		user.role === "CREW" ? user.id : "",
 	)
-	const [items] = useState(
+	const [items, setItems] = useState(
+		(doc.estimatedMaterials as MaterialLine[] | null) ?? [],
+	)
+	// What the job listed; fixed, so the counter can see how far "taken" drifts.
+	const [listed] = useState(
 		(doc.estimatedMaterials as MaterialLine[] | null) ?? [],
 	)
 	const submit = useSubmit()
@@ -389,6 +393,8 @@ export default function SignDoc({
 						<MaterialLineItems
 							serviceCodes={serviceCodes}
 							initialItems={items}
+							estimatedItems={listed}
+							onChange={setItems}
 							readOnly={false}
 							name="materials"
 						/>
@@ -474,6 +480,14 @@ export default function SignDoc({
 						</button>
 					</div>
 				</div>
+
+				<Callout
+					tone="info"
+					icon={<span aria-hidden="true">🔒</span>}
+					title={t("docs_sign.lock_banner_title")}
+				>
+					{t("docs_sign.lock_banner_body")}
+				</Callout>
 
 				{error?.errorKey && (
 					<p className="text-sm text-status-danger">{t(error.errorKey)}</p>

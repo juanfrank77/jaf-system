@@ -36,6 +36,9 @@ interface Props {
 	readOnly?: boolean
 	name?: string
 	estimatedItems?: LineItem[] | undefined
+	/** Fires with the current lines after every edit (editable mode), so a
+	 * parent form can submit what the user actually typed. */
+	onChange?: (items: LineItem[]) => void
 	/** Print `unit price x qty` per line in read-only mode. Defaults to true;
 	 * the column is also skipped for any line whose catalog row has no price. */
 	showPrice?: boolean
@@ -68,18 +71,28 @@ export function MaterialLineItems({
 	name = "materials",
 	estimatedItems,
 	showPrice = true,
+	onChange,
 }: Props) {
 	const { t } = useTranslation()
 	const [items, setItems] = useState<InternalItem[]>(() =>
 		initialItems.map((item) => ({ ...item, _key: nextKey() })),
 	)
 
+	const commit = (next: InternalItem[]) => {
+		setItems(next)
+		onChange?.(
+			next.map(({ serviceCodeId, qty }) => ({
+				serviceCodeId,
+				qty,
+			})),
+		)
+	}
 	const addItem = () =>
-		setItems([...items, { serviceCodeId: "", qty: 1, _key: nextKey() }])
+		commit([...items, { serviceCodeId: "", qty: 1, _key: nextKey() }])
 	const removeItem = (key: string) =>
-		setItems(items.filter((item) => item._key !== key))
+		commit(items.filter((item) => item._key !== key))
 	const updateItem = (key: string, patch: Partial<LineItem>) =>
-		setItems(
+		commit(
 			items.map((item) => (item._key === key ? { ...item, ...patch } : item)),
 		)
 
@@ -141,8 +154,15 @@ export function MaterialLineItems({
 						</div>
 					)
 				}
+				// Counter view: show what was listed beside the editable "taken"
+				// quantity, and flag over-draw / additions plainly (never as errors).
+				const listedQty = estimatedMap?.get(item.serviceCodeId)
+				const isEditOverdrawn =
+					listedQty !== undefined && listedQty > 0 && item.qty > listedQty
+				const isEditAdded =
+					!!estimatedMap && !!item.serviceCodeId && listedQty === undefined
 				return (
-					<div key={item._key} className="flex items-center gap-2">
+					<div key={item._key} className="flex flex-wrap items-center gap-2">
 						<Select
 							items={dropdownItems}
 							value={item.serviceCodeId}
@@ -157,6 +177,14 @@ export function MaterialLineItems({
 							</SelectTrigger>
 							<SelectContent />
 						</Select>
+						{estimatedMap && (
+							<span
+								data-testid="listed-qty"
+								className="text-xs text-muted-foreground whitespace-nowrap"
+							>
+								{t("material_line_items.listed")}: {listedQty ?? "—"}
+							</span>
+						)}
 						<Input
 							type="number"
 							min={1}
@@ -168,6 +196,17 @@ export function MaterialLineItems({
 							}
 							className="w-20"
 						/>
+						{isEditOverdrawn && listedQty !== undefined && (
+							<span className="text-xs bg-status-warn-soft text-status-warn px-2 py-1 rounded whitespace-nowrap">
+								+{item.qty - listedQty}{" "}
+								{t("material_line_items.more_than_estimated")}
+							</span>
+						)}
+						{isEditAdded && (
+							<span className="text-xs bg-status-info-soft text-status-info px-2 py-1 rounded whitespace-nowrap">
+								{t("material_line_items.added_at_counter")}
+							</span>
+						)}
 						<button
 							type="button"
 							onClick={() => removeItem(item._key)}

@@ -418,6 +418,8 @@
 		}
 	},
 	"docs_sign": {
+		"lock_banner_title": "Las cantidades se bloquean al firmar.",
+		"lock_banner_body": "Una vez capturadas ambas firmas, los Materiales Tomados quedan bloqueados en todo el sistema y no se pueden cambiar.",
 		"title": "Recogida en almacén — Firma doble",
 		"warehouse_label": "Almacén",
 		"warehouse_placeholder": "Selecciona un almacén...",
@@ -1163,6 +1165,7 @@
 		"select_placeholder": "Selecciona un material...",
 		"add_material": "+ Agregar material",
 		"remove": "Quitar material",
+		"listed": "Listado",
 		"more_than_estimated": "más que lo estimado",
 		"added_at_counter": "agregado en mostrador"
 	},

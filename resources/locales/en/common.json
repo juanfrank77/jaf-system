@@ -418,6 +418,8 @@
 		}
 	},
 	"docs_sign": {
+		"lock_banner_title": "Quantities lock at signing.",
+		"lock_banner_body": "Once both signatures are captured, Materials Taken is locked everywhere and cannot be changed.",
 		"title": "Warehouse Pickup — Dual Signature",
 		"warehouse_label": "Warehouse",
 		"warehouse_placeholder": "Select warehouse...",
@@ -1163,6 +1165,7 @@
 		"select_placeholder": "Select material...",
 		"add_material": "+ Add material",
 		"remove": "Remove material",
+		"listed": "Listed",
 		"more_than_estimated": "more than listed",
 		"added_at_counter": "added at counter"
 	},

@@ -30,6 +30,11 @@ import {
 	parseGpsCoordinates,
 } from "~/lib/field-update-helpers"
 import { validateFile } from "~/lib/file-upload.server"
+import {
+	getQueuedActions,
+	type QueuedAction,
+	removeQueuedAction,
+} from "~/lib/offline-store"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import {
@@ -190,6 +195,14 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 	// A crew cannot use more of a code than it signed out at pickup.
 	if (exceedsTaken(taken, materialsUsed)) {
+		// A queued offline update is replayed by a background fetch with no page
+		// to show an error on, so it gets a distinct status the sync can act on.
+		if (request.headers.get("X-Offline-Sync") === "true") {
+			return data(
+				{ validationError: "docs_field.errors.used_exceeds_took" },
+				{ status: 422 },
+			)
+		}
 		return { errorKey: "docs_field.errors.used_exceeds_took" }
 	}
 
@@ -338,6 +351,15 @@ export default function FieldUpdate({
 	const navigation = useNavigation()
 	const busy = navigation.state !== "idle"
 	const [queued, setQueued] = useState(false)
+	// An offline update for this job that the server refused on validation.
+	const [rejected, setRejected] = useState<QueuedAction | null>(null)
+	useEffect(() => {
+		getQueuedActions()
+			.then((all) =>
+				setRejected(all.find((a) => a.docId === doc.id && a.rejection) ?? null),
+			)
+			.catch(() => {})
+	}, [doc.id])
 	// Client-side check shown inline (an alert() is a modal OS dialog in the
 	// installed app and the message is gone as soon as it is dismissed).
 	const [clientErrorKey, setClientErrorKey] = useState<ParseKeys | null>(null)
@@ -431,6 +453,11 @@ export default function FieldUpdate({
 			return
 		}
 		setClientErrorKey(null)
+		// Sending again replaces the refused offline update.
+		if (rejected) {
+			await removeQueuedAction(rejected.id).catch(() => {})
+			setRejected(null)
+		}
 
 		const formData = new FormData(form)
 		formData.set("completionSignature", signature)
@@ -508,6 +535,13 @@ export default function FieldUpdate({
 					<span className="text-xs opacity-80">
 						{new Date(latestSendBack.createdAt).toLocaleString()}
 					</span>
+				</Callout>
+			)}
+
+			{rejected?.rejection && (
+				<Callout tone="danger" title={t("docs_field.rejected_offline_title")}>
+					{t(rejected.rejection.errorKey as ParseKeys)}{" "}
+					{t("docs_field.rejected_offline_hint")}
 				</Callout>
 			)}
 

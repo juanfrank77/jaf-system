@@ -220,5 +220,27 @@ describe("offline-store", () => {
 			expect(result.errors).toContain("network")
 			expect(await getQueuedActions()).toHaveLength(1)
 		})
+
+		it("marks a validation-rejected action, keeps it, and never retries it", async () => {
+			await queueAction({ docId: "doc1", action: "FIELD_UPDATE", payload: {} })
+			const rejecting = vi.fn().mockResolvedValue({
+				ok: false,
+				rejected: { errorKey: "docs_field.errors.used_exceeds_took" },
+			})
+			const first = await syncQueuedActions({ syncOne: rejecting })
+			expect(first.rejected).toBe(1)
+			expect(first.errors).toHaveLength(0)
+			const queue = await getQueuedActions()
+			expect(queue).toHaveLength(1)
+			expect(queue[0].rejection?.errorKey).toBe(
+				"docs_field.errors.used_exceeds_took",
+			)
+
+			const again = vi.fn().mockResolvedValue({ ok: true })
+			const second = await syncQueuedActions({ syncOne: again })
+			expect(again).not.toHaveBeenCalled()
+			expect(second.synced).toBe(0)
+			expect(await getQueuedActions()).toHaveLength(1)
+		})
 	})
 })

@@ -501,6 +501,8 @@
 		"queued_title": "Guardado sin conexión",
 		"queued_message": "Actualización de campo guardada. Se sincronizará automáticamente al reconectar.",
 		"offline_submit_title": "Sin conexión",
+		"rejected_offline_title": "Tu actualización sin conexión no fue aceptada",
+		"rejected_offline_hint": "No se envió. Corrige las cantidades abajo y envíala de nuevo; de la actualización rechazada no se conserva nada salvo lo que vuelvas a ingresar.",
 		"offline_submit_notice": "Estás sin conexión. Toca Guardar para sincronizar después y la actualización se subirá cuando tengas señal.",
 		"errors": {
 			"invalid_materials": "Datos de materiales inválidos",

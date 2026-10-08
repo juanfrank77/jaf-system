@@ -9,6 +9,9 @@ export type QueuedAction = {
 	action: "FIELD_UPDATE" | "INSTALLER_COMPLETION"
 	payload: Record<string, unknown>
 	createdAt: string
+	/** Set when the server refused the action on validation. It stays in the
+	 * queue but is never retried; the crew has to fix it and send again. */
+	rejection?: { errorKey: string; at: string }
 }
 
 export type CachedJob = {
@@ -127,6 +130,23 @@ export async function removeQueuedAction(id: string): Promise<void> {
 	await requestToPromise(store.delete(id))
 }
 
+export async function markActionRejected(
+	id: string,
+	errorKey: string,
+): Promise<void> {
+	const store = await withStore(QUEUE_STORE, "readwrite")
+	const action = (await requestToPromise(store.get(id))) as
+		| QueuedAction
+		| undefined
+	if (!action) return
+	await requestToPromise(
+		store.put({
+			...action,
+			rejection: { errorKey, at: new Date().toISOString() },
+		}),
+	)
+}
+
 export type SyncConflict = {
 	type:
 		| "REASSIGNED"
@@ -142,21 +162,36 @@ export async function syncQueuedActions({
 	syncOne,
 	onConflict,
 }: {
-	syncOne: (
-		action: QueuedAction,
-	) => Promise<{ ok: boolean; conflict?: SyncConflict; error?: string }>
+	syncOne: (action: QueuedAction) => Promise<{
+		ok: boolean
+		conflict?: SyncConflict
+		error?: string
+		rejected?: { errorKey: string }
+	}>
 	onConflict?: (conflict: SyncConflict) => void
-}): Promise<{ synced: number; conflicts: SyncConflict[]; errors: string[] }> {
-	const actions = await getQueuedActions()
+}): Promise<{
+	synced: number
+	conflicts: SyncConflict[]
+	errors: string[]
+	rejected: number
+}> {
+	// A rejected action waits for the crew; retrying it would only be refused again.
+	const actions = (await getQueuedActions()).filter((a) => !a.rejection)
 	const sorted = actions.sort(
 		(a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
 	)
 	let synced = 0
 	const conflicts: SyncConflict[] = []
 	const errors: string[] = []
+	let rejected = 0
 
 	for (const action of sorted) {
 		const result = await syncOne(action)
+		if (result.rejected) {
+			rejected++
+			await markActionRejected(action.id, result.rejected.errorKey)
+			continue
+		}
 		if (result.conflict) {
 			conflicts.push(result.conflict)
 			onConflict?.(result.conflict)
@@ -171,5 +206,5 @@ export async function syncQueuedActions({
 		}
 	}
 
-	return { synced, conflicts, errors }
+	return { synced, conflicts, errors, rejected }
 }

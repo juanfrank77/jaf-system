@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next"
-import { Form, redirect } from "react-router"
+import { Form, redirect, useSearchParams } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { InstallerLoopRail } from "~/components/installer-loop-rail"
 import { MaterialLineItems } from "~/components/material-line-items"
@@ -155,7 +155,7 @@ export async function action({ request }: Route.ActionArgs) {
 		return { errorKey: "installer_restock.errors.qty_too_large" as const }
 	}
 	await createRestock(van.id, lines, { id: user.id })
-	return redirect("/installer")
+	return redirect("/installer/restock?sent=1")
 }
 
 export default function InstallerRestock({
@@ -164,6 +164,7 @@ export default function InstallerRestock({
 }: Route.ComponentProps) {
 	const { role, van, prefill, serviceCodes, requests, pending } = loaderData
 	const { t, i18n } = useTranslation()
+	const [params] = useSearchParams()
 
 	if (role !== "INSTALLER") {
 		return (
@@ -205,6 +206,11 @@ export default function InstallerRestock({
 			<h1 className="text-xl font-semibold">
 				{t("installer.request_restock", "Request Restock")}
 			</h1>
+			{params.get("sent") === "1" && (
+				<Callout tone="ok" icon="✓" title={t("installer_restock.sent_title")}>
+					{t("installer_restock.sent_body")}
+				</Callout>
+			)}
 			{van && (
 				<p className="text-sm text-muted-foreground">
 					{t("installer_restock.van_header", { van: van.name })}

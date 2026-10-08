@@ -259,6 +259,24 @@ describe("POST /installer/restock", () => {
 		)
 	})
 
+	it("sends the installer back to the restock page with a sent confirmation", async () => {
+		mocks.requireRole.mockResolvedValue({
+			user: { id: "inst-1", role: "INSTALLER" },
+		})
+		mocks.requireInstaller.mockResolvedValue({ van: { id: "van-1" } })
+		mocks.getActiveMaterialCodes.mockResolvedValue([
+			{ id: "sc-real", claroCode: "C1", name: "Wrap", unit: "EA" },
+		])
+		const res = (await action({
+			request: formRequest({
+				lines: JSON.stringify([{ serviceCodeId: "sc-real", qty: 2 }]),
+			}),
+			params: {},
+		} as never)) as Response
+		expect(res.status).toBe(302)
+		expect(res.headers.get("Location")).toBe("/installer/restock?sent=1")
+	})
+
 	it("drops a posted line with a non-integer quantity", async () => {
 		mocks.requireRole.mockResolvedValue({
 			user: { id: "inst-1", role: "INSTALLER" },

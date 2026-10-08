@@ -106,10 +106,26 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const sentBy = latestSendBack
 		? await db.user.findUnique({ where: { id: latestSendBack.byUserId } })
 		: null
+	// Names for whoever edited the address, so the history can say who.
+	const correctorIds = [
+		...new Set(
+			((doc.addressCorrections as AddressCorrection[] | null) ?? []).map(
+				(c) => c.correctedById,
+			),
+		),
+	]
+	const correctors =
+		correctorIds.length > 0
+			? await db.user.findMany({
+					where: { id: { in: correctorIds } },
+					select: { id: true, name: true },
+				})
+			: []
 	return {
 		doc,
 		user,
 		serviceCodes: serviceCodesForRole(user.role, serviceCodes),
+		correctorNames: Object.fromEntries(correctors.map((u) => [u.id, u.name])),
 		latestSendBack,
 		sentByName: sentBy?.name ?? null,
 	}
@@ -331,7 +347,14 @@ export default function FieldUpdate({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { doc, serviceCodes, user, latestSendBack, sentByName } = loaderData
+	const {
+		doc,
+		serviceCodes,
+		user,
+		latestSendBack,
+		sentByName,
+		correctorNames,
+	} = loaderData
 	const taken = (doc.materialsTaken as MaterialLine[] | null) ?? []
 	const used = (doc.materialsUsed as MaterialLine[] | null) ?? []
 	const estimated = (doc.estimatedMaterials as MaterialLine[] | null) ?? []
@@ -618,8 +641,11 @@ export default function FieldUpdate({
 											{t(
 												c.correctedById === user.id
 													? "docs_field.address_edited_by_you"
-													: "docs_field.address_edited_by_other",
+													: correctorNames[c.correctedById]
+														? "docs_field.address_edited_by_name"
+														: "docs_field.address_edited_by_other",
 												{
+													name: correctorNames[c.correctedById],
 													when: new Date(c.correctedAt).toLocaleString([], {
 														dateStyle: "short",
 														timeStyle: "short",

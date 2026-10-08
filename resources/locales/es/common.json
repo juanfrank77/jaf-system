@@ -513,6 +513,7 @@
 		},
 		"address_diff_hint": "Este cambio se registra con tu nombre y la hora al enviar.",
 		"address_edited_by_you": "Editado por ti · {{when}}",
+		"address_edited_by_name": "Editado por {{name}} · {{when}}",
 		"address_edited_by_other": "Editado por otro miembro de la cuadrilla · {{when}}",
 		"address_gps": "GPS {{lat}}, {{lng}}",
 		"photo_tag_before": "ANTES",

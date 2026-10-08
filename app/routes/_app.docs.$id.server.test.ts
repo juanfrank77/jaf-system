@@ -98,6 +98,34 @@ describe("GET /docs/:id", () => {
 		})
 	})
 
+	it("exposes the names of whoever edited the address", async () => {
+		vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
+			id: "user-1",
+			role: "ADMIN",
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			baseDoc("SIGNED", {
+				addressCorrections: [
+					{
+						original: "a",
+						corrected: "b",
+						correctedById: "crew-2",
+						correctedAt: "2026-10-01T10:00:00.000Z",
+					},
+				],
+			}) as any,
+		)
+		vi.mocked(db.auditTrail.findMany).mockResolvedValue([])
+		vi.mocked(db.user.findMany).mockResolvedValue([
+			{ id: "crew-2", name: "Ana Crew" },
+		] as any)
+		const res = await loader({
+			request: new Request("http://localhost/docs/doc-1"),
+			params: { id: "doc-1" },
+		} as any)
+		expect(res.correctorNames).toEqual({ "crew-2": "Ana Crew" })
+	})
+
 	describe("send-back banner data", () => {
 		const entry = {
 			createdAt: "2026-10-01T10:00:00.000Z",

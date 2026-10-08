@@ -12,6 +12,10 @@ describe("navGroupsFor", () => {
 		])
 	})
 
+	it("gives INSTALLER no Dashboard, only the Installer item", () => {
+		expect(tos(navGroupsFor("INSTALLER"))).toEqual([["field", ["/installer"]]])
+	})
+
 	it("gives CREW only the dashboard", () => {
 		expect(tos(navGroupsFor("CREW"))).toEqual([["overview", ["/dashboard"]]])
 	})

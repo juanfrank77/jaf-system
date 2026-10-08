@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("~/lib/db.server", () => ({
 	db: {
+		installerProfile: { findUnique: vi.fn() },
 		user: {
 			findUniqueOrThrow: vi.fn(),
 			findMany: vi.fn(),
@@ -190,5 +191,65 @@ describe("GET /dashboard (WAREHOUSE) — awaiting-pickup aging", () => {
 		expect(old?.daysStaged).toBe(9)
 		expect(fresh?.aged).toBe(false)
 		expect(fresh?.daysStaged).toBe(1)
+	})
+
+	describe("installer landing", () => {
+		function args() {
+			return {
+				request: new Request("http://localhost/dashboard"),
+				params: {},
+			} as never
+		}
+
+		it("sends an installer with a profile to /installer", async () => {
+			vi.mocked(requireSession).mockResolvedValue({
+				user: { id: "inst-1" },
+			} as never)
+			vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
+				id: "inst-1",
+				role: "INSTALLER",
+			} as never)
+			vi.mocked(db.installerProfile.findUnique).mockResolvedValue({
+				id: "p1",
+			} as never)
+			const thrown = await loader(args()).catch((r: Response) => r)
+			expect((thrown as Response).status).toBe(302)
+			expect((thrown as Response).headers.get("Location")).toBe("/installer")
+		})
+
+		it("does not redirect an installer without a profile (that would loop)", async () => {
+			vi.mocked(requireSession).mockResolvedValue({
+				user: { id: "inst-2" },
+			} as never)
+			vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
+				id: "inst-2",
+				role: "INSTALLER",
+			} as never)
+			vi.mocked(db.installerProfile.findUnique).mockResolvedValue(null as never)
+			vi.mocked(db.jafInvoice.findMany).mockResolvedValue([])
+			vi.mocked(db.user.findMany).mockResolvedValue([])
+			const res = await loader(args()).catch((r: unknown) => r)
+			expect(res instanceof Response).toBe(false)
+		})
+
+		it.each(["CREW", "SUPERVISOR"])(
+			"never redirects %s to /installer",
+			async (role) => {
+				vi.mocked(requireSession).mockResolvedValue({
+					user: { id: "u" },
+				} as never)
+				vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
+					id: "u",
+					role,
+				} as never)
+				vi.mocked(db.jafInvoice.findMany).mockResolvedValue([])
+				vi.mocked(db.user.findMany).mockResolvedValue([])
+				const res = await loader(args()).catch((r: unknown) => r)
+				const loc =
+					res instanceof Response ? res.headers.get("Location") : undefined
+				expect(loc).not.toBe("/installer")
+				expect(db.installerProfile.findUnique).not.toHaveBeenCalled()
+			},
+		)
 	})
 })

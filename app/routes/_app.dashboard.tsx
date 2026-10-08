@@ -224,6 +224,16 @@ export async function loader({ request }: Route.LoaderArgs) {
 		where: { id: session.user.id },
 	})
 
+	// An installer's home is /installer. Only an installer with no profile
+	// stays here, because /installer would send them straight back.
+	if (user.role === "INSTALLER") {
+		const profile = await db.installerProfile.findUnique({
+			where: { userId: user.id },
+			select: { id: true },
+		})
+		if (profile) throw redirect("/installer")
+	}
+
 	if (user.role === "COMPTROLLER") {
 		throw redirect(isComptrollerEnabled() ? "/comptroller" : "/dashboard")
 	}

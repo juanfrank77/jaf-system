@@ -347,6 +347,8 @@
 		"add_line": "+ Add Line",
 		"missing_count_one": "{{count}} material flagged missing",
 		"missing_count_other": "{{count}} materials flagged missing",
+		"flagged_missing": "Flagged missing",
+		"short_by": "{{count}} short",
 		"errors": {
 			"invalid_materials": "Invalid materials data"
 		}

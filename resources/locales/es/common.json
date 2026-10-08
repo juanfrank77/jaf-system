@@ -347,6 +347,8 @@
 		"add_line": "+ Agregar línea",
 		"missing_count_one": "{{count}} material marcado como faltante",
 		"missing_count_other": "{{count}} materiales marcados como faltantes",
+		"flagged_missing": "Marcado como faltante",
+		"short_by": "faltan {{count}}",
 		"errors": {
 			"invalid_materials": "Datos de materiales inválidos"
 		}

@@ -1574,6 +1574,9 @@
 			}
 		},
 		"home": {
+			"jaf_number": "JAF {{n}}",
+			"van_quick_look": "{{van}} · resumen",
+			"view_van": "Ver mi van →",
 			"col_order": "Orden",
 			"col_date": "Fecha",
 			"col_type": "Tipo",

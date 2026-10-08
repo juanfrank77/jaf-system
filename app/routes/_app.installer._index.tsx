@@ -12,7 +12,7 @@ import type { Route } from "./+types/_app.installer._index"
 export const meta: Route.MetaFunction = () => [{ title: "Installer — JAF Ops" }]
 
 export async function loader({ request }: Route.LoaderArgs) {
-	const { user, van } = await requireInstaller(request)
+	const { user, van, profile } = await requireInstaller(request)
 	const requests = await db.paymentRequest.findMany({
 		where: { installerId: user.id },
 		orderBy: { createdAt: "desc" },
@@ -41,6 +41,12 @@ export async function loader({ request }: Route.LoaderArgs) {
 	).length
 	return {
 		installer: user,
+		// Identity line: only what exists is shown.
+		identity: {
+			jafNumber: profile?.jafNumber || null,
+			login: user.email || null,
+			region: profile?.region || null,
+		},
 		van,
 		jobs,
 		quickLook: { belowPar, owedBack: view.owedBack.length },
@@ -55,7 +61,7 @@ const STATUS_VARIANT: Record<string, "ok" | "warn" | "info"> = {
 }
 
 export default function InstallerHome({ loaderData }: Route.ComponentProps) {
-	const { installer, van, jobs, quickLook } = loaderData
+	const { installer, identity, van, jobs, quickLook } = loaderData
 	const { t, i18n } = useTranslation()
 
 	return (
@@ -67,19 +73,42 @@ export default function InstallerHome({ loaderData }: Route.ComponentProps) {
 			<div>
 				<h1 className="text-xl font-semibold">{installer.name}</h1>
 				<p className="text-sm text-muted-foreground">
-					{van ? van.name : t("installer.no_van")}
-				</p>
-				<p className="text-xs text-muted-foreground">
-					{t(
-						"installer.quick_look",
-						"{{belowPar}} below par · {{owedBack}} owed back",
-						{
-							belowPar: quickLook.belowPar,
-							owedBack: quickLook.owedBack,
-						},
-					)}
+					{[
+						identity.jafNumber
+							? t("installer.home.jaf_number", { n: identity.jafNumber })
+							: null,
+						identity.login,
+						van ? van.name : t("installer.no_van"),
+						identity.region,
+					]
+						.filter(Boolean)
+						.join(" · ")}
 				</p>
 			</div>
+
+			{van && (
+				<div className="space-y-2 rounded-lg border bg-card p-3">
+					<p className="text-sm font-medium">
+						{t("installer.home.van_quick_look", { van: van.name })}
+					</p>
+					<p className="text-sm text-muted-foreground">
+						{t(
+							"installer.quick_look",
+							"{{belowPar}} below par · {{owedBack}} owed back",
+							{
+								belowPar: quickLook.belowPar,
+								owedBack: quickLook.owedBack,
+							},
+						)}
+					</p>
+					<Link
+						to="/installer/van"
+						className="inline-flex min-h-11 items-center text-sm font-medium text-accent-text underline"
+					>
+						{t("installer.home.view_van")}
+					</Link>
+				</div>
+			)}
 
 			<div className="flex flex-wrap gap-2">
 				<Link
@@ -93,12 +122,6 @@ export default function InstallerHome({ loaderData }: Route.ComponentProps) {
 					className="inline-flex min-h-11 items-center rounded-md border px-4 py-2 text-sm font-medium"
 				>
 					⟲ {t("installer.swap.heading", "Warranty Swap")}
-				</Link>
-				<Link
-					to="/installer/van"
-					className="inline-flex min-h-11 items-center rounded-md border px-4 py-2 text-sm font-medium"
-				>
-					{t("installer.my_van_heading", "My Van")}
 				</Link>
 			</div>
 

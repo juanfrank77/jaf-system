@@ -140,6 +140,7 @@
 			"COMPTROLLER": "Comptroller",
 			"INSTALLER_SUPERVISOR": "Installer supervisor"
 		},
+		"warehouse_switch": "Warehouse",
 		"nav": {
 			"dashboard": "Dashboard",
 			"new_document": "+ Work Order",

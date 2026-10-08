@@ -21,6 +21,7 @@ export function StepRail({
 	current,
 	ariaLabel,
 	compact = false,
+	touch = false,
 }: {
 	steps: RailStep[]
 	/** Index into `steps` of the step on screen. Out of range means no step is
@@ -29,6 +30,8 @@ export function StepRail({
 	ariaLabel: string
 	/** One equal-width row for a phone: labels truncate instead of wrapping. */
 	compact?: boolean
+	/** Every step is at least 44 px tall so a linked step is a thumb target. */
+	touch?: boolean
 }) {
 	return (
 		<ol
@@ -61,6 +64,7 @@ export function StepRail({
 						aria-current={state === "current" ? "step" : undefined}
 						className={cn(
 							"rounded-full border px-2 py-1",
+							touch && "flex min-h-11 items-center justify-center px-3",
 							compact && "min-w-0 flex-1 truncate px-1 text-center text-[10px]",
 							step.mine && "font-semibold",
 							state === "done" &&
@@ -73,7 +77,13 @@ export function StepRail({
 						)}
 					>
 						{linked ? (
-							<Link to={step.href as string} className="hover:underline">
+							<Link
+								to={step.href as string}
+								className={cn(
+									"hover:underline",
+									touch && "flex min-h-11 items-center",
+								)}
+							>
 								{label}
 							</Link>
 						) : (

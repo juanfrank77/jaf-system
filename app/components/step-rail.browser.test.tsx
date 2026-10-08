@@ -100,4 +100,13 @@ describe("StepRail", () => {
 			"true",
 		)
 	})
+
+	it("touch makes a linked step at least 44px tall", async ({ renderStub }) => {
+		await mount(
+			renderStub,
+			<StepRail steps={steps} current={1} ariaLabel="Progress" touch />,
+		)
+		const link = screen.getByRole("link", { name: "1. Created" })
+		expect(link.getBoundingClientRect().height).toBeGreaterThanOrEqual(44)
+	})
 })

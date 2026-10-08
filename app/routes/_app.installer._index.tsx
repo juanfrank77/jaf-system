@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next"
-import { Link } from "react-router"
+import { Link, useSearchParams } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { InstallerLoopRail } from "~/components/installer-loop-rail"
 import { Badge } from "~/components/ui/badge"
@@ -63,10 +63,16 @@ const STATUS_VARIANT: Record<string, "ok" | "warn" | "info"> = {
 export default function InstallerHome({ loaderData }: Route.ComponentProps) {
 	const { installer, identity, van, jobs, quickLook } = loaderData
 	const { t, i18n } = useTranslation()
+	const [params] = useSearchParams()
 
 	return (
 		<div className="space-y-6">
 			<InstallerLoopRail current="HOME" />
+			{params.get("swapped") === "1" && (
+				<Callout tone="ok" icon="✓" title={t("installer.home.swap_done_title")}>
+					{t("installer.home.swap_done_body")}
+				</Callout>
+			)}
 			<Callout title={t("installer.installer_flow.callout.home_title")}>
 				{t("installer.installer_flow.callout.home_body")}
 			</Callout>

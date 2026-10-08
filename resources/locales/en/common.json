@@ -1542,6 +1542,27 @@
 			"day_inside_warranty": "day {{n}} — inside 30-day warranty",
 			"day_outside_warranty": "day {{n}} — past the 30-day warranty",
 			"start": "Start swap →",
+			"errors": {
+				"title": "Can't submit the swap yet",
+				"no_van": "You are not assigned to an active van.",
+				"completion_not_found": "That job was not found among your completions.",
+				"serial_out_required": "Scan the unit coming out.",
+				"serial_in_required": "Scan the unit going in.",
+				"serials_identical": "The unit going in cannot be the same serial as the unit coming out.",
+				"reason_required": "Choose a reason.",
+				"swap_failed": "The swap could not be saved. Check the job and try again."
+			},
+			"reasons": {
+				"HARDWARE": "Hardware failure",
+				"INSTALL_DEFECT": "Install defect",
+				"CUSTOMER": "Customer-caused",
+				"LINE": "Line / outside plant",
+				"OTHER": "Other"
+			},
+			"out_mismatch_title": "Not the serial on record.",
+			"out_mismatch_body": "This job was recorded with {{recorded}}. Both serials are saved and the swap is flagged; you can still continue.",
+			"in_not_on_van_title": "Unit going in is not on your van.",
+			"in_not_on_van_body": "It is not in your van's stock. You can still continue; the warehouse will see the mismatch.",
 			"find_heading": "Find the original job",
 			"heading": "Warranty Swap",
 			"new_order_no": "New order # (blank = callback)",
@@ -1582,6 +1603,8 @@
 			}
 		},
 		"home": {
+			"swap_done_title": "Swap submitted",
+			"swap_done_body": "The old unit shows as owed back on your van until the warehouse scans it in. The new unit is off your van stock.",
 			"jaf_number": "JAF {{n}}",
 			"van_quick_look": "{{van}} · quick look",
 			"view_van": "View my van →",

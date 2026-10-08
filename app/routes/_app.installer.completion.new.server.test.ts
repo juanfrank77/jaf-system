@@ -36,7 +36,10 @@ function offlineRequest(entries: Record<string, string>) {
 }
 
 describe("POST /installer/completion/new", () => {
-	beforeEach(() => vi.clearAllMocks())
+	beforeEach(() => {
+		vi.clearAllMocks()
+		mocks.db.limitTable.findMany.mockResolvedValue([])
+	})
 
 	it("returns 409 with a conflict when the installer's van is inactive (offline sync)", async () => {
 		mocks.requireInstaller.mockResolvedValue({
@@ -157,6 +160,97 @@ describe("POST /installer/completion/new", () => {
 			}),
 			expect.anything(),
 		)
+	})
+
+	describe("accessories hardening", () => {
+		async function post(extra: Record<string, string>) {
+			mocks.requireInstaller.mockResolvedValue({
+				user: { id: "inst-1" },
+				profile: { id: "p1" },
+				van: { id: "van-1", active: true },
+			})
+			mocks.submitCompletion.mockResolvedValue({
+				completionId: "c1",
+				paymentRequestId: "pr1",
+				status: "READY",
+			})
+			return action({
+				request: offlineRequest({
+					idempotencyKey: "k1",
+					claroOrderNo: "430920",
+					address: "a",
+					serialUnreadable: "true",
+					...extra,
+				}),
+				params: {},
+				context: {},
+			} as never)
+		}
+		const invalid = {
+			errorKey: "installer.completion.errors.invalid_accessories",
+		}
+
+		it("rejects malformed JSON instead of crashing", async () => {
+			expect(await post({ accessories: "{bad" })).toEqual(invalid)
+			expect(mocks.submitCompletion).not.toHaveBeenCalled()
+		})
+
+		it.each([
+			["not an array", '{"a":1}'],
+			["missing code", '[{"qty":1}]'],
+			["negative qty", '[{"serviceCodeId":"sc-1","qty":-1}]'],
+			["fractional qty", '[{"serviceCodeId":"sc-1","qty":1.5}]'],
+			["string qty", '[{"serviceCodeId":"sc-1","qty":"3"}]'],
+			[
+				"duplicate code",
+				'[{"serviceCodeId":"sc-1","qty":1},{"serviceCodeId":"sc-1","qty":2}]',
+			],
+		])("rejects %s", async (_n, accessories) => {
+			expect(await post({ accessories })).toEqual(invalid)
+			expect(mocks.submitCompletion).not.toHaveBeenCalled()
+		})
+
+		it("ignores a forged prefilledQty and recomputes it from the limit table", async () => {
+			mocks.db.limitTable.findMany.mockResolvedValue([
+				{ bracketFt: 100, serviceCodeId: "sc-1", qty: 4 },
+				{ bracketFt: 200, serviceCodeId: "sc-1", qty: 9 },
+			])
+			// Installer raised 4 -> 6 but claims the prefill was already 6.
+			await post({
+				dropFt: "80",
+				accessories: JSON.stringify([
+					{ serviceCodeId: "sc-1", prefilledQty: 6, qty: 6 },
+				]),
+			})
+			expect(mocks.submitCompletion.mock.calls[0][0].accessories).toEqual([
+				{ serviceCodeId: "sc-1", prefilledQty: 4, qty: 6 },
+			])
+		})
+
+		it("keeps a prefilled line the client dropped, as qty 0", async () => {
+			mocks.db.limitTable.findMany.mockResolvedValue([
+				{ bracketFt: 100, serviceCodeId: "sc-1", qty: 4 },
+				{ bracketFt: 100, serviceCodeId: "sc-2", qty: 2 },
+			])
+			await post({
+				dropFt: "100",
+				accessories: JSON.stringify([{ serviceCodeId: "sc-1", qty: 4 }]),
+			})
+			expect(mocks.submitCompletion.mock.calls[0][0].accessories).toEqual([
+				{ serviceCodeId: "sc-1", prefilledQty: 4, qty: 4 },
+				{ serviceCodeId: "sc-2", prefilledQty: 2, qty: 0 },
+			])
+		})
+
+		it("treats a code outside the bracket as prefilled 0", async () => {
+			await post({
+				dropFt: "100",
+				accessories: JSON.stringify([{ serviceCodeId: "sc-9", qty: 2 }]),
+			})
+			expect(mocks.submitCompletion.mock.calls[0][0].accessories).toEqual([
+				{ serviceCodeId: "sc-9", prefilledQty: 0, qty: 2 },
+			])
+		})
 	})
 
 	describe("address edit log", () => {

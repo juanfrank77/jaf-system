@@ -1542,6 +1542,27 @@
 			"day_inside_warranty": "día {{n}} — dentro de la garantía de 30 días",
 			"day_outside_warranty": "día {{n}} — fuera de la garantía de 30 días",
 			"start": "Iniciar cambio →",
+			"errors": {
+				"title": "Aún no se puede enviar el cambio",
+				"no_van": "No tienes una van activa asignada.",
+				"completion_not_found": "Ese trabajo no está entre tus finalizaciones.",
+				"serial_out_required": "Escanea la unidad que sale.",
+				"serial_in_required": "Escanea la unidad que entra.",
+				"serials_identical": "La unidad que entra no puede tener el mismo serial que la que sale.",
+				"reason_required": "Elige un motivo.",
+				"swap_failed": "No se pudo guardar el cambio. Revisa el trabajo e inténtalo de nuevo."
+			},
+			"reasons": {
+				"HARDWARE": "Falla de equipo",
+				"INSTALL_DEFECT": "Defecto de instalación",
+				"CUSTOMER": "Causado por el cliente",
+				"LINE": "Línea / planta externa",
+				"OTHER": "Otro"
+			},
+			"out_mismatch_title": "No es el serial registrado.",
+			"out_mismatch_body": "Este trabajo se registró con {{recorded}}. Se guardan ambos seriales y el cambio queda marcado; puedes continuar.",
+			"in_not_on_van_title": "La unidad que entra no está en tu van.",
+			"in_not_on_van_body": "No está en el inventario de tu van. Puedes continuar; el almacén verá la diferencia.",
 			"find_heading": "Buscar el trabajo original",
 			"heading": "Cambio de garantía",
 			"new_order_no": "Nuevo n.º de orden (vacío = retorno)",
@@ -1582,6 +1603,8 @@
 			}
 		},
 		"home": {
+			"swap_done_title": "Cambio enviado",
+			"swap_done_body": "La unidad vieja aparece como pendiente de devolver en tu van hasta que el almacén la escanee. La unidad nueva ya salió del inventario de tu van.",
 			"jaf_number": "JAF {{n}}",
 			"van_quick_look": "{{van}} · resumen",
 			"view_van": "Ver mi van →",

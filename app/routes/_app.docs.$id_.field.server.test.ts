@@ -173,7 +173,7 @@ describe("POST /docs/:id/field", () => {
 		form.set("jobAddressActual", "123 Calle Sol")
 		form.set(
 			"materialsUsed",
-			JSON.stringify([{ serviceCodeId: "sc-1", qty: 10 }]),
+			JSON.stringify([{ serviceCodeId: "sc-1", qty: 3 }]),
 		)
 		form.set("completionSignature", "data:image/png;base64,abc")
 
@@ -259,7 +259,16 @@ describe("POST /docs/:id/field", () => {
 		expect(db.jafInvoice.update).not.toHaveBeenCalled()
 	})
 
-	it("accepts installed quantity greater than taken with a discrepancy note", async () => {
+	function usedForm(lines: { serviceCodeId: string; qty: number }[]) {
+		const form = new FormData()
+		form.set("jobAddressActual", "123 Calle Sol")
+		form.set("materialsUsed", JSON.stringify(lines))
+		form.set("discrepancyNote", "Different from pickup")
+		form.set("completionSignature", "data:image/png;base64,abc")
+		return form
+	}
+
+	function asCrewWithDoc() {
 		vi.mocked(requireRole).mockResolvedValue({
 			user: { id: "crew-1", role: "CREW" },
 			session: {},
@@ -268,18 +277,43 @@ describe("POST /docs/:id/field", () => {
 			baseDoc() as any,
 		)
 		vi.mocked(db.$transaction).mockResolvedValue(undefined as any)
+	}
 
-		const form = new FormData()
-		form.set("jobAddressActual", "123 Calle Sol")
-		form.set(
-			"materialsUsed",
-			JSON.stringify([{ serviceCodeId: "sc-1", qty: 10 }]),
-		)
-		form.set("discrepancyNote", "Extra materials needed on site")
-		form.set("completionSignature", "data:image/png;base64,abc")
-
+	it("rejects a used quantity greater than taken, even with a discrepancy note", async () => {
+		asCrewWithDoc()
 		const result = await action({
-			request: formRequest(form),
+			request: formRequest(usedForm([{ serviceCodeId: "sc-1", qty: 10 }])),
+			params: { id: "doc-1" },
+		} as any)
+		expect(result).toEqual({ errorKey: "docs_field.errors.used_exceeds_took" })
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+		expect(db.$transaction).not.toHaveBeenCalled()
+	})
+
+	it("rejects a code that was not signed out at all", async () => {
+		asCrewWithDoc()
+		const result = await action({
+			request: formRequest(usedForm([{ serviceCodeId: "sc-9", qty: 1 }])),
+			params: { id: "doc-1" },
+		} as any)
+		expect(result).toEqual({ errorKey: "docs_field.errors.used_exceeds_took" })
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("accepts a used quantity equal to taken", async () => {
+		asCrewWithDoc()
+		const result = await action({
+			request: formRequest(usedForm([{ serviceCodeId: "sc-1", qty: 5 }])),
+			params: { id: "doc-1" },
+		} as any).catch((r: any) => r)
+		expect(result.status).toBe(302)
+		expect(db.jafInvoice.update).toHaveBeenCalled()
+	})
+
+	it("accepts a used quantity below taken with a discrepancy note and logs it", async () => {
+		asCrewWithDoc()
+		const result = await action({
+			request: formRequest(usedForm([{ serviceCodeId: "sc-1", qty: 3 }])),
 			params: { id: "doc-1" },
 		} as any).catch((r: any) => r)
 
@@ -289,7 +323,6 @@ describe("POST /docs/:id/field", () => {
 		const discrepancyAudit = auditCalls.find(
 			(call) => call[0].data.action === "QUANTITY_DISCREPANCY",
 		)
-		expect(discrepancyAudit).toBeDefined()
 		expect(discrepancyAudit?.[0].data.diffJson).toMatchObject({
 			blocksFinance: false,
 		})

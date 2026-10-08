@@ -78,6 +78,11 @@ function buildQuantityDiscrepancies(
 		.filter((d) => d.takenQty !== d.usedQty)
 }
 
+function exceedsTaken(taken: MaterialLine[], used: MaterialLine[]): boolean {
+	const takenMap = new Map(taken.map((t) => [t.serviceCodeId, t.qty]))
+	return used.some((u) => u.qty > (takenMap.get(u.serviceCodeId) ?? 0))
+}
+
 export async function loader({ request, params }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["CREW", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
@@ -182,6 +187,11 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	const taken = (doc.materialsTaken as MaterialLine[] | null) ?? []
+
+	// A crew cannot use more of a code than it signed out at pickup.
+	if (exceedsTaken(taken, materialsUsed)) {
+		return { errorKey: "docs_field.errors.used_exceeds_took" }
+	}
 
 	const quantityDiscrepancies = buildQuantityDiscrepancies(taken, materialsUsed)
 	const hasQuantityDiscrepancy = quantityDiscrepancies.length > 0
@@ -708,6 +718,7 @@ export default function FieldUpdate({
 						estimatedItems={taken.length > 0 ? taken : undefined}
 						listedLabel={t("docs_field.took_label")}
 						tags={false}
+						capToListed={taken.length > 0}
 						onItemsChange={setUsedItems}
 					/>
 					{taken.length > 0 && bringBack.length > 0 && (

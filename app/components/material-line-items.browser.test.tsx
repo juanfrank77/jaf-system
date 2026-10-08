@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react"
+import { fireEvent, screen } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
 import { MaterialLineItems } from "./material-line-items"
 
@@ -88,5 +88,24 @@ describe("MaterialLineItems touch (pickup) mode", () => {
 		)
 		expect(screen.getByText(/Took/)).toBeInTheDocument()
 		expect(screen.queryByText(/more than listed/)).not.toBeInTheDocument()
+	})
+
+	it("caps the stepper at the listed quantity with capToListed", async ({
+		renderStub,
+	}) => {
+		await mount(
+			renderStub,
+			<MaterialLineItems
+				serviceCodes={codes}
+				initialItems={[{ serviceCodeId: "c1", qty: 4 }]}
+				estimatedItems={[{ serviceCodeId: "c1", qty: 4 }]}
+				tags={false}
+				capToListed
+				touch
+			/>,
+		)
+		const input = screen.getByRole("textbox", { name: "Span clamp" })
+		fireEvent.change(input, { target: { value: "9" } })
+		expect((input as HTMLInputElement).value).toBe("4")
 	})
 })

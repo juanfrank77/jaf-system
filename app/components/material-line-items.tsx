@@ -48,6 +48,9 @@ interface Props {
 	/** Editable mode only: print the amber "+N more than listed" and blue
 	 * "added at counter" tags. Off where "more" is not the normal case. */
 	tags?: boolean
+	/** Editable mode, with `estimatedItems`: a line cannot go above its listed
+	 * quantity and only listed codes can be picked. */
+	capToListed?: boolean
 	/** Called with the current lines whenever they change (editable mode). */
 	onItemsChange?: (items: LineItem[]) => void
 }
@@ -82,6 +85,7 @@ export function MaterialLineItems({
 	touch = false,
 	listedLabel,
 	tags = true,
+	capToListed = false,
 	onItemsChange,
 }: Props) {
 	const { t } = useTranslation()
@@ -99,7 +103,13 @@ export function MaterialLineItems({
 		)
 
 	const used = new Set(items.map((i) => i.serviceCodeId).filter(Boolean))
-	const available = serviceCodes.filter((c) => !used.has(c.id))
+	const available = serviceCodes.filter(
+		(c) =>
+			!used.has(c.id) &&
+			(!capToListed ||
+				!estimatedItems ||
+				estimatedItems.some((e) => e.serviceCodeId === c.id)),
+	)
 
 	const serialized: LineItem[] = items.map(({ serviceCodeId, qty }) => ({
 		serviceCodeId,
@@ -241,6 +251,7 @@ export function MaterialLineItems({
 									<QtyStepper
 										value={item.qty}
 										min={1}
+										max={capToListed ? listedQty : undefined}
 										onChange={(qty) => updateItem(item._key, { qty })}
 										label={
 											code?.name ?? t("material_line_items.select_placeholder")

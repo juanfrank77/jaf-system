@@ -64,8 +64,14 @@ function QtyStepper({
 				value={draft ?? String(value)}
 				onChange={(e) => {
 					const raw = e.target.value.replace(/\D/g, "")
-					setDraft(raw)
-					if (raw !== "") onChange(clamp(Number.parseInt(raw, 10)))
+					if (raw === "") {
+						setDraft(raw)
+						return
+					}
+					// Above max, snap what is shown to max right away.
+					const next = clamp(Number.parseInt(raw, 10))
+					setDraft(String(next) === raw ? raw : String(next))
+					onChange(next)
 				}}
 				onFocus={(e) => e.target.select()}
 				onBlur={() => setDraft(null)}

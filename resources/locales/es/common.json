@@ -95,7 +95,8 @@
 			"regenerate": "Regenerar",
 			"download_pdf": "PDF",
 			"download_csv": "CSV"
-		}
+		},
+		"out_tag": "agotado"
 	},
 	"adjust": {
 		"reason_required": "Se requiere un motivo.",

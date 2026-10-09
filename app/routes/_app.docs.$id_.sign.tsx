@@ -23,6 +23,7 @@ import {
 } from "~/components/ui/select"
 import { isUnassignedCrew, notAssignedResponse } from "~/lib/crew-scope"
 import { db } from "~/lib/db.server"
+import { pageTitle } from "~/lib/page-title"
 import { generateWarehouseReceiptPdf } from "~/lib/pdf/warehouse-receipt.server"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
@@ -36,11 +37,11 @@ import type { Route } from "./+types/_app.docs.$id_.sign"
 
 type MaterialLine = { serviceCodeId: string; qty: number }
 
-export const meta: Route.MetaFunction = ({ data }) => [
+export const meta: Route.MetaFunction = ({ data, matches }) => [
 	{
 		title: data
-			? `${data.doc.controlNumber} — Capture Signature — JAF Ops`
-			: "JAF Ops",
+			? pageTitle(matches, "page_title.sign", data.doc.controlNumber)
+			: pageTitle(matches),
 	},
 ]
 
@@ -384,6 +385,7 @@ export default function SignDoc({
 				<div>
 					<Label>{t("docs_sign.warehouse_label")}</Label>
 					<Select
+						items={warehouses.map((w) => ({ value: w.id, label: w.name }))}
 						value={warehouseId}
 						onValueChange={(v) => setWarehouseId(v ?? "")}
 					>
@@ -430,6 +432,10 @@ export default function SignDoc({
 								{t("docs_sign.release_signer_label")}
 							</Label>
 							<Select
+								items={warehouseUsers.map((u) => ({
+									value: u.id,
+									label: u.name,
+								}))}
 								value={releasedById}
 								onValueChange={(v) => setReleasedById(v ?? "")}
 							>
@@ -480,6 +486,7 @@ export default function SignDoc({
 								{t("docs_sign.crew_signer_label")}
 							</Label>
 							<Select
+								items={crewUsers.map((u) => ({ value: u.id, label: u.name }))}
 								value={signedById}
 								onValueChange={(v) => setSignedById(v ?? "")}
 							>
@@ -517,9 +524,13 @@ export default function SignDoc({
 					</div>
 				</div>
 
-				<p className="text-xs text-muted-foreground">
-					🔒 {t("docs_sign.lock_note")}
-				</p>
+				<Callout
+					tone="info"
+					icon={<span aria-hidden="true">🔒</span>}
+					title={t("docs_sign.lock_banner_title")}
+				>
+					{t("docs_sign.lock_banner_body")}
+				</Callout>
 
 				{shownErrorKey && (
 					<div ref={errorRef} role="alert">

@@ -4,12 +4,13 @@ import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Callout } from "~/components/ui/callout"
 import { WarehouseStepRail } from "~/components/warehouse-step-rail"
 import { db } from "~/lib/db.server"
+import { pageTitle } from "~/lib/page-title"
 import { canReleaseToVan, rolesMatching } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import type { Route } from "./+types/_app.warehouse.restock"
 
-export const meta: Route.MetaFunction = () => [
-	{ title: "Restocks to Release — JAF Ops" },
+export const meta: Route.MetaFunction = ({ matches }) => [
+	{ title: pageTitle(matches, "page_title.restocks_to_release") },
 ]
 
 export async function loader({ request }: Route.LoaderArgs) {

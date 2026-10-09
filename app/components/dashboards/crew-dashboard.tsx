@@ -52,7 +52,10 @@ export function CrewDashboard(
 		docs,
 	} = props
 	const approved = useMemo(
-		() => docs.filter((d) => APPROVED_STATUSES.has(d.status)).slice(0, MAX_APPROVED),
+		() =>
+			docs
+				.filter((d) => APPROVED_STATUSES.has(d.status))
+				.slice(0, MAX_APPROVED),
 		[docs],
 	)
 	const rows = useMemo(
@@ -63,7 +66,13 @@ export function CrewDashboard(
 			...crewSubmittedDocs.map((doc) => ({ kind: "submitted" as const, doc })),
 			...approved.map((doc) => ({ kind: "approved" as const, doc })),
 		],
-		[crewSentBackDocs, crewPreppedDocs, crewInFieldDocs, crewSubmittedDocs, approved],
+		[
+			crewSentBackDocs,
+			crewPreppedDocs,
+			crewInFieldDocs,
+			crewSubmittedDocs,
+			approved,
+		],
 	)
 	const open = rows.length - approved.length
 

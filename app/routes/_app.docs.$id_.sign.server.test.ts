@@ -235,6 +235,98 @@ describe("POST /docs/:id/sign", () => {
 		expect(notificationMessages[0]).toContain("overage")
 	})
 
+	describe("signed Taken differs from Listed", () => {
+		async function signWithTaken(taken: number) {
+			vi.mocked(requireRole).mockResolvedValue({
+				user: { id: "warehouse-1", role: "WAREHOUSE" },
+				session: {},
+			} as any)
+			vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+				baseDoc() as any, // Listed: sc-1 x 2
+			)
+			;(db.user.findFirst as any).mockImplementation((args: any) => {
+				if (args.where.role === "WAREHOUSE")
+					return Promise.resolve({ id: "warehouse-1", name: "Iidalia" })
+				return Promise.resolve({ id: "crew-1", name: "Crew A" })
+			})
+			vi.mocked(db.warehouse.findUnique).mockResolvedValue({
+				id: "wh-1",
+				name: "Main",
+			} as any)
+			vi.mocked(db.user.findMany).mockResolvedValue([{ id: "sup-1" }] as any)
+			vi.mocked(db.$transaction).mockImplementation(async (callback: any) => {
+				if (typeof callback === "function") {
+					return await callback({
+						jafInvoice: { update: vi.mocked(db.jafInvoice.update) },
+						auditTrail: { create: vi.mocked(db.auditTrail.create) },
+						notification: { create: vi.mocked(db.notification.create) },
+						stockMovement: { create: vi.mocked(db.stockMovement.create) },
+					})
+				}
+			})
+
+			const form = validForm()
+			form.set(
+				"materials",
+				JSON.stringify([{ serviceCodeId: "sc-1", qty: taken }]),
+			)
+			const result = await action({
+				request: formRequest(form),
+				params: { id: "doc-1" },
+			} as any).catch((r: any) => r)
+			expect(result.status).toBe(302)
+		}
+
+		it("uses the edited (higher) number for saved Taken, stock movement and supervisor overage alert", async () => {
+			await signWithTaken(5)
+
+			const updateData = vi.mocked(db.jafInvoice.update).mock.calls[0][0]
+				.data as any
+			expect(updateData.materialsTaken).toEqual([
+				{ serviceCodeId: "sc-1", qty: 5 },
+			])
+
+			const moves = vi
+				.mocked(db.stockMovement.create)
+				.mock.calls.map((c) => (c[0] as any).data)
+			expect(moves).toHaveLength(1)
+			expect(moves[0]).toMatchObject({
+				serviceCodeId: "sc-1",
+				type: "RELEASE",
+				qty: -5,
+			})
+
+			// The supervisor is alerted because the edited 5 exceeds the listed 2,
+			// and the overage audit records both numbers.
+			const notified = vi
+				.mocked(db.notification.create)
+				.mock.calls.map((c) => (c[0] as any).data.userId)
+			expect(notified).toEqual(["sup-1"])
+			const overageAudit = vi
+				.mocked(db.auditTrail.create)
+				.mock.calls.map((c) => (c[0] as any).data)
+				.find((d) => d.action === "MATERIAL_OVERAGE")
+			expect(overageAudit.diffJson.overages).toEqual([
+				{ serviceCodeId: "sc-1", estimatedQty: 2, takenQty: 5 },
+			])
+		})
+
+		it("uses the edited (lower) number for Taken and stock movement, and raises no overage alert", async () => {
+			await signWithTaken(1)
+
+			const updateData = vi.mocked(db.jafInvoice.update).mock.calls[0][0]
+				.data as any
+			expect(updateData.materialsTaken).toEqual([
+				{ serviceCodeId: "sc-1", qty: 1 },
+			])
+			const moves = vi
+				.mocked(db.stockMovement.create)
+				.mock.calls.map((c) => (c[0] as any).data)
+			expect(moves.map((m) => m.qty)).toEqual([-1])
+			expect(db.notification.create).not.toHaveBeenCalled()
+		})
+	})
+
 	it("rejects when materials are already signed", async () => {
 		vi.mocked(requireRole).mockResolvedValue({
 			user: { id: "warehouse-1", role: "WAREHOUSE" },

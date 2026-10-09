@@ -7,13 +7,11 @@ import {
 } from "~/lib/stock-snapshot.server"
 import {
 	makeTracker,
-	runToken,
 	seedMaterial,
 	seedUser,
 	seedWarehouse,
 } from "~/test/helpers"
 
-const RUN = runToken("SS")
 const t = makeTracker()
 let U_ID: string
 

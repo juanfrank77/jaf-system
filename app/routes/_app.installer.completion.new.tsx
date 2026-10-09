@@ -96,10 +96,14 @@ async function resolveAccessories(
 			return null
 		submitted.set(line.serviceCodeId, line.qty)
 	}
-	const limitRows = limitRowsParam ?? (dropFt !== undefined && Number.isFinite(dropFt)
-		? await db.limitTable.findMany()
-		: [])
-	const brackets = bracketsParam ?? [...new Set(limitRows.map((r) => r.bracketFt))]
+	const limitRows =
+		limitRowsParam ??
+		(dropFt !== undefined && Number.isFinite(dropFt)
+			? await db.limitTable.findMany()
+			: [])
+	const brackets = bracketsParam ?? [
+		...new Set(limitRows.map((r) => r.bracketFt)),
+	]
 	const prefill =
 		brackets.length > 0
 			? prefillAccessories(limitRows, pickBracket(dropFt as number, brackets))
@@ -163,7 +167,9 @@ export async function action({ request }: Route.ActionArgs) {
 	// prefilledQty cannot hide an edit.
 	const dropFtRaw = form.get("dropFt")
 	const dropFt = dropFtRaw ? Number(dropFtRaw) : undefined
-	let limitRowsParam: { serviceCodeId: string; bracketFt: number; qty: number }[] | undefined
+	let limitRowsParam:
+		| { serviceCodeId: string; bracketFt: number; qty: number }[]
+		| undefined
 	let bracketsParam: number[] | undefined
 	const limitRowsRaw = form.get("limitRows")
 	const bracketsRaw = form.get("brackets")

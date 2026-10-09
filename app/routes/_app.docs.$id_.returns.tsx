@@ -3,6 +3,7 @@ import { RouteErrorBoundary } from "~/components/error-boundary"
 import { ReturnsForm } from "~/components/returns-form"
 import { db } from "~/lib/db.server"
 import { runOnce } from "~/lib/idempotency.server"
+import { pageTitle } from "~/lib/page-title"
 import { requireRole } from "~/lib/permissions.server"
 import { dispositionSerial } from "~/lib/repair.server"
 import {
@@ -20,13 +21,15 @@ type SerialReturnReason = "DAMAGED" | "LOST" | "MISCOUNT" | "UNDER_REPORTED"
 
 export const meta = ({
 	data,
+	matches,
 }: {
 	data?: { doc: { controlNumber: string } }
+	matches: Parameters<typeof pageTitle>[0]
 }) => [
 	{
 		title: data
-			? `${data.doc.controlNumber} — Log Returns — JAF Ops`
-			: "JAF Ops",
+			? pageTitle(matches, "page_title.returns", data.doc.controlNumber)
+			: pageTitle(matches),
 	},
 ]
 

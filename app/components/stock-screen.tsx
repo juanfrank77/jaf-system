@@ -75,6 +75,7 @@ export function StockScreen({
 					<MovementTrail
 						warehouseId={selectedId}
 						serviceCodeId={selectedCode}
+						unit={bulk.find((b) => b.serviceCodeId === selectedCode)?.countUnit}
 						onClose={() => setSelectedCode(null)}
 					/>
 				)}

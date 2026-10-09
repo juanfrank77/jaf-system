@@ -3,6 +3,7 @@ import { Trans, useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialLineItems } from "~/components/material-line-items"
+import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Checkbox } from "~/components/ui/checkbox"
 import { Input } from "~/components/ui/input"
@@ -16,6 +17,7 @@ import {
 } from "~/components/ui/select"
 import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
+import { pageTitle } from "~/lib/page-title"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import {
@@ -41,11 +43,11 @@ interface PrepLine {
 let _prepCounter = 0
 const nextPrepKey = () => `prep-${(_prepCounter++).toString()}`
 
-export const meta: Route.MetaFunction = ({ data }) => [
+export const meta: Route.MetaFunction = ({ data, matches }) => [
 	{
 		title: data
-			? `${data.doc.controlNumber} — Prep Materials — JAF Ops`
-			: "JAF Ops",
+			? pageTitle(matches, "page_title.prep", data.doc.controlNumber)
+			: pageTitle(matches),
 	},
 ]
 
@@ -259,6 +261,7 @@ export default function PrepDoc({
 			<div className="space-y-3">
 				{lines.map((line, index) => {
 					const _code = serviceCodes.find((c) => c.id === line.serviceCodeId)
+					const shortBy = Math.max(0, line.estimatedQty - line.preppedQty)
 					const substitutionOptions = serviceCodes.filter(
 						(c) =>
 							c.id !== line.serviceCodeId &&
@@ -327,25 +330,49 @@ export default function PrepDoc({
 								const avail = availability[line.serviceCodeId]
 								if (!avail) return null
 								return (
-									<p className="text-xs text-muted-foreground">
-										{t("docs_prep.available")}: {avail.available}{" "}
-										{avail.countUnit ?? ""}
-										{avail.derivedAvailable !== null && (
-											<>
-												{" "}
-												= {avail.derivedAvailable} {avail.stockUnit}
-											</>
+									<p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+										<span>
+											{t("docs_prep.available")}: {avail.available}{" "}
+											{avail.countUnit ?? ""}
+											{avail.derivedAvailable !== null && (
+												<>
+													{" "}
+													= {avail.derivedAvailable} {avail.stockUnit}
+												</>
+											)}
+										</span>
+										{avail.derivedAvailable === null && (
+											<Badge variant="neutral">{t("stock.unit_not_set")}</Badge>
 										)}
 									</p>
 								)
 							})()}
 
-							{line.missing && substitutionOptions.length > 0 && (
+							{(line.missing || shortBy > 0) && (
+								<div className="flex flex-wrap items-center gap-1.5">
+									{line.missing && (
+										<Badge variant="danger">
+											{t("docs_prep.flagged_missing")}
+										</Badge>
+									)}
+									{shortBy > 0 && (
+										<Badge variant="danger">
+											{t("docs_prep.short_by", { count: shortBy })}
+										</Badge>
+									)}
+								</div>
+							)}
+
+							{substitutionOptions.length > 0 && (
 								<div>
 									<Label className="text-xs text-muted-foreground">
 										{t("docs_prep.substitute_with")}
 									</Label>
 									<Select
+										items={substitutionOptions.map((c) => ({
+											value: c.id,
+											label: `${c.claroCode} — ${c.name}`,
+										}))}
 										value={line.substitutedWith ?? ""}
 										onValueChange={(v) =>
 											updateLine(index, {
@@ -374,10 +401,7 @@ export default function PrepDoc({
 									id={`missing-${index}`}
 									checked={line.missing}
 									onCheckedChange={(checked: boolean) =>
-										updateLine(index, {
-											missing: !!checked,
-											substitutedWith: checked ? null : line.substitutedWith,
-										})
+										updateLine(index, { missing: !!checked })
 									}
 								/>
 								<Label htmlFor={`missing-${index}`} className="text-sm">

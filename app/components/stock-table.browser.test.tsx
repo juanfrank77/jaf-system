@@ -16,6 +16,8 @@ const rows: StockTableRow[] = [
 		stockUnit: "FT",
 		countUnit: "ROLLOS",
 		derivedStockQty: 240,
+		claroCode: "SAP-1",
+		lastMovement: null,
 	},
 	{
 		serviceCodeId: "sc-2",
@@ -24,6 +26,8 @@ const rows: StockTableRow[] = [
 		stockUnit: "FT",
 		countUnit: "ROLLOS",
 		derivedStockQty: null,
+		claroCode: "SAP-2",
+		lastMovement: null,
 	},
 	{
 		serviceCodeId: "sc-3",
@@ -32,10 +36,45 @@ const rows: StockTableRow[] = [
 		stockUnit: null,
 		countUnit: "EA",
 		derivedStockQty: null,
+		claroCode: "SAP-3",
+		lastMovement: null,
 	},
 ]
 
 describe("StockTable", () => {
+	it("shows the SAP code and a translated last-movement column", async ({
+		renderStub,
+	}) => {
+		const withLast: StockTableRow[] = [
+			{
+				...rows[0],
+				lastMovement: { type: "RECEIVE", at: "2026-09-20T12:00:00Z" },
+			},
+			rows[1],
+		]
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<StockTable
+							rows={withLast}
+							selectedCode={null}
+							onSelectCode={() => {}}
+						/>
+					),
+				},
+			],
+		})
+		expect(screen.getByText("SAP-1")).toBeInTheDocument()
+		expect(screen.getByTestId("stock-last-sc-1").textContent).toMatch(
+			/^Received · /,
+		)
+		expect(screen.getByTestId("stock-last-sc-2").textContent).toBe(
+			"No movements yet",
+		)
+	})
+
 	it("renders the derived stock-unit figure when a conversion factor is set", async ({
 		renderStub,
 	}) => {
@@ -176,6 +215,8 @@ describe("StockTable", () => {
 				stockUnit: dual.stockUnit,
 				countUnit: dual.countUnit,
 				derivedStockQty: dual.derivedStockQty,
+				claroCode: "SAP-L",
+				lastMovement: null,
 			},
 		]
 		await renderStub({

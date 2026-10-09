@@ -8,6 +8,7 @@ import { Button } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
 import { db } from "~/lib/db.server"
 import { requireInstaller } from "~/lib/installer-context.server"
+import { pageTitle } from "~/lib/page-title"
 import { canApproveRestock } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import {
@@ -31,7 +32,9 @@ const TRAIL_WITH_SIGNOFF = [
 	"RECEIVED",
 ] as const
 
-export const meta: Route.MetaFunction = () => [{ title: "Restock — JAF Ops" }]
+export const meta: Route.MetaFunction = ({ matches }) => [
+	{ title: pageTitle(matches, "page_title.installer_restock") },
+]
 
 export async function loader({ request }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, [

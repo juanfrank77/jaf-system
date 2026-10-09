@@ -14,6 +14,7 @@ describe("MovementTrail", () => {
 						<MovementTrail
 							warehouseId="wh-1"
 							serviceCodeId="sc-1"
+							unit="ROLLOS"
 							onClose={() => {}}
 						/>
 					),
@@ -41,7 +42,8 @@ describe("MovementTrail", () => {
 		await waitFor(() => {
 			expect(screen.getByText("Orlando")).toBeInTheDocument()
 		})
-		expect(screen.getByText("RECEIVE")).toBeInTheDocument()
+		expect(screen.getByText("Received")).toBeInTheDocument()
+		expect(screen.getByText("+50 ROLLOS")).toBeInTheDocument()
 		expect(screen.getByText("PO-9")).toBeInTheDocument()
 	})
 

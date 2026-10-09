@@ -11,12 +11,13 @@ import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { db } from "~/lib/db.server"
 import { releaseRestockToVan } from "~/lib/load-to-van.server"
+import { pageTitle } from "~/lib/page-title"
 import { canReleaseToVan, rolesMatching } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import type { Route } from "./+types/_app.restock.$id_.release"
 
-export const meta: Route.MetaFunction = () => [
-	{ title: "Release Restock — JAF Ops" },
+export const meta: Route.MetaFunction = ({ matches }) => [
+	{ title: pageTitle(matches, "page_title.release_restock") },
 ]
 
 export async function loader({ request, params }: Route.LoaderArgs) {

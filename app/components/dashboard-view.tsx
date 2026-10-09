@@ -235,6 +235,11 @@ function DashboardView({
 											{t("dashboard.aged_pickup_badge")}
 										</Badge>
 									)}
+									{doc.daysStaged !== undefined && (
+										<Badge variant={doc.aged ? "danger" : "neutral"}>
+											{t("dashboard.days_staged", { count: doc.daysStaged })}
+										</Badge>
+									)}
 									<Badge variant="info">
 										{t("dashboard.ready_for_pickup_badge")}
 									</Badge>
@@ -374,6 +379,11 @@ function DashboardView({
 									{doc.aged && (
 										<Badge variant="danger">
 											{t("dashboard.aged_pickup_badge")}
+										</Badge>
+									)}
+									{doc.daysStaged !== undefined && (
+										<Badge variant={doc.aged ? "danger" : "neutral"}>
+											{t("dashboard.days_staged", { count: doc.daysStaged })}
 										</Badge>
 									)}
 									<Badge variant="info">

@@ -28,9 +28,24 @@
 		"title": "Stock & Audit",
 		"no_warehouse": "No warehouse assigned.",
 		"search_label": "Search materials",
-		"search_placeholder": "Search by name…",
+		"search_placeholder": "Search by name or SAP code…",
 		"kit_filter_label": "Kit / used-in only",
 		"unit_not_set": "unit not set",
+		"no_movement": "No movements yet",
+		"movement_type": {
+			"PICKUP": "Pickup",
+			"INSTALL": "Install",
+			"SWAP_OUT": "Swap out",
+			"SWAP_IN": "Swap in",
+			"RETURN": "Return",
+			"ADJUST": "Adjustment",
+			"RECEIVE": "Received",
+			"RELEASE": "Released",
+			"STARTING_BALANCE": "Starting balance",
+			"DISPOSITION": "Disposition",
+			"SENT_FOR_REPAIR": "Sent for repair",
+			"REPAIR_INTAKE": "Repair intake"
+		},
 		"empty": "No bulk stock for this warehouse.",
 		"view_trail": "View trail",
 		"hide_trail": "Hide",
@@ -140,6 +155,7 @@
 			"COMPTROLLER": "Comptroller",
 			"INSTALLER_SUPERVISOR": "Installer supervisor"
 		},
+		"warehouse_switch": "Warehouse",
 		"nav": {
 			"dashboard": "Dashboard",
 			"new_document": "+ Work Order",
@@ -169,6 +185,16 @@
 			"title": "Notifications",
 			"empty": "No new notifications",
 			"mark_all_read": "Mark all as read",
+			"messages": {
+				"restock_over_par": "Restock {{id}} needs over-par sign-off.",
+				"prep_missing": "Job {{job}} has missing materials flagged during prep. Please review.",
+				"prep_ready": "Job {{job}} is prepped and ready for pickup. Please sign at warehouse.",
+				"sign_overage": "Job {{job}} was signed with material overage. Review the quantities.",
+				"repair_held": "Serial {{serial}} is held for review before repair disposition.",
+				"repair_sent": "Repair batch {{batch}} sent ({{count}} units).",
+				"repair_voided": "Repair batch {{batch}} voided.",
+				"repair_intake": "Repaired intake {{intake}}: declared {{declared}}, stocked {{stocked}}."
+			},
 			"time": {
 				"just_now": "just now",
 				"minutes_ago": "{{count}}m ago",
@@ -337,6 +363,20 @@
 		"submitted_title": "{{control}} submitted · {{time}}",
 		"submitted_body": "{{name}} has been notified. You'll see it here if anything needs fixing."
 	},
+	"page_title": {
+		"needs_review": "Needs Review",
+		"restocks_to_release": "Restocks to Release",
+		"stock": "Stock & Audit",
+		"repairs": "Repairs",
+		"scan_in": "Scan In",
+		"triage": "Triage",
+		"release_restock": "Release Restock",
+		"dashboard": "Dashboard",
+		"prep": "Prep Materials",
+		"sign": "Capture Signature",
+		"returns": "Log Returns",
+		"installer_restock": "Restock"
+	},
 	"docs_prep": {
 		"title": "Prep Materials",
 		"confirm_message": "Confirm that materials for <strong>{{controlNumber}}</strong> have been staged and are ready for crew pickup.",
@@ -354,6 +394,8 @@
 		"add_line": "+ Add Line",
 		"missing_count_one": "{{count}} material flagged missing",
 		"missing_count_other": "{{count}} materials flagged missing",
+		"flagged_missing": "Flagged missing",
+		"short_by": "{{count}} short",
 		"errors": {
 			"invalid_materials": "Invalid materials data"
 		}
@@ -423,6 +465,8 @@
 		}
 	},
 	"docs_sign": {
+		"lock_banner_title": "Quantities lock at signing.",
+		"lock_banner_body": "Once both signatures are captured, Materials Taken is locked everywhere and cannot be changed.",
 		"title": "Warehouse Pickup — Dual Signature",
 		"warehouse_label": "Warehouse",
 		"warehouse_placeholder": "Select warehouse...",
@@ -458,7 +502,6 @@
 		"more_is_normal": "Taking more than listed is normal. The supervisor sees the difference at review.",
 		"sig_prompt": "Sign here with your finger",
 		"signed": "Signed",
-		"lock_note": "Once both sign, the list locks for everyone, warehouse included.",
 		"error_title": "Can't sign yet"
 	},
 	"docs_field": {
@@ -1242,6 +1285,8 @@
 		"sent_back_note": "Note: {{note}}",
 		"ready_for_pickup_heading": "Ready for Pickup ({{count}})",
 		"ready_for_pickup_badge": "Ready for pickup",
+		"days_staged_one": "{{count}} day",
+		"days_staged_other": "{{count}} days",
 		"aged_pickup_badge": "Aged > 3 days",
 		"in_the_field_heading": "In the Field ({{count}})",
 		"in_the_field_badge": "In the field",

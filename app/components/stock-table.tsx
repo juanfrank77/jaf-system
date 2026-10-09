@@ -12,6 +12,10 @@ export type StockTableRow = {
 	stockUnit: string | null
 	countUnit: string | null
 	derivedStockQty: number | null
+	/** SAP / Claro code; empty when the catalog row is gone. */
+	claroCode: string
+	/** Most recent bulk movement at this warehouse (ISO time), or null. */
+	lastMovement: { type: string; at: string } | null
 }
 
 /**
@@ -38,14 +42,16 @@ export function StockTable({
 	selectedCode: string | null
 	onSelectCode: (serviceCodeId: string | null) => void
 }) {
-	const { t } = useTranslation()
+	const { t, i18n } = useTranslation()
 	const [query, setQuery] = useState(initialQuery)
 	const [kitOnly, setKitOnly] = useState(false)
 
 	const term = query.trim().toLowerCase()
 	const visible = rows.filter((r) => {
 		const matchesQuery =
-			term.length === 0 || r.canonicalName.toLowerCase().includes(term)
+			term.length === 0 ||
+			r.canonicalName.toLowerCase().includes(term) ||
+			r.claroCode.toLowerCase().includes(term)
 		const matchesKit = !kitOnly || /kit|used[\s-]?in/i.test(r.canonicalName)
 		return matchesQuery && matchesKit
 	})
@@ -81,7 +87,18 @@ export function StockTable({
 								data-testid={`stock-row-${r.serviceCodeId}`}
 								className="flex flex-wrap items-center justify-between gap-2 border-b border-border py-1.5 text-sm last:border-0"
 							>
+								<span className="w-24 shrink-0 font-mono text-xs text-muted-foreground">
+									{r.claroCode || "—"}
+								</span>
 								<span className="flex-1 basis-40">{r.canonicalName}</span>
+								<span
+									className="basis-36 text-xs text-muted-foreground"
+									data-testid={`stock-last-${r.serviceCodeId}`}
+								>
+									{r.lastMovement
+										? `${t(`stock.movement_type.${r.lastMovement.type}`, { defaultValue: r.lastMovement.type })} · ${new Date(r.lastMovement.at).toLocaleDateString(i18n.language)}`
+										: t("stock.no_movement")}
+								</span>
 								<span className="text-right font-mono">
 									{r.onHand} {r.countUnit ?? ""}
 								</span>

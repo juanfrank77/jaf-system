@@ -60,7 +60,9 @@
 		"trail": {
 			"title": "Historial de movimientos",
 			"loading": "Cargando…",
-			"empty": "Todavía no hay movimientos."
+			"empty": "Todavía no hay movimientos.",
+			"title_for": "Historial de movimientos — {{material}}",
+			"why": "Por qué el historial importa: cada movimiento lleva responsable, hora y trabajo, así el número se puede defender en una auditoría."
 		},
 		"receive": {
 			"heading": "Recibir entrega",

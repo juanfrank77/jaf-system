@@ -60,7 +60,9 @@
 		"trail": {
 			"title": "Movement Trail",
 			"loading": "Loading…",
-			"empty": "No movements yet."
+			"empty": "No movements yet.",
+			"title_for": "Movement trail — {{material}}",
+			"why": "Why the trail is the asset: every movement carries actor, time and job, so the number can be defended in an audit."
 		},
 		"receive": {
 			"heading": "Receive Delivery",

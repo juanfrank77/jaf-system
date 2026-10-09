@@ -512,7 +512,8 @@
 		"more_is_normal": "Taking more than listed is normal. The supervisor sees the difference at review.",
 		"sig_prompt": "Sign here with your finger",
 		"signed": "Signed",
-		"error_title": "Can't sign yet"
+		"error_title": "Can't sign yet",
+		"status_pill": "Pickup"
 	},
 	"docs_field": {
 		"title": "Field Update",
@@ -579,7 +580,8 @@
 		"bring_back_hint": "Took minus used. The warehouse expects these.",
 		"error_title": "Can't submit yet",
 		"submitting": "Sending…",
-		"offline_footnote": "No signal? It saves on the phone and sends itself when you're back online."
+		"offline_footnote": "No signal? It saves on the phone and sends itself when you're back online.",
+		"status_pill": "On site"
 	},
 	"docs_review": {
 		"readonly_title": "Completed step.",
@@ -1938,7 +1940,7 @@
 			"created": "Created",
 			"prep": "Prep",
 			"release": "Release",
-			"field": "Field work",
+			"field": "Work",
 			"return": "Return",
 			"close": "Supervisor · Finance"
 		},
@@ -1949,7 +1951,9 @@
 			"field_title": "Step 4 · You",
 			"field_body": "Do the job, then log it here: actual address, GPS, materials used, photos and your signature. What you save offline syncs when you reconnect.",
 			"warehouse_list_title": "Your steps",
-			"warehouse_list_body": "Stage the materials (2), release them with both signatures (3), receive what comes back. Grey steps happen to the job, not to you."
+			"warehouse_list_body": "Stage the materials (2), release them with both signatures (3), receive what comes back. Grey steps happen to the job, not to you.",
+			"crew_list_title": "Your steps are 3 and 4.",
+			"crew_list_body": "Pick up at the warehouse, do the job, document it. Grey steps happen to the job but are not yours."
 		}
 	},
 	"finance_payroll": {

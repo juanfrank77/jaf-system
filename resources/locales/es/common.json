@@ -512,7 +512,8 @@
 		"more_is_normal": "Llevar más de lo listado es normal. El supervisor ve la diferencia en la revisión.",
 		"sig_prompt": "Firma aquí con el dedo",
 		"signed": "Firmado",
-		"error_title": "Aún no se puede firmar"
+		"error_title": "Aún no se puede firmar",
+		"status_pill": "Recogida"
 	},
 	"docs_field": {
 		"title": "Actualización de campo",
@@ -579,7 +580,8 @@
 		"bring_back_hint": "Llevó menos usado. El almacén los espera.",
 		"error_title": "Aún no se puede enviar",
 		"submitting": "Enviando…",
-		"offline_footnote": "¿Sin señal? Se guarda en el teléfono y se envía solo cuando vuelvas a tener conexión."
+		"offline_footnote": "¿Sin señal? Se guarda en el teléfono y se envía solo cuando vuelvas a tener conexión.",
+		"status_pill": "En sitio"
 	},
 	"docs_review": {
 		"readonly_title": "Paso completado.",
@@ -1938,7 +1940,7 @@
 			"created": "Creado",
 			"prep": "Preparación",
 			"release": "Entrega",
-			"field": "Trabajo de campo",
+			"field": "Trabajo",
 			"return": "Devolución",
 			"close": "Supervisor · Finanzas"
 		},
@@ -1949,7 +1951,9 @@
 			"field_title": "Paso 4 · Tú",
 			"field_body": "Haz el trabajo y luego regístralo aquí: dirección real, GPS, materiales utilizados, fotos y tu firma. Lo que guardes sin conexión se sincroniza al reconectar.",
 			"warehouse_list_title": "Tus pasos",
-			"warehouse_list_body": "Prepara los materiales (2), entrégalos con ambas firmas (3) y recibe lo que regresa. Los pasos en gris les ocurren al trabajo, no a ti."
+			"warehouse_list_body": "Prepara los materiales (2), entrégalos con ambas firmas (3) y recibe lo que regresa. Los pasos en gris les ocurren al trabajo, no a ti.",
+			"crew_list_title": "Tus pasos son el 3 y el 4.",
+			"crew_list_body": "Recoge en el almacén, haz el trabajo y documéntalo. Los pasos en gris le ocurren al trabajo pero no son tuyos."
 		}
 	},
 	"finance_payroll": {

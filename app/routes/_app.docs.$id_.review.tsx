@@ -21,9 +21,7 @@ import { Button, buttonVariants } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
 import { Card, CardContent, CardHeader } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
-import { Label } from "~/components/ui/label"
 import { Pill } from "~/components/ui/pill"
-import { Textarea } from "~/components/ui/textarea"
 import {
 	CONTRACTOR_SHARE_PERCENT,
 	RETENTION_RATE,
@@ -1025,9 +1023,6 @@ function PreCertPanel({
 	const { t } = useTranslation()
 	const lines = (sheet?.lines as PreCertLine[] | null) ?? []
 	const locked = !!sheet?.sigSupervisorAt
-	const notCaptured = (
-		<p className="text-xs text-muted-foreground">{t("precert.not_captured")}</p>
-	)
 	return (
 		<div className="space-y-3">
 			<div className="flex flex-wrap items-center justify-between gap-2 text-sm">
@@ -1126,7 +1121,7 @@ function PreCertPanel({
 									<img
 										src={sheet.sigSupervisorImage}
 										alt=""
-										className="h-12 rounded border bg-white"
+										className="h-12 rounded border bg-card"
 									/>
 								)}
 								<p className="text-sm">{sheet.sigSupervisorName}</p>
@@ -1150,7 +1145,7 @@ function PreCertPanel({
 									<img
 										src={sheet.sigSubcontractorImage}
 										alt=""
-										className="h-12 rounded border bg-white"
+										className="h-12 rounded border bg-card"
 									/>
 								)}
 								<p className="text-sm">
@@ -1187,7 +1182,7 @@ function PreCertPanel({
 									<img
 										src={sheet.sigClaroImage}
 										alt=""
-										className="h-12 rounded border bg-white"
+										className="h-12 rounded border bg-card"
 									/>
 								)}
 								{sheet.sigClaroScanPath && (

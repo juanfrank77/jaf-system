@@ -21,7 +21,7 @@ function debounce<T extends (items: LineItem[]) => void>(
 	let timeoutId: ReturnType<typeof setTimeout>
 	return ((...args: unknown[]) => {
 		clearTimeout(timeoutId)
-		timeoutId = setTimeout(() => fn(...args as [LineItem[]]), delay)
+		timeoutId = setTimeout(() => fn(...(args as [LineItem[]])), delay)
 	}) as T
 }
 

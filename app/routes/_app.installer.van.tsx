@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { InstallerLoopRail } from "~/components/installer-loop-rail"
-import { Button } from "~/components/ui/button"
+import { buttonVariants } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
 import { VanInventoryTable } from "~/components/van-inventory-table"
 import { db } from "~/lib/db.server"
@@ -60,17 +60,21 @@ export default function MyVan({ loaderData }: Route.ComponentProps) {
 				<h1 className="text-xl font-semibold">
 					{t("installer.my_van_heading", "My Van")}
 				</h1>
-				<Link to="/installer/restock">
-					<Button variant="outline">
-						{t("installer.request_restock", "Request Restock")}
-					</Button>
-				</Link>
 			</div>
 			<VanInventoryTable
 				serialized={serialized}
 				accessories={accessories}
 				owedBack={owedBack}
 			/>
+			<Link
+				to="/installer/restock"
+				className={buttonVariants({
+					size: "lg",
+					className: "h-12 w-full text-base",
+				})}
+			>
+				{t("van_view.request_restock")}
+			</Link>
 		</div>
 	)
 }

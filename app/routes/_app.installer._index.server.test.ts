@@ -31,7 +31,7 @@ describe("GET /installer", () => {
 				kind: "INSTALL",
 				status: "READY",
 				completionId: "c1",
-				createdAt: new Date(),
+				createdAt: new Date("2026-10-01T12:00:00Z"),
 			},
 		])
 		mocks.db.installCompletion.findMany.mockResolvedValue([
@@ -47,5 +47,31 @@ describe("GET /installer", () => {
 		const res = await loader({ request: req, params: {}, context: {} } as never)
 		expect(res.jobs[0].pill).toBe("READY")
 		expect(res.jobs[0].claroOrderNo).toBe("430920")
+		expect(res.jobs[0].submittedAt).toBe("2026-10-01T12:00:00.000Z")
+	})
+
+	it("returns the identity line from the profile and shows nothing for missing fields", async () => {
+		mocks.requireInstaller.mockResolvedValue({
+			user: { id: "inst-1", name: "Alfredo", email: "jaf98549@jafcom.net" },
+			profile: { jafNumber: "1820", region: null },
+			van: { id: "van-1", name: "Van 12" },
+		})
+		mocks.db.paymentRequest.findMany.mockResolvedValue([])
+		mocks.db.installCompletion.findMany.mockResolvedValue([])
+		mocks.getVanView.mockResolvedValue({
+			serialized: [],
+			accessories: [],
+			owedBack: [],
+		})
+		const res = await loader({
+			request: new Request("http://localhost/installer"),
+			params: {},
+			context: {},
+		} as never)
+		expect(res.identity).toEqual({
+			jafNumber: "1820",
+			login: "jaf98549@jafcom.net",
+			region: null,
+		})
 	})
 })

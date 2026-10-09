@@ -201,4 +201,54 @@ describe("syncFieldUpdate", () => {
 			error: "Server error",
 		})
 	})
+
+	it("returns rejected, not an error, when the server refuses on validation (422)", async () => {
+		vi.mocked(globalThis.fetch).mockResolvedValue({
+			redirected: false,
+			ok: false,
+			status: 422,
+			json: async () => ({
+				validationError: "docs_field.errors.used_exceeds_took",
+			}),
+		} as Response)
+
+		const result = await syncFieldUpdate(
+			{
+				id: "action-1",
+				docId: "doc-1",
+				action: "FIELD_UPDATE",
+				payload: basePayload(),
+				createdAt: new Date().toISOString(),
+			},
+			baseCachedJob(),
+		)
+
+		expect(result).toEqual({
+			ok: false,
+			rejected: { errorKey: "docs_field.errors.used_exceeds_took" },
+		})
+	})
+
+	it("returns rejected with the message for a 422 raw message", async () => {
+		vi.mocked(globalThis.fetch).mockResolvedValue({
+			redirected: false,
+			ok: false,
+			status: 422,
+			json: async () => ({ validationMessage: "Photo must be JPEG" }),
+		} as Response)
+		const result = await syncFieldUpdate(
+			{
+				id: "action-1",
+				docId: "doc-1",
+				action: "FIELD_UPDATE",
+				payload: basePayload(),
+				createdAt: new Date().toISOString(),
+			},
+			baseCachedJob(),
+		)
+		expect(result).toEqual({
+			ok: false,
+			rejected: { message: "Photo must be JPEG" },
+		})
+	})
 })

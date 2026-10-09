@@ -53,11 +53,11 @@ export async function searchServiceCodes(
 }
 
 /**
- * Roles that never see money. CREW and WAREHOUSE screens carry no prices
+ * Roles that never see money. CREW, WAREHOUSE and INSTALLER screens carry no prices
  * (mockup rule), so the catalog sent to their browsers must not contain any.
  * Stripping in the UI alone still ships the numbers in the page payload.
  */
-const PRICE_BLIND_ROLES: readonly string[] = ["CREW", "WAREHOUSE"]
+const PRICE_BLIND_ROLES: readonly string[] = ["CREW", "WAREHOUSE", "INSTALLER"]
 
 export function isPriceBlind(role: string): boolean {
 	return PRICE_BLIND_ROLES.includes(role)

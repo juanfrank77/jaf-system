@@ -8,9 +8,11 @@ import { MaterialLineItems } from "~/components/material-line-items"
 import { ReassignForm } from "~/components/reassign-form"
 import { SupervisorStepRail } from "~/components/supervisor-step-rail"
 import { Button, buttonVariants } from "~/components/ui/button"
+import { Callout } from "~/components/ui/callout"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
+import { canSeeBilling, hideBilling } from "~/lib/billing-visibility"
 import {
 	assignedBrigadeIds,
 	buildCrewAssignment,
@@ -35,6 +37,14 @@ import { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id"
 
 type MaterialLine = { serviceCodeId: string; qty: number }
+
+type SendBackEntry = {
+	createdAt: string
+	byUserId: string
+	fromStatus: string
+	toStatus: string
+	note: string
+}
 
 type CrewAssignmentEntry = {
 	brigadeId: string
@@ -141,15 +151,44 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		const b = brigadeRows.find((r) => r.id === id)
 		return b ? [{ id: b.id, name: b.name, code: b.code, lead: i === 0 }] : []
 	})
+	// Only a job that is still waiting on the fix (back at SIGNED) carries an
+	// active send-back; once it is resubmitted the banner goes away.
+	const sendBackHistory =
+		(doc.sendBackHistory as unknown as SendBackEntry[] | null) ?? []
+	const latest = sendBackHistory.at(-1) ?? null
+	const latestSendBack = doc.status === "SIGNED" ? latest : null
+	const sentBy = latestSendBack
+		? await db.user.findUnique({ where: { id: latestSendBack.byUserId } })
+		: null
+	const correctorIds = [
+		...new Set(
+			((doc.addressCorrections as AddressCorrection[] | null) ?? []).map(
+				(c) => c.correctedById,
+			),
+		),
+	]
+	const correctors =
+		correctorIds.length > 0
+			? await db.user.findMany({
+					where: { id: { in: correctorIds } },
+					select: { id: true, name: true },
+				})
+			: []
 	return {
-		doc,
+		doc: hideBilling(doc, user.role),
 		user,
+		correctorNames: Object.fromEntries(correctors.map((u) => [u.id, u.name])),
+		latestSendBack,
+		sentByName: sentBy?.name ?? null,
 		serviceCodes: serviceCodesForRole(user.role, serviceCodes),
 		supervisor,
 		assignedCrew,
 		assignedBrigades,
 		brigadeOptions,
-		auditTrail,
+		// diffJson can carry aviso numbers and amounts.
+		auditTrail: canSeeBilling(user.role)
+			? auditTrail
+			: auditTrail.map((a) => ({ ...a, diffJson: null })),
 		stage: deriveSupervisorStage(doc, sheet),
 	}
 }
@@ -446,6 +485,9 @@ export default function DocView({
 		brigadeOptions,
 		auditTrail,
 		stage,
+		latestSendBack,
+		sentByName,
+		correctorNames,
 	} = loaderData
 	const error = actionData as
 		| { errorKey?: string; errorMessage?: string }
@@ -458,6 +500,8 @@ export default function DocView({
 	const corrections =
 		(doc.addressCorrections as AddressCorrection[] | null) || []
 	const gps = doc.gpsCoordinates as { lat: number; lng: number } | null
+	const correctorName = (id: string): string | undefined =>
+		correctorNames[id] ?? (id === user.id ? user.name : undefined)
 
 	const APPROVED_STATUSES = [
 		"SUPERVISOR_APPROVED",
@@ -467,7 +511,8 @@ export default function DocView({
 	const isApproved = APPROVED_STATUSES.includes(
 		doc.status as (typeof APPROVED_STATUSES)[number],
 	)
-	const missingClaroPdf = isApproved && !doc.claroPdfPath
+	const showBilling = canSeeBilling(user.role)
+	const missingClaroPdf = showBilling && isApproved && !doc.claroPdfPath
 
 	return (
 		<div className="space-y-5">
@@ -483,6 +528,40 @@ export default function DocView({
 					{doc.status.replace(/_/g, " ")}
 				</span>
 			</div>
+
+			{latestSendBack && (
+				<Callout
+					tone="danger"
+					title={t("docs_field.sent_back_by", {
+						name: sentByName ?? t("docs_field.sent_back_by_unknown"),
+					})}
+				>
+					{latestSendBack.note}{" "}
+					<span className="text-xs opacity-80">
+						{new Date(latestSendBack.createdAt).toLocaleString()}
+					</span>
+				</Callout>
+			)}
+
+			{user.role === "CREW" &&
+				doc.status === "FIELD_UPDATED" &&
+				doc.fieldSubmittedAt && (
+					<Callout
+						tone="ok"
+						icon="✓"
+						title={t("docs_view.submitted_title", {
+							control: doc.controlNumber,
+							time: new Date(doc.fieldSubmittedAt).toLocaleString([], {
+								dateStyle: "short",
+								timeStyle: "short",
+							}),
+						})}
+					>
+						{t("docs_view.submitted_body", {
+							name: supervisor?.name ?? t("docs_field.sent_back_by_unknown"),
+						})}
+					</Callout>
+				)}
 
 			{missingClaroPdf && (
 				<div className="bg-status-warn-soft border border-status-warn/30 rounded-lg p-4 space-y-2">
@@ -535,21 +614,34 @@ export default function DocView({
 											({c.gps.lat.toFixed(4)}, {c.gps.lng.toFixed(4)})
 										</span>
 									)}
+									<span className="block text-muted-foreground">
+										{t("docs_view.address_edited_by", {
+											name:
+												correctorName(c.correctedById) ??
+												t("docs_view.address_edited_by_unknown"),
+											when: new Date(c.correctedAt).toLocaleString([], {
+												dateStyle: "short",
+												timeStyle: "short",
+											}),
+										})}
+									</span>
 								</li>
 							))}
 						</ul>
 					</div>
 				)}
-				<p>
-					<span className="text-muted-foreground">
-						{t("docs_view.aviso_number")}:
-					</span>{" "}
-					{doc.avisoNumber ?? (
+				{showBilling && (
+					<p>
 						<span className="text-muted-foreground">
-							{t("docs_view.aviso_pending")}
-						</span>
-					)}
-				</p>
+							{t("docs_view.aviso_number")}:
+						</span>{" "}
+						{doc.avisoNumber ?? (
+							<span className="text-muted-foreground">
+								{t("docs_view.aviso_pending")}
+							</span>
+						)}
+					</p>
+				)}
 				<p>
 					<span className="text-muted-foreground">
 						{t("docs_view.supervisor")}:

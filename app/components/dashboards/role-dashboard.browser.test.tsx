@@ -38,7 +38,10 @@ describe("RoleDashboard", () => {
 				<RoleDashboard role={role} supervisorQueues={null} {...base} />,
 			)
 			expect(
-				screen.getByRole("heading", { level: 1, name: "Dashboard" }),
+				screen.getByRole("heading", {
+					level: 1,
+					name: role === "CREW" ? "My jobs" : "Dashboard",
+				}),
 			).toBeInTheDocument()
 		})
 	}

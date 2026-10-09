@@ -170,6 +170,9 @@
 			"supervisor_variance": "Variaciones",
 			"admin_restock": "Aprobaciones de reabastecimiento",
 			"installer": "Instalador",
+			"installer_home": "Inicio",
+			"installer_new_job": "Nuevo trabajo",
+			"installer_van": "Mi van",
 			"installer_supervisor": "Supervisor de Instaladores",
 			"warehouse_scan_in": "Registrar Devolución",
 			"warehouse_restock": "Reabastecimientos por Liberar",
@@ -300,6 +303,8 @@
 	"docs_view": {
 		"aviso_pending": "Aún no — se ingresa en el paso del Aviso",
 		"address": "Dirección",
+		"address_edited_by": "Editado por {{name}} · {{when}}",
+		"address_edited_by_unknown": "alguien",
 		"address_corrections": "Correcciones de dirección",
 		"time_on_site": "Tiempo en sitio",
 		"aviso_number": "# de aviso",
@@ -354,7 +359,9 @@
 			"generate_lc": "Generar solicitud de LC",
 			"continue_review": "Continuar pasos del supervisor",
 			"default": "Próxima acción"
-		}
+		},
+		"submitted_title": "{{control}} enviado · {{time}}",
+		"submitted_body": "{{name}} fue notificado. Lo verás aquí si algo necesita corrección."
 	},
 	"page_title": {
 		"needs_review": "Requiere revisión",
@@ -491,7 +498,11 @@
 			"crew_signer_invalid": "El firmante de la cuadrilla seleccionado no es válido",
 			"already_signed": "Los materiales ya están firmados y bloqueados",
 			"invalid_materials": "Datos de materiales inválidos"
-		}
+		},
+		"more_is_normal": "Llevar más de lo listado es normal. El supervisor ve la diferencia en la revisión.",
+		"sig_prompt": "Firma aquí con el dedo",
+		"signed": "Firmado",
+		"error_title": "Aún no se puede firmar"
 	},
 	"docs_field": {
 		"title": "Actualización de campo",
@@ -536,13 +547,29 @@
 		"queued_title": "Guardado sin conexión",
 		"queued_message": "Actualización de campo guardada. Se sincronizará automáticamente al reconectar.",
 		"offline_submit_title": "Sin conexión",
+		"rejected_offline_title": "Tu actualización sin conexión no fue aceptada",
+		"rejected_offline_hint": "No se envió. Corrige las cantidades abajo y envíala de nuevo; de la actualización rechazada no se conserva nada salvo lo que vuelvas a ingresar.",
 		"offline_submit_notice": "Estás sin conexión. Toca Guardar para sincronizar después y la actualización se subirá cuando tengas señal.",
 		"errors": {
 			"invalid_materials": "Datos de materiales inválidos",
+			"used_exceeds_took": "No puedes usar más de lo que te llevaste. Baja la cantidad a lo que se firmó en la recogida.",
 			"discrepancy_note_required": "Se requiere una nota de discrepancia cuando las cantidades instaladas difieren de lo firmado en salida.",
 			"completion_signature_required": "Se requiere la firma de completado.",
 			"invalid_service_lines": "No se pudieron leer las cantidades de servicio instaladas."
-		}
+		},
+		"address_diff_hint": "Este cambio se registra con tu nombre y la hora al enviar.",
+		"address_edited_by_you": "Editado por ti · {{when}}",
+		"address_edited_by_name": "Editado por {{name}} · {{when}}",
+		"address_edited_by_other": "Editado por otro miembro de la cuadrilla · {{when}}",
+		"address_gps": "GPS {{lat}}, {{lng}}",
+		"photo_tag_before": "ANTES",
+		"photo_tag_after": "DESPUÉS",
+		"took_label": "Llevó",
+		"bring_back_title": "Devolver al almacén:",
+		"bring_back_hint": "Llevó menos usado. El almacén los espera.",
+		"error_title": "Aún no se puede enviar",
+		"submitting": "Enviando…",
+		"offline_footnote": "¿Sin señal? Se guarda en el teléfono y se envía solo cuando vuelvas a tener conexión."
 	},
 	"docs_review": {
 		"readonly_title": "Paso completado.",
@@ -1205,9 +1232,9 @@
 		"select_placeholder": "Selecciona un material...",
 		"add_material": "+ Agregar material",
 		"remove": "Quitar material",
-		"listed": "Listado",
 		"more_than_estimated": "más que lo estimado",
-		"added_at_counter": "agregado en mostrador"
+		"added_at_counter": "agregado en mostrador",
+		"listed": "En lista"
 	},
 	"dashboard": {
 		"status_plain": {
@@ -1370,6 +1397,20 @@
 			"installer_awaiting_warehouse": "Esperando acción de almacén",
 			"installer_awaiting_pickup": "Recoge restock listo",
 			"installer_no_actions": "Sin acciones del instalador pendientes"
+		},
+		"crew": {
+			"title": "Mis trabajos",
+			"subtitle_open_one": "{{count}} abierto",
+			"subtitle_open_other": "{{count}} abiertos",
+			"empty": "Tu brigada aún no tiene trabajos asignados.",
+			"sent_back_note": "Devuelto: {{note}}",
+			"status": {
+				"sent_back": "DEVUELTO",
+				"ready": "LISTO PARA RECOGER",
+				"on_site": "EN EL SITIO",
+				"submitted": "ENVIADO",
+				"approved": "APROBADO"
+			}
 		}
 	},
 	"docs_status": {
@@ -1512,12 +1553,84 @@
 			"scan_heading": "Escanear módem",
 			"serial_unreadable": "Ilegible — solo foto",
 			"signature": "Firma del instalador",
-			"submit": "Enviar"
+			"submit": "Enviar finalización",
+			"next": "Siguiente",
+			"back": "Atrás",
+			"model_unknown_title": "Modelo no reconocido.",
+			"model_unknown_body": "Este serial no coincide con un modelo de módem conocido. Revisa el escaneo; puedes continuar.",
+			"rejected_title": "Esta finalización sin conexión no fue aceptada",
+			"rejected_discard": "Descartar",
+			"rejected_hint": "No se envió. Crea una nueva finalización con los datos corregidos y descarta la rechazada.",
+			"serial_not_on_van_title": "Serial que no está en el inventario de {{van}}.",
+			"serial_not_on_van_body": "Este serial no está en el inventario de tu van. Puedes continuar; se guarda como no está en la van para que el almacén corrija el registro.",
+			"accessory_prefilled": "Prellenado: {{qty}}",
+			"accessory_edited": "editado",
+			"address_diff_hint": "Este cambio se registra con tu nombre y la hora al enviar.",
+			"errors": {
+				"title": "Aún no se puede enviar",
+				"no_van": "No tienes una van activa asignada. Contacta a un administrador.",
+				"order_no_required": "Escribe el número de orden de Claro.",
+				"address_required": "Escribe la dirección.",
+				"invalid_accessories": "No se pudieron leer las cantidades de accesorios. Vuelve al paso de materiales e inténtalo de nuevo."
+			},
+			"accessories_summary": "Accesorios prellenados para el rango de {{bracket}} pies: {{count}} líneas, {{units}} unidades.",
+			"installer_label": "Instalador",
+			"date_label": "Fecha",
+			"auto": "(auto)",
+			"scan_prompt": "Apunta la cámara al código de barras",
+			"scan_again": "Escanear de nuevo",
+			"scan_hint": "serial + foto en una sola toma",
+			"serial_label": "Serial (del escaneo)",
+			"model_label": "Modelo (resuelto)",
+			"model_unresolved": "No reconocido",
+			"scan_captured": "escaneo capturado · {{time}}",
+			"accessories_hint": "Toca un número para cambiarlo. Los cambios se registran.",
+			"required": "requerido",
+			"form_photo_alt": "Foto del formulario de Claro firmado",
+			"form_photo_prompt": "Fotografía el formulario firmado",
+			"form_photo_hint": "el cliente firmó el papel",
+			"form_photo_saved": "foto del formulario guardada · {{time}}",
+			"clear_signature": "Borrar firma",
+			"next_to": {
+				"ORDER": "Siguiente → escanear el módem",
+				"SCAN": "Siguiente → caída y materiales",
+				"MATERIALS": "Siguiente → papeleo",
+				"SIGN": "Enviar finalización"
+			}
 		},
 		"no_submitted_jobs": "Aún no se han enviado trabajos.",
 		"quick_look": "{{belowPar}} bajo par · {{owedBack}} pendientes de devolución",
 		"submitted_jobs_heading": "Mis trabajos enviados",
 		"swap": {
+			"search_label": "# de orden, dirección o serial",
+			"search": "Buscar",
+			"order": "Orden",
+			"unit": "Unidad",
+			"installed_on_by": "instalado el {{date}} por {{name}}",
+			"day_inside_warranty": "día {{n}} — dentro de la garantía de 30 días",
+			"day_outside_warranty": "día {{n}} — fuera de la garantía de 30 días",
+			"start": "Iniciar cambio →",
+			"errors": {
+				"title": "Aún no se puede enviar el cambio",
+				"no_van": "No tienes una van activa asignada.",
+				"completion_not_found": "Ese trabajo no está entre tus finalizaciones.",
+				"serial_out_required": "Escanea la unidad que sale.",
+				"serial_in_required": "Escanea la unidad que entra.",
+				"serials_identical": "La unidad que entra no puede tener el mismo serial que la que sale.",
+				"reason_required": "Elige un motivo.",
+				"swap_failed": "No se pudo guardar el cambio. Revisa el trabajo e inténtalo de nuevo."
+			},
+			"reasons": {
+				"HARDWARE": "Falla de equipo",
+				"INSTALL_DEFECT": "Defecto de instalación",
+				"CUSTOMER": "Causado por el cliente",
+				"LINE": "Línea / planta externa",
+				"OTHER": "Otro"
+			},
+			"out_mismatch_title": "No es el serial registrado.",
+			"out_mismatch_body": "Este trabajo se registró con {{recorded}}. Se guardan ambos seriales y el cambio queda marcado; puedes continuar.",
+			"in_not_on_van_title": "La unidad que entra no está en tu van.",
+			"in_not_on_van_body": "No está en el inventario de tu van. Puedes continuar; el almacén verá la diferencia.",
 			"find_heading": "Buscar el trabajo original",
 			"heading": "Cambio de garantía",
 			"new_order_no": "Nuevo n.º de orden (vacío = retorno)",
@@ -1539,26 +1652,65 @@
 			},
 			"completion": {
 				"aria": "Pasos de la instalación",
-				"order": "1. Orden",
-				"scan": "2. Escanear módem",
-				"materials": "3. Caída y materiales",
-				"sign": "4. Formulario y firma"
+				"order": "Orden",
+				"scan": "Escanear módem",
+				"materials": "Caída y materiales",
+				"sign": "Formulario y firma"
 			},
 			"callout": {
 				"home_title": "Tu van",
 				"home_body": "Inicia una nueva instalación o un cambio de garantía. Mi van muestra lo que hay a bordo y lo que debes devolver.",
-				"new_title": "Paso 1 · Tú",
-				"new_body": "Número de orden, dirección y luego escanea el módem. Cada paso se guarda localmente — nada se pierde si se cae la conexión.",
 				"swap_title": "Paso 2 · Tú",
 				"swap_body": "Busca el trabajo original, escanea la unidad que sale y la que entra. El registro original no se edita — esto es un nuevo evento sobre él.",
 				"van_title": "Tu van",
 				"van_body": "Se deriva de cada movimiento: lo que hay a bordo, lo que está bajo par y lo que debes devolver al almacén.",
 				"restock_title": "Reabastecimiento",
 				"restock_body": "Se prellena al par cuando existen datos de par. Una línea que supera el par necesita aprobación antes de ir al almacén."
+			},
+			"completion_step": {
+				"title": "Paso {{n}} de {{total}}",
+				"ORDER": "Número de orden de Claro y la dirección. Cada paso se guarda localmente — nada se pierde si se cae la conexión.",
+				"SCAN": "Escanea la caja del módem: el serial y su foto en una sola toma. El serial se escanea, nunca se escribe.",
+				"MATERIALS": "Escribe la caída en pies y la lista de accesorios se llena desde la tabla de límites. Toca un número para cambiarlo.",
+				"SIGN": "Foto del formulario de Claro firmado (el cliente firmó el papel) y tu propia firma; luego envía."
+			}
+		},
+		"home": {
+			"swap_done_title": "Cambio enviado",
+			"swap_done_body": "La unidad vieja aparece como pendiente de devolver en tu van hasta que el almacén la escanee. La unidad nueva ya salió del inventario de tu van.",
+			"jaf_number": "JAF {{n}}",
+			"van_quick_look": "{{van}} · resumen",
+			"view_van": "Ver mi van →",
+			"col_order": "Orden",
+			"col_date": "Fecha",
+			"col_type": "Tipo",
+			"col_status": "Estado",
+			"kind": {
+				"INSTALL": "Instalación",
+				"CALLBACK": "Visita de seguimiento"
+			},
+			"status": {
+				"INCOMPLETE": "Falta documentación",
+				"READY": "En cola de pago",
+				"PAID": "Pagado"
 			}
 		}
 	},
 	"installer_restock": {
+		"sent_title": "Solicitud enviada",
+		"sent_body": "Ya está en tu lista de abajo. Si está por encima del par, espera aprobación antes de que el almacén la prepare.",
+		"van_header": "{{van}} · prellenado según el par",
+		"tap_hint": "Toca una cantidad para cambiarla antes de enviar.",
+		"request_summary": "{{lines}} artículos · {{units}} unidades",
+		"trail_aria": "Estado de la solicitud de reposición",
+		"needs_signoff_note": "Necesita aprobación: esta solicitud está por encima del par y espera al supervisor de instaladores antes de que el almacén la prepare.",
+		"status": {
+			"SUBMITTED": "Enviada",
+			"NEEDS_SIGNOFF": "Necesita aprobación",
+			"APPROVED": "Aprobada",
+			"PICKED": "Preparada",
+			"RECEIVED": "Recibida"
+		},
 		"title": "Solicitar reabastecimiento",
 		"warehouse_label": "Almacén",
 		"warehouse_placeholder": "Selecciona un almacén…",
@@ -1679,6 +1831,15 @@
 		"heading": "Liberar reabastecimiento a la van"
 	},
 	"van_view": {
+		"low": "bajo",
+		"serialized": "Unidades con serial",
+		"accessories": "Accesorios",
+		"empty": "Aún no hay inventario registrado. Tu van se llena cuando el almacén la carga y baja cuando instalas.",
+		"removed_today": "retirada hoy",
+		"removed_days_ago_one": "retirada hace {{count}} día",
+		"removed_days_ago_other": "retirada hace {{count}} días",
+		"pending_scan_in": "pendiente de escaneo en el almacén",
+		"request_restock": "Pedir reposición (prellenada según el par) →",
 		"item": "Artículo",
 		"on_van": "En la van",
 		"owed_back": "Pendiente de devolución",
@@ -1817,5 +1978,13 @@
 		"batch_confirm_submit": "Cerrar corrida desde papel",
 		"paid_date": "Fecha de pago",
 		"evidence": "Evidencia (PDF/imagen)"
+	},
+	"qty_stepper": {
+		"decrease": "Disminuir",
+		"increase": "Aumentar"
+	},
+	"photo_capture": {
+		"take": "Tomar foto",
+		"remove": "Quitar foto"
 	}
 }

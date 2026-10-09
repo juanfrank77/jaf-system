@@ -134,8 +134,23 @@ export async function submitCompletion(
 					},
 				})
 			}
-			// Accessories: one INSTALL movement per line.
+			// Accessories: one INSTALL movement per line. A line the installer
+			// changed from the limit-table prefill also gets a zero-qty ADJUST
+			// row, so the edit is on the ledger without moving any stock.
 			for (const a of i.accessories) {
+				if (typeof a.prefilledQty === "number" && a.prefilledQty !== a.qty)
+					await tx.stockMovement.create({
+						data: {
+							vanId: i.vanId,
+							kind: "BULK",
+							serviceCodeId: a.serviceCodeId,
+							qty: 0,
+							type: "ADJUST",
+							refCompletionId: completion.id,
+							note: `Installer edited accessory qty: prefilled ${a.prefilledQty}, final ${a.qty}`,
+							byUserId: actor.id,
+						},
+					})
 				if (a.qty > 0)
 					await tx.stockMovement.create({
 						data: {

@@ -98,6 +98,137 @@ describe("GET /docs/:id", () => {
 		})
 	})
 
+	it("exposes the names of whoever edited the address", async () => {
+		vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
+			id: "user-1",
+			role: "ADMIN",
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			baseDoc("SIGNED", {
+				addressCorrections: [
+					{
+						original: "a",
+						corrected: "b",
+						correctedById: "crew-2",
+						correctedAt: "2026-10-01T10:00:00.000Z",
+					},
+				],
+			}) as any,
+		)
+		vi.mocked(db.auditTrail.findMany).mockResolvedValue([])
+		vi.mocked(db.user.findMany).mockResolvedValue([
+			{ id: "crew-2", name: "Ana Crew" },
+		] as any)
+		const res = await loader({
+			request: new Request("http://localhost/docs/doc-1"),
+			params: { id: "doc-1" },
+		} as any)
+		expect(res.correctorNames).toEqual({ "crew-2": "Ana Crew" })
+	})
+
+	describe("billing information by role", () => {
+		const billed = {
+			avisoNumber: "AV-9",
+			claroPdfPath: "/x.pdf",
+			avisoLines: [{ unitPrice: 4 }],
+			advanceAmount: "100",
+			contractorAccountCode: "009",
+			jafInvoiceLineTotal: "55",
+			retentionAmount: "5",
+		}
+		async function loadAs(role: string) {
+			vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
+				id: "user-1",
+				role,
+			} as any)
+			vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+				baseDoc("SUPERVISOR_APPROVED", {
+					assignedCrewIds: ["user-1"],
+					...billed,
+				}) as any,
+			)
+			vi.mocked(db.auditTrail.findMany).mockResolvedValue([
+				{
+					id: "a1",
+					action: "AVISO_ENTERED",
+					diffJson: { avisoNumber: "AV-9" },
+					user: { name: "Sup" },
+				},
+			] as any)
+			vi.mocked(db.user.findMany).mockResolvedValue([])
+			return loader({
+				request: new Request("http://localhost/docs/doc-1"),
+				params: { id: "doc-1" },
+			} as any)
+		}
+
+		it.each(["CREW", "INSTALLER"])(
+			"does not send %s any billing field or audit payload",
+			async (role) => {
+				const res = await loadAs(role)
+				for (const k of Object.keys(billed))
+					expect((res.doc as any)[k]).toBeNull()
+				expect(res.auditTrail[0].diffJson).toBeNull()
+				expect(JSON.stringify(res)).not.toContain("AV-9")
+			},
+		)
+
+		it.each(["ADMIN", "FINANCE"])(
+			"still sends %s the billing fields",
+			async (role) => {
+				const res = await loadAs(role)
+				expect(res.doc.avisoNumber).toBe("AV-9")
+				expect((res.doc as any).advanceAmount).toBe("100")
+				expect(res.auditTrail[0].diffJson).toEqual({ avisoNumber: "AV-9" })
+			},
+		)
+	})
+
+	describe("send-back banner data", () => {
+		const entry = {
+			createdAt: "2026-10-01T10:00:00.000Z",
+			byUserId: "sup-1",
+			fromStatus: "FIELD_UPDATED",
+			toStatus: "SIGNED",
+			note: "Photos are blurry",
+		}
+
+		async function loadSent(status: string) {
+			vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
+				id: "user-1",
+				role: "CREW",
+			} as any)
+			vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+				baseDoc(status, {
+					assignedCrewIds: ["user-1"],
+					sendBackHistory: [entry],
+				}) as any,
+			)
+			vi.mocked(db.user.findUnique).mockResolvedValue({
+				id: "sup-1",
+				name: "Sam Supervisor",
+			} as any)
+			vi.mocked(db.auditTrail.findMany).mockResolvedValue([])
+			vi.mocked(db.user.findMany).mockResolvedValue([])
+			return loader({
+				request: new Request("http://localhost/docs/doc-1"),
+				params: { id: "doc-1" },
+			} as any)
+		}
+
+		it("returns the latest send-back and who sent it while the job is back at SIGNED", async () => {
+			const res = await loadSent("SIGNED")
+			expect(res.latestSendBack?.note).toBe("Photos are blurry")
+			expect(res.sentByName).toBe("Sam Supervisor")
+		})
+
+		it("returns no send-back once the job was resubmitted", async () => {
+			const res = await loadSent("FIELD_UPDATED")
+			expect(res.latestSendBack).toBeNull()
+			expect(res.sentByName).toBeNull()
+		})
+	})
+
 	it("404s a crew member who is not assigned to the job, marked not-assigned", async () => {
 		vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
 			id: "crew-9",

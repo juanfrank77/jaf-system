@@ -23,9 +23,12 @@ function base64ToFile(dataUrl: string, name: string, type: string): File {
 	return new File([bytes], name, { type })
 }
 
-export async function syncOne(
-	a: QueuedAction,
-): Promise<{ ok: boolean; conflict?: SyncConflict; error?: string }> {
+export async function syncOne(a: QueuedAction): Promise<{
+	ok: boolean
+	conflict?: SyncConflict
+	error?: string
+	rejected?: { errorKey?: string; message?: string }
+}> {
 	const fd = new FormData()
 	const { formPhotoBase64, formPhotoName, formPhotoType, ...rest } =
 		a.payload as Record<string, unknown>
@@ -55,6 +58,16 @@ export async function syncOne(
 				message: "Installer state changed while offline.",
 			},
 		}
+	}
+	if (res.status === 422) {
+		const body = (await res.json().catch(() => ({}))) as {
+			validationError?: string
+			validationMessage?: string
+		}
+		if (body.validationError)
+			return { ok: false, rejected: { errorKey: body.validationError } }
+		if (body.validationMessage)
+			return { ok: false, rejected: { message: body.validationMessage } }
 	}
 	return res.ok || res.redirected
 		? { ok: true }

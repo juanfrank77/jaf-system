@@ -44,3 +44,29 @@ export function JobStepRail({
 		/>
 	)
 }
+
+/** The same lifecycle with no step current: the role's landing screens
+ * (dashboard, My Jobs) show where "you" come in. Grey steps happen to the job,
+ * not to the viewer. */
+export function JobFlowOverview({
+	viewer,
+	compact = false,
+}: {
+	viewer: Role
+	compact?: boolean
+}) {
+	const { t } = useTranslation()
+	return (
+		<StepRail
+			ariaLabel={t("job_flow.aria")}
+			current={-1}
+			compact={compact}
+			steps={JOB_STEPS.map((step) => ({
+				key: step,
+				label: t(JOB_STEP_LABEL_KEY[step]),
+				locked: step === "CLOSE" && !canViewJobStep(viewer, step),
+				mine: isJobStepMine(viewer, step),
+			}))}
+		/>
+	)
+}

@@ -1282,12 +1282,12 @@
 		"crew_sent_back_heading": "Devueltos ({{count}})",
 		"submitted_heading": "Enviados ({{count}})",
 		"submitted_badge": "Esperando revisión",
-		"prepped_awaiting_heading": "Preparados / esperando recogida ({{count}})",
-		"prepped_awaiting_badge": "Listo para recoger",
-		"missing_materials_heading": "Materiales faltantes ({{count}})",
+		"prepped_awaiting_heading": "Esperando recogida ({{count}})",
+		"prepped_awaiting_badge": "Preparado",
+		"missing_materials_heading": "Stock faltante ({{count}})",
 		"missing_materials_badge": "Falta stock",
-		"returns_to_log_heading": "Devoluciones por registrar ({{count}})",
-		"returns_to_log_badge": "Registrar devoluciones",
+		"returns_to_log_heading": "Devoluciones pendientes ({{count}})",
+		"returns_to_log_badge": "Se espera de vuelta",
 		"triage_awaiting_heading": "Unidades devueltas en espera de triaje ({{count}})",
 		"triage_awaiting_cta": "Triaje de unidades devueltas",
 		"repair_pool_tile": "Fila de reparación ({{count}})",
@@ -1303,10 +1303,10 @@
 			"awaiting_warehouse": "Esperando almacén",
 			"awaiting_crew": "Esperando cuadrilla",
 			"pending_review": "Pendientes de revisión",
-			"pending_preps": "Preparaciones pendientes",
-			"prepped_awaiting_pickup": "Preparados / esperando recogida",
-			"missing_materials": "Materiales faltantes",
-			"returns_to_log": "Devoluciones por registrar",
+			"pending_preps": "Por preparar",
+			"prepped_awaiting_pickup": "Esperando recogida",
+			"missing_materials": "Stock faltante",
+			"returns_to_log": "Devoluciones pendientes",
 			"restock_requests": "Solicitudes de reabastecimiento",
 			"open_jobs": "Trabajos abiertos",
 			"awaiting_close": "Esperando cierre",
@@ -1400,7 +1400,9 @@
 				"submitted": "ENVIADO",
 				"approved": "APROBADO"
 			}
-		}
+		},
+		"to_prep_heading": "Por preparar ({{count}})",
+		"to_prep_badge": "Por preparar"
 	},
 	"docs_status": {
 		"created": "Creado",
@@ -1935,7 +1937,9 @@
 			"sign_title_crew": "Paso 3 · Tú + Almacén",
 			"sign_body": "Cuenta cada línea juntos en una pantalla. La cuadrilla puede tomar más — cambia la cantidad. Ambos firman. La lista queda bloqueada para todos.",
 			"field_title": "Paso 4 · Tú",
-			"field_body": "Haz el trabajo y luego regístralo aquí: dirección real, GPS, materiales utilizados, fotos y tu firma. Lo que guardes sin conexión se sincroniza al reconectar."
+			"field_body": "Haz el trabajo y luego regístralo aquí: dirección real, GPS, materiales utilizados, fotos y tu firma. Lo que guardes sin conexión se sincroniza al reconectar.",
+			"warehouse_list_title": "Tus pasos",
+			"warehouse_list_body": "Prepara los materiales (2), entrégalos con ambas firmas (3) y recibe lo que regresa. Los pasos en gris les ocurren al trabajo, no a ti."
 		}
 	},
 	"finance_payroll": {

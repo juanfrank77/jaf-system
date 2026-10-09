@@ -337,32 +337,19 @@ export function computeDashboardStats(
 				(d.status === "SIGNED" || d.status === "FIELD_UPDATED") &&
 				d.materialsReturned === null,
 		)
-		const { discrepancy, shortage, overage } = computeMaterialSignals(docs)
 		return {
+			// Mockup v3 dashboard: exactly the four queues the counter works from.
 			stats: [
 				{ labelKey: "dashboard.stat.pending_preps", value: pendingPreps },
 				{
 					labelKey: "dashboard.stat.prepped_awaiting_pickup",
 					value: preppedAwaiting,
 				},
+				{ labelKey: "dashboard.stat.returns_to_log", value: returnsToLog },
 				{
 					labelKey: "dashboard.stat.missing_materials",
 					value: missingMaterials,
 				},
-				{
-					labelKey: "dashboard.stat.returns_to_log",
-					value: returnsToLog,
-				},
-				{
-					labelKey: "dashboard.stat.stage_awaiting_warehouse",
-					value: pendingPreps,
-				},
-				{ labelKey: "dashboard.stat.stage_awaiting_crew", value: 0 },
-				{ labelKey: "dashboard.stat.stage_pending_review", value: 0 },
-				{ labelKey: "dashboard.stat.stage_in_finance", value: 0 },
-				{ labelKey: "dashboard.stat.discrepancy_count", value: discrepancy },
-				{ labelKey: "dashboard.stat.shortage_count", value: shortage },
-				{ labelKey: "dashboard.stat.overage_count", value: overage },
 			],
 			alert:
 				pendingPreps > 0

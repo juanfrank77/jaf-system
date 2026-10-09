@@ -10,6 +10,7 @@ export type CrewOnlyKeys =
 	| "crewSubmittedDocs"
 
 export type WarehouseOnlyKeys =
+	| "warehouseToPrepDocs"
 	| "warehousePreppedDocs"
 	| "warehouseMissingDocs"
 	| "warehouseReturnsDocs"

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
 import {
@@ -35,6 +36,8 @@ function DashboardView({
 	docs,
 	showFilters = false,
 	showBilling = true,
+	showDocList = true,
+	intro,
 	pendingReviewDocs = [],
 	sentBackDocs = [],
 	crewOptions = [],
@@ -43,6 +46,7 @@ function DashboardView({
 	selectedCrew = null,
 	selectedJobType = null,
 	searchFilter = "",
+	warehouseToPrepDocs = [],
 	warehousePreppedDocs = [],
 	warehouseMissingDocs = [],
 	warehouseReturnsDocs = [],
@@ -61,6 +65,10 @@ function DashboardView({
 	docs: DashboardDocRow[]
 	showFilters?: boolean
 	showBilling?: boolean
+	/** The all-documents list at the foot. Warehouse works from queues only. */
+	showDocList?: boolean
+	/** Rail + callout slot under the title. */
+	intro?: ReactNode
 	pendingReviewDocs?: DashboardDocRow[]
 	sentBackDocs?: DashboardDocRow[]
 	crewOptions?: CrewOption[]
@@ -69,6 +77,7 @@ function DashboardView({
 	selectedCrew?: string | null
 	selectedJobType?: string | null
 	searchFilter?: string
+	warehouseToPrepDocs?: DashboardDocRow[]
 	warehousePreppedDocs?: DashboardDocRow[]
 	warehouseMissingDocs?: DashboardDocRow[]
 	warehouseReturnsDocs?: DashboardDocRow[]
@@ -115,6 +124,8 @@ function DashboardView({
 					searchFilter={searchFilter}
 				/>
 			)}
+
+			{intro}
 
 			{stats.length > 0 && (
 				<div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -355,6 +366,41 @@ function DashboardView({
 				</div>
 			)}
 
+			{warehouseToPrepDocs.length > 0 && (
+				<div className="space-y-2">
+					<div className="flex items-center justify-between">
+						<h2 className="text-sm font-semibold text-foreground">
+							{t("dashboard.to_prep_heading", {
+								count: warehouseToPrepDocs.length,
+							})}
+						</h2>
+						<Badge variant="warn">{warehouseToPrepDocs.length}</Badge>
+					</div>
+					{warehouseToPrepDocs.map((doc) => (
+						<Link
+							key={doc.id}
+							to={`/docs/${doc.id}/prep`}
+							className="block rounded-lg border border-transparent p-2.5 text-sm transition-colors hover:border-border hover:bg-muted/40"
+						>
+							<div className="flex items-center justify-between gap-2">
+								<span className="font-mono font-medium">
+									{doc.controlNumber}
+								</span>
+								<div className="flex items-center gap-2">
+									<Badge variant="warn">{t("dashboard.to_prep_badge")}</Badge>
+									<span className="text-muted-foreground/50" aria-hidden>
+										›
+									</span>
+								</div>
+							</div>
+							<p className="mt-1 text-xs text-muted-foreground/70">
+								{doc.jobType} — {doc.jobAddressEstimated}
+							</p>
+						</Link>
+					))}
+				</div>
+			)}
+
 			{warehousePreppedDocs.length > 0 && (
 				<div className="space-y-2">
 					<div className="flex items-center justify-between">
@@ -399,38 +445,6 @@ function DashboardView({
 				</div>
 			)}
 
-			{warehouseMissingDocs.length > 0 && (
-				<div className="space-y-2">
-					<div className="flex items-center justify-between">
-						<h2 className="text-sm font-semibold text-foreground">
-							{t("dashboard.missing_materials_heading", {
-								count: warehouseMissingDocs.length,
-							})}
-						</h2>
-						<Badge variant="danger">{warehouseMissingDocs.length}</Badge>
-					</div>
-					{warehouseMissingDocs.map((doc) => (
-						<Link
-							key={doc.id}
-							to={`/docs/${doc.id}/prep`}
-							className="block rounded-lg border border-transparent p-2.5 text-sm transition-colors hover:border-border hover:bg-muted/40"
-						>
-							<div className="flex items-center justify-between gap-2">
-								<span className="font-mono font-medium">
-									{doc.controlNumber}
-								</span>
-								<Badge variant="danger">
-									{t("dashboard.missing_materials_badge")}
-								</Badge>
-							</div>
-							<p className="mt-1 text-xs text-muted-foreground/70">
-								{doc.jobType} — {doc.jobAddressEstimated}
-							</p>
-						</Link>
-					))}
-				</div>
-			)}
-
 			{warehouseReturnsDocs.length > 0 && (
 				<div className="space-y-2">
 					<div className="flex items-center justify-between">
@@ -453,6 +467,38 @@ function DashboardView({
 								</span>
 								<Badge variant="warn">
 									{t("dashboard.returns_to_log_badge")}
+								</Badge>
+							</div>
+							<p className="mt-1 text-xs text-muted-foreground/70">
+								{doc.jobType} — {doc.jobAddressEstimated}
+							</p>
+						</Link>
+					))}
+				</div>
+			)}
+
+			{warehouseMissingDocs.length > 0 && (
+				<div className="space-y-2">
+					<div className="flex items-center justify-between">
+						<h2 className="text-sm font-semibold text-foreground">
+							{t("dashboard.missing_materials_heading", {
+								count: warehouseMissingDocs.length,
+							})}
+						</h2>
+						<Badge variant="danger">{warehouseMissingDocs.length}</Badge>
+					</div>
+					{warehouseMissingDocs.map((doc) => (
+						<Link
+							key={doc.id}
+							to={`/docs/${doc.id}/prep`}
+							className="block rounded-lg border border-transparent p-2.5 text-sm transition-colors hover:border-border hover:bg-muted/40"
+						>
+							<div className="flex items-center justify-between gap-2">
+								<span className="font-mono font-medium">
+									{doc.controlNumber}
+								</span>
+								<Badge variant="danger">
+									{t("dashboard.missing_materials_badge")}
 								</Badge>
 							</div>
 							<p className="mt-1 text-xs text-muted-foreground/70">
@@ -509,7 +555,9 @@ function DashboardView({
 				</div>
 			)}
 
-			<DashboardDocList docs={docs} showBilling={showBilling} />
+			{showDocList && (
+				<DashboardDocList docs={docs} showBilling={showBilling} />
+			)}
 		</div>
 	)
 }

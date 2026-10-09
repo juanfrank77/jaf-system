@@ -366,6 +366,18 @@ export async function loader({ request }: Route.LoaderArgs) {
 			: [],
 	)
 
+	const warehouseToPrepDocs =
+		user.role === "WAREHOUSE"
+			? await db.jafInvoice.findMany({
+					where: {
+						...(await buildBaseWhere(user.role, user.id)),
+						status: "CREATED",
+					},
+					orderBy: { createdAt: "desc" },
+					take: 50,
+				})
+			: []
+
 	const warehouseMissingDocs =
 		user.role === "WAREHOUSE"
 			? await db.jafInvoice.findMany({
@@ -483,6 +495,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		selectedCrew,
 		selectedJobType,
 		searchFilter,
+		warehouseToPrepDocs,
 		warehousePreppedDocs,
 		warehouseMissingDocs,
 		warehouseReturnsDocs,
@@ -514,6 +527,7 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 		selectedCrew,
 		selectedJobType,
 		searchFilter,
+		warehouseToPrepDocs,
 		warehousePreppedDocs,
 		warehouseMissingDocs,
 		warehouseReturnsDocs,
@@ -577,6 +591,7 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 			selectedCrew={selectedCrew}
 			selectedJobType={selectedJobType}
 			searchFilter={searchFilter}
+			warehouseToPrepDocs={warehouseToPrepDocs}
 			warehousePreppedDocs={warehousePreppedDocs}
 			warehouseMissingDocs={warehouseMissingDocs}
 			warehouseReturnsDocs={warehouseReturnsDocs}

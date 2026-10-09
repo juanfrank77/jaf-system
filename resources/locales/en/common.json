@@ -1282,12 +1282,12 @@
 		"crew_sent_back_heading": "Sent Back ({{count}})",
 		"submitted_heading": "Submitted ({{count}})",
 		"submitted_badge": "Awaiting review",
-		"prepped_awaiting_heading": "Prepped / Awaiting Pickup ({{count}})",
-		"prepped_awaiting_badge": "Ready for pickup",
-		"missing_materials_heading": "Missing Materials ({{count}})",
+		"prepped_awaiting_heading": "Awaiting pickup ({{count}})",
+		"prepped_awaiting_badge": "Staged",
+		"missing_materials_heading": "Missing stock ({{count}})",
 		"missing_materials_badge": "Missing stock",
-		"returns_to_log_heading": "Returns to Log ({{count}})",
-		"returns_to_log_badge": "Log returns",
+		"returns_to_log_heading": "Returns due ({{count}})",
+		"returns_to_log_badge": "Expected back",
 		"triage_awaiting_heading": "Returned units awaiting triage ({{count}})",
 		"triage_awaiting_cta": "Triage returned units",
 		"repair_pool_tile": "Repair Pool ({{count}})",
@@ -1303,10 +1303,10 @@
 			"awaiting_warehouse": "Awaiting warehouse",
 			"awaiting_crew": "Awaiting crew",
 			"pending_review": "Pending review",
-			"pending_preps": "Pending preps",
-			"prepped_awaiting_pickup": "Prepped / awaiting pickup",
-			"missing_materials": "Missing materials",
-			"returns_to_log": "Returns to log",
+			"pending_preps": "To prep",
+			"prepped_awaiting_pickup": "Awaiting pickup",
+			"missing_materials": "Missing stock",
+			"returns_to_log": "Returns due",
 			"restock_requests": "Restock requests",
 			"open_jobs": "Open jobs",
 			"awaiting_close": "Awaiting close",
@@ -1400,7 +1400,9 @@
 				"submitted": "SUBMITTED",
 				"approved": "APPROVED"
 			}
-		}
+		},
+		"to_prep_heading": "To prep ({{count}})",
+		"to_prep_badge": "To prep"
 	},
 	"docs_status": {
 		"created": "Created",
@@ -1935,7 +1937,9 @@
 			"sign_title_crew": "Step 3 · You + Warehouse",
 			"sign_body": "Count each line together on one screen. The crew may take more — change the number. Both sign. The list locks for everyone.",
 			"field_title": "Step 4 · You",
-			"field_body": "Do the job, then log it here: actual address, GPS, materials used, photos and your signature. What you save offline syncs when you reconnect."
+			"field_body": "Do the job, then log it here: actual address, GPS, materials used, photos and your signature. What you save offline syncs when you reconnect.",
+			"warehouse_list_title": "Your steps",
+			"warehouse_list_body": "Stage the materials (2), release them with both signatures (3), receive what comes back. Grey steps happen to the job, not to you."
 		}
 	},
 	"finance_payroll": {

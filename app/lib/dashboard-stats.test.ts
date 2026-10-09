@@ -95,15 +95,8 @@ describe("computeDashboardStats", () => {
 		expect(stats).toEqual([
 			{ labelKey: "dashboard.stat.pending_preps", value: 2 },
 			{ labelKey: "dashboard.stat.prepped_awaiting_pickup", value: 0 },
-			{ labelKey: "dashboard.stat.missing_materials", value: 0 },
 			{ labelKey: "dashboard.stat.returns_to_log", value: 1 },
-			{ labelKey: "dashboard.stat.stage_awaiting_warehouse", value: 2 },
-			{ labelKey: "dashboard.stat.stage_awaiting_crew", value: 0 },
-			{ labelKey: "dashboard.stat.stage_pending_review", value: 0 },
-			{ labelKey: "dashboard.stat.stage_in_finance", value: 0 },
-			{ labelKey: "dashboard.stat.discrepancy_count", value: 0 },
-			{ labelKey: "dashboard.stat.shortage_count", value: 0 },
-			{ labelKey: "dashboard.stat.overage_count", value: 0 },
+			{ labelKey: "dashboard.stat.missing_materials", value: 0 },
 		])
 		expect(alert).toEqual({
 			variant: "warn",

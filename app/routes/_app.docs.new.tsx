@@ -62,7 +62,6 @@ export async function action({ request }: Route.ActionArgs) {
 	const jobDescription =
 		(form.get("jobDescription") as string | null)?.trim() || null
 	const brigadeIds = parseBrigadeIds(form)
-	const avisoNumber = (form.get("avisoNumber") as string | null)?.trim() || null
 	const materialsRaw = (form.get("materials") as string) || "[]"
 
 	let estimatedMaterials: { serviceCodeId: string; qty: number }[] = []
@@ -84,10 +83,6 @@ export async function action({ request }: Route.ActionArgs) {
 
 	if (!jobType || !jobAddressEstimated || brigadeIds.length === 0) {
 		return { errorKey: "docs_new.errors.missing_fields" }
-	}
-
-	if (avisoNumber && !/^\d{8}$/.test(avisoNumber)) {
-		return { errorKey: "docs_new.errors.aviso_invalid" }
 	}
 
 	const brigades = await Promise.all(
@@ -118,7 +113,6 @@ export async function action({ request }: Route.ActionArgs) {
 				jobType,
 				jobAddressEstimated,
 				jobDescription,
-				avisoNumber,
 				estimatedMaterials,
 				serviceLines,
 				brigadeId,
@@ -194,21 +188,6 @@ export default function NewDoc({
 									className="mt-1 font-mono"
 								/>
 								<Hint>{t("docs_new.work_order_hint")}</Hint>
-							</div>
-							<div>
-								<Label htmlFor="avisoNumber">
-									{t("docs_new.aviso_number_label")}
-								</Label>
-								<Input
-									id="avisoNumber"
-									name="avisoNumber"
-									inputMode="numeric"
-									pattern="\d{8}"
-									maxLength={8}
-									placeholder="10353961"
-									className="mt-1 font-mono"
-								/>
-								<Hint>{t("docs_new.aviso_hint")}</Hint>
 							</div>
 						</div>
 						<div className="grid gap-4 md:grid-cols-2">

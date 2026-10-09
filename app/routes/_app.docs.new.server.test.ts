@@ -106,34 +106,14 @@ describe("POST /docs/new", () => {
 		return form
 	}
 
-	it("stores an 8-digit Aviso number when one is given", async () => {
+	it("never stores an Aviso number at intake, even if one is posted", async () => {
 		const res = await action({
-			request: post(validForm(" 10353961 ")),
+			request: post(validForm("10353961")),
 			params: {},
 		} as any).catch((r) => r)
 		expect(res.status).toBe(302)
-		expect(tx.jafInvoice.create).toHaveBeenCalledWith({
-			data: expect.objectContaining({ avisoNumber: "10353961" }),
-		})
-	})
-
-	it("leaves avisoNumber null when the field is blank or absent", async () => {
-		for (const form of [validForm(""), validForm()]) {
-			tx.jafInvoice.create.mockClear()
-			await action({ request: post(form), params: {} } as any).catch((r) => r)
-			expect(tx.jafInvoice.create).toHaveBeenCalledWith({
-				data: expect.objectContaining({ avisoNumber: null }),
-			})
-		}
-	})
-
-	it("rejects an Aviso number that is not 8 digits", async () => {
-		const res = await action({
-			request: post(validForm("1035396")),
-			params: {},
-		} as any)
-		expect(res).toEqual({ errorKey: "docs_new.errors.aviso_invalid" })
-		expect(tx.jafInvoice.create).not.toHaveBeenCalled()
+		const { data } = tx.jafInvoice.create.mock.calls[0][0]
+		expect(data).not.toHaveProperty("avisoNumber")
 	})
 
 	describe("several brigades", () => {

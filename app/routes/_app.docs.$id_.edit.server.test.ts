@@ -320,7 +320,7 @@ describe("edit form data", () => {
 	})
 })
 
-describe("edit Aviso number", () => {
+describe("edit never touches the Aviso number", () => {
 	const brigade = { id: "b1", area: "SUR", memberIds: ["u1"] }
 	beforeEach(() => {
 		vi.clearAllMocks()
@@ -347,22 +347,13 @@ describe("edit Aviso number", () => {
 		} as any).catch((r) => r)
 	}
 
-	it("rejects a changed Aviso that is not 8 digits", async () => {
+	it("leaves the stored Aviso untouched, even if one is posted", async () => {
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
 			baseDoc({ avisoNumber: null }) as any,
 		)
-		expect(await run("123")).toEqual({
-			errorKey: "docs_edit.errors.aviso_invalid",
-		})
-		expect(tx.jafInvoice.update).not.toHaveBeenCalled()
-	})
-
-	it("still saves when an older, non-8-digit Aviso is left unchanged", async () => {
-		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
-			baseDoc({ avisoNumber: "M17-10353718" }) as any,
-		)
-		const res = await run("M17-10353718")
+		const res = await run("10353961")
 		expect(res.status).toBe(302)
-		expect(tx.jafInvoice.update).toHaveBeenCalled()
+		const { data } = tx.jafInvoice.update.mock.calls[0][0]
+		expect(data).not.toHaveProperty("avisoNumber")
 	})
 })

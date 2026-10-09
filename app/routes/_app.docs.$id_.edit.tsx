@@ -107,7 +107,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const jobDescription =
 		(form.get("jobDescription") as string | null)?.trim() || null
 	const brigadeIds = parseBrigadeIds(form)
-	const avisoNumber = (form.get("avisoNumber") as string | null)?.trim() || null
 	const materialsRaw = (form.get("materials") as string) || "[]"
 
 	let estimatedMaterials: { serviceCodeId: string; qty: number }[] = []
@@ -129,14 +128,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 	if (!jobType || !jobAddressEstimated || brigadeIds.length === 0) {
 		return { errorKey: "docs_edit.errors.missing_fields" }
-	}
-
-	if (
-		avisoNumber &&
-		avisoNumber !== doc.avisoNumber &&
-		!/^\d{8}$/.test(avisoNumber)
-	) {
-		return { errorKey: "docs_edit.errors.aviso_invalid" }
 	}
 
 	const brigades = await Promise.all(
@@ -188,7 +179,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 						},
 					],
 				}),
-				avisoNumber,
 				// PRD §2.7: editing materials after prep started → flag for re-confirm.
 				prepChangedSincePrep:
 					doc.status === "PREPPED" && materialsChanged
@@ -210,7 +200,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 						"serviceLines",
 						"brigadeId",
 						"assignedCrewIds",
-						"avisoNumber",
 					],
 					brigadeIds,
 					materialsChanged,
@@ -265,20 +254,6 @@ export default function EditDoc({
 									disabled
 									className="mt-1 font-mono"
 								/>
-							</div>
-							<div>
-								<Label htmlFor="avisoNumber">
-									{t("docs_new.aviso_number_label")}
-								</Label>
-								<Input
-									id="avisoNumber"
-									name="avisoNumber"
-									defaultValue={doc.avisoNumber ?? ""}
-									inputMode="numeric"
-									placeholder="10353961"
-									className="mt-1 font-mono"
-								/>
-								<Hint>{t("docs_new.aviso_hint")}</Hint>
 							</div>
 						</div>
 						<div className="grid gap-4 md:grid-cols-2">

@@ -51,6 +51,7 @@ import {
 	checkAvisoMatch,
 	deriveSupervisorStage,
 	evaluateReleaseGate,
+	isAvisoStarted,
 	panelForStep,
 	resolveStepView,
 	SUPERVISOR_STAGES,
@@ -172,7 +173,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const stage = deriveSupervisorStage(doc, sheet)
 	const { view, interactive } = resolveStepView(
 		stage,
-		!!doc.avisoNumber || doc.avisoLines != null,
+		isAvisoStarted(doc),
 		new URL(request.url).searchParams.get("step"),
 	)
 	const gate = evaluateReleaseGate(
@@ -1354,7 +1355,7 @@ export default function ReviewDoc({
 				: null
 	// Once an Aviso number or lines are saved the invoice is what was keyed into
 	// Claro, so it can no longer be regenerated from here.
-	const avisoStarted = !!doc.avisoNumber || doc.avisoLines != null
+	const avisoStarted = isAvisoStarted(doc)
 
 	return (
 		<div className="space-y-5">

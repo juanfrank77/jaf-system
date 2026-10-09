@@ -252,7 +252,6 @@
 		"job_address_label": "Dirección del trabajo (estimada)",
 		"job_description_label": "Descripción del trabajo",
 		"service_codes_label": "Códigos de servicio",
-		"aviso_number_label": "# de aviso Claro (si se conoce)",
 		"assigned_crew_label": "Cuadrilla asignada",
 		"estimated_materials_label": "Materiales a preparar",
 		"callout_title": "Paso 1 · Usted",
@@ -260,7 +259,6 @@
 		"work_order_label": "# de orden de trabajo JAF",
 		"work_order_auto": "Se asigna al crear",
 		"work_order_hint": "Se asigna automáticamente. No es la factura ni el Aviso.",
-		"aviso_hint": "8 dígitos, p. ej. 10353961. Si Claro le dio el Aviso con el trabajo, anótelo. Si no, se anota en el paso 6.",
 		"job_address_hint": "Estimada — la brigada la corrige en sitio.",
 		"crew_hint": "Solo se listan las brigadas de su área.",
 		"flow_prefix": "Al enviar",
@@ -269,7 +267,6 @@
 		"estimated_materials_hint": "Materiales físicos que el almacén debe preparar para este trabajo — aparte de los códigos de servicio de arriba. Busque por nombre o código.",
 		"submit": "Crear orden de trabajo",
 		"errors": {
-			"aviso_invalid": "El número de Aviso debe tener exactamente 8 dígitos.",
 			"invalid_materials": "Datos de materiales inválidos",
 			"invalid_service_lines": "No se pudieron leer los códigos de servicio.",
 			"missing_fields": "Se requieren tipo de trabajo, dirección y al menos un miembro de la cuadrilla",
@@ -282,7 +279,6 @@
 		"job_description_label": "Descripción del trabajo",
 		"service_codes_label": "Códigos de servicio",
 		"errors": {
-			"aviso_invalid": "El número de Aviso debe tener exactamente 8 dígitos.",
 			"invalid_materials": "No se pudo leer la lista de materiales",
 			"invalid_service_lines": "No se pudieron leer los códigos de servicio.",
 			"missing_fields": "Se requieren tipo de trabajo, dirección y al menos un miembro de la cuadrilla",

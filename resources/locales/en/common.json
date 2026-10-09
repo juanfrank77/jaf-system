@@ -252,7 +252,6 @@
 		"job_address_label": "Job Address (estimated)",
 		"job_description_label": "Job description",
 		"service_codes_label": "Service codes",
-		"aviso_number_label": "Claro Aviso # (if known)",
 		"assigned_crew_label": "Assigned Crew",
 		"estimated_materials_label": "Materials to prep",
 		"callout_title": "Step 1 · You",
@@ -260,7 +259,6 @@
 		"work_order_label": "JAF Work Order #",
 		"work_order_auto": "Assigned on create",
 		"work_order_hint": "Assigned automatically. Not the invoice, not the Aviso.",
-		"aviso_hint": "8 digits, e.g. 10353961. If Claro gave you the Aviso with the job, enter it. Otherwise it is entered at step 6.",
 		"job_address_hint": "Estimated — the crew corrects it on site.",
 		"crew_hint": "Only your area’s brigades are listed.",
 		"flow_prefix": "On submit",
@@ -269,7 +267,6 @@
 		"estimated_materials_hint": "Physical materials the warehouse should prep for this job — separate from the service codes above. Search by name or code.",
 		"submit": "Create Work Order",
 		"errors": {
-			"aviso_invalid": "The Aviso number must be exactly 8 digits.",
 			"invalid_materials": "Invalid materials data",
 			"invalid_service_lines": "Service codes could not be read.",
 			"missing_fields": "Job type, address, and at least one crew member are required",
@@ -282,7 +279,6 @@
 		"job_description_label": "Job description",
 		"service_codes_label": "Service codes",
 		"errors": {
-			"aviso_invalid": "The Aviso number must be exactly 8 digits.",
 			"invalid_materials": "The materials list could not be read",
 			"invalid_service_lines": "Service codes could not be read.",
 			"missing_fields": "Job type, address, and at least one crew member are required",

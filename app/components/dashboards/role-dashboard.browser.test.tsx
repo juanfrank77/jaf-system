@@ -71,7 +71,7 @@ describe("RoleDashboard", () => {
 	}
 
 	for (const role of ["WAREHOUSE", "CREW"] as const) {
-		it(`hides the Aviso number from the ${role} document list`, async ({
+		it(`hides the Aviso number from the ${role} dashboard`, async ({
 			renderStub,
 		}) => {
 			await mount(
@@ -83,7 +83,12 @@ describe("RoleDashboard", () => {
 					docs={[billedDoc]}
 				/>,
 			)
-			expect(screen.getByText("JAF-1")).toBeInTheDocument()
+			// Warehouse works from its four queues only (mockup v3): no all-docs list.
+			if (role === "WAREHOUSE") {
+				expect(screen.queryByText("JAF-1")).not.toBeInTheDocument()
+			} else {
+				expect(screen.getByText("JAF-1")).toBeInTheDocument()
+			}
 			expect(screen.queryByText(/12345678/)).not.toBeInTheDocument()
 		})
 	}

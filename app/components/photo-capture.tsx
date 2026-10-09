@@ -35,14 +35,24 @@ export function PhotoCapture({
 	// Object URLs for the thumbnails; revoked when a photo goes away.
 	useEffect(() => {
 		const next: Record<string, string> = {}
+		let changed = false
 		for (const p of photos) {
-			next[p.id] = created.current[p.id] ?? URL.createObjectURL(p.file)
+			const existing = created.current[p.id]
+			if (existing) {
+				next[p.id] = existing
+			} else {
+				next[p.id] = URL.createObjectURL(p.file)
+				changed = true
+			}
 		}
 		for (const [id, url] of Object.entries(created.current)) {
-			if (!next[id]) URL.revokeObjectURL(url)
+			if (!next[id]) {
+				URL.revokeObjectURL(url)
+				changed = true
+			}
 		}
 		created.current = next
-		setUrls(next)
+		if (changed) setUrls(next)
 	}, [photos])
 	useEffect(
 		() => () => {

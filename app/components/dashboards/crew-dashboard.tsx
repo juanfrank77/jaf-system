@@ -1,5 +1,6 @@
 import { ChevronRightIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
+import { useMemo } from "react"
 import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
 import type { DashboardDocRow } from "~/components/dashboard-doc-list"
@@ -50,16 +51,20 @@ export function CrewDashboard(
 		crewSubmittedDocs = [],
 		docs,
 	} = props
-	const approved = docs
-		.filter((d) => APPROVED_STATUSES.has(d.status))
-		.slice(0, MAX_APPROVED)
-	const rows: { kind: CrewRowKind; doc: DashboardDocRow }[] = [
-		...crewSentBackDocs.map((doc) => ({ kind: "sent_back" as const, doc })),
-		...crewPreppedDocs.map((doc) => ({ kind: "ready" as const, doc })),
-		...crewInFieldDocs.map((doc) => ({ kind: "on_site" as const, doc })),
-		...crewSubmittedDocs.map((doc) => ({ kind: "submitted" as const, doc })),
-		...approved.map((doc) => ({ kind: "approved" as const, doc })),
-	]
+	const approved = useMemo(
+		() => docs.filter((d) => APPROVED_STATUSES.has(d.status)).slice(0, MAX_APPROVED),
+		[docs],
+	)
+	const rows = useMemo(
+		() => [
+			...crewSentBackDocs.map((doc) => ({ kind: "sent_back" as const, doc })),
+			...crewPreppedDocs.map((doc) => ({ kind: "ready" as const, doc })),
+			...crewInFieldDocs.map((doc) => ({ kind: "on_site" as const, doc })),
+			...crewSubmittedDocs.map((doc) => ({ kind: "submitted" as const, doc })),
+			...approved.map((doc) => ({ kind: "approved" as const, doc })),
+		],
+		[crewSentBackDocs, crewPreppedDocs, crewInFieldDocs, crewSubmittedDocs, approved],
+	)
 	const open = rows.length - approved.length
 
 	return (

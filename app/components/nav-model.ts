@@ -208,8 +208,12 @@ const NAV_ITEMS: NavItem[] = [
 	},
 ]
 
-function visibleItems(role: Role, opts: { comptrollerEnabled?: boolean }) {
+type NavOpts = { comptrollerEnabled?: boolean; varianceEnabled?: boolean }
+
+function visibleItems(role: Role, opts: NavOpts) {
 	return NAV_ITEMS.filter((item) => {
+		if (item.to === "/supervisor/variance" && !opts.varianceEnabled)
+			return false
 		if (item.to.startsWith("/comptroller") && !opts.comptrollerEnabled)
 			return false
 		if (item.hideFor?.includes(role)) return false
@@ -217,10 +221,7 @@ function visibleItems(role: Role, opts: { comptrollerEnabled?: boolean }) {
 	})
 }
 
-export function navGroupsFor(
-	role: Role,
-	opts: { comptrollerEnabled?: boolean } = {},
-): NavGroup[] {
+export function navGroupsFor(role: Role, opts: NavOpts = {}): NavGroup[] {
 	const items = visibleItems(role, opts)
 	return GROUP_ORDER.map((key) => ({
 		key,
@@ -254,10 +255,7 @@ const INSTALLER_TABS: NavItem[] = [
 	},
 ]
 
-export function tabBarItemsFor(
-	role: Role,
-	opts: { comptrollerEnabled?: boolean } = {},
-): NavItem[] {
+export function tabBarItemsFor(role: Role, opts: NavOpts = {}): NavItem[] {
 	if (!TAB_BAR_ROLES.includes(role)) return []
 	if (role === "INSTALLER") return INSTALLER_TABS
 	const items = visibleItems(role, opts)

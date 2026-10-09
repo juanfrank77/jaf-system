@@ -85,6 +85,7 @@ Create a `.env` file in the project root (`/opt/jaf-operations/.env`). This file
 | `BETTER_AUTH_URL` | `https://jaf.internal.client-domain.com` | The public HTTPS URL users will hit. Must match exactly (scheme + host), or login/sessions will break. |
 | `UPLOAD_DIR` | `/var/lib/jaf-operations/uploads` | Where job photos, signature images, and generated PDFs are stored. **See note below.** |
 | `ENABLE_COMPTROLLER` | `false` | Unset or `false` to hide the dormant `/comptroller` screens, `/comptroller` nav item, COMPTROLLER file reads, and COMPTROLLER's receivables view — including the `payroll-runs/` branch in `files.$.tsx`. **Does not gate Lissette's Arm A screens** (`/finance/*`). |
+| `ENABLE_VARIANCE` | `false` | Unset or `false` to hide the supervisor Material Variance page (`/supervisor/variance`, 404) and its nav item. Set `true` once the page reconciles with the warehouse count. |
 
 **Connection-string gotcha — `DATABASE_URL`:** Prisma parses this URL strictly. If the database password (or username) contains any of these characters — `@  /  ?  #  %  &  +  =` or a space — they **must be percent-encoded**, or Prisma throws `P1013: invalid port number in database URL`. The port itself is fine; the special characters truncate the URL before `:port`, so Prisma reads an empty/non-numeric port. Encode them as: `@`→`%40`, `#`→`%23`, `?`→`%3F`, `/`→`%2F`, `%`→`%25`, `&`→`%26`, `+`→`%2B`, `=`→`%3D`, space→`%20`.
 

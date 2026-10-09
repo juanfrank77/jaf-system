@@ -26,11 +26,22 @@ import { loader } from "./_app.supervisor.variance"
 describe("GET /supervisor/variance", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
+		vi.stubEnv("ENABLE_VARIANCE", "true")
 		vi.mocked(requireRole).mockResolvedValue({
 			user: { id: "sup-1", role: "SUPERVISOR" },
 			session: {},
 		} as any)
 		vi.mocked(supervisorAreas).mockResolvedValue(["CENTRAL"])
+	})
+
+	it("404s when ENABLE_VARIANCE is off", async () => {
+		vi.stubEnv("ENABLE_VARIANCE", "false")
+		await expect(
+			loader({
+				request: new Request("http://localhost/supervisor/variance"),
+				params: {},
+			} as any),
+		).rejects.toMatchObject({ init: { status: 404 } })
 	})
 
 	it("caps the query at take: 100 and scopes it via the shared ownedOrInArea helper", async () => {

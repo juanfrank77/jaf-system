@@ -103,6 +103,10 @@ export function DashboardFilters({
 			</div>
 			<div className="grid grid-cols-1 gap-3 sm:grid-cols-4 items-end">
 				<Select
+					items={STATUS_OPTIONS.map((o) => ({
+						value: o.value,
+						label: t(o.labelKey),
+					}))}
 					value={selectedStatus || ""}
 					onValueChange={(v) => {
 						const params = new URLSearchParams(location.search)
@@ -127,6 +131,7 @@ export function DashboardFilters({
 				</Select>
 
 				<Select
+					items={crewOptions.map((c) => ({ value: c.id, label: c.name }))}
 					value={selectedCrew || ""}
 					onValueChange={(v) => {
 						const params = new URLSearchParams(location.search)
@@ -150,6 +155,7 @@ export function DashboardFilters({
 				</Select>
 
 				<Select
+					items={(jobTypeOptions || []).map((jt) => ({ value: jt, label: jt }))}
 					value={selectedJobType || ""}
 					onValueChange={(v) => {
 						const params = new URLSearchParams(location.search)

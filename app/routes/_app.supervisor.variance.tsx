@@ -1,8 +1,9 @@
 import { useTranslation } from "react-i18next"
-import { Link } from "react-router"
+import { data, Link } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { computeMaterialSignals } from "~/lib/dashboard-stats"
 import { db } from "~/lib/db.server"
+import { isVarianceEnabled } from "~/lib/features.server"
 import { requireRole } from "~/lib/permissions.server"
 import { ownedOrInArea, supervisorAreas } from "~/lib/supervisor-scope"
 import { buildVarianceLines, collectVariance } from "~/lib/variance.server"
@@ -13,6 +14,7 @@ export const meta: Route.MetaFunction = () => [
 ]
 
 export async function loader({ request }: Route.LoaderArgs) {
+	if (!isVarianceEnabled()) throw data(null, { status: 404 })
 	const { user } = await requireRole(request, ["SUPERVISOR"])
 	const areas = await supervisorAreas(db, user.id)
 
@@ -62,9 +64,6 @@ export default function SupervisorVariance({
 			<h1 className="text-xl font-semibold">
 				{t("supervisor_variance.title")}
 			</h1>
-			<p className="text-sm text-muted-foreground">
-				{t("supervisor_variance.readonly_note")}
-			</p>
 
 			<section className="bg-card border rounded-lg overflow-hidden">
 				<table className="w-full text-sm">

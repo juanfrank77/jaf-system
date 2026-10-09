@@ -8,6 +8,11 @@ export function isComptrollerEnabled(): boolean {
 	return process.env.ENABLE_COMPTROLLER === "true"
 }
 
+/** Supervisor material-variance page + nav item. Off unless ENABLE_VARIANCE=true. */
+export function isVarianceEnabled(): boolean {
+	return process.env.ENABLE_VARIANCE === "true"
+}
+
 /** Dashboard filter bar. On by default (Phase 3, Sept 2026); disable with ENABLE_DASHBOARD_FILTERS=false. */
 export function isDashboardFiltersEnabled(): boolean {
 	return process.env.ENABLE_DASHBOARD_FILTERS !== "false"

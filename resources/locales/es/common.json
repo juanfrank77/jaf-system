@@ -966,7 +966,6 @@
 	},
 	"supervisor_variance": {
 		"title": "Variación de Materiales",
-		"readonly_note": "Las señales de devolución/reparación de seriales y de existencias faltantes (LOST) aparecerán aquí cuando se implementen Spec A/Spec B. Las etiquetas de sobrante/discrepancia/faltante resumen todo el documento, mientras que la tabla de líneas debajo muestra el detalle ordenado-vs-instalado por código de servicio, así que una etiqueta sin una fila de línea exactamente correspondiente es esperado, no un error.",
 		"table": {
 			"doc": "Documento",
 			"brigade": "Brigada",
@@ -1237,16 +1236,6 @@
 		"listed": "En lista"
 	},
 	"dashboard": {
-		"status_plain": {
-			"CREATED": "Nuevo",
-			"PREPPED": "Preparado",
-			"SIGNED": "Recogido",
-			"FIELD_UPDATED": "Enviado",
-			"SUPERVISOR_APPROVED": "Aprobado",
-			"CLARO_UPLOADED": "Aprobado",
-			"LC_REQUEST_GENERATED": "Aprobado",
-			"CANCELLED": "Cancelado"
-		},
 		"title": "Panel",
 		"supervisor_scope_one": "{{areas}} · {{count}} brigada",
 		"supervisor_scope_other": "{{areas}} · {{count}} brigadas",
@@ -1299,7 +1288,7 @@
 		"missing_materials_badge": "Falta stock",
 		"returns_to_log_heading": "Devoluciones por registrar ({{count}})",
 		"returns_to_log_badge": "Registrar devoluciones",
-		"triage_awaiting_heading": "En espera de disposición ({{count}})",
+		"triage_awaiting_heading": "Unidades devueltas en espera de triaje ({{count}})",
 		"triage_awaiting_cta": "Triaje de unidades devueltas",
 		"repair_pool_tile": "Fila de reparación ({{count}})",
 		"needs_review_tile": "Requiere revisión ({{count}})",
@@ -1800,6 +1789,7 @@
 		"col_code": "Servicio",
 		"col_description": "Descripción",
 		"col_ordered": "Ordenado",
+		"col_type": "Tipo",
 		"col_account": "Cuenta",
 		"col_qty": "Cant.",
 		"col_unit": "Unidad",

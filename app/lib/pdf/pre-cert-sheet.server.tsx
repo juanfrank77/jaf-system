@@ -7,7 +7,7 @@ import {
 	Text,
 	View,
 } from "@react-pdf/renderer"
-import type { PreCertLine } from "~/lib/service-lines"
+import { type PreCertLine, sumLines } from "~/lib/service-lines"
 
 type PreCertPdfParams = {
 	avisoNumber: string | null
@@ -15,7 +15,6 @@ type PreCertPdfParams = {
 	title: string
 	certifiedAddress: string
 	lines: PreCertLine[]
-	total: number
 	sigSupervisor: {
 		name: string
 		image: string | null
@@ -159,7 +158,7 @@ export async function generatePreCertSheetPdf(
 					</View>
 				))}
 				<View style={s.total}>
-					<Text>TOTAL ${p.total.toFixed(2)}</Text>
+					<Text>TOTAL ${sumLines(p.lines).toFixed(2)}</Text>
 				</View>
 				<Text style={s.certLine}>
 					Supervisor de Claro aprobó trabajos realizados

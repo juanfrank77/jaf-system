@@ -73,20 +73,22 @@ function buildInitialReturnLines(
 		(savedReturns ?? []).map((r) => [r.serviceCodeId, r.returnedQty]),
 	)
 
-	return taken.map((m) => {
-		const takenQty = m.qty || 0
-		const usedQty = usedMap[m.serviceCodeId] ?? 0
-		const expectedBack = expectedBackFor(takenQty, usedQty)
-		const saved = savedMap.get(m.serviceCodeId)
-		return {
-			_key: nextReturnKey(),
-			serviceCodeId: m.serviceCodeId || "",
-			takenQty,
-			usedQty,
-			expectedBack,
-			receivedQty: saved ?? expectedBack,
-		}
-	})
+	return taken
+		.filter((m) => m.serviceCodeId)
+		.map((m) => {
+			const takenQty = m.qty || 0
+			const usedQty = usedMap[m.serviceCodeId] ?? 0
+			const expectedBack = expectedBackFor(takenQty, usedQty)
+			const saved = savedMap.get(m.serviceCodeId)
+			return {
+				_key: nextReturnKey(),
+				serviceCodeId: m.serviceCodeId || "",
+				takenQty,
+				usedQty,
+				expectedBack,
+				receivedQty: saved ?? expectedBack,
+			}
+		})
 }
 
 export interface SavedReturnLine {
@@ -159,7 +161,9 @@ export function ReturnsForm({
 	} = useEditableLines<SerialReturnLine>(() => [])
 
 	const [returnWarehouseId, setReturnWarehouseId] = useState(
-		pickupWarehouseId ?? warehouses[0]?.id ?? "",
+		warehouses.some((w) => w.id === pickupWarehouseId)
+			? (pickupWarehouseId as string)
+			: (warehouses[0]?.id ?? ""),
 	)
 	const [discrepancyNote, setDiscrepancyNote] = useState("")
 	const [idempotencyKey, setIdempotencyKey] = useState(() =>

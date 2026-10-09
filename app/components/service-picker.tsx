@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useFetcher } from "react-router"
 import { Input } from "~/components/ui/input"
-import type { ServiceLine } from "~/lib/service-lines"
+import { type ServiceLine, splitServiceSuffix } from "~/lib/service-lines"
 import { formatMoney } from "~/lib/utils"
 
 type Result = {
@@ -48,10 +48,16 @@ export function ServicePicker({
 
 	const results = query.trim().length >= 2 ? (fetcher.data?.results ?? []) : []
 	const total = fetcher.data?.total ?? 0
-	const nameCounts = results.reduce<Record<string, number>>((acc, r) => {
-		acc[r.name] = (acc[r.name] ?? 0) + 1
-		return acc
-	}, {})
+	// Only ambiguous when same-description results sit on different accounts.
+	const accountsByName = results.reduce<Record<string, Set<string>>>(
+		(acc, r) => {
+			const set = acc[r.name] ?? new Set<string>()
+			set.add(r.accountCode ?? "")
+			acc[r.name] = set
+			return acc
+		},
+		{},
+	)
 
 	function add(r: Result) {
 		if (lines.some((l) => l.serviceCodeId === r.id)) return
@@ -108,7 +114,12 @@ export function ServicePicker({
 										<span className="font-mono text-xs text-muted-foreground">
 											{r.claroCode}
 										</span>
-										<span className="flex-1">{r.name}</span>
+										<span className="flex-1">
+											{splitServiceSuffix(r.name).base}
+										</span>
+										<span className="font-mono text-xs text-muted-foreground">
+											{splitServiceSuffix(r.name).suffix}
+										</span>
 										<span className="flex shrink-0 items-center gap-1.5 text-xs">
 											<span className="rounded-md bg-status-warn-soft px-1.5 py-0.5 font-medium text-status-warn">
 												{t("service_picker.account")} {r.accountCode ?? "—"}
@@ -118,7 +129,7 @@ export function ServicePicker({
 											</span>
 										</span>
 									</button>
-									{nameCounts[r.name] > 1 && (
+									{accountsByName[r.name].size > 1 && (
 										<p className="px-2 pb-1 text-xs text-status-warn">
 											{t("service_picker.same_description_hint")}
 										</p>
@@ -143,6 +154,7 @@ export function ServicePicker({
 							<th className="px-2 py-1.5">
 								{t("service_picker.col_description")}
 							</th>
+							<th className="px-2 py-1.5">{t("service_picker.col_type")}</th>
 							<th className="px-2 py-1.5">{t("service_picker.col_account")}</th>
 							<th className="px-2 py-1.5 text-right">
 								{t("service_picker.col_qty")}
@@ -163,7 +175,7 @@ export function ServicePicker({
 						{lines.length === 0 && (
 							<tr>
 								<td
-									colSpan={8}
+									colSpan={9}
 									className="px-2 py-3 text-xs text-muted-foreground"
 								>
 									{t("service_picker.none_selected")}
@@ -177,7 +189,12 @@ export function ServicePicker({
 									<td className="px-2 py-1.5 font-mono text-xs">
 										{l.claroCode}
 									</td>
-									<td className="px-2 py-1.5">{l.name}</td>
+									<td className="px-2 py-1.5">
+										{splitServiceSuffix(l.name).base}
+									</td>
+									<td className="px-2 py-1.5 font-mono text-xs">
+										{splitServiceSuffix(l.name).suffix ?? "—"}
+									</td>
 									<td className="px-2 py-1.5 font-mono text-xs">
 										{l.accountCode ?? "—"}
 									</td>

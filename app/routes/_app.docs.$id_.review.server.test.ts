@@ -31,6 +31,8 @@ vi.mock("~/lib/system-settings.server", () => ({
 vi.mock("~/lib/uploads.server", () => ({
 	saveBuffer: vi.fn(),
 	saveUpload: vi.fn(),
+	// Default: every Photo row's file loads; individual tests override.
+	photosThatLoad: vi.fn(async (_docId: string, photos: unknown[]) => photos),
 }))
 vi.mock("~/lib/pdf/jaf-invoice.server", () => ({
 	generateJafInvoicePdf: vi.fn(),
@@ -48,7 +50,7 @@ import {
 	getAvisoAmountTolerance,
 	getIvuRate,
 } from "~/lib/system-settings.server"
-import { saveBuffer, saveUpload } from "~/lib/uploads.server"
+import { photosThatLoad, saveBuffer, saveUpload } from "~/lib/uploads.server"
 import { action, loader } from "./_app.docs.$id_.review"
 
 const CATALOG = [
@@ -980,6 +982,19 @@ describe("review: release_to_finance", () => {
 		expect(res).toMatchObject({
 			errorKey: "docs_review.errors.release_blocked",
 		})
+		expect(
+			res.conditions?.find((c: { key: string }) => c.key === "photos")?.ok,
+		).toBe(false)
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("refuses when the photo rows exist but the files do not load", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(ready as any)
+		vi.mocked(photosThatLoad).mockResolvedValueOnce([])
+		const res = await action({
+			request: post(intent("release_to_finance")),
+			params: { id: "doc-1" },
+		} as any)
 		expect(
 			res.conditions?.find((c: { key: string }) => c.key === "photos")?.ok,
 		).toBe(false)

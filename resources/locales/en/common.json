@@ -966,7 +966,6 @@
 	},
 	"supervisor_variance": {
 		"title": "Material Variance",
-		"readonly_note": "Serialized returns/repair and missing-stock (LOST) signals will appear here once Spec A/Spec B ship. The overage/discrepancy/shortage badges summarize the whole document, while the line table below shows ordered-vs-installed detail per service code, so a badge without an exactly matching line row is expected, not a bug.",
 		"table": {
 			"doc": "Document",
 			"brigade": "Brigade",
@@ -1237,16 +1236,6 @@
 		"listed": "Listed"
 	},
 	"dashboard": {
-		"status_plain": {
-			"CREATED": "New",
-			"PREPPED": "Prepped",
-			"SIGNED": "Picked up",
-			"FIELD_UPDATED": "Submitted",
-			"SUPERVISOR_APPROVED": "Approved",
-			"CLARO_UPLOADED": "Approved",
-			"LC_REQUEST_GENERATED": "Approved",
-			"CANCELLED": "Cancelled"
-		},
 		"title": "Dashboard",
 		"supervisor_scope_one": "{{areas}} · {{count}} crew",
 		"supervisor_scope_other": "{{areas}} · {{count}} crews",
@@ -1299,7 +1288,7 @@
 		"missing_materials_badge": "Missing stock",
 		"returns_to_log_heading": "Returns to Log ({{count}})",
 		"returns_to_log_badge": "Log returns",
-		"triage_awaiting_heading": "Awaiting Disposition ({{count}})",
+		"triage_awaiting_heading": "Returned units awaiting triage ({{count}})",
 		"triage_awaiting_cta": "Triage returned units",
 		"repair_pool_tile": "Repair Pool ({{count}})",
 		"needs_review_tile": "Needs Review ({{count}})",
@@ -1800,6 +1789,7 @@
 		"col_code": "Service",
 		"col_description": "Description",
 		"col_ordered": "Ordered",
+		"col_type": "Type",
 		"col_account": "Acct",
 		"col_qty": "Qty",
 		"col_unit": "Unit",

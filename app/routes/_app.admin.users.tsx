@@ -275,7 +275,14 @@ export default function AdminUsers({
 						</div>
 						<div className="space-y-1">
 							<Label htmlFor="role">{t("admin_users.role_label")}</Label>
-							<Select name="role" required>
+							<Select
+								name="role"
+								required
+								items={roles.map((r) => ({
+									value: r.value,
+									label: t(r.labelKey as never),
+								}))}
+							>
 								<SelectTrigger id="role">
 									<SelectValue
 										placeholder={t("admin_users.role_placeholder")}
@@ -362,7 +369,14 @@ export default function AdminUsers({
 									<Form method="post" className="flex items-center gap-2">
 										<input type="hidden" name="intent" value="updateRole" />
 										<input type="hidden" name="id" value={user.id} />
-										<Select name="role" defaultValue={user.role}>
+										<Select
+											name="role"
+											defaultValue={user.role}
+											items={roles.map((r) => ({
+												value: r.value,
+												label: t(r.labelKey as never),
+											}))}
+										>
 											<SelectTrigger className="w-40">
 												<SelectValue />
 											</SelectTrigger>

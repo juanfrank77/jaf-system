@@ -8,6 +8,13 @@ describe("navGroupsFor", () => {
 	it("groups SUPERVISOR items under overview and work", () => {
 		expect(tos(navGroupsFor("SUPERVISOR"))).toEqual([
 			["overview", ["/dashboard"]],
+			["work", ["/docs/new", "/supervisor/brigades"]],
+		])
+	})
+
+	it("shows Variance to SUPERVISOR only when ENABLE_VARIANCE is on", () => {
+		expect(tos(navGroupsFor("SUPERVISOR", { varianceEnabled: true }))).toEqual([
+			["overview", ["/dashboard"]],
 			["work", ["/docs/new", "/supervisor/brigades", "/supervisor/variance"]],
 		])
 	})

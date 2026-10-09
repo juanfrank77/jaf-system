@@ -3,6 +3,7 @@ import type { ComponentProps } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, Link, redirect } from "react-router"
 import { AssignedCrew } from "~/components/assigned-crew"
+import { DocStageBadge } from "~/components/doc-stage-badge"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { ReassignForm } from "~/components/reassign-form"
@@ -524,9 +525,7 @@ export default function DocView({
 					<h1 className="font-mono font-bold text-lg">{doc.controlNumber}</h1>
 					<p className="text-sm text-muted-foreground">{doc.jobType}</p>
 				</div>
-				<span className="text-xs bg-muted px-3 py-1 rounded-full font-medium">
-					{doc.status.replace(/_/g, " ")}
-				</span>
+				<DocStageBadge stage={stage} cancelled={doc.status === "CANCELLED"} />
 			</div>
 
 			{latestSendBack && (

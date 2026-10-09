@@ -130,6 +130,28 @@ function toRow(
 	}
 }
 
+/** Adds the derived current step to each row (RELEASE vs PRECERT needs the pre-cert signatures). */
+async function withStages<
+	T extends {
+		id: string
+		status: DocStatus
+		supervisorApprovedAt: Date | null
+		jafInvoiceGeneratedAt: Date | null
+		avisoMatchedAt: Date | null
+		releasedToFinanceAt: Date | null
+	},
+>(docs: T[]): Promise<(T & { stage: SupervisorStage })[]> {
+	const sheets = await db.preCertSheet.findMany({
+		where: { docId: { in: docs.map((d) => d.id) }, supersededAt: null },
+		select: { docId: true, sigSupervisorAt: true, sigSubcontractorAt: true },
+	})
+	const byDoc = new Map(sheets.map((s) => [s.docId, s]))
+	return docs.map((d) => ({
+		...d,
+		stage: deriveSupervisorStage(d, byDoc.get(d.id) ?? null),
+	}))
+}
+
 type SendBackHistoryEntry = { note?: string; createdAt?: string }
 
 async function loadSupervisorQueues(userId: string) {
@@ -447,7 +469,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		stats,
 		alert,
 		explainer,
-		docs: visibleDocs,
+		docs: await withStages(visibleDocs),
 		pendingReviewDocs: [],
 		sentBackDocs: [],
 		supervisorQueues,

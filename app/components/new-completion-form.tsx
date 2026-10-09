@@ -244,6 +244,16 @@ export function NewCompletionForm({
 				/>
 				<input
 					type="hidden"
+					name="limitRows"
+					value={JSON.stringify(limitRows)}
+				/>
+				<input
+					type="hidden"
+					name="brackets"
+					value={JSON.stringify(brackets)}
+				/>
+				<input
+					type="hidden"
 					name="serialInstalled"
 					value={serialUnreadable ? "" : serial}
 				/>

@@ -70,6 +70,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 async function resolveAccessories(
 	raw: string,
 	dropFt: number | undefined,
+	limitRowsParam?: { serviceCodeId: string; bracketFt: number; qty: number }[],
+	bracketsParam?: number[],
 ): Promise<
 	{ serviceCodeId: string; prefilledQty: number; qty: number }[] | null
 > {
@@ -94,11 +96,10 @@ async function resolveAccessories(
 			return null
 		submitted.set(line.serviceCodeId, line.qty)
 	}
-	const limitRows =
-		dropFt !== undefined && Number.isFinite(dropFt)
-			? await db.limitTable.findMany()
-			: []
-	const brackets = [...new Set(limitRows.map((r) => r.bracketFt))]
+	const limitRows = limitRowsParam ?? (dropFt !== undefined && Number.isFinite(dropFt)
+		? await db.limitTable.findMany()
+		: [])
+	const brackets = bracketsParam ?? [...new Set(limitRows.map((r) => r.bracketFt))]
 	const prefill =
 		brackets.length > 0
 			? prefillAccessories(limitRows, pickBracket(dropFt as number, brackets))
@@ -162,9 +163,23 @@ export async function action({ request }: Route.ActionArgs) {
 	// prefilledQty cannot hide an edit.
 	const dropFtRaw = form.get("dropFt")
 	const dropFt = dropFtRaw ? Number(dropFtRaw) : undefined
+	let limitRowsParam: { serviceCodeId: string; bracketFt: number; qty: number }[] | undefined
+	let bracketsParam: number[] | undefined
+	const limitRowsRaw = form.get("limitRows")
+	const bracketsRaw = form.get("brackets")
+	if (limitRowsRaw && bracketsRaw) {
+		try {
+			limitRowsParam = JSON.parse(limitRowsRaw as string)
+			bracketsParam = JSON.parse(bracketsRaw as string)
+		} catch {
+			// fall back to DB query if parsing fails
+		}
+	}
 	const accessories = await resolveAccessories(
 		(form.get("accessories") as string) || "[]",
 		dropFt,
+		limitRowsParam,
+		bracketsParam,
 	)
 	if (!accessories) {
 		return refuse(request, {
@@ -202,7 +217,7 @@ export async function action({ request }: Route.ActionArgs) {
 			addressEditLog,
 			dropFt,
 			accessories,
-			groundRod: form.get("groundRod") !== "false",
+			groundRod: form.get("groundRod") === "true",
 			serialInstalled: (form.get("serialInstalled") as string) || undefined,
 			serialUnreadable: form.get("serialUnreadable") === "true",
 			modelResolved: (form.get("modelResolved") as string) || undefined,

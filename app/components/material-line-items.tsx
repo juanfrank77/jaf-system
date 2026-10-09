@@ -14,6 +14,17 @@ import {
 } from "~/components/ui/select"
 import { toNumberPrice } from "~/lib/utils"
 
+function debounce<T extends (items: LineItem[]) => void>(
+	fn: T,
+	delay: number,
+): T {
+	let timeoutId: ReturnType<typeof setTimeout>
+	return ((...args: unknown[]) => {
+		clearTimeout(timeoutId)
+		timeoutId = setTimeout(() => fn(...args as [LineItem[]]), delay)
+	}) as T
+}
+
 interface LineItem {
 	serviceCodeId: string
 	qty: number
@@ -119,8 +130,13 @@ export function MaterialLineItems({
 
 	const onItemsChangeRef = useRef(onItemsChange)
 	onItemsChangeRef.current = onItemsChange
+	const debouncedOnItemsChange = useRef(
+		debounce((items: LineItem[]) => {
+			onItemsChangeRef.current?.(items)
+		}, 200),
+	)
 	useEffect(() => {
-		onItemsChangeRef.current?.(
+		debouncedOnItemsChange.current(
 			items.map(({ serviceCodeId, qty }) => ({ serviceCodeId, qty })),
 		)
 	}, [items])

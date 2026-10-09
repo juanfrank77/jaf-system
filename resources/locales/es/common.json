@@ -439,7 +439,15 @@
 			"invalid_warehouse": "Ese almacén no existe o ya no está activo.",
 			"invalid_received_qty": "La cantidad devuelta debe ser un número entero de cero o más (código {{serviceCodeId}})."
 		},
-		"already_recorded_notice": "Las devoluciones ya fueron registradas para este documento. No se pueden registrar otra vez."
+		"already_recorded_notice": "Las devoluciones ya fueron registradas para este documento. No se pueden registrar otra vez.",
+		"status_pill": "Se espera de vuelta",
+		"callout_title": "Devolución · Tú",
+		"callout_body": "La cuadrilla dijo qué usó; el sistema calculó lo que debe regresar. Cuenta lo que realmente llegó. Lo que falte lleva una nota.",
+		"submit_confirm": "Confirmar devolución",
+		"submit_discrepancy_one": "Confirmar devolución · {{count}} discrepancia registrada",
+		"submit_discrepancy_other": "Confirmar devolución · {{count}} discrepancias registradas",
+		"invoice_note_title": "La cantidad facturada nunca cambia aquí.",
+		"invoice_note_body": "Lo \"usado\" por la cuadrilla es lo que el supervisor factura. Esta pantalla solo registra si el almacén recuperó su material."
 	},
 	"returns": {
 		"note_required": "Se requiere una nota cuando lo recibido es menor a lo esperado, o cuando una unidad serializada se pierde o daña."

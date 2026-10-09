@@ -2,8 +2,11 @@ import type { ParseKeys } from "i18next"
 import { useEffect, useState } from "react"
 import { Trans, useTranslation } from "react-i18next"
 import { Form } from "react-router"
+import { JobFlowOverview } from "~/components/job-step-rail"
 import { MaterialLineItems } from "~/components/material-line-items"
+import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
+import { Callout } from "~/components/ui/callout"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import {
@@ -200,7 +203,8 @@ export function ReturnsForm({
 	const addSerialLine = () =>
 		pushSerialLine({ _key: nextSerialLineKey(), serial: "", reason: "" })
 
-	const anyShort = lines.some((l) => l.receivedQty < l.expectedBack)
+	const shortCount = lines.filter((l) => l.receivedQty < l.expectedBack).length
+	const anyShort = shortCount > 0
 	const isCrossWarehouse =
 		!!pickupWarehouseId && returnWarehouseId !== pickupWarehouseId
 
@@ -220,7 +224,14 @@ export function ReturnsForm({
 
 	return (
 		<div className="space-y-4">
-			<h1 className="text-xl font-semibold">{t("docs_returns.title")}</h1>
+			<div className="flex items-center justify-between gap-2">
+				<h1 className="text-xl font-semibold">{t("docs_returns.title")}</h1>
+				<Badge variant="ok">{t("docs_returns.status_pill")}</Badge>
+			</div>
+			<JobFlowOverview viewer="WAREHOUSE" current="RETURN" />
+			<Callout title={t("docs_returns.callout_title")}>
+				{t("docs_returns.callout_body")}
+			</Callout>
 			{alreadyRecorded && (
 				<p
 					data-testid="returns-already-recorded"
@@ -447,8 +458,13 @@ export function ReturnsForm({
 					)}
 				</div>
 				<Button type="submit" className="w-full" disabled={alreadyRecorded}>
-					{t("docs_returns.submit")}
+					{shortCount > 0
+						? t("docs_returns.submit_discrepancy", { count: shortCount })
+						: t("docs_returns.submit_confirm")}
 				</Button>
+				<Callout title={t("docs_returns.invoice_note_title")} tone="info">
+					{t("docs_returns.invoice_note_body")}
+				</Callout>
 			</Form>
 
 			{actionData?.errorKey && (

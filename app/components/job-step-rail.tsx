@@ -50,16 +50,19 @@ export function JobStepRail({
  * not to the viewer. */
 export function JobFlowOverview({
 	viewer,
+	current,
 	compact = false,
 }: {
 	viewer: Role
+	/** The step on screen, when the rail sits on a step's screen rather than a landing page. */
+	current?: JobStep
 	compact?: boolean
 }) {
 	const { t } = useTranslation()
 	return (
 		<StepRail
 			ariaLabel={t("job_flow.aria")}
-			current={-1}
+			current={current ? JOB_STEPS.indexOf(current) : -1}
 			compact={compact}
 			steps={JOB_STEPS.map((step) => ({
 				key: step,

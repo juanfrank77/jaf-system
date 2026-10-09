@@ -439,7 +439,15 @@
 			"invalid_warehouse": "That warehouse does not exist or is no longer active.",
 			"invalid_received_qty": "Returned quantity must be a whole number of zero or more (service code {{serviceCodeId}})."
 		},
-		"already_recorded_notice": "Returns were already recorded for this document. They cannot be logged again."
+		"already_recorded_notice": "Returns were already recorded for this document. They cannot be logged again.",
+		"status_pill": "Expected back",
+		"callout_title": "Return · You",
+		"callout_body": "The crew said what they used; the system computed what should come back. Count what actually arrived. Anything short gets a note.",
+		"submit_confirm": "Confirm return",
+		"submit_discrepancy_one": "Confirm return · {{count}} discrepancy logged",
+		"submit_discrepancy_other": "Confirm return · {{count}} discrepancies logged",
+		"invoice_note_title": "The invoiced quantity never changes here.",
+		"invoice_note_body": "The crew's \"used\" is what the supervisor invoices from. This screen only records whether the warehouse got its material back."
 	},
 	"returns": {
 		"note_required": "A note is required when received is less than expected, or a serialized unit is lost or damaged."

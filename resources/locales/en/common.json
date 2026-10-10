@@ -1080,6 +1080,7 @@
 			"advance_already_recorded": "The PBCC advance is already recorded.",
 			"final_already_recorded": "The final payment is already recorded.",
 			"already_closed": "This receivable is already closed.",
+			"missing_claro_pdf": "Upload the Claro PDF before closing.",
 			"unknown_intent": "Unknown action."
 		},
 		"waiting_for_payment": "Waiting for comptroller entry"

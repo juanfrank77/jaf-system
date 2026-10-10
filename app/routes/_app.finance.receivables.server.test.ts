@@ -23,6 +23,8 @@ vi.mock("~/lib/auth.server", () => ({
 }))
 vi.mock("~/lib/finance-pipeline.server", () => ({
 	computeFinanceStage: mocks.computeFinanceStage,
+	isMissingClaroPdf: (invoice: { claroPdfPath: string | null }) =>
+		!invoice.claroPdfPath || invoice.claroPdfPath.trim() === "",
 }))
 vi.mock("~/lib/payment-records.server", () => ({
 	parsePaymentDate: (value: string | null) =>
@@ -117,6 +119,39 @@ describe("Finance receivables action guards", () => {
 			}),
 		)
 		expect(mocks.sendInternalEmail).toHaveBeenCalled()
+	})
+
+	it("refuses to close a receivable without its Claro PDF", async () => {
+		mocks.computeFinanceStage.mockReturnValue("READY_TO_CLOSE")
+		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue({
+			...doc,
+			receivableClosedAt: null,
+			claroPdfPath: null,
+		})
+		const result = await action({
+			request: requestWith({ intent: "close", docId: "job-1" }),
+			params: {},
+		} as any)
+		expect(result).toEqual({
+			errorKey: "finance_receivables.errors.missing_claro_pdf",
+		})
+		expect(mocks.db.$transaction).not.toHaveBeenCalled()
+	})
+
+	it("closes a READY_TO_CLOSE receivable that has its Claro PDF", async () => {
+		mocks.computeFinanceStage.mockReturnValue("READY_TO_CLOSE")
+		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue({
+			...doc,
+			receivableClosedAt: null,
+			claroPdfPath: "claro/job-1.pdf",
+		})
+		mocks.db.$transaction.mockResolvedValue(true)
+		const result = await action({
+			request: requestWith({ intent: "close", docId: "job-1" }),
+			params: {},
+		} as any)
+		expect(result).toBeNull()
+		expect(mocks.db.$transaction).toHaveBeenCalled()
 	})
 
 	it("restricts both loader and action to FINANCE and ADMIN", async () => {

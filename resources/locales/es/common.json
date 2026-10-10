@@ -1080,6 +1080,7 @@
 			"advance_already_recorded": "El anticipo PBCC ya está registrado.",
 			"final_already_recorded": "El pago final ya está registrado.",
 			"already_closed": "Esta cuenta por cobrar ya está cerrada.",
+			"missing_claro_pdf": "Suba el PDF de Claro antes de cerrar.",
 			"unknown_intent": "Acción desconocida."
 		},
 		"waiting_for_payment": "Esperando registro de contraloría"

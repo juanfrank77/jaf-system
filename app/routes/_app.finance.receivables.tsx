@@ -229,6 +229,8 @@ export async function action({ request }: Route.ActionArgs) {
 			return { errorKey: "finance_receivables.errors.invalid_stage" }
 		if (doc.receivableClosedAt)
 			return { errorKey: "finance_receivables.errors.already_closed" }
+		if (isMissingClaroPdf(doc))
+			return { errorKey: "finance_receivables.errors.missing_claro_pdf" }
 		const stage = computeFinanceStage(
 			doc,
 			doc.poLinks.length > 0,
@@ -430,7 +432,16 @@ export default function FinancePipeline({
 										<Form method="post" className="inline">
 											<input type="hidden" name="intent" value="close" />
 											<input type="hidden" name="docId" value={row.id} />
-											<Button type="submit" size="sm">
+											<Button
+												type="submit"
+												size="sm"
+												disabled={row.missingClaroPdf}
+												title={
+													row.missingClaroPdf
+														? t("finance_receivables.errors.missing_claro_pdf")
+														: undefined
+												}
+											>
 												{t("finance_receivables.close")}
 											</Button>
 										</Form>

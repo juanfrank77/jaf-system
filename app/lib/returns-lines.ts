@@ -26,14 +26,16 @@ export function computeExpectedBackLines(
 	const usedMap = Object.fromEntries(
 		(materialsUsed || []).map((u) => [u.serviceCodeId, u.qty]),
 	)
-	return taken.map((t) => {
-		const takenQty = t.qty || 0
-		const usedQty = usedMap[t.serviceCodeId] ?? 0
-		return {
-			serviceCodeId: t.serviceCodeId,
-			takenQty,
-			usedQty,
-			expectedBack: expectedBackFor(takenQty, usedQty),
-		}
-	})
+	return taken
+		.filter((t) => t.serviceCodeId)
+		.map((t) => {
+			const takenQty = t.qty || 0
+			const usedQty = usedMap[t.serviceCodeId] ?? 0
+			return {
+				serviceCodeId: t.serviceCodeId,
+				takenQty,
+				usedQty,
+				expectedBack: expectedBackFor(takenQty, usedQty),
+			}
+		})
 }

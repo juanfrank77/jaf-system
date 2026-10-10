@@ -13,6 +13,7 @@ import {
 	SignaturePad,
 	type SignaturePadHandle,
 } from "~/components/signature-pad"
+import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
 import { Input } from "~/components/ui/input"
@@ -543,15 +544,17 @@ export default function FieldUpdate({
 
 	return (
 		<div className="space-y-5">
-			<h1 className="text-xl font-semibold">{t("docs_field.title")}</h1>
-			<p className="text-sm font-mono text-muted-foreground">
-				{doc.controlNumber}
-			</p>
-
-			<JobStepRail docId={doc.id} current="FIELD" role={user.role} />
-			<Callout title={t("job_flow.callout.field_title")}>
-				{t("job_flow.callout.field_body")}
-			</Callout>
+			<div className="flex items-start justify-between gap-2">
+				<div>
+					<h1 className="text-xl font-semibold">{t("docs_field.title")}</h1>
+					<p className="text-sm font-mono text-muted-foreground">
+						{doc.controlNumber}
+					</p>
+				</div>
+				<Badge variant="info" className="shrink-0">
+					{t("docs_field.status_pill")}
+				</Badge>
+			</div>
 
 			{latestSendBack && (
 				<Callout
@@ -566,6 +569,11 @@ export default function FieldUpdate({
 					</span>
 				</Callout>
 			)}
+
+			<JobStepRail docId={doc.id} current="FIELD" role={user.role} />
+			<Callout title={t("job_flow.callout.field_title")}>
+				{t("job_flow.callout.field_body")}
+			</Callout>
 
 			{rejected.length > 0 && (
 				<Callout tone="danger" title={t("docs_field.rejected_offline_title")}>

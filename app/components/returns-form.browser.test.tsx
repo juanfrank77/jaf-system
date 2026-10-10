@@ -63,7 +63,9 @@ describe("ReturnsForm — post-success resubmit (review fix)", () => {
 			screen.getByLabelText(/Return \/ Shortage Note/),
 			"1 damaged on site",
 		)
-		await userEvent.click(screen.getByRole("button", { name: "Save Returns" }))
+		await userEvent.click(
+			screen.getByRole("button", { name: /^Confirm return/ }),
+		)
 
 		await waitFor(() => {
 			expect(screen.getByText("Returns logged.")).toBeInTheDocument()
@@ -83,7 +85,9 @@ describe("ReturnsForm — post-success resubmit (review fix)", () => {
 		// A second click with no further edits now submits the reset (fresh,
 		// full, non-short) state — never a repeat of the already-confirmed
 		// `received: 30` payload.
-		await userEvent.click(screen.getByRole("button", { name: "Save Returns" }))
+		await userEvent.click(
+			screen.getByRole("button", { name: /^Confirm return/ }),
+		)
 
 		await waitFor(() => {
 			expect(submittedLines).toHaveLength(2)
@@ -122,7 +126,9 @@ describe("ReturnsForm — post-success resubmit (review fix)", () => {
 		// full form here is exactly what let a second click double-credit.
 		expect(screen.getByLabelText("Returned Qty")).toHaveValue(30)
 		expect(screen.getByTestId("returns-already-recorded")).toBeInTheDocument()
-		expect(screen.getByRole("button", { name: "Save Returns" })).toBeDisabled()
+		expect(
+			screen.getByRole("button", { name: /^Confirm return/ }),
+		).toBeDisabled()
 	})
 
 	it("shows the translated serial reason in the closed select, not the raw enum", async ({

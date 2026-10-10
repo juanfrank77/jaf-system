@@ -99,8 +99,11 @@ export function StockTable({
 										? `${t(`stock.movement_type.${r.lastMovement.type}`, { defaultValue: r.lastMovement.type })} · ${new Date(r.lastMovement.at).toLocaleDateString(i18n.language)}`
 										: t("stock.no_movement")}
 								</span>
-								<span className="text-right font-mono">
+								<span className="flex items-center justify-end gap-1.5 text-right font-mono font-semibold">
 									{r.onHand} {r.countUnit ?? ""}
+									{r.onHand <= 0 && (
+										<Badge variant="danger">{t("stock.out_tag")}</Badge>
+									)}
 								</span>
 								<span className="flex items-center justify-end gap-1.5 text-right font-mono">
 									{r.derivedStockQty === null ? (

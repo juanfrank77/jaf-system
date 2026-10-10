@@ -1,57 +1,31 @@
 import { randomUUID } from "node:crypto"
 import fs from "node:fs/promises"
 import { useTranslation } from "react-i18next"
-import { Form, Link, redirect } from "react-router"
+import { Form, Link, redirect, useNavigation } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { FinanceStepRail } from "~/components/finance-step-rail"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
 import { db } from "~/lib/db.server"
+import { isPayrollFallbackEnabled } from "~/lib/features.server"
 import { validateFile } from "~/lib/file-upload.server"
-import { buildJournalBlocks, closePayrollRun } from "~/lib/payroll-run.server"
+import {
+	buildJournalBlocks,
+	closePayrollRun,
+	closePayrollRunAccount,
+	parsePaidDate,
+	RUN_INVOICES,
+} from "~/lib/payroll-run.server"
 import { generateProductionJournalPdf } from "~/lib/pdf/production-journal.server"
 import { requireRole } from "~/lib/permissions.server"
 import { saveUpload } from "~/lib/uploads.server"
 import { formatMoney } from "~/lib/utils"
-import type { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.finance.payroll.$runId"
 
 export const meta: Route.MetaFunction = () => [
 	{ title: "Payroll run — JAF Ops" },
 ]
-
-const INVOICE_SELECT = {
-	id: true,
-	controlNumber: true,
-	avisoNumber: true,
-	contractorShareLines: true,
-	contractorAccount: {
-		select: {
-			id: true,
-			code: true,
-			label: true,
-		},
-	},
-} as const
-
-/**
- * A run's invoices, in the ONE order the journal is ever rendered in.
- *
- * `buildJournalBlocks` sorts blocks by brigade code and jobs by controlNumber
- * internally, so the DB row order only needs to be deterministic. We order by
- * `releasedToFinanceAt` (batch release) with `id` as a tiebreaker so the same
- * set of invoices renders identically on every page load — the running
- * totals in the PDF are derived from this set, so a shifting order would
- * produce a different journal between the screen and a PDF printed from it.
- *
- * Shared by the loader and the PDF branch on purpose — the printed journal
- * has to agree with the screen, and a duplicated literal is how they drift.
- */
-const RUN_INVOICES = {
-	select: INVOICE_SELECT,
-	orderBy: [{ releasedToFinanceAt: "asc" }, { id: "asc" }],
-} as const satisfies Prisma.PayrollRun$invoicesArgs
 
 /**
  * `validateFile(file, "file")` only enforces blocked extensions and the 40MB
@@ -106,7 +80,41 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		include: { invoices: RUN_INVOICES },
 	})
 	const blocks = buildJournalBlocks(run.invoices)
-	return { user, run, blocks }
+	const [accountRows, jobCounts] = await Promise.all([
+		db.payrollRunAccount.findMany({
+			where: { payrollRunId: run.id },
+			include: {
+				contractorAccount: { select: { code: true, label: true } },
+				paidBy: { select: { name: true } },
+			},
+		}),
+		db.jafInvoice.groupBy({
+			by: ["contractorAccountId"],
+			where: { payrollRunId: run.id },
+			_count: true,
+		}),
+	])
+	const jobsByAccount = new Map(
+		jobCounts.map((c) => [c.contractorAccountId, c._count]),
+	)
+	const accounts = accountRows
+		.map((a) => ({
+			accountId: a.contractorAccountId,
+			code: a.contractorAccount.code,
+			label: a.contractorAccount.label,
+			jobs: jobsByAccount.get(a.contractorAccountId) ?? 0,
+			paidAt: a.paidAt,
+			paidByName: a.paidBy?.name ?? null,
+			confirmedByFallback: a.confirmedByFallback,
+		}))
+		.sort((x, y) => x.code.localeCompare(y.code))
+	return {
+		user,
+		run,
+		blocks,
+		accounts,
+		fallbackEnabled: isPayrollFallbackEnabled(),
+	}
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
@@ -129,26 +137,35 @@ export async function action({ request, params }: Route.ActionArgs) {
 		})
 	}
 
+	if (intent === "confirm_account") {
+		const accountId = form.get("accountId")
+		if (typeof accountId !== "string" || !accountId) {
+			return { errorKey: "finance_payroll.errors.missing_fields" }
+		}
+		const parsed = parsePaidDate(form.get("paidDate") as string | null)
+		if ("errorKey" in parsed) return { errorKey: parsed.errorKey }
+		try {
+			await closePayrollRunAccount({
+				runId: params.runId as string,
+				accountId,
+				paidById: user.id,
+				paidDate: parsed.date,
+				confirmedByFallback: true,
+			})
+		} catch (e) {
+			// Already paid (double-click, stale tab): the account IS paid, so
+			// show success. 403/404 and everything else still propagate.
+			if (!(e instanceof Response && e.status === 409)) throw e
+		}
+		return { ok: true }
+	}
+
 	if (intent !== "batch_confirm")
 		return { errorKey: "finance_payroll.errors.unknown_intent" }
 
-	const paidDateRaw = (form.get("paidDate") as string | null)?.trim()
-	if (!paidDateRaw) {
-		return { errorKey: "finance_payroll.errors.missing_fields" }
-	}
-	// `<input type="date">` posts YYYY-MM-DD. `new Date("YYYY-MM-DD")` is UTC
-	// midnight, which renders as the previous day in Puerto Rico (UTC-4), so
-	// anchor the date at local noon instead.
-	if (!/^\d{4}-\d{2}-\d{2}$/.test(paidDateRaw)) {
-		return { errorKey: "finance_payroll.errors.invalid_date" }
-	}
-	const paidDate = new Date(`${paidDateRaw}T12:00:00`)
-	if (Number.isNaN(paidDate.getTime())) {
-		return { errorKey: "finance_payroll.errors.invalid_date" }
-	}
-	if (paidDate.getTime() > Date.now()) {
-		return { errorKey: "finance_payroll.errors.future_date" }
-	}
+	const parsed = parsePaidDate(form.get("paidDate") as string | null)
+	if ("errorKey" in parsed) return { errorKey: parsed.errorKey }
+	const paidDate = parsed.date
 
 	let evidencePath: string | null = null
 	const evidence = form.get("evidence")
@@ -206,8 +223,10 @@ export default function FinancePayrollRunDetail({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { run, blocks } = loaderData
+	const { run, blocks, accounts, fallbackEnabled } = loaderData
+	const fallbackCount = accounts.filter((a) => a.confirmedByFallback).length
 	const { t } = useTranslation()
+	const submitting = useNavigation().state !== "idle"
 	const error = actionData?.errorKey
 		? t(
 				ERROR_KEYS[actionData.errorKey as ActionErrorKey] ??
@@ -234,6 +253,12 @@ export default function FinancePayrollRunDetail({
 				</Badge>
 			) : (
 				<Badge variant="warn">{t("finance_payroll.open")}</Badge>
+			)}
+
+			{fallbackCount > 0 && (
+				<p className="text-sm text-muted-foreground">
+					{t("finance_payroll.fallback_count", { count: fallbackCount })}
+				</p>
 			)}
 
 			{error && <p className="text-sm text-status-danger">{error}</p>}
@@ -309,7 +334,83 @@ export default function FinancePayrollRunDetail({
 				</table>
 			</div>
 
-			{!run.paidAt && (
+			<div className="overflow-x-auto bg-card border rounded-lg">
+				<table className="w-full text-sm">
+					<thead>
+						<tr className="text-xs text-muted-foreground text-left border-b">
+							<th className="p-2">{t("finance_payroll.col.brigade")}</th>
+							<th className="p-2 text-right">
+								{t("finance_payroll.col.jobs")}
+							</th>
+							<th className="p-2">{t("finance_payroll.col.status")}</th>
+						</tr>
+					</thead>
+					<tbody>
+						{accounts.map((a) => (
+							<tr key={a.accountId} className="border-b last:border-0">
+								<td className="p-2">
+									<span className="font-mono">{a.code}</span>{" "}
+									<span className="text-muted-foreground">{a.label}</span>
+								</td>
+								<td className="p-2 text-right font-mono">{a.jobs}</td>
+								<td className="p-2">
+									{a.paidAt ? (
+										<span className="flex flex-wrap items-center gap-2">
+											<span>
+												{t("finance_payroll.paid_by", {
+													date: new Date(a.paidAt).toLocaleDateString(),
+													name: a.paidByName ?? "—",
+												})}
+											</span>
+											{a.confirmedByFallback && (
+												<Badge variant="warn">
+													{t("finance_payroll.from_paper")}
+												</Badge>
+											)}
+										</span>
+									) : (
+										<span className="flex flex-wrap items-center gap-2">
+											<span className="text-muted-foreground">
+												{t("finance_payroll.awaiting_comptroller")}
+											</span>
+											{fallbackEnabled && (
+												<Form method="post" className="flex items-center gap-1">
+													<input
+														type="hidden"
+														name="intent"
+														value="confirm_account"
+													/>
+													<input
+														type="hidden"
+														name="accountId"
+														value={a.accountId}
+													/>
+													<input
+														type="date"
+														name="paidDate"
+														required
+														className="border rounded px-2 py-1 text-xs"
+													/>
+													<Button
+														type="submit"
+														variant="secondary"
+														size="xs"
+														disabled={submitting}
+													>
+														{t("finance_payroll.confirm_account")}
+													</Button>
+												</Form>
+											)}
+										</span>
+									)}
+								</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+
+			{!run.paidAt && fallbackEnabled && (
 				<Form
 					method="post"
 					encType="multipart/form-data"

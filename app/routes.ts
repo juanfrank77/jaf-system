@@ -5,8 +5,6 @@ import {
 	route,
 } from "@react-router/dev/routes"
 
-const ENABLE_COMPTROLLER = process.env.ENABLE_COMPTROLLER === "true"
-
 export default [
 	index("routes/home.tsx"),
 	layout("routes/_auth.tsx", [route("login", "routes/_auth.login.tsx")]),
@@ -63,12 +61,8 @@ export default [
 		route("finance/payroll", "routes/_app.finance.payroll.tsx"),
 		route("finance/payroll/:runId", "routes/_app.finance.payroll.$runId.tsx"),
 		route("finance/po/:id", "routes/_app.finance.po.$id.tsx"),
-		...(ENABLE_COMPTROLLER
-			? [
-					route("comptroller", "routes/_app.comptroller.tsx"),
-					route("comptroller/:id", "routes/_app.comptroller.$id.tsx"),
-				]
-			: []),
+		route("comptroller", "routes/_app.comptroller.tsx"),
+		route("comptroller/runs/:runId", "routes/_app.comptroller.runs.$runId.tsx"),
 	]),
 	route("files/*", "routes/files.$.tsx"),
 	route("api/service-codes", "routes/api.service-codes.tsx"),

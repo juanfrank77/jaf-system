@@ -10,7 +10,6 @@ import { Card, CardContent } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
 import { db } from "~/lib/db.server"
 import { sendInternalEmail } from "~/lib/email.server"
-import { isComptrollerEnabled } from "~/lib/features.server"
 import {
 	FINANCE_STAGES,
 	type FinanceStage,
@@ -40,13 +39,7 @@ export const meta: Route.MetaFunction = () => [
 ]
 
 export async function loader({ request }: Route.LoaderArgs) {
-	const { user } = await requireRole(request, [
-		"FINANCE",
-		"COMPTROLLER",
-		"ADMIN",
-	])
-	if (user.role === "COMPTROLLER" && !isComptrollerEnabled())
-		throw new Response("Not found", { status: 404 })
+	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])
 	const url = new URL(request.url)
 	const stageFilter = url.searchParams.get("stage") as FinanceStage | null
 
@@ -55,10 +48,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		getAgingAlertDays(),
 	])
 
-	const financeStatuses: DocStatus[] =
-		user.role === "COMPTROLLER"
-			? ["SUPERVISOR_APPROVED", "CLARO_UPLOADED"]
-			: FINANCEABLE_STATUSES
+	const financeStatuses: DocStatus[] = FINANCEABLE_STATUSES
 	const invoices = await db.jafInvoice.findMany({
 		where: { status: { in: financeStatuses } },
 		include: {
@@ -164,13 +154,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request }: Route.ActionArgs) {
-	const { user } = await requireRole(request, [
-		"FINANCE",
-		"COMPTROLLER",
-		"ADMIN",
-	])
-	if (user.role === "COMPTROLLER" && !isComptrollerEnabled())
-		throw new Response("Not found", { status: 404 })
+	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])
 	const form = await request.formData()
 	const intent = form.get("intent") as string
 	const docId = form.get("docId") as string
@@ -237,8 +221,6 @@ export async function action({ request }: Route.ActionArgs) {
 	}
 
 	if (intent === "close") {
-		if (user.role !== "FINANCE" && user.role !== "ADMIN")
-			return { errorKey: "finance_receivables.errors.close_role_required" }
 		const doc = await db.jafInvoice.findUniqueOrThrow({
 			where: { id: docId },
 			include: { poLinks: true, paymentRecords: { select: { type: true } } },
@@ -247,6 +229,8 @@ export async function action({ request }: Route.ActionArgs) {
 			return { errorKey: "finance_receivables.errors.invalid_stage" }
 		if (doc.receivableClosedAt)
 			return { errorKey: "finance_receivables.errors.already_closed" }
+		if (isMissingClaroPdf(doc))
+			return { errorKey: "finance_receivables.errors.missing_claro_pdf" }
 		const stage = computeFinanceStage(
 			doc,
 			doc.poLinks.length > 0,
@@ -310,9 +294,7 @@ export default function FinancePipeline({
 	const { rows, totals, stageFilter, user } = loaderData
 	const { t } = useTranslation()
 	const error = actionData as { errorKey?: string } | null
-	const canRecordPayment = ["FINANCE", "COMPTROLLER", "ADMIN"].includes(
-		user.role,
-	)
+	const canRecordPayment = ["FINANCE", "ADMIN"].includes(user.role)
 	const today = new Date().toISOString().slice(0, 10)
 
 	return (
@@ -450,7 +432,16 @@ export default function FinancePipeline({
 										<Form method="post" className="inline">
 											<input type="hidden" name="intent" value="close" />
 											<input type="hidden" name="docId" value={row.id} />
-											<Button type="submit" size="sm">
+											<Button
+												type="submit"
+												size="sm"
+												disabled={row.missingClaroPdf}
+												title={
+													row.missingClaroPdf
+														? t("finance_receivables.errors.missing_claro_pdf")
+														: undefined
+												}
+											>
 												{t("finance_receivables.close")}
 											</Button>
 										</Form>

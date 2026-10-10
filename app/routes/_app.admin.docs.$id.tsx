@@ -1,26 +1,15 @@
 import type { ComponentProps } from "react"
 import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
+import { DocStageBadge } from "~/components/doc-stage-badge"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialLineItems } from "~/components/material-line-items"
-import { Badge } from "~/components/ui/badge"
 import { buttonVariants } from "~/components/ui/button"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
+import { deriveSupervisorStage } from "~/lib/supervisor-stage"
 import { formatMoney, toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.admin.docs.$id"
-
-const STATUS_BADGE_VARIANT: Record<string, "ok" | "warn" | "danger" | "info"> =
-	{
-		CREATED: "info",
-		PREPPED: "info",
-		SIGNED: "info",
-		FIELD_UPDATED: "warn",
-		SUPERVISOR_APPROVED: "ok",
-		CLARO_UPLOADED: "ok",
-		LC_REQUEST_GENERATED: "ok",
-		CANCELLED: "danger",
-	}
 
 interface UserInfo {
 	id: string
@@ -90,8 +79,14 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		where: { active: true },
 	})
 
+	const sheet = await db.preCertSheet.findFirst({
+		where: { docId: params.id, supersededAt: null },
+		select: { sigSupervisorAt: true, sigSubcontractorAt: true },
+	})
+
 	return {
 		doc,
+		stage: deriveSupervisorStage(doc, sheet),
 		sendBack,
 		peopleMap: Object.fromEntries(peopleMap) as Record<string, UserInfo>,
 		serviceCodes: serviceCodes.map((c) => ({
@@ -117,7 +112,7 @@ function actionSummary(action: string, diffJson: AuditDiff): string {
 }
 
 export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
-	const { doc, sendBack, peopleMap, serviceCodes } = loaderData
+	const { doc, stage, sendBack, peopleMap, serviceCodes } = loaderData
 	const t = useTranslation().t
 	const name = (id?: string | null) => (id ? (peopleMap[id]?.name ?? id) : "—")
 	const estimated = (doc.estimatedMaterials as unknown as MaterialLine[]) || []
@@ -131,9 +126,7 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 					<h1 className="font-mono font-bold text-lg">{doc.controlNumber}</h1>
 					<p className="text-sm text-muted-foreground">{doc.jobType}</p>
 				</div>
-				<Badge variant={STATUS_BADGE_VARIANT[doc.status]}>
-					{doc.status.replace(/_/g, " ")}
-				</Badge>
+				<DocStageBadge stage={stage} cancelled={doc.status === "CANCELLED"} />
 			</div>
 
 			<section className="grid grid-cols-2 gap-3 text-sm">

@@ -7,15 +7,11 @@ const mocks = vi.hoisted(() => ({
 		installCompletion: { findUnique: vi.fn(), findFirst: vi.fn() },
 	},
 	requireSession: vi.fn(),
-	isComptrollerEnabled: vi.fn(),
 }))
 
 vi.mock("~/lib/db.server", () => ({ db: mocks.db }))
 vi.mock("~/lib/permissions.server", () => ({
 	requireSession: mocks.requireSession,
-}))
-vi.mock("~/lib/features.server", () => ({
-	isComptrollerEnabled: mocks.isComptrollerEnabled,
 }))
 
 import { loader } from "./files.$"
@@ -27,7 +23,6 @@ function requestFor(pathname: string) {
 describe("files loader access control", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
-		mocks.isComptrollerEnabled.mockReturnValue(true)
 		mocks.requireSession.mockResolvedValue({ user: { id: "user-1" } })
 		mocks.db.user.findUniqueOrThrow.mockResolvedValue({
 			id: "user-1",
@@ -35,8 +30,7 @@ describe("files loader access control", () => {
 		} as any)
 	})
 
-	it("allows an enabled Comptroller to access a financeable doc", async () => {
-		mocks.isComptrollerEnabled.mockReturnValue(true)
+	it("allows a Comptroller to access a financeable doc", async () => {
 		mocks.db.jafInvoice.findUnique.mockResolvedValue({
 			id: "job-1",
 			status: "LC_REQUEST_GENERATED",
@@ -52,25 +46,7 @@ describe("files loader access control", () => {
 		expect(result.status).not.toBe(403)
 	})
 
-	it("blocks a disabled Comptroller from accessing a financeable doc", async () => {
-		mocks.isComptrollerEnabled.mockReturnValue(false)
-		mocks.db.jafInvoice.findUnique.mockResolvedValue({
-			id: "job-1",
-			status: "LC_REQUEST_GENERATED",
-			supervisorId: "sup-1",
-			assignedCrewIds: [],
-		} as any)
-
-		const result = await loader({
-			request: requestFor("/files/jaf-invoices/job-1-jaf-invoice.pdf"),
-			params: { "*": "jaf-invoices/job-1-jaf-invoice.pdf" },
-		} as any)
-
-		expect(result.status).toBe(403)
-	})
-
-	it("still allows Finance access when Comptroller is disabled", async () => {
-		mocks.isComptrollerEnabled.mockReturnValue(false)
+	it("still allows Finance access", async () => {
 		mocks.db.user.findUniqueOrThrow.mockResolvedValue({
 			id: "user-1",
 			role: "FINANCE",
@@ -90,8 +66,7 @@ describe("files loader access control", () => {
 		expect(result.status).not.toBe(403)
 	})
 
-	it("still allows Admin access when Comptroller is disabled", async () => {
-		mocks.isComptrollerEnabled.mockReturnValue(false)
+	it("still allows Admin access", async () => {
 		mocks.db.user.findUniqueOrThrow.mockResolvedValue({
 			id: "user-1",
 			role: "ADMIN",
@@ -122,20 +97,7 @@ describe("files loader — payroll run evidence (Review Focus)", () => {
 		} as any)
 	}
 
-	it("blocks a disabled Comptroller from payroll ACH evidence", async () => {
-		mocks.isComptrollerEnabled.mockReturnValue(false)
-		mocks.db.user.findUniqueOrThrow.mockResolvedValue({
-			id: "user-1",
-			role: "COMPTROLLER",
-		} as any)
-
-		const result = await loadEvidence()
-
-		expect(result.status).toBe(403)
-	})
-
-	it("allows an enabled Comptroller", async () => {
-		mocks.isComptrollerEnabled.mockReturnValue(true)
+	it("allows a Comptroller to read payroll run evidence", async () => {
 		mocks.db.user.findUniqueOrThrow.mockResolvedValue({
 			id: "user-1",
 			role: "COMPTROLLER",
@@ -146,8 +108,7 @@ describe("files loader — payroll run evidence (Review Focus)", () => {
 		expect(result.status).not.toBe(403)
 	})
 
-	it("still allows Finance access when Comptroller is disabled", async () => {
-		mocks.isComptrollerEnabled.mockReturnValue(false)
+	it("still allows Finance access", async () => {
 		mocks.db.user.findUniqueOrThrow.mockResolvedValue({
 			id: "user-1",
 			role: "FINANCE",
@@ -158,8 +119,7 @@ describe("files loader — payroll run evidence (Review Focus)", () => {
 		expect(result.status).not.toBe(403)
 	})
 
-	it("still allows Admin access when Comptroller is disabled", async () => {
-		mocks.isComptrollerEnabled.mockReturnValue(false)
+	it("still allows Admin access", async () => {
 		mocks.db.user.findUniqueOrThrow.mockResolvedValue({
 			id: "user-1",
 			role: "ADMIN",
@@ -170,8 +130,7 @@ describe("files loader — payroll run evidence (Review Focus)", () => {
 		expect(result.status).not.toBe(403)
 	})
 
-	it("blocks a role with no finance access even when Comptroller is enabled", async () => {
-		mocks.isComptrollerEnabled.mockReturnValue(true)
+	it("blocks a role with no finance access ", async () => {
 		mocks.db.user.findUniqueOrThrow.mockResolvedValue({
 			id: "user-1",
 			role: "SUPERVISOR",

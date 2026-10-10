@@ -228,7 +228,7 @@ function NotificationBell({
 function AppShell({
 	user,
 	notifications,
-	comptrollerEnabled,
+	varianceEnabled,
 	warehouseScope,
 	navCounts,
 	children,
@@ -240,7 +240,7 @@ function AppShell({
 		docId: string | null
 		createdAt: Date
 	}[]
-	comptrollerEnabled?: boolean
+	varianceEnabled?: boolean
 	warehouseScope?: {
 		warehouses: { id: string; name: string }[]
 		selectedId?: string
@@ -251,8 +251,12 @@ function AppShell({
 	const [drawerOpen, setDrawerOpen] = useState(false)
 	const connection = useConnectionState()
 	const { t } = useTranslation()
-	const groups = navGroupsFor(user.role, { comptrollerEnabled })
-	const tabItems = tabBarItemsFor(user.role, { comptrollerEnabled })
+	const groups = navGroupsFor(user.role, {
+		varianceEnabled,
+	})
+	const tabItems = tabBarItemsFor(user.role, {
+		varianceEnabled,
+	})
 
 	return (
 		<Dialog.Root open={drawerOpen} onOpenChange={setDrawerOpen}>

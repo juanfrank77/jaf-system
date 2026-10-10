@@ -3,6 +3,7 @@ import {
 	checkAvisoMatch,
 	deriveSupervisorStage,
 	evaluateReleaseGate,
+	isAvisoStarted,
 	panelForStep,
 	resolveStepView,
 } from "./supervisor-stage"
@@ -185,6 +186,22 @@ describe("evaluateReleaseGate", () => {
 		)
 		expect(r.conditions.find((c) => c.key === "precert_signed")?.ok).toBe(false)
 		expect(evaluateReleaseGate(good, null, photos).ok).toBe(false)
+	})
+})
+
+describe("isAvisoStarted", () => {
+	it("ignores an Aviso number typed at intake", () => {
+		expect(isAvisoStarted({ avisoNumber: "10354494", avisoLines: null })).toBe(
+			false,
+		)
+	})
+	it("is started once the supervisor has saved Aviso lines", () => {
+		expect(isAvisoStarted({ avisoNumber: "10354494", avisoLines: [] })).toBe(
+			true,
+		)
+	})
+	it("is not started with nothing saved", () => {
+		expect(isAvisoStarted({ avisoNumber: null, avisoLines: null })).toBe(false)
 	})
 })
 

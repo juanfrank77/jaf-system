@@ -6,10 +6,11 @@
 // finance screen is exactly one step of this loop, so each renders a
 // `FinanceStepRail` naming its step (mockup v3 priority 3: "Step rail
 // + callout on every screen").
-export type FinanceStep = "PACKETS" | "PAYROLL" | "PO" | "PIPELINE"
+export type FinanceStep = "PACKETS" | "FUNDING" | "PAYROLL" | "PO" | "PIPELINE"
 
 export const FINANCE_STEPS: FinanceStep[] = [
 	"PACKETS",
+	"FUNDING",
 	"PAYROLL",
 	"PO",
 	"PIPELINE",
@@ -19,6 +20,7 @@ export const FINANCE_STEPS: FinanceStep[] = [
  * PO step has no list of its own: POs are recorded from the pipeline. */
 export const FINANCE_STEP_HREF: Record<FinanceStep, string> = {
 	PACKETS: "/finance/queue",
+	FUNDING: "/finance/queue",
 	PAYROLL: "/finance/payroll",
 	PO: "/finance/receivables",
 	PIPELINE: "/finance/receivables",
@@ -27,6 +29,7 @@ export const FINANCE_STEP_HREF: Record<FinanceStep, string> = {
 /** i18n key per step, inside the `finance_flow.step` namespace. */
 export const FINANCE_STEP_LABEL_KEY = {
 	PACKETS: "finance_flow.step.packets",
+	FUNDING: "finance_flow.step.funding",
 	PAYROLL: "finance_flow.step.payroll",
 	PO: "finance_flow.step.po",
 	PIPELINE: "finance_flow.step.pipeline",

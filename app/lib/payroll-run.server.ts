@@ -4,8 +4,80 @@ import {
 	toContractorPaymentLines,
 } from "~/lib/contractor-payment.server"
 import { db } from "~/lib/db.server"
+import { isPayrollFallbackEnabled } from "~/lib/features.server"
 import { toNumberPrice } from "~/lib/utils"
 import type { Prisma } from "../../generated/prisma/client"
+
+const INVOICE_SELECT = {
+	id: true,
+	controlNumber: true,
+	avisoNumber: true,
+	contractorShareLines: true,
+	contractorAccount: {
+		select: {
+			id: true,
+			code: true,
+			label: true,
+		},
+	},
+} as const
+
+/**
+ * A run's invoices, in the ONE order the journal is ever rendered in.
+ *
+ * `buildJournalBlocks` sorts blocks by brigade code and jobs by controlNumber
+ * internally, so the DB row order only needs to be deterministic. We order by
+ * `releasedToFinanceAt` (batch release) with `id` as a tiebreaker so the same
+ * set of invoices renders identically on every page load — the running
+ * totals in the PDF are derived from this set, so a shifting order would
+ * produce a different journal between the screen and a PDF printed from it.
+ *
+ * Shared by every loader and PDF branch (finance and comptroller) on purpose —
+ * the printed journal has to agree with the screen, and a duplicated literal
+ * is how they drift.
+ */
+export const RUN_INVOICES = {
+	select: INVOICE_SELECT,
+	orderBy: [{ releasedToFinanceAt: "asc" }, { id: "asc" }],
+} as const satisfies Prisma.PayrollRun$invoicesArgs
+
+/** Today's calendar date (YYYY-MM-DD) in Puerto Rico, whatever the server TZ. */
+export function puertoRicoToday(): string {
+	return new Date().toLocaleDateString("en-CA", {
+		timeZone: "America/Puerto_Rico",
+	})
+}
+
+/**
+ * Validates the `paidDate` form field shared by the whole-run and per-account
+ * confirms. `<input type="date">` posts YYYY-MM-DD; `new Date("YYYY-MM-DD")`
+ * is UTC midnight, which renders as the previous day in Puerto Rico (UTC-4),
+ * so the date is anchored at local noon instead.
+ */
+export function parsePaidDate(raw: string | null | undefined):
+	| { date: Date }
+	| {
+			errorKey:
+				| "finance_payroll.errors.missing_fields"
+				| "finance_payroll.errors.invalid_date"
+				| "finance_payroll.errors.future_date"
+	  } {
+	const value = raw?.trim()
+	if (!value) return { errorKey: "finance_payroll.errors.missing_fields" }
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+		return { errorKey: "finance_payroll.errors.invalid_date" }
+	}
+	const date = new Date(`${value}T12:00:00`)
+	if (Number.isNaN(date.getTime())) {
+		return { errorKey: "finance_payroll.errors.invalid_date" }
+	}
+	// Compare calendar days (YYYY-MM-DD sorts lexically), not instants: "today"
+	// is valid at any hour. Today is the Puerto Rico calendar day.
+	if (value > puertoRicoToday()) {
+		return { errorKey: "finance_payroll.errors.future_date" }
+	}
+	return { date }
+}
 
 /**
  * Every job currently open on Arm A — the L1 query and the sweep source.
@@ -24,7 +96,7 @@ import type { Prisma } from "../../generated/prisma/client"
  * it, and it has to keep serving a job that already has its LC request
  * generated — both are past the point where L1 would list them, but finance
  * still opens them. So `packetView` drops the `LC_REQUEST_GENERATED`
- * exclusion, the `payrollRunId: null` clause and the PBCC_ADVANCE absence.
+ * exclusion and the `payrollRunId: null` clause.
  *
  * What it deliberately does NOT drop: the `CANCELLED` exclusion, "was released
  * to finance", and "is not already closed". Those are the clauses that say
@@ -62,14 +134,57 @@ export function armAOpenWhere(
 		payablesClosedAt: null,
 		// "Not yet claimed" — what makes a job sweepable exactly once. Dropped
 		// in the packet view so finance can still open a job that has already
-		// been swept or that carries a legacy PBCC advance.
-		...(opts.packetView
-			? {}
-			: {
-					payrollRunId: null,
-					paymentRecords: { none: { type: "PBCC_ADVANCE" } },
-				}),
+		// been swept. Funding (a PBCC_ADVANCE payment record) is deliberately
+		// NOT a clause: a sent packet is swept whether or not PBCC has funded it.
+		...(opts.packetView ? {} : { payrollRunId: null }),
 	}
+}
+
+/**
+ * What a payroll run may sweep: everything open on Arm A whose bank request
+ * has been sent to PBCC (spec §3). Funding is NOT part of the gate: JAF's rule
+ * so far is "complete and sent before the brigade is paid"; whether pay is held
+ * until PBCC funds is unconfirmed. To gate on funding later, add
+ * `advanceReceivedAt: { not: null }` here. `armAOpenWhere` itself is unchanged,
+ * so the packets list and packet view keep showing unsent jobs. Nothing here
+ * filters on `active`: an inactive brigade is still paid.
+ */
+function sweepableWhere(): Prisma.JafInvoiceWhereInput {
+	return { ...armAOpenWhere(), pbccRequestSentAt: { not: null } }
+}
+
+/** Info only (finance screens): how many sweepable packets are already funded. */
+export async function countFundedSweepableJobs(): Promise<number> {
+	const docs = await db.jafInvoice.findMany({
+		where: { ...sweepableWhere(), advanceReceivedAt: { not: null } },
+		select: { contractorAccountCode: true },
+	})
+	const resolved = await resolveContractorAccounts(
+		docs.map((d) => d.contractorAccountCode),
+	)
+	return docs.filter(
+		(d) => d.contractorAccountCode && resolved.has(d.contractorAccountCode),
+	).length
+}
+
+/**
+ * Sent-but-blocked: the bank request was sent and the job is open on Arm A,
+ * but its brigade code is missing or does not resolve to a contractor
+ * account, so a run would skip it. Shown on the payroll screen so Lissette
+ * can fix the mapping.
+ */
+export async function blockedSentJobs() {
+	const docs = await db.jafInvoice.findMany({
+		where: sweepableWhere(),
+		select: { id: true, controlNumber: true, contractorAccountCode: true },
+		orderBy: { controlNumber: "asc" },
+	})
+	const resolved = await resolveContractorAccounts(
+		docs.map((d) => d.contractorAccountCode),
+	)
+	return docs.filter(
+		(d) => !d.contractorAccountCode || !resolved.has(d.contractorAccountCode),
+	)
 }
 
 /** Thrown (before anything is written) when a run would contain no jobs. */
@@ -91,7 +206,7 @@ export async function countSweepableJobs(
 ): Promise<number> {
 	const docs = await db.jafInvoice.findMany({
 		where: {
-			...armAOpenWhere(),
+			...sweepableWhere(),
 			...(excludeIds.length ? { id: { notIn: [...excludeIds] } } : {}),
 		},
 		select: { contractorAccountCode: true },
@@ -119,7 +234,7 @@ export async function generateRun(opts: {
 	const excludeIds = opts.excludeIds ?? []
 	const candidates = await db.jafInvoice.findMany({
 		where: {
-			...armAOpenWhere(),
+			...sweepableWhere(),
 			...(excludeIds.length ? { id: { notIn: [...excludeIds] } } : {}),
 		},
 		select: { id: true, jafInvoiceLines: true, contractorAccountCode: true },
@@ -169,6 +284,7 @@ export async function generateRun(opts: {
 				data: { label: opts.label, generatedById: opts.generatedById },
 			})
 			let swept = 0
+			const claimedAccountIds = new Set<string>()
 			for (const doc of toSweep) {
 				const { payment } = doc
 				const result = await tx.jafInvoice.updateMany({
@@ -182,11 +298,30 @@ export async function generateRun(opts: {
 						netPayable: payment.netPayable,
 					},
 				})
+				if (result.count > 0) claimedAccountIds.add(doc.accountId)
 				swept += result.count
 			}
 			// Every candidate was claimed by a concurrent run: roll back rather than
 			// leave an empty run that could be marked paid.
 			if (swept === 0) throw new EmptyRunError()
+			await tx.payrollRunAccount.createMany({
+				data: [...claimedAccountIds].map((contractorAccountId) => ({
+					payrollRunId: created.id,
+					contractorAccountId,
+				})),
+			})
+			const comptrollers = await tx.user.findMany({
+				where: { role: "COMPTROLLER", active: true },
+				select: { id: true },
+			})
+			if (comptrollers.length > 0) {
+				await tx.notification.createMany({
+					data: comptrollers.map((u) => ({
+						userId: u.id,
+						message: `Production Journal ${opts.label} is ready to pay — ${claimedAccountIds.size} accounts.`,
+					})),
+				})
+			}
 			return { created, swept }
 			// The first run sweeps the whole released backlog (one write per job), so
 			// the 5s interactive-transaction default is not enough.
@@ -198,18 +333,127 @@ export async function generateRun(opts: {
 }
 
 /**
- * Close a payroll run (Carmen's PAID): stamp `paidAt` on the run, stamp
- * `payablesClosedAt`/`payablesClosedById` on every member invoice (which is
- * what removes them from Arm A and therefore from L1), and notify FINANCE.
- * No ACH reference is kept — Carmen pays outside the system (q&a 15.2).
+ * Tick one contractor account of a payroll run as paid (Carmen's per-account
+ * PAID, or finance's paper fallback): stamps the account row and
+ * `payablesClosedAt`/`payablesClosedById` on that account's jobs in the run
+ * (which removes them from Arm A and therefore from L1). When it was the last
+ * unpaid account the run itself is closed and FINANCE is notified, exactly
+ * once even under concurrent last ticks. No ACH reference is kept (q&a 15.2).
  *
- * Today the screen calls it with `confirmedByFallback: true`; a later phase's
- * dedicated Carmen screen is expected to pass `false` so both paths stay on one
- * transaction. `reversedAt` / `reversedById` / `reverseReason` on PayrollRun are
- * the schema hook for the admin-only reversal planned for Phase 5 (q&a 15.5);
- * nothing writes them yet.
+ * Throws 403 for a fallback tick when PAYROLL_FALLBACK_ENABLED is off, 404 if
+ * the account is not part of the run, 409 if it is already paid.
+ * `reversedAt` / `reversedById` / `reverseReason` on PayrollRun are the schema
+ * hook for the admin-only reversal planned for Phase 5 (q&a 15.5).
+ */
+export async function closePayrollRunAccount(opts: {
+	runId: string
+	accountId: string
+	paidById: string
+	paidDate: Date
+	confirmedByFallback: boolean
+}): Promise<{ runClosed: boolean }> {
+	// Finance confirming from paper is a side-by-side-period fallback; once
+	// switched off at go-live only the comptroller ticks.
+	if (opts.confirmedByFallback && !isPayrollFallbackEnabled()) {
+		throw new Response("Fallback confirmation is switched off", { status: 403 })
+	}
+	return db.$transaction(async (tx) => {
+		const exists = await tx.payrollRunAccount.findUnique({
+			where: {
+				payrollRunId_contractorAccountId: {
+					payrollRunId: opts.runId,
+					contractorAccountId: opts.accountId,
+				},
+			},
+			select: { id: true },
+		})
+		if (!exists) throw new Response("Account not in this run", { status: 404 })
+		// Lock the run row first: a reversed or already-closed run must refuse
+		// before the account is claimed, and the later "was that the last
+		// one?" decision is serialized on the same lock.
+		await tx.$queryRaw`SELECT "id" FROM "PayrollRun" WHERE "id" = ${opts.runId} FOR UPDATE`
+		const runState = await tx.payrollRun.findUniqueOrThrow({
+			where: { id: opts.runId },
+			select: { reversedAt: true, paidAt: true },
+		})
+		if (runState.reversedAt || runState.paidAt) {
+			throw new Response("Run is reversed or already paid", { status: 409 })
+		}
+		// Conditional claim: same double-submit guard as the old whole-run close.
+		const claimed = await tx.payrollRunAccount.updateMany({
+			where: {
+				payrollRunId: opts.runId,
+				contractorAccountId: opts.accountId,
+				paidAt: null,
+			},
+			data: {
+				paidAt: opts.paidDate,
+				paidById: opts.paidById,
+				confirmedByFallback: opts.confirmedByFallback,
+			},
+		})
+		if (claimed.count === 0) {
+			throw new Response("Account already paid", { status: 409 })
+		}
+		await tx.jafInvoice.updateMany({
+			where: { payrollRunId: opts.runId, contractorAccountId: opts.accountId },
+			data: {
+				// When the system closed the job, not the user-typed pay date.
+				payablesClosedAt: new Date(),
+				payablesClosedById: opts.paidById,
+			},
+		})
+		// The run row is already locked (above), so two concurrent last ticks
+		// cannot both see "someone else is still unpaid" (nobody closes) or
+		// both see "none left" (double notify).
+		const remaining = await tx.payrollRunAccount.count({
+			where: { payrollRunId: opts.runId, paidAt: null },
+		})
+		if (remaining > 0) return { runClosed: false }
+		// The run is "confirmed by fallback" if ANY of its accounts was, not just the last tick.
+		const anyFallback =
+			(await tx.payrollRunAccount.count({
+				where: { payrollRunId: opts.runId, confirmedByFallback: true },
+			})) > 0
+		const closed = await tx.payrollRun.updateMany({
+			where: { id: opts.runId, paidAt: null, reversedAt: null },
+			data: {
+				paidAt: opts.paidDate,
+				paidById: opts.paidById,
+				confirmedByFallback: anyFallback,
+			},
+		})
+		if (closed.count === 0) return { runClosed: false }
+		const [{ label }, count, financeUsers] = await Promise.all([
+			tx.payrollRun.findUniqueOrThrow({
+				where: { id: opts.runId },
+				select: { label: true },
+			}),
+			tx.jafInvoice.count({ where: { payrollRunId: opts.runId } }),
+			tx.user.findMany({
+				where: { role: "FINANCE", active: true },
+				select: { id: true },
+			}),
+		])
+		if (financeUsers.length > 0) {
+			await tx.notification.createMany({
+				data: financeUsers.map((u) => ({
+					userId: u.id,
+					message: `Run ${label} paid — ${count} Avisos payroll confirmed.`,
+				})),
+			})
+		}
+		return { runClosed: true }
+	})
+}
+
+/**
+ * Whole-run confirm (finance's paper fallback): ticks every still-unpaid
+ * account of the run through `closePayrollRunAccount`, so the last tick closes
+ * the run and notifies FINANCE. Returns the number of member invoices closed.
  *
- * Throws 409 if the run is already closed — see the conditional claim below.
+ * Throws 403 if `confirmedByFallback` and the fallback switch is off, 404 for
+ * an unknown run, 409 if the run is already closed.
  */
 export async function closePayrollRun(opts: {
 	runId: string
@@ -219,57 +463,44 @@ export async function closePayrollRun(opts: {
 	evidencePath?: string | null
 	confirmedByFallback: boolean
 }): Promise<{ closedCount: number }> {
-	const closedCount = await db.$transaction(async (tx) => {
-		// The close is a single CONDITIONAL transition, not an unconditional
-		// write. Only an open run (unpaid, unreversed) can be claimed, and the
-		// claim is the guard: two overlapping batch_confirm calls serialize on
-		// this row's lock, and the second re-checks the WHERE on wake, matches
-		// zero rows, and is rejected. This is the same shape as the per-row
-		// conditional claim in `generateRun`.
-		//
-		// Without it the only protection was the React component hiding the form
-		// once `paidAt` is set, so a double-submit, a replay, or a stale tab
-		// re-stamped the paid date/paidBy/evidence path on the run AND on
-		// every member invoice, and notified every FINANCE user a second time.
-		const claimed = await tx.payrollRun.updateMany({
-			where: { id: opts.runId, paidAt: null, reversedAt: null },
-			data: {
-				paidAt: opts.paidDate,
-				paidById: opts.paidById,
-				evidencePath: opts.evidencePath ?? null,
-				confirmedByFallback: opts.confirmedByFallback,
-			},
-		})
-		if (claimed.count === 0) {
-			throw new Response("Payroll run is already closed", { status: 409 })
-		}
-		const closed = await tx.jafInvoice.updateMany({
-			where: { payrollRunId: opts.runId },
-			data: {
-				// When the system closed the job, not the user-typed pay date.
-				payablesClosedAt: new Date(),
-				payablesClosedById: opts.paidById,
-			},
-		})
-		const { label } = await tx.payrollRun.findUniqueOrThrow({
-			where: { id: opts.runId },
-			select: { label: true },
-		})
-		const financeUsers = await tx.user.findMany({
-			where: { role: "FINANCE", active: true },
-			select: { id: true },
-		})
-		if (financeUsers.length > 0) {
-			await tx.notification.createMany({
-				data: financeUsers.map((u) => ({
-					userId: u.id,
-					message: `Run ${label} paid — ${closed.count} Avisos payroll confirmed.`,
-				})),
-			})
-		}
-		return closed.count
+	if (opts.confirmedByFallback && !isPayrollFallbackEnabled()) {
+		throw new Response("Fallback confirmation is switched off", { status: 403 })
+	}
+	const run = await db.payrollRun.findUnique({
+		where: { id: opts.runId },
+		select: { paidAt: true, reversedAt: true },
 	})
-
+	if (!run) throw new Response("Not Found", { status: 404 })
+	if (run.paidAt || run.reversedAt) {
+		throw new Response("Payroll run is already closed", { status: 409 })
+	}
+	if (opts.evidencePath) {
+		await db.payrollRun.update({
+			where: { id: opts.runId },
+			data: { evidencePath: opts.evidencePath },
+		})
+	}
+	const open = await db.payrollRunAccount.findMany({
+		where: { payrollRunId: opts.runId, paidAt: null },
+		select: { contractorAccountId: true },
+	})
+	for (const { contractorAccountId } of open) {
+		try {
+			await closePayrollRunAccount({
+				runId: opts.runId,
+				accountId: contractorAccountId,
+				paidById: opts.paidById,
+				paidDate: opts.paidDate,
+				confirmedByFallback: opts.confirmedByFallback,
+			})
+		} catch (e) {
+			// Lost a race with another tick of the same account: fine, skip it.
+			if (!(e instanceof Response && e.status === 409)) throw e
+		}
+	}
+	const closedCount = await db.jafInvoice.count({
+		where: { payrollRunId: opts.runId, payablesClosedAt: { not: null } },
+	})
 	return { closedCount }
 }
 

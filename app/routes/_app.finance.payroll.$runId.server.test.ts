@@ -1,6 +1,6 @@
 import { stat } from "node:fs/promises"
 import { join, sep } from "node:path"
-import { afterAll, describe, expect, it, vi } from "vitest"
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest"
 import { db } from "~/lib/db.server"
 import {
 	makeTracker,
@@ -16,6 +16,13 @@ import { action, loader } from "./_app.finance.payroll.$runId"
 
 const t = makeTracker()
 afterAll(() => t.cleanup())
+
+const originalFallback = process.env.PAYROLL_FALLBACK_ENABLED
+afterEach(() => {
+	if (originalFallback === undefined)
+		delete process.env.PAYROLL_FALLBACK_ENABLED
+	else process.env.PAYROLL_FALLBACK_ENABLED = originalFallback
+})
 
 describe("journal ordering", () => {
 	it("pins the run's invoice order, with a tiebreaker, in the loader (Review Focus)", async () => {
@@ -141,6 +148,11 @@ describe("L3 run detail", () => {
 		})
 		t.track("payrollRun", run)
 		t.track("jafInvoice", invoice)
+		// closePayrollRun ticks the run's PayrollRunAccount rows, which
+		// generateRun normally creates.
+		await db.payrollRunAccount.create({
+			data: { payrollRunId: run.id, contractorAccountId: account.id },
+		})
 
 		const missingFields = new URLSearchParams({ intent: "batch_confirm" })
 		const blockedResult = await action({
@@ -273,6 +285,130 @@ describe("L3 run detail", () => {
 			errorKey: "finance_payroll.errors.invalid_evidence",
 		})
 
+		const reloaded = await db.payrollRun.findUniqueOrThrow({
+			where: { id: run.id },
+		})
+		expect(reloaded.paidAt).toBeNull()
+	})
+})
+
+describe("per-account confirm", () => {
+	async function runWithAccount() {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		mocks.requireRole.mockResolvedValue({ user: finance })
+		const account = t.track("contractorAccount", await seedContractorAccount())
+		const { run, invoice } = await seedSweptInvoice({
+			generatedById: finance.id,
+			contractorAccountId: account.id,
+			runLabel: "Run account",
+		})
+		t.track("payrollRun", run)
+		t.track("jafInvoice", invoice)
+		await db.payrollRunAccount.create({
+			data: { payrollRunId: run.id, contractorAccountId: account.id },
+		})
+		return { finance, account, run }
+	}
+
+	function post(runId: string, fields: Record<string, string>) {
+		return action({
+			request: new Request(`http://localhost/finance/payroll/${runId}`, {
+				method: "POST",
+				body: new URLSearchParams(fields),
+			}),
+			params: { runId },
+			context: {},
+		} as never)
+	}
+
+	const load = (runId: string) =>
+		loader({
+			request: new Request(`http://localhost/finance/payroll/${runId}`),
+			params: { runId },
+			context: {},
+		} as never)
+
+	async function status(r: unknown) {
+		try {
+			await r
+			return 200
+		} catch (e) {
+			if (e instanceof Response) return e.status
+			throw e
+		}
+	}
+
+	it("loader returns one unpaid accounts row per account", async () => {
+		const { account, run } = await runWithAccount()
+		const result = await load(run.id)
+		expect(result.accounts).toHaveLength(1)
+		expect(result.accounts[0]).toMatchObject({
+			accountId: account.id,
+			code: account.code,
+			jobs: 1,
+			paidAt: null,
+			confirmedByFallback: false,
+		})
+		expect(result.fallbackEnabled).toBe(true)
+	})
+
+	it("confirm_account ticks the account as a fallback, and a replay is a no-op success", async () => {
+		const { finance, account, run } = await runWithAccount()
+		const fields = {
+			intent: "confirm_account",
+			accountId: account.id,
+			paidDate: "2026-09-12",
+		}
+		expect(await post(run.id, fields)).toMatchObject({ ok: true })
+		const row = await db.payrollRunAccount.findFirstOrThrow({
+			where: { payrollRunId: run.id, contractorAccountId: account.id },
+		})
+		expect(row.paidAt).not.toBeNull()
+		expect(row.paidById).toBe(finance.id)
+		expect(row.confirmedByFallback).toBe(true)
+		const shown = (await load(run.id)).accounts[0]
+		expect(shown.paidByName).toBe(finance.name)
+		expect(shown.confirmedByFallback).toBe(true)
+
+		expect(await post(run.id, fields)).toMatchObject({ ok: true })
+	})
+
+	it("confirm_account with an account from another run is a 404", async () => {
+		const { run } = await runWithAccount()
+		const other = t.track("contractorAccount", await seedContractorAccount())
+		expect(
+			await status(
+				post(run.id, {
+					intent: "confirm_account",
+					accountId: other.id,
+					paidDate: "2026-09-12",
+				}),
+			),
+		).toBe(404)
+	})
+
+	it("with the fallback switch off, confirm_account and batch_confirm are 403 and stamp nothing", async () => {
+		const { account, run } = await runWithAccount()
+		process.env.PAYROLL_FALLBACK_ENABLED = "false"
+		expect((await load(run.id)).fallbackEnabled).toBe(false)
+		expect(
+			await status(
+				post(run.id, {
+					intent: "confirm_account",
+					accountId: account.id,
+					paidDate: "2026-09-12",
+				}),
+			),
+		).toBe(403)
+		expect(
+			await status(
+				post(run.id, { intent: "batch_confirm", paidDate: "2026-09-12" }),
+			),
+		).toBe(403)
+		const row = await db.payrollRunAccount.findFirstOrThrow({
+			where: { payrollRunId: run.id },
+		})
+		expect(row.paidAt).toBeNull()
 		const reloaded = await db.payrollRun.findUniqueOrThrow({
 			where: { id: run.id },
 		})

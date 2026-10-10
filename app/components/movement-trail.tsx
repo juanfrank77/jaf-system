@@ -23,12 +23,15 @@ export function MovementTrail({
 	warehouseId,
 	serviceCodeId,
 	unit,
+	material,
 	onClose,
 }: {
 	warehouseId: string
 	serviceCodeId: string
 	/** Count unit of the material (qty is ledger/count-unit). */
 	unit?: string | null
+	/** "1003793 SPAN CLAMP": shown in the title so the trail names its material. */
+	material?: string | null
 	onClose: () => void
 }) {
 	const { t, i18n } = useTranslation()
@@ -49,7 +52,9 @@ export function MovementTrail({
 			<CardContent className="space-y-2 p-3">
 				<div className="flex items-center justify-between">
 					<h3 className="text-xs font-semibold text-muted-foreground">
-						{t("stock.trail.title")}
+						{material
+							? t("stock.trail.title_for", { material })
+							: t("stock.trail.title")}
 					</h3>
 					<Button type="button" variant="ghost" size="xs" onClick={onClose}>
 						{t("stock.hide_trail")}
@@ -88,6 +93,7 @@ export function MovementTrail({
 						))}
 					</ul>
 				)}
+				<p className="text-xs text-muted-foreground">{t("stock.trail.why")}</p>
 			</CardContent>
 		</Card>
 	)

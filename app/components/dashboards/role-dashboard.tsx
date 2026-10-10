@@ -46,8 +46,7 @@ export function RoleDashboard({
 		case "INSTALLER_SUPERVISOR":
 			return <InstallerDashboard {...view} />
 		default:
-			// COMPTROLLER with the feature flag off lands here (the loader redirects
-			// it to /comptroller when the flag is on).
+			// COMPTROLLER is redirected to /comptroller by the loader; this branch is a fallback.
 			return <DashboardView {...view} />
 	}
 }

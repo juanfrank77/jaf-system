@@ -76,6 +76,10 @@ export function StockScreen({
 						warehouseId={selectedId}
 						serviceCodeId={selectedCode}
 						unit={bulk.find((b) => b.serviceCodeId === selectedCode)?.countUnit}
+						material={(() => {
+							const row = bulk.find((b) => b.serviceCodeId === selectedCode)
+							return row ? `${row.claroCode} ${row.canonicalName}`.trim() : null
+						})()}
 						onClose={() => setSelectedCode(null)}
 					/>
 				)}

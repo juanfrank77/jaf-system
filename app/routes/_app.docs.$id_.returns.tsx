@@ -58,9 +58,24 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	})
 	if (!["SIGNED", "FIELD_UPDATED"].includes(doc.status))
 		throw redirect(`/docs/${params.id}`)
-	const serviceCodes = await getActiveMaterialCodes()
-	const warehouses = await db.warehouse.findMany({ where: { active: true } })
 	const taken = (doc.materialsTaken as unknown as MaterialLine[]) || []
+	// A taken line whose material has since been deactivated must still resolve
+	// to a name — the form would otherwise render the raw database id.
+	const [activeCodes, takenCodes, warehouses] = await Promise.all([
+		getActiveMaterialCodes(),
+		db.serviceCode.findMany({
+			where: { id: { in: taken.map((l) => l.serviceCodeId) } },
+		}),
+		db.warehouse.findMany({
+			where: { active: true },
+			orderBy: { name: "asc" },
+		}),
+	])
+	const known = new Set(activeCodes.map((c) => c.id))
+	const serviceCodes = [
+		...activeCodes,
+		...takenCodes.filter((c) => !known.has(c.id)),
+	]
 	const materialsUsed =
 		(doc.materialsUsed as { serviceCodeId: string; qty: number }[] | null) ||
 		null

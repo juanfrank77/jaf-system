@@ -132,7 +132,10 @@ export default function AdminVans({
 							<Label htmlFor="installerId">
 								{t("admin_vans.installer_label")}
 							</Label>
-							<Select name="installerId">
+							<Select
+								name="installerId"
+								items={installers.map((u) => ({ value: u.id, label: u.name }))}
+							>
 								<SelectTrigger id="installerId">
 									<SelectValue
 										placeholder={t("admin_vans.installer_placeholder")}
@@ -282,7 +285,14 @@ function EditVanDialog({
 						<Label htmlFor={`installer-${van.id}`}>
 							{t("admin_vans.installer_label")}
 						</Label>
-						<Select name="installerId" defaultValue={van.installerId ?? ""}>
+						<Select
+							name="installerId"
+							defaultValue={van.installerId ?? ""}
+							items={[
+								{ value: "", label: t("admin_vans.installer_placeholder") },
+								...installers.map((u) => ({ value: u.id, label: u.name })),
+							]}
+						>
 							<SelectTrigger id={`installer-${van.id}`}>
 								<SelectValue />
 							</SelectTrigger>

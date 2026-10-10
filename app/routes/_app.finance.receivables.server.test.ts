@@ -2,25 +2,29 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const mocks = vi.hoisted(() => ({
 	db: {
-		jafInvoice: { findUniqueOrThrow: vi.fn() },
-		user: { findMany: vi.fn() },
+		jafInvoice: { findUniqueOrThrow: vi.fn(), findMany: vi.fn() },
+		user: { findMany: vi.fn(), findUniqueOrThrow: vi.fn() },
 		notification: { createMany: vi.fn() },
 		$transaction: vi.fn(),
 	},
 	requireRole: vi.fn(),
-	isComptrollerEnabled: vi.fn(),
+	getSession: vi.fn(),
 	computeFinanceStage: vi.fn(),
 	recordReceivablePayment: vi.fn(),
 	sendInternalEmail: vi.fn(),
 }))
 
 vi.mock("~/lib/db.server", () => ({ db: mocks.db }))
-vi.mock("~/lib/permissions.server", () => ({ requireRole: mocks.requireRole }))
-vi.mock("~/lib/features.server", () => ({
-	isComptrollerEnabled: mocks.isComptrollerEnabled,
+vi.mock("~/lib/permissions.server", () => ({
+	requireRole: mocks.requireRole,
+}))
+vi.mock("~/lib/auth.server", () => ({
+	auth: { api: { getSession: mocks.getSession } },
 }))
 vi.mock("~/lib/finance-pipeline.server", () => ({
 	computeFinanceStage: mocks.computeFinanceStage,
+	isMissingClaroPdf: (invoice: { claroPdfPath: string | null }) =>
+		!invoice.claroPdfPath || invoice.claroPdfPath.trim() === "",
 }))
 vi.mock("~/lib/payment-records.server", () => ({
 	parsePaymentDate: (value: string | null) =>
@@ -32,7 +36,7 @@ vi.mock("~/lib/email.server", () => ({
 	sendInternalEmail: mocks.sendInternalEmail,
 }))
 
-import { action } from "./_app.finance.receivables"
+import { action, loader } from "./_app.finance.receivables"
 
 const requestWith = (entries: Record<string, string>) => {
 	const form = new FormData()
@@ -54,7 +58,6 @@ const doc = {
 describe("Finance receivables action guards", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
-		mocks.isComptrollerEnabled.mockReturnValue(true)
 		mocks.requireRole.mockResolvedValue({
 			user: { id: "finance-1", role: "FINANCE" },
 		})
@@ -118,29 +121,91 @@ describe("Finance receivables action guards", () => {
 		expect(mocks.sendInternalEmail).toHaveBeenCalled()
 	})
 
-	it("blocks a Comptroller when the portal feature is disabled", async () => {
-		mocks.requireRole.mockResolvedValue({
-			user: { id: "comptroller-1", role: "COMPTROLLER" },
-		})
-		mocks.isComptrollerEnabled.mockReturnValue(false)
-		await expect(
-			action({
-				request: requestWith({ intent: "record_advance" }),
-				params: {},
-			} as any),
-		).rejects.toMatchObject({ status: 404 })
-	})
-
-	it("does not allow Comptroller to close a receivable", async () => {
-		mocks.requireRole.mockResolvedValue({
-			user: { id: "comptroller-1", role: "COMPTROLLER" },
+	it("refuses to close a receivable without its Claro PDF", async () => {
+		mocks.computeFinanceStage.mockReturnValue("READY_TO_CLOSE")
+		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue({
+			...doc,
+			receivableClosedAt: null,
+			claroPdfPath: null,
 		})
 		const result = await action({
 			request: requestWith({ intent: "close", docId: "job-1" }),
 			params: {},
 		} as any)
 		expect(result).toEqual({
-			errorKey: "finance_receivables.errors.close_role_required",
+			errorKey: "finance_receivables.errors.missing_claro_pdf",
 		})
+		expect(mocks.db.$transaction).not.toHaveBeenCalled()
+	})
+
+	it("closes a READY_TO_CLOSE receivable that has its Claro PDF", async () => {
+		mocks.computeFinanceStage.mockReturnValue("READY_TO_CLOSE")
+		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue({
+			...doc,
+			receivableClosedAt: null,
+			claroPdfPath: "claro/job-1.pdf",
+		})
+		mocks.db.$transaction.mockResolvedValue(true)
+		const result = await action({
+			request: requestWith({ intent: "close", docId: "job-1" }),
+			params: {},
+		} as any)
+		expect(result).toBeNull()
+		expect(mocks.db.$transaction).toHaveBeenCalled()
+	})
+
+	it("restricts both loader and action to FINANCE and ADMIN", async () => {
+		mocks.db.jafInvoice.findMany.mockResolvedValue([])
+		await loader({
+			request: new Request("http://localhost/finance/receivables"),
+			params: {},
+		} as any).catch(() => undefined)
+		await action({
+			request: requestWith({ intent: "verify" }),
+			params: {},
+		} as any)
+		expect(mocks.requireRole).toHaveBeenCalledTimes(2)
+		expect(mocks.requireRole).toHaveBeenNthCalledWith(1, expect.anything(), [
+			"FINANCE",
+			"ADMIN",
+		])
+		expect(mocks.requireRole).toHaveBeenNthCalledWith(2, expect.anything(), [
+			"FINANCE",
+			"ADMIN",
+		])
+	})
+})
+
+describe("Finance receivables real role guard", () => {
+	it("redirects a COMPTROLLER to /dashboard from loader and action", async () => {
+		const real = await vi.importActual<
+			typeof import("~/lib/permissions.server")
+		>("~/lib/permissions.server")
+		mocks.requireRole.mockImplementation(real.requireRole)
+		mocks.getSession.mockResolvedValue({ user: { id: "comp-1" } })
+		mocks.db.user.findUniqueOrThrow.mockResolvedValue({
+			id: "comp-1",
+			role: "COMPTROLLER",
+		})
+
+		for (const call of [
+			() =>
+				loader({
+					request: new Request("http://localhost/finance/receivables"),
+					params: {},
+				} as any),
+			() =>
+				action({
+					request: requestWith({ intent: "close" }),
+					params: {},
+				} as any),
+		]) {
+			const thrown = await call().then(
+				() => null,
+				(e: unknown) => e,
+			)
+			expect(thrown).toBeInstanceOf(Response)
+			expect((thrown as Response).headers.get("Location")).toBe("/dashboard")
+		}
 	})
 })

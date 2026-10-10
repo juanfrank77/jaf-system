@@ -136,3 +136,17 @@ export function parseAvisoLines(raw: string | null | undefined): AvisoLine[] {
 			}
 		})
 }
+
+/**
+ * Catalog descriptions end with a glued price-list code ("…ASFALTOMO",
+ * "…C5MC"). Splits it into its own value so screens can show it as a column.
+ * Only the last word is touched, and only when something precedes the MO/MC.
+ */
+export function splitServiceSuffix(name: string): {
+	base: string
+	suffix: "MO" | "MC" | null
+} {
+	const m = name.match(/^(.*?\S)(MO|MC)$/)
+	if (!m) return { base: name, suffix: null }
+	return { base: m[1], suffix: m[2] as "MO" | "MC" }
+}

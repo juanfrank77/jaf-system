@@ -4,7 +4,9 @@ import { useMemo } from "react"
 import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
 import type { DashboardDocRow } from "~/components/dashboard-doc-list"
+import { JobFlowOverview } from "~/components/job-step-rail"
 import { Badge } from "~/components/ui/badge"
+import { Callout } from "~/components/ui/callout"
 import { EmptyState } from "~/components/ui/empty-state"
 import type {
 	BaseDashboardProps,
@@ -14,8 +16,8 @@ import type {
 
 type CrewRowKind = "sent_back" | "ready" | "on_site" | "submitted" | "approved"
 
-const BADGE: Record<CrewRowKind, "warn" | "info" | "ok"> = {
-	sent_back: "warn",
+const BADGE: Record<CrewRowKind, "warn" | "info" | "ok" | "danger"> = {
+	sent_back: "danger",
 	ready: "info",
 	on_site: "warn",
 	submitted: "info",
@@ -84,6 +86,10 @@ export function CrewDashboard(
 					{t("dashboard.crew.subtitle_open", { count: open })}
 				</p>
 			</div>
+			<JobFlowOverview viewer="CREW" compact />
+			<Callout title={t("job_flow.callout.crew_list_title")}>
+				{t("job_flow.callout.crew_list_body")}
+			</Callout>
 			{rows.length === 0 && (
 				<EmptyState>{t("dashboard.crew.empty")}</EmptyState>
 			)}
@@ -96,7 +102,7 @@ export function CrewDashboard(
 								to={hrefFor(kind, doc.id)}
 								className={`flex min-h-16 items-center gap-3 rounded-xl border bg-card p-3 shadow-card transition-colors hover:bg-muted/40 ${
 									kind === "sent_back"
-										? "border-status-warn/50"
+										? "border-status-danger/50"
 										: "border-border"
 								} ${kind === "approved" ? "opacity-75" : ""}`}
 							>
@@ -109,7 +115,7 @@ export function CrewDashboard(
 										{doc.jobAddressEstimated}
 									</p>
 									{note && (
-										<p className="mt-1 text-xs font-medium text-status-warn">
+										<p className="mt-1 text-xs font-medium text-status-danger">
 											{t("dashboard.crew.sent_back_note", { note })}
 										</p>
 									)}

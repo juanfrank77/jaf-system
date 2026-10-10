@@ -1,14 +1,19 @@
-import { afterAll, describe, expect, it, vi } from "vitest"
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest"
 import { db } from "~/lib/db.server"
 import {
 	armAOpenWhere,
 	buildJournalBlocks,
 	closePayrollRun,
+	closePayrollRunAccount,
+	countFundedSweepableJobs,
 	EmptyRunError,
 	generateRun,
+	parsePaidDate,
+	puertoRicoToday,
 } from "~/lib/payroll-run.server"
 import {
 	makeTracker,
+	runToken,
 	seedContractorAccount,
 	seedFinanceableInvoice,
 	seedUser,
@@ -38,6 +43,19 @@ const ONE_LINE_100 = [
 ]
 
 const t = makeTracker()
+
+/**
+ * A sweepable job unrelated to the test's subject, so a negative test ("X is
+ * not swept") still gets a non-empty run on a fresh database instead of an
+ * EmptyRunError.
+ */
+async function seedSweepFiller() {
+	const account = t.track("contractorAccount", await seedContractorAccount())
+	t.track(
+		"jafInvoice",
+		await seedFinanceableInvoice({ contractorAccountCode: account.code }),
+	)
+}
 afterAll(() => t.cleanup())
 
 describe("generateRun", () => {
@@ -90,10 +108,17 @@ describe("generateRun", () => {
 
 		const first = await generateRun({ generatedById: finance.id, label: "R1" })
 		t.track("payrollRun", first.run as { id: string })
-		const second = await generateRun({ generatedById: finance.id, label: "R2" })
-		// generateRun always creates a run row even when it sweeps nothing, and
-		// that row FKs generatedById -> User, so it must be tracked for cleanup.
-		t.track("payrollRun", second.run as { id: string })
+		// With nothing else open (a fresh DB) the second run is refused as empty;
+		// either way it must not re-claim the job. A run row that did get created
+		// FKs generatedById -> User, so it is tracked for cleanup.
+		const second = await generateRun({
+			generatedById: finance.id,
+			label: "R2",
+		}).catch((e) => {
+			if (e instanceof EmptyRunError) return null
+			throw e
+		})
+		if (second) t.track("payrollRun", second.run as { id: string })
 
 		const afterFirst = await db.jafInvoice.findUniqueOrThrow({
 			where: { id: doc.id },
@@ -114,12 +139,17 @@ describe("generateRun", () => {
 			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
 		)
 
-		const [a, b] = await Promise.all([
+		// The loser may find nothing left and be refused as empty (EmptyRunError).
+		const settled = await Promise.allSettled([
 			generateRun({ generatedById: finance.id, label: "Race A" }),
 			generateRun({ generatedById: finance.id, label: "Race B" }),
 		])
-		t.track("payrollRun", a.run as { id: string })
-		t.track("payrollRun", b.run as { id: string })
+		const runs = settled.flatMap((r) => {
+			if (r.status === "fulfilled") return [r.value]
+			if (r.reason instanceof EmptyRunError) return []
+			throw r.reason
+		})
+		for (const r of runs) t.track("payrollRun", r.run as { id: string })
 
 		// Exactly one of the two runs claimed the job. Asserted as per-run
 		// membership rather than a global swept count: generateRun sweeps every
@@ -128,7 +158,7 @@ describe("generateRun", () => {
 		const reloaded = await db.jafInvoice.findUniqueOrThrow({
 			where: { id: doc.id },
 		})
-		expect([a.run.id, b.run.id]).toContain(reloaded.payrollRunId)
+		expect(runs.map((r) => r.run.id)).toContain(reloaded.payrollRunId)
 
 		const inRun = async (runId: string) =>
 			(
@@ -137,7 +167,8 @@ describe("generateRun", () => {
 					include: { invoices: { select: { id: true } } },
 				})
 			).invoices.some((i) => i.id === doc.id)
-		expect(await inRun(a.run.id)).not.toBe(await inRun(b.run.id))
+		const claims = await Promise.all(runs.map((r) => inRun(r.run.id)))
+		expect(claims.filter(Boolean)).toHaveLength(1)
 	})
 
 	it("excludes a job whose contractorAccountCode does not resolve to any ContractorAccount", async () => {
@@ -150,6 +181,7 @@ describe("generateRun", () => {
 			}),
 		)
 
+		await seedSweepFiller()
 		const { run } = await generateRun({
 			generatedById: finance.id,
 			label: "R-unmapped",
@@ -165,7 +197,10 @@ describe("generateRun", () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		const account = t.track(
 			"contractorAccount",
-			await seedContractorAccount({ code: "BRG-INACT", active: false }),
+			await seedContractorAccount({
+				code: runToken("BRG-INACT"),
+				active: false,
+			}),
 		)
 		const doc = t.track(
 			"jafInvoice",
@@ -190,7 +225,7 @@ describe("generateRun", () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		const account = t.track(
 			"contractorAccount",
-			await seedContractorAccount({ code: "BRG-HOLD" }),
+			await seedContractorAccount({ code: runToken("BRG-HOLD") }),
 		)
 		const kept = t.track(
 			"jafInvoice",
@@ -238,11 +273,11 @@ describe("generateRun", () => {
 
 	it("sweeps every Arm-A-open invoice in the candidate set", async () => {
 		// PDF Part 3 §15.4: the sweep takes every job that is Arm-A-open —
-		// released, not closed, no PBCC advance, no payroll run yet.
+		// released, not closed, no payroll run yet.
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		const account = t.track(
 			"contractorAccount",
-			await seedContractorAccount({ code: "BRG-SWEEP" }),
+			await seedContractorAccount({ code: runToken("BRG-SWEEP") }),
 		)
 		const docA = t.track(
 			"jafInvoice",
@@ -273,13 +308,19 @@ describe("generateRun", () => {
 		expect(reloadB.payrollRunId).toBe(run.id)
 	})
 
-	it("excludes a job that already has a PBCC_ADVANCE payment record (legacy boundary)", async () => {
+	it("sweeps a funded packet: a PBCC_ADVANCE payment record does not gate the run", async () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		const account = t.track("contractorAccount", await seedContractorAccount())
 		const doc = t.track(
 			"jafInvoice",
-			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+			}),
 		)
+		await db.jafInvoice.update({
+			where: { id: doc.id },
+			data: { advanceReceivedAt: new Date(), advanceAmount: 80 },
+		})
 		const recorder = t.track("user", await seedUser({ role: "FINANCE" }))
 		t.track(
 			"paymentRecord",
@@ -294,15 +335,162 @@ describe("generateRun", () => {
 			}),
 		)
 
+		await seedSweepFiller()
 		const { run } = await generateRun({
 			generatedById: finance.id,
-			label: "R-legacy",
+			label: "R-funded",
 		})
 		t.track("payrollRun", run as { id: string })
 		const reloaded = await db.jafInvoice.findUniqueOrThrow({
 			where: { id: doc.id },
 		})
+		expect(reloaded.payrollRunId).toBe(run.id)
+	})
+
+	it("does not sweep an unsent packet, and does sweep it once sent; funding is irrelevant (spec §3)", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		const account = t.track("contractorAccount", await seedContractorAccount())
+		const doc = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+				jafInvoiceLines: ONE_LINE_100,
+				pbccRequestSentAt: null,
+			}),
+		)
+		await generateRun({ generatedById: finance.id, label: "unsent-1" })
+			.then((r) => t.track("payrollRun", r.run))
+			.catch(() => undefined) // other fixtures in the shared DB may or may not form a run
+		const still = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: doc.id },
+		})
+		expect(still.payrollRunId).toBeNull()
+
+		// Sent but NOT funded (advanceReceivedAt null): swept.
+		await db.jafInvoice.update({
+			where: { id: doc.id },
+			data: { pbccRequestSentAt: new Date() },
+		})
+		expect(still.advanceReceivedAt).toBeNull()
+		const { run } = await generateRun({
+			generatedById: finance.id,
+			label: "sent-1",
+		})
+		t.track("payrollRun", run)
+		const swept = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: doc.id },
+		})
+		expect(swept.payrollRunId).toBe(run.id)
+	})
+
+	it("countFundedSweepableJobs counts only sent packets that are also funded (info only)", async () => {
+		const account = t.track("contractorAccount", await seedContractorAccount())
+		const before = await countFundedSweepableJobs()
+		const sent = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+				jafInvoiceLines: ONE_LINE_100,
+			}),
+		)
+		expect(await countFundedSweepableJobs()).toBe(before)
+		const recorder = t.track("user", await seedUser({ role: "FINANCE" }))
+		await db.jafInvoice.update({
+			where: { id: sent.id },
+			data: { advanceReceivedAt: new Date(), advanceAmount: 80 },
+		})
+		t.track(
+			"paymentRecord",
+			await db.paymentRecord.create({
+				data: {
+					jobId: sent.id,
+					type: "PBCC_ADVANCE",
+					amount: 80,
+					date: new Date(),
+					recordedById: recorder.id,
+				},
+			}),
+		)
+		expect(await countFundedSweepableJobs()).toBe(before + 1)
+	})
+
+	it("creates exactly one PayrollRunAccount per distinct account, all unpaid", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		const a = t.track("contractorAccount", await seedContractorAccount())
+		const b = t.track("contractorAccount", await seedContractorAccount())
+		for (const code of [a.code, a.code, b.code]) {
+			t.track(
+				"jafInvoice",
+				await seedFinanceableInvoice({
+					contractorAccountCode: code,
+					jafInvoiceLines: ONE_LINE_100,
+				}),
+			)
+		}
+		const { run } = await generateRun({
+			generatedById: finance.id,
+			label: "accounts-1",
+		})
+		t.track("payrollRun", run)
+		const rows = await db.payrollRunAccount.findMany({
+			where: {
+				payrollRunId: run.id,
+				contractorAccountId: { in: [a.id, b.id] },
+			},
+		})
+		expect(rows).toHaveLength(2)
+		expect(rows.every((r) => r.paidAt === null)).toBe(true)
+	})
+
+	it("a sent packet with an unresolved contractor code is not swept and gets no account row", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		const doc = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				contractorAccountCode: "NO-SUCH-ACCOUNT",
+				jafInvoiceLines: ONE_LINE_100,
+			}),
+		)
+		const good = t.track("contractorAccount", await seedContractorAccount())
+		t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				contractorAccountCode: good.code,
+				jafInvoiceLines: ONE_LINE_100,
+			}),
+		)
+		const { run } = await generateRun({
+			generatedById: finance.id,
+			label: "blocked-1",
+		})
+		t.track("payrollRun", run)
+		const reloaded = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: doc.id },
+		})
 		expect(reloaded.payrollRunId).toBeNull()
+	})
+
+	it("notifies every active COMPTROLLER when a run is generated", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		const comptroller = t.track("user", await seedUser({ role: "COMPTROLLER" }))
+		const account = t.track("contractorAccount", await seedContractorAccount())
+		t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+				jafInvoiceLines: ONE_LINE_100,
+			}),
+		)
+		const { run } = await generateRun({
+			generatedById: finance.id,
+			label: "notify-1",
+		})
+		t.track("payrollRun", run)
+		const notes = await db.notification.findMany({
+			where: { userId: comptroller.id },
+		})
+		for (const n of notes) t.track("notification", n)
+		expect(notes.some((n) => n.message.includes("notify-1"))).toBe(true)
 	})
 })
 
@@ -431,6 +619,255 @@ describe("closePayrollRun", () => {
 			where: { userId: finance.id },
 		})
 		expect(afterReplayNotifs.length).toBe(firstNotifs.length)
+	})
+})
+
+describe("parsePaidDate", () => {
+	it("accepts today (any hour) and rejects tomorrow", () => {
+		const today = puertoRicoToday()
+		expect(parsePaidDate(today)).toHaveProperty("date")
+		const tomorrow = new Date(`${today}T12:00:00Z`)
+		tomorrow.setUTCDate(tomorrow.getUTCDate() + 1)
+		expect(parsePaidDate(tomorrow.toISOString().slice(0, 10))).toEqual({
+			errorKey: "finance_payroll.errors.future_date",
+		})
+	})
+})
+
+describe("closePayrollRunAccount", () => {
+	async function twoAccountRun() {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		const comptroller = t.track("user", await seedUser({ role: "COMPTROLLER" }))
+		const a = t.track("contractorAccount", await seedContractorAccount())
+		const b = t.track("contractorAccount", await seedContractorAccount())
+		const docs = []
+		for (const code of [a.code, b.code]) {
+			docs.push(
+				t.track(
+					"jafInvoice",
+					await seedFinanceableInvoice({
+						contractorAccountCode: code,
+						jafInvoiceLines: ONE_LINE_100,
+					}),
+				),
+			)
+		}
+		const { run } = await generateRun({
+			generatedById: finance.id,
+			label: `acct-${Date.now()}`,
+		})
+		t.track("payrollRun", run)
+		return { finance, comptroller, a, b, docs, run }
+	}
+
+	it("ticks one account: stamps only that account's jobs, leaves the run open", async () => {
+		const { comptroller, a, docs, run } = await twoAccountRun()
+		const res = await closePayrollRunAccount({
+			runId: run.id,
+			accountId: a.id,
+			paidById: comptroller.id,
+			paidDate: new Date(),
+			confirmedByFallback: false,
+		})
+		expect(res.runClosed).toBe(false)
+		const [d0, d1] = await Promise.all(
+			docs.map((d) => db.jafInvoice.findUniqueOrThrow({ where: { id: d.id } })),
+		)
+		expect(d0.payablesClosedAt).not.toBeNull()
+		expect(d0.payablesClosedById).toBe(comptroller.id)
+		expect(d1.payablesClosedAt).toBeNull()
+		const r = await db.payrollRun.findUniqueOrThrow({ where: { id: run.id } })
+		expect(r.paidAt).toBeNull()
+	})
+
+	it("the last tick closes the run and notifies finance exactly once", async () => {
+		const { finance, comptroller, a, b, run } = await twoAccountRun()
+		const base = {
+			runId: run.id,
+			paidById: comptroller.id,
+			paidDate: new Date(),
+			confirmedByFallback: false,
+		}
+		await closePayrollRunAccount({ ...base, accountId: a.id })
+		const last = await closePayrollRunAccount({ ...base, accountId: b.id })
+		expect(last.runClosed).toBe(true)
+		const r = await db.payrollRun.findUniqueOrThrow({ where: { id: run.id } })
+		expect(r.paidAt).not.toBeNull()
+		const notes = await db.notification.findMany({
+			where: { userId: finance.id, message: { contains: run.label } },
+		})
+		for (const n of notes) t.track("notification", n)
+		expect(notes).toHaveLength(1)
+	})
+
+	it("rejects a replayed tick with 409 and does not re-stamp (Review Focus 1)", async () => {
+		const { comptroller, a, docs, run } = await twoAccountRun()
+		const base = {
+			runId: run.id,
+			accountId: a.id,
+			paidById: comptroller.id,
+			paidDate: new Date(),
+			confirmedByFallback: false,
+		}
+		await closePayrollRunAccount(base)
+		const before = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: docs[0].id },
+		})
+		await expect(closePayrollRunAccount(base)).rejects.toMatchObject({
+			status: 409,
+		})
+		const after = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: docs[0].id },
+		})
+		expect(after.payablesClosedAt).toEqual(before.payablesClosedAt)
+	})
+
+	it("refuses a tick on a reversed run with 409 and claims nothing", async () => {
+		const { comptroller, a, run } = await twoAccountRun()
+		await db.payrollRun.update({
+			where: { id: run.id },
+			data: { reversedAt: new Date() },
+		})
+		await expect(
+			closePayrollRunAccount({
+				runId: run.id,
+				accountId: a.id,
+				paidById: comptroller.id,
+				paidDate: new Date(),
+				confirmedByFallback: false,
+			}),
+		).rejects.toMatchObject({ status: 409 })
+		const row = await db.payrollRunAccount.findFirstOrThrow({
+			where: { payrollRunId: run.id, contractorAccountId: a.id },
+		})
+		expect(row.paidAt).toBeNull()
+	})
+
+	it("two concurrent last ticks close the run once and notify once (Review Focus 2)", async () => {
+		const { finance, comptroller, a, b, run } = await twoAccountRun()
+		const base = {
+			runId: run.id,
+			paidById: comptroller.id,
+			paidDate: new Date(),
+			confirmedByFallback: false,
+		}
+		const results = await Promise.all([
+			closePayrollRunAccount({ ...base, accountId: a.id }),
+			closePayrollRunAccount({ ...base, accountId: b.id }),
+		])
+		expect(results.filter((r) => r.runClosed)).toHaveLength(1)
+		const notes = await db.notification.findMany({
+			where: { userId: finance.id, message: { contains: run.label } },
+		})
+		for (const n of notes) t.track("notification", n)
+		expect(notes).toHaveLength(1)
+	})
+
+	it("404s for an account that is not part of the run (Review Focus 5)", async () => {
+		const { comptroller, run } = await twoAccountRun()
+		const other = t.track("contractorAccount", await seedContractorAccount())
+		await expect(
+			closePayrollRunAccount({
+				runId: run.id,
+				accountId: other.id,
+				paidById: comptroller.id,
+				paidDate: new Date(),
+				confirmedByFallback: false,
+			}),
+		).rejects.toMatchObject({ status: 404 })
+	})
+
+	describe("fallback switch (PAYROLL_FALLBACK_ENABLED)", () => {
+		const original = process.env.PAYROLL_FALLBACK_ENABLED
+		afterEach(() => {
+			if (original === undefined) delete process.env.PAYROLL_FALLBACK_ENABLED
+			else process.env.PAYROLL_FALLBACK_ENABLED = original
+		})
+
+		it("refuses a fallback tick with 403 when switched off; the comptroller tick still works (Review Focus 6)", async () => {
+			const { finance, comptroller, a, b, run } = await twoAccountRun()
+			process.env.PAYROLL_FALLBACK_ENABLED = "false"
+			const base = { runId: run.id, paidDate: new Date() }
+			await expect(
+				closePayrollRunAccount({
+					...base,
+					accountId: a.id,
+					paidById: finance.id,
+					confirmedByFallback: true,
+				}),
+			).rejects.toMatchObject({ status: 403 })
+			await expect(
+				closePayrollRun({
+					...base,
+					paidById: finance.id,
+					confirmedByFallback: true,
+				}),
+			).rejects.toMatchObject({ status: 403 })
+			const untouched = await db.payrollRunAccount.count({
+				where: { payrollRunId: run.id, paidAt: null },
+			})
+			expect(untouched).toBe(2)
+			await closePayrollRunAccount({
+				...base,
+				accountId: b.id,
+				paidById: comptroller.id,
+				confirmedByFallback: false,
+			})
+			const row = await db.payrollRunAccount.findFirstOrThrow({
+				where: { payrollRunId: run.id, contractorAccountId: b.id },
+			})
+			expect(row.paidAt).not.toBeNull()
+		})
+
+		it("allows and tags a fallback tick when on (default when unset), and flags the run", async () => {
+			delete process.env.PAYROLL_FALLBACK_ENABLED
+			const { finance, comptroller, a, b, run } = await twoAccountRun()
+			const base = { runId: run.id, paidDate: new Date() }
+			await closePayrollRunAccount({
+				...base,
+				accountId: b.id,
+				paidById: finance.id,
+				confirmedByFallback: true,
+			})
+			await closePayrollRunAccount({
+				...base,
+				accountId: a.id,
+				paidById: comptroller.id,
+				confirmedByFallback: false,
+			})
+			const tagged = await db.payrollRunAccount.findMany({
+				where: { payrollRunId: run.id, confirmedByFallback: true },
+			})
+			expect(tagged).toHaveLength(1)
+			const r = await db.payrollRun.findUniqueOrThrow({ where: { id: run.id } })
+			expect(r.paidAt).not.toBeNull()
+			// the LAST tick was Carmen's (not fallback), but the run is still flagged
+			expect(r.confirmedByFallback).toBe(true)
+		})
+	})
+
+	it("closePayrollRun (whole-run confirm) ticks every remaining account as fallback", async () => {
+		const { finance, a, run } = await twoAccountRun()
+		await closePayrollRunAccount({
+			runId: run.id,
+			accountId: a.id,
+			paidById: finance.id,
+			paidDate: new Date(),
+			confirmedByFallback: false,
+		})
+		await closePayrollRun({
+			runId: run.id,
+			paidById: finance.id,
+			paidDate: new Date(),
+			confirmedByFallback: true,
+		})
+		const rows = await db.payrollRunAccount.findMany({
+			where: { payrollRunId: run.id },
+		})
+		expect(rows.every((r) => r.paidAt !== null)).toBe(true)
+		expect(rows.filter((r) => r.confirmedByFallback)).toHaveLength(1)
+		const r = await db.payrollRun.findUniqueOrThrow({ where: { id: run.id } })
+		expect(r.paidAt).not.toBeNull()
 	})
 })
 
@@ -568,6 +1005,7 @@ describe("armAOpenWhere terminal-status guard", () => {
 			}),
 		)
 
+		await seedSweepFiller()
 		const { run } = await generateRun({
 			generatedById: finance.id,
 			label: "R-cancelled",
@@ -630,6 +1068,32 @@ describe("armAOpenWhere consumers (kept here so they cannot race the sweep)", ()
 			result.jobs.find((j: { id: string }) => j.id === mapped.id)
 				?.accountResolved,
 		).toBe(true)
+	})
+
+	it("L1 marks an unsent packet as not sweepable even with a resolved account", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		mocks.requireRole.mockResolvedValue({ user: finance })
+		const account = t.track("contractorAccount", await seedContractorAccount())
+		const unsent = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+				pbccRequestSentAt: null,
+			}),
+		)
+		const sent = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
+		)
+		const result = await queueLoader({
+			request: new Request("http://localhost/finance/queue"),
+			params: {},
+			context: {},
+		} as never)
+		const find = (id: string) =>
+			result.openJobs.find((j: { id: string }) => j.id === id)
+		expect(find(unsent.id)?.sweepable).toBe(false)
+		expect(find(sent.id)?.sweepable).toBe(true)
 	})
 
 	it("L1 resolves every contractor code in one query, not one per row (Review Focus)", async () => {

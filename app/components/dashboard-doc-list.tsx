@@ -2,9 +2,14 @@ import { ChevronRightIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
+import { DocStageBadge } from "~/components/doc-stage-badge"
 import { Badge } from "~/components/ui/badge"
 import { Card, CardContent } from "~/components/ui/card"
 import { EmptyState } from "~/components/ui/empty-state"
+import {
+	deriveSupervisorStage,
+	type SupervisorStage,
+} from "~/lib/supervisor-stage"
 import type { DocStatus } from "../../generated/prisma/client"
 
 function toLines(value: unknown): MaterialLine[] {
@@ -74,22 +79,14 @@ export type DashboardDocRow = {
 	materialsTaken?: unknown
 	materialsUsed?: unknown
 	materialsReturned?: unknown
+	/** Current step, derived server-side (needs the pre-cert signatures). */
+	stage?: SupervisorStage
+	supervisorApprovedAt?: Date | null
+	jafInvoiceGeneratedAt?: Date | null
+	avisoMatchedAt?: Date | null
+	releasedToFinanceAt?: Date | null
 	aged?: boolean
 	daysStaged?: number
-}
-
-const STATUS_BADGE_VARIANT: Record<
-	DocStatus,
-	"ok" | "warn" | "danger" | "info"
-> = {
-	CREATED: "warn",
-	PREPPED: "info",
-	SIGNED: "info",
-	FIELD_UPDATED: "warn",
-	SUPERVISOR_APPROVED: "info",
-	CLARO_UPLOADED: "info",
-	LC_REQUEST_GENERATED: "ok",
-	CANCELLED: "danger",
 }
 
 export function DashboardDocList({
@@ -123,13 +120,24 @@ export function DashboardDocList({
 									{doc.controlNumber}
 								</span>
 								<div className="flex items-center gap-2">
-									<Badge variant={STATUS_BADGE_VARIANT[doc.status]}>
-										{showBilling
-											? doc.status.replace(/_/g, " ")
-											: t(`dashboard.status_plain.${doc.status}`, {
-													defaultValue: doc.status.replace(/_/g, " "),
-												})}
-									</Badge>
+									<DocStageBadge
+										stage={
+											doc.stage ??
+											deriveSupervisorStage(
+												{
+													status: doc.status,
+													supervisorApprovedAt:
+														doc.supervisorApprovedAt ?? null,
+													jafInvoiceGeneratedAt:
+														doc.jafInvoiceGeneratedAt ?? null,
+													avisoMatchedAt: doc.avisoMatchedAt ?? null,
+													releasedToFinanceAt: doc.releasedToFinanceAt ?? null,
+												},
+												null,
+											)
+										}
+										cancelled={doc.status === "CANCELLED"}
+									/>
 									<HugeiconsIcon
 										icon={ChevronRightIcon}
 										strokeWidth={2}

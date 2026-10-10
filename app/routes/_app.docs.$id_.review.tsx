@@ -3,6 +3,7 @@ import { type ComponentProps, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, Link, redirect } from "react-router"
 import { AvisoMatchCard } from "~/components/aviso-match"
+import { DocStageBadge } from "~/components/doc-stage-badge"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import type { MaterialLineItems } from "~/components/material-line-items"
 import {
@@ -16,7 +17,6 @@ import {
 	type SignaturePadHandle,
 } from "~/components/signature-pad"
 import { SupervisorStepRail } from "~/components/supervisor-step-rail"
-import { Badge } from "~/components/ui/badge"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
 import { Card, CardContent, CardHeader } from "~/components/ui/card"
@@ -43,6 +43,7 @@ import {
 	parseAvisoLines,
 	round2,
 	type ServiceLine,
+	splitServiceSuffix,
 	sumLines,
 } from "~/lib/service-lines"
 import { assertDocInSupervisorScope } from "~/lib/supervisor-scope"
@@ -50,6 +51,7 @@ import {
 	checkAvisoMatch,
 	deriveSupervisorStage,
 	evaluateReleaseGate,
+	isAvisoStarted,
 	panelForStep,
 	resolveStepView,
 	SUPERVISOR_STAGES,
@@ -58,7 +60,7 @@ import {
 	getAvisoAmountTolerance,
 	getIvuRate,
 } from "~/lib/system-settings.server"
-import { saveBuffer, saveUpload } from "~/lib/uploads.server"
+import { photosThatLoad, saveBuffer, saveUpload } from "~/lib/uploads.server"
 import { formatMoney, toNumberPrice } from "~/lib/utils"
 import type { PreCertSheet, Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id_.review"
@@ -87,7 +89,6 @@ async function renderPreCert(
 		title: sheet.title,
 		certifiedAddress: sheet.certifiedAddress,
 		lines: sheet.lines as PreCertLine[],
-		total: toNumberPrice(sheet.total),
 		sigSupervisor: sheet.sigSupervisorName
 			? {
 					name: sheet.sigSupervisorName,
@@ -172,10 +173,14 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const stage = deriveSupervisorStage(doc, sheet)
 	const { view, interactive } = resolveStepView(
 		stage,
-		!!doc.avisoNumber || doc.avisoLines != null,
+		isAvisoStarted(doc),
 		new URL(request.url).searchParams.get("step"),
 	)
-	const gate = evaluateReleaseGate(doc, sheet, photos)
+	const gate = evaluateReleaseGate(
+		doc,
+		sheet,
+		await photosThatLoad(params.id, photos),
+	)
 	const lineTotal =
 		doc.jafInvoiceLineTotal != null
 			? toNumberPrice(doc.jafInvoiceLineTotal)
@@ -553,42 +558,56 @@ export async function action({ request, params }: Route.ActionArgs) {
 		if (lines.length === 0)
 			return { errorKey: "docs_review.errors.installed_lines_required" }
 		const previous = await activeSheet(params.id)
-		if (previous)
-			await db.preCertSheet.update({
-				where: { id: previous.id },
-				data: { supersededAt: new Date() },
-			})
 		const revision =
 			codeMap[installed[0].serviceCodeId]?.priceListRevision ?? null
-		const created = await db.preCertSheet.create({
-			data: {
-				docId: params.id,
-				version: (previous?.version ?? 0) + 1,
-				avisoNumber: doc.avisoNumber,
-				certifiedAddress: doc.jobAddressActual ?? doc.jobAddressEstimated,
-				title: doc.jobDescription ?? doc.jobType,
-				issuedOn: doc.fieldSubmittedAt ?? new Date(),
-				lines,
-				priceListRevision: revision,
-				total: sumLines(lines),
-				issuedById: user.id,
-			},
-		})
+		const version = (previous?.version ?? 0) + 1
+		const issuedOn = doc.fieldSubmittedAt ?? new Date()
+		const certifiedAddress = doc.jobAddressActual ?? doc.jobAddressEstimated
+		const title = doc.jobDescription ?? doc.jobType
+		// Render the PDF BEFORE touching the database: if rendering/saving fails,
+		// the previous version must stay the active sheet instead of being
+		// superseded by a new version that has no PDF.
 		const pdfPath = await renderPreCert(
-			{ ...created, lines, total: sumLines(lines) } as unknown as PreCertSheet,
+			{
+				version,
+				avisoNumber: doc.avisoNumber,
+				issuedOn,
+				title,
+				certifiedAddress,
+				lines,
+			} as unknown as PreCertSheet,
 			params.id,
 		)
 		await db.$transaction([
-			db.preCertSheet.update({ where: { id: created.id }, data: { pdfPath } }),
+			...(previous
+				? [
+						db.preCertSheet.update({
+							where: { id: previous.id },
+							data: { supersededAt: new Date() },
+						}),
+					]
+				: []),
+			db.preCertSheet.create({
+				data: {
+					docId: params.id,
+					version,
+					avisoNumber: doc.avisoNumber,
+					certifiedAddress,
+					title,
+					issuedOn,
+					lines,
+					priceListRevision: revision,
+					total: sumLines(lines),
+					issuedById: user.id,
+					pdfPath,
+				},
+			}),
 			db.auditTrail.create({
 				data: {
 					docId: params.id,
 					userId: user.id,
 					action: "PRECERT_GENERATED",
-					diffJson: {
-						version: created.version,
-						supersedes: previous?.version ?? null,
-					},
+					diffJson: { version, supersedes: previous?.version ?? null },
 				},
 			}),
 		] as unknown as Prisma.PrismaPromise<unknown>[])
@@ -784,9 +803,16 @@ export async function action({ request, params }: Route.ActionArgs) {
 		if (doc.releasedToFinanceAt) throw redirect(`/docs/${params.id}/review`)
 		const [sheet, photos] = await Promise.all([
 			activeSheet(params.id),
-			db.photo.findMany({ where: { docId: params.id }, select: { tag: true } }),
+			db.photo.findMany({
+				where: { docId: params.id },
+				select: { tag: true, localPath: true },
+			}),
 		])
-		const gate = evaluateReleaseGate(doc, sheet, photos)
+		const gate = evaluateReleaseGate(
+			doc,
+			sheet,
+			await photosThatLoad(params.id, photos),
+		)
 		if (!gate.ok)
 			return {
 				errorKey: "docs_review.errors.release_blocked",
@@ -1043,6 +1069,7 @@ function PreCertPanel({
 					<tr className="text-left text-xs text-muted-foreground border-b">
 						<th className="py-1">{t("service_picker.col_code")}</th>
 						<th className="py-1">{t("service_picker.col_description")}</th>
+						<th className="py-1">{t("service_picker.col_type")}</th>
 						<th className="py-1 text-right">
 							{t("service_picker.col_installed")}
 						</th>
@@ -1055,12 +1082,15 @@ function PreCertPanel({
 						<tr key={l.serviceCodeId} className="border-b last:border-0">
 							<td className="py-1 font-mono text-xs">{l.claroCode}</td>
 							<td className="py-1">
-								{l.description}
+								{splitServiceSuffix(l.description).base}
 								{l.editReason && (
 									<span className="block text-xs text-status-warn">
 										{l.editReason}
 									</span>
 								)}
+							</td>
+							<td className="py-1 font-mono text-xs">
+								{splitServiceSuffix(l.description).suffix ?? "—"}
 							</td>
 							<td className="py-1 text-right">{l.installedQty}</td>
 							<td className="py-1 text-right">{l.certifiedQty}</td>
@@ -1070,7 +1100,7 @@ function PreCertPanel({
 				</tbody>
 			</table>
 			<p className="text-sm text-right font-medium">
-				{t("precert.total")} {formatMoney(sheet?.total ?? 0)}
+				{t("precert.total")} {formatMoney(sumLines(lines))}
 			</p>
 			{!readOnly &&
 				!locked &&
@@ -1325,13 +1355,13 @@ export default function ReviewDoc({
 				: null
 	// Once an Aviso number or lines are saved the invoice is what was keyed into
 	// Claro, so it can no longer be regenerated from here.
-	const avisoStarted = !!doc.avisoNumber || doc.avisoLines != null
+	const avisoStarted = isAvisoStarted(doc)
 
 	return (
 		<div className="space-y-5">
 			<div className="flex flex-wrap items-center justify-between gap-2">
 				<h1 className="font-mono text-xl font-semibold">{doc.controlNumber}</h1>
-				<Badge variant="info">{doc.status.replace(/_/g, " ")}</Badge>
+				<DocStageBadge stage={stage} cancelled={doc.status === "CANCELLED"} />
 			</div>
 			<p className="text-sm text-muted-foreground">
 				{doc.jobType}
@@ -1424,6 +1454,7 @@ export default function ReviewDoc({
 										<th className="py-1.5">
 											{t("docs_review.table.description")}
 										</th>
+										<th className="py-1.5">{t("service_picker.col_type")}</th>
 										<th className="py-1.5 text-right">
 											{t("docs_review.table.qty")}
 										</th>
@@ -1444,7 +1475,12 @@ export default function ReviewDoc({
 											<td className="py-1.5 font-mono text-xs font-semibold">
 												{l.claroCode}
 											</td>
-											<td className="py-1.5">{l.name}</td>
+											<td className="py-1.5">
+												{splitServiceSuffix(l.name).base}
+											</td>
+											<td className="py-1.5 font-mono text-xs">
+												{splitServiceSuffix(l.name).suffix ?? "—"}
+											</td>
 											<td className="py-1.5 text-right">{l.qty}</td>
 											<td className="py-1.5 text-right">
 												${l.unitPrice.toFixed(4)}

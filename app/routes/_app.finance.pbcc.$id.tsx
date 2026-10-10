@@ -1,7 +1,7 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { useTranslation } from "react-i18next"
-import { Form, redirect } from "react-router"
+import { data, Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { FinanceStepRail } from "~/components/finance-step-rail"
 import { Badge } from "~/components/ui/badge"
@@ -22,6 +22,10 @@ import {
 	invoiceTotalUsed,
 	isMissingClaroPdf,
 } from "~/lib/finance-pipeline.server"
+import {
+	correctReceivablePayment,
+	recordReceivablePayment,
+} from "~/lib/payment-records.server"
 import { armAOpenWhere } from "~/lib/payroll-run.server"
 import { generatePbccRequestPdf } from "~/lib/pdf/pbcc-request.server"
 import { isTerminalStatus } from "~/lib/permissions"
@@ -52,7 +56,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		include: {
 			supervisor: true,
 			poLinks: true,
-			paymentRecords: { select: { type: true } },
+			paymentRecords: { select: { type: true, note: true } },
+			payrollRun: { select: { paidAt: true } },
 			preCertSheets: { orderBy: { version: "desc" }, take: 1 },
 		},
 	})
@@ -102,6 +107,28 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	}
 }
 
+/** Shared by mark_funded and correct_funding: funded date (not future),
+ * amount (> 0) and optional bank reference. */
+function parseFunding(
+	form: FormData,
+): { date: Date; amount: number; note: string | null } | { errorKey: string } {
+	const rawDate = String(form.get("fundedDate") ?? "")
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate))
+		return { errorKey: "finance_pbcc.errors.invalid_date" }
+	const date = new Date(`${rawDate}T12:00:00`)
+	if (Number.isNaN(date.getTime()))
+		return { errorKey: "finance_pbcc.errors.invalid_date" }
+	// Compare calendar days (local), so "today" is allowed before noon.
+	if (rawDate > new Date().toLocaleDateString("en-CA"))
+		return { errorKey: "finance_pbcc.errors.future_date" }
+	const rawAmount = String(form.get("fundedAmount") ?? "").trim()
+	const amount = rawAmount === "" ? Number.NaN : Number(rawAmount)
+	if (!Number.isFinite(amount) || amount <= 0)
+		return { errorKey: "finance_pbcc.errors.invalid_amount" }
+	const note = String(form.get("fundedRef") ?? "").trim() || null
+	return { date, amount, note }
+}
+
 export async function action({ request, params }: Route.ActionArgs) {
 	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
@@ -117,6 +144,52 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 	const form = await request.formData()
 	const intent = form.get("intent")
+
+	if (intent === "mark_funded") {
+		if (!doc.pbccRequestSentAt)
+			return { errorKey: "finance_pbcc.errors.not_sent" }
+		const parsed = parseFunding(form)
+		if ("errorKey" in parsed) return parsed
+		const result = await recordReceivablePayment({
+			jobId: params.id,
+			type: "PBCC_ADVANCE",
+			amount: parsed.amount,
+			date: parsed.date,
+			note: parsed.note,
+			actorId: user.id,
+		})
+		if (result.duplicate) {
+			return data(
+				{ errorKey: "finance_pbcc.errors.already_funded" },
+				{ status: 409 },
+			)
+		}
+		return { ok: true }
+	}
+
+	if (intent === "correct_funding") {
+		// FINANCE + ADMIN: the screen's requireRole already limits to those roles.
+		const reason = (form.get("reason") as string | null)?.trim() ?? ""
+		if (!reason) return { errorKey: "finance_pbcc.errors.reason_required" }
+		const parsed = parseFunding(form)
+		if ("errorKey" in parsed) return parsed
+		const result = await correctReceivablePayment({
+			jobId: params.id,
+			...parsed,
+			reason,
+			actorId: user.id,
+			actorRole: user.role,
+		})
+		if (!result.ok) {
+			return {
+				errorKey:
+					result.error === "locked"
+						? "finance_pbcc.errors.locked_in_paid_run"
+						: "finance_pbcc.errors.not_funded",
+			}
+		}
+		return { ok: true }
+	}
 
 	// Escape hatch: Lissette sends the PBCC packet by hand (outside the system)
 	// because the bank-format invoice/schedule generators don't exist yet. This
@@ -246,7 +319,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 	})
 }
 
-export default function PbccRequest({ loaderData }: Route.ComponentProps) {
+export default function PbccRequest({
+	loaderData,
+	actionData,
+}: Route.ComponentProps) {
 	const {
 		doc,
 		amount,
@@ -259,6 +335,19 @@ export default function PbccRequest({ loaderData }: Route.ComponentProps) {
 	} = loaderData
 	const { t } = useTranslation()
 
+	const today = new Date().toLocaleDateString("en-CA")
+	const errorKey =
+		actionData && "errorKey" in actionData ? actionData.errorKey : null
+	const sent = Boolean(doc.pbccRequestSentAt)
+	const funded = doc.advanceReceivedAt
+		? {
+				date: new Date(doc.advanceReceivedAt),
+				amount: Number(doc.advanceAmount ?? 0),
+				ref:
+					doc.paymentRecords.find((r) => r.type === "PBCC_ADVANCE")?.note ?? "",
+			}
+		: null
+
 	const preCertSheet = doc.preCertSheets?.[0]
 	const supervName = preCertSheet?.sigSupervisorName ?? "—"
 	const subconName = preCertSheet?.sigSubcontractorName ?? "—"
@@ -270,8 +359,14 @@ export default function PbccRequest({ loaderData }: Route.ComponentProps) {
 			<p className="font-mono text-sm text-muted-foreground">
 				{doc.controlNumber}
 			</p>
-			<FinanceStepRail current="PACKETS" />
-			<Callout title={t("finance_flow.callout.pbcc_title")}>
+			<FinanceStepRail current={sent ? "FUNDING" : "PACKETS"} />
+			<Callout
+				title={t(
+					sent
+						? "finance_flow.callout.pbcc_title_funding"
+						: "finance_flow.callout.pbcc_title",
+				)}
+			>
 				{t("finance_flow.callout.pbcc_body")}
 			</Callout>
 
@@ -407,6 +502,135 @@ export default function PbccRequest({ loaderData }: Route.ComponentProps) {
 					</div>
 				)}
 			</div>
+
+			{errorKey && (
+				<p role="alert" className="text-sm text-destructive">
+					{t(errorKey as never)}
+				</p>
+			)}
+
+			{sent && !funded && (
+				<Form
+					method="post"
+					className="bg-card border rounded-lg p-4 space-y-3 text-sm"
+				>
+					<input type="hidden" name="intent" value="mark_funded" />
+					<div className="flex flex-wrap items-end gap-3">
+						<label className="space-y-1">
+							<span className="block text-muted-foreground">
+								{t("finance_pbcc.funded_date")}
+							</span>
+							<input
+								type="date"
+								name="fundedDate"
+								required
+								max={today}
+								className="border rounded px-2 py-1"
+							/>
+						</label>
+						<label className="space-y-1">
+							<span className="block text-muted-foreground">
+								{t("finance_pbcc.funded_amount")}
+							</span>
+							<input
+								type="number"
+								step="0.01"
+								min="0.01"
+								name="fundedAmount"
+								required
+								className="border rounded px-2 py-1"
+							/>
+						</label>
+						<label className="space-y-1">
+							<span className="block text-muted-foreground">
+								{t("finance_pbcc.funded_ref")}
+							</span>
+							<input
+								type="text"
+								name="fundedRef"
+								className="border rounded px-2 py-1"
+							/>
+						</label>
+						<Button type="submit">{t("finance_pbcc.mark_funded")}</Button>
+					</div>
+				</Form>
+			)}
+
+			{funded && (
+				<div className="bg-card border rounded-lg p-4 space-y-3 text-sm">
+					<Badge variant="ok">
+						{t("finance_pbcc.funded_on", {
+							date: funded.date.toLocaleDateString("en-CA"),
+						})}{" "}
+						· {formatMoney(funded.amount)}
+						{funded.ref ? ` · ${funded.ref}` : ""}
+					</Badge>
+					{!doc.payrollRun?.paidAt && (
+						<details>
+							<summary className="cursor-pointer text-accent-text underline">
+								{t("finance_pbcc.correct_funding")}
+							</summary>
+							<Form method="post" className="mt-3 space-y-3">
+								<input type="hidden" name="intent" value="correct_funding" />
+								<div className="flex flex-wrap items-end gap-3">
+									<label className="space-y-1">
+										<span className="block text-muted-foreground">
+											{t("finance_pbcc.funded_date")}
+										</span>
+										<input
+											type="date"
+											name="fundedDate"
+											required
+											max={today}
+											defaultValue={funded.date.toLocaleDateString("en-CA")}
+											className="border rounded px-2 py-1"
+										/>
+									</label>
+									<label className="space-y-1">
+										<span className="block text-muted-foreground">
+											{t("finance_pbcc.funded_amount")}
+										</span>
+										<input
+											type="number"
+											step="0.01"
+											min="0.01"
+											name="fundedAmount"
+											required
+											defaultValue={funded.amount}
+											className="border rounded px-2 py-1"
+										/>
+									</label>
+									<label className="space-y-1">
+										<span className="block text-muted-foreground">
+											{t("finance_pbcc.funded_ref")}
+										</span>
+										<input
+											type="text"
+											name="fundedRef"
+											defaultValue={funded.ref}
+											className="border rounded px-2 py-1"
+										/>
+									</label>
+								</div>
+								<label className="block space-y-1">
+									<span className="block text-muted-foreground">
+										{t("finance_pbcc.correction_reason")}
+									</span>
+									<textarea
+										name="reason"
+										required
+										rows={2}
+										className="border rounded px-2 py-1 w-full"
+									/>
+								</label>
+								<Button type="submit" variant="secondary">
+									{t("finance_pbcc.save_correction")}
+								</Button>
+							</Form>
+						</details>
+					)}
+				</div>
+			)}
 
 			<div className="flex flex-wrap items-center gap-2">
 				{/* Disabled on purpose until the Excel-schedule template exists

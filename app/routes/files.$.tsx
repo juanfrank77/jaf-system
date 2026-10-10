@@ -1,7 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { db } from "~/lib/db.server"
-import { isComptrollerEnabled } from "~/lib/features.server"
 import { requireSession } from "~/lib/permissions.server"
 import type { Route } from "./+types/files.$"
 
@@ -46,11 +45,9 @@ function canAccessDoc(
 	if (userRole === "FINANCE")
 		// biome-ignore lint/suspicious/noExplicitAny: status narrowed below
 		return FINANCEABLE_STATUSES.includes(doc.status as any)
-	if (userRole === "COMPTROLLER") {
-		if (!isComptrollerEnabled()) return false
+	if (userRole === "COMPTROLLER")
 		// biome-ignore lint/suspicious/noExplicitAny: status narrowed below
 		return FINANCEABLE_STATUSES.includes(doc.status as any)
-	}
 	return false
 }
 
@@ -143,14 +140,12 @@ async function canAccessSnapshotFile(
 
 /**
  * ACH evidence uploaded against a payroll run close, stored as
- * `payroll-runs/<runId>-<uuid>.<ext>`. Finance-only: the file is a bank
+ * `payroll-runs/<runId>-<uuid>.<ext>`. Finance-side only: the file is a bank
  * confirmation, and the run id prefix is only honoured for the finance-side
  * roles.
  *
- * COMPTROLLER is gated on the same feature flag as every other branch in this
- * file and in the finance routes. Without that, a deployment with the
- * comptroller feature switched off still has a read path to the `payroll-runs/`
- * bank confirmations — the one branch that was missing it.
+ * The comptroller (an always-on role) may also read run evidence: Carmen
+ * verifies the ACH confirmation when she works a payroll run.
  */
 async function canAccessPayrollRunFile(
 	relativePath: string,
@@ -158,8 +153,11 @@ async function canAccessPayrollRunFile(
 ): Promise<boolean> {
 	const m = relativePath.match(/^payroll-runs\/([^/]+)-/)
 	if (!m) return false
-	if (user.role === "COMPTROLLER") return isComptrollerEnabled()
-	return user.role === "ADMIN" || user.role === "FINANCE"
+	return (
+		user.role === "ADMIN" ||
+		user.role === "FINANCE" ||
+		user.role === "COMPTROLLER"
+	)
 }
 
 export async function loader({ request, params }: Route.LoaderArgs) {

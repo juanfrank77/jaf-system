@@ -9,10 +9,7 @@ import {
 	type DashboardExplainer,
 } from "~/lib/dashboard-stats"
 import { db } from "~/lib/db.server"
-import {
-	isComptrollerEnabled,
-	isDashboardFiltersEnabled,
-} from "~/lib/features.server"
+import { isDashboardFiltersEnabled } from "~/lib/features.server"
 import { cacheJobs } from "~/lib/offline-store"
 import { pageTitle } from "~/lib/page-title"
 import { requireSession } from "~/lib/permissions.server"
@@ -130,6 +127,28 @@ function toRow(
 	}
 }
 
+/** Adds the derived current step to each row (RELEASE vs PRECERT needs the pre-cert signatures). */
+async function withStages<
+	T extends {
+		id: string
+		status: DocStatus
+		supervisorApprovedAt: Date | null
+		jafInvoiceGeneratedAt: Date | null
+		avisoMatchedAt: Date | null
+		releasedToFinanceAt: Date | null
+	},
+>(docs: T[]): Promise<(T & { stage: SupervisorStage })[]> {
+	const sheets = await db.preCertSheet.findMany({
+		where: { docId: { in: docs.map((d) => d.id) }, supersededAt: null },
+		select: { docId: true, sigSupervisorAt: true, sigSubcontractorAt: true },
+	})
+	const byDoc = new Map(sheets.map((s) => [s.docId, s]))
+	return docs.map((d) => ({
+		...d,
+		stage: deriveSupervisorStage(d, byDoc.get(d.id) ?? null),
+	}))
+}
+
 type SendBackHistoryEntry = { note?: string; createdAt?: string }
 
 async function loadSupervisorQueues(userId: string) {
@@ -238,7 +257,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 	}
 
 	if (user.role === "COMPTROLLER") {
-		throw redirect(isComptrollerEnabled() ? "/comptroller" : "/dashboard")
+		throw redirect("/comptroller")
 	}
 
 	const url = new URL(request.url)
@@ -344,6 +363,18 @@ export async function loader({ request }: Route.LoaderArgs) {
 			: [],
 	)
 
+	const warehouseToPrepDocs =
+		user.role === "WAREHOUSE"
+			? await db.jafInvoice.findMany({
+					where: {
+						...(await buildBaseWhere(user.role, user.id)),
+						status: "CREATED",
+					},
+					orderBy: { createdAt: "desc" },
+					take: 50,
+				})
+			: []
+
 	const warehouseMissingDocs =
 		user.role === "WAREHOUSE"
 			? await db.jafInvoice.findMany({
@@ -447,7 +478,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		stats,
 		alert,
 		explainer,
-		docs: visibleDocs,
+		docs: await withStages(visibleDocs),
 		pendingReviewDocs: [],
 		sentBackDocs: [],
 		supervisorQueues,
@@ -461,6 +492,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		selectedCrew,
 		selectedJobType,
 		searchFilter,
+		warehouseToPrepDocs,
 		warehousePreppedDocs,
 		warehouseMissingDocs,
 		warehouseReturnsDocs,
@@ -492,6 +524,7 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 		selectedCrew,
 		selectedJobType,
 		searchFilter,
+		warehouseToPrepDocs,
 		warehousePreppedDocs,
 		warehouseMissingDocs,
 		warehouseReturnsDocs,
@@ -555,6 +588,7 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 			selectedCrew={selectedCrew}
 			selectedJobType={selectedJobType}
 			searchFilter={searchFilter}
+			warehouseToPrepDocs={warehouseToPrepDocs}
 			warehousePreppedDocs={warehousePreppedDocs}
 			warehouseMissingDocs={warehouseMissingDocs}
 			warehouseReturnsDocs={warehouseReturnsDocs}

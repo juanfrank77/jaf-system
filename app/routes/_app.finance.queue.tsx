@@ -35,6 +35,7 @@ type QueueJob = {
 	releasedAt: Date | null
 	accountResolved: boolean
 	missingClaroPdf: boolean
+	fundingState: "to_request" | "awaiting_funding" | "funded"
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -55,6 +56,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 			controlNumber: true,
 			avisoNumber: true,
 			claroPdfPath: true,
+			pbccRequestSentAt: true,
+			advanceReceivedAt: true,
 			releasedToFinanceAt: true,
 			jafInvoiceLines: true,
 			contractorAccountCode: true,
@@ -91,6 +94,11 @@ export async function loader({ request }: Route.LoaderArgs) {
 				? resolved.has(d.contractorAccountCode)
 				: false,
 			missingClaroPdf: !d.claroPdfPath || d.claroPdfPath.trim() === "",
+			fundingState: d.advanceReceivedAt
+				? "funded"
+				: d.pbccRequestSentAt
+					? "awaiting_funding"
+					: "to_request",
 		}
 	})
 
@@ -119,7 +127,10 @@ export async function loader({ request }: Route.LoaderArgs) {
 		jobs,
 		// Every open job's id + whether a run could sweep it, so the client can
 		// keep an accurate "N selected" across pages.
-		openJobs: all.map((j) => ({ id: j.id, sweepable: j.accountResolved })),
+		openJobs: all.map((j) => ({
+			id: j.id,
+			sweepable: j.accountResolved && j.fundingState !== "to_request",
+		})),
 		tiles: {
 			newPackets: {
 				count: all.length,
@@ -252,6 +263,11 @@ export default function FinanceQueue({ loaderData }: Route.ComponentProps) {
 											{`${formatMoney(r.estPayable)} ${t("finance_queue.est_label")}`}
 										</td>
 										<td className="p-2 space-x-1">
+											<Badge
+												variant={r.fundingState === "funded" ? "ok" : undefined}
+											>
+												{t(`finance_queue.state.${r.fundingState}`)}
+											</Badge>
 											{!r.accountResolved && (
 												<Badge variant="warn">
 													{t("finance_queue.account_unmapped")}

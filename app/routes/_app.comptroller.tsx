@@ -1,560 +1,126 @@
 import { useTranslation } from "react-i18next"
-import { data, Form, Link } from "react-router"
-import { ComptrollerStepRail } from "~/components/comptroller-step-rail"
+import { Link } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Badge } from "~/components/ui/badge"
-import { Button, buttonVariants } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
 import { Card, CardContent } from "~/components/ui/card"
 import { db } from "~/lib/db.server"
-import { isComptrollerEnabled } from "~/lib/features.server"
-import { invoiceTotalUsed } from "~/lib/finance-pipeline.server"
 import { requireRole } from "~/lib/permissions.server"
-import { getIvuRate, getLcPbccAdvanceRate } from "~/lib/system-settings.server"
-import { cn, formatMoney, toNumberPrice } from "~/lib/utils"
-import type { DocStatus, JafInvoice } from "../../generated/prisma/client"
+import type { Route } from "./+types/_app.comptroller"
 
-// Route types are local: this screen is env-gated off, so react-router
-// typegen does not emit ./+types/_app.comptroller.
-export const meta = () => [{ title: "Comptroller — JAF Ops" }]
+export const meta: Route.MetaFunction = () => [
+	{ title: "Brigades · payroll — JAF Ops" },
+]
 
-type JobRow = {
-	id: string
-	controlNumber: string
-	jobType: string
-	jobAddressEstimated: string
-	amount: number
-}
-
-type IncomingDocRow = JobRow & {
-	sentAt: Date
-	pbccRequestPdfPath: string | null
-	unread: boolean
-	unreadNotificationId: string | null
-}
-
-type AwaitingAdvanceRow = JobRow & {
-	expectedAdvance: number
-	pbccRequestSentAt: Date
-	ageDays: number
-}
-
-type AwaitingFinalRow = JobRow & {
-	finalClaroUploadedAt: Date
-	ageDays: number
-}
-
-type CrewToPayRow = JobRow & {
-	advanceAmount: number | null
-	assignedCrewIds: string[]
-	crewNames: string[]
-}
-
-export async function loader({ request }: { request: Request }) {
-	if (!isComptrollerEnabled()) throw data(null, { status: 404 })
+export async function loader({ request }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["COMPTROLLER", "ADMIN"])
-
-	const [serviceCodes, ivuRate, lcPbccAdvanceRate] = await Promise.all([
-		db.serviceCode.findMany(),
-		getIvuRate(),
-		getLcPbccAdvanceRate(),
-	])
-	const codeMap = Object.fromEntries(
-		serviceCodes.map((c) => [c.id, { unitPrice: toNumberPrice(c.unitPrice) }]),
-	)
-
-	const selectAmountFields = {
-		id: true,
-		controlNumber: true,
-		jobType: true,
-		jobAddressEstimated: true,
-		materialsUsed: true,
-		materialsTaken: true,
-	} as const
-
-	const comptrollerStatuses: DocStatus[] = [
-		"SUPERVISOR_APPROVED",
-		"CLARO_UPLOADED",
-	]
-	const [incomingRaw, awaitingAdvanceRaw, awaitingFinalRaw, crewsToPayRaw] =
-		await Promise.all([
-			db.jafInvoice.findMany({
-				where: {
-					status: { in: comptrollerStatuses },
-					pbccRequestSentAt: { not: null },
-				},
-				orderBy: { karmenCopySentAt: "desc" },
-				take: 100,
-				select: {
-					...selectAmountFields,
-					karmenCopySentAt: true,
-					pbccRequestSentAt: true,
-					pbccRequestPdfPath: true,
-				},
-			}),
-			db.jafInvoice.findMany({
-				where: {
-					status: { in: comptrollerStatuses },
-					pbccRequestSentAt: { not: null },
-					paymentRecords: { none: { type: "PBCC_ADVANCE" } },
-					receivableClosedAt: null,
-				},
-				orderBy: { pbccRequestSentAt: "asc" },
-				take: 100,
-				select: {
-					...selectAmountFields,
-					pbccRequestSentAt: true,
-				},
-			}),
-			db.jafInvoice.findMany({
-				where: {
-					status: { in: comptrollerStatuses },
-					finalClaroUploadedAt: { not: null },
-					paymentRecords: { none: { type: "CLARO_FINAL" } },
-					receivableClosedAt: null,
-				},
-				orderBy: { finalClaroUploadedAt: "asc" },
-				take: 100,
-				select: {
-					...selectAmountFields,
-					finalClaroUploadedAt: true,
-				},
-			}),
-			db.jafInvoice.findMany({
-				where: {
-					status: { in: comptrollerStatuses },
-					AND: [
-						{ paymentRecords: { some: { type: "PBCC_ADVANCE" } } },
-						{ paymentRecords: { none: { type: "CREW_PAYMENT" } } },
-					],
-					receivableClosedAt: null,
-				},
-				orderBy: { advanceReceivedAt: "asc" },
-				take: 100,
-				select: {
-					...selectAmountFields,
-					assignedCrewIds: true,
-					paymentRecords: {
-						where: { type: "PBCC_ADVANCE" },
-						select: { amount: true },
-					},
-				},
-			}),
-		])
-
-	const incomingIds = incomingRaw.map((d) => d.id)
-	const unreadNotifications =
-		incomingIds.length > 0
-			? await db.notification.findMany({
-					where: {
-						userId: user.id,
-						docId: { in: incomingIds },
-						read: false,
-					},
-					select: { id: true, docId: true },
-				})
-			: []
-	const unreadByDoc = new Map<string, string>()
-	for (const n of unreadNotifications) {
-		if (n.docId && !unreadByDoc.has(n.docId)) unreadByDoc.set(n.docId, n.id)
-	}
-
-	const crewIds = new Set<string>()
-	for (const job of crewsToPayRaw) {
-		for (const id of job.assignedCrewIds) crewIds.add(id)
-	}
-	const crewUsers =
-		crewIds.size > 0
-			? await db.user.findMany({
-					where: { id: { in: [...crewIds] } },
-					select: { id: true, name: true },
-				})
-			: []
-	const crewNameMap = new Map(crewUsers.map((u) => [u.id, u.name]))
-
-	const toRow = (
-		raw: Pick<
-			JafInvoice,
-			| "id"
-			| "controlNumber"
-			| "jobType"
-			| "jobAddressEstimated"
-			| "materialsUsed"
-			| "materialsTaken"
-		>,
-	): JobRow => ({
-		id: raw.id,
-		controlNumber: raw.controlNumber,
-		jobType: raw.jobType,
-		jobAddressEstimated: raw.jobAddressEstimated,
-		amount: invoiceTotalUsed(raw, codeMap, ivuRate),
+	const runs = await db.payrollRun.findMany({
+		where: { reversedAt: null },
+		orderBy: { generatedAt: "desc" },
+		take: 50,
+		select: {
+			id: true,
+			label: true,
+			generatedAt: true,
+			paidAt: true,
+			accounts: { select: { paidAt: true, confirmedByFallback: true } },
+		},
 	})
-
-	const incomingDocs: IncomingDocRow[] = incomingRaw.map((d) => ({
-		...toRow(d),
-		sentAt: d.karmenCopySentAt ?? d.pbccRequestSentAt ?? new Date(),
-		pbccRequestPdfPath: d.pbccRequestPdfPath,
-		unread: unreadByDoc.has(d.id),
-		unreadNotificationId: unreadByDoc.get(d.id) ?? null,
-	}))
-
-	const awaitingAdvance: AwaitingAdvanceRow[] = awaitingAdvanceRaw.map((d) => ({
-		...toRow(d),
-		expectedAdvance: toRow(d).amount * lcPbccAdvanceRate,
-		pbccRequestSentAt: d.pbccRequestSentAt ?? new Date(),
-		ageDays: Math.floor(
-			(Date.now() - new Date(d.pbccRequestSentAt ?? new Date()).getTime()) /
-				1000 /
-				60 /
-				60 /
-				24,
-		),
-	}))
-
-	const awaitingFinal: AwaitingFinalRow[] = awaitingFinalRaw.map((d) => ({
-		...toRow(d),
-		finalClaroUploadedAt: d.finalClaroUploadedAt ?? new Date(),
-		ageDays: Math.floor(
-			(Date.now() - new Date(d.finalClaroUploadedAt ?? new Date()).getTime()) /
-				1000 /
-				60 /
-				60 /
-				24,
-		),
-	}))
-
-	const crewsToPay: CrewToPayRow[] = crewsToPayRaw.map((d) => ({
-		...toRow(d),
-		advanceAmount: d.paymentRecords[0]?.amount
-			? Number(d.paymentRecords[0].amount)
-			: null,
-		assignedCrewIds: d.assignedCrewIds,
-		crewNames: d.assignedCrewIds.map(
-			(id) => crewNameMap.get(id) ?? id.slice(-6),
-		),
-	}))
-
-	const unreadCount = incomingDocs.filter((d) => d.unread).length
-	const awaitingFundsCount = awaitingAdvance.length + awaitingFinal.length
-
 	return {
-		incomingDocs,
-		awaitingAdvance,
-		awaitingFinal,
-		crewsToPay,
-		unreadCount,
-		lcPbccAdvanceRate,
-		awaitingFundsCount,
+		user,
+		toPay: runs.filter((r) => !r.paidAt).reverse(), // oldest first
+		paid: runs.filter((r) => r.paidAt),
 	}
 }
 
-function SectionCard({
-	title,
-	count,
-	children,
-}: {
-	title: string
-	count?: number
-	children: React.ReactNode
-}) {
-	return (
-		<div className="space-y-3">
-			<div className="flex items-center justify-between">
-				<h2 className="text-sm font-semibold text-foreground">{title}</h2>
-				{count !== undefined && (
-					<Badge variant={count > 0 ? "warn" : "neutral"}>{count}</Badge>
-				)}
-			</div>
-			{children}
-		</div>
-	)
-}
+type RunRow = Route.ComponentProps["loaderData"]["toPay"][number]
 
-function Empty({ children }: { children: React.ReactNode }) {
-	return (
-		<Card>
-			<CardContent className="p-4 text-sm text-muted-foreground">
-				{children}
-			</CardContent>
-		</Card>
-	)
-}
-
-export default function ComptrollerDashboard({
-	loaderData,
-}: {
-	loaderData: Awaited<ReturnType<typeof loader>>
-}) {
-	const {
-		incomingDocs,
-		awaitingAdvance,
-		awaitingFinal,
-		crewsToPay,
-		unreadCount,
-		awaitingFundsCount,
-		lcPbccAdvanceRate,
-	} = loaderData
+function RunsTable({ runs }: { runs: RunRow[] }) {
 	const { t } = useTranslation()
-
+	if (runs.length === 0) {
+		return (
+			<p className="p-4 text-sm text-muted-foreground">
+				{t("comptroller_payroll.empty")}
+			</p>
+		)
+	}
 	return (
-		<div className="space-y-6">
-			<div className="flex items-center justify-between">
-				<h1 className="text-xl font-semibold">
-					{t("comptroller_dashboard.title")}
-				</h1>
-				<span className="text-xs rounded-md bg-muted px-2 py-0.5 font-semibold">
-					{t("comptroller_dashboard.role_label")}
-				</span>
-			</div>
-			<ComptrollerStepRail current={null} />
-			<Callout title={t("comptroller_flow.callout.dashboard_title")}>
-				{t("comptroller_flow.callout.dashboard_body")}
-			</Callout>
-
-			<div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-				<Card>
-					<CardContent className="p-3">
-						<p className="text-xs text-muted-foreground">
-							{t("comptroller_dashboard.stat.incoming_docs")}
-						</p>
-						<p className="text-lg font-semibold">{incomingDocs.length}</p>
-						{unreadCount > 0 && (
-							<p className="text-xs text-status-warn">
-								{t("comptroller_dashboard.stat.unread_docs", {
-									count: unreadCount,
-								})}
-							</p>
-						)}
-					</CardContent>
-				</Card>
-				<Card>
-					<CardContent className="p-3">
-						<p className="text-xs text-muted-foreground">
-							{t("comptroller_dashboard.stat.awaiting_funds")}
-						</p>
-						<p className="text-lg font-semibold">{awaitingFundsCount}</p>
-					</CardContent>
-				</Card>
-				<Card>
-					<CardContent className="p-3">
-						<p className="text-xs text-muted-foreground">
-							{t("comptroller_dashboard.stat.crews_to_pay")}
-						</p>
-						<p className="text-lg font-semibold">{crewsToPay.length}</p>
-					</CardContent>
-				</Card>
-			</div>
-
-			<SectionCard
-				title={t("comptroller_dashboard.incoming_docs_heading")}
-				count={unreadCount > 0 ? unreadCount : undefined}
-			>
-				{incomingDocs.length === 0 ? (
-					<Empty>{t("comptroller_dashboard.no_incoming_docs")}</Empty>
-				) : (
-					<div className="space-y-2">
-						{incomingDocs.map((doc) => (
-							<Card
-								key={doc.id}
-								className={cn(doc.unread && "border-l-4 border-l-amber-500")}
-							>
-								<CardContent className="flex flex-wrap items-center justify-between gap-3 p-3">
-									<div className="min-w-0 flex-1">
-										<div className="flex items-center gap-2">
-											<Link
-												to={`/comptroller/${doc.id}`}
-												className="font-mono text-sm font-medium hover:underline"
-											>
-												{doc.controlNumber}
-											</Link>
-											{doc.unread && (
-												<Badge variant="warn">
-													{t("comptroller_dashboard.unread_badge")}
-												</Badge>
-											)}
-										</div>
-										<p className="text-sm text-muted-foreground truncate">
-											{doc.jobType} — {doc.jobAddressEstimated}
-										</p>
-										<p className="text-xs text-muted-foreground/70">
-											{t("comptroller_dashboard.sent_on", {
-												date: new Date(doc.sentAt).toLocaleDateString(),
-											})}
-										</p>
-									</div>
-									<div className="flex items-center gap-2">
-										{doc.pbccRequestPdfPath && (
-											<a
-												href={`/files/pbcc-requests/${doc.id}-pbcc-request.pdf`}
-												target="_blank"
-												rel="noreferrer"
-												className={buttonVariants({
-													variant: "outline",
-													size: "sm",
-												})}
-											>
-												{t("comptroller_dashboard.download_pbcc")}
-											</a>
-										)}
-										{doc.unread && doc.unreadNotificationId && (
-											<Form
-												method="post"
-												action={`/notifications/${doc.unreadNotificationId}/read`}
-											>
-												<input
-													type="hidden"
-													name="redirectTo"
-													value="/comptroller"
-												/>
-												<Button type="submit" variant="ghost" size="sm">
-													{t("comptroller_dashboard.mark_read")}
-												</Button>
-											</Form>
-										)}
-									</div>
-								</CardContent>
-							</Card>
-						))}
-					</div>
-				)}
-			</SectionCard>
-
-			<div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-				<SectionCard
-					title={t("comptroller_dashboard.awaiting_advance_heading", {
-						rate: (lcPbccAdvanceRate * 100).toFixed(1),
-					})}
-					count={
-						awaitingAdvance.length > 0 ? awaitingAdvance.length : undefined
-					}
-				>
-					{awaitingAdvance.length === 0 ? (
-						<Empty>{t("comptroller_dashboard.no_awaiting_advance")}</Empty>
-					) : (
-						<div className="space-y-2">
-							{awaitingAdvance.map((job) => (
-								<Card key={job.id}>
-									<CardContent className="p-3">
-										<div className="flex items-center justify-between gap-2">
-											<Link
-												to={`/comptroller/${job.id}`}
-												className="font-mono text-sm font-medium hover:underline"
-											>
-												{job.controlNumber}
-											</Link>
-											<div className="flex items-center gap-2">
-												<span className="text-xs text-muted-foreground">
-													{job.ageDays}d
-												</span>
-												<Badge variant="warn">
-													{t("comptroller_dashboard.awaiting_funds_badge")}
-												</Badge>
-											</div>
-										</div>
-										<p className="text-sm text-muted-foreground truncate">
-											{job.jobType} — {job.jobAddressEstimated}
-										</p>
-										<p className="text-xs text-muted-foreground/70">
-											{t("comptroller_dashboard.expected_advance", {
-												amount: formatMoney(job.expectedAdvance),
-											})}
-										</p>
-									</CardContent>
-								</Card>
-							))}
-						</div>
-					)}
-				</SectionCard>
-
-				<SectionCard
-					title={t("comptroller_dashboard.awaiting_final_heading")}
-					count={awaitingFinal.length > 0 ? awaitingFinal.length : undefined}
-				>
-					{awaitingFinal.length === 0 ? (
-						<Empty>{t("comptroller_dashboard.no_awaiting_final")}</Empty>
-					) : (
-						<div className="space-y-2">
-							{awaitingFinal.map((job) => (
-								<Card key={job.id}>
-									<CardContent className="p-3">
-										<div className="flex items-center justify-between gap-2">
-											<Link
-												to={`/comptroller/${job.id}`}
-												className="font-mono text-sm font-medium hover:underline"
-											>
-												{job.controlNumber}
-											</Link>
-											<div className="flex items-center gap-2">
-												<span className="text-xs text-muted-foreground">
-													{job.ageDays}d
-												</span>
-												<Badge variant="warn">
-													{t("comptroller_dashboard.awaiting_final_badge")}
-												</Badge>
-											</div>
-										</div>
-										<p className="text-sm text-muted-foreground truncate">
-											{job.jobType} — {job.jobAddressEstimated}
-										</p>
-										<p className="text-xs text-muted-foreground/70">
-											{t("comptroller_dashboard.invoice_amount", {
-												amount: formatMoney(job.amount),
-											})}
-										</p>
-									</CardContent>
-								</Card>
-							))}
-						</div>
-					)}
-				</SectionCard>
-			</div>
-
-			<SectionCard
-				title={t("comptroller_dashboard.crews_to_pay_heading")}
-				count={crewsToPay.length > 0 ? crewsToPay.length : undefined}
-			>
-				{crewsToPay.length === 0 ? (
-					<Empty>{t("comptroller_dashboard.no_crews_to_pay")}</Empty>
-				) : (
-					<div className="space-y-2">
-						{crewsToPay.map((job) => (
-							<Card key={job.id}>
-								<CardContent className="p-3">
-									<div className="flex items-center justify-between gap-2">
-										<Link
-											to={`/comptroller/${job.id}`}
-											className="font-mono text-sm font-medium hover:underline"
-										>
-											{job.controlNumber}
-										</Link>
+		<table className="w-full text-sm">
+			<tbody>
+				{runs.map((run) => {
+					const paid = run.accounts.filter((a) => a.paidAt).length
+					const fromPaper = run.accounts.filter(
+						(a) => a.confirmedByFallback,
+					).length
+					return (
+						<tr key={run.id} className="border-b last:border-0">
+							<td className="p-2">
+								<Link
+									to={`/comptroller/runs/${run.id}`}
+									className="underline font-medium"
+								>
+									{run.label}
+								</Link>
+							</td>
+							<td className="p-2 text-muted-foreground">
+								{new Date(run.generatedAt).toLocaleDateString()}
+							</td>
+							<td className="p-2">
+								<span className="flex flex-wrap items-center gap-2">
+									<span>
+										{t("comptroller_payroll.accounts_progress", {
+											paid,
+											total: run.accounts.length,
+										})}
+									</span>
+									{fromPaper > 0 && (
 										<Badge variant="warn">
-											{t("comptroller_dashboard.crew_unpaid_badge")}
-										</Badge>
-									</div>
-									<p className="text-sm text-muted-foreground truncate">
-										{job.jobType} — {job.jobAddressEstimated}
-									</p>
-									<div className="flex flex-wrap items-center gap-x-4 text-xs text-muted-foreground/70">
-										<span>
-											{t("comptroller_dashboard.advance_received", {
-												amount: formatMoney(job.advanceAmount ?? 0),
+											{t("finance_payroll.fallback_count", {
+												count: fromPaper,
 											})}
-										</span>
-										<span>
-											{t("comptroller_dashboard.crew_label")}:{" "}
-											{job.crewNames.join(", ")}
-										</span>
-									</div>
-								</CardContent>
-							</Card>
-						))}
-					</div>
-				)}
-			</SectionCard>
+										</Badge>
+									)}
+								</span>
+							</td>
+						</tr>
+					)
+				})}
+			</tbody>
+		</table>
+	)
+}
+
+export default function ComptrollerPayroll({
+	loaderData,
+}: Route.ComponentProps) {
+	const { toPay, paid } = loaderData
+	const { t } = useTranslation()
+	return (
+		<div className="p-6 space-y-4">
+			<h1 className="text-2xl font-bold">{t("comptroller_payroll.title")}</h1>
+			<Callout title={t("comptroller_payroll.callout_title")}>
+				{t("comptroller_payroll.callout_body")}
+			</Callout>
+			<Card>
+				<CardContent className="p-0">
+					<h2 className="p-3 text-sm font-semibold border-b">
+						{t("comptroller_payroll.runs_to_pay")}
+					</h2>
+					<RunsTable runs={toPay} />
+				</CardContent>
+			</Card>
+			<Card>
+				<CardContent className="p-0">
+					<h2 className="p-3 text-sm font-semibold border-b">
+						{t("comptroller_payroll.paid_runs")}
+					</h2>
+					<RunsTable runs={paid} />
+				</CardContent>
+			</Card>
 		</div>
 	)
 }
 
-export function ErrorBoundary({ error }: { error: unknown }) {
+export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
 	return <RouteErrorBoundary error={error} />
 }

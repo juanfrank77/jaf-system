@@ -34,6 +34,10 @@ SELECT migration_name FROM "_prisma_migrations" ORDER BY finished_at DESC LIMIT 
 SELECT email, role, active FROM "User" ORDER BY role, email;
 -- expect: only seeded/demo accounts. Write this list down — it is who can log in.
 
+SELECT email FROM "User" WHERE email LIKE '%@jafcomm.local';
+-- expect: 4 rows, the old maintenance supervisors. This deploy replaces them
+-- with @jafcom.net addresses and Step 5b deletes the old ones. Record them.
+
 SELECT name, code, active, cardinality("memberIds") AS crew FROM "Brigade" ORDER BY name;
 -- expect: the 14 old brigades. Crew assignments (memberIds) on them are lost in Step 3.
 ```
@@ -53,8 +57,9 @@ across `./scripts/apply-migrations.sh`, start.
 
 Prod is already at `20260928005451_warehouse_foundation`. This deploy applies
 **one** new migration, `20260929140000_finance_billing_arm_a`: purely additive
-(two tables, eight nullable columns on `jaf_invoice`, indexes, foreign keys —
-no renames, no drops). The script must report exactly one migration applied.
+(three tables — `ContractorAccount`, `PayrollRun` and `PayrollRunAccount`, the
+comptroller's per-account Paid tick — eight nullable columns on `jaf_invoice`,
+indexes, foreign keys; no renames, no drops). The script must report exactly one migration applied.
 If prod lags behind, stop and escalate — never edit a migration.
 
 ---
@@ -87,17 +92,65 @@ and get no account; José A Ríos Rivera (141) is seeded inactive. When a missin
 number is confirmed, enter it on the brigades screen — saving it creates the
 account.
 
+Two things to know about what this seed run creates:
+
+- **The four maintenance supervisors are new users, not updated ones.** The seed
+  upserts a user by email, and the addresses changed from `@jafcomm.local` to
+  `@jafcom.net`, so `eocasio@`/`charlie@`/`irivera@`/`rramos@` are created
+  alongside the old four rather than replacing them. `irivera@jafcom.net` is
+  unconfirmed — it does not match the supervisor it belongs to and our own admin
+  mockup flagged it as possibly the departed installer clerk's. Step 5b removes
+  the old rows. Because `supervisorAreas` is only set on create, these new users
+  get their areas from the seed, which is the point of checking them in Step 5.
+- **Four warehouse logins are on constructed addresses.** Frank Ramos, Gilberto
+  Ayala, Alfredo Medina and Catherine García have no email in any client
+  document; only Orlando's `oguzman@jafcom.net` is confirmed. They are seeded
+  anyway so the warehouse screens have staff, and Step 5 lists them so they can
+  be corrected before go-live. Note that `active = false` does **not** block
+  sign-in — `requireRole` never reads `user.active`.
+
 ---
 
 ## Step 5 — verify, read-only
 
 Section 5 of the SQL file. Expect 15 brigades, the 11 account codes above, no
-job with an unmapped code, and the same user list you wrote down in Step 0.
-Then log in as Finance (Lissette) and confirm `/finance/queue` and
-`/finance/payroll` load.
+job with an unmapped code, 4 supervisors on `@jafcom.net` with the roster's
+areas, and the 4 unverified warehouse logins listed for correction. Then log in
+as Finance (Lissette) and confirm `/finance/queue` and `/finance/payroll` load.
+
+---
+
+## Step 5a — create the comptroller login
+
+The seed creates **no** COMPTROLLER user. Carmen's login has to be created by
+an Admin on the `/admin/users` screen (role *Comptroller*) before the first
+payroll run is generated, or nobody can tick accounts paid. Then log in as her
+and confirm:
+
+- she lands on `/comptroller` (the runs list) straight after login;
+- `/finance/receivables` is refused — receivables is Finance/Admin only.
+
+The comptroller role is always on. `ENABLE_COMPTROLLER` no longer exists; if it
+is still in the server's `.env` it is ignored and can be deleted.
+
+---
+
+## Step 5b — delete the replaced `@jafcomm.local` logins
+
+Section 5b of the SQL file, with `ROLLBACK` first. Without this, four extra
+working logins survive the deploy on a domain that can never receive a password
+reset. A `Doc` row still pointing at one of them has a required `supervisorId`
+and will block the delete — if the transaction aborts, stop and escalate.
 
 Only after this is confirmed, and only by Lissette, generate the first run.
 `/finance/payroll` is not feature-flagged: it is live the moment the code is.
+A run sweeps every *sent* packet — a bank request marked funded (PBCC advance)
+is not required — and creates one row per contractor account; the comptroller
+ticks each account paid at `/comptroller`.
+
+`PAYROLL_FALLBACK_ENABLED` (default on) lets Finance confirm an account from the
+paper journal while both systems run side by side. Set it to `false` in `.env`
+at go-live so only the comptroller can tick.
 
 ---
 

@@ -60,7 +60,9 @@
 		"trail": {
 			"title": "Movement Trail",
 			"loading": "Loading…",
-			"empty": "No movements yet."
+			"empty": "No movements yet.",
+			"title_for": "Movement trail — {{material}}",
+			"why": "Why the trail is the asset: every movement carries actor, time and job, so the number can be defended in an audit."
 		},
 		"receive": {
 			"heading": "Receive Delivery",
@@ -93,7 +95,8 @@
 			"regenerate": "Regenerate",
 			"download_pdf": "PDF",
 			"download_csv": "CSV"
-		}
+		},
+		"out_tag": "out"
 	},
 	"adjust": {
 		"reason_required": "A reason is required.",
@@ -177,7 +180,7 @@
 			"warehouse_scan_in": "Scan In Return",
 			"warehouse_restock": "Restocks to Release",
 			"warehouse_stock": "Stock",
-			"comptroller": "Comptroller",
+			"comptroller": "Brigades · payroll",
 			"finance_payroll": "Awaiting payroll"
 		},
 		"notifications": {
@@ -249,7 +252,6 @@
 		"job_address_label": "Job Address (estimated)",
 		"job_description_label": "Job description",
 		"service_codes_label": "Service codes",
-		"aviso_number_label": "Claro Aviso # (if known)",
 		"assigned_crew_label": "Assigned Crew",
 		"estimated_materials_label": "Materials to prep",
 		"callout_title": "Step 1 · You",
@@ -257,7 +259,6 @@
 		"work_order_label": "JAF Work Order #",
 		"work_order_auto": "Assigned on create",
 		"work_order_hint": "Assigned automatically. Not the invoice, not the Aviso.",
-		"aviso_hint": "8 digits, e.g. 10353961. If Claro gave you the Aviso with the job, enter it. Otherwise it is entered at step 6.",
 		"job_address_hint": "Estimated — the crew corrects it on site.",
 		"crew_hint": "Only your area’s brigades are listed.",
 		"flow_prefix": "On submit",
@@ -266,7 +267,6 @@
 		"estimated_materials_hint": "Physical materials the warehouse should prep for this job — separate from the service codes above. Search by name or code.",
 		"submit": "Create Work Order",
 		"errors": {
-			"aviso_invalid": "The Aviso number must be exactly 8 digits.",
 			"invalid_materials": "Invalid materials data",
 			"invalid_service_lines": "Service codes could not be read.",
 			"missing_fields": "Job type, address, and at least one crew member are required",
@@ -279,7 +279,6 @@
 		"job_description_label": "Job description",
 		"service_codes_label": "Service codes",
 		"errors": {
-			"aviso_invalid": "The Aviso number must be exactly 8 digits.",
 			"invalid_materials": "The materials list could not be read",
 			"invalid_service_lines": "Service codes could not be read.",
 			"missing_fields": "Job type, address, and at least one crew member are required",
@@ -439,7 +438,15 @@
 			"invalid_warehouse": "That warehouse does not exist or is no longer active.",
 			"invalid_received_qty": "Returned quantity must be a whole number of zero or more (service code {{serviceCodeId}})."
 		},
-		"already_recorded_notice": "Returns were already recorded for this document. They cannot be logged again."
+		"already_recorded_notice": "Returns were already recorded for this document. They cannot be logged again.",
+		"status_pill": "Expected back",
+		"callout_title": "Return · You",
+		"callout_body": "The crew said what they used; the system computed what should come back. Count what actually arrived. Anything short gets a note.",
+		"submit_confirm": "Confirm return",
+		"submit_discrepancy_one": "Confirm return · {{count}} discrepancy logged",
+		"submit_discrepancy_other": "Confirm return · {{count}} discrepancies logged",
+		"invoice_note_title": "The invoiced quantity never changes here.",
+		"invoice_note_body": "The crew's \"used\" is what the supervisor invoices from. This screen only records whether the warehouse got its material back."
 	},
 	"returns": {
 		"note_required": "A note is required when received is less than expected, or a serialized unit is lost or damaged."
@@ -502,7 +509,8 @@
 		"more_is_normal": "Taking more than listed is normal. The supervisor sees the difference at review.",
 		"sig_prompt": "Sign here with your finger",
 		"signed": "Signed",
-		"error_title": "Can't sign yet"
+		"error_title": "Can't sign yet",
+		"status_pill": "Pickup"
 	},
 	"docs_field": {
 		"title": "Field Update",
@@ -569,7 +577,8 @@
 		"bring_back_hint": "Took minus used. The warehouse expects these.",
 		"error_title": "Can't submit yet",
 		"submitting": "Sending…",
-		"offline_footnote": "No signal? It saves on the phone and sends itself when you're back online."
+		"offline_footnote": "No signal? It saves on the phone and sends itself when you're back online.",
+		"status_pill": "On site"
 	},
 	"docs_review": {
 		"readonly_title": "Completed step.",
@@ -966,7 +975,6 @@
 	},
 	"supervisor_variance": {
 		"title": "Material Variance",
-		"readonly_note": "Serialized returns/repair and missing-stock (LOST) signals will appear here once Spec A/Spec B ship. The overage/discrepancy/shortage badges summarize the whole document, while the line table below shows ordered-vs-installed detail per service code, so a badge without an exactly matching line row is expected, not a bug.",
 		"table": {
 			"doc": "Document",
 			"brigade": "Brigade",
@@ -1071,8 +1079,8 @@
 			"invalid_payment": "Enter a valid positive amount and payment date.",
 			"advance_already_recorded": "The PBCC advance is already recorded.",
 			"final_already_recorded": "The final payment is already recorded.",
-			"close_role_required": "Only Finance or Admin can close a receivable.",
 			"already_closed": "This receivable is already closed.",
+			"missing_claro_pdf": "Upload the Claro PDF before closing.",
 			"unknown_intent": "Unknown action."
 		},
 		"waiting_for_payment": "Waiting for comptroller entry"
@@ -1117,7 +1125,12 @@
 			"next": "Next"
 		},
 		"generate_run_selected": "Generate run ({{count}} selected)",
-		"select_hint": "Untick jobs you want to hold back — only checked jobs enter the run."
+		"select_hint": "Untick jobs you want to hold back — only checked jobs enter the run.",
+		"state": {
+			"to_request": "Ready to request",
+			"awaiting_funding": "Awaiting funding",
+			"funded": "Funded"
+		}
 	},
 	"finance_verify": {
 		"aviso_amount_prefilled": "Aviso amount {{amount}} captured and matched by the supervisor.",
@@ -1169,7 +1182,15 @@
 		"generate_and_download": "Generate & Download PBCC Request",
 		"errors": {
 			"unknown_intent": "Unknown action.",
-			"terminal_status": "This job is no longer editable."
+			"terminal_status": "This job is no longer editable.",
+			"not_sent": "Send the request to the bank first.",
+			"already_funded": "This packet is already marked funded.",
+			"future_date": "The funded date cannot be in the future.",
+			"invalid_date": "Enter a valid date.",
+			"invalid_amount": "Enter the amount PBCC paid (more than 0).",
+			"reason_required": "Give a reason for the correction.",
+			"not_funded": "This packet has no funding to correct.",
+			"locked_in_paid_run": "This packet is already in a paid payroll run and can no longer be corrected."
 		},
 		"contractor_payment": "Contractor payment (Arm A)",
 		"frozen": "Frozen in run",
@@ -1186,7 +1207,15 @@
 		"precert_title": "Pre-certification sheet",
 		"precert_download": "Download pre-cert sheet",
 		"precert_signers": "Signed by: {{supervisor}}, {{contractor}}, {{claro}}",
-		"precert_missing": "Pre-cert sheet missing"
+		"precert_missing": "Pre-cert sheet missing",
+		"mark_funded": "Mark funded",
+		"funded_on": "Funded {{date}}",
+		"funded_date": "Funded date",
+		"funded_amount": "Amount PBCC paid",
+		"funded_ref": "Bank reference (optional)",
+		"correct_funding": "Correct funding",
+		"correction_reason": "Reason for the correction",
+		"save_correction": "Save correction"
 	},
 	"finance_po": {
 		"title": "Claro PO & Final Document",
@@ -1237,16 +1266,6 @@
 		"listed": "Listed"
 	},
 	"dashboard": {
-		"status_plain": {
-			"CREATED": "New",
-			"PREPPED": "Prepped",
-			"SIGNED": "Picked up",
-			"FIELD_UPDATED": "Submitted",
-			"SUPERVISOR_APPROVED": "Approved",
-			"CLARO_UPLOADED": "Approved",
-			"LC_REQUEST_GENERATED": "Approved",
-			"CANCELLED": "Cancelled"
-		},
 		"title": "Dashboard",
 		"supervisor_scope_one": "{{areas}} · {{count}} crew",
 		"supervisor_scope_other": "{{areas}} · {{count}} crews",
@@ -1293,13 +1312,13 @@
 		"crew_sent_back_heading": "Sent Back ({{count}})",
 		"submitted_heading": "Submitted ({{count}})",
 		"submitted_badge": "Awaiting review",
-		"prepped_awaiting_heading": "Prepped / Awaiting Pickup ({{count}})",
-		"prepped_awaiting_badge": "Ready for pickup",
-		"missing_materials_heading": "Missing Materials ({{count}})",
+		"prepped_awaiting_heading": "Awaiting pickup ({{count}})",
+		"prepped_awaiting_badge": "Staged",
+		"missing_materials_heading": "Missing stock ({{count}})",
 		"missing_materials_badge": "Missing stock",
-		"returns_to_log_heading": "Returns to Log ({{count}})",
-		"returns_to_log_badge": "Log returns",
-		"triage_awaiting_heading": "Awaiting Disposition ({{count}})",
+		"returns_to_log_heading": "Returns due ({{count}})",
+		"returns_to_log_badge": "Expected back",
+		"triage_awaiting_heading": "Returned units awaiting triage ({{count}})",
 		"triage_awaiting_cta": "Triage returned units",
 		"repair_pool_tile": "Repair Pool ({{count}})",
 		"needs_review_tile": "Needs Review ({{count}})",
@@ -1314,10 +1333,10 @@
 			"awaiting_warehouse": "Awaiting warehouse",
 			"awaiting_crew": "Awaiting crew",
 			"pending_review": "Pending review",
-			"pending_preps": "Pending preps",
-			"prepped_awaiting_pickup": "Prepped / awaiting pickup",
-			"missing_materials": "Missing materials",
-			"returns_to_log": "Returns to log",
+			"pending_preps": "To prep",
+			"prepped_awaiting_pickup": "Awaiting pickup",
+			"missing_materials": "Missing stock",
+			"returns_to_log": "Returns due",
 			"restock_requests": "Restock requests",
 			"open_jobs": "Open jobs",
 			"awaiting_close": "Awaiting close",
@@ -1411,7 +1430,9 @@
 				"submitted": "SUBMITTED",
 				"approved": "APPROVED"
 			}
-		}
+		},
+		"to_prep_heading": "To prep ({{count}})",
+		"to_prep_badge": "To prep"
 	},
 	"docs_status": {
 		"created": "Created",
@@ -1430,98 +1451,6 @@
 		"offline": "Offline — changes will sync when you reconnect",
 		"sync_pending_one": "{{count}} change pending sync",
 		"sync_pending_other": "{{count}} changes pending sync"
-	},
-	"comptroller_dashboard": {
-		"title": "Comptroller",
-		"role_label": "Comptroller",
-		"stat": {
-			"incoming_docs": "Incoming docs",
-			"unread_docs_one": "{{count}} unread",
-			"unread_docs_other": "{{count}} unread",
-			"awaiting_funds": "Awaiting funds",
-			"crews_to_pay": "Crews to pay"
-		},
-		"incoming_docs_heading": "Incoming Documents",
-		"no_incoming_docs": "No incoming documents yet.",
-		"unread_badge": "Unread",
-		"sent_on": "Sent on {{date}}",
-		"download_pbcc": "Download PBCC request",
-		"mark_read": "Mark read",
-		"awaiting_advance_heading": "Awaiting PBCC Advance ({{rate}}%)",
-		"no_awaiting_advance": "No jobs waiting for PBCC advance.",
-		"awaiting_funds_badge": "Awaiting funds",
-		"expected_advance": "Expected advance: {{amount}}",
-		"awaiting_final_heading": "Awaiting Claro Final Payment",
-		"no_awaiting_final": "No jobs waiting for final payment.",
-		"awaiting_final_badge": "Awaiting final payment",
-		"invoice_amount": "Invoice amount: {{amount}}",
-		"crews_to_pay_heading": "Crews to Pay",
-		"no_crews_to_pay": "No crews waiting for payment.",
-		"crew_unpaid_badge": "Crew unpaid",
-		"advance_received": "Advance received: {{amount}}",
-		"crew_label": "Crew"
-	},
-	"comptroller_detail": {
-		"title": "Comptroller Job Detail",
-		"unread_badge": "Unread",
-		"back": "Back to comptroller dashboard",
-		"job_type": "Job type",
-		"address": "Address",
-		"supervisor": "Supervisor",
-		"current_crew": "Current crew",
-		"invoice_amount": "Invoice amount",
-		"expected_advance": "Expected PBCC advance ({{rate}}%)",
-		"advance_status": "PBCC advance",
-		"final_status": "Claro final payment",
-		"crew_payment_status": "Crew payment",
-		"status_recorded": "Recorded",
-		"status_pending": "Pending",
-		"incoming_doc_heading": "Incoming PBCC Request",
-		"sent_on": "Sent on {{date}}",
-		"download_pbcc": "Download PBCC request",
-		"record_advance_heading": "Record PBCC Advance",
-		"date_label": "Date",
-		"payment_note_label": "Payment note",
-		"amount_label": "Amount",
-		"record_advance_submit": "Record advance",
-		"advance_recorded": "Advance of {{amount}} recorded on {{date}}",
-		"record_crew_payment_heading": "Record Crew Payment",
-		"crew_payment_recorded": "Crew payment recorded.",
-		"record_crew_payment_submit": "Record crew payment",
-		"note_label": "Note",
-		"note_placeholder": "Optional note…",
-		"crew_amount_placeholder": "Crew payment amount",
-		"record_final_heading": "Record Claro Final Payment",
-		"record_final_submit": "Record final payment",
-		"final_recorded": "Final payment of {{amount}} recorded on {{date}}",
-		"final_amount_placeholder": "Final payment amount",
-		"crew_history_heading": "Crew Assignment History",
-		"crew_history_assigned": "Assigned on {{date}} by {{by}}",
-		"payment_records_heading": "Payment Records",
-		"no_payment_records": "No payment records yet.",
-		"table": {
-			"date": "Date",
-			"type": "Type",
-			"amount": "Amount",
-			"recorded_by": "Recorded by",
-			"note": "Note"
-		},
-		"discrepancy_badge": "Discrepancy",
-		"discrepancy_notice": "Actual amount differs from expected {{expected}}.",
-		"errors": {
-			"invalid_amount": "Enter a valid positive amount.",
-			"invalid_date": "Enter a valid date.",
-			"advance_already_recorded": "PBCC advance has already been recorded for this job.",
-			"final_already_recorded": "Claro final payment has already been recorded for this job.",
-			"amount_exceeds_invoice_total": "Crew payment cannot exceed the invoice total.",
-			"crew_payment_already_recorded": "Crew payment has already been recorded for this job.",
-			"unknown_intent": "Unknown action."
-		},
-		"success": {
-			"advance_recorded": "PBCC advance recorded. Finance has been notified.",
-			"final_recorded": "Claro final payment recorded. Close entry is unlocked.",
-			"crew_payment_recorded": "Crew payment recorded."
-		}
 	},
 	"installer": {
 		"scan": {
@@ -1800,6 +1729,7 @@
 		"col_code": "Service",
 		"col_description": "Description",
 		"col_ordered": "Ordered",
+		"col_type": "Type",
 		"col_account": "Acct",
 		"col_qty": "Qty",
 		"col_unit": "Unit",
@@ -1864,7 +1794,8 @@
 			"packets": "Packets",
 			"payroll": "Payroll",
 			"po": "Claro PO",
-			"pipeline": "Receivables"
+			"pipeline": "Receivables",
+			"funding": "Bank funding"
 		},
 		"callout": {
 			"queue_title": "Step 1 · You",
@@ -1872,33 +1803,14 @@
 			"verify_title": "Step 1 · You",
 			"verify_body": "Check the packet against the amounts the system computed before building the PBCC request.",
 			"pbcc_title": "Step 1 · You",
-			"pbcc_body": "The PBCC request carries the bank-format invoice and the Aviso. The Comptroller records the advance when the funds arrive.",
-			"payroll_title": "Step 2 · Handoff",
-			"payroll_body": "Build the fortnightly run; the Comptroller pays the brigades and confirms. Every Aviso in the run flips to payroll confirmed here.",
-			"po_title": "Step 3 · You",
+			"pbcc_title_funding": "Step 2 · You",
+			"pbcc_body": "The bank request carries the Aviso, the JAF invoice, the bank-format invoice and the bank Excel. When the bank pays, record the date and the amount PBCC paid: that starts the Arm B clock. Funding is shown for information; the packet joins the next Production Journal once the request is sent.",
+			"payroll_title": "Step 3 · Handoff",
+			"payroll_body": "The Production Journal is built from packets whose bank request was sent, one row per contractor account. Funding is shown for information. The Comptroller pays each account in WinPay and ticks it; during the side-by-side period you can still confirm an account from the paper journal, and it is tagged as such.",
+			"po_title": "Step 4 · You",
 			"po_body": "Record the Claro PO against the Aviso — one Aviso can carry several POs. The balance is derived, never typed.",
-			"pipeline_title": "Step 4 · Handoff",
+			"pipeline_title": "Step 5 · Handoff",
 			"pipeline_body": "Record payments as they land and Close once both exist. A half-closed job is the normal state, not an error."
-		}
-	},
-	"comptroller_flow": {
-		"aria": "Comptroller payments",
-		"step": {
-			"advance": "PBCC advance",
-			"crew": "Crew payment",
-			"final": "Claro final"
-		},
-		"callout": {
-			"dashboard_title": "Your three payments",
-			"dashboard_body": "Every job needs the PBCC advance, the crew payment and Claro's final payment recorded. Finance creates each row; you record that the money moved.",
-			"advance_title": "Step 1 · You",
-			"advance_body": "Record the PBCC advance when the deposit shows in the bank.",
-			"crew_title": "Step 2 · You",
-			"crew_body": "Record the crew payment when the crew has been paid.",
-			"final_title": "Step 3 · You",
-			"final_body": "Record Claro's final payment when it arrives. Finance can then close the job.",
-			"done_title": "All recorded · Handoff",
-			"done_body": "All three payments are recorded. Finance closes the job."
 		}
 	},
 	"warehouse_flow": {
@@ -1936,7 +1848,7 @@
 			"created": "Created",
 			"prep": "Prep",
 			"release": "Release",
-			"field": "Field work",
+			"field": "Work",
 			"return": "Return",
 			"close": "Supervisor · Finance"
 		},
@@ -1945,12 +1857,24 @@
 			"sign_title_crew": "Step 3 · You + Warehouse",
 			"sign_body": "Count each line together on one screen. The crew may take more — change the number. Both sign. The list locks for everyone.",
 			"field_title": "Step 4 · You",
-			"field_body": "Do the job, then log it here: actual address, GPS, materials used, photos and your signature. What you save offline syncs when you reconnect."
+			"field_body": "Do the job, then log it here: actual address, GPS, materials used, photos and your signature. What you save offline syncs when you reconnect.",
+			"warehouse_list_title": "Your steps",
+			"warehouse_list_body": "Stage the materials (2), release them with both signatures (3), receive what comes back. Grey steps happen to the job, not to you.",
+			"crew_list_title": "Your steps are 3 and 4.",
+			"crew_list_body": "Pick up at the warehouse, do the job, document it. Grey steps happen to the job but are not yours."
 		}
 	},
 	"finance_payroll": {
 		"title": "Awaiting payroll",
 		"run_label_placeholder": "Run label (e.g. 9/10)",
+		"sent_ready": "{{count}} packets with the bank request sent are ready for the next run ({{funded}} already funded)",
+		"blocked_title": "Sent but blocked",
+		"fallback_count": "{{count}} accounts confirmed from paper",
+		"blocked_reason": "No contractor account for this brigade",
+		"paid_by": "Paid {{date}} by {{name}}",
+		"from_paper": "confirmed from paper",
+		"awaiting_comptroller": "Awaiting the comptroller",
+		"confirm_account": "Confirm from paper",
 		"generate_run": "Generate run ({{count}} open)",
 		"run_row": "{{label}} — {{count}} jobs — generated {{date}}",
 		"overdue": "{{days}}d, overdue",
@@ -1971,6 +1895,8 @@
 			"gross": "Gross",
 			"net": "Net",
 			"retention": "10% ret.",
+			"status": "Status",
+			"jobs": "Jobs",
 			"total_sc": "Total SC"
 		},
 		"grand_total": "Grand Total",
@@ -1986,5 +1912,29 @@
 	"photo_capture": {
 		"take": "Take photo",
 		"remove": "Remove photo"
+	},
+	"comptroller_payroll": {
+		"title": "Brigades · payroll",
+		"callout_title": "Your step",
+		"callout_body": "Open a run, pay each account in WinPay, then tick it here. Finance sees who has been paid.",
+		"runs_to_pay": "Runs to pay",
+		"paid_runs": "Paid runs",
+		"accounts_progress": "{{paid}} of {{total}} accounts",
+		"paid_button": "Paid",
+		"paid_by": "Paid {{date}} by {{name}}",
+		"from_paper": "confirmed from paper by finance",
+		"empty": "No runs yet.",
+		"back": "Back to runs",
+		"download_pdf": "Download journal PDF",
+		"col": {
+			"account": "Acct",
+			"contractor": "Contractor",
+			"jobs": "Jobs",
+			"gross": "Gross",
+			"net": "Net",
+			"retention": "10% Ret.",
+			"adj_net_running": "Adj. net running",
+			"status": "Status"
+		}
 	}
 }

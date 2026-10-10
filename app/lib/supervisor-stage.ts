@@ -76,6 +76,19 @@ export type StepView = {
 	interactive: boolean
 }
 
+/**
+ * The Aviso step has started once the supervisor has saved Aviso lines.
+ * `save_aviso` writes the number and lines together, so the number alone only
+ * means one was typed at intake (the optional field on the new-job form) and
+ * must not hide the "Generate JAF invoice" button.
+ */
+export function isAvisoStarted(doc: {
+	avisoNumber: string | null
+	avisoLines: unknown
+}): boolean {
+	return doc.avisoLines != null
+}
+
 const stageIndex = (s: SupervisorStage) => SUPERVISOR_STAGES.indexOf(s)
 
 /**

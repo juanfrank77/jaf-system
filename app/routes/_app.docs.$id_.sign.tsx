@@ -11,6 +11,7 @@ import {
 	SignaturePad,
 	type SignaturePadHandle,
 } from "~/components/signature-pad"
+import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
 import { Label } from "~/components/ui/label"
@@ -365,10 +366,17 @@ export default function SignDoc({
 
 	return (
 		<div className="space-y-5">
-			<h1 className="text-xl font-semibold">{t("docs_sign.title")}</h1>
-			<p className="text-sm font-mono text-muted-foreground">
-				{doc.controlNumber}
-			</p>
+			<div className="flex items-start justify-between gap-2">
+				<div>
+					<h1 className="text-xl font-semibold">{t("docs_sign.title")}</h1>
+					<p className="text-sm font-mono text-muted-foreground">
+						{doc.controlNumber}
+					</p>
+				</div>
+				<Badge variant="info" className="shrink-0">
+					{t("docs_sign.status_pill")}
+				</Badge>
+			</div>
 
 			<JobStepRail docId={doc.id} current="RELEASE" role={user.role} />
 			<Callout

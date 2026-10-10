@@ -186,6 +186,7 @@ model User {
   payablesClosedDocs   JafInvoice[] @relation("PayablesClosedDocs")
   payrollRunGenerator  PayrollRun[] @relation("PayrollRunGenerator")
   payrollRunPaidBy     PayrollRun[] @relation("PayrollRunPaidBy")
+  payrollRunAccountsPaid PayrollRunAccount[] @relation("PayrollRunAccountPaidBy")
   payrollRunReversedBy PayrollRun[] @relation("PayrollRunReversedBy")
 
   createdRepairBatches    RepairBatch[]   @relation("RepairBatchCreator")
@@ -616,6 +617,8 @@ model ContractorAccount {
 
   invoices JafInvoice[]
 
+  runAccounts PayrollRunAccount[]
+
   @@index([active])
 }
 
@@ -641,7 +644,27 @@ model PayrollRun {
 
   invoices JafInvoice[]
 
+  accounts PayrollRunAccount[]
+
   @@index([generatedAt])
+}
+
+// One row per contractor account in a payroll run: the comptroller's per-account
+// "paid" tick. PayrollRun.paidAt is set when the last of these is ticked.
+model PayrollRunAccount {
+  id                  String            @id @default(cuid())
+  payrollRunId        String
+  payrollRun          PayrollRun        @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  contractorAccountId String
+  contractorAccount   ContractorAccount @relation(fields: [contractorAccountId], references: [id])
+  paidAt              DateTime?
+  paidById            String?
+  paidBy              User?             @relation("PayrollRunAccountPaidBy", fields: [paidById], references: [id])
+  confirmedByFallback Boolean           @default(false)
+  createdAt           DateTime          @default(now())
+
+  @@unique([payrollRunId, contractorAccountId])
+  @@index([payrollRunId])
 }
 
 model Van {

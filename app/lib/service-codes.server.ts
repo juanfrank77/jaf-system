@@ -1,6 +1,18 @@
 import type { ServiceCode } from "../../generated/prisma/client"
+import { PENDING_CODE_PREFIX } from "./catalog-import"
 import { db } from "./db.server"
 import { toNumberPrice } from "./utils"
+
+/**
+ * Placeholder rows (`NEEDS_CODE_*`) stand in for materials whose SAP code the
+ * client has not supplied. They are seeded inactive, but an admin toggle or a
+ * stale DB can leave one active — and then it would be selectable as job
+ * material and bill $0.00. Every picker/search query excludes them regardless.
+ * The admin catalog and limit-table lookups (by id) are unaffected.
+ */
+const NOT_PENDING_CODE = {
+	NOT: { claroCode: { startsWith: PENDING_CODE_PREFIX } },
+}
 
 type Cache = { data: ServiceCode[]; ts: number }
 const TTL = 60_000
@@ -10,7 +22,9 @@ let materialCache: Cache | null = null
 export async function getActiveServiceCodes(): Promise<ServiceCode[]> {
 	const now = Date.now()
 	if (allCache && now - allCache.ts < TTL) return allCache.data
-	const codes = await db.serviceCode.findMany({ where: { active: true } })
+	const codes = await db.serviceCode.findMany({
+		where: { active: true, ...NOT_PENDING_CODE },
+	})
 	allCache = { data: codes, ts: now }
 	return codes
 }
@@ -20,7 +34,7 @@ export async function getActiveMaterialCodes(): Promise<ServiceCode[]> {
 	const now = Date.now()
 	if (materialCache && now - materialCache.ts < TTL) return materialCache.data
 	const codes = await db.serviceCode.findMany({
-		where: { active: true, kind: "MATERIAL" },
+		where: { active: true, kind: "MATERIAL", ...NOT_PENDING_CODE },
 		orderBy: { claroCode: "asc" },
 	})
 	materialCache = { data: codes, ts: now }
@@ -28,7 +42,9 @@ export async function getActiveMaterialCodes(): Promise<ServiceCode[]> {
 }
 
 export async function getSerializedCodes(): Promise<ServiceCode[]> {
-	return db.serviceCode.findMany({ where: { active: true, serialized: true } })
+	return db.serviceCode.findMany({
+		where: { active: true, serialized: true, ...NOT_PENDING_CODE },
+	})
 }
 
 /** Picker search over the SERVICE catalog. Never auto-selects; the caller shows every hit. */
@@ -42,6 +58,7 @@ export async function searchServiceCodes(
 		where: {
 			active: true,
 			kind: "SERVICE",
+			...NOT_PENDING_CODE,
 			OR: [
 				{ claroCode: { startsWith: term } },
 				{ name: { contains: term, mode: "insensitive" } },

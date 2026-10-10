@@ -472,6 +472,9 @@ export const LIMIT_TABLE_SEED: {
 // The 7 NEEDS_CODE_* accessory placeholders LIMIT_TABLE_SEED references, so seedLimitTable
 // has a ServiceCode row to attach to (none of these have a real Claro SAP code yet).
 // Seeded inactive — see the LIMIT_TABLE_SEED note above for why.
+/** Claro code prefix of a stand-in row that has no real SAP code yet. */
+export const PENDING_CODE_PREFIX = "NEEDS_CODE_"
+
 export const LIMIT_TABLE_PLACEHOLDER_CODES: {
 	claroCode: string
 	name: string

@@ -65,6 +65,7 @@ export function makeTracker() {
 		auditTrail: [] as string[],
 		paymentRecord: [] as string[],
 		payrollRun: [] as string[],
+		payrollRunAccount: [] as string[],
 		contractorAccount: [] as string[],
 		brigade: [] as string[],
 	}
@@ -127,6 +128,10 @@ export function makeTracker() {
 		// Brigade.supervisorId), so they must go before `user` cleanup below.
 		if (b.payrollRun.length)
 			await db.payrollRun.deleteMany({ where: { id: { in: b.payrollRun } } })
+		if (b.payrollRunAccount.length)
+			await db.payrollRunAccount.deleteMany({
+				where: { id: { in: b.payrollRunAccount } },
+			})
 		if (b.contractorAccount.length)
 			await db.contractorAccount.deleteMany({
 				where: { id: { in: b.contractorAccount } },
@@ -350,6 +355,7 @@ export async function seedFinanceableInvoice(
 		releasedToFinanceAt?: Date | null
 		payablesClosedAt?: Date | null
 		payrollRunId?: string | null
+		pbccRequestSentAt?: Date | null
 	} = {},
 ) {
 	const supervisorId =
@@ -373,6 +379,10 @@ export async function seedFinanceableInvoice(
 			contractorAccountCode: overrides.contractorAccountCode ?? null,
 			payablesClosedAt: overrides.payablesClosedAt ?? null,
 			payrollRunId: overrides.payrollRunId ?? null,
+			pbccRequestSentAt:
+				overrides.pbccRequestSentAt === undefined
+					? new Date()
+					: overrides.pbccRequestSentAt,
 		},
 	})
 }

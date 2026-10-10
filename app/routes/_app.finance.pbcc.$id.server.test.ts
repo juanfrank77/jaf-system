@@ -51,7 +51,10 @@ describe("L2 Packet", () => {
 		const account = t.track("contractorAccount", await seedContractorAccount())
 		const doc = t.track(
 			"jafInvoice",
-			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+				pbccRequestSentAt: null,
+			}),
 		)
 
 		const form = new URLSearchParams({
@@ -79,7 +82,10 @@ describe("L2 Packet", () => {
 		const account = t.track("contractorAccount", await seedContractorAccount())
 		const doc = t.track(
 			"jafInvoice",
-			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+				pbccRequestSentAt: null,
+			}),
 		)
 		const submit = () =>
 			action({
@@ -103,7 +109,10 @@ describe("L2 Packet", () => {
 		mocks.requireRole.mockResolvedValue({ user: finance })
 		const doc = t.track(
 			"jafInvoice",
-			await seedFinanceableInvoice({ payablesClosedAt: new Date() }),
+			await seedFinanceableInvoice({
+				payablesClosedAt: new Date(),
+				pbccRequestSentAt: null,
+			}),
 		)
 		let location: string | null = null
 		try {

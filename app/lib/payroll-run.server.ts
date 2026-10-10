@@ -72,6 +72,33 @@ export function armAOpenWhere(
 	}
 }
 
+/**
+ * What a payroll run may sweep: everything open on Arm A whose bank request
+ * has been sent to PBCC (spec §3). Funding is NOT part of the gate: JAF's rule
+ * so far is "complete and sent before the brigade is paid"; whether pay is held
+ * until PBCC funds is unconfirmed. To gate on funding later, add
+ * `advanceReceivedAt: { not: null }` here. `armAOpenWhere` itself is unchanged,
+ * so the packets list and packet view keep showing unsent jobs. Nothing here
+ * filters on `active`: an inactive brigade is still paid.
+ */
+export function sweepableWhere(): Prisma.JafInvoiceWhereInput {
+	return { ...armAOpenWhere(), pbccRequestSentAt: { not: null } }
+}
+
+/** Info only (finance screens): how many sweepable packets are already funded. */
+export async function countFundedSweepableJobs(): Promise<number> {
+	const docs = await db.jafInvoice.findMany({
+		where: { ...sweepableWhere(), advanceReceivedAt: { not: null } },
+		select: { contractorAccountCode: true },
+	})
+	const resolved = await resolveContractorAccounts(
+		docs.map((d) => d.contractorAccountCode),
+	)
+	return docs.filter(
+		(d) => d.contractorAccountCode && resolved.has(d.contractorAccountCode),
+	).length
+}
+
 /** Thrown (before anything is written) when a run would contain no jobs. */
 export class EmptyRunError extends Error {
 	constructor() {
@@ -91,7 +118,7 @@ export async function countSweepableJobs(
 ): Promise<number> {
 	const docs = await db.jafInvoice.findMany({
 		where: {
-			...armAOpenWhere(),
+			...sweepableWhere(),
 			...(excludeIds.length ? { id: { notIn: [...excludeIds] } } : {}),
 		},
 		select: { contractorAccountCode: true },
@@ -119,7 +146,7 @@ export async function generateRun(opts: {
 	const excludeIds = opts.excludeIds ?? []
 	const candidates = await db.jafInvoice.findMany({
 		where: {
-			...armAOpenWhere(),
+			...sweepableWhere(),
 			...(excludeIds.length ? { id: { notIn: [...excludeIds] } } : {}),
 		},
 		select: { id: true, jafInvoiceLines: true, contractorAccountCode: true },
@@ -169,6 +196,7 @@ export async function generateRun(opts: {
 				data: { label: opts.label, generatedById: opts.generatedById },
 			})
 			let swept = 0
+			const claimedAccountIds = new Set<string>()
 			for (const doc of toSweep) {
 				const { payment } = doc
 				const result = await tx.jafInvoice.updateMany({
@@ -182,11 +210,30 @@ export async function generateRun(opts: {
 						netPayable: payment.netPayable,
 					},
 				})
+				if (result.count > 0) claimedAccountIds.add(doc.accountId)
 				swept += result.count
 			}
 			// Every candidate was claimed by a concurrent run: roll back rather than
 			// leave an empty run that could be marked paid.
 			if (swept === 0) throw new EmptyRunError()
+			await tx.payrollRunAccount.createMany({
+				data: [...claimedAccountIds].map((contractorAccountId) => ({
+					payrollRunId: created.id,
+					contractorAccountId,
+				})),
+			})
+			const comptrollers = await tx.user.findMany({
+				where: { role: "COMPTROLLER", active: true },
+				select: { id: true },
+			})
+			if (comptrollers.length > 0) {
+				await tx.notification.createMany({
+					data: comptrollers.map((u) => ({
+						userId: u.id,
+						message: `Production Journal ${opts.label} is ready to pay — ${claimedAccountIds.size} accounts.`,
+					})),
+				})
+			}
 			return { created, swept }
 			// The first run sweeps the whole released backlog (one write per job), so
 			// the 5s interactive-transaction default is not enough.

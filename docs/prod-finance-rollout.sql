@@ -1,7 +1,8 @@
 -- Finance Arm A — production rollout SQL for IT
 -- Run with psql against the production database:  psql "$DATABASE_URL" -f ...
 -- (or paste a section at a time). See docs/prod-finance-rollout.md.
--- Sections 0 and 5 are read-only. No DROP, no TRUNCATE, no schema reset.
+-- Sections 0 and 5 are read-only (5b deletes rows but ships with ROLLBACK).
+-- No DROP, no TRUNCATE, no schema reset.
 -- Delete this file once the rollout is confirmed.
 
 \set ON_ERROR_STOP on
@@ -18,6 +19,12 @@ SELECT migration_name FROM "_prisma_migrations" ORDER BY finished_at DESC LIMIT 
 
 -- Write this list down: it is who can log in, and Section 5 must show the same.
 SELECT email, role, active FROM "User" ORDER BY role, email;
+
+-- expect: 4 rows — the old @jafcomm.local supervisors. This deploy replaces
+-- them with @jafcom.net addresses, and the old rows MUST then be deleted
+-- (Section 5b). Deactivating them is NOT enough: permissions.server.ts
+-- requireRole never reads user.active, so an inactive user still signs in.
+SELECT email, role FROM "User" WHERE email LIKE '%@jafcomm.local' ORDER BY email;
 
 -- expect: the 14 old brigades; crew (memberIds) on them is lost in Section 3.
 SELECT name, code, active, cardinality("memberIds") AS crew FROM "Brigade" ORDER BY name;
@@ -56,8 +63,49 @@ SELECT DISTINCT "contractorAccountCode"
  WHERE "contractorAccountCode" IS NOT NULL
    AND "contractorAccountCode" NOT IN (SELECT code FROM "ContractorAccount");
 
--- expect: the same list you wrote down in Section 0
+-- expect: the same list you wrote down in Section 0, plus the 4 replacement
+-- supervisors on @jafcom.net (the @jafcomm.local ones are still here until 5b).
 SELECT email, role, active FROM "User" ORDER BY role, email;
+
+-- expect: 4 rows, and each supervisor's areas must match the roster —
+-- Edgard Ocasio CENTRAL, Charlie González METRO, Luis Rivera NORTE,
+-- Ramón Ramos OESTE+SUR. `seedSupervisors` sets supervisorAreas on CREATE
+-- only (they are admin-managed afterwards), so these four are brand-new rows
+-- and this is the only check that they were created with the right areas.
+SELECT email, "supervisorAreas" FROM "User" WHERE role = 'SUPERVISOR' ORDER BY email;
+
+-- expect: 4 rows. These four logins are on CONSTRUCTED addresses — no client
+-- document gives Frank Ramos, Gilberto Ayala, Alfredo Medina or Catherine
+-- García an email, and Orlando's own data-request form leaves the counter post
+-- blank. Orlando's oguzman@jafcom.net is the only confirmed warehouse address.
+-- Each of these is a real credential on the shared SEED_TEMP_PASSWORD: correct
+-- the address before go-live. Setting active = false will NOT stop them signing
+-- in (see Section 0).
+SELECT email, name, active FROM "User"
+ WHERE email IN ('framos@jafcom.net', 'gayala@jafcom.net',
+                 'amedina@jafcom.net', 'cgarcia@jafcom.net')
+ ORDER BY email;
+
+-- ============================================================
+-- Section 5b — delete the replaced @jafcomm.local logins
+-- (AFTER seeding; once Section 5 is otherwise green)
+-- ============================================================
+
+-- The seed upserts supervisors by email, so the four new @jafcom.net accounts are
+-- created alongside the old ones rather than replacing them. Left in place, four
+-- extra working logins exist on an unroutable domain: they cannot receive a
+-- password reset, and nothing in the app stops them signing in.
+--
+-- Run with ROLLBACK first and read the count. Account rows cascade. A Doc row
+-- still pointing at one of these users has a REQUIRED supervisorId, so it will
+-- block the delete and abort the whole transaction — if that happens, stop and
+-- escalate; do not null the column by hand.
+BEGIN;
+SELECT email FROM "User" WHERE email LIKE '%@jafcomm.local' ORDER BY email;
+DELETE FROM "User" WHERE email LIKE '%@jafcomm.local';   -- expect: 4 rows
+ROLLBACK;
+
+-- Then re-run the Section 5 user query: expect 0 rows on @jafcomm.local.
 
 -- ============================================================
 -- APPENDIX — ONLY if Section 0 showed real jobs (otherwise skip entirely)

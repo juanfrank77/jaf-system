@@ -1896,11 +1896,11 @@
 			"verify_body": "Check the packet against the amounts the system computed before building the PBCC request.",
 			"pbcc_title": "Step 1 · You",
 			"pbcc_body": "The bank request carries the Aviso, the JAF invoice, the bank-format invoice and the bank Excel. When the bank pays, record the date and the amount PBCC paid: that starts the Arm B clock. Funding is shown for information; the packet joins the next Production Journal once the request is sent.",
-			"payroll_title": "Step 2 · Handoff",
+			"payroll_title": "Step 3 · Handoff",
 			"payroll_body": "Build the fortnightly run; the Comptroller pays the brigades and confirms. Every Aviso in the run flips to payroll confirmed here.",
-			"po_title": "Step 3 · You",
+			"po_title": "Step 4 · You",
 			"po_body": "Record the Claro PO against the Aviso — one Aviso can carry several POs. The balance is derived, never typed.",
-			"pipeline_title": "Step 4 · Handoff",
+			"pipeline_title": "Step 5 · Handoff",
 			"pipeline_body": "Record payments as they land and Close once both exist. A half-closed job is the normal state, not an error."
 		}
 	},

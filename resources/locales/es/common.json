@@ -1925,11 +1925,11 @@
 			"verify_body": "Revisa el paquete contra los montos que calculó el sistema antes de armar la solicitud PBCC.",
 			"pbcc_title": "Paso 1 · Tú",
 			"pbcc_body": "La solicitud al banco lleva el Aviso, la factura JAF, la factura en formato del banco y el Excel del banco. Cuando el banco paga, registre la fecha y el monto pagado por PBCC: eso inicia el reloj del Brazo B. El fondeo se muestra como información; el paquete entra al próximo Diario de Producción una vez enviada la solicitud.",
-			"payroll_title": "Paso 2 · Traspaso",
+			"payroll_title": "Paso 3 · Traspaso",
 			"payroll_body": "Arma la corrida quincenal; Contraloría paga a las brigadas y confirma. Cada Aviso de la corrida pasa aquí a nómina confirmada.",
-			"po_title": "Paso 3 · Tú",
+			"po_title": "Paso 4 · Tú",
 			"po_body": "Registra la PO de Claro contra el Aviso — un Aviso puede tener varias POs. El saldo se deriva, nunca se escribe.",
-			"pipeline_title": "Paso 4 · Traspaso",
+			"pipeline_title": "Paso 5 · Traspaso",
 			"pipeline_body": "Registra los pagos según lleguen y Cierra cuando existan ambos. Un trabajo medio cerrado es el estado normal, no un error."
 		}
 	},

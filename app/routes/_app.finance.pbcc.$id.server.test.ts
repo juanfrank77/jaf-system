@@ -379,6 +379,16 @@ describe("L2 Packet", () => {
 		expect(audit).toBe(1)
 	})
 
+	it("mark_funded accepts today's date", async () => {
+		const { doc } = await sentPacket()
+		const today = new Date().toLocaleDateString("en-CA")
+		expect(
+			await action(
+				fundForm(doc.id, { fundedDate: today, fundedAmount: "800" }),
+			),
+		).toEqual({ ok: true })
+	})
+
 	it("mark_funded refuses an unsent request (Review Focus 4)", async () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		mocks.requireRole.mockResolvedValue({ user: finance })

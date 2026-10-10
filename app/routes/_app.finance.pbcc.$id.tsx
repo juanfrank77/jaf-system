@@ -118,7 +118,8 @@ function parseFunding(
 	const date = new Date(`${rawDate}T12:00:00`)
 	if (Number.isNaN(date.getTime()))
 		return { errorKey: "finance_pbcc.errors.invalid_date" }
-	if (date.getTime() > Date.now())
+	// Compare calendar days (local), so "today" is allowed before noon.
+	if (rawDate > new Date().toLocaleDateString("en-CA"))
 		return { errorKey: "finance_pbcc.errors.future_date" }
 	const rawAmount = String(form.get("fundedAmount") ?? "").trim()
 	const amount = rawAmount === "" ? Number.NaN : Number(rawAmount)
@@ -553,7 +554,7 @@ export default function PbccRequest({
 				<div className="bg-card border rounded-lg p-4 space-y-3 text-sm">
 					<Badge variant="ok">
 						{t("finance_pbcc.funded_on", {
-							date: funded.date.toLocaleDateString(),
+							date: funded.date.toLocaleDateString("en-CA"),
 						})}{" "}
 						· {formatMoney(funded.amount)}
 						{funded.ref ? ` · ${funded.ref}` : ""}

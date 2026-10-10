@@ -87,7 +87,7 @@ export function parsePaidDate(raw: string | null | undefined):
  * it, and it has to keep serving a job that already has its LC request
  * generated — both are past the point where L1 would list them, but finance
  * still opens them. So `packetView` drops the `LC_REQUEST_GENERATED`
- * exclusion, the `payrollRunId: null` clause and the PBCC_ADVANCE absence.
+ * exclusion and the `payrollRunId: null` clause.
  *
  * What it deliberately does NOT drop: the `CANCELLED` exclusion, "was released
  * to finance", and "is not already closed". Those are the clauses that say
@@ -125,13 +125,9 @@ export function armAOpenWhere(
 		payablesClosedAt: null,
 		// "Not yet claimed" — what makes a job sweepable exactly once. Dropped
 		// in the packet view so finance can still open a job that has already
-		// been swept or that carries a legacy PBCC advance.
-		...(opts.packetView
-			? {}
-			: {
-					payrollRunId: null,
-					paymentRecords: { none: { type: "PBCC_ADVANCE" } },
-				}),
+		// been swept. Funding (a PBCC_ADVANCE payment record) is deliberately
+		// NOT a clause: a sent packet is swept whether or not PBCC has funded it.
+		...(opts.packetView ? {} : { payrollRunId: null }),
 	}
 }
 

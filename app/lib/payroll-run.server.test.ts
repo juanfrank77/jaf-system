@@ -271,7 +271,7 @@ describe("generateRun", () => {
 
 	it("sweeps every Arm-A-open invoice in the candidate set", async () => {
 		// PDF Part 3 §15.4: the sweep takes every job that is Arm-A-open —
-		// released, not closed, no PBCC advance, no payroll run yet.
+		// released, not closed, no payroll run yet.
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		const account = t.track(
 			"contractorAccount",
@@ -306,13 +306,19 @@ describe("generateRun", () => {
 		expect(reloadB.payrollRunId).toBe(run.id)
 	})
 
-	it("excludes a job that already has a PBCC_ADVANCE payment record (legacy boundary)", async () => {
+	it("sweeps a funded packet: a PBCC_ADVANCE payment record does not gate the run", async () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		const account = t.track("contractorAccount", await seedContractorAccount())
 		const doc = t.track(
 			"jafInvoice",
-			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+			}),
 		)
+		await db.jafInvoice.update({
+			where: { id: doc.id },
+			data: { advanceReceivedAt: new Date(), advanceAmount: 80 },
+		})
 		const recorder = t.track("user", await seedUser({ role: "FINANCE" }))
 		t.track(
 			"paymentRecord",
@@ -330,13 +336,13 @@ describe("generateRun", () => {
 		await seedSweepFiller()
 		const { run } = await generateRun({
 			generatedById: finance.id,
-			label: "R-legacy",
+			label: "R-funded",
 		})
 		t.track("payrollRun", run as { id: string })
 		const reloaded = await db.jafInvoice.findUniqueOrThrow({
 			where: { id: doc.id },
 		})
-		expect(reloaded.payrollRunId).toBeNull()
+		expect(reloaded.payrollRunId).toBe(run.id)
 	})
 
 	it("does not sweep an unsent packet, and does sweep it once sent; funding is irrelevant (spec §3)", async () => {
@@ -386,10 +392,23 @@ describe("generateRun", () => {
 			}),
 		)
 		expect(await countFundedSweepableJobs()).toBe(before)
+		const recorder = t.track("user", await seedUser({ role: "FINANCE" }))
 		await db.jafInvoice.update({
 			where: { id: sent.id },
 			data: { advanceReceivedAt: new Date(), advanceAmount: 80 },
 		})
+		t.track(
+			"paymentRecord",
+			await db.paymentRecord.create({
+				data: {
+					jobId: sent.id,
+					type: "PBCC_ADVANCE",
+					amount: 80,
+					date: new Date(),
+					recordedById: recorder.id,
+				},
+			}),
+		)
 		expect(await countFundedSweepableJobs()).toBe(before + 1)
 	})
 

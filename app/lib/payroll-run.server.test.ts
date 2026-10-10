@@ -1,9 +1,10 @@
-import { afterAll, describe, expect, it, vi } from "vitest"
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest"
 import { db } from "~/lib/db.server"
 import {
 	armAOpenWhere,
 	buildJournalBlocks,
 	closePayrollRun,
+	closePayrollRunAccount,
 	countFundedSweepableJobs,
 	EmptyRunError,
 	generateRun,
@@ -597,6 +598,222 @@ describe("closePayrollRun", () => {
 			where: { userId: finance.id },
 		})
 		expect(afterReplayNotifs.length).toBe(firstNotifs.length)
+	})
+})
+
+describe("closePayrollRunAccount", () => {
+	async function twoAccountRun() {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		const comptroller = t.track("user", await seedUser({ role: "COMPTROLLER" }))
+		const a = t.track("contractorAccount", await seedContractorAccount())
+		const b = t.track("contractorAccount", await seedContractorAccount())
+		const docs = []
+		for (const code of [a.code, b.code]) {
+			docs.push(
+				t.track(
+					"jafInvoice",
+					await seedFinanceableInvoice({
+						contractorAccountCode: code,
+						jafInvoiceLines: ONE_LINE_100,
+					}),
+				),
+			)
+		}
+		const { run } = await generateRun({
+			generatedById: finance.id,
+			label: `acct-${Date.now()}`,
+		})
+		t.track("payrollRun", run)
+		return { finance, comptroller, a, b, docs, run }
+	}
+
+	it("ticks one account: stamps only that account's jobs, leaves the run open", async () => {
+		const { comptroller, a, docs, run } = await twoAccountRun()
+		const res = await closePayrollRunAccount({
+			runId: run.id,
+			accountId: a.id,
+			paidById: comptroller.id,
+			paidDate: new Date(),
+			confirmedByFallback: false,
+		})
+		expect(res.runClosed).toBe(false)
+		const [d0, d1] = await Promise.all(
+			docs.map((d) => db.jafInvoice.findUniqueOrThrow({ where: { id: d.id } })),
+		)
+		expect(d0.payablesClosedAt).not.toBeNull()
+		expect(d0.payablesClosedById).toBe(comptroller.id)
+		expect(d1.payablesClosedAt).toBeNull()
+		const r = await db.payrollRun.findUniqueOrThrow({ where: { id: run.id } })
+		expect(r.paidAt).toBeNull()
+	})
+
+	it("the last tick closes the run and notifies finance exactly once", async () => {
+		const { finance, comptroller, a, b, run } = await twoAccountRun()
+		const base = {
+			runId: run.id,
+			paidById: comptroller.id,
+			paidDate: new Date(),
+			confirmedByFallback: false,
+		}
+		await closePayrollRunAccount({ ...base, accountId: a.id })
+		const last = await closePayrollRunAccount({ ...base, accountId: b.id })
+		expect(last.runClosed).toBe(true)
+		const r = await db.payrollRun.findUniqueOrThrow({ where: { id: run.id } })
+		expect(r.paidAt).not.toBeNull()
+		const notes = await db.notification.findMany({
+			where: { userId: finance.id, message: { contains: run.label } },
+		})
+		for (const n of notes) t.track("notification", n)
+		expect(notes).toHaveLength(1)
+	})
+
+	it("rejects a replayed tick with 409 and does not re-stamp (Review Focus 1)", async () => {
+		const { comptroller, a, docs, run } = await twoAccountRun()
+		const base = {
+			runId: run.id,
+			accountId: a.id,
+			paidById: comptroller.id,
+			paidDate: new Date(),
+			confirmedByFallback: false,
+		}
+		await closePayrollRunAccount(base)
+		const before = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: docs[0].id },
+		})
+		await expect(closePayrollRunAccount(base)).rejects.toMatchObject({
+			status: 409,
+		})
+		const after = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: docs[0].id },
+		})
+		expect(after.payablesClosedAt).toEqual(before.payablesClosedAt)
+	})
+
+	it("two concurrent last ticks close the run once and notify once (Review Focus 2)", async () => {
+		const { finance, comptroller, a, b, run } = await twoAccountRun()
+		const base = {
+			runId: run.id,
+			paidById: comptroller.id,
+			paidDate: new Date(),
+			confirmedByFallback: false,
+		}
+		const results = await Promise.all([
+			closePayrollRunAccount({ ...base, accountId: a.id }),
+			closePayrollRunAccount({ ...base, accountId: b.id }),
+		])
+		expect(results.filter((r) => r.runClosed)).toHaveLength(1)
+		const notes = await db.notification.findMany({
+			where: { userId: finance.id, message: { contains: run.label } },
+		})
+		for (const n of notes) t.track("notification", n)
+		expect(notes).toHaveLength(1)
+	})
+
+	it("404s for an account that is not part of the run (Review Focus 5)", async () => {
+		const { comptroller, run } = await twoAccountRun()
+		const other = t.track("contractorAccount", await seedContractorAccount())
+		await expect(
+			closePayrollRunAccount({
+				runId: run.id,
+				accountId: other.id,
+				paidById: comptroller.id,
+				paidDate: new Date(),
+				confirmedByFallback: false,
+			}),
+		).rejects.toMatchObject({ status: 404 })
+	})
+
+	describe("fallback switch (PAYROLL_FALLBACK_ENABLED)", () => {
+		const original = process.env.PAYROLL_FALLBACK_ENABLED
+		afterEach(() => {
+			if (original === undefined) delete process.env.PAYROLL_FALLBACK_ENABLED
+			else process.env.PAYROLL_FALLBACK_ENABLED = original
+		})
+
+		it("refuses a fallback tick with 403 when switched off; the comptroller tick still works (Review Focus 6)", async () => {
+			const { finance, comptroller, a, b, run } = await twoAccountRun()
+			process.env.PAYROLL_FALLBACK_ENABLED = "false"
+			const base = { runId: run.id, paidDate: new Date() }
+			await expect(
+				closePayrollRunAccount({
+					...base,
+					accountId: a.id,
+					paidById: finance.id,
+					confirmedByFallback: true,
+				}),
+			).rejects.toMatchObject({ status: 403 })
+			await expect(
+				closePayrollRun({
+					...base,
+					paidById: finance.id,
+					confirmedByFallback: true,
+				}),
+			).rejects.toMatchObject({ status: 403 })
+			const untouched = await db.payrollRunAccount.count({
+				where: { payrollRunId: run.id, paidAt: null },
+			})
+			expect(untouched).toBe(2)
+			await closePayrollRunAccount({
+				...base,
+				accountId: b.id,
+				paidById: comptroller.id,
+				confirmedByFallback: false,
+			})
+			const row = await db.payrollRunAccount.findFirstOrThrow({
+				where: { payrollRunId: run.id, contractorAccountId: b.id },
+			})
+			expect(row.paidAt).not.toBeNull()
+		})
+
+		it("allows and tags a fallback tick when on (default when unset), and flags the run", async () => {
+			delete process.env.PAYROLL_FALLBACK_ENABLED
+			const { finance, comptroller, a, b, run } = await twoAccountRun()
+			const base = { runId: run.id, paidDate: new Date() }
+			await closePayrollRunAccount({
+				...base,
+				accountId: b.id,
+				paidById: finance.id,
+				confirmedByFallback: true,
+			})
+			await closePayrollRunAccount({
+				...base,
+				accountId: a.id,
+				paidById: comptroller.id,
+				confirmedByFallback: false,
+			})
+			const tagged = await db.payrollRunAccount.findMany({
+				where: { payrollRunId: run.id, confirmedByFallback: true },
+			})
+			expect(tagged).toHaveLength(1)
+			const r = await db.payrollRun.findUniqueOrThrow({ where: { id: run.id } })
+			expect(r.paidAt).not.toBeNull()
+			// the LAST tick was Carmen's (not fallback), but the run is still flagged
+			expect(r.confirmedByFallback).toBe(true)
+		})
+	})
+
+	it("closePayrollRun (whole-run confirm) ticks every remaining account as fallback", async () => {
+		const { finance, a, run } = await twoAccountRun()
+		await closePayrollRunAccount({
+			runId: run.id,
+			accountId: a.id,
+			paidById: finance.id,
+			paidDate: new Date(),
+			confirmedByFallback: false,
+		})
+		await closePayrollRun({
+			runId: run.id,
+			paidById: finance.id,
+			paidDate: new Date(),
+			confirmedByFallback: true,
+		})
+		const rows = await db.payrollRunAccount.findMany({
+			where: { payrollRunId: run.id },
+		})
+		expect(rows.every((r) => r.paidAt !== null)).toBe(true)
+		expect(rows.filter((r) => r.confirmedByFallback)).toHaveLength(1)
+		const r = await db.payrollRun.findUniqueOrThrow({ where: { id: run.id } })
+		expect(r.paidAt).not.toBeNull()
 	})
 })
 

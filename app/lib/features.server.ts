@@ -17,3 +17,12 @@ export function isVarianceEnabled(): boolean {
 export function isDashboardFiltersEnabled(): boolean {
 	return process.env.ENABLE_DASHBOARD_FILTERS !== "false"
 }
+
+/**
+ * Finance may confirm payroll accounts from paper while Carmen's flow runs
+ * side by side with the paper journal. Set PAYROLL_FALLBACK_ENABLED=false at
+ * go-live: after that only the comptroller ticks. On unless set to "false".
+ */
+export function isPayrollFallbackEnabled(): boolean {
+	return process.env.PAYROLL_FALLBACK_ENABLED !== "false"
+}

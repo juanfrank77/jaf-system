@@ -14,49 +14,18 @@ import {
 	buildJournalBlocks,
 	closePayrollRun,
 	closePayrollRunAccount,
+	parsePaidDate,
+	RUN_INVOICES,
 } from "~/lib/payroll-run.server"
 import { generateProductionJournalPdf } from "~/lib/pdf/production-journal.server"
 import { requireRole } from "~/lib/permissions.server"
 import { saveUpload } from "~/lib/uploads.server"
 import { formatMoney } from "~/lib/utils"
-import type { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.finance.payroll.$runId"
 
 export const meta: Route.MetaFunction = () => [
 	{ title: "Payroll run — JAF Ops" },
 ]
-
-const INVOICE_SELECT = {
-	id: true,
-	controlNumber: true,
-	avisoNumber: true,
-	contractorShareLines: true,
-	contractorAccount: {
-		select: {
-			id: true,
-			code: true,
-			label: true,
-		},
-	},
-} as const
-
-/**
- * A run's invoices, in the ONE order the journal is ever rendered in.
- *
- * `buildJournalBlocks` sorts blocks by brigade code and jobs by controlNumber
- * internally, so the DB row order only needs to be deterministic. We order by
- * `releasedToFinanceAt` (batch release) with `id` as a tiebreaker so the same
- * set of invoices renders identically on every page load — the running
- * totals in the PDF are derived from this set, so a shifting order would
- * produce a different journal between the screen and a PDF printed from it.
- *
- * Shared by the loader and the PDF branch on purpose — the printed journal
- * has to agree with the screen, and a duplicated literal is how they drift.
- */
-const RUN_INVOICES = {
-	select: INVOICE_SELECT,
-	orderBy: [{ releasedToFinanceAt: "asc" }, { id: "asc" }],
-} as const satisfies Prisma.PayrollRun$invoicesArgs
 
 /**
  * `validateFile(file, "file")` only enforces blocked extensions and the 40MB
@@ -103,30 +72,6 @@ const ERROR_KEYS = {
 } as const
 
 type ActionErrorKey = keyof typeof ERROR_KEYS
-
-/**
- * Validates the `paidDate` form field shared by the whole-run and per-account
- * confirms. `<input type="date">` posts YYYY-MM-DD; `new Date("YYYY-MM-DD")`
- * is UTC midnight, which renders as the previous day in Puerto Rico (UTC-4),
- * so the date is anchored at local noon instead.
- */
-function parsePaidDate(
-	raw: string | null | undefined,
-): { date: Date } | { errorKey: ActionErrorKey } {
-	const value = raw?.trim()
-	if (!value) return { errorKey: "finance_payroll.errors.missing_fields" }
-	if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-		return { errorKey: "finance_payroll.errors.invalid_date" }
-	}
-	const date = new Date(`${value}T12:00:00`)
-	if (Number.isNaN(date.getTime())) {
-		return { errorKey: "finance_payroll.errors.invalid_date" }
-	}
-	if (date.getTime() > Date.now()) {
-		return { errorKey: "finance_payroll.errors.future_date" }
-	}
-	return { date }
-}
 
 export async function loader({ request, params }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])

@@ -180,7 +180,7 @@
 			"warehouse_scan_in": "Registrar Devolución",
 			"warehouse_restock": "Reabastecimientos por Liberar",
 			"warehouse_stock": "Inventario",
-			"comptroller": "Contraloría",
+			"comptroller": "Brigadas · nómina",
 			"finance_payroll": "Nómina pendiente"
 		},
 		"notifications": {
@@ -1452,98 +1452,6 @@
 		"sync_pending_one": "{{count}} cambio pendiente de sincronización",
 		"sync_pending_other": "{{count}} cambios pendientes de sincronización"
 	},
-	"comptroller_dashboard": {
-		"title": "Contraloría",
-		"role_label": "Contraloría",
-		"stat": {
-			"incoming_docs": "Documentos entrantes",
-			"unread_docs_one": "{{count}} sin leer",
-			"unread_docs_other": "{{count}} sin leer",
-			"awaiting_funds": "Fondos pendientes",
-			"crews_to_pay": "Cuadrillas por pagar"
-		},
-		"incoming_docs_heading": "Documentos entrantes",
-		"no_incoming_docs": "Aún no hay documentos entrantes.",
-		"unread_badge": "Sin leer",
-		"sent_on": "Enviado el {{date}}",
-		"download_pbcc": "Descargar solicitud PBCC",
-		"mark_read": "Marcar como leído",
-		"awaiting_advance_heading": "Esperando adelanto PBCC ({{rate}}%)",
-		"no_awaiting_advance": "No hay trabajos esperando adelanto PBCC.",
-		"awaiting_funds_badge": "Esperando fondos",
-		"expected_advance": "Adelanto esperado: {{amount}}",
-		"awaiting_final_heading": "Esperando pago final de Claro",
-		"no_awaiting_final": "No hay trabajos esperando pago final.",
-		"awaiting_final_badge": "Esperando pago final",
-		"invoice_amount": "Monto de factura: {{amount}}",
-		"crews_to_pay_heading": "Cuadrillas por pagar",
-		"no_crews_to_pay": "No hay cuadrillas esperando pago.",
-		"crew_unpaid_badge": "Cuadrilla sin pagar",
-		"advance_received": "Adelanto recibido: {{amount}}",
-		"crew_label": "Cuadrilla"
-	},
-	"comptroller_detail": {
-		"title": "Detalle del trabajo — Contraloría",
-		"unread_badge": "Sin leer",
-		"back": "Volver al panel de contraloría",
-		"job_type": "Tipo de trabajo",
-		"address": "Dirección",
-		"supervisor": "Supervisor",
-		"current_crew": "Cuadrilla actual",
-		"invoice_amount": "Monto de factura",
-		"expected_advance": "Adelanto PBCC esperado ({{rate}}%)",
-		"advance_status": "Adelanto PBCC",
-		"final_status": "Pago final de Claro",
-		"crew_payment_status": "Pago de cuadrilla",
-		"status_recorded": "Registrado",
-		"status_pending": "Pendiente",
-		"incoming_doc_heading": "Solicitud PBCC entrante",
-		"sent_on": "Enviado el {{date}}",
-		"download_pbcc": "Descargar solicitud PBCC",
-		"record_advance_heading": "Registrar adelanto PBCC",
-		"date_label": "Fecha",
-		"payment_note_label": "Nota del pago",
-		"amount_label": "Monto",
-		"record_advance_submit": "Registrar adelanto",
-		"advance_recorded": "Adelanto de {{amount}} registrado el {{date}}",
-		"record_crew_payment_heading": "Registrar pago de cuadrilla",
-		"crew_payment_recorded": "Pago de cuadrilla registrado.",
-		"record_crew_payment_submit": "Registrar pago de cuadrilla",
-		"note_label": "Nota",
-		"note_placeholder": "Nota opcional…",
-		"crew_amount_placeholder": "Monto del pago a cuadrilla",
-		"record_final_heading": "Registrar pago final de Claro",
-		"record_final_submit": "Registrar pago final",
-		"final_recorded": "Pago final de {{amount}} registrado el {{date}}",
-		"final_amount_placeholder": "Monto del pago final",
-		"crew_history_heading": "Historial de asignación de cuadrilla",
-		"crew_history_assigned": "Asignado el {{date}} por {{by}}",
-		"payment_records_heading": "Registros de pago",
-		"no_payment_records": "Aún no hay registros de pago.",
-		"table": {
-			"date": "Fecha",
-			"type": "Tipo",
-			"amount": "Monto",
-			"recorded_by": "Registrado por",
-			"note": "Nota"
-		},
-		"discrepancy_badge": "Discrepancia",
-		"discrepancy_notice": "El monto real difiere del esperado {{expected}}.",
-		"errors": {
-			"invalid_amount": "Ingresa un monto positivo válido.",
-			"invalid_date": "Ingresa una fecha válida.",
-			"advance_already_recorded": "El adelanto PBCC ya fue registrado para este trabajo.",
-			"final_already_recorded": "El pago final de Claro ya fue registrado para este trabajo.",
-			"amount_exceeds_invoice_total": "El pago de cuadrilla no puede exceder el monto total de la factura.",
-			"crew_payment_already_recorded": "El pago de cuadrilla ya fue registrado para este trabajo.",
-			"unknown_intent": "Acción desconocida."
-		},
-		"success": {
-			"advance_recorded": "Adelanto PBCC registrado. Finanzas ha sido notificado.",
-			"final_recorded": "Pago final de Claro registrado. El cierre está desbloqueado.",
-			"crew_payment_recorded": "Pago de cuadrilla registrado."
-		}
-	},
 	"installer": {
 		"scan": {
 			"cant_scan": "No se puede escanear — toma una foto en su lugar"
@@ -1933,26 +1841,6 @@
 			"pipeline_body": "Registra los pagos según lleguen y Cierra cuando existan ambos. Un trabajo medio cerrado es el estado normal, no un error."
 		}
 	},
-	"comptroller_flow": {
-		"aria": "Pagos de Contraloría",
-		"step": {
-			"advance": "Adelanto PBCC",
-			"crew": "Pago a la brigada",
-			"final": "Final de Claro"
-		},
-		"callout": {
-			"dashboard_title": "Tus tres pagos",
-			"dashboard_body": "Cada trabajo necesita registrados el adelanto PBCC, el pago a la brigada y el pago final de Claro. Finanzas crea cada fila; tú registras que el dinero se movió.",
-			"advance_title": "Paso 1 · Tú",
-			"advance_body": "Registra el adelanto PBCC cuando el depósito aparezca en el banco.",
-			"crew_title": "Paso 2 · Tú",
-			"crew_body": "Registra el pago a la brigada cuando ya se le haya pagado.",
-			"final_title": "Paso 3 · Tú",
-			"final_body": "Registra el pago final de Claro cuando llegue. Finanzas ya puede cerrar el trabajo.",
-			"done_title": "Todo registrado · Traspaso",
-			"done_body": "Los tres pagos están registrados. Finanzas cierra el trabajo."
-		}
-	},
 	"job_flow": {
 		"aria": "Progreso del trabajo",
 		"step": {
@@ -2023,5 +1911,29 @@
 	"photo_capture": {
 		"take": "Tomar foto",
 		"remove": "Quitar foto"
+	},
+	"comptroller_payroll": {
+		"title": "Brigadas · nómina",
+		"callout_title": "Su paso",
+		"callout_body": "Abra una corrida, pague cada cuenta en WinPay y márquela aquí. Finanzas ve quién ha sido pagado.",
+		"runs_to_pay": "Corridas por pagar",
+		"paid_runs": "Corridas pagadas",
+		"accounts_progress": "{{paid}} de {{total}} cuentas",
+		"paid_button": "Pagado",
+		"paid_by": "Pagado {{date}} por {{name}}",
+		"from_paper": "confirmado del papel por finanzas",
+		"empty": "Aún no hay corridas.",
+		"back": "Volver a corridas",
+		"download_pdf": "Descargar PDF del diario",
+		"col": {
+			"account": "Cta.",
+			"contractor": "Contratista",
+			"jobs": "Trabajos",
+			"gross": "Bruto",
+			"net": "Neto",
+			"retention": "10% Ret.",
+			"adj_net_running": "Neto ajust. acumulado",
+			"status": "Estado"
+		}
 	}
 }

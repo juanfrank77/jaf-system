@@ -180,7 +180,7 @@
 			"warehouse_scan_in": "Scan In Return",
 			"warehouse_restock": "Restocks to Release",
 			"warehouse_stock": "Stock",
-			"comptroller": "Comptroller",
+			"comptroller": "Brigades · payroll",
 			"finance_payroll": "Awaiting payroll"
 		},
 		"notifications": {
@@ -1452,98 +1452,6 @@
 		"sync_pending_one": "{{count}} change pending sync",
 		"sync_pending_other": "{{count}} changes pending sync"
 	},
-	"comptroller_dashboard": {
-		"title": "Comptroller",
-		"role_label": "Comptroller",
-		"stat": {
-			"incoming_docs": "Incoming docs",
-			"unread_docs_one": "{{count}} unread",
-			"unread_docs_other": "{{count}} unread",
-			"awaiting_funds": "Awaiting funds",
-			"crews_to_pay": "Crews to pay"
-		},
-		"incoming_docs_heading": "Incoming Documents",
-		"no_incoming_docs": "No incoming documents yet.",
-		"unread_badge": "Unread",
-		"sent_on": "Sent on {{date}}",
-		"download_pbcc": "Download PBCC request",
-		"mark_read": "Mark read",
-		"awaiting_advance_heading": "Awaiting PBCC Advance ({{rate}}%)",
-		"no_awaiting_advance": "No jobs waiting for PBCC advance.",
-		"awaiting_funds_badge": "Awaiting funds",
-		"expected_advance": "Expected advance: {{amount}}",
-		"awaiting_final_heading": "Awaiting Claro Final Payment",
-		"no_awaiting_final": "No jobs waiting for final payment.",
-		"awaiting_final_badge": "Awaiting final payment",
-		"invoice_amount": "Invoice amount: {{amount}}",
-		"crews_to_pay_heading": "Crews to Pay",
-		"no_crews_to_pay": "No crews waiting for payment.",
-		"crew_unpaid_badge": "Crew unpaid",
-		"advance_received": "Advance received: {{amount}}",
-		"crew_label": "Crew"
-	},
-	"comptroller_detail": {
-		"title": "Comptroller Job Detail",
-		"unread_badge": "Unread",
-		"back": "Back to comptroller dashboard",
-		"job_type": "Job type",
-		"address": "Address",
-		"supervisor": "Supervisor",
-		"current_crew": "Current crew",
-		"invoice_amount": "Invoice amount",
-		"expected_advance": "Expected PBCC advance ({{rate}}%)",
-		"advance_status": "PBCC advance",
-		"final_status": "Claro final payment",
-		"crew_payment_status": "Crew payment",
-		"status_recorded": "Recorded",
-		"status_pending": "Pending",
-		"incoming_doc_heading": "Incoming PBCC Request",
-		"sent_on": "Sent on {{date}}",
-		"download_pbcc": "Download PBCC request",
-		"record_advance_heading": "Record PBCC Advance",
-		"date_label": "Date",
-		"payment_note_label": "Payment note",
-		"amount_label": "Amount",
-		"record_advance_submit": "Record advance",
-		"advance_recorded": "Advance of {{amount}} recorded on {{date}}",
-		"record_crew_payment_heading": "Record Crew Payment",
-		"crew_payment_recorded": "Crew payment recorded.",
-		"record_crew_payment_submit": "Record crew payment",
-		"note_label": "Note",
-		"note_placeholder": "Optional note…",
-		"crew_amount_placeholder": "Crew payment amount",
-		"record_final_heading": "Record Claro Final Payment",
-		"record_final_submit": "Record final payment",
-		"final_recorded": "Final payment of {{amount}} recorded on {{date}}",
-		"final_amount_placeholder": "Final payment amount",
-		"crew_history_heading": "Crew Assignment History",
-		"crew_history_assigned": "Assigned on {{date}} by {{by}}",
-		"payment_records_heading": "Payment Records",
-		"no_payment_records": "No payment records yet.",
-		"table": {
-			"date": "Date",
-			"type": "Type",
-			"amount": "Amount",
-			"recorded_by": "Recorded by",
-			"note": "Note"
-		},
-		"discrepancy_badge": "Discrepancy",
-		"discrepancy_notice": "Actual amount differs from expected {{expected}}.",
-		"errors": {
-			"invalid_amount": "Enter a valid positive amount.",
-			"invalid_date": "Enter a valid date.",
-			"advance_already_recorded": "PBCC advance has already been recorded for this job.",
-			"final_already_recorded": "Claro final payment has already been recorded for this job.",
-			"amount_exceeds_invoice_total": "Crew payment cannot exceed the invoice total.",
-			"crew_payment_already_recorded": "Crew payment has already been recorded for this job.",
-			"unknown_intent": "Unknown action."
-		},
-		"success": {
-			"advance_recorded": "PBCC advance recorded. Finance has been notified.",
-			"final_recorded": "Claro final payment recorded. Close entry is unlocked.",
-			"crew_payment_recorded": "Crew payment recorded."
-		}
-	},
 	"installer": {
 		"scan": {
 			"cant_scan": "Can't scan — take a photo instead"
@@ -1904,26 +1812,6 @@
 			"pipeline_body": "Record payments as they land and Close once both exist. A half-closed job is the normal state, not an error."
 		}
 	},
-	"comptroller_flow": {
-		"aria": "Comptroller payments",
-		"step": {
-			"advance": "PBCC advance",
-			"crew": "Crew payment",
-			"final": "Claro final"
-		},
-		"callout": {
-			"dashboard_title": "Your three payments",
-			"dashboard_body": "Every job needs the PBCC advance, the crew payment and Claro's final payment recorded. Finance creates each row; you record that the money moved.",
-			"advance_title": "Step 1 · You",
-			"advance_body": "Record the PBCC advance when the deposit shows in the bank.",
-			"crew_title": "Step 2 · You",
-			"crew_body": "Record the crew payment when the crew has been paid.",
-			"final_title": "Step 3 · You",
-			"final_body": "Record Claro's final payment when it arrives. Finance can then close the job.",
-			"done_title": "All recorded · Handoff",
-			"done_body": "All three payments are recorded. Finance closes the job."
-		}
-	},
 	"warehouse_flow": {
 		"aria": "Warehouse work loop",
 		"step": {
@@ -2023,5 +1911,29 @@
 	"photo_capture": {
 		"take": "Take photo",
 		"remove": "Remove photo"
+	},
+	"comptroller_payroll": {
+		"title": "Brigades · payroll",
+		"callout_title": "Your step",
+		"callout_body": "Open a run, pay each account in WinPay, then tick it here. Finance sees who has been paid.",
+		"runs_to_pay": "Runs to pay",
+		"paid_runs": "Paid runs",
+		"accounts_progress": "{{paid}} of {{total}} accounts",
+		"paid_button": "Paid",
+		"paid_by": "Paid {{date}} by {{name}}",
+		"from_paper": "confirmed from paper by finance",
+		"empty": "No runs yet.",
+		"back": "Back to runs",
+		"download_pdf": "Download journal PDF",
+		"col": {
+			"account": "Acct",
+			"contractor": "Contractor",
+			"jobs": "Jobs",
+			"gross": "Gross",
+			"net": "Net",
+			"retention": "10% Ret.",
+			"adj_net_running": "Adj. net running",
+			"status": "Status"
+		}
 	}
 }

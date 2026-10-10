@@ -5,7 +5,10 @@ import { FinanceStepRail } from "~/components/finance-step-rail"
 import { Button } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
 import { db } from "~/lib/db.server"
+import { isPayrollFallbackEnabled } from "~/lib/features.server"
 import {
+	blockedSentJobs,
+	countFundedSweepableJobs,
 	countSweepableJobs,
 	EmptyRunError,
 	generateRun,
@@ -19,7 +22,7 @@ export const meta: Route.MetaFunction = () => [
 
 export async function loader({ request }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])
-	const [openRuns, openJobCount] = await Promise.all([
+	const [openRuns, sentReady, fundedReady, blocked] = await Promise.all([
 		db.payrollRun.findMany({
 			where: { paidAt: null, reversedAt: null },
 			orderBy: { generatedAt: "asc" },
@@ -31,8 +34,18 @@ export async function loader({ request }: Route.LoaderArgs) {
 			},
 		}),
 		countSweepableJobs(),
+		countFundedSweepableJobs(),
+		blockedSentJobs(),
 	])
-	return { user, openRuns, openJobCount }
+	return {
+		user,
+		openRuns,
+		openJobCount: sentReady,
+		sentReady,
+		fundedReady,
+		blocked,
+		fallbackEnabled: isPayrollFallbackEnabled(),
+	}
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -66,7 +79,7 @@ export default function FinancePayrollList({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { openRuns, openJobCount } = loaderData
+	const { openRuns, openJobCount, sentReady, fundedReady, blocked } = loaderData
 	const { t } = useTranslation()
 	return (
 		<div className="p-6 space-y-4">
@@ -82,6 +95,12 @@ export default function FinancePayrollList({
 						: t("finance_payroll.errors.unknown_intent")}
 				</p>
 			)}
+			<p className="text-sm text-muted-foreground">
+				{t("finance_payroll.sent_ready", {
+					count: sentReady,
+					funded: fundedReady,
+				})}
+			</p>
 			<Form method="post" className="flex items-center gap-2">
 				<input type="hidden" name="intent" value="generate_run" />
 				<input
@@ -94,6 +113,23 @@ export default function FinancePayrollList({
 					{t("finance_payroll.generate_run", { count: openJobCount })}
 				</Button>
 			</Form>
+			{blocked.length > 0 && (
+				<div className="bg-card border rounded-lg p-4 space-y-1">
+					<h2 className="font-semibold text-sm">
+						{t("finance_payroll.blocked_title")}
+					</h2>
+					<ul className="text-sm space-y-1">
+						{blocked.map((job) => (
+							<li key={job.id}>
+								<span className="font-mono">{job.controlNumber}</span>{" "}
+								<span className="text-muted-foreground">
+									{t("finance_payroll.blocked_reason")}
+								</span>
+							</li>
+						))}
+					</ul>
+				</div>
+			)}
 			<ul className="space-y-1 text-sm">
 				{openRuns.map((run) => {
 					// A run older than one payroll cycle (14d) with no `paidAt` is

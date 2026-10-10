@@ -100,6 +100,26 @@ export async function countFundedSweepableJobs(): Promise<number> {
 	).length
 }
 
+/**
+ * Sent-but-blocked: the bank request was sent and the job is open on Arm A,
+ * but its brigade code is missing or does not resolve to an active contractor
+ * account, so a run would skip it. Shown on the payroll screen so Lissette
+ * can fix the mapping.
+ */
+export async function blockedSentJobs() {
+	const docs = await db.jafInvoice.findMany({
+		where: sweepableWhere(),
+		select: { id: true, controlNumber: true, contractorAccountCode: true },
+		orderBy: { controlNumber: "asc" },
+	})
+	const resolved = await resolveContractorAccounts(
+		docs.map((d) => d.contractorAccountCode),
+	)
+	return docs.filter(
+		(d) => !d.contractorAccountCode || !resolved.has(d.contractorAccountCode),
+	)
+}
+
 /** Thrown (before anything is written) when a run would contain no jobs. */
 export class EmptyRunError extends Error {
 	constructor() {

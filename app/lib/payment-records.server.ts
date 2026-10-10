@@ -1,4 +1,4 @@
-import type { PaymentType } from "../../generated/prisma/client"
+import type { PaymentType, Role } from "../../generated/prisma/client"
 import { db } from "./db.server"
 
 type ReceivablePaymentType = Extract<
@@ -71,4 +71,60 @@ export async function recordReceivablePayment(input: {
 		if (existing) return { duplicate: true, record: existing }
 		throw error
 	}
+}
+
+/** Audited correction of a recorded PBCC advance (the "funded" event). After
+ * a paid brigade run only an ADMIN may correct, and the audit says so. */
+export async function correctReceivablePayment(input: {
+	jobId: string
+	amount: number
+	date: Date
+	note: string | null
+	reason: string
+	actorId: string
+	actorRole: Role
+}): Promise<{ ok: true } | { ok: false; error: "not_funded" | "locked" }> {
+	return db.$transaction(async (tx) => {
+		const record = await tx.paymentRecord.findUnique({
+			where: { jobId_type: { jobId: input.jobId, type: "PBCC_ADVANCE" } },
+		})
+		if (!record) return { ok: false as const, error: "not_funded" as const }
+		const job = await tx.jafInvoice.findUniqueOrThrow({
+			where: { id: input.jobId },
+			select: { payrollRun: { select: { paidAt: true } } },
+		})
+		const afterPaidRun = Boolean(job.payrollRun?.paidAt)
+		if (afterPaidRun && input.actorRole !== "ADMIN")
+			return { ok: false as const, error: "locked" as const }
+		await tx.paymentRecord.update({
+			where: { id: record.id },
+			data: { amount: input.amount, date: input.date, note: input.note },
+		})
+		await tx.jafInvoice.update({
+			where: { id: input.jobId },
+			data: { advanceReceivedAt: input.date, advanceAmount: input.amount },
+		})
+		await tx.auditTrail.create({
+			data: {
+				docId: input.jobId,
+				userId: input.actorId,
+				action: "ADVANCE_CORRECTED",
+				diffJson: {
+					old: {
+						amount: Number(record.amount),
+						date: record.date.toISOString(),
+						note: record.note,
+					},
+					new: {
+						amount: input.amount,
+						date: input.date.toISOString(),
+						note: input.note,
+					},
+					reason: input.reason,
+					...(afterPaidRun && { afterPaidRun: true }),
+				},
+			},
+		})
+		return { ok: true as const }
+	})
 }

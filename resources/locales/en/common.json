@@ -1125,7 +1125,12 @@
 			"next": "Next"
 		},
 		"generate_run_selected": "Generate run ({{count}} selected)",
-		"select_hint": "Untick jobs you want to hold back — only checked jobs enter the run."
+		"select_hint": "Untick jobs you want to hold back — only checked jobs enter the run.",
+		"state": {
+			"to_request": "Ready to request",
+			"awaiting_funding": "Awaiting funding",
+			"funded": "Funded"
+		}
 	},
 	"finance_verify": {
 		"aviso_amount_prefilled": "Aviso amount {{amount}} captured and matched by the supervisor.",
@@ -1177,7 +1182,15 @@
 		"generate_and_download": "Generate & Download PBCC Request",
 		"errors": {
 			"unknown_intent": "Unknown action.",
-			"terminal_status": "This job is no longer editable."
+			"terminal_status": "This job is no longer editable.",
+			"not_sent": "Send the request to the bank first.",
+			"already_funded": "This packet is already marked funded.",
+			"future_date": "The funded date cannot be in the future.",
+			"invalid_date": "Enter a valid date.",
+			"invalid_amount": "Enter the amount PBCC paid (more than 0).",
+			"reason_required": "Give a reason for the correction.",
+			"not_funded": "This packet has no funding to correct.",
+			"locked_in_paid_run": "This packet is already in a paid payroll run and can no longer be corrected."
 		},
 		"contractor_payment": "Contractor payment (Arm A)",
 		"frozen": "Frozen in run",
@@ -1194,7 +1207,15 @@
 		"precert_title": "Pre-certification sheet",
 		"precert_download": "Download pre-cert sheet",
 		"precert_signers": "Signed by: {{supervisor}}, {{contractor}}, {{claro}}",
-		"precert_missing": "Pre-cert sheet missing"
+		"precert_missing": "Pre-cert sheet missing",
+		"mark_funded": "Mark funded",
+		"funded_on": "Funded {{date}}",
+		"funded_date": "Funded date",
+		"funded_amount": "Amount PBCC paid",
+		"funded_ref": "Bank reference (optional)",
+		"correct_funding": "Correct funding",
+		"correction_reason": "Reason for the correction",
+		"save_correction": "Save correction"
 	},
 	"finance_po": {
 		"title": "Claro PO & Final Document",
@@ -1865,7 +1886,8 @@
 			"packets": "Packets",
 			"payroll": "Payroll",
 			"po": "Claro PO",
-			"pipeline": "Receivables"
+			"pipeline": "Receivables",
+			"funding": "Bank funding"
 		},
 		"callout": {
 			"queue_title": "Step 1 · You",
@@ -1873,7 +1895,7 @@
 			"verify_title": "Step 1 · You",
 			"verify_body": "Check the packet against the amounts the system computed before building the PBCC request.",
 			"pbcc_title": "Step 1 · You",
-			"pbcc_body": "The PBCC request carries the bank-format invoice and the Aviso. The Comptroller records the advance when the funds arrive.",
+			"pbcc_body": "The bank request carries the Aviso, the JAF invoice, the bank-format invoice and the bank Excel. When the bank pays, record the date and the amount PBCC paid: that starts the Arm B clock. Funding is shown for information; the packet joins the next Production Journal once the request is sent.",
 			"payroll_title": "Step 2 · Handoff",
 			"payroll_body": "Build the fortnightly run; the Comptroller pays the brigades and confirms. Every Aviso in the run flips to payroll confirmed here.",
 			"po_title": "Step 3 · You",

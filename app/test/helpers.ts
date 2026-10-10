@@ -115,9 +115,14 @@ export function makeTracker() {
 				},
 			})
 		// PaymentRecord→JafInvoice is FK'd, so it goes before the invoice rows below.
-		if (b.paymentRecord.length)
+		if (b.paymentRecord.length || b.jafInvoice.length)
 			await db.paymentRecord.deleteMany({
-				where: { id: { in: b.paymentRecord } },
+				where: {
+					OR: [
+						{ id: { in: b.paymentRecord } },
+						{ jobId: { in: b.jafInvoice } },
+					],
+				},
 			})
 		if (b.jafInvoice.length)
 			await db.jafInvoice.deleteMany({ where: { id: { in: b.jafInvoice } } })

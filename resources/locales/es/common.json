@@ -1125,7 +1125,12 @@
 			"next": "Siguiente"
 		},
 		"generate_run_selected": "Generar corrida ({{count}} seleccionados)",
-		"select_hint": "Desmarque los trabajos que desea posponer; solo los marcados ingresan a la corrida."
+		"select_hint": "Desmarque los trabajos que desea posponer; solo los marcados ingresan a la corrida.",
+		"state": {
+			"to_request": "Listo para solicitar",
+			"awaiting_funding": "Esperando fondeo",
+			"funded": "Fondeado"
+		}
 	},
 	"finance_verify": {
 		"aviso_amount_prefilled": "Monto del Aviso {{amount}} capturado y cotejado por el supervisor.",
@@ -1177,7 +1182,15 @@
 		"generate_and_download": "Generar y descargar solicitud PBCC",
 		"errors": {
 			"unknown_intent": "Acción desconocida.",
-			"terminal_status": "Este trabajo ya no es editable."
+			"terminal_status": "Este trabajo ya no es editable.",
+			"not_sent": "Primero envíe la solicitud al banco.",
+			"already_funded": "Este paquete ya está marcado como fondeado.",
+			"future_date": "La fecha de fondeo no puede ser futura.",
+			"invalid_date": "Ingrese una fecha válida.",
+			"invalid_amount": "Ingrese el monto pagado por PBCC (mayor que 0).",
+			"reason_required": "Indique el motivo de la corrección.",
+			"not_funded": "Este paquete no tiene fondeo que corregir.",
+			"locked_in_paid_run": "Este paquete ya está en una corrida pagada y no se puede corregir."
 		},
 		"contractor_payment": "Pago al contratista (Brazo A)",
 		"frozen": "Congelado en la corrida",
@@ -1194,7 +1207,15 @@
 		"precert_title": "Hoja de pre-certificación",
 		"precert_download": "Descargar hoja de pre-certificación",
 		"precert_signers": "Firmado por: {{supervisor}}, {{contractor}}, {{claro}}",
-		"precert_missing": "Falta hoja de pre-certificación"
+		"precert_missing": "Falta hoja de pre-certificación",
+		"mark_funded": "Marcar fondeado",
+		"funded_on": "Fondeado {{date}}",
+		"funded_date": "Fecha de fondeo",
+		"funded_amount": "Monto pagado por PBCC",
+		"funded_ref": "Referencia del banco (opcional)",
+		"correct_funding": "Corregir fondeo",
+		"correction_reason": "Motivo de la corrección",
+		"save_correction": "Guardar corrección"
 	},
 	"finance_po": {
 		"title": "PO de Claro y documento final",
@@ -1894,7 +1915,8 @@
 			"packets": "Paquetes",
 			"payroll": "Nómina",
 			"po": "PO de Claro",
-			"pipeline": "Cuentas por cobrar"
+			"pipeline": "Cuentas por cobrar",
+			"funding": "Fondeo del banco"
 		},
 		"callout": {
 			"queue_title": "Paso 1 · Tú",
@@ -1902,7 +1924,7 @@
 			"verify_title": "Paso 1 · Tú",
 			"verify_body": "Revisa el paquete contra los montos que calculó el sistema antes de armar la solicitud PBCC.",
 			"pbcc_title": "Paso 1 · Tú",
-			"pbcc_body": "La solicitud PBCC lleva la factura en formato del banco y el Aviso. Contraloría registra el adelanto cuando llegan los fondos.",
+			"pbcc_body": "La solicitud al banco lleva el Aviso, la factura JAF, la factura en formato del banco y el Excel del banco. Cuando el banco paga, registre la fecha y el monto pagado por PBCC: eso inicia el reloj del Brazo B. El fondeo se muestra como información; el paquete entra al próximo Diario de Producción una vez enviada la solicitud.",
 			"payroll_title": "Paso 2 · Traspaso",
 			"payroll_body": "Arma la corrida quincenal; Contraloría paga a las brigadas y confirma. Cada Aviso de la corrida pasa aquí a nómina confirmada.",
 			"po_title": "Paso 3 · Tú",

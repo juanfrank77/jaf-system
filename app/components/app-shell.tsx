@@ -228,7 +228,6 @@ function NotificationBell({
 function AppShell({
 	user,
 	notifications,
-	comptrollerEnabled,
 	varianceEnabled,
 	warehouseScope,
 	navCounts,
@@ -241,7 +240,6 @@ function AppShell({
 		docId: string | null
 		createdAt: Date
 	}[]
-	comptrollerEnabled?: boolean
 	varianceEnabled?: boolean
 	warehouseScope?: {
 		warehouses: { id: string; name: string }[]
@@ -254,11 +252,9 @@ function AppShell({
 	const connection = useConnectionState()
 	const { t } = useTranslation()
 	const groups = navGroupsFor(user.role, {
-		comptrollerEnabled,
 		varianceEnabled,
 	})
 	const tabItems = tabBarItemsFor(user.role, {
-		comptrollerEnabled,
 		varianceEnabled,
 	})
 

@@ -2,7 +2,7 @@ import { Outlet } from "react-router"
 import { AppShell } from "~/components/app-shell"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { db } from "~/lib/db.server"
-import { isComptrollerEnabled, isVarianceEnabled } from "~/lib/features.server"
+import { isVarianceEnabled } from "~/lib/features.server"
 import { loadNavCounts } from "~/lib/nav-counts.server"
 import { requireSession } from "~/lib/permissions.server"
 import { resolveWarehouseScope } from "~/lib/warehouse-scope.server"
@@ -28,7 +28,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 	return {
 		user: { name: user.name, role: user.role },
 		notifications,
-		comptrollerEnabled: isComptrollerEnabled(),
 		varianceEnabled: isVarianceEnabled(),
 		warehouseScope,
 		navCounts,
@@ -36,19 +35,12 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export default function AppShellRoute({ loaderData }: Route.ComponentProps) {
-	const {
-		user,
-		notifications,
-		comptrollerEnabled,
-		varianceEnabled,
-		warehouseScope,
-		navCounts,
-	} = loaderData
+	const { user, notifications, varianceEnabled, warehouseScope, navCounts } =
+		loaderData
 	return (
 		<AppShell
 			user={user}
 			notifications={notifications}
-			comptrollerEnabled={comptrollerEnabled}
 			varianceEnabled={varianceEnabled}
 			warehouseScope={warehouseScope ?? undefined}
 			navCounts={navCounts}

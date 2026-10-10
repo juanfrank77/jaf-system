@@ -182,9 +182,7 @@ describe("AppShell", () => {
 		).not.toBeInTheDocument()
 	})
 
-	it("hides the Comptroller nav item when the feature flag is off", async ({
-		renderStub,
-	}) => {
+	it("shows the Comptroller nav item for ADMIN", async ({ renderStub }) => {
 		await renderStub({
 			entries: [
 				{
@@ -193,7 +191,6 @@ describe("AppShell", () => {
 						<AppShell
 							user={{ name: "Monica García", role: "ADMIN" }}
 							notifications={[]}
-							comptrollerEnabled={false}
 						>
 							<p>content</p>
 						</AppShell>
@@ -202,31 +199,7 @@ describe("AppShell", () => {
 			],
 		})
 		expect(
-			screen.queryByRole("link", { name: "Comptroller", hidden: true }),
-		).not.toBeInTheDocument()
-	})
-
-	it("shows the Comptroller nav item when the feature flag is on", async ({
-		renderStub,
-	}) => {
-		await renderStub({
-			entries: [
-				{
-					path: "/",
-					Component: () => (
-						<AppShell
-							user={{ name: "Monica García", role: "ADMIN" }}
-							notifications={[]}
-							comptrollerEnabled={true}
-						>
-							<p>content</p>
-						</AppShell>
-					),
-				},
-			],
-		})
-		expect(
-			screen.getByRole("link", { name: "Comptroller", hidden: true }),
+			screen.getByRole("link", { name: "Brigades · payroll", hidden: true }),
 		).toBeInTheDocument()
 	})
 

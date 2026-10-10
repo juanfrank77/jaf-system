@@ -35,9 +35,7 @@ describe("navGroupsFor", () => {
 	})
 
 	it("omits empty groups and keeps a fixed group order for ADMIN", () => {
-		const keys = navGroupsFor("ADMIN", { comptrollerEnabled: true }).map(
-			(g) => g.key,
-		)
+		const keys = navGroupsFor("ADMIN").map((g) => g.key)
 		expect(keys).toEqual([
 			"overview",
 			"work",
@@ -48,13 +46,14 @@ describe("navGroupsFor", () => {
 		])
 	})
 
-	it("hides the comptroller item unless the flag is on", () => {
-		const flat = (on: boolean) =>
-			navGroupsFor("ADMIN", { comptrollerEnabled: on }).flatMap((g) =>
-				g.items.map((i) => i.to),
-			)
-		expect(flat(false)).not.toContain("/comptroller")
-		expect(flat(true)).toContain("/comptroller")
+	it("gives COMPTROLLER the comptroller item and no finance screens", () => {
+		const flat = (role: "COMPTROLLER" | "ADMIN") =>
+			navGroupsFor(role).flatMap((g) => g.items.map((i) => i.to))
+		expect(flat("COMPTROLLER")).toContain("/comptroller")
+		expect(flat("COMPTROLLER").some((to) => to.startsWith("/finance"))).toBe(
+			false,
+		)
+		expect(flat("ADMIN")).toContain("/comptroller")
 	})
 })
 

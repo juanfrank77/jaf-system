@@ -208,13 +208,11 @@ const NAV_ITEMS: NavItem[] = [
 	},
 ]
 
-type NavOpts = { comptrollerEnabled?: boolean; varianceEnabled?: boolean }
+type NavOpts = { varianceEnabled?: boolean }
 
 function visibleItems(role: Role, opts: NavOpts) {
 	return NAV_ITEMS.filter((item) => {
 		if (item.to === "/supervisor/variance" && !opts.varianceEnabled)
-			return false
-		if (item.to.startsWith("/comptroller") && !opts.comptrollerEnabled)
 			return false
 		if (item.hideFor?.includes(role)) return false
 		return !item.roles || item.roles.includes(role)

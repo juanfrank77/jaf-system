@@ -1079,7 +1079,6 @@
 			"invalid_payment": "Ingrese un monto positivo y una fecha de pago válidos.",
 			"advance_already_recorded": "El anticipo PBCC ya está registrado.",
 			"final_already_recorded": "El pago final ya está registrado.",
-			"close_role_required": "Solo Finanzas o Administración pueden cerrar una cuenta por cobrar.",
 			"already_closed": "Esta cuenta por cobrar ya está cerrada.",
 			"unknown_intent": "Acción desconocida."
 		},

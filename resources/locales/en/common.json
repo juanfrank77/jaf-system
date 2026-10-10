@@ -1079,7 +1079,6 @@
 			"invalid_payment": "Enter a valid positive amount and payment date.",
 			"advance_already_recorded": "The PBCC advance is already recorded.",
 			"final_already_recorded": "The final payment is already recorded.",
-			"close_role_required": "Only Finance or Admin can close a receivable.",
 			"already_closed": "This receivable is already closed.",
 			"unknown_intent": "Unknown action."
 		},

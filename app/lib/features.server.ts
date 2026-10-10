@@ -4,10 +4,6 @@
  * These helpers are server-only because they access process.env.
  */
 
-export function isComptrollerEnabled(): boolean {
-	return process.env.ENABLE_COMPTROLLER === "true"
-}
-
 /** Supervisor material-variance page + nav item. Off unless ENABLE_VARIANCE=true. */
 export function isVarianceEnabled(): boolean {
 	return process.env.ENABLE_VARIANCE === "true"

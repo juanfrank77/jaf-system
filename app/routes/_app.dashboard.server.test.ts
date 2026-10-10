@@ -21,7 +21,6 @@ vi.mock("~/lib/system-settings.server", () => ({
 	getAvisoAmountTolerance: vi.fn().mockResolvedValue(0.01),
 }))
 vi.mock("~/lib/features.server", () => ({
-	isComptrollerEnabled: () => false,
 	isDashboardFiltersEnabled: vi.fn(),
 }))
 
@@ -251,5 +250,26 @@ describe("GET /dashboard (WAREHOUSE) — awaiting-pickup aging", () => {
 				expect(db.installerProfile.findUnique).not.toHaveBeenCalled()
 			},
 		)
+	})
+})
+
+describe("GET /dashboard (COMPTROLLER)", () => {
+	it("redirects to /comptroller", async () => {
+		vi.mocked(requireSession).mockResolvedValue({
+			user: { id: "comp-1" },
+		} as any)
+		vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
+			id: "comp-1",
+			role: "COMPTROLLER",
+		} as any)
+		const thrown = await loader({
+			request: new Request("http://localhost/dashboard"),
+			params: {},
+		} as any).then(
+			() => null,
+			(e: unknown) => e,
+		)
+		expect(thrown).toBeInstanceOf(Response)
+		expect((thrown as Response).headers.get("Location")).toBe("/comptroller")
 	})
 })

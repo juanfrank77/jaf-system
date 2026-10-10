@@ -9,10 +9,7 @@ import {
 	type DashboardExplainer,
 } from "~/lib/dashboard-stats"
 import { db } from "~/lib/db.server"
-import {
-	isComptrollerEnabled,
-	isDashboardFiltersEnabled,
-} from "~/lib/features.server"
+import { isDashboardFiltersEnabled } from "~/lib/features.server"
 import { cacheJobs } from "~/lib/offline-store"
 import { pageTitle } from "~/lib/page-title"
 import { requireSession } from "~/lib/permissions.server"
@@ -260,7 +257,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 	}
 
 	if (user.role === "COMPTROLLER") {
-		throw redirect(isComptrollerEnabled() ? "/comptroller" : "/dashboard")
+		throw redirect("/comptroller")
 	}
 
 	const url = new URL(request.url)

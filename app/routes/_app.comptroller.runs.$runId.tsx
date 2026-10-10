@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next"
-import { Form, Link } from "react-router"
+import { Form, Link, useNavigation } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
@@ -9,6 +9,7 @@ import {
 	buildJournalBlocks,
 	closePayrollRunAccount,
 	parsePaidDate,
+	puertoRicoToday,
 	RUN_INVOICES,
 } from "~/lib/payroll-run.server"
 import { generateProductionJournalPdf } from "~/lib/pdf/production-journal.server"
@@ -68,8 +69,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			}
 		})
 		.sort((x, y) => x.code.localeCompare(y.code))
-	const now = new Date()
-	const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
+	const today = puertoRicoToday()
 	return {
 		user,
 		run: { id: run.id, label: run.label, paidAt: run.paidAt },
@@ -105,13 +105,19 @@ export async function action({ request, params }: Route.ActionArgs) {
 		}
 		const parsed = parsePaidDate(form.get("paidDate") as string | null)
 		if ("errorKey" in parsed) return { errorKey: parsed.errorKey }
-		await closePayrollRunAccount({
-			runId: params.runId,
-			accountId,
-			paidById: user.id,
-			paidDate: parsed.date,
-			confirmedByFallback: false,
-		})
+		try {
+			await closePayrollRunAccount({
+				runId: params.runId,
+				accountId,
+				paidById: user.id,
+				paidDate: parsed.date,
+				confirmedByFallback: false,
+			})
+		} catch (e) {
+			// Already paid (double-click, stale tab): the account IS paid, so
+			// show success. 403/404 and everything else still propagate.
+			if (!(e instanceof Response && e.status === 409)) throw e
+		}
 		return { ok: true as const }
 	}
 
@@ -124,6 +130,7 @@ export default function ComptrollerPayrollRun({
 }: Route.ComponentProps) {
 	const { run, accounts, today } = loaderData
 	const { t } = useTranslation()
+	const submitting = useNavigation().state !== "idle"
 	const errorKey =
 		actionData && "errorKey" in actionData ? actionData.errorKey : null
 	const error = errorKey
@@ -224,7 +231,7 @@ export default function ComptrollerPayrollRun({
 												max={today}
 												className="border rounded px-2 py-1 text-xs"
 											/>
-											<Button type="submit" size="xs">
+											<Button type="submit" size="xs" disabled={submitting}>
 												{t("comptroller_payroll.paid_button")}
 											</Button>
 										</Form>

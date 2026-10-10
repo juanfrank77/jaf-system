@@ -127,7 +127,10 @@ export async function loader({ request }: Route.LoaderArgs) {
 		jobs,
 		// Every open job's id + whether a run could sweep it, so the client can
 		// keep an accurate "N selected" across pages.
-		openJobs: all.map((j) => ({ id: j.id, sweepable: j.accountResolved })),
+		openJobs: all.map((j) => ({
+			id: j.id,
+			sweepable: j.accountResolved && j.fundingState !== "to_request",
+		})),
 		tiles: {
 			newPackets: {
 				count: all.length,

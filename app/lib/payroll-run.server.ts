@@ -41,6 +41,13 @@ export const RUN_INVOICES = {
 	orderBy: [{ releasedToFinanceAt: "asc" }, { id: "asc" }],
 } as const satisfies Prisma.PayrollRun$invoicesArgs
 
+/** Today's calendar date (YYYY-MM-DD) in Puerto Rico, whatever the server TZ. */
+export function puertoRicoToday(): string {
+	return new Date().toLocaleDateString("en-CA", {
+		timeZone: "America/Puerto_Rico",
+	})
+}
+
 /**
  * Validates the `paidDate` form field shared by the whole-run and per-account
  * confirms. `<input type="date">` posts YYYY-MM-DD; `new Date("YYYY-MM-DD")`
@@ -64,7 +71,9 @@ export function parsePaidDate(raw: string | null | undefined):
 	if (Number.isNaN(date.getTime())) {
 		return { errorKey: "finance_payroll.errors.invalid_date" }
 	}
-	if (date.getTime() > Date.now()) {
+	// Compare calendar days (YYYY-MM-DD sorts lexically), not instants: "today"
+	// is valid at any hour. Today is the Puerto Rico calendar day.
+	if (value > puertoRicoToday()) {
 		return { errorKey: "finance_payroll.errors.future_date" }
 	}
 	return { date }
@@ -140,7 +149,7 @@ export function armAOpenWhere(
  * so the packets list and packet view keep showing unsent jobs. Nothing here
  * filters on `active`: an inactive brigade is still paid.
  */
-export function sweepableWhere(): Prisma.JafInvoiceWhereInput {
+function sweepableWhere(): Prisma.JafInvoiceWhereInput {
 	return { ...armAOpenWhere(), pbccRequestSentAt: { not: null } }
 }
 
@@ -160,7 +169,7 @@ export async function countFundedSweepableJobs(): Promise<number> {
 
 /**
  * Sent-but-blocked: the bank request was sent and the job is open on Arm A,
- * but its brigade code is missing or does not resolve to an active contractor
+ * but its brigade code is missing or does not resolve to a contractor
  * account, so a run would skip it. Shown on the payroll screen so Lissette
  * can fix the mapping.
  */
@@ -359,6 +368,17 @@ export async function closePayrollRunAccount(opts: {
 			select: { id: true },
 		})
 		if (!exists) throw new Response("Account not in this run", { status: 404 })
+		// Lock the run row first: a reversed or already-closed run must refuse
+		// before the account is claimed, and the later "was that the last
+		// one?" decision is serialized on the same lock.
+		await tx.$queryRaw`SELECT "id" FROM "PayrollRun" WHERE "id" = ${opts.runId} FOR UPDATE`
+		const runState = await tx.payrollRun.findUniqueOrThrow({
+			where: { id: opts.runId },
+			select: { reversedAt: true, paidAt: true },
+		})
+		if (runState.reversedAt || runState.paidAt) {
+			throw new Response("Run is reversed or already paid", { status: 409 })
+		}
 		// Conditional claim: same double-submit guard as the old whole-run close.
 		const claimed = await tx.payrollRunAccount.updateMany({
 			where: {
@@ -383,10 +403,9 @@ export async function closePayrollRunAccount(opts: {
 				payablesClosedById: opts.paidById,
 			},
 		})
-		// Serialize the "was that the last one?" decision on the run row so two
-		// concurrent last ticks cannot both see "someone else is still unpaid"
-		// (nobody closes) or both see "none left" (double notify).
-		await tx.$queryRaw`SELECT "id" FROM "PayrollRun" WHERE "id" = ${opts.runId} FOR UPDATE`
+		// The run row is already locked (above), so two concurrent last ticks
+		// cannot both see "someone else is still unpaid" (nobody closes) or
+		// both see "none left" (double notify).
 		const remaining = await tx.payrollRunAccount.count({
 			where: { payrollRunId: opts.runId, paidAt: null },
 		})

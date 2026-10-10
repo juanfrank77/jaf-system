@@ -8,6 +8,8 @@ import {
 	countFundedSweepableJobs,
 	EmptyRunError,
 	generateRun,
+	parsePaidDate,
+	puertoRicoToday,
 } from "~/lib/payroll-run.server"
 import {
 	makeTracker,
@@ -620,6 +622,18 @@ describe("closePayrollRun", () => {
 	})
 })
 
+describe("parsePaidDate", () => {
+	it("accepts today (any hour) and rejects tomorrow", () => {
+		const today = puertoRicoToday()
+		expect(parsePaidDate(today)).toHaveProperty("date")
+		const tomorrow = new Date(`${today}T12:00:00Z`)
+		tomorrow.setUTCDate(tomorrow.getUTCDate() + 1)
+		expect(parsePaidDate(tomorrow.toISOString().slice(0, 10))).toEqual({
+			errorKey: "finance_payroll.errors.future_date",
+		})
+	})
+})
+
 describe("closePayrollRunAccount", () => {
 	async function twoAccountRun() {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
@@ -706,6 +720,27 @@ describe("closePayrollRunAccount", () => {
 			where: { id: docs[0].id },
 		})
 		expect(after.payablesClosedAt).toEqual(before.payablesClosedAt)
+	})
+
+	it("refuses a tick on a reversed run with 409 and claims nothing", async () => {
+		const { comptroller, a, run } = await twoAccountRun()
+		await db.payrollRun.update({
+			where: { id: run.id },
+			data: { reversedAt: new Date() },
+		})
+		await expect(
+			closePayrollRunAccount({
+				runId: run.id,
+				accountId: a.id,
+				paidById: comptroller.id,
+				paidDate: new Date(),
+				confirmedByFallback: false,
+			}),
+		).rejects.toMatchObject({ status: 409 })
+		const row = await db.payrollRunAccount.findFirstOrThrow({
+			where: { payrollRunId: run.id, contractorAccountId: a.id },
+		})
+		expect(row.paidAt).toBeNull()
 	})
 
 	it("two concurrent last ticks close the run once and notify once (Review Focus 2)", async () => {
@@ -1033,6 +1068,32 @@ describe("armAOpenWhere consumers (kept here so they cannot race the sweep)", ()
 			result.jobs.find((j: { id: string }) => j.id === mapped.id)
 				?.accountResolved,
 		).toBe(true)
+	})
+
+	it("L1 marks an unsent packet as not sweepable even with a resolved account", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		mocks.requireRole.mockResolvedValue({ user: finance })
+		const account = t.track("contractorAccount", await seedContractorAccount())
+		const unsent = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+				pbccRequestSentAt: null,
+			}),
+		)
+		const sent = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
+		)
+		const result = await queueLoader({
+			request: new Request("http://localhost/finance/queue"),
+			params: {},
+			context: {},
+		} as never)
+		const find = (id: string) =>
+			result.openJobs.find((j: { id: string }) => j.id === id)
+		expect(find(unsent.id)?.sweepable).toBe(false)
+		expect(find(sent.id)?.sweepable).toBe(true)
 	})
 
 	it("L1 resolves every contractor code in one query, not one per row (Review Focus)", async () => {

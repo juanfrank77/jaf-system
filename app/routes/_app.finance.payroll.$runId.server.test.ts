@@ -352,7 +352,7 @@ describe("per-account confirm", () => {
 		expect(result.fallbackEnabled).toBe(true)
 	})
 
-	it("confirm_account ticks the account as a fallback, and a replay is a 409", async () => {
+	it("confirm_account ticks the account as a fallback, and a replay is a no-op success", async () => {
 		const { finance, account, run } = await runWithAccount()
 		const fields = {
 			intent: "confirm_account",
@@ -370,7 +370,7 @@ describe("per-account confirm", () => {
 		expect(shown.paidByName).toBe(finance.name)
 		expect(shown.confirmedByFallback).toBe(true)
 
-		expect(await status(post(run.id, fields))).toBe(409)
+		expect(await post(run.id, fields)).toMatchObject({ ok: true })
 	})
 
 	it("confirm_account with an account from another run is a 404", async () => {

@@ -360,7 +360,13 @@ export default function PbccRequest({
 				{doc.controlNumber}
 			</p>
 			<FinanceStepRail current={sent ? "FUNDING" : "PACKETS"} />
-			<Callout title={t("finance_flow.callout.pbcc_title")}>
+			<Callout
+				title={t(
+					sent
+						? "finance_flow.callout.pbcc_title_funding"
+						: "finance_flow.callout.pbcc_title",
+				)}
+			>
 				{t("finance_flow.callout.pbcc_body")}
 			</Callout>
 

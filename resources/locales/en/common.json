@@ -1803,6 +1803,7 @@
 			"verify_title": "Step 1 · You",
 			"verify_body": "Check the packet against the amounts the system computed before building the PBCC request.",
 			"pbcc_title": "Step 1 · You",
+			"pbcc_title_funding": "Step 2 · You",
 			"pbcc_body": "The bank request carries the Aviso, the JAF invoice, the bank-format invoice and the bank Excel. When the bank pays, record the date and the amount PBCC paid: that starts the Arm B clock. Funding is shown for information; the packet joins the next Production Journal once the request is sent.",
 			"payroll_title": "Step 3 · Handoff",
 			"payroll_body": "The Production Journal is built from packets whose bank request was sent, one row per contractor account. Funding is shown for information. The Comptroller pays each account in WinPay and ticks it; during the side-by-side period you can still confirm an account from the paper journal, and it is tagged as such.",

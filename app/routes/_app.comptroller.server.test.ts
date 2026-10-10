@@ -201,7 +201,8 @@ describe("pay_account", () => {
 			"ADMIN",
 		])
 
-		expect(await status(post(run.id, fields))).toBe(409)
+		// A replay (double-click, stale tab) is treated as success, not an error.
+		expect(await post(run.id, fields)).toMatchObject({ ok: true })
 	})
 
 	it("404s for an account from another run", async () => {

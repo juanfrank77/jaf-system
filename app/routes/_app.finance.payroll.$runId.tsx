@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 import fs from "node:fs/promises"
 import { useTranslation } from "react-i18next"
-import { Form, Link, redirect } from "react-router"
+import { Form, Link, redirect, useNavigation } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { FinanceStepRail } from "~/components/finance-step-rail"
 import { Badge } from "~/components/ui/badge"
@@ -144,13 +144,19 @@ export async function action({ request, params }: Route.ActionArgs) {
 		}
 		const parsed = parsePaidDate(form.get("paidDate") as string | null)
 		if ("errorKey" in parsed) return { errorKey: parsed.errorKey }
-		await closePayrollRunAccount({
-			runId: params.runId as string,
-			accountId,
-			paidById: user.id,
-			paidDate: parsed.date,
-			confirmedByFallback: true,
-		})
+		try {
+			await closePayrollRunAccount({
+				runId: params.runId as string,
+				accountId,
+				paidById: user.id,
+				paidDate: parsed.date,
+				confirmedByFallback: true,
+			})
+		} catch (e) {
+			// Already paid (double-click, stale tab): the account IS paid, so
+			// show success. 403/404 and everything else still propagate.
+			if (!(e instanceof Response && e.status === 409)) throw e
+		}
 		return { ok: true }
 	}
 
@@ -220,6 +226,7 @@ export default function FinancePayrollRunDetail({
 	const { run, blocks, accounts, fallbackEnabled } = loaderData
 	const fallbackCount = accounts.filter((a) => a.confirmedByFallback).length
 	const { t } = useTranslation()
+	const submitting = useNavigation().state !== "idle"
 	const error = actionData?.errorKey
 		? t(
 				ERROR_KEYS[actionData.errorKey as ActionErrorKey] ??
@@ -384,7 +391,12 @@ export default function FinancePayrollRunDetail({
 														required
 														className="border rounded px-2 py-1 text-xs"
 													/>
-													<Button type="submit" variant="secondary" size="xs">
+													<Button
+														type="submit"
+														variant="secondary"
+														size="xs"
+														disabled={submitting}
+													>
 														{t("finance_payroll.confirm_account")}
 													</Button>
 												</Form>

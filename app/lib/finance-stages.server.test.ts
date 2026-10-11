@@ -1,7 +1,11 @@
 import { afterAll, describe, expect, it } from "vitest"
 import { db } from "~/lib/db.server"
 import { makeTracker, seedFinanceableInvoice, seedUser } from "~/test/helpers"
-import { stageWhere, unfundedSweepableIds } from "./finance-stages.server"
+import {
+	carmenOpenSummary,
+	stageWhere,
+	unfundedSweepableIds,
+} from "./finance-stages.server"
 
 const t = makeTracker()
 afterAll(() => t.cleanup())
@@ -81,5 +85,38 @@ describe("unfundedSweepableIds", () => {
 		const ids = await unfundedSweepableIds()
 		expect(ids).toContain(unfunded)
 		expect(ids).not.toContain(funded)
+	})
+})
+
+describe("carmenOpenSummary overdue cutoff", () => {
+	it("matches the pages: overdue once floor(age in days) > 14", async () => {
+		const now = new Date()
+		const day = 86_400_000
+		const fin = t.track("user", await seedUser({ role: "FINANCE" }))
+		const before = await carmenOpenSummary(now)
+		t.track(
+			"payrollRun",
+			await db.payrollRun.create({
+				data: {
+					label: "age 14.5d",
+					generatedById: fin.id,
+					generatedAt: new Date(now.getTime() - 14.5 * day),
+				},
+			}),
+		)
+		const mid = await carmenOpenSummary(now)
+		expect(mid.overdueRuns - before.overdueRuns).toBe(0)
+		t.track(
+			"payrollRun",
+			await db.payrollRun.create({
+				data: {
+					label: "age 15.5d",
+					generatedById: fin.id,
+					generatedAt: new Date(now.getTime() - 15.5 * day),
+				},
+			}),
+		)
+		const after = await carmenOpenSummary(now)
+		expect(after.overdueRuns - mid.overdueRuns).toBe(1)
 	})
 })

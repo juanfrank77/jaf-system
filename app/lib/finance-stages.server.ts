@@ -62,7 +62,9 @@ export async function countArmAStages(): Promise<
 export async function carmenOpenSummary(
 	now: Date = new Date(),
 ): Promise<{ openAccounts: number; overdueRuns: number }> {
-	const cutoff = new Date(now.getTime() - RUN_OVERDUE_DAYS * 86_400_000)
+	// Same rule as the pages: floor(age in days) > RUN_OVERDUE_DAYS, i.e. at
+	// least RUN_OVERDUE_DAYS + 1 whole days old.
+	const cutoff = new Date(now.getTime() - (RUN_OVERDUE_DAYS + 1) * 86_400_000)
 	const [openAccounts, overdueRuns] = await Promise.all([
 		db.payrollRunAccount.count({
 			where: {
@@ -71,7 +73,7 @@ export async function carmenOpenSummary(
 			},
 		}),
 		db.payrollRun.count({
-			where: { paidAt: null, reversedAt: null, generatedAt: { lt: cutoff } },
+			where: { paidAt: null, reversedAt: null, generatedAt: { lte: cutoff } },
 		}),
 	])
 	return { openAccounts, overdueRuns }

@@ -22,7 +22,7 @@ import {
 	invoiceTotalUsed,
 	isMissingClaroPdf,
 } from "~/lib/finance-pipeline.server"
-import { pbccStep } from "~/lib/finance-steps"
+import { pbccStep, stepNumber } from "~/lib/finance-steps"
 import { parseFunding } from "~/lib/funding-form"
 import {
 	correctReceivablePayment,
@@ -353,11 +353,7 @@ export default function PbccRequest({
 		<div className="space-y-5">
 			<div className="flex items-center gap-3">
 				<h1 className="text-xl font-semibold">{t("finance_pbcc.title")}</h1>
-				<StageChip
-					arm="A"
-					step={step === "LISTS" ? 4 : step === "LC_FUNDED" ? 3 : 2}
-					total={5}
-				/>
+				<StageChip arm="A" step={stepNumber(step)} total={5} />
 			</div>
 			<p className="font-mono text-sm text-muted-foreground">
 				{doc.controlNumber}

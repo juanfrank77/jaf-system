@@ -1818,11 +1818,11 @@
 			}
 		},
 		"step": {
-			"packets": "Paquetes",
+			"packets": "Paquetes recibidos",
 			"lc_request": "Solicitud de LC",
 			"lc_funded": "LC fondeada",
-			"lists": "Listas",
-			"carmen": "Esperando a Carmen"
+			"lists": "Listas a Carmen",
+			"carmen": "Pago de Carmen"
 		},
 		"callout": {
 			"packets_title": "Etapa 1 de 5 · Paquetes recibidos",

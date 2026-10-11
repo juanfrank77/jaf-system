@@ -1789,11 +1789,11 @@
 			}
 		},
 		"step": {
-			"packets": "Packets",
+			"packets": "Packets in",
 			"lc_request": "LC request",
 			"lc_funded": "LC funded",
-			"lists": "Lists",
-			"carmen": "Awaiting Carmen"
+			"lists": "Lists to Carmen",
+			"carmen": "Carmen's payment"
 		},
 		"callout": {
 			"packets_title": "Stage 1 of 5 · Packets in",

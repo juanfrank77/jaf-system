@@ -61,3 +61,13 @@ export const ARM_B_STEP_LABEL_KEY = {
 	AWAITING_ARIBA: "finance_flow.arm_b.step.awaiting_ariba",
 	RECEIVABLES: "finance_flow.arm_b.step.receivables",
 } as const
+
+/** Which Arm A step a packet's request/funding screen belongs to. */
+export function pbccStep(job: {
+	pbccRequestSentAt: Date | string | null
+	advanceReceivedAt: Date | string | null
+}): FinanceStep {
+	if (job.advanceReceivedAt) return "LISTS"
+	if (job.pbccRequestSentAt) return "LC_FUNDED"
+	return "LC_REQUEST"
+}

@@ -3,7 +3,7 @@ import type { ComponentProps } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
-import { FinanceStepRail } from "~/components/finance-step-rail"
+import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
@@ -300,7 +300,12 @@ export default function FinanceVerify({
 		<div className="space-y-5">
 			<div className="flex items-center justify-between">
 				<div>
-					<h1 className="text-xl font-semibold">{t("finance_verify.title")}</h1>
+					<div className="flex items-center gap-3">
+						<h1 className="text-xl font-semibold">
+							{t("finance_verify.title")}
+						</h1>
+						<StageChip arm="A" step={1} total={5} />
+					</div>
 					<p className="font-mono text-sm text-muted-foreground">
 						{doc.controlNumber} — {doc.jobType}
 					</p>
@@ -315,8 +320,8 @@ export default function FinanceVerify({
 				</span>
 			</div>
 			<FinanceStepRail current="PACKETS" />
-			<Callout title={t("finance_flow.callout.verify_title")}>
-				{t("finance_flow.callout.verify_body")}
+			<Callout title={t("finance_flow.callout.packets_title")}>
+				{t("finance_flow.callout.packets_body")}
 			</Callout>
 
 			<div className="text-sm">

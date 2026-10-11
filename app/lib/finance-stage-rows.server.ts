@@ -1,6 +1,7 @@
 import type { StageRow } from "~/components/finance-stage-table"
 import {
 	computeContractorPayment,
+	resolveContractorAccounts,
 	toContractorPaymentLines,
 } from "~/lib/contractor-payment.server"
 import { db } from "~/lib/db.server"
@@ -20,7 +21,11 @@ export async function loadStageRows(opts: {
 	page: number
 	pageSize: number
 	ageFrom: "released" | "sent"
-}): Promise<{ rows: StageRow[]; totalCount: number }> {
+	/** Step 4: add `accountResolved` / `missingClaroPdf` to each row and return
+	 * the ids of every stage job (all pages) whose contractor account resolves.
+	 * One `resolveContractorAccounts` call covers the whole stage. */
+	withAccounts?: boolean
+}): Promise<{ rows: StageRow[]; totalCount: number; sweepableIds: string[] }> {
 	const where = stageWhere(opts.stage)
 	const [totalCount, docs] = await Promise.all([
 		db.jafInvoice.count({ where }),
@@ -49,6 +54,23 @@ export async function loadStageRows(opts: {
 			},
 		}),
 	])
+	let resolved: Map<string, unknown> | null = null
+	let sweepableIds: string[] = []
+	if (opts.withAccounts) {
+		const all = await db.jafInvoice.findMany({
+			where,
+			select: { id: true, contractorAccountCode: true },
+		})
+		resolved = await resolveContractorAccounts(
+			all.map((d) => d.contractorAccountCode),
+		)
+		sweepableIds = all
+			.filter(
+				(d) =>
+					d.contractorAccountCode && resolved?.has(d.contractorAccountCode),
+			)
+			.map((d) => d.id)
+	}
 	const now = new Date()
 	const rows: StageRow[] = docs.map((d) => ({
 		id: d.id,
@@ -71,6 +93,12 @@ export async function loadStageRows(opts: {
 		amount: computeContractorPayment(
 			toContractorPaymentLines(d.jafInvoiceLines),
 		).grossPayable,
+		...(resolved && {
+			accountResolved: d.contractorAccountCode
+				? resolved.has(d.contractorAccountCode)
+				: false,
+			missingClaroPdf: !d.claroPdfPath || d.claroPdfPath.trim() === "",
+		}),
 	}))
-	return { rows, totalCount }
+	return { rows, totalCount, sweepableIds }
 }

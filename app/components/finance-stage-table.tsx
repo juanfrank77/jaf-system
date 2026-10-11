@@ -12,6 +12,10 @@ export type StageRow = {
 	ageDays: number
 	amount: number
 	docs: { claroPdf: boolean; jafInvoice: boolean; aviso: boolean }
+	/** Step 4 only: contractor account resolves, so a list can include it. */
+	accountResolved?: boolean
+	/** Step 4 only: no Claro PDF on file. */
+	missingClaroPdf?: boolean
 }
 
 /** Shared by steps 1-3. `showDocs` adds the documents-received column

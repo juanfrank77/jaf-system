@@ -76,3 +76,14 @@ export async function carmenOpenSummary(
 	])
 	return { openAccounts, overdueRuns }
 }
+
+/** Sent-but-unfunded jobs. `generateRun` sweeps these today (server rule is a
+ * separate follow-up); the Lists to Carmen screen holds them back by passing
+ * them as `excludeIds` so only bank-funded packets reach a list. */
+export async function unfundedSweepableIds(): Promise<string[]> {
+	const rows = await db.jafInvoice.findMany({
+		where: stageWhere("LC_FUNDED"),
+		select: { id: true },
+	})
+	return rows.map((r) => r.id)
+}

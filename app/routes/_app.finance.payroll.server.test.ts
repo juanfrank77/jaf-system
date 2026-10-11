@@ -104,11 +104,15 @@ describe("L3 payroll list", () => {
 	it("flags a funded packet whose account code does not resolve", async () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		mocks.requireRole.mockResolvedValue({ user: finance })
+		const account = t.track("contractorAccount", await seedContractorAccount())
+		const mapped = await seedFunded(account.code)
 		const bad = await seedFunded(runToken("NOPE"))
-		const { eligible, sweepableCount } = await callLoader()
+		const { eligible, sweepableIds, sweepableCount } = await callLoader()
 		const row = eligible.find((r: { id: string }) => r.id === bad.id)
 		expect(row?.accountResolved).toBe(false)
-		expect(typeof sweepableCount).toBe("number")
+		expect(sweepableIds).toContain(mapped.id)
+		expect(sweepableIds).not.toContain(bad.id)
+		expect(sweepableCount).toBe(sweepableIds.length)
 	})
 
 	it("excludes a closed (payablesClosedAt) job", async () => {

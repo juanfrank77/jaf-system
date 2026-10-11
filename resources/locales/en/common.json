@@ -1832,7 +1832,13 @@
 			"po_title": "Step 4 · You",
 			"po_body": "Record the Claro PO against the Aviso — one Aviso can carry several POs. The balance is derived, never typed.",
 			"pipeline_title": "Step 5 · Handoff",
-			"pipeline_body": "Record payments as they land and Close once both exist. A half-closed job is the normal state, not an error."
+			"pipeline_body": "Record payments as they land and Close once both exist. A half-closed job is the normal state, not an error.",
+			"packets_title": "Stage 1 of 5 · Packets in",
+			"packets_body": "Packets the supervisors have released, with the documents that have arrived for each one. When every document is in, check the packet and accept it. Accepted packets move to LC request.",
+			"lc_request_title": "Stage 2 of 5 · LC request",
+			"lc_request_body": "Accepted packets that can have an LC request. Build the request with its four documents and send it to the bank. When the request goes out the packet waits in LC funded.",
+			"lc_funded_title": "Stage 3 of 5 · LC funded",
+			"lc_funded_body": "Packets whose request is with the bank and not funded yet. When the bank funds one, mark it funded here with the date and amount. That moves it to Lists to Carmen and starts the Arm B clock."
 		}
 	},
 	"warehouse_flow": {
@@ -1957,6 +1963,32 @@
 			"retention": "10% Ret.",
 			"adj_net_running": "Adj. net running",
 			"status": "Status"
+		}
+	},
+	"finance_stage": {
+		"col": {
+			"work_order": "Work order",
+			"aviso": "Aviso",
+			"contractor": "Contractor",
+			"amount": "Amount",
+			"docs": "Documents"
+		},
+		"doc": {
+			"claro": "Claro PDF",
+			"jaf_invoice": "JAF invoice",
+			"aviso": "Aviso"
+		},
+		"accept": "Review & accept",
+		"build_request": "Build LC request",
+		"age": {
+			"packets": "Days waiting",
+			"sent": "Days since sent"
+		},
+		"funded": {
+			"mark": "Mark funded",
+			"date": "Funded on",
+			"amount": "Amount",
+			"ref": "Bank reference"
 		}
 	}
 }

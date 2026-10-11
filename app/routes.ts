@@ -55,6 +55,8 @@ export default [
 		route("docs/:id/audit-package", "routes/_app.docs.$id_.audit-package.tsx"),
 		route("docs/:id/returns", "routes/_app.docs.$id_.returns.tsx"),
 		route("finance/queue", "routes/_app.finance.queue.tsx"),
+		route("finance/lc-requests", "routes/_app.finance.lc-requests.tsx"),
+		route("finance/lc-funded", "routes/_app.finance.lc-funded.tsx"),
 		route("finance/receivables", "routes/_app.finance.receivables.tsx"),
 		route("finance/verify/:id", "routes/_app.finance.verify.$id.tsx"),
 		route("finance/pbcc/:id", "routes/_app.finance.pbcc.$id.tsx"),

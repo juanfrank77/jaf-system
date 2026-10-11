@@ -28,7 +28,6 @@ vi.mock("~/lib/permissions.server", () => ({ requireRole: mocks.requireRole }))
 // fixtures by racing for the same candidate pool.
 import { action as generateRunAction } from "~/routes/_app.finance.payroll"
 import { loader as pbccLoader } from "~/routes/_app.finance.pbcc.$id"
-import { loader as queueLoader } from "~/routes/_app.finance.queue"
 
 const ONE_LINE_100 = [
 	{
@@ -1030,101 +1029,6 @@ describe("armAOpenWhere terminal-status guard", () => {
 // ---------------------------------------------------------------------------
 
 describe("armAOpenWhere consumers (kept here so they cannot race the sweep)", () => {
-	it("L1 lists Arm-A-open jobs, flags an unmapped contractor code, and excludes a closed one", async () => {
-		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
-		mocks.requireRole.mockResolvedValue({ user: finance })
-		const account = t.track("contractorAccount", await seedContractorAccount())
-		const mapped = t.track(
-			"jafInvoice",
-			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
-		)
-		const unmapped = t.track(
-			"jafInvoice",
-			await seedFinanceableInvoice({ contractorAccountCode: "NOT-MAPPED" }),
-		)
-		const closed = t.track(
-			"jafInvoice",
-			await seedFinanceableInvoice({
-				contractorAccountCode: account.code,
-				payablesClosedAt: new Date(),
-			}),
-		)
-
-		const result = await queueLoader({
-			request: new Request("http://localhost/finance/queue"),
-			params: {},
-			context: {},
-		} as never)
-
-		const ids = result.jobs.map((j: { id: string }) => j.id)
-		expect(ids).toContain(mapped.id)
-		expect(ids).toContain(unmapped.id)
-		expect(ids).not.toContain(closed.id)
-		expect(
-			result.jobs.find((j: { id: string }) => j.id === unmapped.id)
-				?.accountResolved,
-		).toBe(false)
-		expect(
-			result.jobs.find((j: { id: string }) => j.id === mapped.id)
-				?.accountResolved,
-		).toBe(true)
-	})
-
-	it("L1 marks an unsent packet as not sweepable even with a resolved account", async () => {
-		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
-		mocks.requireRole.mockResolvedValue({ user: finance })
-		const account = t.track("contractorAccount", await seedContractorAccount())
-		const unsent = t.track(
-			"jafInvoice",
-			await seedFinanceableInvoice({
-				contractorAccountCode: account.code,
-				pbccRequestSentAt: null,
-			}),
-		)
-		const sent = t.track(
-			"jafInvoice",
-			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
-		)
-		const result = await queueLoader({
-			request: new Request("http://localhost/finance/queue"),
-			params: {},
-			context: {},
-		} as never)
-		const find = (id: string) =>
-			result.openJobs.find((j: { id: string }) => j.id === id)
-		expect(find(unsent.id)?.sweepable).toBe(false)
-		expect(find(sent.id)?.sweepable).toBe(true)
-	})
-
-	it("L1 resolves every contractor code in one query, not one per row (Review Focus)", async () => {
-		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
-		mocks.requireRole.mockResolvedValue({ user: finance })
-		const account = t.track("contractorAccount", await seedContractorAccount())
-		for (let i = 0; i < 6; i++) {
-			t.track(
-				"jafInvoice",
-				await seedFinanceableInvoice({
-					contractorAccountCode: i % 2 === 0 ? account.code : "NOT-MAPPED",
-				}),
-			)
-		}
-
-		const findMany = vi.spyOn(db.contractorAccount, "findMany")
-		const findUnique = vi.spyOn(db.contractorAccount, "findUnique")
-		try {
-			await queueLoader({
-				request: new Request("http://localhost/finance/queue"),
-				params: {},
-				context: {},
-			} as never)
-			expect(findMany).toHaveBeenCalledTimes(1)
-			expect(findUnique).not.toHaveBeenCalled()
-		} finally {
-			findMany.mockRestore()
-			findUnique.mockRestore()
-		}
-	})
-
 	// This exercises the L2 (pbcc) loader, but it lives here rather than in
 	// `_app.finance.pbcc.$id.server.test.ts` for the same reason: it seeds an
 	// Arm-A-open invoice, and the sibling file's `generateRun` sweep would

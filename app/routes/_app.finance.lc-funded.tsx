@@ -13,7 +13,8 @@ import {
 	fetchInvoiceTotalContext,
 	invoiceTotalUsed,
 } from "~/lib/finance-pipeline.server"
-import { loadStageRows, PAGE_SIZE } from "~/lib/finance-stage-rows.server"
+import { PAGE_SIZE } from "~/lib/finance-stage-paging"
+import { loadStageRows } from "~/lib/finance-stage-rows.server"
 import { parseFunding } from "~/lib/funding-form"
 import { recordReceivablePayment } from "~/lib/payment-records.server"
 import { isTerminalStatus } from "~/lib/permissions"

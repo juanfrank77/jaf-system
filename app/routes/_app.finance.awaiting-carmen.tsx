@@ -82,6 +82,16 @@ function ConfirmFromPaper({
 	const fetcher = useFetcher()
 	const today = new Date().toLocaleDateString("en-CA")
 	const submitting = fetcher.state !== "idle"
+	const errorKey = (fetcher.data as { errorKey?: string } | undefined)?.errorKey
+	// Known action errors are mapped one by one so every key stays a literal.
+	const errorText =
+		errorKey === "finance_payroll.errors.missing_fields"
+			? t("finance_payroll.errors.missing_fields")
+			: errorKey === "finance_payroll.errors.invalid_date"
+				? t("finance_payroll.errors.invalid_date")
+				: errorKey === "finance_payroll.errors.future_date"
+					? t("finance_payroll.errors.future_date")
+					: null
 	return (
 		<fetcher.Form
 			method="post"
@@ -105,6 +115,11 @@ function ConfirmFromPaper({
 			<Button type="submit" variant="secondary" size="xs" disabled={submitting}>
 				{t("finance_carmen.confirm")}
 			</Button>
+			{errorText && (
+				<p role="alert" className="w-full text-xs text-status-danger">
+					{errorText}
+				</p>
+			)}
 		</fetcher.Form>
 	)
 }

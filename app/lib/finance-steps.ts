@@ -71,3 +71,8 @@ export function pbccStep(job: {
 	if (job.pbccRequestSentAt) return "LC_FUNDED"
 	return "LC_REQUEST"
 }
+
+/** 1-based position of a step on the rail, derived from FINANCE_STEPS so it cannot drift. */
+export function stepNumber(step: FinanceStep): number {
+	return FINANCE_STEPS.indexOf(step) + 1
+}

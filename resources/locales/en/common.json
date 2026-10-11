@@ -1867,6 +1867,7 @@
 		"ready_title": "Ready to send to Carmen",
 		"sent_title": "Lists already sent to Carmen",
 		"none_ready": "No funded packets are waiting for a list.",
+		"no_sent_lists": "No lists have been sent to Carmen yet.",
 		"create_list": "Create list for Carmen ({{count}})",
 		"see_carmen": "See Carmen's payment",
 		"select_all": "Include all on this page",

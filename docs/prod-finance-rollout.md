@@ -148,9 +148,10 @@ and will block the delete — if the transaction aborts, stop and escalate.
 
 Only after this is confirmed, and only by Lissette, generate the first run.
 Lists to Carmen (`/finance/payroll`) is not feature-flagged: it is live the moment the code is.
-A run sweeps every *sent* packet — a bank request marked funded (PBCC advance)
-is not required — and creates one row per contractor account; the comptroller
-ticks each account paid at `/comptroller`.
+The Lists to Carmen screen only offers bank-funded packets: funding must be
+recorded first on LC funded (`/finance/lc-funded`). Sent-but-unfunded packets
+are held out of every list the UI creates. A run creates one row per contractor
+account; the comptroller ticks each account paid at `/comptroller`.
 
 `PAYROLL_FALLBACK_ENABLED` (default on) lets Finance confirm an account from the
 paper journal while both systems run side by side. Set it to `false` in `.env`

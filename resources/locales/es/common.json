@@ -1867,7 +1867,9 @@
 			"lc_request_title": "Etapa 2 de 5 · Solicitud de LC",
 			"lc_request_body": "Paquetes aceptados que pueden tener una solicitud de LC. Arma la solicitud con sus cuatro documentos y envíala al banco. Cuando la solicitud sale, el paquete espera en LC financiada.",
 			"lc_funded_title": "Etapa 3 de 5 · LC financiada",
-			"lc_funded_body": "Paquetes cuya solicitud está en el banco y aún no han sido financiados. Cuando el banco financia uno, márcalo aquí con la fecha y el monto. Pasa a Listas para Carmen e inicia el reloj del Brazo B."
+			"lc_funded_body": "Paquetes cuya solicitud está en el banco y aún no han sido financiados. Cuando el banco financia uno, márcalo aquí con la fecha y el monto. Pasa a Listas para Carmen e inicia el reloj del Brazo B.",
+			"lists_title": "Etapa 4 de 5 \u00b7 Listas para Carmen",
+			"lists_body": "Paquetes financiados listos para ir en un Production Journal, y las listas que ya se enviaron. Crea una lista con los paquetes financiados y env\u00edala a Carmen. Carmen luego paga cada cuenta."
 		}
 	},
 	"job_flow": {
@@ -1893,6 +1895,14 @@
 		}
 	},
 	"finance_payroll": {
+		"ready_title": "Listos para enviar a Carmen",
+		"sent_title": "Listas ya enviadas a Carmen",
+		"none_ready": "No hay paquetes financiados esperando una lista.",
+		"create_list": "Crear lista para Carmen ({{count}})",
+		"see_carmen": "Ver el pago de Carmen",
+		"select_all": "Incluir todos en esta p\u00e1gina",
+		"include_row": "Incluir {{number}} en la lista",
+		"reversed": "Revertida",
 		"title": "Nómina pendiente",
 		"run_label_placeholder": "Etiqueta de la corrida (ej. 9/10)",
 		"sent_ready": "{{count}} paquetes con la solicitud al banco enviada están listos para la próxima corrida ({{funded}} ya fondeados)",
@@ -1914,11 +1924,14 @@
 			"empty_run": "No se pudo agregar ningún trabajo a la corrida: todos los trabajos listos están retenidos o no tienen cuenta de contratista asignada.",
 			"invalid_evidence": "La evidencia debe ser un PDF o una imagen."
 		},
-		"back": "Volver a nómina pendiente",
+		"back": "← Listas para Carmen",
 		"open": "Abierta — aún no pagada",
 		"paid_on": "Pagada el {{date}}",
 		"download_journal_pdf": "⬇ Journal en PDF",
 		"col": {
+			"list": "Lista",
+			"date": "Enviada",
+			"age": "D\u00edas",
 			"brigade": "Brigada",
 			"gross": "Bruto",
 			"net": "Neto",

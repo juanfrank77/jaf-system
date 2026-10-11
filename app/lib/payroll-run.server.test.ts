@@ -954,10 +954,15 @@ describe("L3 generate_run action", () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		mocks.requireRole.mockResolvedValue({ user: finance })
 		const account = t.track("contractorAccount", await seedContractorAccount())
-		t.track(
+		const inv = t.track(
 			"jafInvoice",
 			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
 		)
+		// Only bank-funded packets may go on a list for Carmen.
+		await db.jafInvoice.update({
+			where: { id: inv.id },
+			data: { advanceReceivedAt: new Date(), advanceAmount: 10 },
+		})
 
 		const form = new URLSearchParams({ intent: "generate_run", label: "Run B" })
 		let redirected: string | null = null
@@ -978,6 +983,63 @@ describe("L3 generate_run action", () => {
 		const created = await db.payrollRun.findFirst({ where: { label: "Run B" } })
 		if (created) t.track("payrollRun", created)
 		expect(created).not.toBeNull()
+	})
+})
+
+describe("L3 generate_run action holds unfunded packets back", () => {
+	// Lives in this file (not its own) because the real generateRun sweeps the
+	// whole shared candidate pool; tests in one file run sequentially.
+	it("never sweeps a sent-but-unfunded packet, even when the form excludes nothing", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		mocks.requireRole.mockResolvedValue({ user: finance })
+		const account = t.track("contractorAccount", await seedContractorAccount())
+		const mk = async (funded: boolean) => {
+			const inv = t.track(
+				"jafInvoice",
+				await seedFinanceableInvoice({
+					contractorAccountCode: account.code,
+					jafInvoiceLines: ONE_LINE_100,
+				}),
+			)
+			if (funded)
+				await db.jafInvoice.update({
+					where: { id: inv.id },
+					data: { advanceReceivedAt: new Date(), advanceAmount: 10 },
+				})
+			return inv
+		}
+		const fundedJob = await mk(true)
+		const unfundedJob = await mk(false)
+
+		const form = new FormData()
+		form.set("intent", "generate_run")
+		form.set("label", "unfunded guard")
+		let status: number | null = null
+		try {
+			await generateRunAction({
+				request: new Request("http://localhost/finance/payroll", {
+					method: "POST",
+					body: form,
+				}),
+				params: {},
+				context: {},
+			} as never)
+		} catch (response) {
+			if (response instanceof Response) status = response.status
+		}
+		expect(status).toBe(302)
+		const funded = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: fundedJob.id },
+		})
+		const unfunded = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: unfundedJob.id },
+		})
+		expect(funded.payrollRunId).not.toBeNull()
+		expect(unfunded.payrollRunId).toBeNull()
+		const created = await db.payrollRun.findFirst({
+			where: { label: "unfunded guard" },
+		})
+		if (created) t.track("payrollRun", created)
 	})
 })
 

@@ -1789,9 +1789,23 @@
 		}
 	},
 	"finance_flow": {
-		"aria": "Finance work loop",
+		"aria": "Finance Arm A work loop",
+		"chip_a": "Arm A · Stage {{step}} of {{total}}",
+		"chip_b": "Arm B · {{name}}",
+		"arm_b": {
+			"aria": "Finance Arm B work loop",
+			"step": {
+				"awaiting_po": "Awaiting PO",
+				"awaiting_ariba": "Awaiting Ariba",
+				"receivables": "Receivables"
+			}
+		},
 		"step": {
 			"packets": "Packets",
+			"lc_request": "LC request",
+			"lc_funded": "LC funded",
+			"lists": "Lists",
+			"carmen": "Awaiting Carmen",
 			"payroll": "Payroll",
 			"po": "Claro PO",
 			"pipeline": "Receivables",

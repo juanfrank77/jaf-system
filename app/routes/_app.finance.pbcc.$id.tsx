@@ -359,7 +359,7 @@ export default function PbccRequest({
 			<p className="font-mono text-sm text-muted-foreground">
 				{doc.controlNumber}
 			</p>
-			<FinanceStepRail current={sent ? "FUNDING" : "PACKETS"} />
+			<FinanceStepRail current={sent ? "LC_FUNDED" : "LC_REQUEST"} />
 			<Callout
 				title={t(
 					sent

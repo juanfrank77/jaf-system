@@ -84,7 +84,7 @@ export default function FinancePayrollList({
 	return (
 		<div className="p-6 space-y-4">
 			<h1 className="text-2xl font-bold">{t("finance_payroll.title")}</h1>
-			<FinanceStepRail current="PAYROLL" />
+			<FinanceStepRail current="LISTS" />
 			<Callout title={t("finance_flow.callout.payroll_title")}>
 				{t("finance_flow.callout.payroll_body")}
 			</Callout>

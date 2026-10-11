@@ -241,7 +241,7 @@ export default function FinancePayrollRunDetail({
 					{t("finance_payroll.back")}
 				</Link>
 			</div>
-			<FinanceStepRail current="PAYROLL" />
+			<FinanceStepRail current="LISTS" />
 			<Callout title={t("finance_flow.callout.payroll_title")}>
 				{t("finance_flow.callout.payroll_body")}
 			</Callout>

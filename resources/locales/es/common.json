@@ -1818,9 +1818,23 @@
 		}
 	},
 	"finance_flow": {
-		"aria": "Ciclo de trabajo de finanzas",
+		"aria": "Ciclo de trabajo de finanzas, Brazo A",
+		"chip_a": "Brazo A · Etapa {{step}} de {{total}}",
+		"chip_b": "Brazo B · {{name}}",
+		"arm_b": {
+			"aria": "Ciclo de trabajo de finanzas, Brazo B",
+			"step": {
+				"awaiting_po": "Esperando PO",
+				"awaiting_ariba": "Esperando Ariba",
+				"receivables": "Cuentas por cobrar"
+			}
+		},
 		"step": {
 			"packets": "Paquetes",
+			"lc_request": "Solicitud de LC",
+			"lc_funded": "LC fondeada",
+			"lists": "Listas",
+			"carmen": "Esperando a Carmen",
 			"payroll": "Nómina",
 			"po": "PO de Claro",
 			"pipeline": "Cuentas por cobrar",

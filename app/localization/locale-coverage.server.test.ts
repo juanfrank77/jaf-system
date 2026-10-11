@@ -43,17 +43,45 @@ function keysUsedIn(prefixes: string[]): Map<string, string> {
 const enKeys = flatten(en)
 const esKeys = flatten(es)
 
+// i18next plurals: t("x", { count }) resolves to "x_one" / "x_other".
+function has(keys: Set<string>, key: string): boolean {
+	return keys.has(key) || keys.has(`${key}_other`) || keys.has(`${key}_one`)
+}
+
 // Covers the Phase-1 installer/warehouse/restock surface — the screens that
 // went in without es coverage the first time (48 keys, silently falling
 // back to the hardcoded English default for es-locale users).
-const used = keysUsedIn(["_app.installer", "_app.warehouse", "_app.restock"])
+const used = keysUsedIn([
+	"_app.installer",
+	"_app.warehouse",
+	"_app.restock",
+	"_app.finance",
+])
 
-it("every translation key used by the Phase-1 installer/warehouse/restock routes exists in the English locale", () => {
-	const missing = [...used.entries()].filter(([key]) => !enKeys.has(key))
+it("every translation key used by the installer/warehouse/restock/finance routes exists in the English locale", () => {
+	const missing = [...used.entries()].filter(([key]) => !has(enKeys, key))
 	expect(missing).toEqual([])
 })
 
-it("every translation key used by the Phase-1 installer/warehouse/restock routes exists in the Spanish locale", () => {
-	const missing = [...used.entries()].filter(([key]) => !esKeys.has(key))
+it("every translation key used by the installer/warehouse/restock/finance routes exists in the Spanish locale", () => {
+	const missing = [...used.entries()].filter(([key]) => !has(esKeys, key))
 	expect(missing).toEqual([])
+})
+
+it("has en and es copy for the Finance sidebar", () => {
+	for (const k of [
+		"app_shell.nav.finance_packets",
+		"app_shell.nav.finance_lc_request",
+		"app_shell.nav.finance_lc_funded",
+		"app_shell.nav.finance_lists",
+		"app_shell.nav.finance_carmen",
+		"app_shell.nav.finance_awaiting_po",
+		"app_shell.nav.finance_awaiting_ariba",
+		"app_shell.nav.soon",
+		"app_shell.group.arm_a",
+		"app_shell.group.arm_b",
+	]) {
+		expect(enKeys.has(k), `en missing ${k}`).toBe(true)
+		expect(esKeys.has(k), `es missing ${k}`).toBe(true)
+	}
 })

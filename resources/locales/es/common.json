@@ -1106,38 +1106,14 @@
 		}
 	},
 	"finance_queue": {
-		"title": "Paquetes entrantes",
-		"hint": "Trabajos liberados por supervisores y aún abiertos en la nómina del Brazo A. Un trabajo desaparece aquí cuando se cierra su corrida de nómina.",
 		"empty": "No hay paquetes en espera.",
 		"account_unmapped": "Cuenta de contratista no asignada",
 		"missing_claro_pdf": "Falta PDF de Claro",
-		"est_label": "est.",
-		"stat": {
-			"new_packets": "Paquetes nuevos: {{count}}",
-			"awaiting_payroll": "Pendientes de nómina: {{count}}",
-			"new_packets_summary": "{{count}} paquetes · {{gross}} bruto · {{est}} est.",
-			"awaiting_payroll_summary": "{{count}} pendientes · {{gross}} bruto · {{est}} a pagar"
-		},
-		"col": {
-			"work_order": "Orden",
-			"aviso": "Aviso",
-			"contractor": "Contratista",
-			"gross": "Bruto",
-			"est_payable": "Est. a pagar",
-			"packet": "Paquete"
-		},
 		"pagination": {
 			"summary": "{{from}}–{{to}} de {{total}}",
 			"page": "Página {{current}} de {{total}}",
 			"prev": "Anterior",
 			"next": "Siguiente"
-		},
-		"generate_run_selected": "Generar corrida ({{count}} seleccionados)",
-		"select_hint": "Desmarque los trabajos que desea posponer; solo los marcados ingresan a la corrida.",
-		"state": {
-			"to_request": "Listo para solicitar",
-			"awaiting_funding": "Esperando fondeo",
-			"funded": "Fondeado"
 		}
 	},
 	"finance_verify": {
@@ -1171,6 +1147,7 @@
 		"amount_mismatch": "El monto del Aviso difiere del total de la factura por {{difference}} (tolerancia: {{tolerance}}).",
 		"amount_mismatch_detail": "Aviso: {{avisoAmount}} vs Factura: {{invoiceTotal}}.",
 		"errors": {
+			"unknown_intent": "Acción desconocida.",
 			"note_required": "Se requiere una nota de devolución.",
 			"invalid_aviso_amount": "Ingresa un monto de Aviso válido.",
 			"amount_mismatch": "El monto del Aviso difiere del total de la factura por {{difference}} (tolerancia: {{tolerance}}).",
@@ -1249,6 +1226,9 @@
 		"download_final_doc": "Descargar documento final",
 		"uploaded_on": "Cargado el {{date}}",
 		"errors": {
+			"unknown_intent": "Acción desconocida.",
+			"record_po_stage": "Este trabajo no está en la etapa de registrar PO.",
+			"generate_final_stage": "Este trabajo no está en la etapa de generar el documento final.",
 			"po_number_required": "Se requiere el número de PO.",
 			"invalid_po_amount": "Ingresa un monto de PO válido y no negativo.",
 			"record_po_first": "Registra un PO antes de generar el documento final.",
@@ -1842,26 +1822,9 @@
 			"lc_request": "Solicitud de LC",
 			"lc_funded": "LC fondeada",
 			"lists": "Listas",
-			"carmen": "Esperando a Carmen",
-			"payroll": "Nómina",
-			"po": "PO de Claro",
-			"pipeline": "Cuentas por cobrar",
-			"funding": "Fondeo del banco"
+			"carmen": "Esperando a Carmen"
 		},
 		"callout": {
-			"queue_title": "Paso 1 · Tú",
-			"queue_body": "Lee el paquete, confirma el pago al contratista que calculó el sistema y arma la solicitud de adelanto PBCC. El diario recoge el trabajo en la próxima corrida de nómina.",
-			"verify_title": "Paso 1 · Tú",
-			"verify_body": "Revisa el paquete contra los montos que calculó el sistema antes de armar la solicitud PBCC.",
-			"pbcc_title": "Paso 1 · Tú",
-			"pbcc_title_funding": "Paso 2 · Tú",
-			"pbcc_body": "La solicitud al banco lleva el Aviso, la factura JAF, la factura en formato del banco y el Excel del banco. Cuando el banco paga, registre la fecha y el monto pagado por PBCC: eso inicia el reloj del Brazo B. El fondeo se muestra como información; el paquete entra al próximo Diario de Producción una vez enviada la solicitud.",
-			"payroll_title": "Paso 3 · Traspaso",
-			"payroll_body": "El Diario de Producción se arma con los paquetes cuya solicitud al banco fue enviada, una fila por cuenta de contratista. El fondeo se muestra solo como información. Contraloría paga cada cuenta en WinPay y la marca; durante el período en paralelo todavía puede confirmar una cuenta desde el diario en papel, y queda marcada como tal.",
-			"po_title": "Paso 4 · Tú",
-			"po_body": "Registra la PO de Claro contra el Aviso — un Aviso puede tener varias POs. El saldo se deriva, nunca se escribe.",
-			"pipeline_title": "Paso 5 · Traspaso",
-			"pipeline_body": "Registra los pagos según lleguen y Cierra cuando existan ambos. Un trabajo medio cerrado es el estado normal, no un error.",
 			"packets_title": "Etapa 1 de 5 · Paquetes recibidos",
 			"packets_body": "Paquetes que los supervisores han liberado, con los documentos que han llegado de cada uno. Cuando estén todos los documentos, revisa el paquete y acéptalo. Los paquetes aceptados pasan a Solicitud de LC.",
 			"lc_request_title": "Etapa 2 de 5 · Solicitud de LC",
@@ -1873,9 +1836,9 @@
 			"carmen_title": "Etapa 5 de 5 · Pago de Carmen",
 			"carmen_body": "Cada lista enviada a Carmen, con las cuentas que ya pagó y las que siguen abiertas. Espere a Carmen o, si ha estado ausente, confirme una cuenta desde la copia en papel. Cuando todas las cuentas estén pagadas, el Brazo A queda cerrado para esa lista.",
 			"arm_b_receivables_title": "Brazo B · Cuentas por cobrar",
-			"arm_b_receivables_body": "Claro le paga a JAF. Registre los pagos conforme lleguen y cierre el trabajo cuando existan ambos. Un trabajo medio cerrado es normal aquí, no un error.",
+			"arm_b_receivables_body": "Claro le paga a JAF. Registre los pagos conforme lleguen y luego cierre el trabajo cuando existan ambos. Un trabajo medio cerrado es normal aquí, no un error: el trabajo se cierra definitivamente cuando entra el pago de Claro.",
 			"arm_b_po_title": "Brazo B · Esperando PO",
-			"arm_b_po_body": "Registre la PO de Claro contra el Aviso. Varias PO por Aviso, y las listas de Esperando PO y Esperando Ariba, llegan en la próxima fase del Brazo B."
+			"arm_b_po_body": "Registre la PO de Claro contra el Aviso y luego genere el documento final de Claro. Varias PO por Aviso, y las listas de Esperando PO y Esperando Ariba, llegan en la próxima fase del Brazo B."
 		}
 	},
 	"job_flow": {
@@ -1909,9 +1872,7 @@
 		"select_all": "Incluir todos en esta página",
 		"include_row": "Incluir {{number}} en la lista",
 		"reversed": "Revertida",
-		"title": "Nómina pendiente",
 		"run_label_placeholder": "Etiqueta de la corrida (ej. 9/10)",
-		"sent_ready": "{{count}} paquetes con la solicitud al banco enviada están listos para la próxima corrida ({{funded}} ya fondeados)",
 		"blocked_title": "Enviados pero bloqueados",
 		"fallback_count": "{{count}} cuentas confirmadas del papel",
 		"blocked_reason": "Sin cuenta de contratista para esta brigada",
@@ -1919,8 +1880,6 @@
 		"from_paper": "confirmado del papel",
 		"awaiting_comptroller": "Esperando al contralor",
 		"confirm_account": "Confirmar del papel",
-		"generate_run": "Generar corrida ({{count}} abiertas)",
-		"run_row": "{{label}} — {{count}} trabajos — generada {{date}}",
 		"overdue": "{{days}}d, atrasada",
 		"errors": {
 			"unknown_intent": "Acción desconocida.",

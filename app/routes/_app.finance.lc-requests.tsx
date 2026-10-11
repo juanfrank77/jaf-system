@@ -7,7 +7,8 @@ import {
 } from "~/components/finance-stage-table"
 import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
 import { Callout } from "~/components/ui/callout"
-import { loadStageRows, PAGE_SIZE } from "~/lib/finance-stage-rows.server"
+import { PAGE_SIZE } from "~/lib/finance-stage-paging"
+import { loadStageRows } from "~/lib/finance-stage-rows.server"
 import { requireRole } from "~/lib/permissions.server"
 import type { Route } from "./+types/_app.finance.lc-requests"
 

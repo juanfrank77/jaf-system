@@ -12,11 +12,8 @@ import { Button } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
 import { db } from "~/lib/db.server"
 import { isPayrollFallbackEnabled } from "~/lib/features.server"
-import {
-	ageDays,
-	loadStageRows,
-	PAGE_SIZE,
-} from "~/lib/finance-stage-rows.server"
+import { PAGE_SIZE } from "~/lib/finance-stage-paging"
+import { ageDays, loadStageRows } from "~/lib/finance-stage-rows.server"
 import {
 	RUN_OVERDUE_DAYS,
 	unfundedSweepableIds,

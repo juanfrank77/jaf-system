@@ -1,36 +1,63 @@
-// The finance department's loop (Lissette's file, mockup v3), in the
-// order a job travels through it: a packet arrives and is verified and
-// turned into a PBCC advance request, the brigade is paid through a
-// fortnightly payroll run, Claro's PO is recorded against the Aviso,
-// and the pipeline records what lands and closes the job. Every
-// finance screen is exactly one step of this loop, so each renders a
-// `FinanceStepRail` naming its step (mockup v3 priority 3: "Step rail
-// + callout on every screen").
-export type FinanceStep = "PACKETS" | "FUNDING" | "PAYROLL" | "PO" | "PIPELINE"
+// Finance's two arms (Lissette's file, mockup v3), one rail each. Arm A is JAF
+// paying its people: a packet arrives and is accepted, an LC request goes to
+// the bank, the bank funds it, the funded packets become a Production Journal
+// list for Carmen, and Carmen pays. Arm B is Claro paying JAF. Every Finance
+// screen is exactly one step of one arm.
+export type FinanceStep =
+	| "PACKETS"
+	| "LC_REQUEST"
+	| "LC_FUNDED"
+	| "LISTS"
+	| "CARMEN"
 
 export const FINANCE_STEPS: FinanceStep[] = [
 	"PACKETS",
-	"FUNDING",
-	"PAYROLL",
-	"PO",
-	"PIPELINE",
+	"LC_REQUEST",
+	"LC_FUNDED",
+	"LISTS",
+	"CARMEN",
 ]
 
-/** Route per step — the rail links a step back to its list screen. The
- * PO step has no list of its own: POs are recorded from the pipeline. */
+/** One screen per step: no two steps share a URL. */
 export const FINANCE_STEP_HREF: Record<FinanceStep, string> = {
 	PACKETS: "/finance/queue",
-	FUNDING: "/finance/queue",
-	PAYROLL: "/finance/payroll",
-	PO: "/finance/receivables",
-	PIPELINE: "/finance/receivables",
+	LC_REQUEST: "/finance/lc-requests",
+	LC_FUNDED: "/finance/lc-funded",
+	LISTS: "/finance/payroll",
+	CARMEN: "/finance/awaiting-carmen",
 }
 
-/** i18n key per step, inside the `finance_flow.step` namespace. */
 export const FINANCE_STEP_LABEL_KEY = {
 	PACKETS: "finance_flow.step.packets",
-	FUNDING: "finance_flow.step.funding",
-	PAYROLL: "finance_flow.step.payroll",
-	PO: "finance_flow.step.po",
-	PIPELINE: "finance_flow.step.pipeline",
+	LC_REQUEST: "finance_flow.step.lc_request",
+	LC_FUNDED: "finance_flow.step.lc_funded",
+	LISTS: "finance_flow.step.lists",
+	CARMEN: "finance_flow.step.carmen",
+} as const
+
+export type ArmBStep = "AWAITING_PO" | "AWAITING_ARIBA" | "RECEIVABLES"
+
+export const ARM_B_STEPS: ArmBStep[] = [
+	"AWAITING_PO",
+	"AWAITING_ARIBA",
+	"RECEIVABLES",
+]
+
+export const ARM_B_STEP_HREF: Record<ArmBStep, string> = {
+	AWAITING_PO: "/finance/awaiting-po",
+	AWAITING_ARIBA: "/finance/awaiting-ariba",
+	RECEIVABLES: "/finance/receivables",
+}
+
+/** Awaiting PO / Awaiting Ariba are placeholders until the Arm B phase. */
+export const ARM_B_STEP_AVAILABLE: Record<ArmBStep, boolean> = {
+	AWAITING_PO: false,
+	AWAITING_ARIBA: false,
+	RECEIVABLES: true,
+}
+
+export const ARM_B_STEP_LABEL_KEY = {
+	AWAITING_PO: "finance_flow.arm_b.step.awaiting_po",
+	AWAITING_ARIBA: "finance_flow.arm_b.step.awaiting_ariba",
+	RECEIVABLES: "finance_flow.arm_b.step.receivables",
 } as const

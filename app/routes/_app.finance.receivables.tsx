@@ -2,7 +2,7 @@ import type { ParseKeys } from "i18next"
 import { useTranslation } from "react-i18next"
 import { Form, Link } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
-import { FinanceStepRail } from "~/components/finance-step-rail"
+import { ArmBStepRail } from "~/components/finance-step-rail"
 import { Badge } from "~/components/ui/badge"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
@@ -307,7 +307,7 @@ export default function FinancePipeline({
 					{t("finance_receivables.total_open", { count: rows.length })}
 				</p>
 			</div>
-			<FinanceStepRail current="PIPELINE" />
+			<ArmBStepRail current="RECEIVABLES" />
 			<Callout title={t("finance_flow.callout.pipeline_title")}>
 				{t("finance_flow.callout.pipeline_body")}
 			</Callout>

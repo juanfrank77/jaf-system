@@ -4,7 +4,7 @@ import type { ParseKeys } from "i18next"
 import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
-import { FinanceStepRail } from "~/components/finance-step-rail"
+import { ArmBStepRail } from "~/components/finance-step-rail"
 import { Button } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
 import { Input } from "~/components/ui/input"
@@ -259,7 +259,7 @@ export default function FinancePo({
 			<p className="font-mono text-sm text-muted-foreground">
 				{doc.controlNumber}
 			</p>
-			<FinanceStepRail current="PO" />
+			<ArmBStepRail current="AWAITING_PO" />
 			<Callout title={t("finance_flow.callout.po_title")}>
 				{t("finance_flow.callout.po_body")}
 			</Callout>

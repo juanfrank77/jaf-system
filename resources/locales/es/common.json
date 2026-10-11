@@ -1871,7 +1871,11 @@
 			"lists_title": "Etapa 4 de 5 · Listas para Carmen",
 			"lists_body": "Paquetes financiados listos para ir en un Production Journal, y las listas que ya se enviaron. Crea una lista con los paquetes financiados y envíala a Carmen. Carmen luego paga cada cuenta.",
 			"carmen_title": "Etapa 5 de 5 · Pago de Carmen",
-			"carmen_body": "Cada lista enviada a Carmen, con las cuentas que ya pagó y las que siguen abiertas. Espere a Carmen o, si ha estado ausente, confirme una cuenta desde la copia en papel. Cuando todas las cuentas estén pagadas, el Brazo A queda cerrado para esa lista."
+			"carmen_body": "Cada lista enviada a Carmen, con las cuentas que ya pagó y las que siguen abiertas. Espere a Carmen o, si ha estado ausente, confirme una cuenta desde la copia en papel. Cuando todas las cuentas estén pagadas, el Brazo A queda cerrado para esa lista.",
+			"arm_b_receivables_title": "Brazo B · Cuentas por cobrar",
+			"arm_b_receivables_body": "Claro le paga a JAF. Registre los pagos conforme lleguen y cierre el trabajo cuando existan ambos. Un trabajo medio cerrado es normal aquí, no un error.",
+			"arm_b_po_title": "Brazo B · Esperando PO",
+			"arm_b_po_body": "Registre la PO de Claro contra el Aviso. Varias PO por Aviso, y las listas de Esperando PO y Esperando Ariba, llegan en la próxima fase del Brazo B."
 		}
 	},
 	"job_flow": {

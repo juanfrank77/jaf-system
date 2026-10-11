@@ -47,7 +47,7 @@ export function ArmBStepRail({ current }: { current: ArmBStep }) {
 				href: i === index ? undefined : ARM_B_STEP_HREF[step],
 				label: t(ARM_B_STEP_LABEL_KEY[step]),
 				mine: true,
-				locked: !ARM_B_STEP_AVAILABLE[step],
+				locked: !ARM_B_STEP_AVAILABLE[step] && i !== index,
 			}))}
 		/>
 	)

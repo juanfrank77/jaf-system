@@ -1842,7 +1842,11 @@
 			"lists_title": "Stage 4 of 5 · Lists to Carmen",
 			"lists_body": "Funded packets ready to go on a Production Journal, and the lists already sent. Create a list from the funded packets and send it to Carmen. Carmen then pays each account.",
 			"carmen_title": "Stage 5 of 5 · Carmen's payment",
-			"carmen_body": "Each list sent to Carmen, with the accounts she has paid and the ones still open. Wait for Carmen, or — if she has been out — confirm an account from the paper copy. When every account is paid, Arm A is closed for that list."
+			"carmen_body": "Each list sent to Carmen, with the accounts she has paid and the ones still open. Wait for Carmen, or — if she has been out — confirm an account from the paper copy. When every account is paid, Arm A is closed for that list.",
+			"arm_b_receivables_title": "Arm B · Receivables",
+			"arm_b_receivables_body": "Claro paying JAF. Record payments as they land and close the job once both exist. A half-closed job is normal here, not an error.",
+			"arm_b_po_title": "Arm B · Awaiting PO",
+			"arm_b_po_body": "Record the Claro PO against the Aviso. Several POs per Aviso, and the Awaiting PO and Awaiting Ariba lists, arrive in the next Arm B phase."
 		}
 	},
 	"warehouse_flow": {

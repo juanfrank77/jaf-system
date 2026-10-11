@@ -2,7 +2,7 @@ import type { ParseKeys } from "i18next"
 import { useTranslation } from "react-i18next"
 import { Form, Link } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
-import { ArmBStepRail } from "~/components/finance-step-rail"
+import { ArmBStepRail, StageChip } from "~/components/finance-step-rail"
 import { Badge } from "~/components/ui/badge"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
@@ -35,7 +35,7 @@ import type { DocStatus } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.finance.receivables"
 
 export const meta: Route.MetaFunction = () => [
-	{ title: "Finance Pipeline — JAF Ops" },
+	{ title: "Receivables — JAF Ops" },
 ]
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -300,16 +300,19 @@ export default function FinancePipeline({
 	return (
 		<div className="space-y-6">
 			<div className="flex items-center justify-between">
-				<h1 className="text-xl font-semibold">
-					{t("finance_receivables.title")}
-				</h1>
+				<div className="flex items-center gap-3">
+					<h1 className="text-xl font-semibold">
+						{t("finance_receivables.title")}
+					</h1>
+					<StageChip arm="B" name={t("finance_flow.arm_b.step.receivables")} />
+				</div>
 				<p className="text-sm text-muted-foreground">
 					{t("finance_receivables.total_open", { count: rows.length })}
 				</p>
 			</div>
 			<ArmBStepRail current="RECEIVABLES" />
-			<Callout title={t("finance_flow.callout.pipeline_title")}>
-				{t("finance_flow.callout.pipeline_body")}
+			<Callout title={t("finance_flow.callout.arm_b_receivables_title")}>
+				{t("finance_flow.callout.arm_b_receivables_body")}
 			</Callout>
 
 			{error?.errorKey && (

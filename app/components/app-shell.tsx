@@ -82,6 +82,25 @@ function NavList({
 							</p>
 						)}
 						{group.items.map((item) => {
+							if (item.disabled) {
+								return (
+									<span
+										key={item.to}
+										aria-disabled="true"
+										className="flex items-center gap-2.5 rounded-lg border border-transparent px-2.5 py-2 text-sm font-medium text-muted-foreground opacity-60"
+									>
+										<HugeiconsIcon
+											icon={item.icon}
+											strokeWidth={2}
+											className="size-4 shrink-0"
+										/>
+										{t(item.labelKey)}
+										<span className="ml-auto text-[11px]">
+											{t("app_shell.nav.soon")}
+										</span>
+									</span>
+								)
+							}
 							const active = location.pathname === item.to
 							return (
 								<Link

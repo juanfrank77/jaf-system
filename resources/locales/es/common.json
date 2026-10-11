@@ -162,8 +162,15 @@
 		"nav": {
 			"dashboard": "Panel",
 			"new_document": "+ Orden de trabajo",
-			"receivables": "Pipeline de Finanzas",
-			"finance_queue": "Solicitudes de pago",
+			"receivables": "Cuentas por cobrar",
+			"finance_packets": "Paquetes recibidos",
+			"finance_lc_request": "Solicitud de LC",
+			"finance_lc_funded": "LC fondeada",
+			"finance_lists": "Listas a Carmen",
+			"finance_carmen": "Pago de Carmen",
+			"finance_awaiting_po": "Esperando OC",
+			"finance_awaiting_ariba": "Esperando Ariba",
+			"soon": "Pronto",
 			"admin_settings": "Configuración de administrador",
 			"catalog": "Catálogo",
 			"admin_users": "Usuarios",
@@ -180,8 +187,7 @@
 			"warehouse_scan_in": "Registrar Devolución",
 			"warehouse_restock": "Reabastecimientos por Liberar",
 			"warehouse_stock": "Inventario",
-			"comptroller": "Brigadas · nómina",
-			"finance_payroll": "Nómina pendiente"
+			"comptroller": "Brigadas · nómina"
 		},
 		"notifications": {
 			"bell_label": "Notificaciones",
@@ -216,6 +222,8 @@
 			"switch_to_light": "Cambiar a tema claro"
 		},
 		"group": {
+			"arm_a": "Brazo A · Pago a nuestra gente",
+			"arm_b": "Brazo B · Facturación a Claro",
 			"work": "Trabajo",
 			"money": "Finanzas",
 			"stock": "Almacén",

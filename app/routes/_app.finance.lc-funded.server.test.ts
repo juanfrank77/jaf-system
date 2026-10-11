@@ -94,6 +94,36 @@ describe("step 3 LC funded", () => {
 		expect(row.advanceReceivedAt).toBeNull()
 	})
 
+	it("rejects funding a packet whose request was never sent", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		mocks.requireRole.mockResolvedValue({ user: finance })
+		const job = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				releasedToFinanceAt: OLD,
+				pbccRequestSentAt: null,
+			}),
+		)
+		const result = await callAction(fundForm(job.id))
+		expect(result).toEqual({ errorKey: "finance_pbcc.errors.not_sent" })
+		const row = await db.jafInvoice.findUniqueOrThrow({ where: { id: job.id } })
+		expect(row.advanceReceivedAt).toBeNull()
+	})
+
+	it("rejects funding a packet in a terminal status", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		mocks.requireRole.mockResolvedValue({ user: finance })
+		const job = await seedSent()
+		await db.jafInvoice.update({
+			where: { id: job.id },
+			data: { status: "CANCELLED" },
+		})
+		const result = await callAction(fundForm(job.id))
+		expect(result).toEqual({ errorKey: "finance_pbcc.errors.terminal_status" })
+		const row = await db.jafInvoice.findUniqueOrThrow({ where: { id: job.id } })
+		expect(row.advanceReceivedAt).toBeNull()
+	})
+
 	it("a second mark_funded returns a 409 without throwing", async () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		mocks.requireRole.mockResolvedValue({ user: finance })

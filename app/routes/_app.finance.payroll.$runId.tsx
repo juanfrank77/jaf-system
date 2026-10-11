@@ -3,7 +3,7 @@ import fs from "node:fs/promises"
 import { useTranslation } from "react-i18next"
 import { Form, Link, redirect, useNavigation } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
-import { FinanceStepRail } from "~/components/finance-step-rail"
+import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
@@ -236,14 +236,22 @@ export default function FinancePayrollRunDetail({
 	return (
 		<div className="p-6 space-y-4">
 			<div className="flex items-center justify-between">
-				<h1 className="text-2xl font-bold">{run.label}</h1>
-				<Link to="/finance/payroll" className="text-sm underline">
-					{t("finance_payroll.back")}
-				</Link>
+				<div className="flex items-center gap-3">
+					<h1 className="text-2xl font-bold">{run.label}</h1>
+					<StageChip arm="A" step={4} total={5} />
+				</div>
+				<div className="flex items-center gap-4">
+					<Link to="/finance/payroll" className="text-sm underline">
+						{t("finance_payroll.back")}
+					</Link>
+					<Link to="/finance/awaiting-carmen" className="text-sm underline">
+						{t("finance_payroll.see_carmen")}
+					</Link>
+				</div>
 			</div>
 			<FinanceStepRail current="LISTS" />
-			<Callout title={t("finance_flow.callout.payroll_title")}>
-				{t("finance_flow.callout.payroll_body")}
+			<Callout title={t("finance_flow.callout.lists_title")}>
+				{t("finance_flow.callout.lists_body")}
 			</Callout>
 			{run.paidAt ? (
 				<Badge variant="ok">

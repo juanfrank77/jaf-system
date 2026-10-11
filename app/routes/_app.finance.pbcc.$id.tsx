@@ -3,7 +3,7 @@ import path from "node:path"
 import { useTranslation } from "react-i18next"
 import { data, Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
-import { FinanceStepRail } from "~/components/finance-step-rail"
+import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
@@ -22,6 +22,7 @@ import {
 	invoiceTotalUsed,
 	isMissingClaroPdf,
 } from "~/lib/finance-pipeline.server"
+import { pbccStep } from "~/lib/finance-steps"
 import { parseFunding } from "~/lib/funding-form"
 import {
 	correctReceivablePayment,
@@ -318,6 +319,22 @@ export default function PbccRequest({
 	const errorKey =
 		actionData && "errorKey" in actionData ? actionData.errorKey : null
 	const sent = Boolean(doc.pbccRequestSentAt)
+	const step = pbccStep(doc)
+	let calloutTitle: string
+	let calloutBody: string
+	switch (step) {
+		case "LC_REQUEST":
+			calloutTitle = t("finance_flow.callout.lc_request_title")
+			calloutBody = t("finance_flow.callout.lc_request_body")
+			break
+		case "LC_FUNDED":
+			calloutTitle = t("finance_flow.callout.lc_funded_title")
+			calloutBody = t("finance_flow.callout.lc_funded_body")
+			break
+		default:
+			calloutTitle = t("finance_flow.callout.lists_title")
+			calloutBody = t("finance_flow.callout.lists_body")
+	}
 	const funded = doc.advanceReceivedAt
 		? {
 				date: new Date(doc.advanceReceivedAt),
@@ -334,20 +351,19 @@ export default function PbccRequest({
 
 	return (
 		<div className="space-y-5">
-			<h1 className="text-xl font-semibold">{t("finance_pbcc.title")}</h1>
+			<div className="flex items-center gap-3">
+				<h1 className="text-xl font-semibold">{t("finance_pbcc.title")}</h1>
+				<StageChip
+					arm="A"
+					step={step === "LISTS" ? 4 : step === "LC_FUNDED" ? 3 : 2}
+					total={5}
+				/>
+			</div>
 			<p className="font-mono text-sm text-muted-foreground">
 				{doc.controlNumber}
 			</p>
-			<FinanceStepRail current={sent ? "LC_FUNDED" : "LC_REQUEST"} />
-			<Callout
-				title={t(
-					sent
-						? "finance_flow.callout.pbcc_title_funding"
-						: "finance_flow.callout.pbcc_title",
-				)}
-			>
-				{t("finance_flow.callout.pbcc_body")}
-			</Callout>
+			<FinanceStepRail current={step} />
+			<Callout title={calloutTitle}>{calloutBody}</Callout>
 
 			<div className="bg-card border rounded-lg p-4 space-y-2 text-sm">
 				<p>

@@ -116,7 +116,11 @@ Two things to know about what this seed run creates:
 Section 5 of the SQL file. Expect 15 brigades, the 11 account codes above, no
 job with an unmapped code, 4 supervisors on `@jafcom.net` with the roster's
 areas, and the 4 unverified warehouse logins listed for correction. Then log in
-as Finance (Lissette) and confirm `/finance/queue` and `/finance/payroll` load.
+as Finance (Lissette) and confirm the Arm A screens load: Packets in
+(`/finance/queue`), LC request (`/finance/lc-requests`), LC funded
+(`/finance/lc-funded`), Lists to Carmen (`/finance/payroll`) and Carmen's payment
+(`/finance/awaiting-carmen`). Awaiting PO and Awaiting Ariba (Arm B) are
+placeholders in the sidebar.
 
 ---
 
@@ -143,7 +147,7 @@ reset. A `Doc` row still pointing at one of them has a required `supervisorId`
 and will block the delete — if the transaction aborts, stop and escalate.
 
 Only after this is confirmed, and only by Lissette, generate the first run.
-`/finance/payroll` is not feature-flagged: it is live the moment the code is.
+Lists to Carmen (`/finance/payroll`) is not feature-flagged: it is live the moment the code is.
 A run sweeps every *sent* packet — a bank request marked funded (PBCC advance)
 is not required — and creates one row per contractor account; the comptroller
 ticks each account paid at `/comptroller`.

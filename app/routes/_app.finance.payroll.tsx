@@ -174,7 +174,8 @@ export default function FinancePayrollList({
 							<input
 								type="checkbox"
 								ref={selectAllRef}
-								checked={pageHeld === 0}
+								checked={selectable.length > 0 && pageHeld === 0}
+								disabled={selectable.length === 0}
 								onChange={toggleAll}
 							/>
 							{t("finance_payroll.select_all")}
@@ -256,7 +257,11 @@ export default function FinancePayrollList({
 
 			<section className="space-y-3">
 				<h2 className="font-semibold">{t("finance_payroll.sent_title")}</h2>
-				{sentRuns.length === 0 ? null : (
+				{sentRuns.length === 0 ? (
+					<p className="text-sm text-muted-foreground">
+						{t("finance_payroll.no_sent_lists")}
+					</p>
+				) : (
 					<div className="overflow-x-auto bg-card border rounded-lg">
 						<table className="w-full text-sm">
 							<thead>

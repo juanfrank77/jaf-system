@@ -1861,7 +1861,13 @@
 			"po_title": "Paso 4 · Tú",
 			"po_body": "Registra la PO de Claro contra el Aviso — un Aviso puede tener varias POs. El saldo se deriva, nunca se escribe.",
 			"pipeline_title": "Paso 5 · Traspaso",
-			"pipeline_body": "Registra los pagos según lleguen y Cierra cuando existan ambos. Un trabajo medio cerrado es el estado normal, no un error."
+			"pipeline_body": "Registra los pagos según lleguen y Cierra cuando existan ambos. Un trabajo medio cerrado es el estado normal, no un error.",
+			"packets_title": "Etapa 1 de 5 · Paquetes recibidos",
+			"packets_body": "Paquetes que los supervisores han liberado, con los documentos que han llegado de cada uno. Cuando estén todos los documentos, revisa el paquete y acéptalo. Los paquetes aceptados pasan a Solicitud de LC.",
+			"lc_request_title": "Etapa 2 de 5 · Solicitud de LC",
+			"lc_request_body": "Paquetes aceptados que pueden tener una solicitud de LC. Arma la solicitud con sus cuatro documentos y envíala al banco. Cuando la solicitud sale, el paquete espera en LC financiada.",
+			"lc_funded_title": "Etapa 3 de 5 · LC financiada",
+			"lc_funded_body": "Paquetes cuya solicitud está en el banco y aún no han sido financiados. Cuando el banco financia uno, márcalo aquí con la fecha y el monto. Pasa a Listas para Carmen e inicia el reloj del Brazo B."
 		}
 	},
 	"job_flow": {
@@ -1957,6 +1963,32 @@
 			"retention": "10% Ret.",
 			"adj_net_running": "Neto ajust. acumulado",
 			"status": "Estado"
+		}
+	},
+	"finance_stage": {
+		"col": {
+			"work_order": "Orden de trabajo",
+			"aviso": "Aviso",
+			"contractor": "Contratista",
+			"amount": "Monto",
+			"docs": "Documentos"
+		},
+		"doc": {
+			"claro": "PDF de Claro",
+			"jaf_invoice": "Factura JAF",
+			"aviso": "Aviso"
+		},
+		"accept": "Revisar y aceptar",
+		"build_request": "Armar solicitud de LC",
+		"age": {
+			"packets": "Días en espera",
+			"sent": "Días desde el envío"
+		},
+		"funded": {
+			"mark": "Marcar financiada",
+			"date": "Financiada el",
+			"amount": "Monto",
+			"ref": "Referencia bancaria"
 		}
 	}
 }

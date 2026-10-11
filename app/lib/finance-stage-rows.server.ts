@@ -1,0 +1,76 @@
+import type { StageRow } from "~/components/finance-stage-table"
+import {
+	computeContractorPayment,
+	toContractorPaymentLines,
+} from "~/lib/contractor-payment.server"
+import { db } from "~/lib/db.server"
+import { type ArmAListStage, stageWhere } from "~/lib/finance-stages.server"
+
+export const PAGE_SIZE = 50
+
+/** Whole days elapsed since `from` (0 when unset). */
+export function ageDays(from: Date | null, now: Date = new Date()): number {
+	if (!from) return 0
+	return Math.max(0, Math.floor((now.getTime() - from.getTime()) / 86_400_000))
+}
+
+/** One select + mapping shared by steps 1-3, oldest release first. */
+export async function loadStageRows(opts: {
+	stage: ArmAListStage
+	page: number
+	pageSize: number
+	ageFrom: "released" | "sent"
+}): Promise<{ rows: StageRow[]; totalCount: number }> {
+	const where = stageWhere(opts.stage)
+	const [totalCount, docs] = await Promise.all([
+		db.jafInvoice.count({ where }),
+		db.jafInvoice.findMany({
+			where,
+			orderBy: [{ releasedToFinanceAt: "asc" }, { id: "asc" }],
+			skip: (opts.page - 1) * opts.pageSize,
+			take: opts.pageSize,
+			select: {
+				id: true,
+				controlNumber: true,
+				avisoNumber: true,
+				claroPdfPath: true,
+				jafInvoicePdfPath: true,
+				avisoMatchedAt: true,
+				releasedToFinanceAt: true,
+				pbccRequestSentAt: true,
+				jafInvoiceLines: true,
+				contractorAccountCode: true,
+				preCertSheets: {
+					orderBy: { version: "desc" },
+					take: 1,
+					select: { sigSubcontractorName: true },
+				},
+				brigade: { select: { leadName: true, name: true } },
+			},
+		}),
+	])
+	const now = new Date()
+	const rows: StageRow[] = docs.map((d) => ({
+		id: d.id,
+		controlNumber: d.controlNumber,
+		avisoNumber: d.avisoNumber,
+		contractorLabel:
+			d.preCertSheets[0]?.sigSubcontractorName ??
+			d.brigade?.leadName ??
+			d.brigade?.name ??
+			null,
+		ageDays: ageDays(
+			opts.ageFrom === "sent" ? d.pbccRequestSentAt : d.releasedToFinanceAt,
+			now,
+		),
+		docs: {
+			claroPdf: Boolean(d.claroPdfPath?.trim()),
+			jafInvoice: Boolean(d.jafInvoicePdfPath),
+			aviso: Boolean(d.avisoNumber && d.avisoMatchedAt),
+		},
+		amount: computeContractorPayment(
+			toContractorPaymentLines(d.jafInvoiceLines),
+		).grossPayable,
+	}))
+	return { rows, totalCount }
+}

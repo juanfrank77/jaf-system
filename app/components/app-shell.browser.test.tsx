@@ -203,6 +203,31 @@ describe("AppShell", () => {
 		).toBeInTheDocument()
 	})
 
+	it("renders Awaiting PO as a disabled, non-link placeholder for FINANCE", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<AppShell
+							user={{ name: "Fiona Finance", role: "FINANCE" }}
+							notifications={[]}
+						>
+							<p>content</p>
+						</AppShell>
+					),
+				},
+			],
+		})
+		expect(
+			screen.queryByRole("link", { name: /Awaiting PO/, hidden: true }),
+		).toBeNull()
+		expect(screen.getAllByText(/Awaiting PO/).length).toBeGreaterThan(0)
+		expect(screen.getAllByText("Soon").length).toBeGreaterThan(0)
+	})
+
 	it("shows every nav item for ADMIN", async ({ renderStub }) => {
 		await renderStub({
 			entries: [
@@ -226,7 +251,7 @@ describe("AppShell", () => {
 			screen.getByRole("link", { name: "+ Work Order", hidden: true }),
 		).toBeInTheDocument()
 		expect(
-			screen.getByRole("link", { name: "Finance Pipeline", hidden: true }),
+			screen.getByRole("link", { name: "Receivables", hidden: true }),
 		).toBeInTheDocument()
 		expect(
 			screen.getByRole("link", { name: "Admin Settings", hidden: true }),

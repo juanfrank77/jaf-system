@@ -27,10 +27,36 @@ describe("navGroupsFor", () => {
 		expect(tos(navGroupsFor("CREW"))).toEqual([["overview", ["/dashboard"]]])
 	})
 
-	it("groups FINANCE items under overview and money, with payroll between queue and receivables", () => {
+	it("groups FINANCE items into Arm A and Arm B, in process order", () => {
 		expect(tos(navGroupsFor("FINANCE"))).toEqual([
 			["overview", ["/dashboard"]],
-			["money", ["/finance/queue", "/finance/payroll", "/finance/receivables"]],
+			[
+				"arm_a",
+				[
+					"/finance/queue",
+					"/finance/lc-requests",
+					"/finance/lc-funded",
+					"/finance/payroll",
+					"/finance/awaiting-carmen",
+				],
+			],
+			[
+				"arm_b",
+				[
+					"/finance/awaiting-po",
+					"/finance/awaiting-ariba",
+					"/finance/receivables",
+				],
+			],
+		])
+	})
+
+	it("marks Awaiting PO and Awaiting Ariba as disabled placeholders", () => {
+		const items = navGroupsFor("FINANCE").flatMap((g) => g.items)
+		const disabled = items.filter((i) => i.disabled).map((i) => i.to)
+		expect(disabled).toEqual([
+			"/finance/awaiting-po",
+			"/finance/awaiting-ariba",
 		])
 	})
 
@@ -39,6 +65,8 @@ describe("navGroupsFor", () => {
 		expect(keys).toEqual([
 			"overview",
 			"work",
+			"arm_a",
+			"arm_b",
 			"money",
 			"stock",
 			"field",

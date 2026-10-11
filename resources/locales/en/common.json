@@ -162,8 +162,15 @@
 		"nav": {
 			"dashboard": "Dashboard",
 			"new_document": "+ Work Order",
-			"receivables": "Finance Pipeline",
-			"finance_queue": "Payment requests",
+			"receivables": "Receivables",
+			"finance_packets": "Packets in",
+			"finance_lc_request": "LC request",
+			"finance_lc_funded": "LC funded",
+			"finance_lists": "Lists to Carmen",
+			"finance_carmen": "Carmen's payment",
+			"finance_awaiting_po": "Awaiting PO",
+			"finance_awaiting_ariba": "Awaiting Ariba",
+			"soon": "Soon",
 			"admin_settings": "Admin Settings",
 			"catalog": "Catalog",
 			"admin_users": "Users",
@@ -180,8 +187,7 @@
 			"warehouse_scan_in": "Scan In Return",
 			"warehouse_restock": "Restocks to Release",
 			"warehouse_stock": "Stock",
-			"comptroller": "Brigades · payroll",
-			"finance_payroll": "Awaiting payroll"
+			"comptroller": "Brigades · payroll"
 		},
 		"notifications": {
 			"bell_label": "Notifications",
@@ -216,6 +222,8 @@
 			"switch_to_light": "Switch to light theme"
 		},
 		"group": {
+			"arm_a": "Arm A · Paying our people",
+			"arm_b": "Arm B · Claro billing",
 			"work": "Work",
 			"money": "Finance",
 			"stock": "Warehouse",

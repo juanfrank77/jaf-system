@@ -17,8 +17,13 @@ export type NavLabelKey =
 	| "app_shell.nav.dashboard"
 	| "app_shell.nav.new_document"
 	| "app_shell.nav.receivables"
-	| "app_shell.nav.finance_queue"
-	| "app_shell.nav.finance_payroll"
+	| "app_shell.nav.finance_packets"
+	| "app_shell.nav.finance_lc_request"
+	| "app_shell.nav.finance_lc_funded"
+	| "app_shell.nav.finance_lists"
+	| "app_shell.nav.finance_carmen"
+	| "app_shell.nav.finance_awaiting_po"
+	| "app_shell.nav.finance_awaiting_ariba"
 	| "app_shell.nav.admin_settings"
 	| "app_shell.nav.catalog"
 	| "app_shell.nav.comptroller"
@@ -42,6 +47,8 @@ export type NavCount = { value: number; tone: "critical" | "neutral" }
 export type NavGroupKey =
 	| "overview"
 	| "work"
+	| "arm_a"
+	| "arm_b"
 	| "money"
 	| "stock"
 	| "field"
@@ -58,12 +65,16 @@ export type NavItem = {
 	hideFor?: Role[]
 	/** Active only on this exact path (a Home tab must not light up on every sub-page). */
 	exact?: boolean
+	/** Visible placeholder, not a link (screen not built yet). */
+	disabled?: boolean
 }
 export type NavGroup = { key: NavGroupKey; items: NavItem[] }
 
 const GROUP_ORDER: NavGroupKey[] = [
 	"overview",
 	"work",
+	"arm_a",
+	"arm_b",
 	"money",
 	"stock",
 	"field",
@@ -72,6 +83,8 @@ const GROUP_ORDER: NavGroupKey[] = [
 export const GROUP_LABEL_KEY: Record<NavGroupKey, GroupLabelKey | null> = {
 	overview: null,
 	work: "app_shell.group.work",
+	arm_a: "app_shell.group.arm_a",
+	arm_b: "app_shell.group.arm_b",
 	money: "app_shell.group.money",
 	stock: "app_shell.group.stock",
 	field: "app_shell.group.field",
@@ -110,23 +123,60 @@ const NAV_ITEMS: NavItem[] = [
 	},
 	{
 		to: "/finance/queue",
-		labelKey: "app_shell.nav.finance_queue",
+		labelKey: "app_shell.nav.finance_packets",
 		icon: Invoice02Icon,
-		group: "money",
+		group: "arm_a",
+		roles: ["FINANCE", "ADMIN"],
+	},
+	{
+		to: "/finance/lc-requests",
+		labelKey: "app_shell.nav.finance_lc_request",
+		icon: Invoice02Icon,
+		group: "arm_a",
+		roles: ["FINANCE", "ADMIN"],
+	},
+	{
+		to: "/finance/lc-funded",
+		labelKey: "app_shell.nav.finance_lc_funded",
+		icon: Invoice02Icon,
+		group: "arm_a",
 		roles: ["FINANCE", "ADMIN"],
 	},
 	{
 		to: "/finance/payroll",
-		labelKey: "app_shell.nav.finance_payroll",
+		labelKey: "app_shell.nav.finance_lists",
 		icon: Invoice02Icon,
-		group: "money",
+		group: "arm_a",
 		roles: ["FINANCE", "ADMIN"],
+	},
+	{
+		to: "/finance/awaiting-carmen",
+		labelKey: "app_shell.nav.finance_carmen",
+		icon: Invoice02Icon,
+		group: "arm_a",
+		roles: ["FINANCE", "ADMIN"],
+	},
+	{
+		to: "/finance/awaiting-po",
+		labelKey: "app_shell.nav.finance_awaiting_po",
+		icon: Invoice02Icon,
+		group: "arm_b",
+		roles: ["FINANCE", "ADMIN"],
+		disabled: true,
+	},
+	{
+		to: "/finance/awaiting-ariba",
+		labelKey: "app_shell.nav.finance_awaiting_ariba",
+		icon: Invoice02Icon,
+		group: "arm_b",
+		roles: ["FINANCE", "ADMIN"],
+		disabled: true,
 	},
 	{
 		to: "/finance/receivables",
 		labelKey: "app_shell.nav.receivables",
 		icon: Invoice02Icon,
-		group: "money",
+		group: "arm_b",
 		roles: ["FINANCE", "ADMIN"],
 	},
 	{

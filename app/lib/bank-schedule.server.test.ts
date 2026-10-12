@@ -185,8 +185,8 @@ describe("buildBankSchedule", () => {
 		// Work dates on packet a's invoice are Puerto Rico calendar days.
 		const aAviso = s.invoices.find((i) => i.id === a.id)?.avisoNumber
 		expect(aAviso).toBeTruthy()
-		const aInput = (pdfMock.calls as BankInvoiceInput[]).find((c) =>
-			c.invoiceNumber.endsWith(`-${aAviso}`),
+		const aInput = (pdfMock.calls as BankInvoiceInput[]).find(
+			(c) => c.avisoNumber === aAviso,
 		)
 		// Excel "Inv. Date" is the request-creation date (the schedule's creation
 		// day in Puerto Rico), NOT the packet's work date (Aug 4-5 above).
@@ -210,6 +210,10 @@ describe("buildBankSchedule", () => {
 		expect(aInput?.workFrom).toBe("08/04/26")
 		expect(aInput?.workTo).toBe("08/05/26")
 		expect(aInput?.locality).toBe("Mayagüez")
+		expect(aInput?.barrio).toBe("Calle Luna 55")
+		expect(aInput?.org).toBe("PWOR")
+		// The PDF's FECHA is the request-creation date too, in the PR calendar.
+		expect(aInput?.invoiceDate).toBe(bankDateLabel(s.generatedAt))
 		expect(aInput?.total).toBe(100)
 	})
 
@@ -278,7 +282,7 @@ describe("buildBankSchedule", () => {
 		})
 		t.track("bankSchedule", { id: scheduleId })
 		const input = pdfMock.calls[0] as BankInvoiceInput
-		expect(input.invoiceNumber.endsWith(`-${p.controlNumber}`)).toBe(true)
+		expect(input.avisoNumber).toBe(p.controlNumber)
 	})
 
 	it("refuses a packet already on a schedule", async () => {

@@ -45,6 +45,84 @@ describe("L2 Packet", () => {
 		expect(result.payment.netPayable).toBeCloseTo(100 * 0.65 * 0.9, 2)
 	})
 
+	describe("packet claimed by a bank schedule", () => {
+		async function onSchedule(sentAt: Date | null) {
+			const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+			mocks.requireRole.mockResolvedValue({ user: finance })
+			const account = t.track(
+				"contractorAccount",
+				await seedContractorAccount(),
+			)
+			const sched = t.track(
+				"bankSchedule",
+				await db.bankSchedule.create({
+					data: {
+						generatedById: finance.id,
+						advanceRate: 0.8,
+						total: 100,
+						advanceAmount: 80,
+						sentAt,
+					},
+				}),
+			)
+			const doc = t.track(
+				"jafInvoice",
+				await seedFinanceableInvoice({
+					contractorAccountCode: account.code,
+					pbccRequestSentAt: null,
+				}),
+			)
+			await db.jafInvoice.update({
+				where: { id: doc.id },
+				data: {
+					bankScheduleId: sched.id,
+					bankInvoicePdfPath: "/tmp/does-not-matter.pdf",
+				},
+			})
+			return { doc, sched }
+		}
+		const post = (id: string, intent: string) =>
+			action({
+				request: new Request(`http://localhost/finance/pbcc/${id}`, {
+					method: "POST",
+					body: new URLSearchParams({ intent }),
+				}),
+				params: { id },
+				context: {},
+			} as never)
+
+		for (const intent of ["mark_sent_by_hand", "generate_pbcc"]) {
+			it(`${intent} is refused while the schedule is unsent; nothing is written`, async () => {
+				const { doc, sched } = await onSchedule(null)
+				const result = await post(doc.id, intent)
+				expect(result).toEqual({
+					errorKey: "finance_pbcc.errors.on_schedule",
+					list: `#${sched.number}`,
+				})
+				const reloaded = await db.jafInvoice.findUniqueOrThrow({
+					where: { id: doc.id },
+				})
+				expect(reloaded.pbccRequestSentAt).toBeNull()
+				expect(await db.auditTrail.count({ where: { docId: doc.id } })).toBe(0)
+			})
+		}
+
+		it("loader returns the schedule and whether a bank invoice exists", async () => {
+			const { doc, sched } = await onSchedule(null)
+			const result = await loader({
+				request: new Request(`http://localhost/finance/pbcc/${doc.id}`),
+				params: { id: doc.id },
+				context: {},
+			} as never)
+			expect(result.bankSchedule).toMatchObject({
+				id: sched.id,
+				number: sched.number,
+				sentAt: null,
+			})
+			expect(result.hasBankInvoice).toBe(true)
+		})
+	})
+
 	it("mark_sent_by_hand records pbccRequestSentAt and a note without generating missing documents", async () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		mocks.requireRole.mockResolvedValue({ user: finance })

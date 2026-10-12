@@ -1151,6 +1151,7 @@
 		"amount_mismatch": "El monto del Aviso difiere del total de la factura por {{difference}} (tolerancia: {{tolerance}}).",
 		"amount_mismatch_detail": "Aviso: {{avisoAmount}} vs Factura: {{invoiceTotal}}.",
 		"errors": {
+			"on_schedule": "Este paquete está en el cronograma bancario {{list}}. Envíe o descarte el cronograma en lugar de enviarlo a mano.",
 			"unknown_intent": "Acción desconocida.",
 			"note_required": "Se requiere una nota de devolución.",
 			"invalid_aviso_amount": "Ingresa un monto de Aviso válido.",
@@ -1168,7 +1169,8 @@
 		"advance": "Adelanto PBCC ({{rate}}%)",
 		"ivu_rate": "Tasa de IVU: {{rate}}%",
 		"hint": "Generar este PDF guarda la solicitud, la marca como enviada y envía una copia a la Contralora.",
-		"generate_and_download": "Generar y descargar solicitud PBCC",
+		"on_schedule": "En el cronograma bancario #{{number}}",
+		"invoice_pdf": "PDF de factura",
 		"errors": {
 			"unknown_intent": "Acción desconocida.",
 			"terminal_status": "Este trabajo ya no es editable.",
@@ -1189,8 +1191,6 @@
 		"gross": "Bruto a pagar",
 		"retention": "Retención 10%",
 		"net": "Neto a pagar",
-		"bank_invoice_blocked": "Factura en formato bancario — bloqueado: aún no se ha recibido de Lissette la factura bancaria de muestra.",
-		"bank_schedule_blocked": "Plantilla Excel del banco — bloqueado: aún no se ha recibido la plantilla en blanco.",
 		"mark_sent_by_hand": "Marcar enviado a mano, fuera del sistema",
 		"sent_by_hand_note": "Nota (opcional)",
 		"precert_title": "Hoja de pre-certificación",

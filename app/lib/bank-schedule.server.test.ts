@@ -1,5 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import ExcelJS from "exceljs"
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest"
 import { db } from "~/lib/db.server"
 import { stageWhere } from "~/lib/finance-stages.server"
@@ -187,6 +188,25 @@ describe("buildBankSchedule", () => {
 		const aInput = (pdfMock.calls as BankInvoiceInput[]).find((c) =>
 			c.invoiceNumber.endsWith(`-${aAviso}`),
 		)
+		// Excel "Inv. Date" is the request-creation date (the schedule's creation
+		// day in Puerto Rico), NOT the packet's work date (Aug 4-5 above).
+		const wb = new ExcelJS.Workbook()
+		await wb.xlsx.readFile(s.xlsxPath as string)
+		const ws = wb.getWorksheet("FECHA") as ExcelJS.Worksheet
+		let headerRow = 0
+		ws.eachRow((row, n) => {
+			if (String(row.getCell(1).value ?? "").startsWith("Inv. Date"))
+				headerRow = n
+		})
+		expect(headerRow).toBeGreaterThan(0)
+		const expectedDay = s.generatedAt.toLocaleDateString("en-CA", {
+			timeZone: "America/Puerto_Rico",
+		})
+		for (const n of [headerRow + 1, headerRow + 2]) {
+			const cell = ws.getRow(n).getCell(1).value as Date
+			expect(cell.toISOString().slice(0, 10)).toBe(expectedDay)
+			expect(cell.toISOString().slice(0, 10)).not.toBe("2026-08-04")
+		}
 		expect(aInput?.workFrom).toBe("08/04/26")
 		expect(aInput?.workTo).toBe("08/05/26")
 		expect(aInput?.locality).toBe("Mayagüez")

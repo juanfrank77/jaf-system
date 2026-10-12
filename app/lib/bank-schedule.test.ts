@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
 	areaLetter,
 	bankInvoiceNumber,
+	barrioFromAddress,
 	contractLabel,
 	jobKind,
 	localityFromAddress,
@@ -38,6 +39,23 @@ describe("bank-schedule helpers", () => {
 		expect(localityFromAddress("Calle X, Yabucoa PR")).toBe("Yabucoa")
 		expect(localityFromAddress("Calle X, Yabucoa,")).toBe("Yabucoa")
 		expect(localityFromAddress("Calle X, Yabucoa, PR")).toBe("Yabucoa")
+	})
+
+	it("barrioFromAddress takes the first comma segment, blank for a single segment", () => {
+		expect(
+			barrioFromAddress(
+				"CAM 906 Int. Parcelas Nuevas, Com. Aguacate, Yabucoa PR 00767",
+			),
+		).toBe("CAM 906 Int. Parcelas Nuevas")
+		expect(barrioFromAddress("BO TIERRAS NUEVAS, MANATI, PR 00674")).toBe(
+			"BO TIERRAS NUEVAS",
+		)
+		expect(barrioFromAddress("Calle Luna 55, Mayagüez PR 00680")).toBe(
+			"Calle Luna 55",
+		)
+		expect(barrioFromAddress("Calle Luna 55")).toBe("")
+		expect(barrioFromAddress("Yabucoa PR 00767")).toBe("")
+		expect(barrioFromAddress("")).toBe("")
 	})
 
 	it("jobKind maps INSTALL to instalacion and anything else to mantenimiento", () => {

@@ -5,12 +5,14 @@ import {
 	generateBankInvoicePdf,
 } from "./bank-invoice.server"
 
-function extractTextTokensInOrder(bytes: Buffer): string[] {
+/** Text tokens of each content stream (one per page; NOT in page order). */
+function extractStreamTokens(bytes: Buffer): string[][] {
 	const str = bytes.toString("latin1")
 	const streams = str.match(/stream\s*\n([\s\S]*?)\n?endstream/g) || []
 
-	const tokens: string[] = []
+	const perStream: string[][] = []
 	for (const stream of streams) {
+		const tokens: string[] = []
 		const match = stream.match(/stream\s*\n([\s\S]*?)\nendstream/)
 		if (!match) continue
 
@@ -68,17 +70,54 @@ function extractTextTokensInOrder(bytes: Buffer): string[] {
 				}
 			}
 		}
+		if (tokens.length > 0) perStream.push(tokens)
 	}
-	return tokens
+	return perStream
 }
+
+function extractTextTokensInOrder(bytes: Buffer): string[] {
+	return extractStreamTokens(bytes).flat()
+}
+
+/** All text of the PDF, tokens joined with no separator. */
+function fullText(bytes: Buffer): string {
+	return extractTextTokensInOrder(bytes).join("")
+}
+
+function pageCount(bytes: Buffer): number {
+	return (bytes.toString("latin1").match(/\/Type\s*\/Page(?![A-Za-z])/g) || [])
+		.length
+}
+
+/** The line table's header row, all twelve columns, in order. */
+const TABLE_HEADER = [
+	"No. de",
+	"Servicio",
+	"DESCRIPCION",
+	"CANTIDAD",
+	"U/M",
+	"PRECIO",
+	"UNITARIO",
+	"IMPORTE",
+	"A/C",
+	"SUB ACT",
+	"DEPT.",
+	"PROFIT CENTER",
+	"ACT",
+	"CENTRO",
+	"CODIGO COSTO",
+].join("")
 
 const input: BankInvoiceInput = {
 	supplierNumber: "V0000000006",
-	invoiceNumber: "M17-10354739",
+	avisoNumber: "10354739",
+	org: "PWOR",
+	invoiceDate: "08/20/26",
 	contractLabel: "17-xxx",
 	workFrom: "08/17/26",
-	workTo: "08/17/26",
+	workTo: "08/18/26",
 	description: "INST DE LINEA BAJANTE",
+	barrio: "BO TIERRAS NUEVAS",
 	locality: "MANATI",
 	kind: "MANTENIMIENTO",
 	total: 118.45,
@@ -130,7 +169,7 @@ describe("generateBankInvoicePdf", () => {
 		expect(bytes.subarray(0, 4).toString()).toBe("%PDF")
 	})
 
-	it("renders many lines across pages", async () => {
+	it("renders many lines across pages, repeating the table header on every page", async () => {
 		const many = Array.from({ length: 80 }, (_, i) => ({
 			...input.lines[0],
 			claroCode: String(34000000 + i),
@@ -141,18 +180,24 @@ describe("generateBankInvoicePdf", () => {
 			total: 1840,
 		})
 		expect(bytes.subarray(0, 4).toString()).toBe("%PDF")
-		const pdfStr = bytes.toString("latin1")
-		const pageCount = (pdfStr.match(/\/Type\s*\/Page(?![A-Za-z])/g) || [])
-			.length
-		expect(pageCount).toBeGreaterThan(1)
+		const pages = pageCount(bytes)
+		expect(pages).toBeGreaterThan(1)
+		// One content stream per page; streams are not stored in page order, so
+		// assert that EVERY page (page 2 included) carries the header row.
+		const streams = extractStreamTokens(bytes)
+		expect(streams).toHaveLength(pages)
+		const withHeader = streams.filter((t) => t.join("").includes(TABLE_HEADER))
+		expect(withHeader).toHaveLength(pages)
+		// The form header and main box are printed once, on page 1 only.
+		const withBox = streams.filter((t) =>
+			t.join("").includes("NUMERO SUPLIDOR"),
+		)
+		expect(withBox).toHaveLength(1)
 	})
 
-	it("renders 3-line invoice on a single page", async () => {
+	it("renders a 2-line invoice on a single page", async () => {
 		const bytes = await generateBankInvoicePdf(input)
-		const pdfStr = bytes.toString("latin1")
-		const pageCount = (pdfStr.match(/\/Type\s*\/Page(?![A-Za-z])/g) || [])
-			.length
-		expect(pageCount).toBe(1)
+		expect(pageCount(bytes)).toBe(1)
 	})
 
 	it("X mark appears exactly once adjacent to checked job kind label", async () => {
@@ -171,10 +216,12 @@ describe("generateBankInvoicePdf", () => {
 			expect(xCount).toBe(1)
 
 			// react-pdf fragments text in reading order with the X immediately
-			// BEFORE its own label, so join the tokens that follow the X.
+			// BEFORE its own label, so join the tokens that follow the X. Every
+			// token holds at least one character, so kind.length tokens always
+			// cover the whole label however finely it is fragmented.
 			const xIndex = tokens.indexOf("X")
 			expect(xIndex).toBeGreaterThanOrEqual(0)
-			const after = tokens.slice(xIndex + 1, xIndex + 8).join("")
+			const after = tokens.slice(xIndex + 1, xIndex + 1 + kind.length).join("")
 			expect(after.length).toBeGreaterThan(0)
 
 			// The text right after the single X is the rendered kind's label...
@@ -186,13 +233,55 @@ describe("generateBankInvoicePdf", () => {
 		}
 	})
 
-	it("includes invoice number and total in PDF content", async () => {
-		const bytes = await generateBankInvoicePdf(input)
-		const tokens = extractTextTokensInOrder(bytes)
-		const fullText = tokens.join("")
+	it("prints the plain aviso as the invoice number, and the total", async () => {
+		const text = fullText(await generateBankInvoicePdf(input))
+		expect(text).toContain("10354739")
+		expect(text).not.toContain("M17-")
+		expect(text).toContain("118.45")
+	})
 
-		expect(fullText).toContain(input.invoiceNumber)
-		expect(fullText).toContain("118.45")
+	it("prints the page header like JAF's sample", async () => {
+		const text = fullText(await generateBankInvoicePdf(input))
+		expect(text).toContain(
+			"JAF Communications, Inc.PO Box 11468, CAPARRA HEIGHTS, PR 00922",
+		)
+		expect(text).toContain("ACTA DE CONFORMIDADContrato Núm. 17-xxx")
+		expect(text).toContain("FACTURA / CERTIFICACIONDE CONTRATISTA A P.R.T.")
+	})
+
+	it("fills the main box: supplier, aviso, ORG, FECHA, work dates, description, cost block", async () => {
+		const text = fullText(await generateBankInvoicePdf(input))
+		// Labels row, then the values row in the same column order.
+		expect(text).toContain("NUMERO SUPLIDORNUMERO DE FACTURAORG.FECHA")
+		expect(text).toContain("V000000000610354739PWOR08/20/26")
+		expect(text).toContain("NUM. DE ORDEN DE COMPRA")
+		expect(text).toContain(
+			"DESCRIPCION DEL TRABAJOINST DE LINEA BAJANTEBO TIERRAS NUEVASLocalidad: MANATI",
+		)
+		expect(text).toContain("TRABAJO EFECTUADOENTRE08/17/2608/18/26")
+		expect(text).toContain("COSTO TOTAL:CONTRATOFACTURADOBALANCE$$$")
+		expect(text).toContain("TOTAL A PAGAR $$ 118.45")
+		expect(text).toContain("Certificado por:FECHA:")
+		expect(text.match(/Aprobado por:FECHA:/g)).toHaveLength(3)
+		expect(text).toContain("M-3545ORDEN TRABAJO PLANTA:")
+	})
+
+	it("omits the barrio line when there is none", async () => {
+		const text = fullText(
+			await generateBankInvoicePdf({ ...input, barrio: "" }),
+		)
+		expect(text).toContain("INST DE LINEA BAJANTELocalidad: MANATI")
+	})
+
+	it("prints all twelve column headers, the lines, and the totals block", async () => {
+		const text = fullText(await generateBankInvoicePdf(input))
+		expect(text).toContain(TABLE_HEADER)
+		expect(text).toContain(
+			"34012039REMOCION BAJANTE GPON1.00EA23.0023.00012-641",
+		)
+		expect(text).toContain(
+			"Total$ 118.45Resumen:$118.45- - -Total$ 118.45Firma: ",
+		)
 	})
 
 	it("handles duplicate claroCode without React key warnings", async () => {

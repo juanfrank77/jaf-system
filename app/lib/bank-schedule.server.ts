@@ -2,6 +2,7 @@ import fs from "node:fs/promises"
 import {
 	areaLetter,
 	bankInvoiceNumber,
+	barrioFromAddress,
 	contractLabel,
 	jobKind,
 	localityFromAddress,
@@ -45,6 +46,8 @@ export class ScheduleValidationError extends Error {
 
 const SUPPLIER_NUMBER = "V0000000006"
 const DEBTOR = "PRT / CLARO"
+/** ORG. cell on the PBCC invoice. */
+const ORG = "PWOR"
 
 /** MM/DD/YY of the Puerto Rico business-calendar day containing `d`. */
 export function bankDateLabel(d: Date): string {
@@ -178,16 +181,22 @@ export async function buildBankSchedule(opts: {
 			const invoiceNumber = bankInvoiceNumber(prefix, aviso)
 			const from = doc.startedAt ?? doc.fieldSubmittedAt ?? doc.createdAt
 			const to = doc.endedAt ?? from
+			const address = doc.jobAddressActual ?? doc.jobAddressEstimated
 			const pdf = await generateBankInvoicePdf({
 				supplierNumber: SUPPLIER_NUMBER,
-				invoiceNumber,
+				// The PDF's NUMERO DE FACTURA is the plain aviso, as on JAF's
+				// sample; the prefixed form stays on the Excel schedule.
+				avisoNumber: aviso,
+				org: ORG,
+				// FECHA is the request-creation date (the schedule's creation),
+				// in the Puerto Rico calendar, like the Excel "Inv. Date".
+				invoiceDate: bankDateLabel(schedule.generatedAt),
 				contractLabel: contractLabel(prefix),
 				workFrom: bankDateLabel(from),
 				workTo: bankDateLabel(to),
 				description: doc.jobDescription ?? doc.jobType,
-				locality: localityFromAddress(
-					doc.jobAddressActual ?? doc.jobAddressEstimated,
-				),
+				barrio: barrioFromAddress(address),
+				locality: localityFromAddress(address),
 				kind: jobKind(doc.jobType),
 				lines,
 				total: toNumberPrice(doc.jafInvoiceLineTotal),

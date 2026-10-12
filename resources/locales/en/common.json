@@ -1135,9 +1135,6 @@
 		"address": "Address",
 		"aviso_number": "Aviso #",
 		"supervisor": "Supervisor",
-		"claro_work_order": "Claro Work Order",
-		"claro_pdf_title": "Claro PDF",
-		"no_claro_pdf": "No Claro PDF on file.",
 		"previous_send_backs": "Previous Finance Send-backs",
 		"aviso_amount_label": "Aviso total (from document)",
 		"aviso_amount_hint": "Enter the total amount shown on the Aviso document.",
@@ -1147,7 +1144,6 @@
 		"cannot_verify_hint": "The supervisor must upload the Claro PDF before verification.",
 		"send_back_placeholder": "Explain the Aviso issue to the supervisor…",
 		"send_back": "Send Back to Supervisor",
-		"back": "Back to pipeline",
 		"amount_mismatch": "Aviso amount differs from invoice total by {{difference}} (tolerance: {{tolerance}}).",
 		"amount_mismatch_detail": "Aviso: {{avisoAmount}} vs Invoice: {{invoiceTotal}}.",
 		"errors": {

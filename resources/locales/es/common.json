@@ -1135,9 +1135,6 @@
 		"address": "Dirección",
 		"aviso_number": "Aviso #",
 		"supervisor": "Supervisor",
-		"claro_work_order": "Orden de trabajo Claro",
-		"claro_pdf_title": "PDF de Claro",
-		"no_claro_pdf": "No hay PDF de Claro en archivo.",
 		"previous_send_backs": "Devoluciones previas de Finanzas",
 		"aviso_amount_label": "Total del Aviso (del documento)",
 		"aviso_amount_hint": "Ingresa el monto total que aparece en el documento de Aviso.",
@@ -1147,7 +1144,6 @@
 		"cannot_verify_hint": "El supervisor debe cargar el PDF de Claro antes de verificar.",
 		"send_back_placeholder": "Explica el problema del Aviso al supervisor…",
 		"send_back": "Devolver al supervisor",
-		"back": "Volver al pipeline",
 		"amount_mismatch": "El monto del Aviso difiere del total de la factura por {{difference}} (tolerancia: {{tolerance}}).",
 		"amount_mismatch_detail": "Aviso: {{avisoAmount}} vs Factura: {{invoiceTotal}}.",
 		"errors": {

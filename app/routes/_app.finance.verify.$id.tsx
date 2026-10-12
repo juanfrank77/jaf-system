@@ -5,7 +5,7 @@ import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
 import { MaterialLineItems } from "~/components/material-line-items"
-import { Button, buttonVariants } from "~/components/ui/button"
+import { Button } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
@@ -278,9 +278,6 @@ export default function FinanceVerify({
 	const taken =
 		(doc.materialsTaken as { serviceCodeId: string; qty: number }[]) || []
 	const source = used.length > 0 ? used : taken
-	const claroPdfUrl = doc.claroPdfPath
-		? `/files/claro-pdfs/${doc.id}-claro.pdf`
-		: null
 	const jafInvoiceUrl = doc.jafInvoicePdfPath
 		? `/files/jaf-invoices/${doc.id}-jaf-invoice.pdf`
 		: null
@@ -352,7 +349,7 @@ export default function FinanceVerify({
 				</div>
 			)}
 
-			<div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+			<div className="grid grid-cols-1 gap-4">
 				<div className="bg-card border rounded-lg p-4 space-y-3">
 					<h2 className="text-sm font-medium">
 						{t("finance_verify.jaf_invoice")}
@@ -398,23 +395,6 @@ export default function FinanceVerify({
 						initialItems={source}
 						readOnly
 					/>
-				</div>
-
-				<div className="bg-card border rounded-lg p-4 space-y-3">
-					<h2 className="text-sm font-medium">
-						{t("finance_verify.claro_work_order")}
-					</h2>
-					{claroPdfUrl ? (
-						<iframe
-							src={claroPdfUrl}
-							className="w-full h-96 border rounded"
-							title={t("finance_verify.claro_pdf_title")}
-						/>
-					) : (
-						<p className="text-sm text-muted-foreground">
-							{t("finance_verify.no_claro_pdf")}
-						</p>
-					)}
 				</div>
 			</div>
 
@@ -512,12 +492,6 @@ export default function FinanceVerify({
 					{t("finance_verify.errors.invalid_stage")}
 				</p>
 			)}
-			<a
-				href={`/finance/receivables`}
-				className={buttonVariants({ variant: "ghost", size: "sm" })}
-			>
-				{t("finance_verify.back")}
-			</a>
 		</div>
 	)
 }

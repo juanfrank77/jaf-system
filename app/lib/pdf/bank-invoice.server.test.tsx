@@ -5,11 +5,11 @@ import {
 	generateBankInvoicePdf,
 } from "./bank-invoice.server"
 
-function extractPdfText(bytes: Buffer): string {
+function extractTextTokensInOrder(bytes: Buffer): string[] {
 	const str = bytes.toString("latin1")
 	const streams = str.match(/stream\s*\n([\s\S]*?)\n?endstream/g) || []
 
-	let text = ""
+	const tokens: string[] = []
 	for (const stream of streams) {
 		const match = stream.match(/stream\s*\n([\s\S]*?)\nendstream/)
 		if (!match) continue
@@ -29,18 +29,47 @@ function extractPdfText(bytes: Buffer): string {
 			}
 		}
 
-		// Decode hex-encoded strings in angle brackets <...>
-		streamData = streamData.replace(/<([0-9a-fA-F]+)>/g, (match, hex) => {
-			try {
-				return Buffer.from(hex, "hex").toString("latin1")
-			} catch {
-				return match
-			}
-		})
+		// Extract text-showing operators: Tj (show string) and TJ (show strings with spacing)
+		// Match patterns like: (text)Tj, <hextext>Tj, and [...<hex> offset <hex>...]TJ
+		const textOperators =
+			streamData.match(
+				/(\(([^)]*)\)|<([0-9a-fA-F]+)>)\s+Tj|\[[\s\S]*?\]\s*TJ/g,
+			) || []
 
-		text += `${streamData}\n`
+		for (const op of textOperators) {
+			if (op.includes("TJ")) {
+				// Extract hex strings from TJ array [...<hex1> offset <hex2>...]TJ
+				const hexMatches = op.match(/<([0-9a-fA-F]+)>/g) || []
+				for (const hexMatch of hexMatches) {
+					const hex = hexMatch.slice(1, -1)
+					try {
+						const decoded = Buffer.from(hex, "hex").toString("latin1")
+						tokens.push(decoded)
+					} catch {
+						// Ignore invalid hex
+					}
+				}
+			} else if (op.includes("(")) {
+				// Extract literal string from (text)Tj
+				const literalMatch = op.match(/\(([^)]*)\)/)
+				if (literalMatch) {
+					tokens.push(literalMatch[1])
+				}
+			} else if (op.includes("<")) {
+				// Extract hex string from <hex>Tj
+				const hexMatch = op.match(/<([0-9a-fA-F]+)>/)
+				if (hexMatch) {
+					try {
+						const decoded = Buffer.from(hexMatch[1], "hex").toString("latin1")
+						tokens.push(decoded)
+					} catch {
+						// Ignore invalid hex
+					}
+				}
+			}
+		}
 	}
-	return text
+	return tokens
 }
 
 const input: BankInvoiceInput = {
@@ -113,56 +142,79 @@ describe("generateBankInvoicePdf", () => {
 		})
 		expect(bytes.subarray(0, 4).toString()).toBe("%PDF")
 		const pdfStr = bytes.toString("latin1")
-		const pageCount = (pdfStr.match(/\/Type \/Page/g) || []).length
+		const pageCount = (pdfStr.match(/\/Type\s*\/Page(?![A-Za-z])/g) || [])
+			.length
 		expect(pageCount).toBeGreaterThan(1)
 	})
 
-	it("renders invoice with different job kinds", async () => {
-		const instalacion = await generateBankInvoicePdf({
-			...input,
-			kind: "INSTALACION",
-		})
-		expect(instalacion.subarray(0, 4).toString()).toBe("%PDF")
-
-		const construccion = await generateBankInvoicePdf({
-			...input,
-			kind: "CONSTRUCCION",
-		})
-		expect(construccion.subarray(0, 4).toString()).toBe("%PDF")
-
-		const mantenimiento = await generateBankInvoicePdf(input)
-		expect(mantenimiento.subarray(0, 4).toString()).toBe("%PDF")
-	})
-
-	it("includes invoice number, total, and X mark in PDF content", async () => {
+	it("renders 3-line invoice on a single page", async () => {
 		const bytes = await generateBankInvoicePdf(input)
-		const text = extractPdfText(bytes)
-
-		expect(text).toContain(input.invoiceNumber)
-		expect(text).toContain("118.45")
-		expect(text).toContain("X")
-		// Verify MANTENIMIENTO kind renders correctly
-		const mantenimientoCheck = input.kind === "MANTENIMIENTO"
-		expect(mantenimientoCheck).toBe(true)
+		const pdfStr = bytes.toString("latin1")
+		const pageCount = (pdfStr.match(/\/Type\s*\/Page(?![A-Za-z])/g) || [])
+			.length
+		expect(pageCount).toBe(1)
 	})
 
-	it("handles duplicate claroCode lines without throwing or warning", async () => {
-		const consoleErrorSpy = vi.spyOn(console, "error")
-		const duplicateLines: BankInvoiceInput = {
-			...input,
-			lines: [
-				input.lines[0],
-				{ ...input.lines[0], claroCode: input.lines[0].claroCode },
-				{ ...input.lines[0], claroCode: input.lines[0].claroCode },
-			],
+	it("X mark appears exactly once for checked job kind", async () => {
+		const kinds: Array<BankInvoiceInput["kind"]> = [
+			"INSTALACION",
+			"CONSTRUCCION",
+			"MANTENIMIENTO",
+		]
+
+		for (const kind of kinds) {
+			const bytes = await generateBankInvoicePdf({ ...input, kind })
+			const tokens = extractTextTokensInOrder(bytes)
+			const fullText = tokens.join("")
+
+			// X should appear exactly once in the checkbox section
+			const xCount = tokens.filter((t) => t === "X").length
+			expect(xCount).toBe(1)
+
+			// The kind label should appear in the PDF
+			expect(fullText).toContain(kind)
 		}
-		const bytes = await generateBankInvoicePdf(duplicateLines)
-		expect(bytes.subarray(0, 4).toString()).toBe("%PDF")
-		const errorCalls = consoleErrorSpy.mock.calls
-		const hasDuplicateKeyWarning = errorCalls.some((call) =>
-			call.some((arg) => typeof arg === "string" && arg.includes("same key")),
-		)
-		expect(hasDuplicateKeyWarning).toBe(false)
-		consoleErrorSpy.mockRestore()
+	})
+
+	it("includes invoice number and total in PDF content", async () => {
+		const bytes = await generateBankInvoicePdf(input)
+		const tokens = extractTextTokensInOrder(bytes)
+		const fullText = tokens.join("")
+
+		expect(fullText).toContain(input.invoiceNumber)
+		expect(fullText).toContain("118.45")
+	})
+
+	it("handles duplicate claroCode without React key warnings", async () => {
+		const consoleErrorSpy = vi.spyOn(console, "error")
+		try {
+			const duplicateLines: BankInvoiceInput = {
+				...input,
+				lines: [
+					{ ...input.lines[0], description: "Line A" },
+					{
+						...input.lines[0],
+						claroCode: input.lines[0].claroCode,
+						description: "Line B",
+					},
+					{
+						...input.lines[0],
+						claroCode: input.lines[0].claroCode,
+						description: "Line C",
+					},
+				],
+			}
+			const bytes = await generateBankInvoicePdf(duplicateLines)
+			expect(bytes.subarray(0, 4).toString()).toBe("%PDF")
+
+			// Assert console.error was NOT called with any key-related warning
+			const errorCalls = consoleErrorSpy.mock.calls.flat()
+			const hasKeyWarning = errorCalls.some(
+				(arg) => typeof arg === "string" && arg.toLowerCase().includes("key"),
+			)
+			expect(hasKeyWarning).toBe(false)
+		} finally {
+			consoleErrorSpy.mockRestore()
+		}
 	})
 })

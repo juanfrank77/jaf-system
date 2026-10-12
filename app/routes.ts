@@ -61,6 +61,15 @@ export default [
 		route("finance/receivables", "routes/_app.finance.receivables.tsx"),
 		route("finance/verify/:id", "routes/_app.finance.verify.$id.tsx"),
 		route("finance/pbcc/:id", "routes/_app.finance.pbcc.$id.tsx"),
+		route(
+			"finance/pbcc/:id/invoice",
+			"routes/_app.finance.pbcc.$id.invoice.tsx",
+		),
+		route("finance/schedules/:id", "routes/_app.finance.schedules.$id.tsx"),
+		route(
+			"finance/schedules/:id/xlsx",
+			"routes/_app.finance.schedules.$id.xlsx.tsx",
+		),
 		route("finance/payroll", "routes/_app.finance.payroll.tsx"),
 		route("finance/payroll/:runId", "routes/_app.finance.payroll.$runId.tsx"),
 		route(

@@ -1977,6 +1977,32 @@
 			"ref": "Referencia bancaria"
 		}
 	},
+	"finance_schedule": {
+		"title": "Cronograma al banco #{{number}}",
+		"total": "Total",
+		"advance": "Adelanto ({{rate}}%)",
+		"sent_on": "Enviado {{date}}",
+		"not_sent": "Aún no enviado",
+		"download_xlsx": "⬇ Cronograma Excel",
+		"download_invoice": "PDF de factura",
+		"mark_sent": "Marcar enviado al banco",
+		"discard": "Descartar cronograma",
+		"discard_confirm": "¿Descartar este cronograma? Sus paquetes vuelven a la lista de solicitudes LC.",
+		"incomplete_notice": "Este cronograma no se creó completo (sin archivo Excel). Descártelo y créelo de nuevo.",
+		"area": "Área",
+		"build": "Crear cronograma ({{count}})",
+		"recent": "Cronogramas recientes",
+		"none_selected": "Seleccione al menos un paquete.",
+		"errors": {
+			"empty": "Seleccione al menos un paquete.",
+			"not_found": "Un paquete seleccionado ya no existe.",
+			"not_eligible": "Un paquete de este cronograma ya no está listo (devuelto o cancelado): {{list}}. Descarte el cronograma y créelo de nuevo.",
+			"already_scheduled": "Ya están en un cronograma: {{list}}.",
+			"no_area": "La brigada no tiene área definida: {{list}}.",
+			"incomplete": "Este cronograma no se creó completo, por lo que no puede marcarse enviado. Descártelo y créelo de nuevo.",
+			"already_sent": "Este cronograma ya fue enviado."
+		}
+	},
 	"finance_carmen": {
 		"title": "Pago de Carmen",
 		"none": "No hay listas esperando a Carmen.",

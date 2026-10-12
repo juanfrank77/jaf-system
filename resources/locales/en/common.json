@@ -1977,6 +1977,32 @@
 			"ref": "Bank reference"
 		}
 	},
+	"finance_schedule": {
+		"title": "Bank schedule #{{number}}",
+		"total": "Total",
+		"advance": "Advance ({{rate}}%)",
+		"sent_on": "Sent {{date}}",
+		"not_sent": "Not sent yet",
+		"download_xlsx": "⬇ Excel schedule",
+		"download_invoice": "Invoice PDF",
+		"mark_sent": "Mark sent to the bank",
+		"discard": "Discard schedule",
+		"discard_confirm": "Discard this schedule? Its packets return to the LC request list.",
+		"incomplete_notice": "This schedule was not fully built (no Excel file). Discard it and build it again.",
+		"area": "Area",
+		"build": "Build schedule ({{count}})",
+		"recent": "Recent schedules",
+		"none_selected": "Select at least one packet.",
+		"errors": {
+			"empty": "Select at least one packet.",
+			"not_found": "A selected packet no longer exists.",
+			"not_eligible": "A packet on this schedule is no longer ready (sent back or cancelled): {{list}}. Discard the schedule and build it again.",
+			"already_scheduled": "Already on a schedule: {{list}}.",
+			"no_area": "Their brigade has no area set: {{list}}.",
+			"incomplete": "This schedule was not fully built, so it cannot be marked sent. Discard it and build it again.",
+			"already_sent": "This schedule was already sent."
+		}
+	},
 	"finance_carmen": {
 		"title": "Carmen's payment",
 		"none": "No lists are waiting for Carmen.",

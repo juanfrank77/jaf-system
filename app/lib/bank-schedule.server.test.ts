@@ -197,7 +197,9 @@ describe("buildBankSchedule", () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		const ok = await lcRequestPacket()
 		const noArea = await lcRequestPacket({ area: null })
-		const before = await db.bankSchedule.count()
+		const before = await db.bankSchedule.count({
+			where: { generatedById: finance.id },
+		})
 		const err = await buildBankSchedule({
 			packetIds: [ok.id, noArea.id],
 			generatedById: finance.id,
@@ -209,7 +211,9 @@ describe("buildBankSchedule", () => {
 			code: "no_area",
 			controlNumbers: [noArea.controlNumber],
 		})
-		expect(await db.bankSchedule.count()).toBe(before)
+		expect(
+			await db.bankSchedule.count({ where: { generatedById: finance.id } }),
+		).toBe(before)
 		const reloaded = await db.jafInvoice.findUniqueOrThrow({
 			where: { id: ok.id },
 		})
@@ -239,6 +243,22 @@ describe("buildBankSchedule", () => {
 			code: "not_eligible",
 			controlNumbers: [p.controlNumber],
 		})
+	})
+
+	it("an empty-string aviso falls back to the control number for the invoice number", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		const p = await lcRequestPacket()
+		await db.jafInvoice.update({
+			where: { id: p.id },
+			data: { avisoNumber: "" },
+		})
+		const { scheduleId } = await buildBankSchedule({
+			packetIds: [p.id],
+			generatedById: finance.id,
+		})
+		t.track("bankSchedule", { id: scheduleId })
+		const input = pdfMock.calls[0] as BankInvoiceInput
+		expect(input.invoiceNumber.endsWith(`-${p.controlNumber}`)).toBe(true)
 	})
 
 	it("refuses a packet already on a schedule", async () => {
@@ -288,7 +308,9 @@ describe("buildBankSchedule", () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		const a = await lcRequestPacket()
 		const b = await lcRequestPacket()
-		const before = await db.bankSchedule.count()
+		const before = await db.bankSchedule.count({
+			where: { generatedById: finance.id },
+		})
 		settingsHook.beforeClaim = async () => {
 			await db.jafInvoice.update({
 				where: { id: b.id },
@@ -305,7 +327,9 @@ describe("buildBankSchedule", () => {
 			code: "not_eligible",
 			controlNumbers: [b.controlNumber],
 		})
-		expect(await db.bankSchedule.count()).toBe(before)
+		expect(
+			await db.bankSchedule.count({ where: { generatedById: finance.id } }),
+		).toBe(before)
 		for (const id of [a.id, b.id]) {
 			const reloaded = await db.jafInvoice.findUniqueOrThrow({ where: { id } })
 			expect(reloaded.bankScheduleId).toBeNull()
@@ -316,7 +340,9 @@ describe("buildBankSchedule", () => {
 	it("a cleanup failure still surfaces the original error; discard recovers", async () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		const p = await lcRequestPacket()
-		const before = await db.bankSchedule.count()
+		const before = await db.bankSchedule.count({
+			where: { generatedById: finance.id },
+		})
 		const realTx = db.$transaction.bind(db)
 		vi.spyOn(db, "$transaction").mockImplementation(((
 			arg: unknown,
@@ -355,7 +381,9 @@ describe("buildBankSchedule", () => {
 		expect(await discardBankSchedule({ scheduleId })).toEqual({
 			discarded: true,
 		})
-		expect(await db.bankSchedule.count()).toBe(before)
+		expect(
+			await db.bankSchedule.count({ where: { generatedById: finance.id } }),
+		).toBe(before)
 		const released = await db.jafInvoice.findUniqueOrThrow({
 			where: { id: p.id },
 		})
@@ -366,12 +394,16 @@ describe("buildBankSchedule", () => {
 	it("a PDF failure on the first packet rolls everything back", async () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		const p = await lcRequestPacket()
-		const before = await db.bankSchedule.count()
+		const before = await db.bankSchedule.count({
+			where: { generatedById: finance.id },
+		})
 		pdfMock.failOnCall = 1
 		await expect(
 			buildBankSchedule({ packetIds: [p.id], generatedById: finance.id }),
 		).rejects.toThrow("injected pdf failure")
-		expect(await db.bankSchedule.count()).toBe(before)
+		expect(
+			await db.bankSchedule.count({ where: { generatedById: finance.id } }),
+		).toBe(before)
 		const reloaded = await db.jafInvoice.findUniqueOrThrow({
 			where: { id: p.id },
 		})
@@ -384,13 +416,17 @@ describe("buildBankSchedule", () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		const a = await lcRequestPacket()
 		const b = await lcRequestPacket()
-		const before = await db.bankSchedule.count()
+		const before = await db.bankSchedule.count({
+			where: { generatedById: finance.id },
+		})
 		pdfMock.failOnCall = 2
 		await expect(
 			buildBankSchedule({ packetIds: [a.id, b.id], generatedById: finance.id }),
 		).rejects.toThrow("injected pdf failure")
 		expect(pdfMock.calls).toHaveLength(2)
-		expect(await db.bankSchedule.count()).toBe(before)
+		expect(
+			await db.bankSchedule.count({ where: { generatedById: finance.id } }),
+		).toBe(before)
 		for (const id of [a.id, b.id]) {
 			const reloaded = await db.jafInvoice.findUniqueOrThrow({ where: { id } })
 			expect(reloaded.bankScheduleId).toBeNull()
@@ -457,13 +493,17 @@ describe("markScheduleSent", () => {
 			where: { docId: { in: [a.id, b.id] }, action: "PBCC_REQUEST_GENERATED" },
 		})
 		expect(audits).toBe(2)
-		const notes = await db.notification.count({
-			where: { userId: carmen.id, message: { contains: "schedule" } },
-		})
-		expect(notes).toBe(1)
 		const s = await db.bankSchedule.findUniqueOrThrow({
 			where: { id: scheduleId },
 		})
+		// Scope to THIS schedule: other files' mark-sent notifies every comptroller.
+		const notes = await db.notification.count({
+			where: {
+				userId: carmen.id,
+				message: { contains: `Bank schedule #${s.number} ` },
+			},
+		})
+		expect(notes).toBe(1)
 		expect(s.sentAt).not.toBeNull()
 		expect(s.sentById).toBe(finance.id)
 	})
@@ -620,9 +660,14 @@ describe("markScheduleSent stamp race", () => {
 				},
 			}),
 		).toBe(0)
-		expect(await db.notification.count({ where: { userId: carmen.id } })).toBe(
-			0,
-		)
+		expect(
+			await db.notification.count({
+				where: {
+					userId: carmen.id,
+					message: { contains: `Bank schedule #${s.number} ` },
+				},
+			}),
+		).toBe(0)
 	})
 })
 

@@ -1151,7 +1151,6 @@
 		"amount_mismatch": "El monto del Aviso difiere del total de la factura por {{difference}} (tolerancia: {{tolerance}}).",
 		"amount_mismatch_detail": "Aviso: {{avisoAmount}} vs Factura: {{invoiceTotal}}.",
 		"errors": {
-			"on_schedule": "Este paquete está en el cronograma bancario {{list}}. Envíe o descarte el cronograma en lugar de enviarlo a mano.",
 			"unknown_intent": "Acción desconocida.",
 			"note_required": "Se requiere una nota de devolución.",
 			"invalid_aviso_amount": "Ingresa un monto de Aviso válido.",
@@ -1172,6 +1171,7 @@
 		"on_schedule": "En el cronograma bancario #{{number}}",
 		"invoice_pdf": "PDF de factura",
 		"errors": {
+			"on_schedule": "Este paquete está en el cronograma bancario {{list}}. Envíe o descarte el cronograma en lugar de enviarlo a mano.",
 			"unknown_intent": "Acción desconocida.",
 			"terminal_status": "Este trabajo ya no es editable.",
 			"not_sent": "Primero envíe la solicitud al banco.",

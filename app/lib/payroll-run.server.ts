@@ -134,8 +134,9 @@ export function armAOpenWhere(
 		payablesClosedAt: null,
 		// "Not yet claimed" — what makes a job sweepable exactly once. Dropped
 		// in the packet view so finance can still open a job that has already
-		// been swept. Funding (a PBCC_ADVANCE payment record) is deliberately
-		// NOT a clause: a sent packet is swept whether or not PBCC has funded it.
+		// been swept. Funding (a PBCC_ADVANCE payment record) is
+		// deliberately NOT a clause here, so the packets list stays funding-agnostic;
+		// `sweepableWhere` adds the funded requirement for payroll runs.
 		...(opts.packetView ? {} : { payrollRunId: null }),
 	}
 }

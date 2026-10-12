@@ -7,6 +7,7 @@ import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
+import { bankInvoiceNumber } from "~/lib/bank-schedule"
 import {
 	type ContractorPayment,
 	type ContractorShareLine,
@@ -31,7 +32,11 @@ import { armAOpenWhere } from "~/lib/payroll-run.server"
 import { generatePbccRequestPdf } from "~/lib/pdf/pbcc-request.server"
 import { isTerminalStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
-import { getIvuRate, getLcPbccAdvanceRate } from "~/lib/system-settings.server"
+import {
+	getBankInvoicePrefix,
+	getIvuRate,
+	getLcPbccAdvanceRate,
+} from "~/lib/system-settings.server"
 import { formatMoney, toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.finance.pbcc.$id"
 
@@ -224,9 +229,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 	await fs.mkdir(pbccDir, { recursive: true })
 
 	const today = new Date().toLocaleDateString("en-US")
-	const invoiceNumber = doc.avisoNumber
-		? `M${new Date().getFullYear()}-${doc.avisoNumber}`
-		: `M${new Date().getFullYear()}-${doc.controlNumber}`
+	const invoiceNumber = bankInvoiceNumber(
+		await getBankInvoicePrefix(),
+		doc.avisoNumber ?? doc.controlNumber,
+	)
 
 	const pdfBytes = await generatePbccRequestPdf({
 		controlNumber: doc.controlNumber,

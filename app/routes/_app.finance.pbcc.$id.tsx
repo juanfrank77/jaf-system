@@ -20,7 +20,6 @@ import {
 	computeFinanceStage,
 	financeLineItems,
 	invoiceTotalUsed,
-	isMissingClaroPdf,
 } from "~/lib/finance-pipeline.server"
 import { pbccStep, stepNumber } from "~/lib/finance-steps"
 import { parseFunding } from "~/lib/funding-form"
@@ -105,7 +104,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		payment,
 		frozen,
 		contractorAccountResolved: frozen || account !== null,
-		missingClaroPdf: isMissingClaroPdf(doc),
 	}
 }
 
@@ -212,9 +210,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 	if (stage !== "PBCC_REQUEST_PENDING") {
 		throw redirect(`/finance/receivables`)
 	}
-	if (isMissingClaroPdf(doc)) {
-		throw redirect(`/finance/receivables`)
-	}
 
 	const serviceCodes = await db.serviceCode.findMany()
 	const codeMap = Object.fromEntries(serviceCodes.map((c) => [c.id, c]))
@@ -311,7 +306,6 @@ export default function PbccRequest({
 		payment,
 		frozen,
 		contractorAccountResolved,
-		missingClaroPdf,
 	} = loaderData
 	const { t } = useTranslation()
 
@@ -414,9 +408,6 @@ export default function PbccRequest({
 					)}
 					{!contractorAccountResolved && (
 						<Badge variant="warn">{t("finance_pbcc.account_unmapped")}</Badge>
-					)}
-					{missingClaroPdf && (
-						<Badge variant="warn">{t("finance_pbcc.missing_claro_pdf")}</Badge>
 					)}
 				</div>
 				<table className="w-full">

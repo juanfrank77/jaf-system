@@ -20,7 +20,7 @@ export async function loadStageRows(opts: {
 	page: number
 	pageSize: number
 	ageFrom: "released" | "sent"
-	/** Step 4: add `accountResolved` / `missingClaroPdf` to each row and return
+	/** Step 4: add `accountResolved` to each row and return
 	 * the ids of every stage job (all pages) whose contractor account resolves.
 	 * One `resolveContractorAccounts` call covers the whole stage. */
 	withAccounts?: boolean
@@ -37,7 +37,6 @@ export async function loadStageRows(opts: {
 				id: true,
 				controlNumber: true,
 				avisoNumber: true,
-				claroPdfPath: true,
 				jafInvoicePdfPath: true,
 				avisoMatchedAt: true,
 				releasedToFinanceAt: true,
@@ -47,8 +46,13 @@ export async function loadStageRows(opts: {
 				preCertSheets: {
 					orderBy: { version: "desc" },
 					take: 1,
-					select: { sigSubcontractorName: true },
+					select: {
+						sigSubcontractorName: true,
+						sigSupervisorAt: true,
+						sigSubcontractorAt: true,
+					},
 				},
+				photos: { select: { tag: true } },
 				brigade: { select: { leadName: true, name: true } },
 			},
 		}),
@@ -85,9 +89,16 @@ export async function loadStageRows(opts: {
 			now,
 		),
 		docs: {
-			claroPdf: Boolean(d.claroPdfPath?.trim()),
 			jafInvoice: Boolean(d.jafInvoicePdfPath),
 			aviso: Boolean(d.avisoNumber && d.avisoMatchedAt),
+			preCert: Boolean(
+				d.preCertSheets[0]?.sigSupervisorAt &&
+					d.preCertSheets[0]?.sigSubcontractorAt,
+			),
+			photos:
+				d.photos.some((x) => x.tag === "BEFORE") &&
+				d.photos.some((x) => x.tag === "AFTER"),
+			account: Boolean(d.contractorAccountCode),
 		},
 		amount: computeContractorPayment(
 			toContractorPaymentLines(d.jafInvoiceLines),
@@ -96,7 +107,6 @@ export async function loadStageRows(opts: {
 			accountResolved: d.contractorAccountCode
 				? resolved.has(d.contractorAccountCode)
 				: false,
-			missingClaroPdf: !d.claroPdfPath || d.claroPdfPath.trim() === "",
 		}),
 	}))
 	return { rows, totalCount, sweepableIds }

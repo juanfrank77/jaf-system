@@ -205,11 +205,6 @@ export default function FinancePayrollList({
 											{t("finance_queue.account_unmapped")}
 										</Badge>
 									)}
-									{r.missingClaroPdf && (
-										<Badge variant="warn">
-											{t("finance_queue.missing_claro_pdf")}
-										</Badge>
-									)}
 								</div>
 							)}
 						/>

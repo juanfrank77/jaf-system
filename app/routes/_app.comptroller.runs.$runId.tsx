@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next"
 import { Form, Link, useNavigation } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Badge } from "~/components/ui/badge"
-import { Button } from "~/components/ui/button"
+import { Button, buttonVariants } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
 import { db } from "~/lib/db.server"
 import {
@@ -12,7 +12,6 @@ import {
 	puertoRicoToday,
 	RUN_INVOICES,
 } from "~/lib/payroll-run.server"
-import { generateProductionJournalPdf } from "~/lib/pdf/production-journal.server"
 import { requireRole } from "~/lib/permissions.server"
 import { formatMoney } from "~/lib/utils"
 import type { Route } from "./+types/_app.comptroller.runs.$runId"
@@ -83,21 +82,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const form = await request.formData()
 	const intent = form.get("intent") as string
 
-	if (intent === "download_journal_pdf") {
-		const run = await db.payrollRun.findUniqueOrThrow({
-			where: { id: params.runId },
-			include: { invoices: RUN_INVOICES },
-		})
-		const blocks = buildJournalBlocks(run.invoices)
-		const bytes = await generateProductionJournalPdf(run, blocks)
-		return new Response(new Uint8Array(bytes), {
-			headers: {
-				"Content-Type": "application/pdf",
-				"Content-Disposition": `attachment; filename="journal-${run.label.replace(/[^A-Za-z0-9._-]+/g, "_")}.pdf"`,
-			},
-		})
-	}
-
 	if (intent === "pay_account") {
 		const accountId = form.get("accountId")
 		if (typeof accountId !== "string" || !accountId) {
@@ -152,12 +136,13 @@ export default function ComptrollerPayrollRun({
 			</Callout>
 			{error && <p className="text-sm text-status-danger">{error}</p>}
 
-			<Form method="post">
-				<input type="hidden" name="intent" value="download_journal_pdf" />
-				<Button type="submit" variant="secondary">
-					{t("comptroller_payroll.download_pdf")}
-				</Button>
-			</Form>
+			<a
+				href={`/finance/payroll/${run.id}/journal`}
+				download
+				className={buttonVariants({ variant: "secondary" })}
+			>
+				{t("comptroller_payroll.download_pdf")}
+			</a>
 
 			<div className="overflow-x-auto bg-card border rounded-lg">
 				<table className="w-full text-sm">

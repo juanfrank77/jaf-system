@@ -11,11 +11,15 @@ export type StageRow = {
 	contractorLabel: string | null
 	ageDays: number
 	amount: number
-	docs: { claroPdf: boolean; jafInvoice: boolean; aviso: boolean }
+	docs: {
+		jafInvoice: boolean
+		aviso: boolean
+		preCert: boolean
+		photos: boolean
+		account: boolean
+	}
 	/** Step 4 only: contractor account resolves, so a list can include it. */
 	accountResolved?: boolean
-	/** Step 4 only: no Claro PDF on file. */
-	missingClaroPdf?: boolean
 }
 
 /** Shared by steps 1-3. `showDocs` adds the documents-received column
@@ -63,14 +67,20 @@ export function FinanceStageTable({
 							</td>
 							{showDocs && (
 								<td className="p-2 space-x-1">
-									<Badge variant={r.docs.claroPdf ? "ok" : "warn"}>
-										{t("finance_stage.doc.claro")}
-									</Badge>
 									<Badge variant={r.docs.jafInvoice ? "ok" : "warn"}>
 										{t("finance_stage.doc.jaf_invoice")}
 									</Badge>
 									<Badge variant={r.docs.aviso ? "ok" : "warn"}>
 										{t("finance_stage.doc.aviso")}
+									</Badge>
+									<Badge variant={r.docs.preCert ? "ok" : "warn"}>
+										{t("finance_stage.doc.precert")}
+									</Badge>
+									<Badge variant={r.docs.photos ? "ok" : "warn"}>
+										{t("finance_stage.doc.photos")}
+									</Badge>
+									<Badge variant={r.docs.account ? "ok" : "warn"}>
+										{t("finance_stage.doc.account")}
 									</Badge>
 								</td>
 							)}

@@ -170,27 +170,18 @@ describe("generateBankInvoicePdf", () => {
 			const xCount = tokens.filter((t) => t === "X").length
 			expect(xCount).toBe(1)
 
-			// Find X position
+			// react-pdf fragments text in reading order with the X immediately
+			// BEFORE its own label, so join the tokens that follow the X.
 			const xIndex = tokens.indexOf("X")
 			expect(xIndex).toBeGreaterThanOrEqual(0)
+			const after = tokens.slice(xIndex + 1, xIndex + 8).join("")
+			expect(after.length).toBeGreaterThan(0)
 
-			// Check a window around X (within 15 tokens) to find the kind label
-			const windowStart = Math.max(0, xIndex - 10)
-			const windowEnd = Math.min(tokens.length, xIndex + 11)
-			const windowText = tokens.slice(windowStart, windowEnd).join("")
-
-			// The correct kind should appear in the window around X
-			expect(windowText).toContain(kind)
-
-			// Other kinds should NOT appear in immediate neighbors of X
-			const prevToken = tokens[xIndex - 1] || ""
-			const nextToken = tokens[xIndex + 1] || ""
-			const otherKinds = kinds.filter((k) => k !== kind)
-
-			for (const otherKind of otherKinds) {
-				// Neither neighbor should be the start of another kind
-				expect(prevToken).not.toContain(otherKind)
-				expect(nextToken).not.toContain(otherKind)
+			// The text right after the single X is the rendered kind's label...
+			expect(after.startsWith(kind)).toBe(true)
+			// ...and not either of the other two labels.
+			for (const otherKind of kinds.filter((k) => k !== kind)) {
+				expect(after.startsWith(otherKind)).toBe(false)
 			}
 		}
 	})

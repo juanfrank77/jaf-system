@@ -626,4 +626,18 @@ describe("L2 Packet", () => {
 			'"afterPaidRun":true',
 		)
 	})
+
+	it("the on_schedule refusal text exists under finance_pbcc.errors in both locales", async () => {
+		const fs = await import("node:fs/promises")
+		for (const lang of ["en", "es"]) {
+			const raw = await fs.readFile(
+				`resources/locales/${lang}/common.json`,
+				"utf8",
+			)
+			const json = JSON.parse(raw) as {
+				finance_pbcc: { errors: Record<string, string> }
+			}
+			expect(json.finance_pbcc.errors.on_schedule).toContain("{{list}}")
+		}
+	})
 })

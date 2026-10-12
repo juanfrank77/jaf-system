@@ -1151,7 +1151,6 @@
 		"amount_mismatch": "Aviso amount differs from invoice total by {{difference}} (tolerance: {{tolerance}}).",
 		"amount_mismatch_detail": "Aviso: {{avisoAmount}} vs Invoice: {{invoiceTotal}}.",
 		"errors": {
-			"on_schedule": "This packet is on bank schedule {{list}}. Send or discard the schedule instead of sending it by hand.",
 			"unknown_intent": "Unknown action.",
 			"note_required": "A send-back note is required.",
 			"invalid_aviso_amount": "Enter a valid Aviso amount.",
@@ -1172,6 +1171,7 @@
 		"on_schedule": "On bank schedule #{{number}}",
 		"invoice_pdf": "Invoice PDF",
 		"errors": {
+			"on_schedule": "This packet is on bank schedule {{list}}. Send or discard the schedule instead of sending it by hand.",
 			"unknown_intent": "Unknown action.",
 			"terminal_status": "This job is no longer editable.",
 			"not_sent": "Send the request to the bank first.",

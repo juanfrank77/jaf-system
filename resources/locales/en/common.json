@@ -1151,6 +1151,7 @@
 		"amount_mismatch": "Aviso amount differs from invoice total by {{difference}} (tolerance: {{tolerance}}).",
 		"amount_mismatch_detail": "Aviso: {{avisoAmount}} vs Invoice: {{invoiceTotal}}.",
 		"errors": {
+			"on_schedule": "This packet is on bank schedule {{list}}. Send or discard the schedule instead of sending it by hand.",
 			"unknown_intent": "Unknown action.",
 			"note_required": "A send-back note is required.",
 			"invalid_aviso_amount": "Enter a valid Aviso amount.",
@@ -1168,7 +1169,8 @@
 		"advance": "PBCC advance ({{rate}}%)",
 		"ivu_rate": "IVU rate: {{rate}}%",
 		"hint": "Generating this PDF saves the request, marks it sent, and sends a copy to the Comptroller.",
-		"generate_and_download": "Generate & Download PBCC Request",
+		"on_schedule": "On bank schedule #{{number}}",
+		"invoice_pdf": "Invoice PDF",
 		"errors": {
 			"unknown_intent": "Unknown action.",
 			"terminal_status": "This job is no longer editable.",
@@ -1189,8 +1191,6 @@
 		"gross": "Gross payable",
 		"retention": "10% retention",
 		"net": "Net payable",
-		"bank_invoice_blocked": "Bank-format invoice — blocked: sample bank invoice not yet received from Lissette.",
-		"bank_schedule_blocked": "Bank's Excel schedule — blocked: blank template not yet received.",
 		"mark_sent_by_hand": "Mark sent by hand, outside the system",
 		"sent_by_hand_note": "Note (optional)",
 		"precert_title": "Pre-certification sheet",

@@ -1,7 +1,7 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { useTranslation } from "react-i18next"
-import { data, Form, redirect } from "react-router"
+import { data, Form, Link, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
 import { Badge } from "~/components/ui/badge"
@@ -65,6 +65,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			paymentRecords: { select: { type: true, note: true } },
 			payrollRun: { select: { paidAt: true } },
 			preCertSheets: { orderBy: { version: "desc" }, take: 1 },
+			bankSchedule: { select: { id: true, number: true, sentAt: true } },
 		},
 	})
 	// this phase owns the closable loop, so a job that is closed or was never
@@ -109,6 +110,21 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		payment,
 		frozen,
 		contractorAccountResolved: frozen || account !== null,
+		bankSchedule: doc.bankSchedule,
+		hasBankInvoice: Boolean(doc.bankInvoicePdfPath),
+	}
+}
+
+function onUnsentSchedule(doc: {
+	bankSchedule: { sentAt: Date | null } | null
+}): boolean {
+	return doc.bankSchedule != null && doc.bankSchedule.sentAt === null
+}
+
+function onScheduleError(doc: { bankSchedule: { number: number } | null }) {
+	return {
+		errorKey: "finance_pbcc.errors.on_schedule",
+		list: `#${doc.bankSchedule?.number}`,
 	}
 }
 
@@ -120,6 +136,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 			supervisor: true,
 			poLinks: true,
 			paymentRecords: { select: { type: true } },
+			bankSchedule: { select: { number: true, sentAt: true } },
 		},
 	})
 	if (isTerminalStatus(doc.status)) {
@@ -179,6 +196,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 	// must work even when the Aviso/Claro PDFs the auto-generator insists on are
 	// missing — recording "sent" is precisely the case it exists for.
 	if (intent === "mark_sent_by_hand") {
+		// A packet claimed by an unsent bank schedule is already in the .xlsx
+		// the bank will receive; hand-sending it too would fund it twice.
+		if (onUnsentSchedule(doc)) return onScheduleError(doc)
 		// Same gate the loader uses: only a job that is on Arm A can be marked,
 		// and a second click (double-submit, stale tab) is a no-op rather than a
 		// duplicate audit row.
@@ -207,6 +227,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 	if (intent !== "generate_pbcc")
 		return { errorKey: "finance_pbcc.errors.unknown_intent" }
+	if (onUnsentSchedule(doc)) return onScheduleError(doc)
 	const stage = computeFinanceStage(
 		doc,
 		doc.poLinks.length > 0,
@@ -231,7 +252,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const today = new Date().toLocaleDateString("en-US")
 	const invoiceNumber = bankInvoiceNumber(
 		await getBankInvoicePrefix(),
-		doc.avisoNumber ?? doc.controlNumber,
+		doc.avisoNumber || doc.controlNumber,
 	)
 
 	const pdfBytes = await generatePbccRequestPdf({
@@ -312,12 +333,17 @@ export default function PbccRequest({
 		payment,
 		frozen,
 		contractorAccountResolved,
+		bankSchedule,
+		hasBankInvoice,
 	} = loaderData
 	const { t } = useTranslation()
 
 	const today = new Date().toLocaleDateString("en-CA")
 	const errorKey =
 		actionData && "errorKey" in actionData ? actionData.errorKey : null
+	const errorList =
+		actionData && "list" in actionData ? String(actionData.list) : ""
+	const onUnsent = bankSchedule != null && bankSchedule.sentAt === null
 	const sent = Boolean(doc.pbccRequestSentAt)
 	const step = pbccStep(doc)
 	let calloutTitle: string
@@ -446,16 +472,27 @@ export default function PbccRequest({
 
 			<p className="text-sm text-muted-foreground">{t("finance_pbcc.hint")}</p>
 
-			{/* The bank-format invoice / bank Excel schedule have no generator yet —
-			    both are explicitly blocked rather than silently missing. */}
-			<div className="bg-card border rounded-lg p-4 space-y-2 text-sm">
-				<p className="text-muted-foreground">
-					{t("finance_pbcc.bank_invoice_blocked")}
-				</p>
-				<p className="text-muted-foreground">
-					{t("finance_pbcc.bank_schedule_blocked")}
-				</p>
-			</div>
+			{(bankSchedule || hasBankInvoice) && (
+				<div className="bg-card border rounded-lg p-4 flex flex-wrap items-center gap-4 text-sm">
+					{bankSchedule && (
+						<Link
+							to={`/finance/schedules/${bankSchedule.id}`}
+							className="text-accent-text underline"
+						>
+							{t("finance_pbcc.on_schedule", { number: bankSchedule.number })}
+						</Link>
+					)}
+					{hasBankInvoice && (
+						<a
+							href={`/finance/pbcc/${doc.id}/invoice`}
+							download
+							className="text-accent-text underline"
+						>
+							{t("finance_pbcc.invoice_pdf")}
+						</a>
+					)}
+				</div>
+			)}
 
 			{/* Pre-certification sheet: Doc 3, with three signer names. */}
 			<div className="bg-card border rounded-lg p-4 space-y-2 text-sm">
@@ -493,7 +530,7 @@ export default function PbccRequest({
 
 			{errorKey && (
 				<p role="alert" className="text-sm text-destructive">
-					{t(errorKey as never)}
+					{t(errorKey as never, { list: errorList })}
 				</p>
 			)}
 
@@ -621,28 +658,20 @@ export default function PbccRequest({
 			)}
 
 			<div className="flex flex-wrap items-center gap-2">
-				{/* Disabled on purpose until the Excel-schedule template exists
-				    (q&a 13.2): the bank-format generators are pending, so Lissette
-				    marks the packet "sent by hand" instead. The generate_pbcc
-				    action is kept for when the template lands. */}
-				<Form method="post">
-					<input type="hidden" name="intent" value="generate_pbcc" />
-					<Button type="submit" disabled>
-						{t("finance_pbcc.generate_and_download")}
-					</Button>
-				</Form>
-				<Form method="post" className="flex items-center gap-2">
-					<input type="hidden" name="intent" value="mark_sent_by_hand" />
-					<input
-						type="text"
-						name="note"
-						placeholder={t("finance_pbcc.sent_by_hand_note")}
-						className="border rounded px-2 py-1 text-sm"
-					/>
-					<Button type="submit" variant="secondary">
-						{t("finance_pbcc.mark_sent_by_hand")}
-					</Button>
-				</Form>
+				{!onUnsent && (
+					<Form method="post" className="flex items-center gap-2">
+						<input type="hidden" name="intent" value="mark_sent_by_hand" />
+						<input
+							type="text"
+							name="note"
+							placeholder={t("finance_pbcc.sent_by_hand_note")}
+							className="border rounded px-2 py-1 text-sm"
+						/>
+						<Button type="submit" variant="secondary">
+							{t("finance_pbcc.mark_sent_by_hand")}
+						</Button>
+					</Form>
+				)}
 			</div>
 		</div>
 	)

@@ -306,11 +306,35 @@ export async function markScheduleSent(opts: {
 			if (existing.sentAt) return { alreadySent: true }
 			throw new ScheduleValidationError("incomplete", [])
 		}
+		// The stamp carries the eligibility predicate itself, so a send-back or
+		// cancel committed after the pre-check above cannot be stamped: the count
+		// comes up short and the throw rolls back the whole transaction (sentAt
+		// claim and stamps; audits and notifications are written after this).
 		const now = new Date()
-		await tx.jafInvoice.updateMany({
-			where: { bankScheduleId: opts.scheduleId, pbccRequestSentAt: null },
+		const stamped = await tx.jafInvoice.updateMany({
+			where: {
+				AND: [
+					{ bankScheduleId: opts.scheduleId },
+					{ pbccRequestSentAt: null },
+					stageWhere("LC_REQUEST"),
+				],
+			},
 			data: { pbccRequestSentAt: now, karmenCopySentAt: now },
 		})
+		if (stamped.count !== unsent.length) {
+			const late = await tx.jafInvoice.findMany({
+				where: {
+					bankScheduleId: opts.scheduleId,
+					pbccRequestSentAt: null,
+					NOT: stageWhere("LC_REQUEST"),
+				},
+				select: { controlNumber: true },
+			})
+			throw new ScheduleValidationError(
+				"not_eligible",
+				(late.length > 0 ? late : unsent).map((p) => p.controlNumber),
+			)
+		}
 		await tx.auditTrail.createMany({
 			data: packets.map((p) => ({
 				docId: p.id,

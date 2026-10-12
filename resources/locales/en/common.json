@@ -1910,7 +1910,7 @@
 		"batch_confirm": "Batch-confirm from paper",
 		"batch_confirm_submit": "Close run from paper",
 		"paid_date": "Paid date",
-		"evidence": "Evidence (PDF/image)"
+		"evidence": "Upload evidence (PDF or image)"
 	},
 	"qty_stepper": {
 		"decrease": "Decrease",
@@ -1953,11 +1953,14 @@
 			"docs": "Documents"
 		},
 		"doc": {
-			"claro": "Claro PDF",
 			"jaf_invoice": "JAF invoice",
-			"aviso": "Aviso"
+			"aviso": "Aviso",
+			"precert": "Pre-cert signed",
+			"photos": "Photos",
+			"account": "Contractor account"
 		},
 		"accept": "Review & accept",
+		"review": "Review",
 		"build_request": "Build LC request",
 		"age": {
 			"packets": "Days waiting",

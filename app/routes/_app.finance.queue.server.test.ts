@@ -48,6 +48,10 @@ describe("step 1 packets in", () => {
 		expect(ids).not.toContain(accepted.id)
 		const row = result.jobs.find((j: { id: string }) => j.id === packet.id)
 		expect(row?.docs.aviso).toBe(true)
-		expect(row?.docs.claroPdf).toBe(false)
+		// Claro work-order PDF is not part of the Arm A packet; the docs are
+		// the ones the supervisor release gate guarantees.
+		expect(row?.docs).not.toHaveProperty("claroPdf")
+		expect(row?.docs.preCert).toBe(false)
+		expect(row?.docs.photos).toBe(false)
 	})
 })

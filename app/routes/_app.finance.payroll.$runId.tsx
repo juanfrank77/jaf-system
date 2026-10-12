@@ -5,8 +5,10 @@ import { Form, Link, redirect, useNavigation } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
 import { Badge } from "~/components/ui/badge"
-import { Button } from "~/components/ui/button"
+import { Button, buttonVariants } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
+import { Input } from "~/components/ui/input"
+import { Label } from "~/components/ui/label"
 import { db } from "~/lib/db.server"
 import { isPayrollFallbackEnabled } from "~/lib/features.server"
 import { validateFile } from "~/lib/file-upload.server"
@@ -17,7 +19,6 @@ import {
 	parsePaidDate,
 	RUN_INVOICES,
 } from "~/lib/payroll-run.server"
-import { generateProductionJournalPdf } from "~/lib/pdf/production-journal.server"
 import { requireRole } from "~/lib/permissions.server"
 import { saveUpload } from "~/lib/uploads.server"
 import { formatMoney } from "~/lib/utils"
@@ -121,21 +122,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])
 	const form = await request.formData()
 	const intent = form.get("intent") as string
-
-	if (intent === "download_journal_pdf") {
-		const run = await db.payrollRun.findUniqueOrThrow({
-			where: { id: params.runId },
-			include: { invoices: RUN_INVOICES },
-		})
-		const blocks = buildJournalBlocks(run.invoices)
-		const bytes = await generateProductionJournalPdf(run, blocks)
-		return new Response(new Uint8Array(bytes), {
-			headers: {
-				"Content-Type": "application/pdf",
-				"Content-Disposition": `attachment; filename="journal-${run.label.replace(/[^A-Za-z0-9._-]+/g, "_")}.pdf"`,
-			},
-		})
-	}
 
 	if (intent === "confirm_account") {
 		const accountId = form.get("accountId")
@@ -271,12 +257,13 @@ export default function FinancePayrollRunDetail({
 
 			{error && <p className="text-sm text-status-danger">{error}</p>}
 
-			<Form method="post">
-				<input type="hidden" name="intent" value="download_journal_pdf" />
-				<Button type="submit" variant="secondary">
-					{t("finance_payroll.download_journal_pdf")}
-				</Button>
-			</Form>
+			<a
+				href={`/finance/payroll/${run.id}/journal`}
+				download
+				className={buttonVariants({ variant: "secondary" })}
+			>
+				{t("finance_payroll.download_journal_pdf")}
+			</a>
 
 			<div className="overflow-x-auto bg-card border rounded-lg">
 				<table className="w-full text-sm">
@@ -428,20 +415,31 @@ export default function FinancePayrollRunDetail({
 					<h2 className="font-semibold text-sm">
 						{t("finance_payroll.batch_confirm")}
 					</h2>
-					<div className="flex flex-wrap items-center gap-2 text-sm">
-						<label className="flex items-center gap-1">
-							{t("finance_payroll.paid_date")}
-							<input
+					<div className="space-y-3 text-sm">
+						<div className="space-y-1">
+							<Label htmlFor="batch-paid-date">
+								{t("finance_payroll.paid_date")}
+							</Label>
+							<Input
+								id="batch-paid-date"
 								type="date"
 								name="paidDate"
 								required
-								className="border rounded px-2 py-1"
+								className="w-auto"
 							/>
-						</label>
-						<label className="flex items-center gap-1">
-							{t("finance_payroll.evidence")}
-							<input type="file" name="evidence" className="text-sm" />
-						</label>
+						</div>
+						<div className="space-y-1">
+							<Label htmlFor="batch-evidence">
+								{t("finance_payroll.evidence")}
+							</Label>
+							<Input
+								id="batch-evidence"
+								type="file"
+								name="evidence"
+								accept={ALLOWED_EVIDENCE_MIME.join(",")}
+								className="cursor-pointer file:mr-3 file:cursor-pointer file:rounded-md file:border file:bg-secondary file:px-3 file:py-1 file:text-secondary-foreground hover:file:bg-secondary/80"
+							/>
+						</div>
 					</div>
 					<Button type="submit">
 						{t("finance_payroll.batch_confirm_submit")}

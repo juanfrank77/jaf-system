@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({ requireRole: vi.fn() }))
 vi.mock("~/lib/permissions.server", () => ({ requireRole: mocks.requireRole }))
 
 import { action, loader } from "./_app.finance.payroll.$runId"
+import { loader as journalLoader } from "./_app.finance.payroll.$runId.journal"
 
 const t = makeTracker()
 afterAll(() => t.cleanup())
@@ -61,7 +62,7 @@ describe("journal ordering", () => {
 		}
 	})
 
-	it("pins the same order in the PDF branch, so print matches screen (Review Focus)", async () => {
+	it("pins the same order in the PDF download, so print matches screen (Review Focus)", async () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		mocks.requireRole.mockResolvedValue({ user: finance })
 		const account = t.track("contractorAccount", await seedContractorAccount())
@@ -73,18 +74,17 @@ describe("journal ordering", () => {
 		t.track("payrollRun", run)
 		t.track("jafInvoice", invoice)
 
-		const form = new FormData()
-		form.set("intent", "download_journal_pdf")
 		const findUnique = vi.spyOn(db.payrollRun, "findUniqueOrThrow")
 		try {
-			await action({
-				request: new Request(`http://localhost/finance/payroll/${run.id}`, {
-					method: "POST",
-					body: form,
-				}),
+			const res = await journalLoader({
+				request: new Request(
+					`http://localhost/finance/payroll/${run.id}/journal`,
+				),
 				params: { runId: run.id },
 				context: {},
 			} as never)
+			expect(res.headers.get("Content-Type")).toBe("application/pdf")
+			expect(res.headers.get("Content-Disposition")).toContain("attachment")
 
 			const args = findUnique.mock.calls[0]?.[0] as {
 				include?: { invoices?: { orderBy?: unknown } }

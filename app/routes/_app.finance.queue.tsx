@@ -65,17 +65,13 @@ export default function FinancePackets({ loaderData }: Route.ComponentProps) {
 					to={(r) => `/finance/verify/${r.id}`}
 					showDocs
 					ageLabelKey="finance_stage.age.packets"
-					action={(r) =>
-						r.docs.claroPdf && r.docs.jafInvoice && r.docs.aviso ? (
-							<Link to={`/finance/verify/${r.id}`} className="underline">
-								{t("finance_stage.accept")}
-							</Link>
-						) : (
-							<span className="text-muted-foreground">
-								{t("finance_stage.accept")}
-							</span>
-						)
-					}
+					action={(r) => (
+						<Link to={`/finance/verify/${r.id}`} className="underline">
+							{Object.values(r.docs).every(Boolean)
+								? t("finance_stage.accept")
+								: t("finance_stage.review")}
+						</Link>
+					)}
 				/>
 			)}
 			<StagePagination

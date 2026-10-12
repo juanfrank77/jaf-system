@@ -63,6 +63,10 @@ export default [
 		route("finance/pbcc/:id", "routes/_app.finance.pbcc.$id.tsx"),
 		route("finance/payroll", "routes/_app.finance.payroll.tsx"),
 		route("finance/payroll/:runId", "routes/_app.finance.payroll.$runId.tsx"),
+		route(
+			"finance/payroll/:runId/journal",
+			"routes/_app.finance.payroll.$runId.journal.tsx",
+		),
 		route("finance/po/:id", "routes/_app.finance.po.$id.tsx"),
 		route("comptroller", "routes/_app.comptroller.tsx"),
 		route("comptroller/runs/:runId", "routes/_app.comptroller.runs.$runId.tsx"),

@@ -18,7 +18,6 @@ import {
 	FINANCEABLE_STATUSES,
 	fetchInvoiceTotalContext,
 	invoiceTotalUsed,
-	isMissingClaroPdf,
 } from "~/lib/finance-pipeline.server"
 import { isTerminalStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
@@ -74,7 +73,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		amount,
 		ivuRate,
 		tolerance,
-		missingClaroPdf: isMissingClaroPdf(doc),
 		sendBackNotes: (doc.financeSendBackNotes as SendBackNote[]) || [],
 		prefilledAvisoAmount:
 			doc.avisoMatchedAt && doc.avisoLineTotal != null
@@ -113,9 +111,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 		return { errorKey: "finance_verify.errors.invalid_stage" }
 
 	if (intent === "verify") {
-		if (isMissingClaroPdf(doc)) {
-			return { errorKey: "finance_verify.billing_blocked" }
-		}
 		if (
 			doc.avisoMatchedAt &&
 			doc.avisoLineTotal != null &&
@@ -264,7 +259,6 @@ export default function FinanceVerify({
 		amount,
 		ivuRate,
 		tolerance,
-		missingClaroPdf,
 		sendBackNotes,
 		prefilledAvisoAmount,
 		lineTotal,
@@ -292,9 +286,7 @@ export default function FinanceVerify({
 		: null
 
 	const cannotVerify =
-		missingClaroPdf ||
-		stage !== "TO_VERIFY" ||
-		doc.status === "LC_REQUEST_GENERATED"
+		stage !== "TO_VERIFY" || doc.status === "LC_REQUEST_GENERATED"
 
 	return (
 		<div className="space-y-5">
@@ -342,17 +334,6 @@ export default function FinanceVerify({
 					{t("finance_verify.tolerance", { tolerance: formatMoney(tolerance) })}
 				</p>
 			</div>
-
-			{missingClaroPdf && (
-				<div className="bg-status-warn-soft border border-status-warn/30 rounded-lg p-4">
-					<p className="font-medium text-status-warn">
-						{t("finance_verify.billing_blocked")}
-					</p>
-					<ul className="text-sm text-status-warn list-disc list-inside">
-						<li>{t("finance_verify.blocked_claro_pdf")}</li>
-					</ul>
-				</div>
-			)}
 
 			{error?.errorKey === "finance_verify.errors.amount_mismatch" && (
 				<div className="bg-status-danger-soft border border-status-danger-line rounded-lg p-4">

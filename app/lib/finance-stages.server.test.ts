@@ -1,11 +1,7 @@
 import { afterAll, describe, expect, it } from "vitest"
 import { db } from "~/lib/db.server"
 import { makeTracker, seedFinanceableInvoice, seedUser } from "~/test/helpers"
-import {
-	carmenOpenSummary,
-	stageWhere,
-	unfundedSweepableIds,
-} from "./finance-stages.server"
+import { carmenOpenSummary, stageWhere } from "./finance-stages.server"
 
 const t = makeTracker()
 afterAll(() => t.cleanup())
@@ -75,16 +71,6 @@ describe("stageWhere", () => {
 			data: { payrollRunId: run.id },
 		})
 		expect(await stagesOf(id)).toEqual([])
-	})
-})
-
-describe("unfundedSweepableIds", () => {
-	it("returns sent-unfunded jobs only", async () => {
-		const unfunded = await job({ sent: true, verified: true })
-		const funded = await job({ sent: true, verified: true, funded: true })
-		const ids = await unfundedSweepableIds()
-		expect(ids).toContain(unfunded)
-		expect(ids).not.toContain(funded)
 	})
 })
 

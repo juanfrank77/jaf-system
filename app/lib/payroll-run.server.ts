@@ -142,35 +142,24 @@ export function armAOpenWhere(
 
 /**
  * What a payroll run may sweep: everything open on Arm A whose bank request
- * has been sent to PBCC (spec §3). Funding is NOT part of the gate: JAF's rule
- * so far is "complete and sent before the brigade is paid"; whether pay is held
- * until PBCC funds is unconfirmed. To gate on funding later, add
- * `advanceReceivedAt: { not: null }` here. `armAOpenWhere` itself is unchanged,
- * so the packets list and packet view keep showing unsent jobs. Nothing here
- * filters on `active`: an inactive brigade is still paid.
+ * has been sent to PBCC and that the bank has funded. `armAOpenWhere` itself
+ * is unchanged, so the packets list and packet view keep showing unsent jobs.
+ * Nothing here filters on `active`: an inactive brigade is still paid.
  */
 function sweepableWhere(): Prisma.JafInvoiceWhereInput {
-	return { ...armAOpenWhere(), pbccRequestSentAt: { not: null } }
-}
-
-/** Info only (finance screens): how many sweepable packets are already funded. */
-export async function countFundedSweepableJobs(): Promise<number> {
-	const docs = await db.jafInvoice.findMany({
-		where: { ...sweepableWhere(), advanceReceivedAt: { not: null } },
-		select: { contractorAccountCode: true },
-	})
-	const resolved = await resolveContractorAccounts(
-		docs.map((d) => d.contractorAccountCode),
-	)
-	return docs.filter(
-		(d) => d.contractorAccountCode && resolved.has(d.contractorAccountCode),
-	).length
+	return {
+		...armAOpenWhere(),
+		pbccRequestSentAt: { not: null },
+		// Business rule: a packet goes on a Production Journal only once the
+		// bank has funded it.
+		advanceReceivedAt: { not: null },
+	}
 }
 
 /**
- * Sent-but-blocked: the bank request was sent and the job is open on Arm A,
- * but its brigade code is missing or does not resolve to a contractor
- * account, so a run would skip it. Shown on the payroll screen so Lissette
+ * Funded-but-blocked: the packet is funded and open on Arm A, but its
+ * brigade code is missing or does not resolve to a contractor account, so a
+ * run would skip it. Shown on the payroll screen so Lissette
  * can fix the mapping.
  */
 export async function blockedSentJobs() {

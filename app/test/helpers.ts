@@ -361,6 +361,8 @@ export async function seedFinanceableInvoice(
 		payablesClosedAt?: Date | null
 		payrollRunId?: string | null
 		pbccRequestSentAt?: Date | null
+		/** Bank-funded: sets advanceReceivedAt and advanceAmount. */
+		funded?: boolean
 	} = {},
 ) {
 	const supervisorId =
@@ -388,6 +390,8 @@ export async function seedFinanceableInvoice(
 				overrides.pbccRequestSentAt === undefined
 					? new Date()
 					: overrides.pbccRequestSentAt,
+			advanceReceivedAt: overrides.funded ? new Date() : null,
+			advanceAmount: overrides.funded ? 80 : null,
 		},
 	})
 }

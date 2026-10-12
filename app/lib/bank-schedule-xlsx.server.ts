@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs"
 
 export type ScheduleRow = {
+	/** An instant; printed in America/Puerto_Rico. */
 	invoiceDate: Date
 	invoiceNumber: string
 	area: string
@@ -13,6 +14,7 @@ export type ScheduleInput = {
 	rows: ScheduleRow[]
 	total: number
 	advance: number
+	/** An instant; printed in America/Puerto_Rico. */
 	date: Date
 	seller: string
 }
@@ -24,6 +26,16 @@ const ASSIGNMENT =
 	"For valuable consideration, receipt of which is hereby acknowledged, the undersigned hereby sells, assigns, sets over and transfers to PACIFIC BUSINESS CAPITAL CORPORATION, its successors or assignee, all its right, title and interest in and to the accounts above named, including all monies due or to become due thereon, all in accordance with and pursuant to that certain Accounts Receivable Purchase and Security Agreement now existing by and between the undersigned and PACIFIC BUSINESS CAPITAL CORPORATION, the conditions, representations, warranties, and agreements of which are made part of this sale and assignments and incorporated herein by reference."
 
 const MONEY_FMT = "#,##0.00"
+const PR_TZ = "America/Puerto_Rico"
+
+/**
+ * UTC-midnight Date of the Puerto Rico calendar day containing `d`, so Excel
+ * (which stores dates as UTC-based serials) shows that same calendar day.
+ */
+export function puertoRicoCalendarDate(d: Date): Date {
+	const ymd = d.toLocaleDateString("en-CA", { timeZone: PR_TZ })
+	return new Date(`${ymd}T00:00:00Z`)
+}
 
 export async function generateScheduleXlsx(
 	input: ScheduleInput,
@@ -57,7 +69,7 @@ export async function generateScheduleXlsx(
 
 	for (const r of input.rows) {
 		const row = ws.addRow([
-			r.invoiceDate,
+			puertoRicoCalendarDate(r.invoiceDate),
 			r.invoiceNumber,
 			r.area,
 			r.debtor,
@@ -92,6 +104,7 @@ export async function generateScheduleXlsx(
 		month: "long",
 		day: "numeric",
 		year: "numeric",
+		timeZone: PR_TZ,
 	})
 	ws.addRow([
 		`Date: ${date.toUpperCase()}`,

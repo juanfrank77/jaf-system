@@ -2,6 +2,7 @@ import ExcelJS from "exceljs"
 import { describe, expect, it } from "vitest"
 import {
 	generateScheduleXlsx,
+	puertoRicoCalendarDate,
 	type ScheduleInput,
 } from "./bank-schedule-xlsx.server"
 
@@ -89,5 +90,48 @@ describe("generateScheduleXlsx", () => {
 			"M17-10351574",
 		)
 		expect(findRow(ws, "TOTAL:").getCell(6).value).toBe(0)
+	})
+
+	async function dateLine(date: Date) {
+		const ws = await load(await generateScheduleXlsx({ ...base, date }))
+		return String(findRow(ws, "Date:").getCell(1).value)
+	}
+
+	it("prints the Date line in the Puerto Rico calendar", async () => {
+		expect(await dateLine(new Date("2026-08-05T15:00:00Z"))).toBe(
+			"Date: AUGUST 5, 2026",
+		)
+		expect(await dateLine(new Date("2026-08-06T02:00:00Z"))).toBe(
+			"Date: AUGUST 5, 2026",
+		)
+	})
+
+	it("writes row dates as the Puerto Rico calendar day, with formats", async () => {
+		const ws = await load(
+			await generateScheduleXlsx({
+				...base,
+				rows: [
+					{ ...base.rows[0], invoiceDate: new Date("2026-08-06T02:00:00Z") },
+				],
+			}),
+		)
+		const row = ws.getRow(findRow(ws, "Inv. Date").number + 1)
+		const v = row.getCell(1).value
+		expect(v).toBeInstanceOf(Date)
+		expect((v as Date).toISOString().slice(0, 10)).toBe("2026-08-05")
+		expect(row.getCell(1).numFmt).toBe("mm/dd/yy")
+		expect(row.getCell(6).numFmt).toBe("#,##0.00")
+	})
+
+	it("puertoRicoCalendarDate maps instants to the PR day at UTC midnight", () => {
+		expect(
+			puertoRicoCalendarDate(new Date("2026-01-01T03:00:00Z")).toISOString(),
+		).toBe("2025-12-31T00:00:00.000Z")
+		expect(
+			puertoRicoCalendarDate(new Date("2026-07-01T03:00:00Z")).toISOString(),
+		).toBe("2026-06-30T00:00:00.000Z")
+		expect(
+			puertoRicoCalendarDate(new Date("2026-07-01T04:00:00Z")).toISOString(),
+		).toBe("2026-07-01T00:00:00.000Z")
 	})
 })

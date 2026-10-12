@@ -312,7 +312,7 @@ export default function FinancePayrollList({
 											</td>
 											<td className="p-2">
 												<Link
-													to={`/finance/payroll/${run.id}`}
+													to="/finance/awaiting-carmen"
 													className="underline"
 												>
 													{t("finance_payroll.see_carmen")}

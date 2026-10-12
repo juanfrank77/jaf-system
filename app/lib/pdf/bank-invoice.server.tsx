@@ -27,8 +27,8 @@ const styles = StyleSheet.create({
 	bold: { fontWeight: "bold" },
 	check: { flexDirection: "row", alignItems: "center", marginBottom: 2 },
 	checkBox: {
-		width: 8,
-		height: 8,
+		width: 10,
+		height: 10,
 		borderWidth: 1,
 		borderColor: "#000",
 		marginRight: 4,
@@ -94,7 +94,9 @@ const money = (n: number) => n.toFixed(2)
 function Check({ on, label }: { on: boolean; label: string }) {
 	return (
 		<View style={styles.check}>
-			<View style={styles.checkBox}>{on ? <Text>X</Text> : null}</View>
+			<View style={styles.checkBox}>
+				{on ? <Text style={{ fontSize: 7 }}>X</Text> : null}
+			</View>
 			<Text>{label}</Text>
 		</View>
 	)
@@ -174,21 +176,24 @@ function BankInvoice({ input }: { input: BankInvoiceInput }) {
 					<Text style={styles.cAct}>ACT</Text>
 					<Text style={styles.cCenter}>CENTRO</Text>
 				</View>
-				{input.lines.map((l) => (
-					<View key={l.claroCode} style={styles.tr} wrap={false}>
-						<Text style={styles.cCode}>{l.claroCode}</Text>
-						<Text style={styles.cDesc}>{l.description}</Text>
-						<Text style={styles.cQty}>{l.qty.toFixed(2)}</Text>
-						<Text style={styles.cUm}>{l.unit}</Text>
-						<Text style={styles.cPrice}>{money(l.unitPrice)}</Text>
-						<Text style={styles.cAmt}>{money(l.amount)}</Text>
-						<Text style={styles.cAc}>{l.accountCode}</Text>
-						<Text style={styles.cSub}>{l.subAct}</Text>
-						<Text style={styles.cDept}>{l.dept}</Text>
-						<Text style={styles.cProfit}>{l.profitCenter}</Text>
-						<Text style={styles.cAct}>{l.act}</Text>
-						<Text style={styles.cCenter}>{l.costCenter}</Text>
-					</View>
+				{input.lines.map((l, i) => (
+					<>
+						{/* biome-ignore lint/suspicious/noArrayIndexKey: static list, rendered once, never reordered */}
+						<View key={`${l.claroCode}-${i}`} style={styles.tr} wrap={false}>
+							<Text style={styles.cCode}>{l.claroCode}</Text>
+							<Text style={styles.cDesc}>{l.description}</Text>
+							<Text style={styles.cQty}>{l.qty.toFixed(2)}</Text>
+							<Text style={styles.cUm}>{l.unit}</Text>
+							<Text style={styles.cPrice}>{money(l.unitPrice)}</Text>
+							<Text style={styles.cAmt}>{money(l.amount)}</Text>
+							<Text style={styles.cAc}>{l.accountCode}</Text>
+							<Text style={styles.cSub}>{l.subAct}</Text>
+							<Text style={styles.cDept}>{l.dept}</Text>
+							<Text style={styles.cProfit}>{l.profitCenter}</Text>
+							<Text style={styles.cAct}>{l.act}</Text>
+							<Text style={styles.cCenter}>{l.costCenter}</Text>
+						</View>
+					</>
 				))}
 				<View style={styles.totalRow}>
 					<Text style={styles.bold}>Total $ {money(input.total)}</Text>

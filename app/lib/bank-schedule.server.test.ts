@@ -15,6 +15,7 @@ import {
 import {
 	bankDateLabel,
 	buildBankSchedule,
+	discardBankSchedule,
 	markScheduleSent,
 	ScheduleValidationError,
 } from "./bank-schedule.server"
@@ -40,10 +41,29 @@ vi.mock("~/lib/pdf/bank-invoice.server", async (importOriginal) => {
 	}
 })
 
+/** `beforeClaim` runs inside getBankInvoicePrefix, i.e. after buildBankSchedule's
+ * eligibility pre-check and before its claim transaction. */
+const settingsHook = vi.hoisted(() => ({
+	beforeClaim: null as null | (() => Promise<void>),
+}))
+vi.mock("~/lib/system-settings.server", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("~/lib/system-settings.server")>()
+	return {
+		...actual,
+		getBankInvoicePrefix: async () => {
+			await settingsHook.beforeClaim?.()
+			return actual.getBankInvoicePrefix()
+		},
+	}
+})
+
 const t = makeTracker()
 afterEach(() => {
 	pdfMock.failOnCall = null
 	pdfMock.calls = []
+	settingsHook.beforeClaim = null
+	vi.restoreAllMocks()
 })
 afterAll(() => t.cleanup())
 
@@ -264,6 +284,85 @@ describe("buildBankSchedule", () => {
 		expect(reloaded.bankScheduleId).toBe(winner)
 	})
 
+	it("a packet sent back between the pre-check and the claim is not claimed", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		const a = await lcRequestPacket()
+		const b = await lcRequestPacket()
+		const before = await db.bankSchedule.count()
+		settingsHook.beforeClaim = async () => {
+			await db.jafInvoice.update({
+				where: { id: b.id },
+				data: { financeVerifiedAt: null },
+			})
+		}
+		const err = await buildBankSchedule({
+			packetIds: [a.id, b.id],
+			generatedById: finance.id,
+		}).catch((e) => e)
+		if (err?.scheduleId) t.track("bankSchedule", { id: err.scheduleId })
+		expect(err).toBeInstanceOf(ScheduleValidationError)
+		expect(err).toMatchObject({
+			code: "not_eligible",
+			controlNumbers: [b.controlNumber],
+		})
+		expect(await db.bankSchedule.count()).toBe(before)
+		for (const id of [a.id, b.id]) {
+			const reloaded = await db.jafInvoice.findUniqueOrThrow({ where: { id } })
+			expect(reloaded.bankScheduleId).toBeNull()
+		}
+		expect(await inLcRequest(a.id)).toBe(true)
+	})
+
+	it("a cleanup failure still surfaces the original error; discard recovers", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		const p = await lcRequestPacket()
+		const before = await db.bankSchedule.count()
+		const realTx = db.$transaction.bind(db)
+		vi.spyOn(db, "$transaction").mockImplementation(((
+			arg: unknown,
+			...rest: unknown[]
+		) =>
+			Array.isArray(arg)
+				? Promise.reject(new Error("cleanup boom"))
+				: (realTx as (...a: unknown[]) => unknown)(
+						arg,
+						...rest,
+					)) as typeof db.$transaction)
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {})
+		pdfMock.failOnCall = 1
+		const err = await buildBankSchedule({
+			packetIds: [p.id],
+			generatedById: finance.id,
+		}).catch((e) => e)
+		vi.restoreAllMocks()
+		// Track whatever schedule exists before asserting, so a failure here
+		// cannot leak rows into the shared DB.
+		const stuck = await db.jafInvoice.findUniqueOrThrow({ where: { id: p.id } })
+		if (stuck.bankScheduleId)
+			t.track("bankSchedule", { id: stuck.bankScheduleId })
+		if (err?.scheduleId) t.track("bankSchedule", { id: err.scheduleId })
+		expect(err).toBeInstanceOf(Error)
+		expect(err.message).toBe("injected pdf failure")
+		expect(logged).toHaveBeenCalled()
+
+		// The claim could not be released: the packet is stuck on a half-built
+		// schedule, which mark-sent refuses and discard removes.
+		expect(stuck.bankScheduleId).toBeTruthy()
+		const scheduleId = stuck.bankScheduleId as string
+		await expect(
+			markScheduleSent({ scheduleId, sentById: finance.id }),
+		).rejects.toMatchObject({ code: "incomplete" })
+		expect(await discardBankSchedule({ scheduleId })).toEqual({
+			discarded: true,
+		})
+		expect(await db.bankSchedule.count()).toBe(before)
+		const released = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: p.id },
+		})
+		expect(released.bankScheduleId).toBeNull()
+		expect(await inLcRequest(p.id)).toBe(true)
+	})
+
 	it("a PDF failure on the first packet rolls everything back", async () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		const p = await lcRequestPacket()
@@ -367,5 +466,149 @@ describe("markScheduleSent", () => {
 		})
 		expect(s.sentAt).not.toBeNull()
 		expect(s.sentById).toBe(finance.id)
+	})
+})
+
+describe("markScheduleSent refusals", () => {
+	it("refuses an unknown schedule", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		await expect(
+			markScheduleSent({ scheduleId: "nope", sentById: finance.id }),
+		).rejects.toMatchObject({ code: "not_found", controlNumbers: [] })
+	})
+
+	it("refuses a schedule with no xlsx and stamps nothing", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		const p = await lcRequestPacket()
+		const { scheduleId } = await buildBankSchedule({
+			packetIds: [p.id],
+			generatedById: finance.id,
+		})
+		t.track("bankSchedule", { id: scheduleId })
+		await db.bankSchedule.update({
+			where: { id: scheduleId },
+			data: { xlsxPath: null },
+		})
+		await expect(
+			markScheduleSent({ scheduleId, sentById: finance.id }),
+		).rejects.toMatchObject({ code: "incomplete" })
+		const s = await db.bankSchedule.findUniqueOrThrow({
+			where: { id: scheduleId },
+		})
+		expect(s.sentAt).toBeNull()
+		const reloaded = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: p.id },
+		})
+		expect(reloaded.pbccRequestSentAt).toBeNull()
+		expect(reloaded.karmenCopySentAt).toBeNull()
+	})
+
+	it("refuses when a packet was sent back after scheduling and stamps nobody", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		const a = await lcRequestPacket()
+		const b = await lcRequestPacket()
+		const { scheduleId } = await buildBankSchedule({
+			packetIds: [a.id, b.id],
+			generatedById: finance.id,
+		})
+		t.track("bankSchedule", { id: scheduleId })
+		await db.jafInvoice.update({
+			where: { id: b.id },
+			data: { financeVerifiedAt: null },
+		})
+		await expect(
+			markScheduleSent({ scheduleId, sentById: finance.id }),
+		).rejects.toMatchObject({
+			code: "not_eligible",
+			controlNumbers: [b.controlNumber],
+		})
+		const s = await db.bankSchedule.findUniqueOrThrow({
+			where: { id: scheduleId },
+		})
+		expect(s.sentAt).toBeNull()
+		for (const id of [a.id, b.id]) {
+			const r = await db.jafInvoice.findUniqueOrThrow({ where: { id } })
+			expect(r.pbccRequestSentAt).toBeNull()
+			expect(r.karmenCopySentAt).toBeNull()
+		}
+		expect(
+			await db.auditTrail.count({
+				where: {
+					docId: { in: [a.id, b.id] },
+					action: "PBCC_REQUEST_GENERATED",
+				},
+			}),
+		).toBe(0)
+	})
+})
+
+describe("discardBankSchedule", () => {
+	it("releases the packets and deletes the schedule and its files", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		const a = await lcRequestPacket()
+		const b = await lcRequestPacket()
+		const { scheduleId } = await buildBankSchedule({
+			packetIds: [a.id, b.id],
+			generatedById: finance.id,
+		})
+		t.track("bankSchedule", { id: scheduleId })
+		const s = await db.bankSchedule.findUniqueOrThrow({
+			where: { id: scheduleId },
+			include: { invoices: true },
+		})
+		const files = [
+			s.xlsxPath as string,
+			...s.invoices.map((i) => i.bankInvoicePdfPath as string),
+		]
+		expect(files).toHaveLength(3)
+		for (const f of files) expect(await exists(f)).toBe(true)
+
+		expect(await discardBankSchedule({ scheduleId })).toEqual({
+			discarded: true,
+		})
+		expect(
+			await db.bankSchedule.findUnique({ where: { id: scheduleId } }),
+		).toBeNull()
+		for (const f of files) expect(await exists(f)).toBe(false)
+		for (const id of [a.id, b.id]) {
+			const r = await db.jafInvoice.findUniqueOrThrow({ where: { id } })
+			expect(r.bankScheduleId).toBeNull()
+			expect(r.bankInvoicePdfPath).toBeNull()
+			expect(await inLcRequest(id)).toBe(true)
+		}
+		// Claimable again.
+		const again = await buildBankSchedule({
+			packetIds: [a.id, b.id],
+			generatedById: finance.id,
+		})
+		t.track("bankSchedule", { id: again.scheduleId })
+	})
+
+	it("leaves a sent schedule untouched", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		const p = await lcRequestPacket()
+		const { scheduleId } = await buildBankSchedule({
+			packetIds: [p.id],
+			generatedById: finance.id,
+		})
+		t.track("bankSchedule", { id: scheduleId })
+		await markScheduleSent({ scheduleId, sentById: finance.id })
+		expect(await discardBankSchedule({ scheduleId })).toEqual({
+			discarded: false,
+		})
+		const s = await db.bankSchedule.findUniqueOrThrow({
+			where: { id: scheduleId },
+		})
+		expect(s.sentAt).not.toBeNull()
+		expect(await exists(s.xlsxPath as string)).toBe(true)
+		const r = await db.jafInvoice.findUniqueOrThrow({ where: { id: p.id } })
+		expect(r.bankScheduleId).toBe(scheduleId)
+		expect(r.bankInvoicePdfPath).toBeTruthy()
+	})
+
+	it("refuses an unknown schedule", async () => {
+		await expect(
+			discardBankSchedule({ scheduleId: "nope" }),
+		).rejects.toMatchObject({ code: "not_found", controlNumbers: [] })
 	})
 })

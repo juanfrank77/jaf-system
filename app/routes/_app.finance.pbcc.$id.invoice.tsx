@@ -12,10 +12,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	if (!doc?.bankInvoicePdfPath) throw new Response("Not found", { status: 404 })
 	const bytes = await fs.readFile(doc.bankInvoicePdfPath).catch(() => null)
 	if (!bytes) throw new Response("Not found", { status: 404 })
+	const safeName = doc.controlNumber.replace(/[^A-Za-z0-9._-]/g, "_")
 	return new Response(new Uint8Array(bytes), {
 		headers: {
 			"Content-Type": "application/pdf",
-			"Content-Disposition": `attachment; filename="${doc.controlNumber}-bank-invoice.pdf"`,
+			"Content-Disposition": `attachment; filename="${safeName}-bank-invoice.pdf"`,
 		},
 	})
 }

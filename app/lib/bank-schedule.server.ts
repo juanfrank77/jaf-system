@@ -25,7 +25,7 @@ import {
 import { saveBuffer } from "~/lib/uploads.server"
 import { toNumberPrice } from "~/lib/utils"
 
-export type ScheduleErrorCode =
+type ScheduleErrorCode =
 	| "empty"
 	| "not_found"
 	| "not_eligible"
@@ -174,7 +174,7 @@ export async function buildBankSchedule(opts: {
 					}
 				},
 			)
-			const aviso = doc.avisoNumber ?? doc.controlNumber
+			const aviso = doc.avisoNumber || doc.controlNumber
 			const invoiceNumber = bankInvoiceNumber(prefix, aviso)
 			const from = doc.startedAt ?? doc.fieldSubmittedAt ?? doc.createdAt
 			const to = doc.endedAt ?? from

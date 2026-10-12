@@ -50,7 +50,16 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 	const financeStatuses: DocStatus[] = FINANCEABLE_STATUSES
 	const invoices = await db.jafInvoice.findMany({
-		where: { status: { in: financeStatuses } },
+		where: {
+			status: { in: financeStatuses },
+			// Only work orders released to Finance. Legacy exception (Arm A spec
+			// §5): a job with an existing PBCC_ADVANCE payment record keeps
+			// flowing through this page.
+			OR: [
+				{ releasedToFinanceAt: { not: null } },
+				{ paymentRecords: { some: { type: "PBCC_ADVANCE" } } },
+			],
+		},
 		include: {
 			supervisor: true,
 			poLinks: { orderBy: { id: "asc" } },

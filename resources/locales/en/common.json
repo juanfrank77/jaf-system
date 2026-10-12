@@ -1993,6 +1993,7 @@
 		"build": "Build schedule ({{count}})",
 		"recent": "Recent schedules",
 		"none_selected": "Select at least one packet.",
+		"on_schedule": "On schedule #{{number}}",
 		"errors": {
 			"empty": "Select at least one packet.",
 			"not_found": "A selected packet no longer exists.",

@@ -92,3 +92,25 @@ export async function setLcPbccAdvanceRate(
 		create: { key: "lc_pbcc_advance_rate", value: String(rate), updatedById },
 	})
 }
+
+const DEFAULT_BANK_INVOICE_PREFIX = "M17"
+
+/** Contract prefix on bank invoice numbers (`<prefix>-<aviso>`). */
+export async function getBankInvoicePrefix(): Promise<string> {
+	const setting = await db.systemSetting.findUnique({
+		where: { key: "bank_invoice_prefix" },
+	})
+	const value = setting?.value?.trim()
+	return value ? value : DEFAULT_BANK_INVOICE_PREFIX
+}
+
+export async function setBankInvoicePrefix(
+	prefix: string,
+	updatedById: string,
+): Promise<void> {
+	await db.systemSetting.upsert({
+		where: { key: "bank_invoice_prefix" },
+		update: { value: prefix.trim(), updatedById },
+		create: { key: "bank_invoice_prefix", value: prefix.trim(), updatedById },
+	})
+}

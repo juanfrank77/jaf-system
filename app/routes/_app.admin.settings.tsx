@@ -8,10 +8,12 @@ import { requireRole } from "~/lib/permissions.server"
 import {
 	getAgingAlertDays,
 	getAvisoAmountTolerance,
+	getBankInvoicePrefix,
 	getIvuRate,
 	getLcPbccAdvanceRate,
 	setAgingAlertDays,
 	setAvisoAmountTolerance,
+	setBankInvoicePrefix,
 	setIvuRate,
 	setLcPbccAdvanceRate,
 } from "~/lib/system-settings.server"
@@ -24,14 +26,26 @@ export const meta: Route.MetaFunction = () => [
 
 export async function loader({ request }: Route.LoaderArgs) {
 	await requireRole(request, ["ADMIN"])
-	const [ivuRate, agingAlertDays, avisoAmountTolerance, lcPbccAdvanceRate] =
-		await Promise.all([
-			getIvuRate(),
-			getAgingAlertDays(),
-			getAvisoAmountTolerance(),
-			getLcPbccAdvanceRate(),
-		])
-	return { ivuRate, agingAlertDays, avisoAmountTolerance, lcPbccAdvanceRate }
+	const [
+		ivuRate,
+		agingAlertDays,
+		avisoAmountTolerance,
+		lcPbccAdvanceRate,
+		bankInvoicePrefix,
+	] = await Promise.all([
+		getIvuRate(),
+		getAgingAlertDays(),
+		getAvisoAmountTolerance(),
+		getLcPbccAdvanceRate(),
+		getBankInvoicePrefix(),
+	])
+	return {
+		ivuRate,
+		agingAlertDays,
+		avisoAmountTolerance,
+		lcPbccAdvanceRate,
+		bankInvoicePrefix,
+	}
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -97,6 +111,17 @@ export async function action({ request }: Route.ActionArgs) {
 		return { successTolerance: true }
 	}
 
+	if (intent === "bank_prefix") {
+		const raw = (
+			(form.get("bank_invoice_prefix") as string | null) ?? ""
+		).trim()
+		if (!/^[A-Za-z0-9]{1,8}$/.test(raw)) {
+			return { errorKey: "admin_settings.errors.invalid_bank_prefix" }
+		}
+		await setBankInvoicePrefix(raw.toUpperCase(), user.id)
+		return { successBankPrefix: true }
+	}
+
 	return { errorKey: "admin_settings.errors.unknown_intent" }
 }
 
@@ -104,8 +129,13 @@ export default function AdminSettings({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { ivuRate, agingAlertDays, avisoAmountTolerance, lcPbccAdvanceRate } =
-		loaderData
+	const {
+		ivuRate,
+		agingAlertDays,
+		avisoAmountTolerance,
+		lcPbccAdvanceRate,
+		bankInvoicePrefix,
+	} = loaderData
 	const { t } = useTranslation()
 	const error =
 		actionData && "errorKey" in actionData ? actionData.errorKey : null
@@ -117,6 +147,10 @@ export default function AdminSettings({
 			: null
 	const successAging =
 		actionData && "successAging" in actionData ? actionData.successAging : null
+	const successBankPrefix =
+		actionData && "successBankPrefix" in actionData
+			? actionData.successBankPrefix
+			: null
 	const successTolerance =
 		actionData && "successTolerance" in actionData
 			? actionData.successTolerance
@@ -272,6 +306,44 @@ export default function AdminSettings({
 						<p className="text-sm text-status-danger">{t(error as never)}</p>
 					)}
 					{successTolerance && (
+						<p className="text-sm text-status-ok">
+							{t("admin_settings.saved")}
+						</p>
+					)}
+					<Button type="submit" size="sm">
+						{t("admin_settings.save")}
+					</Button>
+				</Form>
+			</div>
+
+			<div className="bg-card border rounded-lg p-4 space-y-3">
+				<h2 className="font-medium text-sm">
+					{t("admin_settings.bank_prefix_heading")}
+				</h2>
+				<p className="text-xs text-muted-foreground">
+					{t("admin_settings.bank_prefix_description", {
+						current: bankInvoicePrefix,
+					})}
+				</p>
+				<Form method="post" className="space-y-3">
+					<input type="hidden" name="intent" value="bank_prefix" />
+					<div>
+						<Label htmlFor="bank_invoice_prefix">
+							{t("admin_settings.bank_prefix_label")}
+						</Label>
+						<Input
+							id="bank_invoice_prefix"
+							name="bank_invoice_prefix"
+							type="text"
+							maxLength={8}
+							defaultValue={bankInvoicePrefix}
+							required
+						/>
+					</div>
+					{error && (
+						<p className="text-sm text-status-danger">{t(error as never)}</p>
+					)}
+					{successBankPrefix && (
 						<p className="text-sm text-status-ok">
 							{t("admin_settings.saved")}
 						</p>

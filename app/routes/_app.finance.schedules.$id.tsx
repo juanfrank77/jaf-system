@@ -102,7 +102,7 @@ export default function BankSchedulePage({
 	actionData,
 }: Route.ComponentProps) {
 	const { schedule } = loaderData
-	const { t } = useTranslation()
+	const { t, i18n } = useTranslation()
 	const navigation = useNavigation()
 	const submitting = navigation.state === "submitting"
 	return (
@@ -128,9 +128,12 @@ export default function BankSchedulePage({
 				{schedule.sentAt ? (
 					<Badge variant="ok">
 						{t("finance_schedule.sent_on", {
-							date: new Date(schedule.sentAt).toLocaleDateString(undefined, {
-								timeZone: "America/Puerto_Rico",
-							}),
+							date: new Date(schedule.sentAt).toLocaleDateString(
+								i18n.language,
+								{
+									timeZone: "America/Puerto_Rico",
+								},
+							),
 						})}
 					</Badge>
 				) : (

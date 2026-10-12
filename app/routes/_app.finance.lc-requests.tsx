@@ -92,7 +92,6 @@ export async function action({ request }: Route.ActionArgs) {
 		switch (e.code) {
 			case "empty":
 			case "not_found":
-			case "not_eligible":
 			case "already_scheduled":
 			case "no_area":
 				return {
@@ -101,7 +100,7 @@ export async function action({ request }: Route.ActionArgs) {
 				}
 			default:
 				return {
-					errorKey: "finance_schedule.errors.not_eligible" as const,
+					errorKey: "finance_schedule.errors.build_not_eligible" as const,
 					list: e.controlNumbers.join(", "),
 				}
 		}
@@ -114,7 +113,7 @@ export default function FinanceLcRequests({
 	actionData,
 }: Route.ComponentProps) {
 	const { jobs, pagination, scheduleByPacket, schedules } = loaderData
-	const { t } = useTranslation()
+	const { t, i18n } = useTranslation()
 	const [ticked, setTicked] = useState<Set<string>>(new Set())
 	const selectedCount = jobs.filter((r) => ticked.has(r.id)).length
 	const toggle = (id: string, on: boolean) =>
@@ -211,9 +210,12 @@ export default function FinanceLcRequests({
 									{formatMoney(s.total)} ·{" "}
 									{s.sentAt
 										? t("finance_schedule.sent_on", {
-												date: new Date(s.sentAt).toLocaleDateString("en-US", {
-													timeZone: "America/Puerto_Rico",
-												}),
+												date: new Date(s.sentAt).toLocaleDateString(
+													i18n.language,
+													{
+														timeZone: "America/Puerto_Rico",
+													},
+												),
 											})
 										: t("finance_schedule.not_sent")}
 								</span>

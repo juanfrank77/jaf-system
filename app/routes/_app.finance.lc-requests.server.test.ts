@@ -99,9 +99,11 @@ describe("step 2 LC request", () => {
 	})
 
 	it("build_schedule names a packet whose brigade has no area; nothing is created", async () => {
-		await financeUser()
+		const finance = await financeUser()
 		const noArea = await lcRequestPacket({ area: null })
-		const before = await db.bankSchedule.count()
+		const before = await db.bankSchedule.count({
+			where: { generatedById: finance.id },
+		})
 		const res = await post(
 			new URLSearchParams([
 				["intent", "build_schedule"],
@@ -116,7 +118,32 @@ describe("step 2 LC request", () => {
 			errorKey: "finance_schedule.errors.no_area",
 		})
 		expect(res.list).toContain(noArea.controlNumber)
-		expect(await db.bankSchedule.count()).toBe(before)
+		expect(
+			await db.bankSchedule.count({ where: { generatedById: finance.id } }),
+		).toBe(before)
+	})
+
+	it("build_schedule names an ineligible packet with the build-specific message", async () => {
+		await financeUser()
+		const p = await lcRequestPacket()
+		await db.jafInvoice.update({
+			where: { id: p.id },
+			data: { pbccRequestSentAt: new Date() },
+		})
+		const res = await post(
+			new URLSearchParams([
+				["intent", "build_schedule"],
+				["packetId", p.id],
+			]),
+		).catch((e) => e)
+		if (res instanceof Response) {
+			const loc = res.headers.get("Location")?.split("/").pop()
+			if (loc) t.track("bankSchedule", { id: loc })
+		}
+		expect(res).toMatchObject({
+			errorKey: "finance_schedule.errors.build_not_eligible",
+		})
+		expect(res.list).toContain(p.controlNumber)
 	})
 
 	it("loader returns recent schedules", async () => {

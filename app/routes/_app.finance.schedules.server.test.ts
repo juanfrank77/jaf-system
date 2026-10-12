@@ -1,3 +1,6 @@
+import fs from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
 import { afterAll, describe, expect, it, vi } from "vitest"
 import { db } from "~/lib/db.server"
 import { makeTracker, seedFinanceableInvoice, seedUser } from "~/test/helpers"
@@ -10,7 +13,21 @@ import { action, loader } from "./_app.finance.schedules.$id"
 import { loader as xlsxLoader } from "./_app.finance.schedules.$id.xlsx"
 
 const t = makeTracker()
-afterAll(() => t.cleanup())
+const tmpFiles: string[] = []
+afterAll(async () => {
+	await t.cleanup()
+	await Promise.all(
+		tmpFiles.map((f) => fs.rm(f, { force: true, recursive: true })),
+	)
+})
+
+async function tmpFile(name: string, bytes: Buffer): Promise<string> {
+	const dir = await fs.mkdtemp(path.join(os.tmpdir(), "jaf-dl-"))
+	const file = path.join(dir, name)
+	await fs.writeFile(file, bytes)
+	tmpFiles.push(file, dir)
+	return file
+}
 
 async function schedule(
 	generatedById: string,
@@ -131,6 +148,83 @@ describe("schedule routes", () => {
 				context: {},
 			} as never),
 		).rejects.toMatchObject({ status: 404 })
+	})
+
+	it("xlsx route serves the file with the spreadsheet type and filename", async () => {
+		const finance = await financeUser()
+		const bytes = Buffer.from("fake-xlsx-bytes")
+		const file = await tmpFile("s.xlsx", bytes)
+		const s = await schedule(finance.id, { xlsxPath: file })
+		const res = (await xlsxLoader({
+			request: new Request("http://x"),
+			params: { id: s.id },
+			context: {},
+		} as never)) as Response
+		expect(res.status).toBe(200)
+		expect(res.headers.get("Content-Type")).toBe(
+			"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+		)
+		expect(res.headers.get("Content-Disposition")).toContain(
+			`schedule-${s.number}.xlsx`,
+		)
+		expect(Buffer.from(await res.arrayBuffer())).toEqual(bytes)
+	})
+
+	it("xlsx route 404s when the path is set but the file is gone", async () => {
+		const finance = await financeUser()
+		const s = await schedule(finance.id, {
+			xlsxPath: path.join(os.tmpdir(), "jaf-dl-missing", "nope.xlsx"),
+		})
+		await expect(
+			xlsxLoader({
+				request: new Request("http://x"),
+				params: { id: s.id },
+				context: {},
+			} as never),
+		).rejects.toMatchObject({ status: 404 })
+	})
+
+	it("invoice route serves the PDF with a sanitised filename", async () => {
+		await financeUser()
+		const bytes = Buffer.from("%PDF-fake")
+		const file = await tmpFile("i.pdf", bytes)
+		const doc = t.track("jafInvoice", await seedFinanceableInvoice())
+		await db.jafInvoice.update({
+			where: { id: doc.id },
+			data: { bankInvoicePdfPath: file, controlNumber: 'JAF "x" 1' },
+		})
+		const res = (await invoiceLoader({
+			request: new Request("http://x"),
+			params: { id: doc.id },
+			context: {},
+		} as never)) as Response
+		expect(res.status).toBe(200)
+		expect(res.headers.get("Content-Type")).toBe("application/pdf")
+		expect(res.headers.get("Content-Disposition")).toBe(
+			'attachment; filename="JAF__x__1-bank-invoice.pdf"',
+		)
+		expect(Buffer.from(await res.arrayBuffer())).toEqual(bytes)
+	})
+
+	it("invoice route 404s when the file is gone or no invoice was built", async () => {
+		await financeUser()
+		const gone = t.track("jafInvoice", await seedFinanceableInvoice())
+		await db.jafInvoice.update({
+			where: { id: gone.id },
+			data: {
+				bankInvoicePdfPath: path.join(os.tmpdir(), "jaf-dl-missing", "x.pdf"),
+			},
+		})
+		const none = t.track("jafInvoice", await seedFinanceableInvoice())
+		for (const id of [gone.id, none.id]) {
+			await expect(
+				invoiceLoader({
+					request: new Request("http://x"),
+					params: { id },
+					context: {},
+				} as never),
+			).rejects.toMatchObject({ status: 404 })
+		}
 	})
 
 	it("mark_sent action is idempotent and redirect-free (returns ok)", async () => {

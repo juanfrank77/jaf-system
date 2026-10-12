@@ -34,6 +34,10 @@ describe("bank-schedule helpers", () => {
 		).toBe("Yabucoa")
 		expect(localityFromAddress("Calle Luna 55")).toBe("Calle Luna 55")
 		expect(localityFromAddress("")).toBe("")
+		expect(localityFromAddress("Calle X, Yabucoa, PR 00767")).toBe("Yabucoa")
+		expect(localityFromAddress("Calle X, Yabucoa PR")).toBe("Yabucoa")
+		expect(localityFromAddress("Calle X, Yabucoa,")).toBe("Yabucoa")
+		expect(localityFromAddress("Calle X, Yabucoa, PR")).toBe("Yabucoa")
 	})
 
 	it("jobKind maps INSTALL to instalacion and anything else to mantenimiento", () => {

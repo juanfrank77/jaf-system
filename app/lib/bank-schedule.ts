@@ -17,8 +17,12 @@ export function contractLabel(prefix: string): string {
 
 /** Municipality for the invoice's "Localidad": last comma segment, minus state and zip. */
 export function localityFromAddress(address: string): string {
-	const last = address.split(",").pop()?.trim() ?? ""
-	return last.replace(/\s+PR\s+\d{5}(-\d{4})?$/i, "").trim()
+	const stripped = address
+		.trim()
+		.replace(/[,\s]+$/, "")
+		.replace(/(?:,\s*|\s+)PR(?:\s+\d{5}(?:-\d{4})?)?$/i, "")
+		.replace(/[,\s]+$/, "")
+	return stripped.split(",").pop()?.trim() ?? ""
 }
 
 export type JobKind = "INSTALACION" | "CONSTRUCCION" | "MANTENIMIENTO"

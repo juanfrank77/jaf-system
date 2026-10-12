@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 import fs from "node:fs/promises"
 import { useTranslation } from "react-i18next"
-import { Form, Link, redirect, useNavigation } from "react-router"
+import { Form, Link, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
 import { Badge } from "~/components/ui/badge"
@@ -212,7 +212,6 @@ export default function FinancePayrollRunDetail({
 	const { run, blocks, accounts, fallbackEnabled } = loaderData
 	const fallbackCount = accounts.filter((a) => a.confirmedByFallback).length
 	const { t } = useTranslation()
-	const submitting = useNavigation().state !== "idle"
 	const error = actionData?.errorKey
 		? t(
 				ERROR_KEYS[actionData.errorKey as ActionErrorKey] ??
@@ -325,82 +324,6 @@ export default function FinancePayrollRunDetail({
 								{formatMoney(blocks.reduce((s, b) => s + b.totalSC, 0))}
 							</td>
 						</tr>
-					</tbody>
-				</table>
-			</div>
-
-			<div className="overflow-x-auto bg-card border rounded-lg">
-				<table className="w-full text-sm">
-					<thead>
-						<tr className="text-xs text-muted-foreground text-left border-b">
-							<th className="p-2">{t("finance_payroll.col.brigade")}</th>
-							<th className="p-2 text-right">
-								{t("finance_payroll.col.jobs")}
-							</th>
-							<th className="p-2">{t("finance_payroll.col.status")}</th>
-						</tr>
-					</thead>
-					<tbody>
-						{accounts.map((a) => (
-							<tr key={a.accountId} className="border-b last:border-0">
-								<td className="p-2">
-									<span className="font-mono">{a.code}</span>{" "}
-									<span className="text-muted-foreground">{a.label}</span>
-								</td>
-								<td className="p-2 text-right font-mono">{a.jobs}</td>
-								<td className="p-2">
-									{a.paidAt ? (
-										<span className="flex flex-wrap items-center gap-2">
-											<span>
-												{t("finance_payroll.paid_by", {
-													date: new Date(a.paidAt).toLocaleDateString(),
-													name: a.paidByName ?? "—",
-												})}
-											</span>
-											{a.confirmedByFallback && (
-												<Badge variant="warn">
-													{t("finance_payroll.from_paper")}
-												</Badge>
-											)}
-										</span>
-									) : (
-										<span className="flex flex-wrap items-center gap-2">
-											<span className="text-muted-foreground">
-												{t("finance_payroll.awaiting_comptroller")}
-											</span>
-											{fallbackEnabled && (
-												<Form method="post" className="flex items-center gap-1">
-													<input
-														type="hidden"
-														name="intent"
-														value="confirm_account"
-													/>
-													<input
-														type="hidden"
-														name="accountId"
-														value={a.accountId}
-													/>
-													<input
-														type="date"
-														name="paidDate"
-														required
-														className="border rounded px-2 py-1 text-xs"
-													/>
-													<Button
-														type="submit"
-														variant="secondary"
-														size="xs"
-														disabled={submitting}
-													>
-														{t("finance_payroll.confirm_account")}
-													</Button>
-												</Form>
-											)}
-										</span>
-									)}
-								</td>
-							</tr>
-						))}
 					</tbody>
 				</table>
 			</div>

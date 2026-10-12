@@ -1993,6 +1993,7 @@
 		"build": "Crear cronograma ({{count}})",
 		"recent": "Cronogramas recientes",
 		"none_selected": "Seleccione al menos un paquete.",
+		"on_schedule": "En cronograma #{{number}}",
 		"errors": {
 			"empty": "Seleccione al menos un paquete.",
 			"not_found": "Un paquete seleccionado ya no existe.",

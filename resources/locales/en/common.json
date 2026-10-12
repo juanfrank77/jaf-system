@@ -825,11 +825,15 @@
 			"invalid_aging_days": "Aging alert days must be a positive whole number.",
 			"invalid_tolerance": "Tolerance must be a non-negative number.",
 			"unknown_intent": "Unknown action.",
-			"invalid_lc_pbcc_rate": "Enter a rate greater than 0 and no greater than 1."
+			"invalid_lc_pbcc_rate": "Enter a rate greater than 0 and no greater than 1.",
+			"invalid_bank_prefix": "Use 1–8 letters or digits."
 		},
 		"lc_pbcc_heading": "LC/PBCC advance rate",
 		"lc_pbcc_description": "PBCC advance is currently {current}% of the verified invoice total. Keep IVU separate.",
-		"lc_pbcc_label": "Advance rate (decimal)"
+		"lc_pbcc_label": "Advance rate (decimal)",
+		"bank_prefix_heading": "Bank invoice prefix",
+		"bank_prefix_description": "Contract prefix on bank invoice numbers, e.g. M17 gives M17-10354739. Current: {{current}}.",
+		"bank_prefix_label": "Prefix"
 	},
 	"admin_catalog": {
 		"title": "Service Catalog",

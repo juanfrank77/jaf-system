@@ -13,16 +13,20 @@ vi.mock("~/lib/system-settings.server", () => ({
 	setAvisoAmountTolerance: vi.fn(),
 	getLcPbccAdvanceRate: vi.fn(),
 	setLcPbccAdvanceRate: vi.fn(),
+	getBankInvoicePrefix: vi.fn(),
+	setBankInvoicePrefix: vi.fn(),
 }))
 
 import { requireRole } from "~/lib/permissions.server"
 import {
 	getAgingAlertDays,
 	getAvisoAmountTolerance,
+	getBankInvoicePrefix,
 	getIvuRate,
 	getLcPbccAdvanceRate,
 	setAgingAlertDays,
 	setAvisoAmountTolerance,
+	setBankInvoicePrefix,
 	setIvuRate,
 	setLcPbccAdvanceRate,
 } from "~/lib/system-settings.server"
@@ -47,6 +51,7 @@ describe("GET /admin/settings", () => {
 		vi.mocked(getAgingAlertDays).mockResolvedValue(30)
 		vi.mocked(getAvisoAmountTolerance).mockResolvedValue(0.01)
 		vi.mocked(getLcPbccAdvanceRate).mockResolvedValue(0.8)
+		vi.mocked(getBankInvoicePrefix).mockResolvedValue("M17")
 
 		const result = await loader({
 			request: new Request("http://localhost/admin/settings"),
@@ -58,6 +63,7 @@ describe("GET /admin/settings", () => {
 			agingAlertDays: 30,
 			avisoAmountTolerance: 0.01,
 			lcPbccAdvanceRate: 0.8,
+			bankInvoicePrefix: "M17",
 		})
 	})
 })
@@ -214,5 +220,39 @@ describe("POST /admin/settings", () => {
 			errorKey: "admin_settings.errors.invalid_lc_pbcc_rate",
 		})
 		expect(setLcPbccAdvanceRate).not.toHaveBeenCalled()
+	})
+
+	it("stores the bank invoice prefix upper-cased", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "admin-1" },
+			session: {},
+		} as any)
+		const form = new FormData()
+		form.set("intent", "bank_prefix")
+		form.set("bank_invoice_prefix", "m18")
+		const result = await action({
+			request: formRequest(form),
+			params: {},
+		} as any)
+		expect(setBankInvoicePrefix).toHaveBeenCalledWith("M18", "admin-1")
+		expect(result).toEqual({ successBankPrefix: true })
+	})
+
+	it("rejects an invalid bank invoice prefix", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "admin-1" },
+			session: {},
+		} as any)
+		const form = new FormData()
+		form.set("intent", "bank_prefix")
+		form.set("bank_invoice_prefix", "bad prefix!")
+		const result = await action({
+			request: formRequest(form),
+			params: {},
+		} as any)
+		expect(result).toEqual({
+			errorKey: "admin_settings.errors.invalid_bank_prefix",
+		})
+		expect(setBankInvoicePrefix).not.toHaveBeenCalled()
 	})
 })

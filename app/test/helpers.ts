@@ -62,6 +62,7 @@ export function makeTracker() {
 		user: [] as string[],
 		serviceCode: [] as string[],
 		jafInvoice: [] as string[],
+		bankSchedule: [] as string[],
 		auditTrail: [] as string[],
 		paymentRecord: [] as string[],
 		payrollRun: [] as string[],
@@ -126,6 +127,10 @@ export function makeTracker() {
 			})
 		if (b.jafInvoice.length)
 			await db.jafInvoice.deleteMany({ where: { id: { in: b.jafInvoice } } })
+		if (b.bankSchedule.length)
+			await db.bankSchedule.deleteMany({
+				where: { id: { in: b.bankSchedule } },
+			})
 		// Arm A parents: JafInvoice→PayrollRun/ContractorAccount/Brigade are
 		// nullable FKs with NoAction referential action, so the invoice rows must
 		// already be gone (above) before these can be deleted. Each of these in

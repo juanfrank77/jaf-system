@@ -12,9 +12,11 @@ vi.mock("./db.server", () => ({
 import { db } from "./db.server"
 import {
 	getAgingAlertDays,
+	getBankInvoicePrefix,
 	getIvuRate,
 	getLcPbccAdvanceRate,
 	setAgingAlertDays,
+	setBankInvoicePrefix,
 	setIvuRate,
 	setLcPbccAdvanceRate,
 } from "./system-settings.server"
@@ -98,6 +100,42 @@ describe("system settings", () => {
 			create: {
 				key: "lc_pbcc_advance_rate",
 				value: "0.75",
+				updatedById: "admin-1",
+			},
+		})
+	})
+
+	it("getBankInvoicePrefix defaults to M17 when unset", async () => {
+		vi.mocked(db.systemSetting.findUnique).mockResolvedValue(null)
+		await expect(getBankInvoicePrefix()).resolves.toBe("M17")
+	})
+
+	it("getBankInvoicePrefix returns the stored value", async () => {
+		vi.mocked(db.systemSetting.findUnique).mockResolvedValue({
+			value: "M18",
+		} as any)
+		await expect(getBankInvoicePrefix()).resolves.toBe("M18")
+		expect(db.systemSetting.findUnique).toHaveBeenCalledWith({
+			where: { key: "bank_invoice_prefix" },
+		})
+	})
+
+	it("getBankInvoicePrefix falls back to M17 when the stored value is blank", async () => {
+		vi.mocked(db.systemSetting.findUnique).mockResolvedValue({
+			value: "   ",
+		} as any)
+		await expect(getBankInvoicePrefix()).resolves.toBe("M17")
+	})
+
+	it("setBankInvoicePrefix upserts the trimmed prefix", async () => {
+		vi.mocked(db.systemSetting.upsert).mockResolvedValue({} as any)
+		await setBankInvoicePrefix(" M18 ", "admin-1")
+		expect(db.systemSetting.upsert).toHaveBeenCalledWith({
+			where: { key: "bank_invoice_prefix" },
+			update: { value: "M18", updatedById: "admin-1" },
+			create: {
+				key: "bank_invoice_prefix",
+				value: "M18",
 				updatedById: "admin-1",
 			},
 		})

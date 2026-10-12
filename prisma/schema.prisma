@@ -195,6 +195,9 @@ model User {
   stockDeliveriesReceived StockDelivery[] @relation("StockDeliveryReceiver")
   stockSnapshotsGenerated StockSnapshot[] @relation("StockSnapshotGenerator")
 
+  bankSchedulesGenerated BankSchedule[] @relation("BankScheduleGenerator")
+  bankSchedulesSent      BankSchedule[] @relation("BankScheduleSender")
+
   @@index([role, active])
 }
 
@@ -367,6 +370,9 @@ model JafInvoice {
   financeVerifiedBy    User?     @relation("FinanceVerifiedDocs", fields: [financeVerifiedById], references: [id])
   financeSendBackNotes Json? // [{ note, byUserId, createdAt }] — Finance→Supervisor Aviso issues
   pbccRequestPdfPath   String?
+  bankInvoicePdfPath   String?
+  bankScheduleId       String?
+  bankSchedule         BankSchedule? @relation(fields: [bankScheduleId], references: [id])
   pbccRequestSentAt    DateTime?
   karmenCopySentAt     DateTime?
   finalClaroDocPath    String?
@@ -430,6 +436,7 @@ model JafInvoice {
   @@index([releasedToFinanceAt])
   @@index([payrollRunId])
   @@index([contractorAccountId])
+  @@index([bankScheduleId])
   @@index([assignedCrewIds(ops: ArrayOps)], type: Gin)
   @@index([avisoNumber(ops: raw("gin_trgm_ops"))], type: Gin)
   @@index([jobAddressEstimated(ops: raw("gin_trgm_ops"))], type: Gin)
@@ -925,4 +932,23 @@ model RestockRequest {
   @@index([status, submittedAt])
   @@index([vanId, submittedAt])
   @@map("restock_request")
+}
+
+model BankSchedule {
+  id            String    @id @default(cuid())
+  number        Int       @unique @default(autoincrement())
+  generatedAt   DateTime  @default(now())
+  generatedById String
+  generatedBy   User      @relation("BankScheduleGenerator", fields: [generatedById], references: [id])
+  advanceRate   Decimal
+  total         Decimal
+  advanceAmount Decimal
+  xlsxPath      String?
+  sentAt        DateTime?
+  sentById      String?
+  sentBy        User?     @relation("BankScheduleSender", fields: [sentById], references: [id])
+
+  invoices JafInvoice[]
+
+  @@index([generatedAt])
 }

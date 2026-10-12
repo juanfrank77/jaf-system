@@ -53,7 +53,11 @@ async function buildBaseWhere(
 		return ownedOrInArea(userId, areas)
 	}
 	if (role === "CREW") return { assignedCrewIds: { has: userId } }
-	return {} // WAREHOUSE, FINANCE, ADMIN see all
+	// Finance only sees work orders the supervisor released to Finance;
+	// supervisor-stage docs never reach them. Composes by key with the status /
+	// crew / job-type filters and the search `OR`, so the gate survives all of them.
+	if (role === "FINANCE") return { releasedToFinanceAt: { not: null } }
+	return {} // WAREHOUSE, ADMIN see all
 }
 
 type QueueRow = {

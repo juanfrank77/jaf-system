@@ -155,7 +155,7 @@ describe("generateBankInvoicePdf", () => {
 		expect(pageCount).toBe(1)
 	})
 
-	it("X mark appears exactly once for checked job kind", async () => {
+	it("X mark appears exactly once adjacent to checked job kind label", async () => {
 		const kinds: Array<BankInvoiceInput["kind"]> = [
 			"INSTALACION",
 			"CONSTRUCCION",
@@ -165,14 +165,33 @@ describe("generateBankInvoicePdf", () => {
 		for (const kind of kinds) {
 			const bytes = await generateBankInvoicePdf({ ...input, kind })
 			const tokens = extractTextTokensInOrder(bytes)
-			const fullText = tokens.join("")
 
-			// X should appear exactly once in the checkbox section
+			// X should appear exactly once
 			const xCount = tokens.filter((t) => t === "X").length
 			expect(xCount).toBe(1)
 
-			// The kind label should appear in the PDF
-			expect(fullText).toContain(kind)
+			// Find X position
+			const xIndex = tokens.indexOf("X")
+			expect(xIndex).toBeGreaterThanOrEqual(0)
+
+			// Check a window around X (within 15 tokens) to find the kind label
+			const windowStart = Math.max(0, xIndex - 10)
+			const windowEnd = Math.min(tokens.length, xIndex + 11)
+			const windowText = tokens.slice(windowStart, windowEnd).join("")
+
+			// The correct kind should appear in the window around X
+			expect(windowText).toContain(kind)
+
+			// Other kinds should NOT appear in immediate neighbors of X
+			const prevToken = tokens[xIndex - 1] || ""
+			const nextToken = tokens[xIndex + 1] || ""
+			const otherKinds = kinds.filter((k) => k !== kind)
+
+			for (const otherKind of otherKinds) {
+				// Neither neighbor should be the start of another kind
+				expect(prevToken).not.toContain(otherKind)
+				expect(nextToken).not.toContain(otherKind)
+			}
 		}
 	})
 

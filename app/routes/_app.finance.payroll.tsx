@@ -14,10 +14,7 @@ import { db } from "~/lib/db.server"
 import { isPayrollFallbackEnabled } from "~/lib/features.server"
 import { PAGE_SIZE } from "~/lib/finance-stage-paging"
 import { ageDays, loadStageRows } from "~/lib/finance-stage-rows.server"
-import {
-	RUN_OVERDUE_DAYS,
-	unfundedSweepableIds,
-} from "~/lib/finance-stages.server"
+import { RUN_OVERDUE_DAYS } from "~/lib/finance-stages.server"
 import {
 	blockedSentJobs,
 	EmptyRunError,
@@ -92,15 +89,9 @@ export async function action({ request }: Route.ActionArgs) {
 	const label =
 		(form.get("label") as string | null)?.trim() ||
 		new Date().toISOString().slice(0, 10)
-	const formExcluded = form
+	const excludeIds = form
 		.getAll("excludeIds")
 		.filter((v): v is string => typeof v === "string" && v !== "")
-	// Only bank-funded packets may go on a list for Carmen. The server rule is
-	// not enforced yet (see spec follow-up), so hold unfunded ones back here,
-	// computed at submit time rather than trusted from the form.
-	const excludeIds = [
-		...new Set([...formExcluded, ...(await unfundedSweepableIds())]),
-	]
 	try {
 		const { run } = await generateRun({
 			generatedById: user.id,

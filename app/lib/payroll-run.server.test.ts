@@ -5,7 +5,6 @@ import {
 	buildJournalBlocks,
 	closePayrollRun,
 	closePayrollRunAccount,
-	countFundedSweepableJobs,
 	EmptyRunError,
 	generateRun,
 	parsePaidDate,
@@ -52,7 +51,10 @@ async function seedSweepFiller() {
 	const account = t.track("contractorAccount", await seedContractorAccount())
 	t.track(
 		"jafInvoice",
-		await seedFinanceableInvoice({ contractorAccountCode: account.code }),
+		await seedFinanceableInvoice({
+			contractorAccountCode: account.code,
+			funded: true,
+		}),
 	)
 }
 afterAll(() => t.cleanup())
@@ -64,6 +66,7 @@ describe("generateRun", () => {
 		const doc = t.track(
 			"jafInvoice",
 			await seedFinanceableInvoice({
+				funded: true,
 				contractorAccountCode: account.code,
 				jafInvoiceLines: [
 					{
@@ -102,7 +105,10 @@ describe("generateRun", () => {
 		const account = t.track("contractorAccount", await seedContractorAccount())
 		const doc = t.track(
 			"jafInvoice",
-			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+				funded: true,
+			}),
 		)
 
 		const first = await generateRun({ generatedById: finance.id, label: "R1" })
@@ -135,7 +141,10 @@ describe("generateRun", () => {
 		const account = t.track("contractorAccount", await seedContractorAccount())
 		const doc = t.track(
 			"jafInvoice",
-			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+				funded: true,
+			}),
 		)
 
 		// The loser may find nothing left and be refused as empty (EmptyRunError).
@@ -175,6 +184,7 @@ describe("generateRun", () => {
 		const doc = t.track(
 			"jafInvoice",
 			await seedFinanceableInvoice({
+				funded: true,
 				contractorAccountId: null,
 				contractorAccountCode: "NOT-MAPPED",
 			}),
@@ -204,6 +214,7 @@ describe("generateRun", () => {
 		const doc = t.track(
 			"jafInvoice",
 			await seedFinanceableInvoice({
+				funded: true,
 				contractorAccountCode: account.code,
 			}),
 		)
@@ -228,11 +239,17 @@ describe("generateRun", () => {
 		)
 		const kept = t.track(
 			"jafInvoice",
-			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+				funded: true,
+			}),
 		)
 		const held = t.track(
 			"jafInvoice",
-			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+				funded: true,
+			}),
 		)
 
 		const { run } = await generateRun({
@@ -281,12 +298,14 @@ describe("generateRun", () => {
 		const docA = t.track(
 			"jafInvoice",
 			await seedFinanceableInvoice({
+				funded: true,
 				contractorAccountCode: account.code,
 			}),
 		)
 		const docB = t.track(
 			"jafInvoice",
 			await seedFinanceableInvoice({
+				funded: true,
 				contractorAccountCode: account.code,
 			}),
 		)
@@ -313,6 +332,7 @@ describe("generateRun", () => {
 		const doc = t.track(
 			"jafInvoice",
 			await seedFinanceableInvoice({
+				funded: true,
 				contractorAccountCode: account.code,
 			}),
 		)
@@ -346,10 +366,10 @@ describe("generateRun", () => {
 		expect(reloaded.payrollRunId).toBe(run.id)
 	})
 
-	it("does not sweep an unsent packet, and does sweep it once sent; funding is irrelevant (spec §3)", async () => {
+	it("sweeps only bank-funded packets: unsent and sent-unfunded stay open", async () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		const account = t.track("contractorAccount", await seedContractorAccount())
-		const doc = t.track(
+		const unsent = t.track(
 			"jafInvoice",
 			await seedFinanceableInvoice({
 				contractorAccountCode: account.code,
@@ -357,60 +377,65 @@ describe("generateRun", () => {
 				pbccRequestSentAt: null,
 			}),
 		)
-		await generateRun({ generatedById: finance.id, label: "unsent-1" })
-			.then((r) => t.track("payrollRun", r.run))
-			.catch(() => undefined) // other fixtures in the shared DB may or may not form a run
-		const still = await db.jafInvoice.findUniqueOrThrow({
-			where: { id: doc.id },
-		})
-		expect(still.payrollRunId).toBeNull()
-
-		// Sent but NOT funded (advanceReceivedAt null): swept.
-		await db.jafInvoice.update({
-			where: { id: doc.id },
-			data: { pbccRequestSentAt: new Date() },
-		})
-		expect(still.advanceReceivedAt).toBeNull()
-		const { run } = await generateRun({
-			generatedById: finance.id,
-			label: "sent-1",
-		})
-		t.track("payrollRun", run)
-		const swept = await db.jafInvoice.findUniqueOrThrow({
-			where: { id: doc.id },
-		})
-		expect(swept.payrollRunId).toBe(run.id)
-	})
-
-	it("countFundedSweepableJobs counts only sent packets that are also funded (info only)", async () => {
-		const account = t.track("contractorAccount", await seedContractorAccount())
-		const before = await countFundedSweepableJobs()
-		const sent = t.track(
+		const sentUnfunded = t.track(
 			"jafInvoice",
 			await seedFinanceableInvoice({
 				contractorAccountCode: account.code,
 				jafInvoiceLines: ONE_LINE_100,
 			}),
 		)
-		expect(await countFundedSweepableJobs()).toBe(before)
-		const recorder = t.track("user", await seedUser({ role: "FINANCE" }))
-		await db.jafInvoice.update({
-			where: { id: sent.id },
-			data: { advanceReceivedAt: new Date(), advanceAmount: 80 },
-		})
-		t.track(
-			"paymentRecord",
-			await db.paymentRecord.create({
-				data: {
-					jobId: sent.id,
-					type: "PBCC_ADVANCE",
-					amount: 80,
-					date: new Date(),
-					recordedById: recorder.id,
-				},
+		const funded = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+				jafInvoiceLines: ONE_LINE_100,
+				funded: true,
 			}),
 		)
-		expect(await countFundedSweepableJobs()).toBe(before + 1)
+		const { run } = await generateRun({
+			generatedById: finance.id,
+			label: "funded-only",
+		})
+		t.track("payrollRun", run)
+		const rows = await db.jafInvoice.findMany({
+			where: { id: { in: [unsent.id, sentUnfunded.id, funded.id] } },
+			select: { id: true, payrollRunId: true },
+		})
+		const byId = Object.fromEntries(rows.map((r) => [r.id, r.payrollRunId]))
+		expect(byId[funded.id]).toBe(run.id)
+		expect(byId[sentUnfunded.id]).toBeNull()
+		expect(byId[unsent.id]).toBeNull()
+	})
+
+	it("excludeIds still holds back a funded packet", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		const account = t.track("contractorAccount", await seedContractorAccount())
+		const kept = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+				jafInvoiceLines: ONE_LINE_100,
+				funded: true,
+			}),
+		)
+		const held = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+				jafInvoiceLines: ONE_LINE_100,
+				funded: true,
+			}),
+		)
+		const { run } = await generateRun({
+			generatedById: finance.id,
+			label: "held",
+			excludeIds: [held.id],
+		})
+		t.track("payrollRun", run)
+		const k = await db.jafInvoice.findUniqueOrThrow({ where: { id: kept.id } })
+		const h = await db.jafInvoice.findUniqueOrThrow({ where: { id: held.id } })
+		expect(k.payrollRunId).toBe(run.id)
+		expect(h.payrollRunId).toBeNull()
 	})
 
 	it("creates exactly one PayrollRunAccount per distinct account, all unpaid", async () => {
@@ -421,6 +446,7 @@ describe("generateRun", () => {
 			t.track(
 				"jafInvoice",
 				await seedFinanceableInvoice({
+					funded: true,
 					contractorAccountCode: code,
 					jafInvoiceLines: ONE_LINE_100,
 				}),
@@ -446,6 +472,7 @@ describe("generateRun", () => {
 		const doc = t.track(
 			"jafInvoice",
 			await seedFinanceableInvoice({
+				funded: true,
 				contractorAccountCode: "NO-SUCH-ACCOUNT",
 				jafInvoiceLines: ONE_LINE_100,
 			}),
@@ -454,6 +481,7 @@ describe("generateRun", () => {
 		t.track(
 			"jafInvoice",
 			await seedFinanceableInvoice({
+				funded: true,
 				contractorAccountCode: good.code,
 				jafInvoiceLines: ONE_LINE_100,
 			}),
@@ -476,6 +504,7 @@ describe("generateRun", () => {
 		t.track(
 			"jafInvoice",
 			await seedFinanceableInvoice({
+				funded: true,
 				contractorAccountCode: account.code,
 				jafInvoiceLines: ONE_LINE_100,
 			}),
@@ -499,7 +528,10 @@ describe("closePayrollRun", () => {
 		const account = t.track("contractorAccount", await seedContractorAccount())
 		t.track(
 			"jafInvoice",
-			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+				funded: true,
+			}),
 		)
 		const { run } = await generateRun({
 			generatedById: finance.id,
@@ -532,7 +564,10 @@ describe("closePayrollRun", () => {
 		const account = t.track("contractorAccount", await seedContractorAccount())
 		t.track(
 			"jafInvoice",
-			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+				funded: true,
+			}),
 		)
 		const { run } = await generateRun({
 			generatedById: finance.id,
@@ -559,7 +594,10 @@ describe("closePayrollRun", () => {
 		const account = t.track("contractorAccount", await seedContractorAccount())
 		const invoice = t.track(
 			"jafInvoice",
-			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+				funded: true,
+			}),
 		)
 		const { run } = await generateRun({
 			generatedById: finance.id,
@@ -645,6 +683,7 @@ describe("closePayrollRunAccount", () => {
 				t.track(
 					"jafInvoice",
 					await seedFinanceableInvoice({
+						funded: true,
 						contractorAccountCode: code,
 						jafInvoiceLines: ONE_LINE_100,
 					}),
@@ -956,7 +995,10 @@ describe("L3 generate_run action", () => {
 		const account = t.track("contractorAccount", await seedContractorAccount())
 		const inv = t.track(
 			"jafInvoice",
-			await seedFinanceableInvoice({ contractorAccountCode: account.code }),
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+				funded: true,
+			}),
 		)
 		// Only bank-funded packets may go on a list for Carmen.
 		await db.jafInvoice.update({
@@ -997,15 +1039,11 @@ describe("L3 generate_run action holds unfunded packets back", () => {
 			const inv = t.track(
 				"jafInvoice",
 				await seedFinanceableInvoice({
+					funded,
 					contractorAccountCode: account.code,
 					jafInvoiceLines: ONE_LINE_100,
 				}),
 			)
-			if (funded)
-				await db.jafInvoice.update({
-					where: { id: inv.id },
-					data: { advanceReceivedAt: new Date(), advanceAmount: 10 },
-				})
 			return inv
 		}
 		const fundedJob = await mk(true)
@@ -1054,6 +1092,7 @@ describe("armAOpenWhere terminal-status guard", () => {
 		const cancelled = t.track(
 			"jafInvoice",
 			await seedFinanceableInvoice({
+				funded: true,
 				status: "CANCELLED",
 				contractorAccountCode: account.code,
 			}),
@@ -1061,6 +1100,7 @@ describe("armAOpenWhere terminal-status guard", () => {
 		const lcFinal = t.track(
 			"jafInvoice",
 			await seedFinanceableInvoice({
+				funded: true,
 				status: "LC_REQUEST_GENERATED",
 				contractorAccountCode: account.code,
 			}),
@@ -1102,6 +1142,7 @@ describe("armAOpenWhere consumers (kept here so they cannot race the sweep)", ()
 		const doc = t.track(
 			"jafInvoice",
 			await seedFinanceableInvoice({
+				funded: true,
 				contractorAccountCode: account.code,
 				jafInvoiceLines: ONE_LINE_100,
 			}),

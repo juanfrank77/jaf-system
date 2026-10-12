@@ -169,19 +169,24 @@ describe("L3 payroll list", () => {
 		const unmapped = t.track(
 			"jafInvoice",
 			await seedFinanceableInvoice({
+				funded: true,
 				contractorAccountCode: runToken("NOPE"),
 			}),
 		)
 		const unsent = t.track(
 			"jafInvoice",
 			await seedFinanceableInvoice({
+				funded: true,
 				contractorAccountCode: runToken("NOPE"),
 				pbccRequestSentAt: null,
 			}),
 		)
 		const onInactive = t.track(
 			"jafInvoice",
-			await seedFinanceableInvoice({ contractorAccountCode: inactive.code }),
+			await seedFinanceableInvoice({
+				funded: true,
+				contractorAccountCode: inactive.code,
+			}),
 		)
 
 		const { blocked } = await callLoader()

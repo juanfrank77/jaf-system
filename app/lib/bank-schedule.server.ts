@@ -203,8 +203,10 @@ export async function buildBankSchedule(opts: {
 				data: { bankInvoicePdfPath: pdfPath },
 			})
 			rows.push({
-				// An instant: the generator prints it in the Puerto Rico calendar.
-				invoiceDate: from,
+				// Inv. Date is when the request was created for the invoice (the
+				// schedule's creation), not the work date. An instant: the
+				// generator prints it in the Puerto Rico calendar.
+				invoiceDate: schedule.generatedAt,
 				invoiceNumber,
 				area: areaLetter(doc.brigade?.area) as string,
 				debtor: DEBTOR,
@@ -216,7 +218,7 @@ export async function buildBankSchedule(opts: {
 			rows,
 			total,
 			advance,
-			date: new Date(),
+			date: schedule.generatedAt,
 			seller: "JAF COM",
 		})
 		const xlsxPath = await saveBuffer(

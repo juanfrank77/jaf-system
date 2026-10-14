@@ -187,7 +187,23 @@
 			"warehouse_scan_in": "Scan In Return",
 			"warehouse_restock": "Restocks to Release",
 			"warehouse_stock": "Stock",
-			"comptroller": "Brigades · payroll"
+			"supervisor_review": "Review queue",
+			"supervisor_invoice": "JAF invoices",
+			"supervisor_aviso": "Aviso & match",
+			"supervisor_precert": "Pre-cert sheets",
+			"supervisor_released": "Released to Finance",
+			"supervisor_all": "All work orders",
+			"warehouse_prep": "Work orders to prep",
+			"warehouse_pickup": "Awaiting pickup",
+			"warehouse_returns": "Returns due",
+			"warehouse_inventory": "Inventory count",
+			"warehouse_requests": "Material requests",
+			"warehouse_serials": "Serial register",
+			"warehouse_movements": "Movement log",
+			"comptroller_lists": "Lists from Lissette",
+			"comptroller_to_pay": "Runs to pay",
+			"comptroller_paid": "Paid runs",
+			"comptroller_installers": "Installers"
 		},
 		"notifications": {
 			"bell_label": "Notifications",
@@ -225,6 +241,7 @@
 			"arm_a": "Arm A · Paying our people",
 			"arm_b": "Arm B · Claro billing",
 			"work": "Work",
+			"team": "Team",
 			"money": "Finance",
 			"stock": "Warehouse",
 			"field": "Field",
@@ -1254,6 +1271,15 @@
 		"listed": "Listed"
 	},
 	"dashboard": {
+		"stage_queue": {
+			"review": "Review queue",
+			"invoice": "JAF invoices",
+			"aviso": "Aviso & match",
+			"precert": "Pre-cert sheets",
+			"released": "Released to Finance",
+			"all": "All work orders",
+			"count": "{{count}} work orders"
+		},
 		"title": "Dashboard",
 		"supervisor_scope_one": "{{areas}} · {{count}} crew",
 		"supervisor_scope_other": "{{areas}} · {{count}} crews",
@@ -1919,6 +1945,21 @@
 	"photo_capture": {
 		"take": "Take photo",
 		"remove": "Remove photo"
+	},
+	"comptroller_lists": {
+		"title": "Lists from Lissette",
+		"callout_body": "Every payroll list Finance has sent. Open a list to pay its accounts in Runs to pay.",
+		"status_unpaid": "{{unpaid}} of {{total}} unpaid",
+		"status_paid": "Paid",
+		"open": "Open",
+		"view": "View",
+		"col": {
+			"list": "List",
+			"sent": "Sent",
+			"work_orders": "Work orders",
+			"total": "Total",
+			"status": "Status"
+		}
 	},
 	"comptroller_payroll": {
 		"title": "Brigades · payroll",

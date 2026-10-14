@@ -13,7 +13,10 @@ const mocks = vi.hoisted(() => ({ requireRole: vi.fn() }))
 vi.mock("~/lib/permissions.server", () => ({ requireRole: mocks.requireRole }))
 
 import { loader as indexLoader } from "./_app.comptroller"
+import { loader as listsLoader } from "./_app.comptroller.lists"
+import { loader as paidLoader } from "./_app.comptroller.paid"
 import { action, loader as runLoader } from "./_app.comptroller.runs.$runId"
+import { loader as toPayLoader } from "./_app.comptroller.to-pay"
 
 const t = makeTracker()
 afterAll(() => t.cleanup())
@@ -127,6 +130,67 @@ describe("comptroller index loader", () => {
 		expect(paidRow?.accounts.filter((a) => a.confirmedByFallback)).toHaveLength(
 			1,
 		)
+		expect(mocks.requireRole).toHaveBeenCalledWith(expect.anything(), [
+			"COMPTROLLER",
+			"ADMIN",
+		])
+	})
+})
+
+describe("comptroller sidebar views", () => {
+	const call = (fn: (a: never) => unknown, path: string) =>
+		fn({
+			request: new Request(`http://localhost${path}`),
+			params: {},
+			context: {},
+		} as never)
+
+	it("splits runs into Runs to pay and Paid runs", async () => {
+		const open = await seedRun(2)
+		const paid = await seedRun(1)
+		await db.payrollRunAccount.updateMany({
+			where: { payrollRunId: paid.run.id },
+			data: { paidAt: new Date(), paidById: paid.comptroller.id },
+		})
+		await db.payrollRun.update({
+			where: { id: paid.run.id },
+			data: { paidAt: new Date(), paidById: paid.comptroller.id },
+		})
+
+		const toPay = (await call(toPayLoader, "/comptroller/to-pay")) as Awaited<
+			ReturnType<typeof toPayLoader>
+		>
+		const done = (await call(paidLoader, "/comptroller/paid")) as Awaited<
+			ReturnType<typeof paidLoader>
+		>
+		expect(toPay.runs.some((r) => r.id === open.run.id)).toBe(true)
+		expect(toPay.runs.some((r) => r.id === paid.run.id)).toBe(false)
+		expect(done.runs.some((r) => r.id === paid.run.id)).toBe(true)
+		expect(done.runs.some((r) => r.id === open.run.id)).toBe(false)
+	})
+
+	it("lists every run with its unpaid count, open until fully paid", async () => {
+		const open = await seedRun(2)
+		const paid = await seedRun(1)
+		await db.payrollRunAccount.updateMany({
+			where: { payrollRunId: paid.run.id },
+			data: { paidAt: new Date(), paidById: paid.comptroller.id },
+		})
+		await db.payrollRun.update({
+			where: { id: paid.run.id },
+			data: { paidAt: new Date(), paidById: paid.comptroller.id },
+		})
+
+		const { lists } = (await call(
+			listsLoader,
+			"/comptroller/lists",
+		)) as Awaited<ReturnType<typeof listsLoader>>
+		const openRow = lists.find((l) => l.id === open.run.id)
+		const paidRow = lists.find((l) => l.id === paid.run.id)
+		expect(openRow).toMatchObject({ open: true, unpaid: 2, accountCount: 2 })
+		expect(paidRow).toMatchObject({ open: false, unpaid: 0 })
+		expect(openRow?.invoiceCount).toBeGreaterThan(0)
+		expect(openRow?.total).toBeGreaterThan(0)
 		expect(mocks.requireRole).toHaveBeenCalledWith(expect.anything(), [
 			"COMPTROLLER",
 			"ADMIN",

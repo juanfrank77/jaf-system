@@ -187,7 +187,23 @@
 			"warehouse_scan_in": "Registrar Devolución",
 			"warehouse_restock": "Reabastecimientos por Liberar",
 			"warehouse_stock": "Inventario",
-			"comptroller": "Brigadas · nómina"
+			"supervisor_review": "Cola de revisión",
+			"supervisor_invoice": "Facturas JAF",
+			"supervisor_aviso": "Aviso y cotejo",
+			"supervisor_precert": "Hojas de precertificación",
+			"supervisor_released": "Liberadas a Finanzas",
+			"supervisor_all": "Todas las órdenes de trabajo",
+			"warehouse_prep": "Órdenes por preparar",
+			"warehouse_pickup": "Pendientes de recogida",
+			"warehouse_returns": "Devoluciones esperadas",
+			"warehouse_inventory": "Conteo de inventario",
+			"warehouse_requests": "Solicitudes de material",
+			"warehouse_serials": "Registro de seriales",
+			"warehouse_movements": "Registro de movimientos",
+			"comptroller_lists": "Listas de Lissette",
+			"comptroller_to_pay": "Corridas por pagar",
+			"comptroller_paid": "Corridas pagadas",
+			"comptroller_installers": "Instaladores"
 		},
 		"notifications": {
 			"bell_label": "Notificaciones",
@@ -225,6 +241,7 @@
 			"arm_a": "Brazo A · Pago a nuestra gente",
 			"arm_b": "Brazo B · Facturación a Claro",
 			"work": "Trabajo",
+			"team": "Equipo",
 			"money": "Finanzas",
 			"stock": "Almacén",
 			"field": "Campo",
@@ -1254,6 +1271,15 @@
 		"listed": "En lista"
 	},
 	"dashboard": {
+		"stage_queue": {
+			"review": "Cola de revisión",
+			"invoice": "Facturas JAF",
+			"aviso": "Aviso y cotejo",
+			"precert": "Hojas de precertificación",
+			"released": "Liberadas a Finanzas",
+			"all": "Todas las órdenes de trabajo",
+			"count": "{{count}} órdenes de trabajo"
+		},
 		"title": "Panel",
 		"supervisor_scope_one": "{{areas}} · {{count}} brigada",
 		"supervisor_scope_other": "{{areas}} · {{count}} brigadas",
@@ -1919,6 +1945,21 @@
 	"photo_capture": {
 		"take": "Tomar foto",
 		"remove": "Quitar foto"
+	},
+	"comptroller_lists": {
+		"title": "Listas de Lissette",
+		"callout_body": "Todas las listas de nómina que Finanzas ha enviado. Abra una lista para pagar sus cuentas en Corridas por pagar.",
+		"status_unpaid": "{{unpaid}} de {{total}} sin pagar",
+		"status_paid": "Pagada",
+		"open": "Abrir",
+		"view": "Ver",
+		"col": {
+			"list": "Lista",
+			"sent": "Enviada",
+			"work_orders": "Órdenes de trabajo",
+			"total": "Total",
+			"status": "Estado"
+		}
 	},
 	"comptroller_payroll": {
 		"title": "Brigadas · nómina",

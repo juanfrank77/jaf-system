@@ -4,6 +4,7 @@ vi.mock("~/lib/db.server", () => ({
 	db: {
 		user: { findUnique: vi.fn() },
 		jafInvoice: { count: vi.fn() },
+		restockRequest: { count: vi.fn() },
 		payrollRunAccount: { count: vi.fn() },
 		payrollRun: { count: vi.fn() },
 	},
@@ -20,15 +21,56 @@ describe("loadNavCounts", () => {
 		} as any)
 	})
 
-	it("gives a supervisor a critical dashboard count of submissions awaiting review", async () => {
-		vi.mocked(db.jafInvoice.count).mockResolvedValue(3)
+	it("gives a supervisor one count per queue, red for Review and Aviso", async () => {
+		vi.mocked(db.jafInvoice.count)
+			.mockResolvedValueOnce(2) // review
+			.mockResolvedValueOnce(5) // invoice
+			.mockResolvedValueOnce(1) // aviso
+			.mockResolvedValueOnce(14) // precert
+			.mockResolvedValueOnce(31) // released
+			.mockResolvedValueOnce(9) // all
 		const counts = await loadNavCounts({ id: "sup-1", role: "SUPERVISOR" })
-		expect(counts).toEqual({ "/dashboard": { value: 3, tone: "critical" } })
+		expect(counts).toEqual({
+			"/dashboard?stage=review": { value: 2, tone: "critical" },
+			"/dashboard?stage=invoice": { value: 5, tone: "neutral" },
+			"/dashboard?stage=aviso": { value: 1, tone: "critical" },
+			"/dashboard?stage=precert": { value: 14, tone: "neutral" },
+			"/dashboard?stage=released": { value: 31, tone: "neutral" },
+			"/dashboard?stage=all": { value: 9, tone: "neutral" },
+		})
+		// Each count is scoped to the supervisor's own jobs and areas.
 		expect(db.jafInvoice.count).toHaveBeenCalledWith({
-			where: expect.objectContaining({
-				status: "FIELD_UPDATED",
-				OR: expect.any(Array),
-			}),
+			where: {
+				AND: [
+					expect.objectContaining({ OR: expect.any(Array) }),
+					expect.objectContaining({ status: "FIELD_UPDATED" }),
+				],
+			},
+		})
+	})
+
+	it("gives WAREHOUSE counts for prep, pickup, returns and material requests", async () => {
+		vi.mocked(db.jafInvoice.count)
+			.mockResolvedValueOnce(3)
+			.mockResolvedValueOnce(2)
+			.mockResolvedValueOnce(4)
+		vi.mocked(db.restockRequest.count).mockResolvedValue(1)
+		expect(await loadNavCounts({ id: "w1", role: "WAREHOUSE" })).toEqual({
+			"/dashboard#to-prep": { value: 3, tone: "neutral" },
+			"/dashboard#awaiting-pickup": { value: 2, tone: "neutral" },
+			"/dashboard#returns-due": { value: 4, tone: "neutral" },
+			"/warehouse/restock#requests": { value: 1, tone: "neutral" },
+		})
+	})
+
+	it("gives COMPTROLLER a count per payroll view, red for runs to pay", async () => {
+		vi.mocked(db.payrollRun.count)
+			.mockResolvedValueOnce(3) // to pay
+			.mockResolvedValueOnce(7) // paid
+		expect(await loadNavCounts({ id: "c1", role: "COMPTROLLER" })).toEqual({
+			"/comptroller/lists": { value: 10, tone: "neutral" },
+			"/comptroller/to-pay": { value: 3, tone: "critical" },
+			"/comptroller/paid": { value: 7, tone: "neutral" },
 		})
 	})
 

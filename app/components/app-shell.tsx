@@ -18,6 +18,7 @@ import { ThemeToggle } from "~/library/theme-toggle"
 import type { Role } from "../../generated/prisma/client"
 import {
 	GROUP_LABEL_KEY,
+	isNavItemActive,
 	type NavCount,
 	type NavGroup,
 	navGroupsFor,
@@ -101,7 +102,7 @@ function NavList({
 									</span>
 								)
 							}
-							const active = location.pathname === item.to
+							const active = isNavItemActive(item.to, location)
 							return (
 								<Link
 									key={item.to}

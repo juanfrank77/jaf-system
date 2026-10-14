@@ -187,4 +187,30 @@ describe("dashboard supervisor view data (integration)", () => {
 			approvedAt.toISOString(),
 		)
 	})
+	it("narrows the list to a sidebar queue with ?stage=, and leaves the tiles on the full scope", async () => {
+		const review = await runLoaderAs(supervisorId, "stage=review")
+		expect(review.docs.map((d) => d.id).sort()).toEqual(
+			[discrepancyDocId, cleanDocId].sort(),
+		)
+		expect(review.stageQueue).toBe("review")
+		const pending = review.stats.find(
+			(s) => s.labelKey === "dashboard.stat.pending_review",
+		)
+		expect(pending?.value).toBe(2)
+
+		const invoice = await runLoaderAs(supervisorId, "stage=invoice")
+		expect(invoice.docs.map((d) => d.id)).toEqual([approvedDocId])
+
+		const aviso = await runLoaderAs(supervisorId, "stage=aviso")
+		expect(aviso.docs).toEqual([])
+
+		const all = await runLoaderAs(supervisorId, "stage=all")
+		expect(all.docs).toHaveLength(4)
+	})
+
+	it("ignores an unknown ?stage= value", async () => {
+		const data = await runLoaderAs(supervisorId, "stage=bogus")
+		expect(data.stageQueue).toBeNull()
+		expect(data.docs).toHaveLength(4)
+	})
 })

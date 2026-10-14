@@ -64,7 +64,8 @@ export function StockScreen({
 				{t("stock.title")}
 			</h1>
 
-			<section className="space-y-2">
+			<section id="inventory" className="space-y-2">
+				<span id="movements" />
 				<StockTable
 					rows={bulk}
 					initialQuery={query}
@@ -85,7 +86,7 @@ export function StockScreen({
 				)}
 			</section>
 
-			<section>
+			<section id="serials">
 				<SerialRegister rows={serial} codeNames={serialCodeNames} />
 			</section>
 

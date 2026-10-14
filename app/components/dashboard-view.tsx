@@ -367,7 +367,7 @@ function DashboardView({
 			)}
 
 			{warehouseToPrepDocs.length > 0 && (
-				<div className="space-y-2">
+				<div id="to-prep" className="space-y-2">
 					<div className="flex items-center justify-between">
 						<h2 className="text-sm font-semibold text-foreground">
 							{t("dashboard.to_prep_heading", {
@@ -402,7 +402,7 @@ function DashboardView({
 			)}
 
 			{warehousePreppedDocs.length > 0 && (
-				<div className="space-y-2">
+				<div id="awaiting-pickup" className="space-y-2">
 					<div className="flex items-center justify-between">
 						<h2 className="text-sm font-semibold text-foreground">
 							{t("dashboard.prepped_awaiting_heading", {
@@ -446,7 +446,7 @@ function DashboardView({
 			)}
 
 			{warehouseReturnsDocs.length > 0 && (
-				<div className="space-y-2">
+				<div id="returns-due" className="space-y-2">
 					<div className="flex items-center justify-between">
 						<h2 className="text-sm font-semibold text-foreground">
 							{t("dashboard.returns_to_log_heading", {

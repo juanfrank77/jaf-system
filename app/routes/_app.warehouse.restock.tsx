@@ -38,7 +38,7 @@ export default function WarehouseRestockList({
 			<Callout title={t("warehouse_flow.callout.restock_title")}>
 				{t("warehouse_flow.callout.restock_body")}
 			</Callout>
-			<ul className="divide-y">
+			<ul id="requests" className="divide-y">
 				{pending.map((r) => (
 					<li key={r.id} className="py-2 flex items-center justify-between">
 						<span className="text-sm">

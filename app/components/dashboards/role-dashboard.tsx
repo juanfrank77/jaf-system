@@ -1,4 +1,5 @@
 import { DashboardView } from "~/components/dashboard-view"
+import type { SupervisorQueue } from "~/lib/supervisor-queues"
 import type { Role } from "../../../generated/prisma/client"
 import { AdminDashboard } from "./admin-dashboard"
 import { CrewDashboard } from "./crew-dashboard"
@@ -16,12 +17,15 @@ type RoleDashboardProps = DashboardViewProps & {
 	role: Role
 	supervisorQueues: SupervisorQueues | null
 	supervisorScope?: SupervisorScope | null
+	/** The supervisor's sidebar queue (`?stage=`), when one is selected. */
+	stageQueue?: SupervisorQueue | null
 }
 
 export function RoleDashboard({
 	role,
 	supervisorQueues,
 	supervisorScope = null,
+	stageQueue = null,
 	...view
 }: RoleDashboardProps) {
 	if (role === "SUPERVISOR" && supervisorQueues) {
@@ -29,6 +33,7 @@ export function RoleDashboard({
 			<SupervisorDashboard
 				queues={supervisorQueues}
 				scope={supervisorScope}
+				stageQueue={stageQueue}
 				view={view}
 			/>
 		)

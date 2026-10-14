@@ -18,6 +18,10 @@ import {
 	refurbishedCount,
 	repairPoolCount,
 } from "~/lib/serial-stock"
+import {
+	parseSupervisorQueue,
+	supervisorQueueWhere,
+} from "~/lib/supervisor-queues"
 import { ownedOrInArea, supervisorAreas } from "~/lib/supervisor-scope"
 import {
 	deriveSupervisorStage,
@@ -270,6 +274,12 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const jobTypeFilter = url.searchParams.get("jobType")
 	const searchFilter = url.searchParams.get("search")?.trim() || ""
 
+	// A supervisor's sidebar queue (`?stage=`): one step of the work-order rail.
+	const stageQueue =
+		user.role === "SUPERVISOR"
+			? parseSupervisorQueue(url.searchParams.get("stage"))
+			: null
+
 	const selectedStatus = statusFilter ? (statusFilter as DocStatus) : null
 	const selectedCrew = crewFilter || null
 	const selectedJobType = jobTypeFilter || null
@@ -315,6 +325,13 @@ export async function loader({ request }: Route.LoaderArgs) {
 		}
 	}
 
+	if (stageQueue) {
+		where.AND = [
+			...(Array.isArray(where.AND) ? where.AND : []),
+			supervisorQueueWhere(stageQueue),
+		]
+	}
+
 	const docs = await db.jafInvoice.findMany({
 		where,
 		orderBy: { createdAt: "desc" },
@@ -330,7 +347,11 @@ export async function loader({ request }: Route.LoaderArgs) {
 	// The supervisor's tiles describe their whole scope, so a filter that
 	// narrows the list must not also shrink the counts.
 	const hasFilters =
-		!!selectedStatus || !!selectedCrew || !!selectedJobType || !!searchFilter
+		!!stageQueue ||
+		!!selectedStatus ||
+		!!selectedCrew ||
+		!!selectedJobType ||
+		!!searchFilter
 	const statsDocs =
 		user.role === "SUPERVISOR" && hasFilters
 			? (
@@ -492,6 +513,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		jobTypeOptions: jobTypeOptions
 			.map((o) => o.jobType)
 			.filter(Boolean) as string[],
+		stageQueue,
 		selectedStatus,
 		selectedCrew,
 		selectedJobType,
@@ -524,6 +546,7 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 		showFilters,
 		crewOptions,
 		jobTypeOptions,
+		stageQueue,
 		selectedStatus,
 		selectedCrew,
 		selectedJobType,
@@ -579,6 +602,7 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 			role={role}
 			supervisorQueues={supervisorQueues}
 			supervisorScope={supervisorScope}
+			stageQueue={stageQueue}
 			stats={stats}
 			alert={alert}
 			explainer={explainer}

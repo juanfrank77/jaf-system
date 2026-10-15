@@ -18,6 +18,7 @@ export function WarehouseDashboard(
 	return (
 		<DashboardView
 			{...rest}
+			stats={[]}
 			showBilling={false}
 			showDocList={false}
 			intro={

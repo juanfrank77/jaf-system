@@ -124,6 +124,23 @@ describe("RoleDashboard", () => {
 		).toHaveAttribute("href", "/warehouse/returns")
 	})
 
+	it("shows the warehouse one set of count cards, not a second stat row", async ({
+		renderStub,
+	}) => {
+		await mount(
+			renderStub,
+			<RoleDashboard
+				{...{ role: "WAREHOUSE" }}
+				supervisorQueues={null}
+				{...base}
+				stats={[{ labelKey: "dashboard.stat.open_documents", value: 9 }]}
+				warehouseCounts={{ prep: 3, release: 2, returns: 4 }}
+			/>,
+		)
+		expect(screen.getAllByText("Awaiting pickup")).toHaveLength(1)
+		expect(screen.queryByText("Open documents")).not.toBeInTheDocument()
+	})
+
 	it("keeps the incoming to-prep orders on the warehouse dashboard but not the other step lists", async ({
 		renderStub,
 	}) => {

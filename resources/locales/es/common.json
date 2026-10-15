@@ -196,7 +196,6 @@
 			"warehouse_prep": "Órdenes por preparar",
 			"warehouse_pickup": "Pendientes de recogida",
 			"warehouse_returns": "Devoluciones esperadas",
-			"warehouse_inventory": "Conteo de inventario",
 			"warehouse_requests": "Solicitudes de material",
 			"warehouse_serials": "Registro de seriales",
 			"warehouse_movements": "Registro de movimientos",
@@ -240,10 +239,12 @@
 		"group": {
 			"arm_a": "Brazo A · Pago a nuestra gente",
 			"arm_b": "Brazo B · Facturación a Claro",
+			"workflow": "Flujo",
 			"work": "Trabajo",
 			"team": "Equipo",
 			"money": "Finanzas",
 			"stock": "Almacén",
+			"other": "Otros",
 			"field": "Campo",
 			"admin": "Administración"
 		}

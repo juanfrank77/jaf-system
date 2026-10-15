@@ -84,25 +84,31 @@ describe("navGroupsFor", () => {
 		])
 	})
 
-	it("gives WAREHOUSE the dashboard, then its queues, with the current links below", () => {
+	it("gives WAREHOUSE Workflow, then a Work link per owned step, then the other links", () => {
 		expect(tos(navGroupsFor("WAREHOUSE"))).toEqual([
 			["overview", ["/dashboard"]],
 			[
-				"work",
+				"workflow",
+				["/warehouse/scan-in", "/warehouse/restock", "/warehouse/stock"],
+			],
+			["work", ["/warehouse/prep", "/warehouse/release", "/warehouse/returns"]],
+			[
+				"other",
 				[
-					"/dashboard#to-prep",
-					"/dashboard#awaiting-pickup",
-					"/dashboard#returns-due",
-					"/warehouse/stock#inventory",
 					"/warehouse/restock#requests",
 					"/warehouse/stock#serials",
 					"/warehouse/stock#movements",
 				],
 			],
-			[
-				"stock",
-				["/warehouse/scan-in", "/warehouse/restock", "/warehouse/stock"],
-			],
+		])
+	})
+
+	it("keeps ADMIN's Warehouse links in their own group, unchanged", () => {
+		const stock = navGroupsFor("ADMIN").find((g) => g.key === "stock")
+		expect(stock?.items.map((i) => i.to)).toEqual([
+			"/warehouse/scan-in",
+			"/warehouse/restock",
+			"/warehouse/stock",
 		])
 	})
 

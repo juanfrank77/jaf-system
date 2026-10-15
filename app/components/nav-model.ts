@@ -15,6 +15,11 @@ import {
 	type SupervisorQueue,
 	supervisorQueueHref,
 } from "~/lib/supervisor-queues"
+import {
+	WAREHOUSE_QUEUE_LABEL_KEY,
+	WAREHOUSE_QUEUES,
+	warehouseQueueHref,
+} from "~/lib/warehouse-queues"
 import type { Role } from "../../generated/prisma/client"
 
 export type NavLabelKey =
@@ -53,7 +58,6 @@ export type NavLabelKey =
 	| "app_shell.nav.warehouse_prep"
 	| "app_shell.nav.warehouse_pickup"
 	| "app_shell.nav.warehouse_returns"
-	| "app_shell.nav.warehouse_inventory"
 	| "app_shell.nav.warehouse_requests"
 	| "app_shell.nav.warehouse_serials"
 	| "app_shell.nav.warehouse_movements"
@@ -66,12 +70,14 @@ export type NavCount = { value: number; tone: "critical" | "neutral" }
 
 export type NavGroupKey =
 	| "overview"
+	| "workflow"
 	| "work"
 	| "team"
 	| "arm_a"
 	| "arm_b"
 	| "money"
 	| "stock"
+	| "other"
 	| "field"
 	| "admin"
 type GroupLabelKey = `app_shell.group.${Exclude<NavGroupKey, "overview">}`
@@ -93,23 +99,27 @@ export type NavGroup = { key: NavGroupKey; items: NavItem[] }
 
 const GROUP_ORDER: NavGroupKey[] = [
 	"overview",
+	"workflow",
 	"work",
 	"team",
 	"arm_a",
 	"arm_b",
 	"money",
 	"stock",
+	"other",
 	"field",
 	"admin",
 ]
 export const GROUP_LABEL_KEY: Record<NavGroupKey, GroupLabelKey | null> = {
 	overview: null,
+	workflow: "app_shell.group.workflow",
 	work: "app_shell.group.work",
 	team: "app_shell.group.team",
 	arm_a: "app_shell.group.arm_a",
 	arm_b: "app_shell.group.arm_b",
 	money: "app_shell.group.money",
 	stock: "app_shell.group.stock",
+	other: "app_shell.group.other",
 	field: "app_shell.group.field",
 	admin: "app_shell.group.admin",
 }
@@ -133,14 +143,44 @@ const SUPERVISOR_QUEUE_ITEMS: NavItem[] = (
 	roles: ["SUPERVISOR"] as Role[],
 }))
 
-// The warehouse's queues: sections of the dashboard and of the stock and
-// restock screens, reached by anchor.
-const WAREHOUSE_QUEUE_ITEMS: NavItem[] = (
+// The warehouse's steps, one page each: the job-rail steps it owns.
+const WAREHOUSE_QUEUE_ITEMS: NavItem[] = WAREHOUSE_QUEUES.map((queue) => ({
+	to: warehouseQueueHref(queue),
+	labelKey: WAREHOUSE_QUEUE_LABEL_KEY[queue],
+	icon: TruckDeliveryIcon,
+	group: "work" as const,
+	roles: ["WAREHOUSE"] as Role[],
+}))
+
+// Scan in, Restock and Stock: the warehouse's own flows. Admin keeps the same
+// links under its existing "stock" group, so only Warehouse sees "workflow".
+const warehouseFlowItems = (group: NavGroupKey, roles: Role[]): NavItem[] => [
+	{
+		to: "/warehouse/scan-in",
+		labelKey: "app_shell.nav.warehouse_scan_in",
+		icon: TruckDeliveryIcon,
+		group,
+		roles,
+	},
+	{
+		to: "/warehouse/restock",
+		labelKey: "app_shell.nav.warehouse_restock",
+		icon: TruckDeliveryIcon,
+		group,
+		roles,
+	},
+	{
+		to: "/warehouse/stock",
+		labelKey: "app_shell.nav.warehouse_stock",
+		icon: GridViewIcon,
+		group,
+		roles,
+	},
+]
+
+// Sections of the Stock and Restock screens that still have no page of their own.
+const WAREHOUSE_OTHER_ITEMS: NavItem[] = (
 	[
-		["/dashboard#to-prep", "app_shell.nav.warehouse_prep"],
-		["/dashboard#awaiting-pickup", "app_shell.nav.warehouse_pickup"],
-		["/dashboard#returns-due", "app_shell.nav.warehouse_returns"],
-		["/warehouse/stock#inventory", "app_shell.nav.warehouse_inventory"],
 		["/warehouse/restock#requests", "app_shell.nav.warehouse_requests"],
 		["/warehouse/stock#serials", "app_shell.nav.warehouse_serials"],
 		["/warehouse/stock#movements", "app_shell.nav.warehouse_movements"],
@@ -149,7 +189,7 @@ const WAREHOUSE_QUEUE_ITEMS: NavItem[] = (
 	to,
 	labelKey,
 	icon: TruckDeliveryIcon,
-	group: "work" as const,
+	group: "other" as const,
 	roles: ["WAREHOUSE"] as Role[],
 }))
 
@@ -278,28 +318,10 @@ const NAV_ITEMS: NavItem[] = [
 		roles: ["COMPTROLLER", "ADMIN"],
 		disabled: true,
 	},
+	...warehouseFlowItems("workflow", ["WAREHOUSE"]),
 	...WAREHOUSE_QUEUE_ITEMS,
-	{
-		to: "/warehouse/scan-in",
-		labelKey: "app_shell.nav.warehouse_scan_in",
-		icon: TruckDeliveryIcon,
-		group: "stock",
-		roles: ["WAREHOUSE", "ADMIN"],
-	},
-	{
-		to: "/warehouse/restock",
-		labelKey: "app_shell.nav.warehouse_restock",
-		icon: TruckDeliveryIcon,
-		group: "stock",
-		roles: ["WAREHOUSE", "ADMIN"],
-	},
-	{
-		to: "/warehouse/stock",
-		labelKey: "app_shell.nav.warehouse_stock",
-		icon: GridViewIcon,
-		group: "stock",
-		roles: ["WAREHOUSE", "ADMIN"],
-	},
+	...WAREHOUSE_OTHER_ITEMS,
+	...warehouseFlowItems("stock", ["ADMIN"]),
 	{
 		to: "/installer",
 		labelKey: "app_shell.nav.installer",

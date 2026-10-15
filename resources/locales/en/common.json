@@ -196,7 +196,6 @@
 			"warehouse_prep": "Work orders to prep",
 			"warehouse_pickup": "Awaiting pickup",
 			"warehouse_returns": "Returns due",
-			"warehouse_inventory": "Inventory count",
 			"warehouse_requests": "Material requests",
 			"warehouse_serials": "Serial register",
 			"warehouse_movements": "Movement log",
@@ -240,10 +239,12 @@
 		"group": {
 			"arm_a": "Arm A · Paying our people",
 			"arm_b": "Arm B · Claro billing",
+			"workflow": "Workflow",
 			"work": "Work",
 			"team": "Team",
 			"money": "Finance",
 			"stock": "Warehouse",
+			"other": "Other",
 			"field": "Field",
 			"admin": "Administration"
 		}

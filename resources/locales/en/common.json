@@ -1839,7 +1839,11 @@
 			"arm_b_po_body": "Record the Claro PO against the Aviso, then generate the final Claro document. Several POs per Aviso, and the Awaiting PO and Awaiting Ariba lists, arrive in the next Arm B phase."
 		}
 	},
-	"warehouse_flow": {
+		"warehouse_queue": {
+			"empty": "Nothing here right now.",
+			"missing_heading": "Missing materials flagged"
+		},
+		"warehouse_flow": {
 		"aria": "Warehouse work loop",
 		"step": {
 			"scan_in": "Scan in",

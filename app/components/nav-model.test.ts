@@ -9,10 +9,6 @@ describe("navGroupsFor", () => {
 		expect(tos(navGroupsFor("SUPERVISOR"))).toEqual([
 			["overview", ["/dashboard"]],
 			[
-				"workflow",
-				["/warehouse/scan-in", "/warehouse/restock", "/warehouse/stock"],
-			],
-			[
 				"work",
 				[
 					"/docs/new",
@@ -88,7 +84,7 @@ describe("navGroupsFor", () => {
 		])
 	})
 
-	it("gives WAREHOUSE Workflow, then a Work link per owned step, then the other links", () => {
+	it("gives WAREHOUSE a Work link per owned step first, then Workflow, then the other links", () => {
 		expect(tos(navGroupsFor("WAREHOUSE"))).toEqual([
 			["overview", ["/dashboard"]],
 			[
@@ -100,6 +96,10 @@ describe("navGroupsFor", () => {
 					"/warehouse/repairs",
 					"/warehouse/needs-review",
 				],
+			],
+			[
+				"workflow",
+				["/warehouse/scan-in", "/warehouse/restock", "/warehouse/stock"],
 			],
 			[
 				"other",

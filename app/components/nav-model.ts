@@ -99,10 +99,12 @@ export type NavItem = {
 }
 export type NavGroup = { key: NavGroupKey; items: NavItem[] }
 
+// "work" leads "workflow" so the warehouse's prep -> pickup -> returns steps
+// are the first thing under Dashboard.
 const GROUP_ORDER: NavGroupKey[] = [
 	"overview",
-	"workflow",
 	"work",
+	"workflow",
 	"team",
 	"arm_a",
 	"arm_b",

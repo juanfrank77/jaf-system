@@ -5,6 +5,7 @@ vi.mock("~/lib/db.server", () => ({
 		user: { findUnique: vi.fn() },
 		jafInvoice: { count: vi.fn() },
 		restockRequest: { count: vi.fn() },
+		serialLocation: { count: vi.fn() },
 		payrollRunAccount: { count: vi.fn() },
 		payrollRun: { count: vi.fn() },
 	},
@@ -55,11 +56,29 @@ describe("loadNavCounts", () => {
 			.mockResolvedValueOnce(2) // release
 			.mockResolvedValueOnce(4) // returns
 		vi.mocked(db.restockRequest.count).mockResolvedValue(1)
-		expect(await loadNavCounts({ id: "w1", role: "WAREHOUSE" })).toEqual({
+		vi.mocked(db.serialLocation.count)
+			.mockResolvedValueOnce(6) // repairs
+			.mockResolvedValueOnce(2) // needs review
+		expect(
+			await loadNavCounts({ id: "w1", role: "WAREHOUSE" }, "wh-1"),
+		).toEqual({
 			"/warehouse/prep": { value: 3, tone: "neutral" },
 			"/warehouse/release": { value: 2, tone: "neutral" },
 			"/warehouse/returns": { value: 4, tone: "neutral" },
+			"/warehouse/repairs": { value: 6, tone: "neutral" },
+			"/warehouse/needs-review": { value: 2, tone: "neutral" },
 			"/warehouse/restock#requests": { value: 1, tone: "neutral" },
+		})
+	})
+
+	it("scopes the repair and review counts to the selected warehouse", async () => {
+		vi.mocked(db.serialLocation.count).mockResolvedValue(0)
+		await loadNavCounts({ id: "w1", role: "WAREHOUSE" }, "wh-9")
+		expect(db.serialLocation.count).toHaveBeenCalledWith({
+			where: { status: "AWAITING_REPAIR", currentRef: "wh-9" },
+		})
+		expect(db.serialLocation.count).toHaveBeenCalledWith({
+			where: { status: "NEEDS_REVIEW", currentRef: "wh-9" },
 		})
 	})
 

@@ -2,6 +2,7 @@ import type { NavCount } from "~/components/nav-model"
 import { countComptrollerRuns } from "~/lib/comptroller-runs.server"
 import { db } from "~/lib/db.server"
 import { carmenOpenSummary, countArmAStages } from "~/lib/finance-stages.server"
+import { needsReviewCount, repairPoolCount } from "~/lib/serial-stock"
 import {
 	type SupervisorQueue,
 	supervisorQueueHref,
@@ -27,10 +28,14 @@ const SUPERVISOR_QUEUE_ORDER: SupervisorQueue[] = [
  * Per-role sidebar counts, keyed by nav `to`. Each department sub-project adds
  * its own role here; roles without an entry get no pills.
  */
-export async function loadNavCounts(user: {
-	id: string
-	role: Role
-}): Promise<Record<string, NavCount>> {
+export async function loadNavCounts(
+	user: {
+		id: string
+		role: Role
+	},
+	/** The header-switch warehouse; scopes the serial-unit counts. */
+	warehouseId?: string | null,
+): Promise<Record<string, NavCount>> {
 	if (user.role === "SUPERVISOR") {
 		const areas = await supervisorAreas(db, user.id)
 		const scope = ownedOrInArea(user.id, areas)
@@ -52,11 +57,13 @@ export async function loadNavCounts(user: {
 		)
 	}
 	if (user.role === "WAREHOUSE") {
-		const [steps, requests] = await Promise.all([
+		const [steps, requests, repairs, review] = await Promise.all([
 			countWarehouseQueues(),
 			db.restockRequest.count({
 				where: { status: { in: ["SUBMITTED", "APPROVED"] } },
 			}),
+			warehouseId ? repairPoolCount(warehouseId) : 0,
+			warehouseId ? needsReviewCount(warehouseId) : 0,
 		])
 		return {
 			...Object.fromEntries(
@@ -65,6 +72,8 @@ export async function loadNavCounts(user: {
 					{ value: steps[q], tone: "neutral" },
 				]),
 			),
+			"/warehouse/repairs": { value: repairs, tone: "neutral" },
+			"/warehouse/needs-review": { value: review, tone: "neutral" },
 			"/warehouse/restock#requests": { value: requests, tone: "neutral" },
 		}
 	}

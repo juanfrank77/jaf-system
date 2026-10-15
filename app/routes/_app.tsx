@@ -24,7 +24,10 @@ export async function loader({ request }: Route.LoaderArgs) {
 		user.role === "WAREHOUSE" || user.role === "ADMIN"
 			? await resolveWarehouseScope(db, request, user)
 			: null
-	const navCounts = await loadNavCounts({ id: user.id, role: user.role })
+	const navCounts = await loadNavCounts(
+		{ id: user.id, role: user.role },
+		warehouseScope?.selectedId,
+	)
 	return {
 		user: { name: user.name, role: user.role },
 		notifications,

@@ -14,11 +14,6 @@ import { cacheJobs } from "~/lib/offline-store"
 import { pageTitle } from "~/lib/page-title"
 import { requireSession } from "~/lib/permissions.server"
 import {
-	needsReviewCount,
-	refurbishedCount,
-	repairPoolCount,
-} from "~/lib/serial-stock"
-import {
 	parseSupervisorQueue,
 	supervisorQueueWhere,
 } from "~/lib/supervisor-queues"
@@ -391,26 +386,16 @@ export async function loader({ request }: Route.LoaderArgs) {
 				})
 			: []
 
-	const warehouseSerialCounts = await (async () => {
-		if (user.role !== "WAREHOUSE")
-			return { triage: 0, repairPool: 0, needsReview: 0, refurbished: 0 }
+	const warehouseTriageCount = await (async () => {
+		if (user.role !== "WAREHOUSE") return 0
 		// Follows the header warehouse switch (`wh` cookie) like every other
-		// warehouse-scoped query, instead of pinning to the first assignment —
-		// otherwise switching to warehouse B left these tiles counting A.
+		// warehouse-scoped query, instead of pinning to the first assignment.
 		const { selectedId } = await resolveWarehouseScope(db, request, user)
-		if (!selectedId)
-			return { triage: 0, repairPool: 0, needsReview: 0, refurbished: 0 }
-		const [triage, repairPool, needsReview, refurbished] = await Promise.all([
-			db.serialLocation.count({
-				where: { status: "RETURNED", currentRef: selectedId },
-			}),
-			repairPoolCount(selectedId),
-			needsReviewCount(selectedId),
-			refurbishedCount(selectedId),
-		])
-		return { triage, repairPool, needsReview, refurbished }
+		if (!selectedId) return 0
+		return db.serialLocation.count({
+			where: { status: "RETURNED", currentRef: selectedId },
+		})
 	})()
-	const warehouseTriageCount = warehouseSerialCounts.triage
 
 	const crewPreppedDocs = computeAwaitingPickup(
 		user.role === "CREW"
@@ -486,9 +471,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 		warehouseToPrepDocs,
 		warehouseCounts,
 		warehouseTriageCount,
-		warehouseRepairPool: warehouseSerialCounts.repairPool,
-		warehouseNeedsReview: warehouseSerialCounts.needsReview,
-		warehouseRefurbished: warehouseSerialCounts.refurbished,
 		crewPreppedDocs,
 		crewInFieldDocs,
 		crewSentBackDocs,
@@ -517,9 +499,6 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 		warehouseToPrepDocs,
 		warehouseCounts,
 		warehouseTriageCount,
-		warehouseRepairPool,
-		warehouseNeedsReview,
-		warehouseRefurbished,
 		crewPreppedDocs,
 		crewInFieldDocs,
 		crewSentBackDocs,
@@ -580,9 +559,6 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 			warehouseToPrepDocs={warehouseToPrepDocs}
 			warehouseCounts={warehouseCounts}
 			warehouseTriageCount={warehouseTriageCount}
-			warehouseRepairPool={warehouseRepairPool}
-			warehouseNeedsReview={warehouseNeedsReview}
-			warehouseRefurbished={warehouseRefurbished}
 			crewPreppedDocs={crewPreppedDocs}
 			crewInFieldDocs={crewInFieldDocs}
 			crewSentBackDocs={crewSentBackDocs}

@@ -24,12 +24,3 @@ export const needsReviewCount = (warehouseId: string) =>
 	db.serialLocation.count({
 		where: { status: "NEEDS_REVIEW", currentRef: warehouseId },
 	})
-
-export const refurbishedCount = (warehouseId: string) =>
-	db.serialLocation.count({
-		where: {
-			status: "WAREHOUSE",
-			condition: "REFURBISHED",
-			currentRef: warehouseId,
-		},
-	})

@@ -9,6 +9,10 @@ describe("navGroupsFor", () => {
 		expect(tos(navGroupsFor("SUPERVISOR"))).toEqual([
 			["overview", ["/dashboard"]],
 			[
+				"workflow",
+				["/warehouse/scan-in", "/warehouse/restock", "/warehouse/stock"],
+			],
+			[
 				"work",
 				[
 					"/docs/new",
@@ -88,10 +92,15 @@ describe("navGroupsFor", () => {
 		expect(tos(navGroupsFor("WAREHOUSE"))).toEqual([
 			["overview", ["/dashboard"]],
 			[
-				"workflow",
-				["/warehouse/scan-in", "/warehouse/restock", "/warehouse/stock"],
+				"work",
+				[
+					"/warehouse/prep",
+					"/warehouse/release",
+					"/warehouse/returns",
+					"/warehouse/repairs",
+					"/warehouse/needs-review",
+				],
 			],
-			["work", ["/warehouse/prep", "/warehouse/release", "/warehouse/returns"]],
 			[
 				"other",
 				[

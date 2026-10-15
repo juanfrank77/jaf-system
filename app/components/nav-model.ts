@@ -58,6 +58,8 @@ export type NavLabelKey =
 	| "app_shell.nav.warehouse_prep"
 	| "app_shell.nav.warehouse_pickup"
 	| "app_shell.nav.warehouse_returns"
+	| "app_shell.nav.warehouse_repairs"
+	| "app_shell.nav.warehouse_needs_review"
 	| "app_shell.nav.warehouse_requests"
 	| "app_shell.nav.warehouse_serials"
 	| "app_shell.nav.warehouse_movements"
@@ -147,6 +149,21 @@ const SUPERVISOR_QUEUE_ITEMS: NavItem[] = (
 const WAREHOUSE_QUEUE_ITEMS: NavItem[] = WAREHOUSE_QUEUES.map((queue) => ({
 	to: warehouseQueueHref(queue),
 	labelKey: WAREHOUSE_QUEUE_LABEL_KEY[queue],
+	icon: TruckDeliveryIcon,
+	group: "work" as const,
+	roles: ["WAREHOUSE"] as Role[],
+}))
+
+// Where triage sends a unit: Repairs (failed) and Needs review (held for the
+// lead). They follow the queue steps in the "work" group.
+const WAREHOUSE_TRIAGE_ITEMS: NavItem[] = (
+	[
+		["/warehouse/repairs", "app_shell.nav.warehouse_repairs"],
+		["/warehouse/needs-review", "app_shell.nav.warehouse_needs_review"],
+	] as [string, NavLabelKey][]
+).map(([to, labelKey]) => ({
+	to,
+	labelKey,
 	icon: TruckDeliveryIcon,
 	group: "work" as const,
 	roles: ["WAREHOUSE"] as Role[],
@@ -320,6 +337,7 @@ const NAV_ITEMS: NavItem[] = [
 	},
 	...warehouseFlowItems("workflow", ["WAREHOUSE"]),
 	...WAREHOUSE_QUEUE_ITEMS,
+	...WAREHOUSE_TRIAGE_ITEMS,
 	...WAREHOUSE_OTHER_ITEMS,
 	...warehouseFlowItems("stock", ["ADMIN"]),
 	{

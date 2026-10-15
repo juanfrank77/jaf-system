@@ -49,16 +49,16 @@ describe("loadNavCounts", () => {
 		})
 	})
 
-	it("gives WAREHOUSE counts for prep, pickup, returns and material requests", async () => {
+	it("gives WAREHOUSE counts per step page and for material requests", async () => {
 		vi.mocked(db.jafInvoice.count)
-			.mockResolvedValueOnce(3)
-			.mockResolvedValueOnce(2)
-			.mockResolvedValueOnce(4)
+			.mockResolvedValueOnce(3) // prep
+			.mockResolvedValueOnce(2) // release
+			.mockResolvedValueOnce(4) // returns
 		vi.mocked(db.restockRequest.count).mockResolvedValue(1)
 		expect(await loadNavCounts({ id: "w1", role: "WAREHOUSE" })).toEqual({
-			"/dashboard#to-prep": { value: 3, tone: "neutral" },
-			"/dashboard#awaiting-pickup": { value: 2, tone: "neutral" },
-			"/dashboard#returns-due": { value: 4, tone: "neutral" },
+			"/warehouse/prep": { value: 3, tone: "neutral" },
+			"/warehouse/release": { value: 2, tone: "neutral" },
+			"/warehouse/returns": { value: 4, tone: "neutral" },
 			"/warehouse/restock#requests": { value: 1, tone: "neutral" },
 		})
 	})

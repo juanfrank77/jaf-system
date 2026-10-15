@@ -8,7 +8,9 @@ import {
 	supervisorQueueWhere,
 } from "~/lib/supervisor-queues"
 import { ownedOrInArea, supervisorAreas } from "~/lib/supervisor-scope"
-import { Prisma, type Role } from "../../generated/prisma/client"
+import { WAREHOUSE_QUEUES, warehouseQueueHref } from "~/lib/warehouse-queues"
+import { countWarehouseQueues } from "~/lib/warehouse-queues.server"
+import type { Role } from "../../generated/prisma/client"
 
 /** Review and Aviso are the supervisor's own action points, so they go red. */
 const CRITICAL_QUEUES: SupervisorQueue[] = ["review", "aviso"]
@@ -50,23 +52,19 @@ export async function loadNavCounts(user: {
 		)
 	}
 	if (user.role === "WAREHOUSE") {
-		const [prep, pickup, returns, requests] = await Promise.all([
-			db.jafInvoice.count({ where: { status: "CREATED" } }),
-			db.jafInvoice.count({ where: { status: "PREPPED" } }),
-			db.jafInvoice.count({
-				where: {
-					status: { in: ["SIGNED", "FIELD_UPDATED"] },
-					materialsReturned: { equals: Prisma.DbNull },
-				},
-			}),
+		const [steps, requests] = await Promise.all([
+			countWarehouseQueues(),
 			db.restockRequest.count({
 				where: { status: { in: ["SUBMITTED", "APPROVED"] } },
 			}),
 		])
 		return {
-			"/dashboard#to-prep": { value: prep, tone: "neutral" },
-			"/dashboard#awaiting-pickup": { value: pickup, tone: "neutral" },
-			"/dashboard#returns-due": { value: returns, tone: "neutral" },
+			...Object.fromEntries(
+				WAREHOUSE_QUEUES.map((q) => [
+					warehouseQueueHref(q),
+					{ value: steps[q], tone: "neutral" },
+				]),
+			),
 			"/warehouse/restock#requests": { value: requests, tone: "neutral" },
 		}
 	}

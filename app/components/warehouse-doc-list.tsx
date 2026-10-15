@@ -3,7 +3,7 @@ import { Link } from "react-router"
 import type { DashboardDocRow } from "~/components/dashboard-doc-list"
 import { Badge } from "~/components/ui/badge"
 
-export type WarehouseRowKind = "prep" | "release" | "returns" | "missing"
+export type WarehouseRowKind = "prep" | "release" | "returns"
 
 const ROW = {
 	prep: {
@@ -20,11 +20,6 @@ const ROW = {
 		href: (id: string) => `/docs/${id}/returns`,
 		badge: "dashboard.returns_to_log_badge",
 		variant: "warn",
-	},
-	missing: {
-		href: (id: string) => `/docs/${id}/prep`,
-		badge: "dashboard.missing_materials_badge",
-		variant: "danger",
 	},
 } as const
 

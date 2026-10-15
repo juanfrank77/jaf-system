@@ -28,18 +28,11 @@ describe("GET /warehouse/prep", () => {
 		])
 	})
 
-	it("lists CREATED jobs and, separately, the missing-materials flags", async () => {
+	it("lists only the CREATED jobs to prep", async () => {
 		await call()
+		expect(mocks.db.jafInvoice.findMany).toHaveBeenCalledTimes(1)
 		expect(mocks.db.jafInvoice.findMany).toHaveBeenCalledWith(
 			expect.objectContaining({ where: { status: "CREATED" }, take: 50 }),
-		)
-		expect(mocks.db.jafInvoice.findMany).toHaveBeenCalledWith(
-			expect.objectContaining({
-				where: {
-					status: { in: ["CREATED", "PREPPED"] },
-					prepChangedSincePrep: true,
-				},
-			}),
 		)
 	})
 

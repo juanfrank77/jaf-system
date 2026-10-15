@@ -1337,7 +1337,6 @@
 		"prepped_awaiting_heading": "Awaiting pickup ({{count}})",
 		"prepped_awaiting_badge": "Staged",
 		"missing_materials_heading": "Missing stock ({{count}})",
-		"missing_materials_badge": "Missing stock",
 		"returns_to_log_heading": "Returns due ({{count}})",
 		"returns_to_log_badge": "Expected back",
 		"triage_awaiting_heading": "Returned units awaiting triage ({{count}})",
@@ -1850,8 +1849,7 @@
 		}
 	},
 	"warehouse_queue": {
-		"empty": "Nothing here right now.",
-		"missing_heading": "Missing materials flagged"
+		"empty": "Nothing here right now."
 	},
 	"warehouse_flow": {
 		"aria": "Warehouse work loop",

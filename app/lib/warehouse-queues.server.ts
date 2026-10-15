@@ -18,12 +18,6 @@ export function warehouseQueueWhere(
 	}
 }
 
-/** Jobs whose prep was flagged short; listed under the Prep page's queue. */
-export const warehouseMissingWhere: Prisma.JafInvoiceWhereInput = {
-	status: { in: ["CREATED", "PREPPED"] },
-	prepChangedSincePrep: true,
-}
-
 export async function countWarehouseQueues(): Promise<
 	Record<WarehouseQueue, number>
 > {

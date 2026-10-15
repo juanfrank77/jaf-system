@@ -1337,7 +1337,6 @@
 		"prepped_awaiting_heading": "Esperando recogida ({{count}})",
 		"prepped_awaiting_badge": "Preparado",
 		"missing_materials_heading": "Stock faltante ({{count}})",
-		"missing_materials_badge": "Falta stock",
 		"returns_to_log_heading": "Devoluciones pendientes ({{count}})",
 		"returns_to_log_badge": "Se espera de vuelta",
 		"triage_awaiting_heading": "Unidades devueltas en espera de triaje ({{count}})",
@@ -1814,8 +1813,7 @@
 		}
 	},
 	"warehouse_queue": {
-		"empty": "Nada por ahora.",
-		"missing_heading": "Material faltante marcado"
+		"empty": "Nada por ahora."
 	},
 	"warehouse_flow": {
 		"aria": "Circuito de trabajo del almacén",

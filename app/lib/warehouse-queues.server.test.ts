@@ -8,7 +8,6 @@ import { db } from "~/lib/db.server"
 import { Prisma } from "../../generated/prisma/client"
 import {
 	countWarehouseQueues,
-	warehouseMissingWhere,
 	warehouseQueueWhere,
 } from "./warehouse-queues.server"
 
@@ -22,13 +21,6 @@ describe("warehouseQueueWhere", () => {
 		expect(warehouseQueueWhere("returns")).toEqual({
 			status: { in: ["SIGNED", "FIELD_UPDATED"] },
 			materialsReturned: { equals: Prisma.DbNull },
-		})
-	})
-
-	it("missing materials is a CREATED/PREPPED job whose prep changed since prep", () => {
-		expect(warehouseMissingWhere).toEqual({
-			status: { in: ["CREATED", "PREPPED"] },
-			prepChangedSincePrep: true,
 		})
 	})
 })

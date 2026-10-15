@@ -1288,7 +1288,6 @@
 		"supervisor_scope_one": "{{areas}} · {{count}} brigada",
 		"supervisor_scope_other": "{{areas}} · {{count}} brigadas",
 		"more_metrics": "Más métricas",
-		"all_work_orders": "Todas las órdenes",
 		"since": {
 			"submitted": "Entregado {{ago}}",
 			"returned": "Devuelto {{ago}}",
@@ -1450,7 +1449,10 @@
 			}
 		},
 		"to_prep_heading": "Por preparar ({{count}})",
-		"to_prep_badge": "Por preparar"
+		"to_prep_badge": "Por preparar",
+		"warehouse_prep_stat": "Por preparar",
+		"warehouse_release_stat": "Pendiente de recogida",
+		"warehouse_returns_stat": "Devoluciones pendientes"
 	},
 	"docs_status": {
 		"created": "Creado",

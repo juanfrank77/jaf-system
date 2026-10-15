@@ -15,11 +15,13 @@ import {
 import { Badge } from "~/components/ui/badge"
 import { Pill } from "~/components/ui/pill"
 import { Stat } from "~/components/ui/stat"
+import { WarehouseDocList } from "~/components/warehouse-doc-list"
 import type {
 	DashboardAlert,
 	DashboardExplainer,
 	DashboardStat,
 } from "~/lib/dashboard-stats"
+import type { WarehouseQueue } from "~/lib/warehouse-queues"
 
 type SendBackEntry = {
 	fromStatus: string
@@ -47,9 +49,6 @@ function DashboardView({
 	selectedJobType = null,
 	searchFilter = "",
 	warehouseToPrepDocs = [],
-	warehousePreppedDocs = [],
-	warehouseMissingDocs = [],
-	warehouseReturnsDocs = [],
 	warehouseTriageCount = 0,
 	warehouseRepairPool = 0,
 	warehouseNeedsReview = 0,
@@ -78,9 +77,7 @@ function DashboardView({
 	selectedJobType?: string | null
 	searchFilter?: string
 	warehouseToPrepDocs?: DashboardDocRow[]
-	warehousePreppedDocs?: DashboardDocRow[]
-	warehouseMissingDocs?: DashboardDocRow[]
-	warehouseReturnsDocs?: DashboardDocRow[]
+	warehouseCounts?: Record<WarehouseQueue, number>
 	warehouseTriageCount?: number
 	warehouseRepairPool?: number
 	warehouseNeedsReview?: number
@@ -367,7 +364,7 @@ function DashboardView({
 			)}
 
 			{warehouseToPrepDocs.length > 0 && (
-				<div id="to-prep" className="space-y-2">
+				<div className="space-y-2">
 					<div className="flex items-center justify-between">
 						<h2 className="text-sm font-semibold text-foreground">
 							{t("dashboard.to_prep_heading", {
@@ -376,136 +373,7 @@ function DashboardView({
 						</h2>
 						<Badge variant="warn">{warehouseToPrepDocs.length}</Badge>
 					</div>
-					{warehouseToPrepDocs.map((doc) => (
-						<Link
-							key={doc.id}
-							to={`/docs/${doc.id}/prep`}
-							className="block rounded-lg border border-transparent p-2.5 text-sm transition-colors hover:border-border hover:bg-muted/40"
-						>
-							<div className="flex items-center justify-between gap-2">
-								<span className="font-mono font-medium">
-									{doc.controlNumber}
-								</span>
-								<div className="flex items-center gap-2">
-									<Badge variant="warn">{t("dashboard.to_prep_badge")}</Badge>
-									<span className="text-muted-foreground/50" aria-hidden>
-										›
-									</span>
-								</div>
-							</div>
-							<p className="mt-1 text-xs text-muted-foreground/70">
-								{doc.jobType} — {doc.jobAddressEstimated}
-							</p>
-						</Link>
-					))}
-				</div>
-			)}
-
-			{warehousePreppedDocs.length > 0 && (
-				<div id="awaiting-pickup" className="space-y-2">
-					<div className="flex items-center justify-between">
-						<h2 className="text-sm font-semibold text-foreground">
-							{t("dashboard.prepped_awaiting_heading", {
-								count: warehousePreppedDocs.length,
-							})}
-						</h2>
-						<Badge variant="info">{warehousePreppedDocs.length}</Badge>
-					</div>
-					{warehousePreppedDocs.map((doc) => (
-						<Link
-							key={doc.id}
-							to={`/docs/${doc.id}/sign`}
-							className="block rounded-lg border border-transparent p-2.5 text-sm transition-colors hover:border-border hover:bg-muted/40"
-						>
-							<div className="flex items-center justify-between gap-2">
-								<span className="font-mono font-medium">
-									{doc.controlNumber}
-								</span>
-								<div className="flex items-center gap-2">
-									{doc.aged && (
-										<Badge variant="danger">
-											{t("dashboard.aged_pickup_badge")}
-										</Badge>
-									)}
-									{doc.daysStaged !== undefined && (
-										<Badge variant={doc.aged ? "danger" : "neutral"}>
-											{t("dashboard.days_staged", { count: doc.daysStaged })}
-										</Badge>
-									)}
-									<Badge variant="info">
-										{t("dashboard.prepped_awaiting_badge")}
-									</Badge>
-								</div>
-							</div>
-							<p className="mt-1 text-xs text-muted-foreground/70">
-								{doc.jobType} — {doc.jobAddressEstimated}
-							</p>
-						</Link>
-					))}
-				</div>
-			)}
-
-			{warehouseReturnsDocs.length > 0 && (
-				<div id="returns-due" className="space-y-2">
-					<div className="flex items-center justify-between">
-						<h2 className="text-sm font-semibold text-foreground">
-							{t("dashboard.returns_to_log_heading", {
-								count: warehouseReturnsDocs.length,
-							})}
-						</h2>
-						<Badge variant="warn">{warehouseReturnsDocs.length}</Badge>
-					</div>
-					{warehouseReturnsDocs.map((doc) => (
-						<Link
-							key={doc.id}
-							to={`/docs/${doc.id}/returns`}
-							className="block rounded-lg border border-transparent p-2.5 text-sm transition-colors hover:border-border hover:bg-muted/40"
-						>
-							<div className="flex items-center justify-between gap-2">
-								<span className="font-mono font-medium">
-									{doc.controlNumber}
-								</span>
-								<Badge variant="warn">
-									{t("dashboard.returns_to_log_badge")}
-								</Badge>
-							</div>
-							<p className="mt-1 text-xs text-muted-foreground/70">
-								{doc.jobType} — {doc.jobAddressEstimated}
-							</p>
-						</Link>
-					))}
-				</div>
-			)}
-
-			{warehouseMissingDocs.length > 0 && (
-				<div className="space-y-2">
-					<div className="flex items-center justify-between">
-						<h2 className="text-sm font-semibold text-foreground">
-							{t("dashboard.missing_materials_heading", {
-								count: warehouseMissingDocs.length,
-							})}
-						</h2>
-						<Badge variant="danger">{warehouseMissingDocs.length}</Badge>
-					</div>
-					{warehouseMissingDocs.map((doc) => (
-						<Link
-							key={doc.id}
-							to={`/docs/${doc.id}/prep`}
-							className="block rounded-lg border border-transparent p-2.5 text-sm transition-colors hover:border-border hover:bg-muted/40"
-						>
-							<div className="flex items-center justify-between gap-2">
-								<span className="font-mono font-medium">
-									{doc.controlNumber}
-								</span>
-								<Badge variant="danger">
-									{t("dashboard.missing_materials_badge")}
-								</Badge>
-							</div>
-							<p className="mt-1 text-xs text-muted-foreground/70">
-								{doc.jobType} — {doc.jobAddressEstimated}
-							</p>
-						</Link>
-					))}
+					<WarehouseDocList docs={warehouseToPrepDocs} kind="prep" />
 				</div>
 			)}
 

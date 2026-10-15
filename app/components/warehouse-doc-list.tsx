@@ -31,14 +31,20 @@ const ROW = {
 export function WarehouseDocList({
 	docs,
 	kind,
+	emptyHref,
 }: {
 	docs: DashboardDocRow[]
 	kind: WarehouseRowKind
+	emptyHref?: string
 }) {
 	const { t } = useTranslation()
 	const row = ROW[kind]
 	if (docs.length === 0) {
-		return (
+		return emptyHref ? (
+			<Link to={emptyHref} className="text-sm text-muted-foreground underline">
+				{t("warehouse_queue.empty")}
+			</Link>
+		) : (
 			<p className="text-sm text-muted-foreground">
 				{t("warehouse_queue.empty")}
 			</p>

@@ -180,7 +180,22 @@ export function SupervisorDashboard({
 				<PageHeader
 					title={t(`dashboard.stage_queue.${stageQueue}`)}
 					description={t("dashboard.stage_queue.count", { count: docs.length })}
+					actions={
+						stageQueue === "all" && showFilters && filtersActive ? (
+							<ClearFiltersButton />
+						) : null
+					}
 				/>
+				{stageQueue === "all" && showFilters && (
+					<DashboardFilters
+						crewOptions={crewOptions}
+						jobTypeOptions={jobTypeOptions}
+						selectedStatus={selectedStatus}
+						selectedCrew={selectedCrew}
+						selectedJobType={selectedJobType}
+						searchFilter={searchFilter}
+					/>
+				)}
 				<DashboardDocList docs={docs} />
 			</div>
 		)
@@ -199,7 +214,6 @@ export function SupervisorDashboard({
 							})
 						: undefined
 				}
-				actions={showFilters && filtersActive ? <ClearFiltersButton /> : null}
 			/>
 
 			{alert && (
@@ -209,17 +223,6 @@ export function SupervisorDashboard({
 				>
 					{t(alert.key, { count: alert.count })}
 				</Pill>
-			)}
-
-			{showFilters && (
-				<DashboardFilters
-					crewOptions={crewOptions}
-					jobTypeOptions={jobTypeOptions}
-					selectedStatus={selectedStatus}
-					selectedCrew={selectedCrew}
-					selectedJobType={selectedJobType}
-					searchFilter={searchFilter}
-				/>
 			)}
 
 			<div
@@ -299,13 +302,6 @@ export function SupervisorDashboard({
 				href={(r) => `/docs/${r.id}/review`}
 				since="approved"
 			/>
-
-			<section className="space-y-2">
-				<h2 className="text-sm font-semibold text-foreground">
-					{t("dashboard.all_work_orders")}
-				</h2>
-				<DashboardDocList docs={docs} />
-			</section>
 		</div>
 	)
 }

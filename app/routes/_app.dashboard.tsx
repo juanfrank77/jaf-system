@@ -29,9 +29,9 @@ import {
 } from "~/lib/supervisor-stage"
 import { getAvisoAmountTolerance } from "~/lib/system-settings.server"
 import { toNumberPrice } from "~/lib/utils"
+import { countWarehouseQueues } from "~/lib/warehouse-queues.server"
 import { resolveWarehouseScope } from "~/lib/warehouse-scope.server"
 import type { DocStatus, Role } from "../../generated/prisma/client"
-import { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.dashboard"
 
 export const meta: Route.MetaFunction = ({ matches }) => [
@@ -372,54 +372,18 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const supervisorScope =
 		user.role === "SUPERVISOR" ? await loadSupervisorScope(user.id) : null
 
-	// Awaiting-pickup aging (spec §6, "days staged … red past 3"): the PREPPED
-	// queues are piped through computeAwaitingPickup so `aged`/`daysStaged`
-	// actually reach the view — without this the badge can never render.
-	const warehousePreppedDocs = computeAwaitingPickup(
+	// WAREHOUSE counts come from the shared warehouse-queues module so the
+	// dashboard cards and the sidebar pills always agree.
+	const warehouseCounts =
 		user.role === "WAREHOUSE"
-			? await db.jafInvoice.findMany({
-					where: {
-						...(await buildBaseWhere(user.role, user.id)),
-						status: "PREPPED",
-					},
-					orderBy: { createdAt: "desc" },
-					take: 50,
-				})
-			: [],
-	)
-
+			? await countWarehouseQueues()
+			: { prep: 0, release: 0, returns: 0 }
 	const warehouseToPrepDocs =
 		user.role === "WAREHOUSE"
 			? await db.jafInvoice.findMany({
 					where: {
 						...(await buildBaseWhere(user.role, user.id)),
 						status: "CREATED",
-					},
-					orderBy: { createdAt: "desc" },
-					take: 50,
-				})
-			: []
-
-	const warehouseMissingDocs =
-		user.role === "WAREHOUSE"
-			? await db.jafInvoice.findMany({
-					where: {
-						...(await buildBaseWhere(user.role, user.id)),
-						status: { in: ["CREATED", "PREPPED"] },
-						prepChangedSincePrep: true,
-					},
-					orderBy: { createdAt: "desc" },
-					take: 50,
-				})
-			: []
-
-	const warehouseReturnsDocs =
-		user.role === "WAREHOUSE"
-			? await db.jafInvoice.findMany({
-					where: {
-						...(await buildBaseWhere(user.role, user.id)),
-						status: { in: ["SIGNED", "FIELD_UPDATED"] },
-						materialsReturned: { equals: Prisma.DbNull },
 					},
 					orderBy: { createdAt: "desc" },
 					take: 50,
@@ -519,9 +483,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		selectedJobType,
 		searchFilter,
 		warehouseToPrepDocs,
-		warehousePreppedDocs,
-		warehouseMissingDocs,
-		warehouseReturnsDocs,
+		warehouseCounts,
 		warehouseTriageCount,
 		warehouseRepairPool: warehouseSerialCounts.repairPool,
 		warehouseNeedsReview: warehouseSerialCounts.needsReview,
@@ -552,9 +514,7 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 		selectedJobType,
 		searchFilter,
 		warehouseToPrepDocs,
-		warehousePreppedDocs,
-		warehouseMissingDocs,
-		warehouseReturnsDocs,
+		warehouseCounts,
 		warehouseTriageCount,
 		warehouseRepairPool,
 		warehouseNeedsReview,
@@ -617,9 +577,7 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 			selectedJobType={selectedJobType}
 			searchFilter={searchFilter}
 			warehouseToPrepDocs={warehouseToPrepDocs}
-			warehousePreppedDocs={warehousePreppedDocs}
-			warehouseMissingDocs={warehouseMissingDocs}
-			warehouseReturnsDocs={warehouseReturnsDocs}
+			warehouseCounts={warehouseCounts}
 			warehouseTriageCount={warehouseTriageCount}
 			warehouseRepairPool={warehouseRepairPool}
 			warehouseNeedsReview={warehouseNeedsReview}

@@ -8,7 +8,7 @@ vi.mock("~/lib/db.server", () => ({
 			findMany: vi.fn(),
 			findUnique: vi.fn(),
 		},
-		jafInvoice: { findMany: vi.fn() },
+		jafInvoice: { findMany: vi.fn(), count: vi.fn() },
 		brigade: { findMany: vi.fn(), count: vi.fn() },
 		preCertSheet: { findMany: vi.fn() },
 		warehouseAssignment: { findFirst: vi.fn(), findMany: vi.fn() },
@@ -130,13 +130,10 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 	})
 })
 
-// Regression for the review's Critical C: `computeAwaitingPickup` existed and
-// its unit test passed, but NOTHING called it — the dashboard's PREPPED queues
-// went to the view untouched, so `doc.aged` was always undefined and the red
-// "aged" badge could never render. This asserts the WIRING, not the function.
-describe("GET /dashboard (WAREHOUSE) — awaiting-pickup aging", () => {
+// The dashboard hands the Warehouse the same `warehouseCounts` the queue pages
+// and sidebar pills use (countWarehouseQueues from warehouse-queues.server).
+describe("GET /dashboard (WAREHOUSE) — count cards", () => {
 	const wh = { id: "wh-user", role: "WAREHOUSE" }
-	const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000)
 
 	beforeEach(() => {
 		vi.clearAllMocks()
@@ -151,45 +148,20 @@ describe("GET /dashboard (WAREHOUSE) — awaiting-pickup aging", () => {
 		vi.mocked(isDashboardFiltersEnabled).mockReturnValue(false)
 	})
 
-	it("flags a prepped doc staged more than 3 days as aged in the loader's data", async () => {
-		const prepped = [
-			{
-				id: "old",
-				controlNumber: "C-OLD",
-				status: "PREPPED",
-				jobType: "M",
-				jobAddressEstimated: "A",
-				createdAt: daysAgo(9),
-				preppedAt: daysAgo(9),
-			},
-			{
-				id: "fresh",
-				controlNumber: "C-FRESH",
-				status: "PREPPED",
-				jobType: "M",
-				jobAddressEstimated: "A",
-				createdAt: daysAgo(1),
-				preppedAt: daysAgo(1),
-			},
-		]
-		vi.mocked(db.jafInvoice.findMany)
-			.mockResolvedValueOnce([] as any) // jobTypeOptions
-			.mockResolvedValueOnce([] as any) // docs list
-			.mockResolvedValueOnce(prepped as any) // warehousePreppedDocs
-			.mockResolvedValueOnce([] as any) // warehouseMissingDocs
-			.mockResolvedValueOnce([] as any) // warehouseReturnsDocs
+	it("exposes warehouseCounts on the loader data", async () => {
+		vi.mocked(db.jafInvoice.findMany).mockResolvedValue([] as any)
+		vi.mocked(db.jafInvoice.count).mockResolvedValue(5)
 
 		const data = await loader({
 			request: new Request("http://localhost/dashboard"),
 			params: {},
 		} as any)
 
-		const old = data.warehousePreppedDocs.find((d) => d.id === "old")
-		const fresh = data.warehousePreppedDocs.find((d) => d.id === "fresh")
-		expect(old?.aged).toBe(true)
-		expect(old?.daysStaged).toBe(9)
-		expect(fresh?.aged).toBe(false)
-		expect(fresh?.daysStaged).toBe(1)
+		expect(data.warehouseCounts).toMatchObject({
+			prep: 5,
+			release: 5,
+			returns: 5,
+		})
 	})
 
 	describe("installer landing", () => {

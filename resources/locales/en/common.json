@@ -1288,7 +1288,6 @@
 		"supervisor_scope_one": "{{areas}} · {{count}} crew",
 		"supervisor_scope_other": "{{areas}} · {{count}} crews",
 		"more_metrics": "More metrics",
-		"all_work_orders": "All work orders",
 		"since": {
 			"submitted": "Submitted {{ago}}",
 			"returned": "Returned {{ago}}",
@@ -1450,7 +1449,10 @@
 			}
 		},
 		"to_prep_heading": "To prep ({{count}})",
-		"to_prep_badge": "To prep"
+		"to_prep_badge": "To prep",
+		"warehouse_prep_stat": "To prep",
+		"warehouse_release_stat": "Awaiting pickup",
+		"warehouse_returns_stat": "Returns due"
 	},
 	"docs_status": {
 		"created": "Created",

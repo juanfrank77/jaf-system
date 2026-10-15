@@ -39,7 +39,7 @@ export function StockScreen({
 
 	if (!selectedId) {
 		return (
-			<div className="mx-auto w-full max-w-3xl p-4">
+			<div>
 				<h1 className="text-lg font-semibold text-foreground">
 					{t("stock.title")}
 				</h1>
@@ -51,7 +51,7 @@ export function StockScreen({
 	}
 
 	return (
-		<div className="mx-auto w-full max-w-3xl space-y-6 p-4">
+		<div className="space-y-6">
 			<h1 className="text-lg font-semibold text-foreground">
 				{t("stock.title")}
 			</h1>

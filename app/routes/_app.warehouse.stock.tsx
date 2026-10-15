@@ -111,7 +111,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 export default function StockAndAudit({ loaderData }: Route.ComponentProps) {
 	const { t } = useTranslation()
 	return (
-		<div className="mx-auto w-full max-w-3xl space-y-4 p-4">
+		<div className="space-y-4">
 			<WarehouseStepRail current="STOCK" />
 			<Callout title={t("warehouse_flow.callout.stock_title")}>
 				{t("warehouse_flow.callout.stock_body")}

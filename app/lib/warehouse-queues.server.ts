@@ -1,0 +1,36 @@
+import { db } from "~/lib/db.server"
+import { Prisma } from "../../generated/prisma/client"
+import { WAREHOUSE_QUEUES, type WarehouseQueue } from "./warehouse-queues"
+
+export function warehouseQueueWhere(
+	queue: WarehouseQueue,
+): Prisma.JafInvoiceWhereInput {
+	switch (queue) {
+		case "prep":
+			return { status: "CREATED" }
+		case "release":
+			return { status: "PREPPED" }
+		case "returns":
+			return {
+				status: { in: ["SIGNED", "FIELD_UPDATED"] },
+				materialsReturned: { equals: Prisma.DbNull },
+			}
+	}
+}
+
+/** Jobs whose prep was flagged short; listed under the Prep page's queue. */
+export const warehouseMissingWhere: Prisma.JafInvoiceWhereInput = {
+	status: { in: ["CREATED", "PREPPED"] },
+	prepChangedSincePrep: true,
+}
+
+export async function countWarehouseQueues(): Promise<
+	Record<WarehouseQueue, number>
+> {
+	const [prep, release, returns] = await Promise.all(
+		WAREHOUSE_QUEUES.map((q) =>
+			db.jafInvoice.count({ where: warehouseQueueWhere(q) }),
+		),
+	)
+	return { prep, release, returns }
+}

@@ -52,11 +52,14 @@ export function JobFlowOverview({
 	viewer,
 	current,
 	compact = false,
+	hrefs,
 }: {
 	viewer: Role
 	/** The step on screen, when the rail sits on a step's screen rather than a landing page. */
 	current?: JobStep
 	compact?: boolean
+	/** Landing pages for steps that have one outside a single job. */
+	hrefs?: Partial<Record<JobStep, string>>
 }) {
 	const { t } = useTranslation()
 	return (
@@ -66,6 +69,7 @@ export function JobFlowOverview({
 			compact={compact}
 			steps={JOB_STEPS.map((step) => ({
 				key: step,
+				href: hrefs?.[step],
 				label: t(JOB_STEP_LABEL_KEY[step]),
 				locked: step === "CLOSE" && !canViewJobStep(viewer, step),
 				mine: isJobStepMine(viewer, step),

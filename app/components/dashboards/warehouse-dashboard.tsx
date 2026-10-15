@@ -3,7 +3,10 @@ import { DashboardView } from "~/components/dashboard-view"
 import { JobFlowOverview } from "~/components/job-step-rail"
 import { Callout } from "~/components/ui/callout"
 import { WarehouseCountCards } from "~/components/warehouse-count-cards"
-import { NO_WAREHOUSE_COUNTS } from "~/lib/warehouse-queues"
+import {
+	NO_WAREHOUSE_COUNTS,
+	WAREHOUSE_JOB_STEP_HREF,
+} from "~/lib/warehouse-queues"
 import type {
 	BaseDashboardProps,
 	DashboardViewProps,
@@ -24,7 +27,7 @@ export function WarehouseDashboard(
 			intro={
 				<div className="space-y-3">
 					<WarehouseCountCards counts={warehouseCounts} />
-					<JobFlowOverview viewer="WAREHOUSE" />
+					<JobFlowOverview viewer="WAREHOUSE" hrefs={WAREHOUSE_JOB_STEP_HREF} />
 					<Callout title={t("job_flow.callout.warehouse_list_title")}>
 						{t("job_flow.callout.warehouse_list_body")}
 					</Callout>

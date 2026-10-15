@@ -1,3 +1,5 @@
+import { ArrowRight01Icon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 import type { ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
@@ -13,6 +15,7 @@ import {
 	type JobTypeOption,
 } from "~/components/dashboard-filters"
 import { Badge } from "~/components/ui/badge"
+import { buttonVariants } from "~/components/ui/button"
 import { Pill } from "~/components/ui/pill"
 import { Stat } from "~/components/ui/stat"
 import { WarehouseDocList } from "~/components/warehouse-doc-list"
@@ -389,11 +392,10 @@ function DashboardView({
 					</div>
 					<Link
 						to="/warehouse/triage"
-						className="block rounded-lg border border-transparent p-2.5 text-sm transition-colors hover:border-border hover:bg-muted/40"
+						className={buttonVariants({ size: "lg", className: "w-full" })}
 					>
-						<span className="font-medium">
-							{t("dashboard.triage_awaiting_cta")}
-						</span>
+						{t("dashboard.triage_awaiting_cta")}
+						<HugeiconsIcon icon={ArrowRight01Icon} />
 					</Link>
 				</div>
 			)}

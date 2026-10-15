@@ -1808,11 +1808,11 @@
 			"success": "Devuelto exitosamente."
 		}
 	},
-		"warehouse_queue": {
-			"empty": "Nada por ahora.",
-			"missing_heading": "Material faltante marcado"
-		},
-		"warehouse_flow": {
+	"warehouse_queue": {
+		"empty": "Nada por ahora.",
+		"missing_heading": "Material faltante marcado"
+	},
+	"warehouse_flow": {
 		"aria": "Circuito de trabajo del almacén",
 		"step": {
 			"scan_in": "Entrada",

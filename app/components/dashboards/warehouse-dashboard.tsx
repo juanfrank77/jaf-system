@@ -3,6 +3,7 @@ import { DashboardView } from "~/components/dashboard-view"
 import { JobFlowOverview } from "~/components/job-step-rail"
 import { Callout } from "~/components/ui/callout"
 import { WarehouseCountCards } from "~/components/warehouse-count-cards"
+import { NO_WAREHOUSE_COUNTS } from "~/lib/warehouse-queues"
 import type {
 	BaseDashboardProps,
 	DashboardViewProps,
@@ -13,8 +14,7 @@ export function WarehouseDashboard(
 	props: BaseDashboardProps & Pick<DashboardViewProps, WarehouseOnlyKeys>,
 ) {
 	const { t } = useTranslation()
-	const { warehouseCounts = { prep: 0, release: 0, returns: 0 }, ...rest } =
-		props
+	const { warehouseCounts = NO_WAREHOUSE_COUNTS, ...rest } = props
 	return (
 		<DashboardView
 			{...rest}

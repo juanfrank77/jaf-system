@@ -29,6 +29,7 @@ import {
 } from "~/lib/supervisor-stage"
 import { getAvisoAmountTolerance } from "~/lib/system-settings.server"
 import { toNumberPrice } from "~/lib/utils"
+import { NO_WAREHOUSE_COUNTS } from "~/lib/warehouse-queues"
 import { countWarehouseQueues } from "~/lib/warehouse-queues.server"
 import { resolveWarehouseScope } from "~/lib/warehouse-scope.server"
 import type { DocStatus, Role } from "../../generated/prisma/client"
@@ -377,7 +378,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const warehouseCounts =
 		user.role === "WAREHOUSE"
 			? await countWarehouseQueues()
-			: { prep: 0, release: 0, returns: 0 }
+			: NO_WAREHOUSE_COUNTS
 	const warehouseToPrepDocs =
 		user.role === "WAREHOUSE"
 			? await db.jafInvoice.findMany({

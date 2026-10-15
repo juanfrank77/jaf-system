@@ -11,6 +11,12 @@ export function warehouseQueueHref(queue: WarehouseQueue): string {
 	return `/warehouse/${queue}`
 }
 
+export const NO_WAREHOUSE_COUNTS: Record<WarehouseQueue, number> = {
+	prep: 0,
+	release: 0,
+	returns: 0,
+}
+
 export const WAREHOUSE_QUEUE_LABEL_KEY = {
 	prep: "app_shell.nav.warehouse_prep",
 	release: "app_shell.nav.warehouse_pickup",

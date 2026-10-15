@@ -67,7 +67,7 @@ describe("loadNavCounts", () => {
 			"/warehouse/returns": { value: 4, tone: "neutral" },
 			"/warehouse/repairs": { value: 6, tone: "neutral" },
 			"/warehouse/needs-review": { value: 2, tone: "neutral" },
-			"/warehouse/restock#requests": { value: 1, tone: "neutral" },
+			"/warehouse/requests": { value: 1, tone: "neutral" },
 		})
 	})
 

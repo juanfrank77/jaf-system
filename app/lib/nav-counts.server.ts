@@ -74,7 +74,7 @@ export async function loadNavCounts(
 			),
 			"/warehouse/repairs": { value: repairs, tone: "neutral" },
 			"/warehouse/needs-review": { value: review, tone: "neutral" },
-			"/warehouse/restock#requests": { value: requests, tone: "neutral" },
+			"/warehouse/requests": { value: requests, tone: "neutral" },
 		}
 	}
 	if (user.role === "COMPTROLLER" || user.role === "ADMIN") {

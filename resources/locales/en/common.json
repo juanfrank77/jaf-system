@@ -393,6 +393,9 @@
 	"page_title": {
 		"needs_review": "Needs Review",
 		"restocks_to_release": "Restocks to Release",
+		"material_requests": "Material Requests",
+		"serial_register": "Serial Register",
+		"movement_log": "Movement Log",
 		"stock": "Stock & Audit",
 		"repairs": "Repairs",
 		"scan_in": "Scan In",
@@ -1795,6 +1798,9 @@
 		"par": "Par"
 	},
 	"warehouse": {
+		"requests": {
+			"empty": "No material requests yet."
+		},
 		"restock_list": {
 			"empty": "No restocks pending release.",
 			"heading": "Restocks to Release",

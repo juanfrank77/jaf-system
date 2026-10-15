@@ -197,12 +197,12 @@ const warehouseFlowItems = (group: NavGroupKey, roles: Role[]): NavItem[] => [
 	},
 ]
 
-// Sections of the Stock and Restock screens that still have no page of their own.
+// The warehouse's reference views: each its own page.
 const WAREHOUSE_OTHER_ITEMS: NavItem[] = (
 	[
-		["/warehouse/restock#requests", "app_shell.nav.warehouse_requests"],
-		["/warehouse/stock#serials", "app_shell.nav.warehouse_serials"],
-		["/warehouse/stock#movements", "app_shell.nav.warehouse_movements"],
+		["/warehouse/requests", "app_shell.nav.warehouse_requests"],
+		["/warehouse/serials", "app_shell.nav.warehouse_serials"],
+		["/warehouse/movements", "app_shell.nav.warehouse_movements"],
 	] as [string, NavLabelKey][]
 ).map(([to, labelKey]) => ({
 	to,

@@ -393,6 +393,9 @@
 	"page_title": {
 		"needs_review": "Requiere revisión",
 		"restocks_to_release": "Reposiciones por liberar",
+		"material_requests": "Solicitudes de material",
+		"serial_register": "Registro de seriales",
+		"movement_log": "Registro de movimientos",
 		"stock": "Inventario y auditoría",
 		"repairs": "Reparaciones",
 		"scan_in": "Escanear entrada",
@@ -1795,6 +1798,9 @@
 		"par": "Par"
 	},
 	"warehouse": {
+		"requests": {
+			"empty": "Aún no hay solicitudes de material."
+		},
 		"restock_list": {
 			"empty": "No hay reabastecimientos pendientes de liberación.",
 			"heading": "Reabastecimientos por liberar",

@@ -103,11 +103,7 @@ describe("navGroupsFor", () => {
 			],
 			[
 				"other",
-				[
-					"/warehouse/restock#requests",
-					"/warehouse/stock#serials",
-					"/warehouse/stock#movements",
-				],
+				["/warehouse/requests", "/warehouse/serials", "/warehouse/movements"],
 			],
 		])
 	})

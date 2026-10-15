@@ -19,7 +19,6 @@ function loaderDataAt(onHand: number): StockScreenData {
 				lastMovement: null,
 			},
 		],
-		serial: [],
 		query: "",
 		isLead: false,
 		materialCodes: [
@@ -31,7 +30,6 @@ function loaderDataAt(onHand: number): StockScreenData {
 				unitPrice: 12.5,
 			},
 		],
-		serialCodeNames: {},
 		snapshots: [],
 	}
 }

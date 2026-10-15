@@ -4,10 +4,6 @@ import { AdjustPanel, type MaterialCode } from "~/components/adjust-panel"
 import { MovementTrail } from "~/components/movement-trail"
 import { ReceivePanel } from "~/components/receive-panel"
 import {
-	SerialRegister,
-	type SerialStockRow,
-} from "~/components/serial-register"
-import {
 	SnapshotPanel,
 	type SnapshotRowData,
 } from "~/components/snapshot-panel"
@@ -16,11 +12,9 @@ import { StockTable, type StockTableRow } from "~/components/stock-table"
 export type StockScreenData = {
 	selectedId: string | undefined
 	bulk: StockTableRow[]
-	serial: SerialStockRow[]
 	query: string
 	isLead: boolean
 	materialCodes: MaterialCode[]
-	serialCodeNames: Record<string, { claroCode: string; name: string }>
 	snapshots: SnapshotRowData[]
 }
 
@@ -35,11 +29,9 @@ export type StockScreenData = {
 export function StockScreen({
 	selectedId,
 	bulk,
-	serial,
 	query,
 	isLead,
 	materialCodes,
-	serialCodeNames,
 	snapshots,
 }: StockScreenData) {
 	const { t } = useTranslation()
@@ -64,8 +56,7 @@ export function StockScreen({
 				{t("stock.title")}
 			</h1>
 
-			<section id="inventory" className="space-y-2">
-				<span id="movements" />
+			<section className="space-y-2">
 				<StockTable
 					rows={bulk}
 					initialQuery={query}
@@ -84,10 +75,6 @@ export function StockScreen({
 						onClose={() => setSelectedCode(null)}
 					/>
 				)}
-			</section>
-
-			<section id="serials">
-				<SerialRegister rows={serial} codeNames={serialCodeNames} />
 			</section>
 
 			<ReceivePanel warehouseId={selectedId} materialCodes={materialCodes} />

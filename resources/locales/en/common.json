@@ -400,6 +400,9 @@
 		"prep": "Prep Materials",
 		"sign": "Capture Signature",
 		"returns": "Log Returns",
+		"warehouse_prep": "Prep Orders",
+		"warehouse_release": "Awaiting Pickup",
+		"warehouse_returns": "Returns Due",
 		"installer_restock": "Restock"
 	},
 	"docs_prep": {

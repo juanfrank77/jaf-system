@@ -400,6 +400,9 @@
 		"prep": "Preparar materiales",
 		"sign": "Capturar firma",
 		"returns": "Registrar devoluciones",
+		"warehouse_prep": "Preparar órdenes",
+		"warehouse_release": "Esperando recogido",
+		"warehouse_returns": "Devoluciones pendientes",
 		"installer_restock": "Reabastecimiento"
 	},
 	"docs_prep": {

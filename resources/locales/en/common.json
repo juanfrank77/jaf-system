@@ -1852,8 +1852,7 @@
 				"request": "Request",
 				"submitted": "Submitted",
 				"items": "Items",
-				"status": "Status",
-				"action": "Action"
+				"status": "Status"
 			},
 			"empty": "No material requests yet."
 		},

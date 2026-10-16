@@ -1852,8 +1852,7 @@
 				"request": "Solicitud",
 				"submitted": "Enviada",
 				"items": "Artículos",
-				"status": "Estado",
-				"action": "Acción"
+				"status": "Estado"
 			},
 			"empty": "Aún no hay solicitudes de material."
 		},

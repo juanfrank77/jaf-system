@@ -1,7 +1,5 @@
 import { useTranslation } from "react-i18next"
-import { Link } from "react-router"
 import { Badge } from "~/components/ui/badge"
-import { buttonVariants } from "~/components/ui/button"
 import {
 	DataTable,
 	DataTableHead,
@@ -21,12 +19,9 @@ type MaterialRequestRow = {
 	unitCount: number
 }
 
-const isPending = (status: string) =>
-	status === "SUBMITTED" || status === "APPROVED"
-
 /**
  * Every van restock request, in the same table layout as the serial register.
- * Only a still-pending request gets the Release button. Server-paged
+ * Read-only: releasing to a van happens from Restocks to Release. Server-paged
  * (`hrefFor` builds the `?page=` links).
  */
 export function MaterialRequestsTable({
@@ -57,11 +52,6 @@ export function MaterialRequestsTable({
 					<Th>{t("warehouse.requests.col.submitted")}</Th>
 					<Th>{t("warehouse.requests.col.items")}</Th>
 					<Th>{t("warehouse.requests.col.status")}</Th>
-					<Th>
-						<span className="sr-only">
-							{t("warehouse.requests.col.action")}
-						</span>
-					</Th>
 				</DataTableHead>
 				<tbody>
 					{requests.map((r) => (
@@ -81,22 +71,15 @@ export function MaterialRequestsTable({
 								{t("warehouse.restock_list.units", { count: r.unitCount })}
 							</Td>
 							<Td>
-								<Badge variant={isPending(r.status) ? "warn" : "info"}>
+								<Badge
+									variant={
+										r.status === "SUBMITTED" || r.status === "APPROVED"
+											? "warn"
+											: "info"
+									}
+								>
 									{t(`restock_status.${r.status}`, r.status)}
 								</Badge>
-							</Td>
-							<Td className="text-right">
-								{isPending(r.status) && (
-									<Link
-										to={`/restock/${r.id}/release`}
-										className={buttonVariants({
-											variant: "outline",
-											size: "sm",
-										})}
-									>
-										{t("warehouse.restock_list.release", "Release")}
-									</Link>
-								)}
 							</Td>
 						</Tr>
 					))}

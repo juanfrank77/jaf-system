@@ -20,7 +20,7 @@ const request = (id: string, status: string) => ({
 })
 
 describe("MaterialRequestsTable", () => {
-	it("offers Release only on a request that is still pending", async ({
+	it("lists each request with its counts and status, and no Release button", async ({
 		renderStub,
 	}) => {
 		await renderStub({
@@ -40,14 +40,10 @@ describe("MaterialRequestsTable", () => {
 			],
 		})
 		const pending = screen.getByTestId("request-row-abc000111")
+		expect(pending).toHaveTextContent("Van 3")
 		expect(pending).toHaveTextContent("5 materials · 14 units")
-		expect(pending.querySelector("a")).toHaveAttribute(
-			"href",
-			"/restock/abc000111/release",
-		)
-		expect(
-			screen.getByTestId("request-row-abc000222").querySelector("a"),
-		).toBeNull()
+		expect(screen.queryByRole("link", { name: "Release" })).toBeNull()
+		expect(screen.queryByRole("link")).toBeNull()
 	})
 
 	it("shows an empty state", async ({ renderStub }) => {

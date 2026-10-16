@@ -16,8 +16,7 @@ export const meta: Route.MetaFunction = ({ matches }) => [
 const PAGE_SIZE = 20
 
 // Every van restock request, newest first. Restock (`/warehouse/restock`) is
-// the action queue of the pending ones; this is the full list, with the
-// release link only where a release is still due.
+// the action queue of the pending ones; this is the full, read-only list.
 export async function loader({ request }: Route.LoaderArgs) {
 	await requireRole(request, rolesMatching(canReleaseToVan))
 	const where = { status: { not: "DRAFT" as const } }

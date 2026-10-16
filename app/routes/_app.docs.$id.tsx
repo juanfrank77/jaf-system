@@ -881,22 +881,6 @@ export default function DocView({
 					</div>
 				)}
 
-			{(user.role === "SUPERVISOR" ||
-				user.role === "FINANCE" ||
-				user.role === "ADMIN") && (
-				<a
-					href={`/docs/${doc.id}/audit-package`}
-					className={buttonVariants({
-						variant: "outline",
-						className: "mt-2 bg-primary text-primary-foreground",
-					})}
-					target="_blank"
-					rel="noreferrer"
-				>
-					{t("docs_view.download_audit_package")}
-				</a>
-			)}
-
 			{auditTrail.length > 0 && (
 				<section className="space-y-2 pt-3 border-t">
 					<p className="text-sm font-semibold text-foreground">
@@ -909,6 +893,22 @@ export default function DocView({
 						</p>
 					))}
 				</section>
+			)}
+
+			{(user.role === "SUPERVISOR" ||
+				user.role === "FINANCE" ||
+				user.role === "ADMIN") && (
+				<a
+					href={`/docs/${doc.id}/audit-package`}
+					className={buttonVariants({
+						variant: "outline",
+						className: "bg-primary text-primary-foreground",
+					})}
+					target="_blank"
+					rel="noreferrer"
+				>
+					{t("docs_view.download_audit_package")}
+				</a>
 			)}
 		</div>
 	)

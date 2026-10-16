@@ -72,6 +72,23 @@ export function pbccStep(job: {
 	return "LC_REQUEST"
 }
 
+/**
+ * Which Arm A list a released job is on, from its three milestone timestamps.
+ * Mirrors `stageWhere` in finance-stages.server.ts (the sent date is tested
+ * first), which is what the sidebar counts and list screens filter on, so a
+ * dashboard badge and the screen it points at cannot disagree.
+ */
+export function armAStepOf(job: {
+	financeVerifiedAt: Date | string | null
+	pbccRequestSentAt: Date | string | null
+	advanceReceivedAt: Date | string | null
+}): FinanceStep {
+	if (job.pbccRequestSentAt) {
+		return job.advanceReceivedAt ? "LISTS" : "LC_FUNDED"
+	}
+	return job.financeVerifiedAt ? "LC_REQUEST" : "PACKETS"
+}
+
 /** 1-based position of a step on the rail, derived from FINANCE_STEPS so it cannot drift. */
 export function stepNumber(step: FinanceStep): number {
 	return FINANCE_STEPS.indexOf(step) + 1

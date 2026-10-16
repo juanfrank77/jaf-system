@@ -704,6 +704,7 @@
 		"errors": {
 			"pdf_required": "Por favor selecciona el PDF de Claro para cargar",
 			"send_back_note_required": "Se requiere una nota explicando la devolución.",
+			"back_note_required": "Escriba una nota con lo que está mal.",
 			"installed_lines_required": "La brigada no registró cantidades instaladas por código de servicio.",
 			"invoice_required": "Genere primero la factura JAF.",
 			"aviso_number_required": "El número de Aviso es obligatorio.",
@@ -732,7 +733,7 @@
 		"callout_approve_title": "Paso {{n}} de {{total}} · Usted",
 		"callout_approve_body": "Revise la dirección corregida, las fotos y las cantidades instaladas. Apruebe, o devuelva con una nota.",
 		"callout_invoice_title": "Paso {{n}} de {{total}} · Usted",
-		"callout_invoice_body": "La factura se arma con lo instalado, a precios de catálogo. Lleve este número al sistema de Claro para crear el Aviso y luego regrese.",
+		"callout_invoice_body": "La factura se arma con lo instalado. Revise las líneas y los datos del trabajo, márquela como revisada y llévela al supervisor de Claro para obtener el Aviso.",
 		"callout_aviso_title": "Paso {{n}} de {{total}} · Usted",
 		"callout_aviso_body": "Ingrese el número del Aviso y suba el documento. El sistema lo compara línea por línea con la factura.",
 		"callout_precert_title": "Paso {{n}} de {{total}} · Usted + el contratista",
@@ -753,6 +754,21 @@
 		"released": "En Finanzas"
 	},
 	"docs_review_steps": {
+		"invoice_reviewed": "Revisada, lista para Claro",
+		"invoice_back": "Volver al paso 4",
+		"invoice_back_note_label": "¿Qué está mal? (obligatorio) — el trabajo vuelve a Aprobar",
+		"invoice_back_confirm": "Devolver a Aprobar",
+		"invoice_back_cancel": "Cancelar",
+		"invoice_reviewed_hint": "Al marcarla revisada se crea la factura que verá el supervisor de Claro y se bloquean su número y montos; su nombre y la hora quedan en el historial.",
+		"invoice_preview": "Esto es una vista previa con lo que instaló la brigada. Todavía no se ha emitido nada.",
+		"invoice_header": {
+			"work_order": "Orden de trabajo",
+			"job_type": "Tipo de trabajo",
+			"address": "Dirección",
+			"brigade": "Brigada",
+			"work_date": "Fecha del trabajo",
+			"invoice_number": "Factura #"
+		},
 		"aviso_heading": "Aviso y cotejo",
 		"aviso_hint": "Ingrese el número del Aviso y suba el documento. El sistema lo compara línea por línea con la factura JAF.",
 		"aviso_number_hint": "8 dígitos",

@@ -232,64 +232,48 @@ describe("review: generate_jaf_invoice", () => {
 			}),
 		)
 		const pdfArgs = vi.mocked(generateJafInvoicePdf).mock.calls[0][0]
-		expect(pdfArgs.contractorShare).toEqual({
-			factor: 0.65,
-			amount: 155.57,
-			retention: 15.56,
-			net: 140.01,
+		// The Claro copy ties to the work order and carries no brigade pay.
+		expect(pdfArgs).toMatchObject({
+			controlNumber: "MAINT-260903-001",
+			jobType: "Mantenimiento",
 			brigadeName: "JESUS MARTINEZ",
 		})
+		expect(pdfArgs).not.toHaveProperty("contractorShare")
 	})
 
-	it("uses the flat 65% contractor rate even when a service code carries a different contractorFactor", async () => {
-		const nonStandardDoc = {
-			...approvedDoc,
-			serviceLines: [
-				{
-					serviceCodeId: "c1",
-					claroCode: "34006301",
-					accountCode: "610",
-					name: "TRANSFER ATTCH DE POSTESMC",
-					qty: 5,
-				},
-			],
-			installedServiceLines: [
-				{
-					serviceCodeId: "c1",
-					claroCode: "34006301",
-					accountCode: "610",
-					name: "TRANSFER ATTCH DE POSTESMC",
-					qty: 5,
-				},
-			],
-		}
-		vi.mocked(getActiveServiceCodes).mockResolvedValue([
-			{
-				id: "c1",
-				claroCode: "34006301",
-				name: "TRANSFER ATTCH DE POSTESMC",
-				accountCode: "610",
-				unit: "EA",
-				unitPrice: "42.3430",
-				contractorFactor: "0.80",
-				priceListRevision: "REV 2023-04-21",
-			},
-		] as any)
+	it("records who reviewed it and pins the invoice number in the audit trail", async () => {
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
-			nonStandardDoc as any,
+			approvedDoc as any,
 		)
 		await action({
 			request: post(intent("generate_jaf_invoice")),
 			params: { id: "doc-1" },
 		} as any).catch(() => {})
-		const pdfArgs = vi.mocked(generateJafInvoicePdf).mock.calls[0][0]
-		expect(pdfArgs.contractorShare).toEqual({
-			factor: 0.65,
-			amount: 137.62,
-			retention: 13.76,
-			net: 123.86,
-			brigadeName: "JESUS MARTINEZ",
+		expect(db.auditTrail.create).toHaveBeenCalledWith({
+			data: expect.objectContaining({
+				userId: "sup-1",
+				action: "JAF_INVOICE_GENERATED",
+				diffJson: expect.objectContaining({
+					reviewed: true,
+					invoiceNumber: "M2026-MAINT-260903-001",
+				}),
+			}),
 		})
+	})
+
+	it("locks the invoice once it is generated", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...approvedDoc,
+			jafInvoiceGeneratedAt: new Date(),
+		} as any)
+		await expect(
+			action({
+				request: post(intent("generate_jaf_invoice")),
+				params: { id: "doc-1" },
+			} as any),
+		).rejects.toMatchObject({ status: 302 })
+		expect(generateJafInvoicePdf).not.toHaveBeenCalled()
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
 	})
 
 	it("refuses when there are no installed service lines", async () => {
@@ -1092,5 +1076,64 @@ describe("review loader: prices by role", () => {
 		const data = await loadAs("ADMIN")
 		expect(data.showPrices).toBe(true)
 		expect(data.invoiceSummary).toMatchObject({ lineTotal: 84.69 })
+	})
+})
+
+describe("review: back_to_approve", () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1", role: "SUPERVISOR", name: "Edgard Ocasio" },
+			session: {},
+		} as any)
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["OESTE"],
+		} as any)
+	})
+
+	const doc = { ...approvedDoc, brigade: { area: "OESTE" } }
+
+	it("needs a note", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(doc as any)
+		const res = await action({
+			request: post(intent("back_to_approve", { note: "  " })),
+			params: { id: "doc-1" },
+		} as any)
+		expect(res).toEqual({ errorKey: "docs_review.errors.back_note_required" })
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("reopens the Approve step with the note in the audit trail", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(doc as any)
+		await expect(
+			action({
+				request: post(intent("back_to_approve", { note: "qty is off" })),
+				params: { id: "doc-1" },
+			} as any),
+		).rejects.toMatchObject({ status: 302 })
+		expect(db.jafInvoice.update).toHaveBeenCalledWith({
+			where: { id: "doc-1" },
+			data: { status: "FIELD_UPDATED", supervisorApprovedAt: null },
+		})
+		expect(db.auditTrail.create).toHaveBeenCalledWith({
+			data: expect.objectContaining({
+				action: "BACK_TO_APPROVE",
+				diffJson: expect.objectContaining({ note: "qty is off" }),
+			}),
+		})
+	})
+
+	it("is not allowed once the invoice has been reviewed", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...doc,
+			jafInvoiceGeneratedAt: new Date(),
+		} as any)
+		await expect(
+			action({
+				request: post(intent("back_to_approve", { note: "x" })),
+				params: { id: "doc-1" },
+			} as any),
+		).rejects.toMatchObject({ status: 302 })
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
 	})
 })

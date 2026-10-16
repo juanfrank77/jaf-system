@@ -21,7 +21,9 @@ import { Button, buttonVariants } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
 import { Card, CardContent, CardHeader } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
+import { Label } from "~/components/ui/label"
 import { Pill } from "~/components/ui/pill"
+import { Textarea } from "~/components/ui/textarea"
 import {
 	CONTRACTOR_SHARE_PERCENT,
 	RETENTION_RATE,
@@ -121,6 +123,8 @@ const activeSheet = (docId: string) =>
 		orderBy: { version: "desc" },
 	})
 
+const showPricesFor = (role: string) => !isPriceBlind(role)
+
 const invoiceNumberFor = (doc: {
 	avisoNumber: string | null
 	controlNumber: string
@@ -198,8 +202,40 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	} | null = null
 	// Supervisors never see money (catalog, totals, brigade share). The Aviso
 	// card is the one exception until it reads its prices from the Aviso PDF.
-	const showPrices = !isPriceBlind(user.role)
-	const invoiceNumber = lineTotal != null ? invoiceNumberFor(doc) : null
+	const showPrices = showPricesFor(user.role)
+	// The number is pinned when the invoice is reviewed and generated, so it
+	// cannot drift when the Aviso number is typed in later.
+	const generatedAudit = doc.jafInvoiceGeneratedAt
+		? await db.auditTrail.findFirst({
+				where: { docId: params.id, action: "JAF_INVOICE_GENERATED" },
+				orderBy: { timestamp: "desc" },
+			})
+		: null
+	const pinnedNumber = (
+		generatedAudit?.diffJson as { invoiceNumber?: string } | null | undefined
+	)?.invoiceNumber
+	const invoiceNumber =
+		lineTotal != null ? (pinnedNumber ?? invoiceNumberFor(doc)) : null
+	// Step 5 shows the invoice as soon as the supervisor arrives, built from
+	// what was installed. Prices are computed here and never sent to a
+	// price-blind role.
+	const preview: InvoiceLine[] =
+		stage === "INVOICE" && !doc.jafInvoiceGeneratedAt
+			? buildInvoiceLines(
+					(doc.installedServiceLines as ServiceLine[] | null) ?? [],
+					Object.fromEntries(serviceCodes.map((c) => [c.id, c])),
+				)
+			: []
+	const invoicePreview = showPricesFor(user.role)
+		? preview
+		: preview.map((l) => ({ ...l, unitPrice: 0, lineAmount: 0 }))
+	const invoiceHeader = {
+		controlNumber: doc.controlNumber,
+		jobType: doc.jobType,
+		address: doc.jobAddressActual ?? doc.jobAddressEstimated,
+		brigadeName: brigade?.name ?? null,
+		workDate: (doc.startedAt ?? doc.fieldSubmittedAt)?.toISOString() ?? null,
+	}
 	if (lineTotal != null && showPrices) {
 		const ivuRate = await getIvuRate()
 		const contractor = round2(lineTotal * CONTRACTOR_SHARE_PERCENT)
@@ -232,6 +268,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		gate,
 		invoiceSummary,
 		invoiceNumber,
+		invoicePreview,
+		invoiceHeader,
 		showPrices,
 		tolerance,
 		correctorNames,
@@ -336,7 +374,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 	if (intent === "generate_jaf_invoice") {
 		if (!isReviewActionStatus(doc.status) && doc.status !== "CLARO_UPLOADED")
 			throw redirect(`/docs/${params.id}`)
-		if (doc.avisoMatchedAt) throw redirect(`/docs/${params.id}/review`)
+		// Reviewed means locked: the invoice Claro sees, the Aviso match and
+		// Finance's packet are all this one version.
+		if (doc.jafInvoiceGeneratedAt) throw redirect(`/docs/${params.id}/review`)
 
 		const catalog = await getActiveServiceCodes()
 		const codeMap = Object.fromEntries(catalog.map((c) => [c.id, c]))
@@ -347,19 +387,22 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 		const lineTotal = sumLines(lines)
 		const ivuRate = await getIvuRate()
-		const factor = CONTRACTOR_SHARE_PERCENT
-		const contractorAmount = round2(lineTotal * factor)
-		const retention = round2(contractorAmount * 0.1)
 		const brigade = doc.brigadeId
 			? await db.brigade.findUnique({ where: { id: doc.brigadeId } })
 			: null
 
 		const invoiceNumber = invoiceNumberFor(doc)
+		// The Claro copy: job details so Claro's supervisor can tie it to the work
+		// order, and no brigade pay or retention (those stay internal).
 		const pdf = await generateJafInvoicePdf({
 			controlNumber: doc.controlNumber,
 			avisoNumber: doc.avisoNumber,
 			jobType: doc.jobType,
 			jobAddress: doc.jobAddressActual ?? doc.jobAddressEstimated,
+			brigadeName: brigade?.name ?? null,
+			workDate: (doc.startedAt ?? doc.fieldSubmittedAt)?.toLocaleDateString(
+				"en-US",
+			),
 			invoiceDate: new Date().toLocaleDateString("en-US"),
 			invoiceNumber,
 			debtor: "PRT/CLARO",
@@ -373,13 +416,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 			})),
 			ivuRate,
 			supervisorName: user.name,
-			contractorShare: {
-				factor,
-				amount: contractorAmount,
-				retention,
-				net: round2(contractorAmount - retention),
-				brigadeName: brigade?.name ?? null,
-			},
 		})
 		const localPath = await saveBuffer(
 			"jaf-invoices",
@@ -401,7 +437,46 @@ export async function action({ request, params }: Route.ActionArgs) {
 					docId: params.id,
 					userId: user.id,
 					action: "JAF_INVOICE_GENERATED",
-					diffJson: { path: localPath, lineTotal, lines },
+					// "Reviewed, ready for Claro": who and when are the entry's own
+					// user and timestamp.
+					diffJson: {
+						path: localPath,
+						lineTotal,
+						lines,
+						invoiceNumber,
+						reviewed: true,
+					},
+				},
+			}),
+		])
+		throw redirect(`/docs/${params.id}/review`)
+	}
+
+	// Something is wrong with what the brigade reported: reopen the Approve step
+	// (not the crew) so the supervisor can fix it before anything goes to Claro.
+	if (intent === "back_to_approve") {
+		const note = (form.get("note") as string | null)?.trim() || ""
+		if (!note) return { errorKey: "docs_review.errors.back_note_required" }
+		if (
+			doc.status !== "SUPERVISOR_APPROVED" ||
+			!doc.supervisorApprovedAt ||
+			doc.jafInvoiceGeneratedAt
+		)
+			throw redirect(`/docs/${params.id}/review`)
+		await db.$transaction([
+			db.jafInvoice.update({
+				where: { id: params.id },
+				data: { status: "FIELD_UPDATED", supervisorApprovedAt: null },
+			}),
+			db.auditTrail.create({
+				data: {
+					docId: params.id,
+					userId: user.id,
+					action: "BACK_TO_APPROVE",
+					diffJson: {
+						status: { before: doc.status, after: "FIELD_UPDATED" },
+						note,
+					},
 				},
 			}),
 		])
@@ -1039,6 +1114,62 @@ function SignatureBlock({
 	)
 }
 
+/**
+ * Step 5 actions: mark the invoice reviewed (this generates the locked Claro
+ * copy and writes who/when to the audit trail), or send the job back to
+ * Approve with a required note when a quantity or code is off.
+ */
+function InvoiceReviewActions({ canReview }: { canReview: boolean }) {
+	const { t } = useTranslation()
+	const [goingBack, setGoingBack] = useState(false)
+	return (
+		<div className="space-y-3">
+			<div className="flex flex-wrap gap-3">
+				<Form method="post" className="flex-[2]">
+					<input type="hidden" name="intent" value="generate_jaf_invoice" />
+					<Button type="submit" className="w-full" disabled={!canReview}>
+						✓ {t("docs_review_steps.invoice_reviewed")}
+					</Button>
+				</Form>
+				{!goingBack && (
+					<Button
+						type="button"
+						variant="outline"
+						className="flex-1"
+						onClick={() => setGoingBack(true)}
+					>
+						← {t("docs_review_steps.invoice_back")}
+					</Button>
+				)}
+			</div>
+			{goingBack && (
+				<Form method="post" className="space-y-2">
+					<input type="hidden" name="intent" value="back_to_approve" />
+					<Label htmlFor="backNote" className="text-xs">
+						{t("docs_review_steps.invoice_back_note_label")}
+					</Label>
+					<Textarea id="backNote" name="note" rows={2} required />
+					<div className="flex gap-2">
+						<Button type="submit" variant="destructive">
+							{t("docs_review_steps.invoice_back_confirm")}
+						</Button>
+						<Button
+							type="button"
+							variant="ghost"
+							onClick={() => setGoingBack(false)}
+						>
+							{t("docs_review_steps.invoice_back_cancel")}
+						</Button>
+					</div>
+				</Form>
+			)}
+			<p className="text-xs text-muted-foreground">
+				{t("docs_review_steps.invoice_reviewed_hint")}
+			</p>
+		</div>
+	)
+}
+
 function PreCertPanel({
 	sheet,
 	doc,
@@ -1317,6 +1448,8 @@ export default function ReviewDoc({
 		gate,
 		invoiceSummary,
 		invoiceNumber,
+		invoicePreview,
+		invoiceHeader,
 		showPrices,
 		tolerance,
 		correctorNames,
@@ -1341,7 +1474,11 @@ export default function ReviewDoc({
 	const used = asLines(doc.materialsUsed)
 	const ordered = (doc.serviceLines as ServiceLine[] | null) ?? []
 	const installed = (doc.installedServiceLines as ServiceLine[] | null) ?? []
-	const invoiceLines = (doc.jafInvoiceLines as InvoiceLine[] | null) ?? []
+	const generatedInvoiceLines =
+		(doc.jafInvoiceLines as InvoiceLine[] | null) ?? []
+	// Before it is reviewed the invoice is a preview built from what was installed.
+	const isPreview = generatedInvoiceLines.length === 0
+	const invoiceLines = isPreview ? invoicePreview : generatedInvoiceLines
 	const avisoLines = (doc.avisoLines as AvisoLine[] | null) ?? []
 	const precertLines = (sheet?.lines as PreCertLine[] | undefined) ?? undefined
 	const jobLines = (
@@ -1468,6 +1605,38 @@ export default function ReviewDoc({
 						</div>
 					</CardHeader>
 					<CardContent className="space-y-3">
+						<dl
+							data-testid="invoice-header"
+							className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2"
+						>
+							{(
+								[
+									["work_order", invoiceHeader.controlNumber],
+									["job_type", invoiceHeader.jobType],
+									["address", invoiceHeader.address],
+									["brigade", invoiceHeader.brigadeName ?? "—"],
+									[
+										"work_date",
+										invoiceHeader.workDate
+											? new Date(invoiceHeader.workDate).toLocaleDateString()
+											: "—",
+									],
+									["invoice_number", invoiceNumber ?? "—"],
+								] as const
+							).map(([key, value]) => (
+								<div key={key} className="flex gap-2">
+									<dt className="text-muted-foreground">
+										{t(`docs_review_steps.invoice_header.${key}`)}:
+									</dt>
+									<dd className="font-medium">{value}</dd>
+								</div>
+							))}
+						</dl>
+						{isPreview && (
+							<Pill variant="info" icon="👁">
+								{t("docs_review_steps.invoice_preview")}
+							</Pill>
+						)}
 						{invoiceLines.length > 0 && (
 							<table className="w-full text-sm">
 								<thead>
@@ -1587,26 +1756,18 @@ export default function ReviewDoc({
 								{t("docs_review.download")}
 							</a>
 						)}
-						{interactive && !doc.avisoMatchedAt && !avisoStarted && (
-							<Form method="post">
-								<input
-									type="hidden"
-									name="intent"
-									value="generate_jaf_invoice"
-								/>
-								<Button type="submit" variant="outline" size="sm">
-									{doc.jafInvoiceGeneratedAt
-										? t("docs_review_steps.regenerate_invoice")
-										: t("docs_review.generate_jaf_invoice")}
-								</Button>
-							</Form>
+						{interactive && !doc.jafInvoiceGeneratedAt && isPreview && (
+							<InvoiceReviewActions canReview={invoiceLines.length > 0} />
 						)}
-						{interactive && invoiceLines.length > 0 && !doc.avisoMatchedAt && (
-							<Pill variant="warn" icon="→">
-								<b>{t("docs_review_steps.next_aviso_title")}</b>{" "}
-								{t("docs_review_steps.next_aviso_body")}
-							</Pill>
-						)}
+						{interactive &&
+							!isPreview &&
+							invoiceLines.length > 0 &&
+							!doc.avisoMatchedAt && (
+								<Pill variant="warn" icon="→">
+									<b>{t("docs_review_steps.next_aviso_title")}</b>{" "}
+									{t("docs_review_steps.next_aviso_body")}
+								</Pill>
+							)}
 						{interactive && stage === "AVISO" && (
 							<Link
 								to="?step=AVISO"

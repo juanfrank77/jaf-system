@@ -1370,7 +1370,7 @@ export default function ReviewDoc({
 				{doc.fieldSubmittedAt &&
 					` · ${new Date(doc.fieldSubmittedAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}`}
 			</p>
-			<SupervisorStepRail stage={stage} view={view} />
+			<SupervisorStepRail stage={stage} view={view} docId={doc.id} />
 			{!interactive && (
 				<Pill variant="info" icon="🔒">
 					<b>{t("docs_review.readonly_title")}</b>{" "}

@@ -557,7 +557,7 @@ export default function DocView({
 	return (
 		<div className="space-y-5">
 			{(user.role === "SUPERVISOR" || user.role === "ADMIN") && (
-				<SupervisorStepRail stage={stage} />
+				<SupervisorStepRail stage={stage} docId={doc.id} page="job" />
 			)}
 			<div className="flex items-center justify-between">
 				<div>

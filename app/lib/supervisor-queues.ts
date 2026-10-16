@@ -7,6 +7,7 @@ import type { Prisma } from "../../generated/prisma/client"
 // can never disagree with what the link opens.
 export type SupervisorQueue =
 	| "intake"
+	| "field"
 	| "review"
 	| "invoice"
 	| "aviso"
@@ -16,6 +17,7 @@ export type SupervisorQueue =
 
 export const SUPERVISOR_QUEUES: SupervisorQueue[] = [
 	"intake",
+	"field",
 	"review",
 	"invoice",
 	"aviso",
@@ -47,6 +49,10 @@ export function supervisorQueueWhere(
 	switch (queue) {
 		case "intake":
 			return { status: "CREATED" }
+		// Prepped and waiting for the crew, or out in the field: the dashboard's
+		// "Awaiting crew" tile. Not a sidebar link.
+		case "field":
+			return { status: { in: ["PREPPED", "SIGNED"] } }
 		case "released":
 			return {
 				releasedToFinanceAt: { not: null },

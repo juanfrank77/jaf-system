@@ -21,6 +21,12 @@ describe("supervisorQueueHref", () => {
 })
 
 describe("supervisorQueueWhere", () => {
+	it("keeps Field to jobs prepped or out with the crew", () => {
+		expect(supervisorQueueWhere("field")).toEqual({
+			status: { in: ["PREPPED", "SIGNED"] },
+		})
+	})
+
 	it("keeps Intake to jobs just created, before the warehouse has prepped them", () => {
 		expect(supervisorQueueWhere("intake")).toEqual({ status: "CREATED" })
 	})

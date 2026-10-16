@@ -1320,7 +1320,18 @@
 		"listed": "Listed"
 	},
 	"dashboard": {
+		"waiting_on": {
+			"warehouse": "Waiting on: warehouse",
+			"crew": "Waiting on: crew",
+			"you": "Waiting on: you",
+			"finance": "With Finance"
+		},
+		"block": {
+			"aviso_mismatch": "Aviso ≠ invoice",
+			"billing_aviso_pdf": "Billing: missing Aviso PDF"
+		},
 		"stage_queue": {
+			"field": "Awaiting crew",
 			"intake": "New work orders",
 			"review": "Review queue",
 			"invoice": "JAF invoices",
@@ -1348,12 +1359,13 @@
 		},
 		"no_documents": "No documents yet.",
 		"queue": {
+			"my_open": "My open work orders",
 			"intake": "New — waiting for the warehouse",
 			"pending_review": "Pending review — crew submitted",
 			"sent_back": "Sent back to crew",
 			"approved": "Approved",
 			"missing_aviso": "Missing Aviso",
-			"blocked": "Blocked · Aviso ≠ Invoice",
+			"blocked": "Blocked",
 			"empty": "Nothing here."
 		},
 		"col": {

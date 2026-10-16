@@ -10,6 +10,7 @@ import {
 } from "~/lib/dashboard-stats"
 import { db } from "~/lib/db.server"
 import { isDashboardFiltersEnabled } from "~/lib/features.server"
+import { isMissingAvisoPdf } from "~/lib/finance-pipeline.server"
 import { cacheJobs } from "~/lib/offline-store"
 import { pageTitle } from "~/lib/page-title"
 import { requireSession } from "~/lib/permissions.server"
@@ -21,6 +22,8 @@ import { ownedOrInArea, supervisorAreas } from "~/lib/supervisor-scope"
 import {
 	deriveSupervisorStage,
 	type SupervisorStage,
+	WAITING_ON,
+	type WaitingOn,
 } from "~/lib/supervisor-stage"
 import { getAvisoAmountTolerance } from "~/lib/system-settings.server"
 import { toNumberPrice } from "~/lib/utils"
@@ -71,6 +74,10 @@ type QueueRow = {
 	/** When the job entered this queue (submitted / returned / approved). */
 	since: Date | null
 	qtyDiscrepancy: boolean
+	/** Why a job sits in the Blocked queue. */
+	blockReason?: "aviso_mismatch" | "billing_aviso_pdf"
+	/** Open work orders list: who the job is waiting on. */
+	waitingOn?: WaitingOn
 }
 
 const queueSelect = {
@@ -89,6 +96,8 @@ const queueSelect = {
 	releasedToFinanceAt: true,
 	sendBackHistory: true,
 	fieldSubmittedAt: true,
+	avisoDocPath: true,
+	claroPdfPath: true,
 	estimatedMaterials: true,
 	materialsTaken: true,
 	materialsUsed: true,
@@ -154,7 +163,14 @@ async function loadSupervisorQueues(userId: string) {
 	const tolerance = await getAvisoAmountTolerance()
 	const areas = await supervisorAreas(db, userId)
 	const scope = ownedOrInArea(userId, areas)
-	const [intakeRaw, pending, sentBackRaw, approved] = await Promise.all([
+	const [
+		intakeRaw,
+		pending,
+		sentBackRaw,
+		approved,
+		billingBlockedRaw,
+		openRaw,
+	] = await Promise.all([
 		db.jafInvoice.findMany({
 			where: { ...scope, status: "CREATED" },
 			select: queueSelect,
@@ -193,8 +209,33 @@ async function loadSupervisorQueues(userId: string) {
 			orderBy: { supervisorApprovedAt: "asc" },
 			take: 100,
 		}),
+		// Released to Finance without an Aviso PDF on file: billing cannot start.
+		db.jafInvoice.findMany({
+			where: {
+				...scope,
+				releasedToFinanceAt: { not: null },
+				status: { not: "CANCELLED" },
+				avisoDocPath: null,
+				claroPdfPath: null,
+				payablesClosedAt: null,
+			},
+			select: queueSelect,
+			orderBy: { releasedToFinanceAt: "asc" },
+			take: 50,
+		}),
+		// Everything the supervisor owns, from creation until it is paid.
+		db.jafInvoice.findMany({
+			where: { ...scope, status: { not: "CANCELLED" }, payablesClosedAt: null },
+			select: queueSelect,
+			orderBy: { createdAt: "desc" },
+			take: 100,
+		}),
 	])
 	const intake = intakeRaw.map((d) => toRow(d, "INTAKE", d.createdAt))
+	const myOpen = (await withStages(openRaw)).map((d) => ({
+		...toRow(d, d.stage, d.createdAt),
+		waitingOn: WAITING_ON[d.stage],
+	}))
 	const pendingReview = pending.map((d) =>
 		toRow(d, "APPROVE", d.fieldSubmittedAt),
 	)
@@ -224,13 +265,24 @@ async function loadSupervisorQueues(userId: string) {
 				toNumberPrice(d.avisoLineTotal) - toNumberPrice(d.jafInvoiceLineTotal),
 			) > tolerance
 		) {
-			blocked.push(toRow(d, "AVISO", d.supervisorApprovedAt))
+			blocked.push({
+				...toRow(d, "AVISO", d.supervisorApprovedAt),
+				blockReason: "aviso_mismatch",
+			})
 		} else {
 			approvedRows.push(toRow(d, stage, d.supervisorApprovedAt))
 		}
 	}
+	for (const d of billingBlockedRaw) {
+		if (!isMissingAvisoPdf(d)) continue
+		blocked.push({
+			...toRow(d, "RELEASED", d.releasedToFinanceAt),
+			blockReason: "billing_aviso_pdf",
+		})
+	}
 	return {
 		intake,
+		myOpen,
 		pendingReview,
 		sentBack,
 		approved: approvedRows,

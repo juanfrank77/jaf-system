@@ -13,7 +13,7 @@ import { Pill } from "~/components/ui/pill"
 import { QueueCard } from "~/components/ui/queue-card"
 import { Stat } from "~/components/ui/stat"
 import type { SupervisorQueue } from "~/lib/supervisor-queues"
-import type { SupervisorStage } from "~/lib/supervisor-stage"
+import type { SupervisorStage, WaitingOn } from "~/lib/supervisor-stage"
 import type { DashboardViewProps } from "./types"
 
 type QueueRow = {
@@ -27,9 +27,12 @@ type QueueRow = {
 	/** When the job entered this queue (submitted / returned / approved). */
 	since: Date | string | null
 	qtyDiscrepancy: boolean
+	blockReason?: "aviso_mismatch" | "billing_aviso_pdf"
+	waitingOn?: WaitingOn
 }
 export type SupervisorScope = { areas: string[]; brigadeCount: number }
 export type SupervisorQueues = {
+	myOpen: QueueRow[]
 	intake: QueueRow[]
 	pendingReview: QueueRow[]
 	sentBack: QueueRow[]
@@ -48,6 +51,15 @@ const STAGE_KEY: Record<SupervisorStage, ParseKeys> = {
 	PRECERT: "step_rail.precert",
 	RELEASE: "step_rail.release",
 	RELEASED: "step_rail.released",
+}
+
+// Each count tile opens the list of jobs behind it: a sidebar-style stage queue,
+// or the section further down this page when the list is already there.
+const TILE_HREF: Partial<Record<string, string>> = {
+	"dashboard.stat.open_documents": "/dashboard?stage=all",
+	"dashboard.stat.awaiting_warehouse": "/dashboard?stage=intake",
+	"dashboard.stat.awaiting_crew": "/dashboard?stage=field",
+	"dashboard.stat.pending_review": "/dashboard?stage=review",
 }
 
 type SinceKind = "created" | "submitted" | "returned" | "approved"
@@ -69,12 +81,15 @@ function titleCase(area: string) {
 }
 
 function Queue({
+	id,
 	titleKey,
 	rows,
 	variant,
 	href,
 	since,
 }: {
+	/** Anchor for a dashboard tile that opens this list. */
+	id?: string
 	titleKey: ParseKeys
 	rows: QueueRow[]
 	variant: "ok" | "warn" | "danger" | "info"
@@ -84,6 +99,7 @@ function Queue({
 	const { t } = useTranslation()
 	return (
 		<QueueCard
+			id={id}
 			title={t(titleKey)}
 			count={rows.length}
 			variant={variant}
@@ -120,6 +136,16 @@ function Queue({
 								{r.qtyDiscrepancy ? (
 									<Badge variant="warn" className="mt-1 text-xs">
 										{t("dashboard.signal.discrepancy")}
+									</Badge>
+								) : null}
+								{r.waitingOn ? (
+									<span className="block text-xs text-muted-foreground">
+										{t(`dashboard.waiting_on.${r.waitingOn}`)}
+									</span>
+								) : null}
+								{r.blockReason ? (
+									<Badge variant="danger" className="mt-1 text-xs">
+										{t(`dashboard.block.${r.blockReason}`)}
 									</Badge>
 								) : null}
 								{r.note ? (
@@ -227,19 +253,23 @@ export function SupervisorDashboard({
 						key={stat.labelKey}
 						label={t(stat.labelKey)}
 						value={stat.value}
+						href={TILE_HREF[stat.labelKey]}
 					/>
 				))}
 				<Stat
 					label={t("dashboard.stat.sent_back")}
 					value={queues.sentBack.length}
+					href="#sent-back"
 				/>
 				<Stat
 					label={t("dashboard.stat.missing_aviso")}
 					value={queues.missingAviso.length}
+					href="#missing-aviso"
 				/>
 				<Stat
 					label={t("dashboard.stat.blocked")}
 					value={queues.blocked.length}
+					href="#blocked"
 				/>
 			</div>
 
@@ -261,6 +291,14 @@ export function SupervisorDashboard({
 			)}
 
 			<Queue
+				id="my-open"
+				titleKey="dashboard.queue.my_open"
+				rows={queues.myOpen}
+				variant="info"
+				href={(r) => `/docs/${r.id}`}
+				since="created"
+			/>
+			<Queue
 				titleKey="dashboard.queue.intake"
 				rows={queues.intake}
 				variant="info"
@@ -275,6 +313,7 @@ export function SupervisorDashboard({
 				since="submitted"
 			/>
 			<Queue
+				id="sent-back"
 				titleKey="dashboard.queue.sent_back"
 				rows={queues.sentBack}
 				variant="info"
@@ -289,6 +328,7 @@ export function SupervisorDashboard({
 				since="approved"
 			/>
 			<Queue
+				id="missing-aviso"
 				titleKey="dashboard.queue.missing_aviso"
 				rows={queues.missingAviso}
 				variant="warn"
@@ -296,6 +336,7 @@ export function SupervisorDashboard({
 				since="approved"
 			/>
 			<Queue
+				id="blocked"
 				titleKey="dashboard.queue.blocked"
 				rows={queues.blocked}
 				variant="danger"

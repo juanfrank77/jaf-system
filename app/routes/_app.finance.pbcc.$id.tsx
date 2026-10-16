@@ -4,11 +4,6 @@ import { useTranslation } from "react-i18next"
 import { data, Form, Link, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
-import {
-	asLines,
-	JobLinesCard,
-	preppedAsLines,
-} from "~/components/job-lines-card"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
@@ -332,10 +327,7 @@ export default function PbccRequest({
 }: Route.ComponentProps) {
 	const {
 		doc,
-		serviceCodes,
 		amount,
-		ivuRate,
-		lcPbccAdvanceRate,
 		payment,
 		frozen,
 		contractorAccountResolved,
@@ -393,16 +385,6 @@ export default function PbccRequest({
 			<FinanceStepRail current={step} />
 			<Callout title={calloutTitle}>{calloutBody}</Callout>
 
-			<JobLinesCard
-				ordered={asLines(doc.serviceLines)}
-				installed={asLines(doc.installedServiceLines)}
-				estimated={asLines(doc.estimatedMaterials)}
-				prepped={preppedAsLines(doc.preppedMaterials)}
-				taken={asLines(doc.materialsTaken)}
-				used={asLines(doc.materialsUsed)}
-				serviceCodes={serviceCodes as never}
-			/>
-
 			<div className="bg-card border rounded-lg p-4 space-y-2 text-sm">
 				<p>
 					<span className="text-muted-foreground">
@@ -427,18 +409,6 @@ export default function PbccRequest({
 						{t("finance_pbcc.amount")}:
 					</span>{" "}
 					{formatMoney(amount)}
-				</p>
-				<p>
-					<span className="text-muted-foreground">
-						{t("finance_pbcc.advance", {
-							rate: (lcPbccAdvanceRate * 100).toFixed(1),
-						})}
-						:
-					</span>{" "}
-					{formatMoney(amount * lcPbccAdvanceRate)}
-				</p>
-				<p className="text-xs text-muted-foreground">
-					{t("finance_pbcc.ivu_rate", { rate: (ivuRate * 100).toFixed(1) })}
 				</p>
 			</div>
 

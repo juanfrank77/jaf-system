@@ -31,19 +31,29 @@ const mount = (renderStub: any, ui: React.ReactElement) =>
 	renderStub({ entries: [{ path: "/", Component: () => ui }] })
 
 describe("JobLinesCard", () => {
-	it("shows the service items and the four material columns together", async ({
+	it("shows the service items and the materials as a table with one column per stage", async ({
 		renderStub,
 	}) => {
 		await mount(renderStub, <JobLinesCard {...props} />)
 		const card = screen.getByTestId("job-lines")
 		expect(within(card).getByText("34006301")).toBeInTheDocument()
-		for (const key of ["estimated", "prepped", "taken", "used"]) {
-			expect(screen.getByTestId(`job-lines-${key}`)).toBeInTheDocument()
+		const table = screen.getByTestId("job-lines-materials")
+		for (const col of [
+			"Estimated",
+			"Prepped",
+			"Taken (signed)",
+			"Used (field)",
+		]) {
+			expect(within(table).getByText(col)).toBeInTheDocument()
 		}
-		expect(screen.getByTestId("job-lines-used")).toHaveTextContent("CLAMP")
-		expect(screen.getByTestId("job-lines-prepped")).toHaveTextContent(
-			"WRAP NET",
-		)
+		const wrap = within(table)
+			.getByText("WRAP NET")
+			.closest("tr") as HTMLElement
+		expect(wrap).toHaveTextContent("6 EA")
+		expect(wrap).toHaveTextContent("5 EA")
+		const clamp = within(table).getByText("CLAMP").closest("tr") as HTMLElement
+		expect(clamp).toHaveTextContent("3 EA")
+		expect(clamp).toHaveTextContent("—")
 	})
 
 	it("shows no money anywhere", async ({ renderStub }) => {
@@ -67,13 +77,7 @@ describe("JobLinesCard", () => {
 		expect(
 			screen.getByText("No service items on this work order."),
 		).toBeInTheDocument()
-		expect(screen.getByTestId("job-lines-taken")).toHaveTextContent("—")
-	})
-
-	it("can show only the service items", async ({ renderStub }) => {
-		await mount(renderStub, <JobLinesCard {...props} showMaterials={false} />)
-		expect(screen.getByText("Service items")).toBeInTheDocument()
-		expect(screen.queryByTestId("job-lines-used")).toBeNull()
+		expect(screen.getByTestId("job-lines-materials")).toBeInTheDocument()
 	})
 })
 

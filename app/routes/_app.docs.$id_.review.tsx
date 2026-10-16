@@ -1559,8 +1559,6 @@ export default function ReviewDoc({
 				</Callout>
 			)}
 
-			{panel !== "APPROVE" && jobLines}
-
 			{/* A — Approve */}
 			{panel === "APPROVE" && (
 				<>
@@ -1698,24 +1696,6 @@ export default function ReviewDoc({
 											</td>
 											<td className="pt-5 pb-1.5 text-right font-semibold">
 												{formatMoney(invoiceSummary.lineTotal)}
-											</td>
-										</tr>
-										<tr className="text-status-warn">
-											<td colSpan={4} className="py-1.5 pr-6 text-right">
-												{t("docs_review_steps.ivu_row", {
-													rate: round2(invoiceSummary.ivuRate * 100),
-												})}
-											</td>
-											<td className="py-1.5 text-right">
-												{formatMoney(invoiceSummary.ivu)}
-											</td>
-										</tr>
-										<tr className="border-t font-semibold">
-											<td colSpan={4} className="pr-6 pt-3 pb-1.5 text-right">
-												{t("docs_review_steps.invoice_total")}
-											</td>
-											<td className="pt-3 pb-1.5 text-right text-base">
-												{formatMoney(invoiceSummary.total)}
 											</td>
 										</tr>
 										<tr className="text-muted-foreground">

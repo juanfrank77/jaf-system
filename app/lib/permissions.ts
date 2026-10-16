@@ -22,6 +22,18 @@ export function isEditableStatus(status: string): status is EditableStatus {
 	return EDITABLE_STATUSES.includes(status as EditableStatus)
 }
 
+// A crew can be swapped until it has reported from the field. Once the field
+// update is in (or the job is approved, sent to Claro, in Finance), the crew
+// that did the work is the one that gets paid. A send-back returns the job to
+// SIGNED, which makes it reassignable again.
+const REASSIGNABLE_STATUSES = ["CREATED", "PREPPED", "SIGNED"] as const
+
+export function isReassignableStatus(status: string): boolean {
+	return REASSIGNABLE_STATUSES.includes(
+		status as (typeof REASSIGNABLE_STATUSES)[number],
+	)
+}
+
 const REVIEW_ACTION_STATUSES = ["FIELD_UPDATED", "SUPERVISOR_APPROVED"] as const
 type ReviewActionStatus = (typeof REVIEW_ACTION_STATUSES)[number]
 

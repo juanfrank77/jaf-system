@@ -155,7 +155,7 @@ describe("ReassignForm", () => {
 		await mount(renderStub, shared)
 		expect(
 			screen.getByText(
-				"Allowed until the work order is cancelled or closed. Every reassignment is written to the crew history.",
+				"Allowed until the crew reports from the field. Every reassignment is written to the crew history.",
 			),
 		).toBeInTheDocument()
 		await userEvent.click(screen.getByRole("combobox"))

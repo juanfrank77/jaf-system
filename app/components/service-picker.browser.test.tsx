@@ -28,14 +28,14 @@ describe("ServicePicker saved lines", () => {
 		expect(within(row).getByText("FT")).toBeInTheDocument()
 		expect(within(row).getByText("$5.06")).toBeInTheDocument()
 		expect(within(row).getByText("$10.12")).toBeInTheDocument()
-		expect(screen.getByText("Estimated subtotal (pre-IVU)")).toBeInTheDocument()
+		expect(screen.getByText("Estimated subtotal")).toBeInTheDocument()
 	})
 
 	it("falls back to dashes and hides the subtotal when no meta is available", async ({
 		renderStub,
 	}) => {
 		await mount(renderStub, { initialLines: [line] })
-		expect(screen.queryByText("Estimated subtotal (pre-IVU)")).toBeNull()
+		expect(screen.queryByText("Estimated subtotal")).toBeNull()
 	})
 
 	it("shows no price, line amount or subtotal when prices are hidden", async ({
@@ -49,7 +49,7 @@ describe("ServicePicker saved lines", () => {
 		const row = screen.getByText("34005446").closest("tr") as HTMLElement
 		expect(within(row).getByText("FT")).toBeInTheDocument()
 		expect(row.textContent).not.toContain("$")
-		expect(screen.queryByText("Estimated subtotal (pre-IVU)")).toBeNull()
+		expect(screen.queryByText("Estimated subtotal")).toBeNull()
 		expect(screen.queryByText("Unit price")).toBeNull()
 	})
 })

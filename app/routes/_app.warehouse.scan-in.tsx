@@ -49,7 +49,7 @@ export default function WarehouseScanIn({
 	const [warehouseId, setWarehouseId] = useState(warehouses[0]?.id ?? "")
 
 	return (
-		<div className="space-y-4 max-w-xl">
+		<div className="space-y-4">
 			<h1 className="text-xl font-semibold">
 				{t("warehouse.scan_in.heading", "Scan In Return")}
 			</h1>

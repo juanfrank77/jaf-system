@@ -1321,7 +1321,18 @@
 		"listed": "En lista"
 	},
 	"dashboard": {
+		"waiting_on": {
+			"warehouse": "Esperando a: almacén",
+			"crew": "Esperando a: la brigada",
+			"you": "Esperando a: usted",
+			"finance": "En Finanzas"
+		},
+		"block": {
+			"aviso_mismatch": "Aviso ≠ factura",
+			"billing_aviso_pdf": "Facturación: falta el PDF del Aviso"
+		},
 		"stage_queue": {
+			"field": "Esperando a la brigada",
 			"intake": "Órdenes nuevas",
 			"review": "Cola de revisión",
 			"invoice": "Facturas JAF",
@@ -1349,12 +1360,13 @@
 		},
 		"no_documents": "Aún no hay documentos.",
 		"queue": {
+			"my_open": "Mis órdenes de trabajo abiertas",
 			"intake": "Nuevas — esperando al almacén",
 			"pending_review": "Pendiente de revisión — brigada entregó",
 			"sent_back": "Devuelto a la brigada",
 			"approved": "Aprobado",
 			"missing_aviso": "Falta Aviso",
-			"blocked": "Bloqueado · Aviso ≠ Factura",
+			"blocked": "Bloqueadas",
 			"empty": "Nada por aquí."
 		},
 		"col": {

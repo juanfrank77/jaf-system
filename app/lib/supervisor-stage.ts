@@ -69,6 +69,20 @@ export function deriveSupervisorStage(
 	}
 }
 
+/** Who a job is waiting on at each step, for the supervisor's open-work-orders list. */
+export type WaitingOn = "warehouse" | "crew" | "you" | "finance"
+export const WAITING_ON: Record<SupervisorStage, WaitingOn> = {
+	INTAKE: "warehouse",
+	WAREHOUSE: "crew",
+	FIELD: "crew",
+	APPROVE: "you",
+	INVOICE: "you",
+	AVISO: "you",
+	PRECERT: "you",
+	RELEASE: "you",
+	RELEASED: "finance",
+}
+
 /** The screen a supervisor is looking at, and whether it accepts actions. */
 export type StepView = {
 	view: SupervisorStage

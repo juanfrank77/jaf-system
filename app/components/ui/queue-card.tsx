@@ -3,6 +3,7 @@ import { EmptyState } from "~/components/ui/empty-state"
 import { cn } from "~/lib/utils"
 
 function QueueCard({
+	id,
 	title,
 	count,
 	variant,
@@ -10,6 +11,7 @@ function QueueCard({
 	className,
 	children,
 }: {
+	id?: string
 	title: React.ReactNode
 	count: number
 	variant: "ok" | "warn" | "danger" | "info"
@@ -19,6 +21,7 @@ function QueueCard({
 }) {
 	return (
 		<section
+			id={id}
 			data-slot="queue-card"
 			className={cn(
 				"space-y-2 rounded-xl border border-border bg-card p-3 shadow-card",

@@ -80,6 +80,13 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 			.mockResolvedValueOnce([
 				row({ id: "m", jafInvoiceGeneratedAt: new Date() }),
 			] as any) // approved candidates
+			.mockResolvedValueOnce([
+				row({ id: "bb", releasedToFinanceAt: new Date() }),
+			] as any) // released without an Aviso PDF
+			.mockResolvedValueOnce([
+				row({ id: "p", status: "FIELD_UPDATED", supervisorApprovedAt: null }),
+				row({ id: "m", jafInvoiceGeneratedAt: new Date() }),
+			] as any) // my open work orders
 		const data = await loader({
 			request: new Request("http://localhost/dashboard"),
 			params: {},
@@ -87,6 +94,13 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 		expect(data.stats).toHaveLength(14)
 		expect(data.showFilters).toBe(false)
 		expect(data.supervisorQueues!.intake.map((r) => r.id)).toEqual(["n"])
+		expect(data.supervisorQueues!.blocked).toEqual([
+			expect.objectContaining({ id: "bb", blockReason: "billing_aviso_pdf" }),
+		])
+		expect(data.supervisorQueues!.myOpen).toEqual([
+			expect.objectContaining({ id: "p", stage: "APPROVE", waitingOn: "you" }),
+			expect.objectContaining({ id: "m", stage: "AVISO", waitingOn: "you" }),
+		])
 		expect(data.supervisorQueues!.intake[0]).toMatchObject({ stage: "INTAKE" })
 		expect(data.supervisorQueues!.pendingReview.map((r) => r.id)).toEqual(["p"])
 		expect(data.supervisorQueues!.missingAviso.map((r) => r.id)).toEqual(["m"])
@@ -117,11 +131,16 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 					avisoMatchedAt: new Date(),
 				}),
 			] as any)
+			.mockResolvedValueOnce([] as any) // released without an Aviso PDF
+			.mockResolvedValueOnce([] as any) // my open work orders
 		const data = await loader({
 			request: new Request("http://localhost/dashboard"),
 			params: {},
 		} as any)
 		expect(data.supervisorQueues!.blocked.map((r) => r.id)).toEqual(["b"])
+		expect(data.supervisorQueues!.blocked[0]).toMatchObject({
+			blockReason: "aviso_mismatch",
+		})
 		expect(data.supervisorQueues!.missingAviso).toEqual([])
 	})
 

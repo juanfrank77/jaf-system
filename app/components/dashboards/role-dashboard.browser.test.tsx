@@ -4,6 +4,7 @@ import { RoleDashboard } from "./role-dashboard"
 
 const base = { stats: [], alert: null, explainer: null, docs: [] }
 const emptyQueues = {
+	myOpen: [],
 	intake: [],
 	pendingReview: [],
 	approved: [],
@@ -47,15 +48,15 @@ describe("RoleDashboard", () => {
 		})
 	}
 
-	it("renders the six supervisor queues and the work-order list for SUPERVISOR", async ({
+	it("renders the seven supervisor queues and the work-order list for SUPERVISOR", async ({
 		renderStub,
 	}) => {
 		await mount(renderStub, <RoleDashboard {...supervisor} {...base} />)
 		expect(
 			screen.getByRole("heading", { level: 1, name: "Dashboard" }),
 		).toBeInTheDocument()
-		// six queue cards (Intake first); dashboard no longer has an "All work orders" section
-		expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(6)
+		// seven queue cards (My open work orders first); dashboard no longer has an "All work orders" section
+		expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(7)
 	})
 
 	const billedDoc = {
@@ -258,6 +259,66 @@ describe("SupervisorDashboard", () => {
 			"href",
 			"/docs/new1",
 		)
+	})
+
+	it("opens the list behind each count tile", async ({ renderStub }) => {
+		await mountSupervisor(renderStub, {
+			stats: [
+				{ labelKey: "dashboard.stat.open_documents", value: 5 },
+				{ labelKey: "dashboard.stat.awaiting_warehouse", value: 1 },
+				{ labelKey: "dashboard.stat.awaiting_crew", value: 2 },
+				{ labelKey: "dashboard.stat.pending_review", value: 3 },
+			],
+		})
+		const tiles = screen.getByTestId("supervisor-tiles")
+		const hrefOf = (label: string) =>
+			within(tiles).getByText(label).closest("a")?.getAttribute("href")
+		expect(hrefOf("Open documents")).toBe("/dashboard?stage=all")
+		expect(hrefOf("Awaiting warehouse")).toBe("/dashboard?stage=intake")
+		expect(hrefOf("Awaiting crew")).toBe("/dashboard?stage=field")
+		expect(hrefOf("Pending review")).toBe("/dashboard?stage=review")
+		expect(hrefOf("Sent back")).toMatch(/#sent-back$/)
+		expect(hrefOf("Missing Aviso")).toMatch(/#missing-aviso$/)
+		expect(hrefOf("Blocked")).toMatch(/#blocked$/)
+	})
+
+	it("lists the supervisor's open work orders with their step and who they wait on", async ({
+		renderStub,
+	}) => {
+		await mountSupervisor(renderStub, {
+			supervisorQueues: {
+				...emptyQueues,
+				myOpen: [
+					queueRow({
+						id: "o1",
+						controlNumber: "JAF-OPEN",
+						stage: "WAREHOUSE",
+						waitingOn: "crew",
+					}),
+				],
+			},
+		})
+		const card = screen
+			.getByRole("heading", { level: 2, name: /My open work orders/ })
+			.closest("section") as HTMLElement
+		expect(
+			within(card).getByRole("link", { name: "JAF-OPEN" }),
+		).toHaveAttribute("href", "/docs/o1")
+		expect(card).toHaveTextContent("Waiting on: crew")
+	})
+
+	it("says why a job is blocked", async ({ renderStub }) => {
+		await mountSupervisor(renderStub, {
+			supervisorQueues: {
+				...emptyQueues,
+				blocked: [
+					queueRow({ id: "b1", blockReason: "billing_aviso_pdf" }),
+					queueRow({ id: "b2", blockReason: "aviso_mismatch" }),
+				],
+			},
+		})
+		expect(screen.getByText("Billing: missing Aviso PDF")).toBeInTheDocument()
+		expect(screen.getByText("Aviso ≠ invoice")).toBeInTheDocument()
 	})
 
 	it("shows the supervisor's area and crew count under the title", async ({

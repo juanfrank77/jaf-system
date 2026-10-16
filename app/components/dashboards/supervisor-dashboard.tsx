@@ -32,6 +32,7 @@ type QueueRow = {
 }
 export type SupervisorScope = { areas: string[]; brigadeCount: number }
 export type SupervisorQueues = {
+	intake: QueueRow[]
 	pendingReview: QueueRow[]
 	sentBack: QueueRow[]
 	approved: QueueRow[]
@@ -51,7 +52,7 @@ const STAGE_KEY: Record<SupervisorStage, ParseKeys> = {
 	RELEASED: "step_rail.released",
 }
 
-type SinceKind = "submitted" | "returned" | "approved"
+type SinceKind = "created" | "submitted" | "returned" | "approved"
 
 function ago(t: TFunction, since: Date | string, now = Date.now()) {
 	const minutes = Math.max(
@@ -267,6 +268,13 @@ export function SupervisorDashboard({
 				</details>
 			)}
 
+			<Queue
+				titleKey="dashboard.queue.intake"
+				rows={queues.intake}
+				variant="info"
+				href={(r) => `/docs/${r.id}`}
+				since="created"
+			/>
 			<Queue
 				titleKey="dashboard.queue.pending_review"
 				rows={queues.pendingReview}

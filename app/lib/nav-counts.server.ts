@@ -16,6 +16,7 @@ import type { Role } from "../../generated/prisma/client"
 /** Review and Aviso are the supervisor's own action points, so they go red. */
 const CRITICAL_QUEUES: SupervisorQueue[] = ["review", "aviso"]
 const SUPERVISOR_QUEUE_ORDER: SupervisorQueue[] = [
+	"intake",
 	"review",
 	"invoice",
 	"aviso",

@@ -72,6 +72,9 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 			.mockResolvedValueOnce([]) // jobTypeOptions
 			.mockResolvedValueOnce([]) // docs list
 			.mockResolvedValueOnce([
+				row({ id: "n", status: "CREATED", createdAt: new Date() }),
+			] as any) // intake
+			.mockResolvedValueOnce([
 				row({ id: "p", status: "FIELD_UPDATED", supervisorApprovedAt: null }),
 			] as any) // pending review
 			.mockResolvedValueOnce([
@@ -83,6 +86,8 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 		} as any)
 		expect(data.stats).toHaveLength(14)
 		expect(data.showFilters).toBe(false)
+		expect(data.supervisorQueues!.intake.map((r) => r.id)).toEqual(["n"])
+		expect(data.supervisorQueues!.intake[0]).toMatchObject({ stage: "INTAKE" })
 		expect(data.supervisorQueues!.pendingReview.map((r) => r.id)).toEqual(["p"])
 		expect(data.supervisorQueues!.missingAviso.map((r) => r.id)).toEqual(["m"])
 		expect(data.supervisorQueues!.missingAviso[0]).toMatchObject({
@@ -95,6 +100,7 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 		vi.mocked(db.jafInvoice.findMany)
 			.mockResolvedValueOnce([] as any)
 			.mockResolvedValueOnce([] as any)
+			.mockResolvedValueOnce([] as any) // intake
 			.mockResolvedValueOnce([] as any)
 			.mockResolvedValueOnce([
 				row({

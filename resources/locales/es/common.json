@@ -224,6 +224,7 @@
 			"warehouse_scan_in": "Registrar Devolución",
 			"warehouse_restock": "Reabastecimientos por Liberar",
 			"warehouse_stock": "Inventario",
+			"supervisor_intake": "Órdenes nuevas",
 			"supervisor_review": "Cola de revisión",
 			"supervisor_invoice": "Facturas JAF",
 			"supervisor_aviso": "Aviso y cotejo",
@@ -1319,6 +1320,7 @@
 	},
 	"dashboard": {
 		"stage_queue": {
+			"intake": "Órdenes nuevas",
 			"review": "Cola de revisión",
 			"invoice": "Facturas JAF",
 			"aviso": "Aviso y cotejo",
@@ -1332,6 +1334,7 @@
 		"supervisor_scope_other": "{{areas}} · {{count}} brigadas",
 		"more_metrics": "Más métricas",
 		"since": {
+			"created": "Creada {{ago}}",
 			"submitted": "Entregado {{ago}}",
 			"returned": "Devuelto {{ago}}",
 			"approved": "Aprobado {{ago}}"
@@ -1344,6 +1347,7 @@
 		},
 		"no_documents": "Aún no hay documentos.",
 		"queue": {
+			"intake": "Nuevas — esperando al almacén",
 			"pending_review": "Pendiente de revisión — brigada entregó",
 			"sent_back": "Devuelto a la brigada",
 			"approved": "Aprobado",

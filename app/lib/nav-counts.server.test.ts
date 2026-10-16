@@ -24,6 +24,7 @@ describe("loadNavCounts", () => {
 
 	it("gives a supervisor one count per queue, red for Review and Aviso", async () => {
 		vi.mocked(db.jafInvoice.count)
+			.mockResolvedValueOnce(3) // intake
 			.mockResolvedValueOnce(2) // review
 			.mockResolvedValueOnce(5) // invoice
 			.mockResolvedValueOnce(1) // aviso
@@ -32,6 +33,7 @@ describe("loadNavCounts", () => {
 			.mockResolvedValueOnce(9) // all
 		const counts = await loadNavCounts({ id: "sup-1", role: "SUPERVISOR" })
 		expect(counts).toEqual({
+			"/dashboard?stage=intake": { value: 3, tone: "neutral" },
 			"/dashboard?stage=review": { value: 2, tone: "critical" },
 			"/dashboard?stage=invoice": { value: 5, tone: "neutral" },
 			"/dashboard?stage=aviso": { value: 1, tone: "critical" },

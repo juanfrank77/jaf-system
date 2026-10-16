@@ -159,7 +159,13 @@ async function loadSupervisorQueues(userId: string) {
 	const tolerance = await getAvisoAmountTolerance()
 	const areas = await supervisorAreas(db, userId)
 	const scope = ownedOrInArea(userId, areas)
-	const [pending, sentBackRaw, approved] = await Promise.all([
+	const [intakeRaw, pending, sentBackRaw, approved] = await Promise.all([
+		db.jafInvoice.findMany({
+			where: { ...scope, status: "CREATED" },
+			select: queueSelect,
+			orderBy: { createdAt: "desc" },
+			take: 50,
+		}),
 		db.jafInvoice.findMany({
 			where: { ...scope, status: "FIELD_UPDATED" },
 			select: queueSelect,
@@ -193,6 +199,7 @@ async function loadSupervisorQueues(userId: string) {
 			take: 100,
 		}),
 	])
+	const intake = intakeRaw.map((d) => toRow(d, "INTAKE", d.createdAt))
 	const pendingReview = pending.map((d) =>
 		toRow(d, "APPROVE", d.fieldSubmittedAt),
 	)
@@ -228,6 +235,7 @@ async function loadSupervisorQueues(userId: string) {
 		}
 	}
 	return {
+		intake,
 		pendingReview,
 		sentBack,
 		approved: approvedRows,

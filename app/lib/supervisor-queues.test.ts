@@ -21,6 +21,10 @@ describe("supervisorQueueHref", () => {
 })
 
 describe("supervisorQueueWhere", () => {
+	it("keeps Intake to jobs just created, before the warehouse has prepped them", () => {
+		expect(supervisorQueueWhere("intake")).toEqual({ status: "CREATED" })
+	})
+
 	it("keeps Review to field-submitted jobs the supervisor has not approved", () => {
 		expect(supervisorQueueWhere("review")).toMatchObject({
 			status: "FIELD_UPDATED",

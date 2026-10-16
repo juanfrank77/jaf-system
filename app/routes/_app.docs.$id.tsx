@@ -5,6 +5,11 @@ import { Form, Link, redirect } from "react-router"
 import { AssignedCrew } from "~/components/assigned-crew"
 import { DocStageBadge } from "~/components/doc-stage-badge"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import {
+	asLines,
+	JobLinesCard,
+	preppedAsLines,
+} from "~/components/job-lines-card"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { ReassignForm } from "~/components/reassign-form"
 import { SupervisorStepRail } from "~/components/supervisor-step-rail"
@@ -658,6 +663,17 @@ export default function DocView({
 					{new Date(doc.createdAt).toLocaleString()}
 				</p>
 			</section>
+
+			<JobLinesCard
+				ordered={asLines(doc.serviceLines)}
+				installed={asLines(doc.installedServiceLines)}
+				estimated={estimated}
+				prepped={preppedAsLines(doc.preppedMaterials)}
+				taken={taken}
+				used={used}
+				serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
+				showMaterials={false}
+			/>
 
 			{estimated.length > 0 && (
 				<section className="bg-card border rounded-lg p-4">

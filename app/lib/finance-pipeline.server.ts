@@ -1,3 +1,4 @@
+import { hasAvisoPdf } from "~/lib/aviso-document"
 import type {
 	DocStatus,
 	JafInvoice,
@@ -165,10 +166,10 @@ export function invoiceTotalUsed(
 	return subtotal + subtotal * ivuRate
 }
 
-export function isMissingClaroPdf(
-	invoice: Pick<JafInvoice, "claroPdfPath">,
+export function isMissingAvisoPdf(
+	invoice: Pick<JafInvoice, "avisoDocPath" | "claroPdfPath">,
 ): boolean {
-	return !invoice.claroPdfPath || invoice.claroPdfPath.trim() === ""
+	return !hasAvisoPdf(invoice)
 }
 
 export function checkAmountTolerance(
@@ -195,7 +196,7 @@ export type FinancePipelineRow = {
 	alertDays: number | null
 	isAlert: boolean
 	amount: number
-	missingClaroPdf: boolean
+	missingAvisoPdf: boolean
 	advanceAmount: number | null
 	finalPaymentAmount: number | null
 	poMismatch: boolean

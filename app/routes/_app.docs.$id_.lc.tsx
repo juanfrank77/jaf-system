@@ -5,6 +5,7 @@ import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { Button } from "~/components/ui/button"
+import { avisoPdfUrl } from "~/lib/aviso-document"
 import { db } from "~/lib/db.server"
 import { generateActaConformidadPdf } from "~/lib/pdf/acta-conformidad.server"
 import { generateScheduleAccountsPdf } from "~/lib/pdf/schedule-accounts.server"
@@ -171,9 +172,7 @@ export default function LcView({ loaderData }: Route.ComponentProps) {
 	const { t } = useTranslation()
 	const used =
 		(doc.materialsUsed as { serviceCodeId: string; qty: number }[]) || []
-	const claroPdfUrl = doc.claroPdfPath
-		? `/files/claro-pdfs/${doc.id}-claro.pdf`
-		: null
+	const claroPdfUrl = avisoPdfUrl(doc)
 
 	return (
 		<div className="space-y-5">

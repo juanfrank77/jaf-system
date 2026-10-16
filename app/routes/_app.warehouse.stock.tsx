@@ -112,11 +112,12 @@ export default function StockAndAudit({ loaderData }: Route.ComponentProps) {
 	const { t } = useTranslation()
 	return (
 		<div className="space-y-4">
+			<h1 className="text-xl font-semibold">{t("stock.title")}</h1>
 			<WarehouseStepRail current="STOCK" />
 			<Callout title={t("warehouse_flow.callout.stock_title")}>
 				{t("warehouse_flow.callout.stock_body")}
 			</Callout>
-			<StockScreen {...loaderData} />
+			<StockScreen {...loaderData} showTitle={false} />
 		</div>
 	)
 }

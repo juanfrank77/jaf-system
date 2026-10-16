@@ -135,19 +135,3 @@ export async function getWarehouseBulkStock(
 		}
 	})
 }
-
-export async function getWarehouseSerialStock(
-	client: StockClient,
-	warehouseId: string,
-): Promise<SerialStockRow[]> {
-	const grouped = await client.serialLocation.groupBy({
-		by: ["serviceCodeId", "condition"],
-		where: { status: "WAREHOUSE", currentRef: warehouseId },
-		_count: true,
-	})
-	return grouped.map((g) => ({
-		serviceCodeId: g.serviceCodeId,
-		condition: g.condition,
-		count: g._count,
-	}))
-}

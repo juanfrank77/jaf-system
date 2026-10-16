@@ -6,9 +6,12 @@ import {
 	SignaturePad,
 	type SignaturePadHandle,
 } from "~/components/signature-pad"
+import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
+import { Card } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
+import { PageHeader } from "~/components/ui/page-header"
 import { db } from "~/lib/db.server"
 import { releaseRestockToVan } from "~/lib/load-to-van.server"
 import { pageTitle } from "~/lib/page-title"
@@ -55,7 +58,7 @@ export default function RestockRelease({
 	actionData,
 }: Route.ComponentProps) {
 	const { restock, lines, codesById } = loaderData
-	const { t } = useTranslation()
+	const { t, i18n } = useTranslation()
 	const releaseSigRef = useRef<SignaturePadHandle>(null)
 	const receiveSigRef = useRef<SignaturePadHandle>(null)
 
@@ -98,12 +101,24 @@ export default function RestockRelease({
 		)
 		.filter((s) => s.serial)
 
+	const totalUnits = lines.reduce((sum, l) => sum + l.qty, 0)
+
 	return (
-		<div className="space-y-6 max-w-xl">
-			<h1 className="text-xl font-semibold">
-				{t("restock_release.heading", "Release Restock to Van")}
-			</h1>
-			<p className="text-sm text-muted-foreground">{restock.van.name}</p>
+		<div className="max-w-3xl space-y-6">
+			<PageHeader
+				title={t("restock_release.heading", "Release Restock to Van")}
+				description={
+					<>
+						<span className="font-medium text-foreground">
+							{restock.van.name}
+						</span>
+						{" · "}
+						<span className="font-mono">#{restock.id.slice(-6)}</span>
+						{" · "}
+						{new Date(restock.submittedAt).toLocaleDateString(i18n.language)}
+					</>
+				}
+			/>
 			{actionData && "errorKey" in actionData && (
 				<p className="text-sm text-status-danger">
 					{t(
@@ -115,7 +130,7 @@ export default function RestockRelease({
 
 			<Form
 				method="post"
-				className="space-y-4"
+				className="space-y-6"
 				onSubmit={() => {
 					const releaseField = document.querySelector<HTMLInputElement>(
 						'input[name="releaseSignature"]',
@@ -142,48 +157,97 @@ export default function RestockRelease({
 				<input type="hidden" name="releaseSignature" />
 				<input type="hidden" name="receiveSignature" />
 
-				{serializedLines.map((l) => (
-					<div key={l.serviceCodeId} className="space-y-1">
-						<Label>
-							{codesById[l.serviceCodeId]?.claroCode} — {l.qty}{" "}
-							{t("restock_release.serials", "serial(s)")}
-						</Label>
-						{Array.from({ length: l.qty }, (_, i) => (
-							<Input
-								key={serialInputIds[l.serviceCodeId][i]}
-								placeholder={t(
-									"restock_release.scan_serial",
-									"Scan/enter serial",
-								)}
-								onChange={(e) =>
-									setSerialAt(l.serviceCodeId, i, e.target.value)
-								}
-							/>
-						))}
-					</div>
-				))}
-
-				{bulkLines.map((l) => (
-					<p key={l.serviceCodeId} className="text-sm">
-						{codesById[l.serviceCodeId]?.claroCode ?? l.serviceCodeId}: {l.qty}
+				<section className="space-y-2">
+					<h2 className="text-sm font-semibold">
+						{t("restock_release.materials_title", "1. Materials to load")}
+					</h2>
+					<Card>
+						<ul className="divide-y divide-border">
+							{lines.map((l) => {
+								const code = codesById[l.serviceCodeId]
+								const isSerialized = !!code?.serialized
+								return (
+									<li key={l.serviceCodeId} className="space-y-2 px-4 py-3">
+										<div className="flex items-start justify-between gap-3">
+											<div className="min-w-0">
+												<p className="text-sm font-medium">
+													{code?.canonicalName ??
+														code?.name ??
+														t(
+															"restock_release.unknown_material",
+															"Unknown material",
+														)}
+												</p>
+												<p className="font-mono text-xs text-muted-foreground">
+													{code?.claroCode ?? l.serviceCodeId}
+												</p>
+											</div>
+											<Badge variant={isSerialized ? "info" : "neutral"}>
+												× {l.qty}
+												{code?.unit ? ` ${code.unit}` : ""}
+											</Badge>
+										</div>
+										{isSerialized && (
+											<div className="space-y-1.5">
+												<Label className="text-xs text-muted-foreground">
+													{t(
+														"restock_release.serials_hint",
+														"Scan or enter one serial per unit",
+													)}
+												</Label>
+												<div className="grid gap-2 sm:grid-cols-2">
+													{Array.from({ length: l.qty }, (_, i) => (
+														<Input
+															key={serialInputIds[l.serviceCodeId][i]}
+															placeholder={t(
+																"restock_release.scan_serial",
+																"Scan/enter serial",
+															)}
+															onChange={(e) =>
+																setSerialAt(l.serviceCodeId, i, e.target.value)
+															}
+														/>
+													))}
+												</div>
+											</div>
+										)}
+									</li>
+								)
+							})}
+						</ul>
+					</Card>
+					<p className="text-xs text-muted-foreground">
+						{t("restock_release.total", {
+							materials: lines.length,
+							units: totalUnits,
+							defaultValue: "{{materials}} materials · {{units}} units",
+						})}
 					</p>
-				))}
+				</section>
 
-				<div className="space-y-1">
-					<Label>
-						{t(
-							"restock_release.warehouse_signature",
-							"Warehouse release signature",
-						)}
-					</Label>
-					<SignaturePad ref={releaseSigRef} />
-				</div>
-				<div className="space-y-1">
-					<Label>
-						{t("restock_release.van_signature", "Van receipt signature")}
-					</Label>
-					<SignaturePad ref={receiveSigRef} />
-				</div>
+				<section className="space-y-2">
+					<h2 className="text-sm font-semibold">
+						{t("restock_release.signatures_title", "2. Signatures")}
+					</h2>
+					<div className="grid gap-4 sm:grid-cols-2">
+						<div className="space-y-1">
+							<Label>
+								{t(
+									"restock_release.warehouse_signature",
+									"Warehouse release signature",
+								)}
+							</Label>
+							<SignaturePad ref={releaseSigRef} />
+						</div>
+						<div className="space-y-1">
+							<Label>
+								{t("restock_release.van_signature", "Van receipt signature")}
+							</Label>
+							<SignaturePad ref={receiveSigRef} />
+						</div>
+					</div>
+				</section>
+
 				<Button type="submit">{t("restock_release.submit", "Release")}</Button>
 			</Form>
 		</div>

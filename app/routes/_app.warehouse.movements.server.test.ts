@@ -57,6 +57,7 @@ describe("movement log loader", () => {
 		expect(data.movements.map((m) => m.qty)).toEqual([2, 1])
 		expect(data.movements[0].actor).toBe(user.name)
 		expect(data.movements[0].material).toContain(code.claroCode)
+		expect(data.paging).toMatchObject({ page: 1, pageCount: 1, total: 2 })
 	})
 
 	it("returns nothing when the user has no warehouse assignment", async () => {

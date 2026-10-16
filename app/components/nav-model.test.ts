@@ -87,19 +87,17 @@ describe("navGroupsFor", () => {
 	it("gives WAREHOUSE a Work link per owned step first, then Workflow, then the other links", () => {
 		expect(tos(navGroupsFor("WAREHOUSE"))).toEqual([
 			["overview", ["/dashboard"]],
-			[
-				"work",
-				[
-					"/warehouse/prep",
-					"/warehouse/release",
-					"/warehouse/returns",
-					"/warehouse/repairs",
-					"/warehouse/needs-review",
-				],
-			],
+			["work", ["/warehouse/prep", "/warehouse/release", "/warehouse/returns"]],
 			[
 				"workflow",
-				["/warehouse/scan-in", "/warehouse/restock", "/warehouse/stock"],
+				[
+					"/warehouse/scan-in",
+					"/warehouse/triage",
+					"/warehouse/needs-review",
+					"/warehouse/repairs",
+					"/warehouse/restock",
+					"/warehouse/stock",
+				],
 			],
 			[
 				"other",

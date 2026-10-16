@@ -4,6 +4,10 @@ import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
+import { Pager } from "~/components/ui/pager"
+import { paginate } from "~/lib/pagination"
+
+const PAGE_SIZE = 10
 
 export type StockTableRow = {
 	serviceCodeId: string
@@ -45,6 +49,7 @@ export function StockTable({
 	const { t, i18n } = useTranslation()
 	const [query, setQuery] = useState(initialQuery)
 	const [kitOnly, setKitOnly] = useState(false)
+	const [requestedPage, setRequestedPage] = useState(1)
 
 	const term = query.trim().toLowerCase()
 	const visible = rows.filter((r) => {
@@ -56,13 +61,19 @@ export function StockTable({
 		return matchesQuery && matchesKit
 	})
 
+	const { page, pageCount } = paginate(requestedPage, visible.length, PAGE_SIZE)
+	const pageRows = visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
 	return (
 		<div className="space-y-2">
 			<div className="flex flex-col gap-2 sm:flex-row sm:items-center">
 				<Input
 					type="search"
 					value={query}
-					onChange={(e) => setQuery(e.target.value)}
+					onChange={(e) => {
+						setQuery(e.target.value)
+						setRequestedPage(1)
+					}}
 					placeholder={t("stock.search_placeholder")}
 					aria-label={t("stock.search_label")}
 					className="flex-1"
@@ -71,7 +82,10 @@ export function StockTable({
 					<input
 						type="checkbox"
 						checked={kitOnly}
-						onChange={(e) => setKitOnly(e.target.checked)}
+						onChange={(e) => {
+							setKitOnly(e.target.checked)
+							setRequestedPage(1)
+						}}
 					/>
 					{t("stock.kit_filter_label")}
 				</label>
@@ -81,7 +95,7 @@ export function StockTable({
 			) : (
 				<Card>
 					<CardContent className="space-y-1 p-3">
-						{visible.map((r) => (
+						{pageRows.map((r) => (
 							<div
 								key={r.serviceCodeId}
 								data-testid={`stock-row-${r.serviceCodeId}`}
@@ -136,6 +150,13 @@ export function StockTable({
 					</CardContent>
 				</Card>
 			)}
+			<Pager
+				page={page}
+				pageCount={pageCount}
+				total={visible.length}
+				pageSize={PAGE_SIZE}
+				onPageChange={setRequestedPage}
+			/>
 		</div>
 	)
 }

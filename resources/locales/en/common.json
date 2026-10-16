@@ -49,12 +49,49 @@
 		"empty": "No bulk stock for this warehouse.",
 		"view_trail": "View trail",
 		"hide_trail": "Hide",
+		"movement_log": {
+			"col": {
+				"when": "When",
+				"type": "Type",
+				"material": "Material",
+				"serial": "Serial",
+				"qty": "Qty",
+				"who": "Who",
+				"reference": "Job / note"
+			}
+		},
 		"serial_register": {
 			"title": "Serial Register",
-			"empty": "No serialized stock on hand.",
+			"empty": "No serials to show.",
 			"condition": {
 				"NEW": "New",
 				"REFURBISHED": "Refurbished"
+			},
+			"stats": {
+				"in_warehouse": "In warehouse",
+				"on_vans": "On vans",
+				"installed": "Installed",
+				"needs_attention": "Needs attention"
+			},
+			"col": {
+				"serial": "Serial",
+				"sap": "SAP",
+				"material": "Material",
+				"location": "Location",
+				"since": "Since",
+				"last_movement": "Last movement",
+				"action": "Action"
+			},
+			"status": {
+				"WAREHOUSE": "In warehouse",
+				"VAN": "On van",
+				"INSTALLED": "Installed",
+				"REMOVED_PENDING_RETURN": "Owed back",
+				"RETURNED": "Returned",
+				"SENT_FOR_REPAIR": "At repair",
+				"NEEDS_REVIEW": "Needs review",
+				"AWAITING_REPAIR": "Awaiting repair",
+				"LOST": "Lost"
 			}
 		},
 		"trail": {
@@ -198,6 +235,7 @@
 			"warehouse_returns": "Returns due",
 			"warehouse_repairs": "Repairs",
 			"warehouse_needs_review": "Needs review",
+			"warehouse_triage": "Triage",
 			"warehouse_requests": "Material requests",
 			"warehouse_serials": "Serial register",
 			"warehouse_movements": "Movement log",
@@ -1773,7 +1811,18 @@
 		"signoff_heading": "Restocks needing sign-off",
 		"submit": "Submit Restock Request"
 	},
+	"pagination": {
+		"nav": "Pagination",
+		"next": "Next",
+		"prev": "Previous",
+		"range": "{{from}}–{{to}} of {{total}}"
+	},
 	"restock_release": {
+		"materials_title": "1. Materials to load",
+		"serials_hint": "Scan or enter one serial per unit",
+		"signatures_title": "2. Signatures",
+		"total": "{{materials}} materials · {{units}} units",
+		"unknown_material": "Unknown material",
 		"heading": "Release Restock to Van",
 		"scan_serial": "Scan/enter serial",
 		"serials": "serial(s)",
@@ -1798,9 +1847,23 @@
 	},
 	"warehouse": {
 		"requests": {
+			"col": {
+				"van": "Van",
+				"request": "Request",
+				"submitted": "Submitted",
+				"items": "Items",
+				"status": "Status",
+				"action": "Action"
+			},
 			"empty": "No material requests yet."
 		},
 		"restock_list": {
+			"materials_one": "{{count}} material",
+			"materials_other": "{{count}} materials",
+			"units_one": "{{count}} unit",
+			"units_other": "{{count}} units",
+			"waiting_days_one": "Waiting {{count}} day",
+			"waiting_days_other": "Waiting {{count}} days",
 			"empty": "No restocks pending release.",
 			"heading": "Restocks to Release",
 			"release": "Release"

@@ -49,12 +49,49 @@
 		"empty": "No hay inventario a granel para este almacén.",
 		"view_trail": "Ver historial",
 		"hide_trail": "Ocultar",
+		"movement_log": {
+			"col": {
+				"when": "Cuándo",
+				"type": "Tipo",
+				"material": "Material",
+				"serial": "Serial",
+				"qty": "Cant.",
+				"who": "Quién",
+				"reference": "Trabajo / nota"
+			}
+		},
 		"serial_register": {
 			"title": "Registro de seriales",
-			"empty": "No hay inventario serializado disponible.",
+			"empty": "No hay seriales para mostrar.",
 			"condition": {
 				"NEW": "Nuevo",
 				"REFURBISHED": "Reacondicionado"
+			},
+			"stats": {
+				"in_warehouse": "En almacén",
+				"on_vans": "En vans",
+				"installed": "Instalados",
+				"needs_attention": "Requieren atención"
+			},
+			"col": {
+				"serial": "Serial",
+				"sap": "SAP",
+				"material": "Material",
+				"location": "Ubicación",
+				"since": "Desde",
+				"last_movement": "Último movimiento",
+				"action": "Acción"
+			},
+			"status": {
+				"WAREHOUSE": "En almacén",
+				"VAN": "En van",
+				"INSTALLED": "Instalado",
+				"REMOVED_PENDING_RETURN": "Por devolver",
+				"RETURNED": "Devuelto",
+				"SENT_FOR_REPAIR": "En reparación",
+				"NEEDS_REVIEW": "Requiere revisión",
+				"AWAITING_REPAIR": "Esperando reparación",
+				"LOST": "Perdido"
 			}
 		},
 		"trail": {
@@ -198,6 +235,7 @@
 			"warehouse_returns": "Devoluciones esperadas",
 			"warehouse_repairs": "Reparaciones",
 			"warehouse_needs_review": "Requiere revisión",
+			"warehouse_triage": "Triaje",
 			"warehouse_requests": "Solicitudes de material",
 			"warehouse_serials": "Registro de seriales",
 			"warehouse_movements": "Registro de movimientos",
@@ -1773,7 +1811,18 @@
 		"signoff_heading": "Reabastecimientos pendientes de aprobación",
 		"submit": "Enviar solicitud de reabastecimiento"
 	},
+	"pagination": {
+		"nav": "Paginación",
+		"next": "Siguiente",
+		"prev": "Anterior",
+		"range": "{{from}}–{{to}} de {{total}}"
+	},
 	"restock_release": {
+		"materials_title": "1. Materiales a cargar",
+		"serials_hint": "Escanee o ingrese un serial por unidad",
+		"signatures_title": "2. Firmas",
+		"total": "{{materials}} materiales · {{units}} unidades",
+		"unknown_material": "Material desconocido",
 		"scan_serial": "Escanear/ingresar número de serie",
 		"serials": "número(s) de serie",
 		"submit": "Liberar",
@@ -1798,9 +1847,23 @@
 	},
 	"warehouse": {
 		"requests": {
+			"col": {
+				"van": "Van",
+				"request": "Solicitud",
+				"submitted": "Enviada",
+				"items": "Artículos",
+				"status": "Estado",
+				"action": "Acción"
+			},
 			"empty": "Aún no hay solicitudes de material."
 		},
 		"restock_list": {
+			"materials_one": "{{count}} material",
+			"materials_other": "{{count}} materiales",
+			"units_one": "{{count}} unidad",
+			"units_other": "{{count}} unidades",
+			"waiting_days_one": "Esperando {{count}} día",
+			"waiting_days_other": "Esperando {{count}} días",
 			"empty": "No hay reabastecimientos pendientes de liberación.",
 			"heading": "Reabastecimientos por liberar",
 			"release": "Liberar"

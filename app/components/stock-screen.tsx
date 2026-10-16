@@ -33,16 +33,22 @@ export function StockScreen({
 	isLead,
 	materialCodes,
 	snapshots,
-}: StockScreenData) {
+	showTitle = true,
+}: StockScreenData & {
+	/** The route renders the title above the step rail; standalone use keeps it. */
+	showTitle?: boolean
+}) {
 	const { t } = useTranslation()
 	const [selectedCode, setSelectedCode] = useState<string | null>(null)
 
 	if (!selectedId) {
 		return (
 			<div>
-				<h1 className="text-lg font-semibold text-foreground">
-					{t("stock.title")}
-				</h1>
+				{showTitle && (
+					<h1 className="text-lg font-semibold text-foreground">
+						{t("stock.title")}
+					</h1>
+				)}
 				<p className="text-sm text-muted-foreground">
 					{t("stock.no_warehouse")}
 				</p>
@@ -52,9 +58,11 @@ export function StockScreen({
 
 	return (
 		<div className="space-y-6">
-			<h1 className="text-lg font-semibold text-foreground">
-				{t("stock.title")}
-			</h1>
+			{showTitle && (
+				<h1 className="text-lg font-semibold text-foreground">
+					{t("stock.title")}
+				</h1>
+			)}
 
 			<section className="space-y-2">
 				<StockTable

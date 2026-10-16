@@ -3,7 +3,7 @@ import { canReleaseToVan, rolesMatching } from "~/lib/permissions"
 
 const mocks = vi.hoisted(() => ({
 	requireRole: vi.fn(),
-	db: { restockRequest: { findMany: vi.fn() } },
+	db: { restockRequest: { findMany: vi.fn(), count: vi.fn() } },
 }))
 
 vi.mock("~/lib/permissions.server", () => ({ requireRole: mocks.requireRole }))
@@ -16,6 +16,7 @@ describe("GET /warehouse/requests", () => {
 		vi.clearAllMocks()
 		mocks.requireRole.mockResolvedValue({ user: { id: "wh-1" } })
 		mocks.db.restockRequest.findMany.mockResolvedValue([])
+		mocks.db.restockRequest.count.mockResolvedValue(0)
 	})
 
 	it("gates the loader via canReleaseToVan", async () => {
@@ -35,8 +36,19 @@ describe("GET /warehouse/requests", () => {
 		expect(mocks.db.restockRequest.findMany).toHaveBeenCalledWith(
 			expect.objectContaining({
 				where: { status: { not: "DRAFT" } },
-				orderBy: { submittedAt: "desc" },
+				orderBy: [{ submittedAt: "desc" }, { id: "desc" }],
 			}),
+		)
+	})
+
+	it("pages the list and clamps a page past the end", async () => {
+		mocks.db.restockRequest.count.mockResolvedValue(45)
+		const data = await loader({
+			request: new Request("http://localhost/warehouse/requests?page=99"),
+		} as never)
+		expect(data.paging).toMatchObject({ page: 3, pageCount: 3, total: 45 })
+		expect(mocks.db.restockRequest.findMany).toHaveBeenCalledWith(
+			expect.objectContaining({ skip: 40, take: 20 }),
 		)
 	})
 })

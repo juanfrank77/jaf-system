@@ -60,6 +60,7 @@ export type NavLabelKey =
 	| "app_shell.nav.warehouse_returns"
 	| "app_shell.nav.warehouse_repairs"
 	| "app_shell.nav.warehouse_needs_review"
+	| "app_shell.nav.warehouse_triage"
 	| "app_shell.nav.warehouse_requests"
 	| "app_shell.nav.warehouse_serials"
 	| "app_shell.nav.warehouse_movements"
@@ -156,21 +157,6 @@ const WAREHOUSE_QUEUE_ITEMS: NavItem[] = WAREHOUSE_QUEUES.map((queue) => ({
 	roles: ["WAREHOUSE"] as Role[],
 }))
 
-// Where triage sends a unit: Repairs (failed) and Needs review (held for the
-// lead). They follow the queue steps in the "work" group.
-const WAREHOUSE_TRIAGE_ITEMS: NavItem[] = (
-	[
-		["/warehouse/repairs", "app_shell.nav.warehouse_repairs"],
-		["/warehouse/needs-review", "app_shell.nav.warehouse_needs_review"],
-	] as [string, NavLabelKey][]
-).map(([to, labelKey]) => ({
-	to,
-	labelKey,
-	icon: TruckDeliveryIcon,
-	group: "work" as const,
-	roles: ["WAREHOUSE"] as Role[],
-}))
-
 // Scan in, Restock and Stock: the warehouse's own flows. Admin keeps the same
 // links under its existing "stock" group, so only Warehouse sees "workflow".
 const warehouseFlowItems = (group: NavGroupKey, roles: Role[]): NavItem[] => [
@@ -196,6 +182,41 @@ const warehouseFlowItems = (group: NavGroupKey, roles: Role[]): NavItem[] => [
 		roles,
 	},
 ]
+
+// The warehouse's "workflow" group mirrors its step rail
+// (`WAREHOUSE_STEPS`): Scan in, Triage, Needs review, Repairs, Restock, Stock.
+const WAREHOUSE_WORKFLOW_ITEMS: NavItem[] = (
+	[
+		[
+			"/warehouse/scan-in",
+			"app_shell.nav.warehouse_scan_in",
+			TruckDeliveryIcon,
+		],
+		["/warehouse/triage", "app_shell.nav.warehouse_triage", TruckDeliveryIcon],
+		[
+			"/warehouse/needs-review",
+			"app_shell.nav.warehouse_needs_review",
+			TruckDeliveryIcon,
+		],
+		[
+			"/warehouse/repairs",
+			"app_shell.nav.warehouse_repairs",
+			TruckDeliveryIcon,
+		],
+		[
+			"/warehouse/restock",
+			"app_shell.nav.warehouse_restock",
+			TruckDeliveryIcon,
+		],
+		["/warehouse/stock", "app_shell.nav.warehouse_stock", GridViewIcon],
+	] as [string, NavLabelKey, IconSvgElement][]
+).map(([to, labelKey, icon]) => ({
+	to,
+	labelKey,
+	icon,
+	group: "workflow" as const,
+	roles: ["WAREHOUSE"] as Role[],
+}))
 
 // The warehouse's reference views: each its own page.
 const WAREHOUSE_OTHER_ITEMS: NavItem[] = (
@@ -337,9 +358,8 @@ const NAV_ITEMS: NavItem[] = [
 		roles: ["COMPTROLLER", "ADMIN"],
 		disabled: true,
 	},
-	...warehouseFlowItems("workflow", ["WAREHOUSE"]),
+	...WAREHOUSE_WORKFLOW_ITEMS,
 	...WAREHOUSE_QUEUE_ITEMS,
-	...WAREHOUSE_TRIAGE_ITEMS,
 	...WAREHOUSE_OTHER_ITEMS,
 	...warehouseFlowItems("stock", ["ADMIN"]),
 	{

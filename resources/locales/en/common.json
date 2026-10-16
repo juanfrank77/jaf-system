@@ -705,6 +705,7 @@
 		"errors": {
 			"pdf_required": "Please select the Claro PDF to upload",
 			"send_back_note_required": "A note explaining the send-back is required.",
+			"back_note_required": "Enter a note saying what is wrong.",
 			"installed_lines_required": "The crew has not recorded installed quantities per service code.",
 			"invoice_required": "Generate the JAF invoice first.",
 			"aviso_number_required": "Aviso # is required.",
@@ -733,7 +734,7 @@
 		"callout_approve_title": "Step {{n}} of {{total}} · You",
 		"callout_approve_body": "Check the corrected address, the photos and the installed quantities. Approve, or send back with a note.",
 		"callout_invoice_title": "Step {{n}} of {{total}} · You",
-		"callout_invoice_body": "The invoice is built from what was installed, at catalog prices. Take this number into Claro's system to create the Aviso, then come back.",
+		"callout_invoice_body": "The invoice is built from what was installed. Check the lines and the job details, mark it reviewed, then take it to Claro's supervisor to get the Aviso.",
 		"callout_aviso_title": "Step {{n}} of {{total}} · You",
 		"callout_aviso_body": "Enter the Aviso number, upload the document. The system compares it line by line with the invoice.",
 		"callout_precert_title": "Step {{n}} of {{total}} · You + the contractor",
@@ -754,6 +755,21 @@
 		"released": "In Finance"
 	},
 	"docs_review_steps": {
+		"invoice_reviewed": "Reviewed, ready for Claro",
+		"invoice_back": "Back to step 4",
+		"invoice_back_note_label": "What is wrong? (required) — the job goes back to Approve",
+		"invoice_back_confirm": "Send back to Approve",
+		"invoice_back_cancel": "Cancel",
+		"invoice_reviewed_hint": "Marking it reviewed creates the invoice Claro's supervisor will see and locks its number and amounts; your name and the time go in the audit trail.",
+		"invoice_preview": "This is a preview built from what the brigade installed. Nothing has been issued yet.",
+		"invoice_header": {
+			"work_order": "Work order",
+			"job_type": "Job type",
+			"address": "Address",
+			"brigade": "Brigade",
+			"work_date": "Work date",
+			"invoice_number": "Invoice #"
+		},
 		"aviso_heading": "Aviso & match",
 		"aviso_hint": "Enter the Aviso number and upload the document. The system compares it line by line with the JAF invoice.",
 		"aviso_number_hint": "8 digits",

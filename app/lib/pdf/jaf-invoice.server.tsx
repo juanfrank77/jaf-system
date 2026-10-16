@@ -64,19 +64,14 @@ interface JafInvoiceParams {
 	avisoNumber?: string | null
 	jobType: string
 	jobAddress: string
+	brigadeName?: string | null
+	workDate?: string
 	invoiceDate: string
 	invoiceNumber: string
 	debtor: string
 	lineItems: LineItem[]
 	ivuRate: number
 	supervisorName: string
-	contractorShare?: {
-		factor: number
-		amount: number
-		retention: number
-		net: number
-		brigadeName: string | null
-	}
 }
 
 export async function generateJafInvoicePdf(
@@ -132,6 +127,18 @@ export async function generateJafInvoicePdf(
 						<Text style={styles.label}>Job Type: </Text>
 						{params.jobType}
 					</Text>
+					{params.workDate ? (
+						<Text>
+							<Text style={styles.label}>Work date: </Text>
+							{params.workDate}
+						</Text>
+					) : null}
+					{params.brigadeName ? (
+						<Text>
+							<Text style={styles.label}>Brigade: </Text>
+							{params.brigadeName}
+						</Text>
+					) : null}
 				</View>
 				<View style={styles.row}>
 					<Text>
@@ -179,33 +186,6 @@ export async function generateJafInvoicePdf(
 						<Text style={styles.bold}>Total a Pagar: ${total.toFixed(2)}</Text>
 					</View>
 				</View>
-
-				{params.contractorShare ? (
-					<View style={styles.totals}>
-						<View style={styles.totalRow}>
-							<Text>
-								Contractor share (
-								{(params.contractorShare.factor * 100).toFixed(0)}
-								%)
-								{params.contractorShare.brigadeName
-									? ` → ${params.contractorShare.brigadeName}`
-									: ""}
-								: ${params.contractorShare.amount.toFixed(2)}
-							</Text>
-						</View>
-						<View style={styles.totalRow}>
-							<Text>
-								Less 10% retention at payroll: $
-								{params.contractorShare.retention.toFixed(2)}
-							</Text>
-						</View>
-						<View style={styles.totalRow}>
-							<Text style={styles.bold}>
-								Net to contractor: ${params.contractorShare.net.toFixed(2)}
-							</Text>
-						</View>
-					</View>
-				) : null}
 
 				<View style={styles.footer}>
 					<Text>

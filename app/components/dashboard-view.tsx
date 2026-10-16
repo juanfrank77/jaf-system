@@ -41,6 +41,7 @@ function DashboardView({
 	docs,
 	showFilters = false,
 	showBilling = true,
+	financeSteps = false,
 	showDocList = true,
 	intro,
 	pendingReviewDocs = [],
@@ -64,6 +65,8 @@ function DashboardView({
 	docs: DashboardDocRow[]
 	showFilters?: boolean
 	showBilling?: boolean
+	/** Badge released jobs with their Finance step (Finance and admin). */
+	financeSteps?: boolean
 	/** The all-documents list at the foot. Warehouse works from queues only. */
 	showDocList?: boolean
 	/** Rail + callout slot under the title. */
@@ -395,7 +398,11 @@ function DashboardView({
 			)}
 
 			{showDocList && (
-				<DashboardDocList docs={docs} showBilling={showBilling} />
+				<DashboardDocList
+					docs={docs}
+					showBilling={showBilling}
+					financeSteps={financeSteps}
+				/>
 			)}
 		</div>
 	)

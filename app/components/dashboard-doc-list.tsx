@@ -6,6 +6,7 @@ import { DocStageBadge } from "~/components/doc-stage-badge"
 import { Badge } from "~/components/ui/badge"
 import { Card, CardContent } from "~/components/ui/card"
 import { EmptyState } from "~/components/ui/empty-state"
+import { armAStepOf, FINANCE_STEP_LABEL_KEY } from "~/lib/finance-steps"
 import {
 	deriveSupervisorStage,
 	type SupervisorStage,
@@ -85,6 +86,9 @@ export type DashboardDocRow = {
 	jafInvoiceGeneratedAt?: Date | null
 	avisoMatchedAt?: Date | null
 	releasedToFinanceAt?: Date | null
+	financeVerifiedAt?: Date | null
+	pbccRequestSentAt?: Date | null
+	advanceReceivedAt?: Date | null
 	aged?: boolean
 	daysStaged?: number
 }
@@ -92,11 +96,16 @@ export type DashboardDocRow = {
 export function DashboardDocList({
 	docs,
 	showBilling = true,
+	financeSteps = false,
 }: {
 	docs: DashboardDocRow[]
 	/** Billing detail (raw status enum, Aviso number) is for supervisor and
 	 * finance. Warehouse and crew pass false. */
 	showBilling?: boolean
+	/** Finance and admin: a job released to Finance shows the Finance step it is
+	 * on (Packets in, LC request, ...) instead of the supervisor's one "In
+	 * Finance" chip, so the dashboard matches the sidebar. */
+	financeSteps?: boolean
 }) {
 	const { t } = useTranslation()
 	return (
@@ -120,24 +129,41 @@ export function DashboardDocList({
 									{doc.controlNumber}
 								</span>
 								<div className="flex items-center gap-2">
-									<DocStageBadge
-										stage={
-											doc.stage ??
-											deriveSupervisorStage(
-												{
-													status: doc.status,
-													supervisorApprovedAt:
-														doc.supervisorApprovedAt ?? null,
-													jafInvoiceGeneratedAt:
-														doc.jafInvoiceGeneratedAt ?? null,
-													avisoMatchedAt: doc.avisoMatchedAt ?? null,
-													releasedToFinanceAt: doc.releasedToFinanceAt ?? null,
-												},
-												null,
-											)
-										}
-										cancelled={doc.status === "CANCELLED"}
-									/>
+									{financeSteps &&
+									doc.releasedToFinanceAt &&
+									doc.status !== "CANCELLED" ? (
+										<Badge variant="ok">
+											{t(
+												FINANCE_STEP_LABEL_KEY[
+													armAStepOf({
+														financeVerifiedAt: doc.financeVerifiedAt ?? null,
+														pbccRequestSentAt: doc.pbccRequestSentAt ?? null,
+														advanceReceivedAt: doc.advanceReceivedAt ?? null,
+													})
+												],
+											)}
+										</Badge>
+									) : (
+										<DocStageBadge
+											stage={
+												doc.stage ??
+												deriveSupervisorStage(
+													{
+														status: doc.status,
+														supervisorApprovedAt:
+															doc.supervisorApprovedAt ?? null,
+														jafInvoiceGeneratedAt:
+															doc.jafInvoiceGeneratedAt ?? null,
+														avisoMatchedAt: doc.avisoMatchedAt ?? null,
+														releasedToFinanceAt:
+															doc.releasedToFinanceAt ?? null,
+													},
+													null,
+												)
+											}
+											cancelled={doc.status === "CANCELLED"}
+										/>
+									)}
 									<HugeiconsIcon
 										icon={ChevronRightIcon}
 										strokeWidth={2}

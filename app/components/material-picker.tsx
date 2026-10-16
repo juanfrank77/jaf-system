@@ -9,7 +9,7 @@ type Material = {
 	claroCode: string
 	name: string
 	unit: string | null
-	unitPrice: number
+	unitPrice?: number
 }
 type Line = { serviceCodeId: string; qty: number }
 

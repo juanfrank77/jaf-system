@@ -14,7 +14,6 @@ import { QueueCard } from "~/components/ui/queue-card"
 import { Stat } from "~/components/ui/stat"
 import type { SupervisorQueue } from "~/lib/supervisor-queues"
 import type { SupervisorStage } from "~/lib/supervisor-stage"
-import { formatMoney } from "~/lib/utils"
 import type { DashboardViewProps } from "./types"
 
 type QueueRow = {
@@ -24,7 +23,6 @@ type QueueRow = {
 	jobAddressActual: string | null
 	brigadeName: string | null
 	stage: SupervisorStage
-	amount: number | null
 	note?: string | null
 	/** When the job entered this queue (submitted / returned / approved). */
 	since: Date | string | null
@@ -98,9 +96,6 @@ function Queue({
 						<th className="py-1">{t("dashboard.col.address")}</th>
 						<th className="py-1">{t("dashboard.col.crew")}</th>
 						<th className="py-1">{t("dashboard.col.stage")}</th>
-						<th className="py-1 text-right">
-							{t("dashboard.col.jaf_invoice")}
-						</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -132,9 +127,6 @@ function Queue({
 										{r.note}
 									</span>
 								) : null}
-							</td>
-							<td className="py-1.5 text-right">
-								{r.amount == null ? "—" : formatMoney(r.amount)}
 							</td>
 						</tr>
 					))}

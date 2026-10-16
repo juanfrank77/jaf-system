@@ -21,7 +21,8 @@ vi.mock("~/lib/db.server", () => ({
 	},
 }))
 vi.mock("~/lib/permissions.server", () => ({ requireRole: vi.fn() }))
-vi.mock("~/lib/service-codes.server", () => ({
+vi.mock("~/lib/service-codes.server", async (importOriginal) => ({
+	...(await importOriginal<typeof import("~/lib/service-codes.server")>()),
 	getActiveServiceCodes: vi.fn(),
 }))
 vi.mock("~/lib/system-settings.server", () => ({
@@ -1030,5 +1031,66 @@ describe("review: release_to_finance", () => {
 		} as any).catch(() => {})
 		expect(db.auditTrail.create).not.toHaveBeenCalled()
 		expect(db.notification.create).not.toHaveBeenCalled()
+	})
+})
+
+describe("review loader: prices by role", () => {
+	const generatedDoc = {
+		...approvedDoc,
+		supervisorId: "sup-1",
+		brigade: { area: "OESTE" },
+		jafInvoiceGeneratedAt: new Date("2026-10-14T15:10:00Z"),
+		jafInvoiceLines: [
+			{
+				serviceCodeId: "c1",
+				claroCode: "34006301",
+				name: "TRANSFER",
+				qty: 2,
+				unitPrice: 42.343,
+				lineAmount: 84.69,
+			},
+		],
+		jafInvoiceLineTotal: 84.69,
+	}
+
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["OESTE"],
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			generatedDoc as any,
+		)
+		vi.mocked(db.photo.findMany).mockResolvedValue([])
+		vi.mocked(db.preCertSheet.findFirst).mockResolvedValue(null)
+		vi.mocked(db.brigade.findUnique).mockResolvedValue(null)
+		vi.mocked(db.user.findMany).mockResolvedValue([])
+		vi.mocked(getActiveServiceCodes).mockResolvedValue(CATALOG as any)
+		vi.mocked(getIvuRate).mockResolvedValue(0.115)
+		vi.mocked(getAvisoAmountTolerance).mockResolvedValue(0.01)
+	})
+
+	async function loadAs(role: string) {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1", role, name: "X" },
+			session: {},
+		} as any)
+		return loader({
+			request: new Request("http://localhost/docs/doc-1/review"),
+			params: { id: "doc-1" },
+		} as any)
+	}
+
+	it("gives a supervisor the invoice number but none of the money", async () => {
+		const data = await loadAs("SUPERVISOR")
+		expect(data.showPrices).toBe(false)
+		expect(data.invoiceSummary).toBeNull()
+		expect(data.invoiceNumber).toBeTruthy()
+	})
+
+	it("still gives Admin the totals", async () => {
+		const data = await loadAs("ADMIN")
+		expect(data.showPrices).toBe(true)
+		expect(data.invoiceSummary).toMatchObject({ lineTotal: 84.69 })
 	})
 })

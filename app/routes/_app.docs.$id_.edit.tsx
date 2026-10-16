@@ -20,7 +20,11 @@ import {
 import { db } from "~/lib/db.server"
 import { isEditableStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
-import { getActiveMaterialCodes } from "~/lib/service-codes.server"
+import {
+	getActiveMaterialCodes,
+	isPriceBlind,
+	serviceCodesForRole,
+} from "~/lib/service-codes.server"
 import { parseServiceLines, type ServiceLine } from "~/lib/service-lines"
 import {
 	assertDocInSupervisorScope,
@@ -71,20 +75,21 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 					select: { id: true, unit: true, unitPrice: true },
 				})
 			: []
+	const showPrices = !isPriceBlind(user.role)
 	const serviceLineMeta = Object.fromEntries(
 		lineCodes.map((c) => [
 			c.id,
-			{ unit: c.unit, unitPrice: toNumberPrice(c.unitPrice) },
+			showPrices
+				? { unit: c.unit, unitPrice: toNumberPrice(c.unitPrice) }
+				: { unit: c.unit },
 		]),
 	)
 	return {
 		doc,
 		user,
 		serviceLineMeta,
-		serviceCodes: serviceCodes.map((c) => ({
-			...c,
-			unitPrice: toNumberPrice(c.unitPrice),
-		})),
+		serviceCodes: serviceCodesForRole(user.role, serviceCodes),
+		showPrices,
 		brigades,
 		assignedBrigadeIds: assignedBrigadeIds(doc),
 	}
@@ -232,8 +237,14 @@ export default function EditDoc({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { doc, serviceCodes, serviceLineMeta, brigades, assignedBrigadeIds } =
-		loaderData
+	const {
+		doc,
+		serviceCodes,
+		serviceLineMeta,
+		showPrices,
+		brigades,
+		assignedBrigadeIds,
+	} = loaderData
 	const error = actionData as { errorKey?: ParseKeys } | undefined
 	const { t } = useTranslation()
 	return (
@@ -309,6 +320,7 @@ export default function EditDoc({
 								<ServicePicker
 									initialLines={(doc.serviceLines as ServiceLine[]) ?? []}
 									initialMeta={serviceLineMeta}
+									showPrices={showPrices}
 								/>
 							</div>
 						</div>

@@ -37,4 +37,19 @@ describe("ServicePicker saved lines", () => {
 		await mount(renderStub, { initialLines: [line] })
 		expect(screen.queryByText("Estimated subtotal (pre-IVU)")).toBeNull()
 	})
+
+	it("shows no price, line amount or subtotal when prices are hidden", async ({
+		renderStub,
+	}) => {
+		await mount(renderStub, {
+			initialLines: [line],
+			initialMeta: { sc1: { unit: "FT" } },
+			showPrices: false,
+		})
+		const row = screen.getByText("34005446").closest("tr") as HTMLElement
+		expect(within(row).getByText("FT")).toBeInTheDocument()
+		expect(row.textContent).not.toContain("$")
+		expect(screen.queryByText("Estimated subtotal (pre-IVU)")).toBeNull()
+		expect(screen.queryByText("Unit price")).toBeNull()
+	})
 })

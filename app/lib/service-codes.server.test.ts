@@ -45,7 +45,7 @@ describe("serviceCodesForRole", () => {
 		},
 	)
 
-	it.each(["SUPERVISOR", "FINANCE", "COMPTROLLER", "ADMIN"])(
+	it.each(["FINANCE", "COMPTROLLER", "ADMIN"])(
 		"keeps a numeric unitPrice for %s",
 		(role) => {
 			const [out] = serviceCodesForRole(role, [row()])
@@ -62,11 +62,12 @@ describe("serviceCodesForRole", () => {
 })
 
 describe("isPriceBlind", () => {
-	it("is true only for crew and warehouse", () => {
+	it("is true for crew, warehouse, installer and supervisor; Finance and Admin see money", () => {
 		expect(isPriceBlind("CREW")).toBe(true)
 		expect(isPriceBlind("WAREHOUSE")).toBe(true)
 		expect(isPriceBlind("INSTALLER")).toBe(true)
-		expect(isPriceBlind("SUPERVISOR")).toBe(false)
+		expect(isPriceBlind("SUPERVISOR")).toBe(true)
+		expect(isPriceBlind("FINANCE")).toBe(false)
 		expect(isPriceBlind("ADMIN")).toBe(false)
 	})
 })

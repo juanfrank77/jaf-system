@@ -33,7 +33,7 @@ import { generateJafInvoicePdf } from "~/lib/pdf/jaf-invoice.server"
 import { generatePreCertSheetPdf } from "~/lib/pdf/pre-cert-sheet.server"
 import { canTransition, isReviewActionStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
-import { getActiveServiceCodes } from "~/lib/service-codes.server"
+import { getActiveServiceCodes, isPriceBlind } from "~/lib/service-codes.server"
 import {
 	type AvisoLine,
 	buildInvoiceLines,
@@ -196,7 +196,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		retentionPercent: number
 		contractorNet: number
 	} | null = null
-	if (lineTotal != null) {
+	// Supervisors never see money (catalog, totals, brigade share). The Aviso
+	// card is the one exception until it reads its prices from the Aviso PDF.
+	const showPrices = !isPriceBlind(user.role)
+	const invoiceNumber = lineTotal != null ? invoiceNumberFor(doc) : null
+	if (lineTotal != null && showPrices) {
 		const ivuRate = await getIvuRate()
 		const contractor = round2(lineTotal * CONTRACTOR_SHARE_PERCENT)
 		invoiceSummary = {
@@ -227,6 +231,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		interactive,
 		gate,
 		invoiceSummary,
+		invoiceNumber,
+		showPrices,
 		tolerance,
 		correctorNames,
 		submittedBy: doc.completedById
@@ -1039,8 +1045,10 @@ function PreCertPanel({
 	brigade,
 	error,
 	readOnly = false,
+	showPrices,
 }: {
 	readOnly?: boolean
+	showPrices: boolean
 	sheet: Route.ComponentProps["loaderData"]["sheet"]
 	doc: Route.ComponentProps["loaderData"]["doc"]
 	brigade: Route.ComponentProps["loaderData"]["brigade"]
@@ -1074,7 +1082,9 @@ function PreCertPanel({
 							{t("service_picker.col_installed")}
 						</th>
 						<th className="py-1 text-right">{t("precert.col_qty")}</th>
-						<th className="py-1 text-right">{t("precert.col_cost")}</th>
+						{showPrices && (
+							<th className="py-1 text-right">{t("precert.col_cost")}</th>
+						)}
 					</tr>
 				</thead>
 				<tbody>
@@ -1094,14 +1104,18 @@ function PreCertPanel({
 							</td>
 							<td className="py-1 text-right">{l.installedQty}</td>
 							<td className="py-1 text-right">{l.certifiedQty}</td>
-							<td className="py-1 text-right">${l.lineAmount.toFixed(2)}</td>
+							{showPrices && (
+								<td className="py-1 text-right">${l.lineAmount.toFixed(2)}</td>
+							)}
 						</tr>
 					))}
 				</tbody>
 			</table>
-			<p className="text-sm text-right font-medium">
-				{t("precert.total")} {formatMoney(sumLines(lines))}
-			</p>
+			{showPrices && (
+				<p className="text-sm text-right font-medium">
+					{t("precert.total")} {formatMoney(sumLines(lines))}
+				</p>
+			)}
 			{!readOnly &&
 				!locked &&
 				lines.map((l) => (
@@ -1302,6 +1316,8 @@ export default function ReviewDoc({
 		interactive,
 		gate,
 		invoiceSummary,
+		invoiceNumber,
+		showPrices,
 		tolerance,
 		correctorNames,
 		submittedBy,
@@ -1433,10 +1449,10 @@ export default function ReviewDoc({
 							<div className="text-base font-bold">
 								{t("docs_review_steps.invoice_title")}
 							</div>
-							{invoiceSummary && doc.jafInvoiceGeneratedAt && (
+							{invoiceNumber && doc.jafInvoiceGeneratedAt && (
 								<div className="mt-0.5 text-xs font-normal text-muted-foreground">
 									{t("docs_review_steps.invoice_subtitle", {
-										number: invoiceSummary.number,
+										number: invoiceNumber,
 										date: new Date(
 											doc.jafInvoiceGeneratedAt,
 										).toLocaleDateString(),
@@ -1458,12 +1474,16 @@ export default function ReviewDoc({
 										<th className="py-1.5 text-right">
 											{t("docs_review.table.qty")}
 										</th>
-										<th className="py-1.5 text-right">
-											{t("docs_review_steps.unit_price")}
-										</th>
-										<th className="py-1.5 text-right">
-											{t("docs_review_steps.line_amount")}
-										</th>
+										{showPrices && (
+											<>
+												<th className="py-1.5 text-right">
+													{t("docs_review_steps.unit_price")}
+												</th>
+												<th className="py-1.5 text-right">
+													{t("docs_review_steps.line_amount")}
+												</th>
+											</>
+										)}
 									</tr>
 								</thead>
 								<tbody className="tabular-nums">
@@ -1482,12 +1502,16 @@ export default function ReviewDoc({
 												{splitServiceSuffix(l.name).suffix ?? "—"}
 											</td>
 											<td className="py-1.5 text-right">{l.qty}</td>
-											<td className="py-1.5 text-right">
-												${l.unitPrice.toFixed(4)}
-											</td>
-											<td className="py-1.5 text-right">
-												${l.lineAmount.toFixed(2)}
-											</td>
+											{showPrices && (
+												<>
+													<td className="py-1.5 text-right">
+														${l.unitPrice.toFixed(4)}
+													</td>
+													<td className="py-1.5 text-right">
+														${l.lineAmount.toFixed(2)}
+													</td>
+												</>
+											)}
 										</tr>
 									))}
 								</tbody>
@@ -1652,6 +1676,7 @@ export default function ReviewDoc({
 							brigade={brigade}
 							error={error ?? null}
 							readOnly={!interactive}
+							showPrices={showPrices}
 						/>
 					)}
 				</section>

@@ -13,18 +13,22 @@ type Result = {
 	name: string
 	accountCode: string | null
 	unit: string | null
-	unitPrice: number
+	/** Absent for roles that never see money. */
+	unitPrice?: number
 }
 
 export function ServicePicker({
 	name = "serviceLines",
 	initialLines = [],
 	initialMeta = {},
+	showPrices = true,
 }: {
 	name?: string
+	/** False for roles that never see money: no price, line amount or subtotal. */
+	showPrices?: boolean
 	initialLines?: ServiceLine[]
 	/** Catalog unit/price for the initial lines, so a saved table shows prices. */
-	initialMeta?: Record<string, { unit: string | null; unitPrice: number }>
+	initialMeta?: Record<string, { unit: string | null; unitPrice?: number }>
 }) {
 	const { t } = useTranslation()
 	const fetcher = useFetcher<{ results: Result[]; total: number }>()
@@ -33,7 +37,7 @@ export function ServicePicker({
 	// Catalog unit/price for display only: the persisted ServiceLine stays
 	// price-free. Callers supply it for saved lines; added lines get it here.
 	const [meta, setMeta] =
-		useState<Record<string, { unit: string | null; unitPrice: number }>>(
+		useState<Record<string, { unit: string | null; unitPrice?: number }>>(
 			initialMeta,
 		)
 
@@ -77,7 +81,9 @@ export function ServicePicker({
 	function setQty(id: string, qty: number) {
 		setLines(lines.map((l) => (l.serviceCodeId === id ? { ...l, qty } : l)))
 	}
-	const priced = lines.every((l) => meta[l.serviceCodeId])
+	const priced =
+		showPrices &&
+		lines.every((l) => meta[l.serviceCodeId]?.unitPrice !== undefined)
 	const subtotal = lines.reduce(
 		(sum, l) => sum + l.qty * (meta[l.serviceCodeId]?.unitPrice ?? 0),
 		0,
@@ -125,7 +131,10 @@ export function ServicePicker({
 												{t("service_picker.account")} {r.accountCode ?? "—"}
 											</span>
 											<span className="rounded-md bg-muted px-1.5 py-0.5 text-muted-foreground">
-												{r.unit ?? "—"} · {formatMoney(r.unitPrice)}
+												{r.unit ?? "—"}
+												{showPrices && r.unitPrice !== undefined
+													? ` · ${formatMoney(r.unitPrice)}`
+													: ""}
 											</span>
 										</span>
 									</button>
@@ -162,12 +171,16 @@ export function ServicePicker({
 							<th className="px-2 py-1.5 text-right">
 								{t("service_picker.col_unit")}
 							</th>
-							<th className="px-2 py-1.5 text-right">
-								{t("service_picker.col_unit_price")}
-							</th>
-							<th className="px-2 py-1.5 text-right">
-								{t("service_picker.col_line")}
-							</th>
+							{showPrices && (
+								<>
+									<th className="px-2 py-1.5 text-right">
+										{t("service_picker.col_unit_price")}
+									</th>
+									<th className="px-2 py-1.5 text-right">
+										{t("service_picker.col_line")}
+									</th>
+								</>
+							)}
 							<th className="w-12" />
 						</tr>
 					</thead>
@@ -175,7 +188,7 @@ export function ServicePicker({
 						{lines.length === 0 && (
 							<tr>
 								<td
-									colSpan={9}
+									colSpan={showPrices ? 9 : 7}
 									className="px-2 py-3 text-xs text-muted-foreground"
 								>
 									{t("service_picker.none_selected")}
@@ -216,12 +229,20 @@ export function ServicePicker({
 									<td className="px-2 py-1.5 text-right font-mono text-xs">
 										{m ? (m.unit ?? "—") : "—"}
 									</td>
-									<td className="px-2 py-1.5 text-right">
-										{m ? formatMoney(m.unitPrice) : "—"}
-									</td>
-									<td className="px-2 py-1.5 text-right font-medium">
-										{m ? formatMoney(l.qty * m.unitPrice) : "—"}
-									</td>
+									{showPrices && (
+										<>
+											<td className="px-2 py-1.5 text-right">
+												{m?.unitPrice !== undefined
+													? formatMoney(m.unitPrice)
+													: "—"}
+											</td>
+											<td className="px-2 py-1.5 text-right font-medium">
+												{m?.unitPrice !== undefined
+													? formatMoney(l.qty * m.unitPrice)
+													: "—"}
+											</td>
+										</>
+									)}
 									<td className="px-2 py-1.5 text-right">
 										<button
 											type="button"

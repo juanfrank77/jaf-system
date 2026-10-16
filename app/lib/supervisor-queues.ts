@@ -1,10 +1,12 @@
 import type { Prisma } from "../../generated/prisma/client"
 
-// The supervisor's sidebar queues: one per step of the work-order rail from
+// The supervisor's sidebar queues: Intake (orders just created, before the
+// warehouse has prepped them), then one per step of the work-order rail from
 // Approve onward. Each is a `?stage=` view of the dashboard, and the same
 // `where` drives both the sidebar count and the filtered list, so the pill
 // can never disagree with what the link opens.
 export type SupervisorQueue =
+	| "intake"
 	| "review"
 	| "invoice"
 	| "aviso"
@@ -13,6 +15,7 @@ export type SupervisorQueue =
 	| "all"
 
 export const SUPERVISOR_QUEUES: SupervisorQueue[] = [
+	"intake",
 	"review",
 	"invoice",
 	"aviso",
@@ -42,6 +45,8 @@ export function supervisorQueueWhere(
 	queue: SupervisorQueue,
 ): Prisma.JafInvoiceWhereInput {
 	switch (queue) {
+		case "intake":
+			return { status: "CREATED" }
 		case "released":
 			return {
 				releasedToFinanceAt: { not: null },

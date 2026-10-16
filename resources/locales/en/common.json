@@ -223,6 +223,7 @@
 			"warehouse_scan_in": "Scan In Return",
 			"warehouse_restock": "Restocks to Release",
 			"warehouse_stock": "Stock",
+			"supervisor_intake": "New work orders",
 			"supervisor_review": "Review queue",
 			"supervisor_invoice": "JAF invoices",
 			"supervisor_aviso": "Aviso & match",
@@ -1320,6 +1321,7 @@
 	},
 	"dashboard": {
 		"stage_queue": {
+			"intake": "New work orders",
 			"review": "Review queue",
 			"invoice": "JAF invoices",
 			"aviso": "Aviso & match",
@@ -1333,6 +1335,7 @@
 		"supervisor_scope_other": "{{areas}} · {{count}} crews",
 		"more_metrics": "More metrics",
 		"since": {
+			"created": "Created {{ago}}",
 			"submitted": "Submitted {{ago}}",
 			"returned": "Returned {{ago}}",
 			"approved": "Approved {{ago}}"
@@ -1345,6 +1348,7 @@
 		},
 		"no_documents": "No documents yet.",
 		"queue": {
+			"intake": "New — waiting for the warehouse",
 			"pending_review": "Pending review — crew submitted",
 			"sent_back": "Sent back to crew",
 			"approved": "Approved",

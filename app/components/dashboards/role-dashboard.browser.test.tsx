@@ -4,6 +4,7 @@ import { RoleDashboard } from "./role-dashboard"
 
 const base = { stats: [], alert: null, explainer: null, docs: [] }
 const emptyQueues = {
+	intake: [],
 	pendingReview: [],
 	approved: [],
 	sentBack: [],
@@ -46,15 +47,15 @@ describe("RoleDashboard", () => {
 		})
 	}
 
-	it("renders the five supervisor queues and the work-order list for SUPERVISOR", async ({
+	it("renders the six supervisor queues and the work-order list for SUPERVISOR", async ({
 		renderStub,
 	}) => {
 		await mount(renderStub, <RoleDashboard {...supervisor} {...base} />)
 		expect(
 			screen.getByRole("heading", { level: 1, name: "Dashboard" }),
 		).toBeInTheDocument()
-		// five queue cards; dashboard no longer has an "All work orders" section
-		expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(5)
+		// six queue cards (Intake first); dashboard no longer has an "All work orders" section
+		expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(6)
 	})
 
 	const billedDoc = {
@@ -240,6 +241,24 @@ describe("SupervisorDashboard", () => {
 		expect(fold.tagName).toBe("DETAILS")
 		expect(fold).not.toHaveAttribute("open")
 		expect(within(fold).getByText("Oldest open (days)")).toBeInTheDocument()
+	})
+
+	it("lists just-created work orders in an Intake section that opens the job", async ({
+		renderStub,
+	}) => {
+		await mountSupervisor(renderStub, {
+			supervisorQueues: {
+				...emptyQueues,
+				intake: [queueRow({ id: "new1", controlNumber: "JAF-NEW" })],
+			},
+		})
+		expect(
+			screen.getByRole("heading", { level: 2, name: /New — waiting/ }),
+		).toBeInTheDocument()
+		expect(screen.getByRole("link", { name: "JAF-NEW" })).toHaveAttribute(
+			"href",
+			"/docs/new1",
+		)
 	})
 
 	it("shows the supervisor's area and crew count under the title", async ({

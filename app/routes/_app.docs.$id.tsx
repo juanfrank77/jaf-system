@@ -13,6 +13,7 @@ import { Callout } from "~/components/ui/callout"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
+import { hasAvisoPdf } from "~/lib/aviso-document"
 import { canSeeBilling, hideBilling } from "~/lib/billing-visibility"
 import {
 	assignedBrigadeIds,
@@ -25,6 +26,7 @@ import {
 	type AddressCorrection,
 	formatTimeOnSite,
 } from "~/lib/field-update-helpers"
+import { validateFile } from "~/lib/file-upload.server"
 import { isEditableStatus, isTerminalStatus } from "~/lib/permissions"
 import { requireRole, requireSession } from "~/lib/permissions.server"
 import { serviceCodesForRole } from "~/lib/service-codes.server"
@@ -34,6 +36,7 @@ import {
 	isBrigadeInSupervisorScope,
 } from "~/lib/supervisor-scope"
 import { deriveSupervisorStage } from "~/lib/supervisor-stage"
+import { saveUpload } from "~/lib/uploads.server"
 import { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id"
 
@@ -406,6 +409,38 @@ export async function action({ request, params }: Route.ActionArgs) {
 		throw redirect(`/docs/${params.id}`)
 	}
 
+	if (intent === "attach_aviso_pdf") {
+		// Only a job already with Finance that has no Aviso PDF on file: the
+		// step-6 upload stays the one way to set it before release.
+		if (!doc.releasedToFinanceAt || hasAvisoPdf(doc))
+			throw redirect(`/docs/${params.id}`)
+		const avisoPdf = form.get("avisoPdf")
+		if (!(avisoPdf instanceof File) || avisoPdf.size === 0)
+			return { errorKey: "docs_review.errors.aviso_pdf_required" as const }
+		const validation = validateFile(avisoPdf, "pdf")
+		if (!validation.valid) return { errorMessage: validation.error }
+		const avisoDocPath = await saveUpload(
+			"aviso-docs",
+			`${params.id}-aviso.pdf`,
+			avisoPdf,
+		)
+		await db.$transaction([
+			db.jafInvoice.update({
+				where: { id: params.id },
+				data: { avisoDocPath },
+			}),
+			db.auditTrail.create({
+				data: {
+					docId: params.id,
+					userId: user.id,
+					action: "AVISO_PDF_ATTACHED",
+					diffJson: { avisoDocPath },
+				},
+			}),
+		])
+		throw redirect(`/docs/${params.id}`)
+	}
+
 	throw redirect(`/docs/${params.id}`)
 }
 
@@ -513,7 +548,11 @@ export default function DocView({
 		doc.status as (typeof APPROVED_STATUSES)[number],
 	)
 	const showBilling = canSeeBilling(user.role)
-	const missingClaroPdf = showBilling && isApproved && !doc.claroPdfPath
+	// Billing needs the Aviso PDF once the job is with Finance; the same rule the
+	// release gate and Finance receivables use.
+	const missingAvisoPdf =
+		showBilling && isApproved && !!doc.releasedToFinanceAt && !hasAvisoPdf(doc)
+	const canAttachAviso = user.role === "SUPERVISOR" || user.role === "ADMIN"
 
 	return (
 		<div className="space-y-5">
@@ -562,7 +601,7 @@ export default function DocView({
 					</Callout>
 				)}
 
-			{missingClaroPdf && (
+			{missingAvisoPdf && (
 				<div className="bg-status-warn-soft border border-status-warn/30 rounded-lg p-4 space-y-2">
 					<div className="flex items-start gap-3">
 						<span className="text-status-warn text-lg" aria-hidden>
@@ -573,8 +612,45 @@ export default function DocView({
 								{t("docs_view.billing_blocked")}
 							</p>
 							<ul className="text-sm text-status-warn list-disc list-inside">
-								<li>{t("docs_view.billing_blocked_claro_pdf")}</li>
+								<li>{t("docs_view.billing_blocked_aviso_pdf")}</li>
 							</ul>
+							{canAttachAviso ? (
+								<Form
+									method="post"
+									encType="multipart/form-data"
+									className="flex flex-wrap items-center gap-2 pt-1"
+								>
+									<input type="hidden" name="intent" value="attach_aviso_pdf" />
+									<Input
+										type="file"
+										name="avisoPdf"
+										accept="application/pdf"
+										required
+										aria-label={t("docs_view.attach_aviso_label")}
+										className="w-auto"
+									/>
+									<Button type="submit" size="sm">
+										{t("docs_view.attach_aviso_submit")}
+									</Button>
+								</Form>
+							) : (
+								<p className="text-sm text-status-warn">
+									{t("docs_view.billing_blocked_ask_supervisor")}
+								</p>
+							)}
+							{actionData && "errorMessage" in actionData && (
+								<p className="text-sm text-status-danger">
+									{actionData.errorMessage}
+								</p>
+							)}
+							{actionData &&
+								"errorKey" in actionData &&
+								actionData.errorKey ===
+									"docs_review.errors.aviso_pdf_required" && (
+									<p className="text-sm text-status-danger">
+										{t(actionData.errorKey)}
+									</p>
+								)}
 						</div>
 					</div>
 				</div>

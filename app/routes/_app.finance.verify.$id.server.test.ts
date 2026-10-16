@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
 	fetchInvoiceTotalContext: vi.fn(),
 	invoiceTotalUsed: vi.fn(),
 	checkAmountTolerance: vi.fn(),
-	isMissingClaroPdf: vi.fn(),
+	isMissingAvisoPdf: vi.fn(),
 	sendInternalEmail: vi.fn(),
 }))
 
@@ -29,7 +29,7 @@ vi.mock("~/lib/finance-pipeline.server", () => ({
 	fetchInvoiceTotalContext: mocks.fetchInvoiceTotalContext,
 	invoiceTotalUsed: mocks.invoiceTotalUsed,
 	checkAmountTolerance: mocks.checkAmountTolerance,
-	isMissingClaroPdf: mocks.isMissingClaroPdf,
+	isMissingAvisoPdf: mocks.isMissingAvisoPdf,
 }))
 vi.mock("~/lib/email.server", () => ({
 	sendInternalEmail: mocks.sendInternalEmail,
@@ -77,7 +77,7 @@ describe("Finance verify action guards", () => {
 			withinTolerance: true,
 			difference: 0,
 		})
-		mocks.isMissingClaroPdf.mockReturnValue(false)
+		mocks.isMissingAvisoPdf.mockReturnValue(false)
 		mocks.db.$transaction.mockResolvedValue(undefined)
 	})
 
@@ -142,7 +142,7 @@ describe("verify pre-fill from supervisor capture", () => {
 		})
 		mocks.isTerminalStatus.mockReturnValue(false)
 		mocks.computeFinanceStage.mockReturnValue("TO_VERIFY")
-		mocks.isMissingClaroPdf.mockReturnValue(false)
+		mocks.isMissingAvisoPdf.mockReturnValue(false)
 		const fixture = {
 			...baseDoc(),
 			avisoNumber: "10353961",

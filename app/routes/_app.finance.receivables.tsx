@@ -24,7 +24,7 @@ import {
 	fetchInvoiceTotalContext,
 	financeStageAlertDays,
 	invoiceTotalUsed,
-	isMissingClaroPdf,
+	isMissingAvisoPdf,
 } from "~/lib/finance-pipeline.server"
 import { parsePaymentDate, paymentForType } from "~/lib/payment-records"
 import { recordReceivablePayment } from "~/lib/payment-records.server"
@@ -100,7 +100,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 			alertDays,
 			isAlert,
 			amount,
-			missingClaroPdf: isMissingClaroPdf(inv),
+			missingAvisoPdf: isMissingAvisoPdf(inv),
 			advanceAmount:
 				advancePayment?.amount != null ? Number(advancePayment.amount) : null,
 			finalPaymentAmount:
@@ -238,8 +238,8 @@ export async function action({ request }: Route.ActionArgs) {
 			return { errorKey: "finance_receivables.errors.invalid_stage" }
 		if (doc.receivableClosedAt)
 			return { errorKey: "finance_receivables.errors.already_closed" }
-		if (isMissingClaroPdf(doc))
-			return { errorKey: "finance_receivables.errors.missing_claro_pdf" }
+		if (isMissingAvisoPdf(doc))
+			return { errorKey: "finance_receivables.errors.missing_aviso_pdf" }
 		const stage = computeFinanceStage(
 			doc,
 			doc.poLinks.length > 0,
@@ -401,9 +401,9 @@ export default function FinancePipeline({
 										})}
 									</span>
 								)}
-								{row.missingClaroPdf && (
+								{row.missingAvisoPdf && (
 									<span className="text-status-warn">
-										{t("finance_receivables.missing_claro_pdf")}
+										{t("finance_receivables.missing_aviso_pdf")}
 									</span>
 								)}
 							</div>
@@ -447,10 +447,10 @@ export default function FinancePipeline({
 											<Button
 												type="submit"
 												size="sm"
-												disabled={row.missingClaroPdf}
+												disabled={row.missingAvisoPdf}
 												title={
-													row.missingClaroPdf
-														? t("finance_receivables.errors.missing_claro_pdf")
+													row.missingAvisoPdf
+														? t("finance_receivables.errors.missing_aviso_pdf")
 														: undefined
 												}
 											>

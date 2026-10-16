@@ -25,6 +25,10 @@ vi.mock("~/lib/db.server", () => {
 	return { db }
 })
 
+vi.mock("~/lib/uploads.server", () => ({
+	saveUpload: vi.fn(() => Promise.resolve("aviso-docs/doc-1-aviso.pdf")),
+}))
+
 vi.mock("~/lib/permissions.server", () => ({
 	requireSession: vi.fn(),
 	requireRole: vi.fn(),
@@ -848,5 +852,81 @@ describe("reassignToBrigade", () => {
 			byUserId: "sup1",
 		})
 		expect(result.assignedCrewIds).toEqual([])
+	})
+})
+
+describe("POST /docs/:id (action) — attach Aviso PDF", () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "admin-1", role: "ADMIN" },
+		} as any)
+	})
+
+	const doc = (overrides: Record<string, unknown> = {}) => ({
+		id: "doc-1",
+		controlNumber: "JAF-1001",
+		status: "SUPERVISOR_APPROVED",
+		supervisorId: "sup-1",
+		assignedCrewIds: [],
+		brigade: { area: "SUR" },
+		releasedToFinanceAt: new Date("2026-10-14"),
+		avisoDocPath: null,
+		claroPdfPath: null,
+		...overrides,
+	})
+
+	function post(file?: File) {
+		const form = new FormData()
+		form.set("intent", "attach_aviso_pdf")
+		if (file) form.set("avisoPdf", file)
+		return action({
+			request: new Request("http://localhost/docs/doc-1", {
+				method: "POST",
+				body: form,
+			}),
+			params: { id: "doc-1" },
+		} as any)
+	}
+	const pdf = () =>
+		new File(["%PDF-1.4"], "aviso.pdf", { type: "application/pdf" })
+
+	it("saves the PDF on a released job that has none, and logs it", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(doc() as any)
+		await expect(post(pdf())).rejects.toMatchObject({ status: 302 })
+		expect(db.jafInvoice.update).toHaveBeenCalledWith({
+			where: { id: "doc-1" },
+			data: { avisoDocPath: "aviso-docs/doc-1-aviso.pdf" },
+		})
+		expect(db.auditTrail.create).toHaveBeenCalledWith({
+			data: expect.objectContaining({
+				docId: "doc-1",
+				action: "AVISO_PDF_ATTACHED",
+			}),
+		})
+	})
+
+	it("does nothing when the job already has a PDF, even only the legacy one", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			doc({ claroPdfPath: "claro-pdfs/doc-1-claro.pdf" }) as any,
+		)
+		await expect(post(pdf())).rejects.toMatchObject({ status: 302 })
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("does nothing before the job is released to Finance", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			doc({ releasedToFinanceAt: null }) as any,
+		)
+		await expect(post(pdf())).rejects.toMatchObject({ status: 302 })
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("asks for a file when none was sent", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(doc() as any)
+		await expect(post()).resolves.toEqual({
+			errorKey: "docs_review.errors.aviso_pdf_required",
+		})
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
 	})
 })

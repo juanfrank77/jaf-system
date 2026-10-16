@@ -1,3 +1,4 @@
+import { hasAvisoPdf } from "~/lib/aviso-document"
 import type { JafInvoice } from "../../generated/prisma/client"
 import {
 	type AvisoLine,
@@ -220,9 +221,7 @@ export function evaluateReleaseGate(
 		{
 			key: "aviso",
 			ok:
-				!!doc.avisoNumber?.trim() &&
-				!!doc.avisoDocPath &&
-				avisoLines.length > 0,
+				!!doc.avisoNumber?.trim() && hasAvisoPdf(doc) && avisoLines.length > 0,
 		},
 		{ key: "amount_match", ok: !!doc.avisoMatchedAt },
 		{

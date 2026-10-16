@@ -23,8 +23,10 @@ vi.mock("~/lib/auth.server", () => ({
 }))
 vi.mock("~/lib/finance-pipeline.server", () => ({
 	computeFinanceStage: mocks.computeFinanceStage,
-	isMissingClaroPdf: (invoice: { claroPdfPath: string | null }) =>
-		!invoice.claroPdfPath || invoice.claroPdfPath.trim() === "",
+	isMissingAvisoPdf: (invoice: {
+		avisoDocPath?: string | null
+		claroPdfPath?: string | null
+	}) => !invoice.avisoDocPath?.trim() && !invoice.claroPdfPath?.trim(),
 }))
 vi.mock("~/lib/payment-records.server", () => ({
 	parsePaymentDate: (value: string | null) =>
@@ -133,7 +135,7 @@ describe("Finance receivables action guards", () => {
 			params: {},
 		} as any)
 		expect(result).toEqual({
-			errorKey: "finance_receivables.errors.missing_claro_pdf",
+			errorKey: "finance_receivables.errors.missing_aviso_pdf",
 		})
 		expect(mocks.db.$transaction).not.toHaveBeenCalled()
 	})

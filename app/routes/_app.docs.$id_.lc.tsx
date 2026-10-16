@@ -3,6 +3,11 @@ import path from "node:path"
 import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import {
+	asLines,
+	JobLinesCard,
+	preppedAsLines,
+} from "~/components/job-lines-card"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { Button } from "~/components/ui/button"
 import { avisoPdfUrl } from "~/lib/aviso-document"
@@ -183,6 +188,16 @@ export default function LcView({ loaderData }: Route.ComponentProps) {
 			<p className="text-xs text-muted-foreground">
 				{t("docs_lc.ivu_rate", { rate: (ivuRate * 100).toFixed(1) })}
 			</p>
+
+			<JobLinesCard
+				ordered={asLines(doc.serviceLines)}
+				installed={asLines(doc.installedServiceLines)}
+				estimated={asLines(doc.estimatedMaterials)}
+				prepped={preppedAsLines(doc.preppedMaterials)}
+				taken={asLines(doc.materialsTaken)}
+				used={asLines(doc.materialsUsed)}
+				serviceCodes={serviceCodes as never}
+			/>
 
 			<div className="grid grid-cols-2 gap-4">
 				<div className="bg-card border rounded-lg p-4">

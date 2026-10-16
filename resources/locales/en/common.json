@@ -1819,6 +1819,19 @@
 		"prev": "Previous",
 		"range": "{{from}}–{{to}} of {{total}}"
 	},
+	"job_lines": {
+		"title": "Service items and materials",
+		"title_services": "Service items",
+		"services": "Service items (ordered vs installed)",
+		"materials": "Materials",
+		"none": "No service items on this work order.",
+		"col": {
+			"estimated": "Estimated",
+			"prepped": "Prepped",
+			"taken": "Taken (signed)",
+			"used": "Used (field)"
+		}
+	},
 	"restock_release": {
 		"materials_title": "1. Materials to load",
 		"serials_hint": "Scan or enter one serial per unit",

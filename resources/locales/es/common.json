@@ -1819,6 +1819,19 @@
 		"prev": "Anterior",
 		"range": "{{from}}–{{to}} de {{total}}"
 	},
+	"job_lines": {
+		"title": "Servicios y materiales",
+		"title_services": "Servicios",
+		"services": "Servicios (pedidos vs instalados)",
+		"materials": "Materiales",
+		"none": "Esta orden no tiene servicios.",
+		"col": {
+			"estimated": "Estimado",
+			"prepped": "Preparado",
+			"taken": "Retirado (firmado)",
+			"used": "Usado (campo)"
+		}
+	},
 	"restock_release": {
 		"materials_title": "1. Materiales a cargar",
 		"serials_hint": "Escanee o ingrese un serial por unidad",

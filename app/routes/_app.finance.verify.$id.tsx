@@ -4,6 +4,11 @@ import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
+import {
+	asLines,
+	JobLinesCard,
+	preppedAsLines,
+} from "~/components/job-lines-card"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { Button } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
@@ -397,6 +402,16 @@ export default function FinanceVerify({
 					/>
 				</div>
 			</div>
+
+			<JobLinesCard
+				ordered={asLines(doc.serviceLines)}
+				installed={asLines(doc.installedServiceLines)}
+				estimated={asLines(doc.estimatedMaterials)}
+				prepped={preppedAsLines(doc.preppedMaterials)}
+				taken={asLines(doc.materialsTaken)}
+				used={asLines(doc.materialsUsed)}
+				serviceCodes={serviceCodes as never}
+			/>
 
 			{sendBackNotes.length > 0 && (
 				<div className="bg-status-warn-soft border border-status-warn/30 rounded-lg p-4 space-y-2">

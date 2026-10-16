@@ -1,20 +1,12 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form } from "react-router"
-import { MaterialLineItems } from "~/components/material-line-items"
-import { ServiceLinesTable } from "~/components/service-lines-table"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardHeader } from "~/components/ui/card"
 import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
 import type { AddressCorrection } from "~/lib/field-update-helpers"
-import type { ServiceLine } from "~/lib/service-lines"
-
-type MaterialLine = Parameters<typeof MaterialLineItems>[0]["initialItems"]
-type MaterialServiceCode = Parameters<
-	typeof MaterialLineItems
->[0]["serviceCodes"]
 
 export type ReviewPhoto = {
 	id: string
@@ -121,69 +113,6 @@ export function PhotosCard({
 						</div>
 					</a>
 				))}
-			</CardContent>
-		</Card>
-	)
-}
-
-export function OrderedVsInstalledCard({
-	ordered,
-	installed,
-	estimated,
-	taken,
-	used,
-	serviceCodes,
-}: {
-	ordered: ServiceLine[]
-	installed: ServiceLine[]
-	estimated: MaterialLine
-	taken: MaterialLine
-	used: MaterialLine
-	serviceCodes: MaterialServiceCode
-}) {
-	const { t } = useTranslation()
-	return (
-		<Card>
-			<CardHeader>
-				<span>{t("docs_review.ordered_vs_installed")}</span>
-				<span className="text-xs font-normal text-muted-foreground">
-					{t("docs_review.per_service_code")}
-				</span>
-			</CardHeader>
-			<CardContent className="space-y-4">
-				{ordered.length > 0 && (
-					<ServiceLinesTable
-						lines={ordered}
-						installed={installed}
-						showDifference
-					/>
-				)}
-				<details className="text-sm">
-					<summary className="cursor-pointer text-muted-foreground">
-						{t("docs_review.materials_detail")}
-					</summary>
-					<div className="mt-3 grid gap-3 sm:grid-cols-3">
-						{(
-							[
-								["estimated", estimated],
-								["taken", taken],
-								["used", used],
-							] as const
-						).map(([key, items]) => (
-							<div key={key} className="rounded-lg border border-border p-3">
-								<p className="mb-1 text-xs text-muted-foreground">
-									{t(`docs_review.${key}`)}
-								</p>
-								<MaterialLineItems
-									serviceCodes={serviceCodes}
-									initialItems={items}
-									estimatedItems={key === "taken" ? estimated : undefined}
-									readOnly
-								/>
-							</div>
-						))}
-					</div>
-				</details>
 			</CardContent>
 		</Card>
 	)

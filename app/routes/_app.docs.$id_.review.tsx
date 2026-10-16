@@ -5,10 +5,10 @@ import { Form, Link, redirect } from "react-router"
 import { AvisoMatchCard } from "~/components/aviso-match"
 import { DocStageBadge } from "~/components/doc-stage-badge"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { JobLinesCard, preppedAsLines } from "~/components/job-lines-card"
 import type { MaterialLineItems } from "~/components/material-line-items"
 import {
 	AddressCard,
-	OrderedVsInstalledCard,
 	PhotosCard,
 	ReviewActionsCard,
 } from "~/components/review-field-work"
@@ -1344,6 +1344,17 @@ export default function ReviewDoc({
 	const invoiceLines = (doc.jafInvoiceLines as InvoiceLine[] | null) ?? []
 	const avisoLines = (doc.avisoLines as AvisoLine[] | null) ?? []
 	const precertLines = (sheet?.lines as PreCertLine[] | undefined) ?? undefined
+	const jobLines = (
+		<JobLinesCard
+			ordered={ordered}
+			installed={installed}
+			estimated={estimated}
+			prepped={preppedAsLines(doc.preppedMaterials)}
+			taken={taken}
+			used={used}
+			serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
+		/>
+	)
 
 	// Basenames for photos; plain string split because `node:path` is not available in the client bundle
 	const photoItems = photos.map((p) => ({
@@ -1411,6 +1422,8 @@ export default function ReviewDoc({
 				</Callout>
 			)}
 
+			{panel !== "APPROVE" && jobLines}
+
 			{/* A — Approve */}
 			{panel === "APPROVE" && (
 				<>
@@ -1421,14 +1434,7 @@ export default function ReviewDoc({
 						notes={doc.fieldNotes}
 					/>
 					<PhotosCard docId={doc.id} photos={photoItems} />
-					<OrderedVsInstalledCard
-						ordered={ordered}
-						installed={installed}
-						estimated={estimated}
-						taken={taken}
-						used={used}
-						serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
-					/>
+					{jobLines}
 					{interactive && (
 						<ReviewActionsCard
 							canApprove={doc.status === "FIELD_UPDATED"}

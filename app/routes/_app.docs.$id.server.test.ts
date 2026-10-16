@@ -635,6 +635,34 @@ describe("POST /docs/:id (action) — supervisor scope", () => {
 
 		expect(db.jafInvoice.update).toHaveBeenCalled()
 	})
+
+	it.each(["FIELD_UPDATED", "SUPERVISOR_APPROVED", "CLARO_UPLOADED"])(
+		"does not reassign a %s doc: the crew has already reported",
+		async (status) => {
+			vi.mocked(requireRole).mockResolvedValue({
+				user: { id: "user-1", role: "ADMIN" },
+			} as any)
+			vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+				baseDoc({ status }) as any,
+			)
+			vi.mocked(db.jafInvoice.update).mockClear()
+			const form = new FormData()
+			form.set("intent", "reassign")
+			form.set("brigadeId", "brigade-sur")
+
+			await expect(
+				action({
+					request: new Request("http://localhost/docs/doc-1", {
+						method: "POST",
+						body: form,
+					}),
+					params: { id: "doc-1" },
+				} as any),
+			).rejects.toMatchObject({ status: 302 })
+
+			expect(db.jafInvoice.update).not.toHaveBeenCalled()
+		},
+	)
 })
 
 describe("POST /docs/:id (action) — change lead", () => {

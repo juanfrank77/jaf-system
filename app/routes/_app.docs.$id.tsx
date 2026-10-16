@@ -5,11 +5,6 @@ import { Form, Link, redirect } from "react-router"
 import { AssignedCrew } from "~/components/assigned-crew"
 import { DocStageBadge } from "~/components/doc-stage-badge"
 import { RouteErrorBoundary } from "~/components/error-boundary"
-import {
-	asLines,
-	JobLinesCard,
-	preppedAsLines,
-} from "~/components/job-lines-card"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { ReassignForm } from "~/components/reassign-form"
 import { SupervisorStepRail } from "~/components/supervisor-step-rail"
@@ -32,7 +27,11 @@ import {
 	formatTimeOnSite,
 } from "~/lib/field-update-helpers"
 import { validateFile } from "~/lib/file-upload.server"
-import { isEditableStatus, isTerminalStatus } from "~/lib/permissions"
+import {
+	isEditableStatus,
+	isReassignableStatus,
+	isTerminalStatus,
+} from "~/lib/permissions"
 import { requireRole, requireSession } from "~/lib/permissions.server"
 import { serviceCodesForRole } from "~/lib/service-codes.server"
 import {
@@ -263,6 +262,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	if (intent === "reassign") {
+		if (!isReassignableStatus(doc.status)) throw redirect(`/docs/${params.id}`)
 		const newBrigadeId = (form.get("brigadeId") as string | null)?.trim() || ""
 		if (!newBrigadeId) return { errorKey: "docs_view.errors.reassign_required" }
 		const newBrigade = await db.brigade.findUnique({
@@ -324,6 +324,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	if (intent === "change_lead") {
+		if (!isReassignableStatus(doc.status)) throw redirect(`/docs/${params.id}`)
 		const newLeadId = (form.get("brigadeId") as string | null)?.trim() || ""
 		if (!newLeadId) return { errorKey: "docs_view.errors.reassign_required" }
 		const current = assignedBrigadeIds(doc)
@@ -740,17 +741,6 @@ export default function DocView({
 				</p>
 			</section>
 
-			<JobLinesCard
-				ordered={asLines(doc.serviceLines)}
-				installed={asLines(doc.installedServiceLines)}
-				estimated={estimated}
-				prepped={preppedAsLines(doc.preppedMaterials)}
-				taken={taken}
-				used={used}
-				serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
-				showMaterials={false}
-			/>
-
 			{estimated.length > 0 && (
 				<section className="bg-card border rounded-lg p-4">
 					<h2 className="text-sm font-medium mb-2 text-muted-foreground">
@@ -927,11 +917,13 @@ export default function DocView({
 			{(user.role === "SUPERVISOR" || user.role === "ADMIN") &&
 				!isTerminalStatus(doc.status) && (
 					<div className="space-y-3 pt-2 border-t">
-						<ReassignForm
-							leadLocked={!!doc.contractorAccountCode}
-							brigadeOptions={brigadeOptions}
-							assignedBrigades={assignedBrigades}
-						/>
+						{isReassignableStatus(doc.status) && (
+							<ReassignForm
+								leadLocked={!!doc.contractorAccountCode}
+								brigadeOptions={brigadeOptions}
+								assignedBrigades={assignedBrigades}
+							/>
+						)}
 
 						<Form method="post" className="space-y-2">
 							<Label htmlFor="cancelReason">

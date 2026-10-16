@@ -209,7 +209,7 @@ export default function NewDoc({
 								<Input
 									id="jobAddressEstimated"
 									name="jobAddressEstimated"
-									placeholder="Calle X, Barrio Y, Municipio"
+									placeholder="Calle X, Barrio Y, Municipio  —  or  18.4655, -66.1057"
 									required
 									className="mt-1"
 								/>

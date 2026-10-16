@@ -67,7 +67,6 @@ type QueueRow = {
 	jobAddressActual: string | null
 	brigadeName: string | null
 	stage: SupervisorStage
-	amount: number | null
 	note?: string | null
 	/** When the job entered this queue (submitted / returned / approved). */
 	since: Date | null
@@ -121,10 +120,6 @@ function toRow(
 		jobAddressActual: d.jobAddressActual ?? null,
 		brigadeName: d.brigade?.name ?? null,
 		stage,
-		amount:
-			d.jafInvoiceLineTotal == null
-				? null
-				: toNumberPrice(d.jafInvoiceLineTotal),
 		note,
 		since,
 		qtyDiscrepancy: computeMaterialSignals([d as never]).discrepancy > 0,

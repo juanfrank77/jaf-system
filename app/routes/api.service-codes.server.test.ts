@@ -18,7 +18,7 @@ describe("GET /api/service-codes", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
 		vi.mocked(db.user.findUnique).mockResolvedValue({
-			role: "SUPERVISOR",
+			role: "FINANCE",
 		} as any)
 	})
 
@@ -89,19 +89,22 @@ describe("GET /api/service-codes", () => {
 		unitPrice: "42.3430",
 	}
 
-	it.each(["CREW", "WAREHOUSE"])("omits unitPrice for %s", async (role) => {
-		vi.mocked(requireSession).mockResolvedValue({ user: { id: "u1" } } as any)
-		vi.mocked(db.user.findUnique).mockResolvedValue({ role } as any)
-		vi.mocked(db.serviceCode.count).mockResolvedValue(1)
-		vi.mocked(searchServiceCodes).mockResolvedValue([hit] as any)
-		const res = await loader({
-			request: new Request("http://localhost/api/service-codes?q=t"),
-			params: {},
-		} as any)
-		const body = await (res as Response).json()
-		expect(body.results).toHaveLength(1)
-		expect("unitPrice" in body.results[0]).toBe(false)
-	})
+	it.each(["CREW", "WAREHOUSE", "SUPERVISOR"])(
+		"omits unitPrice for %s",
+		async (role) => {
+			vi.mocked(requireSession).mockResolvedValue({ user: { id: "u1" } } as any)
+			vi.mocked(db.user.findUnique).mockResolvedValue({ role } as any)
+			vi.mocked(db.serviceCode.count).mockResolvedValue(1)
+			vi.mocked(searchServiceCodes).mockResolvedValue([hit] as any)
+			const res = await loader({
+				request: new Request("http://localhost/api/service-codes?q=t"),
+				params: {},
+			} as any)
+			const body = await (res as Response).json()
+			expect(body.results).toHaveLength(1)
+			expect("unitPrice" in body.results[0]).toBe(false)
+		},
+	)
 
 	it("omits unitPrice when the viewer cannot be found (fails closed)", async () => {
 		vi.mocked(requireSession).mockResolvedValue({ user: { id: "u1" } } as any)

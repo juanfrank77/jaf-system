@@ -16,7 +16,8 @@ vi.mock("~/lib/permissions.server", () => ({ requireRole: vi.fn() }))
 vi.mock("~/lib/control-number.server", () => ({
 	generateControlNumber: vi.fn(),
 }))
-vi.mock("~/lib/service-codes.server", () => ({
+vi.mock("~/lib/service-codes.server", async (importOriginal) => ({
+	...(await importOriginal<typeof import("~/lib/service-codes.server")>()),
 	getActiveMaterialCodes: vi.fn(),
 }))
 
@@ -241,6 +242,35 @@ describe("GET /docs/new", () => {
 		expect(db.brigade.findMany).toHaveBeenCalledWith(
 			expect.objectContaining({ take: 100 }),
 		)
+	})
+
+	it("sends a supervisor the material catalog without any price, and Admin with it", async () => {
+		const material = {
+			id: "m1",
+			claroCode: "1020002",
+			name: "WRAP",
+			unitPrice: "5.0600",
+		}
+		vi.mocked(getActiveMaterialCodes).mockResolvedValue([material] as any)
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["CENTRAL"],
+		} as any)
+		const load = async (role: string) => {
+			vi.mocked(requireRole).mockResolvedValue({
+				user: { id: "u1", role },
+				session: {},
+			} as any)
+			return loader({
+				request: new Request("http://localhost/docs/new"),
+				params: {},
+			} as any)
+		}
+		const sup = await load("SUPERVISOR")
+		expect(sup.showPrices).toBe(false)
+		expect("unitPrice" in sup.serviceCodes[0]).toBe(false)
+		const admin = await load("ADMIN")
+		expect(admin.showPrices).toBe(true)
+		expect(admin.serviceCodes[0].unitPrice).toBe(5.06)
 	})
 
 	it("does not bound the ADMIN brigade picker", async () => {

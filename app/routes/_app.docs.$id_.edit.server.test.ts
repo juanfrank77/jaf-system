@@ -18,7 +18,8 @@ vi.mock("~/lib/db.server", () => ({
 }))
 
 vi.mock("~/lib/permissions.server", () => ({ requireRole: vi.fn() }))
-vi.mock("~/lib/service-codes.server", () => ({
+vi.mock("~/lib/service-codes.server", async (importOriginal) => ({
+	...(await importOriginal<typeof import("~/lib/service-codes.server")>()),
 	getActiveMaterialCodes: vi.fn(() => Promise.resolve([])),
 }))
 

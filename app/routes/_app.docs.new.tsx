@@ -16,13 +16,16 @@ import { generateControlNumber } from "~/lib/control-number.server"
 import { buildCrewAssignment, parseBrigadeIds } from "~/lib/crew-assignment"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
-import { getActiveMaterialCodes } from "~/lib/service-codes.server"
+import {
+	getActiveMaterialCodes,
+	isPriceBlind,
+	serviceCodesForRole,
+} from "~/lib/service-codes.server"
 import { parseServiceLines, type ServiceLine } from "~/lib/service-lines"
 import {
 	assignableBrigadesWhere,
 	isBrigadeInSupervisorScope,
 } from "~/lib/supervisor-scope"
-import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.new"
 
 export const meta: Route.MetaFunction = () => [
@@ -43,10 +46,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 	])
 	return {
 		user,
-		serviceCodes: materials.map((c) => ({
-			...c,
-			unitPrice: toNumberPrice(c.unitPrice),
-		})),
+		serviceCodes: serviceCodesForRole(user.role, materials),
+		showPrices: !isPriceBlind(user.role),
 		brigades,
 	}
 }
@@ -159,7 +160,7 @@ export default function NewDoc({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { serviceCodes, brigades } = loaderData
+	const { serviceCodes, brigades, showPrices } = loaderData
 	const error = actionData as { errorKey?: ParseKeys } | undefined
 	const { t } = useTranslation()
 	return (
@@ -237,7 +238,7 @@ export default function NewDoc({
 						<div>
 							<Label>{t("docs_new.service_codes_label")}</Label>
 							<div className="mt-1">
-								<ServicePicker />
+								<ServicePicker showPrices={showPrices} />
 							</div>
 						</div>
 						<div>

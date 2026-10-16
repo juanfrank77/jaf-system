@@ -194,7 +194,6 @@ const queueRow = (o: Record<string, unknown> = {}) => ({
 	jobAddressActual: null,
 	brigadeName: "Jesús Martínez",
 	stage: "APPROVE" as const,
-	amount: null,
 	note: null,
 	since: null,
 	qtyDiscrepancy: false,

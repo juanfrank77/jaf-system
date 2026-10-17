@@ -93,8 +93,8 @@ export async function isBrigadeInSupervisorScope(
  * capped so the picker can't blow up), unscoped and unbounded for anyone
  * else (ADMIN sees every active brigade, matching its pre-existing
  * behavior). Shared so the `active`/`take`/scope rule can't drift between
- * routes the way it already had once. Not for the supervisor's own
- * brigade-management screen (`/supervisor/brigades`), which intentionally
+ * routes the way it already had once. Not for the Comptroller's
+ * brigade-management screen (`/comptroller/brigades`), which intentionally
  * shows inactive brigades too so they can be reactivated.
  */
 export async function assignableBrigadesWhere(

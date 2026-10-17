@@ -41,7 +41,7 @@ export type SupervisorQueues = {
 	blocked: QueueRow[]
 }
 
-const STAGE_KEY: Record<SupervisorStage, ParseKeys> = {
+export const STAGE_KEY: Record<SupervisorStage, ParseKeys> = {
 	INTAKE: "step_rail.intake",
 	WAREHOUSE: "step_rail.warehouse",
 	FIELD: "step_rail.field",

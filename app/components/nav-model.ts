@@ -75,6 +75,7 @@ export type NavLabelKey =
 	| "app_shell.nav.comptroller_lists"
 	| "app_shell.nav.comptroller_to_pay"
 	| "app_shell.nav.comptroller_paid"
+	| "app_shell.nav.comptroller_brigades"
 	| "app_shell.nav.comptroller_installers"
 
 export type NavCount = { value: number; tone: "critical" | "neutral" }
@@ -114,10 +115,10 @@ const GROUP_ORDER: NavGroupKey[] = [
 	"overview",
 	"work",
 	"workflow",
-	"team",
 	"arm_a",
 	"arm_b",
 	"money",
+	"team",
 	"stock",
 	"other",
 	"field",
@@ -368,6 +369,13 @@ const NAV_ITEMS: NavItem[] = [
 		icon: Wallet01Icon,
 		group: "money",
 		roles: ["COMPTROLLER", "ADMIN"],
+	},
+	{
+		to: "/comptroller/brigades",
+		labelKey: "app_shell.nav.comptroller_brigades",
+		icon: UserGroup03Icon,
+		group: "money",
+		roles: ["COMPTROLLER"],
 	},
 	{
 		to: "/comptroller/installers",

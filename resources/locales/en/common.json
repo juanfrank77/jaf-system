@@ -244,6 +244,7 @@
 			"comptroller_lists": "Lists from Lissette",
 			"comptroller_to_pay": "Runs to pay",
 			"comptroller_paid": "Paid runs",
+			"comptroller_brigades": "Brigades",
 			"comptroller_installers": "Installers"
 		},
 		"notifications": {
@@ -1035,8 +1036,16 @@
 		}
 	},
 	"supervisor_brigades": {
-		"title": "My Brigades",
-		"no_areas_assigned": "You haven't been assigned any areas yet. Ask an admin to assign you at least one area before you can create or edit brigades.",
+		"title": "Brigades",
+		"description": "Where your brigades are: the jobs each one is working right now. Brigades are added and deactivated by the Comptroller.",
+		"empty": "No active brigades in your areas.",
+		"available": "Available",
+		"jobs_one": "{{count}} job",
+		"jobs_other": "{{count}} jobs",
+		"no_members": "No members"
+	},
+	"comptroller_brigades": {
+		"title": "Brigades",
 		"add_heading": "Add Brigade",
 		"name_label": "Brigade Name *",
 		"area_label": "Area *",
@@ -1065,8 +1074,7 @@
 			"invalid_fields": "Valid brigade name, area, and member list are required.",
 			"id_required": "Brigade id is required.",
 			"unknown_intent": "Unknown action.",
-			"duplicate_code": "That contractor code is already in use by another brigade.",
-			"area_not_allowed": "That area is outside your assigned brigades."
+			"duplicate_code": "That contractor code is already in use by another brigade."
 		}
 	},
 	"supervisor_variance": {

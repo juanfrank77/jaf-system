@@ -244,6 +244,7 @@
 			"comptroller_lists": "Listas de Lissette",
 			"comptroller_to_pay": "Corridas por pagar",
 			"comptroller_paid": "Corridas pagadas",
+			"comptroller_brigades": "Brigadas",
 			"comptroller_installers": "Instaladores"
 		},
 		"notifications": {
@@ -1035,8 +1036,16 @@
 		}
 	},
 	"supervisor_brigades": {
-		"title": "Mis brigadas",
-		"no_areas_assigned": "Aún no tienes áreas asignadas. Pide a un administrador que te asigne al menos un área antes de crear o editar brigadas.",
+		"title": "Brigadas",
+		"description": "Dónde están tus brigadas: los trabajos que cada una tiene en curso. Contraloría agrega y desactiva las brigadas.",
+		"empty": "No hay brigadas activas en tus áreas.",
+		"available": "Disponible",
+		"jobs_one": "{{count}} trabajo",
+		"jobs_other": "{{count}} trabajos",
+		"no_members": "Sin miembros"
+	},
+	"comptroller_brigades": {
+		"title": "Brigadas",
 		"add_heading": "Agregar brigada",
 		"name_label": "Nombre de brigada *",
 		"area_label": "Área *",
@@ -1065,8 +1074,7 @@
 			"invalid_fields": "Se requieren nombre de brigada válido, área y lista de miembros.",
 			"id_required": "Se requiere el id de la brigada.",
 			"unknown_intent": "Acción desconocida.",
-			"duplicate_code": "Ese código de contratista ya está en uso por otra brigada.",
-			"area_not_allowed": "Esa área está fuera de tus brigadas asignadas."
+			"duplicate_code": "Ese código de contratista ya está en uso por otra brigada."
 		}
 	},
 	"supervisor_variance": {

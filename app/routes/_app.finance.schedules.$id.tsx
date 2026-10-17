@@ -174,7 +174,7 @@ export default function BankSchedulePage({
 				)}
 			</div>
 			{!schedule.sentAt && !schedule.hasXlsx && (
-				<p className="text-sm text-amber-700">
+				<p className="text-sm text-status-warn">
 					{t("finance_schedule.incomplete_notice")}
 				</p>
 			)}

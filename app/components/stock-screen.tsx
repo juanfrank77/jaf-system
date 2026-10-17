@@ -4,10 +4,6 @@ import { AdjustPanel, type MaterialCode } from "~/components/adjust-panel"
 import { MovementTrail } from "~/components/movement-trail"
 import { ReceivePanel } from "~/components/receive-panel"
 import {
-	SerialRegister,
-	type SerialStockRow,
-} from "~/components/serial-register"
-import {
 	SnapshotPanel,
 	type SnapshotRowData,
 } from "~/components/snapshot-panel"
@@ -16,11 +12,9 @@ import { StockTable, type StockTableRow } from "~/components/stock-table"
 export type StockScreenData = {
 	selectedId: string | undefined
 	bulk: StockTableRow[]
-	serial: SerialStockRow[]
 	query: string
 	isLead: boolean
 	materialCodes: MaterialCode[]
-	serialCodeNames: Record<string, { claroCode: string; name: string }>
 	snapshots: SnapshotRowData[]
 }
 
@@ -35,22 +29,26 @@ export type StockScreenData = {
 export function StockScreen({
 	selectedId,
 	bulk,
-	serial,
 	query,
 	isLead,
 	materialCodes,
-	serialCodeNames,
 	snapshots,
-}: StockScreenData) {
+	showTitle = true,
+}: StockScreenData & {
+	/** The route renders the title above the step rail; standalone use keeps it. */
+	showTitle?: boolean
+}) {
 	const { t } = useTranslation()
 	const [selectedCode, setSelectedCode] = useState<string | null>(null)
 
 	if (!selectedId) {
 		return (
-			<div className="mx-auto w-full max-w-3xl p-4">
-				<h1 className="text-lg font-semibold text-foreground">
-					{t("stock.title")}
-				</h1>
+			<div>
+				{showTitle && (
+					<h1 className="text-lg font-semibold text-foreground">
+						{t("stock.title")}
+					</h1>
+				)}
 				<p className="text-sm text-muted-foreground">
 					{t("stock.no_warehouse")}
 				</p>
@@ -59,10 +57,12 @@ export function StockScreen({
 	}
 
 	return (
-		<div className="mx-auto w-full max-w-3xl space-y-6 p-4">
-			<h1 className="text-lg font-semibold text-foreground">
-				{t("stock.title")}
-			</h1>
+		<div className="space-y-6">
+			{showTitle && (
+				<h1 className="text-lg font-semibold text-foreground">
+					{t("stock.title")}
+				</h1>
+			)}
 
 			<section className="space-y-2">
 				<StockTable
@@ -83,10 +83,6 @@ export function StockScreen({
 						onClose={() => setSelectedCode(null)}
 					/>
 				)}
-			</section>
-
-			<section>
-				<SerialRegister rows={serial} codeNames={serialCodeNames} />
 			</section>
 
 			<ReceivePanel warehouseId={selectedId} materialCodes={materialCodes} />

@@ -49,12 +49,48 @@
 		"empty": "No bulk stock for this warehouse.",
 		"view_trail": "View trail",
 		"hide_trail": "Hide",
+		"movement_log": {
+			"col": {
+				"when": "When",
+				"type": "Type",
+				"material": "Material",
+				"serial": "Serial",
+				"qty": "Qty",
+				"who": "Who",
+				"reference": "Job / note"
+			}
+		},
 		"serial_register": {
-			"title": "Serial Register",
-			"empty": "No serialized stock on hand.",
+			"empty": "No serials to show.",
 			"condition": {
 				"NEW": "New",
 				"REFURBISHED": "Refurbished"
+			},
+			"stats": {
+				"in_warehouse": "In warehouse",
+				"on_vans": "On vans",
+				"installed": "Installed",
+				"needs_attention": "Needs attention"
+			},
+			"col": {
+				"serial": "Serial",
+				"sap": "SAP",
+				"material": "Material",
+				"location": "Location",
+				"since": "Since",
+				"last_movement": "Last movement",
+				"action": "Action"
+			},
+			"status": {
+				"WAREHOUSE": "In warehouse",
+				"VAN": "On van",
+				"INSTALLED": "Installed",
+				"REMOVED_PENDING_RETURN": "Owed back",
+				"RETURNED": "Returned",
+				"SENT_FOR_REPAIR": "At repair",
+				"NEEDS_REVIEW": "Needs review",
+				"AWAITING_REPAIR": "Awaiting repair",
+				"LOST": "Lost"
 			}
 		},
 		"trail": {
@@ -187,7 +223,25 @@
 			"warehouse_scan_in": "Scan In Return",
 			"warehouse_restock": "Restocks to Release",
 			"warehouse_stock": "Stock",
-			"comptroller": "Brigades · payroll"
+			"supervisor_review": "Review queue",
+			"supervisor_invoice": "JAF invoices",
+			"supervisor_aviso": "Aviso & match",
+			"supervisor_precert": "Pre-cert sheets",
+			"supervisor_released": "Released to Finance",
+			"supervisor_all": "All work orders",
+			"warehouse_prep": "Work orders to prep",
+			"warehouse_pickup": "Awaiting pickup",
+			"warehouse_returns": "Returns due",
+			"warehouse_repairs": "Repairs",
+			"warehouse_needs_review": "Needs review",
+			"warehouse_triage": "Triage",
+			"warehouse_requests": "Material requests",
+			"warehouse_serials": "Serial register",
+			"warehouse_movements": "Movement log",
+			"comptroller_lists": "Lists from Lissette",
+			"comptroller_to_pay": "Runs to pay",
+			"comptroller_paid": "Paid runs",
+			"comptroller_installers": "Installers"
 		},
 		"notifications": {
 			"bell_label": "Notifications",
@@ -224,9 +278,12 @@
 		"group": {
 			"arm_a": "Arm A · Paying our people",
 			"arm_b": "Arm B · Claro billing",
+			"workflow": "Workflow",
 			"work": "Work",
+			"team": "Team",
 			"money": "Finance",
 			"stock": "Warehouse",
+			"other": "Other",
 			"field": "Field",
 			"admin": "Administration"
 		}
@@ -375,6 +432,9 @@
 	"page_title": {
 		"needs_review": "Needs Review",
 		"restocks_to_release": "Restocks to Release",
+		"material_requests": "Material Requests",
+		"serial_register": "Serial Register",
+		"movement_log": "Movement Log",
 		"stock": "Stock & Audit",
 		"repairs": "Repairs",
 		"scan_in": "Scan In",
@@ -384,6 +444,9 @@
 		"prep": "Prep Materials",
 		"sign": "Capture Signature",
 		"returns": "Log Returns",
+		"warehouse_prep": "Prep Orders",
+		"warehouse_release": "Awaiting Pickup",
+		"warehouse_returns": "Returns Due",
 		"installer_restock": "Restock"
 	},
 	"docs_prep": {
@@ -1256,11 +1319,19 @@
 		"listed": "Listed"
 	},
 	"dashboard": {
+		"stage_queue": {
+			"review": "Review queue",
+			"invoice": "JAF invoices",
+			"aviso": "Aviso & match",
+			"precert": "Pre-cert sheets",
+			"released": "Released to Finance",
+			"all": "All work orders",
+			"count": "{{count}} work orders"
+		},
 		"title": "Dashboard",
 		"supervisor_scope_one": "{{areas}} · {{count}} crew",
 		"supervisor_scope_other": "{{areas}} · {{count}} crews",
 		"more_metrics": "More metrics",
-		"all_work_orders": "All work orders",
 		"since": {
 			"submitted": "Submitted {{ago}}",
 			"returned": "Returned {{ago}}",
@@ -1302,17 +1373,10 @@
 		"crew_sent_back_heading": "Sent Back ({{count}})",
 		"submitted_heading": "Submitted ({{count}})",
 		"submitted_badge": "Awaiting review",
-		"prepped_awaiting_heading": "Awaiting pickup ({{count}})",
 		"prepped_awaiting_badge": "Staged",
-		"missing_materials_heading": "Missing stock ({{count}})",
-		"missing_materials_badge": "Missing stock",
-		"returns_to_log_heading": "Returns due ({{count}})",
 		"returns_to_log_badge": "Expected back",
 		"triage_awaiting_heading": "Returned units awaiting triage ({{count}})",
 		"triage_awaiting_cta": "Triage returned units",
-		"repair_pool_tile": "Repair Pool ({{count}})",
-		"needs_review_tile": "Needs Review ({{count}})",
-		"refurbished_tile": "Refurbished In Stock ({{count}})",
 		"restock_requests_heading": "Restock Requests ({{count}})",
 		"restock_requests_badge": "Restock",
 		"aviso_number": "Aviso #",
@@ -1422,7 +1486,10 @@
 			}
 		},
 		"to_prep_heading": "To prep ({{count}})",
-		"to_prep_badge": "To prep"
+		"to_prep_badge": "To prep",
+		"warehouse_prep_stat": "To prep",
+		"warehouse_release_stat": "Awaiting pickup",
+		"warehouse_returns_stat": "Returns due"
 	},
 	"docs_status": {
 		"created": "Created",
@@ -1742,7 +1809,18 @@
 		"signoff_heading": "Restocks needing sign-off",
 		"submit": "Submit Restock Request"
 	},
+	"pagination": {
+		"nav": "Pagination",
+		"next": "Next",
+		"prev": "Previous",
+		"range": "{{from}}–{{to}} of {{total}}"
+	},
 	"restock_release": {
+		"materials_title": "1. Materials to load",
+		"serials_hint": "Scan or enter one serial per unit",
+		"signatures_title": "2. Signatures",
+		"total": "{{materials}} materials · {{units}} units",
+		"unknown_material": "Unknown material",
 		"heading": "Release Restock to Van",
 		"scan_serial": "Scan/enter serial",
 		"serials": "serial(s)",
@@ -1766,7 +1844,23 @@
 		"par": "Par"
 	},
 	"warehouse": {
+		"requests": {
+			"col": {
+				"van": "Van",
+				"request": "Request",
+				"submitted": "Submitted",
+				"items": "Items",
+				"status": "Status"
+			},
+			"empty": "No material requests yet."
+		},
 		"restock_list": {
+			"materials_one": "{{count}} material",
+			"materials_other": "{{count}} materials",
+			"units_one": "{{count}} unit",
+			"units_other": "{{count}} units",
+			"waiting_days_one": "Waiting {{count}} day",
+			"waiting_days_other": "Waiting {{count}} days",
 			"empty": "No restocks pending release.",
 			"heading": "Restocks to Release",
 			"release": "Release"
@@ -1813,6 +1907,9 @@
 			"arm_b_po_title": "Arm B · Awaiting PO",
 			"arm_b_po_body": "Record the Claro PO against the Aviso, then generate the final Claro document. Several POs per Aviso, and the Awaiting PO and Awaiting Ariba lists, arrive in the next Arm B phase."
 		}
+	},
+	"warehouse_queue": {
+		"empty": "Nothing here right now."
 	},
 	"warehouse_flow": {
 		"aria": "Warehouse work loop",
@@ -1921,6 +2018,21 @@
 	"photo_capture": {
 		"take": "Take photo",
 		"remove": "Remove photo"
+	},
+	"comptroller_lists": {
+		"title": "Lists from Lissette",
+		"callout_body": "Every payroll list Finance has sent. Open a list to pay its accounts in Runs to pay.",
+		"status_unpaid": "{{unpaid}} of {{total}} unpaid",
+		"status_paid": "Paid",
+		"open": "Open",
+		"view": "View",
+		"col": {
+			"list": "List",
+			"sent": "Sent",
+			"work_orders": "Work orders",
+			"total": "Total",
+			"status": "Status"
+		}
 	},
 	"comptroller_payroll": {
 		"title": "Brigades · payroll",

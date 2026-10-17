@@ -11,13 +11,8 @@ export type CrewOnlyKeys =
 
 export type WarehouseOnlyKeys =
 	| "warehouseToPrepDocs"
-	| "warehousePreppedDocs"
-	| "warehouseMissingDocs"
-	| "warehouseReturnsDocs"
+	| "warehouseCounts"
 	| "warehouseTriageCount"
-	| "warehouseRepairPool"
-	| "warehouseNeedsReview"
-	| "warehouseRefurbished"
 
 export type BaseDashboardProps = Omit<
 	DashboardViewProps,

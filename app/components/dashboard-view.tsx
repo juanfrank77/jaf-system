@@ -1,3 +1,5 @@
+import { ArrowRight01Icon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 import type { ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
@@ -13,13 +15,16 @@ import {
 	type JobTypeOption,
 } from "~/components/dashboard-filters"
 import { Badge } from "~/components/ui/badge"
+import { buttonVariants } from "~/components/ui/button"
 import { Pill } from "~/components/ui/pill"
 import { Stat } from "~/components/ui/stat"
+import { WarehouseDocList } from "~/components/warehouse-doc-list"
 import type {
 	DashboardAlert,
 	DashboardExplainer,
 	DashboardStat,
 } from "~/lib/dashboard-stats"
+import type { WarehouseQueue } from "~/lib/warehouse-queues"
 
 type SendBackEntry = {
 	fromStatus: string
@@ -47,13 +52,7 @@ function DashboardView({
 	selectedJobType = null,
 	searchFilter = "",
 	warehouseToPrepDocs = [],
-	warehousePreppedDocs = [],
-	warehouseMissingDocs = [],
-	warehouseReturnsDocs = [],
 	warehouseTriageCount = 0,
-	warehouseRepairPool = 0,
-	warehouseNeedsReview = 0,
-	warehouseRefurbished = 0,
 	crewPreppedDocs = [],
 	crewInFieldDocs = [],
 	crewSentBackDocs = [],
@@ -78,13 +77,8 @@ function DashboardView({
 	selectedJobType?: string | null
 	searchFilter?: string
 	warehouseToPrepDocs?: DashboardDocRow[]
-	warehousePreppedDocs?: DashboardDocRow[]
-	warehouseMissingDocs?: DashboardDocRow[]
-	warehouseReturnsDocs?: DashboardDocRow[]
+	warehouseCounts?: Record<WarehouseQueue, number>
 	warehouseTriageCount?: number
-	warehouseRepairPool?: number
-	warehouseNeedsReview?: number
-	warehouseRefurbished?: number
 	crewPreppedDocs?: DashboardDocRow[]
 	crewInFieldDocs?: DashboardDocRow[]
 	crewSentBackDocs?: DashboardDocRow[]
@@ -376,136 +370,7 @@ function DashboardView({
 						</h2>
 						<Badge variant="warn">{warehouseToPrepDocs.length}</Badge>
 					</div>
-					{warehouseToPrepDocs.map((doc) => (
-						<Link
-							key={doc.id}
-							to={`/docs/${doc.id}/prep`}
-							className="block rounded-lg border border-transparent p-2.5 text-sm transition-colors hover:border-border hover:bg-muted/40"
-						>
-							<div className="flex items-center justify-between gap-2">
-								<span className="font-mono font-medium">
-									{doc.controlNumber}
-								</span>
-								<div className="flex items-center gap-2">
-									<Badge variant="warn">{t("dashboard.to_prep_badge")}</Badge>
-									<span className="text-muted-foreground/50" aria-hidden>
-										›
-									</span>
-								</div>
-							</div>
-							<p className="mt-1 text-xs text-muted-foreground/70">
-								{doc.jobType} — {doc.jobAddressEstimated}
-							</p>
-						</Link>
-					))}
-				</div>
-			)}
-
-			{warehousePreppedDocs.length > 0 && (
-				<div className="space-y-2">
-					<div className="flex items-center justify-between">
-						<h2 className="text-sm font-semibold text-foreground">
-							{t("dashboard.prepped_awaiting_heading", {
-								count: warehousePreppedDocs.length,
-							})}
-						</h2>
-						<Badge variant="info">{warehousePreppedDocs.length}</Badge>
-					</div>
-					{warehousePreppedDocs.map((doc) => (
-						<Link
-							key={doc.id}
-							to={`/docs/${doc.id}/sign`}
-							className="block rounded-lg border border-transparent p-2.5 text-sm transition-colors hover:border-border hover:bg-muted/40"
-						>
-							<div className="flex items-center justify-between gap-2">
-								<span className="font-mono font-medium">
-									{doc.controlNumber}
-								</span>
-								<div className="flex items-center gap-2">
-									{doc.aged && (
-										<Badge variant="danger">
-											{t("dashboard.aged_pickup_badge")}
-										</Badge>
-									)}
-									{doc.daysStaged !== undefined && (
-										<Badge variant={doc.aged ? "danger" : "neutral"}>
-											{t("dashboard.days_staged", { count: doc.daysStaged })}
-										</Badge>
-									)}
-									<Badge variant="info">
-										{t("dashboard.prepped_awaiting_badge")}
-									</Badge>
-								</div>
-							</div>
-							<p className="mt-1 text-xs text-muted-foreground/70">
-								{doc.jobType} — {doc.jobAddressEstimated}
-							</p>
-						</Link>
-					))}
-				</div>
-			)}
-
-			{warehouseReturnsDocs.length > 0 && (
-				<div className="space-y-2">
-					<div className="flex items-center justify-between">
-						<h2 className="text-sm font-semibold text-foreground">
-							{t("dashboard.returns_to_log_heading", {
-								count: warehouseReturnsDocs.length,
-							})}
-						</h2>
-						<Badge variant="warn">{warehouseReturnsDocs.length}</Badge>
-					</div>
-					{warehouseReturnsDocs.map((doc) => (
-						<Link
-							key={doc.id}
-							to={`/docs/${doc.id}/returns`}
-							className="block rounded-lg border border-transparent p-2.5 text-sm transition-colors hover:border-border hover:bg-muted/40"
-						>
-							<div className="flex items-center justify-between gap-2">
-								<span className="font-mono font-medium">
-									{doc.controlNumber}
-								</span>
-								<Badge variant="warn">
-									{t("dashboard.returns_to_log_badge")}
-								</Badge>
-							</div>
-							<p className="mt-1 text-xs text-muted-foreground/70">
-								{doc.jobType} — {doc.jobAddressEstimated}
-							</p>
-						</Link>
-					))}
-				</div>
-			)}
-
-			{warehouseMissingDocs.length > 0 && (
-				<div className="space-y-2">
-					<div className="flex items-center justify-between">
-						<h2 className="text-sm font-semibold text-foreground">
-							{t("dashboard.missing_materials_heading", {
-								count: warehouseMissingDocs.length,
-							})}
-						</h2>
-						<Badge variant="danger">{warehouseMissingDocs.length}</Badge>
-					</div>
-					{warehouseMissingDocs.map((doc) => (
-						<Link
-							key={doc.id}
-							to={`/docs/${doc.id}/prep`}
-							className="block rounded-lg border border-transparent p-2.5 text-sm transition-colors hover:border-border hover:bg-muted/40"
-						>
-							<div className="flex items-center justify-between gap-2">
-								<span className="font-mono font-medium">
-									{doc.controlNumber}
-								</span>
-								<Badge variant="danger">
-									{t("dashboard.missing_materials_badge")}
-								</Badge>
-							</div>
-							<p className="mt-1 text-xs text-muted-foreground/70">
-								{doc.jobType} — {doc.jobAddressEstimated}
-							</p>
-						</Link>
-					))}
+					<WarehouseDocList docs={warehouseToPrepDocs} kind="prep" />
 				</div>
 			)}
 
@@ -521,36 +386,10 @@ function DashboardView({
 					</div>
 					<Link
 						to="/warehouse/triage"
-						className="block rounded-lg border border-transparent p-2.5 text-sm transition-colors hover:border-border hover:bg-muted/40"
+						className={buttonVariants({ size: "lg", className: "w-full" })}
 					>
-						<span className="font-medium">
-							{t("dashboard.triage_awaiting_cta")}
-						</span>
-					</Link>
-				</div>
-			)}
-
-			{(warehouseRepairPool > 0 ||
-				warehouseNeedsReview > 0 ||
-				warehouseRefurbished > 0) && (
-				<div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-					<Link
-						to="/warehouse/repairs"
-						className="rounded-lg border border-border p-3 text-sm transition-colors hover:bg-muted/40"
-					>
-						{t("dashboard.repair_pool_tile", { count: warehouseRepairPool })}
-					</Link>
-					<Link
-						to="/warehouse/needs-review"
-						className="rounded-lg border border-border p-3 text-sm transition-colors hover:bg-muted/40"
-					>
-						{t("dashboard.needs_review_tile", { count: warehouseNeedsReview })}
-					</Link>
-					<Link
-						to="/warehouse/repairs"
-						className="rounded-lg border border-border p-3 text-sm transition-colors hover:bg-muted/40"
-					>
-						{t("dashboard.refurbished_tile", { count: warehouseRefurbished })}
+						{t("dashboard.triage_awaiting_cta")}
+						<HugeiconsIcon icon={ArrowRight01Icon} />
 					</Link>
 				</div>
 			)}

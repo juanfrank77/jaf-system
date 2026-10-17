@@ -110,10 +110,8 @@ export default function Triage({
 	const { t } = useTranslation()
 	const { units } = loaderData
 	return (
-		<div className="mx-auto w-full max-w-2xl space-y-4 p-4">
-			<h1 className="text-lg font-semibold text-foreground">
-				{t("triage.title")}
-			</h1>
+		<div className="space-y-4">
+			<h1 className="text-xl font-semibold">{t("triage.title")}</h1>
 			<WarehouseStepRail current="TRIAGE" />
 			<Callout title={t("warehouse_flow.callout.triage_title")}>
 				{t("warehouse_flow.callout.triage_body")}

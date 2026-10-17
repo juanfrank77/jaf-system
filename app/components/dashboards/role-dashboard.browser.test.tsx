@@ -53,11 +53,8 @@ describe("RoleDashboard", () => {
 		expect(
 			screen.getByRole("heading", { level: 1, name: "Dashboard" }),
 		).toBeInTheDocument()
-		// five queue cards + "All work orders"
-		expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(6)
-		expect(
-			screen.getByRole("heading", { level: 2, name: "All work orders" }),
-		).toBeInTheDocument()
+		// five queue cards; dashboard no longer has an "All work orders" section
+		expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(5)
 	})
 
 	const billedDoc = {
@@ -101,6 +98,70 @@ describe("RoleDashboard", () => {
 			<RoleDashboard {...finance} {...base} docs={[billedDoc]} />,
 		)
 		expect(screen.getByText(/12345678/)).toBeInTheDocument()
+	})
+
+	it("shows the warehouse a count card per step, linking to its page", async ({
+		renderStub,
+	}) => {
+		await mount(
+			renderStub,
+			<RoleDashboard
+				{...{ role: "WAREHOUSE" }}
+				supervisorQueues={null}
+				{...base}
+				warehouseCounts={{ prep: 3, release: 2, returns: 4 }}
+			/>,
+		)
+		expect(screen.getByRole("link", { name: /To prep.*3/ })).toHaveAttribute(
+			"href",
+			"/warehouse/prep",
+		)
+		expect(
+			screen.getByRole("link", { name: /Awaiting pickup.*2/ }),
+		).toHaveAttribute("href", "/warehouse/release")
+		expect(
+			screen.getByRole("link", { name: /Returns due.*4/ }),
+		).toHaveAttribute("href", "/warehouse/returns")
+	})
+
+	it("shows the warehouse one set of count cards, not a second stat row", async ({
+		renderStub,
+	}) => {
+		await mount(
+			renderStub,
+			<RoleDashboard
+				{...{ role: "WAREHOUSE" }}
+				supervisorQueues={null}
+				{...base}
+				stats={[{ labelKey: "dashboard.stat.open_documents", value: 9 }]}
+				warehouseCounts={{ prep: 3, release: 2, returns: 4 }}
+			/>,
+		)
+		expect(screen.getAllByText("Awaiting pickup")).toHaveLength(1)
+		expect(screen.queryByText("Open documents")).not.toBeInTheDocument()
+	})
+
+	it("keeps the incoming to-prep orders on the warehouse dashboard but not the other step lists", async ({
+		renderStub,
+	}) => {
+		const order = (id: string, controlNumber: string) => ({
+			id,
+			controlNumber,
+			status: "CREATED" as const,
+			jobType: "Install",
+			jobAddressEstimated: "Calle 1",
+			createdAt: new Date("2026-10-01T12:00:00Z"),
+		})
+		await mount(
+			renderStub,
+			<RoleDashboard
+				{...{ role: "WAREHOUSE" }}
+				supervisorQueues={null}
+				{...base}
+				warehouseToPrepDocs={[order("p1", "JAF-PREP-1")]}
+			/>,
+		)
+		expect(screen.getByText("JAF-PREP-1")).toBeInTheDocument()
 	})
 })
 
@@ -203,15 +264,11 @@ describe("SupervisorDashboard", () => {
 		).toBeInTheDocument()
 	})
 
-	it("renders the filter bar when filters are enabled", async ({
+	it("does not put the filter bar or the all-orders list on the dashboard", async ({
 		renderStub,
 	}) => {
-		await mountSupervisor(renderStub, { showFilters: true })
-		expect(screen.getByRole("searchbox")).toBeInTheDocument()
-	})
-
-	it("lists all work orders", async ({ renderStub }) => {
 		await mountSupervisor(renderStub, {
+			showFilters: true,
 			docs: [
 				{
 					id: "d1",
@@ -223,7 +280,26 @@ describe("SupervisorDashboard", () => {
 				},
 			],
 		})
-		expect(screen.getByText("JAF-2026-1001")).toBeInTheDocument()
+		expect(screen.queryByRole("searchbox")).not.toBeInTheDocument()
+		expect(screen.queryByText("All work orders")).not.toBeInTheDocument()
+		expect(screen.queryByText("JAF-2026-1001")).not.toBeInTheDocument()
+	})
+
+	it("shows the filter bar on the All work orders view", async ({
+		renderStub,
+	}) => {
+		await mountSupervisor(renderStub, { showFilters: true, stageQueue: "all" })
+		expect(screen.getByRole("searchbox")).toBeInTheDocument()
+	})
+
+	it("keeps the filter bar off the other step views", async ({
+		renderStub,
+	}) => {
+		await mountSupervisor(renderStub, {
+			showFilters: true,
+			stageQueue: "invoice",
+		})
+		expect(screen.queryByRole("searchbox")).not.toBeInTheDocument()
 	})
 
 	it("shows how long a row has been waiting and flags quantity discrepancies", async ({

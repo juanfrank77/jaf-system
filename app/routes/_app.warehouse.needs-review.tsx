@@ -90,10 +90,8 @@ export default function NeedsReview({
 	const { t } = useTranslation()
 	const { units } = loaderData
 	return (
-		<div className="mx-auto w-full max-w-2xl space-y-4 p-4">
-			<h1 className="text-lg font-semibold text-foreground">
-				{t("needs_review.title")}
-			</h1>
+		<div className="space-y-4">
+			<h1 className="text-xl font-semibold">{t("needs_review.title")}</h1>
 			<WarehouseStepRail current="REVIEW" />
 			<Callout title={t("warehouse_flow.callout.review_title")} tone="warn">
 				{t("warehouse_flow.callout.review_body")}

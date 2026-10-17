@@ -60,6 +60,11 @@ export function hasActiveFilters({
 	)
 }
 
+export function clearFiltersHref(pathname: string, search: string): string {
+	const stage = new URLSearchParams(search).get("stage")
+	return stage ? `${pathname}?stage=${stage}` : pathname
+}
+
 export function ClearFiltersButton() {
 	const { t } = useTranslation()
 	const location = useLocation()
@@ -68,7 +73,10 @@ export function ClearFiltersButton() {
 			variant="ghost"
 			size="sm"
 			onClick={() => {
-				window.location.href = location.pathname
+				window.location.href = clearFiltersHref(
+					location.pathname,
+					location.search,
+				)
 			}}
 			className="text-xs"
 		>

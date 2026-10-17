@@ -49,12 +49,48 @@
 		"empty": "No hay inventario a granel para este almacén.",
 		"view_trail": "Ver historial",
 		"hide_trail": "Ocultar",
+		"movement_log": {
+			"col": {
+				"when": "Cuándo",
+				"type": "Tipo",
+				"material": "Material",
+				"serial": "Serial",
+				"qty": "Cant.",
+				"who": "Quién",
+				"reference": "Trabajo / nota"
+			}
+		},
 		"serial_register": {
-			"title": "Registro de seriales",
-			"empty": "No hay inventario serializado disponible.",
+			"empty": "No hay seriales para mostrar.",
 			"condition": {
 				"NEW": "Nuevo",
 				"REFURBISHED": "Reacondicionado"
+			},
+			"stats": {
+				"in_warehouse": "En almacén",
+				"on_vans": "En vans",
+				"installed": "Instalados",
+				"needs_attention": "Requieren atención"
+			},
+			"col": {
+				"serial": "Serial",
+				"sap": "SAP",
+				"material": "Material",
+				"location": "Ubicación",
+				"since": "Desde",
+				"last_movement": "Último movimiento",
+				"action": "Acción"
+			},
+			"status": {
+				"WAREHOUSE": "En almacén",
+				"VAN": "En van",
+				"INSTALLED": "Instalado",
+				"REMOVED_PENDING_RETURN": "Por devolver",
+				"RETURNED": "Devuelto",
+				"SENT_FOR_REPAIR": "En reparación",
+				"NEEDS_REVIEW": "Requiere revisión",
+				"AWAITING_REPAIR": "Esperando reparación",
+				"LOST": "Perdido"
 			}
 		},
 		"trail": {
@@ -187,7 +223,25 @@
 			"warehouse_scan_in": "Registrar Devolución",
 			"warehouse_restock": "Reabastecimientos por Liberar",
 			"warehouse_stock": "Inventario",
-			"comptroller": "Brigadas · nómina"
+			"supervisor_review": "Cola de revisión",
+			"supervisor_invoice": "Facturas JAF",
+			"supervisor_aviso": "Aviso y cotejo",
+			"supervisor_precert": "Hojas de precertificación",
+			"supervisor_released": "Liberadas a Finanzas",
+			"supervisor_all": "Todas las órdenes de trabajo",
+			"warehouse_prep": "Órdenes por preparar",
+			"warehouse_pickup": "Pendientes de recogida",
+			"warehouse_returns": "Devoluciones esperadas",
+			"warehouse_repairs": "Reparaciones",
+			"warehouse_needs_review": "Requiere revisión",
+			"warehouse_triage": "Triaje",
+			"warehouse_requests": "Solicitudes de material",
+			"warehouse_serials": "Registro de seriales",
+			"warehouse_movements": "Registro de movimientos",
+			"comptroller_lists": "Listas de Lissette",
+			"comptroller_to_pay": "Corridas por pagar",
+			"comptroller_paid": "Corridas pagadas",
+			"comptroller_installers": "Instaladores"
 		},
 		"notifications": {
 			"bell_label": "Notificaciones",
@@ -224,9 +278,12 @@
 		"group": {
 			"arm_a": "Brazo A · Pago a nuestra gente",
 			"arm_b": "Brazo B · Facturación a Claro",
+			"workflow": "Flujo",
 			"work": "Trabajo",
+			"team": "Equipo",
 			"money": "Finanzas",
 			"stock": "Almacén",
+			"other": "Otros",
 			"field": "Campo",
 			"admin": "Administración"
 		}
@@ -375,6 +432,9 @@
 	"page_title": {
 		"needs_review": "Requiere revisión",
 		"restocks_to_release": "Reposiciones por liberar",
+		"material_requests": "Solicitudes de material",
+		"serial_register": "Registro de seriales",
+		"movement_log": "Registro de movimientos",
 		"stock": "Inventario y auditoría",
 		"repairs": "Reparaciones",
 		"scan_in": "Escanear entrada",
@@ -384,6 +444,9 @@
 		"prep": "Preparar materiales",
 		"sign": "Capturar firma",
 		"returns": "Registrar devoluciones",
+		"warehouse_prep": "Preparar órdenes",
+		"warehouse_release": "Esperando recogido",
+		"warehouse_returns": "Devoluciones pendientes",
 		"installer_restock": "Reabastecimiento"
 	},
 	"docs_prep": {
@@ -1256,11 +1319,19 @@
 		"listed": "En lista"
 	},
 	"dashboard": {
+		"stage_queue": {
+			"review": "Cola de revisión",
+			"invoice": "Facturas JAF",
+			"aviso": "Aviso y cotejo",
+			"precert": "Hojas de precertificación",
+			"released": "Liberadas a Finanzas",
+			"all": "Todas las órdenes de trabajo",
+			"count": "{{count}} órdenes de trabajo"
+		},
 		"title": "Panel",
 		"supervisor_scope_one": "{{areas}} · {{count}} brigada",
 		"supervisor_scope_other": "{{areas}} · {{count}} brigadas",
 		"more_metrics": "Más métricas",
-		"all_work_orders": "Todas las órdenes",
 		"since": {
 			"submitted": "Entregado {{ago}}",
 			"returned": "Devuelto {{ago}}",
@@ -1302,17 +1373,10 @@
 		"crew_sent_back_heading": "Devueltos ({{count}})",
 		"submitted_heading": "Enviados ({{count}})",
 		"submitted_badge": "Esperando revisión",
-		"prepped_awaiting_heading": "Esperando recogida ({{count}})",
 		"prepped_awaiting_badge": "Preparado",
-		"missing_materials_heading": "Stock faltante ({{count}})",
-		"missing_materials_badge": "Falta stock",
-		"returns_to_log_heading": "Devoluciones pendientes ({{count}})",
 		"returns_to_log_badge": "Se espera de vuelta",
 		"triage_awaiting_heading": "Unidades devueltas en espera de triaje ({{count}})",
 		"triage_awaiting_cta": "Triaje de unidades devueltas",
-		"repair_pool_tile": "Fila de reparación ({{count}})",
-		"needs_review_tile": "Requiere revisión ({{count}})",
-		"refurbished_tile": "Reacondicionados en inventario ({{count}})",
 		"restock_requests_heading": "Solicitudes de reabastecimiento ({{count}})",
 		"restock_requests_badge": "Reabastecer",
 		"aviso_number": "Aviso #",
@@ -1422,7 +1486,10 @@
 			}
 		},
 		"to_prep_heading": "Por preparar ({{count}})",
-		"to_prep_badge": "Por preparar"
+		"to_prep_badge": "Por preparar",
+		"warehouse_prep_stat": "Por preparar",
+		"warehouse_release_stat": "Pendiente de recogida",
+		"warehouse_returns_stat": "Devoluciones pendientes"
 	},
 	"docs_status": {
 		"created": "Creado",
@@ -1742,7 +1809,18 @@
 		"signoff_heading": "Reabastecimientos pendientes de aprobación",
 		"submit": "Enviar solicitud de reabastecimiento"
 	},
+	"pagination": {
+		"nav": "Paginación",
+		"next": "Siguiente",
+		"prev": "Anterior",
+		"range": "{{from}}–{{to}} de {{total}}"
+	},
 	"restock_release": {
+		"materials_title": "1. Materiales a cargar",
+		"serials_hint": "Escanee o ingrese un serial por unidad",
+		"signatures_title": "2. Firmas",
+		"total": "{{materials}} materiales · {{units}} unidades",
+		"unknown_material": "Material desconocido",
 		"scan_serial": "Escanear/ingresar número de serie",
 		"serials": "número(s) de serie",
 		"submit": "Liberar",
@@ -1766,7 +1844,23 @@
 		"par": "Par"
 	},
 	"warehouse": {
+		"requests": {
+			"col": {
+				"van": "Van",
+				"request": "Solicitud",
+				"submitted": "Enviada",
+				"items": "Artículos",
+				"status": "Estado"
+			},
+			"empty": "Aún no hay solicitudes de material."
+		},
 		"restock_list": {
+			"materials_one": "{{count}} material",
+			"materials_other": "{{count}} materiales",
+			"units_one": "{{count}} unidad",
+			"units_other": "{{count}} unidades",
+			"waiting_days_one": "Esperando {{count}} día",
+			"waiting_days_other": "Esperando {{count}} días",
 			"empty": "No hay reabastecimientos pendientes de liberación.",
 			"heading": "Reabastecimientos por liberar",
 			"release": "Liberar"
@@ -1777,6 +1871,9 @@
 			"submit": "Escanear entrada",
 			"success": "Devuelto exitosamente."
 		}
+	},
+	"warehouse_queue": {
+		"empty": "Nada por ahora."
 	},
 	"warehouse_flow": {
 		"aria": "Circuito de trabajo del almacén",
@@ -1921,6 +2018,21 @@
 	"photo_capture": {
 		"take": "Tomar foto",
 		"remove": "Quitar foto"
+	},
+	"comptroller_lists": {
+		"title": "Listas de Lissette",
+		"callout_body": "Todas las listas de nómina que Finanzas ha enviado. Abra una lista para pagar sus cuentas en Corridas por pagar.",
+		"status_unpaid": "{{unpaid}} de {{total}} sin pagar",
+		"status_paid": "Pagada",
+		"open": "Abrir",
+		"view": "Ver",
+		"col": {
+			"list": "Lista",
+			"sent": "Enviada",
+			"work_orders": "Órdenes de trabajo",
+			"total": "Total",
+			"status": "Estado"
+		}
 	},
 	"comptroller_payroll": {
 		"title": "Brigadas · nómina",

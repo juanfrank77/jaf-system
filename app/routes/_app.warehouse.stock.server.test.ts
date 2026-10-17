@@ -137,44 +137,5 @@ describe("stock & audit loader", () => {
 
 		expect(data.selectedId).toBeUndefined()
 		expect(data.bulk).toEqual([])
-		expect(data.serial).toEqual([])
-	})
-
-	it("resolves serial-register code names for serialized on-hand rows", async () => {
-		const wh = t.track("warehouse", await seedWarehouse())
-		const user = t.track("user", await seedUser({ role: "WAREHOUSE" }))
-		await db.warehouseAssignment.create({
-			data: { userId: user.id, warehouseId: wh.id, isLead: true },
-		})
-		const serialized = t.track(
-			"serviceCode",
-			await seedMaterial({ serialized: true }),
-		)
-		t.track(
-			"serialLocation",
-			await db.serialLocation.create({
-				data: {
-					serial: `S-${Date.now()}`,
-					serviceCodeId: serialized.id,
-					status: "WAREHOUSE",
-					condition: "NEW",
-					currentRef: wh.id,
-				},
-			}),
-		)
-		mocks.requireRole.mockResolvedValue({ user })
-
-		const data = await loader({
-			request: req("http://x/warehouse/stock", `wh=${wh.id}`),
-			params: {},
-			context: {},
-		} as never)
-
-		expect(data.serial.some((s) => s.serviceCodeId === serialized.id)).toBe(
-			true,
-		)
-		expect(data.serialCodeNames[serialized.id]?.claroCode).toBe(
-			serialized.claroCode,
-		)
 	})
 })

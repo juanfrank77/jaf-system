@@ -1,47 +1,111 @@
 import { screen } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
-import { SerialRegister, type SerialStockRow } from "./serial-register"
+import {
+	SerialRegister,
+	type SerialRegisterRow,
+	type SerialRegisterStats,
+} from "./serial-register"
 
-const rows: SerialStockRow[] = [
-	{ serviceCodeId: "sc-1", condition: "NEW", count: 3 },
-	{ serviceCodeId: "sc-1", condition: "REFURBISHED", count: 1 },
-	{ serviceCodeId: "sc-2", condition: "NEW", count: 2 },
-]
+const stats: SerialRegisterStats = {
+	inWarehouse: 18,
+	onVans: 11,
+	installed: 27,
+	needsAttention: 3,
+}
 
-const codeNames = {
-	"sc-1": { claroCode: "34006428", name: "ONT XYZ" },
-	"sc-2": { claroCode: "34009999", name: "ONT ABC" },
+const row = (over: Partial<SerialRegisterRow>): SerialRegisterRow => ({
+	serial: "4009642-A8812",
+	serviceCodeId: "sc-1",
+	claroCode: "4009642",
+	material: "MODEM 788 ADSL/VDSL V3",
+	status: "WAREHOUSE",
+	condition: "NEW",
+	vanName: null,
+	since: "2026-08-29T12:00:00.000Z",
+	lastMovement: { type: "RETURN", at: "2026-08-29T12:00:00.000Z" },
+	...over,
+})
+
+const pageProps = {
+	page: 1,
+	pageCount: 1,
+	total: 2,
+	pageSize: 15,
+	hrefFor: (p: number) => `?page=${p}`,
 }
 
 describe("SerialRegister", () => {
-	it("groups rows by material with NEW/REFURBISHED counts", async ({
+	it("lists one row per serial with its status and the headline counts", async ({
 		renderStub,
 	}) => {
 		await renderStub({
 			entries: [
 				{
 					path: "/",
-					Component: () => <SerialRegister rows={rows} codeNames={codeNames} />,
+					Component: () => (
+						<SerialRegister
+							{...pageProps}
+							stats={stats}
+							rows={[
+								row({}),
+								row({
+									serial: "4012210-C4471",
+									status: "VAN",
+									vanName: "J. Colón",
+								}),
+							]}
+						/>
+					),
 				},
 			],
 		})
-		const first = screen.getByText("34006428 — ONT XYZ").closest("div")
-		expect(first).toHaveTextContent("New 3")
-		expect(first).toHaveTextContent("Refurbished 1")
-		expect(screen.getByText("34009999 — ONT ABC")).toBeInTheDocument()
+		expect(screen.getByText("18")).toBeInTheDocument()
+		expect(screen.getByTestId("serial-row-4009642-A8812")).toHaveTextContent(
+			"In warehouse",
+		)
+		expect(screen.getByTestId("serial-row-4012210-C4471")).toHaveTextContent(
+			"On van · J. Colón",
+		)
 	})
 
-	it("shows an empty state when there is no serialized stock", async ({
+	it("links a unit awaiting triage to the Triage step, and gives stocked units no action", async ({
 		renderStub,
 	}) => {
 		await renderStub({
 			entries: [
 				{
 					path: "/",
-					Component: () => <SerialRegister rows={[]} codeNames={{}} />,
+					Component: () => (
+						<SerialRegister
+							{...pageProps}
+							stats={stats}
+							rows={[
+								row({ serial: "R-1", status: "RETURNED" }),
+								row({ serial: "W-1", status: "WAREHOUSE" }),
+							]}
+						/>
+					),
 				},
 			],
 		})
-		expect(screen.getByText("No serialized stock on hand.")).toBeInTheDocument()
+		const link = screen.getByRole("link", { name: "Triage" })
+		expect(link).toHaveAttribute("href", "/warehouse/triage")
+		expect(screen.getAllByRole("link")).toHaveLength(1)
+	})
+
+	it("shows an empty state when there are no serials", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<SerialRegister {...pageProps} total={0} stats={stats} rows={[]} />
+					),
+				},
+			],
+		})
+		expect(screen.getByText("No serials to show.")).toBeInTheDocument()
 	})
 })

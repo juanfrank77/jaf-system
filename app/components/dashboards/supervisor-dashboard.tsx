@@ -12,6 +12,7 @@ import { PageHeader } from "~/components/ui/page-header"
 import { Pill } from "~/components/ui/pill"
 import { QueueCard } from "~/components/ui/queue-card"
 import { Stat } from "~/components/ui/stat"
+import type { SupervisorQueue } from "~/lib/supervisor-queues"
 import type { SupervisorStage } from "~/lib/supervisor-stage"
 import { formatMoney } from "~/lib/utils"
 import type { DashboardViewProps } from "./types"
@@ -145,10 +146,12 @@ function Queue({
 export function SupervisorDashboard({
 	queues,
 	scope,
+	stageQueue = null,
 	view,
 }: {
 	queues: SupervisorQueues
 	scope: SupervisorScope | null
+	stageQueue?: SupervisorQueue | null
 	view: DashboardViewProps
 }) {
 	const { t } = useTranslation()
@@ -170,6 +173,33 @@ export function SupervisorDashboard({
 		selectedJobType,
 		searchFilter,
 	})
+	// A sidebar queue narrows the page to that step's work orders.
+	if (stageQueue) {
+		return (
+			<div className="space-y-4">
+				<PageHeader
+					title={t(`dashboard.stage_queue.${stageQueue}`)}
+					description={t("dashboard.stage_queue.count", { count: docs.length })}
+					actions={
+						stageQueue === "all" && showFilters && filtersActive ? (
+							<ClearFiltersButton />
+						) : null
+					}
+				/>
+				{stageQueue === "all" && showFilters && (
+					<DashboardFilters
+						crewOptions={crewOptions}
+						jobTypeOptions={jobTypeOptions}
+						selectedStatus={selectedStatus}
+						selectedCrew={selectedCrew}
+						selectedJobType={selectedJobType}
+						searchFilter={searchFilter}
+					/>
+				)}
+				<DashboardDocList docs={docs} />
+			</div>
+		)
+	}
 	const workingStats = stats.slice(0, 4)
 	const accountingStats = stats.slice(4)
 	return (
@@ -184,7 +214,6 @@ export function SupervisorDashboard({
 							})
 						: undefined
 				}
-				actions={showFilters && filtersActive ? <ClearFiltersButton /> : null}
 			/>
 
 			{alert && (
@@ -194,17 +223,6 @@ export function SupervisorDashboard({
 				>
 					{t(alert.key, { count: alert.count })}
 				</Pill>
-			)}
-
-			{showFilters && (
-				<DashboardFilters
-					crewOptions={crewOptions}
-					jobTypeOptions={jobTypeOptions}
-					selectedStatus={selectedStatus}
-					selectedCrew={selectedCrew}
-					selectedJobType={selectedJobType}
-					searchFilter={searchFilter}
-				/>
 			)}
 
 			<div
@@ -284,13 +302,6 @@ export function SupervisorDashboard({
 				href={(r) => `/docs/${r.id}/review`}
 				since="approved"
 			/>
-
-			<section className="space-y-2">
-				<h2 className="text-sm font-semibold text-foreground">
-					{t("dashboard.all_work_orders")}
-				</h2>
-				<DashboardDocList docs={docs} />
-			</section>
 		</div>
 	)
 }

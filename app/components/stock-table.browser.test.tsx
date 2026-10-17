@@ -240,4 +240,61 @@ describe("StockTable", () => {
 		expect(row).not.toHaveTextContent("12 PZA")
 		expect(row).not.toHaveTextContent("= 1200 CAJAS")
 	})
+
+	it("pages the table ten rows at a time and goes back to page 1 when searching", async ({
+		renderStub,
+	}) => {
+		const many: StockTableRow[] = Array.from({ length: 23 }, (_, i) => ({
+			...rows[0],
+			serviceCodeId: `sc-${i}`,
+			canonicalName: `MATERIAL ${String(i).padStart(2, "0")}`,
+			claroCode: `SAP-${i}`,
+		}))
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<StockTable
+							rows={many}
+							selectedCode={null}
+							onSelectCode={() => {}}
+						/>
+					),
+				},
+			],
+		})
+		expect(screen.getAllByTestId(/^stock-row-/)).toHaveLength(10)
+		expect(screen.getByText("1–10 of 23")).toBeInTheDocument()
+
+		await userEvent.click(screen.getByRole("button", { name: "Next" }))
+		await userEvent.click(screen.getByRole("button", { name: "Next" }))
+		expect(screen.getAllByTestId(/^stock-row-/)).toHaveLength(3)
+		expect(screen.getByText("21–23 of 23")).toBeInTheDocument()
+
+		await userEvent.type(screen.getByRole("searchbox"), "MATERIAL 1")
+		// 10 matches fit one page: still on page 3 there would be nothing to show.
+		expect(screen.getAllByTestId(/^stock-row-/)).toHaveLength(10)
+		expect(screen.queryByRole("navigation")).toBeNull()
+	})
+
+	it("shows no pager when everything fits on one page", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<StockTable
+							rows={rows}
+							selectedCode={null}
+							onSelectCode={() => {}}
+						/>
+					),
+				},
+			],
+		})
+		expect(screen.queryByRole("navigation")).toBeNull()
+	})
 })

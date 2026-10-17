@@ -11,6 +11,15 @@ import {
 	Wallet01Icon,
 } from "@hugeicons/core-free-icons"
 import type { IconSvgElement } from "@hugeicons/react"
+import {
+	type SupervisorQueue,
+	supervisorQueueHref,
+} from "~/lib/supervisor-queues"
+import {
+	WAREHOUSE_QUEUE_LABEL_KEY,
+	WAREHOUSE_QUEUES,
+	warehouseQueueHref,
+} from "~/lib/warehouse-queues"
 import type { Role } from "../../generated/prisma/client"
 
 export type NavLabelKey =
@@ -26,7 +35,6 @@ export type NavLabelKey =
 	| "app_shell.nav.finance_awaiting_ariba"
 	| "app_shell.nav.admin_settings"
 	| "app_shell.nav.catalog"
-	| "app_shell.nav.comptroller"
 	| "app_shell.nav.admin_users"
 	| "app_shell.nav.admin_crews"
 	| "app_shell.nav.admin_vans"
@@ -41,16 +49,38 @@ export type NavLabelKey =
 	| "app_shell.nav.warehouse_scan_in"
 	| "app_shell.nav.warehouse_restock"
 	| "app_shell.nav.warehouse_stock"
+	| "app_shell.nav.supervisor_review"
+	| "app_shell.nav.supervisor_invoice"
+	| "app_shell.nav.supervisor_aviso"
+	| "app_shell.nav.supervisor_precert"
+	| "app_shell.nav.supervisor_released"
+	| "app_shell.nav.supervisor_all"
+	| "app_shell.nav.warehouse_prep"
+	| "app_shell.nav.warehouse_pickup"
+	| "app_shell.nav.warehouse_returns"
+	| "app_shell.nav.warehouse_repairs"
+	| "app_shell.nav.warehouse_needs_review"
+	| "app_shell.nav.warehouse_triage"
+	| "app_shell.nav.warehouse_requests"
+	| "app_shell.nav.warehouse_serials"
+	| "app_shell.nav.warehouse_movements"
+	| "app_shell.nav.comptroller_lists"
+	| "app_shell.nav.comptroller_to_pay"
+	| "app_shell.nav.comptroller_paid"
+	| "app_shell.nav.comptroller_installers"
 
 export type NavCount = { value: number; tone: "critical" | "neutral" }
 
 export type NavGroupKey =
 	| "overview"
+	| "workflow"
 	| "work"
+	| "team"
 	| "arm_a"
 	| "arm_b"
 	| "money"
 	| "stock"
+	| "other"
 	| "field"
 	| "admin"
 type GroupLabelKey = `app_shell.group.${Exclude<NavGroupKey, "overview">}`
@@ -70,26 +100,138 @@ export type NavItem = {
 }
 export type NavGroup = { key: NavGroupKey; items: NavItem[] }
 
+// "work" leads "workflow" so the warehouse's prep -> pickup -> returns steps
+// are the first thing under Dashboard.
 const GROUP_ORDER: NavGroupKey[] = [
 	"overview",
 	"work",
+	"workflow",
+	"team",
 	"arm_a",
 	"arm_b",
 	"money",
 	"stock",
+	"other",
 	"field",
 	"admin",
 ]
 export const GROUP_LABEL_KEY: Record<NavGroupKey, GroupLabelKey | null> = {
 	overview: null,
+	workflow: "app_shell.group.workflow",
 	work: "app_shell.group.work",
+	team: "app_shell.group.team",
 	arm_a: "app_shell.group.arm_a",
 	arm_b: "app_shell.group.arm_b",
 	money: "app_shell.group.money",
 	stock: "app_shell.group.stock",
+	other: "app_shell.group.other",
 	field: "app_shell.group.field",
 	admin: "app_shell.group.admin",
 }
+
+// The supervisor's queues, in step-rail order from Approve onward: each is a
+// filtered view of the dashboard, not a separate screen.
+const SUPERVISOR_QUEUE_ITEMS: NavItem[] = (
+	[
+		["review", "app_shell.nav.supervisor_review"],
+		["invoice", "app_shell.nav.supervisor_invoice"],
+		["aviso", "app_shell.nav.supervisor_aviso"],
+		["precert", "app_shell.nav.supervisor_precert"],
+		["released", "app_shell.nav.supervisor_released"],
+		["all", "app_shell.nav.supervisor_all"],
+	] as [SupervisorQueue, NavLabelKey][]
+).map(([queue, labelKey]) => ({
+	to: supervisorQueueHref(queue),
+	labelKey,
+	icon: Invoice02Icon,
+	group: "work" as const,
+	roles: ["SUPERVISOR"] as Role[],
+}))
+
+// The warehouse's steps, one page each: the job-rail steps it owns.
+const WAREHOUSE_QUEUE_ITEMS: NavItem[] = WAREHOUSE_QUEUES.map((queue) => ({
+	to: warehouseQueueHref(queue),
+	labelKey: WAREHOUSE_QUEUE_LABEL_KEY[queue],
+	icon: TruckDeliveryIcon,
+	group: "work" as const,
+	roles: ["WAREHOUSE"] as Role[],
+}))
+
+// Scan in, Restock and Stock: the warehouse's own flows. Admin keeps the same
+// links under its existing "stock" group, so only Warehouse sees "workflow".
+const warehouseFlowItems = (group: NavGroupKey, roles: Role[]): NavItem[] => [
+	{
+		to: "/warehouse/scan-in",
+		labelKey: "app_shell.nav.warehouse_scan_in",
+		icon: TruckDeliveryIcon,
+		group,
+		roles,
+	},
+	{
+		to: "/warehouse/restock",
+		labelKey: "app_shell.nav.warehouse_restock",
+		icon: TruckDeliveryIcon,
+		group,
+		roles,
+	},
+	{
+		to: "/warehouse/stock",
+		labelKey: "app_shell.nav.warehouse_stock",
+		icon: GridViewIcon,
+		group,
+		roles,
+	},
+]
+
+// The warehouse's "workflow" group mirrors its step rail
+// (`WAREHOUSE_STEPS`): Scan in, Triage, Needs review, Repairs, Restock, Stock.
+const WAREHOUSE_WORKFLOW_ITEMS: NavItem[] = (
+	[
+		[
+			"/warehouse/scan-in",
+			"app_shell.nav.warehouse_scan_in",
+			TruckDeliveryIcon,
+		],
+		["/warehouse/triage", "app_shell.nav.warehouse_triage", TruckDeliveryIcon],
+		[
+			"/warehouse/needs-review",
+			"app_shell.nav.warehouse_needs_review",
+			TruckDeliveryIcon,
+		],
+		[
+			"/warehouse/repairs",
+			"app_shell.nav.warehouse_repairs",
+			TruckDeliveryIcon,
+		],
+		[
+			"/warehouse/restock",
+			"app_shell.nav.warehouse_restock",
+			TruckDeliveryIcon,
+		],
+		["/warehouse/stock", "app_shell.nav.warehouse_stock", GridViewIcon],
+	] as [string, NavLabelKey, IconSvgElement][]
+).map(([to, labelKey, icon]) => ({
+	to,
+	labelKey,
+	icon,
+	group: "workflow" as const,
+	roles: ["WAREHOUSE"] as Role[],
+}))
+
+// The warehouse's reference views: each its own page.
+const WAREHOUSE_OTHER_ITEMS: NavItem[] = (
+	[
+		["/warehouse/requests", "app_shell.nav.warehouse_requests"],
+		["/warehouse/serials", "app_shell.nav.warehouse_serials"],
+		["/warehouse/movements", "app_shell.nav.warehouse_movements"],
+	] as [string, NavLabelKey][]
+).map(([to, labelKey]) => ({
+	to,
+	labelKey,
+	icon: TruckDeliveryIcon,
+	group: "other" as const,
+	roles: ["WAREHOUSE"] as Role[],
+}))
 
 const NAV_ITEMS: NavItem[] = [
 	{
@@ -97,8 +239,15 @@ const NAV_ITEMS: NavItem[] = [
 		labelKey: "app_shell.nav.dashboard",
 		icon: DashboardSquare01Icon,
 		group: "overview",
-		// The installer's home is /installer.
-		hideFor: ["INSTALLER"],
+		// The installer's home is /installer, the comptroller's is /comptroller.
+		hideFor: ["INSTALLER", "COMPTROLLER"],
+	},
+	{
+		to: "/comptroller",
+		labelKey: "app_shell.nav.dashboard",
+		icon: DashboardSquare01Icon,
+		group: "overview",
+		roles: ["COMPTROLLER"],
 	},
 	{
 		to: "/docs/new",
@@ -107,18 +256,19 @@ const NAV_ITEMS: NavItem[] = [
 		group: "work",
 		roles: ["SUPERVISOR", "ADMIN"],
 	},
+	...SUPERVISOR_QUEUE_ITEMS,
 	{
 		to: "/supervisor/brigades",
 		labelKey: "app_shell.nav.supervisor_brigades",
 		icon: UserGroup03Icon,
-		group: "work",
+		group: "team",
 		roles: ["SUPERVISOR"],
 	},
 	{
 		to: "/supervisor/variance",
 		labelKey: "app_shell.nav.supervisor_variance",
 		icon: Invoice02Icon,
-		group: "work",
+		group: "team",
 		roles: ["SUPERVISOR"],
 	},
 	{
@@ -180,33 +330,38 @@ const NAV_ITEMS: NavItem[] = [
 		roles: ["FINANCE", "ADMIN"],
 	},
 	{
-		to: "/comptroller",
-		labelKey: "app_shell.nav.comptroller",
+		to: "/comptroller/lists",
+		labelKey: "app_shell.nav.comptroller_lists",
 		icon: Wallet01Icon,
 		group: "money",
 		roles: ["COMPTROLLER", "ADMIN"],
 	},
 	{
-		to: "/warehouse/scan-in",
-		labelKey: "app_shell.nav.warehouse_scan_in",
-		icon: TruckDeliveryIcon,
-		group: "stock",
-		roles: ["WAREHOUSE", "ADMIN"],
+		to: "/comptroller/to-pay",
+		labelKey: "app_shell.nav.comptroller_to_pay",
+		icon: Wallet01Icon,
+		group: "money",
+		roles: ["COMPTROLLER", "ADMIN"],
 	},
 	{
-		to: "/warehouse/restock",
-		labelKey: "app_shell.nav.warehouse_restock",
-		icon: TruckDeliveryIcon,
-		group: "stock",
-		roles: ["WAREHOUSE", "ADMIN"],
+		to: "/comptroller/paid",
+		labelKey: "app_shell.nav.comptroller_paid",
+		icon: Wallet01Icon,
+		group: "money",
+		roles: ["COMPTROLLER", "ADMIN"],
 	},
 	{
-		to: "/warehouse/stock",
-		labelKey: "app_shell.nav.warehouse_stock",
-		icon: GridViewIcon,
-		group: "stock",
-		roles: ["WAREHOUSE", "ADMIN"],
+		to: "/comptroller/installers",
+		labelKey: "app_shell.nav.comptroller_installers",
+		icon: UserGroup03Icon,
+		group: "money",
+		roles: ["COMPTROLLER", "ADMIN"],
+		disabled: true,
 	},
+	...WAREHOUSE_WORKFLOW_ITEMS,
+	...WAREHOUSE_QUEUE_ITEMS,
+	...WAREHOUSE_OTHER_ITEMS,
+	...warehouseFlowItems("stock", ["ADMIN"]),
 	{
 		to: "/installer",
 		labelKey: "app_shell.nav.installer",
@@ -257,6 +412,28 @@ const NAV_ITEMS: NavItem[] = [
 		roles: ["ADMIN"],
 	},
 ]
+
+/**
+ * Whether a nav link is the one on screen. Queue links share a path with
+ * their siblings and differ only by `?stage=` or `#anchor`, so those must
+ * match exactly; a plain link is active only when no queue is selected.
+ */
+export function isNavItemActive(
+	to: string,
+	location: { pathname: string; search: string; hash: string },
+): boolean {
+	const [rest, hash = ""] = to.split("#")
+	const [path, search = ""] = rest.split("?")
+	if (location.pathname !== path) return false
+	if (search) {
+		return (
+			new URLSearchParams(location.search).get("stage") ===
+			new URLSearchParams(search).get("stage")
+		)
+	}
+	if (hash) return location.hash === `#${hash}`
+	return !new URLSearchParams(location.search).has("stage") && !location.hash
+}
 
 type NavOpts = { varianceEnabled?: boolean }
 

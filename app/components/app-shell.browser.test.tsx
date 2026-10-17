@@ -182,7 +182,9 @@ describe("AppShell", () => {
 		).not.toBeInTheDocument()
 	})
 
-	it("shows the Comptroller nav item for ADMIN", async ({ renderStub }) => {
+	it("shows the Comptroller payroll links for ADMIN", async ({
+		renderStub,
+	}) => {
 		await renderStub({
 			entries: [
 				{
@@ -199,7 +201,7 @@ describe("AppShell", () => {
 			],
 		})
 		expect(
-			screen.getByRole("link", { name: "Brigades · payroll", hidden: true }),
+			screen.getByRole("link", { name: /Runs to pay/, hidden: true }),
 		).toBeInTheDocument()
 	})
 

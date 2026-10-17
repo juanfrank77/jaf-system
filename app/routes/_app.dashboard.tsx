@@ -14,10 +14,9 @@ import { cacheJobs } from "~/lib/offline-store"
 import { pageTitle } from "~/lib/page-title"
 import { requireSession } from "~/lib/permissions.server"
 import {
-	needsReviewCount,
-	refurbishedCount,
-	repairPoolCount,
-} from "~/lib/serial-stock"
+	parseSupervisorQueue,
+	supervisorQueueWhere,
+} from "~/lib/supervisor-queues"
 import { ownedOrInArea, supervisorAreas } from "~/lib/supervisor-scope"
 import {
 	deriveSupervisorStage,
@@ -25,9 +24,10 @@ import {
 } from "~/lib/supervisor-stage"
 import { getAvisoAmountTolerance } from "~/lib/system-settings.server"
 import { toNumberPrice } from "~/lib/utils"
+import { NO_WAREHOUSE_COUNTS } from "~/lib/warehouse-queues"
+import { countWarehouseQueues } from "~/lib/warehouse-queues.server"
 import { resolveWarehouseScope } from "~/lib/warehouse-scope.server"
 import type { DocStatus, Role } from "../../generated/prisma/client"
-import { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.dashboard"
 
 export const meta: Route.MetaFunction = ({ matches }) => [
@@ -270,6 +270,12 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const jobTypeFilter = url.searchParams.get("jobType")
 	const searchFilter = url.searchParams.get("search")?.trim() || ""
 
+	// A supervisor's sidebar queue (`?stage=`): one step of the work-order rail.
+	const stageQueue =
+		user.role === "SUPERVISOR"
+			? parseSupervisorQueue(url.searchParams.get("stage"))
+			: null
+
 	const selectedStatus = statusFilter ? (statusFilter as DocStatus) : null
 	const selectedCrew = crewFilter || null
 	const selectedJobType = jobTypeFilter || null
@@ -315,6 +321,13 @@ export async function loader({ request }: Route.LoaderArgs) {
 		}
 	}
 
+	if (stageQueue) {
+		where.AND = [
+			...(Array.isArray(where.AND) ? where.AND : []),
+			supervisorQueueWhere(stageQueue),
+		]
+	}
+
 	const docs = await db.jafInvoice.findMany({
 		where,
 		orderBy: { createdAt: "desc" },
@@ -330,7 +343,11 @@ export async function loader({ request }: Route.LoaderArgs) {
 	// The supervisor's tiles describe their whole scope, so a filter that
 	// narrows the list must not also shrink the counts.
 	const hasFilters =
-		!!selectedStatus || !!selectedCrew || !!selectedJobType || !!searchFilter
+		!!stageQueue ||
+		!!selectedStatus ||
+		!!selectedCrew ||
+		!!selectedJobType ||
+		!!searchFilter
 	const statsDocs =
 		user.role === "SUPERVISOR" && hasFilters
 			? (
@@ -351,22 +368,12 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const supervisorScope =
 		user.role === "SUPERVISOR" ? await loadSupervisorScope(user.id) : null
 
-	// Awaiting-pickup aging (spec §6, "days staged … red past 3"): the PREPPED
-	// queues are piped through computeAwaitingPickup so `aged`/`daysStaged`
-	// actually reach the view — without this the badge can never render.
-	const warehousePreppedDocs = computeAwaitingPickup(
+	// WAREHOUSE counts come from the shared warehouse-queues module so the
+	// dashboard cards and the sidebar pills always agree.
+	const warehouseCounts =
 		user.role === "WAREHOUSE"
-			? await db.jafInvoice.findMany({
-					where: {
-						...(await buildBaseWhere(user.role, user.id)),
-						status: "PREPPED",
-					},
-					orderBy: { createdAt: "desc" },
-					take: 50,
-				})
-			: [],
-	)
-
+			? await countWarehouseQueues()
+			: NO_WAREHOUSE_COUNTS
 	const warehouseToPrepDocs =
 		user.role === "WAREHOUSE"
 			? await db.jafInvoice.findMany({
@@ -379,52 +386,16 @@ export async function loader({ request }: Route.LoaderArgs) {
 				})
 			: []
 
-	const warehouseMissingDocs =
-		user.role === "WAREHOUSE"
-			? await db.jafInvoice.findMany({
-					where: {
-						...(await buildBaseWhere(user.role, user.id)),
-						status: { in: ["CREATED", "PREPPED"] },
-						prepChangedSincePrep: true,
-					},
-					orderBy: { createdAt: "desc" },
-					take: 50,
-				})
-			: []
-
-	const warehouseReturnsDocs =
-		user.role === "WAREHOUSE"
-			? await db.jafInvoice.findMany({
-					where: {
-						...(await buildBaseWhere(user.role, user.id)),
-						status: { in: ["SIGNED", "FIELD_UPDATED"] },
-						materialsReturned: { equals: Prisma.DbNull },
-					},
-					orderBy: { createdAt: "desc" },
-					take: 50,
-				})
-			: []
-
-	const warehouseSerialCounts = await (async () => {
-		if (user.role !== "WAREHOUSE")
-			return { triage: 0, repairPool: 0, needsReview: 0, refurbished: 0 }
+	const warehouseTriageCount = await (async () => {
+		if (user.role !== "WAREHOUSE") return 0
 		// Follows the header warehouse switch (`wh` cookie) like every other
-		// warehouse-scoped query, instead of pinning to the first assignment —
-		// otherwise switching to warehouse B left these tiles counting A.
+		// warehouse-scoped query, instead of pinning to the first assignment.
 		const { selectedId } = await resolveWarehouseScope(db, request, user)
-		if (!selectedId)
-			return { triage: 0, repairPool: 0, needsReview: 0, refurbished: 0 }
-		const [triage, repairPool, needsReview, refurbished] = await Promise.all([
-			db.serialLocation.count({
-				where: { status: "RETURNED", currentRef: selectedId },
-			}),
-			repairPoolCount(selectedId),
-			needsReviewCount(selectedId),
-			refurbishedCount(selectedId),
-		])
-		return { triage, repairPool, needsReview, refurbished }
+		if (!selectedId) return 0
+		return db.serialLocation.count({
+			where: { status: "RETURNED", currentRef: selectedId },
+		})
 	})()
-	const warehouseTriageCount = warehouseSerialCounts.triage
 
 	const crewPreppedDocs = computeAwaitingPickup(
 		user.role === "CREW"
@@ -492,18 +463,14 @@ export async function loader({ request }: Route.LoaderArgs) {
 		jobTypeOptions: jobTypeOptions
 			.map((o) => o.jobType)
 			.filter(Boolean) as string[],
+		stageQueue,
 		selectedStatus,
 		selectedCrew,
 		selectedJobType,
 		searchFilter,
 		warehouseToPrepDocs,
-		warehousePreppedDocs,
-		warehouseMissingDocs,
-		warehouseReturnsDocs,
+		warehouseCounts,
 		warehouseTriageCount,
-		warehouseRepairPool: warehouseSerialCounts.repairPool,
-		warehouseNeedsReview: warehouseSerialCounts.needsReview,
-		warehouseRefurbished: warehouseSerialCounts.refurbished,
 		crewPreppedDocs,
 		crewInFieldDocs,
 		crewSentBackDocs,
@@ -524,18 +491,14 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 		showFilters,
 		crewOptions,
 		jobTypeOptions,
+		stageQueue,
 		selectedStatus,
 		selectedCrew,
 		selectedJobType,
 		searchFilter,
 		warehouseToPrepDocs,
-		warehousePreppedDocs,
-		warehouseMissingDocs,
-		warehouseReturnsDocs,
+		warehouseCounts,
 		warehouseTriageCount,
-		warehouseRepairPool,
-		warehouseNeedsReview,
-		warehouseRefurbished,
 		crewPreppedDocs,
 		crewInFieldDocs,
 		crewSentBackDocs,
@@ -579,6 +542,7 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 			role={role}
 			supervisorQueues={supervisorQueues}
 			supervisorScope={supervisorScope}
+			stageQueue={stageQueue}
 			stats={stats}
 			alert={alert}
 			explainer={explainer}
@@ -593,13 +557,8 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 			selectedJobType={selectedJobType}
 			searchFilter={searchFilter}
 			warehouseToPrepDocs={warehouseToPrepDocs}
-			warehousePreppedDocs={warehousePreppedDocs}
-			warehouseMissingDocs={warehouseMissingDocs}
-			warehouseReturnsDocs={warehouseReturnsDocs}
+			warehouseCounts={warehouseCounts}
 			warehouseTriageCount={warehouseTriageCount}
-			warehouseRepairPool={warehouseRepairPool}
-			warehouseNeedsReview={warehouseNeedsReview}
-			warehouseRefurbished={warehouseRefurbished}
 			crewPreppedDocs={crewPreppedDocs}
 			crewInFieldDocs={crewInFieldDocs}
 			crewSentBackDocs={crewSentBackDocs}

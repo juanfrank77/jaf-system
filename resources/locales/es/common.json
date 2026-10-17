@@ -61,7 +61,6 @@
 			}
 		},
 		"serial_register": {
-			"title": "Registro de seriales",
 			"empty": "No hay seriales para mostrar.",
 			"condition": {
 				"NEW": "Nuevo",
@@ -1406,10 +1405,7 @@
 		"crew_sent_back_heading": "Devueltos ({{count}})",
 		"submitted_heading": "Enviados ({{count}})",
 		"submitted_badge": "Esperando revisión",
-		"prepped_awaiting_heading": "Esperando recogida ({{count}})",
 		"prepped_awaiting_badge": "Preparado",
-		"missing_materials_heading": "Stock faltante ({{count}})",
-		"returns_to_log_heading": "Devoluciones pendientes ({{count}})",
 		"returns_to_log_badge": "Se espera de vuelta",
 		"triage_awaiting_heading": "Unidades devueltas en espera de triaje ({{count}})",
 		"triage_awaiting_cta": "Triaje de unidades devueltas",

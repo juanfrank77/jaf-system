@@ -2,6 +2,7 @@ import { useEffect } from "react"
 import { redirect } from "react-router"
 import { RoleDashboard } from "~/components/dashboards/role-dashboard"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { parseCrewQueue } from "~/lib/crew-queues"
 import {
 	computeAwaitingPickup,
 	computeDashboardStats,
@@ -331,6 +332,10 @@ export async function loader({ request }: Route.LoaderArgs) {
 			? parseSupervisorQueue(url.searchParams.get("stage"))
 			: null
 
+	// A crew member's sidebar queue (`?stage=`): one step of their own work.
+	const crewQueue =
+		user.role === "CREW" ? parseCrewQueue(url.searchParams.get("stage")) : null
+
 	const selectedStatus = statusFilter ? (statusFilter as DocStatus) : null
 	const selectedCrew = crewFilter || null
 	const selectedJobType = jobTypeFilter || null
@@ -530,6 +535,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		crewInFieldDocs,
 		crewSentBackDocs,
 		crewSubmittedDocs,
+		crewQueue,
 	}
 }
 
@@ -558,6 +564,7 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 		crewInFieldDocs,
 		crewSentBackDocs,
 		crewSubmittedDocs,
+		crewQueue,
 	} = loaderData
 	const explainer = (loaderData as { explainer?: DashboardExplainer })
 		.explainer as DashboardExplainer
@@ -598,6 +605,7 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 			supervisorQueues={supervisorQueues}
 			supervisorScope={supervisorScope}
 			stageQueue={stageQueue}
+			crewQueue={crewQueue}
 			stats={stats}
 			alert={alert}
 			explainer={explainer}

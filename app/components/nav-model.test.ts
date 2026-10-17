@@ -133,24 +133,21 @@ describe("navGroupsFor", () => {
 			"arm_a",
 			"arm_b",
 			"money",
+			"team",
 			"stock",
 			"field",
 			"admin",
 		])
 	})
 
-	it("gives COMPTROLLER its own dashboard, then Lists, Runs to pay, Paid runs and a Soon Installers", () => {
+	it("gives COMPTROLLER its own dashboard, then Lists, Runs to pay, Paid runs, and a Team group with Brigades and a Soon Installers", () => {
 		expect(tos(navGroupsFor("COMPTROLLER"))).toEqual([
 			["overview", ["/comptroller"]],
 			[
 				"money",
-				[
-					"/comptroller/lists",
-					"/comptroller/to-pay",
-					"/comptroller/paid",
-					"/comptroller/installers",
-				],
+				["/comptroller/lists", "/comptroller/to-pay", "/comptroller/paid"],
 			],
+			["team", ["/comptroller/brigades", "/comptroller/installers"]],
 		])
 		const installers = navGroupsFor("COMPTROLLER")
 			.flatMap((g) => g.items)

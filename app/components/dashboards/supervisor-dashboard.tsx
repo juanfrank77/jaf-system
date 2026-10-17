@@ -62,6 +62,26 @@ const TILE_HREF: Partial<Record<string, string>> = {
 	"dashboard.stat.pending_review": "/dashboard?stage=review",
 }
 
+// Tile colors follow the queue card each count belongs to (Approved green,
+// Missing aviso amber, Blocked red); the rest are blue unless they are a flag.
+type StatTone = "neutral" | "ok" | "info" | "warn" | "flag"
+const TILE_TONE: Partial<Record<string, StatTone>> = {
+	"dashboard.stat.open_documents": "info",
+	"dashboard.stat.awaiting_warehouse": "info",
+	"dashboard.stat.awaiting_crew": "info",
+	"dashboard.stat.pending_review": "warn",
+	"dashboard.stat.sent_back": "info",
+	"dashboard.stat.missing_aviso": "warn",
+	"dashboard.stat.blocked": "flag",
+	"dashboard.stat.stage_awaiting_warehouse": "info",
+	"dashboard.stat.stage_awaiting_crew": "info",
+	"dashboard.stat.stage_pending_review": "warn",
+	"dashboard.stat.stage_in_finance": "ok",
+	"dashboard.stat.discrepancy_count": "warn",
+	"dashboard.stat.shortage_count": "flag",
+	"dashboard.stat.overage_count": "warn",
+}
+
 type SinceKind = "created" | "submitted" | "returned" | "approved"
 
 function ago(t: TFunction, since: Date | string, now = Date.now()) {
@@ -253,21 +273,25 @@ export function SupervisorDashboard({
 						key={stat.labelKey}
 						label={t(stat.labelKey)}
 						value={stat.value}
+						tone={TILE_TONE[stat.labelKey]}
 						href={TILE_HREF[stat.labelKey]}
 					/>
 				))}
 				<Stat
 					label={t("dashboard.stat.sent_back")}
+					tone={TILE_TONE["dashboard.stat.sent_back"]}
 					value={queues.sentBack.length}
 					href="#sent-back"
 				/>
 				<Stat
 					label={t("dashboard.stat.missing_aviso")}
+					tone={TILE_TONE["dashboard.stat.missing_aviso"]}
 					value={queues.missingAviso.length}
 					href="#missing-aviso"
 				/>
 				<Stat
 					label={t("dashboard.stat.blocked")}
+					tone={TILE_TONE["dashboard.stat.blocked"]}
 					value={queues.blocked.length}
 					href="#blocked"
 				/>
@@ -284,20 +308,13 @@ export function SupervisorDashboard({
 								key={stat.labelKey}
 								label={t(stat.labelKey)}
 								value={stat.value}
+								tone={TILE_TONE[stat.labelKey]}
 							/>
 						))}
 					</div>
 				</details>
 			)}
 
-			<Queue
-				id="my-open"
-				titleKey="dashboard.queue.my_open"
-				rows={queues.myOpen}
-				variant="info"
-				href={(r) => `/docs/${r.id}`}
-				since="created"
-			/>
 			<Queue
 				titleKey="dashboard.queue.intake"
 				rows={queues.intake}
@@ -342,6 +359,14 @@ export function SupervisorDashboard({
 				variant="danger"
 				href={(r) => `/docs/${r.id}/review`}
 				since="approved"
+			/>
+			<Queue
+				id="my-open"
+				titleKey="dashboard.queue.my_open"
+				rows={queues.myOpen}
+				variant="info"
+				href={(r) => `/docs/${r.id}`}
+				since="created"
 			/>
 		</div>
 	)

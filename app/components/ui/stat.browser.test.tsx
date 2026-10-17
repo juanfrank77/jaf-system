@@ -25,7 +25,7 @@ describe("Stat", () => {
 		expect(screen.getByText("oldest 18 d")).toBeInTheDocument()
 	})
 
-	it("is neutral by default and tints for warn and flag", async ({
+	it("is neutral by default and tints for ok, info, warn and flag", async ({
 		renderStub,
 	}) => {
 		await renderStub({
@@ -37,6 +37,8 @@ describe("Stat", () => {
 							<Stat label="A" value={1} />
 							<Stat label="B" value={2} tone="warn" />
 							<Stat label="C" value={3} tone="flag" />
+							<Stat label="D" value={4} tone="ok" />
+							<Stat label="E" value={5} tone="info" />
 						</div>
 					),
 				},
@@ -49,6 +51,8 @@ describe("Stat", () => {
 		expect(tone("B")).toHaveClass("bg-status-warn-soft")
 		expect(tone("C")).toHaveAttribute("data-tone", "flag")
 		expect(tone("C")).toHaveClass("bg-status-danger-soft")
+		expect(tone("D")).toHaveClass("bg-status-ok-soft")
+		expect(tone("E")).toHaveClass("bg-status-info-soft")
 	})
 
 	it("becomes a link when href is given", async ({ renderStub }) => {

@@ -12,7 +12,6 @@ describe("navGroupsFor", () => {
 				"work",
 				[
 					"/docs/new",
-					"/dashboard?stage=intake",
 					"/dashboard?stage=review",
 					"/dashboard?stage=invoice",
 					"/dashboard?stage=aviso",
@@ -32,7 +31,6 @@ describe("navGroupsFor", () => {
 				"work",
 				[
 					"/docs/new",
-					"/dashboard?stage=intake",
 					"/dashboard?stage=review",
 					"/dashboard?stage=invoice",
 					"/dashboard?stage=aviso",

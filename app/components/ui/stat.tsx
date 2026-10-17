@@ -6,6 +6,8 @@ const statVariants = cva("block rounded-xl border p-4 shadow-card", {
 	variants: {
 		tone: {
 			neutral: "border-border bg-card",
+			ok: "border-status-ok/30 bg-status-ok-soft",
+			info: "border-status-info/30 bg-status-info-soft",
 			warn: "border-status-warn/30 bg-status-warn-soft",
 			flag: "border-status-danger/30 bg-status-danger-soft",
 		},

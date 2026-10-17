@@ -12,6 +12,11 @@ import {
 } from "@hugeicons/core-free-icons"
 import type { IconSvgElement } from "@hugeicons/react"
 import {
+	CREW_QUEUE_LABEL_KEY,
+	CREW_QUEUES,
+	crewQueueHref,
+} from "~/lib/crew-queues"
+import {
 	type SupervisorQueue,
 	supervisorQueueHref,
 } from "~/lib/supervisor-queues"
@@ -56,6 +61,9 @@ export type NavLabelKey =
 	| "app_shell.nav.supervisor_precert"
 	| "app_shell.nav.supervisor_released"
 	| "app_shell.nav.supervisor_all"
+	| "app_shell.nav.crew_pickup"
+	| "app_shell.nav.crew_field"
+	| "app_shell.nav.crew_submitted"
 	| "app_shell.nav.warehouse_prep"
 	| "app_shell.nav.warehouse_pickup"
 	| "app_shell.nav.warehouse_returns"
@@ -148,6 +156,16 @@ const SUPERVISOR_QUEUE_ITEMS: NavItem[] = (
 	icon: Invoice02Icon,
 	group: "work" as const,
 	roles: ["SUPERVISOR"] as Role[],
+}))
+
+// The crew's steps, in job-rail order: Pickup, the field work, then what it
+// has submitted. Each is a filtered view of the dashboard.
+const CREW_QUEUE_ITEMS: NavItem[] = CREW_QUEUES.map((queue) => ({
+	to: crewQueueHref(queue),
+	labelKey: CREW_QUEUE_LABEL_KEY[queue],
+	icon: TruckDeliveryIcon,
+	group: "work" as const,
+	roles: ["CREW"] as Role[],
 }))
 
 // The warehouse's steps, one page each: the job-rail steps it owns.
@@ -360,6 +378,7 @@ const NAV_ITEMS: NavItem[] = [
 		roles: ["COMPTROLLER", "ADMIN"],
 		disabled: true,
 	},
+	...CREW_QUEUE_ITEMS,
 	...WAREHOUSE_WORKFLOW_ITEMS,
 	...WAREHOUSE_QUEUE_ITEMS,
 	...WAREHOUSE_OTHER_ITEMS,

@@ -8,6 +8,11 @@ import { JobFlowOverview } from "~/components/job-step-rail"
 import { Badge } from "~/components/ui/badge"
 import { Callout } from "~/components/ui/callout"
 import { EmptyState } from "~/components/ui/empty-state"
+import {
+	CREW_QUEUE_KINDS,
+	CREW_QUEUE_LABEL_KEY,
+	type CrewQueue,
+} from "~/lib/crew-queues"
 import type {
 	BaseDashboardProps,
 	CrewOnlyKeys,
@@ -43,7 +48,8 @@ function hrefFor(kind: CrewRowKind, id: string): string {
 /** The crew's "My jobs": one flat list, no stat tiles, no billing. Needs
  * attention first (sent back), then pickup, on site, submitted, approved. */
 export function CrewDashboard(
-	props: BaseDashboardProps & Pick<DashboardViewProps, CrewOnlyKeys>,
+	props: BaseDashboardProps &
+		Pick<DashboardViewProps, CrewOnlyKeys> & { queue?: CrewQueue | null },
 ) {
 	const { t } = useTranslation()
 	const {
@@ -52,6 +58,7 @@ export function CrewDashboard(
 		crewInFieldDocs = [],
 		crewSubmittedDocs = [],
 		docs,
+		queue = null,
 	} = props
 	const approved = useMemo(
 		() =>
@@ -60,7 +67,7 @@ export function CrewDashboard(
 				.slice(0, MAX_APPROVED),
 		[docs],
 	)
-	const rows = useMemo(
+	const allRows = useMemo(
 		() => [
 			...crewSentBackDocs.map((doc) => ({ kind: "sent_back" as const, doc })),
 			...crewPreppedDocs.map((doc) => ({ kind: "ready" as const, doc })),
@@ -76,12 +83,25 @@ export function CrewDashboard(
 			approved,
 		],
 	)
-	const open = rows.length - approved.length
+	// A sidebar queue narrows the list to its own steps; the plain dashboard
+	// keeps every row, approved included.
+	const rows = useMemo(
+		() =>
+			queue
+				? allRows.filter(({ kind }) =>
+						(CREW_QUEUE_KINDS[queue] as readonly string[]).includes(kind),
+					)
+				: allRows,
+		[allRows, queue],
+	)
+	const open = rows.filter(({ kind }) => kind !== "approved").length
 
 	return (
 		<div className="space-y-4">
 			<div>
-				<h1 className="text-xl font-semibold">{t("dashboard.crew.title")}</h1>
+				<h1 className="text-xl font-semibold">
+					{queue ? t(CREW_QUEUE_LABEL_KEY[queue]) : t("dashboard.crew.title")}
+				</h1>
 				<p className="text-sm text-muted-foreground">
 					{t("dashboard.crew.subtitle_open", { count: open })}
 				</p>

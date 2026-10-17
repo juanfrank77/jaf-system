@@ -44,7 +44,15 @@ export async function loader({ request }: Route.LoaderArgs) {
 			unitCount: lines.reduce((sum, l) => sum + l.qty, 0),
 		}
 	})
-	return { requests, paging: { ...paging, total, pageSize: PAGE_SIZE } }
+	return {
+		requests,
+		paging: {
+			page: paging.page,
+			pageCount: paging.pageCount,
+			total,
+			pageSize: PAGE_SIZE,
+		},
+	}
 }
 
 export default function WarehouseRequests({

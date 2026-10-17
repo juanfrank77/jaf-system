@@ -70,7 +70,7 @@ export default function WarehouseRestockList({
 							<div className="min-w-0 space-y-1">
 								<div className="flex flex-wrap items-center gap-2">
 									<span className="text-base font-semibold">{r.vanName}</span>
-									<Badge variant={r.status === "APPROVED" ? "info" : "warn"}>
+									<Badge variant="warn">
 										{t(`restock_status.${r.status}`, r.status)}
 									</Badge>
 									{r.ageDays >= AGED_DAYS && (

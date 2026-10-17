@@ -59,7 +59,12 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const controlById = new Map(docs.map((d) => [d.id, d.controlNumber]))
 	return {
 		selectedId,
-		paging: { ...paging, total, pageSize: PAGE_SIZE },
+		paging: {
+			page: paging.page,
+			pageCount: paging.pageCount,
+			total,
+			pageSize: PAGE_SIZE,
+		},
 		movements: rows.map((m) => {
 			const code = codeById.get(m.serviceCodeId)
 			return {

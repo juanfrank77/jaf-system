@@ -61,7 +61,6 @@
 			}
 		},
 		"serial_register": {
-			"title": "Serial Register",
 			"empty": "No serials to show.",
 			"condition": {
 				"NEW": "New",
@@ -1372,10 +1371,7 @@
 		"crew_sent_back_heading": "Sent Back ({{count}})",
 		"submitted_heading": "Submitted ({{count}})",
 		"submitted_badge": "Awaiting review",
-		"prepped_awaiting_heading": "Awaiting pickup ({{count}})",
 		"prepped_awaiting_badge": "Staged",
-		"missing_materials_heading": "Missing stock ({{count}})",
-		"returns_to_log_heading": "Returns due ({{count}})",
 		"returns_to_log_badge": "Expected back",
 		"triage_awaiting_heading": "Returned units awaiting triage ({{count}})",
 		"triage_awaiting_cta": "Triage returned units",

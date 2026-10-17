@@ -223,7 +223,6 @@
 			"warehouse_scan_in": "Scan In Return",
 			"warehouse_restock": "Restocks to Release",
 			"warehouse_stock": "Stock",
-			"supervisor_intake": "New work orders",
 			"supervisor_review": "Review queue",
 			"supervisor_invoice": "JAF invoices",
 			"supervisor_aviso": "Aviso & match",

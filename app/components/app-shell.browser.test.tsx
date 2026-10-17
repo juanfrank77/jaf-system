@@ -152,7 +152,7 @@ describe("AppShell", () => {
 		).not.toBeInTheDocument()
 	})
 
-	it("shows only Dashboard for CREW", async ({ renderStub }) => {
+	it("shows Dashboard and the crew steps for CREW", async ({ renderStub }) => {
 		await renderStub({
 			entries: [
 				{
@@ -168,9 +168,11 @@ describe("AppShell", () => {
 				},
 			],
 		})
-		expect(
-			screen.getByRole("link", { name: "Dashboard", hidden: true }),
-		).toBeInTheDocument()
+		for (const name of ["Pickup", "In the field", "Submitted"]) {
+			expect(
+				screen.getAllByRole("link", { name, hidden: true }).length,
+			).toBeGreaterThan(0)
+		}
 		expect(
 			screen.queryByRole("link", { name: "+ Work Order", hidden: true }),
 		).not.toBeInTheDocument()
@@ -714,18 +716,18 @@ describe("AppShell", () => {
 		expect(screen.getByText("Work")).toBeInTheDocument()
 	})
 
-	it("shows a phone tab bar for INSTALLER but not SUPERVISOR or CREW", async ({
+	it("shows a phone tab bar for INSTALLER and CREW but not SUPERVISOR", async ({
 		renderStub,
 	}) => {
 		await renderShell(renderStub, "INSTALLER")
 		expect(screen.getByTestId("tab-bar")).toBeInTheDocument()
 	})
 
-	it("renders no tab bar for CREW (only one nav item)", async ({
+	it("renders a tab bar for CREW (Dashboard plus its three steps)", async ({
 		renderStub,
 	}) => {
 		await renderShell(renderStub, "CREW")
-		expect(screen.queryByTestId("tab-bar")).not.toBeInTheDocument()
+		expect(screen.getByTestId("tab-bar")).toBeInTheDocument()
 	})
 
 	it("renders no tab bar for SUPERVISOR", async ({ renderStub }) => {

@@ -55,8 +55,22 @@ describe("RoleDashboard", () => {
 		expect(
 			screen.getByRole("heading", { level: 1, name: "Dashboard" }),
 		).toBeInTheDocument()
-		// seven queue cards (My open work orders first); dashboard no longer has an "All work orders" section
-		expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(7)
+		// seven queue cards (My open work orders last); dashboard no longer has an "All work orders" section
+		const headings = screen.getAllByRole("heading", { level: 2 })
+		expect(headings).toHaveLength(7)
+		expect(headings.at(-1)).toHaveTextContent("My open work orders")
+	})
+
+	it("colors the supervisor count tiles by what they count", async ({
+		renderStub,
+	}) => {
+		await mount(renderStub, <RoleDashboard {...supervisor} {...base} />)
+		const tone = (label: string) =>
+			within(screen.getByTestId("supervisor-tiles"))
+				.getByText(label)
+				.closest('[data-slot="stat"]') as HTMLElement
+		expect(tone("Blocked")).toHaveAttribute("data-tone", "flag")
+		expect(tone("Missing Aviso")).toHaveAttribute("data-tone", "warn")
 	})
 
 	const billedDoc = {

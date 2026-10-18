@@ -5,6 +5,7 @@ import { db } from "~/lib/db.server"
 import { carmenOpenSummary, countArmAStages } from "~/lib/finance-stages.server"
 import { needsReviewCount, repairPoolCount } from "~/lib/serial-stock"
 import {
+	SUPERVISOR_SIDEBAR_QUEUES,
 	type SupervisorQueue,
 	supervisorQueueHref,
 	supervisorQueueWhere,
@@ -16,14 +17,7 @@ import type { Role } from "../../generated/prisma/client"
 
 /** Review and Aviso are the supervisor's own action points, so they go red. */
 const CRITICAL_QUEUES: SupervisorQueue[] = ["review", "aviso"]
-const SUPERVISOR_QUEUE_ORDER: SupervisorQueue[] = [
-	"review",
-	"invoice",
-	"aviso",
-	"precert",
-	"released",
-	"all",
-]
+const SUPERVISOR_QUEUE_ORDER = SUPERVISOR_SIDEBAR_QUEUES
 
 /**
  * Per-role sidebar counts, keyed by nav `to`. Each department sub-project adds

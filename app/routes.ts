@@ -14,6 +14,7 @@ export default [
 		route("admin/settings", "routes/_app.admin.settings.tsx"),
 		route("admin/docs/:id", "routes/_app.admin.docs.$id.tsx"),
 		route("admin/users", "routes/_app.admin.users.tsx"),
+		route("admin/crews", "routes/_app.admin.crews.tsx"),
 		route("admin/vans", "routes/_app.admin.vans.tsx"),
 		route("supervisor/brigades", "routes/_app.supervisor.brigades.tsx"),
 		route("comptroller/brigades", "routes/_app.comptroller.brigades.tsx"),

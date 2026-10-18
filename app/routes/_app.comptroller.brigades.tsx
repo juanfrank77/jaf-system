@@ -14,6 +14,88 @@ import type { Route } from "./+types/_app.comptroller.brigades"
 
 type CrewUser = { id: string; name: string; active: boolean }
 
+/** Shared area `<select>` for the brigade create and edit forms. */
+function BrigadeAreaSelect({
+	id,
+	defaultValue,
+	areaOptions,
+}: {
+	id: string
+	defaultValue?: string
+	areaOptions: string[]
+}) {
+	const { t } = useTranslation()
+	return (
+		<>
+			<Label htmlFor={id}>{t("comptroller_brigades.area_label")}</Label>
+			<select
+				id={id}
+				name="area"
+				required
+				defaultValue={defaultValue}
+				className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm text-foreground shadow-sm"
+			>
+				{areaOptions.map((a) => (
+					<option key={a} value={a}>
+						{a}
+					</option>
+				))}
+			</select>
+		</>
+	)
+}
+
+/** Shared member-checkbox list for the brigade create and edit forms. */
+function BrigadeMemberList({
+	idPrefix,
+	crewUsers,
+	selectedIds,
+	gridCols,
+}: {
+	idPrefix: string
+	crewUsers: CrewUser[]
+	selectedIds: string[]
+	gridCols: string
+}) {
+	const { t } = useTranslation()
+	return (
+		<>
+			<p className="text-sm font-medium">
+				{t("comptroller_brigades.members_label")}
+			</p>
+			<p className="text-xs text-muted-foreground">
+				{t("comptroller_brigades.members_hint")}
+			</p>
+			<div className={`grid grid-cols-1 gap-2 ${gridCols}`}>
+				{crewUsers.map((u) => (
+					<label
+						key={u.id}
+						htmlFor={`${idPrefix}-${u.id}`}
+						className="flex items-center gap-2 text-sm"
+					>
+						<Checkbox
+							id={`${idPrefix}-${u.id}`}
+							name="memberIds"
+							value={u.id}
+							defaultChecked={selectedIds.includes(u.id)}
+						/>
+						<span>
+							{u.name}{" "}
+							<span className="text-muted-foreground">
+								(
+								{u.active
+									? t("comptroller_brigades.active")
+									: t("comptroller_brigades.inactive")}
+								)
+							</span>
+						</span>
+					</label>
+				))}
+			</div>
+		</>
+	)
+}
+
 export const meta: Route.MetaFunction = () => [{ title: "Brigades — JAF Ops" }]
 
 /**
@@ -203,56 +285,19 @@ export default function ComptrollerBrigades({
 						<Input id="name" name="name" required />
 					</div>
 					<div className="space-y-1">
-						<Label htmlFor="area">{t("comptroller_brigades.area_label")}</Label>
-						<select
-							id="area"
-							name="area"
-							required
-							className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm text-foreground shadow-sm"
-						>
-							{areaOptions.map((a) => (
-								<option key={a} value={a}>
-									{a}
-								</option>
-							))}
-						</select>
+						<BrigadeAreaSelect id="area" areaOptions={areaOptions} />
 					</div>
 					<div className="space-y-1">
 						<Label htmlFor="code">{t("comptroller_brigades.code_label")}</Label>
 						<Input id="code" name="code" />
 					</div>
 					<div className="space-y-2">
-						<p className="text-sm font-medium">
-							{t("comptroller_brigades.members_label")}
-						</p>
-						<p className="text-xs text-muted-foreground">
-							{t("comptroller_brigades.members_hint")}
-						</p>
-						<div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-							{crewUsers.map((u) => (
-								<label
-									key={u.id}
-									htmlFor={`member-${u.id}`}
-									className="flex items-center gap-2 text-sm"
-								>
-									<Checkbox
-										id={`member-${u.id}`}
-										name="memberIds"
-										value={u.id}
-									/>
-									<span>
-										{u.name}{" "}
-										<span className="text-muted-foreground">
-											(
-											{u.active
-												? t("comptroller_brigades.active")
-												: t("comptroller_brigades.inactive")}
-											)
-										</span>
-									</span>
-								</label>
-							))}
-						</div>
+						<BrigadeMemberList
+							idPrefix="member"
+							crewUsers={crewUsers}
+							selectedIds={[]}
+							gridCols="sm:grid-cols-2"
+						/>
 					</div>
 					<div className="flex items-start gap-2">
 						<Checkbox
@@ -425,22 +470,11 @@ function EditBrigadeForm({
 					/>
 				</div>
 				<div className="space-y-1">
-					<Label htmlFor={`area-${brigade.id}`}>
-						{t("comptroller_brigades.area_label")}
-					</Label>
-					<select
+					<BrigadeAreaSelect
 						id={`area-${brigade.id}`}
-						name="area"
-						required
 						defaultValue={brigade.area ?? ""}
-						className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm text-foreground shadow-sm"
-					>
-						{areaOptions.map((a) => (
-							<option key={a} value={a}>
-								{a}
-							</option>
-						))}
-					</select>
+						areaOptions={areaOptions}
+					/>
 				</div>
 				<div className="space-y-1">
 					<Label htmlFor={`code-${brigade.id}`}>
@@ -454,38 +488,12 @@ function EditBrigadeForm({
 				</div>
 			</div>
 			<div className="space-y-2">
-				<p className="text-sm font-medium">
-					{t("comptroller_brigades.members_label")}
-				</p>
-				<p className="text-xs text-muted-foreground">
-					{t("comptroller_brigades.members_hint")}
-				</p>
-				<div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-					{crewUsers.map((u) => (
-						<label
-							key={u.id}
-							htmlFor={`member-${brigade.id}-${u.id}`}
-							className="flex items-center gap-2 text-sm"
-						>
-							<Checkbox
-								id={`member-${brigade.id}-${u.id}`}
-								name="memberIds"
-								value={u.id}
-								defaultChecked={brigade.memberIds.includes(u.id)}
-							/>
-							<span>
-								{u.name}{" "}
-								<span className="text-muted-foreground">
-									(
-									{u.active
-										? t("comptroller_brigades.active")
-										: t("comptroller_brigades.inactive")}
-									)
-								</span>
-							</span>
-						</label>
-					))}
-				</div>
+				<BrigadeMemberList
+					idPrefix={`member-${brigade.id}`}
+					crewUsers={crewUsers}
+					selectedIds={brigade.memberIds}
+					gridCols="sm:grid-cols-2 lg:grid-cols-3"
+				/>
 			</div>
 			<div className="flex items-center gap-2">
 				<Button type="submit" size="sm">

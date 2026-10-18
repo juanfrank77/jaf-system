@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises"
 import type { ParseKeys } from "i18next"
 import { type ComponentProps, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -24,6 +25,13 @@ import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Pill } from "~/components/ui/pill"
 import { Textarea } from "~/components/ui/textarea"
+import { buildAvisoLines } from "~/lib/aviso-lines"
+import {
+	AvisoPdfError,
+	normaliseAvisoNumber,
+	type ParsedAviso,
+	readAvisoPdf,
+} from "~/lib/aviso-pdf.server"
 import {
 	CONTRACTOR_SHARE_PERCENT,
 	RETENTION_RATE,
@@ -122,6 +130,13 @@ const activeSheet = (docId: string) =>
 		where: { docId, supersededAt: null },
 		orderBy: { version: "desc" },
 	})
+
+const AVISO_PDF_ERROR_KEYS = {
+	unreadable: "docs_review.errors.aviso_pdf_unreadable",
+	no_number: "docs_review.errors.aviso_pdf_no_number",
+	multiple_numbers: "docs_review.errors.aviso_pdf_multiple",
+	no_rows: "docs_review.errors.aviso_pdf_no_rows",
+} as const
 
 const showPricesFor = (role: string) => !isPriceBlind(role)
 
@@ -488,49 +503,94 @@ export async function action({ request, params }: Route.ActionArgs) {
 			return { errorKey: "docs_review.errors.invoice_required" }
 		if (doc.releasedToFinanceAt) throw redirect(`/docs/${params.id}/review`)
 
-		const avisoNumber =
-			(form.get("avisoNumber") as string | null)?.trim() || null
+		let avisoNumber = (form.get("avisoNumber") as string | null)?.trim() || null
 		if (!avisoNumber)
 			return { errorKey: "docs_review.errors.aviso_number_required" }
 
-		let rawLines: AvisoLine[]
-		try {
-			rawLines = parseAvisoLines(form.get("avisoLines") as string | null)
-		} catch {
-			return { errorKey: "docs_review.errors.invalid_aviso_lines" }
-		}
-		// Merge duplicate codes (an Aviso may split one service over two rows).
-		// Recompute the line from the merged qty when the unit price matches so
-		// per-row rounding does not drift from the invoice total.
-		const merged = new Map<string, AvisoLine>()
-		for (const l of rawLines) {
-			const prev = merged.get(l.serviceCodeId)
-			if (prev) {
-				const qty = prev.qty + l.qty
-				prev.lineAmount =
-					prev.unitPrice === l.unitPrice
-						? round2(qty * prev.unitPrice)
-						: round2(prev.lineAmount + l.lineAmount)
-				prev.qty = qty
-			} else merged.set(l.serviceCodeId, { ...l })
-		}
-		const avisoLines = [...merged.values()]
-		if (avisoLines.length === 0)
-			return { errorKey: "docs_review.errors.invalid_aviso_lines" }
-
+		// Upload first so a supervisor who only adds the line note re-reads the
+		// PDF already on file.
 		let avisoDocPath = doc.avisoDocPath
+		let pdfBytes: Uint8Array | null = null
 		const avisoPdf = form.get("avisoPdf")
 		if (avisoPdf instanceof File && avisoPdf.size > 0) {
 			const validation = validateFile(avisoPdf, "pdf")
 			if (!validation.valid) return { errorMessage: validation.error }
+			pdfBytes = new Uint8Array(await avisoPdf.arrayBuffer())
+		}
+		if (!pdfBytes && !avisoDocPath)
+			return { errorKey: "docs_review.errors.aviso_pdf_required" }
+
+		let avisoLines: AvisoLine[]
+		if (user.role === "SUPERVISOR") {
+			// The supervisor never supplies quantities or prices: the PDF is the
+			// only source, so a total cannot "agree" with itself.
+			if (!pdfBytes && avisoDocPath) {
+				try {
+					pdfBytes = new Uint8Array(await readFile(avisoDocPath))
+				} catch {
+					return { errorKey: "docs_review.errors.aviso_pdf_required" }
+				}
+			}
+			let parsed: ParsedAviso
+			try {
+				parsed = await readAvisoPdf(pdfBytes as Uint8Array)
+			} catch (e) {
+				if (!(e instanceof AvisoPdfError)) throw e
+				return { errorKey: AVISO_PDF_ERROR_KEYS[e.code] }
+			}
+			if (normaliseAvisoNumber(avisoNumber) !== parsed.avisoNumber)
+				return {
+					errorKey: "docs_review.errors.aviso_number_mismatch",
+					pdfAvisoNumber: parsed.avisoNumber,
+				}
+			const built = buildAvisoLines(
+				parsed.rows,
+				doc.jafInvoiceLines as InvoiceLine[],
+				await getActiveServiceCodes(),
+			)
+			if ("missingCodes" in built)
+				return {
+					errorKey: "docs_review.errors.aviso_codes_missing",
+					missingCodes: built.missingCodes,
+				}
+			avisoNumber = parsed.avisoNumber
+			avisoLines = built.lines
+			if (avisoLines.length === 0)
+				return { errorKey: "docs_review.errors.aviso_pdf_no_rows" }
+		} else {
+			let rawLines: AvisoLine[]
+			try {
+				rawLines = parseAvisoLines(form.get("avisoLines") as string | null)
+			} catch {
+				return { errorKey: "docs_review.errors.invalid_aviso_lines" }
+			}
+			// Merge duplicate codes (an Aviso may split one service over two rows).
+			// Recompute the line from the merged qty when the unit price matches so
+			// per-row rounding does not drift from the invoice total.
+			const merged = new Map<string, AvisoLine>()
+			for (const l of rawLines) {
+				const prev = merged.get(l.serviceCodeId)
+				if (prev) {
+					const qty = prev.qty + l.qty
+					prev.lineAmount =
+						prev.unitPrice === l.unitPrice
+							? round2(qty * prev.unitPrice)
+							: round2(prev.lineAmount + l.lineAmount)
+					prev.qty = qty
+				} else merged.set(l.serviceCodeId, { ...l })
+			}
+			avisoLines = [...merged.values()]
+			if (avisoLines.length === 0)
+				return { errorKey: "docs_review.errors.invalid_aviso_lines" }
+		}
+
+		// Everything validated: only now write the PDF to disk.
+		if (avisoPdf instanceof File && avisoPdf.size > 0)
 			avisoDocPath = await saveUpload(
 				"aviso-docs",
 				`${params.id}-aviso.pdf`,
 				avisoPdf,
 			)
-		}
-		if (!avisoDocPath)
-			return { errorKey: "docs_review.errors.aviso_pdf_required" }
 
 		const tolerance = await getAvisoAmountTolerance()
 		const match = checkAvisoMatch(
@@ -1460,6 +1520,8 @@ export default function ReviewDoc({
 		| {
 				errorKey?: string
 				errorMessage?: string
+				missingCodes?: string[]
+				pdfAvisoNumber?: string
 				invoiceTotal?: number
 				avisoTotal?: number
 				difference?: number

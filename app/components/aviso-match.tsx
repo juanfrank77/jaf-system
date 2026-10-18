@@ -47,6 +47,8 @@ type Props = {
 	readOnly: boolean
 	/** An Aviso number or lines were already saved. */
 	started: boolean
+	/** Price-blind roles still get the gate, but see no money on the card. */
+	showPrices: boolean
 	/** Extra controls rendered under the form (e.g. the optional Claro PDF). */
 	children?: React.ReactNode
 }
@@ -70,6 +72,7 @@ export function AvisoMatchCard({
 	error,
 	readOnly,
 	started,
+	showPrices,
 	children,
 }: Props) {
 	const { t } = useTranslation()
@@ -220,36 +223,41 @@ export function AvisoMatchCard({
 										count: match.lineMismatches.length,
 									})}
 								</b>{" "}
-								{t(`${alertKey}_body` as ParseKeys, {
-									aviso: formatMoney(match.avisoTotal),
-									invoice: formatMoney(match.invoiceTotal),
-								})}
+								{t(
+									`${alertKey}_body${!showPrices && state === "amt" ? "_blind" : ""}` as ParseKeys,
+									{
+										aviso: formatMoney(match.avisoTotal),
+										invoice: formatMoney(match.invoiceTotal),
+									},
+								)}
 							</Pill>
 						)}
 
-						<div className="grid gap-3 sm:grid-cols-3">
-							<Total
-								label={t("docs_review_steps.total_ordered")}
-								value={formatMoney(orderedTotal)}
-								sub={t("docs_review_steps.total_ordered_sub")}
-							/>
-							<Total
-								label={t("docs_review_steps.total_installed")}
-								value={formatMoney(match.invoiceTotal)}
-								sub={t("docs_review_steps.total_installed_sub")}
-							/>
-							<Total
-								label={t("docs_review_steps.total_charged")}
-								value={formatMoney(match.avisoTotal)}
-								sub={t(
-									active
-										? (`docs_review_steps.total_charged_sub_${state}` as ParseKeys)
-										: "docs_review_steps.total_charged_sub_pending",
-									{ count: match.lineMismatches.length },
-								)}
-								bad={active && state !== "ok"}
-							/>
-						</div>
+						{showPrices && (
+							<div className="grid gap-3 sm:grid-cols-3">
+								<Total
+									label={t("docs_review_steps.total_ordered")}
+									value={formatMoney(orderedTotal)}
+									sub={t("docs_review_steps.total_ordered_sub")}
+								/>
+								<Total
+									label={t("docs_review_steps.total_installed")}
+									value={formatMoney(match.invoiceTotal)}
+									sub={t("docs_review_steps.total_installed_sub")}
+								/>
+								<Total
+									label={t("docs_review_steps.total_charged")}
+									value={formatMoney(match.avisoTotal)}
+									sub={t(
+										active
+											? (`docs_review_steps.total_charged_sub_${state}` as ParseKeys)
+											: "docs_review_steps.total_charged_sub_pending",
+										{ count: match.lineMismatches.length },
+									)}
+									bad={active && state !== "ok"}
+								/>
+							</div>
+						)}
 
 						<table className="w-full text-sm">
 							<thead>
@@ -270,9 +278,11 @@ export function AvisoMatchCard({
 									<th className="py-1.5 text-right">
 										{t("docs_review_steps.col_charged")}
 									</th>
-									<th className="py-1.5 text-right">
-										{t("docs_review_steps.aviso_unit_price")}
-									</th>
+									{showPrices && (
+										<th className="py-1.5 text-right">
+											{t("docs_review_steps.aviso_unit_price")}
+										</th>
+									)}
 									<th className="py-1.5">
 										{t("docs_review_steps.col_status")}
 									</th>
@@ -320,21 +330,23 @@ export function AvisoMatchCard({
 													}
 												/>
 											</td>
-											<td className="py-1.5 text-right">
-												<Input
-													type="number"
-													step="0.0001"
-													min={0}
-													value={r.unitPrice}
-													aria-label={`${t("docs_review_steps.aviso_unit_price")} ${r.claroCode}`}
-													className="ml-auto w-28"
-													onChange={(e) =>
-														update(i, {
-															unitPrice: Number(e.target.value) || 0,
-														})
-													}
-												/>
-											</td>
+											{showPrices && (
+												<td className="py-1.5 text-right">
+													<Input
+														type="number"
+														step="0.0001"
+														min={0}
+														value={r.unitPrice}
+														aria-label={`${t("docs_review_steps.aviso_unit_price")} ${r.claroCode}`}
+														className="ml-auto w-28"
+														onChange={(e) =>
+															update(i, {
+																unitPrice: Number(e.target.value) || 0,
+															})
+														}
+													/>
+												</td>
+											)}
 											<td
 												className={cn(
 													"py-1.5 pl-2 text-xs font-medium whitespace-nowrap",

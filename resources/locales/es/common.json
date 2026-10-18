@@ -800,6 +800,7 @@
 		"alert_qty_body": "Se registra en el registro de discrepancias. El trabajo continúa cuando la explique.",
 		"alert_amt_title": "Bloqueado — el total del Aviso no coincide con la factura JAF.",
 		"alert_amt_body": "Aviso {{aviso}} vs. factura {{invoice}}. Corrija el Aviso en Claro y vuelva a subirlo. Este trabajo no se puede liberar hasta que los totales coincidan.",
+		"alert_amt_body_blind": "El total del Aviso no coincide con la factura JAF. Corrija el Aviso en Claro y vuelva a subirlo. Este trabajo no se puede liberar hasta que los totales coincidan.",
 		"note_label": "Nota de discrepancia",
 		"note_required": "requerida para continuar",
 		"note_placeholder": "Explique la diferencia — p. ej. “Claro certificó 4, la cuadrilla instaló 5 — evidencia fotográfica adjunta. Reclamar.”",

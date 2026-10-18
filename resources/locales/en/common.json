@@ -800,6 +800,7 @@
 		"alert_qty_body": "It is logged to the discrepancy register. The job continues once you explain it.",
 		"alert_amt_title": "Blocked — Aviso total does not match the JAF invoice.",
 		"alert_amt_body": "Aviso {{aviso}} vs. invoice {{invoice}}. Correct the Aviso in Claro and re-upload. This job cannot be released until the totals agree.",
+		"alert_amt_body_blind": "Aviso total does not match the JAF invoice. Correct the Aviso in Claro and re-upload. This job cannot be released until the totals agree.",
 		"note_label": "Discrepancy note",
 		"note_required": "required before this can continue",
 		"note_placeholder": "Explain the difference — e.g. “Claro certified 4, crew installed 5 — photo evidence attached. Claim.”",

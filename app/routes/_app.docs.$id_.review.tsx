@@ -1583,6 +1583,9 @@ export default function ReviewDoc({
 			)}
 
 			{/* B — Invoice */}
+			{/* Every later step keeps the same lines card above its own panel */}
+			{panel !== "APPROVE" && jobLines}
+
 			{panel === "INVOICE" && (
 				<Card>
 					<CardHeader className="items-start">

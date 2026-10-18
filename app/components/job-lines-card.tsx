@@ -90,8 +90,8 @@ function MaterialsTable({
 /**
  * Read-only view of what a work order asked for and what happened to it:
  * the ordered / installed service items, then the materials as Estimated,
- * Prepped, Taken and Used. Shown on the supervisor's Approve step only. No
- * prices: those stay with Finance's own screens.
+ * Prepped, Taken and Used. Shown on every supervisor review step and on the
+ * supervisor's work order page. No prices: those stay with Finance's own screens.
  */
 export function JobLinesCard({
 	ordered,

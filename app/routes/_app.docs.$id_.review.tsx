@@ -200,8 +200,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		retentionPercent: number
 		contractorNet: number
 	} | null = null
-	// Supervisors never see money (catalog, totals, brigade share). The Aviso
-	// card is the one exception until it reads its prices from the Aviso PDF.
+	// Supervisors never see money (catalog, totals, brigade share), including
+	// on the Aviso card: it still runs the gate, it just hides the price fields.
 	const showPrices = showPricesFor(user.role)
 	// The number is pinned when the invoice is reviewed and generated, so it
 	// cannot drift when the Aviso number is typed in later.
@@ -1774,13 +1774,16 @@ export default function ReviewDoc({
 					invoiceLines={invoiceLines}
 					ordered={ordered}
 					certified={precertLines}
-					catalogPrices={Object.fromEntries(
-						serviceCodes.map((c) => [c.id, c.unitPrice]),
-					)}
+					catalogPrices={
+						showPrices
+							? Object.fromEntries(serviceCodes.map((c) => [c.id, c.unitPrice]))
+							: {}
+					}
 					tolerance={tolerance}
 					error={error ?? null}
 					readOnly={!interactive}
 					started={avisoStarted}
+					showPrices={showPrices}
 				>
 					{interactive && doc.status === "SUPERVISOR_APPROVED" && (
 						<details className="pt-3">

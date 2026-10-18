@@ -732,6 +732,7 @@
 		"certified_address_corrected": "Dirección certificada — corregida por la cuadrilla",
 		"corrected_by": "Corregida por {{name}} · {{when}}",
 		"photo_tag_BEFORE": "Antes",
+		"photo_tag_DURING": "Durante",
 		"photo_tag_AFTER": "Después",
 		"ordered_vs_installed": "Ordenado vs Instalado",
 		"per_service_code": "por código de servicio",

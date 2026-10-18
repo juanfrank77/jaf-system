@@ -732,6 +732,7 @@
 		"certified_address_corrected": "Certified address — corrected by crew",
 		"corrected_by": "Corrected by {{name}} · {{when}}",
 		"photo_tag_BEFORE": "Before",
+		"photo_tag_DURING": "During",
 		"photo_tag_AFTER": "After",
 		"ordered_vs_installed": "Ordered vs Installed",
 		"per_service_code": "per service code",

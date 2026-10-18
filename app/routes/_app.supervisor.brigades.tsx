@@ -3,6 +3,13 @@ import { Link } from "react-router"
 import { STAGE_KEY } from "~/components/dashboards/supervisor-dashboard"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Badge } from "~/components/ui/badge"
+import {
+	DataTable,
+	DataTableHead,
+	Td,
+	Th,
+	Tr,
+} from "~/components/ui/data-table"
 import { EmptyState } from "~/components/ui/empty-state"
 import { PageHeader } from "~/components/ui/page-header"
 import { assignedBrigadeIds } from "~/lib/crew-assignment"
@@ -28,8 +35,9 @@ const BRIGADE_WORK_STATUSES = [
 
 /**
  * "Where my brigades are": a read-only view of the supervisor's active
- * brigades and the jobs each is working. Adding, editing and deactivating
- * brigades belongs to the Comptroller (`/comptroller/brigades`).
+ * brigades: the idle ones, and one row per job in progress with the brigades
+ * on it. Adding, editing and deactivating brigades belongs to the
+ * Comptroller (`/comptroller/brigades`).
  */
 export async function loader({ request }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["SUPERVISOR"])
@@ -42,14 +50,10 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const memberIds = [...new Set(brigades.flatMap((b) => b.memberIds))]
 	const brigadeIds = brigades.map((b) => b.id)
 
-	const [crewUsers, jobs] = await Promise.all([
-		db.user.findMany({
-			where: { id: { in: memberIds } },
-			select: { id: true, name: true },
-		}),
+	const jobRows =
 		brigades.length === 0
 			? []
-			: db.jafInvoice.findMany({
+			: await db.jafInvoice.findMany({
 					where: {
 						status: { in: [...BRIGADE_WORK_STATUSES] },
 						// A job can be shared by several brigades; the lead is
@@ -74,34 +78,37 @@ export async function loader({ request }: Route.LoaderArgs) {
 						releasedToFinanceAt: true,
 					},
 					orderBy: { createdAt: "desc" },
-				}),
-	])
+				})
 
-	const names = new Map(crewUsers.map((u) => [u.id, u.name]))
+	const nameById = new Map(brigades.map((b) => [b.id, b.name]))
+	// One row per job, however many brigades share it; only this supervisor's
+	// brigades are named.
+	const busy = new Set<string>()
+	const jobs = jobRows.flatMap((j) => {
+		const ids = assignedBrigadeIds(j).filter((id) => nameById.has(id))
+		if (ids.length === 0) return []
+		for (const id of ids) busy.add(id)
+		return {
+			id: j.id,
+			controlNumber: j.controlNumber,
+			address: j.jobAddressActual ?? j.jobAddressEstimated,
+			stage: deriveSupervisorStage(j, null) as SupervisorStage,
+			brigades: ids.map((id) => nameById.get(id) as string),
+		}
+	})
 	return {
-		brigades: brigades.map((b) => ({
-			id: b.id,
-			name: b.name,
-			area: b.area,
-			members: b.memberIds
-				.map((id) => names.get(id))
-				.filter(Boolean) as string[],
-			jobs: jobs
-				.filter((j) => assignedBrigadeIds(j).includes(b.id))
-				.map((j) => ({
-					id: j.id,
-					controlNumber: j.controlNumber,
-					address: j.jobAddressActual ?? j.jobAddressEstimated,
-					stage: deriveSupervisorStage(j, null) as SupervisorStage,
-				})),
-		})),
+		jobs,
+		available: brigades
+			.filter((b) => !busy.has(b.id))
+			.map((b) => ({ id: b.id, name: b.name, area: b.area })),
+		brigadeCount: brigades.length,
 	}
 }
 
 export default function SupervisorBrigades({
 	loaderData,
 }: Route.ComponentProps) {
-	const { brigades } = loaderData
+	const { jobs, available, brigadeCount } = loaderData
 	const { t } = useTranslation()
 	return (
 		<div className="space-y-4">
@@ -109,57 +116,60 @@ export default function SupervisorBrigades({
 				title={t("supervisor_brigades.title")}
 				description={t("supervisor_brigades.description")}
 			/>
-			{brigades.length === 0 && (
+			{brigadeCount === 0 && (
 				<EmptyState>{t("supervisor_brigades.empty")}</EmptyState>
 			)}
-			<div className="grid gap-3 md:grid-cols-2">
-				{brigades.map((b) => (
-					<section
-						key={b.id}
-						className="space-y-2 rounded-xl border border-border bg-card p-3 shadow-card"
-					>
-						<div className="flex items-start justify-between gap-2">
-							<div className="min-w-0">
-								<h2 className="text-sm font-semibold">{b.name}</h2>
-								<p className="text-xs text-muted-foreground">
-									{[b.area, b.members.join(", ")].filter(Boolean).join(" · ") ||
-										t("supervisor_brigades.no_members")}
-								</p>
-							</div>
-							<Badge variant={b.jobs.length > 0 ? "info" : "ok"}>
-								{b.jobs.length > 0
-									? t("supervisor_brigades.jobs", { count: b.jobs.length })
-									: t("supervisor_brigades.available")}
-							</Badge>
-						</div>
-						{b.jobs.length > 0 && (
-							<ul className="divide-y divide-border text-sm">
-								{b.jobs.map((j) => (
-									<li
-										key={j.id}
-										className="flex items-center justify-between gap-3 py-1.5"
-									>
-										<div className="min-w-0">
-											<Link
-												to={`/docs/${j.id}`}
-												className="font-mono underline"
-											>
-												{j.controlNumber}
-											</Link>
-											<p className="truncate text-xs text-muted-foreground">
-												{j.address}
-											</p>
-										</div>
-										<span className="shrink-0 text-xs text-muted-foreground">
-											{t(STAGE_KEY[j.stage])}
-										</span>
-									</li>
-								))}
-							</ul>
-						)}
-					</section>
-				))}
-			</div>
+			{available.length > 0 && (
+				<section className="space-y-2">
+					<h2 className="text-sm font-semibold">
+						{t("supervisor_brigades.available_heading")}
+					</h2>
+					<ul className="flex flex-wrap gap-2">
+						{available.map((b) => (
+							<li key={b.id}>
+								<Badge variant="ok">
+									{b.name}
+									{b.area ? ` · ${b.area}` : ""}
+								</Badge>
+							</li>
+						))}
+					</ul>
+				</section>
+			)}
+			{brigadeCount > 0 && jobs.length === 0 && (
+				<EmptyState>{t("supervisor_brigades.no_jobs")}</EmptyState>
+			)}
+			{jobs.length > 0 && (
+				<DataTable>
+					<DataTableHead>
+						<Th>{t("supervisor_brigades.col_job")}</Th>
+						<Th className="hidden md:table-cell">
+							{t("supervisor_brigades.col_address")}
+						</Th>
+						<Th>{t("supervisor_brigades.col_step")}</Th>
+						<Th>{t("supervisor_brigades.col_brigade")}</Th>
+					</DataTableHead>
+					<tbody>
+						{jobs.map((j) => (
+							<Tr key={j.id}>
+								<Td>
+									<Link to={`/docs/${j.id}`} className="font-mono underline">
+										{j.controlNumber}
+									</Link>
+									<p className="text-xs text-muted-foreground md:hidden">
+										{j.address}
+									</p>
+								</Td>
+								<Td className="hidden text-muted-foreground md:table-cell">
+									{j.address}
+								</Td>
+								<Td>{t(STAGE_KEY[j.stage])}</Td>
+								<Td>{j.brigades.join(", ")}</Td>
+							</Tr>
+						))}
+					</tbody>
+				</DataTable>
+			)}
 		</div>
 	)
 }

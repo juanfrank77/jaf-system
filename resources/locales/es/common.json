@@ -1003,12 +1003,14 @@
 	},
 	"supervisor_brigades": {
 		"title": "Brigadas",
-		"description": "Dónde están tus brigadas: los trabajos que cada una tiene en curso. Contraloría agrega y desactiva las brigadas.",
+		"description": "Dónde están tus brigadas: los trabajos que cada una tiene en curso.",
 		"empty": "No hay brigadas activas en tus áreas.",
-		"available": "Disponible",
-		"jobs_one": "{{count}} trabajo",
-		"jobs_other": "{{count}} trabajos",
-		"no_members": "Sin miembros"
+		"available_heading": "Disponibles ahora",
+		"no_jobs": "No hay trabajos en curso para tus brigadas.",
+		"col_job": "Trabajo",
+		"col_address": "Dirección",
+		"col_step": "Paso",
+		"col_brigade": "Brigada"
 	},
 	"comptroller_brigades": {
 		"title": "Brigadas",

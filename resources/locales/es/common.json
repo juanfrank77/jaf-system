@@ -210,7 +210,6 @@
 			"admin_settings": "Configuración de administrador",
 			"catalog": "Catálogo",
 			"admin_users": "Usuarios",
-			"admin_crews": "Cuadrillas",
 			"admin_vans": "Vans",
 			"supervisor_brigades": "Brigadas",
 			"supervisor_variance": "Variaciones",
@@ -1002,39 +1001,6 @@
 			"unknown_intent": "Acción desconocida."
 		}
 	},
-	"admin_crews": {
-		"title": "Cuadrillas y personal — Brigadas",
-		"add_heading": "Agregar brigada",
-		"name_label": "Nombre de brigada *",
-		"area_label": "Área *",
-		"select_area": "Selecciona un área",
-		"members_label": "Miembros",
-		"active_label": "Activa",
-		"active": "activo",
-		"inactive": "inactivo",
-		"add_submit": "Agregar brigada",
-		"edit": "Editar",
-		"save": "Guardar",
-		"deactivate": "Desactivar",
-		"activate": "Activar",
-		"yes": "Sí",
-		"no": "No",
-		"table": {
-			"name": "Nombre",
-			"area": "Área",
-			"members": "Miembros",
-			"active": "Activa",
-			"actions": "Acciones"
-		},
-		"no_area": "Sin área",
-		"no_members": "Sin miembros",
-		"no_crews": "Aún no hay brigadas.",
-		"errors": {
-			"invalid_fields": "Se requieren nombre de brigada válido, área y lista de miembros.",
-			"id_required": "Se requiere el id de la brigada.",
-			"unknown_intent": "Acción desconocida."
-		}
-	},
 	"supervisor_brigades": {
 		"title": "Brigadas",
 		"description": "Dónde están tus brigadas: los trabajos que cada una tiene en curso. Contraloría agrega y desactiva las brigadas.",
@@ -1051,11 +1017,14 @@
 		"area_label": "Área *",
 		"code_label": "Código de contratista",
 		"members_label": "Miembros",
-		"active_label": "Activa",
+		"active_label": "Brigada activa",
+		"active_hint": "Déjela marcada para que la brigada pueda recibir trabajos de inmediato. Luego puede desactivarla con el botón de la tabla de abajo.",
+		"members_hint": "Solo se pueden agregar cuentas activas. '(inactivo)' significa que el acceso de esa persona está desactivado.",
 		"active": "activo",
 		"inactive": "inactivo",
 		"add_submit": "Agregar brigada",
 		"edit": "Editar",
+		"cancel": "Cancelar",
 		"save": "Guardar",
 		"deactivate": "Desactivar",
 		"activate": "Activar",

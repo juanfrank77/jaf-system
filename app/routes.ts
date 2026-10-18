@@ -16,6 +16,7 @@ export default [
 		route("admin/users", "routes/_app.admin.users.tsx"),
 		route("admin/crews", "routes/_app.admin.crews.tsx"),
 		route("admin/vans", "routes/_app.admin.vans.tsx"),
+		route("admin/claro-supervisors", "routes/_app.admin.claro-supervisors.tsx"),
 		route("supervisor/brigades", "routes/_app.supervisor.brigades.tsx"),
 		route("comptroller/brigades", "routes/_app.comptroller.brigades.tsx"),
 		route("supervisor/variance", "routes/_app.supervisor.variance.tsx"),

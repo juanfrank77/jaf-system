@@ -45,6 +45,14 @@ enum PaymentType {
 enum PhotoTag {
   BEFORE
   AFTER
+  DURING
+}
+
+enum PacketSendOutcome {
+  SENT
+  FAILED
+  UNCONFIGURED
+  MANUAL
 }
 
 enum CatalogKind {
@@ -197,6 +205,8 @@ model User {
 
   bankSchedulesGenerated BankSchedule[] @relation("BankScheduleGenerator")
   bankSchedulesSent      BankSchedule[] @relation("BankScheduleSender")
+
+  packetSends PacketSend[] @relation("PacketSendSender")
 
   @@index([role, active])
 }
@@ -422,12 +432,34 @@ model JafInvoice {
   payrollRunId         String?
   payrollRun           PayrollRun?        @relation(fields: [payrollRunId], references: [id])
 
+  // Supervisor workflow redesign
+  claroSupervisorId String?
+  claroSupervisor   ClaroSupervisor? @relation(fields: [claroSupervisorId], references: [id])
+  sector            String?
+  direccion1        String?
+  direccion2        String?
+  latitud           String?
+  longitud          String?
+  tipo              String?
+  ciudad            String?
+  tipoPlanta        String?
+  grupoPlan         String?
+  ordenNumber       String?
+  pedido            String?
+  smr               String?
+  titulo            String?
+  blueprintPaths    String[] @default([])
+  fieldStartedAt    DateTime?
+  fieldMaterials    Json?
+
   preCertSheets  PreCertSheet[]
   auditTrail     AuditTrail[]
   photos         Photo[]
   poLinks        PoLink[]
   paymentRecords PaymentRecord[]
+  packetSends    PacketSend[]
 
+  @@index([claroSupervisorId])
   @@index([status, lcGeneratedAt])
   @@index([status, financeVerifiedAt, pbccRequestSentAt, advanceReceivedAt])
   @@index([status, createdAt])
@@ -441,6 +473,36 @@ model JafInvoice {
   @@index([avisoNumber(ops: raw("gin_trgm_ops"))], type: Gin)
   @@index([jobAddressEstimated(ops: raw("gin_trgm_ops"))], type: Gin)
   @@map("jaf_invoice")
+}
+
+model ClaroSupervisor {
+  id                String   @id @default(cuid())
+  name              String
+  email             String
+  active            Boolean  @default(true)
+  requiresPrefield  Boolean  @default(false)
+  requiresBlueprint Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  invoices    JafInvoice[]
+  packetSends PacketSend[]
+}
+
+model PacketSend {
+  id                String            @id @default(cuid())
+  docId             String
+  doc               JafInvoice        @relation(fields: [docId], references: [id])
+  sentAt            DateTime          @default(now())
+  sentById          String
+  sentBy            User              @relation("PacketSendSender", fields: [sentById], references: [id])
+  recipientEmail    String
+  claroSupervisorId String?
+  claroSupervisor   ClaroSupervisor?  @relation(fields: [claroSupervisorId], references: [id])
+  outcome           PacketSendOutcome
+  error             String?
+
+  @@index([docId, sentAt])
 }
 
 model AuditTrail {

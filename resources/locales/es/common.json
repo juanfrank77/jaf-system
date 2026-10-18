@@ -211,6 +211,7 @@
 			"catalog": "Catálogo",
 			"admin_users": "Usuarios",
 			"admin_vans": "Vans",
+			"admin_claro_supervisors": "Supervisores de Claro",
 			"supervisor_brigades": "Brigadas",
 			"supervisor_variance": "Variaciones",
 			"admin_restock": "Aprobaciones de reabastecimiento",
@@ -732,6 +733,7 @@
 		"certified_address_corrected": "Dirección certificada — corregida por la cuadrilla",
 		"corrected_by": "Corregida por {{name}} · {{when}}",
 		"photo_tag_BEFORE": "Antes",
+		"photo_tag_DURING": "Durante",
 		"photo_tag_AFTER": "Después",
 		"ordered_vs_installed": "Ordenado vs Instalado",
 		"per_service_code": "por código de servicio",
@@ -1076,6 +1078,36 @@
 		},
 		"no_lines": "Sin detalle de líneas",
 		"no_variance": "No hay variaciones que revisar."
+	},
+	"claro_supervisors": {
+		"title": "Supervisores de Claro",
+		"add_heading": "Agregar supervisor de Claro",
+		"name_label": "Nombre",
+		"email_label": "Correo electrónico",
+		"requires_prefield": "Requiere visita de prefield",
+		"requires_blueprint": "Requiere plano",
+		"add_submit": "Agregar supervisor",
+		"save": "Guardar",
+		"edit": "Editar",
+		"activate": "Activar",
+		"deactivate": "Desactivar",
+		"yes": "Sí",
+		"no": "No",
+		"empty": "Aún no hay supervisores de Claro.",
+		"table": {
+			"name": "Nombre",
+			"email": "Correo",
+			"prefield": "Prefield",
+			"blueprint": "Plano",
+			"active": "Activo",
+			"actions": "Acciones"
+		},
+		"errors": {
+			"invalid_name": "El nombre es obligatorio.",
+			"invalid_email": "Ingresa un correo electrónico válido.",
+			"id_required": "Se requiere el id del supervisor.",
+			"unknown_intent": "Acción desconocida."
+		}
 	},
 	"admin_vans": {
 		"title": "Cuadrillas y personal — Vans",

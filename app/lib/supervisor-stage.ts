@@ -226,7 +226,7 @@ type ReleaseGateDoc = Pick<
 export function evaluateReleaseGate(
 	doc: ReleaseGateDoc,
 	sheet: StageSheet,
-	photos: { tag: "BEFORE" | "AFTER" | null }[],
+	photos: { tag: "BEFORE" | "DURING" | "AFTER" | null }[],
 ): { ok: boolean; conditions: { key: ReleaseConditionKey; ok: boolean }[] } {
 	const avisoLines = Array.isArray(doc.avisoLines) ? doc.avisoLines : []
 	const conditions: { key: ReleaseConditionKey; ok: boolean }[] = [

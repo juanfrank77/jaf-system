@@ -11,7 +11,7 @@ import type { AddressCorrection } from "~/lib/field-update-helpers"
 export type ReviewPhoto = {
 	id: string
 	basename: string
-	tag: "BEFORE" | "AFTER" | null
+	tag: "BEFORE" | "DURING" | "AFTER" | null
 	takenAt: string
 }
 
@@ -103,7 +103,15 @@ export function PhotosCard({
 						/>
 						<div className="flex items-center justify-between text-xs text-muted-foreground">
 							{p.tag ? (
-								<Badge variant={p.tag === "BEFORE" ? "info" : "ok"}>
+								<Badge
+									variant={
+										p.tag === "BEFORE"
+											? "info"
+											: p.tag === "DURING"
+												? "warn"
+												: "ok"
+									}
+								>
 									{t(`docs_review.photo_tag_${p.tag}`)}
 								</Badge>
 							) : (

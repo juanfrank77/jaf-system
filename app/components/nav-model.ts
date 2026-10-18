@@ -41,7 +41,6 @@ export type NavLabelKey =
 	| "app_shell.nav.admin_settings"
 	| "app_shell.nav.catalog"
 	| "app_shell.nav.admin_users"
-	| "app_shell.nav.admin_crews"
 	| "app_shell.nav.admin_vans"
 	| "app_shell.nav.supervisor_brigades"
 	| "app_shell.nav.supervisor_variance"
@@ -374,14 +373,14 @@ const NAV_ITEMS: NavItem[] = [
 		to: "/comptroller/brigades",
 		labelKey: "app_shell.nav.comptroller_brigades",
 		icon: UserGroup03Icon,
-		group: "money",
-		roles: ["COMPTROLLER"],
+		group: "team",
+		roles: ["COMPTROLLER", "ADMIN"],
 	},
 	{
 		to: "/comptroller/installers",
 		labelKey: "app_shell.nav.comptroller_installers",
 		icon: UserGroup03Icon,
-		group: "money",
+		group: "team",
 		roles: ["COMPTROLLER", "ADMIN"],
 		disabled: true,
 	},
@@ -422,13 +421,6 @@ const NAV_ITEMS: NavItem[] = [
 		to: "/admin/users",
 		labelKey: "app_shell.nav.admin_users",
 		icon: UserIcon,
-		group: "admin",
-		roles: ["ADMIN"],
-	},
-	{
-		to: "/admin/crews",
-		labelKey: "app_shell.nav.admin_crews",
-		icon: UserGroup03Icon,
 		group: "admin",
 		roles: ["ADMIN"],
 	},

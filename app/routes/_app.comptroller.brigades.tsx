@@ -1,7 +1,8 @@
+import { Fragment, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { data, Form, redirect } from "react-router"
+import { data, Form, redirect, useNavigation } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
-import { Button, buttonVariants } from "~/components/ui/button"
+import { Button } from "~/components/ui/button"
 import { Checkbox } from "~/components/ui/checkbox"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
@@ -108,14 +109,14 @@ export async function action({ request }: Route.ActionArgs) {
 			const payload = {
 				name: name.trim(),
 				memberIds: memberIds as string[],
-				active,
 				area,
 				code: typeof code === "string" && code.trim() ? code.trim() : null,
 			}
-			// An update keeps the brigade's existing owner (`supervisorId`).
+			// An update keeps the brigade's existing owner (`supervisorId`) and
+			// its active flag: only the toggle button changes that.
 			const saved = existing
 				? await db.brigade.update({ where: { id: existing.id }, data: payload })
-				: await db.brigade.create({ data: payload })
+				: await db.brigade.create({ data: { ...payload, active } })
 			await syncContractorAccount(db, saved)
 		} catch (error) {
 			if (isP2002(error)) {
@@ -177,6 +178,13 @@ export default function ComptrollerBrigades({
 	const { t } = useTranslation()
 	const error =
 		actionData && "errorKey" in actionData ? actionData.errorKey : null
+	const [editingId, setEditingId] = useState<string | null>(null)
+	const navigation = useNavigation()
+	// A finished save (or toggle) collapses the open edit form; a failed one
+	// keeps it open so the error stays next to the fields.
+	useEffect(() => {
+		if (navigation.state === "idle" && !error) setEditingId(null)
+	}, [navigation.state, error])
 
 	return (
 		<div className="space-y-8">
@@ -200,7 +208,7 @@ export default function ComptrollerBrigades({
 							id="area"
 							name="area"
 							required
-							className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+							className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm text-foreground shadow-sm"
 						>
 							{areaOptions.map((a) => (
 								<option key={a} value={a}>
@@ -216,6 +224,9 @@ export default function ComptrollerBrigades({
 					<div className="space-y-2">
 						<p className="text-sm font-medium">
 							{t("comptroller_brigades.members_label")}
+						</p>
+						<p className="text-xs text-muted-foreground">
+							{t("comptroller_brigades.members_hint")}
 						</p>
 						<div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
 							{crewUsers.map((u) => (
@@ -243,11 +254,22 @@ export default function ComptrollerBrigades({
 							))}
 						</div>
 					</div>
-					<div className="flex items-center gap-2">
-						<Checkbox id="active" name="active" defaultChecked />
-						<Label htmlFor="active" className="text-sm">
-							{t("comptroller_brigades.active_label")}
-						</Label>
+					<div className="flex items-start gap-2">
+						<Checkbox
+							id="active"
+							name="active"
+							defaultChecked
+							aria-describedby="active-hint"
+							className="mt-0.5"
+						/>
+						<div className="space-y-0.5">
+							<Label htmlFor="active" className="text-sm">
+								{t("comptroller_brigades.active_label")}
+							</Label>
+							<p id="active-hint" className="text-xs text-muted-foreground">
+								{t("comptroller_brigades.active_hint")}
+							</p>
+						</div>
 					</div>
 					<Button type="submit">{t("comptroller_brigades.add_submit")}</Button>
 					{error && (
@@ -282,48 +304,70 @@ export default function ComptrollerBrigades({
 							const members = crewUsers.filter((u) =>
 								brigade.memberIds.includes(u.id),
 							)
+							const editing = editingId === brigade.id
 							return (
-								<tr key={brigade.id} className="hover:bg-muted">
-									<td className="px-4 py-3 font-medium">{brigade.name}</td>
-									<td className="px-4 py-3 text-muted-foreground">
-										{brigade.area}
-									</td>
-									<td className="px-4 py-3 text-muted-foreground">
-										{members.map((m) => m.name).join(", ") ||
-											t("comptroller_brigades.no_members")}
-									</td>
-									<td className="px-4 py-3 text-center">
-										<span
-											className={
-												brigade.active
-													? "text-status-ok font-medium"
-													: "text-muted-foreground"
-											}
-										>
-											{brigade.active
-												? t("comptroller_brigades.yes")
-												: t("comptroller_brigades.no")}
-										</span>
-									</td>
-									<td className="px-4 py-3 text-center">
-										<div className="flex items-center justify-center gap-2">
-											<Form method="post">
-												<input type="hidden" name="intent" value="toggle" />
-												<input type="hidden" name="id" value={brigade.id} />
-												<Button type="submit" variant="outline" size="sm">
-													{brigade.active
-														? t("comptroller_brigades.deactivate")
-														: t("comptroller_brigades.activate")}
+								<Fragment key={brigade.id}>
+									<tr className="hover:bg-muted">
+										<td className="px-4 py-3 font-medium">{brigade.name}</td>
+										<td className="px-4 py-3 text-muted-foreground">
+											{brigade.area}
+										</td>
+										<td className="px-4 py-3 text-muted-foreground">
+											{members.map((m) => m.name).join(", ") ||
+												t("comptroller_brigades.no_members")}
+										</td>
+										<td className="px-4 py-3 text-center">
+											<span
+												className={
+													brigade.active
+														? "text-status-ok font-medium"
+														: "text-muted-foreground"
+												}
+											>
+												{brigade.active
+													? t("comptroller_brigades.yes")
+													: t("comptroller_brigades.no")}
+											</span>
+										</td>
+										<td className="px-4 py-3 text-center">
+											<div className="flex items-center justify-center gap-2">
+												<Form method="post">
+													<input type="hidden" name="intent" value="toggle" />
+													<input type="hidden" name="id" value={brigade.id} />
+													<Button type="submit" variant="outline" size="sm">
+														{brigade.active
+															? t("comptroller_brigades.deactivate")
+															: t("comptroller_brigades.activate")}
+													</Button>
+												</Form>
+												<Button
+													type="button"
+													variant="outline"
+													size="sm"
+													aria-expanded={editing}
+													onClick={() =>
+														setEditingId(editing ? null : brigade.id)
+													}
+												>
+													{t("comptroller_brigades.edit")}
 												</Button>
-											</Form>
-											<EditBrigadeDialog
-												brigade={brigade}
-												crewUsers={crewUsers}
-												areaOptions={areaOptions}
-											/>
-										</div>
-									</td>
-								</tr>
+											</div>
+										</td>
+									</tr>
+									{editing && (
+										<tr>
+											<td colSpan={5} className="bg-muted/40 px-4 py-4">
+												<EditBrigadeForm
+													brigade={brigade}
+													crewUsers={crewUsers}
+													areaOptions={areaOptions}
+													error={error}
+													onCancel={() => setEditingId(null)}
+												/>
+											</td>
+										</tr>
+									)}
+								</Fragment>
 							)
 						})}
 						{brigades.length === 0 && (
@@ -343,10 +387,12 @@ export default function ComptrollerBrigades({
 	)
 }
 
-function EditBrigadeDialog({
+function EditBrigadeForm({
 	brigade,
 	crewUsers,
 	areaOptions,
+	error,
+	onCancel,
 }: {
 	brigade: {
 		id: string
@@ -358,16 +404,15 @@ function EditBrigadeDialog({
 	}
 	crewUsers: CrewUser[]
 	areaOptions: string[]
+	error: string | null
+	onCancel: () => void
 }) {
 	const { t } = useTranslation()
 	return (
-		<details className="group">
-			<summary className={buttonVariants({ variant: "outline", size: "sm" })}>
-				{t("comptroller_brigades.edit")}
-			</summary>
-			<Form method="post" className="mt-3 space-y-3 rounded-lg border p-3">
-				<input type="hidden" name="intent" value="update" />
-				<input type="hidden" name="id" value={brigade.id} />
+		<Form method="post" className="space-y-4 text-left">
+			<input type="hidden" name="intent" value="update" />
+			<input type="hidden" name="id" value={brigade.id} />
+			<div className="grid gap-3 md:grid-cols-3">
 				<div className="space-y-1">
 					<Label htmlFor={`name-${brigade.id}`}>
 						{t("comptroller_brigades.name_label")}
@@ -388,7 +433,7 @@ function EditBrigadeDialog({
 						name="area"
 						required
 						defaultValue={brigade.area ?? ""}
-						className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+						className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm text-foreground shadow-sm"
 					>
 						{areaOptions.map((a) => (
 							<option key={a} value={a}>
@@ -407,52 +452,53 @@ function EditBrigadeDialog({
 						defaultValue={brigade.code ?? ""}
 					/>
 				</div>
-				<div className="space-y-2">
-					<p className="text-sm font-medium">
-						{t("comptroller_brigades.members_label")}
-					</p>
-					<div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-						{crewUsers.map((u) => (
-							<label
-								key={u.id}
-								htmlFor={`member-${brigade.id}-${u.id}`}
-								className="flex items-center gap-2 text-sm"
-							>
-								<Checkbox
-									id={`member-${brigade.id}-${u.id}`}
-									name="memberIds"
-									value={u.id}
-									defaultChecked={brigade.memberIds.includes(u.id)}
-								/>
-								<span>
-									{u.name}{" "}
-									<span className="text-muted-foreground">
-										(
-										{u.active
-											? t("comptroller_brigades.active")
-											: t("comptroller_brigades.inactive")}
-										)
-									</span>
+			</div>
+			<div className="space-y-2">
+				<p className="text-sm font-medium">
+					{t("comptroller_brigades.members_label")}
+				</p>
+				<p className="text-xs text-muted-foreground">
+					{t("comptroller_brigades.members_hint")}
+				</p>
+				<div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+					{crewUsers.map((u) => (
+						<label
+							key={u.id}
+							htmlFor={`member-${brigade.id}-${u.id}`}
+							className="flex items-center gap-2 text-sm"
+						>
+							<Checkbox
+								id={`member-${brigade.id}-${u.id}`}
+								name="memberIds"
+								value={u.id}
+								defaultChecked={brigade.memberIds.includes(u.id)}
+							/>
+							<span>
+								{u.name}{" "}
+								<span className="text-muted-foreground">
+									(
+									{u.active
+										? t("comptroller_brigades.active")
+										: t("comptroller_brigades.inactive")}
+									)
 								</span>
-							</label>
-						))}
-					</div>
+							</span>
+						</label>
+					))}
 				</div>
-				<div className="flex items-center gap-2">
-					<Checkbox
-						id={`active-${brigade.id}`}
-						name="active"
-						defaultChecked={brigade.active}
-					/>
-					<Label htmlFor={`active-${brigade.id}`} className="text-sm">
-						{t("comptroller_brigades.active_label")}
-					</Label>
-				</div>
+			</div>
+			<div className="flex items-center gap-2">
 				<Button type="submit" size="sm">
 					{t("comptroller_brigades.save")}
 				</Button>
-			</Form>
-		</details>
+				<Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+					{t("comptroller_brigades.cancel")}
+				</Button>
+			</div>
+			{error && (
+				<p className="text-sm text-status-danger">{t(error as never)}</p>
+			)}
+		</Form>
 	)
 }
 

@@ -210,7 +210,6 @@
 			"admin_settings": "Admin Settings",
 			"catalog": "Catalog",
 			"admin_users": "Users",
-			"admin_crews": "Crews",
 			"admin_vans": "Vans",
 			"supervisor_brigades": "Brigades",
 			"supervisor_variance": "Variance",
@@ -1002,39 +1001,6 @@
 			"unknown_intent": "Unknown action."
 		}
 	},
-	"admin_crews": {
-		"title": "Crews & Personnel — Brigades",
-		"add_heading": "Add Brigade",
-		"name_label": "Brigade Name *",
-		"area_label": "Area *",
-		"select_area": "Select an area",
-		"members_label": "Members",
-		"active_label": "Active",
-		"active": "active",
-		"inactive": "inactive",
-		"add_submit": "Add Brigade",
-		"edit": "Edit",
-		"save": "Save",
-		"deactivate": "Deactivate",
-		"activate": "Activate",
-		"yes": "Yes",
-		"no": "No",
-		"table": {
-			"name": "Name",
-			"area": "Area",
-			"members": "Members",
-			"active": "Active",
-			"actions": "Actions"
-		},
-		"no_area": "No area set",
-		"no_members": "No members",
-		"no_crews": "No brigades yet.",
-		"errors": {
-			"invalid_fields": "Valid brigade name, area, and member list are required.",
-			"id_required": "Brigade id is required.",
-			"unknown_intent": "Unknown action."
-		}
-	},
 	"supervisor_brigades": {
 		"title": "Brigades",
 		"description": "Where your brigades are: the jobs each one is working right now. Brigades are added and deactivated by the Comptroller.",
@@ -1051,11 +1017,14 @@
 		"area_label": "Area *",
 		"code_label": "Contractor Code",
 		"members_label": "Members",
-		"active_label": "Active",
+		"active_label": "Active brigade",
+		"active_hint": "Leave checked so the brigade can get new jobs right away. You can deactivate it later with the button in the table below.",
+		"members_hint": "Only active accounts can be added. “(inactive)” means that person's login is turned off.",
 		"active": "active",
 		"inactive": "inactive",
 		"add_submit": "Add Brigade",
 		"edit": "Edit",
+		"cancel": "Cancel",
 		"save": "Save",
 		"deactivate": "Deactivate",
 		"activate": "Activate",

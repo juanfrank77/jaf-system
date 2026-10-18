@@ -147,6 +147,17 @@ describe("/comptroller/brigades", () => {
 		})
 	})
 
+	it("leaves the active flag alone on update, even if the form omits it", async () => {
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
+			id: "b1",
+			memberIds: [],
+			active: true,
+		} as any)
+		await run(formOf({ intent: "update", id: "b1", name: "X", area: "SUR" }))
+		const { data } = vi.mocked(db.brigade.update).mock.calls[0][0] as any
+		expect(data).not.toHaveProperty("active")
+	})
+
 	it("rejects an update with a blank or unknown id instead of creating", async () => {
 		const blank = await run(
 			formOf({ intent: "update", id: " ", name: "X", area: "SUR" }),

@@ -26,6 +26,20 @@ export const SUPERVISOR_QUEUES: SupervisorQueue[] = [
 	"all",
 ]
 
+// The sidebar queues, in display order: one per step of the work-order rail
+// from Approve onward. Intake and Field have no sidebar links (intake opens
+// from the "Awaiting warehouse" tile; field shows on the dashboard cards), so
+// they are excluded here. Deriving this from SUPERVISOR_QUEUES keeps the
+// sidebar order and the count set in sync if a queue is added or removed.
+export const SUPERVISOR_SIDEBAR_QUEUES: SupervisorQueue[] = [
+	"review",
+	"invoice",
+	"aviso",
+	"precert",
+	"released",
+	"all",
+] as const
+
 export function parseSupervisorQueue(
 	value: string | null,
 ): SupervisorQueue | null {

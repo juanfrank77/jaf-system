@@ -78,6 +78,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 						releasedToFinanceAt: true,
 					},
 					orderBy: { createdAt: "desc" },
+					take: 100,
 				})
 
 	const nameById = new Map(brigades.map((b) => [b.id, b.name]))

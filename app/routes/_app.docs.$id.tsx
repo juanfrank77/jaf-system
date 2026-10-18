@@ -515,6 +515,68 @@ function nextActionLabelKey(
 	return "docs_view.next_action.default"
 }
 
+function DocSignaturesAndNotes({
+	doc,
+}: {
+	doc: {
+		crewSignature: string | null
+		fieldNotes: string | null
+		completionSignature: string | null
+		startedAt: string | Date | null
+		endedAt: string | Date | null
+	}
+}) {
+	const { t } = useTranslation()
+	if (
+		!(
+			doc.crewSignature ||
+			doc.fieldNotes ||
+			doc.completionSignature ||
+			(doc.startedAt && doc.endedAt)
+		)
+	)
+		return null
+	return (
+		<section className="bg-card border rounded-lg p-4 space-y-3">
+			{doc.crewSignature && (
+				<div>
+					<p className="text-xs text-muted-foreground mb-1">
+						{t("docs_view.crew_signature_alt")}
+					</p>
+					<img
+						src={doc.crewSignature}
+						alt={t("docs_view.crew_signature_alt")}
+						className="border rounded max-h-16"
+					/>
+				</div>
+			)}
+			{doc.startedAt && doc.endedAt && (
+				<p className="text-sm text-muted-foreground">
+					<span className="text-muted-foreground">
+						{t("docs_view.time_on_site")}:
+					</span>{" "}
+					{formatTimeOnSite(doc.startedAt, doc.endedAt)}
+				</p>
+			)}
+			{doc.fieldNotes && (
+				<p className="text-sm text-muted-foreground">{doc.fieldNotes}</p>
+			)}
+			{doc.completionSignature && (
+				<div>
+					<p className="text-xs text-muted-foreground mb-1">
+						{t("docs_view.completion_signature")}
+					</p>
+					<img
+						src={doc.completionSignature}
+						alt={t("docs_view.completion_signature_alt")}
+						className="border rounded max-h-16"
+					/>
+				</div>
+			)}
+		</section>
+	)
+}
+
 export default function DocView({
 	loaderData,
 	actionData,
@@ -758,50 +820,6 @@ export default function DocView({
 				/>
 			)}
 
-			{showJobLines &&
-				(doc.crewSignature ||
-					doc.fieldNotes ||
-					doc.completionSignature ||
-					(doc.startedAt && doc.endedAt)) && (
-					<section className="bg-card border rounded-lg p-4 space-y-3">
-						{doc.crewSignature && (
-							<div>
-								<p className="text-xs text-muted-foreground mb-1">
-									{t("docs_view.crew_signature_alt")}
-								</p>
-								<img
-									src={doc.crewSignature}
-									alt={t("docs_view.crew_signature_alt")}
-									className="border rounded max-h-16"
-								/>
-							</div>
-						)}
-						{doc.startedAt && doc.endedAt && (
-							<p className="text-sm text-muted-foreground">
-								<span className="text-muted-foreground">
-									{t("docs_view.time_on_site")}:
-								</span>{" "}
-								{formatTimeOnSite(doc.startedAt, doc.endedAt)}
-							</p>
-						)}
-						{doc.fieldNotes && (
-							<p className="text-sm text-muted-foreground">{doc.fieldNotes}</p>
-						)}
-						{doc.completionSignature && (
-							<div>
-								<p className="text-xs text-muted-foreground mb-1">
-									{t("docs_view.completion_signature")}
-								</p>
-								<img
-									src={doc.completionSignature}
-									alt={t("docs_view.completion_signature_alt")}
-									className="border rounded max-h-16"
-								/>
-							</div>
-						)}
-					</section>
-				)}
-
 			{!showJobLines && (
 				<>
 					{estimated.length > 0 && (
@@ -827,13 +845,6 @@ export default function DocView({
 								initialItems={taken}
 								readOnly
 							/>
-							{doc.crewSignature && (
-								<img
-									src={doc.crewSignature}
-									alt={t("docs_view.crew_signature_alt")}
-									className="mt-3 border rounded max-h-16"
-								/>
-							)}
 						</section>
 					)}
 
@@ -847,35 +858,12 @@ export default function DocView({
 								initialItems={used}
 								readOnly
 							/>
-							{doc.startedAt && doc.endedAt && (
-								<p className="text-sm text-muted-foreground">
-									<span className="text-muted-foreground">
-										{t("docs_view.time_on_site")}:
-									</span>{" "}
-									{formatTimeOnSite(doc.startedAt, doc.endedAt)}
-								</p>
-							)}
-							{doc.fieldNotes && (
-								<p className="text-sm text-muted-foreground">
-									{doc.fieldNotes}
-								</p>
-							)}
-							{doc.completionSignature && (
-								<div>
-									<p className="text-xs text-muted-foreground mb-1">
-										{t("docs_view.completion_signature")}
-									</p>
-									<img
-										src={doc.completionSignature}
-										alt={t("docs_view.completion_signature_alt")}
-										className="border rounded max-h-16"
-									/>
-								</div>
-							)}
 						</section>
 					)}
 				</>
 			)}
+
+			<DocSignaturesAndNotes doc={doc} />
 
 			{nextHref && (
 				<Link to={nextHref} className={buttonVariants({ className: "w-full" })}>

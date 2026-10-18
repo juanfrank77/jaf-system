@@ -29,6 +29,7 @@ type AvisoRow = {
 type AvisoError = {
 	errorKey?: string
 	errorMessage?: string
+	missingCodes?: string[]
 } | null
 
 type Props = {
@@ -78,19 +79,37 @@ export function AvisoMatchCard({
 	const { t } = useTranslation()
 	const [touched, setTouched] = useState(false)
 	const [pickedFile, setPickedFile] = useState<string | null>(null)
-	const [rows, setRows] = useState<AvisoRow[]>(() =>
-		invoiceLines.map((l) => {
-			const stored = storedLines.find(
-				(s) => s.serviceCodeId === l.serviceCodeId,
-			)
-			return {
+	// Price-blind roles never type quantities: the server reads the Aviso PDF,
+	// so their rows are exactly what was captured (none before the first save).
+	const [rows, setRows] = useState<AvisoRow[]>(() => {
+		const stored = (id: string) =>
+			storedLines.find((s) => s.serviceCodeId === id)
+		if (!showPrices) {
+			const onInvoice = invoiceLines.map((l) => ({
 				serviceCodeId: l.serviceCodeId,
 				claroCode: l.claroCode,
-				qty: stored?.qty ?? l.qty,
-				unitPrice: stored?.unitPrice ?? l.unitPrice,
-			}
-		}),
-	)
+				qty: stored(l.serviceCodeId)?.qty ?? 0,
+				unitPrice: stored(l.serviceCodeId)?.unitPrice ?? l.unitPrice,
+			}))
+			const extra = storedLines
+				.filter(
+					(s) => !invoiceLines.some((l) => l.serviceCodeId === s.serviceCodeId),
+				)
+				.map((s) => ({
+					serviceCodeId: s.serviceCodeId,
+					claroCode: s.claroCode,
+					qty: s.qty,
+					unitPrice: s.unitPrice,
+				}))
+			return [...onInvoice, ...extra]
+		}
+		return invoiceLines.map((l) => ({
+			serviceCodeId: l.serviceCodeId,
+			claroCode: l.claroCode,
+			qty: stored(l.serviceCodeId)?.qty ?? l.qty,
+			unitPrice: stored(l.serviceCodeId)?.unitPrice ?? l.unitPrice,
+		}))
+	})
 
 	// Same arithmetic as the save_aviso action: zero-qty rows are dropped and
 	// each line is round2(qty × unit price).
@@ -121,7 +140,7 @@ export function AvisoMatchCard({
 		})),
 	)
 	const description = (id: string) =>
-		invoiceLines.find((l) => l.serviceCodeId === id)?.name
+		invoiceLines.find((l) => l.serviceCodeId === id)?.name ?? "—"
 	const fileName = pickedFile ?? avisoDocPath?.split(/[\\/]/).pop() ?? null
 	const update = (i: number, patch: Partial<AvisoRow>) => {
 		setTouched(true)
@@ -314,21 +333,29 @@ export function AvisoMatchCard({
 											<td className="py-1.5 text-right">{installedQty}</td>
 											<td className="py-1.5 text-right">{certifiedQty}</td>
 											<td className="py-1.5 text-right">
-												<Input
-													type="number"
-													min={0}
-													value={r.qty}
-													aria-label={`${t("docs_review_steps.col_charged")} ${r.claroCode}`}
-													className={cn(
-														"ml-auto w-20",
-														active && differs && "border-status-warn",
-													)}
-													onChange={(e) =>
-														update(i, {
-															qty: Number.parseInt(e.target.value, 10) || 0,
-														})
-													}
-												/>
+												{!showPrices ? (
+													active ? (
+														r.qty
+													) : (
+														"—"
+													)
+												) : (
+													<Input
+														type="number"
+														min={0}
+														value={r.qty}
+														aria-label={`${t("docs_review_steps.col_charged")} ${r.claroCode}`}
+														className={cn(
+															"ml-auto w-20",
+															active && differs && "border-status-warn",
+														)}
+														onChange={(e) =>
+															update(i, {
+																qty: Number.parseInt(e.target.value, 10) || 0,
+															})
+														}
+													/>
+												)}
 											</td>
 											{showPrices && (
 												<td className="py-1.5 text-right">
@@ -364,11 +391,13 @@ export function AvisoMatchCard({
 								})}
 							</tbody>
 						</table>
-						<input
-							type="hidden"
-							name="avisoLines"
-							value={JSON.stringify(rows)}
-						/>
+						{showPrices && (
+							<input
+								type="hidden"
+								name="avisoLines"
+								value={JSON.stringify(rows)}
+							/>
+						)}
 
 						{active && state === "qty" && (
 							<div className="space-y-1">
@@ -396,7 +425,9 @@ export function AvisoMatchCard({
 						) : error?.errorKey &&
 							error.errorKey !== "docs_review.errors.aviso_amount_mismatch" ? (
 							<p className="text-sm text-status-danger">
-								{t(error.errorKey as ParseKeys)}
+								{t(error.errorKey as ParseKeys, {
+									codes: error.missingCodes?.join(", "),
+								})}
 							</p>
 						) : null}
 

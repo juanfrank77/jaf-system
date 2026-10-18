@@ -5,6 +5,7 @@ import { Form, Link, redirect } from "react-router"
 import { AssignedCrew } from "~/components/assigned-crew"
 import { DocStageBadge } from "~/components/doc-stage-badge"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { JobLinesCard, preppedAsLines } from "~/components/job-lines-card"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { ReassignForm } from "~/components/reassign-form"
 import { SupervisorStepRail } from "~/components/supervisor-step-rail"
@@ -34,6 +35,7 @@ import {
 } from "~/lib/permissions"
 import { requireRole, requireSession } from "~/lib/permissions.server"
 import { serviceCodesForRole } from "~/lib/service-codes.server"
+import type { ServiceLine } from "~/lib/service-lines"
 import {
 	assertDocInSupervisorScope,
 	assignableBrigadesWhere,
@@ -539,6 +541,9 @@ export default function DocView({
 	const estimated = (doc.estimatedMaterials as unknown as MaterialLine[]) || []
 	const taken = (doc.materialsTaken as unknown as MaterialLine[]) || []
 	const used = (doc.materialsUsed as unknown as MaterialLine[]) || []
+	// The supervisor reads a job as two tables (service items, and materials by
+	// stage); every other role keeps the stacked material lists.
+	const showJobLines = user.role === "SUPERVISOR"
 	const corrections =
 		(doc.addressCorrections as AddressCorrection[] | null) || []
 	const gps = doc.gpsCoordinates as { lat: number; lng: number } | null
@@ -741,73 +746,135 @@ export default function DocView({
 				</p>
 			</section>
 
-			{estimated.length > 0 && (
-				<section className="bg-card border rounded-lg p-4">
-					<h2 className="text-sm font-medium mb-2 text-muted-foreground">
-						{t("docs_view.estimated_materials")}
-					</h2>
-					<MaterialLineItems
-						serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
-						initialItems={estimated}
-						readOnly
-					/>
-				</section>
+			{showJobLines && (
+				<JobLinesCard
+					ordered={(doc.serviceLines as ServiceLine[] | null) ?? []}
+					installed={(doc.installedServiceLines as ServiceLine[] | null) ?? []}
+					estimated={estimated}
+					prepped={preppedAsLines(doc.preppedMaterials)}
+					taken={taken}
+					used={used}
+					serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
+				/>
 			)}
 
-			{taken.length > 0 && (
-				<section className="bg-card border rounded-lg p-4">
-					<h2 className="text-sm font-medium mb-2 text-muted-foreground">
-						{t("docs_view.materials_taken")}
-					</h2>
-					<MaterialLineItems
-						serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
-						initialItems={taken}
-						readOnly
-					/>
-					{doc.crewSignature && (
-						<img
-							src={doc.crewSignature}
-							alt={t("docs_view.crew_signature_alt")}
-							className="mt-3 border rounded max-h-16"
-						/>
-					)}
-				</section>
-			)}
-
-			{used.length > 0 && (
-				<section className="bg-card border rounded-lg p-4 space-y-3">
-					<h2 className="text-sm font-medium mb-2 text-muted-foreground">
-						{t("docs_view.materials_used")}
-					</h2>
-					<MaterialLineItems
-						serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
-						initialItems={used}
-						readOnly
-					/>
-					{doc.startedAt && doc.endedAt && (
-						<p className="text-sm text-muted-foreground">
-							<span className="text-muted-foreground">
-								{t("docs_view.time_on_site")}:
-							</span>{" "}
-							{formatTimeOnSite(doc.startedAt, doc.endedAt)}
-						</p>
-					)}
-					{doc.fieldNotes && (
-						<p className="text-sm text-muted-foreground">{doc.fieldNotes}</p>
-					)}
-					{doc.completionSignature && (
-						<div>
-							<p className="text-xs text-muted-foreground mb-1">
-								{t("docs_view.completion_signature")}
+			{showJobLines &&
+				(doc.crewSignature ||
+					doc.fieldNotes ||
+					doc.completionSignature ||
+					(doc.startedAt && doc.endedAt)) && (
+					<section className="bg-card border rounded-lg p-4 space-y-3">
+						{doc.crewSignature && (
+							<div>
+								<p className="text-xs text-muted-foreground mb-1">
+									{t("docs_view.crew_signature_alt")}
+								</p>
+								<img
+									src={doc.crewSignature}
+									alt={t("docs_view.crew_signature_alt")}
+									className="border rounded max-h-16"
+								/>
+							</div>
+						)}
+						{doc.startedAt && doc.endedAt && (
+							<p className="text-sm text-muted-foreground">
+								<span className="text-muted-foreground">
+									{t("docs_view.time_on_site")}:
+								</span>{" "}
+								{formatTimeOnSite(doc.startedAt, doc.endedAt)}
 							</p>
-							<img
-								src={doc.completionSignature}
-								alt={t("docs_view.completion_signature_alt")}
-								className="border rounded max-h-16"
+						)}
+						{doc.fieldNotes && (
+							<p className="text-sm text-muted-foreground">{doc.fieldNotes}</p>
+						)}
+						{doc.completionSignature && (
+							<div>
+								<p className="text-xs text-muted-foreground mb-1">
+									{t("docs_view.completion_signature")}
+								</p>
+								<img
+									src={doc.completionSignature}
+									alt={t("docs_view.completion_signature_alt")}
+									className="border rounded max-h-16"
+								/>
+							</div>
+						)}
+					</section>
+				)}
+
+			{!showJobLines && (
+				<>
+					{estimated.length > 0 && (
+						<section className="bg-card border rounded-lg p-4">
+							<h2 className="text-sm font-medium mb-2 text-muted-foreground">
+								{t("docs_view.estimated_materials")}
+							</h2>
+							<MaterialLineItems
+								serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
+								initialItems={estimated}
+								readOnly
 							/>
-						</div>
+						</section>
 					)}
-				</section>
+
+					{taken.length > 0 && (
+						<section className="bg-card border rounded-lg p-4">
+							<h2 className="text-sm font-medium mb-2 text-muted-foreground">
+								{t("docs_view.materials_taken")}
+							</h2>
+							<MaterialLineItems
+								serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
+								initialItems={taken}
+								readOnly
+							/>
+							{doc.crewSignature && (
+								<img
+									src={doc.crewSignature}
+									alt={t("docs_view.crew_signature_alt")}
+									className="mt-3 border rounded max-h-16"
+								/>
+							)}
+						</section>
+					)}
+
+					{used.length > 0 && (
+						<section className="bg-card border rounded-lg p-4 space-y-3">
+							<h2 className="text-sm font-medium mb-2 text-muted-foreground">
+								{t("docs_view.materials_used")}
+							</h2>
+							<MaterialLineItems
+								serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
+								initialItems={used}
+								readOnly
+							/>
+							{doc.startedAt && doc.endedAt && (
+								<p className="text-sm text-muted-foreground">
+									<span className="text-muted-foreground">
+										{t("docs_view.time_on_site")}:
+									</span>{" "}
+									{formatTimeOnSite(doc.startedAt, doc.endedAt)}
+								</p>
+							)}
+							{doc.fieldNotes && (
+								<p className="text-sm text-muted-foreground">
+									{doc.fieldNotes}
+								</p>
+							)}
+							{doc.completionSignature && (
+								<div>
+									<p className="text-xs text-muted-foreground mb-1">
+										{t("docs_view.completion_signature")}
+									</p>
+									<img
+										src={doc.completionSignature}
+										alt={t("docs_view.completion_signature_alt")}
+										className="border rounded max-h-16"
+									/>
+								</div>
+							)}
+						</section>
+					)}
+				</>
 			)}
 
 			{nextHref && (

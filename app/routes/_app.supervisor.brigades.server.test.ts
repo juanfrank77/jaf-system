@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 vi.mock("~/lib/db.server", () => ({
 	db: {
 		brigade: { findMany: vi.fn() },
-		user: { findMany: vi.fn() },
 		jafInvoice: { findMany: vi.fn() },
 	},
 }))
@@ -44,9 +43,6 @@ describe("GET /supervisor/brigades (read-only)", () => {
 			session: {},
 		} as any)
 		vi.mocked(supervisorAreas).mockResolvedValue(["CENTRAL"])
-		vi.mocked(db.user.findMany).mockResolvedValue([
-			{ id: "c1", name: "ANA" },
-		] as any)
 	})
 
 	it("offers no way to change a brigade", () => {
@@ -63,7 +59,7 @@ describe("GET /supervisor/brigades (read-only)", () => {
 		expect(db.jafInvoice.findMany).not.toHaveBeenCalled()
 	})
 
-	it("puts each job under its brigade with the stage it is at, and leaves idle brigades empty", async () => {
+	it("lists one row per job with its stage, and only idle brigades as available", async () => {
 		vi.mocked(db.brigade.findMany).mockResolvedValue([
 			{ id: "b1", name: "UNO", area: "CENTRAL", memberIds: ["c1"] },
 			{ id: "b2", name: "DOS", area: "CENTRAL", memberIds: [] },
@@ -77,21 +73,27 @@ describe("GET /supervisor/brigades (read-only)", () => {
 				jobAddressActual: "Calle 2",
 			}),
 		] as any)
-		const { brigades } = await load()
-		expect(brigades[0].members).toEqual(["ANA"])
-		expect(brigades[0].jobs).toEqual([
-			{ id: "j1", controlNumber: "JAF-1", address: "Calle 1", stage: "FIELD" },
+		const { jobs, available } = await load()
+		expect(jobs).toEqual([
+			{
+				id: "j1",
+				controlNumber: "JAF-1",
+				address: "Calle 1",
+				stage: "FIELD",
+				brigades: ["UNO"],
+			},
 			{
 				id: "j2",
 				controlNumber: "JAF-2",
 				address: "Calle 2",
 				stage: "APPROVE",
+				brigades: ["UNO"],
 			},
 		])
-		expect(brigades[1].jobs).toEqual([])
+		expect(available).toEqual([{ id: "b2", name: "DOS", area: "CENTRAL" }])
 	})
 
-	it("shows a shared job under every brigade assigned to it, not only the lead", async () => {
+	it("shows a shared job once, naming every brigade on it, and none of them as available", async () => {
 		vi.mocked(db.brigade.findMany).mockResolvedValue([
 			{ id: "b1", name: "UNO", area: "CENTRAL", memberIds: ["c1"] },
 			{ id: "b2", name: "DOS", area: "CENTRAL", memberIds: ["c2"] },
@@ -102,8 +104,22 @@ describe("GET /supervisor/brigades (read-only)", () => {
 				crewAssignmentHistory: [{ brigadeIds: ["b1", "b2"] }],
 			}),
 		] as any)
-		const { brigades } = await load()
-		expect(brigades.map((b: any) => b.jobs.length)).toEqual([1, 1])
+		const { jobs, available } = await load()
+		expect(jobs).toHaveLength(1)
+		expect(jobs[0].brigades).toEqual(["UNO", "DOS"])
+		expect(available).toEqual([])
+	})
+
+	it("drops a job that is only assigned to brigades outside the supervisor's areas", async () => {
+		vi.mocked(db.brigade.findMany).mockResolvedValue([
+			{ id: "b1", name: "UNO", area: "CENTRAL", memberIds: ["c1"] },
+		] as any)
+		vi.mocked(db.jafInvoice.findMany).mockResolvedValue([
+			job({ brigadeId: "other" }),
+		] as any)
+		const { jobs, available } = await load()
+		expect(jobs).toEqual([])
+		expect(available).toHaveLength(1)
 	})
 
 	it("only counts jobs a brigade still has work on", async () => {

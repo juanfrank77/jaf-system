@@ -267,7 +267,7 @@ describe("AppShell", () => {
 			screen.getByRole("link", { name: "Users", hidden: true }),
 		).toBeInTheDocument()
 		expect(
-			screen.getByRole("link", { name: "Crews", hidden: true }),
+			screen.getByRole("link", { name: "Brigades", hidden: true }),
 		).toBeInTheDocument()
 		expect(
 			screen.getByRole("link", { name: "Vans", hidden: true }),

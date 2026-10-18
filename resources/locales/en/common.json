@@ -1003,12 +1003,14 @@
 	},
 	"supervisor_brigades": {
 		"title": "Brigades",
-		"description": "Where your brigades are: the jobs each one is working right now. Brigades are added and deactivated by the Comptroller.",
+		"description": "Where your brigades are: the jobs each one is working right now.",
 		"empty": "No active brigades in your areas.",
-		"available": "Available",
-		"jobs_one": "{{count}} job",
-		"jobs_other": "{{count}} jobs",
-		"no_members": "No members"
+		"available_heading": "Available now",
+		"no_jobs": "No jobs in progress for your brigades.",
+		"col_job": "Job",
+		"col_address": "Address",
+		"col_step": "Step",
+		"col_brigade": "Brigade"
 	},
 	"comptroller_brigades": {
 		"title": "Brigades",

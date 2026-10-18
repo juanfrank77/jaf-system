@@ -211,6 +211,7 @@
 			"catalog": "Catalog",
 			"admin_users": "Users",
 			"admin_vans": "Vans",
+			"admin_claro_supervisors": "Claro supervisors",
 			"supervisor_brigades": "Brigades",
 			"supervisor_variance": "Variance",
 			"admin_restock": "Restock Sign-offs",
@@ -1077,6 +1078,36 @@
 		},
 		"no_lines": "No line detail",
 		"no_variance": "No variance to review."
+	},
+	"claro_supervisors": {
+		"title": "Claro supervisors",
+		"add_heading": "Add Claro supervisor",
+		"name_label": "Name",
+		"email_label": "Email",
+		"requires_prefield": "Requires pre-field visit",
+		"requires_blueprint": "Requires blueprint",
+		"add_submit": "Add supervisor",
+		"save": "Save",
+		"edit": "Edit",
+		"activate": "Activate",
+		"deactivate": "Deactivate",
+		"yes": "Yes",
+		"no": "No",
+		"empty": "No Claro supervisors yet.",
+		"table": {
+			"name": "Name",
+			"email": "Email",
+			"prefield": "Pre-field",
+			"blueprint": "Blueprint",
+			"active": "Active",
+			"actions": "Actions"
+		},
+		"errors": {
+			"invalid_name": "Name is required.",
+			"invalid_email": "Enter a valid email address.",
+			"id_required": "Supervisor id is required.",
+			"unknown_intent": "Unknown action."
+		}
 	},
 	"admin_vans": {
 		"title": "Crews & Personnel — Vans",

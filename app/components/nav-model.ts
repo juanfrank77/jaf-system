@@ -42,6 +42,7 @@ export type NavLabelKey =
 	| "app_shell.nav.catalog"
 	| "app_shell.nav.admin_users"
 	| "app_shell.nav.admin_vans"
+	| "app_shell.nav.admin_claro_supervisors"
 	| "app_shell.nav.supervisor_brigades"
 	| "app_shell.nav.supervisor_variance"
 	| "app_shell.nav.admin_restock"
@@ -428,6 +429,13 @@ const NAV_ITEMS: NavItem[] = [
 		to: "/admin/vans",
 		labelKey: "app_shell.nav.admin_vans",
 		icon: TruckDeliveryIcon,
+		group: "admin",
+		roles: ["ADMIN"],
+	},
+	{
+		to: "/admin/claro-supervisors",
+		labelKey: "app_shell.nav.admin_claro_supervisors",
+		icon: UserIcon,
 		group: "admin",
 		roles: ["ADMIN"],
 	},

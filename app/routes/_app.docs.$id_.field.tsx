@@ -29,7 +29,11 @@ import {
 	buildAddressCorrection,
 	mergeAddressCorrections,
 } from "~/lib/field-update-helpers"
-import { validateBlueprintFile, validateFile } from "~/lib/file-upload.server"
+import {
+	uploadFileName,
+	validateBlueprintFile,
+	validateFile,
+} from "~/lib/file-upload.server"
 import { composeJobAddress } from "~/lib/intake-address"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
@@ -258,10 +262,6 @@ function files(form: FormData, name: string): File[] {
 		.filter((f): f is File => f instanceof File && f.size > 0)
 }
 
-function safeName(file: File, i: number): string {
-	return `${Date.now()}-${i}-${file.name.replace(/[^\w.-]+/g, "_")}`
-}
-
 /** Zero is a legitimate installed quantity, so this does not use parseServiceLines. */
 function parseInstalled(raw: string): ServiceLine[] {
 	const parsed = JSON.parse(raw) as Record<string, unknown>[]
@@ -408,13 +408,13 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const photoPaths: { path: string; tag: PhotoTag }[] = []
 	for (const [i, { file, tag }] of photos.entries())
 		photoPaths.push({
-			path: await saveUpload(`photos/${doc.id}`, safeName(file, i), file),
+			path: await saveUpload(`photos/${doc.id}`, uploadFileName(file, i), file),
 			tag,
 		})
 	const blueprintPaths: string[] = []
 	for (const [i, file] of blueprints.entries())
 		blueprintPaths.push(
-			await saveUpload(`blueprints/${doc.id}`, safeName(file, i), file),
+			await saveUpload(`blueprints/${doc.id}`, uploadFileName(file, i), file),
 		)
 	if (blueprintPaths.length > 0)
 		update.blueprintPaths = [...doc.blueprintPaths, ...blueprintPaths]

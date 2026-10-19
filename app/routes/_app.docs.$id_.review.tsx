@@ -41,11 +41,15 @@ import {
 import { db } from "~/lib/db.server"
 import { fieldMaterialsOrDefault } from "~/lib/field-materials"
 import type { AddressCorrection } from "~/lib/field-update-helpers"
-import { validateFile } from "~/lib/file-upload.server"
+import {
+	uploadFileName,
+	validateBlueprintFile,
+	validateFile,
+} from "~/lib/file-upload.server"
 import { openJobLabel } from "~/lib/open-job-label"
 import { sendPacket } from "~/lib/packet-send.server"
 import { generatePreCertSheetPdf } from "~/lib/pdf/pre-cert-sheet.server"
-import { canTransition, isReviewActionStatus } from "~/lib/permissions"
+import { canTransition, isTerminalStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import { packetBlockers, prefieldMissing } from "~/lib/prefield"
 import {
@@ -87,13 +91,14 @@ import type { Route } from "./+types/_app.docs.$id_.review"
 
 type MaterialLine = { serviceCodeId: string; qty: number }
 
-type SendBackHistoryEntry = {
-	fromStatus: string
-	toStatus: string
-	note: string
-	byUserId: string
-	createdAt: string
-}
+/** The Prefield inputs the packet step edits (Aviso # stays optional). */
+const PREFIELD_INPUTS = [
+	"avisoNumber",
+	"ordenNumber",
+	"pedido",
+	"smr",
+	"titulo",
+] as const
 
 type MaterialServiceCode = ComponentProps<
 	typeof MaterialLineItems
@@ -233,6 +238,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		people,
 		sends,
 		materialCodes,
+		claroOptions,
 	] = await Promise.all([
 		getActiveServiceCodes(),
 		db.photo.findMany({ where: { docId: params.id } }),
@@ -267,6 +273,26 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 					select: { id: true, claroCode: true, name: true, unit: true },
 				})
 			: Promise.resolve([]),
+		// The packet step's Claro supervisor choice, until the first send: the
+		// active entries, plus the job's own one even if it was deactivated.
+		doc.jafInvoiceGeneratedAt
+			? Promise.resolve([])
+			: db.claroSupervisor.findMany({
+					where: {
+						OR: [
+							{ active: true },
+							...(doc.claroSupervisorId ? [{ id: doc.claroSupervisorId }] : []),
+						],
+					},
+					orderBy: { name: "asc" },
+					select: {
+						id: true,
+						name: true,
+						email: true,
+						requiresPrefield: true,
+						requiresBlueprint: true,
+					},
+				}),
 	])
 	const correctorNames = Object.fromEntries(people.map((u) => [u.id, u.name]))
 	const stage = deriveSupervisorStage(doc, sheet)
@@ -298,19 +324,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	// Supervisors never see money (catalog, totals, brigade share), including
 	// on the Aviso card: it still runs the gate, it just hides the price fields.
 	const showPrices = showPricesFor(user.role)
-	// The number is pinned when the invoice is reviewed and generated, so it
-	// cannot drift when the Aviso number is typed in later.
-	const generatedAudit = doc.jafInvoiceGeneratedAt
-		? await db.auditTrail.findFirst({
-				where: { docId: params.id, action: "JAF_INVOICE_GENERATED" },
-				orderBy: { timestamp: "desc" },
-			})
-		: null
-	const pinnedNumber = (
-		generatedAudit?.diffJson as { invoiceNumber?: string } | null | undefined
-	)?.invoiceNumber
-	const invoiceNumber =
-		lineTotal != null ? (pinnedNumber ?? invoiceNumberFor(doc)) : null
 	// Step 5 shows the work summary as soon as the supervisor arrives, built
 	// from what was installed. Prices are computed here and never sent to a
 	// price-blind role.
@@ -375,6 +388,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 					requiresPrefield: claro.requiresPrefield,
 				}
 			: null,
+		claroSupervisorId: doc.claroSupervisorId,
+		claroOptions,
 		showPrefield: claro?.requiresPrefield ?? false,
 		prefield: {
 			avisoNumber: doc.avisoNumber,
@@ -415,7 +430,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			outcome: s.outcome,
 			error: s.error,
 		})),
-		canMarkManual: sends[0]?.outcome === "UNCONFIGURED",
+		// The manual path is for a send that never reached Claro: only before
+		// the first send, and only after an attempt the server could not deliver.
+		canMarkManual:
+			!sent &&
+			(sends[0]?.outcome === "UNCONFIGURED" || sends[0]?.outcome === "FAILED"),
 	}
 
 	const { claroSupervisor: _claro, ...docData } = doc
@@ -442,7 +461,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		interactive,
 		gate,
 		invoiceSummary,
-		invoiceNumber,
 		invoicePreview: showPrices ? preview : linesWithoutPrices(preview),
 		invoiceHeader,
 		showPrices,
@@ -570,6 +588,74 @@ export async function action({ request, params }: Route.ActionArgs) {
 			mode: intent === "send_packet" ? "email" : "manual",
 		})
 		if (!result.ok) return { errorKey: result.errorKey }
+		throw redirect(`/docs/${params.id}/review`)
+	}
+
+	// Step 5 · the Prefield fields, the Claro supervisor and (when that
+	// supervisor needs one) a blueprint can be filled or corrected here until
+	// the first send; after it they are what Claro received.
+	if (intent === "save_prefield") {
+		if (doc.jafInvoiceGeneratedAt)
+			return { errorKey: "packet.errors.prefield_locked" }
+		if (doc.releasedToFinanceAt || isTerminalStatus(doc.status))
+			return { errorKey: "packet.errors.locked" }
+		const text = (k: string) =>
+			((form.get(k) as string | null) ?? "").trim() || null
+		const data: Prisma.JafInvoiceUncheckedUpdateInput = {}
+		const changes: Record<string, { before: unknown; after: unknown }> = {}
+		for (const k of PREFIELD_INPUTS) {
+			if (!form.has(k)) continue
+			const after = text(k)
+			if (after !== doc[k]) {
+				data[k] = after
+				changes[k] = { before: doc[k], after }
+			}
+		}
+		const claroId = text("claroSupervisorId")
+		if (claroId && claroId !== doc.claroSupervisorId) {
+			const claro = await db.claroSupervisor.findUnique({
+				where: { id: claroId },
+				select: { active: true },
+			})
+			if (!claro?.active)
+				return { errorKey: "packet.errors.claro_supervisor_invalid" }
+			data.claroSupervisorId = claroId
+			changes.claroSupervisorId = {
+				before: doc.claroSupervisorId,
+				after: claroId,
+			}
+		}
+		const blueprints = form
+			.getAll("blueprint")
+			.filter((f): f is File => f instanceof File && f.size > 0)
+		if (blueprints.some((f) => !validateBlueprintFile(f).valid))
+			return { errorKey: "docs_field.errors.blueprint_invalid" }
+		const added: string[] = []
+		for (const [i, file] of blueprints.entries())
+			added.push(
+				await saveUpload(
+					`blueprints/${params.id}`,
+					uploadFileName(file, i),
+					file,
+				),
+			)
+		if (added.length > 0)
+			data.blueprintPaths = [...doc.blueprintPaths, ...added]
+		if (Object.keys(data).length > 0)
+			await db.$transaction([
+				db.jafInvoice.update({ where: { id: params.id }, data }),
+				db.auditTrail.create({
+					data: {
+						docId: params.id,
+						userId: user.id,
+						action: "PREFIELD_EDITED",
+						diffJson: {
+							...changes,
+							...(added.length > 0 ? { blueprintsAdded: added.length } : {}),
+						} as Prisma.InputJsonValue,
+					},
+				}),
+			])
 		throw redirect(`/docs/${params.id}/review`)
 	}
 
@@ -1098,54 +1184,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 			),
 		] as unknown as Prisma.PrismaPromise<unknown>[])
 		throw redirect(`/docs/${params.id}/review`)
-	}
-
-	// The old "send back to crew": crews never log in, so a supervisor no
-	// longer has it (spec "Step 4 · Sign off"). Finance's send-back to the
-	// supervisor lives on the Finance verify screen and is unaffected.
-	if (intent === "send_back") {
-		if (user.role === "SUPERVISOR") throw redirect(`/docs/${params.id}/review`)
-		const note = (form.get("note") as string | null)?.trim() || ""
-		if (!note) return { errorKey: "docs_review.errors.send_back_note_required" }
-		if (!isReviewActionStatus(doc.status)) throw redirect(`/docs/${params.id}`)
-
-		const crew = await db.user.findMany({
-			where: { id: { in: doc.assignedCrewIds }, active: true },
-		})
-		const history = (
-			(doc.sendBackHistory as unknown as SendBackHistoryEntry[]) || []
-		).concat([
-			{
-				fromStatus: doc.status,
-				toStatus: "SIGNED",
-				note,
-				byUserId: user.id,
-				createdAt: new Date().toISOString(),
-			},
-		])
-		await db.$transaction([
-			db.jafInvoice.update({
-				where: { id: params.id },
-				data: { status: "SIGNED", sendBackHistory: history },
-			}),
-			db.auditTrail.create({
-				data: {
-					docId: params.id,
-					userId: user.id,
-					action: "SEND_BACK",
-					diffJson: { from: doc.status, to: "SIGNED", note },
-				},
-			}),
-			...crew.map((c) =>
-				db.notification.create({
-					data: {
-						userId: c.id,
-						docId: params.id,
-						message: `Job ${doc.controlNumber} sent back to you: ${note}`,
-					},
-				}),
-			),
-		])
 	}
 
 	if (intent === "edit_aviso") {

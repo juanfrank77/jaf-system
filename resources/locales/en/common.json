@@ -2260,9 +2260,9 @@
 		"history_title": "Send history",
 		"history_empty": "No attempts yet.",
 		"blocker": {
-			"prefield": "Prefield: fill in {{fields}} (this Claro supervisor requires it).",
-			"blueprint": "Add a blueprint (this Claro supervisor requires one).",
-			"claro_supervisor": "Choose the Claro supervisor for this job on the work order."
+			"prefield": "Prefield: fill in {{fields}} in the Prefield form below (this Claro supervisor requires it).",
+			"blueprint": "Add a blueprint with the upload in the Prefield form below (this Claro supervisor requires one).",
+			"claro_supervisor": "Choose the Claro supervisor for this job in the Prefield form below."
 		},
 		"prefield": {
 			"avisoNumber": "Aviso #",
@@ -2298,7 +2298,14 @@
 			"no_claro_supervisor": "Choose the Claro supervisor for this job before sending the packet.",
 			"not_signed_off": "Sign off the field work before sending the packet.",
 			"locked": "This job has already been released to Finance; the packet can no longer be sent.",
-			"render_failed": "The packet PDF could not be built. The attempt was logged; try again, and tell an administrator if it keeps failing."
-		}
+			"render_failed": "The packet PDF could not be built. The attempt was logged; try again, and tell an administrator if it keeps failing.",
+			"prefield_locked": "The packet has already been sent: the Prefield fields and the Claro supervisor can no longer be changed.",
+			"claro_supervisor_invalid": "That Claro supervisor is not active. Choose another one."
+		},
+		"claro_label": "Claro supervisor",
+		"claro_placeholder": "Choose a Claro supervisor…",
+		"blueprint_upload": "Add a blueprint (PDF or photo)",
+		"prefield_hint": "You can fill in or correct these until the packet is sent.",
+		"prefield_save": "Save"
 	}
 }

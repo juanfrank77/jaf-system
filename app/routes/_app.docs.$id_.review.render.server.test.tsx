@@ -67,6 +67,8 @@ function packetData(over: Record<string, unknown> = {}) {
 			email: "ramon.now@claro.example",
 			requiresPrefield: true,
 		},
+		claroSupervisorId: "claro-1",
+		claroOptions: [],
 		showPrefield: true,
 		prefield: {
 			avisoNumber: null,
@@ -218,9 +220,78 @@ describe("Packet → Claro step (render)", () => {
 		expect(html).toContain('href="/files/blueprints/doc-1/plano%202.pdf"')
 	})
 
-	it("leaves the Prefield out when the Claro supervisor does not require it", async () => {
-		const html = await render(step5({ showPrefield: false }))
+	it("once sent, leaves the Prefield out when the Claro supervisor does not require it", async () => {
+		const html = await render(
+			step5(
+				{
+					showPrefield: false,
+					sent: true,
+					sentAt: "2026-10-18T12:00:00.000Z",
+				},
+				{ jafInvoiceGeneratedAt: "2026-10-18T12:00:00.000Z" },
+			),
+		)
 		expect(html).not.toContain("ORD-77")
+		expect(html).not.toContain('value="save_prefield"')
+	})
+
+	it("before the first send the Prefield and the Claro supervisor are editable", async () => {
+		const html = await render(
+			step5({
+				claroOptions: [
+					{
+						id: "claro-1",
+						name: "Ramón Claro",
+						email: "ramon.now@claro.example",
+						requiresPrefield: true,
+						requiresBlueprint: false,
+					},
+					{
+						id: "claro-2",
+						name: "Ana Claro",
+						email: "ana@claro.example",
+						requiresPrefield: false,
+						requiresBlueprint: false,
+					},
+				],
+			}),
+		)
+		expect(html).toContain('value="save_prefield"')
+		expect(html).toMatch(/<select[^>]*name="claroSupervisorId"/)
+		expect(html).toMatch(/<option value="claro-1" selected="">Ramón Claro/)
+		expect(html).toContain("Ana Claro")
+		for (const name of [
+			"avisoNumber",
+			"ordenNumber",
+			"pedido",
+			"smr",
+			"titulo",
+		])
+			expect(html).toContain(`name="${name}"`)
+		expect(html).toMatch(
+			/name="ordenNumber"[^>]*value="ORD-77"|value="ORD-77"[^>]*name="ordenNumber"/,
+		)
+		// No blueprint is required here, so there is no upload.
+		expect(html).not.toContain('name="blueprint"')
+	})
+
+	it("offers the blueprint upload when the Claro supervisor requires one and there is none", async () => {
+		const html = await render(
+			step5({ blockers: ["blueprint"], blueprints: [] }),
+		)
+		expect(html).toContain('name="blueprint"')
+		expect(html).toContain("upload in the Prefield form below")
+	})
+
+	it("is read-only after the first send", async () => {
+		const html = await render(
+			step5(
+				{ sent: true, sentAt: "2026-10-18T12:00:00.000Z" },
+				{ jafInvoiceGeneratedAt: "2026-10-18T12:00:00.000Z" },
+			),
+		)
+		expect(html).toContain("ORD-77")
+		expect(html).not.toContain('value="save_prefield"')
 	})
 
 	it("lists the blockers and disables Send", async () => {

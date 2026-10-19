@@ -1,9 +1,11 @@
 import type { ParseKeys } from "i18next"
-import { useEffect, useRef } from "react"
+import { type RefObject, useEffect, useRef } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, useNavigation } from "react-router"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { Card, CardContent, CardHeader } from "~/components/ui/card"
+import { Input } from "~/components/ui/input"
+import { Label } from "~/components/ui/label"
 import { Pill } from "~/components/ui/pill"
 import type { PacketSendOutcome } from "../../generated/prisma/client"
 
@@ -28,6 +30,19 @@ export type PacketStepData = {
 		email: string
 		requiresPrefield: boolean
 	} | null
+	/** The job's Claro supervisor id (null if none was chosen at intake). */
+	claroSupervisorId: string | null
+	/**
+	 * What the Claro supervisor select offers until the first send: the active
+	 * entries plus the job's own one, even if deactivated. Empty once sent.
+	 */
+	claroOptions: {
+		id: string
+		name: string
+		email: string
+		requiresPrefield: boolean
+		requiresBlueprint: boolean
+	}[]
 	showPrefield: boolean
 	prefield: Record<PrefieldField, string | null>
 	prefieldMissing: string[]
@@ -55,6 +70,17 @@ export type PacketStepData = {
 	}[]
 	canMarkManual: boolean
 }
+
+/** The Prefield inputs the packet step edits until the first send. */
+const PREFIELD_INPUTS = [
+	"avisoNumber",
+	"ordenNumber",
+	"pedido",
+	"smr",
+	"titulo",
+] as const satisfies PrefieldField[]
+
+const PACKET_INTENTS = ["send_packet", "mark_packet_sent"]
 
 const PREFIELD_FIELDS: PrefieldField[] = [
 	"avisoNumber",
@@ -89,21 +115,24 @@ function ConfirmedSubmit({
 	label,
 	disabled = false,
 	variant,
+	inFlight,
 }: {
 	intent: "send_packet" | "mark_packet_sent"
 	confirmText: string
 	label: string
 	disabled?: boolean
 	variant?: "outline"
+	/** Shared by Send and Mark as sent manually: one packet request at a time. */
+	inFlight: RefObject<boolean>
 }) {
 	const { t } = useTranslation()
 	const navigation = useNavigation()
-	const inFlight = useRef(false)
-	const busy =
-		navigation.state !== "idle" && navigation.formData?.get("intent") === intent
-	useEffect(() => {
-		if (navigation.state === "idle") inFlight.current = false
-	}, [navigation.state])
+	const pending = navigation.formData?.get("intent")
+	const anyBusy =
+		navigation.state !== "idle" &&
+		typeof pending === "string" &&
+		PACKET_INTENTS.includes(pending)
+	const busy = anyBusy && pending === intent
 	return (
 		<Form
 			method="post"
@@ -120,10 +149,90 @@ function ConfirmedSubmit({
 				type="submit"
 				variant={variant}
 				className="w-full"
-				disabled={disabled || busy}
+				disabled={disabled || anyBusy}
 				data-confirm={confirmText}
 			>
 				{busy ? t("packet.sending") : label}
+			</Button>
+		</Form>
+	)
+}
+
+/**
+ * The Prefield fields, the Claro supervisor and (when that supervisor needs
+ * one and there is none yet) a blueprint, editable until the first send.
+ */
+function PrefieldForm({
+	packet,
+	blueprintNeeded,
+}: {
+	packet: PacketStepData
+	blueprintNeeded: boolean
+}) {
+	const { t } = useTranslation()
+	const navigation = useNavigation()
+	const saving =
+		navigation.state !== "idle" &&
+		navigation.formData?.get("intent") === "save_prefield"
+	return (
+		<Form
+			method="post"
+			encType="multipart/form-data"
+			className="space-y-3"
+			data-testid="prefield-form"
+		>
+			<input type="hidden" name="intent" value="save_prefield" />
+			<div className="space-y-1">
+				<Label htmlFor="packet-claro">{t("packet.claro_label")}</Label>
+				<select
+					id="packet-claro"
+					name="claroSupervisorId"
+					defaultValue={packet.claroSupervisorId ?? ""}
+					className="h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm"
+				>
+					{!packet.claroSupervisorId && (
+						<option value="">{t("packet.claro_placeholder")}</option>
+					)}
+					{packet.claroOptions.map((c) => (
+						<option key={c.id} value={c.id}>
+							{c.name} · {c.email}
+						</option>
+					))}
+				</select>
+			</div>
+			<div className="grid gap-3 sm:grid-cols-2">
+				{PREFIELD_INPUTS.map((k) => (
+					<div key={k} className="space-y-1">
+						<Label htmlFor={`packet-${k}`}>{t(`packet.prefield.${k}`)}</Label>
+						<Input
+							id={`packet-${k}`}
+							name={k}
+							defaultValue={packet.prefield[k] ?? ""}
+							aria-invalid={packet.prefieldMissing.includes(k) || undefined}
+						/>
+					</div>
+				))}
+			</div>
+			{blueprintNeeded && (
+				<div className="space-y-1">
+					<Label htmlFor="packet-blueprint">
+						{t("packet.blueprint_upload")}
+					</Label>
+					<Input
+						id="packet-blueprint"
+						name="blueprint"
+						type="file"
+						accept="application/pdf,image/*"
+						multiple
+						className="h-auto py-1.5 text-xs"
+					/>
+				</div>
+			)}
+			<p className="text-xs text-muted-foreground">
+				{t("packet.prefield_hint")}
+			</p>
+			<Button type="submit" variant="outline" size="sm" disabled={saving}>
+				{t("packet.prefield_save")}
 			</Button>
 		</Form>
 	)
@@ -146,7 +255,13 @@ export function PacketStepCard({
 	children?: React.ReactNode
 }) {
 	const { t } = useTranslation()
+	const navigation = useNavigation()
+	const inFlight = useRef(false)
+	useEffect(() => {
+		if (navigation.state === "idle") inFlight.current = false
+	}, [navigation.state])
 	const claro = packet.claroSupervisor
+	const editable = interactive && !packet.sent
 	const last = packet.history[0]?.outcome ?? null
 	const blocked = packet.blockers.length > 0
 	const missing = packet.prefieldMissing
@@ -201,7 +316,19 @@ export function PacketStepCard({
 					</Pill>
 				)}
 
-				{packet.showPrefield && (
+				{editable && (
+					<section className="space-y-1">
+						<h3 className="text-sm font-medium">
+							{t("packet.prefield_title")}
+						</h3>
+						<PrefieldForm
+							packet={packet}
+							blueprintNeeded={packet.blockers.includes("blueprint")}
+						/>
+					</section>
+				)}
+
+				{!editable && packet.showPrefield && (
 					<section className="space-y-1">
 						<h3 className="text-sm font-medium">
 							{t("packet.prefield_title")}
@@ -340,6 +467,7 @@ export function PacketStepCard({
 									{ email: claro?.email ?? "" },
 								)}
 								disabled={!claro || blocked}
+								inFlight={inFlight}
 							/>
 							{packet.canMarkManual && (
 								<>
@@ -350,6 +478,7 @@ export function PacketStepCard({
 										confirmText={t("packet.confirm_manual", {
 											email: claro?.email ?? "",
 										})}
+										inFlight={inFlight}
 									/>
 									<p className="text-xs text-muted-foreground">
 										{t("packet.manual_hint")}

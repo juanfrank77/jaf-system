@@ -11,6 +11,8 @@ const packet = (over: Partial<PacketStepData> = {}): PacketStepData => ({
 		email: "ramon.now@claro.example",
 		requiresPrefield: false,
 	},
+	claroSupervisorId: "claro-1",
+	claroOptions: [],
 	showPrefield: false,
 	prefield: {
 		avisoNumber: null,
@@ -139,6 +141,37 @@ describe("PacketStepCard send button", () => {
 			screen.getByRole("button", { name: "Mark as sent manually" }),
 		)
 		await waitFor(() => expect(action).toHaveBeenCalledWith("mark_packet_sent"))
+	})
+
+	it("Mark as sent manually is disabled while a send is in flight", async ({
+		renderStub,
+	}) => {
+		vi.spyOn(window, "confirm").mockReturnValue(true)
+		let release: () => void = () => {}
+		const action = vi.fn(
+			() => new Promise((resolve) => (release = () => resolve(null))),
+		)
+		await mount(renderStub, packet({ canMarkManual: true }), action)
+		await userEvent.click(
+			screen.getByRole("button", { name: "Send to Claro supervisor" }),
+		)
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: "Mark as sent manually" }),
+			).toBeDisabled(),
+		)
+		await userEvent.click(
+			screen.getByRole("button", { name: "Mark as sent manually" }),
+			{ force: true },
+		)
+		release()
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: "Mark as sent manually" }),
+			).toBeEnabled(),
+		)
+		expect(action).toHaveBeenCalledTimes(1)
+		expect(action).toHaveBeenCalledWith("send_packet")
 	})
 
 	it("cannot be pressed while a blocker stands", async ({ renderStub }) => {

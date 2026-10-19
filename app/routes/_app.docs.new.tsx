@@ -27,7 +27,7 @@ import {
 import { generateControlNumber } from "~/lib/control-number.server"
 import { buildCrewAssignment, parseBrigadeIds } from "~/lib/crew-assignment"
 import { db } from "~/lib/db.server"
-import { validateBlueprintFile } from "~/lib/file-upload.server"
+import { uploadFileName, validateBlueprintFile } from "~/lib/file-upload.server"
 import { composeJobAddress, parseAddressInput } from "~/lib/intake-address"
 import { requireRole } from "~/lib/permissions.server"
 import {
@@ -201,16 +201,14 @@ export async function action({ request }: Route.ActionArgs) {
 		})
 		if (blueprints.length > 0) {
 			const blueprintPaths: string[] = []
-			for (const [i, file] of blueprints.entries()) {
-				const safe = file.name.replace(/[^\w.-]+/g, "_")
+			for (const [i, file] of blueprints.entries())
 				blueprintPaths.push(
 					await saveUpload(
 						`blueprints/${doc.id}`,
-						`${Date.now()}-${i}-${safe}`,
+						uploadFileName(file, i),
 						file,
 					),
 				)
-			}
 			await tx.jafInvoice.update({
 				where: { id: doc.id },
 				data: { blueprintPaths },

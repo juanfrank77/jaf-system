@@ -2260,9 +2260,9 @@
 		"history_title": "Historial de envíos",
 		"history_empty": "Aún no hay intentos.",
 		"blocker": {
-			"prefield": "Prefield: complete {{fields}} (este supervisor de Claro lo requiere).",
-			"blueprint": "Añada un plano (este supervisor de Claro lo requiere).",
-			"claro_supervisor": "Elija el supervisor de Claro de este trabajo en la orden de trabajo."
+			"prefield": "Prefield: complete {{fields}} en el formulario Prefield de abajo (este supervisor de Claro lo requiere).",
+			"blueprint": "Añada un plano con el campo de carga del formulario Prefield de abajo (este supervisor de Claro lo requiere).",
+			"claro_supervisor": "Elija el supervisor de Claro de este trabajo en el formulario Prefield de abajo."
 		},
 		"prefield": {
 			"avisoNumber": "Aviso #",
@@ -2298,7 +2298,14 @@
 			"no_claro_supervisor": "Elija el supervisor de Claro de este trabajo antes de enviar el paquete.",
 			"not_signed_off": "Apruebe el trabajo de campo antes de enviar el paquete.",
 			"locked": "Este trabajo ya se entregó a Finanzas; el paquete ya no se puede enviar.",
-			"render_failed": "No se pudo generar el PDF del paquete. El intento quedó registrado; vuelva a intentarlo y avise a un administrador si sigue fallando."
-		}
+			"render_failed": "No se pudo generar el PDF del paquete. El intento quedó registrado; vuelva a intentarlo y avise a un administrador si sigue fallando.",
+			"prefield_locked": "El paquete ya se envió: los datos Prefield y el supervisor de Claro ya no se pueden cambiar.",
+			"claro_supervisor_invalid": "Ese supervisor de Claro no está activo. Elija otro."
+		},
+		"claro_label": "Supervisor de Claro",
+		"claro_placeholder": "Elija un supervisor de Claro…",
+		"blueprint_upload": "Añada un plano (PDF o foto)",
+		"prefield_hint": "Puede completar o corregir estos datos hasta que se envíe el paquete.",
+		"prefield_save": "Guardar"
 	}
 }

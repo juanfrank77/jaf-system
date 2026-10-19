@@ -64,6 +64,11 @@ export function validateFile(
 	return { valid: true }
 }
 
+/** A unique, filesystem-safe name for the `i`-th file of one upload. */
+export function uploadFileName(file: File, i: number): string {
+	return `${Date.now()}-${i}-${file.name.replace(/[^\w.-]+/g, "_")}`
+}
+
 /** A blueprint is a PDF or a photo (intake and the Field step accept both). */
 export function validateBlueprintFile(
 	file: File,

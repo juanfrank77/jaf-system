@@ -9,6 +9,7 @@ vi.mock("~/lib/db.server", () => ({
 		user: { findMany: vi.fn(), findUnique: vi.fn() },
 		photo: { findMany: vi.fn() },
 		packetSend: { findMany: vi.fn(async () => []) },
+		claroSupervisor: { findMany: vi.fn(async () => []), findUnique: vi.fn() },
 		serviceCode: { findMany: vi.fn(async () => []) },
 		brigade: { findUnique: vi.fn(), update: vi.fn(), findMany: vi.fn() },
 		preCertSheet: {
@@ -1030,11 +1031,11 @@ describe("review loader: prices by role", () => {
 		} as any)
 	}
 
-	it("gives a supervisor the invoice number but none of the money", async () => {
+	it("gives a supervisor none of the money", async () => {
 		const data = await loadAs("SUPERVISOR")
 		expect(data.showPrices).toBe(false)
 		expect(data.invoiceSummary).toBeNull()
-		expect(data.invoiceNumber).toBeTruthy()
+		expect("invoiceNumber" in data).toBe(false)
 	})
 
 	it("still gives Admin the totals", async () => {
@@ -1193,28 +1194,19 @@ describe("review: approve (Sign off)", () => {
 	})
 })
 
-describe("review: send_back to crew", () => {
-	const fieldDone = {
-		...approvedDoc,
-		status: "FIELD_UPDATED",
-		supervisorApprovedAt: null,
-		brigade: { area: "OESTE" },
-	}
-
+describe("review: send_back to crew is gone", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
-		vi.mocked(db.user.findUnique).mockResolvedValue({
-			supervisorAreas: ["OESTE"],
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...approvedDoc,
+			status: "FIELD_UPDATED",
+			supervisorApprovedAt: null,
 		} as any)
-		vi.mocked(db.user.findMany).mockResolvedValue([])
-		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
-			fieldDone as any,
-		)
 	})
 
-	it("is not reachable for a SUPERVISOR (redirect, nothing written)", async () => {
+	it("even an Admin's send_back writes nothing and notifies nobody", async () => {
 		vi.mocked(requireRole).mockResolvedValue({
-			user: { id: "sup-1", role: "SUPERVISOR", name: "Edgard Ocasio" },
+			user: { id: "admin-1", role: "ADMIN", name: "Admin" },
 			session: {},
 		} as any)
 		await expect(
@@ -1224,6 +1216,7 @@ describe("review: send_back to crew", () => {
 			} as any),
 		).rejects.toMatchObject({ status: 302 })
 		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+		expect(db.auditTrail.create).not.toHaveBeenCalled()
 		expect(db.notification.create).not.toHaveBeenCalled()
 	})
 })
@@ -1323,14 +1316,32 @@ describe("review loader: Packet → Claro step", () => {
 		expect(data.packet.canMarkManual).toBe(true)
 	})
 
-	it("offers Mark as sent manually only when the last attempt was UNCONFIGURED", async () => {
-		vi.mocked(db.packetSend.findMany).mockResolvedValue([
-			{ id: "b", outcome: "FAILED", sentBy: { name: "E" } },
-			{ id: "a", outcome: "UNCONFIGURED", sentBy: { name: "E" } },
-		] as any)
-		expect((await loadAs("SUPERVISOR", signedOff)).packet.canMarkManual).toBe(
-			false,
-		)
+	it("offers Mark as sent manually after an UNCONFIGURED or FAILED attempt, before the first send only", async () => {
+		const offered = async (
+			outcomes: string[],
+			doc: Record<string, unknown> = signedOff,
+		) => {
+			vi.mocked(db.packetSend.findMany).mockResolvedValue(
+				outcomes.map((outcome, i) => ({
+					id: `s${i}`,
+					outcome,
+					sentBy: { name: "E" },
+				})) as any,
+			)
+			return (await loadAs("SUPERVISOR", doc)).packet.canMarkManual
+		}
+		expect(await offered([])).toBe(false)
+		expect(await offered(["UNCONFIGURED"])).toBe(true)
+		expect(await offered(["FAILED", "UNCONFIGURED"])).toBe(true)
+		expect(await offered(["SENT"])).toBe(false)
+		// A job already sent never offers it, whatever the last attempt was.
+		const sent = {
+			...signedOff,
+			jafInvoiceGeneratedAt: new Date(),
+			jafInvoiceLines: [],
+		}
+		expect(await offered(["UNCONFIGURED", "SENT"], sent)).toBe(false)
+		expect(await offered(["FAILED", "MANUAL"], sent)).toBe(false)
 	})
 
 	it("a stored packet PDF from an UNCONFIGURED attempt is downloadable but not 'sent'", async () => {

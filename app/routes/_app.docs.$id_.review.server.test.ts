@@ -24,6 +24,7 @@ vi.mock("~/lib/permissions.server", () => ({ requireRole: vi.fn() }))
 vi.mock("~/lib/service-codes.server", async (importOriginal) => ({
 	...(await importOriginal<typeof import("~/lib/service-codes.server")>()),
 	getActiveServiceCodes: vi.fn(),
+	getActiveServiceCodePrices: vi.fn(),
 }))
 vi.mock("~/lib/system-settings.server", () => ({
 	getIvuRate: vi.fn(),

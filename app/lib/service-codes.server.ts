@@ -18,6 +18,7 @@ type Cache = { data: ServiceCode[]; ts: number }
 const TTL = 60_000
 let allCache: Cache | null = null
 let materialCache: Cache | null = null
+let priceCache: Cache | null = null
 
 export async function getActiveServiceCodes(): Promise<ServiceCode[]> {
 	const now = Date.now()
@@ -26,6 +27,24 @@ export async function getActiveServiceCodes(): Promise<ServiceCode[]> {
 		where: { active: true, ...NOT_PENDING_CODE },
 	})
 	allCache = { data: codes, ts: now }
+	return codes
+}
+
+/** Only the columns the Aviso PDF path needs (id, claroCode, unitPrice). */
+export async function getActiveServiceCodePrices(): Promise<
+	Pick<ServiceCode, "id" | "claroCode" | "unitPrice">[]
+> {
+	const now = Date.now()
+	if (priceCache && now - priceCache.ts < TTL)
+		return priceCache.data as Pick<
+			ServiceCode,
+			"id" | "claroCode" | "unitPrice"
+		>[]
+	const codes = await db.serviceCode.findMany({
+		where: { active: true, ...NOT_PENDING_CODE },
+		select: { id: true, claroCode: true, unitPrice: true },
+	})
+	priceCache = { data: codes as unknown as ServiceCode[], ts: now }
 	return codes
 }
 

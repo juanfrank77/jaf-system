@@ -30,6 +30,7 @@ type AvisoError = {
 	errorKey?: string
 	errorMessage?: string
 	missingCodes?: string[]
+	pdfAvisoNumber?: string
 } | null
 
 type Props = {
@@ -427,6 +428,7 @@ export function AvisoMatchCard({
 							<p className="text-sm text-status-danger">
 								{t(error.errorKey as ParseKeys, {
 									codes: error.missingCodes?.join(", "),
+									pdfNumber: error.pdfAvisoNumber,
 								})}
 							</p>
 						) : null}

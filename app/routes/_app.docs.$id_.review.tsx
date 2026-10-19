@@ -43,7 +43,11 @@ import { generateJafInvoicePdf } from "~/lib/pdf/jaf-invoice.server"
 import { generatePreCertSheetPdf } from "~/lib/pdf/pre-cert-sheet.server"
 import { canTransition, isReviewActionStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
-import { getActiveServiceCodes, isPriceBlind } from "~/lib/service-codes.server"
+import {
+	getActiveServiceCodePrices,
+	getActiveServiceCodes,
+	isPriceBlind,
+} from "~/lib/service-codes.server"
 import {
 	type AvisoLine,
 	buildInvoiceLines,
@@ -546,7 +550,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 			const built = buildAvisoLines(
 				parsed.rows,
 				doc.jafInvoiceLines as InvoiceLine[],
-				await getActiveServiceCodes(),
+				await getActiveServiceCodePrices(),
 			)
 			if ("missingCodes" in built)
 				return {

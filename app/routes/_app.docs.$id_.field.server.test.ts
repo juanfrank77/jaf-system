@@ -45,7 +45,6 @@ vi.mock("~/lib/uploads.server", () => ({
 }))
 
 import { db } from "~/lib/db.server"
-import { usedForFinance } from "~/lib/field-materials"
 import { composeJobAddress } from "~/lib/intake-address"
 import { requireRole } from "~/lib/permissions.server"
 import { getActiveMaterialCodes } from "~/lib/service-codes.server"
@@ -224,12 +223,29 @@ describe("POST /docs/:id/field — save", () => {
 		expect(data).not.toHaveProperty("status")
 		expect(data.fieldStartedAt).toBeInstanceOf(Date)
 		expect(data.fieldMaterials).toEqual(rows)
-		expect(data.materialsUsed).toEqual(usedForFinance([...rows]))
+		// Brigade's stock (sc-2) is tracked in fieldMaterials, never billed.
+		expect(data.materialsUsed).toEqual([{ serviceCodeId: "sc-1", qty: 3 }])
 		expect(data.blueprintPaths).toEqual([
 			"/uploads/blueprints/doc-1/intake.pdf",
 			expect.stringMatching(/^\/uploads\/blueprints\/doc-1\/.*plan\.pdf$/),
 		])
 		expect(db.notification.create).not.toHaveBeenCalled()
+	})
+
+	it("6 from the warehouse + 4 from brigade's stock bills 6 and tracks both", async () => {
+		as("SUPERVISOR")
+		withDoc({ materialsTaken: [{ serviceCodeId: "sc-1", qty: 10 }] })
+		const split = [
+			{ serviceCodeId: "sc-1", used: 6, returned: 4, source: "WAREHOUSE" },
+			{ serviceCodeId: "sc-1", used: 4, returned: 0, source: "BRIGADE_STOCK" },
+		]
+		const form = new FormData()
+		form.set("intent", "save")
+		form.set("fieldMaterials", JSON.stringify(split))
+		expect(await run(form)).toEqual({ ok: true })
+		const { data } = lastUpdate()
+		expect(data.materialsUsed).toEqual([{ serviceCodeId: "sc-1", qty: 6 }])
+		expect(data.fieldMaterials).toEqual(split)
 	})
 
 	it("a changed Dirección 1 updates the Aviso address columns, recomputes the job address and logs the correction", async () => {

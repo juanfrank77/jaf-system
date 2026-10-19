@@ -170,8 +170,9 @@ describe("returns: brigade's own stock is not expected back", () => {
 	afterAll(() => vi.clearAllMocks())
 
 	// 10 signed out; the Field table says 6 used from that stock and 4 from the
-	// brigade's own. materialsUsed holds the total 10 (Finance), but 4 of the
-	// warehouse's 10 are still owed back.
+	// brigade's own. This row was saved before the brigade-stock ruling, so
+	// materialsUsed holds the total 10, but 4 of the warehouse's 10 are still
+	// owed back.
 	const split = {
 		taken: [{ serviceCodeId: "1005803", qty: 10 }],
 		used: [{ serviceCodeId: "1005803", qty: 10 }],
@@ -216,6 +217,24 @@ describe("returns: brigade's own stock is not expected back", () => {
 			lines: [{ serviceCodeId: "1005803", received: 0 }],
 		})
 		expect(res).toEqual({ errorKey: "returns.note_required" })
+	})
+
+	it("a Field save under the ruling (materialsUsed = 6) also expects 4 back", async () => {
+		mocks.requireRole.mockResolvedValue({
+			user: { id: "irrelevant", role: "WAREHOUSE" },
+		})
+		const { doc } = await seedFieldUpdatedDoc({
+			...split,
+			used: [{ serviceCodeId: "1005803", qty: 6 }],
+		})
+		const data = await loader({
+			request: new Request(`http://x/docs/${doc.id}/returns`),
+			params: { id: doc.id },
+			context: {},
+		} as never)
+		expect(data.lines).toEqual([
+			{ serviceCodeId: "1005803", takenQty: 10, usedQty: 6, expectedBack: 4 },
+		])
 	})
 
 	it("a legacy job with no Field table still uses materialsUsed", async () => {

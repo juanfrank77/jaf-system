@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest"
 import {
+	billableUsed,
+	brigadeStockLines,
 	exceedsSigned,
 	type FieldMaterialRow,
 	fieldMaterialsOrDefault,
 	parseFieldMaterials,
 	quantityDiscrepancies,
-	usedForFinance,
 	warehouseUsedLines,
 } from "./field-materials"
 
@@ -56,19 +57,54 @@ describe("parseFieldMaterials", () => {
 	})
 })
 
-describe("usedForFinance", () => {
-	it("keeps rows with used > 0 as {serviceCodeId, qty}, summing a code across sources", () => {
+describe("billableUsed", () => {
+	it("keeps WAREHOUSE rows with used > 0 as {serviceCodeId, qty}, summed per code", () => {
 		expect(
-			usedForFinance([
+			billableUsed([
 				row("sc-1", 3),
 				row("sc-2", 0),
-				row("sc-1", 2, "BRIGADE_STOCK"),
-				row("sc-3", 1, "BRIGADE_STOCK"),
+				row("sc-1", 2),
+				row("sc-4", 1),
 			]),
 		).toEqual([
 			{ serviceCodeId: "sc-1", qty: 5 },
-			{ serviceCodeId: "sc-3", qty: 1 },
+			{ serviceCodeId: "sc-4", qty: 1 },
 		])
+	})
+
+	it("keeps brigade's own stock off the billable lines", () => {
+		// 6 from the warehouse pickup, 4 from the brigade's stock: bill 6.
+		expect(
+			billableUsed([
+				row("sc-1", 6),
+				row("sc-1", 4, "BRIGADE_STOCK"),
+				row("sc-3", 1, "BRIGADE_STOCK"),
+			]),
+		).toEqual([{ serviceCodeId: "sc-1", qty: 6 }])
+	})
+})
+
+describe("brigadeStockLines", () => {
+	it("lists BRIGADE_STOCK use > 0 per code, ignoring WAREHOUSE rows", () => {
+		expect(
+			brigadeStockLines([
+				row("sc-1", 6),
+				row("sc-1", 4, "BRIGADE_STOCK"),
+				row("sc-2", 0, "BRIGADE_STOCK"),
+				row("sc-3", 1, "BRIGADE_STOCK"),
+				row("sc-3", 2, "BRIGADE_STOCK"),
+			]),
+		).toEqual([
+			{ serviceCodeId: "sc-1", qty: 4 },
+			{ serviceCodeId: "sc-3", qty: 3 },
+		])
+	})
+
+	it("is empty for a legacy job or unreadable data", () => {
+		expect(brigadeStockLines(null)).toEqual([])
+		expect(brigadeStockLines([])).toEqual([])
+		expect(brigadeStockLines("nope")).toEqual([])
+		expect(brigadeStockLines([row("sc-1", 5)])).toEqual([])
 	})
 })
 
@@ -139,10 +175,21 @@ describe("warehouseUsedLines", () => {
 			{ serviceCodeId: "m1", used: 4, returned: 0, source: "BRIGADE_STOCK" },
 			{ serviceCodeId: "m2", used: 3, returned: 0, source: "BRIGADE_STOCK" },
 		]
-		// materialsUsed keeps the total (10) for Finance; returns see 6.
+		// A row saved before the brigade-stock ruling kept the total (10) in
+		// materialsUsed; returns still see 6.
 		expect(
 			warehouseUsedLines(rows, [{ serviceCodeId: "m1", qty: 10 }]),
 		).toEqual([{ serviceCodeId: "m1", qty: 6 }])
+	})
+
+	it("matches materialsUsed for a row saved under the ruling (WAREHOUSE only)", () => {
+		const rows = [
+			{ serviceCodeId: "m1", used: 6, returned: 0, source: "WAREHOUSE" },
+			{ serviceCodeId: "m1", used: 4, returned: 0, source: "BRIGADE_STOCK" },
+		]
+		expect(warehouseUsedLines(rows, [{ serviceCodeId: "m1", qty: 6 }])).toEqual(
+			[{ serviceCodeId: "m1", qty: 6 }],
+		)
 	})
 
 	it("falls back to materialsUsed on a legacy job with no Field table", () => {

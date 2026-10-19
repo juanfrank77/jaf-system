@@ -17,12 +17,12 @@ import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
 import {
+	billableUsed,
 	exceedsSigned,
 	type FieldMaterialRow,
 	fieldMaterialsOrDefault,
 	parseFieldMaterials,
 	quantityDiscrepancies,
-	usedForFinance,
 } from "~/lib/field-materials"
 import {
 	type AddressCorrection,
@@ -400,8 +400,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 			return refusal("docs_field.errors.discrepancy_note_required")
 	}
 	if (rows) {
+		// Brigade's stock stays in fieldMaterials (tracked), off the billable
+		// lines until Finance rules on it.
 		update.fieldMaterials = rows
-		update.materialsUsed = usedForFinance(rows)
+		update.materialsUsed = billableUsed(rows)
 	}
 
 	// Everything is valid: only now write files.

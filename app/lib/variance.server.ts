@@ -1,3 +1,5 @@
+import { installedLines } from "./field-materials"
+
 type Signals = { overage: number; shortage: number; discrepancy: number }
 
 type MaterialLine = { serviceCodeId: string; qty: number }
@@ -22,10 +24,14 @@ export function buildVarianceLines(doc: {
 	estimatedMaterials?: unknown
 	materialsTaken?: unknown
 	materialsUsed?: unknown
+	fieldMaterials?: unknown
 }): VarianceLine[] {
 	const ordered = toMaterialLines(doc.estimatedMaterials)
 	const taken = toMaterialLines(doc.materialsTaken)
-	const used = toMaterialLines(doc.materialsUsed)
+	// Installed includes the brigade's own stock (tracked, not billed).
+	const used = toMaterialLines(
+		installedLines(doc.fieldMaterials, doc.materialsUsed),
+	)
 
 	const orderedMap = new Map(ordered.map((l) => [l.serviceCodeId, l.qty]))
 	const takenMap = new Map(taken.map((l) => [l.serviceCodeId, l.qty]))

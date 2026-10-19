@@ -5,6 +5,7 @@ import type {
 	ServiceCode,
 } from "../../generated/prisma/client"
 import { db } from "./db.server"
+import { hasFieldTable, warehouseUsedLines } from "./field-materials"
 import type { FinanceStage } from "./finance-pipeline"
 import { getAvisoAmountTolerance, getIvuRate } from "./system-settings.server"
 import { toNumberPrice } from "./utils"
@@ -151,14 +152,30 @@ export function daysInStage(
 	return Math.floor((Date.now() - new Date(anchor).getTime()) / 86400000)
 }
 
+type MaterialsSource = Pick<JafInvoice, "materialsUsed" | "materialsTaken"> &
+	Partial<Pick<JafInvoice, "fieldMaterials">>
+
+/**
+ * The material lines Finance bills. With a Field table that is its WAREHOUSE
+ * use only: brigade's own stock is tracked, not billed (provisional ruling),
+ * and nothing used from the pickup bills nothing. A job without the table
+ * reads `materialsUsed`, or the pickup when nothing was reported used.
+ */
+function billableMaterials(invoice: MaterialsSource): MaterialItem[] {
+	if (hasFieldTable(invoice.fieldMaterials))
+		return warehouseUsedLines(invoice.fieldMaterials, invoice.materialsUsed)
+	const used = (invoice.materialsUsed as MaterialItem[]) || []
+	return used.length > 0
+		? used
+		: (invoice.materialsTaken as MaterialItem[]) || []
+}
+
 export function invoiceTotalUsed(
-	invoice: Pick<JafInvoice, "materialsUsed" | "materialsTaken">,
+	invoice: MaterialsSource,
 	codeMap: Record<string, { unitPrice: number }>,
 	ivuRate: number,
 ): number {
-	const used = (invoice.materialsUsed as MaterialItem[]) || []
-	const source =
-		used.length > 0 ? used : (invoice.materialsTaken as MaterialItem[]) || []
+	const source = billableMaterials(invoice)
 	const subtotal = source.reduce((sum, item) => {
 		const price = toNumberPrice(codeMap[item.serviceCodeId]?.unitPrice)
 		return sum + Number(item.qty || 0) * price
@@ -219,7 +236,7 @@ type FinanceLineItem = {
 }
 
 export function financeLineItems(
-	invoice: Pick<JafInvoice, "materialsUsed" | "materialsTaken">,
+	invoice: MaterialsSource,
 	codeMap: Record<
 		string,
 		{
@@ -231,10 +248,7 @@ export function financeLineItems(
 		}
 	>,
 ): FinanceLineItem[] {
-	const used = (invoice.materialsUsed as MaterialItem[]) || []
-	const source =
-		used.length > 0 ? used : (invoice.materialsTaken as MaterialItem[]) || []
-	return source.map((item) => {
+	return billableMaterials(invoice).map((item) => {
 		const code = codeMap[item.serviceCodeId]
 		return {
 			claroCode: code?.claroCode ?? "",

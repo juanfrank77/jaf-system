@@ -63,6 +63,27 @@ describe("buildVarianceLines", () => {
 		])
 	})
 
+	it("counts brigade's stock as installed (tracked) though it is not billed", () => {
+		// Field save under the ruling: materialsUsed = 6 (warehouse only).
+		const lines = buildVarianceLines({
+			estimatedMaterials: [{ serviceCodeId: "svc-1", qty: 10 }],
+			materialsTaken: [{ serviceCodeId: "svc-1", qty: 10 }],
+			materialsUsed: [{ serviceCodeId: "svc-1", qty: 6 }],
+			fieldMaterials: [
+				{ serviceCodeId: "svc-1", used: 6, returned: 4, source: "WAREHOUSE" },
+				{
+					serviceCodeId: "svc-1",
+					used: 4,
+					returned: 0,
+					source: "BRIGADE_STOCK",
+				},
+			],
+		})
+		expect(lines).toEqual([
+			{ code: "svc-1", ordered: 10, installed: 10, delta: 0 },
+		])
+	})
+
 	it("falls back to materialsTaken when materialsUsed is absent", () => {
 		const lines = buildVarianceLines({
 			estimatedMaterials: [{ serviceCodeId: "svc-1", qty: 2 }],

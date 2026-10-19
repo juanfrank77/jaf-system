@@ -1,8 +1,13 @@
 /**
  * The Field step's one materials table (spec "Step 3 · Field"). It is a
  * presentation over the canonical JSON columns: `fieldMaterials` keeps the
- * supervisor's rows (with the source), and `materialsUsed` keeps receiving the
- * used quantities so Finance, pre-cert and the PDFs read what they always did.
+ * supervisor's rows (with the source), and `materialsUsed` receives the
+ * billable used quantities so Finance, pre-cert and the PDFs read what they
+ * always did.
+ *
+ * Provisional ruling (pending Monica / Lissette): the brigade's own stock is
+ * recorded (BRIGADE_STOCK rows in `fieldMaterials`) for tracking only and
+ * kept off the billable lines, so `materialsUsed` carries WAREHOUSE use only.
  */
 export type FieldMaterialSource = "WAREHOUSE" | "BRIGADE_STOCK"
 
@@ -72,11 +77,38 @@ export function fieldMaterialsOrDefault(
 	}))
 }
 
-/** `materialsUsed` shape: one line per code with used > 0, summed across sources. */
-export function usedForFinance(rows: FieldMaterialRow[]): MaterialLine[] {
+/**
+ * `materialsUsed` shape: one line per code with WAREHOUSE use > 0. Brigade's
+ * stock stays off the billable lines (see `brigadeStockLines`).
+ */
+export function billableUsed(rows: FieldMaterialRow[]): MaterialLine[] {
+	return [...warehouseUsed(rows)]
+		.filter(([, qty]) => qty > 0)
+		.map(([serviceCodeId, qty]) => ({ serviceCodeId, qty }))
+}
+
+function storedRows(fieldMaterials: unknown): FieldMaterialRow[] {
+	try {
+		return toRows(fieldMaterials)
+	} catch {
+		// Nothing (or nothing readable) stored: a job from before the table.
+		return []
+	}
+}
+
+/** Whether a Field materials table was saved for the job. */
+export function hasFieldTable(fieldMaterials: unknown): boolean {
+	return storedRows(fieldMaterials).length > 0
+}
+
+/**
+ * Brigade's-stock use, per code (used > 0), for the read-only "tracked, not
+ * billed" list. Never part of a billable total.
+ */
+export function brigadeStockLines(fieldMaterials: unknown): MaterialLine[] {
 	const byCode = new Map<string, number>()
-	for (const r of rows) {
-		if (r.used <= 0) continue
+	for (const r of storedRows(fieldMaterials)) {
+		if (r.source !== "BRIGADE_STOCK" || r.used <= 0) continue
 		byCode.set(r.serviceCodeId, (byCode.get(r.serviceCodeId) ?? 0) + r.used)
 	}
 	return [...byCode].map(([serviceCodeId, qty]) => ({ serviceCodeId, qty }))
@@ -94,26 +126,41 @@ function warehouseUsed(rows: FieldMaterialRow[]): Map<string, number> {
 /**
  * What was used out of the warehouse stock signed out at pickup, in the
  * `materialsUsed` shape: the WAREHOUSE rows of the Field table when there is
- * one. `materialsUsed` also counts the brigade's own stock (Finance reads the
- * total), so any "signed out vs used" comparison (what should come back, a
- * quantity discrepancy) must read this instead. A job without a Field table
- * (from before it) falls back to `materialsUsed`.
+ * one. A Field save now writes exactly this to `materialsUsed`, but a row
+ * saved before the brigade-stock ruling kept the WAREHOUSE + BRIGADE_STOCK
+ * total there, so anything that compares or bills against the pickup (what
+ * should come back, a quantity discrepancy, Finance's lines) reads this
+ * instead. A job without a Field table (from before it) falls back to
+ * `materialsUsed`.
  */
 export function warehouseUsedLines(
 	fieldMaterials: unknown,
 	materialsUsed: unknown,
 ): MaterialLine[] {
-	let rows: FieldMaterialRow[] = []
-	try {
-		rows = toRows(fieldMaterials)
-	} catch {
-		// Nothing (or nothing readable) stored: a job from before the table.
-	}
+	const rows = storedRows(fieldMaterials)
 	if (rows.length === 0)
 		return Array.isArray(materialsUsed) ? (materialsUsed as MaterialLine[]) : []
-	return [...warehouseUsed(rows)]
-		.filter(([, qty]) => qty > 0)
-		.map(([serviceCodeId, qty]) => ({ serviceCodeId, qty }))
+	return billableUsed(rows)
+}
+
+/**
+ * Everything physically installed, both sources, in the `materialsUsed`
+ * shape: what the variance view compares against the estimate. Not billable
+ * (brigade's stock is in it). Falls back to `materialsUsed` without a table.
+ */
+export function installedLines(
+	fieldMaterials: unknown,
+	materialsUsed: unknown,
+): MaterialLine[] {
+	const rows = storedRows(fieldMaterials)
+	if (rows.length === 0)
+		return Array.isArray(materialsUsed) ? (materialsUsed as MaterialLine[]) : []
+	const byCode = new Map<string, number>()
+	for (const r of rows) {
+		if (r.used <= 0) continue
+		byCode.set(r.serviceCodeId, (byCode.get(r.serviceCodeId) ?? 0) + r.used)
+	}
+	return [...byCode].map(([serviceCodeId, qty]) => ({ serviceCodeId, qty }))
 }
 
 /**

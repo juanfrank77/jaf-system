@@ -262,6 +262,18 @@ describe("computeMaterialSignals: brigade's own stock", () => {
 		expect(computeMaterialSignals([split]).discrepancy).toBe(1)
 	})
 
+	it("a Field save under the ruling (materialsUsed = 6) still flags it", () => {
+		const split = {
+			materialsTaken: taken,
+			materialsUsed: [{ serviceCodeId: "m1", qty: 6 }],
+			fieldMaterials: [
+				{ serviceCodeId: "m1", used: 6, returned: 4, source: "WAREHOUSE" },
+				{ serviceCodeId: "m1", used: 4, returned: 0, source: "BRIGADE_STOCK" },
+			],
+		}
+		expect(computeMaterialSignals([split]).discrepancy).toBe(1)
+	})
+
 	it("extra brigade stock on top of a fully used pickup is no discrepancy", () => {
 		const extra = {
 			materialsTaken: taken,

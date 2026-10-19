@@ -52,6 +52,7 @@ export type PacketStepData = {
 	packetHref: string | null
 	blueprints: { name: string; href: string }[]
 	materials: {
+		serviceCodeId: string
 		claroCode: string
 		name: string
 		unit: string | null
@@ -384,7 +385,7 @@ export function PacketStepCard({
 							<tbody className="tabular-nums">
 								{packet.materials.map((m) => (
 									<tr
-										key={`${m.claroCode}-${m.source}`}
+										key={`${m.serviceCodeId}-${m.source}`}
 										className="border-b last:border-0"
 									>
 										<td className="py-1.5 font-mono text-xs">{m.claroCode}</td>

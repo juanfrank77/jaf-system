@@ -6,7 +6,7 @@ import type {
 	Role,
 } from "../../generated/prisma/client"
 import { db } from "./db.server"
-import { fieldMaterialsOrDefault } from "./field-materials"
+import { packetMaterialRows } from "./field-materials"
 import { sendPacketEmail } from "./packet-mail.server"
 import {
 	blueprintAttachments,
@@ -346,11 +346,8 @@ async function materialRows(
 	stored: unknown,
 	taken: MaterialLine[],
 ): Promise<ClaroPacketInput["materials"]> {
-	// Brigade's own stock stays tracked-only (provisional ruling): it is kept
-	// in fieldMaterials but never listed on the client-facing packet.
-	const rows = fieldMaterialsOrDefault(stored, taken).filter(
-		(r) => r.source !== "BRIGADE_STOCK",
-	)
+	// Brigade's own stock stays tracked-only (provisional ruling).
+	const rows = packetMaterialRows(stored, taken)
 	if (rows.length === 0) return []
 	const codes = await db.serviceCode.findMany({
 		where: { id: { in: rows.map((r) => r.serviceCodeId) } },
@@ -365,7 +362,7 @@ async function materialRows(
 			unit: code?.unit ?? null,
 			used: r.used,
 			returned: r.returned,
-			source: "WAREHOUSE" as const,
+			source: r.source,
 		}
 	})
 }

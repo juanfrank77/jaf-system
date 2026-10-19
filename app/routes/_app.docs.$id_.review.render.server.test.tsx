@@ -87,6 +87,7 @@ function packetData(over: Record<string, unknown> = {}) {
 		],
 		materials: [
 			{
+				serviceCodeId: "m1",
 				claroCode: "M-100",
 				name: "Cable drop",
 				unit: "FT",

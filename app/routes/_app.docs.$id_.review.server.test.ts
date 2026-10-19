@@ -1436,6 +1436,7 @@ describe("review loader: Packet → Claro step", () => {
 		])
 		expect(data.packet.materials).toEqual([
 			{
+				serviceCodeId: "m1",
 				claroCode: "M-100",
 				name: "Cable drop",
 				unit: "FT",
@@ -1444,6 +1445,23 @@ describe("review loader: Packet → Claro step", () => {
 				source: "WAREHOUSE",
 			},
 		])
+	})
+
+	it("previews the packet's materials as sent: no brigade's stock rows", async () => {
+		const data = await loadAs("SUPERVISOR", {
+			...signedOff,
+			fieldMaterials: [
+				{ serviceCodeId: "m1", used: 3, returned: 1, source: "WAREHOUSE" },
+				{ serviceCodeId: "m2", used: 4, returned: 0, source: "BRIGADE_STOCK" },
+			],
+		})
+		expect(
+			data.packet.materials.map((m) => [m.serviceCodeId, m.source]),
+		).toEqual([["m1", "WAREHOUSE"]])
+		// The code lookup no longer asks for the brigade's-stock code.
+		expect(db.serviceCode.findMany).toHaveBeenCalledWith(
+			expect.objectContaining({ where: { id: { in: ["m1"] } } }),
+		)
 	})
 
 	describe("no prices reach a SUPERVISOR", () => {

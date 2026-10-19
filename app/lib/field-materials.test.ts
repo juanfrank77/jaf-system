@@ -6,6 +6,7 @@ import {
 	exceedsSigned,
 	type FieldMaterialRow,
 	fieldMaterialsOrDefault,
+	packetMaterialRows,
 	parseFieldMaterials,
 	quantityDiscrepancies,
 	warehouseUsedLines,
@@ -188,6 +189,23 @@ describe("quantityDiscrepancies", () => {
 		expect(
 			quantityDiscrepancies([{ serviceCodeId: "sc-1", qty: 5 }], []),
 		).toEqual([{ serviceCodeId: "sc-1", takenQty: 5, usedQty: 0 }])
+	})
+})
+
+describe("packetMaterialRows", () => {
+	it("keeps WAREHOUSE rows only (brigade's stock is never on the packet)", () => {
+		expect(
+			packetMaterialRows(
+				[row("sc-1", 6, "WAREHOUSE", 4), row("sc-2", 4, "BRIGADE_STOCK")],
+				[],
+			),
+		).toEqual([row("sc-1", 6, "WAREHOUSE", 4)])
+	})
+
+	it("defaults to the pickup when nothing is stored", () => {
+		expect(
+			packetMaterialRows(null, [{ serviceCodeId: "sc-1", qty: 5 }]),
+		).toEqual([row("sc-1", 5)])
 	})
 })
 

@@ -39,7 +39,7 @@ import {
 	RETENTION_RATE,
 } from "~/lib/contractor-payment.server"
 import { db } from "~/lib/db.server"
-import { fieldMaterialsOrDefault } from "~/lib/field-materials"
+import { packetMaterialRows } from "~/lib/field-materials"
 import type { AddressCorrection } from "~/lib/field-update-helpers"
 import {
 	uploadFileName,
@@ -223,7 +223,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			...(doc.completedById ? [doc.completedById] : []),
 		]),
 	]
-	const materialRows = fieldMaterialsOrDefault(
+	// The packet preview lists what the packet PDF does (no brigade's stock).
+	const materialRows = packetMaterialRows(
 		doc.fieldMaterials,
 		(doc.materialsTaken as MaterialLine[] | null) ?? [],
 	)
@@ -415,6 +416,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		materials: materialRows.map((r) => {
 			const code = codeById.get(r.serviceCodeId)
 			return {
+				serviceCodeId: r.serviceCodeId,
 				claroCode: code?.claroCode ?? "",
 				name: code?.name ?? r.serviceCodeId,
 				unit: code?.unit ?? null,

@@ -34,15 +34,6 @@ export function isReassignableStatus(status: string): boolean {
 	)
 }
 
-const REVIEW_ACTION_STATUSES = ["FIELD_UPDATED", "SUPERVISOR_APPROVED"] as const
-type ReviewActionStatus = (typeof REVIEW_ACTION_STATUSES)[number]
-
-export function isReviewActionStatus(
-	status: string,
-): status is ReviewActionStatus {
-	return REVIEW_ACTION_STATUSES.includes(status as ReviewActionStatus)
-}
-
 const TERMINAL_STATUSES = ["CANCELLED", "LC_REQUEST_GENERATED"] as const
 type TerminalStatus = (typeof TERMINAL_STATUSES)[number]
 

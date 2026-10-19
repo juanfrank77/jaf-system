@@ -214,3 +214,66 @@ describe("dashboard supervisor view data (integration)", () => {
 		expect(data.docs).toHaveLength(4)
 	})
 })
+
+describe("Packets to Claro queue (integration)", () => {
+	const tag = `pk${Date.now()}`
+	let supId: string
+	let unsentId: string
+	let sentId: string
+	let attemptedId: string
+
+	beforeAll(async () => {
+		supId = (
+			await db.user.create({
+				data: {
+					email: `dash-pk-${tag}@x.com`,
+					name: "PkSup",
+					role: "SUPERVISOR",
+					supervisorAreas: [],
+				},
+			})
+		).id
+		const make = (name: string, data: Record<string, unknown>) =>
+			db.jafInvoice
+				.create({
+					data: {
+						...baseInvoice,
+						controlNumber: `DASH-PK-${name}-${tag}`,
+						supervisorId: supId,
+						status: "SUPERVISOR_APPROVED",
+						supervisorApprovedAt: new Date("2026-10-18T10:00:00Z"),
+						...data,
+					},
+				})
+				.then((d) => d.id)
+		unsentId = await make("unsent", {})
+		// An UNCONFIGURED attempt stores the PDF but is not a send.
+		attemptedId = await make("attempted", {
+			jafInvoicePdfPath: "/uploads/packets/x-packet-1.pdf",
+		})
+		sentId = await make("sent", {
+			jafInvoiceGeneratedAt: new Date("2026-10-18T12:00:00Z"),
+			jafInvoicePdfPath: "/uploads/packets/y-packet-2.pdf",
+		})
+	})
+
+	afterAll(async () => {
+		await db.jafInvoice.deleteMany({
+			where: { controlNumber: { endsWith: tag } },
+		})
+		await db.user.delete({ where: { id: supId } })
+	})
+
+	it("lists sent and not-sent jobs, with sent derived from jafInvoiceGeneratedAt only", async () => {
+		const data = await runLoaderAs(supId, "stage=invoice")
+		const byId = new Map(data.docs.map((d) => [d.id, d]))
+		expect([...byId.keys()].sort()).toEqual(
+			[unsentId, attemptedId, sentId].sort(),
+		)
+		expect(byId.get(sentId)?.jafInvoiceGeneratedAt).toBeInstanceOf(Date)
+		expect(byId.get(unsentId)?.jafInvoiceGeneratedAt).toBeNull()
+		expect(byId.get(attemptedId)?.jafInvoiceGeneratedAt).toBeNull()
+		expect(byId.get(sentId)?.openLabel).toBe("SENT_WAITING_AVISO")
+		expect(byId.get(attemptedId)?.openLabel).toBe("READY_TO_SEND")
+	})
+})

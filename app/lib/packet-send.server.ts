@@ -34,7 +34,7 @@ type SendPacketErrorKey =
 	| "packet.errors.locked"
 	// Building or storing the PDF failed; logged as a FAILED attempt.
 	| "packet.errors.render_failed"
-	// Nothing installed to put in the work summary (as generate_jaf_invoice).
+	// Nothing installed to put in the work summary.
 	| "docs_review.errors.installed_lines_required"
 
 type SendPacketResult =

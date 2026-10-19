@@ -50,6 +50,11 @@ type Props = {
 	started: boolean
 	/** Price-blind roles still get the gate, but see no money on the card. */
 	showPrices: boolean
+	/**
+	 * The server's amount verdict on the captured Aviso, for a price-blind
+	 * role: its lines carry no prices, so the card cannot recompute it.
+	 */
+	serverAmountOk?: boolean | null
 	/** Extra controls rendered under the form (e.g. the optional Claro PDF). */
 	children?: React.ReactNode
 }
@@ -74,6 +79,7 @@ export function AvisoMatchCard({
 	readOnly,
 	started,
 	showPrices,
+	serverAmountOk = null,
 	children,
 }: Props) {
 	const { t } = useTranslation()
@@ -120,7 +126,8 @@ export function AvisoMatchCard({
 			lineAmount: round2(r.qty * r.unitPrice),
 		}))
 	const match = checkAvisoMatch(invoiceLines, charged, tolerance)
-	const state: MatchState = !match.amountOk
+	const amountOk = showPrices ? match.amountOk : (serverAmountOk ?? true)
+	const state: MatchState = !amountOk
 		? "amt"
 		: match.lineMismatches.length > 0
 			? "qty"

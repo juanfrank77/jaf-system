@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("~/lib/db.server", () => ({
@@ -7,6 +8,8 @@ vi.mock("~/lib/db.server", () => ({
 		notification: { create: vi.fn(), createMany: vi.fn() },
 		user: { findMany: vi.fn(), findUnique: vi.fn() },
 		photo: { findMany: vi.fn() },
+		packetSend: { findMany: vi.fn(async () => []) },
+		serviceCode: { findMany: vi.fn(async () => []) },
 		brigade: { findUnique: vi.fn(), update: vi.fn(), findMany: vi.fn() },
 		preCertSheet: {
 			findFirst: vi.fn(),
@@ -35,15 +38,20 @@ vi.mock("~/lib/uploads.server", () => ({
 	// Default: every Photo row's file loads; individual tests override.
 	photosThatLoad: vi.fn(async (_docId: string, photos: unknown[]) => photos),
 }))
-vi.mock("~/lib/pdf/jaf-invoice.server", () => ({
-	generateJafInvoicePdf: vi.fn(),
-}))
 vi.mock("~/lib/pdf/pre-cert-sheet.server", () => ({
 	generatePreCertSheetPdf: vi.fn(),
 }))
+vi.mock("~/lib/packet-send.server", () => ({ sendPacket: vi.fn() }))
+// The real Aviso reader runs on the real sample PDF; the spy only lets one
+// test feed it a print with a service split over two rows.
+vi.mock("~/lib/aviso-pdf.server", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("~/lib/aviso-pdf.server")>()
+	return { ...actual, readAvisoPdf: vi.fn(actual.readAvisoPdf) }
+})
 
+import { readAvisoPdf } from "~/lib/aviso-pdf.server"
 import { db } from "~/lib/db.server"
-import { generateJafInvoicePdf } from "~/lib/pdf/jaf-invoice.server"
+import { sendPacket } from "~/lib/packet-send.server"
 import { generatePreCertSheetPdf } from "~/lib/pdf/pre-cert-sheet.server"
 import { requireRole } from "~/lib/permissions.server"
 import { getActiveServiceCodes } from "~/lib/service-codes.server"
@@ -133,6 +141,7 @@ const approvedDoc = {
 	releasedToFinanceAt: null,
 	fieldSubmittedAt: new Date("2026-08-26T20:12:00Z"),
 	assignedCrewIds: ["crew-1"],
+	blueprintPaths: [] as string[],
 }
 
 describe("supervisor scope guard", () => {
@@ -179,175 +188,173 @@ describe("supervisor scope guard", () => {
 	})
 })
 
-describe("review: generate_jaf_invoice", () => {
+describe("review: send_packet and mark_packet_sent", () => {
+	const SUPERVISOR = { id: "sup-1", role: "SUPERVISOR", name: "Edgard Ocasio" }
+	const doc = { ...approvedDoc, brigade: { area: "OESTE" } }
+
 	beforeEach(() => {
 		vi.clearAllMocks()
 		vi.mocked(requireRole).mockResolvedValue({
-			user: { id: "sup-1", role: "SUPERVISOR", name: "Edgard Ocasio" },
+			user: SUPERVISOR,
 			session: {},
 		} as any)
-		vi.mocked(getActiveServiceCodes).mockResolvedValue(CATALOG as any)
-		vi.mocked(getIvuRate).mockResolvedValue(0.115)
-		vi.mocked(getAvisoAmountTolerance).mockResolvedValue(0.01)
-		vi.mocked(generateJafInvoicePdf).mockResolvedValue(Buffer.from("pdf"))
-		vi.mocked(saveBuffer).mockResolvedValue(
-			"/uploads/jaf-invoices/doc-1-jaf-invoice.pdf",
-		)
-		vi.mocked(db.brigade.findUnique).mockResolvedValue({
-			id: "b1",
-			name: "JESUS MARTINEZ",
-			code: "204",
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["OESTE"],
 		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(doc as any)
 	})
 
-	it("prices installed service lines from the catalog and pins them on the doc", async () => {
-		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
-			approvedDoc as any,
-		)
-		await action({
-			request: post(intent("generate_jaf_invoice")),
+	it("send_packet emails the packet through sendPacket and returns to the step", async () => {
+		vi.mocked(sendPacket).mockResolvedValue({ ok: true, outcome: "SENT" })
+		const res = await action({
+			request: post(intent("send_packet")),
 			params: { id: "doc-1" },
-		} as any).catch(() => {})
-		expect(db.jafInvoice.update).toHaveBeenCalledWith(
-			expect.objectContaining({
-				data: expect.objectContaining({
-					jafInvoiceLineTotal: 239.34,
-					jafInvoicePdfPath: "/uploads/jaf-invoices/doc-1-jaf-invoice.pdf",
-					jafInvoiceGeneratedAt: expect.any(Date),
-					jafInvoiceLines: [
-						expect.objectContaining({
-							claroCode: "34006301",
-							qty: 5,
-							unitPrice: 42.343,
-							lineAmount: 211.72,
-						}),
-						expect.objectContaining({
-							claroCode: "34007030",
-							qty: 2,
-							unitPrice: 13.8115,
-							lineAmount: 27.62,
-						}),
-					],
-				}),
-			}),
-		)
-		const pdfArgs = vi.mocked(generateJafInvoicePdf).mock.calls[0][0]
-		// The Claro copy ties to the work order and carries no brigade pay.
-		expect(pdfArgs).toMatchObject({
-			controlNumber: "MAINT-260903-001",
-			jobType: "Mantenimiento",
-			brigadeName: "JESUS MARTINEZ",
+		} as any).catch((r) => r)
+		expect(sendPacket).toHaveBeenCalledWith({
+			docId: "doc-1",
+			actor: SUPERVISOR,
+			mode: "email",
 		})
-		expect(pdfArgs).not.toHaveProperty("contractorShare")
+		expect(res.status).toBe(302)
+		expect(res.headers.get("Location")).toBe("/docs/doc-1/review")
 	})
 
-	it("records who reviewed it and pins the invoice number in the audit trail", async () => {
-		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
-			approvedDoc as any,
-		)
-		await action({
-			request: post(intent("generate_jaf_invoice")),
+	it("an UNCONFIGURED attempt also returns to the step (the history says so)", async () => {
+		vi.mocked(sendPacket).mockResolvedValue({
+			ok: true,
+			outcome: "UNCONFIGURED",
+		})
+		const res = await action({
+			request: post(intent("send_packet")),
 			params: { id: "doc-1" },
-		} as any).catch(() => {})
-		expect(db.auditTrail.create).toHaveBeenCalledWith({
-			data: expect.objectContaining({
-				userId: "sup-1",
-				action: "JAF_INVOICE_GENERATED",
-				diffJson: expect.objectContaining({
-					reviewed: true,
-					invoiceNumber: "M2026-MAINT-260903-001",
-				}),
-			}),
-		})
+		} as any).catch((r) => r)
+		expect(res.status).toBe(302)
 	})
 
-	it("locks the invoice once it is generated", async () => {
+	it.each([
+		"packet.errors.prefield_missing",
+		"packet.errors.blueprint_missing",
+		"packet.errors.no_claro_supervisor",
+		"packet.errors.render_failed",
+		"docs_review.errors.installed_lines_required",
+	] as const)("surfaces sendPacket's %s", async (errorKey) => {
+		vi.mocked(sendPacket).mockResolvedValue({ ok: false, errorKey })
+		const res = await action({
+			request: post(intent("send_packet")),
+			params: { id: "doc-1" },
+		} as any)
+		expect(res).toEqual({ errorKey })
+	})
+
+	it("mark_packet_sent records a manual send", async () => {
+		vi.mocked(sendPacket).mockResolvedValue({ ok: true, outcome: "MANUAL" })
+		const res = await action({
+			request: post(intent("mark_packet_sent")),
+			params: { id: "doc-1" },
+		} as any).catch((r) => r)
+		expect(sendPacket).toHaveBeenCalledWith({
+			docId: "doc-1",
+			actor: SUPERVISOR,
+			mode: "manual",
+		})
+		expect(res.status).toBe(302)
+	})
+
+	it("mark_packet_sent surfaces sendPacket's errorKey", async () => {
+		vi.mocked(sendPacket).mockResolvedValue({
+			ok: false,
+			errorKey: "packet.errors.locked",
+		})
+		const res = await action({
+			request: post(intent("mark_packet_sent")),
+			params: { id: "doc-1" },
+		} as any)
+		expect(res).toEqual({ errorKey: "packet.errors.locked" })
+	})
+
+	it("an out-of-scope supervisor never reaches sendPacket", async () => {
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
-			...approvedDoc,
-			jafInvoiceGeneratedAt: new Date(),
+			...doc,
+			supervisorId: "other-sup",
+			brigade: { area: "SUR" },
 		} as any)
 		await expect(
 			action({
-				request: post(intent("generate_jaf_invoice")),
+				request: post(intent("send_packet")),
 				params: { id: "doc-1" },
 			} as any),
 		).rejects.toMatchObject({ status: 302 })
-		expect(generateJafInvoicePdf).not.toHaveBeenCalled()
-		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+		expect(sendPacket).not.toHaveBeenCalled()
 	})
 
-	it("refuses when there are no installed service lines", async () => {
-		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
-			...approvedDoc,
-			installedServiceLines: [],
-		} as any)
-		const res = await action({
-			request: post(intent("generate_jaf_invoice")),
-			params: { id: "doc-1" },
-		} as any)
-		expect(res).toEqual({
-			errorKey: "docs_review.errors.installed_lines_required",
-		})
-		expect(db.jafInvoice.update).not.toHaveBeenCalled()
-	})
-
-	it("refuses regeneration after the aviso matched", async () => {
-		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
-			...approvedDoc,
-			jafInvoiceGeneratedAt: new Date(),
-			avisoMatchedAt: new Date(),
-		} as any)
+	it("the legacy generate_jaf_invoice intent is gone: redirected, nothing written or sent", async () => {
 		const res = await action({
 			request: post(intent("generate_jaf_invoice")),
 			params: { id: "doc-1" },
 		} as any).catch((r) => r)
 		expect(res.status).toBe(302)
+		expect(res.headers.get("Location")).toBe("/docs/doc-1")
+		expect(sendPacket).not.toHaveBeenCalled()
+		expect(saveBuffer).not.toHaveBeenCalled()
 		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+		expect(db.auditTrail.create).not.toHaveBeenCalled()
 	})
 })
 
-describe("review: save_aviso", () => {
-	const invoiced = {
+describe("review: save_aviso (supervisor: the Aviso PDF is the only source)", () => {
+	// The real Claro print: Aviso # 10354739, services 34012039 × 1 and
+	// 34012040 × 1. Prices are not on the PDF: codes on the JAF invoice keep the
+	// invoice-time price, anything else uses the catalog price.
+	const FIXTURE =
+		"docs/JAF_Package/04 Sample Documents by Entity (Templates)/Finance Journey Example (single Aviso)/1.  AVISO 739.pdf"
+	const AVISO_CATALOG = [
+		{ id: "a1", claroCode: "34012039", unitPrice: "25.5000" },
+		{ id: "a2", claroCode: "34012040", unitPrice: "30.0000" },
+	]
+	const line = (id: "a1" | "a2", qty: number) => ({
+		serviceCodeId: id,
+		claroCode: id === "a1" ? "34012039" : "34012040",
+		accountCode: "610",
+		name: id,
+		unit: "EA",
+		qty,
+		// Invoice-time price 30 for both (a1's catalog price has since moved).
+		unitPrice: 30,
+		lineAmount: qty * 30,
+	})
+	const invoicedWith = (lines: ReturnType<typeof line>[]) => ({
 		...approvedDoc,
 		jafInvoiceGeneratedAt: new Date(),
-		jafInvoiceLines: [
-			{
-				serviceCodeId: "c1",
-				claroCode: "34006301",
-				accountCode: "610",
-				name: "T",
-				unit: "EA",
-				qty: 5,
-				unitPrice: 42.343,
-				lineAmount: 211.72,
-			},
-			{
-				serviceCodeId: "c2",
-				claroCode: "34007030",
-				accountCode: "6102",
-				name: "R",
-				unit: "EA",
-				qty: 2,
-				unitPrice: 13.8115,
-				lineAmount: 27.62,
-			},
-		],
-		jafInvoiceLineTotal: 239.34,
-	}
-	const pdf = new File([Buffer.from("%PDF-1.4")], "aviso.pdf", {
-		type: "application/pdf",
+		jafInvoiceLines: lines,
+		jafInvoiceLineTotal: lines.reduce((s, l) => s + l.lineAmount, 0),
 	})
-	const matching = JSON.stringify([
-		{ serviceCodeId: "c1", claroCode: "34006301", qty: 5, unitPrice: 42.343 },
-		{ serviceCodeId: "c2", claroCode: "34007030", qty: 2, unitPrice: 13.8115 },
-	])
+	let pdfBytes: Buffer
 
-	beforeEach(() => {
+	async function saveAviso(
+		docLines: ReturnType<typeof line>[],
+		extra: Record<string, string> = {},
+	) {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			invoicedWith(docLines) as any,
+		)
+		const form = intent("save_aviso", { avisoNumber: "10354739", ...extra })
+		form.set(
+			"avisoPdf",
+			new File([new Uint8Array(pdfBytes)], "1.  AVISO 739.pdf", {
+				type: "application/pdf",
+			}),
+		)
+		return action({ request: post(form), params: { id: "doc-1" } } as any)
+	}
+
+	beforeEach(async () => {
 		vi.clearAllMocks()
+		pdfBytes ??= await readFile(FIXTURE)
 		vi.mocked(requireRole).mockResolvedValue({
 			user: { id: "sup-1", role: "SUPERVISOR", name: "E" },
 			session: {},
 		} as any)
+		vi.mocked(getActiveServiceCodes).mockResolvedValue(AVISO_CATALOG as any)
 		vi.mocked(getAvisoAmountTolerance).mockResolvedValue(0.01)
 		vi.mocked(saveUpload).mockResolvedValue(
 			"/uploads/aviso-docs/doc-1-aviso.pdf",
@@ -355,91 +362,68 @@ describe("review: save_aviso", () => {
 		vi.mocked(db.user.findMany).mockResolvedValue([])
 	})
 
-	it("stores lines and stamps avisoMatchedAt + CLARO_UPLOADED when totals agree", async () => {
-		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
-			invoiced as any,
-		)
-		const form = intent("save_aviso", {
-			avisoNumber: "10353961",
-			avisoLines: matching,
-		})
-		form.set("avisoPdf", pdf)
-		await action({
-			request: post(form),
-			params: { id: "doc-1" },
-		} as any).catch(() => {})
+	it("stores the PDF's lines and stamps avisoMatchedAt + CLARO_UPLOADED when totals agree", async () => {
+		await saveAviso([line("a1", 1), line("a2", 1)]).catch(() => {})
+		expect(readAvisoPdf).toHaveBeenCalledTimes(1)
 		expect(db.jafInvoice.update).toHaveBeenCalledWith(
 			expect.objectContaining({
 				data: expect.objectContaining({
-					avisoNumber: "10353961",
+					avisoNumber: "10354739",
 					avisoDocPath: "/uploads/aviso-docs/doc-1-aviso.pdf",
-					avisoLineTotal: 239.34,
+					avisoLineTotal: 60,
 					avisoMatchedAt: expect.any(Date),
 					status: "CLARO_UPLOADED",
 					claroUploadedAt: expect.any(Date),
+					// Quantities from the PDF, invoice-time price (not catalog 25.50).
+					avisoLines: [
+						{
+							serviceCodeId: "a1",
+							claroCode: "34012039",
+							qty: 1,
+							unitPrice: 30,
+							lineAmount: 30,
+						},
+						{
+							serviceCodeId: "a2",
+							claroCode: "34012040",
+							qty: 1,
+							unitPrice: 30,
+							lineAmount: 30,
+						},
+					],
 				}),
 			}),
 		)
 	})
 
-	it("stores lines but does not stamp avisoMatchedAt on an amount mismatch", async () => {
-		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
-			invoiced as any,
-		)
-		const form = intent("save_aviso", {
-			avisoNumber: "10353961",
+	it("ignores typed quantities and prices: the supervisor's avisoLines field is not read", async () => {
+		await saveAviso([line("a1", 1), line("a2", 1)], {
 			avisoLines: JSON.stringify([
-				{
-					serviceCodeId: "c1",
-					claroCode: "34006301",
-					qty: 5,
-					unitPrice: 2324.656,
-				},
+				{ serviceCodeId: "a1", claroCode: "34012039", qty: 9, unitPrice: 999 },
 			]),
-		})
-		form.set("avisoPdf", pdf)
-		const res = await action({
-			request: post(form),
-			params: { id: "doc-1" },
-		} as any)
+		}).catch(() => {})
+		const data = vi.mocked(db.jafInvoice.update).mock.calls[0][0].data
+		expect(data.avisoLineTotal).toBe(60)
+		expect(data.avisoLines).toHaveLength(2)
+	})
+
+	it("stores the lines but does not stamp avisoMatchedAt on an amount mismatch", async () => {
+		// Invoiced 3 × a1 + 1 × a2 = 120; the Aviso charges 1 + 1 = 60.
+		const res = await saveAviso([line("a1", 3), line("a2", 1)])
 		expect(res).toMatchObject({
 			errorKey: "docs_review.errors.aviso_amount_mismatch",
-			invoiceTotal: 239.34,
-			avisoTotal: 11623.28,
+			invoiceTotal: 120,
+			avisoTotal: 60,
 		})
 		const data = vi.mocked(db.jafInvoice.update).mock.calls[0][0].data
-		expect(data.avisoLineTotal).toBe(11623.28)
+		expect(data.avisoLineTotal).toBe(60)
 		expect(data.avisoMatchedAt).toBeUndefined()
 		expect(data.status).toBeUndefined()
 	})
 
 	it("requires a note when a line quantity differs but the total matches", async () => {
-		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
-			invoiced as any,
-		)
-		const form = intent("save_aviso", {
-			avisoNumber: "10353961",
-			// same total (239.34) but c2 charged as 3 × 9.2077 instead of 2 × 13.8115
-			avisoLines: JSON.stringify([
-				{
-					serviceCodeId: "c1",
-					claroCode: "34006301",
-					qty: 5,
-					unitPrice: 42.343,
-				},
-				{
-					serviceCodeId: "c2",
-					claroCode: "34007030",
-					qty: 3,
-					unitPrice: 9.2077,
-				},
-			]),
-		})
-		form.set("avisoPdf", pdf)
-		const res = await action({
-			request: post(form),
-			params: { id: "doc-1" },
-		} as any)
+		// Invoiced 2 × a1 = 60; the Aviso charges 1 × a1 + 1 × a2 (catalog 30) = 60.
+		const res = await saveAviso([line("a1", 2)])
 		expect(res).toMatchObject({
 			errorKey: "docs_review.errors.aviso_line_note_required",
 		})
@@ -447,87 +431,68 @@ describe("review: save_aviso", () => {
 	})
 
 	it("logs a QUANTITY_DISCREPANCY audit that does not block when a note is given", async () => {
-		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
-			invoiced as any,
-		)
-		const form = intent("save_aviso", {
-			avisoNumber: "10353961",
-			lineNote: "Claro merged two lines",
-			// same total (239.34) but c2 charged as 3 × 9.2077 instead of 2 × 13.8115
-			avisoLines: JSON.stringify([
-				{
-					serviceCodeId: "c1",
-					claroCode: "34006301",
-					qty: 5,
-					unitPrice: 42.343,
-				},
-				{
-					serviceCodeId: "c2",
-					claroCode: "34007030",
-					qty: 3,
-					unitPrice: 9.2077,
-				},
-			]),
-		})
-		form.set("avisoPdf", pdf)
-		await action({
-			request: post(form),
-			params: { id: "doc-1" },
-		} as any).catch(() => {})
+		await saveAviso([line("a1", 2)], {
+			lineNote: "Claro charged one as a2",
+		}).catch(() => {})
 		expect(db.auditTrail.create).toHaveBeenCalledWith(
 			expect.objectContaining({
 				data: expect.objectContaining({
 					action: "QUANTITY_DISCREPANCY",
 					diffJson: expect.objectContaining({
+						source: "AVISO",
 						blocksFinance: false,
-						note: "Claro merged two lines",
+						note: "Claro charged one as a2",
 					}),
 				}),
 			}),
 		)
+		const data = vi.mocked(db.jafInvoice.update).mock.calls[0][0].data
+		expect(data.avisoMatchedAt).toEqual(expect.any(Date))
 	})
 
-	it("merges duplicate service code rows before matching", async () => {
-		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
-			invoiced as any,
-		)
-		const form = intent("save_aviso", {
-			avisoNumber: "10353961",
-			avisoLines: JSON.stringify([
-				{
-					serviceCodeId: "c1",
-					claroCode: "34006301",
-					qty: 4,
-					unitPrice: 42.343,
-				},
-				{
-					serviceCodeId: "c1",
-					claroCode: "34006301",
-					qty: 1,
-					unitPrice: 42.343,
-				},
-				{
-					serviceCodeId: "c2",
-					claroCode: "34007030",
-					qty: 2,
-					unitPrice: 13.8115,
-				},
-			]),
+	it("merges a service split over two PDF rows before matching", async () => {
+		// The same print with 34012039 listed twice (1 + 1).
+		const actual = (
+			await vi.importActual<typeof import("~/lib/aviso-pdf.server")>(
+				"~/lib/aviso-pdf.server",
+			)
+		).readAvisoPdf
+		vi.mocked(readAvisoPdf).mockImplementationOnce(async (bytes) => {
+			const parsed = await actual(bytes)
+			return {
+				...parsed,
+				rows: [
+					...parsed.rows,
+					{ claroCode: "34012039", qtyInitial: 1, qtyUsed: 1 },
+				],
+			}
 		})
-		form.set("avisoPdf", pdf)
-		await action({
-			request: post(form),
-			params: { id: "doc-1" },
-		} as any).catch(() => {})
+		await saveAviso([line("a1", 2), line("a2", 1)]).catch(() => {})
 		const data = vi.mocked(db.jafInvoice.update).mock.calls[0][0].data
-		expect(data.avisoLineTotal).toBe(239.34)
+		expect(data.avisoLineTotal).toBe(90)
 		expect(data.avisoMatchedAt).toBeDefined()
 		expect(data.avisoLines).toHaveLength(2)
+		expect((data.avisoLines as any[])[0]).toMatchObject({
+			serviceCodeId: "a1",
+			qty: 2,
+		})
 		expect(db.auditTrail.create).not.toHaveBeenCalledWith(
 			expect.objectContaining({
 				data: expect.objectContaining({ action: "QUANTITY_DISCREPANCY" }),
 			}),
 		)
+	})
+
+	it("refuses when the typed Aviso # is not the one on the PDF", async () => {
+		const res = await saveAviso([line("a1", 1), line("a2", 1)], {
+			avisoNumber: "10350001",
+		})
+		expect(res).toEqual({
+			errorKey: "docs_review.errors.aviso_number_mismatch",
+			pdfAvisoNumber: "10354739",
+		})
+		expect(saveUpload).not.toHaveBeenCalled()
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
 	})
 
 	it("requires an invoice first", async () => {
@@ -1260,5 +1225,292 @@ describe("review: send_back to crew", () => {
 		).rejects.toMatchObject({ status: 302 })
 		expect(db.jafInvoice.update).not.toHaveBeenCalled()
 		expect(db.notification.create).not.toHaveBeenCalled()
+	})
+})
+
+describe("review loader: Packet → Claro step", () => {
+	const CLARO = {
+		id: "cs-1",
+		name: "Ramón Claro",
+		email: "ramon.now@claro.example",
+		active: true,
+		requiresPrefield: true,
+		requiresBlueprint: true,
+	}
+	const signedOff = {
+		...approvedDoc,
+		brigade: { area: "OESTE" },
+		claroSupervisorId: "cs-1",
+		claroSupervisor: CLARO,
+		ordenNumber: "ORD-1",
+		pedido: null,
+		smr: "SMR-1",
+		titulo: "Poste",
+		blueprintPaths: [],
+		fieldMaterials: [
+			{ serviceCodeId: "m1", used: 3, returned: 1, source: "WAREHOUSE" },
+		],
+		jafInvoicePdfPath: null,
+	}
+	const loadAs = async (role: string, doc: Record<string, unknown>) => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1", role, name: "Edgard Ocasio" },
+			session: {},
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(doc as any)
+		return loader({
+			request: new Request("http://localhost/docs/doc-1/review"),
+			params: { id: "doc-1" },
+		} as any)
+	}
+
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["OESTE"],
+		} as any)
+		vi.mocked(db.photo.findMany).mockResolvedValue([])
+		vi.mocked(db.preCertSheet.findFirst).mockResolvedValue(null)
+		vi.mocked(db.brigade.findUnique).mockResolvedValue(null)
+		vi.mocked(db.user.findMany).mockResolvedValue([])
+		vi.mocked(db.packetSend.findMany).mockResolvedValue([])
+		vi.mocked(db.serviceCode.findMany).mockResolvedValue([
+			{ id: "m1", claroCode: "M-100", name: "Cable drop", unit: "FT" },
+		] as any)
+		vi.mocked(getActiveServiceCodes).mockResolvedValue(CATALOG as any)
+		vi.mocked(getIvuRate).mockResolvedValue(0.115)
+		vi.mocked(getAvisoAmountTolerance).mockResolvedValue(0.01)
+	})
+
+	it("gives the confirm the Claro supervisor's current directory email", async () => {
+		const data = await loadAs("SUPERVISOR", signedOff)
+		expect(data.packet.claroSupervisor).toEqual({
+			name: "Ramón Claro",
+			email: "ramon.now@claro.example",
+			requiresPrefield: true,
+		})
+	})
+
+	it("returns the send history: time, user, recipient, outcome", async () => {
+		const at = new Date("2026-10-18T14:00:00Z")
+		vi.mocked(db.packetSend.findMany).mockResolvedValue([
+			{
+				id: "ps-2",
+				sentAt: at,
+				recipientEmail: "ramon.old@claro.example",
+				outcome: "UNCONFIGURED",
+				error: null,
+				sentBy: { name: "Edgard Ocasio" },
+			},
+		] as any)
+		const data = await loadAs("SUPERVISOR", signedOff)
+		expect(db.packetSend.findMany).toHaveBeenCalledWith(
+			expect.objectContaining({
+				where: { docId: "doc-1" },
+				orderBy: { sentAt: "desc" },
+			}),
+		)
+		expect(data.packet.history).toEqual([
+			{
+				id: "ps-2",
+				sentAt: at,
+				sentBy: "Edgard Ocasio",
+				recipientEmail: "ramon.old@claro.example",
+				outcome: "UNCONFIGURED",
+				error: null,
+			},
+		])
+		expect(data.packet.canMarkManual).toBe(true)
+	})
+
+	it("offers Mark as sent manually only when the last attempt was UNCONFIGURED", async () => {
+		vi.mocked(db.packetSend.findMany).mockResolvedValue([
+			{ id: "b", outcome: "FAILED", sentBy: { name: "E" } },
+			{ id: "a", outcome: "UNCONFIGURED", sentBy: { name: "E" } },
+		] as any)
+		expect((await loadAs("SUPERVISOR", signedOff)).packet.canMarkManual).toBe(
+			false,
+		)
+	})
+
+	it("a stored packet PDF from an UNCONFIGURED attempt is downloadable but not 'sent'", async () => {
+		const data = await loadAs("SUPERVISOR", {
+			...signedOff,
+			jafInvoicePdfPath:
+				"/uploads/packets/doc-1-packet-1700000000000-abcd1234.pdf",
+			jafInvoiceGeneratedAt: null,
+		})
+		expect(data.packet.sent).toBe(false)
+		expect(data.packet.packetHref).toBe(
+			"/files/packets/doc-1-packet-1700000000000-abcd1234.pdf",
+		)
+	})
+
+	it("sent is the first-send timestamp", async () => {
+		const at = new Date("2026-10-18T15:00:00Z")
+		const data = await loadAs("SUPERVISOR", {
+			...signedOff,
+			jafInvoiceGeneratedAt: at,
+		})
+		expect(data.packet.sent).toBe(true)
+		expect(data.packet.sentAt).toEqual(at)
+	})
+
+	it("lists the blockers from the Claro supervisor's rules before the first send", async () => {
+		const data = await loadAs("SUPERVISOR", signedOff)
+		expect(data.packet.blockers).toEqual(["prefield", "blueprint"])
+		expect(data.packet.prefieldMissing).toEqual(["pedido"])
+	})
+
+	it("blocks on a missing Claro supervisor, and the rules stop applying after the first send", async () => {
+		const none = await loadAs("SUPERVISOR", {
+			...signedOff,
+			claroSupervisorId: null,
+			claroSupervisor: null,
+		})
+		expect(none.packet.blockers).toEqual(["claro_supervisor"])
+		const sent = await loadAs("SUPERVISOR", {
+			...signedOff,
+			jafInvoiceGeneratedAt: new Date(),
+		})
+		expect(sent.packet.blockers).toEqual([])
+	})
+
+	it("carries blueprint download links and the materials table, by code", async () => {
+		const data = await loadAs("SUPERVISOR", {
+			...signedOff,
+			blueprintPaths: ["/uploads/blueprints/doc-1/plano 1.pdf"],
+		})
+		expect(data.packet.blueprints).toEqual([
+			{
+				name: "plano 1.pdf",
+				href: "/files/blueprints/doc-1/plano%201.pdf",
+			},
+		])
+		expect(data.packet.materials).toEqual([
+			{
+				claroCode: "M-100",
+				name: "Cable drop",
+				unit: "FT",
+				used: 3,
+				returned: 1,
+				source: "WAREHOUSE",
+			},
+		])
+	})
+
+	describe("no prices reach a SUPERVISOR", () => {
+		const PRICE_KEYS = new Set([
+			"unitPrice",
+			"lineAmount",
+			"jafInvoiceLineTotal",
+			"avisoLineTotal",
+			"total",
+			"claroBasePrice",
+			"upliftFactor",
+			"contractorPrice",
+			"contractorFactor",
+			"advanceAmount",
+			"finalPaymentAmount",
+			"contractorShareLines",
+			"grossPayable",
+			"retentionAmount",
+			"netPayable",
+		])
+		const priced = {
+			...signedOff,
+			status: "CLARO_UPLOADED",
+			jafInvoiceGeneratedAt: new Date(),
+			jafInvoiceLines: [
+				{
+					serviceCodeId: "c1",
+					claroCode: "34006301",
+					name: "TRANSFER",
+					unit: "EA",
+					qty: 5,
+					unitPrice: 42.343,
+					lineAmount: 211.72,
+				},
+			],
+			jafInvoiceLineTotal: 211.72,
+			avisoLines: [
+				{
+					serviceCodeId: "c1",
+					claroCode: "34006301",
+					qty: 5,
+					unitPrice: 42.343,
+					lineAmount: 211.72,
+				},
+			],
+			avisoLineTotal: 211.72,
+			avisoMatchedAt: new Date(),
+			grossPayable: 137.62,
+			retentionAmount: 13.76,
+			netPayable: 123.86,
+			advanceAmount: 100,
+			finalPaymentAmount: 23.86,
+			contractorShareLines: [{ lineAmount: 137.62 }],
+		}
+		const sheet = {
+			id: "s1",
+			version: 1,
+			total: 211.72,
+			lines: [
+				{
+					serviceCodeId: "c1",
+					claroCode: "34006301",
+					description: "TRANSFER",
+					installedQty: 5,
+					certifiedQty: 5,
+					unitPrice: 42.343,
+					lineAmount: 211.72,
+				},
+			],
+			sigSupervisorAt: null,
+			sigSubcontractorAt: null,
+		}
+		const priceKeysIn = (v: unknown, at = "$"): string[] => {
+			if (Array.isArray(v))
+				return v.flatMap((x, i) => priceKeysIn(x, `${at}[${i}]`))
+			if (v && typeof v === "object" && !(v instanceof Date))
+				return Object.entries(v).flatMap(([k, x]) => [
+					...(PRICE_KEYS.has(k) && x != null ? [`${at}.${k}`] : []),
+					...priceKeysIn(x, `${at}.${k}`),
+				])
+			return []
+		}
+
+		it.each(["INVOICE", "AVISO", "PRECERT"])(
+			"on the %s view the payload has no price field or amount",
+			async (step) => {
+				vi.mocked(db.preCertSheet.findFirst).mockResolvedValue(sheet as any)
+				vi.mocked(requireRole).mockResolvedValue({
+					user: { id: "sup-1", role: "SUPERVISOR", name: "E" },
+					session: {},
+				} as any)
+				vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+					priced as any,
+				)
+				const data = await loader({
+					request: new Request(
+						`http://localhost/docs/doc-1/review?step=${step}`,
+					),
+					params: { id: "doc-1" },
+				} as any)
+				expect(priceKeysIn(data)).toEqual([])
+				const json = JSON.stringify(data)
+				for (const amount of ["42.343", "211.72", "137.62", "123.86"])
+					expect(json).not.toContain(amount)
+				// The Aviso card still gets the server's verdict on the amount.
+				expect(data.avisoAmountOk).toBe(true)
+			},
+		)
+
+		it("Admin keeps the prices", async () => {
+			vi.mocked(db.preCertSheet.findFirst).mockResolvedValue(sheet as any)
+			const data = await loadAs("ADMIN", priced)
+			expect(priceKeysIn(data).length).toBeGreaterThan(0)
+			expect(data.serviceCodes[0].unitPrice).toBe(42.343)
+		})
 	})
 })

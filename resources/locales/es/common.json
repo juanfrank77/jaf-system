@@ -762,7 +762,6 @@
 		"upload_pdf_hint": "Después de crear la orden de trabajo en el portal de Claro, descarga el PDF y súbelo aquí.",
 		"upload_pdf_submit": "Cargar PDF de Claro",
 		"aviso_docs_heading": "Documentos para el aviso de Claro",
-		"download": "Descargar",
 		"not_generated": "No generado",
 		"not_uploaded": "No cargado",
 		"generate_jaf_invoice": "Generar factura JAF (PDF)",
@@ -775,7 +774,7 @@
 			"pdf_required": "Por favor selecciona el PDF de Claro para cargar",
 			"send_back_note_required": "Se requiere una nota explicando la devolución.",
 			"back_note_required": "Escriba una nota con lo que está mal.",
-			"installed_lines_required": "La brigada no registró cantidades instaladas por código de servicio.",
+			"installed_lines_required": "No se registraron cantidades instaladas por código de servicio en el paso Campo.",
 			"invoice_required": "Genere primero la factura JAF.",
 			"aviso_number_required": "El número de Aviso es obligatorio.",
 			"aviso_pdf_required": "Suba el documento del Aviso.",
@@ -810,7 +809,7 @@
 		"callout_approve_title": "Paso {{n}} de {{total}} · Usted",
 		"callout_approve_body": "Revise la dirección, las fotos y las cantidades, y firme para cerrar el paso de Campo.",
 		"callout_invoice_title": "Paso {{n}} de {{total}} · Usted",
-		"callout_invoice_body": "La factura se arma con lo instalado. Revise las líneas y los datos del trabajo, márquela como revisada y llévela al supervisor de Claro para obtener el Aviso.",
+		"callout_invoice_body": "Revise el paquete: Prefield, trabajo realizado, materiales, plano y fotos. Luego envíelo al supervisor de Claro, quien crea el Aviso.",
 		"callout_aviso_title": "Paso {{n}} de {{total}} · Usted",
 		"callout_aviso_body": "Ingrese el número del Aviso y suba el documento. El sistema lo compara línea por línea con la factura.",
 		"callout_precert_title": "Paso {{n}} de {{total}} · Usted + el contratista",
@@ -848,20 +847,16 @@
 		"released": "En Finanzas"
 	},
 	"docs_review_steps": {
-		"invoice_reviewed": "Revisada, lista para Claro",
 		"invoice_back": "Volver a Firma",
 		"invoice_back_note_label": "¿Qué está mal? (obligatorio) — el trabajo vuelve a Firma",
 		"invoice_back_confirm": "Devolver a Firma",
 		"invoice_back_cancel": "Cancelar",
-		"invoice_reviewed_hint": "Al marcarla revisada se crea la factura que verá el supervisor de Claro y se bloquean su número y montos; su nombre y la hora quedan en el historial.",
-		"invoice_preview": "Esto es una vista previa con lo que instaló la brigada. Todavía no se ha emitido nada.",
 		"invoice_header": {
 			"work_order": "Orden de trabajo",
 			"job_type": "Tipo de trabajo",
 			"address": "Dirección",
 			"brigade": "Brigada",
-			"work_date": "Fecha del trabajo",
-			"invoice_number": "Factura #"
+			"work_date": "Fecha del trabajo"
 		},
 		"aviso_heading": "Aviso y cotejo",
 		"aviso_hint": "Ingrese el número del Aviso y suba el documento. El sistema lo compara línea por línea con la factura JAF.",
@@ -906,8 +901,6 @@
 		"footnote_amt": "Bloqueo estricto: una diferencia de monto no se puede dispensar con una nota.",
 		"download_pdf": "Descargar PDF",
 		"continue_to_aviso": "Continuar al Aviso →",
-		"invoice_title": "Factura JAF",
-		"invoice_subtitle": "JAF Communications Inc. · {{number}} · {{date}}",
 		"ivu_row": "+ IVU {{rate}}%",
 		"invoice_total": "Total de la factura",
 		"contractor_share": "Participación del contratista {{percent}}% → {{name}}",
@@ -2279,6 +2272,68 @@
 		"open_list": "Abrir lista"
 	},
 	"packet": {
+		"title": "Paquete → Claro",
+		"status_sent": "Enviado a Claro el {{date}}",
+		"status_not_sent": "Aún no enviado",
+		"recipient": "Enviar a",
+		"no_recipient": "No hay supervisor de Claro elegido para este trabajo.",
+		"blockers_title": "Antes de poder enviar el paquete:",
+		"prefield_title": "Prefield",
+		"missing": "Falta",
+		"work_summary": "Resumen del trabajo",
+		"materials": "Materiales",
+		"no_materials": "No hay materiales registrados.",
+		"col_used": "Usado",
+		"col_returned": "Devuelto",
+		"col_source": "Origen",
+		"blueprints": "Plano",
+		"no_blueprint": "No hay plano adjunto.",
+		"send": "Enviar al supervisor de Claro",
+		"resend": "Reenviar",
+		"sending": "Enviando…",
+		"confirm_send": "¿Enviar el paquete por correo a {{email}}?",
+		"confirm_resend": "¿Enviar el paquete otra vez a {{email}}? Es la dirección actual del supervisor de Claro en el directorio.",
+		"download": "Descargar paquete",
+		"mark_manual": "Marcar como enviado a mano",
+		"confirm_manual": "¿Marcar el paquete como enviado? Hágalo solo después de haber enviado usted mismo el paquete descargado a {{email}}.",
+		"manual_hint": "¿Lo envía usted? Adjunte el PDF del paquete y cada archivo de plano: la descarga es solo el paquete.",
+		"unconfigured": "El correo no está configurado en este servidor, así que no se envió nada. Descargue el paquete, envíelo usted al supervisor de Claro y luego pulse Marcar como enviado a mano.",
+		"failed": "El último intento falló: el correo no salió. Vuelva a intentarlo y avise a un administrador si sigue fallando.",
+		"history_title": "Historial de envíos",
+		"history_empty": "Aún no hay intentos.",
+		"blocker": {
+			"prefield": "Prefield: complete {{fields}} (este supervisor de Claro lo requiere).",
+			"blueprint": "Añada un plano (este supervisor de Claro lo requiere).",
+			"claro_supervisor": "Elija el supervisor de Claro de este trabajo en la orden de trabajo."
+		},
+		"prefield": {
+			"avisoNumber": "Aviso #",
+			"ordenNumber": "# Orden",
+			"pedido": "Pedido",
+			"smr": "SMR",
+			"titulo": "Título",
+			"description": "Descripción"
+		},
+		"source": {
+			"WAREHOUSE": "Almacén",
+			"BRIGADE_STOCK": "Inventario de brigada"
+		},
+		"history": {
+			"time": "Hora",
+			"user": "Por",
+			"recipient": "Destinatario",
+			"outcome": "Resultado"
+		},
+		"outcome": {
+			"SENT": "Enviado",
+			"FAILED": "Falló",
+			"UNCONFIGURED": "Correo no configurado",
+			"MANUAL": "Marcado como enviado a mano"
+		},
+		"queue": {
+			"sent": "Enviado {{date}}",
+			"not_sent": "No enviado"
+		},
 		"errors": {
 			"prefield_missing": "Este supervisor de Claro requiere el formulario Prefield: complete # Orden, Pedido, SMR y Título antes de enviar.",
 			"blueprint_missing": "Este supervisor de Claro requiere un plano: añada uno antes de enviar.",

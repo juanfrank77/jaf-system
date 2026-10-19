@@ -340,7 +340,8 @@
 			"missing_fields": "Job type and at least one brigade are required.",
 			"brigade_invalid": "That brigade is not available.",
 			"claro_supervisor_required": "Select an active Claro supervisor.",
-			"address_required": "Dirección 1, Tipo, Tipo Planta and Grupo Plan are required."
+			"address_required": "Dirección 1, Tipo, Tipo Planta and Grupo Plan are required.",
+			"blueprint_invalid": "The blueprint must be a PDF (up to 30 MB) or a photo (JPEG, PNG, WebP or HEIC, up to 10 MB)."
 		},
 		"claro_supervisor_label": "Claro Supervisor",
 		"claro_supervisor_placeholder": "Select a Claro supervisor",
@@ -666,7 +667,10 @@
 			"used_exceeds_took": "You can't use more than you took. Lower the quantity to what was signed out at pickup.",
 			"discrepancy_note_required": "A discrepancy note is required when installed quantities differ from signed-out quantities.",
 			"completion_signature_required": "Completion signature is required.",
-			"invalid_service_lines": "Installed service quantities could not be read."
+			"invalid_service_lines": "Installed service quantities could not be read.",
+			"photo_invalid": "Photos must be JPEG, PNG, WebP or HEIC, up to 10 MB.",
+			"blueprint_invalid": "The blueprint must be a PDF (up to 30 MB) or a photo (JPEG, PNG, WebP or HEIC, up to 10 MB).",
+			"address_required": "Dirección 1 is required."
 		},
 		"address_diff_hint": "This change is logged with your name and the time when you submit.",
 		"address_edited_by_you": "Edited by you · {{when}}",
@@ -681,7 +685,22 @@
 		"error_title": "Can't submit yet",
 		"submitting": "Sending…",
 		"offline_footnote": "No signal? It saves on the phone and sends itself when you're back online.",
-		"status_pill": "On site"
+		"status_pill": "On site",
+		"photos_during_label": "During Photos",
+		"blueprint_label": "Blueprint",
+		"blueprint_required_hint": "Required by this Claro supervisor before the packet is sent.",
+		"saved": "Saved",
+		"save_progress": "Save progress",
+		"continue_to_signoff": "Continue to Sign off",
+		"materials": {
+			"material": "Material",
+			"signed": "Issued (signed)",
+			"used": "Used",
+			"returned": "Returned",
+			"source": "Source",
+			"source_warehouse": "Warehouse",
+			"source_brigade_stock": "Brigade's stock"
+		}
 	},
 	"docs_review": {
 		"readonly_title": "Completed step.",

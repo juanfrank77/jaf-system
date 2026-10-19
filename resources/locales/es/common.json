@@ -340,7 +340,8 @@
 			"missing_fields": "Se requieren el tipo de trabajo y al menos una brigada.",
 			"brigade_invalid": "Esa brigada no está disponible.",
 			"claro_supervisor_required": "Seleccione un supervisor de Claro activo.",
-			"address_required": "Dirección 1, Tipo, Tipo Planta y Grupo Plan son obligatorios."
+			"address_required": "Dirección 1, Tipo, Tipo Planta y Grupo Plan son obligatorios.",
+			"blueprint_invalid": "El plano debe ser un PDF (hasta 30 MB) o una foto (JPEG, PNG, WebP o HEIC, hasta 10 MB)."
 		},
 		"claro_supervisor_label": "Supervisor de Claro",
 		"claro_supervisor_placeholder": "Seleccione un supervisor de Claro",
@@ -666,7 +667,10 @@
 			"used_exceeds_took": "No puedes usar más de lo que te llevaste. Baja la cantidad a lo que se firmó en la recogida.",
 			"discrepancy_note_required": "Se requiere una nota de discrepancia cuando las cantidades instaladas difieren de lo firmado en salida.",
 			"completion_signature_required": "Se requiere la firma de completado.",
-			"invalid_service_lines": "No se pudieron leer las cantidades de servicio instaladas."
+			"invalid_service_lines": "No se pudieron leer las cantidades de servicio instaladas.",
+			"photo_invalid": "Las fotos deben ser JPEG, PNG, WebP o HEIC, de hasta 10 MB.",
+			"blueprint_invalid": "El plano debe ser un PDF (hasta 30 MB) o una foto (JPEG, PNG, WebP o HEIC, hasta 10 MB).",
+			"address_required": "La Dirección 1 es obligatoria."
 		},
 		"address_diff_hint": "Este cambio se registra con tu nombre y la hora al enviar.",
 		"address_edited_by_you": "Editado por ti · {{when}}",
@@ -681,7 +685,22 @@
 		"error_title": "Aún no se puede enviar",
 		"submitting": "Enviando…",
 		"offline_footnote": "¿Sin señal? Se guarda en el teléfono y se envía solo cuando vuelvas a tener conexión.",
-		"status_pill": "En sitio"
+		"status_pill": "En sitio",
+		"photos_during_label": "Fotos durante",
+		"blueprint_label": "Plano",
+		"blueprint_required_hint": "Este supervisor de Claro lo requiere antes de enviar el paquete.",
+		"saved": "Guardado",
+		"save_progress": "Guardar progreso",
+		"continue_to_signoff": "Continuar a Firma",
+		"materials": {
+			"material": "Material",
+			"signed": "Entregado (firmado)",
+			"used": "Usado",
+			"returned": "Devuelto",
+			"source": "Origen",
+			"source_warehouse": "Almacén",
+			"source_brigade_stock": "Inventario de la brigada"
+		}
 	},
 	"docs_review": {
 		"readonly_title": "Paso completado.",

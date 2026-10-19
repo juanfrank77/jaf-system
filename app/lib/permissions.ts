@@ -55,7 +55,7 @@ const TRANSITIONS: Record<string, { from: string | string[]; roles: Role[] }> =
 	{
 		PREPPED: { from: ["CREATED", "PREPPED"], roles: ["WAREHOUSE", "ADMIN"] },
 		SIGNED: { from: "PREPPED", roles: ["CREW", "WAREHOUSE", "ADMIN"] },
-		FIELD_UPDATED: { from: "SIGNED", roles: ["CREW", "ADMIN"] },
+		FIELD_UPDATED: { from: "SIGNED", roles: ["SUPERVISOR", "ADMIN"] },
 		SUPERVISOR_APPROVED: {
 			from: "FIELD_UPDATED",
 			roles: ["SUPERVISOR", "ADMIN"],

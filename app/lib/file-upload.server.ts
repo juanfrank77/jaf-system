@@ -63,3 +63,10 @@ export function validateFile(
 
 	return { valid: true }
 }
+
+/** A blueprint is a PDF or a photo (intake and the Field step accept both). */
+export function validateBlueprintFile(
+	file: File,
+): { valid: true } | { valid: false; error: string } {
+	return validateFile(file, file.type === "application/pdf" ? "pdf" : "photo")
+}

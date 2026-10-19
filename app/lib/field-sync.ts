@@ -1,9 +1,4 @@
-import {
-	type CachedJob,
-	type QueuedAction,
-	queueAction,
-	type SyncConflict,
-} from "./offline-store"
+import type { CachedJob, QueuedAction, SyncConflict } from "./offline-store"
 
 export type FieldUpdatePayload = {
 	jobAddressActual: string
@@ -17,17 +12,6 @@ export type FieldUpdatePayload = {
 	gpsCoordinates?: string | null
 	photosBefore?: { name: string; base64: string; type: string }[]
 	photosAfter?: { name: string; base64: string; type: string }[]
-}
-
-export async function queueFieldUpdate(
-	docId: string,
-	payload: FieldUpdatePayload,
-): Promise<QueuedAction> {
-	return queueAction({
-		docId,
-		action: "FIELD_UPDATE",
-		payload: payload as unknown as Record<string, unknown>,
-	})
 }
 
 export async function syncFieldUpdate(

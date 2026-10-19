@@ -258,6 +258,42 @@ describe("POST /docs/new", () => {
 		})
 	})
 
+	it("refuses a blueprint that is neither a PDF nor a photo, before creating anything", async () => {
+		const form = addr(validForm())
+		form.append("blueprint", new File(["x"], "plan.exe", { type: "" }))
+		const res = await action({ request: post(form), params: {} } as any).catch(
+			(r) => r,
+		)
+		expect(res).toEqual({ errorKey: "docs_new.errors.blueprint_invalid" })
+		expect(tx.jafInvoice.create).not.toHaveBeenCalled()
+		expect(saveUpload).not.toHaveBeenCalled()
+	})
+
+	it("refuses a PDF blueprint over the size limit", async () => {
+		const form = addr(validForm())
+		form.append(
+			"blueprint",
+			new File([new Uint8Array(31 * 1024 * 1024)], "plan.pdf", {
+				type: "application/pdf",
+			}),
+		)
+		const res = await action({ request: post(form), params: {} } as any).catch(
+			(r) => r,
+		)
+		expect(res).toEqual({ errorKey: "docs_new.errors.blueprint_invalid" })
+		expect(tx.jafInvoice.create).not.toHaveBeenCalled()
+	})
+
+	it("accepts a photo blueprint", async () => {
+		const form = addr(validForm())
+		form.append(
+			"blueprint",
+			new File(["x"], "plan.jpg", { type: "image/jpeg" }),
+		)
+		await action({ request: post(form), params: {} } as any).catch((r) => r)
+		expect(saveUpload).toHaveBeenCalledTimes(1)
+	})
+
 	it("creates fine with no blueprint and no Prefield", async () => {
 		await action({ request: post(addr(validForm())), params: {} } as any).catch(
 			(r) => r,

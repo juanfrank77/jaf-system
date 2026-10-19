@@ -185,15 +185,13 @@ export async function action({ request, params }: Route.ActionArgs) {
 				diffJson: { status: { before: "CREATED", after: "PREPPED" } },
 			},
 		}),
-		...doc.assignedCrewIds.map((crewId) =>
-			db.notification.create({
-				data: {
-					userId: crewId,
-					docId: params.id,
-					message: `Job ${doc.controlNumber} is prepped and ready for pickup. Please sign at warehouse.`,
-				},
-			}),
-		),
+		db.notification.create({
+			data: {
+				userId: doc.supervisorId,
+				docId: params.id,
+				message: `Job ${doc.controlNumber} is ready for pickup.`,
+			},
+		}),
 	])
 
 	throw redirect(`/docs/${params.id}`)

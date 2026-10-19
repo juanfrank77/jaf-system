@@ -393,7 +393,8 @@
 		"back_to_work_order": "Volver a la orden de trabajo",
 		"packet_first_send": "primer envío",
 		"jaf_invoice_priced": "Factura JAF (con precios)",
-		"claro_packet": "Paquete Claro (sin precios)"
+		"claro_packet": "Paquete Claro (sin precios)",
+		"jaf_invoice_priced_legacy": "Factura JAF (con precios, anterior)"
 	},
 	"docs_view": {
 		"aviso_pending": "Aún no — se ingresa en el paso del Aviso",
@@ -1311,7 +1312,8 @@
 			"terminal_status": "Este trabajo ya no es editable."
 		},
 		"priced_invoice": "Factura JAF (con precios)",
-		"claro_packet": "Paquete Claro (sin precios)"
+		"claro_packet": "Paquete Claro (sin precios)",
+		"priced_invoice_legacy": "Factura JAF (con precios, anterior)"
 	},
 	"finance_pbcc": {
 		"title": "Solicitud de pago PBCC",

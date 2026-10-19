@@ -98,6 +98,7 @@ function storedRows(fieldMaterials: unknown): FieldMaterialRow[] {
 
 /** One line of the read-only "Brigade's stock (tracked, not billed)" list. */
 export type BrigadeStockLine = {
+	serviceCodeId: string
 	claroCode: string
 	name: string
 	qty: number
@@ -118,6 +119,7 @@ export function brigadeStockTracked(
 	return brigadeStockLines(fieldMaterials).map(({ serviceCodeId, qty }) => {
 		const code = byId.get(serviceCodeId)
 		return {
+			serviceCodeId,
 			claroCode: code?.claroCode ?? "",
 			name: code?.name ?? serviceCodeId,
 			qty,

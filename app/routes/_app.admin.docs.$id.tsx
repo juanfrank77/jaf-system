@@ -6,13 +6,13 @@ import { DocStageBadge } from "~/components/doc-stage-badge"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { buttonVariants } from "~/components/ui/button"
+import { brigadeStockFor } from "~/lib/brigade-stock.server"
 import { db } from "~/lib/db.server"
-import { brigadeStockLines, brigadeStockTracked } from "~/lib/field-materials"
 import { openJobLabel } from "~/lib/open-job-label"
 import { packetSentSummary } from "~/lib/packet-audit"
 import { requireRole } from "~/lib/permissions.server"
 import { deriveSupervisorStage } from "~/lib/supervisor-stage"
-import { uploadHref } from "~/lib/upload-href"
+import { storedPdfLinks } from "~/lib/upload-href"
 import { formatMoney, toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.admin.docs.$id"
 
@@ -84,15 +84,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		where: { active: true },
 	})
 
-	// Brigade's stock may use a code no longer active: look those up by id.
-	const brigadeIds = brigadeStockLines(doc.fieldMaterials).map(
-		(l) => l.serviceCodeId,
-	)
-	const brigadeCodes =
-		brigadeIds.length > 0
-			? await db.serviceCode.findMany({ where: { id: { in: brigadeIds } } })
-			: []
-
 	const sheet = await db.preCertSheet.findFirst({
 		where: { docId: params.id, supersededAt: null },
 		select: { sigSupervisorAt: true, sigSubcontractorAt: true },
@@ -110,14 +101,12 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		})),
 		// The stored file is the price-free Claro packet; the priced JAF invoice
 		// is rendered on demand once the packet was sent.
-		packetHref: doc.jafInvoicePdfPath
-			? uploadHref(doc.jafInvoicePdfPath)
-			: null,
+		...storedPdfLinks(doc.jafInvoicePdfPath),
 		pricedInvoiceHref: doc.jafInvoiceGeneratedAt
 			? `/finance/verify/${doc.id}/invoice.pdf`
 			: null,
 		// Tracked, not billed (provisional ruling).
-		brigadeStock: brigadeStockTracked(doc.fieldMaterials, brigadeCodes),
+		brigadeStock: await brigadeStockFor(doc.fieldMaterials),
 	}
 }
 
@@ -145,6 +134,7 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 		peopleMap,
 		serviceCodes,
 		packetHref,
+		legacyPricedHref,
 		pricedInvoiceHref,
 		brigadeStock,
 	} = loaderData
@@ -418,6 +408,13 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 						<li>
 							<a href={packetHref} className="text-accent-text underline">
 								{t("admin_history.claro_packet")}
+							</a>
+						</li>
+					)}
+					{legacyPricedHref && (
+						<li>
+							<a href={legacyPricedHref} className="text-accent-text underline">
+								{t("admin_history.jaf_invoice_priced_legacy")}
 							</a>
 						</li>
 					)}

@@ -161,7 +161,7 @@ type MaterialsSource = Pick<JafInvoice, "materialsUsed" | "materialsTaken"> &
  * and nothing used from the pickup bills nothing. A job without the table
  * reads `materialsUsed`, or the pickup when nothing was reported used.
  */
-function billableMaterials(invoice: MaterialsSource): MaterialItem[] {
+export function billableMaterials(invoice: MaterialsSource): MaterialItem[] {
 	if (hasFieldTable(invoice.fieldMaterials))
 		return warehouseUsedLines(invoice.fieldMaterials, invoice.materialsUsed)
 	const used = (invoice.materialsUsed as MaterialItem[]) || []

@@ -11,10 +11,11 @@ import { Callout } from "~/components/ui/callout"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
+import { brigadeStockFor } from "~/lib/brigade-stock.server"
 import { db } from "~/lib/db.server"
 import { sendInternalEmail } from "~/lib/email.server"
-import { brigadeStockTracked } from "~/lib/field-materials"
 import {
+	billableMaterials,
 	checkAmountTolerance,
 	computeFinanceStage,
 	FINANCEABLE_STATUSES,
@@ -23,7 +24,7 @@ import {
 } from "~/lib/finance-pipeline.server"
 import { isTerminalStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
-import { uploadHref } from "~/lib/upload-href"
+import { storedPdfLinks } from "~/lib/upload-href"
 import { cn, formatMoney, toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.finance.verify.$id"
 
@@ -87,14 +88,14 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 				: null,
 		// The stored file is the price-free Claro packet; the priced JAF invoice
 		// is rendered on demand (Finance/Admin only) once the packet was sent.
-		packetHref: doc.jafInvoicePdfPath
-			? uploadHref(doc.jafInvoicePdfPath)
-			: null,
+		...storedPdfLinks(doc.jafInvoicePdfPath),
 		pricedInvoiceHref: doc.jafInvoiceGeneratedAt
 			? `/finance/verify/${doc.id}/invoice.pdf`
 			: null,
 		// Tracked, not billed (provisional ruling): never added to any total.
-		brigadeStock: brigadeStockTracked(doc.fieldMaterials, serviceCodes),
+		brigadeStock: await brigadeStockFor(doc.fieldMaterials),
+		// The material lines Finance bills, listed exactly as billed.
+		materials: billableMaterials(doc),
 	}
 }
 
@@ -276,8 +277,10 @@ export default function FinanceVerify({
 		prefilledAvisoAmount,
 		lineTotal,
 		packetHref,
+		legacyPricedHref,
 		pricedInvoiceHref,
 		brigadeStock,
+		materials,
 	} = loaderData
 	const { t } = useTranslation()
 	const error = actionData as
@@ -289,11 +292,6 @@ export default function FinanceVerify({
 				tolerance?: number
 		  }
 		| undefined
-	const used =
-		(doc.materialsUsed as { serviceCodeId: string; qty: number }[]) || []
-	const taken =
-		(doc.materialsTaken as { serviceCodeId: string; qty: number }[]) || []
-	const source = used.length > 0 ? used : taken
 
 	const cannotVerify =
 		stage !== "TO_VERIFY" || doc.status === "LC_REQUEST_GENERATED"
@@ -367,7 +365,7 @@ export default function FinanceVerify({
 					<h2 className="text-sm font-medium">
 						{t("finance_verify.jaf_invoice")}
 					</h2>
-					{(pricedInvoiceHref || packetHref) && (
+					{(pricedInvoiceHref || packetHref || legacyPricedHref) && (
 						<div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
 							{pricedInvoiceHref && (
 								<a
@@ -387,6 +385,16 @@ export default function FinanceVerify({
 									className="text-accent-text underline"
 								>
 									{t("finance_verify.claro_packet")}
+								</a>
+							)}
+							{legacyPricedHref && (
+								<a
+									href={legacyPricedHref}
+									target="_blank"
+									rel="noreferrer"
+									className="text-accent-text underline"
+								>
+									{t("finance_verify.priced_invoice_legacy")}
 								</a>
 							)}
 						</div>
@@ -419,7 +427,7 @@ export default function FinanceVerify({
 					</div>
 					<MaterialLineItems
 						serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
-						initialItems={source}
+						initialItems={materials}
 						readOnly
 					/>
 				</div>

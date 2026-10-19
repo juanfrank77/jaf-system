@@ -97,14 +97,26 @@ describe("brigadeStockTracked", () => {
 				codes,
 			),
 		).toEqual([
-			{ claroCode: "1005803", name: "Drop cable", qty: 4, unit: "FT" },
+			{
+				serviceCodeId: "sc-1",
+				claroCode: "1005803",
+				name: "Drop cable",
+				qty: 4,
+				unit: "FT",
+			},
 		])
 		expect(brigadeStockTracked([row("sc-1", 6)], codes)).toEqual([])
 	})
 
 	it("falls back to the id when the code is not in the catalog", () => {
 		expect(brigadeStockTracked([row("sc-9", 1, "BRIGADE_STOCK")], [])).toEqual([
-			{ claroCode: "", name: "sc-9", qty: 1, unit: null },
+			{
+				serviceCodeId: "sc-9",
+				claroCode: "",
+				name: "sc-9",
+				qty: 1,
+				unit: null,
+			},
 		])
 	})
 })

@@ -38,7 +38,7 @@ export function BrigadeStockTracked({ lines }: { lines: BrigadeStockLine[] }) {
 				</thead>
 				<tbody>
 					{lines.map((l) => (
-						<tr key={l.claroCode || l.name} className="border-b last:border-0">
+						<tr key={l.serviceCodeId} className="border-b last:border-0">
 							<td className="py-1 font-mono text-xs">{l.claroCode}</td>
 							<td className="py-1">{l.name}</td>
 							<td className="py-1 text-right tabular-nums">

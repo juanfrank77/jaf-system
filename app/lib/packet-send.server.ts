@@ -24,6 +24,7 @@ import {
 	sumLines,
 } from "./service-lines"
 import { assertDocInSupervisorScope } from "./supervisor-scope"
+import { getIvuRate } from "./system-settings.server"
 import { photoFile, saveBuffer } from "./uploads.server"
 
 type SendPacketErrorKey =
@@ -108,6 +109,8 @@ export async function sendPacket(args: {
 			}
 	}
 	const lineTotal = sumLines(lines)
+	// Recorded with the first send only (see the PACKET_SENT diff below).
+	const ivuRate = firstSent ? null : await getIvuRate()
 
 	const showPrefield = firstSent
 		? await prefieldShownAtFirstSend(docId, claro.requiresPrefield)
@@ -286,7 +289,9 @@ export async function sendPacket(args: {
 					path: pdfPath,
 					showPrefield,
 					firstSend: first.count === 1,
-					...(first.count === 1 ? { lineTotal, lines } : {}),
+					// The IVU rate at the first send, so the priced invoice Finance
+					// re-renders later keeps it whatever the setting becomes.
+					...(first.count === 1 ? { lineTotal, lines, ivuRate } : {}),
 					...(error ? { error } : {}),
 				} as Prisma.InputJsonValue,
 			},
@@ -296,30 +301,56 @@ export async function sendPacket(args: {
 	return { ok: true, outcome }
 }
 
-/** After the first send flag edits no longer apply: keep that send's layout. */
-async function prefieldShownAtFirstSend(
+type FirstSendDiff = {
+	firstSend?: boolean
+	showPrefield?: boolean
+	ivuRate?: number
+}
+
+/** The audit diff of the first delivered send, if any. */
+async function firstSendDiff(
 	docId: string,
-	fallback: boolean,
-): Promise<boolean> {
+): Promise<FirstSendDiff | undefined> {
 	const sends = await db.auditTrail.findMany({
 		where: { docId, action: "PACKET_SENT" },
 		orderBy: { timestamp: "asc" },
 		select: { diffJson: true },
 	})
-	const first = sends
-		.map((s) => s.diffJson as { firstSend?: boolean; showPrefield?: boolean })
+	return sends
+		.map((s) => (s.diffJson ?? {}) as FirstSendDiff)
 		.find((d) => d.firstSend)
+}
+
+/**
+ * The IVU rate recorded at the first send; today's setting for a job sent
+ * before the rate was recorded.
+ */
+export async function ivuRateAtFirstSend(docId: string): Promise<number> {
+	const first = await firstSendDiff(docId)
+	return typeof first?.ivuRate === "number" ? first.ivuRate : getIvuRate()
+}
+
+/** After the first send flag edits no longer apply: keep that send's layout. */
+async function prefieldShownAtFirstSend(
+	docId: string,
+	fallback: boolean,
+): Promise<boolean> {
+	const first = await firstSendDiff(docId)
 	return typeof first?.showPrefield === "boolean"
 		? first.showPrefield
 		: fallback
 }
 
-/** The Field materials table, with code names and units but no prices. */
+/** The Field materials table's WAREHOUSE rows, with code names and units but no prices. */
 async function materialRows(
 	stored: unknown,
 	taken: MaterialLine[],
 ): Promise<ClaroPacketInput["materials"]> {
-	const rows = fieldMaterialsOrDefault(stored, taken)
+	// Brigade's own stock stays tracked-only (provisional ruling): it is kept
+	// in fieldMaterials but never listed on the client-facing packet.
+	const rows = fieldMaterialsOrDefault(stored, taken).filter(
+		(r) => r.source !== "BRIGADE_STOCK",
+	)
 	if (rows.length === 0) return []
 	const codes = await db.serviceCode.findMany({
 		where: { id: { in: rows.map((r) => r.serviceCodeId) } },
@@ -334,7 +365,7 @@ async function materialRows(
 			unit: code?.unit ?? null,
 			used: r.used,
 			returned: r.returned,
-			source: r.source,
+			source: "WAREHOUSE" as const,
 		}
 	})
 }

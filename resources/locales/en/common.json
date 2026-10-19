@@ -393,7 +393,8 @@
 		"back_to_work_order": "Back to work order",
 		"packet_first_send": "first send",
 		"jaf_invoice_priced": "JAF invoice (priced)",
-		"claro_packet": "Claro packet (no prices)"
+		"claro_packet": "Claro packet (no prices)",
+		"jaf_invoice_priced_legacy": "JAF invoice (priced, legacy)"
 	},
 	"docs_view": {
 		"aviso_pending": "Not yet — entered at the Aviso step",
@@ -1311,7 +1312,8 @@
 			"terminal_status": "This job is no longer editable."
 		},
 		"priced_invoice": "JAF invoice (priced)",
-		"claro_packet": "Claro packet (no prices)"
+		"claro_packet": "Claro packet (no prices)",
+		"priced_invoice_legacy": "JAF invoice (priced, legacy)"
 	},
 	"finance_pbcc": {
 		"title": "PBCC Payment Request",

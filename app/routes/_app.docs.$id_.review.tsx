@@ -85,7 +85,7 @@ import {
 	getAvisoAmountTolerance,
 	getIvuRate,
 } from "~/lib/system-settings.server"
-import { uploadHref } from "~/lib/upload-href"
+import { isLegacyPricedInvoice, uploadHref } from "~/lib/upload-href"
 import { photosThatLoad, saveBuffer, saveUpload } from "~/lib/uploads.server"
 import { formatMoney, toNumberPrice } from "~/lib/utils"
 import type { PreCertSheet, Prisma } from "../../generated/prisma/client"
@@ -201,6 +201,8 @@ function withoutPrices<T extends Record<string, unknown>>(doc: T): T {
 		avisoLines: linesWithoutPrices(doc.avisoLines),
 	}
 	for (const k of MONEY_COLUMNS) delete out[k]
+	// An old priced JAF invoice (jaf-invoices/) is a price document too.
+	if (isLegacyPricedInvoice(doc.jafInvoicePdfPath)) out.jafInvoicePdfPath = null
 	return out as T
 }
 
@@ -398,9 +400,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		},
 		prefieldMissing: claro?.requiresPrefield ? prefieldMissing(doc) : [],
 		blockers,
-		packetHref: doc.jafInvoicePdfPath
-			? uploadHref(doc.jafInvoicePdfPath)
-			: null,
+		// Only a real packet: a legacy priced invoice in jaf-invoices/ is not one.
+		packetHref:
+			doc.jafInvoicePdfPath && !isLegacyPricedInvoice(doc.jafInvoicePdfPath)
+				? uploadHref(doc.jafInvoicePdfPath)
+				: null,
 		blueprints: doc.blueprintPaths.map((p) => {
 			const name = path.basename(p)
 			return {

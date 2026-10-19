@@ -13,10 +13,12 @@ vi.mock("~/lib/pdf/claro-packet.server", async (importOriginal) => ({
 	generateClaroPacketPdf: vi.fn(async () => Buffer.from("%PDF-packet")),
 }))
 
+import { extractText, getDocumentProxy } from "unpdf"
 import { db } from "~/lib/db.server"
 import { type MailTransport, setMailTransport } from "~/lib/packet-mail.server"
 import { sendPacket } from "~/lib/packet-send.server"
 import { generateClaroPacketPdf } from "~/lib/pdf/claro-packet.server"
+import { getIvuRate } from "~/lib/system-settings.server"
 
 // The shared shadow DB is remote and can be slow under a parallel suite run.
 const HOOK_TIMEOUT = 60_000
@@ -465,5 +467,71 @@ describe("sendPacket outcomes", { timeout: HOOK_TIMEOUT }, () => {
 		// The flag turned on after the first send does not add a Prefield page.
 		const resendInput = vi.mocked(generateClaroPacketPdf).mock.calls.at(-1)?.[0]
 		expect(resendInput?.showPrefield).toBe(false)
+	})
+})
+
+describe("sendPacket: brigade's stock and the IVU snapshot", {
+	timeout: HOOK_TIMEOUT,
+}, () => {
+	it("leaves BRIGADE_STOCK rows out of the packet; WAREHOUSE rows stay", async () => {
+		const own = await db.serviceCode.create({
+			data: {
+				claroCode: `${TAG}-BRIGADE`,
+				name: "OWN CLAMP",
+				kind: "MATERIAL",
+				unit: "EA",
+				unitPrice: "1",
+			},
+		})
+		codeIds.push(own.id)
+		const claro = await seedClaro()
+		const doc = await seedDoc({
+			claroSupervisorId: claro.id,
+			materialsTaken: [{ serviceCodeId: code1.id, qty: 10 }],
+			fieldMaterials: [
+				{ serviceCodeId: code1.id, used: 6, returned: 4, source: "WAREHOUSE" },
+				{
+					serviceCodeId: own.id,
+					used: 4,
+					returned: 0,
+					source: "BRIGADE_STOCK",
+				},
+			],
+		})
+		const res = await sendPacket({ docId: doc.id, actor: sup, mode: "manual" })
+		expect(res).toEqual({ ok: true, outcome: "MANUAL" })
+		const input = vi.mocked(generateClaroPacketPdf).mock.calls[0][0]
+		expect(input.materials.map((m) => [m.claroCode, m.source])).toEqual([
+			[code1.claroCode, "WAREHOUSE"],
+		])
+		// The real renderer: the text layer has the warehouse row only.
+		const real = await vi.importActual<
+			typeof import("~/lib/pdf/claro-packet.server")
+		>("~/lib/pdf/claro-packet.server")
+		const pdf = await real.generateClaroPacketPdf(input)
+		const { text } = await extractText(
+			await getDocumentProxy(new Uint8Array(pdf)),
+			{ mergePages: true },
+		)
+		expect(text).toContain(code1.claroCode)
+		expect(text).not.toContain(own.claroCode)
+		expect(text).not.toContain("OWN CLAMP")
+		// Still tracked on the job.
+		const stored = (await reload(doc.id)).fieldMaterials as { source: string }[]
+		expect(stored.map((r) => r.source)).toEqual(["WAREHOUSE", "BRIGADE_STOCK"])
+	})
+
+	it("records the IVU rate on the first send only", async () => {
+		const claro = await seedClaro()
+		const doc = await seedDoc({ claroSupervisorId: claro.id })
+		await sendPacket({ docId: doc.id, actor: sup, mode: "manual" })
+		await sendPacket({ docId: doc.id, actor: sup, mode: "manual" })
+		const audits = await db.auditTrail.findMany({
+			where: { docId: doc.id, action: "PACKET_SENT" },
+			orderBy: { timestamp: "asc" },
+		})
+		const diffs = audits.map((a) => a.diffJson as Record<string, unknown>)
+		expect(diffs[0].ivuRate).toBe(await getIvuRate())
+		expect(diffs[1]).not.toHaveProperty("ivuRate")
 	})
 })

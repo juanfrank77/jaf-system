@@ -1,9 +1,9 @@
 import { db } from "~/lib/db.server"
 import { invoiceNumberFor } from "~/lib/invoice-number"
+import { ivuRateAtFirstSend } from "~/lib/packet-send.server"
 import { generateJafInvoicePdf } from "~/lib/pdf/jaf-invoice.server"
 import { requireRole } from "~/lib/permissions.server"
 import type { InvoiceLine } from "~/lib/service-lines"
-import { getIvuRate } from "~/lib/system-settings.server"
 import type { Route } from "./+types/_app.finance.verify.$id.invoice"
 
 const PR_DATE = (d: Date) =>
@@ -12,7 +12,9 @@ const PR_DATE = (d: Date) =>
 /**
  * The priced JAF invoice, Finance/Admin only (provisional ruling). Rendered
  * on demand from the lines locked at the first packet send, dated at that
- * send so every download is the same invoice. A job whose packet was never
+ * send and taxed at the IVU rate recorded with it (today's rate only for a
+ * job sent before the rate was recorded), so every download is the same
+ * invoice. A job whose packet was never
  * sent has no locked lines yet, so there is no invoice.
  */
 export async function loader({ request, params }: Route.LoaderArgs) {
@@ -57,7 +59,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			unitPrice: l.unitPrice,
 			accountCode: l.accountCode,
 		})),
-		ivuRate: await getIvuRate(),
+		// The first send's rate, so a re-download never re-prices the IVU.
+		ivuRate: await ivuRateAtFirstSend(params.id),
 		supervisorName: doc.completedBy?.name ?? doc.supervisor.name,
 	})
 	const safeName = doc.controlNumber.replace(/[^A-Za-z0-9._-]/g, "_")

@@ -81,10 +81,30 @@ describe("Admin doc page loader: brigade's stock and the two PDFs", () => {
 		)
 		const data = await load()
 		expect(data.brigadeStock).toEqual([
-			{ claroCode: "1005803", name: "Drop cable", qty: 4, unit: "FT" },
+			{
+				serviceCodeId: "m1",
+				claroCode: "1005803",
+				name: "Drop cable",
+				qty: 4,
+				unit: "FT",
+			},
 		])
 		expect(data.pricedInvoiceHref).toBe("/finance/verify/job-1/invoice.pdf")
 		expect(data.packetHref).toMatch(/job-1-packet-1\.pdf$/)
+	})
+
+	it("labels a legacy priced file as the legacy priced invoice, not the packet", async () => {
+		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue(
+			doc({
+				jafInvoiceGeneratedAt: new Date("2026-09-01T12:00:00Z"),
+				jafInvoicePdfPath: "/uploads/jaf-invoices/job-1-jaf-invoice.pdf",
+			}),
+		)
+		const data = await load()
+		expect(data.packetHref).toBeNull()
+		expect(data.legacyPricedHref).toBe(
+			"/files/jaf-invoices/job-1-jaf-invoice.pdf",
+		)
 	})
 
 	it("has no tracked list without BRIGADE_STOCK rows, no priced link before the send", async () => {
@@ -99,5 +119,6 @@ describe("Admin doc page loader: brigade's stock and the two PDFs", () => {
 		expect(data.brigadeStock).toEqual([])
 		expect(data.pricedInvoiceHref).toBeNull()
 		expect(data.packetHref).toBeNull()
+		expect(data.legacyPricedHref).toBeNull()
 	})
 })

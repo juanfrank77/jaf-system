@@ -5,7 +5,10 @@ import { extractText, getDocumentProxy } from "unpdf"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const mocks = vi.hoisted(() => ({
-	db: { jafInvoice: { findUnique: vi.fn() } },
+	db: {
+		jafInvoice: { findUnique: vi.fn() },
+		auditTrail: { findMany: vi.fn() },
+	},
 	requireRole: vi.fn(),
 	getIvuRate: vi.fn(),
 }))
@@ -74,6 +77,10 @@ beforeEach(() => {
 	vi.clearAllMocks()
 	mocks.getIvuRate.mockResolvedValue(0.115)
 	mocks.db.jafInvoice.findUnique.mockResolvedValue(sentDoc())
+	mocks.db.auditTrail.findMany.mockResolvedValue([
+		{ diffJson: { firstSend: false, outcome: "FAILED" } },
+		{ diffJson: { firstSend: true, outcome: "SENT", ivuRate: 0.115 } },
+	])
 })
 
 describe("GET /finance/verify/:id/invoice.pdf — the priced JAF invoice", () => {
@@ -136,6 +143,30 @@ describe("GET /finance/verify/:id/invoice.pdf — the priced JAF invoice", () =>
 		} finally {
 			vi.useRealTimers()
 		}
+	})
+})
+
+describe("the priced invoice's IVU rate is the first send's", () => {
+	it("keeps the first-send rate after the IVU setting changes", async () => {
+		as("FINANCE")
+		mocks.db.auditTrail.findMany.mockResolvedValue([
+			{ diffJson: { firstSend: true, outcome: "SENT", ivuRate: 0.07 } },
+			{ diffJson: { firstSend: false, outcome: "SENT" } },
+		])
+		mocks.getIvuRate.mockResolvedValue(0.115)
+		const text = await textOf(await load())
+		expect(text).toContain("IVU (7.0%)")
+		expect(text).toContain("$8.66") // 123.75 * 0.07
+		expect(text).not.toContain("11.5%")
+	})
+
+	it("falls back to today's rate for a job sent before the rate was recorded", async () => {
+		as("FINANCE")
+		mocks.db.auditTrail.findMany.mockResolvedValue([
+			{ diffJson: { firstSend: true, outcome: "SENT" } },
+		])
+		mocks.getIvuRate.mockResolvedValue(0.115)
+		expect(await textOf(await load())).toContain("IVU (11.5%)")
 	})
 })
 

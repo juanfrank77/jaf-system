@@ -14,6 +14,7 @@ describe("BrigadeStockTracked", () => {
 						<BrigadeStockTracked
 							lines={[
 								{
+									serviceCodeId: "m1",
 									claroCode: "1005803",
 									name: "Drop cable",
 									qty: 4,
@@ -32,6 +33,40 @@ describe("BrigadeStockTracked", () => {
 		expect(section).toHaveTextContent("Drop cable")
 		expect(section).toHaveTextContent("4")
 		expect(section).not.toHaveTextContent("$")
+	})
+
+	it("lists two uncatalogued codes (no Claro code) as two rows", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<BrigadeStockTracked
+							lines={[
+								{
+									serviceCodeId: "x1",
+									claroCode: "",
+									name: "x1",
+									qty: 1,
+									unit: null,
+								},
+								{
+									serviceCodeId: "x2",
+									claroCode: "",
+									name: "x2",
+									qty: 2,
+									unit: null,
+								},
+							]}
+						/>
+					),
+				},
+			],
+		})
+		const section = await screen.findByRole("region")
+		expect(section.querySelectorAll("tbody tr")).toHaveLength(2)
 	})
 
 	it("renders nothing when there is no brigade's stock", async ({

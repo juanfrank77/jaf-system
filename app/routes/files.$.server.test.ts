@@ -316,3 +316,65 @@ describe("files loader — job photos and blueprints for supervisors", () => {
 		expect((await get("blueprints/job-404/1-0-plan.pdf")).status).toBe(403)
 	})
 })
+
+describe("files loader — legacy priced JAF invoices (jaf-invoices/)", () => {
+	let dir: string
+
+	beforeEach(async () => {
+		vi.clearAllMocks()
+		dir = await mkdtemp(path.join(tmpdir(), "files-test-"))
+		process.env.UPLOAD_DIR = dir
+		await mkdir(path.join(dir, "jaf-invoices"), { recursive: true })
+		await writeFile(
+			path.join(dir, "jaf-invoices/job-1-jaf-invoice.pdf"),
+			"%PDF",
+		)
+		await mkdir(path.join(dir, "packets"), { recursive: true })
+		await writeFile(path.join(dir, "packets/job-1-packet-1-ab.pdf"), "%PDF")
+		// The job's own supervisor, a job in a status every role may read.
+		mocks.db.user.findUnique.mockResolvedValue({ supervisorAreas: [] } as any)
+		mocks.db.jafInvoice.findUnique.mockResolvedValue({
+			status: "SUPERVISOR_APPROVED",
+			supervisorId: "u-1",
+			brigade: { area: "CENTRAL" },
+		} as any)
+	})
+
+	const as = (role: string) => {
+		mocks.requireSession.mockResolvedValue({ user: { id: "u-1" } })
+		mocks.db.user.findUniqueOrThrow.mockResolvedValue({
+			id: "u-1",
+			role,
+		} as any)
+	}
+	const get = (rel: string) =>
+		loader({
+			request: requestFor(`/files/${rel}`),
+			params: { "*": rel },
+		} as any) as Promise<Response>
+
+	it.each(["SUPERVISOR", "WAREHOUSE", "CREW", "INSTALLER"])(
+		"refuses %s, even the job's own supervisor",
+		async (role) => {
+			as(role)
+			expect((await get("jaf-invoices/job-1-jaf-invoice.pdf")).status).toBe(403)
+		},
+	)
+
+	it("refuses a supervisor who reaches the folder through ../", async () => {
+		as("SUPERVISOR")
+		expect(
+			(await get("packets/../jaf-invoices/job-1-jaf-invoice.pdf")).status,
+		).toBe(403)
+	})
+
+	it.each(["FINANCE", "ADMIN", "COMPTROLLER"])("serves %s", async (role) => {
+		as(role)
+		expect((await get("jaf-invoices/job-1-jaf-invoice.pdf")).status).toBe(200)
+	})
+
+	it("still serves the job's supervisor the price-free packet", async () => {
+		as("SUPERVISOR")
+		expect((await get("packets/job-1-packet-1-ab.pdf")).status).toBe(200)
+	})
+})

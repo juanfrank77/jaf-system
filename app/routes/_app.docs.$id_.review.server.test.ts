@@ -1383,6 +1383,16 @@ describe("review loader: Packet → Claro step", () => {
 		)
 	})
 
+	it("never links a legacy priced JAF invoice as the packet", async () => {
+		const data = await loadAs("SUPERVISOR", {
+			...signedOff,
+			jafInvoicePdfPath: "/uploads/jaf-invoices/doc-1-jaf-invoice.pdf",
+			jafInvoiceGeneratedAt: new Date("2026-09-01T12:00:00Z"),
+		})
+		expect(data.packet.packetHref).toBeNull()
+		expect(JSON.stringify(data)).not.toContain("jaf-invoices")
+	})
+
 	it("sent is the first-send timestamp", async () => {
 		const at = new Date("2026-10-18T15:00:00Z")
 		const data = await loadAs("SUPERVISOR", {

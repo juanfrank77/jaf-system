@@ -194,6 +194,22 @@ describe("computeDashboardStats", () => {
 		})
 	})
 
+	it("pins today's behaviour: a signed-off packet not yet sent to Claro already counts as Finance-side", () => {
+		// SUPERVISOR_APPROVED covers both "Ready to send" and "Sent, waiting
+		// Aviso"; these tile counts filter on status alone, so they include
+		// jobs whose JAF invoice has not been generated. Narrowing them is a
+		// separate decision (see the supervisor-workflow-redesign spec).
+		const unsent = doc("SUPERVISOR_APPROVED", null, {
+			supervisorApprovedAt: new Date(),
+			jafInvoiceGeneratedAt: null,
+		})
+		const { stats } = computeDashboardStats("FINANCE", [unsent])
+		const v = (k: string) => stats.find((x) => x.labelKey === k)?.value
+		expect(v("dashboard.stat.open_receivables")).toBe(1)
+		expect(v("dashboard.stat.awaiting_claro_upload")).toBe(1)
+		expect(v("dashboard.stat.stage_in_finance")).toBe(1)
+	})
+
 	it("ADMIN: uses the same computation as FINANCE", () => {
 		const docs = [doc("CLARO_UPLOADED")]
 		expect(computeDashboardStats("ADMIN", docs)).toEqual(

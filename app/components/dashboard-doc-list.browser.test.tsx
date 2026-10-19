@@ -23,7 +23,7 @@ describe("DashboardDocList billing visibility", () => {
 		renderStub,
 	}) => {
 		await mount(renderStub, <DashboardDocList docs={[doc]} />)
-		expect(screen.getByText("JAF invoice")).toBeInTheDocument()
+		expect(screen.getByText("Packet → Claro")).toBeInTheDocument()
 		expect(screen.queryByText(/CLARO/)).not.toBeInTheDocument()
 		expect(screen.getByText(/12345678/)).toBeInTheDocument()
 	})
@@ -35,7 +35,7 @@ describe("DashboardDocList billing visibility", () => {
 			renderStub,
 			<DashboardDocList docs={[doc]} showBilling={false} />,
 		)
-		expect(screen.getByText("JAF invoice")).toBeInTheDocument()
+		expect(screen.getByText("Packet → Claro")).toBeInTheDocument()
 		expect(screen.queryByText(/12345678/)).not.toBeInTheDocument()
 	})
 
@@ -48,5 +48,18 @@ describe("DashboardDocList billing visibility", () => {
 			"es",
 		)
 		expect(screen.getByText("Hoja pre-cert.")).toBeInTheDocument()
+	})
+
+	it("prefers the finer open-job label over the stage label", async ({
+		renderStub,
+	}) => {
+		await mount(
+			renderStub,
+			<DashboardDocList
+				docs={[{ ...doc, stage: "FIELD", openLabel: "PICKED_UP" }]}
+			/>,
+			"es",
+		)
+		expect(screen.getByText("Recogido")).toBeInTheDocument()
 	})
 })

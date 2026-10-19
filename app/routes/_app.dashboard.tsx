@@ -13,6 +13,7 @@ import { db } from "~/lib/db.server"
 import { isDashboardFiltersEnabled } from "~/lib/features.server"
 import { isMissingAvisoPdf } from "~/lib/finance-pipeline.server"
 import { cacheJobs } from "~/lib/offline-store"
+import { type OpenJobLabel, openJobLabel } from "~/lib/open-job-label"
 import { pageTitle } from "~/lib/page-title"
 import { requireSession } from "~/lib/permissions.server"
 import {
@@ -89,6 +90,7 @@ const queueSelect = {
 	jobAddressEstimated: true,
 	jobAddressActual: true,
 	createdAt: true,
+	fieldStartedAt: true,
 	supervisorApprovedAt: true,
 	jafInvoiceGeneratedAt: true,
 	jafInvoiceLineTotal: true,
@@ -141,12 +143,15 @@ async function withStages<
 	T extends {
 		id: string
 		status: DocStatus
+		fieldStartedAt: Date | null
 		supervisorApprovedAt: Date | null
 		jafInvoiceGeneratedAt: Date | null
 		avisoMatchedAt: Date | null
 		releasedToFinanceAt: Date | null
 	},
->(docs: T[]): Promise<(T & { stage: SupervisorStage })[]> {
+>(
+	docs: T[],
+): Promise<(T & { stage: SupervisorStage; openLabel: OpenJobLabel })[]> {
 	const sheets = await db.preCertSheet.findMany({
 		where: { docId: { in: docs.map((d) => d.id) }, supersededAt: null },
 		select: { docId: true, sigSupervisorAt: true, sigSubcontractorAt: true },
@@ -155,6 +160,7 @@ async function withStages<
 	return docs.map((d) => ({
 		...d,
 		stage: deriveSupervisorStage(d, byDoc.get(d.id) ?? null),
+		openLabel: openJobLabel(d, byDoc.get(d.id) ?? null),
 	}))
 }
 
@@ -235,6 +241,7 @@ async function loadSupervisorQueues(userId: string) {
 	const intake = intakeRaw.map((d) => toRow(d, "INTAKE", d.createdAt))
 	const myOpen = (await withStages(openRaw)).map((d) => ({
 		...toRow(d, d.stage, d.createdAt),
+		openLabel: d.openLabel,
 		waitingOn: WAITING_ON[d.stage],
 	}))
 	const pendingReview = pending.map((d) =>

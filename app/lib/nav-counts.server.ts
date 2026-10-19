@@ -14,16 +14,25 @@ import { WAREHOUSE_QUEUES, warehouseQueueHref } from "~/lib/warehouse-queues"
 import { countWarehouseQueues } from "~/lib/warehouse-queues.server"
 import type { Role } from "../../generated/prisma/client"
 
-/** Review and Aviso are the supervisor's own action points, so they go red. */
-const CRITICAL_QUEUES: SupervisorQueue[] = ["review", "aviso"]
+/** Ready for pickup and Aviso are the supervisor's own action points, so they go red. */
+const CRITICAL_QUEUES: SupervisorQueue[] = ["open", "aviso"]
+// Review stays a queue (and a route) but is hidden from the supervisor's sidebar.
 const SUPERVISOR_QUEUE_ORDER: SupervisorQueue[] = [
-	"review",
+	"open",
 	"invoice",
 	"aviso",
 	"precert",
 	"released",
 	"all",
 ]
+
+/** "My open jobs" lists every unreleased job, but its badge counts only the
+ * jobs Ready for pickup (PREPPED): the ones waiting on the crew. */
+function supervisorCountWhere(queue: SupervisorQueue) {
+	return queue === "open"
+		? { status: "PREPPED" as const, releasedToFinanceAt: null }
+		: supervisorQueueWhere(queue)
+}
 
 /**
  * Per-role sidebar counts, keyed by nav `to`. Each department sub-project adds
@@ -43,7 +52,7 @@ export async function loadNavCounts(
 		const values = await Promise.all(
 			SUPERVISOR_QUEUE_ORDER.map((q) =>
 				db.jafInvoice.count({
-					where: { AND: [scope, supervisorQueueWhere(q)] },
+					where: { AND: [scope, supervisorCountWhere(q)] },
 				}),
 			),
 		)

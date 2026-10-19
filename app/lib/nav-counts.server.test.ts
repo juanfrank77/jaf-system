@@ -22,9 +22,9 @@ describe("loadNavCounts", () => {
 		} as any)
 	})
 
-	it("gives a supervisor one count per queue, red for Review and Aviso", async () => {
+	it("gives a supervisor a count per sidebar queue, red for Ready for pickup and Aviso", async () => {
 		vi.mocked(db.jafInvoice.count)
-			.mockResolvedValueOnce(2) // review
+			.mockResolvedValueOnce(3) // open: PREPPED jobs
 			.mockResolvedValueOnce(5) // invoice
 			.mockResolvedValueOnce(1) // aviso
 			.mockResolvedValueOnce(14) // precert
@@ -32,19 +32,22 @@ describe("loadNavCounts", () => {
 			.mockResolvedValueOnce(9) // all
 		const counts = await loadNavCounts({ id: "sup-1", role: "SUPERVISOR" })
 		expect(counts).toEqual({
-			"/dashboard?stage=review": { value: 2, tone: "critical" },
+			"/dashboard?stage=open": { value: 3, tone: "critical" },
 			"/dashboard?stage=invoice": { value: 5, tone: "neutral" },
 			"/dashboard?stage=aviso": { value: 1, tone: "critical" },
 			"/dashboard?stage=precert": { value: 14, tone: "neutral" },
 			"/dashboard?stage=released": { value: 31, tone: "neutral" },
 			"/dashboard?stage=all": { value: 9, tone: "neutral" },
 		})
-		// Each count is scoped to the supervisor's own jobs and areas.
-		expect(db.jafInvoice.count).toHaveBeenCalledWith({
+		// Review is hidden from the sidebar, so it is no longer counted.
+		expect(counts).not.toHaveProperty("/dashboard?stage=review")
+		// The open badge counts only Ready-for-pickup jobs, scoped to the
+		// supervisor's own jobs and areas.
+		expect(db.jafInvoice.count).toHaveBeenNthCalledWith(1, {
 			where: {
 				AND: [
 					expect.objectContaining({ OR: expect.any(Array) }),
-					expect.objectContaining({ status: "FIELD_UPDATED" }),
+					{ status: "PREPPED", releasedToFinanceAt: null },
 				],
 			},
 		})

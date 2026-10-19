@@ -54,7 +54,7 @@ export type NavLabelKey =
 	| "app_shell.nav.warehouse_scan_in"
 	| "app_shell.nav.warehouse_restock"
 	| "app_shell.nav.warehouse_stock"
-	| "app_shell.nav.supervisor_review"
+	| "app_shell.nav.supervisor_open"
 	| "app_shell.nav.supervisor_invoice"
 	| "app_shell.nav.supervisor_aviso"
 	| "app_shell.nav.supervisor_precert"
@@ -138,12 +138,13 @@ export const GROUP_LABEL_KEY: Record<NavGroupKey, GroupLabelKey | null> = {
 	admin: "app_shell.group.admin",
 }
 
-// The supervisor's queues, in step-rail order from Approve onward: each is a
-// filtered view of the dashboard, not a separate screen. Intake has no link of
-// its own; it opens from the "Awaiting warehouse" tile.
+// The supervisor's queues: My open jobs first, then one per step from Packets
+// to Claro onward; each is a filtered view of the dashboard, not a separate
+// screen. Intake has no link of its own (it opens from the "Awaiting
+// warehouse" tile) and neither has Review, whose queue and route remain.
 const SUPERVISOR_QUEUE_ITEMS: NavItem[] = (
 	[
-		["review", "app_shell.nav.supervisor_review"],
+		["open", "app_shell.nav.supervisor_open"],
 		["invoice", "app_shell.nav.supervisor_invoice"],
 		["aviso", "app_shell.nav.supervisor_aviso"],
 		["precert", "app_shell.nav.supervisor_precert"],

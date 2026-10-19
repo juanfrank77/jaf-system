@@ -7,6 +7,7 @@ import { Badge } from "~/components/ui/badge"
 import { Card, CardContent } from "~/components/ui/card"
 import { EmptyState } from "~/components/ui/empty-state"
 import { armAStepOf, FINANCE_STEP_LABEL_KEY } from "~/lib/finance-steps"
+import type { OpenJobLabel } from "~/lib/open-job-label"
 import {
 	deriveSupervisorStage,
 	type SupervisorStage,
@@ -82,6 +83,8 @@ export type DashboardDocRow = {
 	materialsReturned?: unknown
 	/** Current step, derived server-side (needs the pre-cert signatures). */
 	stage?: SupervisorStage
+	/** The supervisor-facing chip label, derived server-side with `stage`. */
+	openLabel?: OpenJobLabel
 	supervisorApprovedAt?: Date | null
 	jafInvoiceGeneratedAt?: Date | null
 	avisoMatchedAt?: Date | null
@@ -145,6 +148,7 @@ export function DashboardDocList({
 										</Badge>
 									) : (
 										<DocStageBadge
+											openLabel={doc.openLabel}
 											stage={
 												doc.stage ??
 												deriveSupervisorStage(

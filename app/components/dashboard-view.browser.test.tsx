@@ -300,44 +300,4 @@ describe("DashboardView", () => {
 		})
 		expect(screen.queryByText("Clear filters")).not.toBeInTheDocument()
 	})
-
-	it("renders crew My Jobs groupings", async ({ renderStub }) => {
-		await renderStub({
-			entries: [
-				{
-					path: "/",
-					Component: () => (
-						<DashboardView
-							stats={[]}
-							alert={null}
-							explainer={null}
-							docs={[]}
-							crewPreppedDocs={[doc({ id: "prepped", status: "PREPPED" })]}
-							crewInFieldDocs={[doc({ id: "field", status: "SIGNED" })]}
-							crewSentBackDocs={[
-								doc({
-									id: "sb",
-									status: "SIGNED",
-									sendBackHistory: [
-										{
-											fromStatus: "FIELD_UPDATED",
-											toStatus: "SIGNED",
-											note: "Retake photo",
-											byUserId: "sup1",
-											createdAt: "2026-08-13T10:00:00Z",
-										},
-									],
-								}),
-							]}
-							crewSubmittedDocs={[doc({ id: "sub", status: "FIELD_UPDATED" })]}
-						/>
-					),
-				},
-			],
-		})
-		expect(screen.getByText("Ready for Pickup (1)")).toBeInTheDocument()
-		expect(screen.getByText("In the Field (1)")).toBeInTheDocument()
-		expect(screen.getByText(/Retake photo/)).toBeInTheDocument()
-		expect(screen.getByText("Submitted (1)")).toBeInTheDocument()
-	})
 })

@@ -112,58 +112,6 @@ describe("computeDashboardStats", () => {
 		expect(alert).toBeNull()
 	})
 
-	it("CREW: counts open jobs and grouped My Jobs states", () => {
-		const docs = [
-			doc("PREPPED"),
-			doc("SIGNED"),
-			doc("SIGNED", null, { sendBackHistory: [{ note: "fix photo" }] }),
-			doc("FIELD_UPDATED"),
-			doc("LC_REQUEST_GENERATED"),
-			doc("CANCELLED"),
-		]
-		const { stats, alert } = computeDashboardStats("CREW", docs)
-		expect(stats).toEqual([
-			{ labelKey: "dashboard.stat.open_jobs", value: 4 },
-			{ labelKey: "dashboard.stat.ready_for_pickup", value: 1 },
-			{ labelKey: "dashboard.stat.in_the_field", value: 1 },
-			{ labelKey: "dashboard.stat.sent_back", value: 1 },
-			{ labelKey: "dashboard.stat.submitted", value: 1 },
-			{ labelKey: "dashboard.stat.stage_awaiting_warehouse", value: 0 },
-			{ labelKey: "dashboard.stat.stage_awaiting_crew", value: 1 },
-			{ labelKey: "dashboard.stat.stage_pending_review", value: 0 },
-			{ labelKey: "dashboard.stat.stage_in_finance", value: 0 },
-			{ labelKey: "dashboard.stat.discrepancy_count", value: 0 },
-			{ labelKey: "dashboard.stat.shortage_count", value: 0 },
-			{ labelKey: "dashboard.stat.overage_count", value: 0 },
-		])
-		expect(alert).toEqual({
-			variant: "warn",
-			key: "dashboard.alert.sent_back",
-			count: 1,
-		})
-	})
-
-	it("CREW: alerts submitted jobs when no send-backs", () => {
-		const { alert } = computeDashboardStats("CREW", [
-			doc("FIELD_UPDATED"),
-			doc("SIGNED"),
-		])
-		expect(alert).toEqual({
-			variant: "info",
-			key: "dashboard.alert.submitted",
-			count: 1,
-		})
-	})
-
-	it("CREW: alerts ready for pickup when no active field jobs", () => {
-		const { alert } = computeDashboardStats("CREW", [doc("PREPPED")])
-		expect(alert).toEqual({
-			variant: "info",
-			key: "dashboard.alert.ready_for_pickup",
-			count: 1,
-		})
-	})
-
 	it("FINANCE: counts total docs, open receivables, awaiting Claro upload", () => {
 		const docs = [
 			doc("SUPERVISOR_APPROVED"),

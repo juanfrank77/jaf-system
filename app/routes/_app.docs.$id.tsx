@@ -21,7 +21,7 @@ import {
 	buildCrewAssignment,
 	readHistory,
 } from "~/lib/crew-assignment"
-import { isUnassignedCrew, notAssignedResponse } from "~/lib/crew-scope"
+import { refuseCrew } from "~/lib/crew-notice.server"
 import { db } from "~/lib/db.server"
 import { nextActionHref } from "~/lib/doc-next-action"
 import {
@@ -113,6 +113,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const user = await db.user.findUniqueOrThrow({
 		where: { id: session.user.id },
 	})
+	refuseCrew(user.role)
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 		include: { brigade: { select: { area: true } } },
@@ -123,7 +124,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	) {
 		throw new Response("Not Found", { status: 404 })
 	}
-	if (isUnassignedCrew(user, doc)) throw notAssignedResponse()
 	if (user.role === "SUPERVISOR") {
 		await assertDocInSupervisorScope(db, user.id, doc)
 	}
@@ -506,7 +506,7 @@ export default function DocView({
 		| { errorKey?: string; errorMessage?: string }
 		| undefined
 	const { t } = useTranslation()
-	const nextHref = nextActionHref(doc, user.role, user.id)
+	const nextHref = nextActionHref(doc, user.role)
 	const estimated = (doc.estimatedMaterials as unknown as MaterialLine[]) || []
 	const taken = (doc.materialsTaken as unknown as MaterialLine[]) || []
 	const used = (doc.materialsUsed as unknown as MaterialLine[]) || []
@@ -564,26 +564,6 @@ export default function DocView({
 					</span>
 				</Callout>
 			)}
-
-			{user.role === "CREW" &&
-				doc.status === "FIELD_UPDATED" &&
-				doc.fieldSubmittedAt && (
-					<Callout
-						tone="ok"
-						icon="✓"
-						title={t("docs_view.submitted_title", {
-							control: doc.controlNumber,
-							time: new Date(doc.fieldSubmittedAt).toLocaleString([], {
-								dateStyle: "short",
-								timeStyle: "short",
-							}),
-						})}
-					>
-						{t("docs_view.submitted_body", {
-							name: supervisor?.name ?? t("docs_field.sent_back_by_unknown"),
-						})}
-					</Callout>
-				)}
 
 			{missingAvisoPdf && (
 				<div className="bg-status-warn-soft border border-status-warn/30 rounded-lg p-4 space-y-2">

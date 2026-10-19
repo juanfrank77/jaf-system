@@ -26,7 +26,6 @@ const mount = (renderStub: any, ui: React.ReactElement) =>
 
 describe("RoleDashboard", () => {
 	for (const role of [
-		"CREW",
 		"WAREHOUSE",
 		"FINANCE",
 		"ADMIN",
@@ -42,7 +41,7 @@ describe("RoleDashboard", () => {
 			expect(
 				screen.getByRole("heading", {
 					level: 1,
-					name: role === "CREW" ? "My jobs" : "Dashboard",
+					name: "Dashboard",
 				}),
 			).toBeInTheDocument()
 		})
@@ -83,28 +82,22 @@ describe("RoleDashboard", () => {
 		avisoNumber: "12345678",
 	}
 
-	for (const role of ["WAREHOUSE", "CREW"] as const) {
-		it(`hides the Aviso number from the ${role} dashboard`, async ({
+	it("hides the Aviso number from the WAREHOUSE dashboard", async ({
+		renderStub,
+	}) => {
+		await mount(
 			renderStub,
-		}) => {
-			await mount(
-				renderStub,
-				<RoleDashboard
-					role={role}
-					supervisorQueues={null}
-					{...base}
-					docs={[billedDoc]}
-				/>,
-			)
-			// Warehouse works from its four queues only (mockup v3): no all-docs list.
-			if (role === "WAREHOUSE") {
-				expect(screen.queryByText("JAF-1")).not.toBeInTheDocument()
-			} else {
-				expect(screen.getByText("JAF-1")).toBeInTheDocument()
-			}
-			expect(screen.queryByText(/12345678/)).not.toBeInTheDocument()
-		})
-	}
+			<RoleDashboard
+				{...{ role: "WAREHOUSE" }}
+				supervisorQueues={null}
+				{...base}
+				docs={[billedDoc]}
+			/>,
+		)
+		// Warehouse works from its four queues only (mockup v3): no all-docs list.
+		expect(screen.queryByText("JAF-1")).not.toBeInTheDocument()
+		expect(screen.queryByText(/12345678/)).not.toBeInTheDocument()
+	})
 
 	it("keeps the Aviso number on the FINANCE document list", async ({
 		renderStub,

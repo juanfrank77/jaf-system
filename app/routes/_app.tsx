@@ -1,6 +1,7 @@
 import { Outlet } from "react-router"
 import { AppShell } from "~/components/app-shell"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { refuseCrew } from "~/lib/crew-notice.server"
 import { db } from "~/lib/db.server"
 import { isVarianceEnabled } from "~/lib/features.server"
 import { loadNavCounts } from "~/lib/nav-counts.server"
@@ -13,6 +14,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const user = await db.user.findUniqueOrThrow({
 		where: { id: session.user.id },
 	})
+	refuseCrew(user.role)
 	const notifications = await db.notification.findMany({
 		where: { userId: session.user.id, read: false },
 		orderBy: { createdAt: "desc" },

@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { syncCompletionActions } from "./installer-completion-sync"
 import {
-	type CachedJob,
-	cacheJobs,
-	getCachedJob,
-	getCachedJobs,
 	getQueuedActions,
 	queueAction,
 	removeQueuedAction,
@@ -123,48 +120,11 @@ describe("offline-store", () => {
 		resetDbPromise()
 	})
 
-	describe("cacheJobs and getCachedJobs", () => {
-		it("caches and retrieves jobs", async () => {
-			const jobs: CachedJob[] = [
-				{
-					id: "doc1",
-					controlNumber: "JAF-1001",
-					status: "SIGNED",
-					jobType: "Repair",
-					jobAddressEstimated: "Cupey",
-					assignedCrewIds: ["crew1"],
-					updatedAt: new Date().toISOString(),
-				},
-			]
-			await cacheJobs(jobs)
-			const cached = await getCachedJobs()
-			expect(cached).toHaveLength(1)
-			expect(cached[0].controlNumber).toBe("JAF-1001")
-		})
-
-		it("retrieves a single cached job by id", async () => {
-			const jobs: CachedJob[] = [
-				{
-					id: "doc2",
-					controlNumber: "JAF-1002",
-					status: "PREPPED",
-					jobType: "Install",
-					jobAddressEstimated: "Santurce",
-					assignedCrewIds: ["crew1"],
-					updatedAt: new Date().toISOString(),
-				},
-			]
-			await cacheJobs(jobs)
-			const cached = await getCachedJob("doc2")
-			expect(cached?.controlNumber).toBe("JAF-1002")
-		})
-	})
-
 	describe("queueAction and getQueuedActions", () => {
-		it("queues a field update action", async () => {
+		it("queues an action", async () => {
 			const action = await queueAction({
 				docId: "doc1",
-				action: "FIELD_UPDATE",
+				action: "INSTALLER_COMPLETION",
 				payload: { notes: "done" },
 			})
 			expect(action.id).toBeTruthy()
@@ -176,7 +136,7 @@ describe("offline-store", () => {
 		it("removes a queued action by id", async () => {
 			const action = await queueAction({
 				docId: "doc1",
-				action: "FIELD_UPDATE",
+				action: "INSTALLER_COMPLETION",
 				payload: {},
 			})
 			await removeQueuedAction(action.id)
@@ -187,8 +147,16 @@ describe("offline-store", () => {
 
 	describe("syncQueuedActions", () => {
 		it("syncs queued actions in order and removes them", async () => {
-			await queueAction({ docId: "doc1", action: "FIELD_UPDATE", payload: {} })
-			await queueAction({ docId: "doc2", action: "FIELD_UPDATE", payload: {} })
+			await queueAction({
+				docId: "doc1",
+				action: "INSTALLER_COMPLETION",
+				payload: {},
+			})
+			await queueAction({
+				docId: "doc2",
+				action: "INSTALLER_COMPLETION",
+				payload: {},
+			})
 			const syncOne = vi.fn().mockResolvedValue({ ok: true })
 			const result = await syncQueuedActions({ syncOne })
 			expect(result.synced).toBe(2)
@@ -197,7 +165,11 @@ describe("offline-store", () => {
 		})
 
 		it("reports conflicts and removes conflicting actions", async () => {
-			await queueAction({ docId: "doc1", action: "FIELD_UPDATE", payload: {} })
+			await queueAction({
+				docId: "doc1",
+				action: "INSTALLER_COMPLETION",
+				payload: {},
+			})
 			const syncOne = vi.fn().mockResolvedValue({
 				ok: false,
 				conflict: {
@@ -213,7 +185,11 @@ describe("offline-store", () => {
 		})
 
 		it("keeps failed actions in the queue when no conflict", async () => {
-			await queueAction({ docId: "doc1", action: "FIELD_UPDATE", payload: {} })
+			await queueAction({
+				docId: "doc1",
+				action: "INSTALLER_COMPLETION",
+				payload: {},
+			})
 			const syncOne = vi.fn().mockResolvedValue({ ok: false, error: "network" })
 			const result = await syncQueuedActions({ syncOne })
 			expect(result.synced).toBe(0)
@@ -222,7 +198,11 @@ describe("offline-store", () => {
 		})
 
 		it("marks a validation-rejected action, keeps it, and never retries it", async () => {
-			await queueAction({ docId: "doc1", action: "FIELD_UPDATE", payload: {} })
+			await queueAction({
+				docId: "doc1",
+				action: "INSTALLER_COMPLETION",
+				payload: {},
+			})
 			const rejecting = vi.fn().mockResolvedValue({
 				ok: false,
 				rejected: { errorKey: "docs_field.errors.used_exceeds_took" },
@@ -241,6 +221,26 @@ describe("offline-store", () => {
 			expect(again).not.toHaveBeenCalled()
 			expect(second.synced).toBe(0)
 			expect(await getQueuedActions()).toHaveLength(1)
+		})
+	})
+
+	describe("a crew field update left in the queue from before", () => {
+		it("is dropped, never replayed, and the installer queue still syncs", async () => {
+			// Crews no longer submit the Field step; a browser can still hold one.
+			await queueAction({
+				docId: "doc1",
+				action: "FIELD_UPDATE",
+				payload: { jobAddressActual: "x" },
+			} as never)
+			await queueAction({ action: "INSTALLER_COMPLETION", payload: {} })
+			const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 })
+			vi.stubGlobal("fetch", fetchMock)
+			const result = await syncCompletionActions()
+			expect(result.synced).toBe(1)
+			expect(result.errors).toEqual([])
+			expect(fetchMock).toHaveBeenCalledTimes(1)
+			expect(fetchMock.mock.calls[0][0]).toBe("/installer/completion/new")
+			expect(await getQueuedActions()).toEqual([])
 		})
 	})
 })

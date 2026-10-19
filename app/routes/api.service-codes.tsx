@@ -10,6 +10,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 		where: { id: session.user.id },
 		select: { role: true },
 	})
+	// Crew accounts no longer sign in.
+	if (viewer?.role === "CREW") return new Response("Forbidden", { status: 403 })
 	// Fail closed: an unknown viewer gets no prices.
 	const showPrices = viewer !== null && !isPriceBlind(viewer.role)
 	const q = new URL(request.url).searchParams.get("q") ?? ""

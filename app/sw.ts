@@ -1,13 +1,13 @@
 import { precacheAndRoute } from "workbox-precaching"
 import { registerRoute } from "workbox-routing"
-import { CacheFirst, NetworkFirst, NetworkOnly } from "workbox-strategies"
+import { CacheFirst, NetworkFirst } from "workbox-strategies"
 
 declare let self: ServiceWorkerGlobalScope
 
 precacheAndRoute(self.__WB_MANIFEST)
 
 // Dashboard and document list/detail pages: try network first, fallback to cache.
-// This keeps the app usable when offline while avoiding stale field-update forms.
+// This keeps the app usable when offline.
 registerRoute(
 	({ url, request }) =>
 		request.destination === "document" &&
@@ -16,16 +16,6 @@ registerRoute(
 		cacheName: "documents-v1",
 		networkTimeoutSeconds: 5,
 	}),
-)
-
-// Field-update form pages must never be served from cache when stale. NetworkOnly
-// always hits the network, so a logged-in user is never shown stale HTML.
-registerRoute(
-	({ url, request }) =>
-		request.destination === "document" &&
-		url.pathname.startsWith("/docs/") &&
-		url.pathname.endsWith("/field"),
-	new NetworkOnly(),
 )
 
 // Static assets — cache first

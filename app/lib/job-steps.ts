@@ -3,7 +3,7 @@ import type { Role } from "../../generated/prisma/client"
 // The job's own lifecycle, in the order the work travels through
 // it, as drawn on every job screen (mockup v3): the work order is
 // created, the warehouse stages and releases the materials with
-// both signatures, the crew works the job and logs it, the
+// both signatures, the crew works the job and the supervisor logs it, the
 // warehouse receives what comes back, and supervisor + finance
 // close it out. Every per-job screen renders a `JobStepRail`
 // naming its step; which steps are "yours" depends on the login.
@@ -47,7 +47,6 @@ export const JOB_STEP_LABEL_KEY = {
 /** The steps a role owns — the rail's "You" marks. ADMIN oversees
  * every step but owns none, so nothing is bolded for it. */
 const MINE_BY_ROLE: Partial<Record<Role, JobStep[]>> = {
-	CREW: ["RELEASE"],
 	WAREHOUSE: ["PREP", "RELEASE", "RETURN"],
 	SUPERVISOR: ["FIELD", "CLOSE"],
 }
@@ -56,7 +55,6 @@ const MINE_BY_ROLE: Partial<Record<Role, JobStep[]>> = {
 const ACCESS_BY_STEP: Record<JobStep, Role[]> = {
 	CREATED: [
 		"SUPERVISOR",
-		"CREW",
 		"WAREHOUSE",
 		"FINANCE",
 		"INSTALLER",
@@ -64,7 +62,7 @@ const ACCESS_BY_STEP: Record<JobStep, Role[]> = {
 		"INSTALLER_SUPERVISOR",
 	],
 	PREP: ["WAREHOUSE"],
-	RELEASE: ["CREW", "WAREHOUSE"],
+	RELEASE: ["WAREHOUSE"],
 	FIELD: ["SUPERVISOR"],
 	RETURN: ["WAREHOUSE"],
 	CLOSE: ["SUPERVISOR"],

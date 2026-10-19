@@ -108,7 +108,7 @@ sudo chown -R <app-user>:<app-user> /var/lib/jaf-operations/uploads
 ## 6. HTTPS is required, not optional
 
 Two features in this app stop working over plain HTTP:
-- **PWA / offline mode** for the crew field-update screen — browsers only register service workers over HTTPS (or `localhost`).
+- **PWA / offline mode** for the installer completion queue — browsers only register service workers over HTTPS (or `localhost`).
 - **Session cookies** — better-auth issues secure cookies that browsers will reject over plain HTTP outside of `localhost`.
 
 You don't need a public CA-signed certificate for a pilot — an internal CA cert or even a self-signed cert trusted on the pilot devices is enough, as long as every device accessing the app trusts it. Put `nginx` or `caddy` in front of the Node app as a TLS-terminating reverse proxy. Example with Caddy (simplest option):

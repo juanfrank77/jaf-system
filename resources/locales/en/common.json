@@ -177,10 +177,6 @@
 		"500": {
 			"title": "Something went wrong!",
 			"description": "An unexpected error occurred on the server."
-		},
-		"not_assigned": {
-			"title": "This job isn't assigned to you",
-			"description": "It may have been reassigned to another crew. Go back to your dashboard to see your current jobs, or ask your supervisor if you think this is a mistake."
 		}
 	},
 	"app_shell": {
@@ -229,9 +225,6 @@
 			"supervisor_precert": "Pre-cert sheets",
 			"supervisor_released": "Released to Finance",
 			"supervisor_all": "All work orders",
-			"crew_pickup": "Pickup",
-			"crew_field": "In the field",
-			"crew_submitted": "Submitted",
 			"warehouse_prep": "Work orders to prep",
 			"warehouse_pickup": "Awaiting pickup",
 			"warehouse_returns": "Returns due",
@@ -303,6 +296,10 @@
 			"rate_limited_one": "Too many login attempts. Try again in {{count}} second.",
 			"rate_limited_other": "Too many login attempts. Try again in {{count}} seconds."
 		}
+	},
+	"crew_notice": {
+		"title": "This account is no longer used",
+		"body": "Crew members no longer sign in to JAF Ops. Your supervisor records the field work for your brigade. If you think this is a mistake, ask your supervisor or an administrator."
 	},
 	"crew_picker": {
 		"share": "Share this job with other crews",
@@ -457,9 +454,7 @@
 			"generate_lc": "Generate LC Request",
 			"continue_review": "Continue supervisor steps",
 			"default": "Next Action"
-		},
-		"submitted_title": "{{control}} submitted · {{time}}",
-		"submitted_body": "{{name}} has been notified. You'll see it here if anything needs fixing."
+		}
 	},
 	"page_title": {
 		"needs_review": "Needs Review",
@@ -479,7 +474,8 @@
 		"warehouse_prep": "Prep Orders",
 		"warehouse_release": "Awaiting Pickup",
 		"warehouse_returns": "Returns Due",
-		"installer_restock": "Restock"
+		"installer_restock": "Restock",
+		"crew_notice": "Account not in use"
 	},
 	"docs_prep": {
 		"title": "Prep Materials",
@@ -1494,16 +1490,9 @@
 		"sent_back_heading": "Sent Back ({{count}})",
 		"sent_back_badge": "Needs Fix",
 		"sent_back_note": "Note: {{note}}",
-		"ready_for_pickup_heading": "Ready for Pickup ({{count}})",
-		"ready_for_pickup_badge": "Ready for pickup",
 		"days_staged_one": "{{count}} day",
 		"days_staged_other": "{{count}} days",
 		"aged_pickup_badge": "Aged > 3 days",
-		"in_the_field_heading": "In the Field ({{count}})",
-		"in_the_field_badge": "In the field",
-		"crew_sent_back_heading": "Sent Back ({{count}})",
-		"submitted_heading": "Submitted ({{count}})",
-		"submitted_badge": "Awaiting review",
 		"prepped_awaiting_badge": "Staged",
 		"returns_to_log_badge": "Expected back",
 		"triage_awaiting_heading": "Returned units awaiting triage ({{count}})",
@@ -1526,9 +1515,7 @@
 			"open_jobs": "Open jobs",
 			"awaiting_close": "Awaiting close",
 			"ready_for_pickup": "Ready for pickup",
-			"in_the_field": "In the field",
 			"sent_back": "Sent back",
-			"submitted": "Submitted",
 			"total_documents": "Total documents",
 			"open_receivables": "Open receivables",
 			"awaiting_claro_upload": "Awaiting Claro upload",
@@ -1556,12 +1543,6 @@
 			"ready_to_close_other": "{{count}} jobs ready to close",
 			"ready_for_pickup_one": "{{count}} job ready for pickup",
 			"ready_for_pickup_other": "{{count}} jobs ready for pickup",
-			"jobs_in_field_one": "{{count}} job in the field",
-			"jobs_in_field_other": "{{count}} jobs in the field",
-			"sent_back_one": "{{count}} job sent back",
-			"sent_back_other": "{{count}} jobs sent back",
-			"submitted_one": "{{count}} job submitted",
-			"submitted_other": "{{count}} jobs submitted",
 			"receivables_open_one": "{{count}} receivable open",
 			"receivables_open_other": "{{count}} receivables open"
 		},
@@ -1589,11 +1570,6 @@
 			"warehouse_needs_prep": "Prep and stage materials",
 			"warehouse_missing_materials": "Resolve missing materials",
 			"warehouse_no_actions": "No actions pending",
-			"crew_sent_back": "Fix and resubmit",
-			"crew_awaiting_review": "Awaiting supervisor review",
-			"crew_ready_for_pickup": "Pick up and sign",
-			"crew_in_field": "Update field status",
-			"crew_no_actions": "No actions pending",
 			"finance_open_receivables": "Process open receivables",
 			"finance_awaiting_claro": "Awaiting Claro upload",
 			"finance_no_actions": "No actions pending",
@@ -1601,20 +1577,6 @@
 			"installer_awaiting_warehouse": "Awaiting warehouse action",
 			"installer_awaiting_pickup": "Pick up ready restock",
 			"installer_no_actions": "No installer actions pending"
-		},
-		"crew": {
-			"title": "My jobs",
-			"subtitle_open_one": "{{count}} open",
-			"subtitle_open_other": "{{count}} open",
-			"empty": "No jobs assigned to your brigade yet.",
-			"sent_back_note": "Sent back: {{note}}",
-			"status": {
-				"sent_back": "SENT BACK",
-				"ready": "READY FOR PICKUP",
-				"on_site": "ON SITE",
-				"submitted": "SUBMITTED",
-				"approved": "APPROVED"
-			}
 		},
 		"to_prep_heading": "To prep ({{count}})",
 		"to_prep_badge": "To prep",
@@ -2098,14 +2060,9 @@
 		},
 		"callout": {
 			"sign_title": "Step 3 · You + Crew",
-			"sign_title_crew": "Step 3 · You + Warehouse",
 			"sign_body": "Count each line together on one screen. The crew may take more — change the number. Both sign. The list locks for everyone.",
-			"field_title": "Step 4 · You",
-			"field_body": "Do the job, then log it here: actual address, GPS, materials used, photos and your signature. What you save offline syncs when you reconnect.",
 			"warehouse_list_title": "Your steps",
-			"warehouse_list_body": "Stage the materials (2), release them with both signatures (3), receive what comes back. Grey steps happen to the job, not to you.",
-			"crew_list_title": "Your steps are 3 and 4.",
-			"crew_list_body": "Pick up at the warehouse, do the job, document it. Grey steps happen to the job but are not yours."
+			"warehouse_list_body": "Stage the materials (2), release them with both signatures (3), receive what comes back. Grey steps happen to the job, not to you."
 		}
 	},
 	"finance_payroll": {

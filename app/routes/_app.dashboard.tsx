@@ -1,10 +1,8 @@
-import { useEffect } from "react"
 import { redirect } from "react-router"
 import { RoleDashboard } from "~/components/dashboards/role-dashboard"
 import { RouteErrorBoundary } from "~/components/error-boundary"
-import { parseCrewQueue } from "~/lib/crew-queues"
+import { refuseCrew } from "~/lib/crew-notice.server"
 import {
-	computeAwaitingPickup,
 	computeDashboardStats,
 	computeMaterialSignals,
 	type DashboardExplainer,
@@ -12,7 +10,6 @@ import {
 import { db } from "~/lib/db.server"
 import { isDashboardFiltersEnabled } from "~/lib/features.server"
 import { isMissingAvisoPdf } from "~/lib/finance-pipeline.server"
-import { cacheJobs } from "~/lib/offline-store"
 import { type OpenJobLabel, openJobLabel } from "~/lib/open-job-label"
 import { pageTitle } from "~/lib/page-title"
 import { requireSession } from "~/lib/permissions.server"
@@ -39,16 +36,6 @@ export const meta: Route.MetaFunction = ({ matches }) => [
 	{ title: pageTitle(matches, "page_title.dashboard") },
 ]
 
-type SendBackHistoryRow = {
-	id: string
-	controlNumber: string
-	status: DocStatus
-	jobType: string
-	jobAddressEstimated: string
-	createdAt: Date
-	sendBackHistory: unknown
-}
-
 async function buildBaseWhere(
 	role: Role,
 	userId: string,
@@ -57,7 +44,6 @@ async function buildBaseWhere(
 		const areas = await supervisorAreas(db, userId)
 		return ownedOrInArea(userId, areas)
 	}
-	if (role === "CREW") return { assignedCrewIds: { has: userId } }
 	// Finance only sees work orders the supervisor released to Finance;
 	// supervisor-stage docs never reach them. Composes by key with the status /
 	// crew / job-type filters and the search `OR`, so the gate survives all of them.
@@ -312,6 +298,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const user = await db.user.findUniqueOrThrow({
 		where: { id: session.user.id },
 	})
+	refuseCrew(user.role)
 
 	// An installer's home is /installer. Only an installer with no profile
 	// stays here, because /installer would send them straight back.
@@ -338,10 +325,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 		user.role === "SUPERVISOR"
 			? parseSupervisorQueue(url.searchParams.get("stage"))
 			: null
-
-	// A crew member's sidebar queue (`?stage=`): one step of their own work.
-	const crewQueue =
-		user.role === "CREW" ? parseCrewQueue(url.searchParams.get("stage")) : null
 
 	const selectedStatus = statusFilter ? (statusFilter as DocStatus) : null
 	const selectedCrew = crewFilter || null
@@ -464,57 +447,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 		})
 	})()
 
-	const crewPreppedDocs = computeAwaitingPickup(
-		user.role === "CREW"
-			? await db.jafInvoice.findMany({
-					where: {
-						...(await buildBaseWhere(user.role, user.id)),
-						status: "PREPPED",
-					},
-					orderBy: { createdAt: "desc" },
-					take: 50,
-				})
-			: [],
-	)
-
-	const crewInFieldDocs =
-		user.role === "CREW"
-			? ((await db.$queryRaw`
-				SELECT id, "controlNumber", status, "jobType", "jobAddressEstimated", "createdAt", "sendBackHistory"
-				FROM jaf_invoice
-				WHERE "assignedCrewIds" @> ARRAY[${user.id}]::text[]
-					AND status = 'SIGNED'
-					AND ("sendBackHistory" IS NULL OR jsonb_array_length("sendBackHistory") = 0)
-			ORDER BY "createdAt" DESC
-			LIMIT 50
-		`) as SendBackHistoryRow[])
-			: []
-
-	const crewSentBackDocs =
-		user.role === "CREW"
-			? ((await db.$queryRaw`
-				SELECT id, "controlNumber", status, "jobType", "jobAddressEstimated", "createdAt", "sendBackHistory"
-				FROM jaf_invoice
-				WHERE "assignedCrewIds" @> ARRAY[${user.id}]::text[]
-					AND status = 'SIGNED'
-					AND jsonb_array_length("sendBackHistory") > 0
-			ORDER BY "createdAt" DESC
-			LIMIT 50
-		`) as SendBackHistoryRow[])
-			: []
-
-	const crewSubmittedDocs =
-		user.role === "CREW"
-			? await db.jafInvoice.findMany({
-					where: {
-						...(await buildBaseWhere(user.role, user.id)),
-						status: "FIELD_UPDATED",
-					},
-					orderBy: { createdAt: "desc" },
-					take: 50,
-				})
-			: []
-
 	return {
 		role: user.role,
 		stats,
@@ -538,11 +470,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 		warehouseToPrepDocs,
 		warehouseCounts,
 		warehouseTriageCount,
-		crewPreppedDocs,
-		crewInFieldDocs,
-		crewSentBackDocs,
-		crewSubmittedDocs,
-		crewQueue,
 	}
 }
 
@@ -567,44 +494,9 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 		warehouseToPrepDocs,
 		warehouseCounts,
 		warehouseTriageCount,
-		crewPreppedDocs,
-		crewInFieldDocs,
-		crewSentBackDocs,
-		crewSubmittedDocs,
-		crewQueue,
 	} = loaderData
 	const explainer = (loaderData as { explainer?: DashboardExplainer })
 		.explainer as DashboardExplainer
-
-	useEffect(() => {
-		if (typeof window === "undefined") return
-		const allDocs = [
-			...docs,
-			...crewPreppedDocs,
-			...crewInFieldDocs,
-			...crewSentBackDocs,
-			...crewSubmittedDocs,
-		]
-		cacheJobs(
-			allDocs.map((d) => ({
-				id: d.id,
-				controlNumber: d.controlNumber,
-				status: d.status,
-				jobType: d.jobType,
-				jobAddressEstimated: d.jobAddressEstimated,
-				assignedCrewIds: "assignedCrewIds" in d ? d.assignedCrewIds : [],
-				sendBackHistory: "sendBackHistory" in d ? d.sendBackHistory : undefined,
-				avisoNumber: "avisoNumber" in d ? d.avisoNumber : null,
-				updatedAt: new Date().toISOString(),
-			})),
-		).catch(() => {})
-	}, [
-		docs,
-		crewPreppedDocs,
-		crewInFieldDocs,
-		crewSentBackDocs,
-		crewSubmittedDocs,
-	])
 
 	return (
 		<RoleDashboard
@@ -612,7 +504,6 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 			supervisorQueues={supervisorQueues}
 			supervisorScope={supervisorScope}
 			stageQueue={stageQueue}
-			crewQueue={crewQueue}
 			stats={stats}
 			alert={alert}
 			explainer={explainer}
@@ -629,10 +520,6 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 			warehouseToPrepDocs={warehouseToPrepDocs}
 			warehouseCounts={warehouseCounts}
 			warehouseTriageCount={warehouseTriageCount}
-			crewPreppedDocs={crewPreppedDocs}
-			crewInFieldDocs={crewInFieldDocs}
-			crewSentBackDocs={crewSentBackDocs}
-			crewSubmittedDocs={crewSubmittedDocs}
 		/>
 	)
 }

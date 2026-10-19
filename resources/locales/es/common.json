@@ -177,10 +177,6 @@
 		"500": {
 			"title": "¡Algo salió mal!",
 			"description": "Ocurrió un error inesperado en el servidor."
-		},
-		"not_assigned": {
-			"title": "No tienes asignado este trabajo",
-			"description": "Puede que se haya reasignado a otra brigada. Vuelve a tu panel para ver tus trabajos actuales, o consulta a tu supervisor si crees que es un error."
 		}
 	},
 	"app_shell": {
@@ -229,9 +225,6 @@
 			"supervisor_precert": "Hojas de precertificación",
 			"supervisor_released": "Liberadas a Finanzas",
 			"supervisor_all": "Todas las órdenes de trabajo",
-			"crew_pickup": "Recogida",
-			"crew_field": "En el campo",
-			"crew_submitted": "Enviados",
 			"warehouse_prep": "Órdenes por preparar",
 			"warehouse_pickup": "Pendientes de recogida",
 			"warehouse_returns": "Devoluciones esperadas",
@@ -303,6 +296,10 @@
 			"rate_limited_one": "Demasiados intentos de inicio de sesión. Inténtalo de nuevo en {{count}} segundo.",
 			"rate_limited_other": "Demasiados intentos de inicio de sesión. Inténtalo de nuevo en {{count}} segundos."
 		}
+	},
+	"crew_notice": {
+		"title": "Esta cuenta ya no se usa",
+		"body": "Los miembros de brigada ya no inician sesión en JAF Ops. Tu supervisor registra el trabajo de campo de tu brigada. Si crees que es un error, consulta con tu supervisor o con un administrador."
 	},
 	"crew_picker": {
 		"share": "Compartir este trabajo con otras brigadas",
@@ -457,9 +454,7 @@
 			"generate_lc": "Generar solicitud de LC",
 			"continue_review": "Continuar pasos del supervisor",
 			"default": "Próxima acción"
-		},
-		"submitted_title": "{{control}} enviado · {{time}}",
-		"submitted_body": "{{name}} fue notificado. Lo verás aquí si algo necesita corrección."
+		}
 	},
 	"page_title": {
 		"needs_review": "Requiere revisión",
@@ -479,7 +474,8 @@
 		"warehouse_prep": "Preparar órdenes",
 		"warehouse_release": "Esperando recogido",
 		"warehouse_returns": "Devoluciones pendientes",
-		"installer_restock": "Reabastecimiento"
+		"installer_restock": "Reabastecimiento",
+		"crew_notice": "Cuenta sin uso"
 	},
 	"docs_prep": {
 		"title": "Preparar materiales",
@@ -1494,16 +1490,9 @@
 		"sent_back_heading": "Devueltos ({{count}})",
 		"sent_back_badge": "Necesita corrección",
 		"sent_back_note": "Nota: {{note}}",
-		"ready_for_pickup_heading": "Listos para recoger ({{count}})",
-		"ready_for_pickup_badge": "Listo para recoger",
 		"days_staged_one": "{{count}} día",
 		"days_staged_other": "{{count}} días",
 		"aged_pickup_badge": "Envejecido > 3 días",
-		"in_the_field_heading": "En el campo ({{count}})",
-		"in_the_field_badge": "En el campo",
-		"crew_sent_back_heading": "Devueltos ({{count}})",
-		"submitted_heading": "Enviados ({{count}})",
-		"submitted_badge": "Esperando revisión",
 		"prepped_awaiting_badge": "Preparado",
 		"returns_to_log_badge": "Se espera de vuelta",
 		"triage_awaiting_heading": "Unidades devueltas en espera de triaje ({{count}})",
@@ -1526,9 +1515,7 @@
 			"open_jobs": "Trabajos abiertos",
 			"awaiting_close": "Esperando cierre",
 			"ready_for_pickup": "Listos para recoger",
-			"in_the_field": "En el campo",
 			"sent_back": "Devueltos",
-			"submitted": "Enviados",
 			"total_documents": "Documentos totales",
 			"open_receivables": "Cuentas por cobrar abiertas",
 			"awaiting_claro_upload": "Esperando carga a Claro",
@@ -1556,12 +1543,6 @@
 			"ready_to_close_other": "{{count}} trabajos listos para cerrar",
 			"ready_for_pickup_one": "{{count}} trabajo listo para recoger",
 			"ready_for_pickup_other": "{{count}} trabajos listos para recoger",
-			"jobs_in_field_one": "{{count}} trabajo en el campo",
-			"jobs_in_field_other": "{{count}} trabajos en el campo",
-			"sent_back_one": "{{count}} trabajo devuelto",
-			"sent_back_other": "{{count}} trabajos devueltos",
-			"submitted_one": "{{count}} trabajo enviado",
-			"submitted_other": "{{count}} trabajos enviados",
 			"receivables_open_one": "{{count}} cuenta por cobrar abierta",
 			"receivables_open_other": "{{count}} cuentas por cobrar abiertas"
 		},
@@ -1589,11 +1570,6 @@
 			"warehouse_needs_prep": "Prepara y etapa materiales",
 			"warehouse_missing_materials": "Resuelve materiales faltantes",
 			"warehouse_no_actions": "Sin acciones pendientes",
-			"crew_sent_back": "Corrige y vuelve a enviar",
-			"crew_awaiting_review": "Esperando revisión del supervisor",
-			"crew_ready_for_pickup": "Recoge y firma",
-			"crew_in_field": "Actualiza estado de campo",
-			"crew_no_actions": "Sin acciones pendientes",
 			"finance_open_receivables": "Procesa cuentas por cobrar",
 			"finance_awaiting_claro": "Esperando carga a Claro",
 			"finance_no_actions": "Sin acciones pendientes",
@@ -1601,20 +1577,6 @@
 			"installer_awaiting_warehouse": "Esperando acción de almacén",
 			"installer_awaiting_pickup": "Recoge restock listo",
 			"installer_no_actions": "Sin acciones del instalador pendientes"
-		},
-		"crew": {
-			"title": "Mis trabajos",
-			"subtitle_open_one": "{{count}} abierto",
-			"subtitle_open_other": "{{count}} abiertos",
-			"empty": "Tu brigada aún no tiene trabajos asignados.",
-			"sent_back_note": "Devuelto: {{note}}",
-			"status": {
-				"sent_back": "DEVUELTO",
-				"ready": "LISTO PARA RECOGER",
-				"on_site": "EN EL SITIO",
-				"submitted": "ENVIADO",
-				"approved": "APROBADO"
-			}
 		},
 		"to_prep_heading": "Por preparar ({{count}})",
 		"to_prep_badge": "Por preparar",
@@ -2098,14 +2060,9 @@
 		},
 		"callout": {
 			"sign_title": "Paso 3 · Tú + Cuadrilla",
-			"sign_title_crew": "Paso 3 · Tú + Almacén",
 			"sign_body": "Cuenta cada línea juntos en una pantalla. La cuadrilla puede tomar más — cambia la cantidad. Ambos firman. La lista queda bloqueada para todos.",
-			"field_title": "Paso 4 · Tú",
-			"field_body": "Haz el trabajo y luego regístralo aquí: dirección real, GPS, materiales utilizados, fotos y tu firma. Lo que guardes sin conexión se sincroniza al reconectar.",
 			"warehouse_list_title": "Tus pasos",
-			"warehouse_list_body": "Prepara los materiales (2), entrégalos con ambas firmas (3) y recibe lo que regresa. Los pasos en gris les ocurren al trabajo, no a ti.",
-			"crew_list_title": "Tus pasos son el 3 y el 4.",
-			"crew_list_body": "Recoge en el almacén, haz el trabajo y documéntalo. Los pasos en gris le ocurren al trabajo pero no son tuyos."
+			"warehouse_list_body": "Prepara los materiales (2), entrégalos con ambas firmas (3) y recibe lo que regresa. Los pasos en gris les ocurren al trabajo, no a ti."
 		}
 	},
 	"finance_payroll": {

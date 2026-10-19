@@ -1,7 +1,6 @@
 import { useTranslation } from "react-i18next"
 import { isRouteErrorResponse, Link } from "react-router"
 import { Card, CardContent } from "~/components/ui/card"
-import { isNotAssignedError } from "~/lib/crew-scope"
 
 interface RouteErrorBoundaryProps {
 	error: unknown
@@ -21,10 +20,7 @@ function ErrorFallback({ error }: ErrorFallbackProps) {
 	let message = t("error.500.description")
 	let stack: string | undefined
 
-	if (isNotAssignedError(error)) {
-		title = t("error.not_assigned.title")
-		message = t("error.not_assigned.description")
-	} else if (isRouteErrorResponse(error)) {
+	if (isRouteErrorResponse(error)) {
 		title = error.status === 404 ? t("error.404.title") : "Error"
 		message =
 			error.status === 404

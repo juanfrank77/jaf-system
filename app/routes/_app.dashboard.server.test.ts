@@ -228,7 +228,7 @@ describe("GET /dashboard (WAREHOUSE) — count cards", () => {
 			expect(res instanceof Response).toBe(false)
 		})
 
-		it.each(["CREW", "SUPERVISOR"])(
+		it.each(["SUPERVISOR"])(
 			"never redirects %s to /installer",
 			async (role) => {
 				vi.mocked(requireSession).mockResolvedValue({
@@ -268,5 +268,27 @@ describe("GET /dashboard (COMPTROLLER)", () => {
 		)
 		expect(thrown).toBeInstanceOf(Response)
 		expect((thrown as Response).headers.get("Location")).toBe("/comptroller")
+	})
+})
+
+describe("GET /dashboard (CREW)", () => {
+	it("sends the crew member to the crew notice and loads no jobs", async () => {
+		vi.clearAllMocks()
+		vi.mocked(requireSession).mockResolvedValue({ user: { id: "c1" } } as any)
+		vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
+			id: "c1",
+			role: "CREW",
+		} as any)
+		const thrown = await loader({
+			request: new Request("http://localhost/dashboard?stage=field"),
+			params: {},
+		} as any).then(
+			() => null,
+			(e: unknown) => e,
+		)
+		expect(thrown).toBeInstanceOf(Response)
+		expect((thrown as Response).headers.get("Location")).toBe("/crew-notice")
+		expect(db.jafInvoice.findMany).not.toHaveBeenCalled()
+		expect(db.$queryRaw).not.toHaveBeenCalled()
 	})
 })

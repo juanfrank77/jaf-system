@@ -33,9 +33,7 @@ export type DashboardStatLabelKey =
 	| "dashboard.stat.open_jobs"
 	| "dashboard.stat.awaiting_close"
 	| "dashboard.stat.ready_for_pickup"
-	| "dashboard.stat.in_the_field"
 	| "dashboard.stat.sent_back"
-	| "dashboard.stat.submitted"
 	| "dashboard.stat.total_documents"
 	| "dashboard.stat.open_receivables"
 	| "dashboard.stat.awaiting_claro_upload"
@@ -59,9 +57,6 @@ export type DashboardAlertKey =
 	| "dashboard.alert.missing_materials"
 	| "dashboard.alert.ready_to_close"
 	| "dashboard.alert.ready_for_pickup"
-	| "dashboard.alert.jobs_in_field"
-	| "dashboard.alert.sent_back"
-	| "dashboard.alert.submitted"
 	| "dashboard.alert.receivables_open"
 
 export type DashboardStat = { labelKey: DashboardStatLabelKey; value: number }
@@ -79,11 +74,6 @@ export type DashboardExplainerKey =
 	| "dashboard.explainer.warehouse_needs_prep"
 	| "dashboard.explainer.warehouse_missing_materials"
 	| "dashboard.explainer.warehouse_no_actions"
-	| "dashboard.explainer.crew_sent_back"
-	| "dashboard.explainer.crew_awaiting_review"
-	| "dashboard.explainer.crew_ready_for_pickup"
-	| "dashboard.explainer.crew_in_field"
-	| "dashboard.explainer.crew_no_actions"
 	| "dashboard.explainer.finance_open_receivables"
 	| "dashboard.explainer.finance_awaiting_claro"
 	| "dashboard.explainer.finance_no_actions"
@@ -371,85 +361,6 @@ export function computeDashboardStats(
 					: missingMaterials > 0
 						? { labelKey: "dashboard.explainer.warehouse_missing_materials" }
 						: { labelKey: "dashboard.explainer.warehouse_no_actions" },
-		}
-	}
-
-	if (role === "CREW") {
-		const openJobs = count(
-			docs,
-			(d) => d.status !== "LC_REQUEST_GENERATED" && d.status !== "CANCELLED",
-		)
-		const readyForPickup = count(docs, (d) => d.status === "PREPPED")
-		const inTheField = count(
-			docs,
-			(d) =>
-				d.status === "SIGNED" &&
-				(!Array.isArray(d.sendBackHistory) ||
-					(Array.isArray(d.sendBackHistory) && d.sendBackHistory.length === 0)),
-		)
-		const sendBackHistory = (d: DashboardDoc): unknown[] =>
-			Array.isArray(d.sendBackHistory) ? d.sendBackHistory : []
-		const sentBack = count(
-			docs,
-			(d) => d.status === "SIGNED" && sendBackHistory(d).length > 0,
-		)
-		const submitted = count(docs, (d) => d.status === "FIELD_UPDATED")
-		const { discrepancy, shortage, overage } = computeMaterialSignals(docs)
-		const alert =
-			sentBack > 0
-				? {
-						variant: "warn" as const,
-						key: "dashboard.alert.sent_back" as const,
-						count: sentBack,
-					}
-				: submitted > 0
-					? {
-							variant: "info" as const,
-							key: "dashboard.alert.submitted" as const,
-							count: submitted,
-						}
-					: readyForPickup > 0
-						? {
-								variant: "info" as const,
-								key: "dashboard.alert.ready_for_pickup" as const,
-								count: readyForPickup,
-							}
-						: inTheField > 0
-							? {
-									variant: "warn" as const,
-									key: "dashboard.alert.jobs_in_field" as const,
-									count: inTheField,
-								}
-							: null
-		return {
-			stats: [
-				{ labelKey: "dashboard.stat.open_jobs", value: openJobs },
-				{ labelKey: "dashboard.stat.ready_for_pickup", value: readyForPickup },
-				{ labelKey: "dashboard.stat.in_the_field", value: inTheField },
-				{ labelKey: "dashboard.stat.sent_back", value: sentBack },
-				{ labelKey: "dashboard.stat.submitted", value: submitted },
-				{ labelKey: "dashboard.stat.stage_awaiting_warehouse", value: 0 },
-				{
-					labelKey: "dashboard.stat.stage_awaiting_crew",
-					value: readyForPickup,
-				},
-				{ labelKey: "dashboard.stat.stage_pending_review", value: 0 },
-				{ labelKey: "dashboard.stat.stage_in_finance", value: 0 },
-				{ labelKey: "dashboard.stat.discrepancy_count", value: discrepancy },
-				{ labelKey: "dashboard.stat.shortage_count", value: shortage },
-				{ labelKey: "dashboard.stat.overage_count", value: overage },
-			],
-			alert,
-			explainer:
-				sentBack > 0
-					? { labelKey: "dashboard.explainer.crew_sent_back" }
-					: submitted > 0
-						? { labelKey: "dashboard.explainer.crew_awaiting_review" }
-						: readyForPickup > 0
-							? { labelKey: "dashboard.explainer.crew_ready_for_pickup" }
-							: inTheField > 0
-								? { labelKey: "dashboard.explainer.crew_in_field" }
-								: { labelKey: "dashboard.explainer.crew_no_actions" },
 		}
 	}
 

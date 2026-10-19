@@ -2277,5 +2277,14 @@
 		"confirm_prompt": "Mark this account paid from the paper copy? This closes Arm A for the account.",
 		"fallback_off": "Confirming from paper is switched off. Carmen marks accounts paid.",
 		"open_list": "Open list"
+	},
+	"packet": {
+		"errors": {
+			"prefield_missing": "This Claro supervisor requires the Prefield form: fill in # Orden, Pedido, SMR and Título before sending.",
+			"blueprint_missing": "This Claro supervisor requires a blueprint: add one before sending.",
+			"no_claro_supervisor": "Choose the Claro supervisor for this job before sending the packet.",
+			"not_signed_off": "Sign off the field work before sending the packet.",
+			"locked": "This job has already been released to Finance; the packet can no longer be sent."
+		}
 	}
 }

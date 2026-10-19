@@ -43,15 +43,15 @@ export async function photosThatLoad<T extends { localPath: string }>(
 ): Promise<T[]> {
 	const loads = await Promise.all(
 		photos.map(async (p) => {
-			const file = path.join(
-				uploadRoot(),
-				"photos",
-				docId,
-				path.basename(p.localPath),
-			)
+			const file = photoFile(docId, p.localPath)
 			const stat = await fs.stat(file).catch(() => null)
 			return !!stat?.isFile() && stat.size > 0
 		}),
 	)
 	return photos.filter((_, i) => loads[i])
+}
+
+/** Where a `Photo` row's file is served from: `<UPLOAD_DIR>/photos/<docId>/<basename>`. */
+export function photoFile(docId: string, localPath: string): string {
+	return path.join(uploadRoot(), "photos", docId, path.basename(localPath))
 }

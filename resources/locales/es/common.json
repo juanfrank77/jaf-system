@@ -2277,5 +2277,14 @@
 		"confirm_prompt": "¿Marcar esta cuenta como pagada desde la copia en papel? Esto cierra el Brazo A para la cuenta.",
 		"fallback_off": "La confirmación desde el papel está desactivada. Carmen marca las cuentas como pagadas.",
 		"open_list": "Abrir lista"
+	},
+	"packet": {
+		"errors": {
+			"prefield_missing": "Este supervisor de Claro requiere el formulario Prefield: complete # Orden, Pedido, SMR y Título antes de enviar.",
+			"blueprint_missing": "Este supervisor de Claro requiere un plano: añada uno antes de enviar.",
+			"no_claro_supervisor": "Elija el supervisor de Claro de este trabajo antes de enviar el paquete.",
+			"not_signed_off": "Apruebe el trabajo de campo antes de enviar el paquete.",
+			"locked": "Este trabajo ya se entregó a Finanzas; el paquete ya no se puede enviar."
+		}
 	}
 }

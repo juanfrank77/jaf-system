@@ -22,7 +22,6 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "~/components/ui/select"
-import { isUnassignedCrew, notAssignedResponse } from "~/lib/crew-scope"
 import { db } from "~/lib/db.server"
 import { pageTitle } from "~/lib/page-title"
 import { generateWarehouseReceiptPdf } from "~/lib/pdf/warehouse-receipt.server"
@@ -47,11 +46,12 @@ export const meta: Route.MetaFunction = ({ data, matches }) => [
 ]
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-	const { user } = await requireRole(request, ["CREW", "WAREHOUSE", "ADMIN"])
+	// The warehouse (or an admin) runs the counter: crew accounts no longer
+	// sign in, so the brigade member signs on this screen, picked from the list.
+	const { user } = await requireRole(request, ["WAREHOUSE", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
-	if (isUnassignedCrew(user, doc)) throw notAssignedResponse()
 	if (!canTransition(doc.status, "SIGNED", user.role))
 		throw redirect(`/docs/${params.id}`)
 	const serviceCodes = await getActiveMaterialCodes()
@@ -100,11 +100,10 @@ function buildOverages(
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-	const { user } = await requireRole(request, ["CREW", "WAREHOUSE", "ADMIN"])
+	const { user } = await requireRole(request, ["WAREHOUSE", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
-	if (isUnassignedCrew(user, doc)) throw notAssignedResponse()
 	if (!canTransition(doc.status, "SIGNED", user.role))
 		throw redirect(`/docs/${params.id}`)
 
@@ -303,9 +302,7 @@ export default function SignDoc({
 	const [releasedById, setReleasedById] = useState(
 		user.role === "WAREHOUSE" ? user.id : "",
 	)
-	const [signedById, setSignedById] = useState(
-		user.role === "CREW" ? user.id : "",
-	)
+	const [signedById, setSignedById] = useState("")
 	const [items] = useState(
 		(doc.estimatedMaterials as MaterialLine[] | null) ?? [],
 	)
@@ -379,13 +376,7 @@ export default function SignDoc({
 			</div>
 
 			<JobStepRail docId={doc.id} current="RELEASE" role={user.role} />
-			<Callout
-				title={t(
-					user.role === "CREW"
-						? "job_flow.callout.sign_title_crew"
-						: "job_flow.callout.sign_title",
-				)}
-			>
+			<Callout title={t("job_flow.callout.sign_title")}>
 				{t("job_flow.callout.sign_body")}
 			</Callout>
 

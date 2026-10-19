@@ -1,4 +1,5 @@
 import {
+	dropRetiredActions,
 	type QueuedAction,
 	queueAction,
 	type SyncConflict,
@@ -75,10 +76,6 @@ export async function syncOne(a: QueuedAction): Promise<{
 }
 
 export async function syncCompletionActions() {
-	return syncQueuedActions({
-		syncOne: (a) =>
-			a.action === "INSTALLER_COMPLETION"
-				? syncOne(a)
-				: Promise.resolve({ ok: false, error: "unknown" }),
-	})
+	await dropRetiredActions()
+	return syncQueuedActions({ syncOne })
 }

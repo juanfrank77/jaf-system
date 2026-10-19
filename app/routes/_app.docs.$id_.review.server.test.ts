@@ -412,15 +412,34 @@ describe("review: save_aviso (supervisor: the Aviso PDF is the only source)", ()
 	it("stores the lines but does not stamp avisoMatchedAt on an amount mismatch", async () => {
 		// Invoiced 3 × a1 + 1 × a2 = 120; the Aviso charges 1 + 1 = 60.
 		const res = await saveAviso([line("a1", 3), line("a2", 1)])
-		expect(res).toMatchObject({
+		// A supervisor gets the verdict, never the amounts.
+		expect(res).toEqual({
 			errorKey: "docs_review.errors.aviso_amount_mismatch",
-			invoiceTotal: 120,
-			avisoTotal: 60,
 		})
 		const data = vi.mocked(db.jafInvoice.update).mock.calls[0][0].data
 		expect(data.avisoLineTotal).toBe(60)
 		expect(data.avisoMatchedAt).toBeUndefined()
 		expect(data.status).toBeUndefined()
+	})
+
+	it("an Admin still gets the amounts on a mismatch", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "admin-1", role: "ADMIN", name: "A" },
+			session: {},
+		} as any)
+		const res = await saveAviso([line("a1", 3), line("a2", 1)], {
+			avisoLines: JSON.stringify([
+				{ serviceCodeId: "a1", claroCode: "34012039", qty: 1, unitPrice: 30 },
+				{ serviceCodeId: "a2", claroCode: "34012040", qty: 1, unitPrice: 30 },
+			]),
+		})
+		expect(res).toMatchObject({
+			errorKey: "docs_review.errors.aviso_amount_mismatch",
+			invoiceTotal: 120,
+			avisoTotal: 60,
+			difference: 60,
+			tolerance: 0.01,
+		})
 	})
 
 	it("requires a note when a line quantity differs but the total matches", async () => {

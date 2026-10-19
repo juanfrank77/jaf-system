@@ -92,6 +92,31 @@ function warehouseUsed(rows: FieldMaterialRow[]): Map<string, number> {
 }
 
 /**
+ * What was used out of the warehouse stock signed out at pickup, in the
+ * `materialsUsed` shape: the WAREHOUSE rows of the Field table when there is
+ * one. `materialsUsed` also counts the brigade's own stock (Finance reads the
+ * total), so any "signed out vs used" comparison (what should come back, a
+ * quantity discrepancy) must read this instead. A job without a Field table
+ * (from before it) falls back to `materialsUsed`.
+ */
+export function warehouseUsedLines(
+	fieldMaterials: unknown,
+	materialsUsed: unknown,
+): MaterialLine[] {
+	let rows: FieldMaterialRow[] = []
+	try {
+		rows = toRows(fieldMaterials)
+	} catch {
+		// Nothing (or nothing readable) stored: a job from before the table.
+	}
+	if (rows.length === 0)
+		return Array.isArray(materialsUsed) ? (materialsUsed as MaterialLine[]) : []
+	return [...warehouseUsed(rows)]
+		.filter(([, qty]) => qty > 0)
+		.map(([serviceCodeId, qty]) => ({ serviceCodeId, qty }))
+}
+
+/**
  * Whether WAREHOUSE-source use of any code is above what was signed out at
  * pickup. Brigade's-stock rows were never signed out, so they never count.
  */

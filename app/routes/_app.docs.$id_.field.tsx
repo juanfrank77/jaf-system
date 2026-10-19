@@ -449,7 +449,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 				},
 			}),
 		)
-	if (discrepancies.length > 0)
+	// Logged once, with the Continue that moves the job to Sign off; a later
+	// Continue from FIELD_UPDATED re-checks the note but adds no second row.
+	if (advances && discrepancies.length > 0)
 		ops.push(
 			db.auditTrail.create({
 				data: {

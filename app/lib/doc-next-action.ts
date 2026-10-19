@@ -1,26 +1,19 @@
 /**
  * The job page's "next action" link: where this viewer goes to move the job
  * on, or null when the next move is not theirs. Field (status SIGNED) is the
- * supervisor's step now; crews never log in and the route refuses them.
+ * supervisor's step now; crew accounts no longer sign in, so no step is theirs.
  */
 export function nextActionHref(
 	doc: {
 		id: string
 		status: string
-		assignedCrewIds?: string[] | null
 		releasedToFinanceAt?: Date | string | null
 	},
 	userRole: string,
-	userId: string,
 ): string | null {
 	if (doc.status === "CREATED" && userRole === "WAREHOUSE")
 		return `/docs/${doc.id}/prep`
-	if (
-		doc.status === "PREPPED" &&
-		(userRole === "WAREHOUSE" ||
-			userRole === "CREW" ||
-			doc.assignedCrewIds?.includes(userId))
-	)
+	if (doc.status === "PREPPED" && userRole === "WAREHOUSE")
 		return `/docs/${doc.id}/sign`
 	if (
 		doc.status === "SIGNED" &&

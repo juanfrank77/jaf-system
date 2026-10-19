@@ -1,6 +1,5 @@
 import type { NavCount } from "~/components/nav-model"
 import { countComptrollerRuns } from "~/lib/comptroller-runs.server"
-import { CREW_QUEUES, crewQueueHref, crewQueueWhere } from "~/lib/crew-queues"
 import { db } from "~/lib/db.server"
 import { carmenOpenSummary, countArmAStages } from "~/lib/finance-stages.server"
 import { needsReviewCount, repairPoolCount } from "~/lib/serial-stock"
@@ -56,19 +55,6 @@ export async function loadNavCounts(
 					value: values[i],
 					tone: CRITICAL_QUEUES.includes(q) ? "critical" : "neutral",
 				},
-			]),
-		)
-	}
-	if (user.role === "CREW") {
-		const values = await Promise.all(
-			CREW_QUEUES.map((q) =>
-				db.jafInvoice.count({ where: crewQueueWhere(q, user.id) }),
-			),
-		)
-		return Object.fromEntries(
-			CREW_QUEUES.map((q, i) => [
-				crewQueueHref(q),
-				{ value: values[i], tone: "neutral" },
 			]),
 		)
 	}

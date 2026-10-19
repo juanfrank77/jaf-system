@@ -124,23 +124,10 @@ describe("loadNavCounts", () => {
 		})
 	})
 
-	it("gives CREW one count per step, scoped to their own jobs", async () => {
-		vi.mocked(db.jafInvoice.count)
-			.mockResolvedValueOnce(2) // pickup
-			.mockResolvedValueOnce(1) // field
-			.mockResolvedValueOnce(0) // submitted
-		expect(await loadNavCounts({ id: "c1", role: "CREW" })).toEqual({
-			"/dashboard?stage=pickup": { value: 2, tone: "neutral" },
-			"/dashboard?stage=field": { value: 1, tone: "neutral" },
-			"/dashboard?stage=submitted": { value: 0, tone: "neutral" },
-		})
-		for (const [a] of vi.mocked(db.jafInvoice.count).mock.calls) {
-			expect(a?.where).toMatchObject({ assignedCrewIds: { has: "c1" } })
-		}
-	})
-
 	it("returns no counts for roles that do not define any yet", async () => {
 		expect(await loadNavCounts({ id: "i1", role: "INSTALLER" })).toEqual({})
+		// Crew accounts no longer sign in.
+		expect(await loadNavCounts({ id: "c1", role: "CREW" })).toEqual({})
 		expect(db.jafInvoice.count).not.toHaveBeenCalled()
 	})
 })

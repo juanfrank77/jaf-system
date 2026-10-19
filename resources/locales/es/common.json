@@ -177,10 +177,6 @@
 		"500": {
 			"title": "¡Algo salió mal!",
 			"description": "Ocurrió un error inesperado en el servidor."
-		},
-		"not_assigned": {
-			"title": "No tienes asignado este trabajo",
-			"description": "Puede que se haya reasignado a otra brigada. Vuelve a tu panel para ver tus trabajos actuales, o consulta a tu supervisor si crees que es un error."
 		}
 	},
 	"app_shell": {
@@ -229,9 +225,6 @@
 			"supervisor_precert": "Hojas de precertificación",
 			"supervisor_released": "Liberadas a Finanzas",
 			"supervisor_all": "Todas las órdenes de trabajo",
-			"crew_pickup": "Recogida",
-			"crew_field": "En el campo",
-			"crew_submitted": "Enviados",
 			"warehouse_prep": "Órdenes por preparar",
 			"warehouse_pickup": "Pendientes de recogida",
 			"warehouse_returns": "Devoluciones esperadas",
@@ -256,6 +249,7 @@
 				"restock_over_par": "El reabastecimiento {{id}} requiere aprobación por exceso del nivel par.",
 				"prep_missing": "Se marcaron materiales faltantes en la preparación del trabajo {{job}}. Por favor revise.",
 				"prep_ready": "El trabajo {{job}} está preparado y listo para recoger. Por favor firme en el almacén.",
+				"prep_ready_supervisor": "El trabajo {{job}} está listo para recoger.",
 				"sign_overage": "El trabajo {{job}} se firmó con exceso de material. Revise las cantidades.",
 				"repair_held": "El serial {{serial}} está retenido para revisión antes de la disposición de reparación.",
 				"repair_sent": "Lote de reparación {{batch}} enviado ({{count}} unidades).",
@@ -302,6 +296,10 @@
 			"rate_limited_one": "Demasiados intentos de inicio de sesión. Inténtalo de nuevo en {{count}} segundo.",
 			"rate_limited_other": "Demasiados intentos de inicio de sesión. Inténtalo de nuevo en {{count}} segundos."
 		}
+	},
+	"crew_notice": {
+		"title": "Esta cuenta ya no se usa",
+		"body": "Los miembros de brigada ya no inician sesión en JAF Ops. Tu supervisor registra el trabajo de campo de tu brigada. Si crees que es un error, consulta con tu supervisor o con un administrador."
 	},
 	"crew_picker": {
 		"share": "Compartir este trabajo con otras brigadas",
@@ -393,7 +391,8 @@
 		"claro_work_order": "Orden de trabajo Claro (PDF)",
 		"lc_request": "Solicitud de LC",
 		"materials_heading": "Materiales",
-		"back_to_work_order": "Volver a la orden de trabajo"
+		"back_to_work_order": "Volver a la orden de trabajo",
+		"packet_first_send": "primer envío"
 	},
 	"docs_view": {
 		"aviso_pending": "Aún no — se ingresa en el paso del Aviso",
@@ -456,9 +455,7 @@
 			"generate_lc": "Generar solicitud de LC",
 			"continue_review": "Continuar pasos del supervisor",
 			"default": "Próxima acción"
-		},
-		"submitted_title": "{{control}} enviado · {{time}}",
-		"submitted_body": "{{name}} fue notificado. Lo verás aquí si algo necesita corrección."
+		}
 	},
 	"page_title": {
 		"needs_review": "Requiere revisión",
@@ -478,7 +475,8 @@
 		"warehouse_prep": "Preparar órdenes",
 		"warehouse_release": "Esperando recogido",
 		"warehouse_returns": "Devoluciones pendientes",
-		"installer_restock": "Reabastecimiento"
+		"installer_restock": "Reabastecimiento",
+		"crew_notice": "Cuenta sin uso"
 	},
 	"docs_prep": {
 		"title": "Preparar materiales",
@@ -515,8 +513,8 @@
 		"return_note_placeholder": "Describe cualquier faltante, daño o problema de reabastecimiento...",
 		"add_line": "+ Agregar línea",
 		"submit": "Guardar devoluciones",
-		"crew_reported_hint": "La cuadrilla reportó {{usedQty}} usados; se espera devolver {{expectedReturnQty}}.",
-		"discrepancy_warning": "La cantidad devuelta difiere del uso reportado por la cuadrilla.",
+		"crew_reported_hint": "Informe de campo: {{usedQty}} usado del almacén; devolución esperada: {{expectedReturnQty}}.",
+		"discrepancy_warning": "La cantidad devuelta difiere de lo usado según el informe de campo.",
 		"warehouse_label": "Devolver al almacén",
 		"warehouse_policy_unconfirmed": "Se permite devolver a un almacén distinto al de retiro, pero la política para esto no está confirmada.",
 		"serial_lines_heading": "Devoluciones serializadas",
@@ -545,12 +543,12 @@
 		"already_recorded_notice": "Las devoluciones ya fueron registradas para este documento. No se pueden registrar otra vez.",
 		"status_pill": "Se espera de vuelta",
 		"callout_title": "Devolución · Tú",
-		"callout_body": "La cuadrilla dijo qué usó; el sistema calculó lo que debe regresar. Cuenta lo que realmente llegó. Lo que falte lleva una nota.",
+		"callout_body": "El informe de campo del supervisor dice qué se usó del material del almacén; el sistema calculó lo que debe regresar. Cuenta lo que realmente llegó. Lo que falte lleva una nota.",
 		"submit_confirm": "Confirmar devolución",
 		"submit_discrepancy_one": "Confirmar devolución · {{count}} discrepancia registrada",
 		"submit_discrepancy_other": "Confirmar devolución · {{count}} discrepancias registradas",
 		"invoice_note_title": "La cantidad facturada nunca cambia aquí.",
-		"invoice_note_body": "Lo \"usado\" por la cuadrilla es lo que el supervisor factura. Esta pantalla solo registra si el almacén recuperó su material."
+		"invoice_note_body": "Las cantidades \"usadas\" vienen del paso de Campo del supervisor y son las que van a Claro. Esta pantalla solo registra si el almacén recuperó su material."
 	},
 	"returns": {
 		"note_required": "Se requiere una nota cuando lo recibido es menor a lo esperado, o cuando una unidad serializada se pierde o daña."
@@ -624,19 +622,10 @@
 		"sent_back_by_unknown": "tu supervisor",
 		"actual_address_label": "Dirección real del trabajo",
 		"address_history_heading": "Correcciones de dirección",
-		"gps_capture": "Capturar coordenadas GPS",
-		"gps_captured": "GPS capturado",
-		"gps_saved": "Las coordenadas GPS se guardarán con esta actualización.",
-		"gps_not_supported": "La geolocalización no es compatible con este dispositivo.",
-		"gps_error": "No se pudo capturar el GPS (error {{code}}).",
-		"time_on_site_label": "Tiempo en sitio",
-		"start_timer": "Iniciar",
-		"stop_timer": "Detener",
-		"time_on_site_value": "Tiempo en sitio: {{duration}}",
 		"materials_used_label": "Materiales utilizados",
 		"materials_used_hint": "No puede exceder lo entregado en el almacén.",
 		"services_performed_label": "Servicios realizados",
-		"services_performed_hint": "Cantidad instalada por código de servicio. La factura JAF y la hoja de pre-certificación se generan de esta columna.",
+		"services_performed_hint": "Cantidad instalada por código de servicio, según se la informó la brigada. El paquete para Claro y la hoja de pre-certificación se generan de esta columna.",
 		"taken_reference_label": "Retirado (firmado)",
 		"used_entry_label": "Instalado",
 		"ordered_vs_installed_hint": "La diferencia entre pedido e instalado es solo informativa.",
@@ -651,11 +640,7 @@
 		"photos_before_hint": "Fotos tomadas antes de comenzar el trabajo.",
 		"photos_after_label": "Fotos después",
 		"photos_after_hint": "Fotos tomadas después de completar el trabajo.",
-		"completion_signature_label": "Firmar completado",
-		"completion_signature_hint": "El jefe de cuadrilla firma aquí confirmando que el trabajo está completo según lo reportado.",
 		"clear_signature": "Borrar firma",
-		"submit": "Enviar actualización de campo",
-		"save_offline": "Guardar para sincronizar después",
 		"queued_title": "Guardado sin conexión",
 		"queued_message": "Actualización de campo guardada. Se sincronizará automáticamente al reconectar.",
 		"offline_submit_title": "Sin conexión",
@@ -752,7 +737,6 @@
 			"qty": "Cant.",
 			"unit": "Unidad"
 		},
-		"approve_job_heading": "Aprobar trabajo",
 		"aviso_number_confirm_label": "# de aviso Claro (confirmar o agregar)",
 		"approve": "Firma",
 		"send_to_finance_heading": "Enviar a Finanzas",
@@ -764,18 +748,12 @@
 		"aviso_docs_heading": "Documentos para el aviso de Claro",
 		"not_generated": "No generado",
 		"not_uploaded": "No cargado",
-		"generate_jaf_invoice": "Generar factura JAF (PDF)",
 		"save_aviso": "Guardar aviso",
-		"send_back_heading": "Devolver a la cuadrilla",
-		"send_back_hint": "Agrega una nota explicando qué debe corregir la cuadrilla. El trabajo regresa a la cola de campo de la cuadrilla.",
-		"send_back": "Devolver",
-		"send_back_cancel": "Cancelar",
 		"errors": {
 			"pdf_required": "Por favor selecciona el PDF de Claro para cargar",
-			"send_back_note_required": "Se requiere una nota explicando la devolución.",
 			"back_note_required": "Escriba una nota con lo que está mal.",
 			"installed_lines_required": "No se registraron cantidades instaladas por código de servicio en el paso Campo.",
-			"invoice_required": "Genere primero la factura JAF.",
+			"invoice_required": "Envíe primero el paquete a Claro.",
 			"aviso_number_required": "El número de Aviso es obligatorio.",
 			"aviso_pdf_required": "Suba el documento del Aviso.",
 			"invalid_aviso_lines": "No se pudieron leer las líneas del Aviso.",
@@ -805,7 +783,6 @@
 		"per_service_code": "por código de servicio",
 		"materials_detail": "Materiales: estimado, retirado, utilizado",
 		"approve_field_work": "Firma",
-		"submitted_by": "enviado por {{name}}",
 		"callout_approve_title": "Paso {{n}} de {{total}} · Usted",
 		"callout_approve_body": "Revise la dirección, las fotos y las cantidades, y firme para cerrar el paso de Campo.",
 		"callout_invoice_title": "Paso {{n}} de {{total}} · Usted",
@@ -921,8 +898,8 @@
 		"button": "Liberar paquete a Finanzas",
 		"released_at": "Liberado a Finanzas el {{date}}",
 		"claro_not_captured": "Aceptación de campo de Claro no capturada",
-		"condition.approved": "Trabajo de campo aprobado",
-		"condition.invoice": "Factura JAF generada",
+		"condition.approved": "Trabajo de campo firmado",
+		"condition.invoice": "Paquete enviado a Claro",
 		"condition.aviso": "Aviso # ingresado, documento subido, líneas capturadas",
 		"condition.amount_match": "Cotejo de monto aprobado (bloqueo duro)",
 		"condition.photos": "Fotos de antes y después presentes",
@@ -1444,7 +1421,7 @@
 			"billing_aviso_pdf": "Facturación: falta el PDF del Aviso"
 		},
 		"stage_queue": {
-			"field": "Esperando a la brigada",
+			"field": "Trabajo de campo en curso",
 			"open": "Mis trabajos abiertos",
 			"intake": "Órdenes nuevas",
 			"review": "Cola de revisión",
@@ -1462,8 +1439,7 @@
 		"since": {
 			"created": "Creada {{ago}}",
 			"submitted": "Entregado {{ago}}",
-			"returned": "Devuelto {{ago}}",
-			"approved": "Aprobado {{ago}}"
+			"approved": "Firmado {{ago}}"
 		},
 		"ago": {
 			"just_now": "justo ahora",
@@ -1475,9 +1451,8 @@
 		"queue": {
 			"my_open": "Mis órdenes de trabajo abiertas",
 			"intake": "Nuevas — esperando al almacén",
-			"pending_review": "Pendiente de revisión — brigada entregó",
-			"sent_back": "Devuelto a la brigada",
-			"approved": "Aprobado",
+			"pending_review": "Esperando su firma",
+			"approved": "Firmado",
 			"missing_aviso": "Falta Aviso",
 			"blocked": "Bloqueadas",
 			"empty": "Nada por aquí."
@@ -1493,16 +1468,9 @@
 		"sent_back_heading": "Devueltos ({{count}})",
 		"sent_back_badge": "Necesita corrección",
 		"sent_back_note": "Nota: {{note}}",
-		"ready_for_pickup_heading": "Listos para recoger ({{count}})",
-		"ready_for_pickup_badge": "Listo para recoger",
 		"days_staged_one": "{{count}} día",
 		"days_staged_other": "{{count}} días",
 		"aged_pickup_badge": "Envejecido > 3 días",
-		"in_the_field_heading": "En el campo ({{count}})",
-		"in_the_field_badge": "En el campo",
-		"crew_sent_back_heading": "Devueltos ({{count}})",
-		"submitted_heading": "Enviados ({{count}})",
-		"submitted_badge": "Esperando revisión",
 		"prepped_awaiting_badge": "Preparado",
 		"returns_to_log_badge": "Se espera de vuelta",
 		"triage_awaiting_heading": "Unidades devueltas en espera de triaje ({{count}})",
@@ -1515,7 +1483,7 @@
 			"blocked": "Bloqueado",
 			"open_documents": "Documentos abiertos",
 			"awaiting_warehouse": "Esperando almacén",
-			"awaiting_crew": "Esperando cuadrilla",
+			"awaiting_crew": "Trabajo de campo en curso",
 			"pending_review": "Pendientes de revisión",
 			"pending_preps": "Por preparar",
 			"prepped_awaiting_pickup": "Esperando recogida",
@@ -1525,14 +1493,11 @@
 			"open_jobs": "Trabajos abiertos",
 			"awaiting_close": "Esperando cierre",
 			"ready_for_pickup": "Listos para recoger",
-			"in_the_field": "En el campo",
-			"sent_back": "Devueltos",
-			"submitted": "Enviados",
 			"total_documents": "Documentos totales",
 			"open_receivables": "Cuentas por cobrar abiertas",
 			"awaiting_claro_upload": "Esperando carga a Claro",
 			"stage_awaiting_warehouse": "Etapa: esperando almacén",
-			"stage_awaiting_crew": "Etapa: esperando cuadrilla",
+			"stage_awaiting_crew": "Etapa: trabajo de campo en curso",
 			"stage_pending_review": "Etapa: pendiente de revisión",
 			"stage_in_finance": "Etapa: en finanzas",
 			"discrepancy_count": "Diferencias de cantidad",
@@ -1555,12 +1520,6 @@
 			"ready_to_close_other": "{{count}} trabajos listos para cerrar",
 			"ready_for_pickup_one": "{{count}} trabajo listo para recoger",
 			"ready_for_pickup_other": "{{count}} trabajos listos para recoger",
-			"jobs_in_field_one": "{{count}} trabajo en el campo",
-			"jobs_in_field_other": "{{count}} trabajos en el campo",
-			"sent_back_one": "{{count}} trabajo devuelto",
-			"sent_back_other": "{{count}} trabajos devueltos",
-			"submitted_one": "{{count}} trabajo enviado",
-			"submitted_other": "{{count}} trabajos enviados",
 			"receivables_open_one": "{{count}} cuenta por cobrar abierta",
 			"receivables_open_other": "{{count}} cuentas por cobrar abiertas"
 		},
@@ -1588,11 +1547,6 @@
 			"warehouse_needs_prep": "Prepara y etapa materiales",
 			"warehouse_missing_materials": "Resuelve materiales faltantes",
 			"warehouse_no_actions": "Sin acciones pendientes",
-			"crew_sent_back": "Corrige y vuelve a enviar",
-			"crew_awaiting_review": "Esperando revisión del supervisor",
-			"crew_ready_for_pickup": "Recoge y firma",
-			"crew_in_field": "Actualiza estado de campo",
-			"crew_no_actions": "Sin acciones pendientes",
 			"finance_open_receivables": "Procesa cuentas por cobrar",
 			"finance_awaiting_claro": "Esperando carga a Claro",
 			"finance_no_actions": "Sin acciones pendientes",
@@ -1600,20 +1554,6 @@
 			"installer_awaiting_warehouse": "Esperando acción de almacén",
 			"installer_awaiting_pickup": "Recoge restock listo",
 			"installer_no_actions": "Sin acciones del instalador pendientes"
-		},
-		"crew": {
-			"title": "Mis trabajos",
-			"subtitle_open_one": "{{count}} abierto",
-			"subtitle_open_other": "{{count}} abiertos",
-			"empty": "Tu brigada aún no tiene trabajos asignados.",
-			"sent_back_note": "Devuelto: {{note}}",
-			"status": {
-				"sent_back": "DEVUELTO",
-				"ready": "LISTO PARA RECOGER",
-				"on_site": "EN EL SITIO",
-				"submitted": "ENVIADO",
-				"approved": "APROBADO"
-			}
 		},
 		"to_prep_heading": "Por preparar ({{count}})",
 		"to_prep_badge": "Por preparar",
@@ -2097,14 +2037,9 @@
 		},
 		"callout": {
 			"sign_title": "Paso 3 · Tú + Cuadrilla",
-			"sign_title_crew": "Paso 3 · Tú + Almacén",
 			"sign_body": "Cuenta cada línea juntos en una pantalla. La cuadrilla puede tomar más — cambia la cantidad. Ambos firman. La lista queda bloqueada para todos.",
-			"field_title": "Paso 4 · Tú",
-			"field_body": "Haz el trabajo y luego regístralo aquí: dirección real, GPS, materiales utilizados, fotos y tu firma. Lo que guardes sin conexión se sincroniza al reconectar.",
 			"warehouse_list_title": "Tus pasos",
-			"warehouse_list_body": "Prepara los materiales (2), entrégalos con ambas firmas (3) y recibe lo que regresa. Los pasos en gris les ocurren al trabajo, no a ti.",
-			"crew_list_title": "Tus pasos son el 3 y el 4.",
-			"crew_list_body": "Recoge en el almacén, haz el trabajo y documéntalo. Los pasos en gris le ocurren al trabajo pero no son tuyos."
+			"warehouse_list_body": "Prepara los materiales (2), entrégalos con ambas firmas (3) y recibe lo que regresa. Los pasos en gris les ocurren al trabajo, no a ti."
 		}
 	},
 	"finance_payroll": {

@@ -2,6 +2,7 @@ import { redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { ReturnsForm } from "~/components/returns-form"
 import { db } from "~/lib/db.server"
+import { warehouseUsedLines } from "~/lib/field-materials"
 import { runOnce } from "~/lib/idempotency.server"
 import { pageTitle } from "~/lib/page-title"
 import { requireRole } from "~/lib/permissions.server"
@@ -76,9 +77,12 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		...activeCodes,
 		...takenCodes.filter((c) => !known.has(c.id)),
 	]
-	const materialsUsed =
-		(doc.materialsUsed as { serviceCodeId: string; qty: number }[] | null) ||
-		null
+	// Only what came out of the warehouse's stock is owed back: the brigade's
+	// own stock (in the Field table) never left the warehouse.
+	const materialsUsed = warehouseUsedLines(
+		doc.fieldMaterials,
+		doc.materialsUsed,
+	)
 	const lines = computeExpectedBackLines(taken, materialsUsed)
 	// Revisiting the page after a save must show what was actually SAVED, not a
 	// blank/full-expected form — otherwise a second "Save Returns" click posts a
@@ -166,8 +170,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const takenMap = Object.fromEntries(
 		taken.map((t) => [t.serviceCodeId, t.qty]),
 	)
-	const materialsUsed =
-		(doc.materialsUsed as { serviceCodeId: string; qty: number }[] | null) || []
+	const materialsUsed = warehouseUsedLines(
+		doc.fieldMaterials,
+		doc.materialsUsed,
+	)
 
 	for (const line of lines) {
 		if (!line.serviceCodeId) {

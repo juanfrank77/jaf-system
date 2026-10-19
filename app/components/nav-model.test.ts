@@ -61,18 +61,8 @@ describe("navGroupsFor", () => {
 		expect(tos(navGroupsFor("INSTALLER"))).toEqual([["field", ["/installer"]]])
 	})
 
-	it("gives CREW the dashboard and its three steps, in rail order", () => {
-		expect(tos(navGroupsFor("CREW"))).toEqual([
-			["overview", ["/dashboard"]],
-			[
-				"work",
-				[
-					"/dashboard?stage=pickup",
-					"/dashboard?stage=field",
-					"/dashboard?stage=submitted",
-				],
-			],
-		])
+	it("gives CREW nothing: crew accounts no longer sign in", () => {
+		expect(navGroupsFor("CREW")).toEqual([])
 	})
 
 	it("groups FINANCE items into Arm A and Arm B, in process order", () => {
@@ -225,13 +215,8 @@ describe("tabBarItemsFor", () => {
 		expect(tabBarItemsFor("ADMIN")).toEqual([])
 	})
 
-	it("gives CREW the dashboard and its steps as tabs", () => {
-		expect(tabBarItemsFor("CREW").map((i) => i.to)).toEqual([
-			"/dashboard",
-			"/dashboard?stage=pickup",
-			"/dashboard?stage=field",
-			"/dashboard?stage=submitted",
-		])
+	it("gives CREW no tab bar", () => {
+		expect(tabBarItemsFor("CREW")).toEqual([])
 	})
 
 	it("gives INSTALLER Home, New job and My van", () => {

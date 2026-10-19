@@ -6,6 +6,7 @@ import {
 	isAvisoStarted,
 	panelForStep,
 	resolveStepView,
+	WAITING_ON,
 } from "./supervisor-stage"
 
 const now = new Date()
@@ -16,6 +17,14 @@ const base = {
 	avisoMatchedAt: null,
 	releasedToFinanceAt: null,
 }
+
+describe("WAITING_ON", () => {
+	it("a job in Field waits on the supervisor, who fills it in for the brigade", () => {
+		expect(WAITING_ON.FIELD).toBe("you")
+		expect(WAITING_ON.INTAKE).toBe("warehouse")
+		expect(WAITING_ON.RELEASED).toBe("finance")
+	})
+})
 
 describe("deriveSupervisorStage", () => {
 	it("follows status before approval", () => {

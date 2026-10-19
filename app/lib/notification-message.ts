@@ -22,6 +22,11 @@ const PATTERNS: { re: RegExp; key: string; params: string[] }[] = [
 		params: ["job"],
 	},
 	{
+		re: /^Job (.+) is ready for pickup\.$/,
+		key: "prep_ready_supervisor",
+		params: ["job"],
+	},
+	{
 		re: /^Job (.+) was signed with material overage\. Review the quantities\.$/,
 		key: "sign_overage",
 		params: ["job"],

@@ -1,3 +1,4 @@
+import { redirect } from "react-router"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("~/lib/db.server", () => {
@@ -475,38 +476,108 @@ describe("POST /docs/:id/sign", () => {
 	})
 })
 
-describe("crew assignment scope on /docs/:id/sign", () => {
+describe("who signs on /docs/:id/sign (crew accounts no longer sign in)", () => {
 	beforeEach(() => vi.clearAllMocks())
 
-	function unassignedCrewSetup() {
-		vi.mocked(requireRole).mockResolvedValue({
-			user: { id: "crew-9", role: "CREW" },
-		} as any)
-		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
-			id: "doc-1",
-			status: "PREPPED",
-			assignedCrewIds: ["crew-1"],
-		} as any)
+	/** requireRole as the real one behaves: off-list roles go to /dashboard. */
+	function as(role: string, id: string) {
+		vi.mocked(requireRole).mockImplementation(async (_req, roles) => {
+			if (!(roles as string[]).includes(role)) throw redirect("/dashboard")
+			return { user: { id, role }, session: {} } as any
+		})
 	}
 
-	it("404s the loader for a crew member not assigned to the job", async () => {
-		unassignedCrewSetup()
-		const thrown = await loader({
+	function signable() {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			id: "doc-1",
+			controlNumber: "JAF-1001",
+			status: "PREPPED",
+			supervisorId: "sup-1",
+			assignedCrewIds: ["crew-1", "crew-2"],
+			estimatedMaterials: [{ serviceCodeId: "sc-1", qty: 2 }],
+			materialsTaken: null,
+		} as any)
+		;(db.user.findFirst as any).mockImplementation((args: any) =>
+			Promise.resolve(
+				args.where.role === "WAREHOUSE"
+					? { id: args.where.id, name: "Iidalia" }
+					: { id: args.where.id, name: `Member ${args.where.id}` },
+			),
+		)
+		vi.mocked(db.warehouse.findUnique).mockResolvedValue({
+			id: "wh-1",
+			name: "Main",
+		} as any)
+		vi.mocked(db.user.findMany).mockResolvedValue([])
+	}
+
+	function signForm() {
+		const form = new FormData()
+		form.set("warehouseId", "wh-1")
+		form.set("releasedById", "warehouse-1")
+		form.set("signedById", "crew-1")
+		form.set("releaseSignature", "data:image/png;base64,release")
+		form.set("crewSignature", "data:image/png;base64,crew")
+		form.set("materials", JSON.stringify([{ serviceCodeId: "sc-1", qty: 2 }]))
+		return form
+	}
+
+	it("refuses a CREW session on the loader and the action, writing nothing", async () => {
+		as("CREW", "crew-1")
+		signable()
+		const l = await loader({
 			request: new Request("http://localhost/docs/doc-1/sign"),
 			params: { id: "doc-1" },
 		} as any).catch((e: unknown) => e)
-		expect((thrown as Response).status).toBe(404)
-		expect(await (thrown as Response).text()).toBe("NOT_ASSIGNED")
+		const a = await action({
+			request: formRequest(signForm()),
+			params: { id: "doc-1" },
+		} as any).catch((e: unknown) => e)
+		for (const res of [l, a]) {
+			expect((res as Response).status).toBe(302)
+			expect((res as Response).headers.get("Location")).toBe("/dashboard")
+		}
+		expect(requireRole).toHaveBeenCalledWith(expect.anything(), [
+			"WAREHOUSE",
+			"ADMIN",
+		])
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
 	})
 
-	it("404s the action and writes nothing for an unassigned crew member", async () => {
-		unassignedCrewSetup()
-		await expect(
-			action({
-				request: formRequest(new FormData()),
-				params: { id: "doc-1" },
-			} as any),
-		).rejects.toMatchObject({ status: 404 })
-		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	it.each([
+		["WAREHOUSE", "warehouse-1"],
+		["ADMIN", "admin-1"],
+	])("lets %s complete the dual signature", async (role, id) => {
+		as(role, id)
+		signable()
+		const res = await action({
+			request: formRequest(signForm()),
+			params: { id: "doc-1" },
+		} as any).catch((r: unknown) => r)
+		expect((res as Response).status).toBe(302)
+		const data = vi.mocked(db.jafInvoice.update).mock.calls[0][0].data as any
+		expect(data.status).toBe("SIGNED")
+		expect(data.releasedById).toBe("warehouse-1")
+		expect(data.releaseSignature).toBe("data:image/png;base64,release")
+		expect(data.signedById).toBe("crew-1")
+		expect(data.crewSignature).toBe("data:image/png;base64,crew")
+	})
+
+	it("records one brigade member on the crew side, even when several are sent (multi-member signing is a follow-up)", async () => {
+		as("WAREHOUSE", "warehouse-1")
+		signable()
+		const form = signForm()
+		form.append("signedById", "crew-2")
+		await action({
+			request: formRequest(form),
+			params: { id: "doc-1" },
+		} as any).catch((r: unknown) => r)
+		const data = vi.mocked(db.jafInvoice.update).mock.calls[0][0].data as any
+		expect(data.signedById).toBe("crew-1")
+		expect(generateWarehouseReceiptPdf).toHaveBeenCalledWith(
+			expect.objectContaining({ crewSignerName: "Member crew-1" }),
+			expect.anything(),
+			"Main",
+		)
 	})
 })

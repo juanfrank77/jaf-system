@@ -3,6 +3,7 @@ import {
 	canApproveRestock,
 	canReleaseToVan,
 	canScanInReturn,
+	canTransition,
 	rolesMatching,
 } from "./permissions"
 
@@ -24,5 +25,13 @@ describe("rolesMatching", () => {
 		expect(rolesMatching(canReleaseToVan).sort()).toEqual(
 			["ADMIN", "WAREHOUSE"].sort(),
 		)
+	})
+})
+
+describe("release signature (PREPPED -> SIGNED)", () => {
+	it("is the warehouse's and admin's, no longer the crew's", () => {
+		expect(canTransition("PREPPED", "SIGNED", "WAREHOUSE")).toBe(true)
+		expect(canTransition("PREPPED", "SIGNED", "ADMIN")).toBe(true)
+		expect(canTransition("PREPPED", "SIGNED", "CREW")).toBe(false)
 	})
 })

@@ -24,7 +24,16 @@ type Line = { serviceCodeId: string; qty: number }
 /** Seed a FIELD_UPDATED doc with `materialsTaken`/`materialsUsed`, plus the
  * pickup warehouse and a ServiceCode row per referenced serviceCodeId (so the
  * action's active-service-code check passes for literal ids like "1005803"). */
-async function seedFieldUpdatedDoc(opts: { taken: Line[]; used: Line[] }) {
+async function seedFieldUpdatedDoc(opts: {
+	taken: Line[]
+	used: Line[]
+	fieldMaterials?: {
+		serviceCodeId: string
+		used: number
+		returned: number
+		source: "WAREHOUSE" | "BRIGADE_STOCK"
+	}[]
+}) {
 	const warehouse = t.track("warehouse", await seedWarehouse())
 	const supervisor = t.track("user", await seedUser({ role: "SUPERVISOR" }))
 	const user = t.track("user", await seedUser({ role: "WAREHOUSE" }))
@@ -62,6 +71,7 @@ async function seedFieldUpdatedDoc(opts: { taken: Line[]; used: Line[] }) {
 				warehouseId: warehouse.id,
 				materialsTaken: opts.taken,
 				materialsUsed: opts.used,
+				...(opts.fieldMaterials ? { fieldMaterials: opts.fieldMaterials } : {}),
 			},
 		}),
 	)
@@ -153,6 +163,77 @@ describe("returns: pre-fill", () => {
 		expect(
 			data.lines.find((l) => l.serviceCodeId === "1005803")?.expectedBack,
 		).toBe(40)
+	})
+})
+
+describe("returns: brigade's own stock is not expected back", () => {
+	afterAll(() => vi.clearAllMocks())
+
+	// 10 signed out; the Field table says 6 used from that stock and 4 from the
+	// brigade's own. materialsUsed holds the total 10 (Finance), but 4 of the
+	// warehouse's 10 are still owed back.
+	const split = {
+		taken: [{ serviceCodeId: "1005803", qty: 10 }],
+		used: [{ serviceCodeId: "1005803", qty: 10 }],
+		fieldMaterials: [
+			{
+				serviceCodeId: "1005803",
+				used: 6,
+				returned: 4,
+				source: "WAREHOUSE" as const,
+			},
+			{
+				serviceCodeId: "1005803",
+				used: 4,
+				returned: 0,
+				source: "BRIGADE_STOCK" as const,
+			},
+		],
+	}
+
+	it("expects 4 back, not 0", async () => {
+		mocks.requireRole.mockResolvedValue({
+			user: { id: "irrelevant", role: "WAREHOUSE" },
+		})
+		const { doc } = await seedFieldUpdatedDoc(split)
+		const data = await loader({
+			request: new Request(`http://x/docs/${doc.id}/returns`),
+			params: { id: doc.id },
+			context: {},
+		} as never)
+		expect(data.lines).toEqual([
+			{ serviceCodeId: "1005803", takenQty: 10, usedQty: 6, expectedBack: 4 },
+		])
+		expect(data.materialsUsed).toEqual([{ serviceCodeId: "1005803", qty: 6 }])
+	})
+
+	it("requires a note when fewer than those 4 come back", async () => {
+		const { doc, warehouse, user } = await seedFieldUpdatedDoc(split)
+		mocks.requireRole.mockResolvedValue({ user })
+		const res = await confirmReturns(doc, {
+			idempotencyKey: runToken("idem"),
+			returnWarehouseId: warehouse.id,
+			lines: [{ serviceCodeId: "1005803", received: 0 }],
+		})
+		expect(res).toEqual({ errorKey: "returns.note_required" })
+	})
+
+	it("a legacy job with no Field table still uses materialsUsed", async () => {
+		mocks.requireRole.mockResolvedValue({
+			user: { id: "irrelevant", role: "WAREHOUSE" },
+		})
+		const { doc } = await seedFieldUpdatedDoc({
+			taken: [{ serviceCodeId: "1005803", qty: 10 }],
+			used: [{ serviceCodeId: "1005803", qty: 7 }],
+		})
+		const data = await loader({
+			request: new Request(`http://x/docs/${doc.id}/returns`),
+			params: { id: doc.id },
+			context: {},
+		} as never)
+		expect(
+			data.lines.find((l) => l.serviceCodeId === "1005803")?.expectedBack,
+		).toBe(3)
 	})
 })
 

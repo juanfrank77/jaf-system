@@ -296,17 +296,15 @@ describe("files loader — job photos and blueprints for supervisors", () => {
 		expect((await get("blueprints/job-1/1-0-plan.pdf")).status).toBe(200)
 	})
 
-	it("keeps the other roles' rules: assigned crew yes, other crew and finance (pre-approval) no", async () => {
-		mocks.db.user.findUniqueOrThrow.mockResolvedValue({
-			id: "crew-1",
-			role: "CREW",
-		} as any)
-		expect((await get("blueprints/job-1/1-0-plan.pdf")).status).toBe(200)
-		mocks.db.user.findUniqueOrThrow.mockResolvedValue({
-			id: "crew-9",
-			role: "CREW",
-		} as any)
-		expect((await get("blueprints/job-1/1-0-plan.pdf")).status).toBe(403)
+	it("refuses every CREW session, assigned or not, and keeps Finance's pre-approval rule", async () => {
+		for (const id of ["crew-1", "crew-9"]) {
+			mocks.db.user.findUniqueOrThrow.mockResolvedValue({
+				id,
+				role: "CREW",
+			} as any)
+			expect((await get("blueprints/job-1/1-0-plan.pdf")).status).toBe(403)
+			expect((await get("photos/job-1/1-0-a.jpg")).status).toBe(403)
+		}
 		mocks.db.user.findUniqueOrThrow.mockResolvedValue({
 			id: "fin-1",
 			role: "FINANCE",

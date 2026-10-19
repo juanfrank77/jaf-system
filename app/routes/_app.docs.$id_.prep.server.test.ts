@@ -35,6 +35,7 @@ async function seedDoc(
 		status?: string
 		estimated?: { serviceCodeId: string; qty: number }[]
 		prepped?: PrepLineInput[]
+		crewIds?: string[]
 	} = {},
 ) {
 	const supervisor = t.track("user", await seedUser({ role: "SUPERVISOR" }))
@@ -48,7 +49,7 @@ async function seedDoc(
 				jobAddressEstimated: "123 Test St",
 				estimatedMaterials: (opts.estimated ??
 					[]) as unknown as Prisma.InputJsonValue,
-				assignedCrewIds: [],
+				assignedCrewIds: opts.crewIds ?? [],
 				supervisorId: supervisor.id,
 				preppedMaterials: opts.prepped
 					? (opts.prepped as unknown as Prisma.InputJsonValue)
@@ -136,5 +137,39 @@ describe("prep action: flag_missing", () => {
 		).toBeGreaterThan(0)
 		// release path is still reachable (status not forced to a blocking state)
 		expect(res.blocksRelease).toBe(false)
+	})
+})
+
+describe("prep action: completing prep", () => {
+	afterAll(() => vi.clearAllMocks())
+
+	it("alerts the supervisor, not the crew", async () => {
+		const crew = t.track("user", await seedUser({ role: "CREW" }))
+		const { doc, supervisor } = await seedDoc({
+			estimated: [{ serviceCodeId: "1005855", qty: 5 }],
+			crewIds: [crew.id],
+		})
+		const actor = t.track("user", await seedUser({ role: "WAREHOUSE" }))
+		mocks.requireRole.mockResolvedValue({ user: actor })
+		await expect(
+			prepAction(doc, [
+				{
+					_key: "k1",
+					serviceCodeId: "1005855",
+					estimatedQty: 5,
+					preppedQty: 5,
+					substitutedWith: null,
+					missing: false,
+					notes: "",
+				},
+			]),
+		).rejects.toMatchObject({ status: 302 })
+		const sup = await db.notification.findMany({
+			where: { userId: supervisor.id, docId: doc.id },
+		})
+		expect(sup.map((n) => n.message)).toEqual([
+			`Job ${doc.controlNumber} is ready for pickup.`,
+		])
+		expect(await db.notification.count({ where: { userId: crew.id } })).toBe(0)
 	})
 })

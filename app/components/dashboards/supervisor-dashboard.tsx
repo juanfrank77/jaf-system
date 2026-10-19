@@ -38,7 +38,6 @@ export type SupervisorQueues = {
 	myOpen: QueueRow[]
 	intake: QueueRow[]
 	pendingReview: QueueRow[]
-	sentBack: QueueRow[]
 	approved: QueueRow[]
 	missingAviso: QueueRow[]
 	blocked: QueueRow[]
@@ -73,7 +72,6 @@ const TILE_TONE: Partial<Record<string, StatTone>> = {
 	"dashboard.stat.awaiting_warehouse": "info",
 	"dashboard.stat.awaiting_crew": "info",
 	"dashboard.stat.pending_review": "warn",
-	"dashboard.stat.sent_back": "info",
 	"dashboard.stat.missing_aviso": "warn",
 	"dashboard.stat.blocked": "flag",
 	"dashboard.stat.stage_awaiting_warehouse": "info",
@@ -85,7 +83,7 @@ const TILE_TONE: Partial<Record<string, StatTone>> = {
 	"dashboard.stat.overage_count": "warn",
 }
 
-type SinceKind = "created" | "submitted" | "returned" | "approved"
+type SinceKind = "created" | "submitted" | "approved"
 
 function ago(t: TFunction, since: Date | string, now = Date.now()) {
 	const minutes = Math.max(
@@ -285,12 +283,6 @@ export function SupervisorDashboard({
 					/>
 				))}
 				<Stat
-					label={t("dashboard.stat.sent_back")}
-					tone={TILE_TONE["dashboard.stat.sent_back"]}
-					value={queues.sentBack.length}
-					href="#sent-back"
-				/>
-				<Stat
 					label={t("dashboard.stat.missing_aviso")}
 					tone={TILE_TONE["dashboard.stat.missing_aviso"]}
 					value={queues.missingAviso.length}
@@ -335,14 +327,6 @@ export function SupervisorDashboard({
 				variant="warn"
 				href={(r) => `/docs/${r.id}/review`}
 				since="submitted"
-			/>
-			<Queue
-				id="sent-back"
-				titleKey="dashboard.queue.sent_back"
-				rows={queues.sentBack}
-				variant="info"
-				href={(r) => `/docs/${r.id}`}
-				since="returned"
 			/>
 			<Queue
 				titleKey="dashboard.queue.approved"

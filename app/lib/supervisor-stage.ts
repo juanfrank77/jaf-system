@@ -73,8 +73,10 @@ export function deriveSupervisorStage(
 export type WaitingOn = "warehouse" | "crew" | "you" | "finance"
 export const WAITING_ON: Record<SupervisorStage, WaitingOn> = {
 	INTAKE: "warehouse",
+	// Prepped: the brigade still has to pick the material up.
 	WAREHOUSE: "crew",
-	FIELD: "crew",
+	// Crews never log in: the supervisor fills Field from what they send.
+	FIELD: "you",
 	APPROVE: "you",
 	INVOICE: "you",
 	AVISO: "you",

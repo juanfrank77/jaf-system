@@ -177,10 +177,6 @@
 		"500": {
 			"title": "Something went wrong!",
 			"description": "An unexpected error occurred on the server."
-		},
-		"not_assigned": {
-			"title": "This job isn't assigned to you",
-			"description": "It may have been reassigned to another crew. Go back to your dashboard to see your current jobs, or ask your supervisor if you think this is a mistake."
 		}
 	},
 	"app_shell": {
@@ -229,9 +225,6 @@
 			"supervisor_precert": "Pre-cert sheets",
 			"supervisor_released": "Released to Finance",
 			"supervisor_all": "All work orders",
-			"crew_pickup": "Pickup",
-			"crew_field": "In the field",
-			"crew_submitted": "Submitted",
 			"warehouse_prep": "Work orders to prep",
 			"warehouse_pickup": "Awaiting pickup",
 			"warehouse_returns": "Returns due",
@@ -256,6 +249,7 @@
 				"restock_over_par": "Restock {{id}} needs over-par sign-off.",
 				"prep_missing": "Job {{job}} has missing materials flagged during prep. Please review.",
 				"prep_ready": "Job {{job}} is prepped and ready for pickup. Please sign at warehouse.",
+				"prep_ready_supervisor": "Job {{job}} is ready for pickup.",
 				"sign_overage": "Job {{job}} was signed with material overage. Review the quantities.",
 				"repair_held": "Serial {{serial}} is held for review before repair disposition.",
 				"repair_sent": "Repair batch {{batch}} sent ({{count}} units).",
@@ -302,6 +296,10 @@
 			"rate_limited_one": "Too many login attempts. Try again in {{count}} second.",
 			"rate_limited_other": "Too many login attempts. Try again in {{count}} seconds."
 		}
+	},
+	"crew_notice": {
+		"title": "This account is no longer used",
+		"body": "Crew members no longer sign in to JAF Ops. Your supervisor records the field work for your brigade. If you think this is a mistake, ask your supervisor or an administrator."
 	},
 	"crew_picker": {
 		"share": "Share this job with other crews",
@@ -393,7 +391,8 @@
 		"claro_work_order": "Claro work order (PDF)",
 		"lc_request": "LC request",
 		"materials_heading": "Materials",
-		"back_to_work_order": "Back to work order"
+		"back_to_work_order": "Back to work order",
+		"packet_first_send": "first send"
 	},
 	"docs_view": {
 		"aviso_pending": "Not yet — entered at the Aviso step",
@@ -456,9 +455,7 @@
 			"generate_lc": "Generate LC Request",
 			"continue_review": "Continue supervisor steps",
 			"default": "Next Action"
-		},
-		"submitted_title": "{{control}} submitted · {{time}}",
-		"submitted_body": "{{name}} has been notified. You'll see it here if anything needs fixing."
+		}
 	},
 	"page_title": {
 		"needs_review": "Needs Review",
@@ -478,7 +475,8 @@
 		"warehouse_prep": "Prep Orders",
 		"warehouse_release": "Awaiting Pickup",
 		"warehouse_returns": "Returns Due",
-		"installer_restock": "Restock"
+		"installer_restock": "Restock",
+		"crew_notice": "Account not in use"
 	},
 	"docs_prep": {
 		"title": "Prep Materials",
@@ -515,8 +513,8 @@
 		"return_note_placeholder": "Describe any shortage, damage, or restocking issue...",
 		"add_line": "+ Add Line",
 		"submit": "Save Returns",
-		"crew_reported_hint": "Crew reported {{usedQty}} used; expected return is {{expectedReturnQty}}.",
-		"discrepancy_warning": "Return qty differs from crew-reported usage.",
+		"crew_reported_hint": "Field report: {{usedQty}} used from warehouse stock; expected return is {{expectedReturnQty}}.",
+		"discrepancy_warning": "Return qty differs from the use in the Field report.",
 		"warehouse_label": "Return to warehouse",
 		"warehouse_policy_unconfirmed": "Returning to a warehouse other than pickup is allowed, but policy for this is unconfirmed.",
 		"serial_lines_heading": "Serialized Returns",
@@ -545,12 +543,12 @@
 		"already_recorded_notice": "Returns were already recorded for this document. They cannot be logged again.",
 		"status_pill": "Expected back",
 		"callout_title": "Return · You",
-		"callout_body": "The crew said what they used; the system computed what should come back. Count what actually arrived. Anything short gets a note.",
+		"callout_body": "The supervisor's Field report says what was used from warehouse stock; the system computed what should come back. Count what actually arrived. Anything short gets a note.",
 		"submit_confirm": "Confirm return",
 		"submit_discrepancy_one": "Confirm return · {{count}} discrepancy logged",
 		"submit_discrepancy_other": "Confirm return · {{count}} discrepancies logged",
 		"invoice_note_title": "The invoiced quantity never changes here.",
-		"invoice_note_body": "The crew's \"used\" is what the supervisor invoices from. This screen only records whether the warehouse got its material back."
+		"invoice_note_body": "The \"used\" figures come from the supervisor's Field step and are what goes to Claro. This screen only records whether the warehouse got its material back."
 	},
 	"returns": {
 		"note_required": "A note is required when received is less than expected, or a serialized unit is lost or damaged."
@@ -624,19 +622,10 @@
 		"sent_back_by_unknown": "your supervisor",
 		"actual_address_label": "Actual Job Address",
 		"address_history_heading": "Address corrections",
-		"gps_capture": "Capture GPS coordinates",
-		"gps_captured": "GPS captured",
-		"gps_saved": "GPS coordinates will be saved with this update.",
-		"gps_not_supported": "Geolocation is not supported on this device.",
-		"gps_error": "Could not capture GPS (error {{code}}).",
-		"time_on_site_label": "Time on site",
-		"start_timer": "Start",
-		"stop_timer": "Stop",
-		"time_on_site_value": "Time on site: {{duration}}",
 		"materials_used_label": "Materials Used",
 		"materials_used_hint": "Cannot exceed what was signed out at warehouse.",
 		"services_performed_label": "Services performed",
-		"services_performed_hint": "Installed quantity per service code. The JAF invoice and the pre-certification sheet are built from this column.",
+		"services_performed_hint": "Installed quantity per service code, as the brigade reported it to you. The Claro packet and the pre-certification sheet are built from this column.",
 		"taken_reference_label": "Taken (signed)",
 		"used_entry_label": "Installed",
 		"ordered_vs_installed_hint": "Ordered-vs-installed variance is informational only.",
@@ -651,11 +640,7 @@
 		"photos_before_hint": "Photos taken before work began.",
 		"photos_after_label": "After Photos",
 		"photos_after_hint": "Photos taken after work was completed.",
-		"completion_signature_label": "Sign completion",
-		"completion_signature_hint": "Crew lead signs here confirming the work is complete as reported.",
 		"clear_signature": "Clear signature",
-		"submit": "Submit Field Update",
-		"save_offline": "Save for later sync",
 		"queued_title": "Saved offline",
 		"queued_message": "Field update saved. It will sync automatically when you reconnect.",
 		"offline_submit_title": "Offline",
@@ -752,7 +737,6 @@
 			"qty": "Qty",
 			"unit": "Unit"
 		},
-		"approve_job_heading": "Approve Job",
 		"aviso_number_confirm_label": "Claro Aviso # (confirm or add)",
 		"approve": "Sign off",
 		"send_to_finance_heading": "Send to Finance",
@@ -764,18 +748,12 @@
 		"aviso_docs_heading": "Documents for Claro Aviso",
 		"not_generated": "Not generated",
 		"not_uploaded": "Not uploaded",
-		"generate_jaf_invoice": "Generate JAF Invoice PDF",
 		"save_aviso": "Save Aviso #",
-		"send_back_heading": "Send Back to Crew",
-		"send_back_hint": "Add a note explaining what the crew needs to fix. The job returns to the crew's field queue.",
-		"send_back": "Send Back",
-		"send_back_cancel": "Cancel",
 		"errors": {
 			"pdf_required": "Please select the Claro PDF to upload",
-			"send_back_note_required": "A note explaining the send-back is required.",
 			"back_note_required": "Enter a note saying what is wrong.",
 			"installed_lines_required": "No installed quantities per service code were recorded in the Field step.",
-			"invoice_required": "Generate the JAF invoice first.",
+			"invoice_required": "Send the packet to Claro first.",
 			"aviso_number_required": "Aviso # is required.",
 			"aviso_pdf_required": "Upload the Aviso document.",
 			"invalid_aviso_lines": "Aviso lines could not be read.",
@@ -805,7 +783,6 @@
 		"per_service_code": "per service code",
 		"materials_detail": "Materials: estimated, taken, used",
 		"approve_field_work": "Sign off",
-		"submitted_by": "submitted by {{name}}",
 		"callout_approve_title": "Step {{n}} of {{total}} · You",
 		"callout_approve_body": "Check the address, the photos and the quantities, then sign to close the Field step.",
 		"callout_invoice_title": "Step {{n}} of {{total}} · You",
@@ -921,8 +898,8 @@
 		"button": "Release packet to Finance",
 		"released_at": "Released to Finance on {{date}}",
 		"claro_not_captured": "Claro acceptance not captured",
-		"condition.approved": "Field work approved",
-		"condition.invoice": "JAF invoice generated",
+		"condition.approved": "Field work signed off",
+		"condition.invoice": "Packet sent to Claro",
 		"condition.aviso": "Aviso # entered, document uploaded, lines captured",
 		"condition.amount_match": "Amount match green (hard gate)",
 		"condition.photos": "Before and after photos present",
@@ -1444,7 +1421,7 @@
 			"billing_aviso_pdf": "Billing: missing Aviso PDF"
 		},
 		"stage_queue": {
-			"field": "Awaiting crew",
+			"field": "Field work in progress",
 			"open": "My open jobs",
 			"intake": "New work orders",
 			"review": "Review queue",
@@ -1462,8 +1439,7 @@
 		"since": {
 			"created": "Created {{ago}}",
 			"submitted": "Submitted {{ago}}",
-			"returned": "Returned {{ago}}",
-			"approved": "Approved {{ago}}"
+			"approved": "Signed off {{ago}}"
 		},
 		"ago": {
 			"just_now": "just now",
@@ -1475,9 +1451,8 @@
 		"queue": {
 			"my_open": "My open work orders",
 			"intake": "New — waiting for the warehouse",
-			"pending_review": "Pending review — crew submitted",
-			"sent_back": "Sent back to crew",
-			"approved": "Approved",
+			"pending_review": "Awaiting your sign-off",
+			"approved": "Signed off",
 			"missing_aviso": "Missing Aviso",
 			"blocked": "Blocked",
 			"empty": "Nothing here."
@@ -1493,16 +1468,9 @@
 		"sent_back_heading": "Sent Back ({{count}})",
 		"sent_back_badge": "Needs Fix",
 		"sent_back_note": "Note: {{note}}",
-		"ready_for_pickup_heading": "Ready for Pickup ({{count}})",
-		"ready_for_pickup_badge": "Ready for pickup",
 		"days_staged_one": "{{count}} day",
 		"days_staged_other": "{{count}} days",
 		"aged_pickup_badge": "Aged > 3 days",
-		"in_the_field_heading": "In the Field ({{count}})",
-		"in_the_field_badge": "In the field",
-		"crew_sent_back_heading": "Sent Back ({{count}})",
-		"submitted_heading": "Submitted ({{count}})",
-		"submitted_badge": "Awaiting review",
 		"prepped_awaiting_badge": "Staged",
 		"returns_to_log_badge": "Expected back",
 		"triage_awaiting_heading": "Returned units awaiting triage ({{count}})",
@@ -1515,7 +1483,7 @@
 			"blocked": "Blocked",
 			"open_documents": "Open documents",
 			"awaiting_warehouse": "Awaiting warehouse",
-			"awaiting_crew": "Awaiting crew",
+			"awaiting_crew": "Field work in progress",
 			"pending_review": "Pending review",
 			"pending_preps": "To prep",
 			"prepped_awaiting_pickup": "Awaiting pickup",
@@ -1525,14 +1493,11 @@
 			"open_jobs": "Open jobs",
 			"awaiting_close": "Awaiting close",
 			"ready_for_pickup": "Ready for pickup",
-			"in_the_field": "In the field",
-			"sent_back": "Sent back",
-			"submitted": "Submitted",
 			"total_documents": "Total documents",
 			"open_receivables": "Open receivables",
 			"awaiting_claro_upload": "Awaiting Claro upload",
 			"stage_awaiting_warehouse": "Stage: awaiting warehouse",
-			"stage_awaiting_crew": "Stage: awaiting crew",
+			"stage_awaiting_crew": "Stage: field work in progress",
 			"stage_pending_review": "Stage: pending review",
 			"stage_in_finance": "Stage: in finance",
 			"discrepancy_count": "Qty discrepancies",
@@ -1555,12 +1520,6 @@
 			"ready_to_close_other": "{{count}} jobs ready to close",
 			"ready_for_pickup_one": "{{count}} job ready for pickup",
 			"ready_for_pickup_other": "{{count}} jobs ready for pickup",
-			"jobs_in_field_one": "{{count}} job in the field",
-			"jobs_in_field_other": "{{count}} jobs in the field",
-			"sent_back_one": "{{count}} job sent back",
-			"sent_back_other": "{{count}} jobs sent back",
-			"submitted_one": "{{count}} job submitted",
-			"submitted_other": "{{count}} jobs submitted",
 			"receivables_open_one": "{{count}} receivable open",
 			"receivables_open_other": "{{count}} receivables open"
 		},
@@ -1588,11 +1547,6 @@
 			"warehouse_needs_prep": "Prep and stage materials",
 			"warehouse_missing_materials": "Resolve missing materials",
 			"warehouse_no_actions": "No actions pending",
-			"crew_sent_back": "Fix and resubmit",
-			"crew_awaiting_review": "Awaiting supervisor review",
-			"crew_ready_for_pickup": "Pick up and sign",
-			"crew_in_field": "Update field status",
-			"crew_no_actions": "No actions pending",
 			"finance_open_receivables": "Process open receivables",
 			"finance_awaiting_claro": "Awaiting Claro upload",
 			"finance_no_actions": "No actions pending",
@@ -1600,20 +1554,6 @@
 			"installer_awaiting_warehouse": "Awaiting warehouse action",
 			"installer_awaiting_pickup": "Pick up ready restock",
 			"installer_no_actions": "No installer actions pending"
-		},
-		"crew": {
-			"title": "My jobs",
-			"subtitle_open_one": "{{count}} open",
-			"subtitle_open_other": "{{count}} open",
-			"empty": "No jobs assigned to your brigade yet.",
-			"sent_back_note": "Sent back: {{note}}",
-			"status": {
-				"sent_back": "SENT BACK",
-				"ready": "READY FOR PICKUP",
-				"on_site": "ON SITE",
-				"submitted": "SUBMITTED",
-				"approved": "APPROVED"
-			}
 		},
 		"to_prep_heading": "To prep ({{count}})",
 		"to_prep_badge": "To prep",
@@ -2097,14 +2037,9 @@
 		},
 		"callout": {
 			"sign_title": "Step 3 · You + Crew",
-			"sign_title_crew": "Step 3 · You + Warehouse",
 			"sign_body": "Count each line together on one screen. The crew may take more — change the number. Both sign. The list locks for everyone.",
-			"field_title": "Step 4 · You",
-			"field_body": "Do the job, then log it here: actual address, GPS, materials used, photos and your signature. What you save offline syncs when you reconnect.",
 			"warehouse_list_title": "Your steps",
-			"warehouse_list_body": "Stage the materials (2), release them with both signatures (3), receive what comes back. Grey steps happen to the job, not to you.",
-			"crew_list_title": "Your steps are 3 and 4.",
-			"crew_list_body": "Pick up at the warehouse, do the job, document it. Grey steps happen to the job but are not yours."
+			"warehouse_list_body": "Stage the materials (2), release them with both signatures (3), receive what comes back. Grey steps happen to the job, not to you."
 		}
 	},
 	"finance_payroll": {

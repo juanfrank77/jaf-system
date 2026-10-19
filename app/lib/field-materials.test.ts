@@ -6,6 +6,7 @@ import {
 	parseFieldMaterials,
 	quantityDiscrepancies,
 	usedForFinance,
+	warehouseUsedLines,
 } from "./field-materials"
 
 const row = (
@@ -128,5 +129,26 @@ describe("fieldMaterialsOrDefault", () => {
 	it("returns the stored rows when there are any", () => {
 		const stored = [row("sc-1", 2, "WAREHOUSE", 3)]
 		expect(fieldMaterialsOrDefault(stored, taken)).toEqual(stored)
+	})
+})
+
+describe("warehouseUsedLines", () => {
+	it("counts only WAREHOUSE-source use when the Field table exists", () => {
+		const rows = [
+			{ serviceCodeId: "m1", used: 6, returned: 0, source: "WAREHOUSE" },
+			{ serviceCodeId: "m1", used: 4, returned: 0, source: "BRIGADE_STOCK" },
+			{ serviceCodeId: "m2", used: 3, returned: 0, source: "BRIGADE_STOCK" },
+		]
+		// materialsUsed keeps the total (10) for Finance; returns see 6.
+		expect(
+			warehouseUsedLines(rows, [{ serviceCodeId: "m1", qty: 10 }]),
+		).toEqual([{ serviceCodeId: "m1", qty: 6 }])
+	})
+
+	it("falls back to materialsUsed on a legacy job with no Field table", () => {
+		const used = [{ serviceCodeId: "m1", qty: 7 }]
+		expect(warehouseUsedLines(null, used)).toEqual(used)
+		expect(warehouseUsedLines([], used)).toEqual(used)
+		expect(warehouseUsedLines(null, null)).toEqual([])
 	})
 })

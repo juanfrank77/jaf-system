@@ -35,7 +35,6 @@ async function canAccessDoc(
 	doc: {
 		status: string
 		supervisorId: string
-		assignedCrewIds: string[]
 		brigade: { area: string | null } | null
 	},
 	userRole: string,
@@ -49,7 +48,7 @@ async function canAccessDoc(
 		const area = doc.brigade?.area
 		return !!area && (await supervisorAreas(db, userId)).includes(area)
 	}
-	if (userRole === "CREW") return doc.assignedCrewIds.includes(userId)
+	// CREW falls through to false: crew accounts no longer sign in.
 	if (userRole === "WAREHOUSE")
 		// biome-ignore lint/suspicious/noExplicitAny: status narrowed below
 		return WAREHOUSE_STATUSES.includes(doc.status as any)
@@ -211,7 +210,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			select: {
 				status: true,
 				supervisorId: true,
-				assignedCrewIds: true,
 				brigade: { select: { area: true } },
 			},
 		})

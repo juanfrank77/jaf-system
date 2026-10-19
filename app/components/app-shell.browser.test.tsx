@@ -152,7 +152,9 @@ describe("AppShell", () => {
 		).not.toBeInTheDocument()
 	})
 
-	it("shows Dashboard and the crew steps for CREW", async ({ renderStub }) => {
+	it("gives CREW no navigation (crew accounts no longer sign in)", async ({
+		renderStub,
+	}) => {
 		await renderStub({
 			entries: [
 				{
@@ -168,20 +170,12 @@ describe("AppShell", () => {
 				},
 			],
 		})
-		for (const name of ["Pickup", "In the field", "Submitted"]) {
+		for (const name of ["Dashboard", "Pickup", "In the field", "Submitted"]) {
 			expect(
-				screen.getAllByRole("link", { name, hidden: true }).length,
-			).toBeGreaterThan(0)
+				screen.queryByRole("link", { name, hidden: true }),
+			).not.toBeInTheDocument()
 		}
-		expect(
-			screen.queryByRole("link", { name: "+ Work Order", hidden: true }),
-		).not.toBeInTheDocument()
-		expect(
-			screen.queryByRole("link", { name: "Receivables", hidden: true }),
-		).not.toBeInTheDocument()
-		expect(
-			screen.queryByRole("link", { name: "Admin Settings", hidden: true }),
-		).not.toBeInTheDocument()
+		expect(screen.queryByTestId("tab-bar")).not.toBeInTheDocument()
 	})
 
 	it("shows the Comptroller payroll links for ADMIN", async ({
@@ -668,7 +662,7 @@ describe("AppShell", () => {
 
 	const renderShell = (
 		renderStub: any,
-		role: "SUPERVISOR" | "CREW" | "INSTALLER",
+		role: "SUPERVISOR" | "INSTALLER",
 		navCounts?: Record<string, { value: number; tone: "critical" | "neutral" }>,
 	) =>
 		renderStub({
@@ -716,17 +710,8 @@ describe("AppShell", () => {
 		expect(screen.getByText("Work")).toBeInTheDocument()
 	})
 
-	it("shows a phone tab bar for INSTALLER and CREW but not SUPERVISOR", async ({
-		renderStub,
-	}) => {
+	it("shows a phone tab bar for INSTALLER", async ({ renderStub }) => {
 		await renderShell(renderStub, "INSTALLER")
-		expect(screen.getByTestId("tab-bar")).toBeInTheDocument()
-	})
-
-	it("renders a tab bar for CREW (Dashboard plus its three steps)", async ({
-		renderStub,
-	}) => {
-		await renderShell(renderStub, "CREW")
 		expect(screen.getByTestId("tab-bar")).toBeInTheDocument()
 	})
 

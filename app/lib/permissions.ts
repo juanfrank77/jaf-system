@@ -34,15 +34,6 @@ export function isReassignableStatus(status: string): boolean {
 	)
 }
 
-const REVIEW_ACTION_STATUSES = ["FIELD_UPDATED", "SUPERVISOR_APPROVED"] as const
-type ReviewActionStatus = (typeof REVIEW_ACTION_STATUSES)[number]
-
-export function isReviewActionStatus(
-	status: string,
-): status is ReviewActionStatus {
-	return REVIEW_ACTION_STATUSES.includes(status as ReviewActionStatus)
-}
-
 const TERMINAL_STATUSES = ["CANCELLED", "LC_REQUEST_GENERATED"] as const
 type TerminalStatus = (typeof TERMINAL_STATUSES)[number]
 
@@ -54,7 +45,7 @@ export function isTerminalStatus(status: string): status is TerminalStatus {
 const TRANSITIONS: Record<string, { from: string | string[]; roles: Role[] }> =
 	{
 		PREPPED: { from: ["CREATED", "PREPPED"], roles: ["WAREHOUSE", "ADMIN"] },
-		SIGNED: { from: "PREPPED", roles: ["CREW", "WAREHOUSE", "ADMIN"] },
+		SIGNED: { from: "PREPPED", roles: ["WAREHOUSE", "ADMIN"] },
 		FIELD_UPDATED: { from: "SIGNED", roles: ["SUPERVISOR", "ADMIN"] },
 		SUPERVISOR_APPROVED: {
 			from: "FIELD_UPDATED",

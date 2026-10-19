@@ -7,6 +7,7 @@ import { MaterialLineItems } from "~/components/material-line-items"
 import { buttonVariants } from "~/components/ui/button"
 import { db } from "~/lib/db.server"
 import { openJobLabel } from "~/lib/open-job-label"
+import { packetSentSummary } from "~/lib/packet-audit"
 import { requireRole } from "~/lib/permissions.server"
 import { deriveSupervisorStage } from "~/lib/supervisor-stage"
 import { uploadHref } from "~/lib/upload-href"
@@ -206,7 +207,14 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 							{a.action !== "STATUS_CHANGED" && (
 								<span className="text-sm text-foreground">
 									{" — "}
-									{actionSummary(a.action, a.diffJson as AuditDiff)}
+									{a.action === "PACKET_SENT"
+										? packetSentSummary(
+												(a.diffJson ?? {}) as Parameters<
+													typeof packetSentSummary
+												>[0],
+												t,
+											)
+										: actionSummary(a.action, a.diffJson as AuditDiff)}
 								</span>
 							)}
 						</li>

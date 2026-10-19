@@ -89,7 +89,7 @@ describe("GET /docs/:id", () => {
 			} as any)
 		}
 
-		it.each(["CREW", "WAREHOUSE"])("sends %s no price fields", async (role) => {
+		it.each(["WAREHOUSE"])("sends %s no price fields", async (role) => {
 			const { serviceCodes } = await loadAs(role)
 			expect(serviceCodes).toHaveLength(1)
 			for (const k of ["unitPrice", "contractorPrice", "claroBasePrice"])
@@ -166,7 +166,7 @@ describe("GET /docs/:id", () => {
 			} as any)
 		}
 
-		it.each(["CREW", "INSTALLER"])(
+		it.each(["INSTALLER"])(
 			"does not send %s any billing field or audit payload",
 			async (role) => {
 				const res = await loadAs(role)
@@ -200,7 +200,7 @@ describe("GET /docs/:id", () => {
 		async function loadSent(status: string) {
 			vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
 				id: "user-1",
-				role: "CREW",
+				role: "ADMIN",
 			} as any)
 			vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
 				baseDoc(status, {
@@ -233,42 +233,25 @@ describe("GET /docs/:id", () => {
 		})
 	})
 
-	it("404s a crew member who is not assigned to the job, marked not-assigned", async () => {
-		vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
-			id: "crew-9",
-			role: "CREW",
-		} as any)
-		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
-			baseDoc("PREPPED", { assignedCrewIds: ["crew-1"] }) as any,
-		)
-
-		const thrown = await loader({
-			request: new Request("http://localhost/docs/doc-1"),
-			params: { id: "doc-1" },
-		} as any).catch((e: unknown) => e)
-		expect(thrown).toBeInstanceOf(Response)
-		expect((thrown as Response).status).toBe(404)
-		expect(await (thrown as Response).text()).toBe("NOT_ASSIGNED")
-	})
-
-	it("lets an assigned crew member load the job", async () => {
-		vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
-			id: "crew-1",
-			role: "CREW",
-		} as any)
-		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
-			baseDoc("PREPPED", { assignedCrewIds: ["crew-1"] }) as any,
-		)
-		vi.mocked(db.auditTrail.findMany).mockResolvedValue([])
-		vi.mocked(db.user.findMany).mockResolvedValue([])
-
-		const result = await loader({
-			request: new Request("http://localhost/docs/doc-1"),
-			params: { id: "doc-1" },
-		} as any)
-
-		expect(result.doc.id).toBe("doc-1")
-	})
+	it.each([{ assigned: [] }, { assigned: ["crew-1"] }])(
+		"sends a CREW session to the crew notice, assigned or not ($assigned)",
+		async ({ assigned }) => {
+			vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
+				id: "crew-1",
+				role: "CREW",
+			} as any)
+			vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+				baseDoc("PREPPED", { assignedCrewIds: assigned }) as any,
+			)
+			const thrown = await loader({
+				request: new Request("http://localhost/docs/doc-1"),
+				params: { id: "doc-1" },
+			} as any).catch((e: unknown) => e)
+			expect(thrown).toBeInstanceOf(Response)
+			expect((thrown as Response).headers.get("Location")).toBe("/crew-notice")
+			expect(db.jafInvoice.findUniqueOrThrow).not.toHaveBeenCalled()
+		},
+	)
 
 	it("allows a Finance user to load an LC_REQUEST_GENERATED doc", async () => {
 		vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
@@ -311,23 +294,6 @@ describe("GET /docs/:id", () => {
 		vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
 			id: "user-1",
 			role: "SUPERVISOR",
-		} as any)
-		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
-			baseDoc("LC_REQUEST_GENERATED") as any,
-		)
-
-		await expect(
-			loader({
-				request: new Request("http://localhost/docs/doc-1"),
-				params: { id: "doc-1" },
-			} as any),
-		).rejects.toMatchObject({ status: 404 })
-	})
-
-	it("blocks a Crew user from loading an LC_REQUEST_GENERATED doc", async () => {
-		vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
-			id: "user-1",
-			role: "CREW",
 		} as any)
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
 			baseDoc("LC_REQUEST_GENERATED") as any,
@@ -455,25 +421,6 @@ describe("GET /docs/:id", () => {
 			{ id: "b2", name: "DINO CASTILLO", code: "209", lead: true },
 			{ id: "b1", name: "ALEXIS DIAZ", code: "206", lead: false },
 		])
-	})
-
-	it("allows an assigned Crew user to load a normal doc", async () => {
-		vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
-			id: "user-1",
-			role: "CREW",
-		} as any)
-		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
-			baseDoc("SIGNED", { assignedCrewIds: ["user-1"] }) as any,
-		)
-		vi.mocked(db.auditTrail.findMany).mockResolvedValue([])
-		vi.mocked(db.user.findMany).mockResolvedValue([])
-
-		const result = await loader({
-			request: new Request("http://localhost/docs/doc-1"),
-			params: { id: "doc-1" },
-		} as any)
-
-		expect(result.doc.status).toBe("SIGNED")
 	})
 
 	it("allows a Warehouse user to load a normal doc", async () => {
@@ -634,6 +581,9 @@ describe("POST /docs/:id (action) — supervisor scope", () => {
 		).rejects.toMatchObject({ status: 302 })
 
 		expect(db.jafInvoice.update).toHaveBeenCalled()
+		// Crews never log in: nobody on the brigade is notified.
+		expect(db.notification.createMany).not.toHaveBeenCalled()
+		expect(db.notification.create).not.toHaveBeenCalled()
 	})
 
 	it.each(["FIELD_UPDATED", "SUPERVISOR_APPROVED", "CLARO_UPLOADED"])(

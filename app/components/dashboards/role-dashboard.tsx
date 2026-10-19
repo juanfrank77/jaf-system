@@ -1,9 +1,7 @@
 import { DashboardView } from "~/components/dashboard-view"
-import type { CrewQueue } from "~/lib/crew-queues"
 import type { SupervisorQueue } from "~/lib/supervisor-queues"
 import type { Role } from "../../../generated/prisma/client"
 import { AdminDashboard } from "./admin-dashboard"
-import { CrewDashboard } from "./crew-dashboard"
 import { FinanceDashboard } from "./finance-dashboard"
 import { InstallerDashboard } from "./installer-dashboard"
 import {
@@ -20,8 +18,6 @@ type RoleDashboardProps = DashboardViewProps & {
 	supervisorScope?: SupervisorScope | null
 	/** The supervisor's sidebar queue (`?stage=`), when one is selected. */
 	stageQueue?: SupervisorQueue | null
-	/** The crew's sidebar queue (`?stage=`), when one is selected. */
-	crewQueue?: CrewQueue | null
 }
 
 export function RoleDashboard({
@@ -29,7 +25,6 @@ export function RoleDashboard({
 	supervisorQueues,
 	supervisorScope = null,
 	stageQueue = null,
-	crewQueue = null,
 	...view
 }: RoleDashboardProps) {
 	if (role === "SUPERVISOR" && supervisorQueues) {
@@ -43,8 +38,6 @@ export function RoleDashboard({
 		)
 	}
 	switch (role) {
-		case "CREW":
-			return <CrewDashboard {...view} queue={crewQueue} />
 		case "WAREHOUSE":
 			return <WarehouseDashboard {...view} />
 		case "FINANCE":
@@ -55,7 +48,8 @@ export function RoleDashboard({
 		case "INSTALLER_SUPERVISOR":
 			return <InstallerDashboard {...view} />
 		default:
-			// COMPTROLLER is redirected to /comptroller by the loader; this branch is a fallback.
+			// COMPTROLLER (to /comptroller) and CREW (to the crew notice) are
+			// redirected by the loader; this branch is a fallback.
 			return <DashboardView {...view} />
 	}
 }

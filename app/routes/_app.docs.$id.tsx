@@ -317,13 +317,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 					},
 				},
 			}),
-			db.notification.createMany({
-				data: assignedCrewIds.map((memberId) => ({
-					userId: memberId,
-					docId: params.id,
-					message: `You have been reassigned to job ${doc.controlNumber}.`,
-				})),
-			}),
+			// No notification: crews never log in (the supervisor tells them).
 		])
 		throw redirect(`/docs/${params.id}`)
 	}

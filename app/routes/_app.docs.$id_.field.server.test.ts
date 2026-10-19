@@ -517,6 +517,23 @@ describe("POST /docs/:id/field — continue", () => {
 		})
 	})
 
+	it("a second Continue, once already at Sign off, logs no second discrepancy", async () => {
+		as("SUPERVISOR")
+		withDoc({ status: "FIELD_UPDATED" })
+		const res = await run(
+			cont(
+				[{ serviceCodeId: "sc-1", used: 3, returned: 2, source: "WAREHOUSE" }],
+				(f) => f.set("discrepancyNote", "Two came back unused"),
+			),
+		)
+		expect(res.status).toBe(302)
+		const actions = vi
+			.mocked(db.auditTrail.create)
+			.mock.calls.map((c) => (c[0] as any).data.action)
+		expect(actions).not.toContain("QUANTITY_DISCREPANCY")
+		expect(actions).not.toContain("STATUS_CHANGED")
+	})
+
 	it("advances SIGNED → FIELD_UPDATED without a signature, a crew notification or the blueprint", async () => {
 		as("SUPERVISOR")
 		withDoc({

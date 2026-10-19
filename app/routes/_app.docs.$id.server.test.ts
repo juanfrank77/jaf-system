@@ -581,6 +581,9 @@ describe("POST /docs/:id (action) — supervisor scope", () => {
 		).rejects.toMatchObject({ status: 302 })
 
 		expect(db.jafInvoice.update).toHaveBeenCalled()
+		// Crews never log in: nobody on the brigade is notified.
+		expect(db.notification.createMany).not.toHaveBeenCalled()
+		expect(db.notification.create).not.toHaveBeenCalled()
 	})
 
 	it.each(["FIELD_UPDATED", "SUPERVISOR_APPROVED", "CLARO_UPLOADED"])(

@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises"
+import path from "node:path"
 import type { ParseKeys } from "i18next"
 import { type ComponentProps, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -8,6 +9,11 @@ import { DocStageBadge } from "~/components/doc-stage-badge"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { JobLinesCard, preppedAsLines } from "~/components/job-lines-card"
 import type { MaterialLineItems } from "~/components/material-line-items"
+import {
+	type PacketBlocker,
+	PacketStepCard,
+	type PacketStepData,
+} from "~/components/packet-step"
 import { AddressCard, PhotosCard } from "~/components/review-field-work"
 import {
 	SignaturePad,
@@ -33,17 +39,24 @@ import {
 	RETENTION_RATE,
 } from "~/lib/contractor-payment.server"
 import { db } from "~/lib/db.server"
+import { fieldMaterialsOrDefault } from "~/lib/field-materials"
 import type { AddressCorrection } from "~/lib/field-update-helpers"
-import { validateFile } from "~/lib/file-upload.server"
+import {
+	uploadFileName,
+	validateBlueprintFile,
+	validateFile,
+} from "~/lib/file-upload.server"
 import { openJobLabel } from "~/lib/open-job-label"
-import { generateJafInvoicePdf } from "~/lib/pdf/jaf-invoice.server"
+import { sendPacket } from "~/lib/packet-send.server"
 import { generatePreCertSheetPdf } from "~/lib/pdf/pre-cert-sheet.server"
-import { canTransition, isReviewActionStatus } from "~/lib/permissions"
+import { canTransition, isTerminalStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
+import { packetBlockers, prefieldMissing } from "~/lib/prefield"
 import {
 	getActiveServiceCodePrices,
 	getActiveServiceCodes,
 	isPriceBlind,
+	serviceCodesForRole,
 } from "~/lib/service-codes.server"
 import {
 	type AvisoLine,
@@ -71,6 +84,7 @@ import {
 	getAvisoAmountTolerance,
 	getIvuRate,
 } from "~/lib/system-settings.server"
+import { uploadHref } from "~/lib/upload-href"
 import { photosThatLoad, saveBuffer, saveUpload } from "~/lib/uploads.server"
 import { formatMoney, toNumberPrice } from "~/lib/utils"
 import type { PreCertSheet, Prisma } from "../../generated/prisma/client"
@@ -78,13 +92,14 @@ import type { Route } from "./+types/_app.docs.$id_.review"
 
 type MaterialLine = { serviceCodeId: string; qty: number }
 
-type SendBackHistoryEntry = {
-	fromStatus: string
-	toStatus: string
-	note: string
-	byUserId: string
-	createdAt: string
-}
+/** The Prefield inputs the packet step edits (Aviso # stays optional). */
+const PREFIELD_INPUTS = [
+	"avisoNumber",
+	"ordenNumber",
+	"pedido",
+	"smr",
+	"titulo",
+] as const
 
 type MaterialServiceCode = ComponentProps<
 	typeof MaterialLineItems
@@ -157,11 +172,47 @@ export const meta: Route.MetaFunction = ({ data }) => [
 	},
 ]
 
+/** Money columns on a work order: never sent to a price-blind role. */
+const MONEY_COLUMNS = [
+	"jafInvoiceLineTotal",
+	"avisoLineTotal",
+	"advanceAmount",
+	"finalPaymentAmount",
+	"contractorShareLines",
+	"grossPayable",
+	"retentionAmount",
+	"netPayable",
+] as const
+
+/** Lines (invoice, Aviso, pre-cert) with `unitPrice` and `lineAmount` removed. */
+function linesWithoutPrices<T>(v: T): T {
+	if (!Array.isArray(v)) return v
+	return v.map((l) => {
+		const { unitPrice: _unitPrice, lineAmount: _lineAmount, ...rest } = l
+		return rest
+	}) as T
+}
+
+/**
+ * A price-blind role's copy: the same shape, with every price and amount
+ * removed (absent, not zero). Components only read the removed fields when
+ * `showPrices` is on.
+ */
+function withoutPrices<T extends Record<string, unknown>>(doc: T): T {
+	const out: Record<string, unknown> = {
+		...doc,
+		jafInvoiceLines: linesWithoutPrices(doc.jafInvoiceLines),
+		avisoLines: linesWithoutPrices(doc.avisoLines),
+	}
+	for (const k of MONEY_COLUMNS) delete out[k]
+	return out as T
+}
+
 export async function loader({ request, params }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["SUPERVISOR", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
-		include: { brigade: { select: { area: true } } },
+		include: { brigade: { select: { area: true } }, claroSupervisor: true },
 	})
 	if (user.role === "SUPERVISOR") {
 		await assertDocInSupervisorScope(db, user.id, doc)
@@ -174,21 +225,76 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			...(doc.completedById ? [doc.completedById] : []),
 		]),
 	]
-	const [serviceCodes, photos, supervisor, sheet, brigade, tolerance, people] =
-		await Promise.all([
-			getActiveServiceCodes(),
-			db.photo.findMany({ where: { docId: params.id } }),
-			db.user.findUnique({ where: { id: doc.supervisorId } }),
-			activeSheet(params.id),
-			doc.brigadeId
-				? db.brigade.findUnique({ where: { id: doc.brigadeId } })
-				: Promise.resolve(null),
-			getAvisoAmountTolerance(),
-			db.user.findMany({
-				where: { id: { in: personIds } },
-				select: { id: true, name: true },
-			}),
-		])
+	const materialRows = fieldMaterialsOrDefault(
+		doc.fieldMaterials,
+		(doc.materialsTaken as MaterialLine[] | null) ?? [],
+	)
+	const [
+		serviceCodes,
+		photos,
+		supervisor,
+		sheet,
+		brigade,
+		tolerance,
+		people,
+		sends,
+		materialCodes,
+		claroOptions,
+	] = await Promise.all([
+		getActiveServiceCodes(),
+		db.photo.findMany({ where: { docId: params.id } }),
+		db.user.findUnique({
+			where: { id: doc.supervisorId },
+			select: { name: true },
+		}),
+		activeSheet(params.id),
+		doc.brigadeId
+			? db.brigade.findUnique({ where: { id: doc.brigadeId } })
+			: Promise.resolve(null),
+		getAvisoAmountTolerance(),
+		db.user.findMany({
+			where: { id: { in: personIds } },
+			select: { id: true, name: true },
+		}),
+		db.packetSend.findMany({
+			where: { docId: params.id },
+			orderBy: { sentAt: "desc" },
+			select: {
+				id: true,
+				sentAt: true,
+				recipientEmail: true,
+				outcome: true,
+				error: true,
+				sentBy: { select: { name: true } },
+			},
+		}),
+		materialRows.length > 0
+			? db.serviceCode.findMany({
+					where: { id: { in: materialRows.map((r) => r.serviceCodeId) } },
+					select: { id: true, claroCode: true, name: true, unit: true },
+				})
+			: Promise.resolve([]),
+		// The packet step's Claro supervisor choice, until the first send: the
+		// active entries, plus the job's own one even if it was deactivated.
+		doc.jafInvoiceGeneratedAt
+			? Promise.resolve([])
+			: db.claroSupervisor.findMany({
+					where: {
+						OR: [
+							{ active: true },
+							...(doc.claroSupervisorId ? [{ id: doc.claroSupervisorId }] : []),
+						],
+					},
+					orderBy: { name: "asc" },
+					select: {
+						id: true,
+						name: true,
+						email: true,
+						requiresPrefield: true,
+						requiresBlueprint: true,
+					},
+				}),
+	])
 	const correctorNames = Object.fromEntries(people.map((u) => [u.id, u.name]))
 	const stage = deriveSupervisorStage(doc, sheet)
 	const { view, interactive } = resolveStepView(
@@ -219,21 +325,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	// Supervisors never see money (catalog, totals, brigade share), including
 	// on the Aviso card: it still runs the gate, it just hides the price fields.
 	const showPrices = showPricesFor(user.role)
-	// The number is pinned when the invoice is reviewed and generated, so it
-	// cannot drift when the Aviso number is typed in later.
-	const generatedAudit = doc.jafInvoiceGeneratedAt
-		? await db.auditTrail.findFirst({
-				where: { docId: params.id, action: "JAF_INVOICE_GENERATED" },
-				orderBy: { timestamp: "desc" },
-			})
-		: null
-	const pinnedNumber = (
-		generatedAudit?.diffJson as { invoiceNumber?: string } | null | undefined
-	)?.invoiceNumber
-	const invoiceNumber =
-		lineTotal != null ? (pinnedNumber ?? invoiceNumberFor(doc)) : null
-	// Step 5 shows the invoice as soon as the supervisor arrives, built from
-	// what was installed. Prices are computed here and never sent to a
+	// Step 5 shows the work summary as soon as the supervisor arrives, built
+	// from what was installed. Prices are computed here and never sent to a
 	// price-blind role.
 	const preview: InvoiceLine[] =
 		stage === "INVOICE" && !doc.jafInvoiceGeneratedAt
@@ -242,9 +335,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 					Object.fromEntries(serviceCodes.map((c) => [c.id, c])),
 				)
 			: []
-	const invoicePreview = showPricesFor(user.role)
-		? preview
-		: preview.map((l) => ({ ...l, unitPrice: 0, lineAmount: 0 }))
 	const invoiceHeader = {
 		controlNumber: doc.controlNumber,
 		jobType: doc.jobType,
@@ -267,16 +357,104 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			contractorNet: round2(contractor - round2(contractor * RETENTION_RATE)),
 		}
 	}
-	return {
-		doc,
-		user,
-		serviceCodes: serviceCodes.map((c) => ({
-			...c,
-			unitPrice: toNumberPrice(c.unitPrice),
+	// The Aviso card cannot recompute the amount gate without prices, so a
+	// price-blind role gets the server's verdict on what was captured.
+	const avisoAmountOk =
+		doc.jafInvoiceLines && doc.avisoLines
+			? checkAvisoMatch(
+					doc.jafInvoiceLines as InvoiceLine[],
+					doc.avisoLines as AvisoLine[],
+					tolerance,
+				).amountOk
+			: null
+
+	// Step 5 · Packet → Claro. "Sent" is the first SENT/MANUAL send
+	// (`jafInvoiceGeneratedAt`); a stored PDF alone is not, since an
+	// UNCONFIGURED attempt also stores one for the manual path.
+	const claro = doc.claroSupervisor
+	const sent = doc.jafInvoiceGeneratedAt != null
+	const blockers: PacketBlocker[] = sent
+		? []
+		: claro
+			? packetBlockers(doc, claro)
+			: ["claro_supervisor"]
+	const codeById = new Map(materialCodes.map((c) => [c.id, c]))
+	const packet: PacketStepData = {
+		sent,
+		sentAt: doc.jafInvoiceGeneratedAt,
+		claroSupervisor: claro
+			? {
+					name: claro.name,
+					email: claro.email,
+					requiresPrefield: claro.requiresPrefield,
+				}
+			: null,
+		claroSupervisorId: doc.claroSupervisorId,
+		claroOptions,
+		showPrefield: claro?.requiresPrefield ?? false,
+		prefield: {
+			avisoNumber: doc.avisoNumber,
+			ordenNumber: doc.ordenNumber,
+			pedido: doc.pedido,
+			smr: doc.smr,
+			titulo: doc.titulo,
+			description: doc.jobDescription,
+		},
+		prefieldMissing: claro?.requiresPrefield ? prefieldMissing(doc) : [],
+		blockers,
+		packetHref: doc.jafInvoicePdfPath
+			? uploadHref(doc.jafInvoicePdfPath)
+			: null,
+		blueprints: doc.blueprintPaths.map((p) => {
+			const name = path.basename(p)
+			return {
+				name,
+				href: `/files/blueprints/${encodeURIComponent(doc.id)}/${encodeURIComponent(name)}`,
+			}
+		}),
+		materials: materialRows.map((r) => {
+			const code = codeById.get(r.serviceCodeId)
+			return {
+				claroCode: code?.claroCode ?? "",
+				name: code?.name ?? r.serviceCodeId,
+				unit: code?.unit ?? null,
+				used: r.used,
+				returned: r.returned,
+				source: r.source,
+			}
+		}),
+		history: sends.map((s) => ({
+			id: s.id,
+			sentAt: s.sentAt,
+			sentBy: s.sentBy?.name ?? "—",
+			recipientEmail: s.recipientEmail,
+			outcome: s.outcome,
+			error: s.error,
 		})),
+		// The manual path is for a send that never reached Claro: only before
+		// the first send, and only after an attempt the server could not deliver.
+		canMarkManual:
+			!sent &&
+			(sends[0]?.outcome === "UNCONFIGURED" || sends[0]?.outcome === "FAILED"),
+	}
+
+	const { claroSupervisor: _claro, ...docData } = doc
+	return {
+		doc: showPrices ? docData : withoutPrices(docData),
+		user,
+		serviceCodes: serviceCodesForRole(user.role, serviceCodes),
 		photos,
 		supervisor,
-		sheet,
+		sheet:
+			sheet && !showPrices
+				? (() => {
+						const { total: _total, ...rest } = sheet
+						return {
+							...rest,
+							lines: linesWithoutPrices(sheet.lines),
+						} as typeof sheet
+					})()
+				: sheet,
 		brigade,
 		stage,
 		openLabel: openJobLabel(doc, sheet),
@@ -284,12 +462,13 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		interactive,
 		gate,
 		invoiceSummary,
-		invoiceNumber,
-		invoicePreview,
+		invoicePreview: showPrices ? preview : linesWithoutPrices(preview),
 		invoiceHeader,
 		showPrices,
+		avisoAmountOk,
 		tolerance,
 		correctorNames,
+		packet,
 		// Who signed off (Step 4). Before this redesign it was the crew lead.
 		signedOffBy: doc.completedById
 			? (correctorNames[doc.completedById] ?? null)
@@ -398,84 +577,86 @@ export async function action({ request, params }: Route.ActionArgs) {
 		])
 	}
 
-	if (intent === "generate_jaf_invoice") {
-		if (!isReviewActionStatus(doc.status) && doc.status !== "CLARO_UPLOADED")
-			throw redirect(`/docs/${params.id}`)
-		// Reviewed means locked: the invoice Claro sees, the Aviso match and
-		// Finance's packet are all this one version.
-		if (doc.jafInvoiceGeneratedAt) throw redirect(`/docs/${params.id}/review`)
-
-		const catalog = await getActiveServiceCodes()
-		const codeMap = Object.fromEntries(catalog.map((c) => [c.id, c]))
-		const installed = (doc.installedServiceLines as ServiceLine[] | null) ?? []
-		const lines = buildInvoiceLines(installed, codeMap)
-		if (lines.length === 0)
-			return { errorKey: "docs_review.errors.installed_lines_required" }
-
-		const lineTotal = sumLines(lines)
-		const ivuRate = await getIvuRate()
-		const brigade = doc.brigadeId
-			? await db.brigade.findUnique({ where: { id: doc.brigadeId } })
-			: null
-
-		const invoiceNumber = invoiceNumberFor(doc)
-		// The Claro copy: job details so Claro's supervisor can tie it to the work
-		// order, and no brigade pay or retention (those stay internal).
-		const pdf = await generateJafInvoicePdf({
-			controlNumber: doc.controlNumber,
-			avisoNumber: doc.avisoNumber,
-			jobType: doc.jobType,
-			jobAddress: doc.jobAddressActual ?? doc.jobAddressEstimated,
-			brigadeName: brigade?.name ?? null,
-			workDate: (doc.startedAt ?? doc.fieldSubmittedAt)?.toLocaleDateString(
-				"en-US",
-			),
-			invoiceDate: new Date().toLocaleDateString("en-US"),
-			invoiceNumber,
-			debtor: "PRT/CLARO",
-			lineItems: lines.map((l) => ({
-				claroCode: l.claroCode,
-				name: l.name,
-				qty: l.qty,
-				unit: l.unit ?? "",
-				unitPrice: l.unitPrice,
-				accountCode: l.accountCode,
-			})),
-			ivuRate,
-			supervisorName: user.name,
+	// Step 5 · Packet → Claro: email the packet, or record that the
+	// supervisor sent the downloaded PDF themselves. `sendPacket` owns the gates
+	// (sign-off, Claro supervisor, Prefield / blueprint), the send log and the
+	// first-send lock; every outcome lands back on the step, whose history and
+	// banner say what happened.
+	if (intent === "send_packet" || intent === "mark_packet_sent") {
+		const result = await sendPacket({
+			docId: params.id,
+			actor: { id: user.id, role: user.role, name: user.name },
+			mode: intent === "send_packet" ? "email" : "manual",
 		})
-		const localPath = await saveBuffer(
-			"jaf-invoices",
-			`${params.id}-jaf-invoice.pdf`,
-			pdf,
-		)
-		await db.$transaction([
-			db.jafInvoice.update({
-				where: { id: params.id },
-				data: {
-					jafInvoicePdfPath: localPath,
-					jafInvoiceLines: lines,
-					jafInvoiceLineTotal: lineTotal,
-					jafInvoiceGeneratedAt: new Date(),
-				},
-			}),
-			db.auditTrail.create({
-				data: {
-					docId: params.id,
-					userId: user.id,
-					action: "JAF_INVOICE_GENERATED",
-					// "Reviewed, ready for Claro": who and when are the entry's own
-					// user and timestamp.
-					diffJson: {
-						path: localPath,
-						lineTotal,
-						lines,
-						invoiceNumber,
-						reviewed: true,
+		if (!result.ok) return { errorKey: result.errorKey }
+		throw redirect(`/docs/${params.id}/review`)
+	}
+
+	// Step 5 · the Prefield fields, the Claro supervisor and (when that
+	// supervisor needs one) a blueprint can be filled or corrected here until
+	// the first send; after it they are what Claro received.
+	if (intent === "save_prefield") {
+		if (doc.jafInvoiceGeneratedAt)
+			return { errorKey: "packet.errors.prefield_locked" }
+		if (doc.releasedToFinanceAt || isTerminalStatus(doc.status))
+			return { errorKey: "packet.errors.locked" }
+		const text = (k: string) =>
+			((form.get(k) as string | null) ?? "").trim() || null
+		const data: Prisma.JafInvoiceUncheckedUpdateInput = {}
+		const changes: Record<string, { before: unknown; after: unknown }> = {}
+		for (const k of PREFIELD_INPUTS) {
+			if (!form.has(k)) continue
+			const after = text(k)
+			if (after !== doc[k]) {
+				data[k] = after
+				changes[k] = { before: doc[k], after }
+			}
+		}
+		const claroId = text("claroSupervisorId")
+		if (claroId && claroId !== doc.claroSupervisorId) {
+			const claro = await db.claroSupervisor.findUnique({
+				where: { id: claroId },
+				select: { active: true },
+			})
+			if (!claro?.active)
+				return { errorKey: "packet.errors.claro_supervisor_invalid" }
+			data.claroSupervisorId = claroId
+			changes.claroSupervisorId = {
+				before: doc.claroSupervisorId,
+				after: claroId,
+			}
+		}
+		const blueprints = form
+			.getAll("blueprint")
+			.filter((f): f is File => f instanceof File && f.size > 0)
+		if (blueprints.some((f) => !validateBlueprintFile(f).valid))
+			return { errorKey: "docs_field.errors.blueprint_invalid" }
+		const added: string[] = []
+		for (const [i, file] of blueprints.entries())
+			added.push(
+				await saveUpload(
+					`blueprints/${params.id}`,
+					uploadFileName(file, i),
+					file,
+				),
+			)
+		if (added.length > 0)
+			data.blueprintPaths = [...doc.blueprintPaths, ...added]
+		if (Object.keys(data).length > 0)
+			await db.$transaction([
+				db.jafInvoice.update({ where: { id: params.id }, data }),
+				db.auditTrail.create({
+					data: {
+						docId: params.id,
+						userId: user.id,
+						action: "PREFIELD_EDITED",
+						diffJson: {
+							...changes,
+							...(added.length > 0 ? { blueprintsAdded: added.length } : {}),
+						} as Prisma.InputJsonValue,
 					},
-				},
-			}),
-		])
+				}),
+			])
 		throw redirect(`/docs/${params.id}/review`)
 	}
 
@@ -1006,54 +1187,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 		throw redirect(`/docs/${params.id}/review`)
 	}
 
-	// The old "send back to crew": crews never log in, so a supervisor no
-	// longer has it (spec "Step 4 · Sign off"). Finance's send-back to the
-	// supervisor lives on the Finance verify screen and is unaffected.
-	if (intent === "send_back") {
-		if (user.role === "SUPERVISOR") throw redirect(`/docs/${params.id}/review`)
-		const note = (form.get("note") as string | null)?.trim() || ""
-		if (!note) return { errorKey: "docs_review.errors.send_back_note_required" }
-		if (!isReviewActionStatus(doc.status)) throw redirect(`/docs/${params.id}`)
-
-		const crew = await db.user.findMany({
-			where: { id: { in: doc.assignedCrewIds }, active: true },
-		})
-		const history = (
-			(doc.sendBackHistory as unknown as SendBackHistoryEntry[]) || []
-		).concat([
-			{
-				fromStatus: doc.status,
-				toStatus: "SIGNED",
-				note,
-				byUserId: user.id,
-				createdAt: new Date().toISOString(),
-			},
-		])
-		await db.$transaction([
-			db.jafInvoice.update({
-				where: { id: params.id },
-				data: { status: "SIGNED", sendBackHistory: history },
-			}),
-			db.auditTrail.create({
-				data: {
-					docId: params.id,
-					userId: user.id,
-					action: "SEND_BACK",
-					diffJson: { from: doc.status, to: "SIGNED", note },
-				},
-			}),
-			...crew.map((c) =>
-				db.notification.create({
-					data: {
-						userId: c.id,
-						docId: params.id,
-						message: `Job ${doc.controlNumber} sent back to you: ${note}`,
-					},
-				}),
-			),
-		])
-	}
-
 	if (intent === "edit_aviso") {
 		// PRD §1.5: supervisor can enter/update the Aviso # at any point.
 		const avisoNumber =
@@ -1280,58 +1413,43 @@ function SignOffCard({
 }
 
 /**
- * Step 5 actions: mark the invoice reviewed (this generates the locked Claro
- * copy and writes who/when to the audit trail), or send the job back to
- * Approve with a required note when a quantity or code is off.
+ * Before the first send, something wrong with what the brigade reported
+ * reopens Sign off with a required note.
  */
-function InvoiceReviewActions({ canReview }: { canReview: boolean }) {
+function BackToSignOff() {
 	const { t } = useTranslation()
 	const [goingBack, setGoingBack] = useState(false)
+	if (!goingBack)
+		return (
+			<Button
+				type="button"
+				variant="ghost"
+				className="w-full"
+				onClick={() => setGoingBack(true)}
+			>
+				← {t("docs_review_steps.invoice_back")}
+			</Button>
+		)
 	return (
-		<div className="space-y-3">
-			<div className="flex flex-wrap gap-3">
-				<Form method="post" className="flex-[2]">
-					<input type="hidden" name="intent" value="generate_jaf_invoice" />
-					<Button type="submit" className="w-full" disabled={!canReview}>
-						✓ {t("docs_review_steps.invoice_reviewed")}
-					</Button>
-				</Form>
-				{!goingBack && (
-					<Button
-						type="button"
-						variant="outline"
-						className="flex-1"
-						onClick={() => setGoingBack(true)}
-					>
-						← {t("docs_review_steps.invoice_back")}
-					</Button>
-				)}
+		<Form method="post" className="space-y-2">
+			<input type="hidden" name="intent" value="back_to_approve" />
+			<Label htmlFor="backNote" className="text-xs">
+				{t("docs_review_steps.invoice_back_note_label")}
+			</Label>
+			<Textarea id="backNote" name="note" rows={2} required />
+			<div className="flex gap-2">
+				<Button type="submit" variant="destructive">
+					{t("docs_review_steps.invoice_back_confirm")}
+				</Button>
+				<Button
+					type="button"
+					variant="ghost"
+					onClick={() => setGoingBack(false)}
+				>
+					{t("docs_review_steps.invoice_back_cancel")}
+				</Button>
 			</div>
-			{goingBack && (
-				<Form method="post" className="space-y-2">
-					<input type="hidden" name="intent" value="back_to_approve" />
-					<Label htmlFor="backNote" className="text-xs">
-						{t("docs_review_steps.invoice_back_note_label")}
-					</Label>
-					<Textarea id="backNote" name="note" rows={2} required />
-					<div className="flex gap-2">
-						<Button type="submit" variant="destructive">
-							{t("docs_review_steps.invoice_back_confirm")}
-						</Button>
-						<Button
-							type="button"
-							variant="ghost"
-							onClick={() => setGoingBack(false)}
-						>
-							{t("docs_review_steps.invoice_back_cancel")}
-						</Button>
-					</div>
-				</Form>
-			)}
-			<p className="text-xs text-muted-foreground">
-				{t("docs_review_steps.invoice_reviewed_hint")}
-			</p>
-		</div>
+		</Form>
 	)
 }
 
@@ -1613,12 +1731,13 @@ export default function ReviewDoc({
 		interactive,
 		gate,
 		invoiceSummary,
-		invoiceNumber,
 		invoicePreview,
 		invoiceHeader,
 		showPrices,
+		avisoAmountOk,
 		tolerance,
 		correctorNames,
+		packet,
 		signedOffBy,
 	} = loaderData
 	const { t } = useTranslation()
@@ -1750,185 +1869,178 @@ export default function ReviewDoc({
 				</>
 			)}
 
-			{/* B — Invoice */}
 			{/* Every later step keeps the same lines card above its own panel */}
 			{panel !== "APPROVE" && jobLines}
 
+			{/* B — Packet → Claro */}
 			{panel === "INVOICE" && (
-				<Card>
-					<CardHeader className="items-start">
-						<div>
-							<div className="text-base font-bold">
-								{t("docs_review_steps.invoice_title")}
-							</div>
-							{invoiceNumber && doc.jafInvoiceGeneratedAt && (
-								<div className="mt-0.5 text-xs font-normal text-muted-foreground">
-									{t("docs_review_steps.invoice_subtitle", {
-										number: invoiceNumber,
-										date: new Date(
-											doc.jafInvoiceGeneratedAt,
-										).toLocaleDateString(),
-									})}
-								</div>
-							)}
-						</div>
-					</CardHeader>
-					<CardContent className="space-y-3">
-						<dl
-							data-testid="invoice-header"
-							className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2"
-						>
-							{(
-								[
-									["work_order", invoiceHeader.controlNumber],
-									["job_type", invoiceHeader.jobType],
-									["address", invoiceHeader.address],
-									["brigade", invoiceHeader.brigadeName ?? "—"],
-									[
-										"work_date",
-										invoiceHeader.workDate
-											? new Date(invoiceHeader.workDate).toLocaleDateString()
-											: "—",
-									],
-									["invoice_number", invoiceNumber ?? "—"],
-								] as const
-							).map(([key, value]) => (
-								<div key={key} className="flex gap-2">
-									<dt className="text-muted-foreground">
-										{t(`docs_review_steps.invoice_header.${key}`)}:
-									</dt>
-									<dd className="font-medium">{value}</dd>
-								</div>
-							))}
-						</dl>
-						{isPreview && (
-							<Pill variant="info" icon="👁">
-								{t("docs_review_steps.invoice_preview")}
-							</Pill>
-						)}
-						{invoiceLines.length > 0 && (
-							<table className="w-full text-sm">
-								<thead>
-									<tr className="border-b text-left text-xs text-muted-foreground">
-										<th className="py-1.5">{t("docs_review.table.code")}</th>
-										<th className="py-1.5">
-											{t("docs_review.table.description")}
-										</th>
-										<th className="py-1.5">{t("service_picker.col_type")}</th>
-										<th className="py-1.5 text-right">
-											{t("docs_review.table.qty")}
-										</th>
-										{showPrices && (
-											<>
-												<th className="py-1.5 text-right">
-													{t("docs_review_steps.unit_price")}
-												</th>
-												<th className="py-1.5 text-right">
-													{t("docs_review_steps.line_amount")}
-												</th>
-											</>
-										)}
-									</tr>
-								</thead>
-								<tbody className="tabular-nums">
-									{invoiceLines.map((l) => (
-										<tr
-											key={l.serviceCodeId}
-											className="border-b last:border-0"
-										>
-											<td className="py-1.5 font-mono text-xs font-semibold">
-												{l.claroCode}
-											</td>
-											<td className="py-1.5">
-												{splitServiceSuffix(l.name).base}
-											</td>
-											<td className="py-1.5 font-mono text-xs">
-												{splitServiceSuffix(l.name).suffix ?? "—"}
-											</td>
-											<td className="py-1.5 text-right">{l.qty}</td>
-											{showPrices && (
-												<>
-													<td className="py-1.5 text-right">
-														${l.unitPrice.toFixed(4)}
-													</td>
-													<td className="py-1.5 text-right">
-														${l.lineAmount.toFixed(2)}
-													</td>
-												</>
-											)}
-										</tr>
+				<>
+					<PhotosCard docId={doc.id} photos={photoItems} />
+					<PacketStepCard
+						packet={packet}
+						interactive={interactive}
+						errorKey={error?.errorKey}
+						workSummary={
+							<div className="space-y-3">
+								<dl
+									data-testid="invoice-header"
+									className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2"
+								>
+									{(
+										[
+											["work_order", invoiceHeader.controlNumber],
+											["job_type", invoiceHeader.jobType],
+											["address", invoiceHeader.address],
+											["brigade", invoiceHeader.brigadeName ?? "—"],
+											[
+												"work_date",
+												invoiceHeader.workDate
+													? new Date(
+															invoiceHeader.workDate,
+														).toLocaleDateString()
+													: "—",
+											],
+										] as const
+									).map(([key, value]) => (
+										<div key={key} className="flex gap-2">
+											<dt className="text-muted-foreground">
+												{t(`docs_review_steps.invoice_header.${key}`)}:
+											</dt>
+											<dd className="font-medium">{value}</dd>
+										</div>
 									))}
-								</tbody>
-								{invoiceSummary && (
-									<tfoot className="tabular-nums">
-										<tr>
-											<td colSpan={4} className="pr-6 pt-5 pb-1.5 text-right">
-												{t("docs_review_steps.line_sum_pre_ivu")}
-											</td>
-											<td className="pt-5 pb-1.5 text-right font-semibold">
-												{formatMoney(invoiceSummary.lineTotal)}
-											</td>
-										</tr>
-										<tr className="text-muted-foreground">
-											<td colSpan={4} className="pr-6 pt-6 pb-1.5 text-right">
-												{t("docs_review_steps.contractor_share", {
-													percent: round2(invoiceSummary.sharePercent * 100),
-													name: brigade?.name ?? "—",
-												})}{" "}
-												<span className="text-xs italic">
-													{t("docs_review_steps.information_only")}
-												</span>
-											</td>
-											<td className="pt-6 pb-1.5 text-right">
-												{formatMoney(invoiceSummary.contractor)}
-											</td>
-										</tr>
-										<tr className="text-muted-foreground">
-											<td colSpan={4} className="py-1.5 pr-6 text-right">
-												{t("docs_review_steps.retention_row", {
-													percent: round2(
-														invoiceSummary.retentionPercent * 100,
-													),
-												})}
-											</td>
-											<td className="py-1.5 text-right">
-												{formatMoney(invoiceSummary.contractorNet)}
-											</td>
-										</tr>
-									</tfoot>
+								</dl>
+								{invoiceLines.length === 0 ? (
+									<p className="text-xs text-muted-foreground">
+										{t("docs_review.errors.installed_lines_required")}
+									</p>
+								) : (
+									<table className="w-full text-sm">
+										<thead>
+											<tr className="border-b text-left text-xs text-muted-foreground">
+												<th className="py-1.5">
+													{t("docs_review.table.code")}
+												</th>
+												<th className="py-1.5">
+													{t("docs_review.table.description")}
+												</th>
+												<th className="py-1.5">
+													{t("service_picker.col_type")}
+												</th>
+												<th className="py-1.5 text-right">
+													{t("docs_review.table.qty")}
+												</th>
+												{showPrices && (
+													<>
+														<th className="py-1.5 text-right">
+															{t("docs_review_steps.unit_price")}
+														</th>
+														<th className="py-1.5 text-right">
+															{t("docs_review_steps.line_amount")}
+														</th>
+													</>
+												)}
+											</tr>
+										</thead>
+										<tbody className="tabular-nums">
+											{invoiceLines.map((l) => (
+												<tr
+													key={l.serviceCodeId}
+													className="border-b last:border-0"
+												>
+													<td className="py-1.5 font-mono text-xs font-semibold">
+														{l.claroCode}
+													</td>
+													<td className="py-1.5">
+														{splitServiceSuffix(l.name).base}
+													</td>
+													<td className="py-1.5 font-mono text-xs">
+														{splitServiceSuffix(l.name).suffix ?? "—"}
+													</td>
+													<td className="py-1.5 text-right">
+														{l.qty} {l.unit ?? ""}
+													</td>
+													{showPrices && (
+														<>
+															<td className="py-1.5 text-right">
+																${l.unitPrice.toFixed(4)}
+															</td>
+															<td className="py-1.5 text-right">
+																${l.lineAmount.toFixed(2)}
+															</td>
+														</>
+													)}
+												</tr>
+											))}
+										</tbody>
+										{invoiceSummary && (
+											<tfoot className="tabular-nums">
+												<tr>
+													<td
+														colSpan={5}
+														className="pr-6 pt-5 pb-1.5 text-right"
+													>
+														{t("docs_review_steps.line_sum_pre_ivu")}
+													</td>
+													<td className="pt-5 pb-1.5 text-right font-semibold">
+														{formatMoney(invoiceSummary.lineTotal)}
+													</td>
+												</tr>
+												<tr className="text-muted-foreground">
+													<td
+														colSpan={5}
+														className="pr-6 pt-6 pb-1.5 text-right"
+													>
+														{t("docs_review_steps.contractor_share", {
+															percent: round2(
+																invoiceSummary.sharePercent * 100,
+															),
+															name: brigade?.name ?? "—",
+														})}{" "}
+														<span className="text-xs italic">
+															{t("docs_review_steps.information_only")}
+														</span>
+													</td>
+													<td className="pt-6 pb-1.5 text-right">
+														{formatMoney(invoiceSummary.contractor)}
+													</td>
+												</tr>
+												<tr className="text-muted-foreground">
+													<td colSpan={5} className="py-1.5 pr-6 text-right">
+														{t("docs_review_steps.retention_row", {
+															percent: round2(
+																invoiceSummary.retentionPercent * 100,
+															),
+														})}
+													</td>
+													<td className="py-1.5 text-right">
+														{formatMoney(invoiceSummary.contractorNet)}
+													</td>
+												</tr>
+											</tfoot>
+										)}
+									</table>
 								)}
-							</table>
-						)}
-						{doc.jafInvoicePdfPath && (
-							<a
-								href={`/files/jaf-invoices/${doc.id}-jaf-invoice.pdf`}
-								className="text-accent-text underline text-sm"
-							>
-								{t("docs_review.download")}
-							</a>
-						)}
-						{interactive && !doc.jafInvoiceGeneratedAt && isPreview && (
-							<InvoiceReviewActions canReview={invoiceLines.length > 0} />
-						)}
-						{interactive &&
-							!isPreview &&
-							invoiceLines.length > 0 &&
-							!doc.avisoMatchedAt && (
-								<Pill variant="warn" icon="→">
-									<b>{t("docs_review_steps.next_aviso_title")}</b>{" "}
-									{t("docs_review_steps.next_aviso_body")}
-								</Pill>
-							)}
-						{interactive && stage === "AVISO" && (
-							<Link
-								to="?step=AVISO"
-								className={buttonVariants({ className: "w-full" })}
-							>
-								{t("docs_review_steps.continue_to_aviso")}
-							</Link>
-						)}
-					</CardContent>
-				</Card>
+							</div>
+						}
+					>
+						{interactive && !packet.sent && <BackToSignOff />}
+					</PacketStepCard>
+					{interactive && packet.sent && !doc.avisoMatchedAt && (
+						<Pill variant="warn" icon="→">
+							<b>{t("docs_review_steps.next_aviso_title")}</b>{" "}
+							{t("docs_review_steps.next_aviso_body")}
+						</Pill>
+					)}
+					{interactive && stage === "AVISO" && (
+						<Link
+							to="?step=AVISO"
+							className={buttonVariants({ className: "w-full" })}
+						>
+							{t("docs_review_steps.continue_to_aviso")}
+						</Link>
+					)}
+				</>
 			)}
 
 			{/* C — Aviso & match */}
@@ -1944,7 +2056,9 @@ export default function ReviewDoc({
 					certified={precertLines}
 					catalogPrices={
 						showPrices
-							? Object.fromEntries(serviceCodes.map((c) => [c.id, c.unitPrice]))
+							? Object.fromEntries(
+									serviceCodes.map((c) => [c.id, c.unitPrice ?? 0]),
+								)
 							: {}
 					}
 					tolerance={tolerance}
@@ -1952,6 +2066,7 @@ export default function ReviewDoc({
 					readOnly={!interactive}
 					started={avisoStarted}
 					showPrices={showPrices}
+					serverAmountOk={avisoAmountOk}
 				>
 					{interactive && doc.status === "SUPERVISOR_APPROVED" && (
 						<details className="pt-3">

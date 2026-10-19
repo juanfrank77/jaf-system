@@ -762,7 +762,6 @@
 		"upload_pdf_hint": "After creating the work order in Claro's portal, download the PDF and upload it here.",
 		"upload_pdf_submit": "Upload Claro PDF",
 		"aviso_docs_heading": "Documents for Claro Aviso",
-		"download": "Download",
 		"not_generated": "Not generated",
 		"not_uploaded": "Not uploaded",
 		"generate_jaf_invoice": "Generate JAF Invoice PDF",
@@ -775,7 +774,7 @@
 			"pdf_required": "Please select the Claro PDF to upload",
 			"send_back_note_required": "A note explaining the send-back is required.",
 			"back_note_required": "Enter a note saying what is wrong.",
-			"installed_lines_required": "The crew has not recorded installed quantities per service code.",
+			"installed_lines_required": "No installed quantities per service code were recorded in the Field step.",
 			"invoice_required": "Generate the JAF invoice first.",
 			"aviso_number_required": "Aviso # is required.",
 			"aviso_pdf_required": "Upload the Aviso document.",
@@ -810,7 +809,7 @@
 		"callout_approve_title": "Step {{n}} of {{total}} · You",
 		"callout_approve_body": "Check the address, the photos and the quantities, then sign to close the Field step.",
 		"callout_invoice_title": "Step {{n}} of {{total}} · You",
-		"callout_invoice_body": "The invoice is built from what was installed. Check the lines and the job details, mark it reviewed, then take it to Claro's supervisor to get the Aviso.",
+		"callout_invoice_body": "Check the packet: Prefield, work done, materials, blueprint and photos. Then send it to the Claro supervisor, who creates the Aviso.",
 		"callout_aviso_title": "Step {{n}} of {{total}} · You",
 		"callout_aviso_body": "Enter the Aviso number, upload the document. The system compares it line by line with the invoice.",
 		"callout_precert_title": "Step {{n}} of {{total}} · You + the contractor",
@@ -848,20 +847,16 @@
 		"released": "In Finance"
 	},
 	"docs_review_steps": {
-		"invoice_reviewed": "Reviewed, ready for Claro",
 		"invoice_back": "Back to Sign off",
 		"invoice_back_note_label": "What is wrong? (required) — the job goes back to Sign off",
 		"invoice_back_confirm": "Send back to Sign off",
 		"invoice_back_cancel": "Cancel",
-		"invoice_reviewed_hint": "Marking it reviewed creates the invoice Claro's supervisor will see and locks its number and amounts; your name and the time go in the audit trail.",
-		"invoice_preview": "This is a preview built from what the brigade installed. Nothing has been issued yet.",
 		"invoice_header": {
 			"work_order": "Work order",
 			"job_type": "Job type",
 			"address": "Address",
 			"brigade": "Brigade",
-			"work_date": "Work date",
-			"invoice_number": "Invoice #"
+			"work_date": "Work date"
 		},
 		"aviso_heading": "Aviso & match",
 		"aviso_hint": "Enter the Aviso number and upload the document. The system compares it line by line with the JAF invoice.",
@@ -906,8 +901,6 @@
 		"footnote_amt": "Hard gate: amount mismatches cannot be waived with a note.",
 		"download_pdf": "Download PDF",
 		"continue_to_aviso": "Continue to Aviso →",
-		"invoice_title": "JAF Invoice",
-		"invoice_subtitle": "JAF Communications Inc. · {{number}} · {{date}}",
 		"ivu_row": "+ IVU {{rate}}%",
 		"invoice_total": "Invoice total",
 		"contractor_share": "Contractor share {{percent}}% → {{name}}",
@@ -2277,5 +2270,84 @@
 		"confirm_prompt": "Mark this account paid from the paper copy? This closes Arm A for the account.",
 		"fallback_off": "Confirming from paper is switched off. Carmen marks accounts paid.",
 		"open_list": "Open list"
+	},
+	"packet": {
+		"title": "Packet → Claro",
+		"status_sent": "Sent to Claro on {{date}}",
+		"status_not_sent": "Not sent yet",
+		"recipient": "Send to",
+		"no_recipient": "No Claro supervisor is chosen for this job.",
+		"blockers_title": "Before the packet can be sent:",
+		"prefield_title": "Prefield",
+		"missing": "Missing",
+		"work_summary": "Work summary",
+		"materials": "Materials",
+		"no_materials": "No materials recorded.",
+		"col_used": "Used",
+		"col_returned": "Returned",
+		"col_source": "Source",
+		"blueprints": "Blueprint",
+		"no_blueprint": "No blueprint attached.",
+		"send": "Send to Claro supervisor",
+		"resend": "Resend",
+		"sending": "Sending…",
+		"confirm_send": "Email the packet to {{email}}?",
+		"confirm_resend": "Email the packet again to {{email}}? This is the Claro supervisor's current address in the directory.",
+		"download": "Download packet",
+		"mark_manual": "Mark as sent manually",
+		"confirm_manual": "Mark the packet as sent? Do this only after you have sent the downloaded packet to {{email}} yourself.",
+		"manual_hint": "Sending it yourself? Attach the packet PDF and each blueprint file: the download is the packet only.",
+		"unconfigured": "Email is not set up on this server, so nothing was sent. Download the packet, send it to the Claro supervisor yourself, then press Mark as sent manually.",
+		"failed": "The last attempt failed: the email did not go out. Try again, and tell an administrator if it keeps failing.",
+		"history_title": "Send history",
+		"history_empty": "No attempts yet.",
+		"blocker": {
+			"prefield": "Prefield: fill in {{fields}} in the Prefield form below (this Claro supervisor requires it).",
+			"blueprint": "Add a blueprint with the upload in the Prefield form below (this Claro supervisor requires one).",
+			"claro_supervisor": "Choose the Claro supervisor for this job in the Prefield form below."
+		},
+		"prefield": {
+			"avisoNumber": "Aviso #",
+			"ordenNumber": "# Orden",
+			"pedido": "Pedido",
+			"smr": "SMR",
+			"titulo": "Título",
+			"description": "Description"
+		},
+		"source": {
+			"WAREHOUSE": "Warehouse",
+			"BRIGADE_STOCK": "Brigade stock"
+		},
+		"history": {
+			"time": "Time",
+			"user": "By",
+			"recipient": "Recipient",
+			"outcome": "Outcome"
+		},
+		"outcome": {
+			"SENT": "Sent",
+			"FAILED": "Failed",
+			"UNCONFIGURED": "Email not set up",
+			"MANUAL": "Marked sent manually"
+		},
+		"queue": {
+			"sent": "Sent {{date}}",
+			"not_sent": "Not sent"
+		},
+		"errors": {
+			"prefield_missing": "This Claro supervisor requires the Prefield form: fill in # Orden, Pedido, SMR and Título before sending.",
+			"blueprint_missing": "This Claro supervisor requires a blueprint: add one before sending.",
+			"no_claro_supervisor": "Choose the Claro supervisor for this job before sending the packet.",
+			"not_signed_off": "Sign off the field work before sending the packet.",
+			"locked": "This job has already been released to Finance; the packet can no longer be sent.",
+			"render_failed": "The packet PDF could not be built. The attempt was logged; try again, and tell an administrator if it keeps failing.",
+			"prefield_locked": "The packet has already been sent: the Prefield fields and the Claro supervisor can no longer be changed.",
+			"claro_supervisor_invalid": "That Claro supervisor is not active. Choose another one."
+		},
+		"claro_label": "Claro supervisor",
+		"claro_placeholder": "Choose a Claro supervisor…",
+		"blueprint_upload": "Add a blueprint (PDF or photo)",
+		"prefield_hint": "You can fill in or correct these until the packet is sent.",
+		"prefield_save": "Save"
 	}
 }

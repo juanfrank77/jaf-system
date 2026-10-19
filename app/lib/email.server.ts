@@ -1,4 +1,5 @@
 import { db } from "./db.server"
+import { sanitizedError } from "./redact"
 
 type InternalEmailMessage = {
 	recipients: string[]
@@ -13,21 +14,6 @@ export function setInternalEmailTransport(
 	next: InternalEmailTransport | null,
 ): void {
 	transport = next
-}
-
-function sanitizedError(error: unknown): string {
-	const message = error instanceof Error ? error.message : String(error)
-	return message
-		.replace(
-			/authorization:\s*Bearer\s+\S+|(?:password|secret|token|api_key|authorization)[\s:=]+[^\s,;]*/gi,
-			"[redacted]",
-		)
-		.replace(/"(?:password|secret)":"[^"]*"/gi, "[redacted]")
-		.replace(
-			/-----BEGIN[^-]*PRIVATE KEY-----[\s\S]*?-----END[^-]*PRIVATE KEY-----/gi,
-			"[redacted]",
-		)
-		.slice(0, 300)
 }
 
 export async function sendInternalEmail(input: {

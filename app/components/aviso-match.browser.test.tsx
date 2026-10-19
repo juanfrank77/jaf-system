@@ -87,6 +87,53 @@ describe("AvisoMatchCard for a price-blind role", () => {
 	})
 })
 
+describe("AvisoMatchCard with prices stripped (what a supervisor's loader sends)", () => {
+	const blindInvoice = [
+		{ serviceCodeId: "c1", claroCode: "34012039", name: "REMOCION", qty: 1 },
+	] as any
+	const blindStored = [
+		{ serviceCodeId: "c1", claroCode: "34012039", qty: 1 },
+	] as any
+
+	it("takes the amount verdict from the server: agreeing quantities read as agreed", async ({
+		renderStub,
+	}) => {
+		await mount(
+			renderStub,
+			<AvisoMatchCard
+				{...base}
+				invoiceLines={blindInvoice}
+				storedLines={blindStored}
+				started
+				avisoDocPath="/x.pdf"
+				serverAmountOk
+			/>,
+		)
+		expect(screen.getByText("Aviso and JAF invoice agree.")).toBeInTheDocument()
+		expect(screen.queryByText(/\$|NaN/)).toBeNull()
+	})
+
+	it("shows the blocked state when the server says the totals disagree", async ({
+		renderStub,
+	}) => {
+		await mount(
+			renderStub,
+			<AvisoMatchCard
+				{...base}
+				invoiceLines={blindInvoice}
+				storedLines={blindStored}
+				started
+				avisoDocPath="/x.pdf"
+				serverAmountOk={false}
+			/>,
+		)
+		expect(
+			screen.getByText("Blocked — Aviso total does not match the JAF invoice."),
+		).toBeInTheDocument()
+		expect(screen.queryByText(/\$|NaN/)).toBeNull()
+	})
+})
+
 describe("AvisoMatchCard for Finance/Admin", () => {
 	it("keeps the editable quantity and price fields", async ({ renderStub }) => {
 		await mount(renderStub, <AvisoMatchCard {...base} showPrices />)

@@ -242,7 +242,7 @@ export function SupervisorDashboard({
 						searchFilter={searchFilter}
 					/>
 				)}
-				<DashboardDocList docs={docs} />
+				<DashboardDocList docs={docs} packetStatus={stageQueue === "invoice"} />
 			</div>
 		)
 	}

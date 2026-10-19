@@ -9,6 +9,7 @@ import { db } from "~/lib/db.server"
 import { openJobLabel } from "~/lib/open-job-label"
 import { requireRole } from "~/lib/permissions.server"
 import { deriveSupervisorStage } from "~/lib/supervisor-stage"
+import { uploadHref } from "~/lib/upload-href"
 import { formatMoney, toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.admin.docs.$id"
 
@@ -366,7 +367,7 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 					{doc.jafInvoicePdfPath && (
 						<li>
 							<a
-								href={`/files/jaf-invoices/${doc.id}-jaf-invoice.pdf`}
+								href={uploadHref(doc.jafInvoicePdfPath)}
 								className="text-accent-text underline"
 							>
 								{t("admin_history.jaf_invoice")}

@@ -62,4 +62,44 @@ describe("DashboardDocList billing visibility", () => {
 		)
 		expect(screen.getByText("Recogido")).toBeInTheDocument()
 	})
+
+	it("Packets to Claro: flags each row sent or not sent from the first-send timestamp", async ({
+		renderStub,
+	}) => {
+		await mount(
+			renderStub,
+			<DashboardDocList
+				packetStatus
+				docs={[
+					{
+						...doc,
+						id: "sent",
+						controlNumber: "JAF-SENT",
+						status: "SUPERVISOR_APPROVED",
+						jafInvoiceGeneratedAt: new Date("2026-10-18T12:00:00Z"),
+					},
+					{
+						...doc,
+						id: "unsent",
+						controlNumber: "JAF-UNSENT",
+						status: "SUPERVISOR_APPROVED",
+						jafInvoiceGeneratedAt: null,
+					},
+				]}
+			/>,
+		)
+		const sentRow = screen.getByText("JAF-SENT").closest("a") as HTMLElement
+		const unsentRow = screen.getByText("JAF-UNSENT").closest("a") as HTMLElement
+		expect(sentRow.textContent).toMatch(/Sent \d/)
+		expect(sentRow.textContent).not.toContain("Not sent")
+		expect(unsentRow.textContent).toContain("Not sent")
+	})
+
+	it("shows no packet flag on the other lists", async ({ renderStub }) => {
+		await mount(
+			renderStub,
+			<DashboardDocList docs={[{ ...doc, jafInvoiceGeneratedAt: null }]} />,
+		)
+		expect(screen.queryByText("Not sent")).toBeNull()
+	})
 })

@@ -100,6 +100,7 @@ export function DashboardDocList({
 	docs,
 	showBilling = true,
 	financeSteps = false,
+	packetStatus = false,
 }: {
 	docs: DashboardDocRow[]
 	/** Billing detail (raw status enum, Aviso number) is for supervisor and
@@ -109,6 +110,9 @@ export function DashboardDocList({
 	 * on (Packets in, LC request, ...) instead of the supervisor's one "In
 	 * Finance" chip, so the dashboard matches the sidebar. */
 	financeSteps?: boolean
+	/** Packets to Claro: flag each row sent / not sent. Sent is the first
+	 * delivered send (`jafInvoiceGeneratedAt`), never just a stored PDF. */
+	packetStatus?: boolean
 }) {
 	const { t } = useTranslation()
 	return (
@@ -168,6 +172,18 @@ export function DashboardDocList({
 											cancelled={doc.status === "CANCELLED"}
 										/>
 									)}
+									{packetStatus &&
+										(doc.jafInvoiceGeneratedAt ? (
+											<Badge variant="ok" suppressHydrationWarning>
+												{t("packet.queue.sent", {
+													date: new Date(
+														doc.jafInvoiceGeneratedAt,
+													).toLocaleDateString(),
+												})}
+											</Badge>
+										) : (
+											<Badge variant="warn">{t("packet.queue.not_sent")}</Badge>
+										))}
 									<HugeiconsIcon
 										icon={ChevronRightIcon}
 										strokeWidth={2}

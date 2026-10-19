@@ -21,6 +21,7 @@ import {
 } from "~/lib/finance-pipeline.server"
 import { isTerminalStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
+import { uploadHref } from "~/lib/upload-href"
 import { cn, formatMoney, toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.finance.verify.$id"
 
@@ -279,7 +280,7 @@ export default function FinanceVerify({
 		(doc.materialsTaken as { serviceCodeId: string; qty: number }[]) || []
 	const source = used.length > 0 ? used : taken
 	const jafInvoiceUrl = doc.jafInvoicePdfPath
-		? `/files/jaf-invoices/${doc.id}-jaf-invoice.pdf`
+		? uploadHref(doc.jafInvoicePdfPath)
 		: null
 
 	const cannotVerify =

@@ -494,6 +494,49 @@ async function seedDemoSerials() {
 	console.log(`demo serials: ${demo.length} upserted at Guaynabo (SEED_DEMO=1)`)
 }
 
+// Demo Claro supervisors (invented people, unroutable `.invalid` addresses),
+// one per rule combination, so a demo can walk the packet gates. Guarded by
+// SEED_DEMO=1 like the demo serials: the intake dropdown lists every active
+// entry, and a real deployment's directory is entered on Admin → Claro
+// supervisors. Idempotent: upsert on a stable id; an admin's edits survive.
+const DEMO_CLARO_SUPERVISORS = [
+	{
+		id: "demo-claro-prefield-blueprint",
+		name: "Marisol Quiñones (demo)",
+		email: "marisol.quinones@claro-demo.invalid",
+		requiresPrefield: true,
+		requiresBlueprint: true,
+	},
+	{
+		id: "demo-claro-prefield",
+		name: "Héctor Villanueva (demo)",
+		email: "hector.villanueva@claro-demo.invalid",
+		requiresPrefield: true,
+		requiresBlueprint: false,
+	},
+	{
+		id: "demo-claro-plain",
+		name: "Lucía Ortega (demo)",
+		email: "lucia.ortega@claro-demo.invalid",
+		requiresPrefield: false,
+		requiresBlueprint: false,
+	},
+]
+
+async function seedDemoClaroSupervisors() {
+	if (process.env.SEED_DEMO !== "1") return
+	for (const c of DEMO_CLARO_SUPERVISORS)
+		await db.claroSupervisor.upsert({
+			where: { id: c.id },
+			update: {},
+			create: c,
+		})
+	// biome-ignore lint/suspicious/noConsole: CLI seed output
+	console.log(
+		`demo Claro supervisors: ${DEMO_CLARO_SUPERVISORS.length} upserted (SEED_DEMO=1)`,
+	)
+}
+
 async function main() {
 	// Fail before any write, not after 9 other steps have already committed:
 	// the roster CSV is an out-of-band transfer (gitignored, real PII), and a
@@ -515,6 +558,7 @@ async function main() {
 	await seedVansAndStock()
 	await seedLimitTable()
 	await seedDemoSerials()
+	await seedDemoClaroSupervisors()
 	await seedWarehouseStartingBalances(db)
 }
 

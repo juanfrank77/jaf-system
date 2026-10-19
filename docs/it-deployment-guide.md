@@ -103,6 +103,26 @@ sudo mkdir -p /var/lib/jaf-operations/uploads
 sudo chown -R <app-user>:<app-user> /var/lib/jaf-operations/uploads
 ```
 
+### Outbound email for the Claro packet (SMTP)
+
+Step 5 of the supervisor workflow ("Send to Claro supervisor") emails the packet PDF, plus any blueprint files, to the Claro supervisor's address in the directory. The app sends it over SMTP using the mail account JAF's IT creates for it:
+
+| Variable | Example | What it's for |
+|---|---|---|
+| `SMTP_HOST` | `mail.client-domain.com` | The SMTP server |
+| `SMTP_PORT` | `587` | `465` uses implicit TLS; any other port (normally `587`) upgrades with STARTTLS |
+| `SMTP_USER` | `packets@client-domain.com` | The mail account's login |
+| `SMTP_PASSWORD` | (the account's password) | The mail account's password |
+| `SMTP_FROM` | `IMS <packets@client-domain.com>` | The sender shown on the email |
+
+- **All five are required, `SMTP_USER` and `SMTP_PASSWORD` included.** The app always logs in to the SMTP server: an unauthenticated relay (an open port 25 relay with no login) is **not supported**.
+- **If any of them is missing**, nothing is sent. Each attempt is recorded in the job's send history as *Email not set up* (`UNCONFIGURED`), the screen says so, and the supervisor can download the packet, send it themselves and press **Mark as sent manually**. This is how the demo works without a mail server, and it keeps the workflow moving until the account exists.
+- **If the server refuses or cannot be reached**, the attempt is recorded as *Failed* with the server's error message, the job does **not** advance, and the supervisor can try again (or use Mark as sent manually).
+- **Credentials are never logged.** The password is stripped from any stored error message, and neither credentials nor email bodies are written to the app logs or the send history.
+- Internal notification email (`email.server.ts`) is separate, best effort, and does not use these settings.
+
+**How to test it:** after setting the five variables, restart the app (`sudo systemctl restart jaf-operations`). As an admin, add (or edit) a Claro supervisor on **Admin → Claro supervisors** with an email address you can read. Take a test job to Step 5 (signed off, that Claro supervisor chosen) and press **Send to Claro supervisor**. The send history under the button should show *Sent*, and the email should arrive with the packet PDF attached. *Failed* shows the server's error (wrong port, TLS, login, or a firewall blocking outbound SMTP); *Email not set up* means one of the five variables is missing or `SMTP_PORT` is not a number. Cancel the test job afterwards.
+
 ---
 
 ## 6. HTTPS is required, not optional

@@ -44,6 +44,13 @@ function input(extra: Partial<ClaroPacketInput> = {}): ClaroPacketInput {
 			tipoPlanta: "Cobre",
 			grupoPlan: "G1",
 		},
+		job: {
+			address: "Carr. 906 Km 2.1, Yabucoa",
+			jobType: "Mantenimiento",
+			description: "Pole transfer, three drops",
+			workDate: new Date("2026-10-17T15:00:00Z"),
+			avisoNumber: null,
+		},
 		workSummary: [
 			{ claroCode: "34006301", name: "TRANSFER ATTCH", qty: 5, unit: "EA" },
 		],
@@ -83,6 +90,10 @@ describe("generateClaroPacketPdf", () => {
 		)
 		expect(text).not.toContain("SMR")
 		expect(text).toContain("Resumen del trabajo")
+		// The job is still identified without the Prefield page.
+		expect(text).toContain("Carr. 906 Km 2.1, Yabucoa")
+		expect(text).toContain("Pole transfer, three drops")
+		expect(text).toContain("Bo. Juan Martín")
 	})
 
 	it("embeds photos and image blueprints, skipping missing files", async () => {

@@ -393,6 +393,30 @@ describe("sendPacket outcomes", { timeout: HOOK_TIMEOUT }, () => {
 		)
 	})
 
+	it("a PDF that fails to render logs FAILED and returns render_failed", async () => {
+		const claro = await seedClaro()
+		const doc = await seedDoc({ claroSupervisorId: claro.id })
+		setMailTransport(okTransport)
+		vi.mocked(generateClaroPacketPdf).mockRejectedValueOnce(
+			new Error("font load failed token=abc123"),
+		)
+		expect(
+			await sendPacket({ docId: doc.id, actor: sup, mode: "email" }),
+		).toEqual({ ok: false, errorKey: "packet.errors.render_failed" })
+		const log = await rows(doc.id)
+		expect(log).toHaveLength(1)
+		expect(log[0]).toMatchObject({
+			outcome: "FAILED",
+			recipientEmail: claro.email,
+		})
+		expect(log[0].error).toContain("font load failed")
+		expect(log[0].error).not.toContain("abc123")
+		expect(sent).toHaveLength(0)
+		const after = await reload(doc.id)
+		expect(after.jafInvoiceGeneratedAt).toBeNull()
+		expect(after.jafInvoicePdfPath).toBeNull()
+	})
+
 	it("a double-click sets the first-send time once", async () => {
 		const claro = await seedClaro()
 		const doc = await seedDoc({ claroSupervisorId: claro.id })

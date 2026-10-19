@@ -15,6 +15,7 @@ import {
 } from "./pdf/claro-packet.server"
 import { isTerminalStatus } from "./permissions"
 import { packetBlockers } from "./prefield"
+import { sanitizedError } from "./redact"
 import { getActiveServiceCodes } from "./service-codes.server"
 import {
 	buildInvoiceLines,
@@ -31,6 +32,8 @@ type SendPacketErrorKey =
 	| "packet.errors.no_claro_supervisor"
 	| "packet.errors.not_signed_off"
 	| "packet.errors.locked"
+	// Building or storing the PDF failed; logged as a FAILED attempt.
+	| "packet.errors.render_failed"
 	// Nothing installed to put in the work summary (as generate_jaf_invoice).
 	| "docs_review.errors.installed_lines_required"
 
@@ -144,6 +147,13 @@ export async function sendPacket(args: {
 			tipoPlanta: doc.tipoPlanta,
 			grupoPlan: doc.grupoPlan,
 		},
+		job: {
+			address: doc.jobAddressActual ?? doc.jobAddressEstimated,
+			jobType: doc.jobType,
+			description: doc.jobDescription,
+			workDate: doc.startedAt ?? doc.fieldSubmittedAt,
+			avisoNumber: doc.avisoNumber,
+		},
 		workSummary: lines.map((l) => ({
 			claroCode: l.claroCode,
 			name: l.name,
@@ -156,16 +166,54 @@ export async function sendPacket(args: {
 		supervisorName: signer?.name ?? actor.name,
 		signedOffAt: doc.completionSignedAt ?? doc.supervisorApprovedAt,
 	}
-	const pdf = await generateClaroPacketPdf(packet)
-	// One file per attempt: the audit row names exactly the PDF that went out,
-	// and two quick clicks never write the same file at once.
-	const pdfPath = await saveBuffer(
-		"packets",
-		`${docId}-packet-${Date.now()}-${randomUUID().slice(0, 8)}.pdf`,
-		pdf,
-	)
-
 	const recipientEmail = claro.email
+	// One file per attempt, so two quick clicks never write the same file. For
+	// an email send it is the PDF that was attached; for MANUAL it is a fresh
+	// render from the same stored data, not necessarily the exact file the
+	// supervisor downloaded and sent by hand.
+	let pdf: Buffer
+	let pdfPath: string
+	try {
+		pdf = await generateClaroPacketPdf(packet)
+		pdfPath = await saveBuffer(
+			"packets",
+			`${docId}-packet-${Date.now()}-${randomUUID().slice(0, 8)}.pdf`,
+			pdf,
+		)
+	} catch (cause) {
+		const error = sanitizedError(cause)
+		await db.$transaction([
+			db.packetSend.create({
+				data: {
+					docId,
+					sentById: actor.id,
+					recipientEmail,
+					claroSupervisorId: claro.id,
+					outcome: "FAILED",
+					error,
+				},
+			}),
+			db.auditTrail.create({
+				data: {
+					docId,
+					userId: actor.id,
+					action: "PACKET_SENT",
+					diffJson: {
+						mode,
+						outcome: "FAILED",
+						recipientEmail,
+						claroSupervisorId: claro.id,
+						showPrefield,
+						firstSend: false,
+						renderFailed: true,
+						error,
+					},
+				},
+			}),
+		])
+		return { ok: false, errorKey: "packet.errors.render_failed" }
+	}
+
 	let outcome: PacketSendOutcome
 	let error: string | undefined
 	if (mode === "manual") {

@@ -2284,7 +2284,8 @@
 			"blueprint_missing": "Este supervisor de Claro requiere un plano: añada uno antes de enviar.",
 			"no_claro_supervisor": "Elija el supervisor de Claro de este trabajo antes de enviar el paquete.",
 			"not_signed_off": "Apruebe el trabajo de campo antes de enviar el paquete.",
-			"locked": "Este trabajo ya se entregó a Finanzas; el paquete ya no se puede enviar."
+			"locked": "Este trabajo ya se entregó a Finanzas; el paquete ya no se puede enviar.",
+			"render_failed": "No se pudo generar el PDF del paquete. El intento quedó registrado; vuelva a intentarlo y avise a un administrador si sigue fallando."
 		}
 	}
 }

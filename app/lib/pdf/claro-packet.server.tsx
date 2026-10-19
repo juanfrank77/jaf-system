@@ -42,6 +42,14 @@ export interface ClaroPacketInput {
 		tipoPlanta: string | null
 		grupoPlan: string | null
 	}
+	/** Always printed, so a packet without the Prefield page still names the job. */
+	job: {
+		address: string
+		jobType: string
+		description: string | null
+		workDate: Date | null
+		avisoNumber: string | null
+	}
 	workSummary: {
 		claroCode: string
 		name: string
@@ -260,6 +268,26 @@ export async function generateClaroPacketPdf(
 
 			<Page size="LETTER" style={s.page}>
 				<Header input={input} issued={issued} />
+				<Text style={s.h2}>Job / Trabajo</Text>
+				{input.job.avisoNumber && (
+					<Field label="Aviso #" value={input.job.avisoNumber} />
+				)}
+				<Field label="Address / Dirección" value={input.job.address} />
+				{address.sector && <Field label="Sector" value={address.sector} />}
+				{address.ciudad && (
+					<Field label="City / Ciudad" value={address.ciudad} />
+				)}
+				{address.tipo && <Field label="Type / Tipo" value={address.tipo} />}
+				<Field label="Job type / Tipo de trabajo" value={input.job.jobType} />
+				<Field
+					label="Description / Descripción"
+					value={input.job.description}
+				/>
+				<Field
+					label="Work date / Fecha del trabajo"
+					value={input.job.workDate ? formatDate(input.job.workDate) : null}
+				/>
+
 				<Text style={s.h2}>Work summary / Resumen del trabajo</Text>
 				<View style={s.tableHeader}>
 					<Text style={s.code}>Code / Código</Text>
@@ -267,8 +295,9 @@ export async function generateClaroPacketPdf(
 					<Text style={s.num}>Qty / Cant.</Text>
 					<Text style={s.num}>Unit / Unidad</Text>
 				</View>
-				{input.workSummary.map((l) => (
-					<View key={l.claroCode} style={s.tableRow} wrap={false}>
+				{input.workSummary.map((l, i) => (
+					// biome-ignore lint/suspicious/noArrayIndexKey: static render; a code can repeat
+					<View key={i} style={s.tableRow} wrap={false}>
 						<Text style={s.code}>{l.claroCode}</Text>
 						<Text style={s.name}>{l.name}</Text>
 						<Text style={s.num}>{l.qty}</Text>

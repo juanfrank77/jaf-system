@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer"
+import { sanitizedError } from "./redact"
 
 /**
  * Outbound mail for the Claro packet (spec "Step 5 · Packet → Claro"). Unlike
@@ -27,22 +28,12 @@ export function setMailTransport(t: MailTransport | null): void {
 	injected = t
 }
 
-/** Same redaction rules as `email.server.ts`, plus the configured password. */
-function sanitizedError(error: unknown): string {
-	let message = error instanceof Error ? error.message : String(error)
+/** The shared redaction rules, plus the configured password by value. */
+function redactedError(error: unknown): string {
 	const password = process.env.SMTP_PASSWORD
-	if (password) message = message.split(password).join("[redacted]")
-	return message
-		.replace(
-			/authorization:\s*Bearer\s+\S+|(?:password|secret|token|api_key|authorization)[\s:=]+[^\s,;]*/gi,
-			"[redacted]",
-		)
-		.replace(/"(?:password|secret)":"[^"]*"/gi, "[redacted]")
-		.replace(
-			/-----BEGIN[^-]*PRIVATE KEY-----[\s\S]*?-----END[^-]*PRIVATE KEY-----/gi,
-			"[redacted]",
-		)
-		.slice(0, 300)
+	if (!password) return sanitizedError(error)
+	const message = error instanceof Error ? error.message : String(error)
+	return sanitizedError(message.split(password).join("[redacted]"))
 }
 
 /** An SMTP transport when every `SMTP_*` setting is present, else null. */
@@ -79,6 +70,6 @@ export async function sendPacketEmail(m: PacketMail): Promise<MailResult> {
 		await transport(m)
 		return { outcome: "SENT" }
 	} catch (cause) {
-		return { outcome: "FAILED", error: sanitizedError(cause) }
+		return { outcome: "FAILED", error: redactedError(cause) }
 	}
 }

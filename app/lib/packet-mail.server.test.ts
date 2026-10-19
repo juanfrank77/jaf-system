@@ -73,6 +73,16 @@ describe("sendPacketEmail", () => {
 		expect(r.error).not.toContain("hunter2")
 	})
 
+	it("redacts the configured SMTP password wherever it appears", async () => {
+		process.env.SMTP_PASSWORD = "Zq9-unusual"
+		setMailTransport(async () => {
+			throw new Error("server echoed Zq9-unusual back")
+		})
+		const r = await sendPacketEmail(message)
+		expect(r.outcome).toBe("FAILED")
+		expect(r.error).toBe("server echoed [redacted] back")
+	})
+
 	it("uses SMTP from the SMTP_* settings when all are set", async () => {
 		process.env.SMTP_HOST = "smtp.example.test"
 		process.env.SMTP_PORT = "587"

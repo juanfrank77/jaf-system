@@ -2284,7 +2284,8 @@
 			"blueprint_missing": "This Claro supervisor requires a blueprint: add one before sending.",
 			"no_claro_supervisor": "Choose the Claro supervisor for this job before sending the packet.",
 			"not_signed_off": "Sign off the field work before sending the packet.",
-			"locked": "This job has already been released to Finance; the packet can no longer be sent."
+			"locked": "This job has already been released to Finance; the packet can no longer be sent.",
+			"render_failed": "The packet PDF could not be built. The attempt was logged; try again, and tell an administrator if it keeps failing."
 		}
 	}
 }

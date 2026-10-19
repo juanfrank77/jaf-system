@@ -1,4 +1,4 @@
-import { extractText, getDocumentProxy } from "unpdf"
+import { extractText } from "unpdf"
 
 export type AvisoPdfRow = {
 	claroCode: string
@@ -30,9 +30,8 @@ const ROW_START = /^(\d{8})\s/
 const ROW_QTYS =
 	/^(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\s+-?\d+(?:\.\d+)?\s+-?\d+(?:\.\d+)?$/
 
-/** Pure parser over the per-page text of a Claro Aviso print. */
-export function parseAvisoText(pages: string[]): ParsedAviso {
-	const text = pages.join("\n")
+/** Pure parser over the merged text of a Claro Aviso print. */
+export function parseAvisoText(text: string): ParsedAviso {
 	const numbers = new Set(
 		[...text.matchAll(/Aviso\s*#\s*(\d{8})/g)].map((m) => m[1]),
 	)
@@ -69,13 +68,14 @@ export function parseAvisoText(pages: string[]): ParsedAviso {
 
 /** Extracts the text layer (no OCR) and parses it. */
 export async function readAvisoPdf(bytes: Uint8Array): Promise<ParsedAviso> {
-	let pages: string[]
+	let text: string
 	try {
-		const pdf = await getDocumentProxy(bytes)
-		const { text } = await extractText(pdf, { mergePages: false })
-		pages = text
+		const { text: extracted } = await extractText(bytes, {
+			mergePages: true,
+		})
+		text = extracted
 	} catch {
 		throw new AvisoPdfError("unreadable")
 	}
-	return parseAvisoText(pages)
+	return parseAvisoText(text)
 }

@@ -16,10 +16,12 @@ const row = (code: string, initial: number, used: number) =>
 
 describe("parseAvisoText", () => {
 	it("reads the Aviso number and each service row (used quantity)", () => {
-		const parsed = parseAvisoText([
-			header("10350001"),
-			services(row("34012039", 1, 1) + row("34012040", 3, 2)),
-		])
+		const parsed = parseAvisoText(
+			[
+				header("10350001"),
+				services(row("34012039", 1, 1) + row("34012040", 3, 2)),
+			].join("\n"),
+		)
 		expect(parsed.avisoNumber).toBe("10350001")
 		expect(parsed.rows).toEqual([
 			{ claroCode: "34012039", qtyInitial: 1, qtyUsed: 1 },
@@ -29,28 +31,32 @@ describe("parseAvisoText", () => {
 
 	it("rejects two distinct Aviso numbers", () => {
 		expect(() =>
-			parseAvisoText([
-				header("10350001"),
-				header("10350002") + services(row("34012039", 1, 1)),
-			]),
+			parseAvisoText(
+				[
+					header("10350001"),
+					header("10350002") + services(row("34012039", 1, 1)),
+				].join("\n"),
+			),
 		).toThrowError(expect.objectContaining({ code: "multiple_numbers" }))
 	})
 
 	it("rejects a document with no Aviso number", () => {
 		expect(() =>
-			parseAvisoText([services(row("34012039", 1, 1))]),
+			parseAvisoText([services(row("34012039", 1, 1))].join("\n")),
 		).toThrowError(expect.objectContaining({ code: "no_number" }))
 	})
 
 	it("rejects a document with no service rows", () => {
 		expect(() =>
-			parseAvisoText([header("10350001"), services("")]),
+			parseAvisoText([header("10350001"), services("")].join("\n")),
 		).toThrowError(expect.objectContaining({ code: "no_rows" }))
 	})
 
 	it("ignores material rows after the services section", () => {
-		const text = services(row("34012039", 1, 1)) + "34099999 1 1 0\n"
-		expect(parseAvisoText([header("10350001"), text]).rows).toHaveLength(1)
+		const text = `${services(row("34012039", 1, 1))}34099999 1 1 0\n`
+		expect(
+			parseAvisoText([header("10350001"), text].join("\n")).rows,
+		).toHaveLength(1)
 	})
 })
 

@@ -761,7 +761,7 @@
 			"aviso_pdf_no_number": "No se encontró un número de Aviso en el PDF. Suba el Aviso exportado de Claro.",
 			"aviso_pdf_multiple": "El PDF contiene más de un número de Aviso. Suba un Aviso por archivo.",
 			"aviso_pdf_no_rows": "No se encontraron servicios en el PDF del Aviso.",
-			"aviso_number_mismatch": "El # de Aviso que escribió no coincide con el número del PDF. Revise el número o suba el PDF correcto.",
+			"aviso_number_mismatch": "El # de Aviso que escribió no coincide con el número del PDF ({{pdfNumber}}). Revise el número o suba el PDF correcto.",
 			"aviso_codes_missing": "Estos códigos de servicio del Aviso aún no están en el catálogo: {{codes}}. Pida a un Admin que los agregue y guarde de nuevo.",
 			"aviso_amount_mismatch": "El total del Aviso {{avisoTotal}} no coincide con la suma de líneas de la factura JAF {{invoiceTotal}} (diferencia {{difference}}, tolerancia {{tolerance}}). Corrija el Aviso en Claro y vuelva a guardar.",
 			"aviso_line_note_required": "Las cantidades por línea difieren de las instaladas. Agregue una nota.",

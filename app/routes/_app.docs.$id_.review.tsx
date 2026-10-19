@@ -53,6 +53,7 @@ import { canTransition, isTerminalStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import { packetBlockers, prefieldMissing } from "~/lib/prefield"
 import {
+	getActiveServiceCodePrices,
 	getActiveServiceCodes,
 	isPriceBlind,
 	serviceCodesForRole,
@@ -738,7 +739,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 			const built = buildAvisoLines(
 				parsed.rows,
 				doc.jafInvoiceLines as InvoiceLine[],
-				await getActiveServiceCodes(),
+				await getActiveServiceCodePrices(),
 			)
 			if ("missingCodes" in built)
 				return {

@@ -28,6 +28,7 @@ vi.mock("~/lib/permissions.server", () => ({ requireRole: vi.fn() }))
 vi.mock("~/lib/service-codes.server", async (importOriginal) => ({
 	...(await importOriginal<typeof import("~/lib/service-codes.server")>()),
 	getActiveServiceCodes: vi.fn(),
+	getActiveServiceCodePrices: vi.fn(),
 }))
 vi.mock("~/lib/system-settings.server", () => ({
 	getIvuRate: vi.fn(),
@@ -55,7 +56,10 @@ import { db } from "~/lib/db.server"
 import { sendPacket } from "~/lib/packet-send.server"
 import { generatePreCertSheetPdf } from "~/lib/pdf/pre-cert-sheet.server"
 import { requireRole } from "~/lib/permissions.server"
-import { getActiveServiceCodes } from "~/lib/service-codes.server"
+import {
+	getActiveServiceCodePrices,
+	getActiveServiceCodes,
+} from "~/lib/service-codes.server"
 import {
 	getAvisoAmountTolerance,
 	getIvuRate,
@@ -356,6 +360,9 @@ describe("review: save_aviso (supervisor: the Aviso PDF is the only source)", ()
 			session: {},
 		} as any)
 		vi.mocked(getActiveServiceCodes).mockResolvedValue(AVISO_CATALOG as any)
+		vi.mocked(getActiveServiceCodePrices).mockResolvedValue(
+			AVISO_CATALOG as any,
+		)
 		vi.mocked(getAvisoAmountTolerance).mockResolvedValue(0.01)
 		vi.mocked(saveUpload).mockResolvedValue(
 			"/uploads/aviso-docs/doc-1-aviso.pdf",

@@ -387,12 +387,13 @@
 		"no_payments": "No hay registros de pago.",
 		"documents_heading": "Documentos",
 		"warehouse_receipt": "Recibo de almacén (PDF)",
-		"jaf_invoice": "Factura JAF (PDF)",
 		"claro_work_order": "Orden de trabajo Claro (PDF)",
 		"lc_request": "Solicitud de LC",
 		"materials_heading": "Materiales",
 		"back_to_work_order": "Volver a la orden de trabajo",
-		"packet_first_send": "primer envío"
+		"packet_first_send": "primer envío",
+		"jaf_invoice_priced": "Factura JAF (con precios)",
+		"claro_packet": "Paquete Claro (sin precios)"
 	},
 	"docs_view": {
 		"aviso_pending": "Aún no — se ingresa en el paso del Aviso",
@@ -1286,7 +1287,6 @@
 		"billing_blocked": "No se puede verificar — documentos de facturación incompletos",
 		"blocked_claro_pdf": "Falta PDF de orden de trabajo Claro",
 		"jaf_invoice": "Factura JAF",
-		"download": "Descargar",
 		"job_type": "Tipo de trabajo",
 		"address": "Dirección",
 		"aviso_number": "Aviso #",
@@ -1309,7 +1309,9 @@
 			"amount_mismatch": "El monto del Aviso difiere del total de la factura por {{difference}} (tolerancia: {{tolerance}}).",
 			"invalid_stage": "Este trabajo no está en la etapa de verificación.",
 			"terminal_status": "Este trabajo ya no es editable."
-		}
+		},
+		"priced_invoice": "Factura JAF (con precios)",
+		"claro_packet": "Paquete Claro (sin precios)"
 	},
 	"finance_pbcc": {
 		"title": "Solicitud de pago PBCC",
@@ -2284,5 +2286,12 @@
 		"blueprint_upload": "Añada un plano (PDF o foto)",
 		"prefield_hint": "Puede completar o corregir estos datos hasta que se envíe el paquete.",
 		"prefield_save": "Guardar"
+	},
+	"brigade_stock_tracked": {
+		"heading": "Inventario de la brigada (registrado, no facturado)",
+		"hint": "Usado del inventario propio de la brigada. Se registra solo para control y queda fuera de las líneas facturables hasta que Finanzas decida.",
+		"code": "Código",
+		"name": "Material",
+		"qty": "Cant."
 	}
 }

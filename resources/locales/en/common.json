@@ -387,12 +387,13 @@
 		"no_payments": "No payment records.",
 		"documents_heading": "Documents",
 		"warehouse_receipt": "Warehouse receipt (PDF)",
-		"jaf_invoice": "JAF invoice (PDF)",
 		"claro_work_order": "Claro work order (PDF)",
 		"lc_request": "LC request",
 		"materials_heading": "Materials",
 		"back_to_work_order": "Back to work order",
-		"packet_first_send": "first send"
+		"packet_first_send": "first send",
+		"jaf_invoice_priced": "JAF invoice (priced)",
+		"claro_packet": "Claro packet (no prices)"
 	},
 	"docs_view": {
 		"aviso_pending": "Not yet — entered at the Aviso step",
@@ -1286,7 +1287,6 @@
 		"billing_blocked": "Cannot verify — billing documents incomplete",
 		"blocked_claro_pdf": "Missing Claro work-order PDF",
 		"jaf_invoice": "JAF Invoice",
-		"download": "Download",
 		"job_type": "Job Type",
 		"address": "Address",
 		"aviso_number": "Aviso #",
@@ -1309,7 +1309,9 @@
 			"amount_mismatch": "Aviso amount differs from invoice total by {{difference}} (tolerance: {{tolerance}}).",
 			"invalid_stage": "This job is not at the Verify stage.",
 			"terminal_status": "This job is no longer editable."
-		}
+		},
+		"priced_invoice": "JAF invoice (priced)",
+		"claro_packet": "Claro packet (no prices)"
 	},
 	"finance_pbcc": {
 		"title": "PBCC Payment Request",
@@ -2284,5 +2286,12 @@
 		"blueprint_upload": "Add a blueprint (PDF or photo)",
 		"prefield_hint": "You can fill in or correct these until the packet is sent.",
 		"prefield_save": "Save"
+	},
+	"brigade_stock_tracked": {
+		"heading": "Brigade's stock (tracked, not billed)",
+		"hint": "Used from the brigade's own stock. Recorded for tracking only and kept off the billable lines until Finance rules on it.",
+		"code": "Code",
+		"name": "Material",
+		"qty": "Qty"
 	}
 }

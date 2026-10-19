@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
 	billableUsed,
 	brigadeStockLines,
+	brigadeStockTracked,
 	exceedsSigned,
 	type FieldMaterialRow,
 	fieldMaterialsOrDefault,
@@ -81,6 +82,30 @@ describe("billableUsed", () => {
 				row("sc-3", 1, "BRIGADE_STOCK"),
 			]),
 		).toEqual([{ serviceCodeId: "sc-1", qty: 6 }])
+	})
+})
+
+describe("brigadeStockTracked", () => {
+	it("names BRIGADE_STOCK rows from the catalog, never WAREHOUSE ones", () => {
+		const codes = [
+			{ id: "sc-1", claroCode: "1005803", name: "Drop cable", unit: "FT" },
+			{ id: "sc-2", claroCode: "1005900", name: "Clamp", unit: null },
+		]
+		expect(
+			brigadeStockTracked(
+				[row("sc-1", 6), row("sc-1", 4, "BRIGADE_STOCK"), row("sc-2", 2)],
+				codes,
+			),
+		).toEqual([
+			{ claroCode: "1005803", name: "Drop cable", qty: 4, unit: "FT" },
+		])
+		expect(brigadeStockTracked([row("sc-1", 6)], codes)).toEqual([])
+	})
+
+	it("falls back to the id when the code is not in the catalog", () => {
+		expect(brigadeStockTracked([row("sc-9", 1, "BRIGADE_STOCK")], [])).toEqual([
+			{ claroCode: "", name: "sc-9", qty: 1, unit: null },
+		])
 	})
 })
 

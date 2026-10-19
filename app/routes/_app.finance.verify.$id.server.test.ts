@@ -30,12 +30,13 @@ vi.mock("~/lib/finance-pipeline.server", () => ({
 	invoiceTotalUsed: mocks.invoiceTotalUsed,
 	checkAmountTolerance: mocks.checkAmountTolerance,
 	isMissingAvisoPdf: mocks.isMissingAvisoPdf,
+	FINANCEABLE_STATUSES: ["SUPERVISOR_APPROVED", "CLARO_UPLOADED"],
 }))
 vi.mock("~/lib/email.server", () => ({
 	sendInternalEmail: mocks.sendInternalEmail,
 }))
 
-import { action } from "./_app.finance.verify.$id"
+import { action, loader } from "./_app.finance.verify.$id"
 
 const requestWith = (entries: Record<string, string>) => {
 	const form = new FormData()
@@ -170,5 +171,63 @@ describe("verify pre-fill from supervisor capture", () => {
 				}),
 			}),
 		)
+	})
+})
+
+describe("Finance verify loader: brigade's stock and the two PDFs", () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+		mocks.requireRole.mockResolvedValue({
+			user: { id: "finance-1", role: "FINANCE" },
+		})
+		mocks.computeFinanceStage.mockReturnValue("TO_VERIFY")
+		mocks.invoiceTotalUsed.mockReturnValue(100)
+		mocks.fetchInvoiceTotalContext.mockResolvedValue({
+			serviceCodes: [
+				{ id: "m1", claroCode: "1005803", name: "Drop cable", unit: "FT" },
+			],
+			codeMap: {},
+			ivuRate: 0.115,
+			tolerance: 0.01,
+		})
+	})
+
+	const load = () =>
+		loader({
+			request: new Request("http://localhost/finance/verify/job-1"),
+			params: { id: "job-1" },
+		} as any)
+
+	it("lists BRIGADE_STOCK rows as tracked and links the priced invoice once sent", async () => {
+		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue({
+			...baseDoc(),
+			jafInvoiceGeneratedAt: new Date("2026-10-01T12:00:00Z"),
+			jafInvoicePdfPath: "/uploads/packets/job-1-packet-1.pdf",
+			fieldMaterials: [
+				{ serviceCodeId: "m1", used: 6, returned: 4, source: "WAREHOUSE" },
+				{ serviceCodeId: "m1", used: 4, returned: 0, source: "BRIGADE_STOCK" },
+			],
+		})
+		const data = await load()
+		expect(data.brigadeStock).toEqual([
+			{ claroCode: "1005803", name: "Drop cable", qty: 4, unit: "FT" },
+		])
+		expect(data.pricedInvoiceHref).toBe("/finance/verify/job-1/invoice.pdf")
+		expect(data.packetHref).toMatch(/job-1-packet-1\.pdf$/)
+	})
+
+	it("has no tracked list for warehouse-only use and no priced link before the send", async () => {
+		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue({
+			...baseDoc(),
+			jafInvoiceGeneratedAt: null,
+			jafInvoicePdfPath: null,
+			fieldMaterials: [
+				{ serviceCodeId: "m1", used: 6, returned: 4, source: "WAREHOUSE" },
+			],
+		})
+		const data = await load()
+		expect(data.brigadeStock).toEqual([])
+		expect(data.pricedInvoiceHref).toBeNull()
+		expect(data.packetHref).toBeNull()
 	})
 })

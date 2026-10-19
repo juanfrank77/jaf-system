@@ -46,6 +46,7 @@ import {
 	validateBlueprintFile,
 	validateFile,
 } from "~/lib/file-upload.server"
+import { invoiceNumberFor } from "~/lib/invoice-number"
 import { openJobLabel } from "~/lib/open-job-label"
 import { sendPacket } from "~/lib/packet-send.server"
 import { generatePreCertSheetPdf } from "~/lib/pdf/pre-cert-sheet.server"
@@ -155,11 +156,6 @@ const AVISO_PDF_ERROR_KEYS = {
 } as const
 
 const showPricesFor = (role: string) => !isPriceBlind(role)
-
-const invoiceNumberFor = (doc: {
-	avisoNumber: string | null
-	controlNumber: string
-}) => `M2026-${doc.avisoNumber ?? doc.controlNumber}`
 
 const isSig = (v: unknown) =>
 	typeof v === "string" && v.startsWith("data:image") && v !== "data:,"

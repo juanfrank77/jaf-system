@@ -96,6 +96,36 @@ function storedRows(fieldMaterials: unknown): FieldMaterialRow[] {
 	}
 }
 
+/** One line of the read-only "Brigade's stock (tracked, not billed)" list. */
+export type BrigadeStockLine = {
+	claroCode: string
+	name: string
+	qty: number
+	unit: string | null
+}
+
+/** `brigadeStockLines`, named from the catalog for display. */
+export function brigadeStockTracked(
+	fieldMaterials: unknown,
+	codes: readonly {
+		id: string
+		claroCode: string
+		name: string
+		unit: string | null
+	}[],
+): BrigadeStockLine[] {
+	const byId = new Map(codes.map((c) => [c.id, c]))
+	return brigadeStockLines(fieldMaterials).map(({ serviceCodeId, qty }) => {
+		const code = byId.get(serviceCodeId)
+		return {
+			claroCode: code?.claroCode ?? "",
+			name: code?.name ?? serviceCodeId,
+			qty,
+			unit: code?.unit ?? null,
+		}
+	})
+}
+
 /** Whether a Field materials table was saved for the job. */
 export function hasFieldTable(fieldMaterials: unknown): boolean {
 	return storedRows(fieldMaterials).length > 0

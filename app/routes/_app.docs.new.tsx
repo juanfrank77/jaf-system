@@ -341,6 +341,10 @@ export default function NewDoc({
 							<Hint>{t("docs_new.prefield_hint")}</Hint>
 							<div className="grid gap-4 md:grid-cols-3">
 								<TextField
+									name="avisoNumber"
+									label={t("docs_new.aviso_label")}
+								/>
+								<TextField
 									name="ordenNumber"
 									label={t("docs_new.orden_label")}
 								/>

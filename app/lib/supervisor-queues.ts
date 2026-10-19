@@ -6,6 +6,7 @@ import type { Prisma } from "../../generated/prisma/client"
 // `where` drives both the sidebar count and the filtered list, so the pill
 // can never disagree with what the link opens.
 export type SupervisorQueue =
+	| "open"
 	| "intake"
 	| "field"
 	| "review"
@@ -16,6 +17,7 @@ export type SupervisorQueue =
 	| "all"
 
 export const SUPERVISOR_QUEUES: SupervisorQueue[] = [
+	"open",
 	"intake",
 	"field",
 	"review",
@@ -26,13 +28,12 @@ export const SUPERVISOR_QUEUES: SupervisorQueue[] = [
 	"all",
 ]
 
-// The sidebar queues, in display order: one per step of the work-order rail
-// from Approve onward. Intake and Field have no sidebar links (intake opens
-// from the "Awaiting warehouse" tile; field shows on the dashboard cards), so
-// they are excluded here. Deriving this from SUPERVISOR_QUEUES keeps the
-// sidebar order and the count set in sync if a queue is added or removed.
+// The sidebar queues, in display order. Intake and Field have no sidebar links
+// (intake opens from the "Awaiting warehouse" tile; field shows on the dashboard
+// cards), and Review stays a queue (and a route) but is hidden from the sidebar.
+// nav-counts reads this list, so the sidebar order and the count set stay in sync.
 export const SUPERVISOR_SIDEBAR_QUEUES: SupervisorQueue[] = [
-	"review",
+	"open",
 	"invoice",
 	"aviso",
 	"precert",
@@ -55,12 +56,19 @@ export function supervisorQueueHref(queue: SupervisorQueue): string {
  * Mirrors `deriveSupervisorStage`: a job is in the first stage whose
  * milestone it has reached, checked from the end of the process backwards.
  * `precert` covers both Pre-cert and Release (the sheet is still being
- * signed). The list is disjoint, so the five stage queues never overlap.
+ * signed). `open` (My open jobs) is every unreleased job and so overlaps the
+ * rest, and `invoice` (Packets to Claro) spans sent and not yet sent, so it
+ * overlaps `aviso`; the remaining stage queues are disjoint.
  */
 export function supervisorQueueWhere(
 	queue: SupervisorQueue,
 ): Prisma.JafInvoiceWhereInput {
 	switch (queue) {
+		case "open":
+			return {
+				releasedToFinanceAt: null,
+				status: { notIn: ["CANCELLED", "LC_REQUEST_GENERATED"] },
+			}
 		case "intake":
 			return { status: "CREATED" }
 		// Prepped and waiting for the crew, or out in the field: the dashboard's
@@ -89,7 +97,6 @@ export function supervisorQueueWhere(
 			return {
 				releasedToFinanceAt: null,
 				avisoMatchedAt: null,
-				jafInvoiceGeneratedAt: null,
 				supervisorApprovedAt: { not: null },
 				status: { not: "CANCELLED" },
 			}

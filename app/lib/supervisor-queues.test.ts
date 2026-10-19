@@ -21,6 +21,23 @@ describe("supervisorQueueHref", () => {
 })
 
 describe("supervisorQueueWhere", () => {
+	it("keeps Open to every unreleased job that is not cancelled or an LC request", () => {
+		expect(supervisorQueueWhere("open")).toEqual({
+			releasedToFinanceAt: null,
+			status: { notIn: ["CANCELLED", "LC_REQUEST_GENERATED"] },
+		})
+	})
+
+	it("keeps Packets to Claro to signed-off jobs still waiting on the Aviso, sent or not", () => {
+		const where = supervisorQueueWhere("invoice")
+		expect(where).toMatchObject({
+			releasedToFinanceAt: null,
+			avisoMatchedAt: null,
+			supervisorApprovedAt: { not: null },
+		})
+		expect(where).not.toHaveProperty("jafInvoiceGeneratedAt")
+	})
+
 	it("keeps Field to jobs prepped or out with the crew", () => {
 		expect(supervisorQueueWhere("field")).toEqual({
 			status: { in: ["PREPPED", "SIGNED"] },
@@ -41,7 +58,7 @@ describe("supervisorQueueWhere", () => {
 	it("walks the milestones from Approve to Finance", () => {
 		expect(supervisorQueueWhere("invoice")).toMatchObject({
 			supervisorApprovedAt: { not: null },
-			jafInvoiceGeneratedAt: null,
+			avisoMatchedAt: null,
 		})
 		expect(supervisorQueueWhere("aviso")).toMatchObject({
 			jafInvoiceGeneratedAt: { not: null },

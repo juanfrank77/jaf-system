@@ -6,6 +6,7 @@ import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { buttonVariants } from "~/components/ui/button"
 import { db } from "~/lib/db.server"
+import { openJobLabel } from "~/lib/open-job-label"
 import { requireRole } from "~/lib/permissions.server"
 import { deriveSupervisorStage } from "~/lib/supervisor-stage"
 import { formatMoney, toNumberPrice } from "~/lib/utils"
@@ -87,6 +88,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	return {
 		doc,
 		stage: deriveSupervisorStage(doc, sheet),
+		openLabel: openJobLabel(doc, sheet),
 		sendBack,
 		peopleMap: Object.fromEntries(peopleMap) as Record<string, UserInfo>,
 		serviceCodes: serviceCodes.map((c) => ({
@@ -112,7 +114,8 @@ function actionSummary(action: string, diffJson: AuditDiff): string {
 }
 
 export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
-	const { doc, stage, sendBack, peopleMap, serviceCodes } = loaderData
+	const { doc, stage, openLabel, sendBack, peopleMap, serviceCodes } =
+		loaderData
 	const t = useTranslation().t
 	const name = (id?: string | null) => (id ? (peopleMap[id]?.name ?? id) : "—")
 	const estimated = (doc.estimatedMaterials as unknown as MaterialLine[]) || []
@@ -126,7 +129,11 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 					<h1 className="font-mono font-bold text-lg">{doc.controlNumber}</h1>
 					<p className="text-sm text-muted-foreground">{doc.jobType}</p>
 				</div>
-				<DocStageBadge stage={stage} cancelled={doc.status === "CANCELLED"} />
+				<DocStageBadge
+					stage={stage}
+					openLabel={openLabel}
+					cancelled={doc.status === "CANCELLED"}
+				/>
 			</div>
 
 			<section className="grid grid-cols-2 gap-3 text-sm">

@@ -28,6 +28,7 @@ import {
 	formatTimeOnSite,
 } from "~/lib/field-update-helpers"
 import { validateFile } from "~/lib/file-upload.server"
+import { openJobLabel } from "~/lib/open-job-label"
 import {
 	isEditableStatus,
 	isReassignableStatus,
@@ -200,6 +201,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			? auditTrail
 			: auditTrail.map((a) => ({ ...a, diffJson: null })),
 		stage: deriveSupervisorStage(doc, sheet),
+		openLabel: openJobLabel(doc, sheet),
 	}
 }
 
@@ -591,6 +593,7 @@ export default function DocView({
 		brigadeOptions,
 		auditTrail,
 		stage,
+		openLabel,
 		latestSendBack,
 		sentByName,
 		correctorNames,
@@ -637,7 +640,11 @@ export default function DocView({
 					<h1 className="font-mono font-bold text-lg">{doc.controlNumber}</h1>
 					<p className="text-sm text-muted-foreground">{doc.jobType}</p>
 				</div>
-				<DocStageBadge stage={stage} cancelled={doc.status === "CANCELLED"} />
+				<DocStageBadge
+					stage={stage}
+					openLabel={openLabel}
+					cancelled={doc.status === "CANCELLED"}
+				/>
 			</div>
 
 			{latestSendBack && (

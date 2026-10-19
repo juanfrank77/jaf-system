@@ -6,7 +6,11 @@ vi.mock("./system-settings.server", () => ({
 	getIvuRate: vi.fn(),
 }))
 
-import { computeFinanceStage, daysInStage } from "./finance-pipeline.server"
+import {
+	computeFinanceStage,
+	daysInStage,
+	FINANCEABLE_STATUSES,
+} from "./finance-pipeline.server"
 
 const invoice = (overrides: Record<string, unknown> = {}) => ({
 	status: "CLARO_UPLOADED" as const,
@@ -71,5 +75,15 @@ describe("finance pipeline stages", () => {
 		expect(
 			daysInStage(invoice(), stage, null, [{ type: "PBCC_ADVANCE", date }]),
 		).toBeGreaterThanOrEqual(3)
+	})
+})
+
+describe("FINANCEABLE_STATUSES", () => {
+	it("pins today's behaviour: SUPERVISOR_APPROVED stays financeable", () => {
+		expect(FINANCEABLE_STATUSES).toEqual([
+			"SUPERVISOR_APPROVED",
+			"CLARO_UPLOADED",
+			"LC_REQUEST_GENERATED",
+		])
 	})
 })

@@ -39,6 +39,7 @@ import {
 import { db } from "~/lib/db.server"
 import type { AddressCorrection } from "~/lib/field-update-helpers"
 import { validateFile } from "~/lib/file-upload.server"
+import { openJobLabel } from "~/lib/open-job-label"
 import { generateJafInvoicePdf } from "~/lib/pdf/jaf-invoice.server"
 import { generatePreCertSheetPdf } from "~/lib/pdf/pre-cert-sheet.server"
 import { canTransition, isReviewActionStatus } from "~/lib/permissions"
@@ -282,6 +283,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		sheet,
 		brigade,
 		stage,
+		openLabel: openJobLabel(doc, sheet),
 		view,
 		interactive,
 		gate,
@@ -1507,6 +1509,7 @@ export default function ReviewDoc({
 		sheet,
 		brigade,
 		stage,
+		openLabel,
 		view,
 		interactive,
 		gate,
@@ -1591,7 +1594,11 @@ export default function ReviewDoc({
 		<div className="space-y-5">
 			<div className="flex flex-wrap items-center justify-between gap-2">
 				<h1 className="font-mono text-xl font-semibold">{doc.controlNumber}</h1>
-				<DocStageBadge stage={stage} cancelled={doc.status === "CANCELLED"} />
+				<DocStageBadge
+					stage={stage}
+					openLabel={openLabel}
+					cancelled={doc.status === "CANCELLED"}
+				/>
 			</div>
 			<p className="text-sm text-muted-foreground">
 				{doc.jobType}

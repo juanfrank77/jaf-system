@@ -12,7 +12,7 @@ describe("navGroupsFor", () => {
 				"work",
 				[
 					"/docs/new",
-					"/dashboard?stage=review",
+					"/dashboard?stage=open",
 					"/dashboard?stage=invoice",
 					"/dashboard?stage=aviso",
 					"/dashboard?stage=precert",
@@ -24,6 +24,20 @@ describe("navGroupsFor", () => {
 		])
 	})
 
+	it("hides the Review queue from SUPERVISOR but keeps open jobs and packets", () => {
+		const items = navGroupsFor("SUPERVISOR").flatMap((g) =>
+			g.items.map((i) => i.to),
+		)
+		expect(items).toContain("/dashboard?stage=open")
+		expect(items).toContain("/dashboard?stage=invoice")
+		expect(items).not.toContain("/dashboard?stage=review")
+		const labels = navGroupsFor("SUPERVISOR").flatMap((g) =>
+			g.items.map((i) => i.labelKey),
+		)
+		expect(labels).toContain("app_shell.nav.supervisor_open")
+		expect(labels).toContain("app_shell.nav.supervisor_invoice")
+	})
+
 	it("shows Variance to SUPERVISOR only when ENABLE_VARIANCE is on", () => {
 		expect(tos(navGroupsFor("SUPERVISOR", { varianceEnabled: true }))).toEqual([
 			["overview", ["/dashboard"]],
@@ -31,7 +45,7 @@ describe("navGroupsFor", () => {
 				"work",
 				[
 					"/docs/new",
-					"/dashboard?stage=review",
+					"/dashboard?stage=open",
 					"/dashboard?stage=invoice",
 					"/dashboard?stage=aviso",
 					"/dashboard?stage=precert",

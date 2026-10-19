@@ -12,6 +12,7 @@ import { PageHeader } from "~/components/ui/page-header"
 import { Pill } from "~/components/ui/pill"
 import { QueueCard } from "~/components/ui/queue-card"
 import { Stat } from "~/components/ui/stat"
+import { OPEN_JOB_LABEL_KEYS, type OpenJobLabel } from "~/lib/open-job-label"
 import type { SupervisorQueue } from "~/lib/supervisor-queues"
 import type { SupervisorStage, WaitingOn } from "~/lib/supervisor-stage"
 import type { DashboardViewProps } from "./types"
@@ -29,6 +30,8 @@ type QueueRow = {
 	qtyDiscrepancy: boolean
 	blockReason?: "aviso_mismatch" | "billing_aviso_pdf"
 	waitingOn?: WaitingOn
+	/** The finer chip label (`openJobLabel`); falls back to the stage label. */
+	openLabel?: OpenJobLabel
 }
 export type SupervisorScope = { areas: string[]; brigadeCount: number }
 export type SupervisorQueues = {
@@ -147,7 +150,11 @@ function Queue({
 							</td>
 							<td className="py-1.5">{r.brigadeName ?? "—"}</td>
 							<td className="py-1.5">
-								{t(STAGE_KEY[r.stage])}
+								{t(
+									r.openLabel
+										? OPEN_JOB_LABEL_KEYS[r.openLabel]
+										: STAGE_KEY[r.stage],
+								)}
 								{r.since ? (
 									<span className="block text-xs text-muted-foreground">
 										{t(`dashboard.since.${since}`, { ago: ago(t, r.since) })}

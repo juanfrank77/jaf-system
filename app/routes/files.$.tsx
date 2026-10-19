@@ -2,6 +2,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { db } from "~/lib/db.server"
 import { requireSession } from "~/lib/permissions.server"
+import { supervisorAreas } from "~/lib/supervisor-scope"
 import type { Route } from "./+types/files.$"
 
 const FINANCEABLE_STATUSES = [
@@ -17,9 +18,12 @@ const WAREHOUSE_STATUSES = [
 	"FIELD_UPDATED",
 ] as const
 
+/** Upload folders kept per job: `<kind>/<docId>/<file>`. */
+const PER_DOC_FOLDERS = ["photos", "blueprints"]
+
 function extractDocId(relativePath: string): string | null {
 	const segments = relativePath.split("/")
-	if (segments.length >= 2 && segments[0] === "photos") {
+	if (segments.length >= 2 && PER_DOC_FOLDERS.includes(segments[0])) {
 		return segments[1] || null
 	}
 	const fileName = segments[segments.length - 1] || ""
@@ -27,17 +31,24 @@ function extractDocId(relativePath: string): string | null {
 	return docId
 }
 
-function canAccessDoc(
+async function canAccessDoc(
 	doc: {
 		status: string
 		supervisorId: string
 		assignedCrewIds: string[]
+		brigade: { area: string | null } | null
 	},
 	userRole: string,
 	userId: string,
-): boolean {
+): Promise<boolean> {
 	if (userRole === "ADMIN") return true
-	if (userRole === "SUPERVISOR") return doc.supervisorId === userId
+	// The same scope as every supervisor job screen: the job's own supervisor,
+	// or one whose admin-assigned areas cover the job's brigade.
+	if (userRole === "SUPERVISOR") {
+		if (doc.supervisorId === userId) return true
+		const area = doc.brigade?.area
+		return !!area && (await supervisorAreas(db, userId)).includes(area)
+	}
 	if (userRole === "CREW") return doc.assignedCrewIds.includes(userId)
 	if (userRole === "WAREHOUSE")
 		// biome-ignore lint/suspicious/noExplicitAny: status narrowed below
@@ -201,10 +212,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 				status: true,
 				supervisorId: true,
 				assignedCrewIds: true,
+				brigade: { select: { area: true } },
 			},
 		})
 
-		if (!doc || !canAccessDoc(doc, user.role, user.id)) {
+		if (!doc || !(await canAccessDoc(doc, user.role, user.id))) {
 			return new Response("Forbidden", { status: 403 })
 		}
 	}

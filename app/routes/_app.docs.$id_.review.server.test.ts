@@ -1138,3 +1138,128 @@ describe("review: back_to_approve", () => {
 		expect(db.jafInvoice.update).not.toHaveBeenCalled()
 	})
 })
+
+describe("review: approve (Sign off)", () => {
+	const SIG = "data:image/png;base64,iVBORw0KGgo="
+	const fieldDone = {
+		...approvedDoc,
+		status: "FIELD_UPDATED",
+		supervisorApprovedAt: null,
+		brigade: { area: "OESTE" },
+	}
+
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1", role: "SUPERVISOR", name: "Edgard Ocasio" },
+			session: {},
+		} as any)
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["OESTE"],
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			fieldDone as any,
+		)
+	})
+
+	it.each([
+		["missing", {}],
+		["an empty pad", { completionSignature: "data:," }],
+		["not an image", { completionSignature: "hello" }],
+	])("refuses with the signature %s", async (_label, extra) => {
+		const res = await action({
+			request: post(intent("approve", extra as Record<string, string>)),
+			params: { id: "doc-1" },
+		} as any)
+		expect(res).toEqual({ errorKey: "docs_review.errors.signature_required" })
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("stores the signature, who signed and when, and moves to SUPERVISOR_APPROVED", async () => {
+		await action({
+			request: post(intent("approve", { completionSignature: SIG })),
+			params: { id: "doc-1" },
+		} as any).catch(() => {})
+		const { data } = vi.mocked(db.jafInvoice.update).mock.calls[0][0] as any
+		expect(data).toMatchObject({
+			status: "SUPERVISOR_APPROVED",
+			supervisorApprovedAt: expect.any(Date),
+			completionSignature: SIG,
+			completedById: "sup-1",
+			completionSignedAt: expect.any(Date),
+		})
+		expect(db.auditTrail.create).toHaveBeenCalledWith({
+			data: expect.objectContaining({
+				action: "STATUS_CHANGED",
+				diffJson: expect.objectContaining({
+					status: { before: "FIELD_UPDATED", after: "SUPERVISOR_APPROVED" },
+				}),
+			}),
+		})
+	})
+
+	it("an out-of-scope supervisor is refused", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...fieldDone,
+			supervisorId: "other-sup",
+			brigade: { area: "SUR" },
+		} as any)
+		await expect(
+			action({
+				request: post(intent("approve", { completionSignature: SIG })),
+				params: { id: "doc-1" },
+			} as any),
+		).rejects.toMatchObject({ status: 302 })
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("cannot sign off twice", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...fieldDone,
+			status: "SUPERVISOR_APPROVED",
+			supervisorApprovedAt: new Date(),
+		} as any)
+		await expect(
+			action({
+				request: post(intent("approve", { completionSignature: SIG })),
+				params: { id: "doc-1" },
+			} as any),
+		).rejects.toMatchObject({ status: 302 })
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+})
+
+describe("review: send_back to crew", () => {
+	const fieldDone = {
+		...approvedDoc,
+		status: "FIELD_UPDATED",
+		supervisorApprovedAt: null,
+		brigade: { area: "OESTE" },
+	}
+
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["OESTE"],
+		} as any)
+		vi.mocked(db.user.findMany).mockResolvedValue([])
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			fieldDone as any,
+		)
+	})
+
+	it("is not reachable for a SUPERVISOR (redirect, nothing written)", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1", role: "SUPERVISOR", name: "Edgard Ocasio" },
+			session: {},
+		} as any)
+		await expect(
+			action({
+				request: post(intent("send_back", { note: "fix it" })),
+				params: { id: "doc-1" },
+			} as any),
+		).rejects.toMatchObject({ status: 302 })
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+		expect(db.notification.create).not.toHaveBeenCalled()
+	})
+})

@@ -27,6 +27,7 @@ import {
 import { generateControlNumber } from "~/lib/control-number.server"
 import { buildCrewAssignment, parseBrigadeIds } from "~/lib/crew-assignment"
 import { db } from "~/lib/db.server"
+import { validateBlueprintFile } from "~/lib/file-upload.server"
 import { composeJobAddress, parseAddressInput } from "~/lib/intake-address"
 import { requireRole } from "~/lib/permissions.server"
 import {
@@ -99,6 +100,8 @@ export async function action({ request }: Route.ActionArgs) {
 	const blueprints = form
 		.getAll("blueprint")
 		.filter((f): f is File => f instanceof File && f.size > 0)
+	if (blueprints.some((f) => !validateBlueprintFile(f).valid))
+		return { errorKey: "docs_new.errors.blueprint_invalid" }
 	const jobDescription =
 		(form.get("jobDescription") as string | null)?.trim() || null
 	const brigadeIds = parseBrigadeIds(form)

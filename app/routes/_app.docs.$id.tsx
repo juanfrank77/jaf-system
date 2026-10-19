@@ -23,6 +23,7 @@ import {
 } from "~/lib/crew-assignment"
 import { isUnassignedCrew, notAssignedResponse } from "~/lib/crew-scope"
 import { db } from "~/lib/db.server"
+import { nextActionHref } from "~/lib/doc-next-action"
 import {
 	type AddressCorrection,
 	formatTimeOnSite,
@@ -452,41 +453,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	throw redirect(`/docs/${params.id}`)
-}
-
-function nextActionHref(
-	doc: Route.ComponentProps["loaderData"]["doc"],
-	userRole: string,
-	userId: string,
-): string | null {
-	if (doc.status === "CREATED" && userRole === "WAREHOUSE")
-		return `/docs/${doc.id}/prep`
-	if (
-		doc.status === "PREPPED" &&
-		(userRole === "WAREHOUSE" ||
-			userRole === "CREW" ||
-			doc.assignedCrewIds?.includes(userId))
-	)
-		return `/docs/${doc.id}/sign`
-	if (doc.status === "SIGNED" && doc.assignedCrewIds?.includes(userId))
-		return `/docs/${doc.id}/field`
-	if (
-		doc.status === "FIELD_UPDATED" &&
-		(userRole === "SUPERVISOR" || userRole === "ADMIN")
-	)
-		return `/docs/${doc.id}/review`
-	if (
-		(doc.status === "SUPERVISOR_APPROVED" || doc.status === "CLARO_UPLOADED") &&
-		(userRole === "SUPERVISOR" || userRole === "ADMIN") &&
-		!doc.releasedToFinanceAt
-	)
-		return `/docs/${doc.id}/review`
-	if (
-		(doc.status === "SUPERVISOR_APPROVED" || doc.status === "CLARO_UPLOADED") &&
-		(userRole === "FINANCE" || userRole === "ADMIN")
-	)
-		return `/finance/verify/${doc.id}`
-	return null
 }
 
 type NextActionLabelKey =

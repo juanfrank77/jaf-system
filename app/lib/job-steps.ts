@@ -47,9 +47,9 @@ export const JOB_STEP_LABEL_KEY = {
 /** The steps a role owns — the rail's "You" marks. ADMIN oversees
  * every step but owns none, so nothing is bolded for it. */
 const MINE_BY_ROLE: Partial<Record<Role, JobStep[]>> = {
-	CREW: ["RELEASE", "FIELD"],
+	CREW: ["RELEASE"],
 	WAREHOUSE: ["PREP", "RELEASE", "RETURN"],
-	SUPERVISOR: ["CLOSE"],
+	SUPERVISOR: ["FIELD", "CLOSE"],
 }
 
 /** The roles that can open a step's screen. */
@@ -65,7 +65,7 @@ const ACCESS_BY_STEP: Record<JobStep, Role[]> = {
 	],
 	PREP: ["WAREHOUSE"],
 	RELEASE: ["CREW", "WAREHOUSE"],
-	FIELD: ["CREW"],
+	FIELD: ["SUPERVISOR"],
 	RETURN: ["WAREHOUSE"],
 	CLOSE: ["SUPERVISOR"],
 }

@@ -2,12 +2,16 @@ import path from "node:path"
 import type { ParseKeys } from "i18next"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { data, Form, redirect, useNavigation } from "react-router"
+import { data, Form, redirect, useFetcher, useNavigation } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import {
+	FieldMaterialsTable,
+	type FieldMaterialsTableRow,
+} from "~/components/field-materials-table"
 import { JobStepRail } from "~/components/job-step-rail"
-import { ServiceLinesTable } from "~/components/service-lines-table"
 import { Button } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
+import { Card, CardContent, CardHeader } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
@@ -35,6 +39,7 @@ import {
 } from "~/lib/service-codes.server"
 import type { ServiceLine } from "~/lib/service-lines"
 import { assertDocInSupervisorScope } from "~/lib/supervisor-scope"
+import { SUPERVISOR_STAGES } from "~/lib/supervisor-stage"
 import { photosThatLoad, saveUpload } from "~/lib/uploads.server"
 import type { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id_.field"
@@ -50,8 +55,24 @@ export const meta: Route.MetaFunction = ({ data }) => [
 	},
 ]
 
-/** Field is open from pickup until sign-off (which locks it). */
+/**
+ * Field is open from pickup until sign-off, which locks it for the
+ * supervisor. Only an Admin may still change it after sign-off (the existing
+ * override), and only until the job moves past SUPERVISOR_APPROVED.
+ */
 const FIELD_OPEN_STATUSES = ["SIGNED", "FIELD_UPDATED"]
+const ADMIN_FIELD_OPEN_STATUSES = [
+	...FIELD_OPEN_STATUSES,
+	"SUPERVISOR_APPROVED",
+]
+
+function fieldIsOpen(
+	doc: { status: string; supervisorApprovedAt: Date | null },
+	role: string,
+): boolean {
+	if (role === "ADMIN") return ADMIN_FIELD_OPEN_STATUSES.includes(doc.status)
+	return FIELD_OPEN_STATUSES.includes(doc.status) && !doc.supervisorApprovedAt
+}
 
 const PHOTO_FIELDS: [string, PhotoTag][] = [
 	["photosBefore", "BEFORE"],
@@ -96,6 +117,7 @@ const FIELD_DOC_SELECT = {
 	fieldNotes: true,
 	fieldStartedAt: true,
 	fieldSubmittedAt: true,
+	supervisorApprovedAt: true,
 	blueprintPaths: true,
 	claroSupervisor: { select: { name: true, requiresBlueprint: true } },
 } satisfies Prisma.JafInvoiceSelect
@@ -112,7 +134,7 @@ async function openFieldDoc(request: Request, id: string) {
 	})
 	if (user.role === "SUPERVISOR")
 		await assertDocInSupervisorScope(db, user.id, doc)
-	if (!FIELD_OPEN_STATUSES.includes(doc.status)) throw redirect(`/docs/${id}`)
+	if (!fieldIsOpen(doc, user.role)) throw redirect(`/docs/${id}`)
 	return { user, doc }
 }
 
@@ -129,14 +151,21 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		(doc.addressCorrections as AddressCorrection[] | null) ?? []
 	const shared = doc.assignedCrewIds.length > 1
 
-	const [codes, photoRows] = await Promise.all([
+	const [codes, photoRows, serviceUnits] = await Promise.all([
 		getActiveMaterialCodes(),
 		db.photo.findMany({
 			where: { docId: doc.id },
 			orderBy: { takenAt: "asc" },
 			select: { id: true, tag: true, localPath: true },
 		}),
+		ordered.length > 0
+			? db.serviceCode.findMany({
+					where: { id: { in: ordered.map((l) => l.serviceCodeId) } },
+					select: { id: true, unit: true },
+				})
+			: Promise.resolve([]),
 	])
+	const unitOf = new Map(serviceUnits.map((c) => [c.id, c.unit]))
 	const photos: Record<PhotoTag, { id: string; src: string }[]> = {
 		BEFORE: [],
 		DURING: [],
@@ -205,6 +234,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 				actual:
 					installed?.find((i) => i.serviceCodeId === l.serviceCodeId)?.qty ??
 					null,
+				unit: unitOf.get(l.serviceCodeId) ?? null,
 			})),
 			brigadeNames: shared
 				? doc.assignedCrewIds
@@ -440,10 +470,183 @@ export async function action({ request, params }: Route.ActionArgs) {
 	return { ok: true as const }
 }
 
+/** Each photo box holds this many; the upload hides once a box is full. */
+const MAX_PHOTOS_PER_BOX = 4
+
+const PHOTO_BOXES: [PhotoTag, string, ParseKeys][] = [
+	["BEFORE", "photosBefore", "docs_field.photos_before_label"],
+	["DURING", "photosDuring", "docs_field.photos_during_label"],
+	["AFTER", "photosAfter", "docs_field.photos_after_label"],
+]
+
+const SIGN_OFF_STEP = SUPERVISOR_STAGES.indexOf("APPROVE") + 1
+
+type ActionResult = { errorKey?: ParseKeys; ok?: true } | undefined
+
+/** The Field `save` intent, posted on its own as soon as files are picked. */
+function useFileAutosave() {
+	const fetcher = useFetcher<ActionResult>()
+	const send = (name: string, files: File[]) => {
+		if (files.length === 0) return
+		const form = new FormData()
+		form.set("intent", "save")
+		for (const f of files) form.append(name, f)
+		fetcher.submit(form, { method: "post", encType: "multipart/form-data" })
+	}
+	return {
+		send,
+		busy: fetcher.state !== "idle",
+		errorKey: fetcher.data?.errorKey,
+	}
+}
+
+function PhotoBox({
+	name,
+	labelKey,
+	photos,
+}: {
+	name: string
+	labelKey: ParseKeys
+	photos: { id: string; src: string }[]
+}) {
+	const { t } = useTranslation()
+	const upload = useFileAutosave()
+	const room = Math.max(0, MAX_PHOTOS_PER_BOX - photos.length)
+	return (
+		<div className="space-y-2">
+			<div className="flex items-baseline justify-between gap-2">
+				<Label htmlFor={room > 0 ? name : undefined}>{t(labelKey)}</Label>
+				<span className="text-xs text-muted-foreground">
+					{upload.busy
+						? t("docs_field.photo_uploading")
+						: t("docs_field.photo_count", {
+								count: photos.length,
+								max: MAX_PHOTOS_PER_BOX,
+							})}
+				</span>
+			</div>
+			<div className="grid grid-cols-4 gap-2">
+				{photos.map((p) => (
+					<a
+						key={p.id}
+						href={p.src}
+						target="_blank"
+						rel="noreferrer"
+						className="block aspect-square overflow-hidden rounded-lg border"
+					>
+						<img src={p.src} alt="" className="h-full w-full object-cover" />
+					</a>
+				))}
+				{Array.from({ length: room }, (_, i) => (
+					<label
+						// biome-ignore lint/suspicious/noArrayIndexKey: empty slots have no identity
+						key={i}
+						htmlFor={name}
+						data-testid="photo-slot-empty"
+						className="flex aspect-square cursor-pointer items-center justify-center rounded-lg border border-dashed text-center text-xs text-muted-foreground hover:bg-muted"
+					>
+						{i === 0 ? t("docs_field.photo_add") : null}
+					</label>
+				))}
+			</div>
+			{room > 0 && (
+				<input
+					id={name}
+					name={name}
+					type="file"
+					accept="image/*"
+					multiple
+					className="sr-only"
+					disabled={upload.busy}
+					onChange={(e) => {
+						// The box takes four: anything picked beyond the room left is dropped.
+						upload.send(name, [...(e.target.files ?? [])].slice(0, room))
+						e.target.value = ""
+					}}
+				/>
+			)}
+			{upload.errorKey && (
+				<p role="alert" className="text-xs text-status-danger">
+					{t(upload.errorKey)}
+				</p>
+			)}
+		</div>
+	)
+}
+
+function BlueprintBox({
+	docId,
+	files,
+	required,
+}: {
+	docId: string
+	files: string[]
+	required: boolean
+}) {
+	const { t } = useTranslation()
+	const upload = useFileAutosave()
+	return (
+		<div className="space-y-2">
+			<Label htmlFor="blueprint">{t("docs_field.blueprint_label")}</Label>
+			{required && (
+				<p className="text-xs text-status-warn">
+					{t("docs_field.blueprint_required_hint")}
+				</p>
+			)}
+			<div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+				{files.map((f) => (
+					<a
+						key={f}
+						href={`/files/blueprints/${docId}/${f}`}
+						target="_blank"
+						rel="noreferrer"
+						className="flex min-h-16 items-center justify-center break-all rounded-lg border p-2 text-center text-xs text-accent-text underline"
+					>
+						{f.replace(/^\d+-\d+-/, "")}
+					</a>
+				))}
+				<label
+					htmlFor="blueprint"
+					className="flex min-h-16 cursor-pointer items-center justify-center rounded-lg border border-dashed p-2 text-center text-xs text-muted-foreground hover:bg-muted"
+				>
+					{upload.busy
+						? t("docs_field.photo_uploading")
+						: t("docs_field.blueprint_add")}
+				</label>
+			</div>
+			{files.length === 0 && (
+				<p className="text-xs text-muted-foreground">
+					{t("docs_field.blueprint_empty")}
+				</p>
+			)}
+			<input
+				id="blueprint"
+				name="blueprint"
+				type="file"
+				accept="application/pdf,image/*"
+				multiple
+				className="sr-only"
+				disabled={upload.busy}
+				onChange={(e) => {
+					upload.send("blueprint", [...(e.target.files ?? [])])
+					e.target.value = ""
+				}}
+			/>
+			{upload.errorKey && (
+				<p role="alert" className="text-xs text-status-danger">
+					{t(upload.errorKey)}
+				</p>
+			)}
+		</div>
+	)
+}
+
 /**
- * Interim screen over the supervisor loader/action (Task 7 replaces it with
- * the mockup layout and autosave): plain form, "Save progress" and
- * "Continue to Sign off".
+ * Step 3 · Field, filled by the supervisor from what the crew sends on
+ * WhatsApp (mockup 4): Before / During / After photos, blueprints, the address
+ * correction with its history, the actual services (no prices) and the one
+ * materials table. Photos and blueprints save the moment they are picked;
+ * "Save progress" posts every other field; "Continue" goes on to Sign off.
  */
 export default function FieldUpdate({
 	loaderData,
@@ -458,28 +661,70 @@ export default function FieldUpdate({
 		blueprints,
 		blueprintRequired,
 		materialsTaken,
+		estimatedMaterials,
 		fieldMaterials,
 		serviceLines,
-		installedServiceLines,
+		services,
 		serviceCodes,
 	} = loaderData
 	const { t } = useTranslation()
 	const navigation = useNavigation()
 	const busy = navigation.state !== "idle"
-	const error = actionData as { errorKey?: ParseKeys; ok?: true } | undefined
+	const result = actionData as ActionResult
+
+	// Address fields are only posted once edited, so saving a job that has no
+	// Dirección 1 yet (created before the Aviso-style address) never trips the
+	// "Dirección 1 is required" check.
+	const [addressDirty, setAddressDirty] = useState(false)
+	const addressInput = (
+		key: AddressColumn,
+		labelKey: ParseKeys,
+		extra: { placeholder?: string; required?: boolean } = {},
+	) => (
+		<div className="space-y-1">
+			<Label htmlFor={key}>{t(labelKey)}</Label>
+			<Input
+				id={key}
+				name={addressDirty ? key : undefined}
+				defaultValue={doc[key] ?? ""}
+				placeholder={extra.placeholder}
+				required={addressDirty && extra.required}
+				onChange={() => setAddressDirty(true)}
+			/>
+		</div>
+	)
+
+	const [actuals, setActuals] = useState<Record<string, string>>(() =>
+		Object.fromEntries(
+			services.rows.map((r) => [
+				r.serviceCodeId,
+				r.actual == null ? "" : String(r.actual),
+			]),
+		),
+	)
+	const installed = serviceLines
+		.filter((l) => (actuals[l.serviceCodeId] ?? "") !== "")
+		.map((l) => ({ ...l, qty: Number(actuals[l.serviceCodeId]) }))
+	const shared = services.brigadeNames.length > 0
+
 	const [rows, setRows] = useState<FieldMaterialRow[]>(fieldMaterials)
-	const signed = new Map(materialsTaken.map((m) => [m.serviceCodeId, m.qty]))
-	const codeOf = (id: string) => serviceCodes.find((c) => c.id === id)
-
-	function setRow(i: number, patch: Partial<FieldMaterialRow>) {
-		setRows(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)))
-	}
-
-	const photoBoxes: [PhotoTag, string, ParseKeys][] = [
-		["BEFORE", "photosBefore", "docs_field.photos_before_label"],
-		["DURING", "photosDuring", "docs_field.photos_during_label"],
-		["AFTER", "photosAfter", "docs_field.photos_after_label"],
-	]
+	const codeOf = new Map(serviceCodes.map((c) => [c.id, c]))
+	const qtyOf = (list: MaterialLine[]) =>
+		new Map(list.map((m) => [m.serviceCodeId, m.qty]))
+	const signedQty = qtyOf(materialsTaken)
+	const estimatedQty = qtyOf(estimatedMaterials)
+	const tableRows: FieldMaterialsTableRow[] = rows.map((r) => {
+		const code = codeOf.get(r.serviceCodeId)
+		return {
+			...r,
+			claroCode: code?.claroCode ?? "—",
+			name: code?.name ?? r.serviceCodeId,
+			unit: code?.unit ?? null,
+			estimated: estimatedQty.get(r.serviceCodeId) ?? 0,
+			signed:
+				r.source === "WAREHOUSE" ? (signedQty.get(r.serviceCodeId) ?? 0) : 0,
+		}
+	})
 
 	return (
 		<div className="space-y-5">
@@ -491,209 +736,240 @@ export default function FieldUpdate({
 			</div>
 			<JobStepRail docId={doc.id} current="FIELD" role={user.role} />
 
-			{error?.errorKey && (
-				<div role="alert">
-					<Callout tone="danger" title={t("docs_field.error_title")}>
-						{t(error.errorKey)}
-					</Callout>
-				</div>
-			)}
-			{error?.ok && (
-				<Callout tone="ok" title={t("docs_field.saved")}>
+			{doc.status === "SUPERVISOR_APPROVED" && (
+				<Callout tone="warn" title={t("docs_field.admin_override")}>
 					{null}
 				</Callout>
 			)}
 
-			<Form
-				method="post"
-				encType="multipart/form-data"
-				className="space-y-4"
-				// A new key after each save clears the file inputs.
-				key={`${photos.BEFORE.length}-${photos.DURING.length}-${photos.AFTER.length}-${blueprints.length}`}
-			>
-				<div className="border rounded-lg p-3 space-y-3">
-					<div className="space-y-1">
-						<Label htmlFor="direccion1">{t("docs_new.direccion1_label")}</Label>
-						<Input
-							id="direccion1"
-							name="direccion1"
-							defaultValue={doc.direccion1 ?? doc.jobAddressEstimated}
-						/>
-					</div>
-					<div className="space-y-1">
-						<Label htmlFor="sector">{t("docs_new.sector_label")}</Label>
-						<Input id="sector" name="sector" defaultValue={doc.sector ?? ""} />
-					</div>
-					{addressCorrections.length > 0 && (
-						<ul className="space-y-1.5">
-							{addressCorrections.map((c) => (
-								<li
-									key={`${c.original}-${c.corrected}-${c.correctedAt}`}
-									className="rounded-lg bg-muted p-2 text-xs"
-								>
-									<span className="text-muted-foreground line-through">
-										{c.original}
-									</span>
-									{" → "}
-									<span className="font-medium">{c.corrected}</span>
-									<span className="block text-muted-foreground">
-										{t(
-											c.correctedById === user.id
-												? "docs_field.address_edited_by_you"
-												: correctorNames[c.correctedById]
-													? "docs_field.address_edited_by_name"
-													: "docs_field.address_edited_by_other",
-											{
-												name: correctorNames[c.correctedById],
-												when: new Date(c.correctedAt).toLocaleString(),
-											},
-										)}
-									</span>
-								</li>
-							))}
-						</ul>
-					)}
-				</div>
-
-				{photoBoxes.map(([tag, name, label]) => (
-					<div key={tag} className="border rounded-lg p-3 space-y-2">
-						<Label htmlFor={name}>{t(label)}</Label>
-						<div className="flex flex-wrap gap-2">
-							{photos[tag].map((p) => (
-								<img
-									key={p.id}
-									src={p.src}
-									alt=""
-									className="h-20 w-20 rounded object-cover"
-								/>
-							))}
-						</div>
-						<input
-							id={name}
+			<Card>
+				<CardHeader>{t("docs_field.photos_label")}</CardHeader>
+				<CardContent className="space-y-4">
+					<p className="text-xs text-muted-foreground">
+						{t("docs_field.photos_saved_hint")}
+					</p>
+					{PHOTO_BOXES.map(([tag, name, labelKey]) => (
+						<PhotoBox
+							key={tag}
 							name={name}
-							type="file"
-							accept="image/*"
-							multiple
+							labelKey={labelKey}
+							photos={photos[tag]}
 						/>
-					</div>
-				))}
-
-				<div className="border rounded-lg p-3 space-y-2">
-					<Label htmlFor="blueprint">{t("docs_field.blueprint_label")}</Label>
-					{blueprintRequired && (
-						<p className="text-xs text-muted-foreground">
-							{t("docs_field.blueprint_required_hint")}
-						</p>
-					)}
-					<ul className="text-sm">
-						{blueprints.map((b) => (
-							<li key={b}>{b}</li>
-						))}
-					</ul>
-					<input
-						id="blueprint"
-						name="blueprint"
-						type="file"
-						accept="application/pdf,image/*"
-						multiple
+					))}
+					<BlueprintBox
+						docId={doc.id}
+						files={blueprints}
+						required={blueprintRequired}
 					/>
-				</div>
+				</CardContent>
+			</Card>
 
-				{serviceLines.length > 0 && (
-					<div className="border rounded-lg p-3 space-y-2">
-						<Label>{t("docs_field.services_performed_label")}</Label>
-						<ServiceLinesTable
-							lines={serviceLines}
-							installed={installedServiceLines ?? undefined}
-							editableName="installedServiceLines"
-						/>
-					</div>
+			<Form method="post" className="space-y-5">
+				<Card>
+					<CardHeader>{t("docs_field.address_heading")}</CardHeader>
+					<CardContent className="space-y-3">
+						<p className="text-sm">
+							{t("docs_field.address_on_file", {
+								address: doc.jobAddressActual || doc.jobAddressEstimated,
+							})}
+						</p>
+						<div className="grid gap-3 sm:grid-cols-2">
+							{addressInput("direccion1", "docs_new.direccion1_label", {
+								placeholder: doc.jobAddressEstimated,
+								required: true,
+							})}
+							{addressInput("direccion2", "docs_new.direccion2_label")}
+							{addressInput("sector", "docs_new.sector_label")}
+							{addressInput("ciudad", "docs_new.ciudad_label")}
+							{addressInput("latitud", "docs_new.latitud_label")}
+							{addressInput("longitud", "docs_new.longitud_label")}
+						</div>
+						<p className="text-xs text-muted-foreground">
+							{t("docs_field.address_diff_hint")}
+						</p>
+						{addressCorrections.length > 0 && (
+							<div className="space-y-1.5">
+								<p className="text-xs font-medium">
+									{t("docs_field.address_history_heading")}
+								</p>
+								<ul className="space-y-1.5">
+									{addressCorrections.map((c) => (
+										<li
+											key={`${c.original}-${c.corrected}-${c.correctedAt}`}
+											className="rounded-lg bg-muted p-2 text-xs"
+										>
+											<span className="text-muted-foreground line-through">
+												{c.original}
+											</span>
+											{" → "}
+											<span className="font-medium">{c.corrected}</span>
+											<span className="block text-muted-foreground">
+												{t(
+													c.correctedById === user.id
+														? "docs_field.address_edited_by_you"
+														: correctorNames[c.correctedById]
+															? "docs_field.address_edited_by_name"
+															: "docs_field.address_edited_by_other",
+													{
+														name: correctorNames[c.correctedById],
+														when: new Date(c.correctedAt).toLocaleString(),
+													},
+												)}
+											</span>
+										</li>
+									))}
+								</ul>
+							</div>
+						)}
+					</CardContent>
+				</Card>
+
+				{services.rows.length > 0 && (
+					<Card>
+						<CardHeader>{t("docs_field.services_performed_label")}</CardHeader>
+						<CardContent className="space-y-2">
+							{installed.length > 0 && (
+								<input
+									type="hidden"
+									name="installedServiceLines"
+									value={JSON.stringify(installed)}
+								/>
+							)}
+							<div className="overflow-x-auto">
+								<table className="w-full text-sm" data-testid="field-services">
+									<thead>
+										<tr className="border-b text-left text-xs text-muted-foreground">
+											<th className="py-1.5 pr-2">
+												{t("docs_field.services.code")}
+											</th>
+											<th className="py-1.5 pr-2">
+												{t("docs_field.services.name")}
+											</th>
+											<th className="py-1.5 pr-2 text-right">
+												{t("docs_field.services.estimated")}
+											</th>
+											<th className="py-1.5 pr-2">
+												{t("docs_field.services.actual")}
+											</th>
+											<th className="py-1.5 pr-2">
+												{t("docs_field.services.unit")}
+											</th>
+											{shared && (
+												<th className="py-1.5">
+													{t("docs_field.services.brigade")}
+												</th>
+											)}
+										</tr>
+									</thead>
+									<tbody className="tabular-nums">
+										{services.rows.map((r) => (
+											<tr
+												key={r.serviceCodeId}
+												className="border-b last:border-0"
+											>
+												<td className="py-1.5 pr-2 font-mono text-xs">
+													{r.claroCode}
+												</td>
+												<td className="py-1.5 pr-2">{r.name}</td>
+												<td className="py-1.5 pr-2 text-right">
+													{r.estimated}
+												</td>
+												<td className="py-1.5 pr-2">
+													<Input
+														type="number"
+														min={0}
+														inputMode="decimal"
+														className="w-20"
+														aria-label={`${t("docs_field.services.actual")} ${r.claroCode}`}
+														value={actuals[r.serviceCodeId] ?? ""}
+														onChange={(e) =>
+															setActuals({
+																...actuals,
+																[r.serviceCodeId]: e.target.value,
+															})
+														}
+													/>
+												</td>
+												<td className="py-1.5 pr-2 text-xs">{r.unit ?? "—"}</td>
+												{shared && (
+													<td className="py-1.5 text-xs">
+														{services.brigadeNames.join(" + ")}
+													</td>
+												)}
+											</tr>
+										))}
+									</tbody>
+								</table>
+							</div>
+						</CardContent>
+					</Card>
 				)}
 
-				<div className="border rounded-lg p-3 space-y-2">
-					<Label>{t("docs_field.materials_used_label")}</Label>
-					<input
-						type="hidden"
-						name="fieldMaterials"
-						value={JSON.stringify(rows)}
-					/>
-					<table className="w-full text-sm">
-						<thead className="text-xs text-muted-foreground">
-							<tr>
-								<th className="text-left">
-									{t("docs_field.materials.material")}
-								</th>
-								<th>{t("docs_field.materials.signed")}</th>
-								<th>{t("docs_field.materials.used")}</th>
-								<th>{t("docs_field.materials.returned")}</th>
-								<th>{t("docs_field.materials.source")}</th>
-							</tr>
-						</thead>
-						<tbody>
-							{rows.map((r, i) => (
-								<tr key={`${r.serviceCodeId}-${r.source}`}>
-									<td>{codeOf(r.serviceCodeId)?.name ?? r.serviceCodeId}</td>
-									<td className="text-center">
-										{signed.get(r.serviceCodeId) ?? 0}
-									</td>
-									<td>
-										<Input
-											type="number"
-											min={0}
-											aria-label={t("docs_field.materials.used")}
-											value={r.used}
-											onChange={(e) =>
-												setRow(i, { used: Number(e.target.value) })
-											}
-										/>
-									</td>
-									<td>
-										<Input
-											type="number"
-											min={0}
-											aria-label={t("docs_field.materials.returned")}
-											value={r.returned}
-											onChange={(e) =>
-												setRow(i, { returned: Number(e.target.value) })
-											}
-										/>
-									</td>
-									<td>
-										<select
-											aria-label={t("docs_field.materials.source")}
-											value={r.source}
-											onChange={(e) =>
-												setRow(i, {
-													source: e.target.value as FieldMaterialRow["source"],
-												})
-											}
-										>
-											<option value="WAREHOUSE">
-												{t("docs_field.materials.source_warehouse")}
-											</option>
-											<option value="BRIGADE_STOCK">
-												{t("docs_field.materials.source_brigade_stock")}
-											</option>
-										</select>
-									</td>
-								</tr>
+				<Card>
+					<CardHeader>{t("docs_field.materials_used_label")}</CardHeader>
+					<CardContent className="space-y-3">
+						<input
+							type="hidden"
+							name="fieldMaterials"
+							value={JSON.stringify(rows)}
+						/>
+						{rows.length === 0 ? (
+							<p className="text-sm text-muted-foreground">
+								{t("docs_field.materials.empty")}
+							</p>
+						) : (
+							<FieldMaterialsTable
+								rows={tableRows}
+								onChange={(i, row) =>
+									setRows(rows.map((r, j) => (j === i ? row : r)))
+								}
+							/>
+						)}
+						<p className="text-xs text-muted-foreground">
+							{t("docs_field.materials.hint")}
+						</p>
+						<select
+							aria-label={t("docs_field.materials.add")}
+							className="h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm"
+							value=""
+							onChange={(e) => {
+								if (!e.target.value) return
+								setRows([
+									...rows,
+									{
+										serviceCodeId: e.target.value,
+										used: 0,
+										returned: 0,
+										source: "BRIGADE_STOCK",
+									},
+								])
+							}}
+						>
+							<option value="">{t("docs_field.materials.add")}</option>
+							{serviceCodes.map((c) => (
+								<option key={c.id} value={c.id}>
+									{c.claroCode} · {c.name}
+								</option>
 							))}
-						</tbody>
-					</table>
-				</div>
+						</select>
+						<div className="space-y-1">
+							<Label htmlFor="discrepancyNote">
+								{t("docs_field.discrepancy_note_label")}
+							</Label>
+							<Textarea
+								id="discrepancyNote"
+								name="discrepancyNote"
+								rows={2}
+								placeholder={t("docs_field.discrepancy_note_placeholder")}
+							/>
+							<p className="text-xs text-muted-foreground">
+								{t("docs_field.discrepancy_note_hint")}
+							</p>
+						</div>
+					</CardContent>
+				</Card>
 
-				<div>
-					<Label htmlFor="discrepancyNote">
-						{t("docs_field.discrepancy_note_label")}
-					</Label>
-					<Textarea
-						id="discrepancyNote"
-						name="discrepancyNote"
-						rows={2}
-						placeholder={t("docs_field.discrepancy_note_placeholder")}
-					/>
-				</div>
-				<div>
+				<div className="space-y-1">
 					<Label htmlFor="fieldNotes">
 						{t("docs_field.field_notes_label")}
 					</Label>
@@ -701,9 +977,23 @@ export default function FieldUpdate({
 						id="fieldNotes"
 						name="fieldNotes"
 						rows={3}
+						placeholder={t("docs_field.field_notes_placeholder")}
 						defaultValue={doc.fieldNotes ?? ""}
 					/>
 				</div>
+
+				{result?.errorKey && (
+					<div role="alert">
+						<Callout tone="danger" title={t("docs_field.error_title")}>
+							{t(result.errorKey)}
+						</Callout>
+					</div>
+				)}
+				{result?.ok && !busy && (
+					<Callout tone="ok" title={t("docs_field.saved")}>
+						{null}
+					</Callout>
+				)}
 
 				<div className="flex flex-wrap gap-2">
 					<Button
@@ -715,8 +1005,14 @@ export default function FieldUpdate({
 					>
 						{t("docs_field.save_progress")}
 					</Button>
-					<Button type="submit" name="intent" value="continue" disabled={busy}>
-						{t("docs_field.continue_to_signoff")}
+					<Button
+						type="submit"
+						name="intent"
+						value="continue"
+						disabled={busy}
+						className="ml-auto"
+					>
+						{t("docs_field.continue_to_signoff", { n: SIGN_OFF_STEP })}
 					</Button>
 				</div>
 			</Form>

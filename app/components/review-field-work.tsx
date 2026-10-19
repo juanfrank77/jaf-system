@@ -1,11 +1,6 @@
-import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Form } from "react-router"
 import { Badge } from "~/components/ui/badge"
-import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardHeader } from "~/components/ui/card"
-import { Label } from "~/components/ui/label"
-import { Textarea } from "~/components/ui/textarea"
 import type { AddressCorrection } from "~/lib/field-update-helpers"
 
 export type ReviewPhoto = {
@@ -121,75 +116,6 @@ export function PhotosCard({
 						</div>
 					</a>
 				))}
-			</CardContent>
-		</Card>
-	)
-}
-
-/** Approve (when FIELD_UPDATED) and send back (note required, revealed on demand). */
-export function ReviewActionsCard({
-	canApprove,
-	canSendBack,
-}: {
-	canApprove: boolean
-	canSendBack: boolean
-}) {
-	const { t } = useTranslation()
-	const [sendingBack, setSendingBack] = useState(false)
-	if (!canApprove && !canSendBack) return null
-	return (
-		<Card>
-			<CardContent className="space-y-4">
-				<div className="flex flex-wrap gap-3">
-					{canApprove && (
-						<Form method="post" className="flex-[2]">
-							<input type="hidden" name="intent" value="approve" />
-							<Button type="submit" className="w-full">
-								✓ {t("docs_review.approve_field_work")}
-							</Button>
-						</Form>
-					)}
-					{canSendBack && !sendingBack && (
-						<Button
-							type="button"
-							variant="outline"
-							className="flex-1"
-							onClick={() => setSendingBack(true)}
-						>
-							↩ {t("docs_review.send_back_heading")}
-						</Button>
-					)}
-				</div>
-				{canSendBack && sendingBack && (
-					<Form method="post" className="space-y-2 border-t border-border pt-4">
-						<Label htmlFor="sendBackNote">
-							{t("docs_review.send_back_heading")}
-						</Label>
-						<Textarea
-							id="sendBackNote"
-							name="note"
-							rows={2}
-							required
-							autoFocus
-						/>
-						<p className="text-xs text-muted-foreground">
-							{t("docs_review.send_back_hint")}
-						</p>
-						<input type="hidden" name="intent" value="send_back" />
-						<div className="flex gap-2">
-							<Button type="submit" variant="outline">
-								↩ {t("docs_review.send_back")}
-							</Button>
-							<Button
-								type="button"
-								variant="ghost"
-								onClick={() => setSendingBack(false)}
-							>
-								{t("docs_review.send_back_cancel")}
-							</Button>
-						</div>
-					</Form>
-				)}
 			</CardContent>
 		</Card>
 	)

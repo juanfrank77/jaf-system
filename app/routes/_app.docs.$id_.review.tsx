@@ -8,11 +8,7 @@ import { DocStageBadge } from "~/components/doc-stage-badge"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { JobLinesCard, preppedAsLines } from "~/components/job-lines-card"
 import type { MaterialLineItems } from "~/components/material-line-items"
-import {
-	AddressCard,
-	PhotosCard,
-	ReviewActionsCard,
-} from "~/components/review-field-work"
+import { AddressCard, PhotosCard } from "~/components/review-field-work"
 import {
 	SignaturePad,
 	type SignaturePadHandle,
@@ -290,7 +286,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		showPrices,
 		tolerance,
 		correctorNames,
-		submittedBy: doc.completedById
+		// Who signed off (Step 4). Before this redesign it was the crew lead.
+		signedOffBy: doc.completedById
 			? (correctorNames[doc.completedById] ?? null)
 			: null,
 	}
@@ -311,6 +308,11 @@ export async function action({ request, params }: Route.ActionArgs) {
 	if (intent === "approve") {
 		if (!canTransition(doc.status, "SUPERVISOR_APPROVED", user.role))
 			throw redirect(`/docs/${params.id}`)
+		// Sign off: the supervisor signs the field completion (name and date
+		// are their login and now). It locks the Field step for them.
+		const signature = form.get("completionSignature")
+		if (!isSig(signature))
+			return { errorKey: "docs_review.errors.signature_required" }
 		const ordered = (doc.serviceLines as ServiceLine[] | null) ?? []
 		const installed = (doc.installedServiceLines as ServiceLine[] | null) ?? []
 		if (ordered.length > 0 && installed.length === 0)
@@ -318,12 +320,16 @@ export async function action({ request, params }: Route.ActionArgs) {
 		const avisoNumber =
 			(form.get("avisoNumber") as string | null)?.trim() || doc.avisoNumber
 		const claroNotes = (form.get("claroNotes") as string | null)?.trim() || null
+		const now = new Date()
 		await db.$transaction([
 			db.jafInvoice.update({
 				where: { id: params.id },
 				data: {
 					status: "SUPERVISOR_APPROVED",
-					supervisorApprovedAt: new Date(),
+					supervisorApprovedAt: now,
+					completionSignature: signature as string,
+					completedById: user.id,
+					completionSignedAt: now,
 					avisoNumber,
 					claroNotes,
 				},
@@ -996,7 +1002,11 @@ export async function action({ request, params }: Route.ActionArgs) {
 		throw redirect(`/docs/${params.id}/review`)
 	}
 
+	// The old "send back to crew": crews never log in, so a supervisor no
+	// longer has it (spec "Step 4 · Sign off"). Finance's send-back to the
+	// supervisor lives on the Finance verify screen and is unaffected.
 	if (intent === "send_back") {
+		if (user.role === "SUPERVISOR") throw redirect(`/docs/${params.id}/review`)
 		const note = (form.get("note") as string | null)?.trim() || ""
 		if (!note) return { errorKey: "docs_review.errors.send_back_note_required" }
 		if (!isReviewActionStatus(doc.status)) throw redirect(`/docs/${params.id}`)
@@ -1082,9 +1092,14 @@ function SignatureBlock({
 	optional = false,
 	encType,
 	readOnly = false,
+	fieldName = "signature",
+	submitLabelKey = "precert.sign",
 }: {
 	intent: string
 	labelKey: ParseKeys
+	/** The form field the drawn signature is posted as. */
+	fieldName?: string
+	submitLabelKey?: ParseKeys
 	/** Fields above the pad (name, contractor code, scan upload). */
 	children?: React.ReactNode
 	/** Present once this party has signed: replaces the form with a summary. */
@@ -1132,7 +1147,7 @@ function SignatureBlock({
 				const pad = padRef.current
 				const form = e.currentTarget
 				const input = form.elements.namedItem(
-					"signature",
+					fieldName,
 				) as HTMLInputElement | null
 				const scan = form.elements.namedItem("scan") as HTMLInputElement | null
 				const hasScan = !!scan?.files?.length
@@ -1144,7 +1159,7 @@ function SignatureBlock({
 			}}
 		>
 			<input type="hidden" name="intent" value={intent} />
-			<input type="hidden" name="signature" />
+			<input type="hidden" name={fieldName} />
 			{header}
 			{children}
 			<div className="space-y-1">
@@ -1169,10 +1184,94 @@ function SignatureBlock({
 					{t("precert.clear_signature")}
 				</Button>
 				<Button type="submit" size="sm" className="ml-auto">
-					{t("precert.sign")}
+					{t(submitLabelKey)}
 				</Button>
 			</div>
 		</Form>
+	)
+}
+
+/**
+ * Step 4 · Sign off (was Approve): the supervisor signs the field completion
+ * with their name and the date. No send-back to crew; once signed, Field is
+ * locked for the supervisor.
+ */
+function SignOffCard({
+	doc,
+	signerName,
+	signedOffBy,
+	canSign,
+	errorKey,
+}: {
+	doc: {
+		supervisorApprovedAt: Date | string | null
+		completionSignature: string | null
+		completionSignedAt: Date | string | null
+	}
+	signerName: string
+	signedOffBy: string | null
+	canSign: boolean
+	errorKey?: string
+}) {
+	const { t } = useTranslation()
+	const signed = !!doc.supervisorApprovedAt && !!doc.completionSignature
+	return (
+		<Card>
+			<CardHeader>{t("docs_review.signoff_heading")}</CardHeader>
+			<CardContent className="space-y-3">
+				<p className="text-xs text-muted-foreground">
+					{t("docs_review.signoff_hint")}
+				</p>
+				<SignatureBlock
+					intent="approve"
+					fieldName="completionSignature"
+					labelKey="docs_review.approve"
+					submitLabelKey="docs_review.approve_field_work"
+					readOnly={!canSign}
+					signed={
+						signed ? (
+							<div className="space-y-1">
+								<img
+									src={doc.completionSignature ?? ""}
+									alt=""
+									className="h-12 rounded border bg-card"
+								/>
+								<p className="text-xs text-muted-foreground">
+									{t("docs_review.signed_off_by", {
+										name: signedOffBy ?? "—",
+										when: doc.completionSignedAt
+											? new Date(doc.completionSignedAt).toLocaleString()
+											: "",
+									})}
+								</p>
+							</div>
+						) : undefined
+					}
+				>
+					<dl className="grid grid-cols-2 gap-2 text-sm">
+						<div>
+							<dt className="text-xs text-muted-foreground">
+								{t("docs_review.signoff_name")}
+							</dt>
+							<dd className="font-medium">{signerName}</dd>
+						</div>
+						<div>
+							<dt className="text-xs text-muted-foreground">
+								{t("docs_review.signoff_date")}
+							</dt>
+							<dd className="font-medium" suppressHydrationWarning>
+								{new Date().toLocaleDateString()}
+							</dd>
+						</div>
+					</dl>
+				</SignatureBlock>
+				{canSign && errorKey && (
+					<p role="alert" className="text-sm text-status-danger">
+						{t(errorKey as ParseKeys)}
+					</p>
+				)}
+			</CardContent>
+		</Card>
 	)
 }
 
@@ -1516,7 +1615,7 @@ export default function ReviewDoc({
 		showPrices,
 		tolerance,
 		correctorNames,
-		submittedBy,
+		signedOffBy,
 	} = loaderData
 	const { t } = useTranslation()
 	const error = actionData as
@@ -1598,8 +1697,6 @@ export default function ReviewDoc({
 			</div>
 			<p className="text-sm text-muted-foreground">
 				{doc.jobType}
-				{submittedBy &&
-					` · ${t("docs_review.submitted_by", { name: submittedBy })}`}
 				{doc.fieldSubmittedAt &&
 					` · ${new Date(doc.fieldSubmittedAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}`}
 			</p>
@@ -1639,15 +1736,13 @@ export default function ReviewDoc({
 					/>
 					<PhotosCard docId={doc.id} photos={photoItems} />
 					{jobLines}
-					{interactive && (
-						<ReviewActionsCard
-							canApprove={doc.status === "FIELD_UPDATED"}
-							canSendBack={
-								doc.status === "FIELD_UPDATED" ||
-								doc.status === "SUPERVISOR_APPROVED"
-							}
-						/>
-					)}
+					<SignOffCard
+						doc={doc}
+						signerName={user.name}
+						signedOffBy={signedOffBy}
+						canSign={interactive && doc.status === "FIELD_UPDATED"}
+						errorKey={error?.errorKey}
+					/>
 				</>
 			)}
 

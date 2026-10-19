@@ -18,6 +18,9 @@ vi.mock("~/lib/db.server", () => ({
 		auditTrail: {
 			create: vi.fn(),
 		},
+		serviceCode: {
+			findMany: vi.fn(),
+		},
 		notification: {
 			create: vi.fn(),
 		},
@@ -93,6 +96,7 @@ function baseDoc(overrides: Record<string, unknown> = {}) {
 		fieldNotes: null,
 		fieldStartedAt: null,
 		fieldSubmittedAt: null,
+		supervisorApprovedAt: null,
 		blueprintPaths: ["/uploads/blueprints/doc-1/intake.pdf"],
 		claroSupervisor: {
 			name: "Claro Ana",
@@ -166,6 +170,9 @@ beforeEach(() => {
 	vi.mocked(db.user.findMany).mockResolvedValue([])
 	vi.mocked(db.photo.findMany).mockResolvedValue([])
 	vi.mocked(getActiveMaterialCodes).mockResolvedValue([])
+	vi.mocked(db.serviceCode.findMany).mockResolvedValue([
+		{ id: "svc-1", unit: "EA" },
+	] as any)
 })
 
 describe("POST /docs/:id/field — save", () => {
@@ -621,6 +628,69 @@ describe("/docs/:id/field — access", () => {
 		expect(db.jafInvoice.update).not.toHaveBeenCalled()
 	})
 
+	it("after sign-off, save is refused for SUPERVISOR (locked) but allowed for ADMIN", async () => {
+		const signedOff = {
+			status: "SUPERVISOR_APPROVED",
+			supervisorApprovedAt: new Date(),
+		}
+		const form = () => {
+			const f = new FormData()
+			f.set("intent", "save")
+			f.set("fieldNotes", "late info")
+			return f
+		}
+
+		as("SUPERVISOR")
+		withDoc(signedOff)
+		const refused = await run(form())
+		expect(refused.status).toBe(302)
+		expect(refused.headers.get("Location")).toBe("/docs/doc-1")
+		expect((await load()).headers.get("Location")).toBe("/docs/doc-1")
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+
+		as("ADMIN", "admin-1")
+		withDoc(signedOff)
+		expect(await run(form())).toEqual({ ok: true })
+		expect(lastUpdate().data).toMatchObject({ fieldNotes: "late info" })
+		expect(lastUpdate().data).not.toHaveProperty("status")
+		expect((await load()).doc.status).toBe("SUPERVISOR_APPROVED")
+	})
+
+	it("ADMIN continue after sign-off saves and does not change the status", async () => {
+		as("ADMIN", "admin-1")
+		withDoc({ status: "SUPERVISOR_APPROVED", supervisorApprovedAt: new Date() })
+		const form = new FormData()
+		form.set("intent", "continue")
+		form.set(
+			"fieldMaterials",
+			JSON.stringify([
+				{ serviceCodeId: "sc-1", used: 5, returned: 0, source: "WAREHOUSE" },
+			]),
+		)
+		const res = await run(form)
+		expect(res.status).toBe(302)
+		expect(lastUpdate().data).not.toHaveProperty("status")
+	})
+
+	it("a supervisor is locked out once supervisorApprovedAt is set, whatever the status", async () => {
+		as("SUPERVISOR")
+		withDoc({ status: "FIELD_UPDATED", supervisorApprovedAt: new Date() })
+		const form = new FormData()
+		form.set("intent", "save")
+		form.set("fieldNotes", "x")
+		expect((await run(form)).headers.get("Location")).toBe("/docs/doc-1")
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("nobody edits Field once the packet has gone to Claro", async () => {
+		as("ADMIN", "admin-1")
+		withDoc({ status: "CLARO_UPLOADED", supervisorApprovedAt: new Date() })
+		const form = new FormData()
+		form.set("intent", "save")
+		expect((await run(form)).headers.get("Location")).toBe("/docs/doc-1")
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
 	it("refuses an unknown intent", async () => {
 		as("SUPERVISOR")
 		withDoc()
@@ -671,6 +741,7 @@ describe("GET /docs/:id/field", () => {
 					name: "TRANSFER",
 					estimated: 2,
 					actual: null,
+					unit: "EA",
 				},
 			],
 			brigadeNames: [],

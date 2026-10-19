@@ -1,8 +1,11 @@
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import path from "node:path"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const mocks = vi.hoisted(() => ({
 	db: {
-		user: { findUniqueOrThrow: vi.fn() },
+		user: { findUniqueOrThrow: vi.fn(), findUnique: vi.fn() },
 		jafInvoice: { findUnique: vi.fn() },
 		installCompletion: { findUnique: vi.fn(), findFirst: vi.fn() },
 	},
@@ -215,5 +218,103 @@ describe("files loader — install completion files", () => {
 		} as any)
 
 		expect(result.status).toBe(403)
+	})
+})
+
+describe("files loader — job photos and blueprints for supervisors", () => {
+	let dir: string
+
+	beforeEach(async () => {
+		vi.clearAllMocks()
+		dir = await mkdtemp(path.join(tmpdir(), "files-test-"))
+		process.env.UPLOAD_DIR = dir
+		for (const rel of [
+			"photos/job-1/1-0-a.jpg",
+			"blueprints/job-1/1-0-plan.pdf",
+		]) {
+			await mkdir(path.dirname(path.join(dir, rel)), { recursive: true })
+			await writeFile(path.join(dir, rel), "bytes")
+		}
+		mocks.requireSession.mockResolvedValue({ user: { id: "sup-2" } })
+		mocks.db.user.findUniqueOrThrow.mockResolvedValue({
+			id: "sup-2",
+			role: "SUPERVISOR",
+		} as any)
+		mocks.db.user.findUnique.mockResolvedValue({
+			supervisorAreas: ["CENTRAL"],
+		} as any)
+		mocks.db.jafInvoice.findUnique.mockImplementation((async (args: any) =>
+			args.where.id === "job-1"
+				? {
+						status: "SIGNED",
+						supervisorId: "sup-1",
+						assignedCrewIds: ["crew-1"],
+						brigade: { area: "CENTRAL" },
+					}
+				: null) as any)
+	})
+
+	const get = (rel: string) =>
+		loader({
+			request: requestFor(`/files/${rel}`),
+			params: { "*": rel },
+		} as any) as Promise<Response>
+
+	it("serves a job photo to a supervisor covering the job's area", async () => {
+		const res = await get("photos/job-1/1-0-a.jpg")
+		expect(res.status).toBe(200)
+		expect(res.headers.get("Content-Type")).toBe("image/jpeg")
+		expect(mocks.db.jafInvoice.findUnique).toHaveBeenCalledWith(
+			expect.objectContaining({ where: { id: "job-1" } }),
+		)
+	})
+
+	it("serves a job blueprint to a supervisor covering the job's area", async () => {
+		const res = await get("blueprints/job-1/1-0-plan.pdf")
+		expect(res.status).toBe(200)
+		expect(res.headers.get("Content-Type")).toBe("application/pdf")
+		expect(mocks.db.jafInvoice.findUnique).toHaveBeenCalledWith(
+			expect.objectContaining({ where: { id: "job-1" } }),
+		)
+	})
+
+	it("refuses a supervisor outside the job's area", async () => {
+		mocks.db.user.findUnique.mockResolvedValue({
+			supervisorAreas: ["SUR"],
+		} as any)
+		expect((await get("photos/job-1/1-0-a.jpg")).status).toBe(403)
+		expect((await get("blueprints/job-1/1-0-plan.pdf")).status).toBe(403)
+	})
+
+	it("still serves the job's own supervisor without an area match", async () => {
+		mocks.requireSession.mockResolvedValue({ user: { id: "sup-1" } })
+		mocks.db.user.findUniqueOrThrow.mockResolvedValue({
+			id: "sup-1",
+			role: "SUPERVISOR",
+		} as any)
+		mocks.db.user.findUnique.mockResolvedValue({ supervisorAreas: [] } as any)
+		expect((await get("blueprints/job-1/1-0-plan.pdf")).status).toBe(200)
+	})
+
+	it("keeps the other roles' rules: assigned crew yes, other crew and finance (pre-approval) no", async () => {
+		mocks.db.user.findUniqueOrThrow.mockResolvedValue({
+			id: "crew-1",
+			role: "CREW",
+		} as any)
+		expect((await get("blueprints/job-1/1-0-plan.pdf")).status).toBe(200)
+		mocks.db.user.findUniqueOrThrow.mockResolvedValue({
+			id: "crew-9",
+			role: "CREW",
+		} as any)
+		expect((await get("blueprints/job-1/1-0-plan.pdf")).status).toBe(403)
+		mocks.db.user.findUniqueOrThrow.mockResolvedValue({
+			id: "fin-1",
+			role: "FINANCE",
+		} as any)
+		expect((await get("photos/job-1/1-0-a.jpg")).status).toBe(403)
+	})
+
+	it("refuses a blueprint of a job that does not exist", async () => {
+		expect((await get("blueprints/job-404/1-0-plan.pdf")).status).toBe(403)
 	})
 })

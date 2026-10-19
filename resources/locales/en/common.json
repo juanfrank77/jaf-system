@@ -256,6 +256,7 @@
 				"restock_over_par": "Restock {{id}} needs over-par sign-off.",
 				"prep_missing": "Job {{job}} has missing materials flagged during prep. Please review.",
 				"prep_ready": "Job {{job}} is prepped and ready for pickup. Please sign at warehouse.",
+				"prep_ready_supervisor": "Job {{job}} is ready for pickup.",
 				"sign_overage": "Job {{job}} was signed with material overage. Review the quantities.",
 				"repair_held": "Serial {{serial}} is held for review before repair disposition.",
 				"repair_sent": "Repair batch {{batch}} sent ({{count}} units).",

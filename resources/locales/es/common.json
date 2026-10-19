@@ -256,6 +256,7 @@
 				"restock_over_par": "El reabastecimiento {{id}} requiere aprobación por exceso del nivel par.",
 				"prep_missing": "Se marcaron materiales faltantes en la preparación del trabajo {{job}}. Por favor revise.",
 				"prep_ready": "El trabajo {{job}} está preparado y listo para recoger. Por favor firme en el almacén.",
+				"prep_ready_supervisor": "El trabajo {{job}} está listo para recoger.",
 				"sign_overage": "El trabajo {{job}} se firmó con exceso de material. Revise las cantidades.",
 				"repair_held": "El serial {{serial}} está retenido para revisión antes de la disposición de reparación.",
 				"repair_sent": "Lote de reparación {{batch}} enviado ({{count}} unidades).",

@@ -28,6 +28,16 @@ describe("localizeNotification", () => {
 		)
 	})
 
+	it("localizes the supervisor ready-for-pickup alert in EN and ES", async () => {
+		const msg = "Job A/12 is ready for pickup."
+		const en = i18next.getFixedT("en")
+		const es = i18next.getFixedT("es")
+		expect(localizeNotification(msg, en)).toBe("Job A/12 is ready for pickup.")
+		expect(localizeNotification(msg, es)).toBe(
+			"El trabajo A/12 está listo para recoger.",
+		)
+	})
+
 	it("passes unknown messages through unchanged", () => {
 		const t = i18next.t.bind(i18next)
 		expect(localizeNotification("Something else happened.", t)).toBe(

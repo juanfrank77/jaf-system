@@ -337,7 +337,7 @@
 		"errors": {
 			"invalid_materials": "Datos de materiales inválidos",
 			"invalid_service_lines": "No se pudieron leer los códigos de servicio.",
-			"missing_fields": "Seleccione al menos una brigada.",
+			"missing_fields": "Se requieren el tipo de trabajo y al menos una brigada.",
 			"brigade_invalid": "Esa brigada no está disponible.",
 			"claro_supervisor_required": "Seleccione un supervisor de Claro activo.",
 			"address_required": "Dirección 1, Tipo, Tipo Planta y Grupo Plan son obligatorios."
@@ -348,7 +348,7 @@
 		"requires_prefield_chip": "Prefield",
 		"requires_blueprint_chip": "Plano",
 		"prefield_heading": "Prefield",
-		"prefield_hint": "Opcional por ahora. Si este supervisor de Claro los requiere, deben completarse antes de enviar el paquete.",
+		"prefield_hint": "Opcional por ahora. El # de Aviso se verifica contra el PDF del Aviso en el paso 6. Si este supervisor de Claro requiere el resto, deben completarse antes de enviar el paquete.",
 		"orden_label": "# Orden",
 		"pedido_label": "Pedido",
 		"smr_label": "SMR",
@@ -365,7 +365,8 @@
 		"tipo_planta_label": "Tipo Planta",
 		"grupo_plan_label": "Grupo Plan",
 		"blueprint_label": "Plano (opcional)",
-		"blueprint_hint": "PDF o foto. También puede añadirlo después."
+		"blueprint_hint": "PDF o foto. También puede añadirlo después.",
+		"aviso_label": "# Aviso (si se conoce)"
 	},
 	"docs_edit": {
 		"title": "Editar orden de trabajo",

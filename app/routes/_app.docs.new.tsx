@@ -133,7 +133,7 @@ export async function action({ request }: Route.ActionArgs) {
 	const address = await canonicalizeAddress(parsed.value)
 	const jobAddressEstimated = composeJobAddress(address)
 
-	if (brigadeIds.length === 0) {
+	if (!jobType || brigadeIds.length === 0) {
 		return { errorKey: "docs_new.errors.missing_fields" }
 	}
 
@@ -162,7 +162,7 @@ export async function action({ request }: Route.ActionArgs) {
 			data: {
 				controlNumber,
 				status: "CREATED",
-				jobType: jobType || address.tipo,
+				jobType,
 				jobAddressEstimated,
 				claroSupervisorId: claro.id,
 				sector: address.sector,
@@ -174,6 +174,7 @@ export async function action({ request }: Route.ActionArgs) {
 				ciudad: address.ciudad,
 				tipoPlanta: address.tipoPlanta,
 				grupoPlan: address.grupoPlan,
+				avisoNumber: prefield("avisoNumber"),
 				ordenNumber: prefield("ordenNumber"),
 				pedido: prefield("pedido"),
 				smr: prefield("smr"),
@@ -229,7 +230,7 @@ export async function action({ request }: Route.ActionArgs) {
 			data: warehouse.map((w) => ({
 				userId: w.id,
 				docId: doc.id,
-				message: `New job ${controlNumber} — ${jobType || address.tipo} at ${jobAddressEstimated}. Please prepare materials.`,
+				message: `New job ${controlNumber} — ${jobType} at ${jobAddressEstimated}. Please prepare materials.`,
 			})),
 		})
 		return doc
@@ -327,6 +328,7 @@ export default function NewDoc({
 								<Input
 									id="jobType"
 									name="jobType"
+									required
 									placeholder="Mantenimiento, Instalación..."
 									className="mt-1"
 								/>
@@ -454,13 +456,11 @@ function TextField({
 	name,
 	label,
 	required,
-	disabled,
 	options,
 }: {
 	name: string
 	label: string
 	required?: boolean
-	disabled?: boolean
 	options?: string[]
 }) {
 	const listId = options ? `${name}-options` : undefined
@@ -469,9 +469,8 @@ function TextField({
 			<Label htmlFor={name}>{label}</Label>
 			<Input
 				id={name}
-				name={disabled ? undefined : name}
+				name={name}
 				required={required}
-				disabled={disabled}
 				list={listId}
 				className="mt-1"
 			/>

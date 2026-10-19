@@ -139,14 +139,44 @@ describe("POST /docs/new", () => {
 		return form
 	}
 
-	it("never stores an Aviso number at intake, even if one is posted", async () => {
-		const res = await action({
-			request: post(validForm("10353961")),
+	it("stores a typed Aviso number (trimmed) and null when blank", async () => {
+		await action({
+			request: post(validForm("  10353961 ")),
 			params: {},
 		} as any).catch((r) => r)
-		expect(res.status).toBe(302)
+		expect(tx.jafInvoice.create.mock.calls[0][0].data.avisoNumber).toBe(
+			"10353961",
+		)
+		tx.jafInvoice.create.mockClear()
+		await action({ request: post(validForm()), params: {} } as any).catch(
+			(r) => r,
+		)
+		expect(tx.jafInvoice.create.mock.calls[0][0].data.avisoNumber).toBeNull()
+	})
+
+	it("stores whitespace-only Prefield values as null", async () => {
+		const form = validForm("   ")
+		for (const k of ["ordenNumber", "pedido", "smr", "titulo"])
+			form.set(k, "  ")
+		await action({ request: post(form), params: {} } as any).catch((r) => r)
 		const { data } = tx.jafInvoice.create.mock.calls[0][0]
-		expect(data).not.toHaveProperty("avisoNumber")
+		expect(data).toEqual(
+			expect.objectContaining({
+				avisoNumber: null,
+				ordenNumber: null,
+				pedido: null,
+				smr: null,
+				titulo: null,
+			}),
+		)
+	})
+
+	it("requires a job type", async () => {
+		const form = validForm()
+		form.delete("jobType")
+		expect(await action({ request: post(form), params: {} } as any)).toEqual({
+			errorKey: "docs_new.errors.missing_fields",
+		})
 	})
 
 	it("stores the canonicalised address, Prefield, supervisor and composed jobAddressEstimated", async () => {

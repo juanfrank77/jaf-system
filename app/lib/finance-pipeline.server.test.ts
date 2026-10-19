@@ -10,6 +10,8 @@ import {
 	computeFinanceStage,
 	daysInStage,
 	FINANCEABLE_STATUSES,
+	financeLineItems,
+	invoiceTotalUsed,
 } from "./finance-pipeline.server"
 
 const invoice = (overrides: Record<string, unknown> = {}) => ({
@@ -85,5 +87,70 @@ describe("FINANCEABLE_STATUSES", () => {
 			"CLARO_UPLOADED",
 			"LC_REQUEST_GENERATED",
 		])
+	})
+})
+
+describe("finance material lines: brigade's own stock is tracked, not billed", () => {
+	const codeMap = {
+		m1: { claroCode: "1005803", name: "Drop", unit: "FT", unitPrice: 2 },
+		m2: { claroCode: "1005900", name: "Clamp", unit: "EA", unitPrice: 5 },
+	}
+	const taken = [{ serviceCodeId: "m1", qty: 10 }]
+	const split = [
+		{ serviceCodeId: "m1", used: 6, returned: 4, source: "WAREHOUSE" },
+		{ serviceCodeId: "m1", used: 4, returned: 0, source: "BRIGADE_STOCK" },
+	]
+
+	it("a Field save under the ruling bills the 6 warehouse units only", () => {
+		const doc = {
+			materialsTaken: taken,
+			materialsUsed: [{ serviceCodeId: "m1", qty: 6 }],
+			fieldMaterials: split,
+		}
+		expect(financeLineItems(doc, codeMap).map((l) => l.qty)).toEqual([6])
+		expect(invoiceTotalUsed(doc, codeMap, 0)).toBe(12)
+	})
+
+	it("a row saved before the ruling (materialsUsed = 10) still bills 6", () => {
+		const doc = {
+			materialsTaken: taken,
+			materialsUsed: [{ serviceCodeId: "m1", qty: 10 }],
+			fieldMaterials: split,
+		}
+		expect(financeLineItems(doc, codeMap).map((l) => l.qty)).toEqual([6])
+	})
+
+	it("only brigade's stock used: nothing billed, not the signed-out pickup", () => {
+		const doc = {
+			materialsTaken: taken,
+			materialsUsed: [],
+			fieldMaterials: [
+				{ serviceCodeId: "m1", used: 0, returned: 10, source: "WAREHOUSE" },
+				{ serviceCodeId: "m2", used: 3, returned: 0, source: "BRIGADE_STOCK" },
+			],
+		}
+		expect(financeLineItems(doc, codeMap)).toEqual([])
+		expect(invoiceTotalUsed(doc, codeMap, 0.115)).toBe(0)
+	})
+
+	it("a legacy job without the Field table is unchanged", () => {
+		const used = {
+			materialsTaken: taken,
+			materialsUsed: [{ serviceCodeId: "m1", qty: 7 }],
+		}
+		expect(financeLineItems(used, codeMap)).toEqual([
+			{
+				claroCode: "1005803",
+				name: "Drop",
+				qty: 7,
+				unit: "FT",
+				unitPrice: 2,
+				accountCode: undefined,
+			},
+		])
+		// Nothing reported used yet: Finance reads the pickup, as before.
+		const none = { materialsTaken: taken, materialsUsed: null }
+		expect(financeLineItems(none, codeMap).map((l) => l.qty)).toEqual([10])
+		expect(invoiceTotalUsed(none, codeMap, 0)).toBe(20)
 	})
 })

@@ -71,6 +71,10 @@ export default [
 		route("finance/awaiting-carmen", "routes/_app.finance.awaiting-carmen.tsx"),
 		route("finance/receivables", "routes/_app.finance.receivables.tsx"),
 		route("finance/verify/:id", "routes/_app.finance.verify.$id.tsx"),
+		route(
+			"finance/verify/:id/invoice.pdf",
+			"routes/_app.finance.verify.$id.invoice.tsx",
+		),
 		route("finance/pbcc/:id", "routes/_app.finance.pbcc.$id.tsx"),
 		route(
 			"finance/pbcc/:id/invoice",

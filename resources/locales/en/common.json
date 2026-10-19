@@ -387,12 +387,14 @@
 		"no_payments": "No payment records.",
 		"documents_heading": "Documents",
 		"warehouse_receipt": "Warehouse receipt (PDF)",
-		"jaf_invoice": "JAF invoice (PDF)",
 		"claro_work_order": "Claro work order (PDF)",
 		"lc_request": "LC request",
 		"materials_heading": "Materials",
 		"back_to_work_order": "Back to work order",
-		"packet_first_send": "first send"
+		"packet_first_send": "first send",
+		"jaf_invoice_priced": "JAF invoice (priced)",
+		"claro_packet": "Claro packet (no prices)",
+		"jaf_invoice_priced_legacy": "JAF invoice (priced, legacy)"
 	},
 	"docs_view": {
 		"aviso_pending": "Not yet — entered at the Aviso step",
@@ -514,7 +516,6 @@
 		"add_line": "+ Add Line",
 		"submit": "Save Returns",
 		"crew_reported_hint": "Field report: {{usedQty}} used from warehouse stock; expected return is {{expectedReturnQty}}.",
-		"discrepancy_warning": "Return qty differs from the use in the Field report.",
 		"warehouse_label": "Return to warehouse",
 		"warehouse_policy_unconfirmed": "Returning to a warehouse other than pickup is allowed, but policy for this is unconfirmed.",
 		"serial_lines_heading": "Serialized Returns",
@@ -528,7 +529,6 @@
 			"UNDER_REPORTED": "Used — under-reported"
 		},
 		"add_serial_line": "+ Add Serial Line",
-		"note_required_hint": "A note is required because received is less than expected.",
 		"success": "Returns logged.",
 		"errors": {
 			"invalid_materials": "Invalid materials data",
@@ -543,15 +543,13 @@
 		"already_recorded_notice": "Returns were already recorded for this document. They cannot be logged again.",
 		"status_pill": "Expected back",
 		"callout_title": "Return · You",
-		"callout_body": "The supervisor's Field report says what was used from warehouse stock; the system computed what should come back. Count what actually arrived. Anything short gets a note.",
+		"callout_body": "The supervisor's Field report says what was used from warehouse stock; the system computed what should come back. Count what actually arrived.",
 		"submit_confirm": "Confirm return",
-		"submit_discrepancy_one": "Confirm return · {{count}} discrepancy logged",
-		"submit_discrepancy_other": "Confirm return · {{count}} discrepancies logged",
 		"invoice_note_title": "The invoiced quantity never changes here.",
 		"invoice_note_body": "The \"used\" figures come from the supervisor's Field step and are what goes to Claro. This screen only records whether the warehouse got its material back."
 	},
 	"returns": {
-		"note_required": "A note is required when received is less than expected, or a serialized unit is lost or damaged."
+		"note_required": "A note is required when a serialized unit is lost or damaged."
 	},
 	"restock_fulfill": {
 		"title": "Fulfill Restock #{{id}}",
@@ -629,9 +627,6 @@
 		"taken_reference_label": "Taken (signed)",
 		"used_entry_label": "Installed",
 		"ordered_vs_installed_hint": "Ordered-vs-installed variance is informational only.",
-		"discrepancy_note_label": "Quantity Discrepancy Note",
-		"discrepancy_note_hint": "Required when installed quantities differ from what was signed out.",
-		"discrepancy_note_placeholder": "Explain why installed quantities differ from signed-out quantities...",
 		"field_notes_label": "Field Notes",
 		"field_notes_placeholder": "Observations, issues, changes...",
 		"photos_label": "Photos",
@@ -649,8 +644,7 @@
 		"offline_submit_notice": "You are offline. Tap Save for later sync and the update will upload when you have signal.",
 		"errors": {
 			"invalid_materials": "Invalid materials data",
-			"used_exceeds_took": "You can't use more than you took. Lower the quantity to what was signed out at pickup.",
-			"discrepancy_note_required": "A discrepancy note is required when installed quantities differ from signed-out quantities.",
+			"used_exceeds_took": "Warehouse-issued material can't exceed what was signed out at pickup. Enter any extra material under another Source.",
 			"completion_signature_required": "Completion signature is required.",
 			"invalid_service_lines": "Installed service quantities could not be read.",
 			"photo_invalid": "Photos must be JPEG, PNG, WebP or HEIC, up to 10 MB.",
@@ -683,13 +677,16 @@
 			"used": "Used",
 			"returned": "Returned",
 			"source": "Source",
-			"source_warehouse": "Warehouse",
-			"source_brigade_stock": "Brigade's stock",
+			"source_warehouse_issue": "Warehouse issue",
+			"source_existing_at_site": "Existing at site",
+			"source_claro_drop_off": "Claro drop-off",
+			"source_truck_stock": "Truck stock",
+			"source_crew_personal": "Crew personal",
 			"code": "Code",
 			"estimated": "Estimated",
-			"add": "+ Add a material not issued at pickup",
+			"add": "+ Material from another source",
 			"empty": "No material was issued at pickup.",
-			"hint": "Used from the warehouse cannot exceed what was issued. Brigade's stock was never signed out, so it has no limit."
+			"hint": "Only material issued from the warehouse is billed. Anything else you used, enter under its own Source."
 		},
 		"address_heading": "Address",
 		"address_on_file": "On file: {{address}}",
@@ -1121,7 +1118,6 @@
 		},
 		"kinds": {
 			"overage": "Overage",
-			"discrepancy": "Discrepancy",
 			"shortage": "Shortage"
 		},
 		"line": {
@@ -1286,7 +1282,6 @@
 		"billing_blocked": "Cannot verify — billing documents incomplete",
 		"blocked_claro_pdf": "Missing Claro work-order PDF",
 		"jaf_invoice": "JAF Invoice",
-		"download": "Download",
 		"job_type": "Job Type",
 		"address": "Address",
 		"aviso_number": "Aviso #",
@@ -1309,7 +1304,10 @@
 			"amount_mismatch": "Aviso amount differs from invoice total by {{difference}} (tolerance: {{tolerance}}).",
 			"invalid_stage": "This job is not at the Verify stage.",
 			"terminal_status": "This job is no longer editable."
-		}
+		},
+		"priced_invoice": "JAF invoice (priced)",
+		"claro_packet": "Claro packet (no prices)",
+		"priced_invoice_legacy": "JAF invoice (priced, legacy)"
 	},
 	"finance_pbcc": {
 		"title": "PBCC Payment Request",
@@ -1500,7 +1498,6 @@
 			"stage_awaiting_crew": "Stage: field work in progress",
 			"stage_pending_review": "Stage: pending review",
 			"stage_in_finance": "Stage: in finance",
-			"discrepancy_count": "Qty discrepancies",
 			"shortage_count": "Shortages",
 			"overage_count": "Overages",
 			"aging_oldest_days": "Oldest open (days)",
@@ -1525,7 +1522,6 @@
 		},
 		"signal": {
 			"overage": "Overage",
-			"discrepancy": "Qty discrepancy",
 			"shortage": "Shortage / return"
 		},
 		"action": {
@@ -1596,7 +1592,6 @@
 		"no_restock_requests": "No active restock requests.",
 		"installs_heading": "My Installs",
 		"no_installs": "No installs logged yet.",
-		"discrepancy": "Discrepancy",
 		"completion": {
 			"address": "Address",
 			"drop_ft": "Drop (ft)",
@@ -1863,8 +1858,7 @@
 		"col_unit_price": "Unit price",
 		"col_line": "Line",
 		"subtotal": "Estimated subtotal",
-		"col_installed": "Installed",
-		"col_difference": "Difference"
+		"col_installed": "Installed"
 	},
 	"installer_supervisor": {
 		"below_par": "Below par",
@@ -2249,10 +2243,6 @@
 			"titulo": "Título",
 			"description": "Description"
 		},
-		"source": {
-			"WAREHOUSE": "Warehouse",
-			"BRIGADE_STOCK": "Brigade stock"
-		},
 		"history": {
 			"time": "Time",
 			"user": "By",
@@ -2284,5 +2274,12 @@
 		"blueprint_upload": "Add a blueprint (PDF or photo)",
 		"prefield_hint": "You can fill in or correct these until the packet is sent.",
 		"prefield_save": "Save"
+	},
+	"brigade_stock_tracked": {
+		"heading": "Brigade's stock (tracked, not billed)",
+		"hint": "Used from the brigade's own stock. Recorded for tracking only and kept off the billable lines until Finance rules on it.",
+		"code": "Code",
+		"name": "Material",
+		"qty": "Qty"
 	}
 }

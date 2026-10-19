@@ -61,7 +61,7 @@ function input(extra: Partial<ClaroPacketInput> = {}): ClaroPacketInput {
 				unit: "FT",
 				used: 40,
 				returned: 2,
-				source: "WAREHOUSE",
+				source: "WAREHOUSE_ISSUE",
 			},
 		],
 		photos: { BEFORE: [], DURING: [], AFTER: [] },

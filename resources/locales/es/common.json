@@ -387,12 +387,14 @@
 		"no_payments": "No hay registros de pago.",
 		"documents_heading": "Documentos",
 		"warehouse_receipt": "Recibo de almacén (PDF)",
-		"jaf_invoice": "Factura JAF (PDF)",
 		"claro_work_order": "Orden de trabajo Claro (PDF)",
 		"lc_request": "Solicitud de LC",
 		"materials_heading": "Materiales",
 		"back_to_work_order": "Volver a la orden de trabajo",
-		"packet_first_send": "primer envío"
+		"packet_first_send": "primer envío",
+		"jaf_invoice_priced": "Factura JAF (con precios)",
+		"claro_packet": "Paquete Claro (sin precios)",
+		"jaf_invoice_priced_legacy": "Factura JAF (con precios, anterior)"
 	},
 	"docs_view": {
 		"aviso_pending": "Aún no — se ingresa en el paso del Aviso",
@@ -514,7 +516,6 @@
 		"add_line": "+ Agregar línea",
 		"submit": "Guardar devoluciones",
 		"crew_reported_hint": "Informe de campo: {{usedQty}} usado del almacén; devolución esperada: {{expectedReturnQty}}.",
-		"discrepancy_warning": "La cantidad devuelta difiere de lo usado según el informe de campo.",
 		"warehouse_label": "Devolver al almacén",
 		"warehouse_policy_unconfirmed": "Se permite devolver a un almacén distinto al de retiro, pero la política para esto no está confirmada.",
 		"serial_lines_heading": "Devoluciones serializadas",
@@ -528,7 +529,6 @@
 			"UNDER_REPORTED": "Usado — sub-reportado"
 		},
 		"add_serial_line": "+ Agregar línea serializada",
-		"note_required_hint": "Se requiere una nota porque lo recibido es menor a lo esperado.",
 		"success": "Devoluciones registradas.",
 		"errors": {
 			"invalid_materials": "Datos de materiales inválidos",
@@ -543,15 +543,13 @@
 		"already_recorded_notice": "Las devoluciones ya fueron registradas para este documento. No se pueden registrar otra vez.",
 		"status_pill": "Se espera de vuelta",
 		"callout_title": "Devolución · Tú",
-		"callout_body": "El informe de campo del supervisor dice qué se usó del material del almacén; el sistema calculó lo que debe regresar. Cuenta lo que realmente llegó. Lo que falte lleva una nota.",
+		"callout_body": "El informe de campo del supervisor dice qué se usó del material del almacén; el sistema calculó lo que debe regresar. Cuenta lo que realmente llegó.",
 		"submit_confirm": "Confirmar devolución",
-		"submit_discrepancy_one": "Confirmar devolución · {{count}} discrepancia registrada",
-		"submit_discrepancy_other": "Confirmar devolución · {{count}} discrepancias registradas",
 		"invoice_note_title": "La cantidad facturada nunca cambia aquí.",
 		"invoice_note_body": "Las cantidades \"usadas\" vienen del paso de Campo del supervisor y son las que van a Claro. Esta pantalla solo registra si el almacén recuperó su material."
 	},
 	"returns": {
-		"note_required": "Se requiere una nota cuando lo recibido es menor a lo esperado, o cuando una unidad serializada se pierde o daña."
+		"note_required": "Se requiere una nota cuando una unidad serializada se pierde o daña."
 	},
 	"restock_fulfill": {
 		"title": "Cumplir reabastecimiento #{{id}}",
@@ -629,9 +627,6 @@
 		"taken_reference_label": "Retirado (firmado)",
 		"used_entry_label": "Instalado",
 		"ordered_vs_installed_hint": "La diferencia entre pedido e instalado es solo informativa.",
-		"discrepancy_note_label": "Nota de discrepancia de cantidad",
-		"discrepancy_note_hint": "Obligatoria cuando las cantidades instaladas difieren de lo firmado en salida.",
-		"discrepancy_note_placeholder": "Explica por qué las cantidades instaladas difieren de lo firmado en salida...",
 		"field_notes_label": "Notas de campo",
 		"field_notes_placeholder": "Observaciones, incidencias, cambios...",
 		"photos_label": "Fotos",
@@ -649,8 +644,7 @@
 		"offline_submit_notice": "Estás sin conexión. Toca Guardar para sincronizar después y la actualización se subirá cuando tengas señal.",
 		"errors": {
 			"invalid_materials": "Datos de materiales inválidos",
-			"used_exceeds_took": "No puedes usar más de lo que te llevaste. Baja la cantidad a lo que se firmó en la recogida.",
-			"discrepancy_note_required": "Se requiere una nota de discrepancia cuando las cantidades instaladas difieren de lo firmado en salida.",
+			"used_exceeds_took": "El material entregado por el almacén no puede superar lo firmado en la recogida. Registra el material adicional con otra Fuente.",
 			"completion_signature_required": "Se requiere la firma de completado.",
 			"invalid_service_lines": "No se pudieron leer las cantidades de servicio instaladas.",
 			"photo_invalid": "Las fotos deben ser JPEG, PNG, WebP o HEIC, de hasta 10 MB.",
@@ -683,13 +677,16 @@
 			"used": "Usado",
 			"returned": "Devuelto",
 			"source": "Origen",
-			"source_warehouse": "Almacén",
-			"source_brigade_stock": "Inventario de la brigada",
+			"source_warehouse_issue": "Entrega de almacén",
+			"source_existing_at_site": "Existente en el sitio",
+			"source_claro_drop_off": "Entregado por Claro",
+			"source_truck_stock": "Inventario del camión",
+			"source_crew_personal": "Personal de la cuadrilla",
 			"code": "Código",
 			"estimated": "Estimado",
-			"add": "+ Añadir un material no entregado en la recogida",
+			"add": "+ Material de otra fuente",
 			"empty": "No se entregó material en la recogida.",
-			"hint": "Lo usado del almacén no puede exceder lo entregado. El inventario de la brigada nunca se firmó en salida, así que no tiene límite."
+			"hint": "Solo se factura el material entregado por el almacén. Cualquier otro material usado, regístralo con su propia Fuente."
 		},
 		"address_heading": "Dirección",
 		"address_on_file": "Registrada: {{address}}",
@@ -1121,7 +1118,6 @@
 		},
 		"kinds": {
 			"overage": "Sobrante",
-			"discrepancy": "Discrepancia",
 			"shortage": "Faltante"
 		},
 		"line": {
@@ -1286,7 +1282,6 @@
 		"billing_blocked": "No se puede verificar — documentos de facturación incompletos",
 		"blocked_claro_pdf": "Falta PDF de orden de trabajo Claro",
 		"jaf_invoice": "Factura JAF",
-		"download": "Descargar",
 		"job_type": "Tipo de trabajo",
 		"address": "Dirección",
 		"aviso_number": "Aviso #",
@@ -1309,7 +1304,10 @@
 			"amount_mismatch": "El monto del Aviso difiere del total de la factura por {{difference}} (tolerancia: {{tolerance}}).",
 			"invalid_stage": "Este trabajo no está en la etapa de verificación.",
 			"terminal_status": "Este trabajo ya no es editable."
-		}
+		},
+		"priced_invoice": "Factura JAF (con precios)",
+		"claro_packet": "Paquete Claro (sin precios)",
+		"priced_invoice_legacy": "Factura JAF (con precios, anterior)"
 	},
 	"finance_pbcc": {
 		"title": "Solicitud de pago PBCC",
@@ -1500,7 +1498,6 @@
 			"stage_awaiting_crew": "Etapa: trabajo de campo en curso",
 			"stage_pending_review": "Etapa: pendiente de revisión",
 			"stage_in_finance": "Etapa: en finanzas",
-			"discrepancy_count": "Diferencias de cantidad",
 			"shortage_count": "Faltantes",
 			"overage_count": "Excesos",
 			"aging_oldest_days": "Más antiguo abierto (días)",
@@ -1525,7 +1522,6 @@
 		},
 		"signal": {
 			"overage": "Exceso",
-			"discrepancy": "Diferencia de cantidad",
 			"shortage": "Faltante / devolución"
 		},
 		"action": {
@@ -1596,7 +1592,6 @@
 		"no_restock_requests": "No hay solicitudes de reabastecimiento activas.",
 		"installs_heading": "Mis instalaciones",
 		"no_installs": "Aún no hay instalaciones registradas.",
-		"discrepancy": "Discrepancia",
 		"completion": {
 			"address": "Dirección",
 			"drop_ft": "Caída (pies)",
@@ -1863,8 +1858,7 @@
 		"col_unit_price": "Precio unit.",
 		"col_line": "Línea",
 		"subtotal": "Subtotal estimado",
-		"col_installed": "Instalado",
-		"col_difference": "Diferencia"
+		"col_installed": "Instalado"
 	},
 	"installer_supervisor": {
 		"below_par": "Bajo par",
@@ -2249,10 +2243,6 @@
 			"titulo": "Título",
 			"description": "Descripción"
 		},
-		"source": {
-			"WAREHOUSE": "Almacén",
-			"BRIGADE_STOCK": "Inventario de brigada"
-		},
 		"history": {
 			"time": "Hora",
 			"user": "Por",
@@ -2284,5 +2274,12 @@
 		"blueprint_upload": "Añada un plano (PDF o foto)",
 		"prefield_hint": "Puede completar o corregir estos datos hasta que se envíe el paquete.",
 		"prefield_save": "Guardar"
+	},
+	"brigade_stock_tracked": {
+		"heading": "Inventario de la brigada (registrado, no facturado)",
+		"hint": "Usado del inventario propio de la brigada. Se registra solo para control y queda fuera de las líneas facturables hasta que Finanzas decida.",
+		"code": "Código",
+		"name": "Material",
+		"qty": "Cant."
 	}
 }

@@ -1261,7 +1261,7 @@ describe("review loader: Packet → Claro step", () => {
 		titulo: "Poste",
 		blueprintPaths: [],
 		fieldMaterials: [
-			{ serviceCodeId: "m1", used: 3, returned: 1, source: "WAREHOUSE" },
+			{ serviceCodeId: "m1", used: 3, returned: 1, source: "WAREHOUSE_ISSUE" },
 		],
 		jafInvoicePdfPath: null,
 	}
@@ -1377,6 +1377,16 @@ describe("review loader: Packet → Claro step", () => {
 		)
 	})
 
+	it("never links a legacy priced JAF invoice as the packet", async () => {
+		const data = await loadAs("SUPERVISOR", {
+			...signedOff,
+			jafInvoicePdfPath: "/uploads/jaf-invoices/doc-1-jaf-invoice.pdf",
+			jafInvoiceGeneratedAt: new Date("2026-09-01T12:00:00Z"),
+		})
+		expect(data.packet.packetHref).toBeNull()
+		expect(JSON.stringify(data)).not.toContain("jaf-invoices")
+	})
+
 	it("sent is the first-send timestamp", async () => {
 		const at = new Date("2026-10-18T15:00:00Z")
 		const data = await loadAs("SUPERVISOR", {
@@ -1420,14 +1430,37 @@ describe("review loader: Packet → Claro step", () => {
 		])
 		expect(data.packet.materials).toEqual([
 			{
+				serviceCodeId: "m1",
 				claroCode: "M-100",
 				name: "Cable drop",
 				unit: "FT",
 				used: 3,
 				returned: 1,
-				source: "WAREHOUSE",
+				source: "WAREHOUSE_ISSUE",
 			},
 		])
+	})
+
+	it("previews the packet's materials as sent: no brigade's stock rows", async () => {
+		const data = await loadAs("SUPERVISOR", {
+			...signedOff,
+			fieldMaterials: [
+				{
+					serviceCodeId: "m1",
+					used: 3,
+					returned: 1,
+					source: "WAREHOUSE_ISSUE",
+				},
+				{ serviceCodeId: "m2", used: 4, returned: 0, source: "TRUCK_STOCK" },
+			],
+		})
+		expect(
+			data.packet.materials.map((m) => [m.serviceCodeId, m.source]),
+		).toEqual([["m1", "WAREHOUSE_ISSUE"]])
+		// The code lookup no longer asks for the brigade's-stock code.
+		expect(db.serviceCode.findMany).toHaveBeenCalledWith(
+			expect.objectContaining({ where: { id: { in: ["m1"] } } }),
+		)
 	})
 
 	describe("no prices reach a SUPERVISOR", () => {

@@ -37,7 +37,6 @@ describe("computeDashboardStats", () => {
 			{ labelKey: "dashboard.stat.stage_awaiting_crew", value: 2 },
 			{ labelKey: "dashboard.stat.stage_pending_review", value: 0 },
 			{ labelKey: "dashboard.stat.stage_in_finance", value: 0 },
-			{ labelKey: "dashboard.stat.discrepancy_count", value: 0 },
 			{ labelKey: "dashboard.stat.shortage_count", value: 0 },
 			{ labelKey: "dashboard.stat.overage_count", value: 0 },
 			{ labelKey: "dashboard.stat.aging_oldest_days", value: 0 },
@@ -63,7 +62,6 @@ describe("computeDashboardStats", () => {
 			{ labelKey: "dashboard.stat.stage_awaiting_crew", value: 0 },
 			{ labelKey: "dashboard.stat.stage_pending_review", value: 2 },
 			{ labelKey: "dashboard.stat.stage_in_finance", value: 0 },
-			{ labelKey: "dashboard.stat.discrepancy_count", value: 0 },
 			{ labelKey: "dashboard.stat.shortage_count", value: 0 },
 			{ labelKey: "dashboard.stat.overage_count", value: 0 },
 			{ labelKey: "dashboard.stat.aging_oldest_days", value: 0 },
@@ -132,7 +130,6 @@ describe("computeDashboardStats", () => {
 			{ labelKey: "dashboard.stat.stage_awaiting_crew", value: 0 },
 			{ labelKey: "dashboard.stat.stage_pending_review", value: 0 },
 			{ labelKey: "dashboard.stat.stage_in_finance", value: 3 },
-			{ labelKey: "dashboard.stat.discrepancy_count", value: 0 },
 			{ labelKey: "dashboard.stat.shortage_count", value: 0 },
 			{ labelKey: "dashboard.stat.overage_count", value: 0 },
 			{ labelKey: "dashboard.stat.aging_oldest_days", value: 0 },
@@ -244,40 +241,25 @@ describe("computeAwaitingPickup", () => {
 	})
 })
 
-describe("computeMaterialSignals: brigade's own stock", () => {
+describe("computeMaterialSignals: no used-vs-issued comparison", () => {
 	const taken = [{ serviceCodeId: "m1", qty: 10 }]
-	const total = [{ serviceCodeId: "m1", qty: 10 }]
 
-	it("compares signed-out stock with WAREHOUSE use only", () => {
-		// 10 signed out, 6 used from it + 4 from the brigade's stock: 4 are
-		// unaccounted for, even though the total used equals what was taken.
+	it("returns only shortage and overage", () => {
 		const split = {
 			materialsTaken: taken,
-			materialsUsed: total,
+			materialsUsed: [{ serviceCodeId: "m1", qty: 6 }],
 			fieldMaterials: [
 				{ serviceCodeId: "m1", used: 6, returned: 4, source: "WAREHOUSE" },
-				{ serviceCodeId: "m1", used: 4, returned: 0, source: "BRIGADE_STOCK" },
 			],
 		}
-		expect(computeMaterialSignals([split]).discrepancy).toBe(1)
+		expect(computeMaterialSignals([split])).toEqual({ shortage: 0, overage: 0 })
 	})
 
-	it("extra brigade stock on top of a fully used pickup is no discrepancy", () => {
-		const extra = {
+	it("a used quantity that differs from the issued one raises no signal", () => {
+		const doc = {
 			materialsTaken: taken,
-			materialsUsed: [{ serviceCodeId: "m1", qty: 14 }],
-			fieldMaterials: [
-				{ serviceCodeId: "m1", used: 10, returned: 0, source: "WAREHOUSE" },
-				{ serviceCodeId: "m1", used: 4, returned: 0, source: "BRIGADE_STOCK" },
-			],
+			materialsUsed: [{ serviceCodeId: "m1", qty: 3 }],
 		}
-		expect(computeMaterialSignals([extra]).discrepancy).toBe(0)
-	})
-
-	it("a legacy job without the Field table still reads materialsUsed", () => {
-		expect(
-			computeMaterialSignals([{ materialsTaken: taken, materialsUsed: total }])
-				.discrepancy,
-		).toBe(0)
+		expect(computeMaterialSignals([doc])).toEqual({ shortage: 0, overage: 0 })
 	})
 })

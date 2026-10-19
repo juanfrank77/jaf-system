@@ -2,7 +2,14 @@ import path from "node:path"
 import type { ParseKeys } from "i18next"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { data, Form, redirect, useFetcher, useNavigation } from "react-router"
+import {
+	data,
+	Form,
+	redirect,
+	useFetcher,
+	useNavigate,
+	useNavigation,
+} from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import {
 	FieldMaterialsTable,
@@ -17,12 +24,11 @@ import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
 import {
+	billableUsed,
 	exceedsSigned,
 	type FieldMaterialRow,
 	fieldMaterialsOrDefault,
 	parseFieldMaterials,
-	quantityDiscrepancies,
-	usedForFinance,
 } from "~/lib/field-materials"
 import {
 	type AddressCorrection,
@@ -35,6 +41,7 @@ import {
 	validateFile,
 } from "~/lib/file-upload.server"
 import { composeJobAddress } from "~/lib/intake-address"
+import { isBillableSource } from "~/lib/material-source"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import {
@@ -387,21 +394,18 @@ export async function action({ request, params }: Route.ActionArgs) {
 	if (address) Object.assign(update, address)
 
 	const taken = lines(doc.materialsTaken)
-	let discrepancies: ReturnType<typeof quantityDiscrepancies> = []
-	const discrepancyNote =
-		(form.get("discrepancyNote") as string | null)?.trim() || null
 	if (intent === "continue") {
 		rows ??= fieldMaterialsOrDefault(doc.fieldMaterials, taken)
-		// The used ≤ signed-out rule covers WAREHOUSE rows only.
+		// Billable (WAREHOUSE_ISSUE) use cannot exceed what was issued; extra
+		// material is entered under another Source.
 		if (exceedsSigned(taken, rows))
 			return refusal("docs_field.errors.used_exceeds_took")
-		discrepancies = quantityDiscrepancies(taken, rows)
-		if (discrepancies.length > 0 && !discrepancyNote)
-			return refusal("docs_field.errors.discrepancy_note_required")
 	}
 	if (rows) {
+		// Brigade's stock stays in fieldMaterials (tracked), off the billable
+		// lines until Finance rules on it.
 		update.fieldMaterials = rows
-		update.materialsUsed = usedForFinance(rows)
+		update.materialsUsed = billableUsed(rows)
 	}
 
 	// Everything is valid: only now write files.
@@ -446,23 +450,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 						status: { before: doc.status, after: "FIELD_UPDATED" },
 						materialsUsed: update.materialsUsed ?? null,
 					} as Prisma.InputJsonValue,
-				},
-			}),
-		)
-	// Logged once, with the Continue that moves the job to Sign off; a later
-	// Continue from FIELD_UPDATED re-checks the note but adds no second row.
-	if (advances && discrepancies.length > 0)
-		ops.push(
-			db.auditTrail.create({
-				data: {
-					docId: doc.id,
-					userId: user.id,
-					action: "QUANTITY_DISCREPANCY",
-					diffJson: {
-						discrepancies,
-						note: discrepancyNote,
-						blocksFinance: false,
-					},
 				},
 			}),
 		)
@@ -671,6 +658,7 @@ export default function FieldUpdate({
 	} = loaderData
 	const { t } = useTranslation()
 	const navigation = useNavigation()
+	const navigate = useNavigate()
 	const busy = navigation.state !== "idle"
 	const result = actionData as ActionResult
 
@@ -723,8 +711,9 @@ export default function FieldUpdate({
 			name: code?.name ?? r.serviceCodeId,
 			unit: code?.unit ?? null,
 			estimated: estimatedQty.get(r.serviceCodeId) ?? 0,
-			signed:
-				r.source === "WAREHOUSE" ? (signedQty.get(r.serviceCodeId) ?? 0) : 0,
+			signed: isBillableSource(r.source)
+				? (signedQty.get(r.serviceCodeId) ?? 0)
+				: 0,
 		}
 	})
 
@@ -881,7 +870,7 @@ export default function FieldUpdate({
 														type="number"
 														min={0}
 														inputMode="decimal"
-														className="w-20"
+														className="field-required w-20"
 														aria-label={`${t("docs_field.services.actual")} ${r.claroCode}`}
 														value={actuals[r.serviceCodeId] ?? ""}
 														onChange={(e) =>
@@ -942,7 +931,7 @@ export default function FieldUpdate({
 										serviceCodeId: e.target.value,
 										used: 0,
 										returned: 0,
-										source: "BRIGADE_STOCK",
+										source: "TRUCK_STOCK",
 									},
 								])
 							}}
@@ -954,20 +943,6 @@ export default function FieldUpdate({
 								</option>
 							))}
 						</select>
-						<div className="space-y-1">
-							<Label htmlFor="discrepancyNote">
-								{t("docs_field.discrepancy_note_label")}
-							</Label>
-							<Textarea
-								id="discrepancyNote"
-								name="discrepancyNote"
-								rows={2}
-								placeholder={t("docs_field.discrepancy_note_placeholder")}
-							/>
-							<p className="text-xs text-muted-foreground">
-								{t("docs_field.discrepancy_note_hint")}
-							</p>
-						</div>
 					</CardContent>
 				</Card>
 
@@ -998,6 +973,14 @@ export default function FieldUpdate({
 				)}
 
 				<div className="flex flex-wrap gap-2">
+					<Button
+						type="button"
+						variant="ghost"
+						disabled={busy}
+						onClick={() => navigate(-1)}
+					>
+						{t("navigation.back")}
+					</Button>
 					<Button
 						type="submit"
 						name="intent"

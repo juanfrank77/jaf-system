@@ -18,6 +18,15 @@ const WAREHOUSE_STATUSES = [
 	"FIELD_UPDATED",
 ] as const
 
+/**
+ * Old priced JAF invoices (the retired generate_jaf_invoice step). They carry
+ * unit prices and totals, so only the finance-side roles may read them, on
+ * top of the usual per-job check. COMPTROLLER keeps the Finance-level access
+ * it already had here (financeable statuses only).
+ */
+const PRICED_FOLDER = "jaf-invoices/"
+const PRICED_ROLES = ["FINANCE", "ADMIN", "COMPTROLLER"]
+
 /** Upload folders kept per job: `<kind>/<docId>/<file>`. */
 const PER_DOC_FOLDERS = ["photos", "blueprints"]
 
@@ -200,6 +209,16 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		const allowed = await canAccessPayrollRunFile(relativePath, user)
 		if (!allowed) return new Response("Forbidden", { status: 403 })
 	} else {
+		// On the resolved path, so `packets/../jaf-invoices/…` cannot dodge it.
+		const normalized = path
+			.relative(resolvedUploadDir, filePath)
+			.split(path.sep)
+			.join("/")
+		if (
+			normalized.startsWith(PRICED_FOLDER) &&
+			!PRICED_ROLES.includes(user.role)
+		)
+			return new Response("Forbidden", { status: 403 })
 		const docId = extractDocId(relativePath)
 		if (!docId) {
 			return new Response("Forbidden", { status: 403 })

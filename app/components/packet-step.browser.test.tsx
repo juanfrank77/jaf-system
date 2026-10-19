@@ -181,3 +181,26 @@ describe("PacketStepCard send button", () => {
 		).toBeDisabled()
 	})
 })
+
+describe("PacketStepCard materials", () => {
+	it("renders every row, even two uncatalogued codes with no Claro code", async ({
+		renderStub,
+	}) => {
+		const row = (serviceCodeId: string) => ({
+			serviceCodeId,
+			claroCode: "",
+			name: serviceCodeId,
+			unit: null,
+			used: 1,
+			returned: 0,
+			source: "WAREHOUSE_ISSUE" as const,
+		})
+		await mount(
+			renderStub,
+			packet({ materials: [row("x1"), row("x2")] }),
+			async () => null,
+		)
+		expect(await screen.findByText("x1")).toBeInTheDocument()
+		expect(screen.getByText("x2")).toBeInTheDocument()
+	})
+})

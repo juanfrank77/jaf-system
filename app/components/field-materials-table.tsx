@@ -1,9 +1,11 @@
 import { useTranslation } from "react-i18next"
 import { Input } from "~/components/ui/input"
-import type {
-	FieldMaterialRow,
-	FieldMaterialSource,
-} from "~/lib/field-materials"
+import type { FieldMaterialRow } from "~/lib/field-materials"
+import {
+	MATERIAL_SOURCES,
+	type MaterialSource,
+	sourceLabelKey,
+} from "~/lib/material-source"
 
 /** A stored Field row plus what the table shows beside it (never a price). */
 export type FieldMaterialsTableRow = FieldMaterialRow & {
@@ -14,14 +16,6 @@ export type FieldMaterialsTableRow = FieldMaterialRow & {
 	/** Issued at pickup and signed for. */
 	signed: number
 }
-
-const SOURCES: [
-	FieldMaterialSource,
-	"source_warehouse" | "source_brigade_stock",
-][] = [
-	["WAREHOUSE", "source_warehouse"],
-	["BRIGADE_STOCK", "source_brigade_stock"],
-]
 
 function plain(row: FieldMaterialsTableRow): FieldMaterialRow {
 	return {
@@ -98,7 +92,7 @@ export function FieldMaterialsTable({
 									type="number"
 									min={0}
 									inputMode="decimal"
-									className="w-20"
+									className="field-required w-20"
 									aria-label={t("docs_field.materials.used")}
 									value={r.used}
 									onChange={(e) => edit(i, { used: qty(e.target.value) })}
@@ -118,15 +112,15 @@ export function FieldMaterialsTable({
 							<td className="py-1.5">
 								<select
 									aria-label={t("docs_field.materials.source")}
-									className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm"
+									className="field-required h-8 rounded-lg border border-input px-2 text-sm"
 									value={r.source}
 									onChange={(e) =>
-										edit(i, { source: e.target.value as FieldMaterialSource })
+										edit(i, { source: e.target.value as MaterialSource })
 									}
 								>
-									{SOURCES.map(([value, key]) => (
+									{MATERIAL_SOURCES.map((value) => (
 										<option key={value} value={value}>
-											{t(`docs_field.materials.${key}`)}
+											{t(sourceLabelKey(value))}
 										</option>
 									))}
 								</select>

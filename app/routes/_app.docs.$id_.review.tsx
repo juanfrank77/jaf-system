@@ -39,13 +39,14 @@ import {
 	RETENTION_RATE,
 } from "~/lib/contractor-payment.server"
 import { db } from "~/lib/db.server"
-import { fieldMaterialsOrDefault } from "~/lib/field-materials"
+import { packetMaterialRows } from "~/lib/field-materials"
 import type { AddressCorrection } from "~/lib/field-update-helpers"
 import {
 	uploadFileName,
 	validateBlueprintFile,
 	validateFile,
 } from "~/lib/file-upload.server"
+import { invoiceNumberFor } from "~/lib/invoice-number"
 import { openJobLabel } from "~/lib/open-job-label"
 import { sendPacket } from "~/lib/packet-send.server"
 import { generatePreCertSheetPdf } from "~/lib/pdf/pre-cert-sheet.server"
@@ -84,7 +85,7 @@ import {
 	getAvisoAmountTolerance,
 	getIvuRate,
 } from "~/lib/system-settings.server"
-import { uploadHref } from "~/lib/upload-href"
+import { isLegacyPricedInvoice, uploadHref } from "~/lib/upload-href"
 import { photosThatLoad, saveBuffer, saveUpload } from "~/lib/uploads.server"
 import { formatMoney, toNumberPrice } from "~/lib/utils"
 import type { PreCertSheet, Prisma } from "../../generated/prisma/client"
@@ -156,11 +157,6 @@ const AVISO_PDF_ERROR_KEYS = {
 
 const showPricesFor = (role: string) => !isPriceBlind(role)
 
-const invoiceNumberFor = (doc: {
-	avisoNumber: string | null
-	controlNumber: string
-}) => `M2026-${doc.avisoNumber ?? doc.controlNumber}`
-
 const isSig = (v: unknown) =>
 	typeof v === "string" && v.startsWith("data:image") && v !== "data:,"
 
@@ -205,6 +201,8 @@ function withoutPrices<T extends Record<string, unknown>>(doc: T): T {
 		avisoLines: linesWithoutPrices(doc.avisoLines),
 	}
 	for (const k of MONEY_COLUMNS) delete out[k]
+	// An old priced JAF invoice (jaf-invoices/) is a price document too.
+	if (isLegacyPricedInvoice(doc.jafInvoicePdfPath)) out.jafInvoicePdfPath = null
 	return out as T
 }
 
@@ -225,7 +223,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			...(doc.completedById ? [doc.completedById] : []),
 		]),
 	]
-	const materialRows = fieldMaterialsOrDefault(
+	// The packet preview lists what the packet PDF does (no brigade's stock).
+	const materialRows = packetMaterialRows(
 		doc.fieldMaterials,
 		(doc.materialsTaken as MaterialLine[] | null) ?? [],
 	)
@@ -402,9 +401,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		},
 		prefieldMissing: claro?.requiresPrefield ? prefieldMissing(doc) : [],
 		blockers,
-		packetHref: doc.jafInvoicePdfPath
-			? uploadHref(doc.jafInvoicePdfPath)
-			: null,
+		// Only a real packet: a legacy priced invoice in jaf-invoices/ is not one.
+		packetHref:
+			doc.jafInvoicePdfPath && !isLegacyPricedInvoice(doc.jafInvoicePdfPath)
+				? uploadHref(doc.jafInvoicePdfPath)
+				: null,
 		blueprints: doc.blueprintPaths.map((p) => {
 			const name = path.basename(p)
 			return {
@@ -415,6 +416,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		materials: materialRows.map((r) => {
 			const code = codeById.get(r.serviceCodeId)
 			return {
+				serviceCodeId: r.serviceCodeId,
 				claroCode: code?.claroCode ?? "",
 				name: code?.name ?? r.serviceCodeId,
 				unit: code?.unit ?? null,

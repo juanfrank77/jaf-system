@@ -11,12 +11,10 @@ export function ServiceLinesTable({
 	lines,
 	installed,
 	editableName,
-	showDifference,
 }: {
 	lines: ServiceLine[]
 	installed?: ServiceLine[]
 	editableName?: string
-	showDifference?: boolean
 }) {
 	const { t } = useTranslation()
 	const initial = lines.map((l) => ({
@@ -31,9 +29,8 @@ export function ServiceLinesTable({
 	}
 
 	if (editableName) {
-		// Phone layout: one row per service, code under the name, a thumb-sized
-		// stepper for the installed quantity and an amber "+N / -N" when it
-		// differs from what was ordered. No horizontal scroll.
+		// Phone layout: one row per service, code under the name and a
+		// thumb-sized stepper for the installed quantity. No horizontal scroll.
 		return (
 			<div>
 				<input type="hidden" name={editableName} value={JSON.stringify(rows)} />
@@ -43,7 +40,6 @@ export function ServiceLinesTable({
 				</div>
 				<ul>
 					{lines.map((l, i) => {
-						const diff = rows[i].qty - l.qty
 						return (
 							<li
 								key={l.serviceCodeId}
@@ -56,18 +52,12 @@ export function ServiceLinesTable({
 									</p>
 									<p className="text-xs text-muted-foreground">
 										{t("service_picker.col_ordered")}: {l.qty}
-										{diff !== 0 && (
-											<span className="ml-2 rounded bg-status-warn-soft px-1.5 py-0.5 font-medium text-status-warn">
-												{diff > 0 ? `+${diff}` : diff}
-											</span>
-										)}
 									</p>
 								</div>
 								<QtyStepper
 									value={rows[i].qty}
 									onChange={(qty) => updateQty(i, qty)}
 									label={l.name}
-									invalid={diff !== 0}
 								/>
 							</li>
 						)
@@ -90,11 +80,6 @@ export function ServiceLinesTable({
 						<th className="py-1 text-right">
 							{t("service_picker.col_installed")}
 						</th>
-						{showDifference && (
-							<th className="py-1 text-right">
-								{t("service_picker.col_difference")}
-							</th>
-						)}
 					</tr>
 				</thead>
 				<tbody>
@@ -102,24 +87,12 @@ export function ServiceLinesTable({
 						const installedQty = installed?.find(
 							(x) => x.serviceCodeId === l.serviceCodeId,
 						)?.qty
-						const diff = installedQty === undefined ? 0 : installedQty - l.qty
 						return (
 							<tr key={l.serviceCodeId} className="border-b last:border-0">
 								<td className="py-1 font-mono text-xs">{l.claroCode}</td>
 								<td className="py-1">{l.name}</td>
 								<td className="py-1 text-right">{l.qty}</td>
 								<td className="py-1 text-right">{installedQty ?? "—"}</td>
-								{showDifference && (
-									<td
-										className={
-											diff === 0
-												? "py-1 text-right text-status-ok"
-												: "py-1 text-right font-medium text-status-warn"
-										}
-									>
-										{diff === 0 ? "—" : diff > 0 ? `+${diff}` : diff}
-									</td>
-								)}
 							</tr>
 						)
 					})}

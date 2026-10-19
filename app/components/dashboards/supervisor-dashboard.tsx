@@ -27,7 +27,6 @@ type QueueRow = {
 	note?: string | null
 	/** When the job entered this queue (submitted / returned / approved). */
 	since: Date | string | null
-	qtyDiscrepancy: boolean
 	blockReason?: "aviso_mismatch" | "billing_aviso_pdf"
 	waitingOn?: WaitingOn
 	/** The finer chip label (`openJobLabel`); falls back to the stage label. */
@@ -78,7 +77,6 @@ const TILE_TONE: Partial<Record<string, StatTone>> = {
 	"dashboard.stat.stage_awaiting_crew": "info",
 	"dashboard.stat.stage_pending_review": "warn",
 	"dashboard.stat.stage_in_finance": "ok",
-	"dashboard.stat.discrepancy_count": "warn",
 	"dashboard.stat.shortage_count": "flag",
 	"dashboard.stat.overage_count": "warn",
 }
@@ -157,11 +155,6 @@ function Queue({
 									<span className="block text-xs text-muted-foreground">
 										{t(`dashboard.since.${since}`, { ago: ago(t, r.since) })}
 									</span>
-								) : null}
-								{r.qtyDiscrepancy ? (
-									<Badge variant="warn" className="mt-1 text-xs">
-										{t("dashboard.signal.discrepancy")}
-									</Badge>
 								) : null}
 								{r.waitingOn ? (
 									<span className="block text-xs text-muted-foreground">

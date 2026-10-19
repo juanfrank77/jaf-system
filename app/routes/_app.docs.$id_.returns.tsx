@@ -146,7 +146,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 	const returnWarehouseId = String(form.get("returnWarehouseId") ?? "").trim()
 	const idempotencyKey = String(form.get("idempotencyKey") ?? "").trim()
-	const discrepancyNote = String(form.get("discrepancyNote") ?? "").trim()
+	const returnNote = String(form.get("returnNote") ?? "").trim()
 
 	if (!returnWarehouseId) {
 		return { errorKey: "docs_returns.errors.warehouse_required" as const }
@@ -214,23 +214,18 @@ export async function action({ request, params }: Route.ActionArgs) {
 		}
 	}
 
-	// The shortfall check runs against the AUTHORITATIVE expected-back set
-	// recomputed from the doc (taken − used), not against whatever subset of
-	// lines the client chose to submit: omitting a line entirely used to skip
-	// both its RETURN credit and its note requirement. A missing line counts as
-	// a full shortfall.
+	// Recorded against the AUTHORITATIVE expected-back set recomputed from the
+	// doc (taken − used). Coming back short is normal (crews need not return
+	// leftovers right away), so it is recorded, never warned about.
 	const receivedMap = new Map<string, number>()
 	for (const l of lines) receivedMap.set(l.serviceCodeId, l.received)
 	const expectedLines = computeExpectedBackLines(taken, materialsUsed)
-	const anyShort = expectedLines.some(
-		(e) => (receivedMap.get(e.serviceCodeId) ?? 0) < e.expectedBack,
-	)
 	// A LOST or DAMAGED serialized unit is real shrinkage (spec §7) — a
-	// reasonable auditor expects a recorded reason, so it requires a note too.
+	// reasonable auditor expects a recorded reason, so it requires a note.
 	const anySerialLoss = serialLines.some(
 		(s) => s.reason === "LOST" || s.reason === "DAMAGED",
 	)
-	if ((anyShort || anySerialLoss) && !discrepancyNote) {
+	if (anySerialLoss && !returnNote) {
 		return { errorKey: "returns.note_required" as const }
 	}
 
@@ -306,7 +301,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 						warehouseId: returnWarehouseId,
 						byUserId: user.id,
 						refDocId: params.id,
-						note: `LOST${discrepancyNote ? `: ${discrepancyNote}` : ""}`,
+						note: `LOST${returnNote ? `: ${returnNote}` : ""}`,
 					},
 				})
 			}
@@ -351,7 +346,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 					returnWarehouseId,
 					lines,
 					serialLines,
-					discrepancyNote: discrepancyNote || null,
+					returnNote: returnNote || null,
 				} as unknown as Prisma.InputJsonValue,
 			},
 		})

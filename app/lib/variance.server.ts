@@ -1,4 +1,6 @@
-type Signals = { overage: number; shortage: number; discrepancy: number }
+import { installedLines } from "./field-materials"
+
+type Signals = { overage: number; shortage: number }
 
 type MaterialLine = { serviceCodeId: string; qty: number }
 
@@ -22,10 +24,14 @@ export function buildVarianceLines(doc: {
 	estimatedMaterials?: unknown
 	materialsTaken?: unknown
 	materialsUsed?: unknown
+	fieldMaterials?: unknown
 }): VarianceLine[] {
 	const ordered = toMaterialLines(doc.estimatedMaterials)
 	const taken = toMaterialLines(doc.materialsTaken)
-	const used = toMaterialLines(doc.materialsUsed)
+	// Installed includes the brigade's own stock (tracked, not billed).
+	const used = toMaterialLines(
+		installedLines(doc.fieldMaterials, doc.materialsUsed),
+	)
 
 	const orderedMap = new Map(ordered.map((l) => [l.serviceCodeId, l.qty]))
 	const takenMap = new Map(taken.map((l) => [l.serviceCodeId, l.qty]))
@@ -62,7 +68,7 @@ export type VarianceRow = {
 	docId: string
 	claroOrderNo: string
 	brigade: string
-	kinds: ("overage" | "discrepancy" | "shortage")[]
+	kinds: ("overage" | "shortage")[]
 	lines: VarianceLine[]
 }
 
@@ -83,7 +89,7 @@ export function collectVariance(
 	}[],
 ): VarianceRow[] {
 	return docs.flatMap((d) => {
-		const kinds = (["overage", "discrepancy", "shortage"] as const).filter(
+		const kinds = (["overage", "shortage"] as const).filter(
 			(k) => d.signals[k] > 0,
 		)
 		return kinds.length

@@ -183,14 +183,13 @@ const statKeys = [
 	"stage_awaiting_crew",
 	"stage_pending_review",
 	"stage_in_finance",
-	"discrepancy_count",
 	"shortage_count",
 	"overage_count",
 	"aging_oldest_days",
 	"aging_po_wait_count",
 	"aging_claro_wait_count",
 ] as const
-const fourteenStats = statKeys.map((k, i) => ({
+const thirteenStats = statKeys.map((k, i) => ({
 	labelKey: `dashboard.stat.${k}` as const,
 	value: i,
 }))
@@ -204,7 +203,6 @@ const queueRow = (o: Record<string, unknown> = {}) => ({
 	stage: "APPROVE" as const,
 	note: null,
 	since: null,
-	qtyDiscrepancy: false,
 	...o,
 })
 
@@ -218,13 +216,13 @@ describe("SupervisorDashboard", () => {
 			<RoleDashboard
 				{...supervisor}
 				{...base}
-				stats={fourteenStats}
+				stats={thirteenStats}
 				supervisorScope={{ areas: ["CENTRAL"], brigadeCount: 4 }}
 				{...props}
 			/>,
 		)
 
-	it("shows six working tiles and folds the ten accounting metrics", async ({
+	it("shows six working tiles and folds the nine accounting metrics", async ({
 		renderStub,
 	}) => {
 		await mountSupervisor(renderStub, {
@@ -241,7 +239,7 @@ describe("SupervisorDashboard", () => {
 			"2",
 		)
 		const fold = screen.getByTestId("more-metrics")
-		expect(fold.querySelectorAll('[data-slot="stat"]')).toHaveLength(10)
+		expect(fold.querySelectorAll('[data-slot="stat"]')).toHaveLength(9)
 		expect(fold.tagName).toBe("DETAILS")
 		expect(fold).not.toHaveAttribute("open")
 		expect(within(fold).getByText("Oldest open (days)")).toBeInTheDocument()
@@ -384,7 +382,7 @@ describe("SupervisorDashboard", () => {
 		expect(screen.queryByRole("searchbox")).not.toBeInTheDocument()
 	})
 
-	it("shows how long a row has been waiting and flags quantity discrepancies", async ({
+	it("shows how long a row has been waiting and never flags quantity differences", async ({
 		renderStub,
 	}) => {
 		const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000)
@@ -392,12 +390,12 @@ describe("SupervisorDashboard", () => {
 		await mountSupervisor(renderStub, {
 			supervisorQueues: {
 				...emptyQueues,
-				pendingReview: [queueRow({ since: twoHoursAgo, qtyDiscrepancy: true })],
+				pendingReview: [queueRow({ since: twoHoursAgo })],
 				approved: [queueRow({ id: "a", stage: "INVOICE", since: oneDayAgo })],
 			},
 		})
 		expect(screen.getByText("Submitted 2h ago")).toBeInTheDocument()
 		expect(screen.getByText("Signed off 1d ago")).toBeInTheDocument()
-		expect(screen.getByText("Qty discrepancy")).toBeInTheDocument()
+		expect(screen.queryByText("Qty discrepancy")).not.toBeInTheDocument()
 	})
 })

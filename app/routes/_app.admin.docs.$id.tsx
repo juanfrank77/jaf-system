@@ -1,16 +1,18 @@
 import type { ComponentProps } from "react"
 import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
+import { BrigadeStockTracked } from "~/components/brigade-stock-tracked"
 import { DocStageBadge } from "~/components/doc-stage-badge"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { buttonVariants } from "~/components/ui/button"
+import { brigadeStockFor } from "~/lib/brigade-stock.server"
 import { db } from "~/lib/db.server"
 import { openJobLabel } from "~/lib/open-job-label"
 import { packetSentSummary } from "~/lib/packet-audit"
 import { requireRole } from "~/lib/permissions.server"
 import { deriveSupervisorStage } from "~/lib/supervisor-stage"
-import { uploadHref } from "~/lib/upload-href"
+import { storedPdfLinks } from "~/lib/upload-href"
 import { formatMoney, toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.admin.docs.$id"
 
@@ -97,6 +99,14 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			...c,
 			unitPrice: toNumberPrice(c.unitPrice),
 		})),
+		// The stored file is the price-free Claro packet; the priced JAF invoice
+		// is rendered on demand once the packet was sent.
+		...storedPdfLinks(doc.jafInvoicePdfPath),
+		pricedInvoiceHref: doc.jafInvoiceGeneratedAt
+			? `/finance/verify/${doc.id}/invoice.pdf`
+			: null,
+		// Tracked, not billed (provisional ruling).
+		brigadeStock: await brigadeStockFor(doc.fieldMaterials),
 	}
 }
 
@@ -116,8 +126,18 @@ function actionSummary(action: string, diffJson: AuditDiff): string {
 }
 
 export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
-	const { doc, stage, openLabel, sendBack, peopleMap, serviceCodes } =
-		loaderData
+	const {
+		doc,
+		stage,
+		openLabel,
+		sendBack,
+		peopleMap,
+		serviceCodes,
+		packetHref,
+		legacyPricedHref,
+		pricedInvoiceHref,
+		brigadeStock,
+	} = loaderData
 	const t = useTranslation().t
 	const name = (id?: string | null) => (id ? (peopleMap[id]?.name ?? id) : "—")
 	const estimated = (doc.estimatedMaterials as unknown as MaterialLine[]) || []
@@ -357,6 +377,8 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 				</section>
 			)}
 
+			<BrigadeStockTracked lines={brigadeStock} />
+
 			<section className="bg-card border rounded-lg p-4">
 				<h2 className="text-sm font-semibold text-foreground mb-2">
 					{t("admin_history.documents_heading")}
@@ -372,13 +394,27 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 							</a>
 						</li>
 					)}
-					{doc.jafInvoicePdfPath && (
+					{pricedInvoiceHref && (
 						<li>
 							<a
-								href={uploadHref(doc.jafInvoicePdfPath)}
+								href={pricedInvoiceHref}
 								className="text-accent-text underline"
 							>
-								{t("admin_history.jaf_invoice")}
+								{t("admin_history.jaf_invoice_priced")}
+							</a>
+						</li>
+					)}
+					{packetHref && (
+						<li>
+							<a href={packetHref} className="text-accent-text underline">
+								{t("admin_history.claro_packet")}
+							</a>
+						</li>
+					)}
+					{legacyPricedHref && (
+						<li>
+							<a href={legacyPricedHref} className="text-accent-text underline">
+								{t("admin_history.jaf_invoice_priced_legacy")}
 							</a>
 						</li>
 					)}

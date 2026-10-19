@@ -45,7 +45,6 @@ vi.mock("~/lib/uploads.server", () => ({
 }))
 
 import { db } from "~/lib/db.server"
-import { usedForFinance } from "~/lib/field-materials"
 import { composeJobAddress } from "~/lib/intake-address"
 import { requireRole } from "~/lib/permissions.server"
 import { getActiveMaterialCodes } from "~/lib/service-codes.server"
@@ -177,9 +176,9 @@ beforeEach(() => {
 
 describe("POST /docs/:id/field — save", () => {
 	const rows = [
-		{ serviceCodeId: "sc-1", used: 3, returned: 2, source: "WAREHOUSE" },
-		{ serviceCodeId: "sc-2", used: 1, returned: 0, source: "BRIGADE_STOCK" },
-		{ serviceCodeId: "sc-3", used: 0, returned: 0, source: "WAREHOUSE" },
+		{ serviceCodeId: "sc-1", used: 3, returned: 2, source: "WAREHOUSE_ISSUE" },
+		{ serviceCodeId: "sc-2", used: 1, returned: 0, source: "TRUCK_STOCK" },
+		{ serviceCodeId: "sc-3", used: 0, returned: 0, source: "WAREHOUSE_ISSUE" },
 	] as const
 
 	function fullSave() {
@@ -224,12 +223,34 @@ describe("POST /docs/:id/field — save", () => {
 		expect(data).not.toHaveProperty("status")
 		expect(data.fieldStartedAt).toBeInstanceOf(Date)
 		expect(data.fieldMaterials).toEqual(rows)
-		expect(data.materialsUsed).toEqual(usedForFinance([...rows]))
+		// Brigade's stock (sc-2) is tracked in fieldMaterials, never billed.
+		expect(data.materialsUsed).toEqual([{ serviceCodeId: "sc-1", qty: 3 }])
 		expect(data.blueprintPaths).toEqual([
 			"/uploads/blueprints/doc-1/intake.pdf",
 			expect.stringMatching(/^\/uploads\/blueprints\/doc-1\/.*plan\.pdf$/),
 		])
 		expect(db.notification.create).not.toHaveBeenCalled()
+	})
+
+	it("6 from the warehouse + 4 from brigade's stock bills 6 and tracks both", async () => {
+		as("SUPERVISOR")
+		withDoc({ materialsTaken: [{ serviceCodeId: "sc-1", qty: 10 }] })
+		const split = [
+			{
+				serviceCodeId: "sc-1",
+				used: 6,
+				returned: 4,
+				source: "WAREHOUSE_ISSUE",
+			},
+			{ serviceCodeId: "sc-1", used: 4, returned: 0, source: "TRUCK_STOCK" },
+		]
+		const form = new FormData()
+		form.set("intent", "save")
+		form.set("fieldMaterials", JSON.stringify(split))
+		expect(await run(form)).toEqual({ ok: true })
+		const { data } = lastUpdate()
+		expect(data.materialsUsed).toEqual([{ serviceCodeId: "sc-1", qty: 6 }])
+		expect(data.fieldMaterials).toEqual(split)
 	})
 
 	it("a changed Dirección 1 updates the Aviso address columns, recomputes the job address and logs the correction", async () => {
@@ -340,7 +361,12 @@ describe("POST /docs/:id/field — save", () => {
 		form.set(
 			"fieldMaterials",
 			JSON.stringify([
-				{ serviceCodeId: "sc-1", used: 9, returned: 0, source: "WAREHOUSE" },
+				{
+					serviceCodeId: "sc-1",
+					used: 9,
+					returned: 0,
+					source: "WAREHOUSE_ISSUE",
+				},
 			]),
 		)
 		expect(await run(form)).toEqual({ ok: true })
@@ -443,7 +469,12 @@ describe("POST /docs/:id/field — continue", () => {
 		withDoc()
 		const res = await run(
 			cont([
-				{ serviceCodeId: "sc-1", used: 6, returned: 0, source: "WAREHOUSE" },
+				{
+					serviceCodeId: "sc-1",
+					used: 6,
+					returned: 0,
+					source: "WAREHOUSE_ISSUE",
+				},
 			]),
 		)
 		expect(res).toEqual({ errorKey: "docs_field.errors.used_exceeds_took" })
@@ -456,37 +487,33 @@ describe("POST /docs/:id/field — continue", () => {
 		withDoc()
 		const res = await run(
 			cont([
-				{ serviceCodeId: "sc-1", used: 5, returned: 0, source: "WAREHOUSE" },
+				{
+					serviceCodeId: "sc-1",
+					used: 5,
+					returned: 0,
+					source: "WAREHOUSE_ISSUE",
+				},
 				{
 					serviceCodeId: "sc-9",
 					used: 7,
 					returned: 0,
-					source: "BRIGADE_STOCK",
+					source: "TRUCK_STOCK",
 				},
 			]),
 		)
 		expect(res.status).toBe(302)
 	})
 
-	it("requires a discrepancy note when quantities differ", async () => {
-		as("SUPERVISOR")
-		withDoc()
-		const res = await run(
-			cont([
-				{ serviceCodeId: "sc-1", used: 3, returned: 2, source: "WAREHOUSE" },
-			]),
-		)
-		expect(res).toEqual({
-			errorKey: "docs_field.errors.discrepancy_note_required",
-		})
-		expect(db.jafInvoice.update).not.toHaveBeenCalled()
-	})
-
 	it("validates the stored table when the post carries none", async () => {
 		as("SUPERVISOR")
 		withDoc({
 			fieldMaterials: [
-				{ serviceCodeId: "sc-1", used: 8, returned: 0, source: "WAREHOUSE" },
+				{
+					serviceCodeId: "sc-1",
+					used: 8,
+					returned: 0,
+					source: "WAREHOUSE_ISSUE",
+				},
 			],
 		})
 		const form = new FormData()
@@ -496,42 +523,25 @@ describe("POST /docs/:id/field — continue", () => {
 		})
 	})
 
-	it("with a note, logs the discrepancy and advances", async () => {
+	it("continues without a note when used differs from issued, and logs no discrepancy", async () => {
 		as("SUPERVISOR")
 		withDoc()
 		const res = await run(
-			cont(
-				[{ serviceCodeId: "sc-1", used: 3, returned: 2, source: "WAREHOUSE" }],
-				(f) => f.set("discrepancyNote", "Two came back unused"),
-			),
-		)
-		expect(res.status).toBe(302)
-		const audit = vi
-			.mocked(db.auditTrail.create)
-			.mock.calls.find(
-				(c) => (c[0] as any).data.action === "QUANTITY_DISCREPANCY",
-			)
-		expect((audit as any)[0].data.diffJson).toMatchObject({
-			note: "Two came back unused",
-			blocksFinance: false,
-		})
-	})
-
-	it("a second Continue, once already at Sign off, logs no second discrepancy", async () => {
-		as("SUPERVISOR")
-		withDoc({ status: "FIELD_UPDATED" })
-		const res = await run(
-			cont(
-				[{ serviceCodeId: "sc-1", used: 3, returned: 2, source: "WAREHOUSE" }],
-				(f) => f.set("discrepancyNote", "Two came back unused"),
-			),
+			cont([
+				{
+					serviceCodeId: "sc-1",
+					used: 3,
+					returned: 2,
+					source: "WAREHOUSE_ISSUE",
+				},
+			]),
 		)
 		expect(res.status).toBe(302)
 		const actions = vi
 			.mocked(db.auditTrail.create)
 			.mock.calls.map((c) => (c[0] as any).data.action)
+		expect(actions).toContain("STATUS_CHANGED")
 		expect(actions).not.toContain("QUANTITY_DISCREPANCY")
-		expect(actions).not.toContain("STATUS_CHANGED")
 	})
 
 	it("advances SIGNED → FIELD_UPDATED without a signature, a crew notification or the blueprint", async () => {
@@ -546,7 +556,12 @@ describe("POST /docs/:id/field — continue", () => {
 		})
 		const res = await run(
 			cont([
-				{ serviceCodeId: "sc-1", used: 5, returned: 0, source: "WAREHOUSE" },
+				{
+					serviceCodeId: "sc-1",
+					used: 5,
+					returned: 0,
+					source: "WAREHOUSE_ISSUE",
+				},
 			]),
 		)
 		expect(res.status).toBe(302)
@@ -573,7 +588,12 @@ describe("POST /docs/:id/field — continue", () => {
 		withDoc({ status: "FIELD_UPDATED" })
 		const res = await run(
 			cont([
-				{ serviceCodeId: "sc-1", used: 5, returned: 0, source: "WAREHOUSE" },
+				{
+					serviceCodeId: "sc-1",
+					used: 5,
+					returned: 0,
+					source: "WAREHOUSE_ISSUE",
+				},
 			]),
 		)
 		expect(res.status).toBe(302)
@@ -681,7 +701,12 @@ describe("/docs/:id/field — access", () => {
 		form.set(
 			"fieldMaterials",
 			JSON.stringify([
-				{ serviceCodeId: "sc-1", used: 5, returned: 0, source: "WAREHOUSE" },
+				{
+					serviceCodeId: "sc-1",
+					used: 5,
+					returned: 0,
+					source: "WAREHOUSE_ISSUE",
+				},
 			]),
 		)
 		const res = await run(form)
@@ -748,7 +773,12 @@ describe("GET /docs/:id/field", () => {
 			AFTER: [{ id: "p3", src: "/files/photos/doc-1/c.jpg" }],
 		})
 		expect(res.fieldMaterials).toEqual([
-			{ serviceCodeId: "sc-1", used: 5, returned: 0, source: "WAREHOUSE" },
+			{
+				serviceCodeId: "sc-1",
+				used: 5,
+				returned: 0,
+				source: "WAREHOUSE_ISSUE",
+			},
 		])
 		expect(res.services).toEqual({
 			rows: [
@@ -799,7 +829,12 @@ describe("GET /docs/:id/field", () => {
 	it("returns stored materials rows and the names of whoever edited the address", async () => {
 		as("SUPERVISOR")
 		const stored = [
-			{ serviceCodeId: "sc-1", used: 2, returned: 3, source: "WAREHOUSE" },
+			{
+				serviceCodeId: "sc-1",
+				used: 2,
+				returned: 3,
+				source: "WAREHOUSE_ISSUE",
+			},
 		]
 		withDoc({
 			fieldMaterials: stored,

@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Pill } from "~/components/ui/pill"
+import { type MaterialSource, sourceLabelKey } from "~/lib/material-source"
 import type { PacketSendOutcome } from "../../generated/prisma/client"
 
 type PrefieldField =
@@ -52,12 +53,13 @@ export type PacketStepData = {
 	packetHref: string | null
 	blueprints: { name: string; href: string }[]
 	materials: {
+		serviceCodeId: string
 		claroCode: string
 		name: string
 		unit: string | null
 		used: number
 		returned: number
-		source: "WAREHOUSE" | "BRIGADE_STOCK"
+		source: MaterialSource
 	}[]
 	/** Newest first. */
 	history: {
@@ -384,7 +386,7 @@ export function PacketStepCard({
 							<tbody className="tabular-nums">
 								{packet.materials.map((m) => (
 									<tr
-										key={`${m.claroCode}-${m.source}`}
+										key={`${m.serviceCodeId}-${m.source}`}
 										className="border-b last:border-0"
 									>
 										<td className="py-1.5 font-mono text-xs">{m.claroCode}</td>
@@ -394,7 +396,7 @@ export function PacketStepCard({
 										</td>
 										<td className="py-1.5 text-right">{m.returned}</td>
 										<td className="py-1.5 text-xs">
-											{t(`packet.source.${m.source}`)}
+											{t(sourceLabelKey(m.source))}
 										</td>
 									</tr>
 								))}

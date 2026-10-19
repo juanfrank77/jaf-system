@@ -96,7 +96,7 @@ function as(user: Seeded) {
 	})
 }
 
-function post(docId: string, fields: Record<string, string>) {
+function post(docId: string, fields: Record<string, string | File>) {
 	const form = new FormData()
 	for (const [k, v] of Object.entries(fields)) form.set(k, v)
 	return new Request(`http://localhost/docs/${docId}/review`, {
@@ -105,7 +105,7 @@ function post(docId: string, fields: Record<string, string>) {
 	})
 }
 
-async function run(docId: string, fields: Record<string, string>) {
+async function run(docId: string, fields: Record<string, string | File>) {
 	try {
 		return await action({
 			request: post(docId, fields),
@@ -262,6 +262,37 @@ describe("review: save_prefield", { timeout: HOOK_TIMEOUT }, () => {
 		})
 		expect(after.claroSupervisorId).toBe(retired.id)
 		expect(after.ordenNumber).toBe("1")
+	})
+
+	it("adds a blueprint when the Claro supervisor requires one, and refuses a bad file", async () => {
+		const claro = await seedClaro({ requiresBlueprint: true })
+		const doc = await seedDoc({ claroSupervisorId: claro.id })
+		as(sup)
+		expect((await load(doc.id)).packet.blockers).toEqual(["blueprint"])
+
+		expect(
+			await run(doc.id, {
+				intent: "save_prefield",
+				claroSupervisorId: claro.id,
+				blueprint: new File(["x"], "plano.exe", {
+					type: "application/octet-stream",
+				}),
+			}),
+		).toEqual({ errorKey: "docs_field.errors.blueprint_invalid" })
+
+		await run(doc.id, {
+			intent: "save_prefield",
+			claroSupervisorId: claro.id,
+			blueprint: new File(["%PDF-1.4"], "plano 1.pdf", {
+				type: "application/pdf",
+			}),
+		})
+		const after = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: doc.id },
+		})
+		expect(after.blueprintPaths).toHaveLength(1)
+		expect(after.blueprintPaths[0]).toMatch(/plano_1\.pdf$/)
+		expect((await load(doc.id)).packet.blockers).toEqual([])
 	})
 
 	it("is refused after the first send", async () => {

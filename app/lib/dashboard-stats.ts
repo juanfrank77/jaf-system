@@ -1,4 +1,5 @@
 import type { DocStatus, Role } from "../../generated/prisma/client"
+import { warehouseUsedLines } from "./field-materials"
 
 type MaterialLine = { serviceCodeId: string; qty: number }
 
@@ -12,6 +13,7 @@ type DashboardDoc = {
 	estimatedMaterials?: unknown
 	materialsTaken?: unknown
 	materialsUsed?: unknown
+	fieldMaterials?: unknown
 	avisoNumber?: string | null
 	claroUploadedAt?: Date | null
 	pbccRequestSentAt?: Date | null
@@ -33,7 +35,6 @@ export type DashboardStatLabelKey =
 	| "dashboard.stat.open_jobs"
 	| "dashboard.stat.awaiting_close"
 	| "dashboard.stat.ready_for_pickup"
-	| "dashboard.stat.sent_back"
 	| "dashboard.stat.total_documents"
 	| "dashboard.stat.open_receivables"
 	| "dashboard.stat.awaiting_claro_upload"
@@ -182,6 +183,7 @@ export function computeMaterialSignals(
 		| "estimatedMaterials"
 		| "materialsTaken"
 		| "materialsUsed"
+		| "fieldMaterials"
 		| "materialsReturned"
 	>[],
 ) {
@@ -191,7 +193,11 @@ export function computeMaterialSignals(
 	for (const doc of docs) {
 		const estimated = toLines(doc.estimatedMaterials)
 		const taken = toLines(doc.materialsTaken)
-		const used = toLines(doc.materialsUsed)
+		// Signed out vs used from that stock: the brigade's own stock never
+		// left the warehouse, so it is not a discrepancy.
+		const used = toLines(
+			warehouseUsedLines(doc.fieldMaterials, doc.materialsUsed),
+		)
 		const returned = Array.isArray(doc.materialsReturned)
 			? (doc.materialsReturned as Record<string, unknown>[])
 			: []

@@ -512,8 +512,8 @@
 		"return_note_placeholder": "Describe cualquier faltante, daño o problema de reabastecimiento...",
 		"add_line": "+ Agregar línea",
 		"submit": "Guardar devoluciones",
-		"crew_reported_hint": "La cuadrilla reportó {{usedQty}} usados; se espera devolver {{expectedReturnQty}}.",
-		"discrepancy_warning": "La cantidad devuelta difiere del uso reportado por la cuadrilla.",
+		"crew_reported_hint": "Informe de campo: {{usedQty}} usado del almacén; devolución esperada: {{expectedReturnQty}}.",
+		"discrepancy_warning": "La cantidad devuelta difiere de lo usado según el informe de campo.",
 		"warehouse_label": "Devolver al almacén",
 		"warehouse_policy_unconfirmed": "Se permite devolver a un almacén distinto al de retiro, pero la política para esto no está confirmada.",
 		"serial_lines_heading": "Devoluciones serializadas",
@@ -542,12 +542,12 @@
 		"already_recorded_notice": "Las devoluciones ya fueron registradas para este documento. No se pueden registrar otra vez.",
 		"status_pill": "Se espera de vuelta",
 		"callout_title": "Devolución · Tú",
-		"callout_body": "La cuadrilla dijo qué usó; el sistema calculó lo que debe regresar. Cuenta lo que realmente llegó. Lo que falte lleva una nota.",
+		"callout_body": "El informe de campo del supervisor dice qué se usó del material del almacén; el sistema calculó lo que debe regresar. Cuenta lo que realmente llegó. Lo que falte lleva una nota.",
 		"submit_confirm": "Confirmar devolución",
 		"submit_discrepancy_one": "Confirmar devolución · {{count}} discrepancia registrada",
 		"submit_discrepancy_other": "Confirmar devolución · {{count}} discrepancias registradas",
 		"invoice_note_title": "La cantidad facturada nunca cambia aquí.",
-		"invoice_note_body": "Lo \"usado\" por la cuadrilla es lo que el supervisor factura. Esta pantalla solo registra si el almacén recuperó su material."
+		"invoice_note_body": "Las cantidades \"usadas\" vienen del paso de Campo del supervisor y son las que van a Claro. Esta pantalla solo registra si el almacén recuperó su material."
 	},
 	"returns": {
 		"note_required": "Se requiere una nota cuando lo recibido es menor a lo esperado, o cuando una unidad serializada se pierde o daña."
@@ -633,7 +633,7 @@
 		"materials_used_label": "Materiales utilizados",
 		"materials_used_hint": "No puede exceder lo entregado en el almacén.",
 		"services_performed_label": "Servicios realizados",
-		"services_performed_hint": "Cantidad instalada por código de servicio. La factura JAF y la hoja de pre-certificación se generan de esta columna.",
+		"services_performed_hint": "Cantidad instalada por código de servicio, según se la informó la brigada. El paquete para Claro y la hoja de pre-certificación se generan de esta columna.",
 		"taken_reference_label": "Retirado (firmado)",
 		"used_entry_label": "Instalado",
 		"ordered_vs_installed_hint": "La diferencia entre pedido e instalado es solo informativa.",
@@ -772,7 +772,7 @@
 			"send_back_note_required": "Se requiere una nota explicando la devolución.",
 			"back_note_required": "Escriba una nota con lo que está mal.",
 			"installed_lines_required": "No se registraron cantidades instaladas por código de servicio en el paso Campo.",
-			"invoice_required": "Genere primero la factura JAF.",
+			"invoice_required": "Envíe primero el paquete a Claro.",
 			"aviso_number_required": "El número de Aviso es obligatorio.",
 			"aviso_pdf_required": "Suba el documento del Aviso.",
 			"invalid_aviso_lines": "No se pudieron leer las líneas del Aviso.",
@@ -918,8 +918,8 @@
 		"button": "Liberar paquete a Finanzas",
 		"released_at": "Liberado a Finanzas el {{date}}",
 		"claro_not_captured": "Aceptación de campo de Claro no capturada",
-		"condition.approved": "Trabajo de campo aprobado",
-		"condition.invoice": "Factura JAF generada",
+		"condition.approved": "Trabajo de campo firmado",
+		"condition.invoice": "Paquete enviado a Claro",
 		"condition.aviso": "Aviso # ingresado, documento subido, líneas capturadas",
 		"condition.amount_match": "Cotejo de monto aprobado (bloqueo duro)",
 		"condition.photos": "Fotos de antes y después presentes",
@@ -1441,7 +1441,7 @@
 			"billing_aviso_pdf": "Facturación: falta el PDF del Aviso"
 		},
 		"stage_queue": {
-			"field": "Esperando a la brigada",
+			"field": "Trabajo de campo en curso",
 			"open": "Mis trabajos abiertos",
 			"intake": "Órdenes nuevas",
 			"review": "Cola de revisión",
@@ -1459,8 +1459,7 @@
 		"since": {
 			"created": "Creada {{ago}}",
 			"submitted": "Entregado {{ago}}",
-			"returned": "Devuelto {{ago}}",
-			"approved": "Aprobado {{ago}}"
+			"approved": "Firmado {{ago}}"
 		},
 		"ago": {
 			"just_now": "justo ahora",
@@ -1472,9 +1471,8 @@
 		"queue": {
 			"my_open": "Mis órdenes de trabajo abiertas",
 			"intake": "Nuevas — esperando al almacén",
-			"pending_review": "Pendiente de revisión — brigada entregó",
-			"sent_back": "Devuelto a la brigada",
-			"approved": "Aprobado",
+			"pending_review": "Esperando su firma",
+			"approved": "Firmado",
 			"missing_aviso": "Falta Aviso",
 			"blocked": "Bloqueadas",
 			"empty": "Nada por aquí."
@@ -1505,7 +1503,7 @@
 			"blocked": "Bloqueado",
 			"open_documents": "Documentos abiertos",
 			"awaiting_warehouse": "Esperando almacén",
-			"awaiting_crew": "Esperando cuadrilla",
+			"awaiting_crew": "Trabajo de campo en curso",
 			"pending_review": "Pendientes de revisión",
 			"pending_preps": "Por preparar",
 			"prepped_awaiting_pickup": "Esperando recogida",
@@ -1515,12 +1513,11 @@
 			"open_jobs": "Trabajos abiertos",
 			"awaiting_close": "Esperando cierre",
 			"ready_for_pickup": "Listos para recoger",
-			"sent_back": "Devueltos",
 			"total_documents": "Documentos totales",
 			"open_receivables": "Cuentas por cobrar abiertas",
 			"awaiting_claro_upload": "Esperando carga a Claro",
 			"stage_awaiting_warehouse": "Etapa: esperando almacén",
-			"stage_awaiting_crew": "Etapa: esperando cuadrilla",
+			"stage_awaiting_crew": "Etapa: trabajo de campo en curso",
 			"stage_pending_review": "Etapa: pendiente de revisión",
 			"stage_in_finance": "Etapa: en finanzas",
 			"discrepancy_count": "Diferencias de cantidad",

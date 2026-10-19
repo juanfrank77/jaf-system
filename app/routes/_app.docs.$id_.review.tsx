@@ -825,6 +825,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 				db.jafInvoice.update({ where: { id: params.id }, data: baseData }),
 			)
 			await db.$transaction(ops)
+			// A price-blind role gets the verdict only; the card shows the
+			// server's amount check (`serverAmountOk`) instead of the totals.
+			if (!showPricesFor(user.role))
+				return { errorKey: "docs_review.errors.aviso_amount_mismatch" }
 			return {
 				errorKey: "docs_review.errors.aviso_amount_mismatch",
 				invoiceTotal: match.invoiceTotal,

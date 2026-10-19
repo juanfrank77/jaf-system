@@ -41,9 +41,6 @@ describe("dashboard supervisor queues — area scoping (integration)", () => {
 	let ownDocId: string
 	let secondAreaDocId: string
 	let outsideDocId: string
-	let sentBackOwnId: string
-	let sentBackSecondAreaId: string
-	let sentBackOutsideId: string
 	let missingAvisoSecondAreaId: string
 
 	let emptyBrigadeSupervisorId: string
@@ -126,45 +123,6 @@ describe("dashboard supervisor queues — area scoping (integration)", () => {
 			},
 		})
 		outsideDocId = outsideDoc.id
-
-		// Same three scenarios again, but hitting the raw-SQL sentBack query
-		// (status SIGNED with non-empty sendBackHistory).
-		const sendBackHistory = [{ note: "fix address" }]
-		sentBackOwnId = (
-			await db.jafInvoice.create({
-				data: {
-					...baseInvoice,
-					controlNumber: control("sentback-own"),
-					supervisorId,
-					status: "SIGNED",
-					sendBackHistory,
-				},
-			})
-		).id
-		sentBackSecondAreaId = (
-			await db.jafInvoice.create({
-				data: {
-					...baseInvoice,
-					controlNumber: control("sentback-second-area"),
-					supervisorId: otherSupervisorId,
-					brigadeId: brigadeSecondArea.id,
-					status: "SIGNED",
-					sendBackHistory,
-				},
-			})
-		).id
-		sentBackOutsideId = (
-			await db.jafInvoice.create({
-				data: {
-					...baseInvoice,
-					controlNumber: control("sentback-outside"),
-					supervisorId: otherSupervisorId,
-					brigadeId: brigadeOutside.id,
-					status: "SIGNED",
-					sendBackHistory,
-				},
-			})
-		).id
 
 		// Approved-but-missing-aviso, reached via the second supervised area.
 		missingAvisoSecondAreaId = (
@@ -265,27 +223,17 @@ describe("dashboard supervisor queues — area scoping (integration)", () => {
 		expect(ids).not.toContain(outsideDocId)
 	})
 
-	it("applies the same area union to the raw-SQL sentBack queue", async () => {
-		const data = await runLoaderAs(supervisorId)
-		const ids = data.supervisorQueues?.sentBack.map((r) => r.id) ?? []
-		expect(ids).toContain(sentBackOwnId)
-		expect(ids).toContain(sentBackSecondAreaId)
-		expect(ids).not.toContain(sentBackOutsideId)
-	})
-
 	it("applies the area union to the missingAviso queue", async () => {
 		const data = await runLoaderAs(supervisorId)
 		const ids = data.supervisorQueues?.missingAviso.map((r) => r.id) ?? []
 		expect(ids).toContain(missingAvisoSecondAreaId)
 	})
 
-	it("a supervisor who owns zero brigades still gets their own docs without the empty-array raw SQL erroring", async () => {
+	it("a supervisor who owns zero brigades still gets their own docs", async () => {
 		const data = await runLoaderAs(emptyBrigadeSupervisorId)
 		expect(data.supervisorQueues).not.toBeNull()
 		const ids = data.supervisorQueues?.pendingReview.map((r) => r.id) ?? []
 		expect(ids).toEqual([emptyBrigadeOwnDocId])
-		// The raw-SQL sentBack query must not throw with areas = [].
-		expect(data.supervisorQueues?.sentBack).toEqual([])
 	})
 
 	it("the main doc list (buildBaseWhere) uses the same area union as the queues — includes an in-area, not-owned doc", async () => {

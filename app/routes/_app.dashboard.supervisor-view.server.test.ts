@@ -174,12 +174,8 @@ describe("dashboard supervisor view data (integration)", () => {
 		)
 	})
 
-	it("carries the send-back time and approval time on the other queues", async () => {
+	it("carries the approval time on the missing-Aviso queue", async () => {
 		const data = await runLoaderAs(supervisorId)
-		const sent = data.supervisorQueues?.sentBack.find(
-			(r) => r.id === sentBackDocId,
-		)
-		expect(new Date(sent?.since as Date).toISOString()).toBe(returnedAt)
 		const missing = data.supervisorQueues?.missingAviso.find(
 			(r) => r.id === approvedDocId,
 		)

@@ -6,6 +6,7 @@ import { DocStageBadge } from "~/components/doc-stage-badge"
 import { Badge } from "~/components/ui/badge"
 import { Card, CardContent } from "~/components/ui/card"
 import { EmptyState } from "~/components/ui/empty-state"
+import { warehouseUsedLines } from "~/lib/field-materials"
 import { armAStepOf, FINANCE_STEP_LABEL_KEY } from "~/lib/finance-steps"
 import type { OpenJobLabel } from "~/lib/open-job-label"
 import {
@@ -37,7 +38,10 @@ function hasOverage(doc: DashboardDocRow): boolean {
 
 function hasQuantityDiscrepancy(doc: DashboardDocRow): boolean {
 	const taken = toLines(doc.materialsTaken)
-	const used = toLines(doc.materialsUsed)
+	// Signed out vs used from that stock (not the brigade's own).
+	const used = toLines(
+		warehouseUsedLines(doc.fieldMaterials, doc.materialsUsed),
+	)
 	if (taken.length === 0 || used.length === 0) return false
 	const takenMap = Object.fromEntries(
 		taken.map((t) => [t.serviceCodeId, t.qty]),
@@ -80,6 +84,7 @@ export type DashboardDocRow = {
 	estimatedMaterials?: unknown
 	materialsTaken?: unknown
 	materialsUsed?: unknown
+	fieldMaterials?: unknown
 	materialsReturned?: unknown
 	/** Current step, derived server-side (needs the pre-cert signatures). */
 	stage?: SupervisorStage

@@ -512,8 +512,8 @@
 		"return_note_placeholder": "Describe any shortage, damage, or restocking issue...",
 		"add_line": "+ Add Line",
 		"submit": "Save Returns",
-		"crew_reported_hint": "Crew reported {{usedQty}} used; expected return is {{expectedReturnQty}}.",
-		"discrepancy_warning": "Return qty differs from crew-reported usage.",
+		"crew_reported_hint": "Field report: {{usedQty}} used from warehouse stock; expected return is {{expectedReturnQty}}.",
+		"discrepancy_warning": "Return qty differs from the use in the Field report.",
 		"warehouse_label": "Return to warehouse",
 		"warehouse_policy_unconfirmed": "Returning to a warehouse other than pickup is allowed, but policy for this is unconfirmed.",
 		"serial_lines_heading": "Serialized Returns",
@@ -542,12 +542,12 @@
 		"already_recorded_notice": "Returns were already recorded for this document. They cannot be logged again.",
 		"status_pill": "Expected back",
 		"callout_title": "Return · You",
-		"callout_body": "The crew said what they used; the system computed what should come back. Count what actually arrived. Anything short gets a note.",
+		"callout_body": "The supervisor's Field report says what was used from warehouse stock; the system computed what should come back. Count what actually arrived. Anything short gets a note.",
 		"submit_confirm": "Confirm return",
 		"submit_discrepancy_one": "Confirm return · {{count}} discrepancy logged",
 		"submit_discrepancy_other": "Confirm return · {{count}} discrepancies logged",
 		"invoice_note_title": "The invoiced quantity never changes here.",
-		"invoice_note_body": "The crew's \"used\" is what the supervisor invoices from. This screen only records whether the warehouse got its material back."
+		"invoice_note_body": "The \"used\" figures come from the supervisor's Field step and are what goes to Claro. This screen only records whether the warehouse got its material back."
 	},
 	"returns": {
 		"note_required": "A note is required when received is less than expected, or a serialized unit is lost or damaged."
@@ -633,7 +633,7 @@
 		"materials_used_label": "Materials Used",
 		"materials_used_hint": "Cannot exceed what was signed out at warehouse.",
 		"services_performed_label": "Services performed",
-		"services_performed_hint": "Installed quantity per service code. The JAF invoice and the pre-certification sheet are built from this column.",
+		"services_performed_hint": "Installed quantity per service code, as the brigade reported it to you. The Claro packet and the pre-certification sheet are built from this column.",
 		"taken_reference_label": "Taken (signed)",
 		"used_entry_label": "Installed",
 		"ordered_vs_installed_hint": "Ordered-vs-installed variance is informational only.",
@@ -772,7 +772,7 @@
 			"send_back_note_required": "A note explaining the send-back is required.",
 			"back_note_required": "Enter a note saying what is wrong.",
 			"installed_lines_required": "No installed quantities per service code were recorded in the Field step.",
-			"invoice_required": "Generate the JAF invoice first.",
+			"invoice_required": "Send the packet to Claro first.",
 			"aviso_number_required": "Aviso # is required.",
 			"aviso_pdf_required": "Upload the Aviso document.",
 			"invalid_aviso_lines": "Aviso lines could not be read.",
@@ -918,8 +918,8 @@
 		"button": "Release packet to Finance",
 		"released_at": "Released to Finance on {{date}}",
 		"claro_not_captured": "Claro acceptance not captured",
-		"condition.approved": "Field work approved",
-		"condition.invoice": "JAF invoice generated",
+		"condition.approved": "Field work signed off",
+		"condition.invoice": "Packet sent to Claro",
 		"condition.aviso": "Aviso # entered, document uploaded, lines captured",
 		"condition.amount_match": "Amount match green (hard gate)",
 		"condition.photos": "Before and after photos present",
@@ -1441,7 +1441,7 @@
 			"billing_aviso_pdf": "Billing: missing Aviso PDF"
 		},
 		"stage_queue": {
-			"field": "Awaiting crew",
+			"field": "Field work in progress",
 			"open": "My open jobs",
 			"intake": "New work orders",
 			"review": "Review queue",
@@ -1459,8 +1459,7 @@
 		"since": {
 			"created": "Created {{ago}}",
 			"submitted": "Submitted {{ago}}",
-			"returned": "Returned {{ago}}",
-			"approved": "Approved {{ago}}"
+			"approved": "Signed off {{ago}}"
 		},
 		"ago": {
 			"just_now": "just now",
@@ -1472,9 +1471,8 @@
 		"queue": {
 			"my_open": "My open work orders",
 			"intake": "New — waiting for the warehouse",
-			"pending_review": "Pending review — crew submitted",
-			"sent_back": "Sent back to crew",
-			"approved": "Approved",
+			"pending_review": "Awaiting your sign-off",
+			"approved": "Signed off",
 			"missing_aviso": "Missing Aviso",
 			"blocked": "Blocked",
 			"empty": "Nothing here."
@@ -1505,7 +1503,7 @@
 			"blocked": "Blocked",
 			"open_documents": "Open documents",
 			"awaiting_warehouse": "Awaiting warehouse",
-			"awaiting_crew": "Awaiting crew",
+			"awaiting_crew": "Field work in progress",
 			"pending_review": "Pending review",
 			"pending_preps": "To prep",
 			"prepped_awaiting_pickup": "Awaiting pickup",
@@ -1515,12 +1513,11 @@
 			"open_jobs": "Open jobs",
 			"awaiting_close": "Awaiting close",
 			"ready_for_pickup": "Ready for pickup",
-			"sent_back": "Sent back",
 			"total_documents": "Total documents",
 			"open_receivables": "Open receivables",
 			"awaiting_claro_upload": "Awaiting Claro upload",
 			"stage_awaiting_warehouse": "Stage: awaiting warehouse",
-			"stage_awaiting_crew": "Stage: awaiting crew",
+			"stage_awaiting_crew": "Stage: field work in progress",
 			"stage_pending_review": "Stage: pending review",
 			"stage_in_finance": "Stage: in finance",
 			"discrepancy_count": "Qty discrepancies",

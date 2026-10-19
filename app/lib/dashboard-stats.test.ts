@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest"
-import { computeAwaitingPickup, computeDashboardStats } from "./dashboard-stats"
+import {
+	computeAwaitingPickup,
+	computeDashboardStats,
+	computeMaterialSignals,
+} from "./dashboard-stats"
 
 const doc = (
 	status: string,
@@ -237,5 +241,43 @@ describe("computeAwaitingPickup", () => {
 		expect(rows.find((r) => r.id === "d2")!.aged).toBe(false) // 1 day <= 3
 		expect(rows.find((r) => r.id === "d3")!.aged).toBe(false) // 3 days = 3, not > 3
 		expect(rows.find((r) => r.id === "d4")!.aged).toBe(true) // 4 days > 3
+	})
+})
+
+describe("computeMaterialSignals: brigade's own stock", () => {
+	const taken = [{ serviceCodeId: "m1", qty: 10 }]
+	const total = [{ serviceCodeId: "m1", qty: 10 }]
+
+	it("compares signed-out stock with WAREHOUSE use only", () => {
+		// 10 signed out, 6 used from it + 4 from the brigade's stock: 4 are
+		// unaccounted for, even though the total used equals what was taken.
+		const split = {
+			materialsTaken: taken,
+			materialsUsed: total,
+			fieldMaterials: [
+				{ serviceCodeId: "m1", used: 6, returned: 4, source: "WAREHOUSE" },
+				{ serviceCodeId: "m1", used: 4, returned: 0, source: "BRIGADE_STOCK" },
+			],
+		}
+		expect(computeMaterialSignals([split]).discrepancy).toBe(1)
+	})
+
+	it("extra brigade stock on top of a fully used pickup is no discrepancy", () => {
+		const extra = {
+			materialsTaken: taken,
+			materialsUsed: [{ serviceCodeId: "m1", qty: 14 }],
+			fieldMaterials: [
+				{ serviceCodeId: "m1", used: 10, returned: 0, source: "WAREHOUSE" },
+				{ serviceCodeId: "m1", used: 4, returned: 0, source: "BRIGADE_STOCK" },
+			],
+		}
+		expect(computeMaterialSignals([extra]).discrepancy).toBe(0)
+	})
+
+	it("a legacy job without the Field table still reads materialsUsed", () => {
+		expect(
+			computeMaterialSignals([{ materialsTaken: taken, materialsUsed: total }])
+				.discrepancy,
+		).toBe(0)
 	})
 })

@@ -8,7 +8,6 @@ const emptyQueues = {
 	intake: [],
 	pendingReview: [],
 	approved: [],
-	sentBack: [],
 	missingAviso: [],
 	blocked: [],
 }
@@ -47,16 +46,17 @@ describe("RoleDashboard", () => {
 		})
 	}
 
-	it("renders the seven supervisor queues and the work-order list for SUPERVISOR", async ({
+	it("renders the six supervisor queues and the work-order list for SUPERVISOR", async ({
 		renderStub,
 	}) => {
 		await mount(renderStub, <RoleDashboard {...supervisor} {...base} />)
 		expect(
 			screen.getByRole("heading", { level: 1, name: "Dashboard" }),
 		).toBeInTheDocument()
-		// seven queue cards (My open work orders last); dashboard no longer has an "All work orders" section
+		// six queue cards (My open work orders last); dashboard no longer has an "All work orders" section
 		const headings = screen.getAllByRole("heading", { level: 2 })
-		expect(headings).toHaveLength(7)
+		expect(headings).toHaveLength(6)
+		expect(screen.queryByText("Sent back to crew")).not.toBeInTheDocument()
 		expect(headings.at(-1)).toHaveTextContent("My open work orders")
 	})
 
@@ -224,22 +224,19 @@ describe("SupervisorDashboard", () => {
 			/>,
 		)
 
-	it("shows seven working tiles and folds the ten accounting metrics", async ({
+	it("shows six working tiles and folds the ten accounting metrics", async ({
 		renderStub,
 	}) => {
 		await mountSupervisor(renderStub, {
 			supervisorQueues: {
 				...emptyQueues,
-				sentBack: [queueRow({ id: "s" })],
 				blocked: [queueRow({ id: "b" }), queueRow({ id: "b2" })],
 			},
 		})
 		const tiles = screen.getByTestId("supervisor-tiles")
-		expect(tiles.querySelectorAll('[data-slot="stat"]')).toHaveLength(7)
-		// the three queue tiles carry the queue counts
-		expect(within(tiles).getByText("Sent back").nextSibling).toHaveTextContent(
-			"1",
-		)
+		expect(tiles.querySelectorAll('[data-slot="stat"]')).toHaveLength(6)
+		// the queue tiles carry the queue counts; nothing is "sent back" to a crew
+		expect(within(tiles).queryByText("Sent back")).not.toBeInTheDocument()
 		expect(within(tiles).getByText("Blocked").nextSibling).toHaveTextContent(
 			"2",
 		)
@@ -282,9 +279,8 @@ describe("SupervisorDashboard", () => {
 			within(tiles).getByText(label).closest("a")?.getAttribute("href")
 		expect(hrefOf("Open documents")).toBe("/dashboard?stage=all")
 		expect(hrefOf("Awaiting warehouse")).toBe("/dashboard?stage=intake")
-		expect(hrefOf("Awaiting crew")).toBe("/dashboard?stage=field")
+		expect(hrefOf("Field work in progress")).toBe("/dashboard?stage=field")
 		expect(hrefOf("Pending review")).toBe("/dashboard?stage=review")
-		expect(hrefOf("Sent back")).toMatch(/#sent-back$/)
 		expect(hrefOf("Missing Aviso")).toMatch(/#missing-aviso$/)
 		expect(hrefOf("Blocked")).toMatch(/#blocked$/)
 	})
@@ -397,19 +393,11 @@ describe("SupervisorDashboard", () => {
 			supervisorQueues: {
 				...emptyQueues,
 				pendingReview: [queueRow({ since: twoHoursAgo, qtyDiscrepancy: true })],
-				sentBack: [
-					queueRow({
-						id: "s",
-						stage: "FIELD",
-						since: oneDayAgo,
-						note: "retake photos",
-					}),
-				],
+				approved: [queueRow({ id: "a", stage: "INVOICE", since: oneDayAgo })],
 			},
 		})
 		expect(screen.getByText("Submitted 2h ago")).toBeInTheDocument()
-		expect(screen.getByText("Returned 1d ago")).toBeInTheDocument()
-		expect(screen.getByText("retake photos")).toBeInTheDocument()
+		expect(screen.getByText("Signed off 1d ago")).toBeInTheDocument()
 		expect(screen.getByText("Qty discrepancy")).toBeInTheDocument()
 	})
 })

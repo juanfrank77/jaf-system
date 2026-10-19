@@ -13,6 +13,7 @@ import { isMissingAvisoPdf } from "~/lib/finance-pipeline.server"
 import { type OpenJobLabel, openJobLabel } from "~/lib/open-job-label"
 import { pageTitle } from "~/lib/page-title"
 import { requireSession } from "~/lib/permissions.server"
+import { isPriceBlind } from "~/lib/service-codes.server"
 import {
 	parseSupervisorQueue,
 	supervisorQueueWhere,
@@ -29,12 +30,70 @@ import { toNumberPrice } from "~/lib/utils"
 import { NO_WAREHOUSE_COUNTS } from "~/lib/warehouse-queues"
 import { countWarehouseQueues } from "~/lib/warehouse-queues.server"
 import { resolveWarehouseScope } from "~/lib/warehouse-scope.server"
-import type { DocStatus, Role } from "../../generated/prisma/client"
+import type { DocStatus, Prisma, Role } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.dashboard"
 
 export const meta: Route.MetaFunction = ({ matches }) => [
 	{ title: pageTitle(matches, "page_title.dashboard") },
 ]
+
+/**
+ * The columns the dashboard lists and tiles read (`DashboardDocList`, the
+ * stage chips, `computeDashboardStats`). A price-blind role gets only these,
+ * so no invoice line, total, payable or signature reaches its payload.
+ */
+const PRICE_FREE_DOC_SELECT = {
+	id: true,
+	controlNumber: true,
+	status: true,
+	jobType: true,
+	jobAddressEstimated: true,
+	createdAt: true,
+	avisoNumber: true,
+	assignedCrewIds: true,
+	sendBackHistory: true,
+	estimatedMaterials: true,
+	materialsTaken: true,
+	materialsUsed: true,
+	materialsReturned: true,
+	fieldMaterials: true,
+	prepChangedSincePrep: true,
+	preppedAt: true,
+	fieldStartedAt: true,
+	supervisorApprovedAt: true,
+	jafInvoiceGeneratedAt: true,
+	claroUploadedAt: true,
+	avisoMatchedAt: true,
+	releasedToFinanceAt: true,
+	financeVerifiedAt: true,
+	pbccRequestSentAt: true,
+	lcGeneratedAt: true,
+	advanceReceivedAt: true,
+	finalPaymentReceivedAt: true,
+	receivableClosedAt: true,
+} satisfies Prisma.JafInvoiceSelect
+
+type DashboardListDoc = Prisma.JafInvoiceGetPayload<{
+	select: typeof PRICE_FREE_DOC_SELECT
+}>
+
+/** The whole row for Finance / Admin; only the list columns for everyone else. */
+function findDashboardDocs(
+	role: Role,
+	args: {
+		where: Prisma.JafInvoiceWhereInput
+		orderBy: Prisma.JafInvoiceOrderByWithRelationInput
+		take: number
+	},
+): Promise<DashboardListDoc[]> {
+	return isPriceBlind(role)
+		? db.jafInvoice.findMany({ ...args, select: PRICE_FREE_DOC_SELECT })
+		: db.jafInvoice.findMany(args)
+}
+
+/** "My open jobs" lists every unreleased job; the other lists stay short. */
+const OPEN_JOBS_LIMIT = 200
+const LIST_LIMIT = 50
 
 async function buildBaseWhere(
 	role: Role,
@@ -83,7 +142,6 @@ const queueSelect = {
 	avisoLineTotal: true,
 	avisoMatchedAt: true,
 	releasedToFinanceAt: true,
-	sendBackHistory: true,
 	fieldSubmittedAt: true,
 	avisoDocPath: true,
 	claroPdfPath: true,
@@ -91,6 +149,7 @@ const queueSelect = {
 	materialsTaken: true,
 	materialsUsed: true,
 	materialsReturned: true,
+	fieldMaterials: true,
 	brigade: { select: { name: true } },
 } as const
 
@@ -150,80 +209,61 @@ async function withStages<
 	}))
 }
 
-type SendBackHistoryEntry = { note?: string; createdAt?: string }
-
 async function loadSupervisorQueues(userId: string) {
 	const tolerance = await getAvisoAmountTolerance()
 	const areas = await supervisorAreas(db, userId)
 	const scope = ownedOrInArea(userId, areas)
-	const [
-		intakeRaw,
-		pending,
-		sentBackRaw,
-		approved,
-		billingBlockedRaw,
-		openRaw,
-	] = await Promise.all([
-		db.jafInvoice.findMany({
-			where: { ...scope, status: "CREATED" },
-			select: queueSelect,
-			orderBy: { createdAt: "desc" },
-			take: 50,
-		}),
-		db.jafInvoice.findMany({
-			where: { ...scope, status: "FIELD_UPDATED" },
-			select: queueSelect,
-			orderBy: { fieldSubmittedAt: "desc" },
-			take: 50,
-		}),
-		db.$queryRaw`
-			SELECT ji.id, ji."controlNumber", ji."jobAddressEstimated", ji."jobAddressActual", ji."sendBackHistory"
-			FROM jaf_invoice ji
-			LEFT JOIN "Brigade" b ON b.id = ji."brigadeId"
-			WHERE (ji."supervisorId" = ${userId} OR b.area = ANY(${areas}))
-				AND ji.status = 'SIGNED' AND jsonb_array_length(ji."sendBackHistory") > 0
-			ORDER BY ji."createdAt" DESC LIMIT 50` as Promise<
-			{
-				id: string
-				controlNumber: string
-				jobAddressEstimated: string
-				jobAddressActual: string | null
-				sendBackHistory: unknown
-			}[]
-		>,
-		db.jafInvoice.findMany({
-			where: {
-				...scope,
-				supervisorApprovedAt: { not: null },
-				releasedToFinanceAt: null,
-				status: { not: "CANCELLED" },
-			},
-			select: queueSelect,
-			orderBy: { supervisorApprovedAt: "asc" },
-			take: 100,
-		}),
-		// Released to Finance without an Aviso PDF on file: billing cannot start.
-		db.jafInvoice.findMany({
-			where: {
-				...scope,
-				releasedToFinanceAt: { not: null },
-				status: { not: "CANCELLED" },
-				avisoDocPath: null,
-				claroPdfPath: null,
-				payablesClosedAt: null,
-			},
-			select: queueSelect,
-			orderBy: { releasedToFinanceAt: "asc" },
-			take: 50,
-		}),
-		// Everything the supervisor owns, from creation until it is paid.
-		db.jafInvoice.findMany({
-			where: { ...scope, status: { not: "CANCELLED" }, payablesClosedAt: null },
-			select: queueSelect,
-			orderBy: { createdAt: "desc" },
-			take: 100,
-		}),
-	])
+	const [intakeRaw, pending, approved, billingBlockedRaw, openRaw] =
+		await Promise.all([
+			db.jafInvoice.findMany({
+				where: { ...scope, status: "CREATED" },
+				select: queueSelect,
+				orderBy: { createdAt: "desc" },
+				take: 50,
+			}),
+			db.jafInvoice.findMany({
+				where: { ...scope, status: "FIELD_UPDATED" },
+				select: queueSelect,
+				orderBy: { fieldSubmittedAt: "desc" },
+				take: 50,
+			}),
+			db.jafInvoice.findMany({
+				where: {
+					...scope,
+					supervisorApprovedAt: { not: null },
+					releasedToFinanceAt: null,
+					status: { not: "CANCELLED" },
+				},
+				select: queueSelect,
+				orderBy: { supervisorApprovedAt: "asc" },
+				take: 100,
+			}),
+			// Released to Finance without an Aviso PDF on file: billing cannot start.
+			db.jafInvoice.findMany({
+				where: {
+					...scope,
+					releasedToFinanceAt: { not: null },
+					status: { not: "CANCELLED" },
+					avisoDocPath: null,
+					claroPdfPath: null,
+					payablesClosedAt: null,
+				},
+				select: queueSelect,
+				orderBy: { releasedToFinanceAt: "asc" },
+				take: 50,
+			}),
+			// Everything the supervisor owns, from creation until it is paid.
+			db.jafInvoice.findMany({
+				where: {
+					...scope,
+					status: { not: "CANCELLED" },
+					payablesClosedAt: null,
+				},
+				select: queueSelect,
+				orderBy: { createdAt: "desc" },
+				take: 100,
+			}),
+		])
 	const intake = intakeRaw.map((d) => toRow(d, "INTAKE", d.createdAt))
 	const myOpen = (await withStages(openRaw)).map((d) => ({
 		...toRow(d, d.stage, d.createdAt),
@@ -233,18 +273,6 @@ async function loadSupervisorQueues(userId: string) {
 	const pendingReview = pending.map((d) =>
 		toRow(d, "APPROVE", d.fieldSubmittedAt),
 	)
-	const sentBack = sentBackRaw.map((d) => {
-		const h = Array.isArray(d.sendBackHistory)
-			? (d.sendBackHistory as SendBackHistoryEntry[])
-			: []
-		const returnedAt = h.at(-1)?.createdAt
-		return toRow(
-			d,
-			"FIELD",
-			returnedAt ? new Date(returnedAt) : null,
-			h.at(-1)?.note ?? null,
-		)
-	})
 	const approvedRows: QueueRow[] = []
 	const missingAviso: QueueRow[] = []
 	const blocked: QueueRow[] = []
@@ -278,7 +306,6 @@ async function loadSupervisorQueues(userId: string) {
 		intake,
 		myOpen,
 		pendingReview,
-		sentBack,
 		approved: approvedRows,
 		missingAviso,
 		blocked,
@@ -378,10 +405,10 @@ export async function loader({ request }: Route.LoaderArgs) {
 		]
 	}
 
-	const docs = await db.jafInvoice.findMany({
+	const docs = await findDashboardDocs(user.role, {
 		where,
 		orderBy: { createdAt: "desc" },
-		take: 50,
+		take: stageQueue === "open" ? OPEN_JOBS_LIMIT : LIST_LIMIT,
 	})
 
 	// LC_REQUEST_GENERATED is Finance/Admin-only in all projections.
@@ -401,10 +428,10 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const statsDocs =
 		user.role === "SUPERVISOR" && hasFilters
 			? (
-					await db.jafInvoice.findMany({
+					await findDashboardDocs(user.role, {
 						where: baseWhere,
 						orderBy: { createdAt: "desc" },
-						take: 50,
+						take: LIST_LIMIT,
 					})
 				).filter((d) => d.status !== "LC_REQUEST_GENERATED")
 			: visibleDocs
@@ -426,13 +453,13 @@ export async function loader({ request }: Route.LoaderArgs) {
 			: NO_WAREHOUSE_COUNTS
 	const warehouseToPrepDocs =
 		user.role === "WAREHOUSE"
-			? await db.jafInvoice.findMany({
+			? await findDashboardDocs(user.role, {
 					where: {
 						...(await buildBaseWhere(user.role, user.id)),
 						status: "CREATED",
 					},
 					orderBy: { createdAt: "desc" },
-					take: 50,
+					take: LIST_LIMIT,
 				})
 			: []
 

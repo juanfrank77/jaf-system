@@ -162,6 +162,83 @@ describe("Sign off step (render)", () => {
 	})
 })
 
+describe("Step 4 · the work order document (render)", () => {
+	const WO = {
+		workOrderNumber: "JAF-1001",
+		claroSupervisor: "Ramón Claro",
+		jafSupervisor: "Edgard Ocasio",
+		crews: [{ name: "JESUS MARTINEZ", contractNumber: "009" }],
+		address: "Bo. Cupey, Calle Luna 1, San Juan",
+		description: "Instalar poste",
+		services: [{ code: "34006301", description: "TRANSFER ATTCH", qty: 5 }],
+		materials: [
+			{ name: "Cable drop", used: 3, unit: "FT", source: "WAREHOUSE_ISSUE" },
+		],
+		photos: { before: [], during: [], after: [] },
+		blueprint: "not_required",
+		prefield: "not_required",
+		fieldReport: null,
+		signatures: {
+			supervisor: "pending",
+			warehouse: "pending",
+			crew: "pending",
+		},
+	}
+	const step4 = (over: Record<string, unknown> = {}, doc = {}) => ({
+		...loaderData(doc),
+		workOrder: WO,
+		workOrderIssuedOn: "2026-10-19T15:00:00.000Z",
+		canGeneratePdf: false,
+		...over,
+	})
+
+	it("shows the banner, the document, the sign-off below it, a disabled Generate PDF and Back to step 3", async () => {
+		const html = await render(step4())
+		expect(html).toContain(
+			"Check the document below, sign, and generate the JAF Work Order PDF for the Claro supervisor.",
+		)
+		expect(html).toContain("JAF Work Order")
+		expect(html).toContain("JESUS MARTINEZ · 009")
+		expect(html).toContain("Bo. Cupey, Calle Luna 1, San Juan")
+		expect(html.indexOf("JAF Work Order")).toBeLessThan(
+			html.indexOf("Sign off the field work"),
+		)
+		expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Generate PDF/)
+		expect(html).toContain('href="/docs/doc-1/field"')
+		expect(html).toContain("Back to step 3")
+		// The old cards are gone; no prices, no Difference, no job location.
+		expect(html).not.toContain("Certified address")
+		expect(html).not.toContain("Ordered vs Installed")
+		expect(html).not.toMatch(/\$|Difference|Job location/)
+	})
+
+	it("once signed: Generate PDF is enabled on the step, no read-only banner, no Back", async () => {
+		const html = await render(
+			step4(
+				{ stage: "INVOICE", interactive: false, canGeneratePdf: true },
+				{
+					status: "SUPERVISOR_APPROVED",
+					supervisorApprovedAt: "2026-10-18T10:00:00.000Z",
+					completionSignature: "data:image/png;base64,abc",
+				},
+			),
+		)
+		expect(html).toMatch(
+			/<input[^>]*name="intent"[^>]*value="generate_work_order_pdf"/,
+		)
+		expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>Generate PDF/)
+		expect(html).not.toContain("Completed step.")
+		expect(html).not.toContain("Back to step 3")
+	})
+
+	it("speaks Spanish too", async () => {
+		const html = await render(step4(), undefined, "es")
+		expect(html).toContain("Orden de trabajo JAF")
+		expect(html).toContain("Generar PDF")
+		expect(html).toContain("Pendiente")
+	})
+})
+
 describe("Packet → Claro step (render)", () => {
 	const INSTALLED = [
 		{
@@ -395,7 +472,7 @@ describe("Packet → Claro step (render)", () => {
 			"Choose the Claro supervisor for this job",
 		],
 		["packet.errors.not_signed_off", "Sign off the field work before sending"],
-		["packet.errors.locked", "already been released to Finance"],
+		["packet.errors.locked", "sent to Claro or released to Finance"],
 		["packet.errors.render_failed", "The packet PDF could not be built"],
 		[
 			"docs_review.errors.installed_lines_required",

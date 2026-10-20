@@ -9,70 +9,27 @@ import {
 	Text,
 	View,
 } from "@react-pdf/renderer"
+import { sourceLabelKey } from "~/lib/material-source"
+import {
+	formatDocDate,
+	WORK_ORDER_ISSUER,
+	type WorkOrderDocument,
+	type WorkOrderSignature,
+} from "~/lib/work-order-document"
+import { resources } from "~/localization/resource"
 
 /**
- * The packet a Claro supervisor receives for a finished job (spec "Step 5 ·
- * Packet → Claro"): Prefield page (only when that supervisor requires it),
- * work summary, materials, blueprints and photos. Bilingual EN / ES, IMS as
- * the provider, and no prices anywhere: the input type carries none.
+ * The JAF work order a Claro supervisor receives for a finished job (spec
+ * "Step 4 · Sign off", B5/B6): the same `WorkOrderDocument` the step 4 page
+ * shows, block for block in the B5 order. Bilingual EN / ES, JAF as the
+ * issuer, and no prices anywhere: the document type carries none.
  */
 
-type PhotoGroup = "BEFORE" | "DURING" | "AFTER"
-
 export interface ClaroPacketInput {
-	controlNumber: string
-	claroSupervisorName: string
-	showPrefield: boolean
-	prefield: {
-		avisoNumber: string | null
-		ordenNumber: string | null
-		pedido: string | null
-		smr: string | null
-		titulo: string | null
-		description: string | null
-	}
-	address: {
-		direccion1: string | null
-		direccion2: string | null
-		sector: string | null
-		ciudad: string | null
-		latitud: string | null
-		longitud: string | null
-		tipo: string | null
-		tipoPlanta: string | null
-		grupoPlan: string | null
-	}
-	/** Always printed, so a packet without the Prefield page still names the job. */
-	job: {
-		address: string
-		jobType: string
-		description: string | null
-		workDate: Date | null
-		avisoNumber: string | null
-	}
-	workSummary: {
-		claroCode: string
-		name: string
-		qty: number
-		unit: string | null
-	}[]
-	materials: {
-		claroCode: string
-		name: string
-		unit: string | null
-		used: number
-		returned: number
-		// Brigade's own stock is tracked-only and never on this client-facing
-		// packet (provisional ruling), so only warehouse rows reach it.
-		source: "WAREHOUSE_ISSUE"
-	}[]
-	photos: Record<PhotoGroup, string[]>
-	blueprints: string[]
-	supervisorName: string
-	signedOffAt: Date | null
+	/** Photo and blueprint references are file paths. */
+	document: WorkOrderDocument
+	issuedOn: Date
 }
-
-const PROVIDER = "IMS"
 
 const s = StyleSheet.create({
 	page: { padding: 36, fontFamily: "Helvetica", fontSize: 9 },
@@ -81,19 +38,19 @@ const s = StyleSheet.create({
 		justifyContent: "space-between",
 		borderBottom: "1px solid #1e3a5f",
 		paddingBottom: 6,
-		marginBottom: 14,
+		marginBottom: 10,
 	},
 	provider: { fontSize: 16, fontWeight: "bold", color: "#1e3a5f" },
 	title: { fontSize: 11, fontWeight: "bold" },
 	meta: { fontSize: 8, color: "#555", textAlign: "right" },
 	h2: {
-		fontSize: 11,
+		fontSize: 10,
 		fontWeight: "bold",
-		marginTop: 12,
-		marginBottom: 6,
+		marginTop: 10,
+		marginBottom: 4,
 		color: "#1e3a5f",
 	},
-	h3: { fontSize: 9, fontWeight: "bold", marginTop: 8, marginBottom: 4 },
+	h3: { fontSize: 9, fontWeight: "bold", marginTop: 6, marginBottom: 3 },
 	field: { flexDirection: "row", marginBottom: 3 },
 	label: { width: 150, color: "#666" },
 	value: { flex: 1 },
@@ -113,29 +70,50 @@ const s = StyleSheet.create({
 	code: { flex: 1.2 },
 	name: { flex: 3 },
 	num: { flex: 0.8, textAlign: "right" },
-	source: { flex: 1.6, paddingLeft: 6 },
+	source: { flex: 1.8, paddingLeft: 6 },
 	empty: { fontSize: 8, color: "#94a3b8", padding: 4 },
-	signoff: {
-		marginTop: 24,
-		borderTop: "1px solid #ccc",
-		paddingTop: 10,
-	},
 	photoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
 	photo: { width: 165, height: 124, objectFit: "contain" },
-	blueprint: { width: "100%", maxHeight: 620, objectFit: "contain" },
+	blueprint: { width: "100%", maxHeight: 560, objectFit: "contain" },
+	sigRow: { flexDirection: "row", gap: 8, marginTop: 4 },
+	sigBox: {
+		flex: 1,
+		border: "0.5px solid #cbd5e1",
+		padding: 6,
+		minHeight: 70,
+	},
+	sigImage: { height: 40, objectFit: "contain", marginVertical: 4 },
+	pending: { color: "#b45309", marginTop: 12 },
 })
 
-const PHOTO_GROUPS: { key: PhotoGroup; label: string }[] = [
-	{ key: "BEFORE", label: "Before / Antes" },
-	{ key: "DURING", label: "During / Durante" },
-	{ key: "AFTER", label: "After / Después" },
+const PHOTO_GROUPS: {
+	key: keyof WorkOrderDocument["photos"]
+	label: string
+}[] = [
+	{ key: "before", label: "Before / Antes" },
+	{ key: "during", label: "During / Durante" },
+	{ key: "after", label: "After / Después" },
 ]
 
-const SOURCE_LABEL: Record<
-	ClaroPacketInput["materials"][number]["source"],
-	string
-> = {
-	WAREHOUSE_ISSUE: "Warehouse / Almacén",
+/** "English / Español" from the app's own locale files, so the PDF says what the page says. */
+function bilingual(key: string): string {
+	const pick = (root: unknown) =>
+		key
+			.split(".")
+			.reduce<unknown>(
+				(node, part) =>
+					node && typeof node === "object"
+						? (node as Record<string, unknown>)[part]
+						: undefined,
+				root,
+			)
+	const en = pick(resources.en.common)
+	const es = pick(resources.es.common)
+	return typeof en === "string" && typeof es === "string"
+		? en === es
+			? en
+			: `${en} / ${es}`
+		: key
 }
 
 type LoadedImage = { data: Buffer; format: "png" | "jpg" }
@@ -179,10 +157,12 @@ export async function blueprintAttachments(
 	return out
 }
 
-const formatDate = (d: Date) =>
-	new Intl.DateTimeFormat("en-CA", { timeZone: "America/Puerto_Rico" }).format(
-		d,
-	)
+/** A drawn signature (a data URL) as an image the renderer can draw. */
+function signatureImage(dataUrl: string): LoadedImage | null {
+	const comma = dataUrl.indexOf(",")
+	if (comma < 0) return null
+	return asImage(Buffer.from(dataUrl.slice(comma + 1), "base64"))
+}
 
 function Field({ label, value }: { label: string; value: string | null }) {
 	return (
@@ -193,28 +173,40 @@ function Field({ label, value }: { label: string; value: string | null }) {
 	)
 }
 
-function Header({
-	input,
-	issued,
-}: {
-	input: ClaroPacketInput
-	issued: string
-}) {
+function Header({ doc, issued }: { doc: WorkOrderDocument; issued: string }) {
 	return (
 		<View style={s.header} fixed>
 			<View>
-				<Text style={s.provider}>{PROVIDER}</Text>
-				<Text style={s.title}>Work packet / Paquete de trabajo</Text>
+				<Text style={s.provider}>{WORK_ORDER_ISSUER}</Text>
+				<Text style={s.title}>JAF Work Order / Orden de trabajo JAF</Text>
 			</View>
 			<View>
-				<Text style={s.meta}>
-					Control # / Núm. de control: {input.controlNumber}
-				</Text>
-				<Text style={s.meta}>
-					Claro supervisor / Supervisor de Claro: {input.claroSupervisorName}
-				</Text>
-				<Text style={s.meta}>Issued / Emitido: {issued}</Text>
+				<Text style={s.meta}>{doc.workOrderNumber}</Text>
+				<Text style={s.meta}>{issued}</Text>
 			</View>
+		</View>
+	)
+}
+
+function SignatureBox({
+	label,
+	sig,
+}: {
+	label: string
+	sig: WorkOrderSignature
+}) {
+	const image = sig === "pending" ? null : signatureImage(sig.image)
+	return (
+		<View style={s.sigBox}>
+			<Text style={s.h3}>{label}</Text>
+			{sig === "pending" ? (
+				<Text style={s.pending}>Pending / Pendiente</Text>
+			) : (
+				<>
+					{image && <Image src={image} style={s.sigImage} />}
+					<Text>{sig.name || "—"}</Text>
+				</>
+			)}
 		</View>
 	)
 }
@@ -222,163 +214,102 @@ function Header({
 export async function generateClaroPacketPdf(
 	input: ClaroPacketInput,
 ): Promise<Buffer> {
+	const doc = input.document
+	const blueprintFiles = doc.blueprint === "not_required" ? [] : doc.blueprint
 	const [before, during, after, blueprintImages, attached] = await Promise.all([
-		loadImages(input.photos.BEFORE),
-		loadImages(input.photos.DURING),
-		loadImages(input.photos.AFTER),
-		loadImages(input.blueprints),
-		blueprintAttachments(input.blueprints),
+		loadImages(doc.photos.before),
+		loadImages(doc.photos.during),
+		loadImages(doc.photos.after),
+		loadImages(blueprintFiles),
+		blueprintAttachments(blueprintFiles),
 	])
-	const photos: Record<PhotoGroup, LoadedImage[]> = {
-		BEFORE: before,
-		DURING: during,
-		AFTER: after,
-	}
+	const photos = { before, during, after }
 	const attachedBlueprints = attached.map((a) => a.filename)
-
-	const issued = formatDate(new Date())
-	const { prefield, address } = input
+	const issued = formatDocDate(input.issuedOn)
+	const prefield = doc.prefield
 
 	const element = (
-		<Document title={`${PROVIDER} — ${input.controlNumber}`} author={PROVIDER}>
-			{input.showPrefield && (
-				<Page size="LETTER" style={s.page}>
-					<Header input={input} issued={issued} />
-					<Text style={s.h2}>Prefield form / Formulario Prefield</Text>
-					<Field label="Aviso #" value={prefield.avisoNumber} />
-					<Field label="Order # / # Orden" value={prefield.ordenNumber} />
-					<Field label="Order request / Pedido" value={prefield.pedido} />
-					<Field label="SMR" value={prefield.smr} />
-					<Field label="Title / Título" value={prefield.titulo} />
-					<Field
-						label="Description / Descripción"
-						value={prefield.description}
-					/>
-					<Text style={s.h2}>Address / Dirección</Text>
-					<Field label="Address 1 / Dirección 1" value={address.direccion1} />
-					<Field label="Address 2 / Dirección 2" value={address.direccion2} />
-					<Field label="Sector" value={address.sector} />
-					<Field label="City / Ciudad" value={address.ciudad} />
-					<Field label="Latitude / Latitud" value={address.latitud} />
-					<Field label="Longitude / Longitud" value={address.longitud} />
-					<Field label="Type / Tipo" value={address.tipo} />
-					<Field label="Plant type / Tipo planta" value={address.tipoPlanta} />
-					<Field label="Plan group / Grupo plan" value={address.grupoPlan} />
-				</Page>
-			)}
-
+		<Document
+			title={`${WORK_ORDER_ISSUER} — ${doc.workOrderNumber}`}
+			author={WORK_ORDER_ISSUER}
+		>
 			<Page size="LETTER" style={s.page}>
-				<Header input={input} issued={issued} />
-				<Text style={s.h2}>Job / Trabajo</Text>
-				{input.job.avisoNumber && (
-					<Field label="Aviso #" value={input.job.avisoNumber} />
-				)}
-				<Field label="Address / Dirección" value={input.job.address} />
-				{address.sector && <Field label="Sector" value={address.sector} />}
-				{address.ciudad && (
-					<Field label="City / Ciudad" value={address.ciudad} />
-				)}
-				{address.tipo && <Field label="Type / Tipo" value={address.tipo} />}
-				<Field label="Job type / Tipo de trabajo" value={input.job.jobType} />
-				<Field
-					label="Description / Descripción"
-					value={input.job.description}
-				/>
-				<Field
-					label="Work date / Fecha del trabajo"
-					value={input.job.workDate ? formatDate(input.job.workDate) : null}
-				/>
+				<Header doc={doc} issued={issued} />
 
-				<Text style={s.h2}>Work summary / Resumen del trabajo</Text>
+				{/* 1–6 */}
+				<Field
+					label="JAF work order # / Orden de trabajo JAF #"
+					value={doc.workOrderNumber}
+				/>
+				<Field
+					label="Claro supervisor / Supervisor de Claro"
+					value={doc.claroSupervisor}
+				/>
+				<Field
+					label="JAF supervisor / Supervisor de JAF"
+					value={doc.jafSupervisor}
+				/>
+				<View style={s.field}>
+					<Text style={s.label}>Crew / Brigada</Text>
+					<View style={s.value}>
+						{doc.crews.length === 0 ? (
+							<Text>—</Text>
+						) : (
+							doc.crews.map((c, i) => (
+								// biome-ignore lint/suspicious/noArrayIndexKey: static render
+								<Text key={i}>
+									{c.contractNumber
+										? `${c.name} · ${c.contractNumber}`
+										: c.name}
+								</Text>
+							))
+						)}
+					</View>
+				</View>
+				<Field label="Job address / Dirección" value={doc.address} />
+				<Field label="Job description / Descripción" value={doc.description} />
+
+				{/* 7 */}
+				<Text style={s.h2}>Services / Servicios</Text>
 				<View style={s.tableHeader}>
 					<Text style={s.code}>Code / Código</Text>
 					<Text style={s.name}>Description / Descripción</Text>
 					<Text style={s.num}>Qty / Cant.</Text>
-					<Text style={s.num}>Unit / Unidad</Text>
 				</View>
-				{input.workSummary.map((l, i) => (
+				{doc.services.map((l, i) => (
 					// biome-ignore lint/suspicious/noArrayIndexKey: static render; a code can repeat
 					<View key={i} style={s.tableRow} wrap={false}>
-						<Text style={s.code}>{l.claroCode}</Text>
-						<Text style={s.name}>{l.name}</Text>
+						<Text style={s.code}>{l.code}</Text>
+						<Text style={s.name}>{l.description}</Text>
 						<Text style={s.num}>{l.qty}</Text>
-						<Text style={s.num}>{l.unit ?? ""}</Text>
 					</View>
 				))}
-				{input.workSummary.length === 0 && (
-					<Text style={s.empty}>
-						No service lines / Sin partidas de servicio
-					</Text>
+				{doc.services.length === 0 && (
+					<Text style={s.empty}>No services / Sin servicios</Text>
 				)}
 
+				{/* 8 */}
 				<Text style={s.h2}>Materials / Materiales</Text>
 				<View style={s.tableHeader}>
-					<Text style={s.code}>Code / Código</Text>
-					<Text style={s.name}>Description / Descripción</Text>
+					<Text style={s.name}>Material</Text>
 					<Text style={s.num}>Used / Usado</Text>
-					<Text style={s.num}>Returned / Devuelto</Text>
 					<Text style={s.source}>Source / Origen</Text>
 				</View>
-				{input.materials.map((m) => (
-					<View
-						key={`${m.claroCode}-${m.source}`}
-						style={s.tableRow}
-						wrap={false}
-					>
-						<Text style={s.code}>{m.claroCode}</Text>
+				{doc.materials.map((m, i) => (
+					// biome-ignore lint/suspicious/noArrayIndexKey: static render
+					<View key={i} style={s.tableRow} wrap={false}>
 						<Text style={s.name}>{m.name}</Text>
 						<Text style={s.num}>
 							{m.used} {m.unit ?? ""}
 						</Text>
-						<Text style={s.num}>
-							{m.returned} {m.unit ?? ""}
-						</Text>
-						<Text style={s.source}>{SOURCE_LABEL[m.source]}</Text>
+						<Text style={s.source}>{bilingual(sourceLabelKey(m.source))}</Text>
 					</View>
 				))}
-				{input.materials.length === 0 && (
+				{doc.materials.length === 0 && (
 					<Text style={s.empty}>No materials / Sin materiales</Text>
 				)}
 
-				<View style={s.signoff} wrap={false}>
-					<Text style={s.h3}>Sign-off / Aprobación</Text>
-					<Field label="Provider / Proveedor" value={PROVIDER} />
-					<Field
-						label="Signed off by / Aprobado por"
-						value={input.supervisorName}
-					/>
-					<Field
-						label="Date / Fecha"
-						value={input.signedOffAt ? formatDate(input.signedOffAt) : null}
-					/>
-				</View>
-			</Page>
-
-			{input.blueprints.length > 0 && (
-				<Page size="LETTER" style={s.page}>
-					<Header input={input} issued={issued} />
-					<Text style={s.h2}>Blueprint / Plano</Text>
-					{blueprintImages.map((img, i) => (
-						// biome-ignore lint/suspicious/noArrayIndexKey: static render, no reordering
-						<View key={i} break={i > 0}>
-							<Image src={img} style={s.blueprint} />
-						</View>
-					))}
-					{attachedBlueprints.length > 0 && (
-						<View>
-							<Text style={s.h3}>
-								Attached separately / Adjunto por separado
-							</Text>
-							{attachedBlueprints.map((name) => (
-								<Text key={name}>{name}</Text>
-							))}
-						</View>
-					)}
-				</Page>
-			)}
-
-			<Page size="LETTER" style={s.page}>
-				<Header input={input} issued={issued} />
+				{/* 9 */}
 				<Text style={s.h2}>Photos / Fotos</Text>
 				{PHOTO_GROUPS.map((g) => (
 					<View key={g.key}>
@@ -395,6 +326,66 @@ export async function generateClaroPacketPdf(
 						)}
 					</View>
 				))}
+
+				{/* 10 */}
+				<Text style={s.h2}>Blueprint / Plano</Text>
+				{doc.blueprint === "not_required" ? (
+					<Text>Not required / No requerido</Text>
+				) : (
+					<>
+						{blueprintImages.map((img, i) => (
+							// biome-ignore lint/suspicious/noArrayIndexKey: static render, no reordering
+							<Image key={i} src={img} style={s.blueprint} />
+						))}
+						{attachedBlueprints.length > 0 && (
+							<View>
+								<Text style={s.h3}>
+									Attached separately / Adjunto por separado
+								</Text>
+								{attachedBlueprints.map((name) => (
+									<Text key={name}>{name}</Text>
+								))}
+							</View>
+						)}
+						{blueprintFiles.length === 0 && <Text style={s.empty}>—</Text>}
+					</>
+				)}
+
+				{/* 11 */}
+				<Text style={s.h2}>Prefield</Text>
+				{prefield === "not_required" ? (
+					<Text>
+						Not required by this Claro supervisor / No requerido por este
+						supervisor de Claro
+					</Text>
+				) : (
+					<>
+						<Field label="Order # / # Orden" value={prefield.ordenNumber} />
+						<Field label="Order request / Pedido" value={prefield.pedido} />
+						<Field label="SMR" value={prefield.smr} />
+						<Field label="Title / Título" value={prefield.titulo} />
+					</>
+				)}
+
+				{/* 12 */}
+				<Text style={s.h2}>Field report / Informe de campo</Text>
+				<Text>{doc.fieldReport ?? "—"}</Text>
+
+				{/* 13 */}
+				<View wrap={false}>
+					<Text style={s.h2}>Signatures / Firmas</Text>
+					<View style={s.sigRow}>
+						<SignatureBox
+							label="JAF supervisor / Supervisor de JAF"
+							sig={doc.signatures.supervisor}
+						/>
+						<SignatureBox
+							label="Warehouse / Almacén"
+							sig={doc.signatures.warehouse}
+						/>
+						<SignatureBox label="Crew / Brigada" sig={doc.signatures.crew} />
+					</View>
+				</View>
 			</Page>
 		</Document>
 	)

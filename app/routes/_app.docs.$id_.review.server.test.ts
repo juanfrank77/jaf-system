@@ -1,9 +1,13 @@
 import { readFile } from "node:fs/promises"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("~/lib/db.server", () => ({
-	db: {
-		jafInvoice: { findUniqueOrThrow: vi.fn(), update: vi.fn() },
+vi.mock("~/lib/db.server", () => {
+	const db: any = {
+		jafInvoice: {
+			findUniqueOrThrow: vi.fn(),
+			update: vi.fn(),
+			updateMany: vi.fn(async () => ({ count: 1 })),
+		},
 		auditTrail: { create: vi.fn(), findFirst: vi.fn() },
 		notification: { create: vi.fn(), createMany: vi.fn() },
 		user: { findMany: vi.fn(), findUnique: vi.fn() },
@@ -19,11 +23,13 @@ vi.mock("~/lib/db.server", () => ({
 			update: vi.fn(),
 			updateMany: vi.fn(),
 		},
-		$transaction: vi.fn(async (ops: any) =>
-			typeof ops === "function" ? ops({}) : Promise.all(ops),
-		),
-	},
-}))
+	}
+	// An interactive transaction runs against the same mocked client.
+	db.$transaction = vi.fn(async (ops: any) =>
+		typeof ops === "function" ? ops(db) : Promise.all(ops),
+	)
+	return { db }
+})
 vi.mock("~/lib/permissions.server", () => ({ requireRole: vi.fn() }))
 vi.mock("~/lib/service-codes.server", async (importOriginal) => ({
 	...(await importOriginal<typeof import("~/lib/service-codes.server")>()),
@@ -43,7 +49,14 @@ vi.mock("~/lib/uploads.server", () => ({
 vi.mock("~/lib/pdf/pre-cert-sheet.server", () => ({
 	generatePreCertSheetPdf: vi.fn(),
 }))
-vi.mock("~/lib/packet-send.server", () => ({ sendPacket: vi.fn() }))
+vi.mock("~/lib/packet-send.server", () => ({
+	sendPacket: vi.fn(),
+	buildPacketInput: vi.fn(),
+	loadWorkOrderDocument: vi.fn(async () => null),
+}))
+vi.mock("~/lib/pdf/claro-packet.server", () => ({
+	generateClaroPacketPdf: vi.fn(async () => Buffer.from("%PDF-wo")),
+}))
 // The real Aviso reader runs on the real sample PDF; the spy only lets one
 // test feed it a print with a service split over two rows.
 vi.mock("~/lib/aviso-pdf.server", async (importOriginal) => {
@@ -53,7 +66,8 @@ vi.mock("~/lib/aviso-pdf.server", async (importOriginal) => {
 
 import { readAvisoPdf } from "~/lib/aviso-pdf.server"
 import { db } from "~/lib/db.server"
-import { sendPacket } from "~/lib/packet-send.server"
+import { buildPacketInput, sendPacket } from "~/lib/packet-send.server"
+import { generateClaroPacketPdf } from "~/lib/pdf/claro-packet.server"
 import { generatePreCertSheetPdf } from "~/lib/pdf/pre-cert-sheet.server"
 import { requireRole } from "~/lib/permissions.server"
 import {
@@ -1579,5 +1593,210 @@ describe("review loader: Packet → Claro step", () => {
 			expect(priceKeysIn(data).length).toBeGreaterThan(0)
 			expect(data.serviceCodes[0].unitPrice).toBe(42.343)
 		})
+	})
+})
+
+describe("review: generate_work_order_pdf (step 4)", () => {
+	const CLARO = {
+		id: "cs-1",
+		name: "Ramón Claro",
+		email: "ramon@claro.example",
+		active: true,
+		requiresPrefield: false,
+		requiresBlueprint: false,
+	}
+	const signed = {
+		...approvedDoc,
+		brigade: { area: "OESTE" },
+		claroSupervisorId: "cs-1",
+		claroSupervisor: CLARO,
+		completionSignature: "data:image/png;base64,iVBORw0KGgo=",
+		completionSignedAt: new Date(),
+		jafInvoicePdfPath: null,
+		ordenNumber: null,
+		pedido: null,
+		smr: null,
+		titulo: null,
+	}
+	const PACKET = {
+		document: { workOrderNumber: "MAINT-260903-001" },
+		issuedOn: new Date(),
+	}
+	const run = () =>
+		action({
+			request: post(intent("generate_work_order_pdf")),
+			params: { id: "doc-1" },
+		} as any).catch((r) => r)
+
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1", role: "SUPERVISOR", name: "Edgard Ocasio" },
+			session: {},
+		} as any)
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["OESTE"],
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(signed as any)
+		vi.mocked(buildPacketInput).mockResolvedValue(PACKET as any)
+		vi.mocked(saveBuffer).mockResolvedValue("/var/jaf/uploads/packets/wo.pdf")
+		vi.mocked(db.jafInvoice.updateMany).mockResolvedValue({ count: 1 } as any)
+	})
+
+	it("renders the work order, stores its path and writes WORK_ORDER_PDF_GENERATED", async () => {
+		const res = await run()
+		expect(res.status).toBe(302)
+		expect(res.headers.get("Location")).toBe("/docs/doc-1/review?step=APPROVE")
+		expect(buildPacketInput).toHaveBeenCalledWith("doc-1")
+		expect(generateClaroPacketPdf).toHaveBeenCalledWith(PACKET)
+		expect(vi.mocked(saveBuffer).mock.calls[0][0]).toBe("packets")
+		expect(db.jafInvoice.updateMany).toHaveBeenCalledWith({
+			where: { id: "doc-1", jafInvoiceGeneratedAt: null },
+			data: { jafInvoicePdfPath: "/var/jaf/uploads/packets/wo.pdf" },
+		})
+		expect(db.auditTrail.create).toHaveBeenCalledWith({
+			data: {
+				docId: "doc-1",
+				userId: "sup-1",
+				action: "WORK_ORDER_PDF_GENERATED",
+				diffJson: {
+					jafInvoicePdfPath: {
+						before: null,
+						after: "/var/jaf/uploads/packets/wo.pdf",
+					},
+				},
+			},
+		})
+	})
+
+	it("regenerating overwrites the stored path", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...signed,
+			jafInvoicePdfPath: "/var/jaf/uploads/packets/old.pdf",
+		} as any)
+		await run()
+		expect(db.jafInvoice.updateMany).toHaveBeenCalledWith({
+			where: { id: "doc-1", jafInvoiceGeneratedAt: null },
+			data: { jafInvoicePdfPath: "/var/jaf/uploads/packets/wo.pdf" },
+		})
+	})
+
+	it("generates with the warehouse and crew signatures missing", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...signed,
+			releaseSignature: null,
+			crewSignature: null,
+		} as any)
+		const res = await run()
+		expect(res.status).toBe(302)
+		expect(db.jafInvoice.updateMany).toHaveBeenCalled()
+	})
+
+	it("is refused before the supervisor signs off", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...signed,
+			status: "FIELD_UPDATED",
+			supervisorApprovedAt: null,
+			completionSignature: null,
+		} as any)
+		expect(await run()).toEqual({ errorKey: "packet.errors.not_signed_off" })
+		expect(generateClaroPacketPdf).not.toHaveBeenCalled()
+		expect(db.jafInvoice.updateMany).not.toHaveBeenCalled()
+		expect(db.auditTrail.create).not.toHaveBeenCalled()
+	})
+
+	it("is refused once the PDF has been sent to Claro", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...signed,
+			jafInvoiceGeneratedAt: new Date(),
+		} as any)
+		expect(await run()).toEqual({ errorKey: "packet.errors.locked" })
+		expect(generateClaroPacketPdf).not.toHaveBeenCalled()
+		expect(db.jafInvoice.updateMany).not.toHaveBeenCalled()
+	})
+
+	it("is refused when a send lands while rendering: nothing audited", async () => {
+		vi.mocked(db.jafInvoice.updateMany).mockResolvedValue({ count: 0 } as any)
+		expect(await run()).toEqual({ errorKey: "packet.errors.locked" })
+		expect(db.auditTrail.create).not.toHaveBeenCalled()
+	})
+
+	it("keeps the Claro supervisor's Prefield rule", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...signed,
+			claroSupervisor: { ...CLARO, requiresPrefield: true },
+		} as any)
+		expect(await run()).toEqual({ errorKey: "packet.errors.prefield_missing" })
+		expect(generateClaroPacketPdf).not.toHaveBeenCalled()
+	})
+
+	it("reports a render failure without storing anything", async () => {
+		vi.mocked(generateClaroPacketPdf).mockRejectedValueOnce(new Error("boom"))
+		expect(await run()).toEqual({ errorKey: "packet.errors.render_failed" })
+		expect(db.jafInvoice.updateMany).not.toHaveBeenCalled()
+	})
+})
+
+describe("review loader: step 4 work-order document", () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["OESTE"],
+		} as any)
+		vi.mocked(db.photo.findMany).mockResolvedValue([])
+		vi.mocked(db.preCertSheet.findFirst).mockResolvedValue(null)
+		vi.mocked(db.brigade.findUnique).mockResolvedValue(null)
+		vi.mocked(db.user.findMany).mockResolvedValue([])
+		vi.mocked(getActiveServiceCodes).mockResolvedValue(CATALOG as any)
+		vi.mocked(getAvisoAmountTolerance).mockResolvedValue(0.01)
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1", role: "SUPERVISOR", name: "Edgard Ocasio" },
+			session: {},
+		} as any)
+	})
+
+	const load = async (doc: Record<string, unknown>) => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(doc as any)
+		return loader({
+			request: new Request("http://localhost/docs/doc-1/review?step=APPROVE"),
+			params: { id: "doc-1" },
+		} as any)
+	}
+
+	it("loads the document with page links, the viewer as JAF supervisor fallback", async () => {
+		const { loadWorkOrderDocument } = await import("~/lib/packet-send.server")
+		vi.mocked(loadWorkOrderDocument).mockResolvedValue({
+			workOrderNumber: "W",
+		} as any)
+		const data = await load({ ...approvedDoc, brigade: { area: "OESTE" } })
+		expect(loadWorkOrderDocument).toHaveBeenCalledWith(
+			"doc-1",
+			"urls",
+			"Edgard Ocasio",
+		)
+		expect(data.workOrder).toEqual({ workOrderNumber: "W" })
+	})
+
+	it("Generate PDF is open once signed and until the first send", async () => {
+		const signedDoc = {
+			...approvedDoc,
+			brigade: { area: "OESTE" },
+			completionSignature: "data:image/png;base64,x",
+		}
+		expect((await load(signedDoc)).canGeneratePdf).toBe(true)
+		expect(
+			(
+				await load({
+					...signedDoc,
+					status: "FIELD_UPDATED",
+					supervisorApprovedAt: null,
+					completionSignature: null,
+				})
+			).canGeneratePdf,
+		).toBe(false)
+		expect(
+			(await load({ ...signedDoc, jafInvoiceGeneratedAt: new Date() }))
+				.canGeneratePdf,
+		).toBe(false)
 	})
 })

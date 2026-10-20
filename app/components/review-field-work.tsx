@@ -1,7 +1,6 @@
 import { useTranslation } from "react-i18next"
 import { Badge } from "~/components/ui/badge"
 import { Card, CardContent, CardHeader } from "~/components/ui/card"
-import type { AddressCorrection } from "~/lib/field-update-helpers"
 
 export type ReviewPhoto = {
 	id: string
@@ -14,59 +13,6 @@ const timeFmt = new Intl.DateTimeFormat(undefined, {
 	dateStyle: "short",
 	timeStyle: "short",
 })
-
-/** Certified address, shown as old → new with who/when for each correction. */
-export function AddressCard({
-	estimated,
-	corrections,
-	correctorNames,
-	notes,
-}: {
-	estimated: string
-	corrections: AddressCorrection[]
-	correctorNames: Record<string, string>
-	notes: string | null
-}) {
-	const { t } = useTranslation()
-	return (
-		<Card>
-			<CardHeader>
-				{corrections.length > 0
-					? t("docs_review.certified_address_corrected")
-					: t("docs_review.certified_address")}
-			</CardHeader>
-			<CardContent className="space-y-3 text-sm">
-				{corrections.length === 0 ? (
-					<p>{estimated}</p>
-				) : (
-					corrections.map((c) => (
-						<div
-							key={`${c.original}-${c.corrected}-${c.correctedAt}`}
-							className="rounded-lg bg-muted p-3"
-						>
-							<span className="text-muted-foreground line-through">
-								{c.original}
-							</span>
-							{" → "}
-							<span className="font-medium">{c.corrected}</span>
-							<p className="mt-1 text-xs text-muted-foreground">
-								{t("docs_review.corrected_by", {
-									name: correctorNames[c.correctedById] ?? "—",
-									when: timeFmt.format(new Date(c.correctedAt)),
-								})}
-							</p>
-						</div>
-					))
-				)}
-				{notes && (
-					<p className="text-muted-foreground">
-						{t("docs_review.field_notes")}: “{notes}”
-					</p>
-				)}
-			</CardContent>
-		</Card>
-	)
-}
 
 export function PhotosCard({
 	docId,

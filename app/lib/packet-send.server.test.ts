@@ -16,7 +16,7 @@ vi.mock("~/lib/pdf/claro-packet.server", async (importOriginal) => ({
 import { extractText, getDocumentProxy } from "unpdf"
 import { db } from "~/lib/db.server"
 import { type MailTransport, setMailTransport } from "~/lib/packet-mail.server"
-import { sendPacket } from "~/lib/packet-send.server"
+import { buildPacketInput, sendPacket } from "~/lib/packet-send.server"
 import { generateClaroPacketPdf } from "~/lib/pdf/claro-packet.server"
 import { getIvuRate } from "~/lib/system-settings.server"
 
@@ -27,6 +27,7 @@ const userIds: string[] = []
 const docIds: string[] = []
 const claroIds: string[] = []
 const codeIds: string[] = []
+const brigadeIds: string[] = []
 
 type Seeded = { id: string; name: string; role: "SUPERVISOR" | "ADMIN" }
 let sup: Seeded
@@ -158,6 +159,7 @@ afterAll(async () => {
 	await db.packetSend.deleteMany({ where: { docId: { in: docIds } } })
 	await db.jafInvoice.deleteMany({ where: { id: { in: docIds } } })
 	await db.claroSupervisor.deleteMany({ where: { id: { in: claroIds } } })
+	await db.brigade.deleteMany({ where: { id: { in: brigadeIds } } })
 	await db.serviceCode.deleteMany({ where: { id: { in: codeIds } } })
 	await db.user.deleteMany({ where: { id: { in: userIds } } })
 }, HOOK_TIMEOUT)
@@ -262,6 +264,11 @@ describe("sendPacket outcomes", { timeout: HOOK_TIMEOUT }, () => {
 		expect(sent).toHaveLength(1)
 		expect(sent[0].to).toBe(claro.email)
 		expect(sent[0].attachments[0].content.toString()).toBe("%PDF-packet")
+		// The issuer is JAF, in the subject, the body and the file name.
+		expect(sent[0].subject).toContain("JAF")
+		expect(sent[0].text).toContain("JAF")
+		expect(sent[0].attachments[0].filename).toMatch(/^JAF-/)
+		expect(JSON.stringify(sent[0])).not.toContain("IMS")
 
 		const after = await reload(doc.id)
 		expect(after.jafInvoiceGeneratedAt).not.toBeNull()
@@ -291,8 +298,13 @@ describe("sendPacket outcomes", { timeout: HOOK_TIMEOUT }, () => {
 		expect(Number(after.jafInvoiceLineTotal)).toBe(59)
 
 		const pdfInput = vi.mocked(generateClaroPacketPdf).mock.calls[0][0]
-		expect(pdfInput.showPrefield).toBe(true)
-		expect(pdfInput.claroSupervisorName).toBe(claro.name)
+		expect(pdfInput.document.prefield).toEqual({
+			ordenNumber: "O1",
+			pedido: "P1",
+			smr: "S1",
+			titulo: "T1",
+		})
+		expect(pdfInput.document.claroSupervisor).toBe(claro.name)
 		expect(JSON.stringify(pdfInput)).not.toMatch(/unitPrice|lineAmount/)
 
 		const audit = await db.auditTrail.findMany({
@@ -466,14 +478,14 @@ describe("sendPacket outcomes", { timeout: HOOK_TIMEOUT }, () => {
 		expect(sent[1].to).toBe(newEmail)
 		// The flag turned on after the first send does not add a Prefield page.
 		const resendInput = vi.mocked(generateClaroPacketPdf).mock.calls.at(-1)?.[0]
-		expect(resendInput?.showPrefield).toBe(false)
+		expect(resendInput?.document.prefield).toBe("not_required")
 	})
 })
 
 describe("sendPacket: brigade's stock and the IVU snapshot", {
 	timeout: HOOK_TIMEOUT,
 }, () => {
-	it("leaves BRIGADE_STOCK rows out of the packet; WAREHOUSE rows stay", async () => {
+	it("prints every Source's rows on the work order; only warehouse use is billed", async () => {
 		const own = await db.serviceCode.create({
 			data: {
 				claroCode: `${TAG}-BRIGADE`,
@@ -506,10 +518,11 @@ describe("sendPacket: brigade's stock and the IVU snapshot", {
 		const res = await sendPacket({ docId: doc.id, actor: sup, mode: "manual" })
 		expect(res).toEqual({ ok: true, outcome: "MANUAL" })
 		const input = vi.mocked(generateClaroPacketPdf).mock.calls[0][0]
-		expect(input.materials.map((m) => [m.claroCode, m.source])).toEqual([
-			[code1.claroCode, "WAREHOUSE_ISSUE"],
+		expect(input.document.materials).toEqual([
+			{ name: code1.name, used: 6, unit: "EA", source: "WAREHOUSE_ISSUE" },
+			{ name: "OWN CLAMP", used: 4, unit: "EA", source: "TRUCK_STOCK" },
 		])
-		// The real renderer: the text layer has the warehouse row only.
+		// The real renderer prints both rows with their Source.
 		const real = await vi.importActual<
 			typeof import("~/lib/pdf/claro-packet.server")
 		>("~/lib/pdf/claro-packet.server")
@@ -518,15 +531,16 @@ describe("sendPacket: brigade's stock and the IVU snapshot", {
 			await getDocumentProxy(new Uint8Array(pdf)),
 			{ mergePages: true },
 		)
-		expect(text).toContain(code1.claroCode)
-		expect(text).not.toContain(own.claroCode)
-		expect(text).not.toContain("OWN CLAMP")
-		// Still tracked on the job.
-		const stored = (await reload(doc.id)).fieldMaterials as { source: string }[]
-		expect(stored.map((r) => r.source)).toEqual([
-			"WAREHOUSE_ISSUE",
-			"TRUCK_STOCK",
-		])
+		expect(text).toContain("OWN CLAMP")
+		expect(text).toContain("Truck stock")
+		expect(text).not.toMatch(/[$€]/)
+		// Only warehouse use is billed: the locked lines are the services.
+		const after = await reload(doc.id)
+		expect(
+			(after.jafInvoiceLines as { serviceCodeId: string }[]).map(
+				(l) => l.serviceCodeId,
+			),
+		).toEqual([code1.id, code2.id])
 	})
 
 	it("records the IVU rate on the first send only", async () => {
@@ -541,5 +555,52 @@ describe("sendPacket: brigade's stock and the IVU snapshot", {
 		const diffs = audits.map((a) => a.diffJson as Record<string, unknown>)
 		expect(diffs[0].ivuRate).toBe(await getIvuRate())
 		expect(diffs[1]).not.toHaveProperty("ivuRate")
+	})
+})
+
+describe("buildPacketInput", { timeout: HOOK_TIMEOUT }, () => {
+	async function seedBrigade(name: string, code: string | null) {
+		const b = await db.brigade.create({
+			data: { name, code, memberIds: [] },
+		})
+		brigadeIds.push(b.id)
+		return b
+	}
+
+	it("builds the work order from stored data: every crew, pending signatures, JAF supervisor", async () => {
+		const claro = await seedClaro()
+		const lead = await seedBrigade(`LEAD ${TAG}`, `${TAG}-L`)
+		const other = await seedBrigade(`OTHER ${TAG}`, null)
+		const doc = await seedDoc({
+			claroSupervisorId: claro.id,
+			brigadeId: lead.id,
+			crewAssignmentHistory: [{ userIds: [], brigadeIds: [lead.id, other.id] }],
+			completionSignature: "data:image/png;base64,iVBORw0KGgo=",
+			direccion1: "Calle 1",
+			sector: "Bo. Centro",
+		})
+		const input = await buildPacketInput(doc.id)
+		const d = input.document
+		expect(d.workOrderNumber).toBe(doc.controlNumber)
+		expect(d.claroSupervisor).toBe(claro.name)
+		expect(d.jafSupervisor).toBe(sup.name)
+		expect(d.crews).toEqual([
+			{ name: lead.name, contractNumber: lead.code },
+			{ name: other.name, contractNumber: null },
+		])
+		expect(d.address).toBe("Bo. Centro, Calle 1")
+		expect(d.services.map((l) => l.qty)).toEqual([5, 2])
+		expect(d.prefield).toBe("not_required")
+		expect(d.blueprint).toBe("not_required")
+		expect(d.signatures).toEqual({
+			supervisor: {
+				name: sup.name,
+				image: "data:image/png;base64,iVBORw0KGgo=",
+			},
+			warehouse: "pending",
+			crew: "pending",
+		})
+		expect(input.issuedOn).toBeInstanceOf(Date)
+		expect(JSON.stringify(input)).not.toMatch(/unitPrice|lineAmount|price/i)
 	})
 })

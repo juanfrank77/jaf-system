@@ -11,8 +11,11 @@ type ReleaseRow = {
 
 const present = (v: string | null | undefined) => !!v && v.trim() !== ""
 
-/** A stored work-order PDF counts only when it is the packet under `packets/`. */
-function isPacketPath(path: string | null): boolean {
+/**
+ * A stored work-order PDF counts only when it is the packet under `packets/`:
+ * not an old priced invoice (`jaf-invoices/`), and not nothing.
+ */
+export function isPacketPath(path: string | null): boolean {
 	if (!present(path) || isLegacyPricedInvoice(path)) return false
 	return (path as string).split(/[\\/]/).filter(Boolean).at(-2) === "packets"
 }

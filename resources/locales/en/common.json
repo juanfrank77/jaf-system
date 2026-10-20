@@ -778,7 +778,7 @@
 		"callout_approve_title": "Step {{n}} of {{total}} · You",
 		"callout_approve_body": "Check the document below, sign, and generate the JAF Work Order PDF for the Claro supervisor.",
 		"callout_invoice_title": "Step {{n}} of {{total}} · You",
-		"callout_invoice_body": "Check the packet: Prefield, work done, materials, blueprint and photos. Then send it to the Claro supervisor, who creates the Aviso.",
+		"callout_invoice_body": "Send the PDF to the Claro supervisor, who creates the Aviso from your work order.",
 		"callout_aviso_title": "Step {{n}} of {{total}} · You",
 		"callout_aviso_body": "Enter the Aviso number and upload the document.",
 		"callout_precert_title": "Step {{n}} of {{total}} · You + the contractor",
@@ -2203,6 +2203,13 @@
 		"generate_hint": "Sign below first: the PDF can be generated once you have signed.",
 		"generated": "PDF generated",
 		"download": "Download PDF",
+		"blockers_title": "Before the PDF can be generated:",
+		"blocker": {
+			"prefield": "Prefield: fill in {{fields}} (this Claro supervisor requires it).",
+			"blueprint": "Add a blueprint (this Claro supervisor requires one).",
+			"claro_supervisor": "Choose the Claro supervisor for this job."
+		},
+		"blockers_fix": "Fix it on step 5 (Packet → Claro), then come back to generate the PDF →",
 		"back_to_field": "Back to step 3"
 	},
 	"packet": {

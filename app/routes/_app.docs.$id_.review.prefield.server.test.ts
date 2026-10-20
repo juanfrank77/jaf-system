@@ -298,6 +298,50 @@ describe("review: save_prefield", { timeout: HOOK_TIMEOUT }, () => {
 		expect((await load(doc.id)).packet.blockers).toEqual([])
 	})
 
+	it("a change before the first send clears the stored PDF (audited); an unchanged save keeps it", async () => {
+		const claro = await seedClaro()
+		const other = await seedClaro()
+		const doc = await seedDoc({
+			claroSupervisorId: claro.id,
+			ordenNumber: "1",
+			jafInvoicePdfPath: "packets/stored.pdf",
+		})
+		as(sup)
+		const pdfPath = async () =>
+			(await db.jafInvoice.findUniqueOrThrow({ where: { id: doc.id } }))
+				.jafInvoicePdfPath
+		await run(doc.id, {
+			intent: "save_prefield",
+			claroSupervisorId: claro.id,
+			ordenNumber: "1",
+		})
+		expect(await pdfPath()).toBe("packets/stored.pdf")
+
+		await run(doc.id, {
+			intent: "save_prefield",
+			claroSupervisorId: claro.id,
+			ordenNumber: "2",
+		})
+		expect(await pdfPath()).toBeNull()
+		const audit = await db.auditTrail.findFirst({
+			where: { docId: doc.id, action: "PREFIELD_EDITED" },
+		})
+		expect(audit?.diffJson).toMatchObject({
+			ordenNumber: { before: "1", after: "2" },
+			jafInvoicePdfPath: { before: "packets/stored.pdf", after: null },
+		})
+		const step5 = (await load(doc.id)).packet
+		expect(step5.packetHref).toBeNull()
+
+		// A new Claro supervisor changes the PDF too.
+		await db.jafInvoice.update({
+			where: { id: doc.id },
+			data: { jafInvoicePdfPath: "packets/again.pdf" },
+		})
+		await run(doc.id, { intent: "save_prefield", claroSupervisorId: other.id })
+		expect(await pdfPath()).toBeNull()
+	})
+
 	it("is refused after the first send", async () => {
 		const claro = await seedClaro()
 		const sentAt = new Date()

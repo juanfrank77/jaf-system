@@ -43,7 +43,7 @@ import {
 } from "~/lib/contractor-payment.server"
 import { db } from "~/lib/db.server"
 import { isPacketEmailEnabled } from "~/lib/features.server"
-import { packetMaterialRows } from "~/lib/field-materials"
+import { fieldMaterialsOrDefault } from "~/lib/field-materials"
 import type { AddressCorrection } from "~/lib/field-update-helpers"
 import {
 	uploadFileName,
@@ -68,7 +68,7 @@ import {
 	renderPreCert,
 } from "~/lib/pre-cert.server"
 import { packetBlockers, prefieldMissing } from "~/lib/prefield"
-import { evaluateReleaseGate } from "~/lib/release-gate"
+import { evaluateReleaseGate, isPacketPath } from "~/lib/release-gate"
 import {
 	getActiveServiceCodes,
 	isPriceBlind,
@@ -161,6 +161,16 @@ async function checkAvisoNumber(
 const isSig = (v: unknown) =>
 	typeof v === "string" && v.startsWith("data:image") && v !== "data:,"
 
+/**
+ * Sent to Claro under the old flow: the first send happened but what is
+ * stored is a priced invoice (`jaf-invoices/`) or nothing, never the work
+ * order PDF the release gate needs. Step 4 can still generate that PDF.
+ */
+const isSentUnderOldFlow = (doc: {
+	jafInvoiceGeneratedAt: Date | null
+	jafInvoicePdfPath: string | null
+}) => !!doc.jafInvoiceGeneratedAt && !isPacketPath(doc.jafInvoicePdfPath)
+
 export const meta: Route.MetaFunction = ({ data }) => [
 	{
 		title: data
@@ -224,11 +234,12 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			...(doc.completedById ? [doc.completedById] : []),
 		]),
 	]
-	// The packet preview lists what the packet PDF does (no brigade's stock).
-	const materialRows = packetMaterialRows(
+	// Step 5 lists the materials the work order PDF prints: every Source, used
+	// lines only (the same rows `buildWorkOrderDocument` takes).
+	const materialRows = fieldMaterialsOrDefault(
 		doc.fieldMaterials,
 		(doc.materialsTaken as MaterialLine[] | null) ?? [],
-	)
+	).filter((r) => r.used > 0)
 	const [
 		serviceCodes,
 		photos,
@@ -337,7 +348,12 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		controlNumber: doc.controlNumber,
 		jobType: doc.jobType,
 		address: doc.jobAddressActual ?? doc.jobAddressEstimated,
-		brigadeName: brigade?.name ?? null,
+		// The crew as the work order prints it: "NAME · contract number".
+		brigadeName: brigade
+			? brigade.code
+				? `${brigade.name} · ${brigade.code}`
+				: brigade.name
+			: null,
 		workDate: (doc.startedAt ?? doc.fieldSubmittedAt)?.toISOString() ?? null,
 	}
 	if (lineTotal != null && showPrices) {
@@ -391,10 +407,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		prefieldMissing: claro?.requiresPrefield ? prefieldMissing(doc) : [],
 		blockers,
 		// Only a real packet: a legacy priced invoice in jaf-invoices/ is not one.
-		packetHref:
-			doc.jafInvoicePdfPath && !isLegacyPricedInvoice(doc.jafInvoicePdfPath)
-				? uploadHref(doc.jafInvoicePdfPath)
-				: null,
+		packetHref: isPacketPath(doc.jafInvoicePdfPath)
+			? uploadHref(doc.jafInvoicePdfPath as string)
+			: null,
 		blueprints: doc.blueprintPaths.map((p) => {
 			const name = path.basename(p)
 			return {
@@ -430,21 +445,25 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		canMarkManual: emailEnabled
 			? !sent &&
 				(sends[0]?.outcome === "UNCONFIGURED" || sends[0]?.outcome === "FAILED")
-			: !sent && !!doc.jafInvoicePdfPath,
+			: !sent && isPacketPath(doc.jafInvoicePdfPath),
 	}
 
 	// Step 4 · the work order document, and Generate PDF: open once the
-	// supervisor has signed, until the first send to Claro locks it.
+	// supervisor has signed and the Claro supervisor's rules are met, until the
+	// first send to Claro locks it. A job sent under the old flow has no work
+	// order PDF yet, so it stays open for it until the release.
 	const workOrder =
 		panelForStep(view) === "APPROVE"
 			? await loadWorkOrderDocument(params.id, "urls", user.name)
 			: null
 	const canGeneratePdf =
 		!!doc.supervisorApprovedAt &&
-		isSig(doc.completionSignature) &&
-		!doc.jafInvoiceGeneratedAt &&
 		!doc.releasedToFinanceAt &&
-		!isTerminalStatus(doc.status)
+		!isTerminalStatus(doc.status) &&
+		(isSentUnderOldFlow(doc) ||
+			(isSig(doc.completionSignature) &&
+				!doc.jafInvoiceGeneratedAt &&
+				blockers.length === 0))
 
 	const { claroSupervisor: _claro, ...docData } = doc
 	return {
@@ -544,28 +563,39 @@ export async function action({ request, params }: Route.ActionArgs) {
 	// Step 4 · Generate PDF: render the work order document and store it as
 	// the job's packet PDF. Only after sign-off (a missing warehouse or crew
 	// signature prints "Pending" and never blocks), and only until the first
-	// send to Claro: regenerating before then replaces the stored file.
+	// send to Claro: regenerating before then replaces the stored file. A job
+	// sent under the old flow (a priced invoice, or nothing, stored) has no
+	// work order PDF for the release gate, so it may generate one until the
+	// release; the Claro supervisor's rules stopped applying at its send.
 	if (intent === "generate_work_order_pdf") {
+		const oldFlow = isSentUnderOldFlow(doc)
 		if (
-			doc.jafInvoiceGeneratedAt ||
+			(doc.jafInvoiceGeneratedAt && !oldFlow) ||
 			doc.releasedToFinanceAt ||
 			isTerminalStatus(doc.status)
 		)
 			return { errorKey: "packet.errors.locked" }
-		if (!doc.supervisorApprovedAt || !isSig(doc.completionSignature))
+		if (
+			!doc.supervisorApprovedAt ||
+			(!oldFlow && !isSig(doc.completionSignature))
+		)
 			return { errorKey: "packet.errors.not_signed_off" }
-		const claro = doc.claroSupervisor
-		if (!claro) return { errorKey: "packet.errors.no_claro_supervisor" }
-		const blockers = packetBlockers(doc, claro)
-		if (blockers.includes("prefield"))
-			return { errorKey: "packet.errors.prefield_missing" }
-		if (blockers.includes("blueprint"))
-			return { errorKey: "packet.errors.blueprint_missing" }
+		if (!oldFlow) {
+			const claro = doc.claroSupervisor
+			if (!claro) return { errorKey: "packet.errors.no_claro_supervisor" }
+			const blockers = packetBlockers(doc, claro)
+			if (blockers.includes("prefield"))
+				return { errorKey: "packet.errors.prefield_missing" }
+			if (blockers.includes("blueprint"))
+				return { errorKey: "packet.errors.blueprint_missing" }
+		}
 		let pdfPath: string
+		// The layout of this file, so the send that records it can say so.
+		let showPrefield: boolean
 		try {
-			const pdf = await generateClaroPacketPdf(
-				await buildPacketInput(params.id),
-			)
+			const input = await buildPacketInput(params.id)
+			showPrefield = input.document.prefield !== "not_required"
+			const pdf = await generateClaroPacketPdf(input)
 			pdfPath = await saveBuffer(
 				"packets",
 				`${params.id}-work-order-${Date.now()}.pdf`,
@@ -575,9 +605,12 @@ export async function action({ request, params }: Route.ActionArgs) {
 			return { errorKey: "packet.errors.render_failed" }
 		}
 		const stored = await db.$transaction(async (tx) => {
-			// A send that landed while rendering wins: nothing changes.
+			// A send that landed while rendering wins: nothing changes. An
+			// old-flow job only checks nobody stored another file meanwhile.
 			const updated = await tx.jafInvoice.updateMany({
-				where: { id: params.id, jafInvoiceGeneratedAt: null },
+				where: oldFlow
+					? { id: params.id, jafInvoicePdfPath: doc.jafInvoicePdfPath }
+					: { id: params.id, jafInvoiceGeneratedAt: null },
 				data: { jafInvoicePdfPath: pdfPath },
 			})
 			if (updated.count === 0) return false
@@ -591,6 +624,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 							before: doc.jafInvoicePdfPath,
 							after: pdfPath,
 						},
+						showPrefield,
 					},
 				},
 			})
@@ -664,7 +698,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 	// Step 5 · the Prefield fields, the Claro supervisor and (when that
 	// supervisor needs one) a blueprint can be filled or corrected here until
-	// the first send; after it they are what Claro received.
+	// the first send; after it they are what Claro received. Any change makes
+	// the stored PDF out of date, so it is cleared and step 4 generates it again.
 	if (intent === "save_prefield") {
 		if (doc.jafInvoiceGeneratedAt)
 			return { errorKey: "packet.errors.prefield_locked" }
@@ -712,6 +747,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 			)
 		if (added.length > 0)
 			data.blueprintPaths = [...doc.blueprintPaths, ...added]
+		if (Object.keys(data).length > 0 && doc.jafInvoicePdfPath) {
+			data.jafInvoicePdfPath = null
+			changes.jafInvoicePdfPath = { before: doc.jafInvoicePdfPath, after: null }
+		}
 		if (Object.keys(data).length > 0)
 			await db.$transaction([
 				db.jafInvoice.update({ where: { id: params.id }, data }),
@@ -732,6 +771,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 	// Something is wrong with what the brigade reported: reopen the Approve step
 	// (not the crew) so the supervisor can fix it before anything goes to Claro.
+	// The stored PDF no longer matches what will be signed: it is cleared.
 	if (intent === "back_to_approve") {
 		const note = (form.get("note") as string | null)?.trim() || ""
 		if (!note) return { errorKey: "docs_review.errors.back_note_required" }
@@ -744,7 +784,11 @@ export async function action({ request, params }: Route.ActionArgs) {
 		await db.$transaction([
 			db.jafInvoice.update({
 				where: { id: params.id },
-				data: { status: "FIELD_UPDATED", supervisorApprovedAt: null },
+				data: {
+					status: "FIELD_UPDATED",
+					supervisorApprovedAt: null,
+					...(doc.jafInvoicePdfPath ? { jafInvoicePdfPath: null } : {}),
+				},
 			}),
 			db.auditTrail.create({
 				data: {
@@ -754,6 +798,14 @@ export async function action({ request, params }: Route.ActionArgs) {
 					diffJson: {
 						status: { before: doc.status, after: "FIELD_UPDATED" },
 						note,
+						...(doc.jafInvoicePdfPath
+							? {
+									jafInvoicePdfPath: {
+										before: doc.jafInvoicePdfPath,
+										after: null,
+									},
+								}
+							: {}),
 					},
 				},
 			}),
@@ -1720,9 +1772,13 @@ export default function ReviewDoc({
 		takenAt: String(p.takenAt),
 	}))
 	const panel = panelForStep(view)
+	// Signed, not sent, but the Claro supervisor's rules block Generate PDF:
+	// step 4 says what to fix on step 5.
+	const pdfBlocked =
+		!!doc.supervisorApprovedAt && !packet.sent && packet.blockers.length > 0
 	// Step 4 stays actionable after signing, for Generate PDF, until the send.
 	const signOffOpen =
-		view === "APPROVE" && (stage === "APPROVE" || canGeneratePdf)
+		view === "APPROVE" && (stage === "APPROVE" || canGeneratePdf || pdfBlocked)
 	// The one-line "Step N of 9" callout under the rail. Approve only shows while
 	// it is the live step; later screens show it whenever they can be acted on.
 	const calloutKey =
@@ -1794,6 +1850,31 @@ export default function ReviewDoc({
 						canSign={interactive && doc.status === "FIELD_UPDATED"}
 						errorKey={error?.errorKey}
 					/>
+					{signOffOpen && pdfBlocked && (
+						<Pill variant="warn" icon="⚠">
+							<b>{t("work_order_doc.blockers_title")}</b>
+							<ul className="mt-1 list-disc pl-5">
+								{packet.blockers.map((b) => (
+									<li key={b}>
+										{b === "prefield"
+											? t("work_order_doc.blocker.prefield", {
+													fields: packet.prefieldMissing
+														.map((k) =>
+															t(
+																`packet.prefield.${k as (typeof PREFIELD_INPUTS)[number]}`,
+															),
+														)
+														.join(", "),
+												})
+											: t(`work_order_doc.blocker.${b}`)}
+									</li>
+								))}
+							</ul>
+							<Link to="?step=INVOICE" className="underline">
+								{t("work_order_doc.blockers_fix")}
+							</Link>
+						</Pill>
+					)}
 					{signOffOpen && (
 						<GenerateWorkOrderPdf
 							enabled={canGeneratePdf}
@@ -1974,9 +2055,7 @@ export default function ReviewDoc({
 							</div>
 						}
 					>
-						{interactive && !packet.sent && packet.emailEnabled && (
-							<BackToSignOff />
-						)}
+						{interactive && !packet.sent && <BackToSignOff />}
 					</PacketStepCard>
 					{interactive && packet.sent && !isAvisoSaved(doc) && (
 						<Pill variant="warn" icon="→">

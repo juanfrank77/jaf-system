@@ -82,22 +82,6 @@ export function fieldMaterialsOrDefault(
 }
 
 /**
- * The materials rows on the Claro packet, and on the supervisor's preview of
- * it: WAREHOUSE rows only. Brigade's own stock stays tracked in
- * `fieldMaterials` and never reaches the client-facing packet (provisional
- * ruling). One helper for both, so the preview cannot drift from the PDF.
- */
-export function packetMaterialRows(
-	stored: unknown,
-	taken: MaterialLine[],
-): (FieldMaterialRow & { source: "WAREHOUSE_ISSUE" })[] {
-	return fieldMaterialsOrDefault(stored, taken).filter(
-		(r): r is FieldMaterialRow & { source: "WAREHOUSE_ISSUE" } =>
-			isBillableSource(r.source),
-	)
-}
-
-/**
  * `materialsUsed` shape: one line per code with WAREHOUSE use > 0. Brigade's
  * stock stays off the billable lines (see `brigadeStockLines`).
  */

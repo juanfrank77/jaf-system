@@ -18,6 +18,7 @@ import {
 import { isTerminalStatus } from "./permissions"
 import { packetBlockers } from "./prefield"
 import { sanitizedError } from "./redact"
+import { isPacketPath } from "./release-gate"
 import { getActiveServiceCodes } from "./service-codes.server"
 import {
 	buildInvoiceLines,
@@ -121,24 +122,31 @@ export async function sendPacket(args: {
 	// Recorded with the first send only (see the PACKET_SENT diff below).
 	const ivuRate = firstSent ? null : await getIvuRate()
 
-	// Manual mode sends nothing: it records that the supervisor emailed the PDF
-	// stored at step 4, so that file is reused as is.
-	if (mode === "manual" && !doc.jafInvoicePdfPath)
+	// Manual mode sends nothing: it records that the supervisor emailed the
+	// work order PDF stored at step 4 (never an old priced invoice), so that
+	// file is reused as is, with the Prefield layout it was generated with.
+	if (mode === "manual" && !isPacketPath(doc.jafInvoicePdfPath))
 		return { ok: false, errorKey: "packet.errors.pdf_missing" }
 
-	const packet = await buildPacketInput(docId)
-	const showPrefield = packet.document.prefield !== "not_required"
 	const recipientEmail = claro.email
-	// One file per attempt, so two quick clicks never write the same file. For
-	// an email send it is the PDF that was attached; for MANUAL it is a fresh
-	// render from the same stored data, not necessarily the exact file the
-	// supervisor downloaded and sent by hand.
+	let showPrefield =
+		mode === "manual"
+			? await prefieldShownInStoredPdf(
+					docId,
+					doc.jafInvoicePdfPath as string,
+					claro.requiresPrefield,
+				)
+			: false
+	// An email send renders one file per attempt, so two quick clicks never
+	// write the same file; it is the PDF that was attached.
 	let pdf: Buffer | null = null
 	let pdfPath: string
 	try {
 		if (mode === "manual") {
 			pdfPath = doc.jafInvoicePdfPath as string
 		} else {
+			const packet = await buildPacketInput(docId)
+			showPrefield = packet.document.prefield !== "not_required"
 			pdf = await generateClaroPacketPdf(packet)
 			pdfPath = await saveBuffer(
 				"packets",
@@ -294,6 +302,31 @@ async function firstSendDiff(
 export async function ivuRateAtFirstSend(docId: string): Promise<number> {
 	const first = await firstSendDiff(docId)
 	return typeof first?.ivuRate === "number" ? first.ivuRate : getIvuRate()
+}
+
+/**
+ * Whether the stored step 4 PDF has the Prefield block, as recorded when it
+ * was generated; the Claro supervisor's flag for a file generated before
+ * that was recorded.
+ */
+async function prefieldShownInStoredPdf(
+	docId: string,
+	pdfPath: string,
+	fallback: boolean,
+): Promise<boolean> {
+	const generated = await db.auditTrail.findFirst({
+		where: { docId, action: "WORK_ORDER_PDF_GENERATED" },
+		orderBy: { timestamp: "desc" },
+		select: { diffJson: true },
+	})
+	const diff = (generated?.diffJson ?? {}) as {
+		jafInvoicePdfPath?: { after?: unknown }
+		showPrefield?: unknown
+	}
+	return diff.jafInvoicePdfPath?.after === pdfPath &&
+		typeof diff.showPrefield === "boolean"
+		? diff.showPrefield
+		: fallback
 }
 
 /** After the first send flag edits no longer apply: keep that send's layout. */

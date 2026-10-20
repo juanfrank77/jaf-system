@@ -778,7 +778,7 @@
 		"callout_approve_title": "Paso {{n}} de {{total}} · Usted",
 		"callout_approve_body": "Revise el documento abajo, firme y genere el PDF de la Orden de trabajo JAF para el supervisor de Claro.",
 		"callout_invoice_title": "Paso {{n}} de {{total}} · Usted",
-		"callout_invoice_body": "Revise el paquete: Prefield, trabajo realizado, materiales, plano y fotos. Luego envíelo al supervisor de Claro, quien crea el Aviso.",
+		"callout_invoice_body": "Envíe el PDF al supervisor de Claro, quien crea el Aviso a partir de su orden de trabajo.",
 		"callout_aviso_title": "Paso {{n}} de {{total}} · Usted",
 		"callout_aviso_body": "Ingrese el número de Aviso y suba el documento.",
 		"callout_precert_title": "Paso {{n}} de {{total}} · Usted + el contratista",
@@ -2203,6 +2203,13 @@
 		"generate_hint": "Firme abajo primero: el PDF se puede generar cuando haya firmado.",
 		"generated": "PDF generado",
 		"download": "Descargar PDF",
+		"blockers_title": "Antes de poder generar el PDF:",
+		"blocker": {
+			"prefield": "Prefield: complete {{fields}} (este supervisor de Claro lo requiere).",
+			"blueprint": "Añada un plano (este supervisor de Claro lo requiere).",
+			"claro_supervisor": "Elija el supervisor de Claro de este trabajo."
+		},
+		"blockers_fix": "Corríjalo en el paso 5 (Paquete → Claro) y vuelva para generar el PDF →",
 		"back_to_field": "Volver al paso 3"
 	},
 	"packet": {

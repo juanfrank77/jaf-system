@@ -1246,6 +1246,38 @@ describe("review: back_to_approve", () => {
 		})
 	})
 
+	it("clears the stored work order PDF, so step 4 has to generate it again", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...doc,
+			jafInvoicePdfPath: "/var/jaf/uploads/packets/wo.pdf",
+		} as any)
+		await expect(
+			action({
+				request: post(intent("back_to_approve", { note: "qty is off" })),
+				params: { id: "doc-1" },
+			} as any),
+		).rejects.toMatchObject({ status: 302 })
+		expect(db.jafInvoice.update).toHaveBeenCalledWith({
+			where: { id: "doc-1" },
+			data: {
+				status: "FIELD_UPDATED",
+				supervisorApprovedAt: null,
+				jafInvoicePdfPath: null,
+			},
+		})
+		expect(db.auditTrail.create).toHaveBeenCalledWith({
+			data: expect.objectContaining({
+				action: "BACK_TO_APPROVE",
+				diffJson: expect.objectContaining({
+					jafInvoicePdfPath: {
+						before: "/var/jaf/uploads/packets/wo.pdf",
+						after: null,
+					},
+				}),
+			}),
+		})
+	})
+
 	it("is not allowed once the invoice has been reviewed", async () => {
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
 			...doc,
@@ -1525,6 +1557,15 @@ describe("review loader: Packet → Claro step", () => {
 			})
 		).packet
 		expect(sentDoc.canMarkManual).toBe(false)
+		// An old priced invoice is not the step 4 PDF.
+		const legacy = (
+			await loadAs("SUPERVISOR", {
+				...signedOff,
+				jafInvoicePdfPath: "/uploads/jaf-invoices/doc-1-jaf-invoice.pdf",
+			})
+		).packet
+		expect(legacy.canMarkManual).toBe(false)
+		expect(legacy.packetHref).toBeNull()
 	})
 
 	it("a stored packet PDF from an UNCONFIGURED attempt is downloadable but not 'sent'", async () => {
@@ -1580,6 +1621,24 @@ describe("review loader: Packet → Claro step", () => {
 		expect(sent.packet.blockers).toEqual([])
 	})
 
+	it("names the crew with its contract number on the step 5 card", async () => {
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
+			id: "b1",
+			name: "JESUS MARTINEZ",
+			code: "009",
+		} as any)
+		const data = await loadAs("SUPERVISOR", signedOff)
+		expect(data.invoiceHeader.brigadeName).toBe("JESUS MARTINEZ · 009")
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
+			id: "b1",
+			name: "JESUS MARTINEZ",
+			code: null,
+		} as any)
+		expect(
+			(await loadAs("SUPERVISOR", signedOff)).invoiceHeader.brigadeName,
+		).toBe("JESUS MARTINEZ")
+	})
+
 	it("carries blueprint download links and the materials table, by code", async () => {
 		const data = await loadAs("SUPERVISOR", {
 			...signedOff,
@@ -1604,7 +1663,7 @@ describe("review loader: Packet → Claro step", () => {
 		])
 	})
 
-	it("previews the packet's materials as sent: no brigade's stock rows", async () => {
+	it("previews the work order PDF's materials: every Source, used lines only", async () => {
 		const data = await loadAs("SUPERVISOR", {
 			...signedOff,
 			fieldMaterials: [
@@ -1615,14 +1674,22 @@ describe("review loader: Packet → Claro step", () => {
 					source: "WAREHOUSE_ISSUE",
 				},
 				{ serviceCodeId: "m2", used: 4, returned: 0, source: "TRUCK_STOCK" },
+				{
+					serviceCodeId: "m3",
+					used: 0,
+					returned: 2,
+					source: "WAREHOUSE_ISSUE",
+				},
 			],
 		})
 		expect(
 			data.packet.materials.map((m) => [m.serviceCodeId, m.source]),
-		).toEqual([["m1", "WAREHOUSE_ISSUE"]])
-		// The code lookup no longer asks for the brigade's-stock code.
+		).toEqual([
+			["m1", "WAREHOUSE_ISSUE"],
+			["m2", "TRUCK_STOCK"],
+		])
 		expect(db.serviceCode.findMany).toHaveBeenCalledWith(
-			expect.objectContaining({ where: { id: { in: ["m1"] } } }),
+			expect.objectContaining({ where: { id: { in: ["m1", "m2"] } } }),
 		)
 	})
 
@@ -1766,7 +1833,7 @@ describe("review: generate_work_order_pdf (step 4)", () => {
 		titulo: null,
 	}
 	const PACKET = {
-		document: { workOrderNumber: "MAINT-260903-001" },
+		document: { workOrderNumber: "MAINT-260903-001", prefield: "not_required" },
 		issuedOn: new Date(),
 	}
 	const run = () =>
@@ -1811,6 +1878,8 @@ describe("review: generate_work_order_pdf (step 4)", () => {
 						before: null,
 						after: "/var/jaf/uploads/packets/wo.pdf",
 					},
+					// The layout of this file, for the send that records it.
+					showPrefield: false,
 				},
 			},
 		})
@@ -1856,10 +1925,58 @@ describe("review: generate_work_order_pdf (step 4)", () => {
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
 			...signed,
 			jafInvoiceGeneratedAt: new Date(),
+			jafInvoicePdfPath: "/var/jaf/uploads/packets/sent.pdf",
 		} as any)
 		expect(await run()).toEqual({ errorKey: "packet.errors.locked" })
 		expect(generateClaroPacketPdf).not.toHaveBeenCalled()
 		expect(db.jafInvoice.updateMany).not.toHaveBeenCalled()
+	})
+
+	it.each([
+		["a priced invoice", "/var/jaf/uploads/jaf-invoices/doc-1-jaf-invoice.pdf"],
+		["no file", null],
+	])(
+		"a job sent under the old flow (%s stored) can still generate it, so it can be released",
+		async (_label, legacyPath) => {
+			vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+				...signed,
+				status: "CLARO_UPLOADED",
+				jafInvoiceGeneratedAt: new Date("2026-09-01T12:00:00Z"),
+				jafInvoicePdfPath: legacyPath,
+				// The old flow had no Claro supervisor directory nor this signature.
+				claroSupervisorId: null,
+				claroSupervisor: null,
+				completionSignature: null,
+			} as any)
+			const res = await run()
+			expect(res.status).toBe(302)
+			expect(db.jafInvoice.updateMany).toHaveBeenCalledWith({
+				where: { id: "doc-1", jafInvoicePdfPath: legacyPath },
+				data: { jafInvoicePdfPath: "/var/jaf/uploads/packets/wo.pdf" },
+			})
+			expect(db.auditTrail.create).toHaveBeenCalledWith({
+				data: expect.objectContaining({
+					action: "WORK_ORDER_PDF_GENERATED",
+					diffJson: expect.objectContaining({
+						jafInvoicePdfPath: {
+							before: legacyPath,
+							after: "/var/jaf/uploads/packets/wo.pdf",
+						},
+					}),
+				}),
+			})
+		},
+	)
+
+	it("is refused for an old-flow job already released to Finance", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...signed,
+			jafInvoiceGeneratedAt: new Date(),
+			jafInvoicePdfPath: "/var/jaf/uploads/jaf-invoices/doc-1.pdf",
+			releasedToFinanceAt: new Date(),
+		} as any)
+		expect(await run()).toEqual({ errorKey: "packet.errors.locked" })
+		expect(generateClaroPacketPdf).not.toHaveBeenCalled()
 	})
 
 	it("is refused when a send lands while rendering: nothing audited", async () => {
@@ -1929,6 +2046,19 @@ describe("review loader: step 4 work-order document", () => {
 			...approvedDoc,
 			brigade: { area: "OESTE" },
 			completionSignature: "data:image/png;base64,x",
+			claroSupervisorId: "cs-1",
+			claroSupervisor: {
+				id: "cs-1",
+				name: "Ramón Claro",
+				email: "ramon@claro.example",
+				requiresPrefield: false,
+				requiresBlueprint: false,
+			},
+			ordenNumber: null,
+			pedido: null,
+			smr: null,
+			titulo: null,
+			jafInvoicePdfPath: null,
 		}
 		expect((await load(signedDoc)).canGeneratePdf).toBe(true)
 		expect(
@@ -1942,8 +2072,61 @@ describe("review loader: step 4 work-order document", () => {
 			).canGeneratePdf,
 		).toBe(false)
 		expect(
-			(await load({ ...signedDoc, jafInvoiceGeneratedAt: new Date() }))
-				.canGeneratePdf,
+			(
+				await load({
+					...signedDoc,
+					jafInvoiceGeneratedAt: new Date(),
+					jafInvoicePdfPath: "/uploads/packets/sent.pdf",
+				})
+			).canGeneratePdf,
 		).toBe(false)
+	})
+
+	it("Generate PDF stays closed while the action would refuse it: no Claro supervisor, or its Prefield / blueprint rules unmet", async () => {
+		const base = {
+			...approvedDoc,
+			brigade: { area: "OESTE" },
+			completionSignature: "data:image/png;base64,x",
+			ordenNumber: null,
+			pedido: null,
+			smr: null,
+			titulo: null,
+			jafInvoicePdfPath: null,
+		}
+		const none = await load({
+			...base,
+			claroSupervisorId: null,
+			claroSupervisor: null,
+		})
+		expect(none.canGeneratePdf).toBe(false)
+		expect(none.packet.blockers).toEqual(["claro_supervisor"])
+		const strict = await load({
+			...base,
+			claroSupervisorId: "cs-1",
+			claroSupervisor: {
+				id: "cs-1",
+				name: "Ramón Claro",
+				email: "ramon@claro.example",
+				requiresPrefield: true,
+				requiresBlueprint: true,
+			},
+		})
+		expect(strict.canGeneratePdf).toBe(false)
+		expect(strict.packet.blockers).toEqual(["prefield", "blueprint"])
+	})
+
+	it("a job sent under the old flow (priced invoice stored) can generate its work order PDF", async () => {
+		const data = await load({
+			...approvedDoc,
+			status: "CLARO_UPLOADED",
+			brigade: { area: "OESTE" },
+			completionSignature: null,
+			claroSupervisorId: null,
+			claroSupervisor: null,
+			jafInvoiceGeneratedAt: new Date("2026-09-01T12:00:00Z"),
+			jafInvoicePdfPath: "/uploads/jaf-invoices/doc-1-jaf-invoice.pdf",
+		})
+		expect(data.canGeneratePdf).toBe(true)
+		expect(data.packet.packetHref).toBeNull()
 	})
 })

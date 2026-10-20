@@ -32,7 +32,7 @@ describe("supervisorQueueWhere", () => {
 		const where = supervisorQueueWhere("invoice")
 		expect(where).toMatchObject({
 			releasedToFinanceAt: null,
-			avisoMatchedAt: null,
+			OR: [{ avisoNumber: null }, { avisoDocPath: null }],
 			supervisorApprovedAt: { not: null },
 		})
 		expect(where).not.toHaveProperty("jafInvoiceGeneratedAt")
@@ -58,14 +58,15 @@ describe("supervisorQueueWhere", () => {
 	it("walks the milestones from Approve to Finance", () => {
 		expect(supervisorQueueWhere("invoice")).toMatchObject({
 			supervisorApprovedAt: { not: null },
-			avisoMatchedAt: null,
+			OR: [{ avisoNumber: null }, { avisoDocPath: null }],
 		})
 		expect(supervisorQueueWhere("aviso")).toMatchObject({
 			jafInvoiceGeneratedAt: { not: null },
-			avisoMatchedAt: null,
+			OR: [{ avisoNumber: null }, { avisoDocPath: null }],
 		})
 		expect(supervisorQueueWhere("precert")).toMatchObject({
-			avisoMatchedAt: { not: null },
+			avisoNumber: { not: null },
+			avisoDocPath: { not: null },
 			releasedToFinanceAt: null,
 		})
 		expect(supervisorQueueWhere("released")).toMatchObject({

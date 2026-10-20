@@ -14,7 +14,8 @@ const base = {
 	status: "FIELD_UPDATED" as const,
 	supervisorApprovedAt: null,
 	jafInvoiceGeneratedAt: null,
-	avisoMatchedAt: null,
+	avisoNumber: null,
+	avisoDocPath: null,
 	releasedToFinanceAt: null,
 }
 
@@ -41,6 +42,18 @@ describe("deriveSupervisorStage", () => {
 			deriveSupervisorStage({ ...base, status: "FIELD_UPDATED" }, null),
 		).toBe("APPROVE")
 	})
+	it("a legacy avisoMatchedAt without a saved Aviso PDF stays at AVISO, not PRECERT", () => {
+		const legacy = {
+			...base,
+			status: "SUPERVISOR_APPROVED" as const,
+			supervisorApprovedAt: now,
+			jafInvoiceGeneratedAt: now,
+			avisoNumber: "10353961",
+			avisoDocPath: null,
+			avisoMatchedAt: now,
+		}
+		expect(deriveSupervisorStage(legacy, null)).toBe("AVISO")
+	})
 	it("follows timestamps after approval", () => {
 		const approved = {
 			...base,
@@ -54,7 +67,8 @@ describe("deriveSupervisorStage", () => {
 		const matched = {
 			...approved,
 			jafInvoiceGeneratedAt: now,
-			avisoMatchedAt: now,
+			avisoNumber: "10353961",
+			avisoDocPath: "/x/aviso-docs/a.pdf",
 		}
 		expect(deriveSupervisorStage(matched, null)).toBe("PRECERT")
 		expect(
@@ -152,7 +166,6 @@ describe("evaluateReleaseGate", () => {
 				lineAmount: 1,
 			},
 		],
-		avisoMatchedAt: now,
 		contractorAccountCode: "204",
 	}
 	const sheet = { sigSupervisorAt: now, sigSubcontractorAt: now }
@@ -176,7 +189,7 @@ describe("evaluateReleaseGate", () => {
 		["invoice", { jafInvoiceGeneratedAt: null }],
 		["aviso", { avisoDocPath: null }],
 		["aviso", { avisoLines: [] }],
-		["amount_match", { avisoMatchedAt: null }],
+		["amount_match", { avisoNumber: null }],
 		["contractor_code", { contractorAccountCode: null }],
 	])("fails %s", (key, patch) => {
 		const r = evaluateReleaseGate({ ...good, ...patch }, sheet, photos)

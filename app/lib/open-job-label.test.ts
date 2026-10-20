@@ -7,12 +7,18 @@ const signed = { sigSupervisorAt: D, sigSubcontractorAt: D }
 const unsigned = { sigSupervisorAt: D, sigSubcontractorAt: null }
 
 type Doc = Parameters<typeof openJobLabel>[0]
+const SAVED = {
+	avisoNumber: "10353961",
+	avisoDocPath: "/x/aviso-docs/a.pdf",
+}
+
 const doc = (status: DocStatus, over: Partial<Doc> = {}): Doc => ({
 	status,
 	fieldStartedAt: null,
 	supervisorApprovedAt: null,
 	jafInvoiceGeneratedAt: null,
-	avisoMatchedAt: null,
+	avisoNumber: null,
+	avisoDocPath: null,
 	releasedToFinanceAt: null,
 	...over,
 })
@@ -33,13 +39,13 @@ describe("openJobLabel", () => {
 		],
 		[
 			"SUPERVISOR_APPROVED",
-			{ supervisorApprovedAt: D, jafInvoiceGeneratedAt: D, avisoMatchedAt: D },
+			{ supervisorApprovedAt: D, jafInvoiceGeneratedAt: D, ...SAVED },
 			unsigned,
 			"PRECERT",
 		],
 		[
 			"SUPERVISOR_APPROVED",
-			{ supervisorApprovedAt: D, jafInvoiceGeneratedAt: D, avisoMatchedAt: D },
+			{ supervisorApprovedAt: D, jafInvoiceGeneratedAt: D, ...SAVED },
 			signed,
 			"RELEASE",
 		],
@@ -48,7 +54,7 @@ describe("openJobLabel", () => {
 			{
 				supervisorApprovedAt: D,
 				jafInvoiceGeneratedAt: D,
-				avisoMatchedAt: D,
+				...SAVED,
 				releasedToFinanceAt: D,
 			},
 			signed,

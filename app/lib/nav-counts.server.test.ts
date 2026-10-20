@@ -53,6 +53,26 @@ describe("loadNavCounts", () => {
 		})
 	})
 
+	it("the red Aviso count is the jobs sent to Claro still awaiting a saved Aviso", async () => {
+		vi.mocked(db.jafInvoice.count).mockResolvedValue(0)
+		await loadNavCounts({ id: "sup-1", role: "SUPERVISOR" })
+		// Order: open, invoice, aviso, …
+		expect(db.jafInvoice.count).toHaveBeenNthCalledWith(3, {
+			where: {
+				AND: [
+					expect.objectContaining({ OR: expect.any(Array) }),
+					{
+						releasedToFinanceAt: null,
+						// "Aviso saved" = number + stored PDF; either missing still counts.
+						OR: [{ avisoNumber: null }, { avisoDocPath: null }],
+						jafInvoiceGeneratedAt: { not: null },
+						status: { not: "CANCELLED" },
+					},
+				],
+			},
+		})
+	})
+
 	it("gives WAREHOUSE counts per step page and for material requests", async () => {
 		vi.mocked(db.jafInvoice.count)
 			.mockResolvedValueOnce(3) // prep

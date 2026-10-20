@@ -30,7 +30,8 @@ const job = (o: Record<string, unknown>) => ({
 	crewAssignmentHistory: null,
 	supervisorApprovedAt: null,
 	jafInvoiceGeneratedAt: null,
-	avisoMatchedAt: null,
+	avisoNumber: null,
+	avisoDocPath: null,
 	releasedToFinanceAt: null,
 	...o,
 })

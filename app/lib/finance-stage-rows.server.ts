@@ -1,4 +1,5 @@
 import type { StageRow } from "~/components/finance-stage-table"
+import { isAvisoSaved } from "~/lib/aviso-document"
 import {
 	computeContractorPayment,
 	resolveContractorAccounts,
@@ -37,7 +38,7 @@ export async function loadStageRows(opts: {
 				controlNumber: true,
 				avisoNumber: true,
 				jafInvoicePdfPath: true,
-				avisoMatchedAt: true,
+				avisoDocPath: true,
 				releasedToFinanceAt: true,
 				pbccRequestSentAt: true,
 				jafInvoiceLines: true,
@@ -89,7 +90,7 @@ export async function loadStageRows(opts: {
 		),
 		docs: {
 			jafInvoice: Boolean(d.jafInvoicePdfPath),
-			aviso: Boolean(d.avisoNumber && d.avisoMatchedAt),
+			aviso: isAvisoSaved(d),
 			preCert: Boolean(
 				d.preCertSheets[0]?.sigSupervisorAt &&
 					d.preCertSheets[0]?.sigSubcontractorAt,

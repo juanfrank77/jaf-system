@@ -23,3 +23,21 @@ export function avisoPdfUrl(
 	if (present(doc.claroPdfPath)) return `/files/claro-pdfs/${doc.id}-claro.pdf`
 	return null
 }
+
+/**
+ * "Aviso saved": the supervisor stored both the Aviso number and its PDF.
+ * This is the signal that moves a job past the AVISO stage (it replaced the
+ * old `avisoMatchedAt` amount-match stamp). The legacy Claro PDF does not count.
+ */
+export function isAvisoSaved(doc: {
+	avisoNumber?: string | null
+	avisoDocPath?: string | null
+}): boolean {
+	return present(doc.avisoNumber) && present(doc.avisoDocPath)
+}
+
+/** Prisma filter matching the same rows as `isAvisoSaved`. */
+export const avisoSavedWhere = {
+	avisoNumber: { not: null },
+	avisoDocPath: { not: null },
+} as const

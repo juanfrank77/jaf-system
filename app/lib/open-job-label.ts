@@ -1,3 +1,4 @@
+import { isAvisoSaved } from "~/lib/aviso-document"
 import type { JafInvoice } from "../../generated/prisma/client"
 
 /**
@@ -40,7 +41,8 @@ export function openJobLabel(
 		| "fieldStartedAt"
 		| "supervisorApprovedAt"
 		| "jafInvoiceGeneratedAt"
-		| "avisoMatchedAt"
+		| "avisoNumber"
+		| "avisoDocPath"
 		| "releasedToFinanceAt"
 	>,
 	sheet: {
@@ -49,7 +51,7 @@ export function openJobLabel(
 	} | null,
 ): OpenJobLabel {
 	if (doc.releasedToFinanceAt) return "RELEASED"
-	if (doc.avisoMatchedAt) {
+	if (isAvisoSaved(doc)) {
 		return sheet?.sigSupervisorAt && sheet?.sigSubcontractorAt
 			? "RELEASE"
 			: "PRECERT"

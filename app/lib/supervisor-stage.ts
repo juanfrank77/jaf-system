@@ -1,4 +1,4 @@
-import { hasAvisoPdf } from "~/lib/aviso-document"
+import { hasAvisoPdf, isAvisoSaved } from "~/lib/aviso-document"
 import type { JafInvoice } from "../../generated/prisma/client"
 import {
 	type AvisoLine,
@@ -35,7 +35,8 @@ type StageDoc = Pick<
 	| "status"
 	| "supervisorApprovedAt"
 	| "jafInvoiceGeneratedAt"
-	| "avisoMatchedAt"
+	| "avisoNumber"
+	| "avisoDocPath"
 	| "releasedToFinanceAt"
 >
 type StageSheet = {
@@ -48,7 +49,7 @@ export function deriveSupervisorStage(
 	sheet: StageSheet,
 ): SupervisorStage {
 	if (doc.releasedToFinanceAt) return "RELEASED"
-	if (doc.avisoMatchedAt) {
+	if (isAvisoSaved(doc)) {
 		return sheet?.sigSupervisorAt && sheet?.sigSubcontractorAt
 			? "RELEASE"
 			: "PRECERT"
@@ -94,10 +95,9 @@ export type StepView = {
 }
 
 /**
- * The Aviso step has started once the supervisor has saved Aviso lines.
- * `save_aviso` writes the number and lines together, so the number alone only
- * means one was typed at intake (the optional field on the new-job form) and
- * must not hide the "Generate JAF invoice" button.
+ * Legacy: Aviso lines were saved (the pre-F2 line match). `save_aviso` no
+ * longer writes lines, so this is true only for old rows; a number alone only
+ * means one was typed at intake (the optional field on the new-job form).
  */
 export function isAvisoStarted(doc: {
 	avisoNumber: string | null
@@ -221,7 +221,6 @@ type ReleaseGateDoc = Pick<
 	| "avisoNumber"
 	| "avisoDocPath"
 	| "avisoLines"
-	| "avisoMatchedAt"
 	| "contractorAccountCode"
 >
 
@@ -239,7 +238,7 @@ export function evaluateReleaseGate(
 			ok:
 				!!doc.avisoNumber?.trim() && hasAvisoPdf(doc) && avisoLines.length > 0,
 		},
-		{ key: "amount_match", ok: !!doc.avisoMatchedAt },
+		{ key: "amount_match", ok: isAvisoSaved(doc) },
 		{
 			key: "photos",
 			ok:

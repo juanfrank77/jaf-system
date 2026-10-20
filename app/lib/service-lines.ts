@@ -116,27 +116,6 @@ export function buildPreCertLines(
 	}))
 }
 
-export function parseAvisoLines(raw: string | null | undefined): AvisoLine[] {
-	if (!raw) return []
-	const parsed = JSON.parse(raw)
-	if (!Array.isArray(parsed)) return []
-	return parsed
-		.filter(
-			(l) => l && typeof l.serviceCodeId === "string" && Number(l.qty) > 0,
-		)
-		.map((l) => {
-			const qty = Number(l.qty)
-			const unitPrice = Number(l.unitPrice) || 0
-			return {
-				serviceCodeId: String(l.serviceCodeId),
-				claroCode: String(l.claroCode ?? ""),
-				qty,
-				unitPrice,
-				lineAmount: round2(qty * unitPrice),
-			}
-		})
-}
-
 /**
  * Catalog descriptions end with a glued price-list code ("…ASFALTOMO",
  * "…C5MC"). Splits it into its own value so screens can show it as a column.

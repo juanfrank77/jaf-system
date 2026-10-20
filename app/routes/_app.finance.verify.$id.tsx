@@ -11,6 +11,7 @@ import { Callout } from "~/components/ui/callout"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
+import { isAvisoSaved } from "~/lib/aviso-document"
 import { brigadeStockFor } from "~/lib/brigade-stock.server"
 import { db } from "~/lib/db.server"
 import { sendInternalEmail } from "~/lib/email.server"
@@ -79,7 +80,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		tolerance,
 		sendBackNotes: (doc.financeSendBackNotes as SendBackNote[]) || [],
 		prefilledAvisoAmount:
-			doc.avisoMatchedAt && doc.avisoLineTotal != null
+			isAvisoSaved(doc) && doc.avisoLineTotal != null
 				? toNumberPrice(doc.avisoLineTotal)
 				: null,
 		lineTotal:
@@ -126,7 +127,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 	if (intent === "verify") {
 		if (
-			doc.avisoMatchedAt &&
+			isAvisoSaved(doc) &&
 			doc.avisoLineTotal != null &&
 			doc.jafInvoiceLineTotal != null
 		) {

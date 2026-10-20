@@ -42,7 +42,8 @@ const row = (o: Record<string, unknown>) => ({
 	jafInvoiceGeneratedAt: null,
 	jafInvoiceLineTotal: null,
 	avisoLineTotal: null,
-	avisoMatchedAt: null,
+	avisoNumber: null,
+	avisoDocPath: null,
 	releasedToFinanceAt: null,
 	brigade: { name: "JESUS MARTINEZ" },
 	sendBackHistory: null,
@@ -128,7 +129,8 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 					jafInvoiceGeneratedAt: new Date(),
 					jafInvoiceLineTotal: 586.37,
 					avisoLineTotal: 586.37,
-					avisoMatchedAt: new Date(),
+					avisoNumber: "10353961",
+					avisoDocPath: "aviso-docs/ok-aviso.pdf",
 				}),
 			] as any)
 			.mockResolvedValueOnce([] as any) // released without an Aviso PDF

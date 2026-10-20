@@ -152,7 +152,7 @@ describe("verify pre-fill from supervisor capture", () => {
 			avisoNumber: "10353961",
 			claroPdfPath: "/x/claro.pdf",
 			avisoLineTotal: "239.34",
-			avisoMatchedAt: new Date(),
+			avisoDocPath: "aviso-docs/doc-1-aviso.pdf",
 			jafInvoiceLineTotal: "239.34",
 		}
 		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue(fixture)

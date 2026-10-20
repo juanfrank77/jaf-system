@@ -59,7 +59,6 @@ export type DashboardDocRow = {
 	jobType: string
 	jobAddressEstimated: string
 	createdAt: Date
-	avisoNumber?: string | null
 	assignedCrewIds?: string[]
 	sendBackHistory?: unknown
 	estimatedMaterials?: unknown
@@ -73,7 +72,8 @@ export type DashboardDocRow = {
 	openLabel?: OpenJobLabel
 	supervisorApprovedAt?: Date | null
 	jafInvoiceGeneratedAt?: Date | null
-	avisoMatchedAt?: Date | null
+	avisoNumber?: string | null
+	avisoDocPath?: string | null
 	releasedToFinanceAt?: Date | null
 	financeVerifiedAt?: Date | null
 	pbccRequestSentAt?: Date | null
@@ -147,7 +147,8 @@ export function DashboardDocList({
 															doc.supervisorApprovedAt ?? null,
 														jafInvoiceGeneratedAt:
 															doc.jafInvoiceGeneratedAt ?? null,
-														avisoMatchedAt: doc.avisoMatchedAt ?? null,
+														avisoNumber: doc.avisoNumber ?? null,
+														avisoDocPath: doc.avisoDocPath ?? null,
 														releasedToFinanceAt:
 															doc.releasedToFinanceAt ?? null,
 													},

@@ -34,9 +34,10 @@ describe("SupervisorStepRail", () => {
 				"href",
 				"/docs/d1/review?step=APPROVE",
 			)
-			expect(
-				screen.getByRole("link", { name: "6. Aviso & match" }),
-			).toHaveAttribute("href", "/docs/d1/review?step=AVISO")
+			expect(screen.getByRole("link", { name: "6. Aviso" })).toHaveAttribute(
+				"href",
+				"/docs/d1/review?step=AVISO",
+			)
 		},
 	)
 

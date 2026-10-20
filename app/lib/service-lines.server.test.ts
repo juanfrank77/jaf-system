@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest"
 import {
 	buildInvoiceLines,
 	buildPreCertLines,
-	parseAvisoLines,
 	parseServiceLines,
 	round2,
 	sumLines,
@@ -132,27 +131,6 @@ describe("service-lines", () => {
 				installedQty: 5,
 				certifiedQty: 5,
 				unit: "EA",
-				unitPrice: 42.343,
-				lineAmount: 211.72,
-			},
-		])
-	})
-
-	it("parseAvisoLines computes lineAmount and drops zero-qty lines", () => {
-		const raw = JSON.stringify([
-			{ serviceCodeId: "c1", claroCode: "34006301", qty: 5, unitPrice: 42.343 },
-			{
-				serviceCodeId: "c2",
-				claroCode: "34007030",
-				qty: 0,
-				unitPrice: 13.8115,
-			},
-		])
-		expect(parseAvisoLines(raw)).toEqual([
-			{
-				serviceCodeId: "c1",
-				claroCode: "34006301",
-				qty: 5,
 				unitPrice: 42.343,
 				lineAmount: 211.72,
 			},

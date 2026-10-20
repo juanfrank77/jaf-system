@@ -4,7 +4,7 @@ import type { ParseKeys } from "i18next"
 import { type ComponentProps, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, Link, redirect } from "react-router"
-import { AvisoMatchCard } from "~/components/aviso-match"
+import { AvisoCard } from "~/components/aviso-card"
 import { DocStageBadge } from "~/components/doc-stage-badge"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { JobLinesCard, preppedAsLines } from "~/components/job-lines-card"
@@ -32,12 +32,10 @@ import {
 	WorkOrderDocumentCard,
 } from "~/components/work-order-document"
 import { isAvisoSaved } from "~/lib/aviso-document"
-import { buildAvisoLines } from "~/lib/aviso-lines"
 import {
 	AvisoPdfError,
 	normaliseAvisoNumber,
-	type ParsedAviso,
-	readAvisoPdf,
+	readAvisoNumber,
 } from "~/lib/aviso-pdf.server"
 import {
 	CONTRACTOR_SHARE_PERCENT,
@@ -60,23 +58,25 @@ import {
 	sendPacket,
 } from "~/lib/packet-send.server"
 import { generateClaroPacketPdf } from "~/lib/pdf/claro-packet.server"
-import { generatePreCertSheetPdf } from "~/lib/pdf/pre-cert-sheet.server"
 import { canTransition, isTerminalStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
+import {
+	activeSheet,
+	createPreCertSheet,
+	isSheetSigned,
+	preCertLinesFor,
+	renderPreCert,
+} from "~/lib/pre-cert.server"
 import { packetBlockers, prefieldMissing } from "~/lib/prefield"
 import {
-	getActiveServiceCodePrices,
 	getActiveServiceCodes,
 	isPriceBlind,
 	serviceCodesForRole,
 } from "~/lib/service-codes.server"
 import {
-	type AvisoLine,
 	buildInvoiceLines,
-	buildPreCertLines,
 	type InvoiceLine,
 	type PreCertLine,
-	parseAvisoLines,
 	round2,
 	type ServiceLine,
 	splitServiceSuffix,
@@ -84,7 +84,6 @@ import {
 } from "~/lib/service-lines"
 import { assertDocInSupervisorScope } from "~/lib/supervisor-scope"
 import {
-	checkAvisoMatch,
 	deriveSupervisorStage,
 	evaluateReleaseGate,
 	isAvisoStarted,
@@ -92,10 +91,7 @@ import {
 	resolveStepView,
 	SUPERVISOR_STAGES,
 } from "~/lib/supervisor-stage"
-import {
-	getAvisoAmountTolerance,
-	getIvuRate,
-} from "~/lib/system-settings.server"
+import { getIvuRate } from "~/lib/system-settings.server"
 import { isLegacyPricedInvoice, uploadHref } from "~/lib/upload-href"
 import { photosThatLoad, saveBuffer, saveUpload } from "~/lib/uploads.server"
 import { formatMoney, toNumberPrice } from "~/lib/utils"
@@ -117,56 +113,50 @@ type MaterialServiceCode = ComponentProps<
 	typeof MaterialLineItems
 >["serviceCodes"][number]
 
-async function renderPreCert(
-	sheet: PreCertSheet,
-	docId: string,
-): Promise<string> {
-	const pdf = await generatePreCertSheetPdf({
-		avisoNumber: sheet.avisoNumber,
-		issuedOn: sheet.issuedOn,
-		title: sheet.title,
-		certifiedAddress: sheet.certifiedAddress,
-		lines: sheet.lines as PreCertLine[],
-		sigSupervisor: sheet.sigSupervisorName
-			? {
-					name: sheet.sigSupervisorName,
-					image: sheet.sigSupervisorImage,
-					at: sheet.sigSupervisorAt,
-				}
-			: null,
-		sigSubcontractor: sheet.sigSubcontractorName
-			? {
-					name: sheet.sigSubcontractorName,
-					code: sheet.sigSubcontractorCode,
-					image: sheet.sigSubcontractorImage,
-					at: sheet.sigSubcontractorAt,
-				}
-			: null,
-		sigClaro: sheet.sigClaroAt
-			? {
-					name: sheet.sigClaroName,
-					image: sheet.sigClaroImage,
-					at: sheet.sigClaroAt,
-				}
-			: null,
-	})
-	return saveBuffer("precert", `${docId}-v${sheet.version}.pdf`, pdf)
-}
-
-const activeSheet = (docId: string) =>
-	db.preCertSheet.findFirst({
-		where: { docId, supersededAt: null },
-		orderBy: { version: "desc" },
-	})
-
 const AVISO_PDF_ERROR_KEYS = {
 	unreadable: "docs_review.errors.aviso_pdf_unreadable",
 	no_number: "docs_review.errors.aviso_pdf_no_number",
 	multiple_numbers: "docs_review.errors.aviso_pdf_multiple",
-	no_rows: "docs_review.errors.aviso_pdf_no_rows",
 } as const
 
 const showPricesFor = (role: string) => !isPriceBlind(role)
+
+/** The Aviso PDF on record, or null when it cannot be read back. */
+async function readPdf(file: string): Promise<Uint8Array | null> {
+	try {
+		return new Uint8Array(await readFile(file))
+	} catch {
+		return null
+	}
+}
+
+/**
+ * Step 6's one check: the 8-digit number on the file equals the typed one. A
+ * scan, an empty PDF or one with several numbers is refused with its own
+ * message; a different number is refused with both numbers.
+ */
+async function checkAvisoNumber(
+	typed: string,
+	pdf: Uint8Array,
+): Promise<
+	| { avisoNumber: string }
+	| { errorKey: string; typedNumber?: string; pdfAvisoNumber?: string }
+> {
+	let onFile: string
+	try {
+		onFile = await readAvisoNumber(pdf)
+	} catch (e) {
+		if (!(e instanceof AvisoPdfError)) throw e
+		return { errorKey: AVISO_PDF_ERROR_KEYS[e.code] }
+	}
+	if (normaliseAvisoNumber(typed) !== onFile)
+		return {
+			errorKey: "docs_review.errors.aviso_number_mismatch",
+			typedNumber: typed,
+			pdfAvisoNumber: onFile,
+		}
+	return { avisoNumber: onFile }
+}
 
 const isSig = (v: unknown) =>
 	typeof v === "string" && v.startsWith("data:image") && v !== "data:,"
@@ -245,7 +235,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		supervisor,
 		sheet,
 		brigade,
-		tolerance,
 		people,
 		sends,
 		materialCodes,
@@ -261,7 +250,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		doc.brigadeId
 			? db.brigade.findUnique({ where: { id: doc.brigadeId } })
 			: Promise.resolve(null),
-		getAvisoAmountTolerance(),
 		db.user.findMany({
 			where: { id: { in: personIds } },
 			select: { id: true, name: true },
@@ -367,17 +355,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			contractorNet: round2(contractor - round2(contractor * RETENTION_RATE)),
 		}
 	}
-	// The Aviso card cannot recompute the amount gate without prices, so a
-	// price-blind role gets the server's verdict on what was captured.
-	const avisoAmountOk =
-		doc.jafInvoiceLines && doc.avisoLines
-			? checkAvisoMatch(
-					doc.jafInvoiceLines as InvoiceLine[],
-					doc.avisoLines as AvisoLine[],
-					tolerance,
-				).amountOk
-			: null
-
 	// Step 5 · Packet → Claro. "Sent" is the first SENT/MANUAL send
 	// (`jafInvoiceGeneratedAt`); a stored PDF alone is not, since an
 	// UNCONFIGURED attempt also stores one for the manual path.
@@ -496,8 +473,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		invoicePreview: showPrices ? preview : linesWithoutPrices(preview),
 		invoiceHeader,
 		showPrices,
-		avisoAmountOk,
-		tolerance,
 		correctorNames,
 		packet,
 		workOrder,
@@ -787,262 +762,112 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	if (intent === "save_aviso") {
-		if (!doc.jafInvoiceGeneratedAt || !doc.jafInvoiceLines)
+		// Step 6 (spec F2): the only check is that the number on the file equals
+		// the typed one. Rows, quantities and amounts are never compared.
+		if (!doc.jafInvoiceGeneratedAt)
 			return { errorKey: "docs_review.errors.invoice_required" }
 		if (doc.releasedToFinanceAt) throw redirect(`/docs/${params.id}/review`)
 
-		let avisoNumber = (form.get("avisoNumber") as string | null)?.trim() || null
-		if (!avisoNumber)
-			return { errorKey: "docs_review.errors.aviso_number_required" }
+		const typed = (form.get("avisoNumber") as string | null)?.trim() || null
+		if (!typed) return { errorKey: "docs_review.errors.aviso_number_required" }
 
-		// Upload first so a supervisor who only adds the line note re-reads the
-		// PDF already on file.
-		let avisoDocPath = doc.avisoDocPath
-		let pdfBytes: Uint8Array | null = null
 		const avisoPdf = form.get("avisoPdf")
-		if (avisoPdf instanceof File && avisoPdf.size > 0) {
-			const validation = validateFile(avisoPdf, "pdf")
+		const newFile =
+			avisoPdf instanceof File && avisoPdf.size > 0 ? avisoPdf : null
+		let pdfBytes: Uint8Array
+		if (newFile) {
+			const validation = validateFile(newFile, "pdf")
 			if (!validation.valid) return { errorMessage: validation.error }
-			pdfBytes = new Uint8Array(await avisoPdf.arrayBuffer())
-		}
-		if (!pdfBytes && !avisoDocPath)
-			return { errorKey: "docs_review.errors.aviso_pdf_required" }
-
-		let avisoLines: AvisoLine[]
-		if (user.role === "SUPERVISOR") {
-			// The supervisor never supplies quantities or prices: the PDF is the
-			// only source, so a total cannot "agree" with itself.
-			if (!pdfBytes && avisoDocPath) {
-				try {
-					pdfBytes = new Uint8Array(await readFile(avisoDocPath))
-				} catch {
-					return { errorKey: "docs_review.errors.aviso_pdf_required" }
-				}
-			}
-			let parsed: ParsedAviso
-			try {
-				parsed = await readAvisoPdf(pdfBytes as Uint8Array)
-			} catch (e) {
-				if (!(e instanceof AvisoPdfError)) throw e
-				return { errorKey: AVISO_PDF_ERROR_KEYS[e.code] }
-			}
-			if (normaliseAvisoNumber(avisoNumber) !== parsed.avisoNumber)
-				return {
-					errorKey: "docs_review.errors.aviso_number_mismatch",
-					pdfAvisoNumber: parsed.avisoNumber,
-				}
-			const built = buildAvisoLines(
-				parsed.rows,
-				doc.jafInvoiceLines as InvoiceLine[],
-				await getActiveServiceCodePrices(),
-			)
-			if ("missingCodes" in built)
-				return {
-					errorKey: "docs_review.errors.aviso_codes_missing",
-					missingCodes: built.missingCodes,
-				}
-			avisoNumber = parsed.avisoNumber
-			avisoLines = built.lines
-			if (avisoLines.length === 0)
-				return { errorKey: "docs_review.errors.aviso_pdf_no_rows" }
+			pdfBytes = new Uint8Array(await newFile.arrayBuffer())
 		} else {
-			let rawLines: AvisoLine[]
-			try {
-				rawLines = parseAvisoLines(form.get("avisoLines") as string | null)
-			} catch {
-				return { errorKey: "docs_review.errors.invalid_aviso_lines" }
-			}
-			// Merge duplicate codes (an Aviso may split one service over two rows).
-			// Recompute the line from the merged qty when the unit price matches so
-			// per-row rounding does not drift from the invoice total.
-			const merged = new Map<string, AvisoLine>()
-			for (const l of rawLines) {
-				const prev = merged.get(l.serviceCodeId)
-				if (prev) {
-					const qty = prev.qty + l.qty
-					prev.lineAmount =
-						prev.unitPrice === l.unitPrice
-							? round2(qty * prev.unitPrice)
-							: round2(prev.lineAmount + l.lineAmount)
-					prev.qty = qty
-				} else merged.set(l.serviceCodeId, { ...l })
-			}
-			avisoLines = [...merged.values()]
-			if (avisoLines.length === 0)
-				return { errorKey: "docs_review.errors.invalid_aviso_lines" }
+			// No new file: the number is re-checked against the file on record.
+			const onRecord = doc.avisoDocPath ? await readPdf(doc.avisoDocPath) : null
+			if (!onRecord)
+				return { errorKey: "docs_review.errors.aviso_pdf_required" }
+			pdfBytes = onRecord
 		}
+		const checked = await checkAvisoNumber(typed, pdfBytes)
+		if ("errorKey" in checked)
+			return {
+				errorKey: checked.errorKey,
+				typedNumber: checked.typedNumber,
+				pdfAvisoNumber: checked.pdfAvisoNumber,
+			}
+		const { avisoNumber } = checked
+
+		// The pre-cert sheet comes from what the crew installed: refuse before
+		// writing anything if there is nothing to certify.
+		const installed = (doc.installedServiceLines as ServiceLine[] | null) ?? []
+		if ((await preCertLinesFor(installed)).lines.length === 0)
+			return { errorKey: "docs_review.errors.installed_lines_required" }
+
+		// A new file or number regenerates the sheet; a signed one is kept as is.
+		const sheet = await activeSheet(params.id)
+		const changed = !!newFile || avisoNumber !== doc.avisoNumber
+		const keepSigned = !!sheet && changed && isSheetSigned(sheet)
+		const generate = !sheet || (changed && !keepSigned)
 
 		// Everything validated: only now write the PDF to disk.
-		if (avisoPdf instanceof File && avisoPdf.size > 0)
-			avisoDocPath = await saveUpload(
-				"aviso-docs",
-				`${params.id}-aviso.pdf`,
-				avisoPdf,
-			)
-
-		const tolerance = await getAvisoAmountTolerance()
-		const match = checkAvisoMatch(
-			doc.jafInvoiceLines as InvoiceLine[],
-			avisoLines,
-			tolerance,
-		)
-		const lineNote = (form.get("lineNote") as string | null)?.trim() || null
-		if (match.amountOk && match.lineMismatches.length > 0 && !lineNote)
-			return {
-				errorKey: "docs_review.errors.aviso_line_note_required",
-				lineMismatches: match.lineMismatches,
-			}
-
-		const baseData = {
-			avisoNumber,
-			avisoDocPath,
-			avisoLines,
-			avisoLineTotal: match.avisoTotal,
-		}
-		const ops: Prisma.PrismaPromise<unknown>[] = [
-			db.auditTrail.create({
-				data: {
-					docId: params.id,
-					userId: user.id,
-					action: "AVISO_CAPTURED",
-					diffJson: {
-						avisoNumber,
-						avisoTotal: match.avisoTotal,
-						invoiceTotal: match.invoiceTotal,
-						difference: match.difference,
-						amountOk: match.amountOk,
-					},
-				},
-			}),
-		]
-
-		if (!match.amountOk) {
-			ops.unshift(
-				db.jafInvoice.update({ where: { id: params.id }, data: baseData }),
-			)
-			await db.$transaction(ops)
-			// A price-blind role gets the verdict only; the card shows the
-			// server's amount check (`serverAmountOk`) instead of the totals.
-			if (!showPricesFor(user.role))
-				return { errorKey: "docs_review.errors.aviso_amount_mismatch" }
-			return {
-				errorKey: "docs_review.errors.aviso_amount_mismatch",
-				invoiceTotal: match.invoiceTotal,
-				avisoTotal: match.avisoTotal,
-				difference: match.difference,
-				tolerance,
-			}
-		}
-
+		const avisoDocPath = newFile
+			? await saveUpload("aviso-docs", `${params.id}-aviso.pdf`, newFile)
+			: doc.avisoDocPath
 		const transition = canTransition(doc.status, "CLARO_UPLOADED", user.role)
-		ops.unshift(
+		await db.$transaction([
 			db.jafInvoice.update({
 				where: { id: params.id },
 				data: {
-					...baseData,
+					avisoNumber,
+					avisoDocPath,
 					...(transition
 						? { status: "CLARO_UPLOADED", claroUploadedAt: new Date() }
 						: {}),
 				},
 			}),
-		)
-		if (transition)
-			ops.push(
-				db.auditTrail.create({
-					data: {
-						docId: params.id,
-						userId: user.id,
-						action: "STATUS_CHANGED",
-						diffJson: {
-							status: { before: doc.status, after: "CLARO_UPLOADED" },
-						},
-					},
-				}),
-			)
-		if (match.lineMismatches.length > 0)
-			ops.push(
-				db.auditTrail.create({
-					data: {
-						docId: params.id,
-						userId: user.id,
-						action: "QUANTITY_DISCREPANCY",
-						diffJson: {
-							source: "AVISO",
-							discrepancies: match.lineMismatches,
-							note: lineNote,
-							blocksFinance: false,
-						},
-					},
-				}),
-			)
-		await db.$transaction(ops)
-		throw redirect(`/docs/${params.id}/review`)
-	}
-
-	if (intent === "generate_precert") {
-		if (!isAvisoSaved(doc))
-			return { errorKey: "docs_review.errors.aviso_match_required" }
-		if (doc.releasedToFinanceAt) throw redirect(`/docs/${params.id}/review`)
-		const catalog = await getActiveServiceCodes()
-		const codeMap = Object.fromEntries(catalog.map((c) => [c.id, c]))
-		const installed = (doc.installedServiceLines as ServiceLine[] | null) ?? []
-		const lines = buildPreCertLines(installed, codeMap)
-		if (lines.length === 0)
-			return { errorKey: "docs_review.errors.installed_lines_required" }
-		const previous = await activeSheet(params.id)
-		const revision =
-			codeMap[installed[0].serviceCodeId]?.priceListRevision ?? null
-		const version = (previous?.version ?? 0) + 1
-		const issuedOn = doc.fieldSubmittedAt ?? new Date()
-		const certifiedAddress = doc.jobAddressActual ?? doc.jobAddressEstimated
-		const title = doc.jobDescription ?? doc.jobType
-		// Render the PDF BEFORE touching the database: if rendering/saving fails,
-		// the previous version must stay the active sheet instead of being
-		// superseded by a new version that has no PDF.
-		const pdfPath = await renderPreCert(
-			{
-				version,
-				avisoNumber: doc.avisoNumber,
-				issuedOn,
-				title,
-				certifiedAddress,
-				lines,
-			} as unknown as PreCertSheet,
-			params.id,
-		)
-		await db.$transaction([
-			...(previous
-				? [
-						db.preCertSheet.update({
-							where: { id: previous.id },
-							data: { supersededAt: new Date() },
-						}),
-					]
-				: []),
-			db.preCertSheet.create({
-				data: {
-					docId: params.id,
-					version,
-					avisoNumber: doc.avisoNumber,
-					certifiedAddress,
-					title,
-					issuedOn,
-					lines,
-					priceListRevision: revision,
-					total: sumLines(lines),
-					issuedById: user.id,
-					pdfPath,
-				},
-			}),
 			db.auditTrail.create({
 				data: {
 					docId: params.id,
 					userId: user.id,
-					action: "PRECERT_GENERATED",
-					diffJson: { version, supersedes: previous?.version ?? null },
+					action: "AVISO_CAPTURED",
+					diffJson: { avisoNumber, fileUploaded: !!newFile },
 				},
 			}),
-		] as unknown as Prisma.PrismaPromise<unknown>[])
+			...(transition
+				? [
+						db.auditTrail.create({
+							data: {
+								docId: params.id,
+								userId: user.id,
+								action: "STATUS_CHANGED",
+								diffJson: {
+									status: { before: doc.status, after: "CLARO_UPLOADED" },
+								},
+							},
+						}),
+					]
+				: []),
+		])
+		if (generate)
+			await createPreCertSheet({
+				docId: params.id,
+				actor: { id: user.id, role: user.role },
+			})
+		if (keepSigned) return { noteKey: "docs_review.aviso_resaved_signed" }
+		throw redirect(`/docs/${params.id}/review`)
+	}
+
+	// Manual fallback: the sheet is generated on Aviso save, but a failed render
+	// (or an explicit regenerate on the sheet) can still create the next version.
+	if (intent === "generate_precert") {
+		if (!isAvisoSaved(doc))
+			return { errorKey: "docs_review.errors.aviso_pdf_required" }
+		if (doc.releasedToFinanceAt) throw redirect(`/docs/${params.id}/review`)
+		const installed = (doc.installedServiceLines as ServiceLine[] | null) ?? []
+		if ((await preCertLinesFor(installed)).lines.length === 0)
+			return { errorKey: "docs_review.errors.installed_lines_required" }
+		await createPreCertSheet({
+			docId: params.id,
+			actor: { id: user.id, role: user.role },
+		})
 		throw redirect(`/docs/${params.id}/review`)
 	}
 
@@ -1286,9 +1111,24 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	if (intent === "edit_aviso") {
-		// PRD §1.5: supervisor can enter/update the Aviso # at any point.
-		const avisoNumber =
-			(form.get("avisoNumber") as string | null)?.trim() || null
+		// PRD §1.5: supervisor can enter/update the Aviso # at any point. Once an
+		// Aviso PDF is on record, only the number on that file is accepted.
+		let avisoNumber = (form.get("avisoNumber") as string | null)?.trim() || null
+		if (doc.avisoDocPath) {
+			if (!avisoNumber)
+				return { errorKey: "docs_review.errors.aviso_number_required" }
+			const onRecord = await readPdf(doc.avisoDocPath)
+			if (!onRecord)
+				return { errorKey: "docs_review.errors.aviso_pdf_required" }
+			const checked = await checkAvisoNumber(avisoNumber, onRecord)
+			if ("errorKey" in checked)
+				return {
+					errorKey: checked.errorKey,
+					typedNumber: checked.typedNumber,
+					pdfAvisoNumber: checked.pdfAvisoNumber,
+				}
+			avisoNumber = checked.avisoNumber
+		}
 		await db.$transaction([
 			db.jafInvoice.update({
 				where: { id: params.id },
@@ -1832,8 +1672,6 @@ export default function ReviewDoc({
 		invoicePreview,
 		invoiceHeader,
 		showPrices,
-		avisoAmountOk,
-		tolerance,
 		packet,
 		workOrder,
 		workOrderIssuedOn,
@@ -1845,11 +1683,9 @@ export default function ReviewDoc({
 		| {
 				errorKey?: string
 				errorMessage?: string
-				missingCodes?: string[]
+				noteKey?: string
+				typedNumber?: string
 				pdfAvisoNumber?: string
-				invoiceTotal?: number
-				avisoTotal?: number
-				difference?: number
 				conditions?: { key: string; ok: boolean }[]
 		  }
 		| undefined
@@ -1866,8 +1702,6 @@ export default function ReviewDoc({
 	// Before it is reviewed the invoice is a preview built from what was installed.
 	const isPreview = generatedInvoiceLines.length === 0
 	const invoiceLines = isPreview ? invoicePreview : generatedInvoiceLines
-	const avisoLines = (doc.avisoLines as AvisoLine[] | null) ?? []
-	const precertLines = (sheet?.lines as PreCertLine[] | undefined) ?? undefined
 	const jobLines = (
 		<JobLinesCard
 			ordered={ordered}
@@ -1905,9 +1739,6 @@ export default function ReviewDoc({
 						view === "RELEASE")
 				? (view.toLowerCase() as "invoice" | "aviso" | "precert" | "release")
 				: null
-	// Once an Aviso number or lines are saved the invoice is what was keyed into
-	// Claro, so it can no longer be regenerated from here.
-	const avisoStarted = isAvisoStarted(doc)
 
 	return (
 		<div className="space-y-5">
@@ -2166,30 +1997,16 @@ export default function ReviewDoc({
 				</>
 			)}
 
-			{/* C — Aviso & match */}
+			{/* C — Aviso (step 6) */}
 			{panel === "AVISO" && doc.jafInvoiceGeneratedAt && (
-				<AvisoMatchCard
+				<AvisoCard
 					docId={doc.id}
 					avisoNumber={doc.avisoNumber}
 					avisoDocPath={doc.avisoDocPath}
-					storedLines={avisoLines}
+					saved={isAvisoSaved(doc)}
 					locked={!!doc.releasedToFinanceAt}
-					invoiceLines={invoiceLines}
-					ordered={ordered}
-					certified={precertLines}
-					catalogPrices={
-						showPrices
-							? Object.fromEntries(
-									serviceCodes.map((c) => [c.id, c.unitPrice ?? 0]),
-								)
-							: {}
-					}
-					tolerance={tolerance}
-					error={error ?? null}
 					readOnly={!interactive}
-					started={avisoStarted}
-					showPrices={showPrices}
-					serverAmountOk={avisoAmountOk}
+					result={error ?? null}
 				>
 					{interactive && doc.status === "SUPERVISOR_APPROVED" && (
 						<details className="pt-3">
@@ -2214,13 +2031,18 @@ export default function ReviewDoc({
 							</Form>
 						</details>
 					)}
-				</AvisoMatchCard>
+				</AvisoCard>
 			)}
 
 			{/* D — Pre-cert sheet */}
 			{panel === "PRECERT" && isAvisoSaved(doc) && (
 				<section className="bg-card border rounded-lg p-4 space-y-3">
 					<h2 className="font-medium text-sm">{t("precert.heading")}</h2>
+					{error?.noteKey && (
+						<Pill variant="info" icon="ℹ">
+							{t(error.noteKey as ParseKeys)}
+						</Pill>
+					)}
 					{!sheet ? (
 						interactive && (
 							<Form method="post">

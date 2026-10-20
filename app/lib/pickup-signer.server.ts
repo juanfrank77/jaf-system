@@ -2,9 +2,11 @@ import { db } from "./db.server"
 
 type CrewUser = { id: string; name: string }
 
+const normaliseName = (name: string | null) => (name ?? "").trim().toLowerCase()
+
 /**
  * Who picks the materials up: the assigned brigade's lead (a CREW user matched
- * by name), else its first member that is an active CREW user. A shared job
+ * by name, trimmed and ignoring case), else its first member that is an active CREW user. A shared job
  * passes only its lead brigade (JafInvoice.brigadeId), so the signer is the
  * lead's alone. Null when nobody on the brigade has a CREW account.
  */
@@ -13,8 +15,9 @@ export function pickupSigner(
 	crewUsers: CrewUser[],
 ): CrewUser | null {
 	if (!brigade) return null
-	const lead = brigade.leadName
-		? crewUsers.find((u) => u.name === brigade.leadName)
+	const leadName = normaliseName(brigade.leadName)
+	const lead = leadName
+		? crewUsers.find((u) => normaliseName(u.name) === leadName)
 		: undefined
 	if (lead) return lead
 	for (const id of brigade.memberIds) {

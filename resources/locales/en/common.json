@@ -486,22 +486,34 @@
 		"submit": "Mark Prepped",
 		"submit_with_missing": "Save Missing Flags & Notify Supervisor",
 		"missing_flagged_notice": "Missing materials flagged. Supervisor has been notified. The job remains in Pending Preps until resolved.",
-		"estimated_qty": "Estimated Qty",
-		"prepped_qty": "Prepped Qty",
-		"substitute_with": "Substitute With",
-		"substitute_placeholder": "Select substitution...",
-		"missing_flag": "Missing / Out of Stock",
-		"available": "Available",
 		"line_notes": "Notes",
 		"line_notes_placeholder": "Substitution reason, damage, etc.",
-		"add_line": "+ Add Line",
 		"missing_count_one": "{{count}} material flagged missing",
 		"missing_count_other": "{{count}} materials flagged missing",
-		"flagged_missing": "Flagged missing",
-		"short_by": "{{count}} short",
 		"errors": {
 			"invalid_materials": "Invalid materials data"
-		}
+		},
+		"col": {
+			"code": "Code",
+			"material": "Material",
+			"requested": "Requested",
+			"in_stock": "In stock",
+			"prepped": "Prepped",
+			"status": "Status"
+		},
+		"status": {
+			"ok": "OK",
+			"short": "Short by {{count}}",
+			"out": "Out of stock"
+		},
+		"more": "More ▾",
+		"less": "Less ▴",
+		"out_of_stock": "Out of stock",
+		"replace_with": "Replace with",
+		"replace_placeholder": "No replacement",
+		"remove_line": "Remove line",
+		"select_material": "Select material…",
+		"add_material": "+ Add material"
 	},
 	"docs_returns": {
 		"title": "Log Returns",
@@ -602,6 +614,7 @@
 			"release_signer_required": "Please select the warehouse signer",
 			"crew_signer_required": "Please select the crew signer",
 			"release_signer_invalid": "Selected warehouse signer is not valid",
+			"no_pickup_signer": "This job's brigade has no crew account to sign for the pickup. Ask the supervisor to fix the brigade.",
 			"crew_signer_invalid": "Selected crew signer is not valid",
 			"already_signed": "Materials are already signed and locked",
 			"invalid_materials": "Invalid materials data"

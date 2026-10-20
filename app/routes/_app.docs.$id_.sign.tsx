@@ -27,6 +27,7 @@ import { pageTitle } from "~/lib/page-title"
 import { generateWarehouseReceiptPdf } from "~/lib/pdf/warehouse-receipt.server"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
+import { pickupSignerForDoc } from "~/lib/pickup-signer.server"
 import {
 	getActiveMaterialCodes,
 	getActiveServiceCodes,
@@ -60,17 +61,19 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		where: { role: "WAREHOUSE", active: true },
 		orderBy: { name: "asc" },
 	})
-	const crewUsers = await db.user.findMany({
-		where: { role: "CREW", active: true },
-		orderBy: { name: "asc" },
-	})
+	// The brigade assigned to the job picks the materials up; no CREW account on
+	// it is a screen error, not a crash.
+	const pickup = await pickupSignerForDoc(doc.brigadeId)
 	return {
 		doc,
 		user,
 		serviceCodes: serviceCodesForRole(user.role, serviceCodes),
 		warehouses,
 		warehouseUsers,
-		crewUsers,
+		pickupSigner: pickup,
+		pickupErrorKey: pickup
+			? null
+			: ("docs_sign.errors.no_pickup_signer" as const),
 	}
 }
 
@@ -121,8 +124,12 @@ export async function action({ request, params }: Route.ActionArgs) {
 	if (!releasedById) {
 		return { errorKey: "docs_sign.errors.release_signer_required" }
 	}
-	if (!signedById) {
-		return { errorKey: "docs_sign.errors.crew_signer_required" }
+	const pickup = await pickupSignerForDoc(doc.brigadeId)
+	if (!pickup) {
+		return { errorKey: "docs_sign.errors.no_pickup_signer" }
+	}
+	if (signedById !== pickup.id) {
+		return { errorKey: "docs_sign.errors.crew_signer_invalid" }
 	}
 	if (!releaseSignature || releaseSignature === "data:,") {
 		return { errorKey: "docs_sign.errors.release_signature_required" }
@@ -141,20 +148,14 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	// Signer identity validation
-	const [releaseSigner, crewSigner, warehouse] = await Promise.all([
+	const [releaseSigner, warehouse] = await Promise.all([
 		db.user.findFirst({
 			where: { id: releasedById, role: "WAREHOUSE", active: true },
-		}),
-		db.user.findFirst({
-			where: { id: signedById, role: "CREW", active: true },
 		}),
 		db.warehouse.findUnique({ where: { id: warehouseId } }),
 	])
 	if (!releaseSigner) {
 		return { errorKey: "docs_sign.errors.release_signer_invalid" }
-	}
-	if (!crewSigner) {
-		return { errorKey: "docs_sign.errors.crew_signer_invalid" }
 	}
 
 	// Permanently lock: refuse to overwrite an existing signed materials record.
@@ -171,7 +172,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 			releaseSignature,
 			crewSignature,
 			releaseSignerName: releaseSigner.name,
-			crewSignerName: crewSigner.name,
+			crewSignerName: pickup.name,
 		},
 		serviceCodes.map((c) => ({
 			id: c.id,
@@ -291,8 +292,15 @@ export default function SignDoc({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { doc, serviceCodes, warehouses, warehouseUsers, crewUsers, user } =
-		loaderData
+	const {
+		doc,
+		serviceCodes,
+		warehouses,
+		warehouseUsers,
+		pickupSigner,
+		pickupErrorKey,
+		user,
+	} = loaderData
 	const error = actionData as { errorKey?: ParseKeys } | undefined
 	const releaseRef = useRef<SignaturePadHandle>(null)
 	const crewRef = useRef<SignaturePadHandle>(null)
@@ -302,7 +310,7 @@ export default function SignDoc({
 	const [releasedById, setReleasedById] = useState(
 		user.role === "WAREHOUSE" ? user.id : "",
 	)
-	const [signedById, setSignedById] = useState("")
+	const signedById = pickupSigner?.id ?? ""
 	const [items] = useState(
 		(doc.estimatedMaterials as MaterialLine[] | null) ?? [],
 	)
@@ -313,7 +321,8 @@ export default function SignDoc({
 	const [releaseSigned, setReleaseSigned] = useState(false)
 	const [crewSigned, setCrewSigned] = useState(false)
 	const errorRef = useRef<HTMLDivElement>(null)
-	const shownErrorKey = clientErrorKey ?? error?.errorKey
+	const shownErrorKey =
+		clientErrorKey ?? error?.errorKey ?? pickupErrorKey ?? undefined
 	// biome-ignore lint/correctness/useExhaustiveDependencies: scroll only when an error appears or changes
 	useEffect(() => {
 		if (shownErrorKey)
@@ -335,7 +344,7 @@ export default function SignDoc({
 			return
 		}
 		if (!signedById) {
-			fail("docs_sign.alerts.crew_signer_required")
+			fail("docs_sign.errors.no_pickup_signer")
 			return
 		}
 		if (releaseRef.current?.isEmpty()) {
@@ -484,24 +493,12 @@ export default function SignDoc({
 							<Label className="text-xs text-muted-foreground">
 								{t("docs_sign.crew_signer_label")}
 							</Label>
-							<Select
-								items={crewUsers.map((u) => ({ value: u.id, label: u.name }))}
-								value={signedById}
-								onValueChange={(v) => setSignedById(v ?? "")}
+							<p
+								className="mt-1 flex h-11 items-center rounded-md border bg-muted/40 px-3 text-base"
+								data-testid="pickup-signer"
 							>
-								<SelectTrigger className="mt-1 h-11 w-full text-base">
-									<SelectValue
-										placeholder={t("docs_sign.crew_signer_placeholder")}
-									/>
-								</SelectTrigger>
-								<SelectContent>
-									{crewUsers.map((u) => (
-										<SelectItem key={u.id} value={u.id}>
-											{u.name}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
+								{pickupSigner?.name ?? "—"}
+							</p>
 						</div>
 						<SignaturePad
 							ref={crewRef}

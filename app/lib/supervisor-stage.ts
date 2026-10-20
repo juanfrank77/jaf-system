@@ -89,15 +89,15 @@ export const WAITING_ON: Record<SupervisorStage, WaitingOn> = {
 /** The screen a supervisor is looking at, and whether it accepts actions. */
 export type StepView = {
 	view: SupervisorStage
-	/** Only the current step (and the invoice until the Aviso is started) can
+	/** Only the current step (and step 5 while the job waits at step 6) can
 	 * be acted on; every earlier step is a read-only look back. */
 	interactive: boolean
 }
 
 /**
- * Legacy: Aviso lines were saved (the pre-F2 line match). `save_aviso` no
- * longer writes lines, so this is true only for old rows; a number alone only
- * means one was typed at intake (the optional field on the new-job form).
+ * Legacy only: Aviso lines were saved by the pre-F2 line match. `save_aviso`
+ * no longer writes lines, so this is false for every new job; an Aviso number
+ * alone never counts (it may have been typed at intake, on the new-job form).
  */
 export function isAvisoStarted(doc: {
 	avisoNumber: string | null
@@ -110,9 +110,11 @@ const stageIndex = (s: SupervisorStage) => SUPERVISOR_STAGES.indexOf(s)
 
 /**
  * Which step's screen to show. Defaults to the derived stage, except that a
- * generated invoice keeps its own screen ("Continue to Aviso") until an Aviso
- * number or lines are saved. `requested` (from `?step=`) may only point at a
- * supervisor step (APPROVE onward) that has already been reached.
+ * job sent to Claro (stage AVISO) opens on step 5 ("Continue to Aviso"),
+ * which stays interactive; only a legacy job whose Aviso lines were saved
+ * (`isAvisoStarted`) opens on step 6. Once the Aviso is saved the stage moves
+ * on. `requested` (from `?step=`) may only point at a supervisor step
+ * (APPROVE onward) that has already been reached.
  */
 export function resolveStepView(
 	stage: SupervisorStage,

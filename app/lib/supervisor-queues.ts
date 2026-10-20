@@ -1,3 +1,4 @@
+import { avisoSavedWhere } from "~/lib/aviso-document"
 import type { Prisma } from "../../generated/prisma/client"
 
 // The supervisor's sidebar queues: Intake (orders just created, before the
@@ -5,6 +6,11 @@ import type { Prisma } from "../../generated/prisma/client"
 // Approve onward. Each is a `?stage=` view of the dashboard, and the same
 // `where` drives both the sidebar count and the filtered list, so the pill
 // can never disagree with what the link opens.
+// Complement of `avisoSavedWhere`: the Aviso number or its PDF is still missing.
+const avisoNotSavedWhere = {
+	OR: [{ avisoNumber: null }, { avisoDocPath: null }],
+} satisfies Prisma.JafInvoiceWhereInput
+
 export type SupervisorQueue =
 	| "open"
 	| "intake"
@@ -70,27 +76,27 @@ export function supervisorQueueWhere(
 		case "precert":
 			return {
 				releasedToFinanceAt: null,
-				avisoMatchedAt: { not: null },
+				...avisoSavedWhere,
 				status: { not: "CANCELLED" },
 			}
 		case "aviso":
 			return {
 				releasedToFinanceAt: null,
-				avisoMatchedAt: null,
+				...avisoNotSavedWhere,
 				jafInvoiceGeneratedAt: { not: null },
 				status: { not: "CANCELLED" },
 			}
 		case "invoice":
 			return {
 				releasedToFinanceAt: null,
-				avisoMatchedAt: null,
+				...avisoNotSavedWhere,
 				supervisorApprovedAt: { not: null },
 				status: { not: "CANCELLED" },
 			}
 		case "review":
 			return {
 				releasedToFinanceAt: null,
-				avisoMatchedAt: null,
+				...avisoNotSavedWhere,
 				jafInvoiceGeneratedAt: null,
 				supervisorApprovedAt: null,
 				status: "FIELD_UPDATED",

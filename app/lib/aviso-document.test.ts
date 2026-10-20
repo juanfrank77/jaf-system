@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { avisoPdfUrl, hasAvisoPdf } from "./aviso-document"
+import { avisoPdfUrl, hasAvisoPdf, isAvisoSaved } from "./aviso-document"
 
 describe("hasAvisoPdf", () => {
 	it("is true for the step-6 Aviso PDF alone", () => {
@@ -31,5 +31,38 @@ describe("avisoPdfUrl", () => {
 			"/files/claro-pdfs/j1-claro.pdf",
 		)
 		expect(avisoPdfUrl({ id: "j1" })).toBeNull()
+	})
+})
+
+describe("isAvisoSaved", () => {
+	it("is true with both the number and the uploaded Aviso PDF", () => {
+		expect(
+			isAvisoSaved({
+				avisoNumber: "10353961",
+				avisoDocPath: "/x/aviso-docs/a.pdf",
+			}),
+		).toBe(true)
+	})
+
+	it("is false when either is null, empty or whitespace", () => {
+		expect(isAvisoSaved({ avisoNumber: null, avisoDocPath: "/x/a.pdf" })).toBe(
+			false,
+		)
+		expect(isAvisoSaved({ avisoNumber: "1", avisoDocPath: null })).toBe(false)
+		expect(isAvisoSaved({ avisoNumber: "  ", avisoDocPath: "/x/a.pdf" })).toBe(
+			false,
+		)
+		expect(isAvisoSaved({ avisoNumber: "1", avisoDocPath: " " })).toBe(false)
+		expect(isAvisoSaved({})).toBe(false)
+	})
+
+	it("does not count the legacy Claro PDF", () => {
+		expect(
+			isAvisoSaved({
+				avisoNumber: "1",
+				avisoDocPath: null,
+				claroPdfPath: "/x",
+			} as never),
+		).toBe(false)
 	})
 })

@@ -1,4 +1,4 @@
-import { hasAvisoPdf } from "~/lib/aviso-document"
+import { hasAvisoPdf, isAvisoSaved } from "~/lib/aviso-document"
 import type { JafInvoice } from "../../generated/prisma/client"
 import {
 	type AvisoLine,
@@ -35,7 +35,8 @@ type StageDoc = Pick<
 	| "status"
 	| "supervisorApprovedAt"
 	| "jafInvoiceGeneratedAt"
-	| "avisoMatchedAt"
+	| "avisoNumber"
+	| "avisoDocPath"
 	| "releasedToFinanceAt"
 >
 type StageSheet = {
@@ -48,7 +49,7 @@ export function deriveSupervisorStage(
 	sheet: StageSheet,
 ): SupervisorStage {
 	if (doc.releasedToFinanceAt) return "RELEASED"
-	if (doc.avisoMatchedAt) {
+	if (isAvisoSaved(doc)) {
 		return sheet?.sigSupervisorAt && sheet?.sigSubcontractorAt
 			? "RELEASE"
 			: "PRECERT"
@@ -221,7 +222,6 @@ type ReleaseGateDoc = Pick<
 	| "avisoNumber"
 	| "avisoDocPath"
 	| "avisoLines"
-	| "avisoMatchedAt"
 	| "contractorAccountCode"
 >
 
@@ -239,7 +239,7 @@ export function evaluateReleaseGate(
 			ok:
 				!!doc.avisoNumber?.trim() && hasAvisoPdf(doc) && avisoLines.length > 0,
 		},
-		{ key: "amount_match", ok: !!doc.avisoMatchedAt },
+		{ key: "amount_match", ok: isAvisoSaved(doc) },
 		{
 			key: "photos",
 			ok:

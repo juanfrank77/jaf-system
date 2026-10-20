@@ -1,6 +1,7 @@
 import { redirect } from "react-router"
 import { RoleDashboard } from "~/components/dashboards/role-dashboard"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { isAvisoSaved } from "~/lib/aviso-document"
 import { refuseCrew } from "~/lib/crew-notice.server"
 import {
 	computeDashboardStats,
@@ -63,7 +64,7 @@ const PRICE_FREE_DOC_SELECT = {
 	supervisorApprovedAt: true,
 	jafInvoiceGeneratedAt: true,
 	claroUploadedAt: true,
-	avisoMatchedAt: true,
+	avisoDocPath: true,
 	releasedToFinanceAt: true,
 	financeVerifiedAt: true,
 	pbccRequestSentAt: true,
@@ -140,10 +141,10 @@ const queueSelect = {
 	jafInvoiceGeneratedAt: true,
 	jafInvoiceLineTotal: true,
 	avisoLineTotal: true,
-	avisoMatchedAt: true,
+	avisoNumber: true,
+	avisoDocPath: true,
 	releasedToFinanceAt: true,
 	fieldSubmittedAt: true,
-	avisoDocPath: true,
 	claroPdfPath: true,
 	estimatedMaterials: true,
 	materialsTaken: true,
@@ -191,7 +192,8 @@ async function withStages<
 		fieldStartedAt: Date | null
 		supervisorApprovedAt: Date | null
 		jafInvoiceGeneratedAt: Date | null
-		avisoMatchedAt: Date | null
+		avisoNumber: string | null
+		avisoDocPath: string | null
 		releasedToFinanceAt: Date | null
 	},
 >(
@@ -278,7 +280,7 @@ async function loadSupervisorQueues(userId: string) {
 	const blocked: QueueRow[] = []
 	for (const d of approved) {
 		const stage = deriveSupervisorStage(d, null)
-		if (d.avisoMatchedAt) {
+		if (isAvisoSaved(d)) {
 			approvedRows.push(toRow(d, stage, d.supervisorApprovedAt))
 		} else if (d.avisoLineTotal == null) {
 			missingAviso.push(toRow(d, stage, d.supervisorApprovedAt))

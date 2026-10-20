@@ -141,7 +141,6 @@ const approvedDoc = {
 	avisoDocPath: null,
 	avisoLines: null,
 	avisoLineTotal: null,
-	avisoMatchedAt: null,
 	contractorAccountCode: null,
 	releasedToFinanceAt: null,
 	fieldSubmittedAt: new Date("2026-08-26T20:12:00Z"),
@@ -370,7 +369,7 @@ describe("review: save_aviso (supervisor: the Aviso PDF is the only source)", ()
 		vi.mocked(db.user.findMany).mockResolvedValue([])
 	})
 
-	it("stores the PDF's lines and stamps avisoMatchedAt + CLARO_UPLOADED when totals agree", async () => {
+	it("stores the PDF's lines and moves to CLARO_UPLOADED when totals agree", async () => {
 		await saveAviso([line("a1", 1), line("a2", 1)]).catch(() => {})
 		expect(readAvisoPdf).toHaveBeenCalledTimes(1)
 		expect(db.jafInvoice.update).toHaveBeenCalledWith(
@@ -379,7 +378,6 @@ describe("review: save_aviso (supervisor: the Aviso PDF is the only source)", ()
 					avisoNumber: "10354739",
 					avisoDocPath: "/uploads/aviso-docs/doc-1-aviso.pdf",
 					avisoLineTotal: 60,
-					avisoMatchedAt: expect.any(Date),
 					status: "CLARO_UPLOADED",
 					claroUploadedAt: expect.any(Date),
 					// Quantities from the PDF, invoice-time price (not catalog 25.50).
@@ -415,7 +413,7 @@ describe("review: save_aviso (supervisor: the Aviso PDF is the only source)", ()
 		expect(data.avisoLines).toHaveLength(2)
 	})
 
-	it("stores the lines but does not stamp avisoMatchedAt on an amount mismatch", async () => {
+	it("stores the lines but does not move to CLARO_UPLOADED on an amount mismatch", async () => {
 		// Invoiced 3 × a1 + 1 × a2 = 120; the Aviso charges 1 + 1 = 60.
 		const res = await saveAviso([line("a1", 3), line("a2", 1)])
 		// A supervisor gets the verdict, never the amounts.
@@ -424,7 +422,7 @@ describe("review: save_aviso (supervisor: the Aviso PDF is the only source)", ()
 		})
 		const data = vi.mocked(db.jafInvoice.update).mock.calls[0][0].data
 		expect(data.avisoLineTotal).toBe(60)
-		expect(data.avisoMatchedAt).toBeUndefined()
+		expect(data).not.toHaveProperty("avisoMatchedAt")
 		expect(data.status).toBeUndefined()
 	})
 
@@ -474,7 +472,7 @@ describe("review: save_aviso (supervisor: the Aviso PDF is the only source)", ()
 			}),
 		)
 		const data = vi.mocked(db.jafInvoice.update).mock.calls[0][0].data
-		expect(data.avisoMatchedAt).toEqual(expect.any(Date))
+		expect(data).not.toHaveProperty("avisoMatchedAt")
 	})
 
 	it("merges a service split over two PDF rows before matching", async () => {
@@ -497,7 +495,7 @@ describe("review: save_aviso (supervisor: the Aviso PDF is the only source)", ()
 		await saveAviso([line("a1", 2), line("a2", 1)]).catch(() => {})
 		const data = vi.mocked(db.jafInvoice.update).mock.calls[0][0].data
 		expect(data.avisoLineTotal).toBe(90)
-		expect(data.avisoMatchedAt).toBeDefined()
+		expect(data).not.toHaveProperty("avisoMatchedAt")
 		expect(data.avisoLines).toHaveLength(2)
 		expect((data.avisoLines as any[])[0]).toMatchObject({
 			serviceCodeId: "a1",
@@ -555,7 +553,6 @@ describe("review: pre-cert sheet", () => {
 			},
 		],
 		avisoLineTotal: 239.34,
-		avisoMatchedAt: new Date(),
 	}
 	const sig = "data:image/png;base64,iVBORw0KGgo="
 
@@ -639,7 +636,7 @@ describe("review: pre-cert sheet", () => {
 	it("refuses generation before the aviso matched", async () => {
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
 			...matched,
-			avisoMatchedAt: null,
+			avisoDocPath: null,
 		} as any)
 		const res = await action({
 			request: post(intent("generate_precert")),
@@ -897,7 +894,6 @@ describe("review: release_to_finance", () => {
 				lineAmount: 211.72,
 			},
 		],
-		avisoMatchedAt: new Date(),
 		contractorAccountCode: "204",
 	}
 	beforeEach(() => {
@@ -1508,7 +1504,8 @@ describe("review loader: Packet → Claro step", () => {
 				},
 			],
 			avisoLineTotal: 211.72,
-			avisoMatchedAt: new Date(),
+			avisoNumber: "10353961",
+			avisoDocPath: "/uploads/aviso-docs/doc-1-aviso.pdf",
 			grossPayable: 137.62,
 			retentionAmount: 13.76,
 			netPayable: 123.86,

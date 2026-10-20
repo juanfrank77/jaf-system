@@ -363,6 +363,8 @@ export async function seedFinanceableInvoice(
 			lineAmount: number
 		}[]
 		releasedToFinanceAt?: Date | null
+		avisoNumber?: string | null
+		avisoDocPath?: string | null
 		payablesClosedAt?: Date | null
 		payrollRunId?: string | null
 		pbccRequestSentAt?: Date | null
@@ -385,7 +387,14 @@ export async function seedFinanceableInvoice(
 				overrides.releasedToFinanceAt === undefined
 					? new Date()
 					: overrides.releasedToFinanceAt,
-			avisoMatchedAt: new Date(),
+			avisoNumber:
+				overrides.avisoNumber === undefined
+					? "10353961"
+					: overrides.avisoNumber,
+			avisoDocPath:
+				overrides.avisoDocPath === undefined
+					? "aviso-docs/test-aviso.pdf"
+					: overrides.avisoDocPath,
 			jafInvoiceLines: (overrides.jafInvoiceLines ?? []) as never,
 			contractorAccountId: overrides.contractorAccountId ?? null,
 			contractorAccountCode: overrides.contractorAccountCode ?? null,

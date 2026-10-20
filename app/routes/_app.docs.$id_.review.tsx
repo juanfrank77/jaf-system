@@ -27,6 +27,7 @@ import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Pill } from "~/components/ui/pill"
 import { Textarea } from "~/components/ui/textarea"
+import { isAvisoSaved } from "~/lib/aviso-document"
 import { buildAvisoLines } from "~/lib/aviso-lines"
 import {
 	AvisoPdfError,
@@ -847,7 +848,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 				where: { id: params.id },
 				data: {
 					...baseData,
-					avisoMatchedAt: new Date(),
 					...(transition
 						? { status: "CLARO_UPLOADED", claroUploadedAt: new Date() }
 						: {}),
@@ -888,7 +888,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	if (intent === "generate_precert") {
-		if (!doc.avisoMatchedAt)
+		if (!isAvisoSaved(doc))
 			return { errorKey: "docs_review.errors.aviso_match_required" }
 		if (doc.releasedToFinanceAt) throw redirect(`/docs/${params.id}/review`)
 		const catalog = await getActiveServiceCodes()
@@ -2032,7 +2032,7 @@ export default function ReviewDoc({
 					>
 						{interactive && !packet.sent && <BackToSignOff />}
 					</PacketStepCard>
-					{interactive && packet.sent && !doc.avisoMatchedAt && (
+					{interactive && packet.sent && !isAvisoSaved(doc) && (
 						<Pill variant="warn" icon="→">
 							<b>{t("docs_review_steps.next_aviso_title")}</b>{" "}
 							{t("docs_review_steps.next_aviso_body")}
@@ -2101,7 +2101,7 @@ export default function ReviewDoc({
 			)}
 
 			{/* D — Pre-cert sheet */}
-			{panel === "PRECERT" && doc.avisoMatchedAt && (
+			{panel === "PRECERT" && isAvisoSaved(doc) && (
 				<section className="bg-card border rounded-lg p-4 space-y-3">
 					<h2 className="font-medium text-sm">{t("precert.heading")}</h2>
 					{!sheet ? (
@@ -2125,7 +2125,7 @@ export default function ReviewDoc({
 			)}
 
 			{/* E — Release */}
-			{panel === "RELEASE" && doc.avisoMatchedAt && (
+			{panel === "RELEASE" && isAvisoSaved(doc) && (
 				<section className="bg-card border rounded-lg p-4 space-y-3">
 					<h2 className="font-medium text-sm">{t("release.heading")}</h2>
 					<ul className="text-sm space-y-1">

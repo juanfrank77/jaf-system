@@ -146,9 +146,12 @@ beforeAll(async () => {
 
 beforeEach(() => {
 	setMailTransport(okTransport)
+	// These tests exercise the email send path, which is opt-in.
+	process.env.PACKET_EMAIL_ENABLED = "true"
 })
 
 afterAll(async () => {
+	delete process.env.PACKET_EMAIL_ENABLED
 	setMailTransport(null)
 	await db.auditTrail.deleteMany({ where: { docId: { in: docIds } } })
 	await db.packetSend.deleteMany({ where: { docId: { in: docIds } } })

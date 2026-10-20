@@ -1,7 +1,7 @@
 import type { ParseKeys } from "i18next"
 import { type RefObject, useEffect, useRef } from "react"
 import { useTranslation } from "react-i18next"
-import { Form, useNavigation } from "react-router"
+import { Form, Link, useNavigation } from "react-router"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { Card, CardContent, CardHeader } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
@@ -71,6 +71,11 @@ export type PacketStepData = {
 		error: string | null
 	}[]
 	canMarkManual: boolean
+	/**
+	 * PACKET_EMAIL_ENABLED. Off: step 5 only records that the supervisor sent
+	 * the stored PDF themselves.
+	 */
+	emailEnabled: boolean
 }
 
 /** The Prefield inputs the packet step edits until the first send. */
@@ -459,7 +464,46 @@ export function PacketStepCard({
 							{t("packet.download")}
 						</a>
 					)}
-					{interactive && (
+					{!packet.emailEnabled && (
+						<p className="text-sm font-medium">
+							{packet.packetHref
+								? `${t("packet.pdf_generated")}`
+								: t("packet.pdf_not_generated")}
+						</p>
+					)}
+					{interactive && !packet.emailEnabled && (
+						<>
+							<Button type="button" className="w-full" disabled>
+								{t("packet.send_coming_later")}
+							</Button>
+							{!packet.sent && (
+								<>
+									<ConfirmedSubmit
+										intent="mark_packet_sent"
+										label={t("packet.mark_sent")}
+										confirmText={t("packet.confirm_manual", {
+											email: claro?.email ?? "",
+										})}
+										disabled={!claro || blocked || !packet.packetHref}
+										inFlight={inFlight}
+									/>
+									<p className="text-xs text-muted-foreground">
+										{t("packet.manual_only_hint")}
+									</p>
+									<Link
+										to="?step=APPROVE"
+										className={buttonVariants({
+											variant: "ghost",
+											className: "w-full",
+										})}
+									>
+										← {t("packet.back")}
+									</Link>
+								</>
+							)}
+						</>
+					)}
+					{interactive && packet.emailEnabled && (
 						<>
 							<ConfirmedSubmit
 								intent="send_packet"

@@ -14,7 +14,7 @@ import {
 	PacketStepCard,
 	type PacketStepData,
 } from "~/components/packet-step"
-import { AddressCard, PhotosCard } from "~/components/review-field-work"
+import { PhotosCard } from "~/components/review-field-work"
 import {
 	SignaturePad,
 	type SignaturePadHandle,
@@ -27,6 +27,10 @@ import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Pill } from "~/components/ui/pill"
 import { Textarea } from "~/components/ui/textarea"
+import {
+	GenerateWorkOrderPdf,
+	WorkOrderDocumentCard,
+} from "~/components/work-order-document"
 import { isAvisoSaved } from "~/lib/aviso-document"
 import {
 	AvisoPdfError,
@@ -38,6 +42,7 @@ import {
 	RETENTION_RATE,
 } from "~/lib/contractor-payment.server"
 import { db } from "~/lib/db.server"
+import { isPacketEmailEnabled } from "~/lib/features.server"
 import { packetMaterialRows } from "~/lib/field-materials"
 import type { AddressCorrection } from "~/lib/field-update-helpers"
 import {
@@ -47,7 +52,12 @@ import {
 } from "~/lib/file-upload.server"
 import { invoiceNumberFor } from "~/lib/invoice-number"
 import { openJobLabel } from "~/lib/open-job-label"
-import { sendPacket } from "~/lib/packet-send.server"
+import {
+	buildPacketInput,
+	loadWorkOrderDocument,
+	sendPacket,
+} from "~/lib/packet-send.server"
+import { generateClaroPacketPdf } from "~/lib/pdf/claro-packet.server"
 import { canTransition, isTerminalStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import {
@@ -356,6 +366,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			? packetBlockers(doc, claro)
 			: ["claro_supervisor"]
 	const codeById = new Map(materialCodes.map((c) => [c.id, c]))
+	const emailEnabled = isPacketEmailEnabled()
 	const packet: PacketStepData = {
 		sent,
 		sentAt: doc.jafInvoiceGeneratedAt,
@@ -413,10 +424,27 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		})),
 		// The manual path is for a send that never reached Claro: only before
 		// the first send, and only after an attempt the server could not deliver.
-		canMarkManual:
-			!sent &&
-			(sends[0]?.outcome === "UNCONFIGURED" || sends[0]?.outcome === "FAILED"),
+		// With email off the manual send is the only one: offered whenever the
+		// step 4 PDF exists and nothing was sent yet.
+		emailEnabled,
+		canMarkManual: emailEnabled
+			? !sent &&
+				(sends[0]?.outcome === "UNCONFIGURED" || sends[0]?.outcome === "FAILED")
+			: !sent && !!doc.jafInvoicePdfPath,
 	}
+
+	// Step 4 · the work order document, and Generate PDF: open once the
+	// supervisor has signed, until the first send to Claro locks it.
+	const workOrder =
+		panelForStep(view) === "APPROVE"
+			? await loadWorkOrderDocument(params.id, "urls", user.name)
+			: null
+	const canGeneratePdf =
+		!!doc.supervisorApprovedAt &&
+		isSig(doc.completionSignature) &&
+		!doc.jafInvoiceGeneratedAt &&
+		!doc.releasedToFinanceAt &&
+		!isTerminalStatus(doc.status)
 
 	const { claroSupervisor: _claro, ...docData } = doc
 	return {
@@ -447,6 +475,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		showPrices,
 		correctorNames,
 		packet,
+		workOrder,
+		workOrderIssuedOn: (doc.completionSignedAt ?? new Date()).toISOString(),
+		canGeneratePdf,
 		// Who signed off (Step 4). Before this redesign it was the crew lead.
 		signedOffBy: doc.completedById
 			? (correctorNames[doc.completedById] ?? null)
@@ -458,7 +489,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const { user } = await requireRole(request, ["SUPERVISOR", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
-		include: { brigade: { select: { area: true } } },
+		include: { brigade: { select: { area: true } }, claroSupervisor: true },
 	})
 	if (user.role === "SUPERVISOR") {
 		await assertDocInSupervisorScope(db, user.id, doc)
@@ -506,6 +537,67 @@ export async function action({ request, params }: Route.ActionArgs) {
 				},
 			}),
 		])
+		// Signed: stay on step 4, where Generate PDF is now open.
+		throw redirect(`/docs/${params.id}/review?step=APPROVE`)
+	}
+
+	// Step 4 · Generate PDF: render the work order document and store it as
+	// the job's packet PDF. Only after sign-off (a missing warehouse or crew
+	// signature prints "Pending" and never blocks), and only until the first
+	// send to Claro: regenerating before then replaces the stored file.
+	if (intent === "generate_work_order_pdf") {
+		if (
+			doc.jafInvoiceGeneratedAt ||
+			doc.releasedToFinanceAt ||
+			isTerminalStatus(doc.status)
+		)
+			return { errorKey: "packet.errors.locked" }
+		if (!doc.supervisorApprovedAt || !isSig(doc.completionSignature))
+			return { errorKey: "packet.errors.not_signed_off" }
+		const claro = doc.claroSupervisor
+		if (!claro) return { errorKey: "packet.errors.no_claro_supervisor" }
+		const blockers = packetBlockers(doc, claro)
+		if (blockers.includes("prefield"))
+			return { errorKey: "packet.errors.prefield_missing" }
+		if (blockers.includes("blueprint"))
+			return { errorKey: "packet.errors.blueprint_missing" }
+		let pdfPath: string
+		try {
+			const pdf = await generateClaroPacketPdf(
+				await buildPacketInput(params.id),
+			)
+			pdfPath = await saveBuffer(
+				"packets",
+				`${params.id}-work-order-${Date.now()}.pdf`,
+				pdf,
+			)
+		} catch {
+			return { errorKey: "packet.errors.render_failed" }
+		}
+		const stored = await db.$transaction(async (tx) => {
+			// A send that landed while rendering wins: nothing changes.
+			const updated = await tx.jafInvoice.updateMany({
+				where: { id: params.id, jafInvoiceGeneratedAt: null },
+				data: { jafInvoicePdfPath: pdfPath },
+			})
+			if (updated.count === 0) return false
+			await tx.auditTrail.create({
+				data: {
+					docId: params.id,
+					userId: user.id,
+					action: "WORK_ORDER_PDF_GENERATED",
+					diffJson: {
+						jafInvoicePdfPath: {
+							before: doc.jafInvoicePdfPath,
+							after: pdfPath,
+						},
+					},
+				},
+			})
+			return true
+		})
+		if (!stored) return { errorKey: "packet.errors.locked" }
+		throw redirect(`/docs/${params.id}/review?step=APPROVE`)
 	}
 
 	if (intent === "upload_claro") {
@@ -1580,8 +1672,10 @@ export default function ReviewDoc({
 		invoicePreview,
 		invoiceHeader,
 		showPrices,
-		correctorNames,
 		packet,
+		workOrder,
+		workOrderIssuedOn,
+		canGeneratePdf,
 		signedOffBy,
 	} = loaderData
 	const { t } = useTranslation()
@@ -1627,14 +1721,15 @@ export default function ReviewDoc({
 		tag: p.tag,
 		takenAt: String(p.takenAt),
 	}))
-	const corrections =
-		(doc.addressCorrections as AddressCorrection[] | null) ?? []
 	const panel = panelForStep(view)
+	// Step 4 stays actionable after signing, for Generate PDF, until the send.
+	const signOffOpen =
+		view === "APPROVE" && (stage === "APPROVE" || canGeneratePdf)
 	// The one-line "Step N of 9" callout under the rail. Approve only shows while
 	// it is the live step; later screens show it whenever they can be acted on.
 	const calloutKey =
 		view === "APPROVE"
-			? stage === "APPROVE"
+			? signOffOpen
 				? "approve"
 				: null
 			: interactive &&
@@ -1661,7 +1756,7 @@ export default function ReviewDoc({
 					` · ${new Date(doc.fieldSubmittedAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}`}
 			</p>
 			<SupervisorStepRail stage={stage} view={view} docId={doc.id} />
-			{!interactive && (
+			{!interactive && !signOffOpen && (
 				<Pill variant="info" icon="🔒">
 					<b>{t("docs_review.readonly_title")}</b>{" "}
 					{t("docs_review.readonly_body")}{" "}
@@ -1688,14 +1783,12 @@ export default function ReviewDoc({
 			{/* A — Approve */}
 			{panel === "APPROVE" && (
 				<>
-					<AddressCard
-						estimated={doc.jobAddressEstimated}
-						corrections={corrections}
-						correctorNames={correctorNames}
-						notes={doc.fieldNotes}
-					/>
-					<PhotosCard docId={doc.id} photos={photoItems} />
-					{jobLines}
+					{workOrder && (
+						<WorkOrderDocumentCard
+							document={workOrder}
+							issuedOn={workOrderIssuedOn}
+						/>
+					)}
 					<SignOffCard
 						doc={doc}
 						signerName={user.name}
@@ -1703,6 +1796,28 @@ export default function ReviewDoc({
 						canSign={interactive && doc.status === "FIELD_UPDATED"}
 						errorKey={error?.errorKey}
 					/>
+					{signOffOpen && (
+						<GenerateWorkOrderPdf
+							enabled={canGeneratePdf}
+							pdfHref={packet.packetHref}
+						/>
+					)}
+					{signOffOpen && error?.errorKey?.startsWith("packet.errors.") && (
+						<p role="alert" className="text-sm text-status-danger">
+							{t(error.errorKey as ParseKeys)}
+						</p>
+					)}
+					{interactive && stage === "APPROVE" && (
+						<Link
+							to={`/docs/${doc.id}/field`}
+							className={buttonVariants({
+								variant: "ghost",
+								className: "w-full",
+							})}
+						>
+							← {t("work_order_doc.back_to_field")}
+						</Link>
+					)}
 				</>
 			)}
 
@@ -1861,7 +1976,9 @@ export default function ReviewDoc({
 							</div>
 						}
 					>
-						{interactive && !packet.sent && <BackToSignOff />}
+						{interactive && !packet.sent && packet.emailEnabled && (
+							<BackToSignOff />
+						)}
 					</PacketStepCard>
 					{interactive && packet.sent && !isAvisoSaved(doc) && (
 						<Pill variant="warn" icon="→">

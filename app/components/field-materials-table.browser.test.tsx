@@ -145,10 +145,10 @@ describe("FieldMaterialsTable", () => {
 			.map((o) => o.textContent)
 		expect(options).toEqual([
 			"Warehouse issue",
-			"Existing at site",
+			"Existing material at site",
 			"Claro drop-off",
 			"Truck stock",
-			"Crew personal",
+			"Crew personal storage",
 		])
 	})
 
@@ -168,5 +168,12 @@ describe("FieldMaterialsTable", () => {
 			0,
 		)
 		expect(screen.getByText("Entregado (firmado)")).toBeInTheDocument()
+		// The spec's B2 labels.
+		for (const label of [
+			"Entregado por almacén",
+			"Material existente en el sitio",
+			"Almacén personal de la brigada",
+		])
+			expect(screen.getAllByText(label).length).toBeGreaterThan(0)
 	})
 })

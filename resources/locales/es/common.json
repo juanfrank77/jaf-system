@@ -756,6 +756,9 @@
 		"not_uploaded": "No cargado",
 		"save_aviso": "Guardar aviso",
 		"aviso_resaved_signed": "Aviso guardado. La hoja de pre-certificación ya estaba firmada, así que se conservó firmada y no se regeneró.",
+		"precert": {
+			"note": "La Pre-cert se desbloquea solo con la firma del supervisor."
+		},
 		"errors": {
 			"pdf_required": "Por favor selecciona el PDF de Claro para cargar",
 			"back_note_required": "Escriba una nota con lo que está mal.",
@@ -784,13 +787,13 @@
 		"callout_approve_title": "Paso {{n}} de {{total}} · Usted",
 		"callout_approve_body": "Revise el documento abajo, firme y genere el PDF de la Orden de trabajo JAF para el supervisor de Claro.",
 		"callout_invoice_title": "Paso {{n}} de {{total}} · Usted",
-		"callout_invoice_body": "Revise el paquete: Prefield, trabajo realizado, materiales, plano y fotos. Luego envíelo al supervisor de Claro, quien crea el Aviso.",
+		"callout_invoice_body": "Envíe el PDF al supervisor de Claro, quien crea el Aviso a partir de su orden de trabajo.",
 		"callout_aviso_title": "Paso {{n}} de {{total}} · Usted",
 		"callout_aviso_body": "Ingrese el número de Aviso y suba el documento.",
 		"callout_precert_title": "Paso {{n}} de {{total}} · Usted + el contratista",
-		"callout_precert_body": "Todos los campos de abajo ya existen en el sistema. Firme, obtenga la firma del subcontratista y libere.",
+		"callout_precert_body": "Todos los campos de abajo ya existen en el sistema. Firme y libere; la firma del subcontratista es opcional.",
 		"callout_release_title": "Paso {{n}} de {{total}} · Usted",
-		"callout_release_body": "Siete condiciones, verificadas por el sistema. Cuando todas estén en verde, un clic envía el paquete a Lissette.",
+		"callout_release_body": "Revise el paquete y libérelo a Finanzas.",
 		"signoff_heading": "Firma del trabajo de campo",
 		"signoff_hint": "Usted responde por el trabajo de la brigada. Al firmar confirma que el paso de Campo está completo como se ingresó y lo bloquea.",
 		"signoff_name": "Nombre",
@@ -859,18 +862,15 @@
 		"claro_pdf_optional": "PDF de orden de trabajo Claro (opcional, distinto del Aviso)"
 	},
 	"release": {
-		"heading": "Liberar a Finanzas",
-		"button": "Liberar paquete a Finanzas",
+		"heading": "Paquete para Finanzas · {{done}}/{{total}}",
+		"button": "Liberar a Finanzas",
+		"back": "Atrás",
 		"released_at": "Liberado a Finanzas el {{date}}",
-		"claro_not_captured": "Aceptación de campo de Claro no capturada",
-		"condition.approved": "Trabajo de campo firmado",
-		"condition.invoice": "Paquete enviado a Claro",
-		"condition.aviso": "# de Aviso ingresado y documento subido",
-		"condition.amount_match": "Cotejo de monto aprobado (bloqueo duro)",
-		"condition.photos": "Fotos de antes y después presentes",
-		"condition.precert_signed": "Hoja pre-cert firmada — supervisor + sub-contratista",
-		"condition.contractor_code": "Cuenta de contratista resuelta",
-		"condition.claro_badge": "Aceptación de campo de Claro — solo insignia, no condición"
+		"photos_added": "{{n}} agregadas",
+		"row.work_order_pdf": "PDF de orden de trabajo JAF",
+		"row.aviso": "Aviso adjunto",
+		"row.precert_signed": "Hoja pre-cert firmada",
+		"row.photos": "Fotos antes + después"
 	},
 	"precert": {
 		"heading": "Hoja de Pre-Certificación Contratista",
@@ -892,7 +892,7 @@
 		"clear_signature": "Borrar",
 		"regenerate_confirm": "Regenerar crea una nueva versión y borra todas las firmas. ¿Continuar?",
 		"signatures": "Firmas",
-		"signatures_hint": "Deben firmar el supervisor del contratista y el subcontratista. Dibuje la firma en el recuadro y presione Firmar.",
+		"signatures_hint": "Debe firmar el supervisor del contratista; la firma del subcontratista es opcional. Dibuje la firma en el recuadro y presione Firmar.",
 		"signed": "Firmada",
 		"required": "Requerida",
 		"optional": "Opcional",
@@ -902,7 +902,7 @@
 		"col_cost": "Costo",
 		"total": "TOTAL",
 		"continue_release": "Continuar a Liberación →",
-		"continue_hint": "La liberación se habilita automáticamente cuando el supervisor del contratista y el subcontratista hayan firmado."
+		"continue_hint": "La liberación se habilita automáticamente cuando el supervisor del contratista haya firmado."
 	},
 	"docs_lc": {
 		"title": "Solicitud de LC — Revisión de Lissette",
@@ -927,9 +927,9 @@
 		"aging_heading": "Umbral de alerta de antigüedad",
 		"aging_description": "Los documentos más antiguos que esta cantidad de días en etapas clave de finanzas generarán alertas de antigüedad. Actual: {{current}} días",
 		"aging_label": "Días de alerta de antigüedad",
-		"tolerance_heading": "Tolerancia de monto de Aviso",
-		"tolerance_description": "Las diferencias de monto entre el Aviso y la factura JAF dentro de este valor absoluto se permiten. Diferencias above this bloquean la verificación de Finanzas. Actual: {{current}}",
-		"tolerance_label": "Tolerancia de monto de Aviso ($)",
+		"tolerance_heading": "Tolerancia de monto de PO",
+		"tolerance_description": "Se permiten diferencias de monto entre una PO y la factura JAF dentro de este valor absoluto. Aplica solo a montos de PO; el Aviso no tiene verificación de monto. Actual: {{current}}",
+		"tolerance_label": "Tolerancia de monto de PO ($)",
 		"saved": "Guardado.",
 		"save": "Guardar",
 		"errors": {
@@ -1241,12 +1241,10 @@
 		}
 	},
 	"finance_verify": {
-		"aviso_amount_prefilled": "Monto del Aviso {{amount}} capturado y cotejado por el supervisor.",
 		"line_sum_pre_ivu": "Suma de líneas (antes de IVU)",
-		"title": "Verificar Aviso vs. Factura",
+		"title": "Verificar paquete",
 		"amount": "Monto de factura",
 		"ivu_rate": "Tasa de IVU: {{rate}}%",
-		"tolerance": "Tolerancia permitida: {{tolerance}}",
 		"billing_blocked": "No se puede verificar — documentos de facturación incompletos",
 		"blocked_claro_pdf": "Falta PDF de orden de trabajo Claro",
 		"jaf_invoice": "Factura JAF",
@@ -1255,27 +1253,34 @@
 		"aviso_number": "Aviso #",
 		"supervisor": "Supervisor",
 		"previous_send_backs": "Devoluciones previas de Finanzas",
-		"aviso_amount_label": "Total del Aviso (del documento)",
-		"aviso_amount_hint": "Ingresa el monto total que aparece en el documento de Aviso.",
-		"aviso_amount_placeholder": "0.00",
 		"verify_note_placeholder": "Nota de verificación opcional…",
 		"mark_verified": "Marcar verificado",
 		"cannot_verify_hint": "El supervisor debe cargar el PDF de Claro antes de verificar.",
 		"send_back_placeholder": "Explica el problema del Aviso al supervisor…",
 		"send_back": "Devolver al supervisor",
-		"amount_mismatch": "El monto del Aviso difiere del total de la factura por {{difference}} (tolerancia: {{tolerance}}).",
-		"amount_mismatch_detail": "Aviso: {{avisoAmount}} vs Factura: {{invoiceTotal}}.",
 		"errors": {
 			"unknown_intent": "Acción desconocida.",
 			"note_required": "Se requiere una nota de devolución.",
-			"invalid_aviso_amount": "Ingresa un monto de Aviso válido.",
-			"amount_mismatch": "El monto del Aviso difiere del total de la factura por {{difference}} (tolerancia: {{tolerance}}).",
 			"invalid_stage": "Este trabajo no está en la etapa de verificación.",
 			"terminal_status": "Este trabajo ya no es editable."
 		},
 		"priced_invoice": "Factura JAF (con precios)",
 		"claro_packet": "Paquete Claro (sin precios)",
-		"priced_invoice_legacy": "Factura JAF (con precios, anterior)"
+		"priced_invoice_legacy": "Factura JAF (con precios, anterior)",
+		"packet": {
+			"heading": "Documentos del paquete",
+			"work_order_pdf": "PDF de orden de trabajo JAF",
+			"work_order_pdf_detail": "Enviado a Claro",
+			"aviso": "Aviso de Claro {{number}}",
+			"aviso_detail": "{{file}}",
+			"precert": "Hoja de pre-certificación",
+			"precert_detail": "Firmada por el supervisor",
+			"photos": "Fotos antes / después",
+			"photos_detail_one": "{{count}} foto",
+			"photos_detail_other": "{{count}} fotos",
+			"missing": "Falta",
+			"open": "Abrir"
+		}
 	},
 	"finance_pbcc": {
 		"title": "Solicitud de pago PBCC",
@@ -1383,7 +1388,6 @@
 			"finance": "En Finanzas"
 		},
 		"block": {
-			"aviso_mismatch": "Aviso ≠ factura",
 			"billing_aviso_pdf": "Facturación: falta el PDF del Aviso"
 		},
 		"stage_queue": {
@@ -2208,6 +2212,13 @@
 		"generate_hint": "Firme abajo primero: el PDF se puede generar cuando haya firmado.",
 		"generated": "PDF generado",
 		"download": "Descargar PDF",
+		"blockers_title": "Antes de poder generar el PDF:",
+		"blocker": {
+			"prefield": "Prefield: complete {{fields}} (este supervisor de Claro lo requiere).",
+			"blueprint": "Añada un plano (este supervisor de Claro lo requiere).",
+			"claro_supervisor": "Elija el supervisor de Claro de este trabajo."
+		},
+		"blockers_fix": "Corríjalo en el paso 5 (Paquete → Claro) y vuelva para generar el PDF →",
 		"back_to_field": "Volver al paso 3"
 	},
 	"packet": {

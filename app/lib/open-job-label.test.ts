@@ -4,7 +4,8 @@ import { OPEN_JOB_LABEL_KEYS, openJobLabel } from "./open-job-label"
 
 const D = new Date("2026-10-18T12:00:00Z")
 const signed = { sigSupervisorAt: D, sigSubcontractorAt: D }
-const unsigned = { sigSupervisorAt: D, sigSubcontractorAt: null }
+const unsigned = { sigSupervisorAt: null, sigSubcontractorAt: D }
+const supervisorOnly = { sigSupervisorAt: D, sigSubcontractorAt: null }
 
 type Doc = Parameters<typeof openJobLabel>[0]
 const SAVED = {
@@ -47,6 +48,12 @@ describe("openJobLabel", () => {
 			"SUPERVISOR_APPROVED",
 			{ supervisorApprovedAt: D, jafInvoiceGeneratedAt: D, ...SAVED },
 			signed,
+			"RELEASE",
+		],
+		[
+			"SUPERVISOR_APPROVED",
+			{ supervisorApprovedAt: D, jafInvoiceGeneratedAt: D, ...SAVED },
+			supervisorOnly,
 			"RELEASE",
 		],
 		[

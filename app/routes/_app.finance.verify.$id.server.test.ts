@@ -59,6 +59,8 @@ const baseDoc = () => ({
 	paymentRecords: [],
 	financeSendBackNotes: [],
 	supervisor: { email: "sup@example.com" },
+	preCertSheets: [],
+	photos: [],
 })
 
 describe("Finance verify action guards", () => {
@@ -120,60 +122,57 @@ describe("Finance verify action guards", () => {
 		expect(mocks.db.jafInvoice.update).not.toHaveBeenCalled()
 	})
 
-	it("records a successful verification", async () => {
+	it("verifies without an Aviso amount and records no amount check", async () => {
 		const result = await action({
-			request: requestWith({
-				intent: "verify",
-				avisoAmount: "100",
-				note: "ok",
-			}),
+			request: requestWith({ intent: "verify", note: "ok" }),
 			params: { id: "job-1" },
 		} as any).catch((r: any) => r)
 		expect(result.status).toBe(302)
+		expect(result.headers.get("Location")).toBe("/finance/queue")
 		expect(mocks.db.jafInvoice.update).toHaveBeenCalledWith(
 			expect.objectContaining({
 				data: expect.objectContaining({ financeVerifiedAt: expect.any(Date) }),
 			}),
 		)
-	})
-})
-
-describe("verify pre-fill from supervisor capture", () => {
-	it("verify uses the stored aviso line total when the supervisor captured lines", async () => {
-		mocks.db.$transaction.mockResolvedValue([])
-		mocks.requireRole.mockResolvedValue({
-			user: { id: "fin-1", role: "FINANCE" },
+		expect(mocks.db.auditTrail.create).toHaveBeenCalledWith({
+			data: {
+				docId: "job-1",
+				userId: "finance-1",
+				action: "FINANCE_VERIFIED",
+				diffJson: { note: "ok" },
+			},
 		})
-		mocks.isTerminalStatus.mockReturnValue(false)
-		mocks.computeFinanceStage.mockReturnValue("TO_VERIFY")
-		mocks.isMissingAvisoPdf.mockReturnValue(false)
-		const fixture = {
+		expect(mocks.checkAmountTolerance).not.toHaveBeenCalled()
+	})
+
+	it("never blocks on an Aviso amount, even a legacy stored mismatch", async () => {
+		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue({
 			...baseDoc(),
 			avisoNumber: "10353961",
-			claroPdfPath: "/x/claro.pdf",
-			avisoLineTotal: "239.34",
-			avisoDocPath: "aviso-docs/doc-1-aviso.pdf",
-			jafInvoiceLineTotal: "239.34",
+			avisoDocPath: "aviso-docs/job-1-aviso.pdf",
+			avisoLineTotal: "11623.28",
+			jafInvoiceLineTotal: "586.37",
+		})
+		mocks.checkAmountTolerance.mockReturnValue({
+			withinTolerance: false,
+			difference: 11036.91,
+		})
+		for (const avisoAmount of [undefined, "abc", "-5", "999999"]) {
+			const entries: Record<string, string> = { intent: "verify" }
+			if (avisoAmount !== undefined) entries.avisoAmount = avisoAmount
+			const result = await action({
+				request: requestWith(entries),
+				params: { id: "job-1" },
+			} as any).catch((r: any) => r)
+			expect(result.status).toBe(302)
 		}
-		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue(fixture)
-		const form = new FormData()
-		form.set("intent", "verify") // no avisoAmount typed
-		const res = await action({
-			request: requestWith({ intent: "verify" }),
-			params: { id: "job-1" },
-		} as any).catch((r) => r)
-		expect(res.status).toBe(302)
-		expect(mocks.db.auditTrail.create).toHaveBeenCalledWith(
-			expect.objectContaining({
-				data: expect.objectContaining({
-					diffJson: expect.objectContaining({
-						avisoAmount: 239.34,
-						invoiceTotal: 239.34,
-						source: "SUPERVISOR_CAPTURE",
-					}),
-				}),
-			}),
+		const diffs = mocks.db.auditTrail.create.mock.calls.map(
+			(c: any) => c[0].data.diffJson,
 		)
+		for (const d of diffs) {
+			expect(d).not.toHaveProperty("withinTolerance")
+			expect(d).not.toHaveProperty("avisoAmount")
+		}
 	})
 })
 
@@ -246,6 +245,57 @@ describe("Finance verify loader: brigade's stock and the two PDFs", () => {
 		expect(data.pricedInvoiceHref).toBeNull()
 		expect(data.packetHref).toBeNull()
 		expect(data.legacyPricedHref).toBeNull()
+	})
+
+	it("lists the released packet's four documents with open-links", async () => {
+		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue({
+			...baseDoc(),
+			jafInvoiceGeneratedAt: new Date("2026-10-01T12:00:00Z"),
+			jafInvoicePdfPath: "/uploads/packets/job-1-packet-1.pdf",
+			avisoNumber: "10353961",
+			avisoDocPath: "/uploads/aviso-docs/job-1-aviso.pdf",
+			preCertSheets: [
+				{
+					pdfPath: "/uploads/precert/job-1-v1.pdf",
+					sigSupervisorAt: new Date(),
+					sigSubcontractorAt: new Date(),
+				},
+			],
+			photos: [
+				{
+					localPath: "/uploads/photos/job-1/b.jpg",
+					tag: "BEFORE",
+					takenAt: new Date("2026-10-01"),
+				},
+				{
+					localPath: "/uploads/photos/job-1/a.jpg",
+					tag: "AFTER",
+					takenAt: new Date("2026-10-02"),
+				},
+			],
+		})
+		const data = await load()
+		expect(data.packetDocs.map((d: { href: string | null }) => d.href)).toEqual(
+			[
+				"/files/packets/job-1-packet-1.pdf",
+				"/files/aviso-docs/job-1-aviso.pdf",
+				"/files/precert/job-1-v1.pdf",
+				"/files/photos/job-1/b.jpg",
+			],
+		)
+		// Only the latest live pre-cert sheet is read.
+		expect(mocks.db.jafInvoice.findUniqueOrThrow).toHaveBeenCalledWith(
+			expect.objectContaining({
+				include: expect.objectContaining({
+					preCertSheets: expect.objectContaining({
+						where: { supersededAt: null },
+						take: 1,
+					}),
+				}),
+			}),
+		)
+		expect(data).not.toHaveProperty("prefilledAvisoAmount")
+		expect(data).not.toHaveProperty("tolerance")
 	})
 
 	it("labels a legacy priced file as the legacy priced invoice, not the packet", async () => {

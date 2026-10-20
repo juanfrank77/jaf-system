@@ -8,21 +8,18 @@ import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { Button } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
-import { Input } from "~/components/ui/input"
-import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
-import { isAvisoSaved } from "~/lib/aviso-document"
 import { brigadeStockFor } from "~/lib/brigade-stock.server"
 import { db } from "~/lib/db.server"
 import { sendInternalEmail } from "~/lib/email.server"
 import {
 	billableMaterials,
-	checkAmountTolerance,
 	computeFinanceStage,
 	FINANCEABLE_STATUSES,
 	fetchInvoiceTotalContext,
 	invoiceTotalUsed,
 } from "~/lib/finance-pipeline.server"
+import { packetDocuments } from "~/lib/packet-documents"
 import { isTerminalStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import { storedPdfLinks } from "~/lib/upload-href"
@@ -55,14 +52,24 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			supervisor: true,
 			poLinks: true,
 			paymentRecords: { select: { type: true } },
+			preCertSheets: {
+				where: { supersededAt: null },
+				orderBy: { version: "desc" },
+				take: 1,
+				select: {
+					pdfPath: true,
+					sigSupervisorAt: true,
+					sigSubcontractorAt: true,
+				},
+			},
+			photos: { select: { localPath: true, tag: true, takenAt: true } },
 		},
 	})
 	if (!FINANCEABLE_STATUSES.includes(doc.status)) {
 		throw redirect(`/docs/${params.id}`)
 	}
 
-	const { serviceCodes, codeMap, ivuRate, tolerance } =
-		await fetchInvoiceTotalContext()
+	const { serviceCodes, codeMap, ivuRate } = await fetchInvoiceTotalContext()
 	const stage = computeFinanceStage(
 		doc,
 		doc.poLinks.length > 0,
@@ -77,12 +84,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		stage,
 		amount,
 		ivuRate,
-		tolerance,
 		sendBackNotes: (doc.financeSendBackNotes as SendBackNote[]) || [],
-		prefilledAvisoAmount:
-			isAvisoSaved(doc) && doc.avisoLineTotal != null
-				? toNumberPrice(doc.avisoLineTotal)
-				: null,
+		// The released packet's four documents, each opening its file.
+		packetDocs: packetDocuments(doc, doc.preCertSheets[0] ?? null, doc.photos),
 		lineTotal:
 			doc.jafInvoiceLineTotal != null
 				? toNumberPrice(doc.jafInvoiceLineTotal)
@@ -126,66 +130,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 		return { errorKey: "finance_verify.errors.invalid_stage" }
 
 	if (intent === "verify") {
-		if (
-			isAvisoSaved(doc) &&
-			doc.avisoLineTotal != null &&
-			doc.jafInvoiceLineTotal != null
-		) {
-			const avisoAmount = toNumberPrice(doc.avisoLineTotal)
-			const invoiceTotal = toNumberPrice(doc.jafInvoiceLineTotal)
-			const note = (form.get("note") as string | null)?.trim() || null
-			await db.$transaction([
-				db.jafInvoice.update({
-					where: { id: params.id },
-					data: {
-						financeVerifiedAt: new Date(),
-						financeVerifiedById: user.id,
-					},
-				}),
-				db.auditTrail.create({
-					data: {
-						docId: params.id,
-						userId: user.id,
-						action: "FINANCE_VERIFIED",
-						diffJson: {
-							note,
-							avisoAmount,
-							invoiceTotal,
-							difference: Math.abs(avisoAmount - invoiceTotal),
-							withinTolerance: true,
-							source: "SUPERVISOR_CAPTURE",
-						},
-					},
-				}),
-			])
-			throw redirect("/finance/queue")
-		}
-		const avisoAmountRaw = (form.get("avisoAmount") as string | null)?.trim()
-		const avisoAmount = avisoAmountRaw ? Number(avisoAmountRaw) : NaN
-		if (
-			!avisoAmountRaw ||
-			Number.isNaN(avisoAmount) ||
-			!Number.isFinite(avisoAmount) ||
-			avisoAmount < 0
-		) {
-			return { errorKey: "finance_verify.errors.invalid_aviso_amount" }
-		}
-		const { codeMap, ivuRate, tolerance } = await fetchInvoiceTotalContext()
-		const invoiceTotal = invoiceTotalUsed(doc, codeMap, ivuRate)
-		const { withinTolerance, difference } = checkAmountTolerance(
-			invoiceTotal,
-			avisoAmount,
-			tolerance,
-		)
-		if (!withinTolerance) {
-			return {
-				errorKey: "finance_verify.errors.amount_mismatch",
-				avisoAmount: avisoAmountRaw,
-				invoiceTotal,
-				difference,
-				tolerance,
-			}
-		}
+		// No Aviso-amount check (F2): verifying never asks for or compares one.
 		const note = (form.get("note") as string | null)?.trim() || null
 		await db.$transaction([
 			db.jafInvoice.update({
@@ -200,17 +145,11 @@ export async function action({ request, params }: Route.ActionArgs) {
 					docId: params.id,
 					userId: user.id,
 					action: "FINANCE_VERIFIED",
-					diffJson: {
-						note,
-						avisoAmount,
-						invoiceTotal,
-						difference,
-						withinTolerance: true,
-					},
+					diffJson: { note },
 				},
 			}),
 		])
-		throw redirect(`/finance/receivables`)
+		throw redirect("/finance/queue")
 	}
 
 	if (intent === "send_back") {
@@ -273,9 +212,8 @@ export default function FinanceVerify({
 		stage,
 		amount,
 		ivuRate,
-		tolerance,
 		sendBackNotes,
-		prefilledAvisoAmount,
+		packetDocs,
 		lineTotal,
 		packetHref,
 		legacyPricedHref,
@@ -284,15 +222,7 @@ export default function FinanceVerify({
 		materials,
 	} = loaderData
 	const { t } = useTranslation()
-	const error = actionData as
-		| {
-				errorKey?: string
-				avisoAmount?: string
-				invoiceTotal?: number
-				difference?: number
-				tolerance?: number
-		  }
-		| undefined
+	const error = actionData as { errorKey?: string } | undefined
 
 	const cannotVerify =
 		stage !== "TO_VERIFY" || doc.status === "LC_REQUEST_GENERATED"
@@ -339,27 +269,47 @@ export default function FinanceVerify({
 				<p>
 					{t("finance_verify.ivu_rate", { rate: (ivuRate * 100).toFixed(1) })}
 				</p>
-				<p className="text-xs text-muted-foreground">
-					{t("finance_verify.tolerance", { tolerance: formatMoney(tolerance) })}
-				</p>
 			</div>
 
-			{error?.errorKey === "finance_verify.errors.amount_mismatch" && (
-				<div className="bg-status-danger-soft border border-status-danger-line rounded-lg p-4">
-					<p className="font-medium text-status-danger">
-						{t("finance_verify.amount_mismatch", {
-							difference: formatMoney(error.difference ?? 0),
-							tolerance: formatMoney(error.tolerance ?? 0),
-						})}
-					</p>
-					<p className="text-sm text-status-danger mt-1">
-						{t("finance_verify.amount_mismatch_detail", {
-							avisoAmount: formatMoney(Number(error.avisoAmount ?? 0)),
-							invoiceTotal: formatMoney(error.invoiceTotal ?? 0),
-						})}
-					</p>
-				</div>
-			)}
+			<div className="bg-card border rounded-lg p-4 space-y-2">
+				<h2 className="text-sm font-medium">
+					{t("finance_verify.packet.heading")}
+				</h2>
+				<ul className="divide-y text-sm">
+					{packetDocs.map((d) => (
+						<li
+							key={d.key}
+							className="flex flex-wrap items-center justify-between gap-2 py-2"
+						>
+							<div>
+								<p className="font-medium">
+									{t(d.label as ParseKeys, {
+										number: doc.avisoNumber ?? "—",
+									})}
+								</p>
+								<p className="text-xs text-muted-foreground">
+									{d.href
+										? t(`finance_verify.packet.${d.key}_detail` as ParseKeys, {
+												file: d.detail,
+												count: Number(d.detail) || 0,
+											})
+										: t("finance_verify.packet.missing")}
+								</p>
+							</div>
+							{d.href && (
+								<a
+									href={d.href}
+									target="_blank"
+									rel="noreferrer"
+									className="text-accent-text underline"
+								>
+									{t("finance_verify.packet.open")}
+								</a>
+							)}
+						</li>
+					))}
+				</ul>
+			</div>
 
 			<div className="grid grid-cols-1 gap-4">
 				<div className="bg-card border rounded-lg p-4 space-y-3">
@@ -455,41 +405,6 @@ export default function FinanceVerify({
 				<div className="flex flex-wrap items-start gap-4">
 					<Form method="post" className="space-y-3">
 						<input type="hidden" name="intent" value="verify" />
-						{prefilledAvisoAmount != null ? (
-							<div>
-								<Label htmlFor="avisoAmountPrefilled">
-									{t("finance_verify.aviso_amount_label")}
-								</Label>
-								<p
-									id="avisoAmountPrefilled"
-									className="mt-1 text-sm font-medium text-status-ok bg-status-ok-soft border border-status-ok/30 rounded px-2 py-1"
-								>
-									{t("finance_verify.aviso_amount_prefilled", {
-										amount: formatMoney(prefilledAvisoAmount),
-									})}
-								</p>
-							</div>
-						) : (
-							<div>
-								<Label htmlFor="avisoAmount">
-									{t("finance_verify.aviso_amount_label")}
-								</Label>
-								<Input
-									id="avisoAmount"
-									name="avisoAmount"
-									type="number"
-									step="0.01"
-									min="0"
-									defaultValue={actionData?.avisoAmount ?? ""}
-									placeholder={t("finance_verify.aviso_amount_placeholder")}
-									className="mt-1"
-									required
-								/>
-								<p className="text-xs text-muted-foreground mt-1">
-									{t("finance_verify.aviso_amount_hint")}
-								</p>
-							</div>
-						)}
 						<Textarea
 							name="note"
 							rows={2}
@@ -515,12 +430,11 @@ export default function FinanceVerify({
 						<Button type="submit" variant="outline">
 							{t("finance_verify.send_back")}
 						</Button>
-						{error?.errorKey &&
-							error.errorKey !== "finance_verify.errors.amount_mismatch" && (
-								<p className="text-sm text-status-danger">
-									{t(error.errorKey as ParseKeys)}
-								</p>
-							)}
+						{error?.errorKey && (
+							<p className="text-sm text-status-danger">
+								{t(error.errorKey as ParseKeys)}
+							</p>
+						)}
 					</Form>
 				</div>
 			)}

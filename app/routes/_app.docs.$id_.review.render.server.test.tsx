@@ -44,7 +44,7 @@ function loaderData(doc: Record<string, unknown> = {}, interactive = true) {
 		openLabel: null,
 		view: "APPROVE",
 		interactive,
-		gate: { ok: false, conditions: [] },
+		gate: { ok: false, rows: [] },
 		invoiceSummary: null,
 		invoiceNumber: null,
 		invoicePreview: [],
@@ -230,6 +230,32 @@ describe("Step 4 · the work order document (render)", () => {
 		expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>Generate PDF/)
 		expect(html).not.toContain("Completed step.")
 		expect(html).not.toContain("Back to step 3")
+	})
+
+	it("once signed, lists what blocks Generate PDF and links to step 5 to fix it", async () => {
+		const html = await render(
+			step4(
+				{
+					stage: "INVOICE",
+					interactive: false,
+					canGeneratePdf: false,
+					packet: packetData({
+						blockers: ["prefield", "claro_supervisor"],
+						prefieldMissing: ["pedido"],
+					}),
+				},
+				{
+					status: "SUPERVISOR_APPROVED",
+					supervisorApprovedAt: "2026-10-18T10:00:00.000Z",
+					completionSignature: "data:image/png;base64,abc",
+				},
+			),
+		)
+		expect(html).toContain("Before the PDF can be generated:")
+		expect(html).toContain("Prefield: fill in Pedido")
+		expect(html).toContain("Choose the Claro supervisor for this job")
+		expect(html).toContain('href="/?step=INVOICE"')
+		expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Generate PDF/)
 	})
 
 	it("speaks Spanish too", async () => {
@@ -496,6 +522,33 @@ describe("Packet → Claro step (render)", () => {
 		expect(html).toContain(
 			"¿Enviar el paquete por correo a ramon.now@claro.example?",
 		)
+	})
+
+	it("with email off, Sign off can still be reopened before the send", async () => {
+		const html = await render(
+			step5({
+				emailEnabled: false,
+				packetHref: "/files/packets/doc-1-work-order-1.pdf",
+				canMarkManual: true,
+			}),
+		)
+		expect(html).toContain('value="mark_packet_sent"')
+		expect(html).toContain("Back to Sign off")
+		expect(html).toContain(
+			"Send the PDF to the Claro supervisor, who creates the Aviso from your work order.",
+		)
+		const sent = await render(
+			step5(
+				{
+					emailEnabled: false,
+					sent: true,
+					sentAt: "2026-10-18T15:00:00.000Z",
+					packetHref: "/files/packets/doc-1-work-order-1.pdf",
+				},
+				{ jafInvoiceGeneratedAt: "2026-10-18T15:00:00.000Z" },
+			),
+		)
+		expect(sent).not.toContain("Back to Sign off")
 	})
 
 	it("a read-only view of the step has no send controls", async () => {

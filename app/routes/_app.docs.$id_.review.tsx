@@ -43,7 +43,7 @@ import {
 } from "~/lib/contractor-payment.server"
 import { db } from "~/lib/db.server"
 import { isPacketEmailEnabled } from "~/lib/features.server"
-import { packetMaterialRows } from "~/lib/field-materials"
+import { fieldMaterialsOrDefault } from "~/lib/field-materials"
 import type { AddressCorrection } from "~/lib/field-update-helpers"
 import {
 	uploadFileName,
@@ -68,6 +68,7 @@ import {
 	renderPreCert,
 } from "~/lib/pre-cert.server"
 import { packetBlockers, prefieldMissing } from "~/lib/prefield"
+import { evaluateReleaseGate, isPacketPath } from "~/lib/release-gate"
 import {
 	getActiveServiceCodes,
 	isPriceBlind,
@@ -85,7 +86,6 @@ import {
 import { assertDocInSupervisorScope } from "~/lib/supervisor-scope"
 import {
 	deriveSupervisorStage,
-	evaluateReleaseGate,
 	isAvisoStarted,
 	panelForStep,
 	resolveStepView,
@@ -161,6 +161,16 @@ async function checkAvisoNumber(
 const isSig = (v: unknown) =>
 	typeof v === "string" && v.startsWith("data:image") && v !== "data:,"
 
+/**
+ * Sent to Claro under the old flow: the first send happened but what is
+ * stored is a priced invoice (`jaf-invoices/`) or nothing, never the work
+ * order PDF the release gate needs. Step 4 can still generate that PDF.
+ */
+const isSentUnderOldFlow = (doc: {
+	jafInvoiceGeneratedAt: Date | null
+	jafInvoicePdfPath: string | null
+}) => !!doc.jafInvoiceGeneratedAt && !isPacketPath(doc.jafInvoicePdfPath)
+
 export const meta: Route.MetaFunction = ({ data }) => [
 	{
 		title: data
@@ -224,11 +234,12 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			...(doc.completedById ? [doc.completedById] : []),
 		]),
 	]
-	// The packet preview lists what the packet PDF does (no brigade's stock).
-	const materialRows = packetMaterialRows(
+	// Step 5 lists the materials the work order PDF prints: every Source, used
+	// lines only (the same rows `buildWorkOrderDocument` takes).
+	const materialRows = fieldMaterialsOrDefault(
 		doc.fieldMaterials,
 		(doc.materialsTaken as MaterialLine[] | null) ?? [],
-	)
+	).filter((r) => r.used > 0)
 	const [
 		serviceCodes,
 		photos,
@@ -300,11 +311,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		isAvisoStarted(doc),
 		new URL(request.url).searchParams.get("step"),
 	)
-	const gate = evaluateReleaseGate(
+	const gate = evaluateReleaseGate({
 		doc,
 		sheet,
-		await photosThatLoad(params.id, photos),
-	)
+		photos: await photosThatLoad(params.id, photos),
+	})
 	const lineTotal =
 		doc.jafInvoiceLineTotal != null
 			? toNumberPrice(doc.jafInvoiceLineTotal)
@@ -337,7 +348,12 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		controlNumber: doc.controlNumber,
 		jobType: doc.jobType,
 		address: doc.jobAddressActual ?? doc.jobAddressEstimated,
-		brigadeName: brigade?.name ?? null,
+		// The crew as the work order prints it: "NAME · contract number".
+		brigadeName: brigade
+			? brigade.code
+				? `${brigade.name} · ${brigade.code}`
+				: brigade.name
+			: null,
 		workDate: (doc.startedAt ?? doc.fieldSubmittedAt)?.toISOString() ?? null,
 	}
 	if (lineTotal != null && showPrices) {
@@ -391,10 +407,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		prefieldMissing: claro?.requiresPrefield ? prefieldMissing(doc) : [],
 		blockers,
 		// Only a real packet: a legacy priced invoice in jaf-invoices/ is not one.
-		packetHref:
-			doc.jafInvoicePdfPath && !isLegacyPricedInvoice(doc.jafInvoicePdfPath)
-				? uploadHref(doc.jafInvoicePdfPath)
-				: null,
+		packetHref: isPacketPath(doc.jafInvoicePdfPath)
+			? uploadHref(doc.jafInvoicePdfPath as string)
+			: null,
 		blueprints: doc.blueprintPaths.map((p) => {
 			const name = path.basename(p)
 			return {
@@ -430,21 +445,25 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		canMarkManual: emailEnabled
 			? !sent &&
 				(sends[0]?.outcome === "UNCONFIGURED" || sends[0]?.outcome === "FAILED")
-			: !sent && !!doc.jafInvoicePdfPath,
+			: !sent && isPacketPath(doc.jafInvoicePdfPath),
 	}
 
 	// Step 4 · the work order document, and Generate PDF: open once the
-	// supervisor has signed, until the first send to Claro locks it.
+	// supervisor has signed and the Claro supervisor's rules are met, until the
+	// first send to Claro locks it. A job sent under the old flow has no work
+	// order PDF yet, so it stays open for it until the release.
 	const workOrder =
 		panelForStep(view) === "APPROVE"
 			? await loadWorkOrderDocument(params.id, "urls", user.name)
 			: null
 	const canGeneratePdf =
 		!!doc.supervisorApprovedAt &&
-		isSig(doc.completionSignature) &&
-		!doc.jafInvoiceGeneratedAt &&
 		!doc.releasedToFinanceAt &&
-		!isTerminalStatus(doc.status)
+		!isTerminalStatus(doc.status) &&
+		(isSentUnderOldFlow(doc) ||
+			(isSig(doc.completionSignature) &&
+				!doc.jafInvoiceGeneratedAt &&
+				blockers.length === 0))
 
 	const { claroSupervisor: _claro, ...docData } = doc
 	return {
@@ -544,28 +563,39 @@ export async function action({ request, params }: Route.ActionArgs) {
 	// Step 4 · Generate PDF: render the work order document and store it as
 	// the job's packet PDF. Only after sign-off (a missing warehouse or crew
 	// signature prints "Pending" and never blocks), and only until the first
-	// send to Claro: regenerating before then replaces the stored file.
+	// send to Claro: regenerating before then replaces the stored file. A job
+	// sent under the old flow (a priced invoice, or nothing, stored) has no
+	// work order PDF for the release gate, so it may generate one until the
+	// release; the Claro supervisor's rules stopped applying at its send.
 	if (intent === "generate_work_order_pdf") {
+		const oldFlow = isSentUnderOldFlow(doc)
 		if (
-			doc.jafInvoiceGeneratedAt ||
+			(doc.jafInvoiceGeneratedAt && !oldFlow) ||
 			doc.releasedToFinanceAt ||
 			isTerminalStatus(doc.status)
 		)
 			return { errorKey: "packet.errors.locked" }
-		if (!doc.supervisorApprovedAt || !isSig(doc.completionSignature))
+		if (
+			!doc.supervisorApprovedAt ||
+			(!oldFlow && !isSig(doc.completionSignature))
+		)
 			return { errorKey: "packet.errors.not_signed_off" }
-		const claro = doc.claroSupervisor
-		if (!claro) return { errorKey: "packet.errors.no_claro_supervisor" }
-		const blockers = packetBlockers(doc, claro)
-		if (blockers.includes("prefield"))
-			return { errorKey: "packet.errors.prefield_missing" }
-		if (blockers.includes("blueprint"))
-			return { errorKey: "packet.errors.blueprint_missing" }
+		if (!oldFlow) {
+			const claro = doc.claroSupervisor
+			if (!claro) return { errorKey: "packet.errors.no_claro_supervisor" }
+			const blockers = packetBlockers(doc, claro)
+			if (blockers.includes("prefield"))
+				return { errorKey: "packet.errors.prefield_missing" }
+			if (blockers.includes("blueprint"))
+				return { errorKey: "packet.errors.blueprint_missing" }
+		}
 		let pdfPath: string
+		// The layout of this file, so the send that records it can say so.
+		let showPrefield: boolean
 		try {
-			const pdf = await generateClaroPacketPdf(
-				await buildPacketInput(params.id),
-			)
+			const input = await buildPacketInput(params.id)
+			showPrefield = input.document.prefield !== "not_required"
+			const pdf = await generateClaroPacketPdf(input)
 			pdfPath = await saveBuffer(
 				"packets",
 				`${params.id}-work-order-${Date.now()}.pdf`,
@@ -575,9 +605,12 @@ export async function action({ request, params }: Route.ActionArgs) {
 			return { errorKey: "packet.errors.render_failed" }
 		}
 		const stored = await db.$transaction(async (tx) => {
-			// A send that landed while rendering wins: nothing changes.
+			// A send that landed while rendering wins: nothing changes. An
+			// old-flow job only checks nobody stored another file meanwhile.
 			const updated = await tx.jafInvoice.updateMany({
-				where: { id: params.id, jafInvoiceGeneratedAt: null },
+				where: oldFlow
+					? { id: params.id, jafInvoicePdfPath: doc.jafInvoicePdfPath }
+					: { id: params.id, jafInvoiceGeneratedAt: null },
 				data: { jafInvoicePdfPath: pdfPath },
 			})
 			if (updated.count === 0) return false
@@ -591,6 +624,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 							before: doc.jafInvoicePdfPath,
 							after: pdfPath,
 						},
+						showPrefield,
 					},
 				},
 			})
@@ -664,7 +698,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 	// Step 5 · the Prefield fields, the Claro supervisor and (when that
 	// supervisor needs one) a blueprint can be filled or corrected here until
-	// the first send; after it they are what Claro received.
+	// the first send; after it they are what Claro received. Any change makes
+	// the stored PDF out of date, so it is cleared and step 4 generates it again.
 	if (intent === "save_prefield") {
 		if (doc.jafInvoiceGeneratedAt)
 			return { errorKey: "packet.errors.prefield_locked" }
@@ -712,6 +747,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 			)
 		if (added.length > 0)
 			data.blueprintPaths = [...doc.blueprintPaths, ...added]
+		if (Object.keys(data).length > 0 && doc.jafInvoicePdfPath) {
+			data.jafInvoicePdfPath = null
+			changes.jafInvoicePdfPath = { before: doc.jafInvoicePdfPath, after: null }
+		}
 		if (Object.keys(data).length > 0)
 			await db.$transaction([
 				db.jafInvoice.update({ where: { id: params.id }, data }),
@@ -732,6 +771,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 	// Something is wrong with what the brigade reported: reopen the Approve step
 	// (not the crew) so the supervisor can fix it before anything goes to Claro.
+	// The stored PDF no longer matches what will be signed: it is cleared.
 	if (intent === "back_to_approve") {
 		const note = (form.get("note") as string | null)?.trim() || ""
 		if (!note) return { errorKey: "docs_review.errors.back_note_required" }
@@ -744,7 +784,11 @@ export async function action({ request, params }: Route.ActionArgs) {
 		await db.$transaction([
 			db.jafInvoice.update({
 				where: { id: params.id },
-				data: { status: "FIELD_UPDATED", supervisorApprovedAt: null },
+				data: {
+					status: "FIELD_UPDATED",
+					supervisorApprovedAt: null,
+					...(doc.jafInvoicePdfPath ? { jafInvoicePdfPath: null } : {}),
+				},
 			}),
 			db.auditTrail.create({
 				data: {
@@ -754,6 +798,14 @@ export async function action({ request, params }: Route.ActionArgs) {
 					diffJson: {
 						status: { before: doc.status, after: "FIELD_UPDATED" },
 						note,
+						...(doc.jafInvoicePdfPath
+							? {
+									jafInvoicePdfPath: {
+										before: doc.jafInvoicePdfPath,
+										after: null,
+									},
+								}
+							: {}),
 					},
 				},
 			}),
@@ -1065,23 +1117,24 @@ export async function action({ request, params }: Route.ActionArgs) {
 				select: { tag: true, localPath: true },
 			}),
 		])
-		const gate = evaluateReleaseGate(
+		const gate = evaluateReleaseGate({
 			doc,
 			sheet,
-			await photosThatLoad(params.id, photos),
-		)
+			photos: await photosThatLoad(params.id, photos),
+		})
 		if (!gate.ok)
 			return {
 				errorKey: "docs_review.errors.release_blocked",
-				conditions: gate.conditions,
+				rows: gate.rows,
 			}
 		const brigade = doc.brigadeId
 			? await db.brigade.findUnique({ where: { id: doc.brigadeId } })
 			: null
 		const contractor =
 			sheet?.sigSubcontractorName ?? brigade?.leadName ?? brigade?.name ?? ""
-		const amount = toNumberPrice(doc.jafInvoiceLineTotal).toFixed(2)
-		const message = `${doc.controlNumber} · Aviso ${doc.avisoNumber} · ${contractor} · $${amount} — ready for payment request`
+		// No amount in the message: supervisors can read their own notifications
+		// back, and they never see money.
+		const message = `${doc.controlNumber} · Aviso ${doc.avisoNumber} · ${contractor} — ready for payment request`
 		const finance = await db.user.findMany({
 			where: { role: "FINANCE", active: true },
 		})
@@ -1098,7 +1151,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 					docId: params.id,
 					userId: user.id,
 					action: "RELEASED_TO_FINANCE",
-					diffJson: { conditions: gate.conditions },
+					diffJson: { rows: gate.rows },
 				},
 			}),
 			...finance.map((f) =>
@@ -1149,14 +1202,11 @@ export async function action({ request, params }: Route.ActionArgs) {
 	throw redirect(`/docs/${params.id}`)
 }
 
-const CONDITION_KEYS = {
-	approved: "release.condition.approved",
-	invoice: "release.condition.invoice",
-	aviso: "release.condition.aviso",
-	amount_match: "release.condition.amount_match",
-	photos: "release.condition.photos",
-	precert_signed: "release.condition.precert_signed",
-	contractor_code: "release.condition.contractor_code",
+const RELEASE_ROW_KEYS = {
+	work_order_pdf: "release.row.work_order_pdf",
+	aviso: "release.row.aviso",
+	precert_signed: "release.row.precert_signed",
+	photos: "release.row.photos",
 } as const
 
 function SignatureBlock({
@@ -1499,6 +1549,9 @@ function PreCertPanel({
 				))}
 			<div className="space-y-2 pt-1">
 				<h3 className="text-sm font-medium">{t("precert.signatures")}</h3>
+				<p className="text-xs text-muted-foreground">
+					{t("docs_review.precert.note")}
+				</p>
 				{!readOnly && (
 					<p className="text-xs text-muted-foreground">
 						{t("precert.signatures_hint")}
@@ -1534,6 +1587,7 @@ function PreCertPanel({
 					intent="sign_precert_subcontractor"
 					labelKey="precert.sig_subcontractor"
 					readOnly={readOnly}
+					optional
 					signed={
 						sheet?.sigSubcontractorName ? (
 							<div className="space-y-1">
@@ -1640,7 +1694,7 @@ function PreCertPanel({
 					</p>
 				</div>
 			)}
-			{readOnly && sheet?.sigSupervisorAt && sheet?.sigSubcontractorAt && (
+			{readOnly && sheet?.sigSupervisorAt && (
 				<div className="flex justify-end border-t pt-3">
 					<Link to="?step=RELEASE" className={buttonVariants({})}>
 						{t("precert.continue_release")}
@@ -1686,7 +1740,7 @@ export default function ReviewDoc({
 				noteKey?: string
 				typedNumber?: string
 				pdfAvisoNumber?: string
-				conditions?: { key: string; ok: boolean }[]
+				rows?: { key: string; ok: boolean }[]
 		  }
 		| undefined
 	// Json columns: tolerate null or a malformed non-array value
@@ -1722,9 +1776,13 @@ export default function ReviewDoc({
 		takenAt: String(p.takenAt),
 	}))
 	const panel = panelForStep(view)
+	// Signed, not sent, but the Claro supervisor's rules block Generate PDF:
+	// step 4 says what to fix on step 5.
+	const pdfBlocked =
+		!!doc.supervisorApprovedAt && !packet.sent && packet.blockers.length > 0
 	// Step 4 stays actionable after signing, for Generate PDF, until the send.
 	const signOffOpen =
-		view === "APPROVE" && (stage === "APPROVE" || canGeneratePdf)
+		view === "APPROVE" && (stage === "APPROVE" || canGeneratePdf || pdfBlocked)
 	// The one-line "Step N of 9" callout under the rail. Approve only shows while
 	// it is the live step; later screens show it whenever they can be acted on.
 	const calloutKey =
@@ -1796,6 +1854,31 @@ export default function ReviewDoc({
 						canSign={interactive && doc.status === "FIELD_UPDATED"}
 						errorKey={error?.errorKey}
 					/>
+					{signOffOpen && pdfBlocked && (
+						<Pill variant="warn" icon="⚠">
+							<b>{t("work_order_doc.blockers_title")}</b>
+							<ul className="mt-1 list-disc pl-5">
+								{packet.blockers.map((b) => (
+									<li key={b}>
+										{b === "prefield"
+											? t("work_order_doc.blocker.prefield", {
+													fields: packet.prefieldMissing
+														.map((k) =>
+															t(
+																`packet.prefield.${k as (typeof PREFIELD_INPUTS)[number]}`,
+															),
+														)
+														.join(", "),
+												})
+											: t(`work_order_doc.blocker.${b}`)}
+									</li>
+								))}
+							</ul>
+							<Link to="?step=INVOICE" className="underline">
+								{t("work_order_doc.blockers_fix")}
+							</Link>
+						</Pill>
+					)}
 					{signOffOpen && (
 						<GenerateWorkOrderPdf
 							enabled={canGeneratePdf}
@@ -1976,9 +2059,7 @@ export default function ReviewDoc({
 							</div>
 						}
 					>
-						{interactive && !packet.sent && packet.emailEnabled && (
-							<BackToSignOff />
-						)}
+						{interactive && !packet.sent && <BackToSignOff />}
 					</PacketStepCard>
 					{interactive && packet.sent && !isAvisoSaved(doc) && (
 						<Pill variant="warn" icon="→">
@@ -2063,32 +2144,34 @@ export default function ReviewDoc({
 				</section>
 			)}
 
-			{/* E — Release */}
+			{/* E — Release (step 8) */}
 			{panel === "RELEASE" && isAvisoSaved(doc) && (
 				<section className="bg-card border rounded-lg p-4 space-y-3">
-					<h2 className="font-medium text-sm">{t("release.heading")}</h2>
+					<h2 className="font-medium text-sm">
+						{t("release.heading", {
+							done: gate.rows.filter((r) => r.ok).length,
+							total: gate.rows.length,
+						})}
+					</h2>
 					<ul className="text-sm space-y-1">
-						{gate.conditions.map((c) => (
+						{gate.rows.map((r) => (
 							<li
-								key={c.key}
-								className={c.ok ? "text-status-ok" : "text-muted-foreground"}
+								key={r.key}
+								className={r.ok ? "text-status-ok" : "text-status-danger"}
 							>
-								{c.ok ? "✓" : "–"} {t(CONDITION_KEYS[c.key])}
+								{r.ok ? "✓" : "✗"} {t(RELEASE_ROW_KEYS[r.key])}
+								{r.key === "aviso" && r.detail ? ` · #${r.detail}` : ""}
+								{r.key === "photos"
+									? ` · ${t("release.photos_added", { n: Number(r.detail ?? 0) })}`
+									: ""}
 							</li>
 						))}
-						<li className="text-muted-foreground">
-							– {t("release.condition.claro_badge")}
-							{sheet?.sigClaroAt
-								? " ✓"
-								: ` (${t("release.claro_not_captured")})`}
-						</li>
 					</ul>
-					{error?.errorKey === "docs_review.errors.release_blocked" &&
-						error.conditions && (
-							<p className="text-sm text-status-danger">
-								{t("docs_review.errors.release_blocked")}
-							</p>
-						)}
+					{error?.errorKey === "docs_review.errors.release_blocked" && (
+						<p className="text-sm text-status-danger">
+							{t("docs_review.errors.release_blocked")}
+						</p>
+					)}
 					{doc.releasedToFinanceAt ? (
 						<Pill variant="info" icon="✓">
 							{t("release.released_at", {
@@ -2096,12 +2179,20 @@ export default function ReviewDoc({
 							})}
 						</Pill>
 					) : interactive ? (
-						<Form method="post">
-							<input type="hidden" name="intent" value="release_to_finance" />
-							<Button type="submit" disabled={!gate.ok} className="w-full">
-								{t("release.button")}
-							</Button>
-						</Form>
+						<div className="flex gap-2">
+							<Link
+								to="?step=PRECERT"
+								className={buttonVariants({ variant: "outline" })}
+							>
+								{t("release.back")}
+							</Link>
+							<Form method="post" className="flex-1">
+								<input type="hidden" name="intent" value="release_to_finance" />
+								<Button type="submit" disabled={!gate.ok} className="w-full">
+									{t("release.button")}
+								</Button>
+							</Form>
+						</div>
 					) : null}
 					<p className="text-xs text-muted-foreground">
 						{t("docs_review.supervisor")}: {supervisor?.name ?? user.name}

@@ -14,14 +14,6 @@ export type InvoiceLine = ServiceLine & {
 	lineAmount: number
 }
 
-export type AvisoLine = {
-	serviceCodeId: string
-	claroCode: string
-	qty: number
-	unitPrice: number
-	lineAmount: number
-}
-
 export type PreCertLine = {
 	serviceCodeId: string
 	claroCode: string

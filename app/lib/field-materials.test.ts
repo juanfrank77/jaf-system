@@ -6,7 +6,6 @@ import {
 	exceedsSigned,
 	type FieldMaterialRow,
 	fieldMaterialsOrDefault,
-	packetMaterialRows,
 	parseFieldMaterials,
 	warehouseUsedLines,
 } from "./field-materials"
@@ -168,23 +167,6 @@ describe("exceedsSigned", () => {
 				row("sc-9", 4, "TRUCK_STOCK"),
 			]),
 		).toBe(false)
-	})
-})
-
-describe("packetMaterialRows", () => {
-	it("keeps WAREHOUSE rows only (brigade's stock is never on the packet)", () => {
-		expect(
-			packetMaterialRows(
-				[row("sc-1", 6, "WAREHOUSE_ISSUE", 4), row("sc-2", 4, "TRUCK_STOCK")],
-				[],
-			),
-		).toEqual([row("sc-1", 6, "WAREHOUSE_ISSUE", 4)])
-	})
-
-	it("defaults to the pickup when nothing is stored", () => {
-		expect(
-			packetMaterialRows(null, [{ serviceCodeId: "sc-1", qty: 5 }]),
-		).toEqual([row("sc-1", 5)])
 	})
 })
 

@@ -52,9 +52,7 @@ export function openJobLabel(
 ): OpenJobLabel {
 	if (doc.releasedToFinanceAt) return "RELEASED"
 	if (isAvisoSaved(doc)) {
-		return sheet?.sigSupervisorAt && sheet?.sigSubcontractorAt
-			? "RELEASE"
-			: "PRECERT"
+		return sheet?.sigSupervisorAt ? "RELEASE" : "PRECERT"
 	}
 	if (doc.jafInvoiceGeneratedAt) return "SENT_WAITING_AVISO"
 	if (doc.supervisorApprovedAt) return "READY_TO_SEND"

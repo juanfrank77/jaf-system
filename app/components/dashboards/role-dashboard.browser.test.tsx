@@ -312,14 +312,11 @@ describe("SupervisorDashboard", () => {
 		await mountSupervisor(renderStub, {
 			supervisorQueues: {
 				...emptyQueues,
-				blocked: [
-					queueRow({ id: "b1", blockReason: "billing_aviso_pdf" }),
-					queueRow({ id: "b2", blockReason: "aviso_mismatch" }),
-				],
+				blocked: [queueRow({ id: "b1", blockReason: "billing_aviso_pdf" })],
 			},
 		})
 		expect(screen.getByText("Billing: missing Aviso PDF")).toBeInTheDocument()
-		expect(screen.getByText("Aviso ≠ invoice")).toBeInTheDocument()
+		expect(screen.queryByText("Aviso ≠ invoice")).not.toBeInTheDocument()
 	})
 
 	it("shows the supervisor's area and crew count under the title", async ({

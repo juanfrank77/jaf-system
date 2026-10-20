@@ -27,7 +27,7 @@ type QueueRow = {
 	note?: string | null
 	/** When the job entered this queue (submitted / returned / approved). */
 	since: Date | string | null
-	blockReason?: "aviso_mismatch" | "billing_aviso_pdf"
+	blockReason?: "billing_aviso_pdf"
 	waitingOn?: WaitingOn
 	/** The finer chip label (`openJobLabel`); falls back to the stage label. */
 	openLabel?: OpenJobLabel

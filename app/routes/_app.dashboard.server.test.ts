@@ -27,6 +27,7 @@ vi.mock("~/lib/features.server", () => ({
 import { db } from "~/lib/db.server"
 import { isDashboardFiltersEnabled } from "~/lib/features.server"
 import { requireSession } from "~/lib/permissions.server"
+import { getAvisoAmountTolerance } from "~/lib/system-settings.server"
 import { loader } from "./_app.dashboard"
 
 const sup = { id: "sup-1", role: "SUPERVISOR" }
@@ -111,7 +112,7 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 		})
 	})
 
-	it("puts a job with a stored mismatch into the blocked queue, not the missing-aviso queue", async () => {
+	it("never blocks a job on amounts: a legacy stored Aviso total is ignored", async () => {
 		vi.mocked(db.jafInvoice.findMany)
 			.mockResolvedValueOnce([] as any)
 			.mockResolvedValueOnce([] as any)
@@ -139,11 +140,10 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 			request: new Request("http://localhost/dashboard"),
 			params: {},
 		} as any)
-		expect(data.supervisorQueues!.blocked.map((r) => r.id)).toEqual(["b"])
-		expect(data.supervisorQueues!.blocked[0]).toMatchObject({
-			blockReason: "aviso_mismatch",
-		})
-		expect(data.supervisorQueues!.missingAviso).toEqual([])
+		expect(data.supervisorQueues!.blocked).toEqual([])
+		expect(data.supervisorQueues!.missingAviso.map((r) => r.id)).toEqual(["b"])
+		expect(data.supervisorQueues!.approved.map((r) => r.id)).toEqual(["ok"])
+		expect(getAvisoAmountTolerance).not.toHaveBeenCalled()
 	})
 
 	it("exposes showFilters when the flag is on", async () => {

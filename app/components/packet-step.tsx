@@ -467,7 +467,7 @@ export function PacketStepCard({
 					{!packet.emailEnabled && (
 						<p className="text-sm font-medium">
 							{packet.packetHref
-								? `${t("packet.pdf_generated")}`
+								? t("packet.pdf_generated")
 								: t("packet.pdf_not_generated")}
 						</p>
 					)}

@@ -669,4 +669,56 @@ describe("sendPacket: manual-only step 5", { timeout: HOOK_TIMEOUT }, () => {
 		expect(await rows(doc.id)).toHaveLength(0)
 		expect((await reload(doc.id)).jafInvoiceGeneratedAt).toBeNull()
 	})
+
+	it("an old priced invoice is not the step 4 PDF: manual send returns pdf_missing", async () => {
+		delete process.env.PACKET_EMAIL_ENABLED
+		const claro = await seedClaro()
+		const doc = await seedDoc({
+			claroSupervisorId: claro.id,
+			jafInvoicePdfPath: "/uploads/jaf-invoices/doc-jaf-invoice.pdf",
+		})
+		expect(
+			await sendPacket({ docId: doc.id, actor: sup, mode: "manual" }),
+		).toEqual({ ok: false, errorKey: "packet.errors.pdf_missing" })
+		expect(await rows(doc.id)).toHaveLength(0)
+		expect((await reload(doc.id)).jafInvoiceGeneratedAt).toBeNull()
+	})
+
+	it("the manual send records the Prefield layout the stored PDF was generated with", async () => {
+		delete process.env.PACKET_EMAIL_ENABLED
+		const claro = await seedClaro()
+		const doc = await seedDoc({
+			claroSupervisorId: claro.id,
+			jafInvoicePdfPath: "packets/with-prefield.pdf",
+		})
+		// Generated while the Claro supervisor required the Prefield; the flag
+		// has been turned off in the directory since.
+		await db.auditTrail.create({
+			data: {
+				docId: doc.id,
+				userId: sup.id,
+				action: "WORK_ORDER_PDF_GENERATED",
+				diffJson: {
+					jafInvoicePdfPath: {
+						before: null,
+						after: "packets/with-prefield.pdf",
+					},
+					showPrefield: true,
+				},
+			},
+		})
+		expect(
+			await sendPacket({ docId: doc.id, actor: sup, mode: "manual" }),
+		).toEqual({ ok: true, outcome: "MANUAL" })
+		const audit = await db.auditTrail.findFirst({
+			where: { docId: doc.id, action: "PACKET_SENT" },
+		})
+		expect(audit?.diffJson).toMatchObject({
+			firstSend: true,
+			showPrefield: true,
+		})
+		// Step 4 and the release then show that layout, not today's flag.
+		const input = await buildPacketInput(doc.id)
+		expect(input.document.prefield).not.toBe("not_required")
+	})
 })

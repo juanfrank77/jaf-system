@@ -7,6 +7,7 @@ import {
 } from "~/lib/contractor-payment.server"
 import { db } from "~/lib/db.server"
 import { type ArmAListStage, stageWhere } from "~/lib/finance-stages.server"
+import { evaluateReleaseGate } from "~/lib/release-gate"
 
 /** Whole days elapsed since `from` (0 when unset). */
 export function ageDays(from: Date | null, now: Date = new Date()): number {
@@ -75,39 +76,44 @@ export async function loadStageRows(opts: {
 			.map((d) => d.id)
 	}
 	const now = new Date()
-	const rows: StageRow[] = docs.map((d) => ({
-		id: d.id,
-		controlNumber: d.controlNumber,
-		avisoNumber: d.avisoNumber,
-		contractorLabel:
-			d.preCertSheets[0]?.sigSubcontractorName ??
-			d.brigade?.leadName ??
-			d.brigade?.name ??
-			null,
-		ageDays: ageDays(
-			opts.ageFrom === "sent" ? d.pbccRequestSentAt : d.releasedToFinanceAt,
-			now,
-		),
-		docs: {
-			jafInvoice: Boolean(d.jafInvoicePdfPath),
-			aviso: isAvisoSaved(d),
-			preCert: Boolean(
-				d.preCertSheets[0]?.sigSupervisorAt &&
-					d.preCertSheets[0]?.sigSubcontractorAt,
+	const rows: StageRow[] = docs.map((d) => {
+		// The packet's four documents, read the way the release gate reads them.
+		const gate = evaluateReleaseGate({
+			doc: d,
+			sheet: d.preCertSheets[0] ?? null,
+			photos: d.photos,
+		})
+		const has = (key: string) =>
+			gate.rows.find((r) => r.key === key)?.ok === true
+		return {
+			id: d.id,
+			controlNumber: d.controlNumber,
+			avisoNumber: d.avisoNumber,
+			contractorLabel:
+				d.preCertSheets[0]?.sigSubcontractorName ??
+				d.brigade?.leadName ??
+				d.brigade?.name ??
+				null,
+			ageDays: ageDays(
+				opts.ageFrom === "sent" ? d.pbccRequestSentAt : d.releasedToFinanceAt,
+				now,
 			),
-			photos:
-				d.photos.some((x) => x.tag === "BEFORE") &&
-				d.photos.some((x) => x.tag === "AFTER"),
-			account: Boolean(d.contractorAccountCode),
-		},
-		amount: computeContractorPayment(
-			toContractorPaymentLines(d.jafInvoiceLines),
-		).grossPayable,
-		...(resolved && {
-			accountResolved: d.contractorAccountCode
-				? resolved.has(d.contractorAccountCode)
-				: false,
-		}),
-	}))
+			docs: {
+				jafInvoice: has("work_order_pdf"),
+				aviso: isAvisoSaved(d),
+				preCert: has("precert_signed"),
+				photos: has("photos"),
+				account: Boolean(d.contractorAccountCode),
+			},
+			amount: computeContractorPayment(
+				toContractorPaymentLines(d.jafInvoiceLines),
+			).grossPayable,
+			...(resolved && {
+				accountResolved: d.contractorAccountCode
+					? resolved.has(d.contractorAccountCode)
+					: false,
+			}),
+		}
+	})
 	return { rows, totalCount, sweepableIds }
 }

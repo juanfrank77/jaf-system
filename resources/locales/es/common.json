@@ -602,6 +602,7 @@
 			"release_signer_required": "Por favor selecciona el firmante del almacén",
 			"crew_signer_required": "Por favor selecciona el firmante de la cuadrilla",
 			"release_signer_invalid": "El firmante del almacén seleccionado no es válido",
+			"no_pickup_signer": "La cuadrilla de este trabajo no tiene una cuenta de cuadrilla para firmar el retiro. Pide al supervisor que corrija la cuadrilla.",
 			"crew_signer_invalid": "El firmante de la cuadrilla seleccionado no es válido",
 			"already_signed": "Los materiales ya están firmados y bloqueados",
 			"invalid_materials": "Datos de materiales inválidos"

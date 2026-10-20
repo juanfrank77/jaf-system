@@ -602,6 +602,7 @@
 			"release_signer_required": "Please select the warehouse signer",
 			"crew_signer_required": "Please select the crew signer",
 			"release_signer_invalid": "Selected warehouse signer is not valid",
+			"no_pickup_signer": "This job's brigade has no crew account to sign for the pickup. Ask the supervisor to fix the brigade.",
 			"crew_signer_invalid": "Selected crew signer is not valid",
 			"already_signed": "Materials are already signed and locked",
 			"invalid_materials": "Invalid materials data"

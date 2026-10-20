@@ -44,7 +44,7 @@ function loaderData(doc: Record<string, unknown> = {}, interactive = true) {
 		openLabel: null,
 		view: "APPROVE",
 		interactive,
-		gate: { ok: false, conditions: [] },
+		gate: { ok: false, rows: [] },
 		invoiceSummary: null,
 		invoiceNumber: null,
 		invoicePreview: [],

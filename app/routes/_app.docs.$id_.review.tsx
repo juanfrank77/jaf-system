@@ -68,6 +68,7 @@ import {
 	renderPreCert,
 } from "~/lib/pre-cert.server"
 import { packetBlockers, prefieldMissing } from "~/lib/prefield"
+import { evaluateReleaseGate } from "~/lib/release-gate"
 import {
 	getActiveServiceCodes,
 	isPriceBlind,
@@ -85,7 +86,6 @@ import {
 import { assertDocInSupervisorScope } from "~/lib/supervisor-scope"
 import {
 	deriveSupervisorStage,
-	evaluateReleaseGate,
 	isAvisoStarted,
 	panelForStep,
 	resolveStepView,
@@ -300,11 +300,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		isAvisoStarted(doc),
 		new URL(request.url).searchParams.get("step"),
 	)
-	const gate = evaluateReleaseGate(
+	const gate = evaluateReleaseGate({
 		doc,
 		sheet,
-		await photosThatLoad(params.id, photos),
-	)
+		photos: await photosThatLoad(params.id, photos),
+	})
 	const lineTotal =
 		doc.jafInvoiceLineTotal != null
 			? toNumberPrice(doc.jafInvoiceLineTotal)
@@ -1065,23 +1065,24 @@ export async function action({ request, params }: Route.ActionArgs) {
 				select: { tag: true, localPath: true },
 			}),
 		])
-		const gate = evaluateReleaseGate(
+		const gate = evaluateReleaseGate({
 			doc,
 			sheet,
-			await photosThatLoad(params.id, photos),
-		)
+			photos: await photosThatLoad(params.id, photos),
+		})
 		if (!gate.ok)
 			return {
 				errorKey: "docs_review.errors.release_blocked",
-				conditions: gate.conditions,
+				rows: gate.rows,
 			}
 		const brigade = doc.brigadeId
 			? await db.brigade.findUnique({ where: { id: doc.brigadeId } })
 			: null
 		const contractor =
 			sheet?.sigSubcontractorName ?? brigade?.leadName ?? brigade?.name ?? ""
-		const amount = toNumberPrice(doc.jafInvoiceLineTotal).toFixed(2)
-		const message = `${doc.controlNumber} · Aviso ${doc.avisoNumber} · ${contractor} · $${amount} — ready for payment request`
+		// No amount in the message: supervisors can read their own notifications
+		// back, and they never see money.
+		const message = `${doc.controlNumber} · Aviso ${doc.avisoNumber} · ${contractor} — ready for payment request`
 		const finance = await db.user.findMany({
 			where: { role: "FINANCE", active: true },
 		})
@@ -1098,7 +1099,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 					docId: params.id,
 					userId: user.id,
 					action: "RELEASED_TO_FINANCE",
-					diffJson: { conditions: gate.conditions },
+					diffJson: { rows: gate.rows },
 				},
 			}),
 			...finance.map((f) =>
@@ -1149,14 +1150,11 @@ export async function action({ request, params }: Route.ActionArgs) {
 	throw redirect(`/docs/${params.id}`)
 }
 
-const CONDITION_KEYS = {
-	approved: "release.condition.approved",
-	invoice: "release.condition.invoice",
-	aviso: "release.condition.aviso",
-	amount_match: "release.condition.amount_match",
-	photos: "release.condition.photos",
-	precert_signed: "release.condition.precert_signed",
-	contractor_code: "release.condition.contractor_code",
+const RELEASE_ROW_KEYS = {
+	work_order_pdf: "release.row.work_order_pdf",
+	aviso: "release.row.aviso",
+	precert_signed: "release.row.precert_signed",
+	photos: "release.row.photos",
 } as const
 
 function SignatureBlock({
@@ -1686,7 +1684,7 @@ export default function ReviewDoc({
 				noteKey?: string
 				typedNumber?: string
 				pdfAvisoNumber?: string
-				conditions?: { key: string; ok: boolean }[]
+				rows?: { key: string; ok: boolean }[]
 		  }
 		| undefined
 	// Json columns: tolerate null or a malformed non-array value
@@ -2063,32 +2061,34 @@ export default function ReviewDoc({
 				</section>
 			)}
 
-			{/* E — Release */}
+			{/* E — Release (step 8) */}
 			{panel === "RELEASE" && isAvisoSaved(doc) && (
 				<section className="bg-card border rounded-lg p-4 space-y-3">
-					<h2 className="font-medium text-sm">{t("release.heading")}</h2>
+					<h2 className="font-medium text-sm">
+						{t("release.heading", {
+							done: gate.rows.filter((r) => r.ok).length,
+							total: gate.rows.length,
+						})}
+					</h2>
 					<ul className="text-sm space-y-1">
-						{gate.conditions.map((c) => (
+						{gate.rows.map((r) => (
 							<li
-								key={c.key}
-								className={c.ok ? "text-status-ok" : "text-muted-foreground"}
+								key={r.key}
+								className={r.ok ? "text-status-ok" : "text-status-danger"}
 							>
-								{c.ok ? "✓" : "–"} {t(CONDITION_KEYS[c.key])}
+								{r.ok ? "✓" : "✗"} {t(RELEASE_ROW_KEYS[r.key])}
+								{r.key === "aviso" && r.detail ? ` · #${r.detail}` : ""}
+								{r.key === "photos"
+									? ` · ${t("release.photos_added", { n: Number(r.detail ?? 0) })}`
+									: ""}
 							</li>
 						))}
-						<li className="text-muted-foreground">
-							– {t("release.condition.claro_badge")}
-							{sheet?.sigClaroAt
-								? " ✓"
-								: ` (${t("release.claro_not_captured")})`}
-						</li>
 					</ul>
-					{error?.errorKey === "docs_review.errors.release_blocked" &&
-						error.conditions && (
-							<p className="text-sm text-status-danger">
-								{t("docs_review.errors.release_blocked")}
-							</p>
-						)}
+					{error?.errorKey === "docs_review.errors.release_blocked" && (
+						<p className="text-sm text-status-danger">
+							{t("docs_review.errors.release_blocked")}
+						</p>
+					)}
 					{doc.releasedToFinanceAt ? (
 						<Pill variant="info" icon="✓">
 							{t("release.released_at", {
@@ -2096,12 +2096,20 @@ export default function ReviewDoc({
 							})}
 						</Pill>
 					) : interactive ? (
-						<Form method="post">
-							<input type="hidden" name="intent" value="release_to_finance" />
-							<Button type="submit" disabled={!gate.ok} className="w-full">
-								{t("release.button")}
-							</Button>
-						</Form>
+						<div className="flex gap-2">
+							<Link
+								to="?step=PRECERT"
+								className={buttonVariants({ variant: "outline" })}
+							>
+								{t("release.back")}
+							</Link>
+							<Form method="post" className="flex-1">
+								<input type="hidden" name="intent" value="release_to_finance" />
+								<Button type="submit" disabled={!gate.ok} className="w-full">
+									{t("release.button")}
+								</Button>
+							</Form>
+						</div>
 					) : null}
 					<p className="text-xs text-muted-foreground">
 						{t("docs_review.supervisor")}: {supervisor?.name ?? user.name}

@@ -981,17 +981,8 @@ describe("review: release_to_finance", () => {
 		avisoNumber: "10353961",
 		jafInvoiceGeneratedAt: new Date(),
 		jafInvoiceLineTotal: 586.37,
+		jafInvoicePdfPath: "/var/jaf/uploads/packets/doc-1-packet-1.pdf",
 		avisoDocPath: "/x/aviso.pdf",
-		avisoLines: [
-			{
-				serviceCodeId: "c1",
-				claroCode: "34006301",
-				qty: 5,
-				unitPrice: 42.343,
-				lineAmount: 211.72,
-			},
-		],
-		contractorAccountCode: "204",
 	}
 	beforeEach(() => {
 		vi.clearAllMocks()
@@ -1018,7 +1009,7 @@ describe("review: release_to_finance", () => {
 		} as any)
 	})
 
-	it("releases when all seven conditions hold and notifies Finance", async () => {
+	it("releases when the four documents are present and notifies Finance", async () => {
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(ready as any)
 		const res = await action({
 			request: post(intent("release_to_finance")),
@@ -1037,9 +1028,56 @@ describe("review: release_to_finance", () => {
 				userId: "fin-1",
 				docId: "doc-1",
 				message:
-					"MAINT-260903-001 · Aviso 10353961 · Jesús Martínez · $586.37 — ready for payment request",
+					"MAINT-260903-001 · Aviso 10353961 · Jesús Martínez — ready for payment request",
 			},
 		})
+		const msg = vi.mocked(db.notification.create).mock.calls[0][0].data
+			.message as string
+		expect(msg).not.toMatch(/[$€]|\d+\.\d{2}/)
+		expect(db.auditTrail.create).toHaveBeenCalledWith({
+			data: {
+				docId: "doc-1",
+				userId: "sup-1",
+				action: "RELEASED_TO_FINANCE",
+				diffJson: { rows: expect.any(Array) },
+			},
+		})
+	})
+
+	it.each([
+		["only a DURING photo", [{ tag: "DURING" }]],
+		["only a BEFORE photo", [{ tag: "BEFORE" }]],
+	])("refuses with %s and marks the photos row missing", async (_n, photos) => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(ready as any)
+		vi.mocked(db.photo.findMany).mockResolvedValue(photos as any)
+		vi.mocked(photosThatLoad).mockResolvedValueOnce(photos as any)
+		const res = await action({
+			request: post(intent("release_to_finance")),
+			params: { id: "doc-1" },
+		} as any)
+		expect(res).toMatchObject({
+			errorKey: "docs_review.errors.release_blocked",
+		})
+		expect(res.rows?.find((c: { key: string }) => c.key === "photos")?.ok).toBe(
+			false,
+		)
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+		expect(db.notification.create).not.toHaveBeenCalled()
+	})
+
+	it("refuses when the stored PDF is a legacy priced invoice", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...ready,
+			jafInvoicePdfPath: "/var/jaf/uploads/jaf-invoices/doc-1.pdf",
+		} as any)
+		const res = await action({
+			request: post(intent("release_to_finance")),
+			params: { id: "doc-1" },
+		} as any)
+		expect(
+			res.rows?.find((c: { key: string }) => c.key === "work_order_pdf")?.ok,
+		).toBe(false)
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
 	})
 
 	it("refuses when a photo is missing and reports which condition failed", async () => {
@@ -1052,9 +1090,9 @@ describe("review: release_to_finance", () => {
 		expect(res).toMatchObject({
 			errorKey: "docs_review.errors.release_blocked",
 		})
-		expect(
-			res.conditions?.find((c: { key: string }) => c.key === "photos")?.ok,
-		).toBe(false)
+		expect(res.rows?.find((c: { key: string }) => c.key === "photos")?.ok).toBe(
+			false,
+		)
 		expect(db.jafInvoice.update).not.toHaveBeenCalled()
 	})
 
@@ -1065,9 +1103,9 @@ describe("review: release_to_finance", () => {
 			request: post(intent("release_to_finance")),
 			params: { id: "doc-1" },
 		} as any)
-		expect(
-			res.conditions?.find((c: { key: string }) => c.key === "photos")?.ok,
-		).toBe(false)
+		expect(res.rows?.find((c: { key: string }) => c.key === "photos")?.ok).toBe(
+			false,
+		)
 		expect(db.jafInvoice.update).not.toHaveBeenCalled()
 	})
 

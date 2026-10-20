@@ -784,7 +784,7 @@
 		"callout_precert_title": "Paso {{n}} de {{total}} · Usted + el contratista",
 		"callout_precert_body": "Todos los campos de abajo ya existen en el sistema. Firme, obtenga la firma del subcontratista y libere.",
 		"callout_release_title": "Paso {{n}} de {{total}} · Usted",
-		"callout_release_body": "Siete condiciones, verificadas por el sistema. Cuando todas estén en verde, un clic envía el paquete a Lissette.",
+		"callout_release_body": "Revise el paquete y libérelo a Finanzas.",
 		"signoff_heading": "Firma del trabajo de campo",
 		"signoff_hint": "Usted responde por el trabajo de la brigada. Al firmar confirma que el paso de Campo está completo como se ingresó y lo bloquea.",
 		"signoff_name": "Nombre",
@@ -853,18 +853,15 @@
 		"claro_pdf_optional": "PDF de orden de trabajo Claro (opcional, distinto del Aviso)"
 	},
 	"release": {
-		"heading": "Liberar a Finanzas",
-		"button": "Liberar paquete a Finanzas",
+		"heading": "Paquete para Finanzas · {{done}}/{{total}}",
+		"button": "Liberar a Finanzas",
+		"back": "Atrás",
 		"released_at": "Liberado a Finanzas el {{date}}",
-		"claro_not_captured": "Aceptación de campo de Claro no capturada",
-		"condition.approved": "Trabajo de campo firmado",
-		"condition.invoice": "Paquete enviado a Claro",
-		"condition.aviso": "# de Aviso ingresado y documento subido",
-		"condition.amount_match": "Cotejo de monto aprobado (bloqueo duro)",
-		"condition.photos": "Fotos de antes y después presentes",
-		"condition.precert_signed": "Hoja pre-cert firmada — supervisor + sub-contratista",
-		"condition.contractor_code": "Cuenta de contratista resuelta",
-		"condition.claro_badge": "Aceptación de campo de Claro — solo insignia, no condición"
+		"photos_added": "{{n}} agregadas",
+		"row.work_order_pdf": "PDF de orden de trabajo JAF",
+		"row.aviso": "Aviso adjunto",
+		"row.precert_signed": "Hoja pre-cert firmada",
+		"row.photos": "Fotos antes + después"
 	},
 	"precert": {
 		"heading": "Hoja de Pre-Certificación Contratista",

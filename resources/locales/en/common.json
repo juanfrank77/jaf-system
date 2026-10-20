@@ -784,7 +784,7 @@
 		"callout_precert_title": "Step {{n}} of {{total}} · You + the contractor",
 		"callout_precert_body": "Every field below already exists in the system. Sign, get the sub-contractor's signature, and release.",
 		"callout_release_title": "Step {{n}} of {{total}} · You",
-		"callout_release_body": "Seven conditions, checked by the system. When they are all green, one click sends the packet to Lissette.",
+		"callout_release_body": "Check the packet and release it to Finance.",
 		"signoff_heading": "Sign off the field work",
 		"signoff_hint": "You answer for the brigade's work. Signing confirms the Field step is complete as entered and locks it.",
 		"signoff_name": "Name",
@@ -853,18 +853,15 @@
 		"claro_pdf_optional": "Claro work-order PDF (optional, separate from the Aviso)"
 	},
 	"release": {
-		"heading": "Release to Finance",
-		"button": "Release packet to Finance",
+		"heading": "Packet for Finance · {{done}}/{{total}}",
+		"button": "Release to Finance",
+		"back": "Back",
 		"released_at": "Released to Finance on {{date}}",
-		"claro_not_captured": "Claro acceptance not captured",
-		"condition.approved": "Field work signed off",
-		"condition.invoice": "Packet sent to Claro",
-		"condition.aviso": "Aviso # entered and document uploaded",
-		"condition.amount_match": "Amount match green (hard gate)",
-		"condition.photos": "Before and after photos present",
-		"condition.precert_signed": "Pre-cert sheet signed — supervisor + sub-contractor",
-		"condition.contractor_code": "Contractor account resolved",
-		"condition.claro_badge": "Claro field acceptance — badge only, not a release condition"
+		"photos_added": "{{n}} added",
+		"row.work_order_pdf": "JAF work order PDF",
+		"row.aviso": "Aviso attached",
+		"row.precert_signed": "Pre-cert sheet signed",
+		"row.photos": "Photos before + after"
 	},
 	"precert": {
 		"heading": "Contractor Pre-Certification Sheet",

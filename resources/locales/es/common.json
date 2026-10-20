@@ -644,7 +644,7 @@
 		"offline_submit_notice": "Estás sin conexión. Toca Guardar para sincronizar después y la actualización se subirá cuando tengas señal.",
 		"errors": {
 			"invalid_materials": "Datos de materiales inválidos",
-			"used_exceeds_took": "No puedes usar más de lo que te llevaste. Baja la cantidad a lo que se firmó en la recogida.",
+			"used_exceeds_took": "El material entregado por el almacén no puede superar lo firmado en la recogida. Registra el material adicional con otra Fuente.",
 			"completion_signature_required": "Se requiere la firma de completado.",
 			"invalid_service_lines": "No se pudieron leer las cantidades de servicio instaladas.",
 			"photo_invalid": "Las fotos deben ser JPEG, PNG, WebP o HEIC, de hasta 10 MB.",
@@ -677,13 +677,16 @@
 			"used": "Usado",
 			"returned": "Devuelto",
 			"source": "Origen",
-			"source_warehouse": "Almacén",
-			"source_brigade_stock": "Inventario de la brigada",
+			"source_warehouse_issue": "Entrega de almacén",
+			"source_existing_at_site": "Existente en el sitio",
+			"source_claro_drop_off": "Entregado por Claro",
+			"source_truck_stock": "Inventario del camión",
+			"source_crew_personal": "Personal de la cuadrilla",
 			"code": "Código",
 			"estimated": "Estimado",
-			"add": "+ Añadir un material no entregado en la recogida",
+			"add": "+ Material de otra fuente",
 			"empty": "No se entregó material en la recogida.",
-			"hint": "Lo usado del almacén no puede exceder lo entregado. El inventario de la brigada nunca se firmó en salida, así que no tiene límite."
+			"hint": "Solo se factura el material entregado por el almacén. Cualquier otro material usado, regístralo con su propia Fuente."
 		},
 		"address_heading": "Dirección",
 		"address_on_file": "Registrada: {{address}}",
@@ -2239,10 +2242,6 @@
 			"smr": "SMR",
 			"titulo": "Título",
 			"description": "Descripción"
-		},
-		"source": {
-			"WAREHOUSE": "Almacén",
-			"BRIGADE_STOCK": "Inventario de brigada"
 		},
 		"history": {
 			"time": "Hora",

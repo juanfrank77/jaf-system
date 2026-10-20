@@ -193,7 +193,7 @@ describe("PacketStepCard materials", () => {
 			unit: null,
 			used: 1,
 			returned: 0,
-			source: "WAREHOUSE" as const,
+			source: "WAREHOUSE_ISSUE" as const,
 		})
 		await mount(
 			renderStub,

@@ -644,7 +644,7 @@
 		"offline_submit_notice": "You are offline. Tap Save for later sync and the update will upload when you have signal.",
 		"errors": {
 			"invalid_materials": "Invalid materials data",
-			"used_exceeds_took": "You can't use more than you took. Lower the quantity to what was signed out at pickup.",
+			"used_exceeds_took": "Warehouse-issued material can't exceed what was signed out at pickup. Enter any extra material under another Source.",
 			"completion_signature_required": "Completion signature is required.",
 			"invalid_service_lines": "Installed service quantities could not be read.",
 			"photo_invalid": "Photos must be JPEG, PNG, WebP or HEIC, up to 10 MB.",
@@ -677,13 +677,16 @@
 			"used": "Used",
 			"returned": "Returned",
 			"source": "Source",
-			"source_warehouse": "Warehouse",
-			"source_brigade_stock": "Brigade's stock",
+			"source_warehouse_issue": "Warehouse issue",
+			"source_existing_at_site": "Existing at site",
+			"source_claro_drop_off": "Claro drop-off",
+			"source_truck_stock": "Truck stock",
+			"source_crew_personal": "Crew personal",
 			"code": "Code",
 			"estimated": "Estimated",
-			"add": "+ Add a material not issued at pickup",
+			"add": "+ Material from another source",
 			"empty": "No material was issued at pickup.",
-			"hint": "Used from the warehouse cannot exceed what was issued. Brigade's stock was never signed out, so it has no limit."
+			"hint": "Only material issued from the warehouse is billed. Anything else you used, enter under its own Source."
 		},
 		"address_heading": "Address",
 		"address_on_file": "On file: {{address}}",
@@ -2239,10 +2242,6 @@
 			"smr": "SMR",
 			"titulo": "Título",
 			"description": "Description"
-		},
-		"source": {
-			"WAREHOUSE": "Warehouse",
-			"BRIGADE_STOCK": "Brigade stock"
 		},
 		"history": {
 			"time": "Time",

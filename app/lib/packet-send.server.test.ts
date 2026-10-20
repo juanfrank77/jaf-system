@@ -489,12 +489,17 @@ describe("sendPacket: brigade's stock and the IVU snapshot", {
 			claroSupervisorId: claro.id,
 			materialsTaken: [{ serviceCodeId: code1.id, qty: 10 }],
 			fieldMaterials: [
-				{ serviceCodeId: code1.id, used: 6, returned: 4, source: "WAREHOUSE" },
+				{
+					serviceCodeId: code1.id,
+					used: 6,
+					returned: 4,
+					source: "WAREHOUSE_ISSUE",
+				},
 				{
 					serviceCodeId: own.id,
 					used: 4,
 					returned: 0,
-					source: "BRIGADE_STOCK",
+					source: "TRUCK_STOCK",
 				},
 			],
 		})
@@ -502,7 +507,7 @@ describe("sendPacket: brigade's stock and the IVU snapshot", {
 		expect(res).toEqual({ ok: true, outcome: "MANUAL" })
 		const input = vi.mocked(generateClaroPacketPdf).mock.calls[0][0]
 		expect(input.materials.map((m) => [m.claroCode, m.source])).toEqual([
-			[code1.claroCode, "WAREHOUSE"],
+			[code1.claroCode, "WAREHOUSE_ISSUE"],
 		])
 		// The real renderer: the text layer has the warehouse row only.
 		const real = await vi.importActual<
@@ -518,7 +523,10 @@ describe("sendPacket: brigade's stock and the IVU snapshot", {
 		expect(text).not.toContain("OWN CLAMP")
 		// Still tracked on the job.
 		const stored = (await reload(doc.id)).fieldMaterials as { source: string }[]
-		expect(stored.map((r) => r.source)).toEqual(["WAREHOUSE", "BRIGADE_STOCK"])
+		expect(stored.map((r) => r.source)).toEqual([
+			"WAREHOUSE_ISSUE",
+			"TRUCK_STOCK",
+		])
 	})
 
 	it("records the IVU rate on the first send only", async () => {

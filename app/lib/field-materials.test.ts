@@ -14,7 +14,7 @@ import {
 const row = (
 	serviceCodeId: string,
 	used: number,
-	source: FieldMaterialRow["source"] = "WAREHOUSE",
+	source: FieldMaterialRow["source"] = "WAREHOUSE_ISSUE",
 	returned = 0,
 ): FieldMaterialRow => ({ serviceCodeId, used, returned, source })
 
@@ -29,12 +29,12 @@ describe("parseFieldMaterials", () => {
 			parseFieldMaterials(
 				JSON.stringify([
 					{ serviceCodeId: "sc-1", used: "3", returned: 2 },
-					{ serviceCodeId: "sc-2", used: 1, source: "BRIGADE_STOCK" },
+					{ serviceCodeId: "sc-2", used: 1, source: "TRUCK_STOCK" },
 				]),
 			),
 		).toEqual([
-			row("sc-1", 3, "WAREHOUSE", 2),
-			row("sc-2", 1, "BRIGADE_STOCK", 0),
+			row("sc-1", 3, "WAREHOUSE_ISSUE", 2),
+			row("sc-2", 1, "TRUCK_STOCK", 0),
 		])
 	})
 
@@ -78,8 +78,8 @@ describe("billableUsed", () => {
 		expect(
 			billableUsed([
 				row("sc-1", 6),
-				row("sc-1", 4, "BRIGADE_STOCK"),
-				row("sc-3", 1, "BRIGADE_STOCK"),
+				row("sc-1", 4, "TRUCK_STOCK"),
+				row("sc-3", 1, "TRUCK_STOCK"),
 			]),
 		).toEqual([{ serviceCodeId: "sc-1", qty: 6 }])
 	})
@@ -93,7 +93,7 @@ describe("brigadeStockTracked", () => {
 		]
 		expect(
 			brigadeStockTracked(
-				[row("sc-1", 6), row("sc-1", 4, "BRIGADE_STOCK"), row("sc-2", 2)],
+				[row("sc-1", 6), row("sc-1", 4, "TRUCK_STOCK"), row("sc-2", 2)],
 				codes,
 			),
 		).toEqual([
@@ -109,7 +109,7 @@ describe("brigadeStockTracked", () => {
 	})
 
 	it("falls back to the id when the code is not in the catalog", () => {
-		expect(brigadeStockTracked([row("sc-9", 1, "BRIGADE_STOCK")], [])).toEqual([
+		expect(brigadeStockTracked([row("sc-9", 1, "TRUCK_STOCK")], [])).toEqual([
 			{
 				serviceCodeId: "sc-9",
 				claroCode: "",
@@ -126,10 +126,10 @@ describe("brigadeStockLines", () => {
 		expect(
 			brigadeStockLines([
 				row("sc-1", 6),
-				row("sc-1", 4, "BRIGADE_STOCK"),
-				row("sc-2", 0, "BRIGADE_STOCK"),
-				row("sc-3", 1, "BRIGADE_STOCK"),
-				row("sc-3", 2, "BRIGADE_STOCK"),
+				row("sc-1", 4, "TRUCK_STOCK"),
+				row("sc-2", 0, "TRUCK_STOCK"),
+				row("sc-3", 1, "TRUCK_STOCK"),
+				row("sc-3", 2, "TRUCK_STOCK"),
 			]),
 		).toEqual([
 			{ serviceCodeId: "sc-1", qty: 4 },
@@ -164,8 +164,8 @@ describe("exceedsSigned", () => {
 		expect(
 			exceedsSigned(taken, [
 				row("sc-1", 5),
-				row("sc-1", 10, "BRIGADE_STOCK"),
-				row("sc-9", 4, "BRIGADE_STOCK"),
+				row("sc-1", 10, "TRUCK_STOCK"),
+				row("sc-9", 4, "TRUCK_STOCK"),
 			]),
 		).toBe(false)
 	})
@@ -175,10 +175,10 @@ describe("packetMaterialRows", () => {
 	it("keeps WAREHOUSE rows only (brigade's stock is never on the packet)", () => {
 		expect(
 			packetMaterialRows(
-				[row("sc-1", 6, "WAREHOUSE", 4), row("sc-2", 4, "BRIGADE_STOCK")],
+				[row("sc-1", 6, "WAREHOUSE_ISSUE", 4), row("sc-2", 4, "TRUCK_STOCK")],
 				[],
 			),
-		).toEqual([row("sc-1", 6, "WAREHOUSE", 4)])
+		).toEqual([row("sc-1", 6, "WAREHOUSE_ISSUE", 4)])
 	})
 
 	it("defaults to the pickup when nothing is stored", () => {
@@ -197,7 +197,7 @@ describe("fieldMaterialsOrDefault", () => {
 	})
 
 	it("returns the stored rows when there are any", () => {
-		const stored = [row("sc-1", 2, "WAREHOUSE", 3)]
+		const stored = [row("sc-1", 2, "WAREHOUSE_ISSUE", 3)]
 		expect(fieldMaterialsOrDefault(stored, taken)).toEqual(stored)
 	})
 })
@@ -205,9 +205,9 @@ describe("fieldMaterialsOrDefault", () => {
 describe("warehouseUsedLines", () => {
 	it("counts only WAREHOUSE-source use when the Field table exists", () => {
 		const rows = [
-			{ serviceCodeId: "m1", used: 6, returned: 0, source: "WAREHOUSE" },
-			{ serviceCodeId: "m1", used: 4, returned: 0, source: "BRIGADE_STOCK" },
-			{ serviceCodeId: "m2", used: 3, returned: 0, source: "BRIGADE_STOCK" },
+			{ serviceCodeId: "m1", used: 6, returned: 0, source: "WAREHOUSE_ISSUE" },
+			{ serviceCodeId: "m1", used: 4, returned: 0, source: "TRUCK_STOCK" },
+			{ serviceCodeId: "m2", used: 3, returned: 0, source: "TRUCK_STOCK" },
 		]
 		// A row saved before the brigade-stock ruling kept the total (10) in
 		// materialsUsed; returns still see 6.
@@ -218,8 +218,8 @@ describe("warehouseUsedLines", () => {
 
 	it("matches materialsUsed for a row saved under the ruling (WAREHOUSE only)", () => {
 		const rows = [
-			{ serviceCodeId: "m1", used: 6, returned: 0, source: "WAREHOUSE" },
-			{ serviceCodeId: "m1", used: 4, returned: 0, source: "BRIGADE_STOCK" },
+			{ serviceCodeId: "m1", used: 6, returned: 0, source: "WAREHOUSE_ISSUE" },
+			{ serviceCodeId: "m1", used: 4, returned: 0, source: "TRUCK_STOCK" },
 		]
 		expect(warehouseUsedLines(rows, [{ serviceCodeId: "m1", qty: 6 }])).toEqual(
 			[{ serviceCodeId: "m1", qty: 6 }],
@@ -238,5 +238,58 @@ describe("no used-vs-issued comparison", () => {
 	it("no longer exports quantityDiscrepancies", async () => {
 		const mod = await import("./field-materials")
 		expect("quantityDiscrepancies" in mod).toBe(false)
+	})
+})
+
+describe("five material Sources", () => {
+	it("accepts each of the five values and rejects an unknown one", () => {
+		for (const source of [
+			"WAREHOUSE_ISSUE",
+			"EXISTING_AT_SITE",
+			"CLARO_DROP_OFF",
+			"TRUCK_STOCK",
+			"CREW_PERSONAL",
+		])
+			expect(
+				parseFieldMaterials(
+					JSON.stringify([{ serviceCodeId: "a", used: 1, source }]),
+				)[0].source,
+			).toBe(source)
+		expect(() =>
+			parseFieldMaterials(
+				JSON.stringify([{ serviceCodeId: "a", used: 1, source: "FOO" }]),
+			),
+		).toThrow()
+	})
+
+	it("reads old stored rows through normaliseSource", () => {
+		const rows = parseFieldMaterials(
+			JSON.stringify([
+				{ serviceCodeId: "a", used: 1, source: "WAREHOUSE" },
+				{ serviceCodeId: "b", used: 1, source: "BRIGADE_STOCK" },
+			]),
+		)
+		expect(rows.map((r) => r.source)).toEqual([
+			"WAREHOUSE_ISSUE",
+			"TRUCK_STOCK",
+		])
+	})
+
+	it("keeps a used TRUCK_STOCK row in the table but off the billable lines", () => {
+		const rows = [
+			row("sc-1", 3, "WAREHOUSE_ISSUE"),
+			row("sc-2", 2, "TRUCK_STOCK"),
+		]
+		expect(billableUsed(rows)).toEqual([{ serviceCodeId: "sc-1", qty: 3 }])
+		expect(rows.map((r) => r.serviceCodeId)).toEqual(["sc-1", "sc-2"])
+		expect(brigadeStockLines(rows)).toEqual([{ serviceCodeId: "sc-2", qty: 2 }])
+	})
+
+	it("lets a non-billable source exceed what was issued, but not a billable one", () => {
+		const taken = [{ serviceCodeId: "sc-1", qty: 5 }]
+		expect(
+			exceedsSigned(taken, [row("sc-1", 5), row("sc-1", 4, "CREW_PERSONAL")]),
+		).toBe(false)
+		expect(exceedsSigned(taken, [row("sc-1", 6)])).toBe(true)
 	})
 })

@@ -2,7 +2,14 @@ import path from "node:path"
 import type { ParseKeys } from "i18next"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { data, Form, redirect, useFetcher, useNavigation } from "react-router"
+import {
+	data,
+	Form,
+	redirect,
+	useFetcher,
+	useNavigate,
+	useNavigation,
+} from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import {
 	FieldMaterialsTable,
@@ -34,6 +41,7 @@ import {
 	validateFile,
 } from "~/lib/file-upload.server"
 import { composeJobAddress } from "~/lib/intake-address"
+import { isBillableSource } from "~/lib/material-source"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import {
@@ -388,7 +396,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const taken = lines(doc.materialsTaken)
 	if (intent === "continue") {
 		rows ??= fieldMaterialsOrDefault(doc.fieldMaterials, taken)
-		// The used ≤ signed-out rule covers WAREHOUSE rows only.
+		// Billable (WAREHOUSE_ISSUE) use cannot exceed what was issued; extra
+		// material is entered under another Source.
 		if (exceedsSigned(taken, rows))
 			return refusal("docs_field.errors.used_exceeds_took")
 	}
@@ -649,6 +658,7 @@ export default function FieldUpdate({
 	} = loaderData
 	const { t } = useTranslation()
 	const navigation = useNavigation()
+	const navigate = useNavigate()
 	const busy = navigation.state !== "idle"
 	const result = actionData as ActionResult
 
@@ -701,8 +711,9 @@ export default function FieldUpdate({
 			name: code?.name ?? r.serviceCodeId,
 			unit: code?.unit ?? null,
 			estimated: estimatedQty.get(r.serviceCodeId) ?? 0,
-			signed:
-				r.source === "WAREHOUSE" ? (signedQty.get(r.serviceCodeId) ?? 0) : 0,
+			signed: isBillableSource(r.source)
+				? (signedQty.get(r.serviceCodeId) ?? 0)
+				: 0,
 		}
 	})
 
@@ -859,7 +870,7 @@ export default function FieldUpdate({
 														type="number"
 														min={0}
 														inputMode="decimal"
-														className="w-20"
+														className="field-required w-20"
 														aria-label={`${t("docs_field.services.actual")} ${r.claroCode}`}
 														value={actuals[r.serviceCodeId] ?? ""}
 														onChange={(e) =>
@@ -920,7 +931,7 @@ export default function FieldUpdate({
 										serviceCodeId: e.target.value,
 										used: 0,
 										returned: 0,
-										source: "BRIGADE_STOCK",
+										source: "TRUCK_STOCK",
 									},
 								])
 							}}
@@ -962,6 +973,14 @@ export default function FieldUpdate({
 				)}
 
 				<div className="flex flex-wrap gap-2">
+					<Button
+						type="button"
+						variant="ghost"
+						disabled={busy}
+						onClick={() => navigate(-1)}
+					>
+						{t("navigation.back")}
+					</Button>
 					<Button
 						type="submit"
 						name="intent"

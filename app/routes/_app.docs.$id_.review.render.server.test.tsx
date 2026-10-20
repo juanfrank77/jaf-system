@@ -93,7 +93,7 @@ function packetData(over: Record<string, unknown> = {}) {
 				unit: "FT",
 				used: 3,
 				returned: 1,
-				source: "WAREHOUSE",
+				source: "WAREHOUSE_ISSUE",
 			},
 		],
 		history: [] as Record<string, unknown>[],

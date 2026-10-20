@@ -64,7 +64,7 @@ export interface ClaroPacketInput {
 		returned: number
 		// Brigade's own stock is tracked-only and never on this client-facing
 		// packet (provisional ruling), so only warehouse rows reach it.
-		source: "WAREHOUSE"
+		source: "WAREHOUSE_ISSUE"
 	}[]
 	photos: Record<PhotoGroup, string[]>
 	blueprints: string[]
@@ -135,7 +135,7 @@ const SOURCE_LABEL: Record<
 	ClaroPacketInput["materials"][number]["source"],
 	string
 > = {
-	WAREHOUSE: "Warehouse / Almacén",
+	WAREHOUSE_ISSUE: "Warehouse / Almacén",
 }
 
 type LoadedImage = { data: Buffer; format: "png" | "jpg" }

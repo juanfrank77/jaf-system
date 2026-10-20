@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Pill } from "~/components/ui/pill"
+import { type MaterialSource, sourceLabelKey } from "~/lib/material-source"
 import type { PacketSendOutcome } from "../../generated/prisma/client"
 
 type PrefieldField =
@@ -58,7 +59,7 @@ export type PacketStepData = {
 		unit: string | null
 		used: number
 		returned: number
-		source: "WAREHOUSE" | "BRIGADE_STOCK"
+		source: MaterialSource
 	}[]
 	/** Newest first. */
 	history: {
@@ -395,7 +396,7 @@ export function PacketStepCard({
 										</td>
 										<td className="py-1.5 text-right">{m.returned}</td>
 										<td className="py-1.5 text-xs">
-											{t(`packet.source.${m.source}`)}
+											{t(sourceLabelKey(m.source))}
 										</td>
 									</tr>
 								))}

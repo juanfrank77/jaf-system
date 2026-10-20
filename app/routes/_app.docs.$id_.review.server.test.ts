@@ -1263,7 +1263,7 @@ describe("review loader: Packet → Claro step", () => {
 		titulo: "Poste",
 		blueprintPaths: [],
 		fieldMaterials: [
-			{ serviceCodeId: "m1", used: 3, returned: 1, source: "WAREHOUSE" },
+			{ serviceCodeId: "m1", used: 3, returned: 1, source: "WAREHOUSE_ISSUE" },
 		],
 		jafInvoicePdfPath: null,
 	}
@@ -1438,7 +1438,7 @@ describe("review loader: Packet → Claro step", () => {
 				unit: "FT",
 				used: 3,
 				returned: 1,
-				source: "WAREHOUSE",
+				source: "WAREHOUSE_ISSUE",
 			},
 		])
 	})
@@ -1447,13 +1447,18 @@ describe("review loader: Packet → Claro step", () => {
 		const data = await loadAs("SUPERVISOR", {
 			...signedOff,
 			fieldMaterials: [
-				{ serviceCodeId: "m1", used: 3, returned: 1, source: "WAREHOUSE" },
-				{ serviceCodeId: "m2", used: 4, returned: 0, source: "BRIGADE_STOCK" },
+				{
+					serviceCodeId: "m1",
+					used: 3,
+					returned: 1,
+					source: "WAREHOUSE_ISSUE",
+				},
+				{ serviceCodeId: "m2", used: 4, returned: 0, source: "TRUCK_STOCK" },
 			],
 		})
 		expect(
 			data.packet.materials.map((m) => [m.serviceCodeId, m.source]),
-		).toEqual([["m1", "WAREHOUSE"]])
+		).toEqual([["m1", "WAREHOUSE_ISSUE"]])
 		// The code lookup no longer asks for the brigade's-stock code.
 		expect(db.serviceCode.findMany).toHaveBeenCalledWith(
 			expect.objectContaining({ where: { id: { in: ["m1"] } } }),

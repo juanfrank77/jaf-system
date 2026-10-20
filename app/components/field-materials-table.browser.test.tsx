@@ -16,7 +16,7 @@ const rows: FieldMaterialsTableRow[] = [
 		signed: 5,
 		used: 5,
 		returned: 0,
-		source: "WAREHOUSE",
+		source: "WAREHOUSE_ISSUE",
 	},
 	{
 		serviceCodeId: "m2",
@@ -27,7 +27,7 @@ const rows: FieldMaterialsTableRow[] = [
 		signed: 0,
 		used: 2,
 		returned: 0,
-		source: "BRIGADE_STOCK",
+		source: "TRUCK_STOCK",
 	},
 ]
 
@@ -78,7 +78,7 @@ describe("FieldMaterialsTable", () => {
 			serviceCodeId: "m1",
 			used: 3,
 			returned: 0,
-			source: "WAREHOUSE",
+			source: "WAREHOUSE_ISSUE",
 		})
 	})
 
@@ -96,13 +96,11 @@ describe("FieldMaterialsTable", () => {
 			serviceCodeId: "m1",
 			used: 5,
 			returned: 2,
-			source: "WAREHOUSE",
+			source: "WAREHOUSE_ISSUE",
 		})
 	})
 
-	it("the source select toggles WAREHOUSE / BRIGADE_STOCK", async ({
-		renderStub,
-	}) => {
+	it("the source select switches between Sources", async ({ renderStub }) => {
 		const onChange = vi.fn()
 		await mount(
 			renderStub,
@@ -112,24 +110,46 @@ describe("FieldMaterialsTable", () => {
 		const clamp = screen.getByText("CLAMP").closest("tr") as HTMLElement
 		await userEvent.selectOptions(
 			within(wrap).getByLabelText("Source"),
-			"BRIGADE_STOCK",
+			"TRUCK_STOCK",
 		)
 		expect(onChange).toHaveBeenLastCalledWith(0, {
 			serviceCodeId: "m1",
 			used: 5,
 			returned: 0,
-			source: "BRIGADE_STOCK",
+			source: "TRUCK_STOCK",
 		})
 		await userEvent.selectOptions(
 			within(clamp).getByLabelText("Source"),
-			"WAREHOUSE",
+			"WAREHOUSE_ISSUE",
 		)
 		expect(onChange).toHaveBeenLastCalledWith(1, {
 			serviceCodeId: "m2",
 			used: 2,
 			returned: 0,
-			source: "WAREHOUSE",
+			source: "WAREHOUSE_ISSUE",
 		})
+	})
+
+	it("marks Used and Source with the field-required class and lists five Sources", async ({
+		renderStub,
+	}) => {
+		await mount(
+			renderStub,
+			<FieldMaterialsTable rows={rows} onChange={vi.fn()} />,
+		)
+		const wrap = screen.getByText("WRAP NET").closest("tr") as HTMLElement
+		expect(within(wrap).getByLabelText("Used")).toHaveClass("field-required")
+		expect(within(wrap).getByLabelText("Source")).toHaveClass("field-required")
+		const options = within(within(wrap).getByLabelText("Source"))
+			.getAllByRole("option")
+			.map((o) => o.textContent)
+		expect(options).toEqual([
+			"Warehouse issue",
+			"Existing at site",
+			"Claro drop-off",
+			"Truck stock",
+			"Crew personal",
+		])
 	})
 
 	it("shows the options in Spanish", async ({ renderStub }) => {
@@ -144,9 +164,9 @@ describe("FieldMaterialsTable", () => {
 			],
 			i18n: { lng: "es" },
 		})
-		expect(
-			screen.getAllByText("Inventario de la brigada").length,
-		).toBeGreaterThan(0)
+		expect(screen.getAllByText("Inventario del camión").length).toBeGreaterThan(
+			0,
+		)
 		expect(screen.getByText("Entregado (firmado)")).toBeInTheDocument()
 	})
 })

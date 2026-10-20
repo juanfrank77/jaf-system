@@ -1,3 +1,10 @@
+import {
+	isBillableSource,
+	isKnownSource,
+	type MaterialSource,
+	normaliseSource,
+} from "./material-source"
+
 /**
  * The Field step's one materials table (spec "Step 3 · Field"). It is a
  * presentation over the canonical JSON columns: `fieldMaterials` keeps the
@@ -5,11 +12,11 @@
  * billable used quantities so Finance, pre-cert and the PDFs read what they
  * always did.
  *
- * Provisional ruling (pending Monica / Lissette): the brigade's own stock is
- * recorded (BRIGADE_STOCK rows in `fieldMaterials`) for tracking only and
- * kept off the billable lines, so `materialsUsed` carries WAREHOUSE use only.
+ * Each row has one of five Sources (`material-source.ts`). Only
+ * WAREHOUSE_ISSUE material is billable, so `materialsUsed` carries that use
+ * only; the others are recorded in `fieldMaterials` for tracking.
  */
-export type FieldMaterialSource = "WAREHOUSE" | "BRIGADE_STOCK"
+export type FieldMaterialSource = MaterialSource
 
 export type FieldMaterialRow = {
 	serviceCodeId: string
@@ -19,8 +26,6 @@ export type FieldMaterialRow = {
 }
 
 type MaterialLine = { serviceCodeId: string; qty: number }
-
-const SOURCES: readonly FieldMaterialSource[] = ["WAREHOUSE", "BRIGADE_STOCK"]
 
 function quantity(v: unknown): number {
 	if (v === undefined || v === null || v === "") return 0
@@ -39,14 +44,13 @@ function toRows(value: unknown): FieldMaterialRow[] {
 			unknown
 		>
 		if (typeof serviceCodeId !== "string" || !serviceCodeId) continue
-		const s = source ?? "WAREHOUSE"
-		if (!SOURCES.includes(s as FieldMaterialSource))
+		if (source != null && !isKnownSource(source))
 			throw new Error("Invalid materials source")
 		rows.push({
 			serviceCodeId,
 			used: quantity(used),
 			returned: quantity(returned),
-			source: s as FieldMaterialSource,
+			source: normaliseSource(source),
 		})
 	}
 	return rows
@@ -58,7 +62,7 @@ export function parseFieldMaterials(raw: string | null): FieldMaterialRow[] {
 	return toRows(JSON.parse(raw))
 }
 
-/** The stored rows, or one WAREHOUSE row per signed-out line (used = signed). */
+/** The stored rows, or one WAREHOUSE_ISSUE row per signed-out line (used = signed). */
 export function fieldMaterialsOrDefault(
 	stored: unknown,
 	taken: MaterialLine[],
@@ -73,7 +77,7 @@ export function fieldMaterialsOrDefault(
 		serviceCodeId: t.serviceCodeId,
 		used: t.qty,
 		returned: 0,
-		source: "WAREHOUSE",
+		source: "WAREHOUSE_ISSUE",
 	}))
 }
 
@@ -86,10 +90,10 @@ export function fieldMaterialsOrDefault(
 export function packetMaterialRows(
 	stored: unknown,
 	taken: MaterialLine[],
-): (FieldMaterialRow & { source: "WAREHOUSE" })[] {
+): (FieldMaterialRow & { source: "WAREHOUSE_ISSUE" })[] {
 	return fieldMaterialsOrDefault(stored, taken).filter(
-		(r): r is FieldMaterialRow & { source: "WAREHOUSE" } =>
-			r.source === "WAREHOUSE",
+		(r): r is FieldMaterialRow & { source: "WAREHOUSE_ISSUE" } =>
+			isBillableSource(r.source),
 	)
 }
 
@@ -156,7 +160,7 @@ export function hasFieldTable(fieldMaterials: unknown): boolean {
 export function brigadeStockLines(fieldMaterials: unknown): MaterialLine[] {
 	const byCode = new Map<string, number>()
 	for (const r of storedRows(fieldMaterials)) {
-		if (r.source !== "BRIGADE_STOCK" || r.used <= 0) continue
+		if (r.source !== "TRUCK_STOCK" || r.used <= 0) continue
 		byCode.set(r.serviceCodeId, (byCode.get(r.serviceCodeId) ?? 0) + r.used)
 	}
 	return [...byCode].map(([serviceCodeId, qty]) => ({ serviceCodeId, qty }))
@@ -165,7 +169,7 @@ export function brigadeStockLines(fieldMaterials: unknown): MaterialLine[] {
 function warehouseUsed(rows: FieldMaterialRow[]): Map<string, number> {
 	const byCode = new Map<string, number>()
 	for (const r of rows) {
-		if (r.source !== "WAREHOUSE") continue
+		if (!isBillableSource(r.source)) continue
 		byCode.set(r.serviceCodeId, (byCode.get(r.serviceCodeId) ?? 0) + r.used)
 	}
 	return byCode
@@ -212,8 +216,9 @@ export function installedLines(
 }
 
 /**
- * Whether WAREHOUSE-source use of any code is above what was signed out at
- * pickup. Brigade's-stock rows were never signed out, so they never count.
+ * Whether WAREHOUSE_ISSUE use (the billable side) of any code is above what
+ * was signed out at pickup. Material from the other Sources was never signed
+ * out, so it never counts: extra material is entered under another Source.
  */
 export function exceedsSigned(
 	taken: MaterialLine[],

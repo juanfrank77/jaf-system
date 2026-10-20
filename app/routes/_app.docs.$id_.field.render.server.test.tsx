@@ -50,7 +50,12 @@ function loaderData(overrides: Record<string, unknown> = {}) {
 		materialsTaken: [{ serviceCodeId: "sc-1", qty: 5 }],
 		estimatedMaterials: [{ serviceCodeId: "sc-1", qty: 4 }],
 		fieldMaterials: [
-			{ serviceCodeId: "sc-1", used: 5, returned: 0, source: "WAREHOUSE" },
+			{
+				serviceCodeId: "sc-1",
+				used: 5,
+				returned: 0,
+				source: "WAREHOUSE_ISSUE",
+			},
 		],
 		serviceLines: [
 			{
@@ -112,6 +117,20 @@ const inputs = (html: string, re: RegExp) =>
 	(html.match(/<input[^>]*>/g) ?? []).filter((i) => re.test(i))
 
 describe("Field screen (render)", () => {
+	it("marks Actual, Used and Source as required fields and offers Back", async () => {
+		const html = await render()
+		expect(inputs(html, /aria-label="Actual 34006301"/)[0]).toMatch(
+			/class="[^"]*field-required/,
+		)
+		expect(inputs(html, /aria-label="Used"/)[0]).toMatch(
+			/class="[^"]*field-required/,
+		)
+		expect(html).toMatch(
+			/<select[^>]*aria-label="Source"[^>]*field-required|<select[^>]*field-required[^>]*aria-label="Source"/,
+		)
+		expect(html).toContain("Go back")
+	})
+
 	it("does not backfill Dirección 1 with the composed job address", async () => {
 		const html = await render()
 		const [d1] = inputs(html, /id="direccion1"/)

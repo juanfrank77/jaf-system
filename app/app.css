@@ -109,6 +109,8 @@
 	--status-danger-solid-foreground: #ffffff;
 	--status-ok: #3b6d11;
 	--status-ok-soft: #eaf3de;
+	--field-required-bg: #fff8d6;
+	--field-required-border: #d9b92e;
 }
 
 .dark {
@@ -158,6 +160,14 @@
 	--status-danger-solid-foreground: #0f0f0e;
 	--status-ok: #8fc04f;
 	--status-ok-soft: #1c2913;
+	--field-required-bg: #3a3310;
+	--field-required-border: #a8901f;
+}
+
+/* Unlayered so it wins over the Input utilities (bg-background, border-input). */
+.field-required {
+	background-color: var(--field-required-bg);
+	border-color: var(--field-required-border);
 }
 
 @layer base {

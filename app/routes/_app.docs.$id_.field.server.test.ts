@@ -176,9 +176,9 @@ beforeEach(() => {
 
 describe("POST /docs/:id/field — save", () => {
 	const rows = [
-		{ serviceCodeId: "sc-1", used: 3, returned: 2, source: "WAREHOUSE" },
-		{ serviceCodeId: "sc-2", used: 1, returned: 0, source: "BRIGADE_STOCK" },
-		{ serviceCodeId: "sc-3", used: 0, returned: 0, source: "WAREHOUSE" },
+		{ serviceCodeId: "sc-1", used: 3, returned: 2, source: "WAREHOUSE_ISSUE" },
+		{ serviceCodeId: "sc-2", used: 1, returned: 0, source: "TRUCK_STOCK" },
+		{ serviceCodeId: "sc-3", used: 0, returned: 0, source: "WAREHOUSE_ISSUE" },
 	] as const
 
 	function fullSave() {
@@ -236,8 +236,13 @@ describe("POST /docs/:id/field — save", () => {
 		as("SUPERVISOR")
 		withDoc({ materialsTaken: [{ serviceCodeId: "sc-1", qty: 10 }] })
 		const split = [
-			{ serviceCodeId: "sc-1", used: 6, returned: 4, source: "WAREHOUSE" },
-			{ serviceCodeId: "sc-1", used: 4, returned: 0, source: "BRIGADE_STOCK" },
+			{
+				serviceCodeId: "sc-1",
+				used: 6,
+				returned: 4,
+				source: "WAREHOUSE_ISSUE",
+			},
+			{ serviceCodeId: "sc-1", used: 4, returned: 0, source: "TRUCK_STOCK" },
 		]
 		const form = new FormData()
 		form.set("intent", "save")
@@ -356,7 +361,12 @@ describe("POST /docs/:id/field — save", () => {
 		form.set(
 			"fieldMaterials",
 			JSON.stringify([
-				{ serviceCodeId: "sc-1", used: 9, returned: 0, source: "WAREHOUSE" },
+				{
+					serviceCodeId: "sc-1",
+					used: 9,
+					returned: 0,
+					source: "WAREHOUSE_ISSUE",
+				},
 			]),
 		)
 		expect(await run(form)).toEqual({ ok: true })
@@ -459,7 +469,12 @@ describe("POST /docs/:id/field — continue", () => {
 		withDoc()
 		const res = await run(
 			cont([
-				{ serviceCodeId: "sc-1", used: 6, returned: 0, source: "WAREHOUSE" },
+				{
+					serviceCodeId: "sc-1",
+					used: 6,
+					returned: 0,
+					source: "WAREHOUSE_ISSUE",
+				},
 			]),
 		)
 		expect(res).toEqual({ errorKey: "docs_field.errors.used_exceeds_took" })
@@ -472,12 +487,17 @@ describe("POST /docs/:id/field — continue", () => {
 		withDoc()
 		const res = await run(
 			cont([
-				{ serviceCodeId: "sc-1", used: 5, returned: 0, source: "WAREHOUSE" },
+				{
+					serviceCodeId: "sc-1",
+					used: 5,
+					returned: 0,
+					source: "WAREHOUSE_ISSUE",
+				},
 				{
 					serviceCodeId: "sc-9",
 					used: 7,
 					returned: 0,
-					source: "BRIGADE_STOCK",
+					source: "TRUCK_STOCK",
 				},
 			]),
 		)
@@ -488,7 +508,12 @@ describe("POST /docs/:id/field — continue", () => {
 		as("SUPERVISOR")
 		withDoc({
 			fieldMaterials: [
-				{ serviceCodeId: "sc-1", used: 8, returned: 0, source: "WAREHOUSE" },
+				{
+					serviceCodeId: "sc-1",
+					used: 8,
+					returned: 0,
+					source: "WAREHOUSE_ISSUE",
+				},
 			],
 		})
 		const form = new FormData()
@@ -503,7 +528,12 @@ describe("POST /docs/:id/field — continue", () => {
 		withDoc()
 		const res = await run(
 			cont([
-				{ serviceCodeId: "sc-1", used: 3, returned: 2, source: "WAREHOUSE" },
+				{
+					serviceCodeId: "sc-1",
+					used: 3,
+					returned: 2,
+					source: "WAREHOUSE_ISSUE",
+				},
 			]),
 		)
 		expect(res.status).toBe(302)
@@ -526,7 +556,12 @@ describe("POST /docs/:id/field — continue", () => {
 		})
 		const res = await run(
 			cont([
-				{ serviceCodeId: "sc-1", used: 5, returned: 0, source: "WAREHOUSE" },
+				{
+					serviceCodeId: "sc-1",
+					used: 5,
+					returned: 0,
+					source: "WAREHOUSE_ISSUE",
+				},
 			]),
 		)
 		expect(res.status).toBe(302)
@@ -553,7 +588,12 @@ describe("POST /docs/:id/field — continue", () => {
 		withDoc({ status: "FIELD_UPDATED" })
 		const res = await run(
 			cont([
-				{ serviceCodeId: "sc-1", used: 5, returned: 0, source: "WAREHOUSE" },
+				{
+					serviceCodeId: "sc-1",
+					used: 5,
+					returned: 0,
+					source: "WAREHOUSE_ISSUE",
+				},
 			]),
 		)
 		expect(res.status).toBe(302)
@@ -661,7 +701,12 @@ describe("/docs/:id/field — access", () => {
 		form.set(
 			"fieldMaterials",
 			JSON.stringify([
-				{ serviceCodeId: "sc-1", used: 5, returned: 0, source: "WAREHOUSE" },
+				{
+					serviceCodeId: "sc-1",
+					used: 5,
+					returned: 0,
+					source: "WAREHOUSE_ISSUE",
+				},
 			]),
 		)
 		const res = await run(form)
@@ -728,7 +773,12 @@ describe("GET /docs/:id/field", () => {
 			AFTER: [{ id: "p3", src: "/files/photos/doc-1/c.jpg" }],
 		})
 		expect(res.fieldMaterials).toEqual([
-			{ serviceCodeId: "sc-1", used: 5, returned: 0, source: "WAREHOUSE" },
+			{
+				serviceCodeId: "sc-1",
+				used: 5,
+				returned: 0,
+				source: "WAREHOUSE_ISSUE",
+			},
 		])
 		expect(res.services).toEqual({
 			rows: [
@@ -779,7 +829,12 @@ describe("GET /docs/:id/field", () => {
 	it("returns stored materials rows and the names of whoever edited the address", async () => {
 		as("SUPERVISOR")
 		const stored = [
-			{ serviceCodeId: "sc-1", used: 2, returned: 3, source: "WAREHOUSE" },
+			{
+				serviceCodeId: "sc-1",
+				used: 2,
+				returned: 3,
+				source: "WAREHOUSE_ISSUE",
+			},
 		]
 		withDoc({
 			fieldMaterials: stored,

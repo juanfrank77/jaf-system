@@ -918,9 +918,9 @@
 		"aging_heading": "Umbral de alerta de antigüedad",
 		"aging_description": "Los documentos más antiguos que esta cantidad de días en etapas clave de finanzas generarán alertas de antigüedad. Actual: {{current}} días",
 		"aging_label": "Días de alerta de antigüedad",
-		"tolerance_heading": "Tolerancia de monto de Aviso",
-		"tolerance_description": "Las diferencias de monto entre el Aviso y la factura JAF dentro de este valor absoluto se permiten. Diferencias above this bloquean la verificación de Finanzas. Actual: {{current}}",
-		"tolerance_label": "Tolerancia de monto de Aviso ($)",
+		"tolerance_heading": "Tolerancia de monto de PO",
+		"tolerance_description": "Se permiten diferencias de monto entre una PO y la factura JAF dentro de este valor absoluto. Aplica solo a montos de PO; el Aviso no tiene verificación de monto. Actual: {{current}}",
+		"tolerance_label": "Tolerancia de monto de PO ($)",
 		"saved": "Guardado.",
 		"save": "Guardar",
 		"errors": {
@@ -1232,12 +1232,10 @@
 		}
 	},
 	"finance_verify": {
-		"aviso_amount_prefilled": "Monto del Aviso {{amount}} capturado y cotejado por el supervisor.",
 		"line_sum_pre_ivu": "Suma de líneas (antes de IVU)",
-		"title": "Verificar Aviso vs. Factura",
+		"title": "Verificar paquete",
 		"amount": "Monto de factura",
 		"ivu_rate": "Tasa de IVU: {{rate}}%",
-		"tolerance": "Tolerancia permitida: {{tolerance}}",
 		"billing_blocked": "No se puede verificar — documentos de facturación incompletos",
 		"blocked_claro_pdf": "Falta PDF de orden de trabajo Claro",
 		"jaf_invoice": "Factura JAF",
@@ -1246,27 +1244,34 @@
 		"aviso_number": "Aviso #",
 		"supervisor": "Supervisor",
 		"previous_send_backs": "Devoluciones previas de Finanzas",
-		"aviso_amount_label": "Total del Aviso (del documento)",
-		"aviso_amount_hint": "Ingresa el monto total que aparece en el documento de Aviso.",
-		"aviso_amount_placeholder": "0.00",
 		"verify_note_placeholder": "Nota de verificación opcional…",
 		"mark_verified": "Marcar verificado",
 		"cannot_verify_hint": "El supervisor debe cargar el PDF de Claro antes de verificar.",
 		"send_back_placeholder": "Explica el problema del Aviso al supervisor…",
 		"send_back": "Devolver al supervisor",
-		"amount_mismatch": "El monto del Aviso difiere del total de la factura por {{difference}} (tolerancia: {{tolerance}}).",
-		"amount_mismatch_detail": "Aviso: {{avisoAmount}} vs Factura: {{invoiceTotal}}.",
 		"errors": {
 			"unknown_intent": "Acción desconocida.",
 			"note_required": "Se requiere una nota de devolución.",
-			"invalid_aviso_amount": "Ingresa un monto de Aviso válido.",
-			"amount_mismatch": "El monto del Aviso difiere del total de la factura por {{difference}} (tolerancia: {{tolerance}}).",
 			"invalid_stage": "Este trabajo no está en la etapa de verificación.",
 			"terminal_status": "Este trabajo ya no es editable."
 		},
 		"priced_invoice": "Factura JAF (con precios)",
 		"claro_packet": "Paquete Claro (sin precios)",
-		"priced_invoice_legacy": "Factura JAF (con precios, anterior)"
+		"priced_invoice_legacy": "Factura JAF (con precios, anterior)",
+		"packet": {
+			"heading": "Documentos del paquete",
+			"work_order_pdf": "PDF de orden de trabajo JAF",
+			"work_order_pdf_detail": "Enviado a Claro",
+			"aviso": "Aviso de Claro {{number}}",
+			"aviso_detail": "{{file}}",
+			"precert": "Hoja de pre-certificación",
+			"precert_detail": "Firmada por el supervisor",
+			"photos": "Fotos antes / después",
+			"photos_detail_one": "{{count}} foto",
+			"photos_detail_other": "{{count}} fotos",
+			"missing": "Falta",
+			"open": "Abrir"
+		}
 	},
 	"finance_pbcc": {
 		"title": "Solicitud de pago PBCC",
@@ -1374,7 +1379,6 @@
 			"finance": "En Finanzas"
 		},
 		"block": {
-			"aviso_mismatch": "Aviso ≠ factura",
 			"billing_aviso_pdf": "Facturación: falta el PDF del Aviso"
 		},
 		"stage_queue": {

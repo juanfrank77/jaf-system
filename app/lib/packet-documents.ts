@@ -1,0 +1,82 @@
+import { evaluateReleaseGate } from "~/lib/release-gate"
+import { uploadHref } from "~/lib/upload-href"
+
+type PacketDocumentKey = "work_order_pdf" | "aviso" | "precert" | "photos"
+
+type PacketDocument = {
+	key: PacketDocumentKey
+	/** i18n key of the row's label. */
+	label: string
+	/** The Aviso file name, or the photo count; "" when there is nothing to show. */
+	detail: string
+	/** Where the document opens, or null when it is missing. */
+	href: string | null
+}
+
+const basename = (p: string) => p.split(/[\\/]/).filter(Boolean).at(-1) ?? ""
+
+/**
+ * The released packet's four documents as Finance opens them (Finance/Admin
+ * only). A document links only when the release gate counts it as present.
+ */
+export function packetDocuments(
+	doc: {
+		id: string
+		jafInvoicePdfPath: string | null
+		avisoNumber: string | null
+		avisoDocPath: string | null
+	},
+	sheet: {
+		pdfPath: string | null
+		sigSupervisorAt: Date | null
+		sigSubcontractorAt: Date | null
+	} | null,
+	photos: {
+		localPath: string
+		tag: "BEFORE" | "DURING" | "AFTER" | null
+		takenAt: Date
+	}[],
+): PacketDocument[] {
+	const gate = evaluateReleaseGate({ doc, sheet, photos })
+	const ok = (key: string) => gate.rows.find((r) => r.key === key)?.ok === true
+	const first = [...photos].sort(
+		(a, b) => a.takenAt.getTime() - b.takenAt.getTime(),
+	)[0]
+	const row = (
+		key: PacketDocumentKey,
+		detail: string,
+		href: string | null,
+	): PacketDocument => ({
+		key,
+		label: `finance_verify.packet.${key}`,
+		detail,
+		href,
+	})
+	return [
+		row(
+			"work_order_pdf",
+			"",
+			ok("work_order_pdf") && doc.jafInvoicePdfPath
+				? uploadHref(doc.jafInvoicePdfPath)
+				: null,
+		),
+		row(
+			"aviso",
+			doc.avisoDocPath ? basename(doc.avisoDocPath) : "",
+			ok("aviso") && doc.avisoDocPath ? uploadHref(doc.avisoDocPath) : null,
+		),
+		row(
+			"precert",
+			"",
+			ok("precert_signed") && sheet?.pdfPath ? uploadHref(sheet.pdfPath) : null,
+		),
+		row(
+			"photos",
+			String(photos.length),
+			// The photos route serves per-job folders: /files/photos/<docId>/<file>.
+			ok("photos") && first
+				? `/files/photos/${encodeURIComponent(doc.id)}/${encodeURIComponent(basename(first.localPath))}`
+				: null,
+		),
+	]
+}

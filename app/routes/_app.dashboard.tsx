@@ -25,8 +25,6 @@ import {
 	WAITING_ON,
 	type WaitingOn,
 } from "~/lib/supervisor-stage"
-import { getAvisoAmountTolerance } from "~/lib/system-settings.server"
-import { toNumberPrice } from "~/lib/utils"
 import { NO_WAREHOUSE_COUNTS } from "~/lib/warehouse-queues"
 import { countWarehouseQueues } from "~/lib/warehouse-queues.server"
 import { resolveWarehouseScope } from "~/lib/warehouse-scope.server"
@@ -121,7 +119,7 @@ type QueueRow = {
 	/** When the job entered this queue (submitted / returned / approved). */
 	since: Date | null
 	/** Why a job sits in the Blocked queue. */
-	blockReason?: "aviso_mismatch" | "billing_aviso_pdf"
+	blockReason?: "billing_aviso_pdf"
 	/** Open work orders list: who the job is waiting on. */
 	waitingOn?: WaitingOn
 }
@@ -137,8 +135,6 @@ const queueSelect = {
 	fieldStartedAt: true,
 	supervisorApprovedAt: true,
 	jafInvoiceGeneratedAt: true,
-	jafInvoiceLineTotal: true,
-	avisoLineTotal: true,
 	avisoNumber: true,
 	avisoDocPath: true,
 	releasedToFinanceAt: true,
@@ -158,7 +154,6 @@ function toRow(
 		controlNumber: string
 		jobAddressEstimated: string
 		jobAddressActual?: string | null
-		jafInvoiceLineTotal?: unknown
 		estimatedMaterials?: unknown
 		materialsTaken?: unknown
 		materialsUsed?: unknown
@@ -209,7 +204,6 @@ async function withStages<
 }
 
 async function loadSupervisorQueues(userId: string) {
-	const tolerance = await getAvisoAmountTolerance()
 	const areas = await supervisorAreas(db, userId)
 	const scope = ownedOrInArea(userId, areas)
 	const [intakeRaw, pending, approved, billingBlockedRaw, openRaw] =
@@ -277,21 +271,11 @@ async function loadSupervisorQueues(userId: string) {
 	const blocked: QueueRow[] = []
 	for (const d of approved) {
 		const stage = deriveSupervisorStage(d, null)
+		// No job is ever blocked on amounts (F2): only a saved Aviso matters.
 		if (isAvisoSaved(d)) {
 			approvedRows.push(toRow(d, stage, d.supervisorApprovedAt))
-		} else if (d.avisoLineTotal == null) {
-			missingAviso.push(toRow(d, stage, d.supervisorApprovedAt))
-		} else if (
-			Math.abs(
-				toNumberPrice(d.avisoLineTotal) - toNumberPrice(d.jafInvoiceLineTotal),
-			) > tolerance
-		) {
-			blocked.push({
-				...toRow(d, "AVISO", d.supervisorApprovedAt),
-				blockReason: "aviso_mismatch",
-			})
 		} else {
-			approvedRows.push(toRow(d, stage, d.supervisorApprovedAt))
+			missingAviso.push(toRow(d, stage, d.supervisorApprovedAt))
 		}
 	}
 	for (const d of billingBlockedRaw) {

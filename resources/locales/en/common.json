@@ -918,9 +918,9 @@
 		"aging_heading": "Aging Alert Threshold",
 		"aging_description": "Documents older than this many days in key finance stages will trigger aging alerts. Current: {{current}} days",
 		"aging_label": "Aging Alert Days",
-		"tolerance_heading": "Aviso Amount Tolerance",
-		"tolerance_description": "Amount differences between the Aviso and JAF invoice within this absolute value are allowed. Differences above this block Finance verification. Current: {{current}}",
-		"tolerance_label": "Aviso Amount Tolerance ($)",
+		"tolerance_heading": "PO Amount Tolerance",
+		"tolerance_description": "Amount differences between a PO and the JAF invoice within this absolute value are allowed. It applies to PO amounts only; the Aviso has no amount check. Current: {{current}}",
+		"tolerance_label": "PO Amount Tolerance ($)",
 		"saved": "Saved.",
 		"save": "Save",
 		"errors": {
@@ -1232,12 +1232,10 @@
 		}
 	},
 	"finance_verify": {
-		"aviso_amount_prefilled": "Aviso amount {{amount}} captured and matched by the supervisor.",
 		"line_sum_pre_ivu": "Line sum (pre-IVU)",
-		"title": "Verify Aviso vs. Invoice",
+		"title": "Verify packet",
 		"amount": "Invoice amount",
 		"ivu_rate": "IVU rate: {{rate}}%",
-		"tolerance": "Allowed tolerance: {{tolerance}}",
 		"billing_blocked": "Cannot verify — billing documents incomplete",
 		"blocked_claro_pdf": "Missing Claro work-order PDF",
 		"jaf_invoice": "JAF Invoice",
@@ -1246,27 +1244,34 @@
 		"aviso_number": "Aviso #",
 		"supervisor": "Supervisor",
 		"previous_send_backs": "Previous Finance Send-backs",
-		"aviso_amount_label": "Aviso total (from document)",
-		"aviso_amount_hint": "Enter the total amount shown on the Aviso document.",
-		"aviso_amount_placeholder": "0.00",
 		"verify_note_placeholder": "Optional verification note…",
 		"mark_verified": "Mark Verified",
 		"cannot_verify_hint": "The supervisor must upload the Claro PDF before verification.",
 		"send_back_placeholder": "Explain the Aviso issue to the supervisor…",
 		"send_back": "Send Back to Supervisor",
-		"amount_mismatch": "Aviso amount differs from invoice total by {{difference}} (tolerance: {{tolerance}}).",
-		"amount_mismatch_detail": "Aviso: {{avisoAmount}} vs Invoice: {{invoiceTotal}}.",
 		"errors": {
 			"unknown_intent": "Unknown action.",
 			"note_required": "A send-back note is required.",
-			"invalid_aviso_amount": "Enter a valid Aviso amount.",
-			"amount_mismatch": "Aviso amount differs from invoice total by {{difference}} (tolerance: {{tolerance}}).",
 			"invalid_stage": "This job is not at the Verify stage.",
 			"terminal_status": "This job is no longer editable."
 		},
 		"priced_invoice": "JAF invoice (priced)",
 		"claro_packet": "Claro packet (no prices)",
-		"priced_invoice_legacy": "JAF invoice (priced, legacy)"
+		"priced_invoice_legacy": "JAF invoice (priced, legacy)",
+		"packet": {
+			"heading": "Packet documents",
+			"work_order_pdf": "JAF work order PDF",
+			"work_order_pdf_detail": "Sent to Claro",
+			"aviso": "Claro Aviso {{number}}",
+			"aviso_detail": "{{file}}",
+			"precert": "Pre-cert sheet",
+			"precert_detail": "Supervisor signed",
+			"photos": "Before / after photos",
+			"photos_detail_one": "{{count}} photo",
+			"photos_detail_other": "{{count}} photos",
+			"missing": "Missing",
+			"open": "Open"
+		}
 	},
 	"finance_pbcc": {
 		"title": "PBCC Payment Request",
@@ -1374,7 +1379,6 @@
 			"finance": "With Finance"
 		},
 		"block": {
-			"aviso_mismatch": "Aviso ≠ invoice",
 			"billing_aviso_pdf": "Billing: missing Aviso PDF"
 		},
 		"stage_queue": {

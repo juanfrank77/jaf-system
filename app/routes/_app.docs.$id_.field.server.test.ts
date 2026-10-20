@@ -484,20 +484,6 @@ describe("POST /docs/:id/field — continue", () => {
 		expect(res.status).toBe(302)
 	})
 
-	it("requires a discrepancy note when quantities differ", async () => {
-		as("SUPERVISOR")
-		withDoc()
-		const res = await run(
-			cont([
-				{ serviceCodeId: "sc-1", used: 3, returned: 2, source: "WAREHOUSE" },
-			]),
-		)
-		expect(res).toEqual({
-			errorKey: "docs_field.errors.discrepancy_note_required",
-		})
-		expect(db.jafInvoice.update).not.toHaveBeenCalled()
-	})
-
 	it("validates the stored table when the post carries none", async () => {
 		as("SUPERVISOR")
 		withDoc({
@@ -512,42 +498,20 @@ describe("POST /docs/:id/field — continue", () => {
 		})
 	})
 
-	it("with a note, logs the discrepancy and advances", async () => {
+	it("continues without a note when used differs from issued, and logs no discrepancy", async () => {
 		as("SUPERVISOR")
 		withDoc()
 		const res = await run(
-			cont(
-				[{ serviceCodeId: "sc-1", used: 3, returned: 2, source: "WAREHOUSE" }],
-				(f) => f.set("discrepancyNote", "Two came back unused"),
-			),
-		)
-		expect(res.status).toBe(302)
-		const audit = vi
-			.mocked(db.auditTrail.create)
-			.mock.calls.find(
-				(c) => (c[0] as any).data.action === "QUANTITY_DISCREPANCY",
-			)
-		expect((audit as any)[0].data.diffJson).toMatchObject({
-			note: "Two came back unused",
-			blocksFinance: false,
-		})
-	})
-
-	it("a second Continue, once already at Sign off, logs no second discrepancy", async () => {
-		as("SUPERVISOR")
-		withDoc({ status: "FIELD_UPDATED" })
-		const res = await run(
-			cont(
-				[{ serviceCodeId: "sc-1", used: 3, returned: 2, source: "WAREHOUSE" }],
-				(f) => f.set("discrepancyNote", "Two came back unused"),
-			),
+			cont([
+				{ serviceCodeId: "sc-1", used: 3, returned: 2, source: "WAREHOUSE" },
+			]),
 		)
 		expect(res.status).toBe(302)
 		const actions = vi
 			.mocked(db.auditTrail.create)
 			.mock.calls.map((c) => (c[0] as any).data.action)
+		expect(actions).toContain("STATUS_CHANGED")
 		expect(actions).not.toContain("QUANTITY_DISCREPANCY")
-		expect(actions).not.toContain("STATUS_CHANGED")
 	})
 
 	it("advances SIGNED → FIELD_UPDATED without a signature, a crew notification or the blueprint", async () => {

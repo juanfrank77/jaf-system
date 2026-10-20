@@ -43,8 +43,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 				{
 					estimatedMaterials: doc.estimatedMaterials,
 					materialsTaken: doc.materialsTaken,
-					materialsUsed: doc.materialsUsed,
-					fieldMaterials: doc.fieldMaterials,
 					materialsReturned: doc.materialsReturned,
 				},
 			]),

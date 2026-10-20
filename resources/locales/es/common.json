@@ -516,7 +516,6 @@
 		"add_line": "+ Agregar línea",
 		"submit": "Guardar devoluciones",
 		"crew_reported_hint": "Informe de campo: {{usedQty}} usado del almacén; devolución esperada: {{expectedReturnQty}}.",
-		"discrepancy_warning": "La cantidad devuelta difiere de lo usado según el informe de campo.",
 		"warehouse_label": "Devolver al almacén",
 		"warehouse_policy_unconfirmed": "Se permite devolver a un almacén distinto al de retiro, pero la política para esto no está confirmada.",
 		"serial_lines_heading": "Devoluciones serializadas",
@@ -530,7 +529,6 @@
 			"UNDER_REPORTED": "Usado — sub-reportado"
 		},
 		"add_serial_line": "+ Agregar línea serializada",
-		"note_required_hint": "Se requiere una nota porque lo recibido es menor a lo esperado.",
 		"success": "Devoluciones registradas.",
 		"errors": {
 			"invalid_materials": "Datos de materiales inválidos",
@@ -545,15 +543,13 @@
 		"already_recorded_notice": "Las devoluciones ya fueron registradas para este documento. No se pueden registrar otra vez.",
 		"status_pill": "Se espera de vuelta",
 		"callout_title": "Devolución · Tú",
-		"callout_body": "El informe de campo del supervisor dice qué se usó del material del almacén; el sistema calculó lo que debe regresar. Cuenta lo que realmente llegó. Lo que falte lleva una nota.",
+		"callout_body": "El informe de campo del supervisor dice qué se usó del material del almacén; el sistema calculó lo que debe regresar. Cuenta lo que realmente llegó.",
 		"submit_confirm": "Confirmar devolución",
-		"submit_discrepancy_one": "Confirmar devolución · {{count}} discrepancia registrada",
-		"submit_discrepancy_other": "Confirmar devolución · {{count}} discrepancias registradas",
 		"invoice_note_title": "La cantidad facturada nunca cambia aquí.",
 		"invoice_note_body": "Las cantidades \"usadas\" vienen del paso de Campo del supervisor y son las que van a Claro. Esta pantalla solo registra si el almacén recuperó su material."
 	},
 	"returns": {
-		"note_required": "Se requiere una nota cuando lo recibido es menor a lo esperado, o cuando una unidad serializada se pierde o daña."
+		"note_required": "Se requiere una nota cuando una unidad serializada se pierde o daña."
 	},
 	"restock_fulfill": {
 		"title": "Cumplir reabastecimiento #{{id}}",
@@ -631,9 +627,6 @@
 		"taken_reference_label": "Retirado (firmado)",
 		"used_entry_label": "Instalado",
 		"ordered_vs_installed_hint": "La diferencia entre pedido e instalado es solo informativa.",
-		"discrepancy_note_label": "Nota de discrepancia de cantidad",
-		"discrepancy_note_hint": "Obligatoria cuando las cantidades instaladas difieren de lo firmado en salida.",
-		"discrepancy_note_placeholder": "Explica por qué las cantidades instaladas difieren de lo firmado en salida...",
 		"field_notes_label": "Notas de campo",
 		"field_notes_placeholder": "Observaciones, incidencias, cambios...",
 		"photos_label": "Fotos",
@@ -652,7 +645,6 @@
 		"errors": {
 			"invalid_materials": "Datos de materiales inválidos",
 			"used_exceeds_took": "No puedes usar más de lo que te llevaste. Baja la cantidad a lo que se firmó en la recogida.",
-			"discrepancy_note_required": "Se requiere una nota de discrepancia cuando las cantidades instaladas difieren de lo firmado en salida.",
 			"completion_signature_required": "Se requiere la firma de completado.",
 			"invalid_service_lines": "No se pudieron leer las cantidades de servicio instaladas.",
 			"photo_invalid": "Las fotos deben ser JPEG, PNG, WebP o HEIC, de hasta 10 MB.",
@@ -1123,7 +1115,6 @@
 		},
 		"kinds": {
 			"overage": "Sobrante",
-			"discrepancy": "Discrepancia",
 			"shortage": "Faltante"
 		},
 		"line": {
@@ -1504,7 +1495,6 @@
 			"stage_awaiting_crew": "Etapa: trabajo de campo en curso",
 			"stage_pending_review": "Etapa: pendiente de revisión",
 			"stage_in_finance": "Etapa: en finanzas",
-			"discrepancy_count": "Diferencias de cantidad",
 			"shortage_count": "Faltantes",
 			"overage_count": "Excesos",
 			"aging_oldest_days": "Más antiguo abierto (días)",
@@ -1529,7 +1519,6 @@
 		},
 		"signal": {
 			"overage": "Exceso",
-			"discrepancy": "Diferencia de cantidad",
 			"shortage": "Faltante / devolución"
 		},
 		"action": {
@@ -1600,7 +1589,6 @@
 		"no_restock_requests": "No hay solicitudes de reabastecimiento activas.",
 		"installs_heading": "Mis instalaciones",
 		"no_installs": "Aún no hay instalaciones registradas.",
-		"discrepancy": "Discrepancia",
 		"completion": {
 			"address": "Dirección",
 			"drop_ft": "Caída (pies)",
@@ -1867,8 +1855,7 @@
 		"col_unit_price": "Precio unit.",
 		"col_line": "Línea",
 		"subtotal": "Subtotal estimado",
-		"col_installed": "Instalado",
-		"col_difference": "Diferencia"
+		"col_installed": "Instalado"
 	},
 	"installer_supervisor": {
 		"below_par": "Bajo par",

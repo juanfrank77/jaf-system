@@ -8,7 +8,6 @@ import {
 	fieldMaterialsOrDefault,
 	packetMaterialRows,
 	parseFieldMaterials,
-	quantityDiscrepancies,
 	warehouseUsedLines,
 } from "./field-materials"
 
@@ -172,26 +171,6 @@ describe("exceedsSigned", () => {
 	})
 })
 
-describe("quantityDiscrepancies", () => {
-	it("lists WAREHOUSE codes whose used differs from signed out", () => {
-		expect(
-			quantityDiscrepancies(
-				[
-					{ serviceCodeId: "sc-1", qty: 5 },
-					{ serviceCodeId: "sc-2", qty: 2 },
-				],
-				[row("sc-1", 3), row("sc-2", 2), row("sc-3", 1, "BRIGADE_STOCK")],
-			),
-		).toEqual([{ serviceCodeId: "sc-1", takenQty: 5, usedQty: 3 }])
-	})
-
-	it("counts a signed-out code with no row as zero used", () => {
-		expect(
-			quantityDiscrepancies([{ serviceCodeId: "sc-1", qty: 5 }], []),
-		).toEqual([{ serviceCodeId: "sc-1", takenQty: 5, usedQty: 0 }])
-	})
-})
-
 describe("packetMaterialRows", () => {
 	it("keeps WAREHOUSE rows only (brigade's stock is never on the packet)", () => {
 		expect(
@@ -252,5 +231,12 @@ describe("warehouseUsedLines", () => {
 		expect(warehouseUsedLines(null, used)).toEqual(used)
 		expect(warehouseUsedLines([], used)).toEqual(used)
 		expect(warehouseUsedLines(null, null)).toEqual([])
+	})
+})
+
+describe("no used-vs-issued comparison", () => {
+	it("no longer exports quantityDiscrepancies", async () => {
+		const mod = await import("./field-materials")
+		expect("quantityDiscrepancies" in mod).toBe(false)
 	})
 })

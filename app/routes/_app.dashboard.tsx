@@ -5,7 +5,6 @@ import { isAvisoSaved } from "~/lib/aviso-document"
 import { refuseCrew } from "~/lib/crew-notice.server"
 import {
 	computeDashboardStats,
-	computeMaterialSignals,
 	type DashboardExplainer,
 } from "~/lib/dashboard-stats"
 import { db } from "~/lib/db.server"
@@ -121,7 +120,6 @@ type QueueRow = {
 	note?: string | null
 	/** When the job entered this queue (submitted / returned / approved). */
 	since: Date | null
-	qtyDiscrepancy: boolean
 	/** Why a job sits in the Blocked queue. */
 	blockReason?: "aviso_mismatch" | "billing_aviso_pdf"
 	/** Open work orders list: who the job is waiting on. */
@@ -180,7 +178,6 @@ function toRow(
 		stage,
 		note,
 		since,
-		qtyDiscrepancy: computeMaterialSignals([d as never]).discrepancy > 0,
 	}
 }
 

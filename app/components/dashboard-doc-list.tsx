@@ -6,7 +6,6 @@ import { DocStageBadge } from "~/components/doc-stage-badge"
 import { Badge } from "~/components/ui/badge"
 import { Card, CardContent } from "~/components/ui/card"
 import { EmptyState } from "~/components/ui/empty-state"
-import { warehouseUsedLines } from "~/lib/field-materials"
 import { armAStepOf, FINANCE_STEP_LABEL_KEY } from "~/lib/finance-steps"
 import type { OpenJobLabel } from "~/lib/open-job-label"
 import {
@@ -34,24 +33,6 @@ function hasOverage(doc: DashboardDocRow): boolean {
 		estimated.map((e) => [e.serviceCodeId, e.qty]),
 	)
 	return taken.some((t) => t.qty > (estimatedMap[t.serviceCodeId] ?? 0))
-}
-
-function hasQuantityDiscrepancy(doc: DashboardDocRow): boolean {
-	const taken = toLines(doc.materialsTaken)
-	// Signed out vs used from that stock (not the brigade's own).
-	const used = toLines(
-		warehouseUsedLines(doc.fieldMaterials, doc.materialsUsed),
-	)
-	if (taken.length === 0 || used.length === 0) return false
-	const takenMap = Object.fromEntries(
-		taken.map((t) => [t.serviceCodeId, t.qty]),
-	)
-	const usedMap = Object.fromEntries(used.map((u) => [u.serviceCodeId, u.qty]))
-	const allIds = new Set([...Object.keys(takenMap), ...Object.keys(usedMap)])
-	for (const id of allIds) {
-		if ((takenMap[id] ?? 0) !== (usedMap[id] ?? 0)) return true
-	}
-	return false
 }
 
 function hasShortage(doc: DashboardDocRow): boolean {
@@ -128,7 +109,6 @@ export function DashboardDocList({
 				)}
 				{docs.map((doc) => {
 					const overage = hasOverage(doc)
-					const discrepancy = hasQuantityDiscrepancy(doc)
 					const shortage = hasShortage(doc)
 					return (
 						<Link
@@ -200,16 +180,11 @@ export function DashboardDocList({
 							<p className="mt-1 text-sm text-muted-foreground">
 								{doc.jobType} — {doc.jobAddressEstimated}
 							</p>
-							{(overage || discrepancy || shortage) && (
+							{(overage || shortage) && (
 								<div className="mt-2 flex flex-wrap items-center gap-1">
 									{overage && (
 										<Badge variant="danger" className="text-xs">
 											{t("dashboard.signal.overage")}
-										</Badge>
-									)}
-									{discrepancy && (
-										<Badge variant="warn" className="text-xs">
-											{t("dashboard.signal.discrepancy")}
 										</Badge>
 									)}
 									{shortage && (

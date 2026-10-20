@@ -177,7 +177,7 @@ function warehouseUsed(rows: FieldMaterialRow[]): Map<string, number> {
  * one. A Field save now writes exactly this to `materialsUsed`, but a row
  * saved before the brigade-stock ruling kept the WAREHOUSE + BRIGADE_STOCK
  * total there, so anything that compares or bills against the pickup (what
- * should come back, a quantity discrepancy, Finance's lines) reads this
+ * should come back, Finance's lines) reads this
  * instead. A job without a Field table (from before it) falls back to
  * `materialsUsed`.
  */
@@ -224,21 +224,4 @@ export function exceedsSigned(
 		if (used > (signed.get(code) ?? 0)) return true
 	}
 	return false
-}
-
-/** Signed-out codes whose WAREHOUSE use differs from the signed quantity. */
-export function quantityDiscrepancies(
-	taken: MaterialLine[],
-	rows: FieldMaterialRow[],
-): { serviceCodeId: string; takenQty: number; usedQty: number }[] {
-	const used = warehouseUsed(rows)
-	const signed = new Map(taken.map((t) => [t.serviceCodeId, t.qty]))
-	const codes = new Set([...signed.keys(), ...used.keys()])
-	return [...codes]
-		.map((serviceCodeId) => ({
-			serviceCodeId,
-			takenQty: signed.get(serviceCodeId) ?? 0,
-			usedQty: used.get(serviceCodeId) ?? 0,
-		}))
-		.filter((d) => d.takenQty !== d.usedQty)
 }

@@ -22,7 +22,6 @@ import {
 	type FieldMaterialRow,
 	fieldMaterialsOrDefault,
 	parseFieldMaterials,
-	quantityDiscrepancies,
 } from "~/lib/field-materials"
 import {
 	type AddressCorrection,
@@ -387,17 +386,11 @@ export async function action({ request, params }: Route.ActionArgs) {
 	if (address) Object.assign(update, address)
 
 	const taken = lines(doc.materialsTaken)
-	let discrepancies: ReturnType<typeof quantityDiscrepancies> = []
-	const discrepancyNote =
-		(form.get("discrepancyNote") as string | null)?.trim() || null
 	if (intent === "continue") {
 		rows ??= fieldMaterialsOrDefault(doc.fieldMaterials, taken)
 		// The used ≤ signed-out rule covers WAREHOUSE rows only.
 		if (exceedsSigned(taken, rows))
 			return refusal("docs_field.errors.used_exceeds_took")
-		discrepancies = quantityDiscrepancies(taken, rows)
-		if (discrepancies.length > 0 && !discrepancyNote)
-			return refusal("docs_field.errors.discrepancy_note_required")
 	}
 	if (rows) {
 		// Brigade's stock stays in fieldMaterials (tracked), off the billable
@@ -448,23 +441,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 						status: { before: doc.status, after: "FIELD_UPDATED" },
 						materialsUsed: update.materialsUsed ?? null,
 					} as Prisma.InputJsonValue,
-				},
-			}),
-		)
-	// Logged once, with the Continue that moves the job to Sign off; a later
-	// Continue from FIELD_UPDATED re-checks the note but adds no second row.
-	if (advances && discrepancies.length > 0)
-		ops.push(
-			db.auditTrail.create({
-				data: {
-					docId: doc.id,
-					userId: user.id,
-					action: "QUANTITY_DISCREPANCY",
-					diffJson: {
-						discrepancies,
-						note: discrepancyNote,
-						blocksFinance: false,
-					},
 				},
 			}),
 		)
@@ -956,20 +932,6 @@ export default function FieldUpdate({
 								</option>
 							))}
 						</select>
-						<div className="space-y-1">
-							<Label htmlFor="discrepancyNote">
-								{t("docs_field.discrepancy_note_label")}
-							</Label>
-							<Textarea
-								id="discrepancyNote"
-								name="discrepancyNote"
-								rows={2}
-								placeholder={t("docs_field.discrepancy_note_placeholder")}
-							/>
-							<p className="text-xs text-muted-foreground">
-								{t("docs_field.discrepancy_note_hint")}
-							</p>
-						</div>
 					</CardContent>
 				</Card>
 

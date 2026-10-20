@@ -92,7 +92,7 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 			request: new Request("http://localhost/dashboard"),
 			params: {},
 		} as any)
-		expect(data.stats).toHaveLength(14)
+		expect(data.stats).toHaveLength(13)
 		expect(data.showFilters).toBe(false)
 		expect(data.supervisorQueues!.intake.map((r) => r.id)).toEqual(["n"])
 		expect(data.supervisorQueues!.blocked).toEqual([

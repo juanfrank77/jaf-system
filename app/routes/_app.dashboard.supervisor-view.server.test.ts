@@ -132,7 +132,7 @@ describe("dashboard supervisor view data (integration)", () => {
 
 	it("returns real stat tiles and the approval alert for a supervisor", async () => {
 		const data = await runLoaderAs(supervisorId)
-		expect(data.stats).toHaveLength(14)
+		expect(data.stats).toHaveLength(13)
 		expect(data.stats.slice(0, 4).map((s) => s.labelKey)).toEqual([
 			"dashboard.stat.open_documents",
 			"dashboard.stat.awaiting_warehouse",
@@ -162,13 +162,15 @@ describe("dashboard supervisor view data (integration)", () => {
 		})
 	})
 
-	it("flags a quantity discrepancy and carries the submitted time on pending-review rows", async () => {
+	it("carries the submitted time on pending-review rows and never tags a used-vs-issued difference", async () => {
 		const data = await runLoaderAs(supervisorId)
 		const rows = data.supervisorQueues?.pendingReview ?? []
 		const disc = rows.find((r) => r.id === discrepancyDocId)
 		const clean = rows.find((r) => r.id === cleanDocId)
-		expect(disc?.qtyDiscrepancy).toBe(true)
-		expect(clean?.qtyDiscrepancy).toBe(false)
+		expect(disc).toBeDefined()
+		expect(clean).toBeDefined()
+		expect(disc).not.toHaveProperty("qtyDiscrepancy")
+		expect(clean).not.toHaveProperty("qtyDiscrepancy")
 		expect(new Date(disc?.since as Date).toISOString()).toBe(
 			submittedAt.toISOString(),
 		)

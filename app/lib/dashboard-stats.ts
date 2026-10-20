@@ -1,5 +1,4 @@
 import type { DocStatus, Role } from "../../generated/prisma/client"
-import { warehouseUsedLines } from "./field-materials"
 
 type MaterialLine = { serviceCodeId: string; qty: number }
 
@@ -44,7 +43,6 @@ export type DashboardStatLabelKey =
 	| "dashboard.stat.stage_awaiting_crew"
 	| "dashboard.stat.stage_pending_review"
 	| "dashboard.stat.stage_in_finance"
-	| "dashboard.stat.discrepancy_count"
 	| "dashboard.stat.shortage_count"
 	| "dashboard.stat.overage_count"
 	| "dashboard.stat.aging_oldest_days"
@@ -180,24 +178,14 @@ function computeAgingBuckets(docs: DashboardDoc[]): AgingBucket {
 export function computeMaterialSignals(
 	docs: Pick<
 		DashboardDoc,
-		| "estimatedMaterials"
-		| "materialsTaken"
-		| "materialsUsed"
-		| "fieldMaterials"
-		| "materialsReturned"
+		"estimatedMaterials" | "materialsTaken" | "materialsReturned"
 	>[],
 ) {
-	let discrepancy = 0
 	let shortage = 0
 	let overage = 0
 	for (const doc of docs) {
 		const estimated = toLines(doc.estimatedMaterials)
 		const taken = toLines(doc.materialsTaken)
-		// Signed out vs used from that stock: the brigade's own stock never
-		// left the warehouse, so it is not a discrepancy.
-		const used = toLines(
-			warehouseUsedLines(doc.fieldMaterials, doc.materialsUsed),
-		)
 		const returned = Array.isArray(doc.materialsReturned)
 			? (doc.materialsReturned as Record<string, unknown>[])
 			: []
@@ -208,24 +196,6 @@ export function computeMaterialSignals(
 			)
 			if (taken.some((t) => t.qty > (estimatedMap[t.serviceCodeId] ?? 0))) {
 				overage++
-			}
-		}
-		if (taken.length && used.length) {
-			const takenMap = Object.fromEntries(
-				taken.map((t) => [t.serviceCodeId, t.qty]),
-			)
-			const usedMap = Object.fromEntries(
-				used.map((u) => [u.serviceCodeId, u.qty]),
-			)
-			const allIds = new Set([
-				...Object.keys(takenMap),
-				...Object.keys(usedMap),
-			])
-			for (const id of allIds) {
-				if ((takenMap[id] ?? 0) !== (usedMap[id] ?? 0)) {
-					discrepancy++
-					break
-				}
 			}
 		}
 		for (const line of returned) {
@@ -240,7 +210,7 @@ export function computeMaterialSignals(
 			}
 		}
 	}
-	return { discrepancy, shortage, overage }
+	return { shortage, overage }
 }
 
 export function computeDashboardStats(
@@ -262,7 +232,7 @@ export function computeDashboardStats(
 			(d) => d.status === "PREPPED" || d.status === "SIGNED",
 		)
 		const pendingReview = count(docs, (d) => d.status === "FIELD_UPDATED")
-		const { discrepancy, shortage, overage } = computeMaterialSignals(docs)
+		const { shortage, overage } = computeMaterialSignals(docs)
 		const aging = computeAgingBuckets(docs)
 		const oldestOpenDays = docs.reduce(
 			(max, d) => Math.max(max, computeAgingDays(d.createdAt)),
@@ -287,7 +257,6 @@ export function computeDashboardStats(
 					value: pendingReview,
 				},
 				{ labelKey: "dashboard.stat.stage_in_finance", value: 0 },
-				{ labelKey: "dashboard.stat.discrepancy_count", value: discrepancy },
 				{ labelKey: "dashboard.stat.shortage_count", value: shortage },
 				{ labelKey: "dashboard.stat.overage_count", value: overage },
 				{ labelKey: "dashboard.stat.aging_oldest_days", value: oldestOpenDays },
@@ -388,7 +357,6 @@ export function computeDashboardStats(
 				{ labelKey: "dashboard.stat.stage_awaiting_crew", value: 0 },
 				{ labelKey: "dashboard.stat.stage_pending_review", value: 0 },
 				{ labelKey: "dashboard.stat.stage_in_finance", value: 0 },
-				{ labelKey: "dashboard.stat.discrepancy_count", value: 0 },
 				{ labelKey: "dashboard.stat.shortage_count", value: 0 },
 				{ labelKey: "dashboard.stat.overage_count", value: 0 },
 			],
@@ -432,7 +400,7 @@ export function computeDashboardStats(
 			d.status === "CLARO_UPLOADED" ||
 			d.status === "LC_REQUEST_GENERATED",
 	)
-	const { discrepancy, shortage, overage } = computeMaterialSignals(docs)
+	const { shortage, overage } = computeMaterialSignals(docs)
 	const aging = computeAgingBuckets(docs)
 	return {
 		stats: [
@@ -458,7 +426,6 @@ export function computeDashboardStats(
 				value: stagePendingReview,
 			},
 			{ labelKey: "dashboard.stat.stage_in_finance", value: stageInFinance },
-			{ labelKey: "dashboard.stat.discrepancy_count", value: discrepancy },
 			{ labelKey: "dashboard.stat.shortage_count", value: shortage },
 			{ labelKey: "dashboard.stat.overage_count", value: overage },
 			{ labelKey: "dashboard.stat.aging_oldest_days", value: aging.oldestDays },

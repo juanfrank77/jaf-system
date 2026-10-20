@@ -168,7 +168,7 @@ export function ReturnsForm({
 			? (pickupWarehouseId as string)
 			: (warehouses[0]?.id ?? ""),
 	)
-	const [discrepancyNote, setDiscrepancyNote] = useState("")
+	const [returnNote, setReturnNote] = useState("")
 	const [idempotencyKey, setIdempotencyKey] = useState(() =>
 		crypto.randomUUID(),
 	)
@@ -186,7 +186,7 @@ export function ReturnsForm({
 			setIdempotencyKey(crypto.randomUUID())
 			resetLines(buildInitialReturnLines(taken, materialsUsed, savedReturns))
 			resetSerialLines([])
-			setDiscrepancyNote("")
+			setReturnNote("")
 		}
 	}, [actionData])
 
@@ -203,8 +203,6 @@ export function ReturnsForm({
 	const addSerialLine = () =>
 		pushSerialLine({ _key: nextSerialLineKey(), serial: "", reason: "" })
 
-	const shortCount = lines.filter((l) => l.receivedQty < l.expectedBack).length
-	const anyShort = shortCount > 0
 	const isCrossWarehouse =
 		!!pickupWarehouseId && returnWarehouseId !== pickupWarehouseId
 
@@ -276,7 +274,6 @@ export function ReturnsForm({
 			<div className="space-y-3">
 				{lines.map((line, index) => {
 					const code = serviceCodes.find((c) => c.id === line.serviceCodeId)
-					const differsFromExpected = line.receivedQty !== line.expectedBack
 
 					return (
 						<div key={line._key} className="border rounded-lg p-3 space-y-2">
@@ -339,11 +336,6 @@ export function ReturnsForm({
 											expectedReturnQty: line.expectedBack,
 										})}
 									</p>
-									{differsFromExpected && (
-										<p className="mt-1 text-xs font-medium text-status-warn">
-											{t("docs_returns.discrepancy_warning")}
-										</p>
-									)}
 								</div>
 							</div>
 
@@ -438,29 +430,21 @@ export function ReturnsForm({
 				<input type="hidden" name="lines" value={linesPayload} />
 				<input type="hidden" name="serialLines" value={serialLinesPayload} />
 				<div>
-					<Label htmlFor="discrepancyNote">
+					<Label htmlFor="returnNote">
 						{t("docs_returns.return_note_label")}
-						{anyShort ? " *" : ""}
 					</Label>
 					<Textarea
-						id="discrepancyNote"
-						name="discrepancyNote"
+						id="returnNote"
+						name="returnNote"
 						rows={2}
-						value={discrepancyNote}
-						onChange={(e) => setDiscrepancyNote(e.target.value)}
+						value={returnNote}
+						onChange={(e) => setReturnNote(e.target.value)}
 						placeholder={t("docs_returns.return_note_placeholder")}
 						className="mt-1"
 					/>
-					{anyShort && (
-						<p className="mt-1 text-xs text-status-warn">
-							{t("docs_returns.note_required_hint")}
-						</p>
-					)}
 				</div>
 				<Button type="submit" className="w-full" disabled={alreadyRecorded}>
-					{shortCount > 0
-						? t("docs_returns.submit_discrepancy", { count: shortCount })
-						: t("docs_returns.submit_confirm")}
+					{t("docs_returns.submit_confirm")}
 				</Button>
 				<Callout title={t("docs_returns.invoice_note_title")} tone="info">
 					{t("docs_returns.invoice_note_body")}

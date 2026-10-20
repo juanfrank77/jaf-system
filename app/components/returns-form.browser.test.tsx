@@ -55,7 +55,7 @@ describe("ReturnsForm — post-success resubmit (review fix)", () => {
 		})
 
 		// Pre-filled expected-back is 40 (taken 40 − used 0) — short it to 30 and
-		// supply the now-required discrepancy note.
+		// add a note.
 		const receivedInput = screen.getByLabelText("Returned Qty")
 		await userEvent.clear(receivedInput)
 		await userEvent.type(receivedInput, "30")
@@ -94,6 +94,36 @@ describe("ReturnsForm — post-success resubmit (review fix)", () => {
 		})
 		expect(submittedLines[1]).toEqual([{ serviceCodeId: "sc-1", received: 40 }])
 		expect(submittedLines[0]).not.toEqual(submittedLines[1])
+	})
+
+	it("warns about nothing and keeps the plain confirm label when received is short", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					loader: async () => loaderData(),
+					Component: () => {
+						const data = useLoaderData() as ReturnsFormData
+						return <ReturnsForm loaderData={data} actionData={undefined} />
+					},
+				},
+			],
+		})
+		const receivedInput = screen.getByLabelText("Returned Qty")
+		await userEvent.clear(receivedInput)
+		await userEvent.type(receivedInput, "30")
+		expect(
+			screen.queryByText(/differs from the use in the Field report/),
+		).not.toBeInTheDocument()
+		expect(
+			screen.queryByText(/note is required because received/),
+		).not.toBeInTheDocument()
+		expect(
+			screen.getByRole("button", { name: "Confirm return" }),
+		).toBeInTheDocument()
+		expect(screen.queryByText(/discrepanc/i)).not.toBeInTheDocument()
 	})
 
 	it("prefills the ALREADY-SAVED returns on a revisit and disables resubmitting", async ({

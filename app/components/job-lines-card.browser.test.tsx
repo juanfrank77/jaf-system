@@ -56,6 +56,15 @@ describe("JobLinesCard", () => {
 		expect(clamp).toHaveTextContent("—")
 	})
 
+	it("renders no Difference column, even when installed differs from ordered", async ({
+		renderStub,
+	}) => {
+		await mount(renderStub, <JobLinesCard {...props} />)
+		const card = screen.getByTestId("job-lines")
+		expect(within(card).queryByText("Difference")).not.toBeInTheDocument()
+		expect(within(card).getByText("Installed")).toBeInTheDocument()
+	})
+
 	it("shows no money anywhere", async ({ renderStub }) => {
 		await mount(renderStub, <JobLinesCard {...props} />)
 		expect(screen.getByTestId("job-lines").textContent).not.toContain("$")

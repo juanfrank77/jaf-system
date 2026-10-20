@@ -8,6 +8,7 @@ import type {
 } from "../../generated/prisma/client"
 import { assignedBrigadeIds } from "./crew-assignment"
 import { db } from "./db.server"
+import { isPacketEmailEnabled } from "./features.server"
 import { sendPacketEmail } from "./packet-mail.server"
 import {
 	blueprintAttachments,
@@ -38,6 +39,9 @@ type SendPacketErrorKey =
 	| "packet.errors.no_claro_supervisor"
 	| "packet.errors.not_signed_off"
 	| "packet.errors.locked"
+	// Email sending is off (PACKET_EMAIL_ENABLED) or no work order PDF is stored.
+	| "packet.errors.email_disabled"
+	| "packet.errors.pdf_missing"
 	// Building or storing the PDF failed; logged as a FAILED attempt.
 	| "packet.errors.render_failed"
 	// Nothing installed to put in the work summary.
@@ -50,8 +54,9 @@ type SendPacketResult =
 const SIGNED_OFF_STATUSES = ["SUPERVISOR_APPROVED", "CLARO_UPLOADED"]
 
 /**
- * Step 5 · Packet → Claro: build the packet PDF from stored data, email it to
- * the job's Claro supervisor (or record a manual send), and log the attempt.
+ * Step 5 · Packet → Claro: record a manual send of the work order PDF stored at
+ * step 4 (no re-render), or, with PACKET_EMAIL_ENABLED, build the packet PDF
+ * and email it to the job's Claro supervisor; log the attempt either way.
  *
  * The first SENT or MANUAL attempt locks the invoice lines and sets
  * `jafInvoiceGeneratedAt`, conditionally (`where jafInvoiceGeneratedAt is
@@ -65,6 +70,8 @@ export async function sendPacket(args: {
 	mode: "email" | "manual"
 }): Promise<SendPacketResult> {
 	const { docId, actor, mode } = args
+	if (mode === "email" && !isPacketEmailEnabled())
+		return { ok: false, errorKey: "packet.errors.email_disabled" }
 	if (actor.role !== "SUPERVISOR" && actor.role !== "ADMIN")
 		throw redirect("/dashboard")
 	const doc = await db.jafInvoice.findUniqueOrThrow({
@@ -114,6 +121,11 @@ export async function sendPacket(args: {
 	// Recorded with the first send only (see the PACKET_SENT diff below).
 	const ivuRate = firstSent ? null : await getIvuRate()
 
+	// Manual mode sends nothing: it records that the supervisor emailed the PDF
+	// stored at step 4, so that file is reused as is.
+	if (mode === "manual" && !doc.jafInvoicePdfPath)
+		return { ok: false, errorKey: "packet.errors.pdf_missing" }
+
 	const packet = await buildPacketInput(docId)
 	const showPrefield = packet.document.prefield !== "not_required"
 	const recipientEmail = claro.email
@@ -121,15 +133,19 @@ export async function sendPacket(args: {
 	// an email send it is the PDF that was attached; for MANUAL it is a fresh
 	// render from the same stored data, not necessarily the exact file the
 	// supervisor downloaded and sent by hand.
-	let pdf: Buffer
+	let pdf: Buffer | null = null
 	let pdfPath: string
 	try {
-		pdf = await generateClaroPacketPdf(packet)
-		pdfPath = await saveBuffer(
-			"packets",
-			`${docId}-packet-${Date.now()}-${randomUUID().slice(0, 8)}.pdf`,
-			pdf,
-		)
+		if (mode === "manual") {
+			pdfPath = doc.jafInvoicePdfPath as string
+		} else {
+			pdf = await generateClaroPacketPdf(packet)
+			pdfPath = await saveBuffer(
+				"packets",
+				`${docId}-packet-${Date.now()}-${randomUUID().slice(0, 8)}.pdf`,
+				pdf,
+			)
+		}
 	} catch (cause) {
 		const error = sanitizedError(cause)
 		await db.$transaction([
@@ -177,7 +193,10 @@ export async function sendPacket(args: {
 				`Adjunta la orden de trabajo de JAF ${doc.controlNumber}.`,
 			].join("\n\n"),
 			attachments: [
-				{ filename: `JAF-work-order-${doc.controlNumber}.pdf`, content: pdf },
+				{
+					filename: `JAF-work-order-${doc.controlNumber}.pdf`,
+					content: pdf as Buffer,
+				},
 				...(await blueprintAttachments(doc.blueprintPaths)),
 			],
 		})
@@ -205,7 +224,7 @@ export async function sendPacket(args: {
 						jafInvoiceGeneratedAt: new Date(),
 						jafInvoiceLines: lines as unknown as Prisma.InputJsonValue,
 						jafInvoiceLineTotal: lineTotal,
-						jafInvoicePdfPath: pdfPath,
+						...(mode === "email" ? { jafInvoicePdfPath: pdfPath } : {}),
 					},
 				})
 			: { count: 0 }
@@ -213,12 +232,12 @@ export async function sendPacket(args: {
 		// is also the latest attempt, so the supervisor can download it after an
 		// UNCONFIGURED attempt and "Mark as sent manually"; after the first
 		// send, an undelivered attempt never replaces what Claro has.
-		if (first.count === 0 && delivered)
+		if (mode === "email" && first.count === 0 && delivered)
 			await tx.jafInvoice.update({
 				where: { id: docId },
 				data: { jafInvoicePdfPath: pdfPath },
 			})
-		if (!delivered)
+		if (mode === "email" && !delivered)
 			await tx.jafInvoice.updateMany({
 				where: { id: docId, jafInvoiceGeneratedAt: null },
 				data: { jafInvoicePdfPath: pdfPath },

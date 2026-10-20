@@ -44,6 +44,7 @@ import {
 	RETENTION_RATE,
 } from "~/lib/contractor-payment.server"
 import { db } from "~/lib/db.server"
+import { isPacketEmailEnabled } from "~/lib/features.server"
 import { packetMaterialRows } from "~/lib/field-materials"
 import type { AddressCorrection } from "~/lib/field-update-helpers"
 import {
@@ -388,6 +389,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			? packetBlockers(doc, claro)
 			: ["claro_supervisor"]
 	const codeById = new Map(materialCodes.map((c) => [c.id, c]))
+	const emailEnabled = isPacketEmailEnabled()
 	const packet: PacketStepData = {
 		sent,
 		sentAt: doc.jafInvoiceGeneratedAt,
@@ -445,9 +447,13 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		})),
 		// The manual path is for a send that never reached Claro: only before
 		// the first send, and only after an attempt the server could not deliver.
-		canMarkManual:
-			!sent &&
-			(sends[0]?.outcome === "UNCONFIGURED" || sends[0]?.outcome === "FAILED"),
+		// With email off the manual send is the only one: offered whenever the
+		// step 4 PDF exists and nothing was sent yet.
+		emailEnabled,
+		canMarkManual: emailEnabled
+			? !sent &&
+				(sends[0]?.outcome === "UNCONFIGURED" || sends[0]?.outcome === "FAILED")
+			: !sent && !!doc.jafInvoicePdfPath,
 	}
 
 	// Step 4 · the work order document, and Generate PDF: open once the
@@ -2139,7 +2145,9 @@ export default function ReviewDoc({
 							</div>
 						}
 					>
-						{interactive && !packet.sent && <BackToSignOff />}
+						{interactive && !packet.sent && packet.emailEnabled && (
+							<BackToSignOff />
+						)}
 					</PacketStepCard>
 					{interactive && packet.sent && !isAvisoSaved(doc) && (
 						<Pill variant="warn" icon="→">

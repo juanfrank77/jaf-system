@@ -29,6 +29,7 @@ const packet = (over: Partial<PacketStepData> = {}): PacketStepData => ({
 	materials: [],
 	history: [],
 	canMarkManual: false,
+	emailEnabled: true,
 	...over,
 })
 
@@ -202,5 +203,55 @@ describe("PacketStepCard materials", () => {
 		)
 		expect(await screen.findByText("x1")).toBeInTheDocument()
 		expect(screen.getByText("x2")).toBeInTheDocument()
+	})
+})
+
+describe("PacketStepCard with email off (manual only)", () => {
+	const manual = (over: Partial<PacketStepData> = {}) =>
+		packet({
+			emailEnabled: false,
+			canMarkManual: true,
+			packetHref: "/files/packets/d1-work-order-1.pdf",
+			...over,
+		})
+
+	it("shows PDF generated, a disabled coming-later send, the manual button and Back", async ({
+		renderStub,
+	}) => {
+		await mount(
+			renderStub,
+			manual(),
+			vi.fn(async () => null),
+		)
+		expect(screen.getByText("PDF ✓ generated")).toBeVisible()
+		expect(
+			screen.getByRole("button", {
+				name: "Send to Claro supervisor (coming later)",
+			}),
+		).toBeDisabled()
+		expect(
+			screen.getByRole("button", { name: "I sent the PDF to Claro →" }),
+		).toBeEnabled()
+		expect(
+			screen.getByText("For now: email the PDF yourself, then mark it sent."),
+		).toBeVisible()
+		expect(screen.getByRole("link", { name: /Back/ })).toHaveAttribute(
+			"href",
+			expect.stringContaining("step=APPROVE"),
+		)
+		expect(screen.queryByRole("button", { name: "Resend" })).toBeNull()
+	})
+
+	it("the manual button posts mark_packet_sent, never send_packet", async ({
+		renderStub,
+	}) => {
+		vi.spyOn(window, "confirm").mockReturnValue(true)
+		const action = vi.fn(async () => null)
+		await mount(renderStub, manual(), action)
+		await userEvent.click(
+			screen.getByRole("button", { name: "I sent the PDF to Claro →" }),
+		)
+		await waitFor(() => expect(action).toHaveBeenCalledWith("mark_packet_sent"))
+		expect(action).not.toHaveBeenCalledWith("send_packet")
 	})
 })

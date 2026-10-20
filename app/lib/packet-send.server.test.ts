@@ -151,6 +151,8 @@ beforeEach(() => {
 	])
 		delete process.env[k]
 	vi.mocked(generateClaroPacketPdf).mockClear()
+	// The email tests run with the feature on; manual-mode tests turn it off.
+	process.env.PACKET_EMAIL_ENABLED = "true"
 })
 
 afterAll(async () => {
@@ -515,8 +517,9 @@ describe("sendPacket: brigade's stock and the IVU snapshot", {
 				},
 			],
 		})
-		const res = await sendPacket({ docId: doc.id, actor: sup, mode: "manual" })
-		expect(res).toEqual({ ok: true, outcome: "MANUAL" })
+		setMailTransport(okTransport)
+		const res = await sendPacket({ docId: doc.id, actor: sup, mode: "email" })
+		expect(res).toEqual({ ok: true, outcome: "SENT" })
 		const input = vi.mocked(generateClaroPacketPdf).mock.calls[0][0]
 		expect(input.document.materials).toEqual([
 			{ name: code1.name, used: 6, unit: "EA", source: "WAREHOUSE_ISSUE" },
@@ -545,7 +548,10 @@ describe("sendPacket: brigade's stock and the IVU snapshot", {
 
 	it("records the IVU rate on the first send only", async () => {
 		const claro = await seedClaro()
-		const doc = await seedDoc({ claroSupervisorId: claro.id })
+		const doc = await seedDoc({
+			claroSupervisorId: claro.id,
+			jafInvoicePdfPath: "packets/stored.pdf",
+		})
 		await sendPacket({ docId: doc.id, actor: sup, mode: "manual" })
 		await sendPacket({ docId: doc.id, actor: sup, mode: "manual" })
 		const audits = await db.auditTrail.findMany({
@@ -602,5 +608,65 @@ describe("buildPacketInput", { timeout: HOOK_TIMEOUT }, () => {
 		})
 		expect(input.issuedOn).toBeInstanceOf(Date)
 		expect(JSON.stringify(input)).not.toMatch(/unitPrice|lineAmount|price/i)
+	})
+})
+
+describe("sendPacket: manual-only step 5", { timeout: HOOK_TIMEOUT }, () => {
+	it("refuses an email send while PACKET_EMAIL_ENABLED is off, sending and logging nothing", async () => {
+		delete process.env.PACKET_EMAIL_ENABLED
+		const claro = await seedClaro()
+		const doc = await seedDoc({
+			claroSupervisorId: claro.id,
+			jafInvoicePdfPath: "packets/stored.pdf",
+		})
+		setMailTransport(okTransport)
+		expect(
+			await sendPacket({ docId: doc.id, actor: sup, mode: "email" }),
+		).toEqual({ ok: false, errorKey: "packet.errors.email_disabled" })
+		expect(sent).toHaveLength(0)
+		expect(await rows(doc.id)).toHaveLength(0)
+		expect(vi.mocked(generateClaroPacketPdf)).not.toHaveBeenCalled()
+	})
+
+	it("manual send reuses the stored PDF: MANUAL row, PACKET_SENT audit, first-send time, no re-render", async () => {
+		delete process.env.PACKET_EMAIL_ENABLED
+		const claro = await seedClaro()
+		const doc = await seedDoc({
+			claroSupervisorId: claro.id,
+			jafInvoicePdfPath: "packets/stored.pdf",
+		})
+		expect(
+			await sendPacket({ docId: doc.id, actor: sup, mode: "manual" }),
+		).toEqual({ ok: true, outcome: "MANUAL" })
+		expect(vi.mocked(generateClaroPacketPdf)).not.toHaveBeenCalled()
+		expect((await rows(doc.id)).map((r) => r.outcome)).toEqual(["MANUAL"])
+		const after = await reload(doc.id)
+		expect(after.jafInvoiceGeneratedAt).not.toBeNull()
+		expect(after.jafInvoicePdfPath).toBe("packets/stored.pdf")
+		const audit = await db.auditTrail.findMany({
+			where: { docId: doc.id, action: "PACKET_SENT" },
+		})
+		expect(audit).toHaveLength(1)
+		expect(audit[0].diffJson).toMatchObject({
+			mode: "manual",
+			outcome: "MANUAL",
+			path: "packets/stored.pdf",
+			firstSend: true,
+		})
+		// A resend keeps the stored file too.
+		await sendPacket({ docId: doc.id, actor: sup, mode: "manual" })
+		expect((await reload(doc.id)).jafInvoicePdfPath).toBe("packets/stored.pdf")
+		expect(vi.mocked(generateClaroPacketPdf)).not.toHaveBeenCalled()
+	})
+
+	it("manual send with no stored PDF returns pdf_missing and changes nothing", async () => {
+		delete process.env.PACKET_EMAIL_ENABLED
+		const claro = await seedClaro()
+		const doc = await seedDoc({ claroSupervisorId: claro.id })
+		expect(
+			await sendPacket({ docId: doc.id, actor: sup, mode: "manual" }),
+		).toEqual({ ok: false, errorKey: "packet.errors.pdf_missing" })
+		expect(await rows(doc.id)).toHaveLength(0)
+		expect((await reload(doc.id)).jafInvoiceGeneratedAt).toBeNull()
 	})
 })

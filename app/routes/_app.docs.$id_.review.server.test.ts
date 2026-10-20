@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("~/lib/db.server", () => {
 	const db: any = {
@@ -161,6 +161,10 @@ const approvedDoc = {
 	assignedCrewIds: ["crew-1"],
 	blueprintPaths: [] as string[],
 }
+
+afterEach(() => {
+	vi.unstubAllEnvs()
+})
 
 describe("supervisor scope guard", () => {
 	const outOfAreaDoc = {
@@ -1332,6 +1336,7 @@ describe("review loader: Packet → Claro step", () => {
 				sentBy: { name: "Edgard Ocasio" },
 			},
 		] as any)
+		vi.stubEnv("PACKET_EMAIL_ENABLED", "true")
 		const data = await loadAs("SUPERVISOR", signedOff)
 		expect(db.packetSend.findMany).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -1353,6 +1358,7 @@ describe("review loader: Packet → Claro step", () => {
 	})
 
 	it("offers Mark as sent manually after an UNCONFIGURED or FAILED attempt, before the first send only", async () => {
+		vi.stubEnv("PACKET_EMAIL_ENABLED", "true")
 		const offered = async (
 			outcomes: string[],
 			doc: Record<string, unknown> = signedOff,
@@ -1378,6 +1384,30 @@ describe("review loader: Packet → Claro step", () => {
 		}
 		expect(await offered(["UNCONFIGURED", "SENT"], sent)).toBe(false)
 		expect(await offered(["FAILED", "MANUAL"], sent)).toBe(false)
+	})
+
+	it("with email off, the manual send is offered once the step 4 PDF is stored, before the first send", async () => {
+		vi.stubEnv("PACKET_EMAIL_ENABLED", "")
+		vi.mocked(db.packetSend.findMany).mockResolvedValue([] as any)
+		const none = (await loadAs("SUPERVISOR", signedOff)).packet
+		expect(none.emailEnabled).toBe(false)
+		expect(none.canMarkManual).toBe(false)
+		const stored = (
+			await loadAs("SUPERVISOR", {
+				...signedOff,
+				jafInvoicePdfPath: "packets/doc-1-work-order-1.pdf",
+			})
+		).packet
+		expect(stored.canMarkManual).toBe(true)
+		const sentDoc = (
+			await loadAs("SUPERVISOR", {
+				...signedOff,
+				jafInvoicePdfPath: "packets/doc-1-work-order-1.pdf",
+				jafInvoiceGeneratedAt: new Date(),
+				jafInvoiceLines: [],
+			})
+		).packet
+		expect(sentDoc.canMarkManual).toBe(false)
 	})
 
 	it("a stored packet PDF from an UNCONFIGURED attempt is downloadable but not 'sent'", async () => {

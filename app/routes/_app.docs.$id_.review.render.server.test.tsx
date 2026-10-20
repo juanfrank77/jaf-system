@@ -98,6 +98,7 @@ function packetData(over: Record<string, unknown> = {}) {
 		],
 		history: [] as Record<string, unknown>[],
 		canMarkManual: false,
+		emailEnabled: true,
 		...over,
 	}
 }
@@ -472,7 +473,7 @@ describe("Packet → Claro step (render)", () => {
 			"Choose the Claro supervisor for this job",
 		],
 		["packet.errors.not_signed_off", "Sign off the field work before sending"],
-		["packet.errors.locked", "sent to Claro or released to Finance"],
+		["packet.errors.locked", "released to Finance or closed"],
 		["packet.errors.render_failed", "The packet PDF could not be built"],
 		[
 			"docs_review.errors.installed_lines_required",

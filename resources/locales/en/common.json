@@ -630,8 +630,8 @@
 		"taken_reference_label": "Taken (signed)",
 		"used_entry_label": "Installed",
 		"ordered_vs_installed_hint": "Ordered-vs-installed variance is informational only.",
-		"field_notes_label": "Field Notes",
-		"field_notes_placeholder": "Observations, issues, changes...",
+		"field_notes_label": "Field report",
+		"field_notes_placeholder": "Anything else that happened on site. Write N/A if there is nothing to add.",
 		"photos_label": "Photos",
 		"photos_hint": "Photos are source data for the supervisor's Claro submission — stored on server.",
 		"photos_before_label": "Before Photos",
@@ -652,7 +652,9 @@
 			"invalid_service_lines": "Installed service quantities could not be read.",
 			"photo_invalid": "Photos must be JPEG, PNG, WebP or HEIC, up to 10 MB.",
 			"blueprint_invalid": "The blueprint must be a PDF (up to 30 MB) or a photo (JPEG, PNG, WebP or HEIC, up to 10 MB).",
-			"address_required": "Dirección 1 is required."
+			"address_required": "Dirección 1 is required.",
+			"photos_required": "Add at least one Before and one After photo to continue.",
+			"field_report_required": "The Field report is required to continue. Write N/A if there is nothing to add."
 		},
 		"address_diff_hint": "This change is logged with your name and the time when you submit.",
 		"address_edited_by_you": "Edited by you · {{when}}",
@@ -707,7 +709,9 @@
 			"unit": "Unit",
 			"brigade": "Brigade"
 		},
-		"admin_override": "Signed off. You are editing it as Admin."
+		"admin_override": "Signed off. You are editing it as Admin.",
+		"prefield_label": "Prefield",
+		"prefield_note": "This Claro supervisor requires Prefield. It is filled in from the work order at the Aviso step (5) and goes on the packet."
 	},
 	"docs_review": {
 		"readonly_title": "Completed step.",

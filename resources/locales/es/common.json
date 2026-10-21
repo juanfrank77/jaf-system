@@ -630,8 +630,8 @@
 		"taken_reference_label": "Retirado (firmado)",
 		"used_entry_label": "Instalado",
 		"ordered_vs_installed_hint": "La diferencia entre pedido e instalado es solo informativa.",
-		"field_notes_label": "Notas de campo",
-		"field_notes_placeholder": "Observaciones, incidencias, cambios...",
+		"field_notes_label": "Reporte de campo",
+		"field_notes_placeholder": "Cualquier otro detalle del trabajo. Escribe N/A si no hay nada que añadir.",
 		"photos_label": "Fotos",
 		"photos_hint": "Las fotos son el respaldo para la presentación a Claro del supervisor — se guardan en el servidor.",
 		"photos_before_label": "Fotos antes",
@@ -652,7 +652,9 @@
 			"invalid_service_lines": "No se pudieron leer las cantidades de servicio instaladas.",
 			"photo_invalid": "Las fotos deben ser JPEG, PNG, WebP o HEIC, de hasta 10 MB.",
 			"blueprint_invalid": "El plano debe ser un PDF (hasta 30 MB) o una foto (JPEG, PNG, WebP o HEIC, hasta 10 MB).",
-			"address_required": "La Dirección 1 es obligatoria."
+			"address_required": "La Dirección 1 es obligatoria.",
+			"photos_required": "Agrega al menos una foto de Antes y una de Después para continuar.",
+			"field_report_required": "El reporte de campo es obligatorio para continuar. Escribe N/A si no hay nada que añadir."
 		},
 		"address_diff_hint": "Este cambio se registra con tu nombre y la hora al enviar.",
 		"address_edited_by_you": "Editado por ti · {{when}}",
@@ -707,7 +709,9 @@
 			"unit": "Unidad",
 			"brigade": "Brigada"
 		},
-		"admin_override": "Ya está firmado. Lo está editando como Admin."
+		"admin_override": "Ya está firmado. Lo está editando como Admin.",
+		"prefield_label": "Prefield",
+		"prefield_note": "Este supervisor de Claro requiere Prefield. Se completa desde la orden de trabajo en el paso del Aviso (5) y va en el paquete."
 	},
 	"docs_review": {
 		"readonly_title": "Paso completado.",

@@ -47,6 +47,8 @@ function loaderData(overrides: Record<string, unknown> = {}) {
 		},
 		blueprints: ["1-0-plan.pdf"],
 		blueprintRequired: true,
+		prefieldRequired: false,
+		stage: "FIELD",
 		materialsTaken: [{ serviceCodeId: "sc-1", qty: 5 }],
 		estimatedMaterials: [{ serviceCodeId: "sc-1", qty: 4 }],
 		fieldMaterials: [
@@ -129,6 +131,44 @@ describe("Field screen (render)", () => {
 			/<select[^>]*aria-label="Source"[^>]*field-required|<select[^>]*field-required[^>]*aria-label="Source"/,
 		)
 		expect(html).toContain("Go back")
+	})
+
+	it("shows the 9-step supervisor bar, not the crew rail", async () => {
+		const html = await render()
+		expect(html).toContain("Intake")
+		expect(html).toContain("In Finance")
+		expect(html).toContain("Pre-cert sheet")
+		expect(html).not.toContain("Supervisor · Finance")
+	})
+
+	it("orders the form Services, Materials, Photos, Field report, Address", async () => {
+		const html = await render()
+		const at = (needle: string) => {
+			const i = html.indexOf(needle)
+			expect(i, needle).toBeGreaterThan(-1)
+			return i
+		}
+		const order = [
+			at("Services performed"),
+			at("Materials Used"),
+			at("Before Photos"),
+			at("Blueprint"),
+			at("Field report"),
+			at("On file:"),
+		]
+		expect(order).toEqual([...order].sort((x, y) => x - y))
+	})
+
+	it("shows the Prefield note only when the Claro supervisor requires it", async () => {
+		expect(await render()).not.toContain("requires Prefield")
+		expect(await render(loaderData({ prefieldRequired: true }))).toContain(
+			"requires Prefield",
+		)
+	})
+
+	it("marks the Field report required", async () => {
+		const html = await render()
+		expect(html).toMatch(/<textarea[^>]*field-required/)
 	})
 
 	it("does not backfill Dirección 1 with the composed job address", async () => {

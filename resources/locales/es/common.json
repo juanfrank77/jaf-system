@@ -491,22 +491,34 @@
 		"submit": "Marcar como preparado",
 		"submit_with_missing": "Guardar faltantes y notificar supervisor",
 		"missing_flagged_notice": "Materiales faltantes marcados. El supervisor ha sido notificado. El trabajo permanece en Pendientes de preparación hasta resolverse.",
-		"estimated_qty": "Cantidad estimada",
-		"prepped_qty": "Cantidad preparada",
-		"substitute_with": "Sustituir por",
-		"substitute_placeholder": "Selecciona sustitución...",
-		"missing_flag": "Faltante / Sin stock",
-		"available": "Disponible",
 		"line_notes": "Notas",
 		"line_notes_placeholder": "Razón de sustitución, daño, etc.",
-		"add_line": "+ Agregar línea",
 		"missing_count_one": "{{count}} material marcado como faltante",
 		"missing_count_other": "{{count}} materiales marcados como faltantes",
-		"flagged_missing": "Marcado como faltante",
-		"short_by": "faltan {{count}}",
 		"errors": {
 			"invalid_materials": "Datos de materiales inválidos"
-		}
+		},
+		"col": {
+			"code": "Código",
+			"material": "Material",
+			"requested": "Solicitado",
+			"in_stock": "En existencia",
+			"prepped": "Preparado",
+			"status": "Estado"
+		},
+		"status": {
+			"ok": "OK",
+			"short": "Faltan {{count}}",
+			"out": "Sin stock"
+		},
+		"more": "Más ▾",
+		"less": "Menos ▴",
+		"out_of_stock": "Sin stock",
+		"replace_with": "Reemplazar por",
+		"replace_placeholder": "Sin reemplazo",
+		"remove_line": "Quitar línea",
+		"select_material": "Selecciona material…",
+		"add_material": "+ Agregar material"
 	},
 	"docs_returns": {
 		"title": "Registrar devoluciones",

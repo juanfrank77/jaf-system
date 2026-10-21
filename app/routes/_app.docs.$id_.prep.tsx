@@ -2,20 +2,8 @@ import type { ParseKeys } from "i18next"
 import { Trans, useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
-import { MaterialLineItems } from "~/components/material-line-items"
-import { Badge } from "~/components/ui/badge"
+import { PrepMaterialsTable } from "~/components/prep-materials-table"
 import { Button } from "~/components/ui/button"
-import { Checkbox } from "~/components/ui/checkbox"
-import { Input } from "~/components/ui/input"
-import { Label } from "~/components/ui/label"
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "~/components/ui/select"
-import { Textarea } from "~/components/ui/textarea"
 import { db } from "~/lib/db.server"
 import { pageTitle } from "~/lib/page-title"
 import { canTransition } from "~/lib/permissions"
@@ -229,7 +217,7 @@ export default function PrepDoc({
 		pushLine({
 			_key: nextPrepKey(),
 			serviceCodeId: "",
-			estimatedQty: 1,
+			estimatedQty: 0,
 			preppedQty: 1,
 			substitutedWith: null,
 			missing: false,
@@ -256,176 +244,16 @@ export default function PrepDoc({
 				</div>
 			)}
 
-			<div className="space-y-3">
-				{lines.map((line, index) => {
-					const _code = serviceCodes.find((c) => c.id === line.serviceCodeId)
-					const shortBy = Math.max(0, line.estimatedQty - line.preppedQty)
-					const substitutionOptions = serviceCodes.filter(
-						(c) =>
-							c.id !== line.serviceCodeId &&
-							!lines.some((l, i) => i !== index && l.serviceCodeId === c.id),
-					)
-
-					return (
-						<div key={line._key} className="border rounded-lg p-3 space-y-2">
-							<div className="flex items-center gap-2">
-								<MaterialLineItems
-									serviceCodes={serviceCodes}
-									initialItems={[
-										{
-											serviceCodeId: line.serviceCodeId,
-											qty: line.preppedQty,
-										},
-									]}
-									readOnly={false}
-									name={`prepped-${index}`}
-								/>
-								<button
-									type="button"
-									onClick={() => removeLine(index)}
-									className="text-muted-foreground hover:text-status-danger text-lg"
-								>
-									×
-								</button>
-							</div>
-
-							<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-								<div>
-									<Label className="text-xs text-muted-foreground">
-										{t("docs_prep.estimated_qty")}
-									</Label>
-									<Input
-										type="number"
-										min={1}
-										value={line.estimatedQty}
-										onChange={(e) =>
-											updateLine(index, {
-												estimatedQty: parseInt(e.target.value, 10) || 1,
-											})
-										}
-										className="mt-1"
-									/>
-								</div>
-								<div>
-									<Label className="text-xs text-muted-foreground">
-										{t("docs_prep.prepped_qty")}
-									</Label>
-									<Input
-										type="number"
-										min={1}
-										value={line.preppedQty}
-										onChange={(e) =>
-											updateLine(index, {
-												preppedQty: parseInt(e.target.value, 10) || 1,
-											})
-										}
-										className="mt-1"
-									/>
-								</div>
-							</div>
-
-							{(() => {
-								const avail = availability[line.serviceCodeId]
-								if (!avail) return null
-								return (
-									<p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-										<span>
-											{t("docs_prep.available")}: {avail.available}{" "}
-											{avail.countUnit ?? ""}
-											{avail.derivedAvailable !== null && (
-												<>
-													{" "}
-													= {avail.derivedAvailable} {avail.stockUnit}
-												</>
-											)}
-										</span>
-										{avail.derivedAvailable === null && (
-											<Badge variant="neutral">{t("stock.unit_not_set")}</Badge>
-										)}
-									</p>
-								)
-							})()}
-
-							{(line.missing || shortBy > 0) && (
-								<div className="flex flex-wrap items-center gap-1.5">
-									{line.missing && (
-										<Badge variant="danger">
-											{t("docs_prep.flagged_missing")}
-										</Badge>
-									)}
-									{shortBy > 0 && (
-										<Badge variant="danger">
-											{t("docs_prep.short_by", { count: shortBy })}
-										</Badge>
-									)}
-								</div>
-							)}
-
-							{substitutionOptions.length > 0 && (
-								<div>
-									<Label className="text-xs text-muted-foreground">
-										{t("docs_prep.substitute_with")}
-									</Label>
-									<Select
-										items={substitutionOptions.map((c) => ({
-											value: c.id,
-											label: `${c.claroCode} — ${c.name}`,
-										}))}
-										value={line.substitutedWith ?? ""}
-										onValueChange={(v) =>
-											updateLine(index, {
-												substitutedWith: v ?? null,
-											})
-										}
-									>
-										<SelectTrigger className="mt-1">
-											<SelectValue
-												placeholder={t("docs_prep.substitute_placeholder")}
-											/>
-										</SelectTrigger>
-										<SelectContent>
-											{substitutionOptions.map((c) => (
-												<SelectItem key={c.id} value={c.id}>
-													{c.claroCode} — {c.name}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-								</div>
-							)}
-
-							<div className="flex items-center gap-2">
-								<Checkbox
-									id={`missing-${index}`}
-									checked={line.missing}
-									onCheckedChange={(checked: boolean) =>
-										updateLine(index, { missing: !!checked })
-									}
-								/>
-								<Label htmlFor={`missing-${index}`} className="text-sm">
-									{t("docs_prep.missing_flag")}
-								</Label>
-							</div>
-
-							<div>
-								<Label className="text-xs text-muted-foreground">
-									{t("docs_prep.line_notes")}
-								</Label>
-								<Textarea
-									value={line.notes}
-									onChange={(e) => updateLine(index, { notes: e.target.value })}
-									placeholder={t("docs_prep.line_notes_placeholder")}
-									rows={2}
-									className="mt-1"
-								/>
-							</div>
-						</div>
-					)
-				})}
-			</div>
+			<PrepMaterialsTable
+				rows={lines}
+				codes={serviceCodes}
+				availability={availability}
+				onChange={updateLine}
+				onRemove={removeLine}
+			/>
 
 			<Button type="button" variant="outline" size="sm" onClick={addLine}>
-				{t("docs_prep.add_line")}
+				{t("docs_prep.add_material")}
 			</Button>
 
 			{missingCount > 0 && (

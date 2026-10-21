@@ -4,6 +4,8 @@ import {
 	isAvisoStarted,
 	panelForStep,
 	resolveStepView,
+	SUPERVISOR_STAGES,
+	supervisorStepHref,
 	WAITING_ON,
 } from "./supervisor-stage"
 
@@ -153,5 +155,38 @@ describe("panelForStep", () => {
 		expect(panelForStep("APPROVE")).toBe("APPROVE")
 		expect(panelForStep("INVOICE")).toBe("INVOICE")
 		expect(panelForStep("RELEASED")).toBe("RELEASE")
+	})
+})
+
+describe("supervisorStepHref", () => {
+	it("sends Intake and Warehouse to the job page and Field to the Field screen", () => {
+		expect(supervisorStepHref("d1", "INTAKE")).toBe("/docs/d1")
+		expect(supervisorStepHref("d1", "WAREHOUSE")).toBe("/docs/d1")
+		expect(supervisorStepHref("d1", "FIELD")).toBe("/docs/d1/field")
+	})
+
+	it("opens Sign off onward on the review screen at the job's own step", () => {
+		expect(supervisorStepHref("d1", "AVISO")).toBe("/docs/d1/review?step=AVISO")
+	})
+
+	it("a job waiting on the Aviso opens on Step 6, not Step 5", () => {
+		const url = new URL(supervisorStepHref("d1", "AVISO"), "http://x")
+		const step = url.searchParams.get("step")
+		// No legacy Aviso lines saved: the default view would be Step 5.
+		expect(resolveStepView("AVISO", false, null).view).toBe("INVOICE")
+		expect(resolveStepView("AVISO", false, step)).toEqual({
+			view: "AVISO",
+			interactive: true,
+		})
+	})
+
+	it("every review-screen step lands on its own step in the rail", () => {
+		for (const stage of SUPERVISOR_STAGES.slice(3)) {
+			const step = new URL(
+				supervisorStepHref("d1", stage),
+				"http://x",
+			).searchParams.get("step")
+			expect(resolveStepView(stage, false, step).view).toBe(stage)
+		}
 	})
 })

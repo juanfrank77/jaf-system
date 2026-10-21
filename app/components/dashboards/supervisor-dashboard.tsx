@@ -14,7 +14,11 @@ import { QueueCard } from "~/components/ui/queue-card"
 import { Stat } from "~/components/ui/stat"
 import { OPEN_JOB_LABEL_KEYS, type OpenJobLabel } from "~/lib/open-job-label"
 import type { SupervisorQueue } from "~/lib/supervisor-queues"
-import type { SupervisorStage, WaitingOn } from "~/lib/supervisor-stage"
+import {
+	type SupervisorStage,
+	supervisorStepHref,
+	type WaitingOn,
+} from "~/lib/supervisor-stage"
 import type { DashboardViewProps } from "./types"
 
 type QueueRow = {
@@ -233,7 +237,11 @@ export function SupervisorDashboard({
 						searchFilter={searchFilter}
 					/>
 				)}
-				<DashboardDocList docs={docs} packetStatus={stageQueue === "invoice"} />
+				<DashboardDocList
+					docs={docs}
+					packetStatus={stageQueue === "invoice"}
+					stepLinks
+				/>
 			</div>
 		)
 	}
@@ -311,21 +319,21 @@ export function SupervisorDashboard({
 				titleKey="dashboard.queue.intake"
 				rows={queues.intake}
 				variant="info"
-				href={(r) => `/docs/${r.id}`}
+				href={(r) => supervisorStepHref(r.id, r.stage)}
 				since="created"
 			/>
 			<Queue
 				titleKey="dashboard.queue.pending_review"
 				rows={queues.pendingReview}
 				variant="warn"
-				href={(r) => `/docs/${r.id}/review`}
+				href={(r) => supervisorStepHref(r.id, r.stage)}
 				since="submitted"
 			/>
 			<Queue
 				titleKey="dashboard.queue.approved"
 				rows={queues.approved}
 				variant="ok"
-				href={(r) => `/docs/${r.id}`}
+				href={(r) => supervisorStepHref(r.id, r.stage)}
 				since="approved"
 			/>
 			<Queue
@@ -333,7 +341,7 @@ export function SupervisorDashboard({
 				titleKey="dashboard.queue.missing_aviso"
 				rows={queues.missingAviso}
 				variant="warn"
-				href={(r) => `/docs/${r.id}/review`}
+				href={(r) => supervisorStepHref(r.id, r.stage)}
 				since="approved"
 			/>
 			<Queue
@@ -341,7 +349,7 @@ export function SupervisorDashboard({
 				titleKey="dashboard.queue.blocked"
 				rows={queues.blocked}
 				variant="danger"
-				href={(r) => `/docs/${r.id}/review`}
+				href={(r) => supervisorStepHref(r.id, r.stage)}
 				since="approved"
 			/>
 			<Queue
@@ -349,7 +357,7 @@ export function SupervisorDashboard({
 				titleKey="dashboard.queue.my_open"
 				rows={queues.myOpen}
 				variant="info"
-				href={(r) => `/docs/${r.id}`}
+				href={(r) => supervisorStepHref(r.id, r.stage)}
 				since="created"
 			/>
 		</div>

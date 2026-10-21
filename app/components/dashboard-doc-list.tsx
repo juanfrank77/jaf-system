@@ -11,6 +11,7 @@ import type { OpenJobLabel } from "~/lib/open-job-label"
 import {
 	deriveSupervisorStage,
 	type SupervisorStage,
+	supervisorStepHref,
 } from "~/lib/supervisor-stage"
 import type { DocStatus } from "../../generated/prisma/client"
 
@@ -87,6 +88,7 @@ export function DashboardDocList({
 	showBilling = true,
 	financeSteps = false,
 	packetStatus = false,
+	stepLinks = false,
 }: {
 	docs: DashboardDocRow[]
 	/** Billing detail (raw status enum, Aviso number) is for supervisor and
@@ -99,6 +101,8 @@ export function DashboardDocList({
 	/** Packets to Claro: flag each row sent / not sent. Sent is the first
 	 * delivered send (`jafInvoiceGeneratedAt`), never just a stored PDF. */
 	packetStatus?: boolean
+	/** Supervisor: a row opens the screen of the step the job is on. */
+	stepLinks?: boolean
 }) {
 	const { t } = useTranslation()
 	return (
@@ -110,10 +114,27 @@ export function DashboardDocList({
 				{docs.map((doc) => {
 					const overage = hasOverage(doc)
 					const shortage = hasShortage(doc)
+					const stage =
+						doc.stage ??
+						deriveSupervisorStage(
+							{
+								status: doc.status,
+								supervisorApprovedAt: doc.supervisorApprovedAt ?? null,
+								jafInvoiceGeneratedAt: doc.jafInvoiceGeneratedAt ?? null,
+								avisoNumber: doc.avisoNumber ?? null,
+								avisoDocPath: doc.avisoDocPath ?? null,
+								releasedToFinanceAt: doc.releasedToFinanceAt ?? null,
+							},
+							null,
+						)
 					return (
 						<Link
 							key={doc.id}
-							to={`/docs/${doc.id}`}
+							to={
+								stepLinks
+									? supervisorStepHref(doc.id, stage)
+									: `/docs/${doc.id}`
+							}
 							className="block rounded-lg border border-transparent p-3 transition-colors hover:border-border hover:bg-muted/40"
 						>
 							<div className="flex items-center justify-between gap-2">
@@ -138,23 +159,7 @@ export function DashboardDocList({
 									) : (
 										<DocStageBadge
 											openLabel={doc.openLabel}
-											stage={
-												doc.stage ??
-												deriveSupervisorStage(
-													{
-														status: doc.status,
-														supervisorApprovedAt:
-															doc.supervisorApprovedAt ?? null,
-														jafInvoiceGeneratedAt:
-															doc.jafInvoiceGeneratedAt ?? null,
-														avisoNumber: doc.avisoNumber ?? null,
-														avisoDocPath: doc.avisoDocPath ?? null,
-														releasedToFinanceAt:
-															doc.releasedToFinanceAt ?? null,
-													},
-													null,
-												)
-											}
+											stage={stage}
 											cancelled={doc.status === "CANCELLED"}
 										/>
 									)}

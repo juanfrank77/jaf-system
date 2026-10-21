@@ -251,7 +251,9 @@ describe("SupervisorDashboard", () => {
 		await mountSupervisor(renderStub, {
 			supervisorQueues: {
 				...emptyQueues,
-				intake: [queueRow({ id: "new1", controlNumber: "JAF-NEW" })],
+				intake: [
+					queueRow({ id: "new1", controlNumber: "JAF-NEW", stage: "INTAKE" }),
+				],
 			},
 		})
 		expect(

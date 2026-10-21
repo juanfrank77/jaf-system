@@ -25,7 +25,7 @@ const SUPERVISOR_QUEUE_ORDER: SupervisorQueue[] = [
 	"all",
 ]
 
-/** "My open jobs" lists every unreleased job, but its badge counts only the
+/** "My open jobs" lists the jobs before the packet, but its badge counts only the
  * jobs Ready for pickup (PREPPED): the ones waiting on the crew. */
 function supervisorCountWhere(queue: SupervisorQueue) {
 	return queue === "open"

@@ -89,7 +89,7 @@ function findDashboardDocs(
 		: db.jafInvoice.findMany(args)
 }
 
-/** "My open jobs" lists every unreleased job; the other lists stay short. */
+/** "My open jobs" lists every job before the packet; the other lists stay short. */
 const OPEN_JOBS_LIMIT = 200
 const LIST_LIMIT = 50
 

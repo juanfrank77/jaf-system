@@ -49,18 +49,24 @@ export function supervisorQueueHref(queue: SupervisorQueue): string {
  * Mirrors `deriveSupervisorStage`: a job is in the first stage whose
  * milestone it has reached, checked from the end of the process backwards.
  * `precert` covers both Pre-cert and Release (the sheet is still being
- * signed). `open` (My open jobs) is every unreleased job and so overlaps the
- * rest, and `invoice` (Packets to Claro) spans sent and not yet sent, so it
- * overlaps `aviso`; the remaining stage queues are disjoint.
+ * signed). `open` (My open jobs) is the steps before the packet (Intake to
+ * Sign off), so it is disjoint from the packet-onward queues. `invoice`
+ * (Packets to Claro) spans sent and not yet sent, so it overlaps `aviso`;
+ * `field` and `review` sit inside `open`; the rest are disjoint.
  */
 export function supervisorQueueWhere(
 	queue: SupervisorQueue,
 ): Prisma.JafInvoiceWhereInput {
 	switch (queue) {
+		// The steps before the packet exists: Intake, Warehouse, Field and Sign
+		// off. From the packet onward a job lives in its own sidebar queue.
 		case "open":
 			return {
 				releasedToFinanceAt: null,
-				status: { notIn: ["CANCELLED", "LC_REQUEST_GENERATED"] },
+				...avisoNotSavedWhere,
+				supervisorApprovedAt: null,
+				jafInvoiceGeneratedAt: null,
+				status: { in: ["CREATED", "PREPPED", "SIGNED", "FIELD_UPDATED"] },
 			}
 		case "intake":
 			return { status: "CREATED" }

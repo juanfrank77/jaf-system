@@ -21,10 +21,13 @@ describe("supervisorQueueHref", () => {
 })
 
 describe("supervisorQueueWhere", () => {
-	it("keeps Open to every unreleased job that is not cancelled or an LC request", () => {
+	it("keeps Open to the steps before the packet, so Packet, Aviso and Pre-cert jobs sit only in their own queues", () => {
 		expect(supervisorQueueWhere("open")).toEqual({
 			releasedToFinanceAt: null,
-			status: { notIn: ["CANCELLED", "LC_REQUEST_GENERATED"] },
+			OR: [{ avisoNumber: null }, { avisoDocPath: null }],
+			supervisorApprovedAt: null,
+			jafInvoiceGeneratedAt: null,
+			status: { in: ["CREATED", "PREPPED", "SIGNED", "FIELD_UPDATED"] },
 		})
 	})
 

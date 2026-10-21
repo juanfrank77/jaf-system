@@ -122,7 +122,7 @@ describe("dashboard payload: no prices for a SUPERVISOR", () => {
 			for (const q of [
 				undefined,
 				"stage=all",
-				"stage=open",
+				"stage=invoice",
 				"status=SUPERVISOR_APPROVED",
 			]) {
 				const data = await runLoaderAs(supId, q)

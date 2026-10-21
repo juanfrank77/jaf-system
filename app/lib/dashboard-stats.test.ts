@@ -20,7 +20,7 @@ const dayAgo = (days: number) =>
 	new Date(Date.now() - days * 24 * 60 * 60 * 1000)
 
 describe("computeDashboardStats", () => {
-	it("SUPERVISOR: counts open docs and docs awaiting warehouse/crew", () => {
+	it("SUPERVISOR: counts docs awaiting warehouse/crew", () => {
 		const docs = [
 			doc("CREATED"),
 			doc("PREPPED"),
@@ -29,7 +29,6 @@ describe("computeDashboardStats", () => {
 		]
 		const { stats } = computeDashboardStats("SUPERVISOR", docs)
 		expect(stats).toEqual([
-			{ labelKey: "dashboard.stat.open_documents", value: 3 },
 			{ labelKey: "dashboard.stat.awaiting_warehouse", value: 1 },
 			{ labelKey: "dashboard.stat.awaiting_crew", value: 2 },
 			{ labelKey: "dashboard.stat.pending_review", value: 0 },
@@ -45,7 +44,7 @@ describe("computeDashboardStats", () => {
 		])
 	})
 
-	it("SUPERVISOR: counts pending review and excludes cancelled docs from open", () => {
+	it("SUPERVISOR: counts pending review", () => {
 		const docs = [
 			doc("CREATED"),
 			doc("FIELD_UPDATED"),
@@ -54,7 +53,6 @@ describe("computeDashboardStats", () => {
 		]
 		const { stats, alert } = computeDashboardStats("SUPERVISOR", docs)
 		expect(stats).toEqual([
-			{ labelKey: "dashboard.stat.open_documents", value: 3 },
 			{ labelKey: "dashboard.stat.awaiting_warehouse", value: 1 },
 			{ labelKey: "dashboard.stat.awaiting_crew", value: 0 },
 			{ labelKey: "dashboard.stat.pending_review", value: 2 },

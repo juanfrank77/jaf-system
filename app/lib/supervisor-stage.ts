@@ -145,3 +145,16 @@ export function panelForStep(
 			return "APPROVE"
 	}
 }
+
+/**
+ * Where a supervisor's list row opens: the screen of the step the job is on,
+ * so the rail there highlights that step. Intake and Warehouse are the
+ * warehouse's steps and have no supervisor screen, so they open the job page.
+ * The step is always named, so a job sent to Claro (stage AVISO) opens on
+ * Step 6 rather than on Step 5's "Continue to Aviso".
+ */
+export function supervisorStepHref(docId: string, stage: SupervisorStage) {
+	if (stage === "INTAKE" || stage === "WAREHOUSE") return `/docs/${docId}`
+	if (stage === "FIELD") return `/docs/${docId}/field`
+	return `/docs/${docId}/review?step=${stage}`
+}

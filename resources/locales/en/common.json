@@ -368,11 +368,16 @@
 		"aviso_label": "Aviso # (if known)"
 	},
 	"docs_edit": {
+		"edits_left_short": "{{left}} of {{max}} left",
+		"limit_reached": "You have used all {{max}} edits allowed on this work order. Cancel it and create a new one.",
+		"edits_left": "{{left}} of {{max}} edits left. After that the work order has to be cancelled and a new one created.",
+		"back_to_work_order": "Back to work order",
 		"title": "Edit Work Order",
 		"submit": "Save Changes",
 		"job_description_label": "Job description",
 		"service_codes_label": "Service codes",
 		"errors": {
+			"limit_reached": "No edits left on this work order. Cancel it and create a new one.",
 			"invalid_materials": "The materials list could not be read",
 			"invalid_service_lines": "Service codes could not be read.",
 			"missing_fields": "Job type, address, and at least one crew member are required",
@@ -637,8 +642,8 @@
 		"taken_reference_label": "Taken (signed)",
 		"used_entry_label": "Installed",
 		"ordered_vs_installed_hint": "Ordered-vs-installed variance is informational only.",
-		"field_notes_label": "Field Notes",
-		"field_notes_placeholder": "Observations, issues, changes...",
+		"field_notes_label": "Field report",
+		"field_notes_placeholder": "Anything else that happened on site. Write N/A if there is nothing to add.",
 		"photos_label": "Photos",
 		"photos_hint": "Photos are source data for the supervisor's Claro submission — stored on server.",
 		"photos_before_label": "Before Photos",
@@ -659,7 +664,9 @@
 			"invalid_service_lines": "Installed service quantities could not be read.",
 			"photo_invalid": "Photos must be JPEG, PNG, WebP or HEIC, up to 10 MB.",
 			"blueprint_invalid": "The blueprint must be a PDF (up to 30 MB) or a photo (JPEG, PNG, WebP or HEIC, up to 10 MB).",
-			"address_required": "Dirección 1 is required."
+			"address_required": "Dirección 1 is required.",
+			"photos_required": "Add at least one Before and one After photo to continue.",
+			"field_report_required": "The Field report is required to continue. Write N/A if there is nothing to add."
 		},
 		"address_diff_hint": "This change is logged with your name and the time when you submit.",
 		"address_edited_by_you": "Edited by you · {{when}}",
@@ -714,7 +721,9 @@
 			"unit": "Unit",
 			"brigade": "Brigade"
 		},
-		"admin_override": "Signed off. You are editing it as Admin."
+		"admin_override": "Signed off. You are editing it as Admin.",
+		"prefield_label": "Prefield",
+		"prefield_note": "This Claro supervisor requires Prefield. It is filled in from the work order at the Aviso step (5) and goes on the packet."
 	},
 	"docs_review": {
 		"readonly_title": "Completed step.",
@@ -728,9 +737,6 @@
 		"estimated_address": "Estimated address",
 		"actual_address": "Actual address",
 		"field_notes": "Field notes",
-		"job_photos_one": "Job Photos ({{count}})",
-		"job_photos_other": "Job Photos ({{count}})",
-		"job_site_alt": "Job site",
 		"claro_helper_title": "Claro Portal — Submission Data",
 		"claro_helper_hint": "Copy this data into Claro's portal to create the work order.",
 		"aviso_number_missing": "— (enter after creating in Claro)",
@@ -777,9 +783,6 @@
 			"contractor_code_required": "This crew has no contractor code. Enter it to sign.",
 			"release_blocked": "The packet is incomplete. See the checklist."
 		},
-		"photo_tag_BEFORE": "Before",
-		"photo_tag_DURING": "During",
-		"photo_tag_AFTER": "After",
 		"ordered_vs_installed": "Ordered vs Installed",
 		"per_service_code": "per service code",
 		"materials_detail": "Materials: estimated, taken, used",
@@ -873,6 +876,12 @@
 		"row.photos": "Photos before + after"
 	},
 	"precert": {
+		"info": {
+			"address": "Address",
+			"aviso": "Aviso #",
+			"supervisor": "Supervisor",
+			"crew": "Crew"
+		},
 		"heading": "Contractor Pre-Certification Sheet",
 		"generate": "Generate sheet",
 		"regenerate": "Regenerate sheet",
@@ -1387,9 +1396,6 @@
 			"you": "Waiting on: you",
 			"finance": "With Finance"
 		},
-		"block": {
-			"billing_aviso_pdf": "Billing: missing Aviso PDF"
-		},
 		"stage_queue": {
 			"field": "Field work in progress",
 			"open": "My open jobs",
@@ -1424,7 +1430,6 @@
 			"pending_review": "Awaiting your sign-off",
 			"approved": "Signed off",
 			"missing_aviso": "Missing Aviso",
-			"blocked": "Blocked",
 			"empty": "Nothing here."
 		},
 		"col": {
@@ -1450,8 +1455,6 @@
 		"aviso_number": "Aviso #",
 		"stat": {
 			"missing_aviso": "Missing Aviso",
-			"blocked": "Blocked",
-			"open_documents": "Open documents",
 			"awaiting_warehouse": "Awaiting warehouse",
 			"awaiting_crew": "Field work in progress",
 			"pending_review": "Pending review",

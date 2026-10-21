@@ -1,11 +1,11 @@
 import type { ParseKeys } from "i18next"
 import { useTranslation } from "react-i18next"
-import { Form, redirect } from "react-router"
+import { Form, Link, redirect } from "react-router"
 import { CrewPicker } from "~/components/crew-picker"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialPicker } from "~/components/material-picker"
 import { ServicePicker } from "~/components/service-picker"
-import { Button } from "~/components/ui/button"
+import { Button, buttonVariants } from "~/components/ui/button"
 import { Card, CardContent } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
@@ -32,6 +32,11 @@ import {
 	isBrigadeInSupervisorScope,
 } from "~/lib/supervisor-scope"
 import { toNumberPrice } from "~/lib/utils"
+import {
+	MAX_SUPERVISOR_EDITS,
+	supervisorEditsLeft,
+	WORK_ORDER_EDITED,
+} from "~/lib/work-order-edits"
 import type { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id_.edit"
 
@@ -40,6 +45,14 @@ export const meta: Route.MetaFunction = ({ data }) => [
 		title: data ? `${data.doc.controlNumber} — Edit — JAF Ops` : "JAF Ops",
 	},
 ]
+
+/** Edits a supervisor has used on this job; null when the role is not limited. */
+async function supervisorEditsUsed(role: string, docId: string) {
+	if (role !== "SUPERVISOR") return null
+	return db.auditTrail.count({
+		where: { docId, action: WORK_ORDER_EDITED },
+	})
+}
 
 export async function loader({ request, params }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["SUPERVISOR", "ADMIN"])
@@ -84,9 +97,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 				: { unit: c.unit },
 		]),
 	)
+	const editsUsed = await supervisorEditsUsed(user.role, doc.id)
 	return {
 		doc,
 		user,
+		editsUsed,
 		serviceLineMeta,
 		serviceCodes: serviceCodesForRole(user.role, serviceCodes),
 		showPrices,
@@ -105,6 +120,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 		await assertDocInSupervisorScope(db, user.id, doc)
 	}
 	if (!isEditableStatus(doc.status)) throw redirect(`/docs/${params.id}`)
+
+	const editsUsed = await supervisorEditsUsed(user.role, doc.id)
+	if (editsUsed !== null && supervisorEditsLeft(editsUsed) === 0)
+		return { errorKey: "docs_edit.errors.limit_reached" }
 
 	const form = await request.formData()
 	const jobType = (form.get("jobType") as string).trim()
@@ -239,6 +258,7 @@ export default function EditDoc({
 }: Route.ComponentProps) {
 	const {
 		doc,
+		editsUsed,
 		serviceCodes,
 		serviceLineMeta,
 		showPrices,
@@ -247,9 +267,37 @@ export default function EditDoc({
 	} = loaderData
 	const error = actionData as { errorKey?: ParseKeys } | undefined
 	const { t } = useTranslation()
+	const editsLeft = editsUsed === null ? null : supervisorEditsLeft(editsUsed)
+	if (editsLeft === 0)
+		return (
+			<div className="space-y-4">
+				<PageHeader title={t("docs_edit.title")} />
+				<Card>
+					<CardContent className="space-y-3">
+						<p role="alert" className="text-sm text-status-danger">
+							{t("docs_edit.limit_reached", { max: MAX_SUPERVISOR_EDITS })}
+						</p>
+						<Link
+							to={`/docs/${doc.id}`}
+							className={buttonVariants({ variant: "outline" })}
+						>
+							{t("docs_edit.back_to_work_order")}
+						</Link>
+					</CardContent>
+				</Card>
+			</div>
+		)
 	return (
 		<div className="space-y-4">
 			<PageHeader title={t("docs_edit.title")} />
+			{editsLeft !== null && (
+				<p className="text-sm text-muted-foreground">
+					{t("docs_edit.edits_left", {
+						left: editsLeft,
+						max: MAX_SUPERVISOR_EDITS,
+					})}
+				</p>
+			)}
 			<Form method="post">
 				<Card>
 					<CardContent className="space-y-5">

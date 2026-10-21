@@ -83,9 +83,6 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 				row({ id: "m", jafInvoiceGeneratedAt: new Date() }),
 			] as any) // approved candidates
 			.mockResolvedValueOnce([
-				row({ id: "bb", releasedToFinanceAt: new Date() }),
-			] as any) // released without an Aviso PDF
-			.mockResolvedValueOnce([
 				row({ id: "p", status: "FIELD_UPDATED", supervisorApprovedAt: null }),
 				row({ id: "m", jafInvoiceGeneratedAt: new Date() }),
 			] as any) // my open work orders
@@ -93,12 +90,9 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 			request: new Request("http://localhost/dashboard"),
 			params: {},
 		} as any)
-		expect(data.stats).toHaveLength(13)
+		expect(data.stats).toHaveLength(12)
 		expect(data.showFilters).toBe(false)
 		expect(data.supervisorQueues!.intake.map((r) => r.id)).toEqual(["n"])
-		expect(data.supervisorQueues!.blocked).toEqual([
-			expect.objectContaining({ id: "bb", blockReason: "billing_aviso_pdf" }),
-		])
 		expect(data.supervisorQueues!.myOpen).toEqual([
 			expect.objectContaining({ id: "p", stage: "APPROVE", waitingOn: "you" }),
 			expect.objectContaining({ id: "m", stage: "AVISO", waitingOn: "you" }),
@@ -134,13 +128,11 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 					avisoDocPath: "aviso-docs/ok-aviso.pdf",
 				}),
 			] as any)
-			.mockResolvedValueOnce([] as any) // released without an Aviso PDF
 			.mockResolvedValueOnce([] as any) // my open work orders
 		const data = await loader({
 			request: new Request("http://localhost/dashboard"),
 			params: {},
 		} as any)
-		expect(data.supervisorQueues!.blocked).toEqual([])
 		expect(data.supervisorQueues!.missingAviso.map((r) => r.id)).toEqual(["b"])
 		expect(data.supervisorQueues!.approved.map((r) => r.id)).toEqual(["ok"])
 		expect(getAvisoAmountTolerance).not.toHaveBeenCalled()

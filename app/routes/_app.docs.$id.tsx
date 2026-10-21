@@ -45,6 +45,11 @@ import {
 } from "~/lib/supervisor-scope"
 import { deriveSupervisorStage } from "~/lib/supervisor-stage"
 import { saveUpload } from "~/lib/uploads.server"
+import {
+	countWorkOrderEdits,
+	MAX_SUPERVISOR_EDITS,
+	supervisorEditsLeft,
+} from "~/lib/work-order-edits"
 import { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id"
 
@@ -558,6 +563,10 @@ export default function DocView({
 		sentByName,
 		correctorNames,
 	} = loaderData
+	const editsLeft =
+		user.role === "SUPERVISOR"
+			? supervisorEditsLeft(countWorkOrderEdits(auditTrail))
+			: null
 	const error = actionData as
 		| { errorKey?: string; errorMessage?: string }
 		| undefined
@@ -819,7 +828,12 @@ export default function DocView({
 			)}
 
 			{(user.role === "SUPERVISOR" || user.role === "ADMIN") &&
-				isEditableStatus(doc.status) && (
+				isEditableStatus(doc.status) &&
+				(editsLeft === 0 ? (
+					<p className="text-sm text-muted-foreground">
+						{t("docs_edit.limit_reached", { max: MAX_SUPERVISOR_EDITS })}
+					</p>
+				) : (
 					<Link
 						to={`/docs/${doc.id}/edit`}
 						className={buttonVariants({
@@ -828,8 +842,10 @@ export default function DocView({
 						})}
 					>
 						{t("docs_view.edit_work_order")}
+						{editsLeft !== null &&
+							` · ${t("docs_edit.edits_left_short", { left: editsLeft, max: MAX_SUPERVISOR_EDITS })}`}
 					</Link>
-				)}
+				))}
 
 			{(user.role === "SUPERVISOR" || user.role === "ADMIN") &&
 				doc.status === "CREATED" &&

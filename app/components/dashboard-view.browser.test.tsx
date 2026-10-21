@@ -24,7 +24,7 @@ describe("DashboardView", () => {
 					path: "/",
 					Component: () => (
 						<DashboardView
-							stats={[{ labelKey: "dashboard.stat.open_documents", value: 3 }]}
+							stats={[{ labelKey: "dashboard.stat.total_documents", value: 3 }]}
 							alert={null}
 							explainer={null}
 							docs={[]}
@@ -33,7 +33,7 @@ describe("DashboardView", () => {
 				},
 			],
 		})
-		expect(screen.getByText("Open documents")).toBeInTheDocument()
+		expect(screen.getByText("Total documents")).toBeInTheDocument()
 		expect(screen.getByText("3")).toBeInTheDocument()
 	})
 

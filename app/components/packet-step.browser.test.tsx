@@ -44,9 +44,7 @@ async function mount(
 				path: "/",
 				action: async ({ request }: { request: Request }) =>
 					action(String((await request.formData()).get("intent"))),
-				Component: () => (
-					<PacketStepCard packet={data} interactive workSummary={null} />
-				),
+				Component: () => <PacketStepCard packet={data} interactive />,
 			},
 		],
 	})
@@ -183,26 +181,29 @@ describe("PacketStepCard send button", () => {
 	})
 })
 
-describe("PacketStepCard materials", () => {
-	it("renders every row, even two uncatalogued codes with no Claro code", async ({
+describe("PacketStepCard work content", () => {
+	it("does not repeat the materials already on the work order", async ({
 		renderStub,
 	}) => {
-		const row = (serviceCodeId: string) => ({
-			serviceCodeId,
-			claroCode: "",
-			name: serviceCodeId,
-			unit: null,
-			used: 1,
-			returned: 0,
-			source: "WAREHOUSE_ISSUE" as const,
-		})
 		await mount(
 			renderStub,
-			packet({ materials: [row("x1"), row("x2")] }),
+			packet({
+				materials: [
+					{
+						serviceCodeId: "x1",
+						claroCode: "",
+						name: "Cable drop",
+						unit: null,
+						used: 1,
+						returned: 0,
+						source: "WAREHOUSE_ISSUE" as const,
+					},
+				],
+			}),
 			async () => null,
 		)
-		expect(await screen.findByText("x1")).toBeInTheDocument()
-		expect(screen.getByText("x2")).toBeInTheDocument()
+		expect(await screen.findByTestId("packet-step")).toBeInTheDocument()
+		expect(screen.queryByText("Cable drop")).not.toBeInTheDocument()
 	})
 })
 

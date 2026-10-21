@@ -460,9 +460,69 @@ describe("POST /docs/:id/field — continue", () => {
 		const form = new FormData()
 		form.set("intent", "continue")
 		form.set("fieldMaterials", JSON.stringify(rows))
+		form.set("fieldNotes", "Brigade finished, customer confirmed.")
+		form.append("photosBefore", photo("before.jpg"))
+		form.append("photosAfter", photo("after.jpg"))
 		extra(form)
 		return form
 	}
+
+	it("refuses a blank Field report, and accepts N/A", async () => {
+		as("SUPERVISOR")
+		withDoc()
+		const blank = await run(cont([], (f) => f.set("fieldNotes", "   ")))
+		expect(blank).toMatchObject({
+			errorKey: "docs_field.errors.field_report_required",
+		})
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+		await run(cont([], (f) => f.set("fieldNotes", "N/A")))
+		expect(lastUpdate().data).toMatchObject({
+			status: "FIELD_UPDATED",
+			fieldNotes: "N/A",
+		})
+	})
+
+	it("uses the stored Field report when the post carries none", async () => {
+		as("SUPERVISOR")
+		withDoc({ fieldNotes: "N/A" })
+		await run(cont([], (f) => f.delete("fieldNotes")))
+		expect(lastUpdate().data.status).toBe("FIELD_UPDATED")
+	})
+
+	it("refuses to continue without a Before and an After photo", async () => {
+		as("SUPERVISOR")
+		withDoc()
+		const none = await run(
+			cont([], (f) => {
+				f.delete("photosBefore")
+				f.delete("photosAfter")
+			}),
+		)
+		expect(none).toMatchObject({
+			errorKey: "docs_field.errors.photos_required",
+		})
+		const noAfter = await run(cont([], (f) => f.delete("photosAfter")))
+		expect(noAfter).toMatchObject({
+			errorKey: "docs_field.errors.photos_required",
+		})
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("counts photos already saved, so During-only posts still continue", async () => {
+		as("SUPERVISOR")
+		withDoc()
+		vi.mocked(db.photo.findMany).mockResolvedValue([
+			{ tag: "BEFORE" },
+			{ tag: "AFTER" },
+		] as any)
+		await run(
+			cont([], (f) => {
+				f.delete("photosBefore")
+				f.delete("photosAfter")
+			}),
+		)
+		expect(lastUpdate().data.status).toBe("FIELD_UPDATED")
+	})
 
 	it("refuses WAREHOUSE use above what was signed out", async () => {
 		as("SUPERVISOR")
@@ -507,6 +567,7 @@ describe("POST /docs/:id/field — continue", () => {
 	it("validates the stored table when the post carries none", async () => {
 		as("SUPERVISOR")
 		withDoc({
+			fieldNotes: "N/A",
 			fieldMaterials: [
 				{
 					serviceCodeId: "sc-1",
@@ -516,6 +577,10 @@ describe("POST /docs/:id/field — continue", () => {
 				},
 			],
 		})
+		vi.mocked(db.photo.findMany).mockResolvedValue([
+			{ tag: "BEFORE" },
+			{ tag: "AFTER" },
+		] as any)
 		const form = new FormData()
 		form.set("intent", "continue")
 		expect(await run(form)).toEqual({
@@ -695,7 +760,15 @@ describe("/docs/:id/field — access", () => {
 
 	it("ADMIN continue after sign-off saves and does not change the status", async () => {
 		as("ADMIN", "admin-1")
-		withDoc({ status: "SUPERVISOR_APPROVED", supervisorApprovedAt: new Date() })
+		withDoc({
+			status: "SUPERVISOR_APPROVED",
+			supervisorApprovedAt: new Date(),
+			fieldNotes: "N/A",
+		})
+		vi.mocked(db.photo.findMany).mockResolvedValue([
+			{ tag: "BEFORE" },
+			{ tag: "AFTER" },
+		] as any)
 		const form = new FormData()
 		form.set("intent", "continue")
 		form.set(

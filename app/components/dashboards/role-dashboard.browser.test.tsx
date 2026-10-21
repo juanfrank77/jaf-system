@@ -9,7 +9,6 @@ const emptyQueues = {
 	pendingReview: [],
 	approved: [],
 	missingAviso: [],
-	blocked: [],
 }
 
 // Spread so biome's a11y rule does not mistake the `role` prop for an ARIA role.
@@ -53,9 +52,9 @@ describe("RoleDashboard", () => {
 		expect(
 			screen.getByRole("heading", { level: 1, name: "Dashboard" }),
 		).toBeInTheDocument()
-		// six queue cards (My open work orders last); dashboard no longer has an "All work orders" section
+		// five queue cards (My open work orders last); dashboard no longer has an "All work orders" section
 		const headings = screen.getAllByRole("heading", { level: 2 })
-		expect(headings).toHaveLength(6)
+		expect(headings).toHaveLength(5)
 		expect(screen.queryByText("Sent back to crew")).not.toBeInTheDocument()
 		expect(headings.at(-1)).toHaveTextContent("My open work orders")
 	})
@@ -68,7 +67,6 @@ describe("RoleDashboard", () => {
 			within(screen.getByTestId("supervisor-tiles"))
 				.getByText(label)
 				.closest('[data-slot="stat"]') as HTMLElement
-		expect(tone("Blocked")).toHaveAttribute("data-tone", "flag")
 		expect(tone("Missing Aviso")).toHaveAttribute("data-tone", "warn")
 	})
 
@@ -142,12 +140,12 @@ describe("RoleDashboard", () => {
 				{...{ role: "WAREHOUSE" }}
 				supervisorQueues={null}
 				{...base}
-				stats={[{ labelKey: "dashboard.stat.open_documents", value: 9 }]}
+				stats={[{ labelKey: "dashboard.stat.total_documents", value: 9 }]}
 				warehouseCounts={{ prep: 3, release: 2, returns: 4 }}
 			/>,
 		)
 		expect(screen.getAllByText("Awaiting pickup")).toHaveLength(1)
-		expect(screen.queryByText("Open documents")).not.toBeInTheDocument()
+		expect(screen.queryByText("Total documents")).not.toBeInTheDocument()
 	})
 
 	it("keeps the incoming to-prep orders on the warehouse dashboard but not the other step lists", async ({
@@ -175,7 +173,6 @@ describe("RoleDashboard", () => {
 })
 
 const statKeys = [
-	"open_documents",
 	"awaiting_warehouse",
 	"awaiting_crew",
 	"pending_review",
@@ -189,7 +186,7 @@ const statKeys = [
 	"aging_po_wait_count",
 	"aging_claro_wait_count",
 ] as const
-const thirteenStats = statKeys.map((k, i) => ({
+const twelveStats = statKeys.map((k, i) => ({
 	labelKey: `dashboard.stat.${k}` as const,
 	value: i,
 }))
@@ -216,28 +213,28 @@ describe("SupervisorDashboard", () => {
 			<RoleDashboard
 				{...supervisor}
 				{...base}
-				stats={thirteenStats}
+				stats={twelveStats}
 				supervisorScope={{ areas: ["CENTRAL"], brigadeCount: 4 }}
 				{...props}
 			/>,
 		)
 
-	it("shows six working tiles and folds the nine accounting metrics", async ({
+	it("shows four working tiles and folds the nine accounting metrics", async ({
 		renderStub,
 	}) => {
 		await mountSupervisor(renderStub, {
 			supervisorQueues: {
 				...emptyQueues,
-				blocked: [queueRow({ id: "b" }), queueRow({ id: "b2" })],
+				missingAviso: [queueRow({ id: "b" }), queueRow({ id: "b2" })],
 			},
 		})
 		const tiles = screen.getByTestId("supervisor-tiles")
-		expect(tiles.querySelectorAll('[data-slot="stat"]')).toHaveLength(6)
+		expect(tiles.querySelectorAll('[data-slot="stat"]')).toHaveLength(4)
 		// the queue tiles carry the queue counts; nothing is "sent back" to a crew
 		expect(within(tiles).queryByText("Sent back")).not.toBeInTheDocument()
-		expect(within(tiles).getByText("Blocked").nextSibling).toHaveTextContent(
-			"2",
-		)
+		expect(
+			within(tiles).getByText("Missing Aviso").nextSibling,
+		).toHaveTextContent("2")
 		const fold = screen.getByTestId("more-metrics")
 		expect(fold.querySelectorAll('[data-slot="stat"]')).toHaveLength(9)
 		expect(fold.tagName).toBe("DETAILS")
@@ -251,7 +248,9 @@ describe("SupervisorDashboard", () => {
 		await mountSupervisor(renderStub, {
 			supervisorQueues: {
 				...emptyQueues,
-				intake: [queueRow({ id: "new1", controlNumber: "JAF-NEW" })],
+				intake: [
+					queueRow({ id: "new1", controlNumber: "JAF-NEW", stage: "INTAKE" }),
+				],
 			},
 		})
 		expect(
@@ -266,7 +265,6 @@ describe("SupervisorDashboard", () => {
 	it("opens the list behind each count tile", async ({ renderStub }) => {
 		await mountSupervisor(renderStub, {
 			stats: [
-				{ labelKey: "dashboard.stat.open_documents", value: 5 },
 				{ labelKey: "dashboard.stat.awaiting_warehouse", value: 1 },
 				{ labelKey: "dashboard.stat.awaiting_crew", value: 2 },
 				{ labelKey: "dashboard.stat.pending_review", value: 3 },
@@ -275,12 +273,10 @@ describe("SupervisorDashboard", () => {
 		const tiles = screen.getByTestId("supervisor-tiles")
 		const hrefOf = (label: string) =>
 			within(tiles).getByText(label).closest("a")?.getAttribute("href")
-		expect(hrefOf("Open documents")).toBe("/dashboard?stage=all")
 		expect(hrefOf("Awaiting warehouse")).toBe("/dashboard?stage=intake")
 		expect(hrefOf("Field work in progress")).toBe("/dashboard?stage=field")
 		expect(hrefOf("Pending review")).toBe("/dashboard?stage=review")
 		expect(hrefOf("Missing Aviso")).toMatch(/#missing-aviso$/)
-		expect(hrefOf("Blocked")).toMatch(/#blocked$/)
 	})
 
 	it("lists the supervisor's open work orders with their step and who they wait on", async ({
@@ -306,17 +302,6 @@ describe("SupervisorDashboard", () => {
 			within(card).getByRole("link", { name: "JAF-OPEN" }),
 		).toHaveAttribute("href", "/docs/o1")
 		expect(card).toHaveTextContent("Waiting on: crew")
-	})
-
-	it("says why a job is blocked", async ({ renderStub }) => {
-		await mountSupervisor(renderStub, {
-			supervisorQueues: {
-				...emptyQueues,
-				blocked: [queueRow({ id: "b1", blockReason: "billing_aviso_pdf" })],
-			},
-		})
-		expect(screen.getByText("Billing: missing Aviso PDF")).toBeInTheDocument()
-		expect(screen.queryByText("Aviso ≠ invoice")).not.toBeInTheDocument()
 	})
 
 	it("shows the supervisor's area and crew count under the title", async ({

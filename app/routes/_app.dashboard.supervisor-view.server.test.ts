@@ -132,9 +132,8 @@ describe("dashboard supervisor view data (integration)", () => {
 
 	it("returns real stat tiles and the approval alert for a supervisor", async () => {
 		const data = await runLoaderAs(supervisorId)
-		expect(data.stats).toHaveLength(13)
-		expect(data.stats.slice(0, 4).map((s) => s.labelKey)).toEqual([
-			"dashboard.stat.open_documents",
+		expect(data.stats).toHaveLength(12)
+		expect(data.stats.slice(0, 3).map((s) => s.labelKey)).toEqual([
 			"dashboard.stat.awaiting_warehouse",
 			"dashboard.stat.awaiting_crew",
 			"dashboard.stat.pending_review",

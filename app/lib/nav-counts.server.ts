@@ -18,7 +18,7 @@ import type { Role } from "../../generated/prisma/client"
 const CRITICAL_QUEUES: SupervisorQueue[] = ["open", "aviso"]
 const SUPERVISOR_QUEUE_ORDER = SUPERVISOR_SIDEBAR_QUEUES
 
-/** "My open jobs" lists every unreleased job, but its badge counts only the
+/** "My open jobs" lists the jobs before the packet, but its badge counts only the
  * jobs Ready for pickup (PREPPED): the ones waiting on the crew. */
 function supervisorCountWhere(queue: SupervisorQueue) {
 	return queue === "open"

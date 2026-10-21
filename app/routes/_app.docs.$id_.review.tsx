@@ -1,20 +1,17 @@
 import { readFile } from "node:fs/promises"
 import path from "node:path"
 import type { ParseKeys } from "i18next"
-import { type ComponentProps, useRef, useState } from "react"
+import { useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, Link, redirect } from "react-router"
 import { AvisoCard } from "~/components/aviso-card"
 import { DocStageBadge } from "~/components/doc-stage-badge"
 import { RouteErrorBoundary } from "~/components/error-boundary"
-import { JobLinesCard, preppedAsLines } from "~/components/job-lines-card"
-import type { MaterialLineItems } from "~/components/material-line-items"
 import {
 	type PacketBlocker,
 	PacketStepCard,
 	type PacketStepData,
 } from "~/components/packet-step"
-import { PhotosCard } from "~/components/review-field-work"
 import {
 	SignaturePad,
 	type SignaturePadHandle,
@@ -24,9 +21,7 @@ import { Button, buttonVariants } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
 import { Card, CardContent, CardHeader } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
-import { Label } from "~/components/ui/label"
 import { Pill } from "~/components/ui/pill"
-import { Textarea } from "~/components/ui/textarea"
 import {
 	GenerateWorkOrderPdf,
 	WorkOrderDocumentCard,
@@ -100,18 +95,8 @@ import type { Route } from "./+types/_app.docs.$id_.review"
 
 type MaterialLine = { serviceCodeId: string; qty: number }
 
-/** The Prefield inputs the packet step edits (Aviso # stays optional). */
-const PREFIELD_INPUTS = [
-	"avisoNumber",
-	"ordenNumber",
-	"pedido",
-	"smr",
-	"titulo",
-] as const
-
-type MaterialServiceCode = ComponentProps<
-	typeof MaterialLineItems
->["serviceCodes"][number]
+/** The Prefield inputs the packet step edits (Aviso # is entered at step 6). */
+const PREFIELD_INPUTS = ["ordenNumber", "pedido", "smr", "titulo"] as const
 
 const AVISO_PDF_ERROR_KEYS = {
 	unreadable: "docs_review.errors.aviso_pdf_unreadable",
@@ -470,7 +455,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		doc: showPrices ? docData : withoutPrices(docData),
 		user,
 		serviceCodes: serviceCodesForRole(user.role, serviceCodes),
-		photos,
 		supervisor,
 		sheet:
 			sheet && !showPrices
@@ -1400,47 +1384,6 @@ function SignOffCard({
 	)
 }
 
-/**
- * Before the first send, something wrong with what the brigade reported
- * reopens Sign off with a required note.
- */
-function BackToSignOff() {
-	const { t } = useTranslation()
-	const [goingBack, setGoingBack] = useState(false)
-	if (!goingBack)
-		return (
-			<Button
-				type="button"
-				variant="ghost"
-				className="w-full"
-				onClick={() => setGoingBack(true)}
-			>
-				← {t("docs_review_steps.invoice_back")}
-			</Button>
-		)
-	return (
-		<Form method="post" className="space-y-2">
-			<input type="hidden" name="intent" value="back_to_approve" />
-			<Label htmlFor="backNote" className="text-xs">
-				{t("docs_review_steps.invoice_back_note_label")}
-			</Label>
-			<Textarea id="backNote" name="note" rows={2} required />
-			<div className="flex gap-2">
-				<Button type="submit" variant="destructive">
-					{t("docs_review_steps.invoice_back_confirm")}
-				</Button>
-				<Button
-					type="button"
-					variant="ghost"
-					onClick={() => setGoingBack(false)}
-				>
-					{t("docs_review_steps.invoice_back_cancel")}
-				</Button>
-			</div>
-		</Form>
-	)
-}
-
 function PreCertPanel({
 	sheet,
 	doc,
@@ -1712,8 +1655,6 @@ export default function ReviewDoc({
 	const {
 		doc,
 		user,
-		serviceCodes,
-		photos,
 		supervisor,
 		sheet,
 		brigade,
@@ -1722,8 +1663,6 @@ export default function ReviewDoc({
 		view,
 		interactive,
 		gate,
-		invoiceSummary,
-		invoicePreview,
 		invoiceHeader,
 		showPrices,
 		packet,
@@ -1743,38 +1682,6 @@ export default function ReviewDoc({
 				rows?: { key: string; ok: boolean }[]
 		  }
 		| undefined
-	// Json columns: tolerate null or a malformed non-array value
-	const asLines = (v: unknown) =>
-		Array.isArray(v) ? (v as MaterialLine[]) : []
-	const estimated = asLines(doc.estimatedMaterials)
-	const taken = asLines(doc.materialsTaken)
-	const used = asLines(doc.materialsUsed)
-	const ordered = (doc.serviceLines as ServiceLine[] | null) ?? []
-	const installed = (doc.installedServiceLines as ServiceLine[] | null) ?? []
-	const generatedInvoiceLines =
-		(doc.jafInvoiceLines as InvoiceLine[] | null) ?? []
-	// Before it is reviewed the invoice is a preview built from what was installed.
-	const isPreview = generatedInvoiceLines.length === 0
-	const invoiceLines = isPreview ? invoicePreview : generatedInvoiceLines
-	const jobLines = (
-		<JobLinesCard
-			ordered={ordered}
-			installed={installed}
-			estimated={estimated}
-			prepped={preppedAsLines(doc.preppedMaterials)}
-			taken={taken}
-			used={used}
-			serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
-		/>
-	)
-
-	// Basenames for photos; plain string split because `node:path` is not available in the client bundle
-	const photoItems = photos.map((p) => ({
-		id: p.id,
-		basename: p.localPath.split(/[\\/]/).pop() ?? p.localPath,
-		tag: p.tag,
-		takenAt: String(p.takenAt),
-	}))
 	const panel = panelForStep(view)
 	// Signed, not sent, but the Claro supervisor's rules block Generate PDF:
 	// step 4 says what to fix on step 5.
@@ -1904,163 +1811,14 @@ export default function ReviewDoc({
 				</>
 			)}
 
-			{/* Every later step keeps the same lines card above its own panel */}
-			{panel !== "APPROVE" && jobLines}
-
 			{/* B — Packet → Claro */}
 			{panel === "INVOICE" && (
 				<>
-					<PhotosCard docId={doc.id} photos={photoItems} />
 					<PacketStepCard
 						packet={packet}
 						interactive={interactive}
 						errorKey={error?.errorKey}
-						workSummary={
-							<div className="space-y-3">
-								<dl
-									data-testid="invoice-header"
-									className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2"
-								>
-									{(
-										[
-											["work_order", invoiceHeader.controlNumber],
-											["job_type", invoiceHeader.jobType],
-											["address", invoiceHeader.address],
-											["brigade", invoiceHeader.brigadeName ?? "—"],
-											[
-												"work_date",
-												invoiceHeader.workDate
-													? new Date(
-															invoiceHeader.workDate,
-														).toLocaleDateString()
-													: "—",
-											],
-										] as const
-									).map(([key, value]) => (
-										<div key={key} className="flex gap-2">
-											<dt className="text-muted-foreground">
-												{t(`docs_review_steps.invoice_header.${key}`)}:
-											</dt>
-											<dd className="font-medium">{value}</dd>
-										</div>
-									))}
-								</dl>
-								{invoiceLines.length === 0 ? (
-									<p className="text-xs text-muted-foreground">
-										{t("docs_review.errors.installed_lines_required")}
-									</p>
-								) : (
-									<table className="w-full text-sm">
-										<thead>
-											<tr className="border-b text-left text-xs text-muted-foreground">
-												<th className="py-1.5">
-													{t("docs_review.table.code")}
-												</th>
-												<th className="py-1.5">
-													{t("docs_review.table.description")}
-												</th>
-												<th className="py-1.5">
-													{t("service_picker.col_type")}
-												</th>
-												<th className="py-1.5 text-right">
-													{t("docs_review.table.qty")}
-												</th>
-												{showPrices && (
-													<>
-														<th className="py-1.5 text-right">
-															{t("docs_review_steps.unit_price")}
-														</th>
-														<th className="py-1.5 text-right">
-															{t("docs_review_steps.line_amount")}
-														</th>
-													</>
-												)}
-											</tr>
-										</thead>
-										<tbody className="tabular-nums">
-											{invoiceLines.map((l) => (
-												<tr
-													key={l.serviceCodeId}
-													className="border-b last:border-0"
-												>
-													<td className="py-1.5 font-mono text-xs font-semibold">
-														{l.claroCode}
-													</td>
-													<td className="py-1.5">
-														{splitServiceSuffix(l.name).base}
-													</td>
-													<td className="py-1.5 font-mono text-xs">
-														{splitServiceSuffix(l.name).suffix ?? "—"}
-													</td>
-													<td className="py-1.5 text-right">
-														{l.qty} {l.unit ?? ""}
-													</td>
-													{showPrices && (
-														<>
-															<td className="py-1.5 text-right">
-																${l.unitPrice.toFixed(4)}
-															</td>
-															<td className="py-1.5 text-right">
-																${l.lineAmount.toFixed(2)}
-															</td>
-														</>
-													)}
-												</tr>
-											))}
-										</tbody>
-										{invoiceSummary && (
-											<tfoot className="tabular-nums">
-												<tr>
-													<td
-														colSpan={5}
-														className="pr-6 pt-5 pb-1.5 text-right"
-													>
-														{t("docs_review_steps.line_sum_pre_ivu")}
-													</td>
-													<td className="pt-5 pb-1.5 text-right font-semibold">
-														{formatMoney(invoiceSummary.lineTotal)}
-													</td>
-												</tr>
-												<tr className="text-muted-foreground">
-													<td
-														colSpan={5}
-														className="pr-6 pt-6 pb-1.5 text-right"
-													>
-														{t("docs_review_steps.contractor_share", {
-															percent: round2(
-																invoiceSummary.sharePercent * 100,
-															),
-															name: brigade?.name ?? "—",
-														})}{" "}
-														<span className="text-xs italic">
-															{t("docs_review_steps.information_only")}
-														</span>
-													</td>
-													<td className="pt-6 pb-1.5 text-right">
-														{formatMoney(invoiceSummary.contractor)}
-													</td>
-												</tr>
-												<tr className="text-muted-foreground">
-													<td colSpan={5} className="py-1.5 pr-6 text-right">
-														{t("docs_review_steps.retention_row", {
-															percent: round2(
-																invoiceSummary.retentionPercent * 100,
-															),
-														})}
-													</td>
-													<td className="py-1.5 text-right">
-														{formatMoney(invoiceSummary.contractorNet)}
-													</td>
-												</tr>
-											</tfoot>
-										)}
-									</table>
-								)}
-							</div>
-						}
-					>
-						{interactive && !packet.sent && <BackToSignOff />}
-					</PacketStepCard>
+					/>
 					{interactive && packet.sent && !isAvisoSaved(doc) && (
 						<Pill variant="warn" icon="→">
 							<b>{t("docs_review_steps.next_aviso_title")}</b>{" "}
@@ -2116,6 +1874,30 @@ export default function ReviewDoc({
 			)}
 
 			{/* D — Pre-cert sheet */}
+			{panel === "PRECERT" && isAvisoSaved(doc) && (
+				<section className="bg-card border rounded-lg p-4">
+					<dl
+						data-testid="precert-job-info"
+						className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[auto_1fr]"
+					>
+						{(
+							[
+								["address", invoiceHeader.address ?? "—"],
+								["aviso", doc.avisoNumber ?? "—"],
+								["supervisor", supervisor?.name ?? user.name],
+								["crew", invoiceHeader.brigadeName ?? "—"],
+							] as const
+						).map(([key, value]) => (
+							<div key={key} className="contents">
+								<dt className="text-muted-foreground">
+									{t(`precert.info.${key}`)}
+								</dt>
+								<dd className="font-medium">{value}</dd>
+							</div>
+						))}
+					</dl>
+				</section>
+			)}
 			{panel === "PRECERT" && isAvisoSaved(doc) && (
 				<section className="bg-card border rounded-lg p-4 space-y-3">
 					<h2 className="font-medium text-sm">{t("precert.heading")}</h2>

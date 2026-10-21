@@ -15,7 +15,7 @@ import {
 	FieldMaterialsTable,
 	type FieldMaterialsTableRow,
 } from "~/components/field-materials-table"
-import { JobStepRail } from "~/components/job-step-rail"
+import { SupervisorStepRail } from "~/components/supervisor-step-rail"
 import { Button } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
 import { Card, CardContent, CardHeader } from "~/components/ui/card"
@@ -50,7 +50,10 @@ import {
 } from "~/lib/service-codes.server"
 import type { ServiceLine } from "~/lib/service-lines"
 import { assertDocInSupervisorScope } from "~/lib/supervisor-scope"
-import { SUPERVISOR_STAGES } from "~/lib/supervisor-stage"
+import {
+	deriveSupervisorStage,
+	SUPERVISOR_STAGES,
+} from "~/lib/supervisor-stage"
 import { photosThatLoad, saveUpload } from "~/lib/uploads.server"
 import type { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id_.field"
@@ -129,8 +132,14 @@ const FIELD_DOC_SELECT = {
 	fieldStartedAt: true,
 	fieldSubmittedAt: true,
 	supervisorApprovedAt: true,
+	jafInvoiceGeneratedAt: true,
+	avisoNumber: true,
+	avisoDocPath: true,
+	releasedToFinanceAt: true,
 	blueprintPaths: true,
-	claroSupervisor: { select: { name: true, requiresBlueprint: true } },
+	claroSupervisor: {
+		select: { name: true, requiresBlueprint: true, requiresPrefield: true },
+	},
 } satisfies Prisma.JafInvoiceSelect
 
 type FieldDoc = Prisma.JafInvoiceGetPayload<{
@@ -231,6 +240,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		photos,
 		blueprints: doc.blueprintPaths.map((p) => path.basename(p)),
 		blueprintRequired: doc.claroSupervisor?.requiresBlueprint ?? false,
+		prefieldRequired: doc.claroSupervisor?.requiresPrefield ?? false,
+		stage: deriveSupervisorStage(doc, null),
 		materialsTaken: taken,
 		estimatedMaterials: lines(doc.estimatedMaterials),
 		fieldMaterials: fieldMaterialsOrDefault(doc.fieldMaterials, taken),
@@ -395,6 +406,19 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 	const taken = lines(doc.materialsTaken)
 	if (intent === "continue") {
+		// "N/A" counts: the report just can't be blank.
+		const report = form.has("fieldNotes")
+			? (form.get("fieldNotes") as string).trim()
+			: (doc.fieldNotes ?? "")
+		if (!report) return refusal("docs_field.errors.field_report_required")
+		const stored = await db.photo.findMany({
+			where: { docId: doc.id },
+			select: { tag: true },
+		})
+		const has = (tag: PhotoTag) =>
+			stored.some((p) => p.tag === tag) || photos.some((p) => p.tag === tag)
+		if (!has("BEFORE") || !has("AFTER"))
+			return refusal("docs_field.errors.photos_required")
 		rows ??= fieldMaterialsOrDefault(doc.fieldMaterials, taken)
 		// Billable (WAREHOUSE_ISSUE) use cannot exceed what was issued; extra
 		// material is entered under another Source.
@@ -514,7 +538,7 @@ function PhotoBox({
 							})}
 				</span>
 			</div>
-			<div className="grid grid-cols-4 gap-2">
+			<div className="grid max-w-md grid-cols-4 gap-2">
 				{photos.map((p) => (
 					<a
 						key={p.id}
@@ -649,6 +673,8 @@ export default function FieldUpdate({
 		photos,
 		blueprints,
 		blueprintRequired,
+		prefieldRequired,
+		stage,
 		materialsTaken,
 		estimatedMaterials,
 		fieldMaterials,
@@ -725,7 +751,7 @@ export default function FieldUpdate({
 					{doc.controlNumber}
 				</p>
 			</div>
-			<JobStepRail docId={doc.id} current="FIELD" role={user.role} />
+			<SupervisorStepRail stage={stage} view="FIELD" docId={doc.id} />
 
 			{doc.status === "SUPERVISOR_APPROVED" && (
 				<Callout tone="warn" title={t("docs_field.admin_override")}>
@@ -733,88 +759,7 @@ export default function FieldUpdate({
 				</Callout>
 			)}
 
-			<Card>
-				<CardHeader>{t("docs_field.photos_label")}</CardHeader>
-				<CardContent className="space-y-4">
-					<p className="text-xs text-muted-foreground">
-						{t("docs_field.photos_saved_hint")}
-					</p>
-					{PHOTO_BOXES.map(([tag, name, labelKey]) => (
-						<PhotoBox
-							key={tag}
-							name={name}
-							labelKey={labelKey}
-							photos={photos[tag]}
-						/>
-					))}
-					<BlueprintBox
-						docId={doc.id}
-						files={blueprints}
-						required={blueprintRequired}
-					/>
-				</CardContent>
-			</Card>
-
 			<Form method="post" className="space-y-5">
-				<Card>
-					<CardHeader>{t("docs_field.address_heading")}</CardHeader>
-					<CardContent className="space-y-3">
-						<p className="text-sm">
-							{t("docs_field.address_on_file", {
-								address: doc.jobAddressActual || doc.jobAddressEstimated,
-							})}
-						</p>
-						<div className="grid gap-3 sm:grid-cols-2">
-							{addressInput("direccion1", "docs_new.direccion1_label", {
-								placeholder: doc.jobAddressEstimated,
-								required: true,
-							})}
-							{addressInput("direccion2", "docs_new.direccion2_label")}
-							{addressInput("sector", "docs_new.sector_label")}
-							{addressInput("ciudad", "docs_new.ciudad_label")}
-							{addressInput("latitud", "docs_new.latitud_label")}
-							{addressInput("longitud", "docs_new.longitud_label")}
-						</div>
-						<p className="text-xs text-muted-foreground">
-							{t("docs_field.address_diff_hint")}
-						</p>
-						{addressCorrections.length > 0 && (
-							<div className="space-y-1.5">
-								<p className="text-xs font-medium">
-									{t("docs_field.address_history_heading")}
-								</p>
-								<ul className="space-y-1.5">
-									{addressCorrections.map((c) => (
-										<li
-											key={`${c.original}-${c.corrected}-${c.correctedAt}`}
-											className="rounded-lg bg-muted p-2 text-xs"
-										>
-											<span className="text-muted-foreground line-through">
-												{c.original}
-											</span>
-											{" → "}
-											<span className="font-medium">{c.corrected}</span>
-											<span className="block text-muted-foreground">
-												{t(
-													c.correctedById === user.id
-														? "docs_field.address_edited_by_you"
-														: correctorNames[c.correctedById]
-															? "docs_field.address_edited_by_name"
-															: "docs_field.address_edited_by_other",
-													{
-														name: correctorNames[c.correctedById],
-														when: new Date(c.correctedAt).toLocaleString(),
-													},
-												)}
-											</span>
-										</li>
-									))}
-								</ul>
-							</div>
-						)}
-					</CardContent>
-				</Card>
-
 				{services.rows.length > 0 && (
 					<Card>
 						<CardHeader>{t("docs_field.services_performed_label")}</CardHeader>
@@ -946,6 +891,39 @@ export default function FieldUpdate({
 					</CardContent>
 				</Card>
 
+				<Card>
+					<CardHeader>{t("docs_field.photos_label")}</CardHeader>
+					<CardContent className="space-y-4">
+						<p className="text-xs text-muted-foreground">
+							{t("docs_field.photos_saved_hint")}
+						</p>
+						{PHOTO_BOXES.map(([tag, name, labelKey]) => (
+							<PhotoBox
+								key={tag}
+								name={name}
+								labelKey={labelKey}
+								photos={photos[tag]}
+							/>
+						))}
+						<BlueprintBox
+							docId={doc.id}
+							files={blueprints}
+							required={blueprintRequired}
+						/>
+					</CardContent>
+				</Card>
+
+				{prefieldRequired && (
+					<Card>
+						<CardHeader>{t("docs_field.prefield_label")}</CardHeader>
+						<CardContent>
+							<p className="text-sm text-muted-foreground">
+								{t("docs_field.prefield_note")}
+							</p>
+						</CardContent>
+					</Card>
+				)}
+
 				<div className="space-y-1">
 					<Label htmlFor="fieldNotes">
 						{t("docs_field.field_notes_label")}
@@ -954,10 +932,70 @@ export default function FieldUpdate({
 						id="fieldNotes"
 						name="fieldNotes"
 						rows={3}
+						className="field-required"
 						placeholder={t("docs_field.field_notes_placeholder")}
 						defaultValue={doc.fieldNotes ?? ""}
 					/>
 				</div>
+
+				<Card>
+					<CardHeader>{t("docs_field.address_heading")}</CardHeader>
+					<CardContent className="space-y-3">
+						<p className="text-sm">
+							{t("docs_field.address_on_file", {
+								address: doc.jobAddressActual || doc.jobAddressEstimated,
+							})}
+						</p>
+						<div className="grid gap-3 sm:grid-cols-2">
+							{addressInput("direccion1", "docs_new.direccion1_label", {
+								placeholder: doc.jobAddressEstimated,
+								required: true,
+							})}
+							{addressInput("direccion2", "docs_new.direccion2_label")}
+							{addressInput("sector", "docs_new.sector_label")}
+							{addressInput("ciudad", "docs_new.ciudad_label")}
+							{addressInput("latitud", "docs_new.latitud_label")}
+							{addressInput("longitud", "docs_new.longitud_label")}
+						</div>
+						<p className="text-xs text-muted-foreground">
+							{t("docs_field.address_diff_hint")}
+						</p>
+						{addressCorrections.length > 0 && (
+							<div className="space-y-1.5">
+								<p className="text-xs font-medium">
+									{t("docs_field.address_history_heading")}
+								</p>
+								<ul className="space-y-1.5">
+									{addressCorrections.map((c) => (
+										<li
+											key={`${c.original}-${c.corrected}-${c.correctedAt}`}
+											className="rounded-lg bg-muted p-2 text-xs"
+										>
+											<span className="text-muted-foreground line-through">
+												{c.original}
+											</span>
+											{" → "}
+											<span className="font-medium">{c.corrected}</span>
+											<span className="block text-muted-foreground">
+												{t(
+													c.correctedById === user.id
+														? "docs_field.address_edited_by_you"
+														: correctorNames[c.correctedById]
+															? "docs_field.address_edited_by_name"
+															: "docs_field.address_edited_by_other",
+													{
+														name: correctorNames[c.correctedById],
+														when: new Date(c.correctedAt).toLocaleString(),
+													},
+												)}
+											</span>
+										</li>
+									))}
+								</ul>
+							</div>
+						)}
+					</CardContent>
+				</Card>
 
 				{result?.errorKey && (
 					<div role="alert">

@@ -36,7 +36,6 @@ function loaderData(doc: Record<string, unknown> = {}, interactive = true) {
 		},
 		user: { id: "sup-1", role: "SUPERVISOR", name: "Edgard Ocasio" },
 		serviceCodes: [],
-		photos: [],
 		supervisor: null,
 		sheet: null,
 		brigade: null,
@@ -313,16 +312,16 @@ describe("Packet → Claro step (render)", () => {
 		expect(html).not.toContain(">Resend<")
 	})
 
-	it("shows the Prefield, work summary without prices, materials and blueprint links", async () => {
+	it("shows the Prefield and leaves the work summary, materials and blueprint list to step 4", async () => {
 		const html = await render(step5())
 		expect(html).toContain("Prefield")
 		expect(html).toContain("ORD-77")
 		expect(html).toContain("SMR-9")
-		expect(html).toContain("34006301")
+		expect(html).not.toContain("34006301")
+		expect(html).not.toContain("Cable drop")
+		expect(html).not.toContain("Work summary")
+		expect(html).not.toContain("plano%201.pdf")
 		expect(html).not.toContain("$")
-		expect(html).toContain("Cable drop")
-		expect(html).toContain('href="/files/blueprints/doc-1/plano%201.pdf"')
-		expect(html).toContain('href="/files/blueprints/doc-1/plano%202.pdf"')
 	})
 
 	it("once sent, leaves the Prefield out when the Claro supervisor does not require it", async () => {
@@ -365,14 +364,10 @@ describe("Packet → Claro step (render)", () => {
 		expect(html).toMatch(/<select[^>]*name="claroSupervisorId"/)
 		expect(html).toMatch(/<option value="claro-1" selected="">Ramón Claro/)
 		expect(html).toContain("Ana Claro")
-		for (const name of [
-			"avisoNumber",
-			"ordenNumber",
-			"pedido",
-			"smr",
-			"titulo",
-		])
+		for (const name of ["ordenNumber", "pedido", "smr", "titulo"])
 			expect(html).toContain(`name="${name}"`)
+		// The Aviso # comes at step 6, so it is not a Prefield input here.
+		expect(html).not.toContain('name="avisoNumber"')
 		expect(html).toMatch(
 			/name="ordenNumber"[^>]*value="ORD-77"|value="ORD-77"[^>]*name="ordenNumber"/,
 		)
@@ -524,7 +519,7 @@ describe("Packet → Claro step (render)", () => {
 		)
 	})
 
-	it("with email off, Sign off can still be reopened before the send", async () => {
+	it("with email off, there is a single Back link to Sign off before the send", async () => {
 		const html = await render(
 			step5({
 				emailEnabled: false,
@@ -533,7 +528,8 @@ describe("Packet → Claro step (render)", () => {
 			}),
 		)
 		expect(html).toContain('value="mark_packet_sent"')
-		expect(html).toContain("Back to Sign off")
+		expect(html).not.toContain("Back to Sign off")
+		expect(html.match(/← <!-- -->Back/g)).toHaveLength(1)
 		expect(html).toContain(
 			"Send the PDF to the Claro supervisor, who creates the Aviso from your work order.",
 		)

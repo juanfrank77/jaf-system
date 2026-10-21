@@ -12,7 +12,6 @@ import {
 	PacketStepCard,
 	type PacketStepData,
 } from "~/components/packet-step"
-import { PhotosCard } from "~/components/review-field-work"
 import {
 	SignaturePad,
 	type SignaturePadHandle,
@@ -456,7 +455,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		doc: showPrices ? docData : withoutPrices(docData),
 		user,
 		serviceCodes: serviceCodesForRole(user.role, serviceCodes),
-		photos,
 		supervisor,
 		sheet:
 			sheet && !showPrices
@@ -1653,7 +1651,6 @@ export default function ReviewDoc({
 	const {
 		doc,
 		user,
-		photos,
 		supervisor,
 		sheet,
 		brigade,
@@ -1681,13 +1678,6 @@ export default function ReviewDoc({
 				rows?: { key: string; ok: boolean }[]
 		  }
 		| undefined
-	// Basenames for photos; plain string split because `node:path` is not available in the client bundle
-	const photoItems = photos.map((p) => ({
-		id: p.id,
-		basename: p.localPath.split(/[\\/]/).pop() ?? p.localPath,
-		tag: p.tag,
-		takenAt: String(p.takenAt),
-	}))
 	const panel = panelForStep(view)
 	// Signed, not sent, but the Claro supervisor's rules block Generate PDF:
 	// step 4 says what to fix on step 5.
@@ -1820,7 +1810,6 @@ export default function ReviewDoc({
 			{/* B — Packet → Claro */}
 			{panel === "INVOICE" && (
 				<>
-					<PhotosCard docId={doc.id} photos={photoItems} />
 					<PacketStepCard
 						packet={packet}
 						interactive={interactive}

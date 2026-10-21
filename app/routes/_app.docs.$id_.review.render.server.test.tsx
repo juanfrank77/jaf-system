@@ -36,7 +36,6 @@ function loaderData(doc: Record<string, unknown> = {}, interactive = true) {
 		},
 		user: { id: "sup-1", role: "SUPERVISOR", name: "Edgard Ocasio" },
 		serviceCodes: [],
-		photos: [],
 		supervisor: null,
 		sheet: null,
 		brigade: null,

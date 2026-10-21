@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Pill } from "~/components/ui/pill"
-import { type MaterialSource, sourceLabelKey } from "~/lib/material-source"
+import type { MaterialSource } from "~/lib/material-source"
 import type { PacketSendOutcome } from "../../generated/prisma/client"
 
 type PrefieldField =
@@ -80,7 +80,6 @@ export type PacketStepData = {
 
 /** The Prefield inputs the packet step edits until the first send. */
 const PREFIELD_INPUTS = [
-	"avisoNumber",
 	"ordenNumber",
 	"pedido",
 	"smr",
@@ -90,7 +89,6 @@ const PREFIELD_INPUTS = [
 const PACKET_INTENTS = ["send_packet", "mark_packet_sent"]
 
 const PREFIELD_FIELDS: PrefieldField[] = [
-	"avisoNumber",
 	"ordenNumber",
 	"pedido",
 	"smr",
@@ -250,14 +248,11 @@ export function PacketStepCard({
 	packet,
 	interactive,
 	errorKey,
-	workSummary,
 	children,
 }: {
 	packet: PacketStepData
 	interactive: boolean
 	errorKey?: string
-	/** The job block and the work done (no prices for a price-blind role). */
-	workSummary: React.ReactNode
 	/** Extra controls under the send buttons (e.g. back to Sign off). */
 	children?: React.ReactNode
 }) {
@@ -361,78 +356,6 @@ export function PacketStepCard({
 						</dl>
 					</section>
 				)}
-
-				<section className="space-y-1">
-					<h3 className="text-sm font-medium">{t("packet.work_summary")}</h3>
-					{workSummary}
-				</section>
-
-				<section className="space-y-1">
-					<h3 className="text-sm font-medium">{t("packet.materials")}</h3>
-					{packet.materials.length === 0 ? (
-						<p className="text-xs text-muted-foreground">
-							{t("packet.no_materials")}
-						</p>
-					) : (
-						<table className="w-full text-sm">
-							<thead>
-								<tr className="border-b text-left text-xs text-muted-foreground">
-									<th className="py-1.5">{t("docs_review.table.code")}</th>
-									<th className="py-1.5">
-										{t("docs_review.table.description")}
-									</th>
-									<th className="py-1.5 text-right">{t("packet.col_used")}</th>
-									<th className="py-1.5 text-right">
-										{t("packet.col_returned")}
-									</th>
-									<th className="py-1.5">{t("packet.col_source")}</th>
-								</tr>
-							</thead>
-							<tbody className="tabular-nums">
-								{packet.materials.map((m) => (
-									<tr
-										key={`${m.serviceCodeId}-${m.source}`}
-										className="border-b last:border-0"
-									>
-										<td className="py-1.5 font-mono text-xs">{m.claroCode}</td>
-										<td className="py-1.5">{m.name}</td>
-										<td className="py-1.5 text-right">
-											{m.used} {m.unit ?? ""}
-										</td>
-										<td className="py-1.5 text-right">{m.returned}</td>
-										<td className="py-1.5 text-xs">
-											{t(sourceLabelKey(m.source))}
-										</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
-					)}
-				</section>
-
-				<section className="space-y-1">
-					<h3 className="text-sm font-medium">{t("packet.blueprints")}</h3>
-					{packet.blueprints.length === 0 ? (
-						<p className="text-xs text-muted-foreground">
-							{t("packet.no_blueprint")}
-						</p>
-					) : (
-						<ul className="space-y-0.5 text-sm">
-							{packet.blueprints.map((b) => (
-								<li key={b.href}>
-									<a
-										href={b.href}
-										target="_blank"
-										rel="noreferrer"
-										className="text-accent-text underline"
-									>
-										{b.name}
-									</a>
-								</li>
-							))}
-						</ul>
-					)}
-				</section>
 
 				{last === "UNCONFIGURED" && (
 					<Pill variant="warn" icon="✉">

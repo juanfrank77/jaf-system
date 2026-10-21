@@ -9,7 +9,7 @@ const tx = vi.hoisted(() => ({
 vi.mock("~/lib/db.server", () => ({
 	db: {
 		jafInvoice: { findUniqueOrThrow: vi.fn(), update: vi.fn() },
-		auditTrail: { create: vi.fn() },
+		auditTrail: { create: vi.fn(), count: vi.fn(() => Promise.resolve(0)) },
 		user: { findMany: vi.fn(), findUnique: vi.fn() },
 		brigade: { findMany: vi.fn(), findUnique: vi.fn() },
 		serviceCode: { findMany: vi.fn(() => Promise.resolve([])) },
@@ -356,5 +356,87 @@ describe("edit never touches the Aviso number", () => {
 		expect(res.status).toBe(302)
 		const { data } = tx.jafInvoice.update.mock.calls[0][0]
 		expect(data).not.toHaveProperty("avisoNumber")
+	})
+})
+
+describe("three-edit limit for supervisors", () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+		tx.user.findMany.mockResolvedValue([])
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			baseDoc() as any,
+		)
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["SUR"],
+		} as any)
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
+			id: "b1",
+			area: "SUR",
+			memberIds: ["crew-1"],
+		} as any)
+	})
+
+	function as(role: "SUPERVISOR" | "ADMIN") {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "user-1", role },
+			session: {},
+		} as any)
+	}
+
+	function post() {
+		const form = new FormData()
+		form.set("jobType", "Install")
+		form.set("jobAddressEstimated", "123 Main")
+		form.set("brigadeId", "b1")
+		form.set("materials", "[]")
+		return action({
+			request: new Request("http://localhost/docs/doc-1/edit", {
+				method: "POST",
+				body: form,
+			}),
+			params: { id: "doc-1" },
+		} as any)
+	}
+
+	function load() {
+		return loader({
+			request: new Request("http://localhost/docs/doc-1/edit"),
+			params: { id: "doc-1" },
+		} as any)
+	}
+
+	it("counts the work order's edit audit rows", async () => {
+		as("SUPERVISOR")
+		vi.mocked(db.auditTrail.count).mockResolvedValue(2)
+		const result = await load()
+		expect(result.editsUsed).toBe(2)
+		expect(db.auditTrail.count).toHaveBeenCalledWith({
+			where: { docId: "doc-1", action: "WORK_ORDER_EDITED" },
+		})
+	})
+
+	it("lets a supervisor make the third edit", async () => {
+		as("SUPERVISOR")
+		vi.mocked(db.auditTrail.count).mockResolvedValue(2)
+		await expect(post()).rejects.toMatchObject({ status: 302 })
+		expect(tx.jafInvoice.update).toHaveBeenCalled()
+	})
+
+	it("refuses a fourth edit and saves nothing", async () => {
+		as("SUPERVISOR")
+		vi.mocked(db.auditTrail.count).mockResolvedValue(3)
+		await expect(post()).resolves.toEqual({
+			errorKey: "docs_edit.errors.limit_reached",
+		})
+		expect(tx.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("does not limit an admin", async () => {
+		as("ADMIN")
+		vi.mocked(db.auditTrail.count).mockResolvedValue(9)
+		expect((await load()).editsUsed).toBeNull()
+		await expect(post()).rejects.toMatchObject({ status: 302 })
+		expect(db.auditTrail.count).not.toHaveBeenCalled()
+		expect(tx.jafInvoice.update).toHaveBeenCalled()
 	})
 })

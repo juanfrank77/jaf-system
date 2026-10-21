@@ -368,11 +368,16 @@
 		"aviso_label": "Aviso # (if known)"
 	},
 	"docs_edit": {
+		"edits_left_short": "{{left}} of {{max}} left",
+		"limit_reached": "You have used all {{max}} edits allowed on this work order. Cancel it and create a new one.",
+		"edits_left": "{{left}} of {{max}} edits left. After that the work order has to be cancelled and a new one created.",
+		"back_to_work_order": "Back to work order",
 		"title": "Edit Work Order",
 		"submit": "Save Changes",
 		"job_description_label": "Job description",
 		"service_codes_label": "Service codes",
 		"errors": {
+			"limit_reached": "No edits left on this work order. Cancel it and create a new one.",
 			"invalid_materials": "The materials list could not be read",
 			"invalid_service_lines": "Service codes could not be read.",
 			"missing_fields": "Job type, address, and at least one crew member are required",
@@ -858,6 +863,12 @@
 		"row.photos": "Photos before + after"
 	},
 	"precert": {
+		"info": {
+			"address": "Address",
+			"aviso": "Aviso #",
+			"supervisor": "Supervisor",
+			"crew": "Crew"
+		},
 		"heading": "Contractor Pre-Certification Sheet",
 		"generate": "Generate sheet",
 		"regenerate": "Regenerate sheet",

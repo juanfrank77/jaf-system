@@ -368,11 +368,16 @@
 		"aviso_label": "# Aviso (si se conoce)"
 	},
 	"docs_edit": {
+		"edits_left_short": "quedan {{left}} de {{max}}",
+		"limit_reached": "Ya usó las {{max}} ediciones permitidas en esta orden de trabajo. Cancélela y cree una nueva.",
+		"edits_left": "Quedan {{left}} de {{max}} ediciones. Después hay que cancelar la orden de trabajo y crear una nueva.",
+		"back_to_work_order": "Volver a la orden de trabajo",
 		"title": "Editar orden de trabajo",
 		"submit": "Guardar cambios",
 		"job_description_label": "Descripción del trabajo",
 		"service_codes_label": "Códigos de servicio",
 		"errors": {
+			"limit_reached": "No quedan ediciones en esta orden de trabajo. Cancélela y cree una nueva.",
 			"invalid_materials": "No se pudo leer la lista de materiales",
 			"invalid_service_lines": "No se pudieron leer los códigos de servicio.",
 			"missing_fields": "Se requieren tipo de trabajo, dirección y al menos un miembro de la cuadrilla",
@@ -858,6 +863,12 @@
 		"row.photos": "Fotos antes + después"
 	},
 	"precert": {
+		"info": {
+			"address": "Dirección",
+			"aviso": "Aviso #",
+			"supervisor": "Supervisor",
+			"crew": "Cuadrilla"
+		},
 		"heading": "Hoja de Pre-Certificación Contratista",
 		"generate": "Generar hoja",
 		"regenerate": "Regenerar hoja",

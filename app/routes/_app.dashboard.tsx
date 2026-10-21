@@ -9,7 +9,6 @@ import {
 } from "~/lib/dashboard-stats"
 import { db } from "~/lib/db.server"
 import { isDashboardFiltersEnabled } from "~/lib/features.server"
-import { isMissingAvisoPdf } from "~/lib/finance-pipeline.server"
 import { type OpenJobLabel, openJobLabel } from "~/lib/open-job-label"
 import { pageTitle } from "~/lib/page-title"
 import { requireSession } from "~/lib/permissions.server"
@@ -118,8 +117,6 @@ type QueueRow = {
 	note?: string | null
 	/** When the job entered this queue (submitted / returned / approved). */
 	since: Date | null
-	/** Why a job sits in the Blocked queue. */
-	blockReason?: "billing_aviso_pdf"
 	/** Open work orders list: who the job is waiting on. */
 	waitingOn?: WaitingOn
 }
@@ -206,57 +203,38 @@ async function withStages<
 async function loadSupervisorQueues(userId: string) {
 	const areas = await supervisorAreas(db, userId)
 	const scope = ownedOrInArea(userId, areas)
-	const [intakeRaw, pending, approved, billingBlockedRaw, openRaw] =
-		await Promise.all([
-			db.jafInvoice.findMany({
-				where: { ...scope, status: "CREATED" },
-				select: queueSelect,
-				orderBy: { createdAt: "desc" },
-				take: 50,
-			}),
-			db.jafInvoice.findMany({
-				where: { ...scope, status: "FIELD_UPDATED" },
-				select: queueSelect,
-				orderBy: { fieldSubmittedAt: "desc" },
-				take: 50,
-			}),
-			db.jafInvoice.findMany({
-				where: {
-					...scope,
-					supervisorApprovedAt: { not: null },
-					releasedToFinanceAt: null,
-					status: { not: "CANCELLED" },
-				},
-				select: queueSelect,
-				orderBy: { supervisorApprovedAt: "asc" },
-				take: 100,
-			}),
-			// Released to Finance without an Aviso PDF on file: billing cannot start.
-			db.jafInvoice.findMany({
-				where: {
-					...scope,
-					releasedToFinanceAt: { not: null },
-					status: { not: "CANCELLED" },
-					avisoDocPath: null,
-					claroPdfPath: null,
-					payablesClosedAt: null,
-				},
-				select: queueSelect,
-				orderBy: { releasedToFinanceAt: "asc" },
-				take: 50,
-			}),
-			// Everything the supervisor owns, from creation until it is paid.
-			db.jafInvoice.findMany({
-				where: {
-					...scope,
-					status: { not: "CANCELLED" },
-					payablesClosedAt: null,
-				},
-				select: queueSelect,
-				orderBy: { createdAt: "desc" },
-				take: 100,
-			}),
-		])
+	const [intakeRaw, pending, approved, openRaw] = await Promise.all([
+		db.jafInvoice.findMany({
+			where: { ...scope, status: "CREATED" },
+			select: queueSelect,
+			orderBy: { createdAt: "desc" },
+			take: 50,
+		}),
+		db.jafInvoice.findMany({
+			where: { ...scope, status: "FIELD_UPDATED" },
+			select: queueSelect,
+			orderBy: { fieldSubmittedAt: "desc" },
+			take: 50,
+		}),
+		db.jafInvoice.findMany({
+			where: {
+				...scope,
+				supervisorApprovedAt: { not: null },
+				releasedToFinanceAt: null,
+				status: { not: "CANCELLED" },
+			},
+			select: queueSelect,
+			orderBy: { supervisorApprovedAt: "asc" },
+			take: 100,
+		}),
+		// The steps before the packet, same as the sidebar's My open jobs.
+		db.jafInvoice.findMany({
+			where: { AND: [scope, supervisorQueueWhere("open")] },
+			select: queueSelect,
+			orderBy: { createdAt: "desc" },
+			take: 100,
+		}),
+	])
 	const intake = intakeRaw.map((d) => toRow(d, "INTAKE", d.createdAt))
 	const myOpen = (await withStages(openRaw)).map((d) => ({
 		...toRow(d, d.stage, d.createdAt),
@@ -268,7 +246,6 @@ async function loadSupervisorQueues(userId: string) {
 	)
 	const approvedRows: QueueRow[] = []
 	const missingAviso: QueueRow[] = []
-	const blocked: QueueRow[] = []
 	for (const d of approved) {
 		const stage = deriveSupervisorStage(d, null)
 		// No job is ever blocked on amounts (F2): only a saved Aviso matters.
@@ -278,20 +255,12 @@ async function loadSupervisorQueues(userId: string) {
 			missingAviso.push(toRow(d, stage, d.supervisorApprovedAt))
 		}
 	}
-	for (const d of billingBlockedRaw) {
-		if (!isMissingAvisoPdf(d)) continue
-		blocked.push({
-			...toRow(d, "RELEASED", d.releasedToFinanceAt),
-			blockReason: "billing_aviso_pdf",
-		})
-	}
 	return {
 		intake,
 		myOpen,
 		pendingReview,
 		approved: approvedRows,
 		missingAviso,
-		blocked,
 	}
 }
 

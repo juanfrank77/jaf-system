@@ -1381,9 +1381,6 @@
 			"you": "Waiting on: you",
 			"finance": "With Finance"
 		},
-		"block": {
-			"billing_aviso_pdf": "Billing: missing Aviso PDF"
-		},
 		"stage_queue": {
 			"field": "Field work in progress",
 			"open": "My open jobs",
@@ -1418,7 +1415,6 @@
 			"pending_review": "Awaiting your sign-off",
 			"approved": "Signed off",
 			"missing_aviso": "Missing Aviso",
-			"blocked": "Blocked",
 			"empty": "Nothing here."
 		},
 		"col": {
@@ -1444,8 +1440,6 @@
 		"aviso_number": "Aviso #",
 		"stat": {
 			"missing_aviso": "Missing Aviso",
-			"blocked": "Blocked",
-			"open_documents": "Open documents",
 			"awaiting_warehouse": "Awaiting warehouse",
 			"awaiting_crew": "Field work in progress",
 			"pending_review": "Pending review",

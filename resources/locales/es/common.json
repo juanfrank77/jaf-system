@@ -1381,9 +1381,6 @@
 			"you": "Esperando a: usted",
 			"finance": "En Finanzas"
 		},
-		"block": {
-			"billing_aviso_pdf": "Facturación: falta el PDF del Aviso"
-		},
 		"stage_queue": {
 			"field": "Trabajo de campo en curso",
 			"open": "Mis trabajos abiertos",
@@ -1418,7 +1415,6 @@
 			"pending_review": "Esperando su firma",
 			"approved": "Firmado",
 			"missing_aviso": "Falta Aviso",
-			"blocked": "Bloqueadas",
 			"empty": "Nada por aquí."
 		},
 		"col": {
@@ -1444,8 +1440,6 @@
 		"aviso_number": "Aviso #",
 		"stat": {
 			"missing_aviso": "Falta Aviso",
-			"blocked": "Bloqueado",
-			"open_documents": "Documentos abiertos",
 			"awaiting_warehouse": "Esperando almacén",
 			"awaiting_crew": "Trabajo de campo en curso",
 			"pending_review": "Pendientes de revisión",

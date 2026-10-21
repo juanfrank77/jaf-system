@@ -7,7 +7,6 @@ import {
 	DashboardFilters,
 	hasActiveFilters,
 } from "~/components/dashboard-filters"
-import { Badge } from "~/components/ui/badge"
 import { PageHeader } from "~/components/ui/page-header"
 import { Pill } from "~/components/ui/pill"
 import { QueueCard } from "~/components/ui/queue-card"
@@ -31,7 +30,6 @@ type QueueRow = {
 	note?: string | null
 	/** When the job entered this queue (submitted / returned / approved). */
 	since: Date | string | null
-	blockReason?: "billing_aviso_pdf"
 	waitingOn?: WaitingOn
 	/** The finer chip label (`openJobLabel`); falls back to the stage label. */
 	openLabel?: OpenJobLabel
@@ -43,7 +41,6 @@ export type SupervisorQueues = {
 	pendingReview: QueueRow[]
 	approved: QueueRow[]
 	missingAviso: QueueRow[]
-	blocked: QueueRow[]
 }
 
 export const STAGE_KEY: Record<SupervisorStage, ParseKeys> = {
@@ -61,22 +58,19 @@ export const STAGE_KEY: Record<SupervisorStage, ParseKeys> = {
 // Each count tile opens the list of jobs behind it: a sidebar-style stage queue,
 // or the section further down this page when the list is already there.
 const TILE_HREF: Partial<Record<string, string>> = {
-	"dashboard.stat.open_documents": "/dashboard?stage=all",
 	"dashboard.stat.awaiting_warehouse": "/dashboard?stage=intake",
 	"dashboard.stat.awaiting_crew": "/dashboard?stage=field",
 	"dashboard.stat.pending_review": "/dashboard?stage=review",
 }
 
 // Tile colors follow the queue card each count belongs to (Approved green,
-// Missing aviso amber, Blocked red); the rest are blue unless they are a flag.
+// Missing aviso amber); the rest are blue unless they are a flag.
 type StatTone = "neutral" | "ok" | "info" | "warn" | "flag"
 const TILE_TONE: Partial<Record<string, StatTone>> = {
-	"dashboard.stat.open_documents": "info",
 	"dashboard.stat.awaiting_warehouse": "info",
 	"dashboard.stat.awaiting_crew": "info",
 	"dashboard.stat.pending_review": "warn",
 	"dashboard.stat.missing_aviso": "warn",
-	"dashboard.stat.blocked": "flag",
 	"dashboard.stat.stage_awaiting_warehouse": "info",
 	"dashboard.stat.stage_awaiting_crew": "info",
 	"dashboard.stat.stage_pending_review": "warn",
@@ -165,11 +159,6 @@ function Queue({
 										{t(`dashboard.waiting_on.${r.waitingOn}`)}
 									</span>
 								) : null}
-								{r.blockReason ? (
-									<Badge variant="danger" className="mt-1 text-xs">
-										{t(`dashboard.block.${r.blockReason}`)}
-									</Badge>
-								) : null}
 								{r.note ? (
 									<span className="block text-xs text-status-warn">
 										{r.note}
@@ -245,8 +234,8 @@ export function SupervisorDashboard({
 			</div>
 		)
 	}
-	const workingStats = stats.slice(0, 4)
-	const accountingStats = stats.slice(4)
+	const workingStats = stats.slice(0, 3)
+	const accountingStats = stats.slice(3)
 	return (
 		<div className="space-y-4">
 			<PageHeader
@@ -288,12 +277,6 @@ export function SupervisorDashboard({
 					tone={TILE_TONE["dashboard.stat.missing_aviso"]}
 					value={queues.missingAviso.length}
 					href="#missing-aviso"
-				/>
-				<Stat
-					label={t("dashboard.stat.blocked")}
-					tone={TILE_TONE["dashboard.stat.blocked"]}
-					value={queues.blocked.length}
-					href="#blocked"
 				/>
 			</div>
 
@@ -341,14 +324,6 @@ export function SupervisorDashboard({
 				titleKey="dashboard.queue.missing_aviso"
 				rows={queues.missingAviso}
 				variant="warn"
-				href={(r) => supervisorStepHref(r.id, r.stage)}
-				since="approved"
-			/>
-			<Queue
-				id="blocked"
-				titleKey="dashboard.queue.blocked"
-				rows={queues.blocked}
-				variant="danger"
 				href={(r) => supervisorStepHref(r.id, r.stage)}
 				since="approved"
 			/>

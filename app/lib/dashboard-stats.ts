@@ -22,7 +22,6 @@ type DashboardDoc = {
 }
 
 export type DashboardStatLabelKey =
-	| "dashboard.stat.open_documents"
 	| "dashboard.stat.awaiting_warehouse"
 	| "dashboard.stat.awaiting_crew"
 	| "dashboard.stat.pending_review"
@@ -38,7 +37,6 @@ export type DashboardStatLabelKey =
 	| "dashboard.stat.open_receivables"
 	| "dashboard.stat.awaiting_claro_upload"
 	| "dashboard.stat.missing_aviso"
-	| "dashboard.stat.blocked"
 	| "dashboard.stat.stage_awaiting_warehouse"
 	| "dashboard.stat.stage_awaiting_crew"
 	| "dashboard.stat.stage_pending_review"
@@ -222,10 +220,6 @@ export function computeDashboardStats(
 	explainer: DashboardExplainer
 } {
 	if (role === "SUPERVISOR") {
-		const open = count(
-			docs,
-			(d) => d.status !== "LC_REQUEST_GENERATED" && d.status !== "CANCELLED",
-		)
 		const awaitingWarehouse = count(docs, (d) => d.status === "CREATED")
 		const awaitingCrew = count(
 			docs,
@@ -240,7 +234,6 @@ export function computeDashboardStats(
 		)
 		return {
 			stats: [
-				{ labelKey: "dashboard.stat.open_documents", value: open },
 				{
 					labelKey: "dashboard.stat.awaiting_warehouse",
 					value: awaitingWarehouse,

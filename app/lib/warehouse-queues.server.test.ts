@@ -17,9 +17,10 @@ describe("warehouseQueueWhere", () => {
 		expect(warehouseQueueWhere("release")).toEqual({ status: "PREPPED" })
 	})
 
-	it("returns is signed/field-updated work with no returned-materials record", () => {
+	it("returns is signed/field-updated warehouse work with no returned-materials record", () => {
 		expect(warehouseQueueWhere("returns")).toEqual({
 			status: { in: ["SIGNED", "FIELD_UPDATED"] },
+			materialsFromWarehouse: true,
 			materialsReturned: { equals: Prisma.DbNull },
 		})
 	})

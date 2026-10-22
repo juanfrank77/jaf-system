@@ -131,6 +131,7 @@ const FIELD_DOC_SELECT = {
 	fieldNotes: true,
 	fieldStartedAt: true,
 	fieldSubmittedAt: true,
+	materialsFromWarehouse: true,
 	supervisorApprovedAt: true,
 	jafInvoiceGeneratedAt: true,
 	avisoNumber: true,
@@ -232,6 +233,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			fieldNotes: doc.fieldNotes,
 			fieldStartedAt: doc.fieldStartedAt,
 			fieldSubmittedAt: doc.fieldSubmittedAt,
+			materialsFromWarehouse: doc.materialsFromWarehouse,
 		},
 		addressCorrections: corrections,
 		correctorNames: Object.fromEntries(
@@ -751,7 +753,12 @@ export default function FieldUpdate({
 					{doc.controlNumber}
 				</p>
 			</div>
-			<SupervisorStepRail stage={stage} view="FIELD" docId={doc.id} />
+			<SupervisorStepRail
+				stage={stage}
+				view="FIELD"
+				docId={doc.id}
+				warehouseSkipped={!doc.materialsFromWarehouse}
+			/>
 
 			{doc.status === "SUPERVISOR_APPROVED" && (
 				<Callout tone="warn" title={t("docs_field.admin_override")}>

@@ -1,8 +1,13 @@
 import type { ParseKeys } from "i18next"
+import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, Link, redirect } from "react-router"
 import { CrewPicker } from "~/components/crew-picker"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import {
+	MaterialsSourceChoice,
+	PrefieldNeededChoice,
+} from "~/components/intake-choices"
 import { MaterialPicker } from "~/components/material-picker"
 import { ServicePicker } from "~/components/service-picker"
 import { Button, buttonVariants } from "~/components/ui/button"
@@ -18,6 +23,11 @@ import {
 	readHistory,
 } from "~/lib/crew-assignment"
 import { db } from "~/lib/db.server"
+import {
+	type MaterialsChoice,
+	type PrefieldChoice,
+	parseIntakeAnswers,
+} from "~/lib/intake-answers"
 import { isEditableStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import {
@@ -66,7 +76,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	if (user.role === "SUPERVISOR") {
 		await assertDocInSupervisorScope(db, user.id, doc)
 	}
-	if (!isEditableStatus(doc.status)) throw redirect(`/docs/${params.id}`)
+	if (!isEditableStatus(doc.status, doc)) throw redirect(`/docs/${params.id}`)
 
 	const brigadeArgs = await assignableBrigadesWhere(db, user)
 	const [serviceCodes, brigades] = await Promise.all([
@@ -107,6 +117,13 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		showPrices,
 		brigades,
 		assignedBrigadeIds: assignedBrigadeIds(doc),
+		intakeAnswers: {
+			materials: (doc.materialsFromWarehouse ? "yes" : "no") as MaterialsChoice,
+			materialsReason: doc.materialsReason,
+			prefield: (doc.prefieldNeeded
+				? "needed"
+				: "not_needed") as PrefieldChoice,
+		},
 	}
 }
 
@@ -119,7 +136,12 @@ export async function action({ request, params }: Route.ActionArgs) {
 	if (user.role === "SUPERVISOR") {
 		await assertDocInSupervisorScope(db, user.id, doc)
 	}
-	if (!isEditableStatus(doc.status)) throw redirect(`/docs/${params.id}`)
+	if (!isEditableStatus(doc.status, doc)) {
+		// A no-warehouse job stops being editable once Field starts.
+		if (doc.status === "SIGNED" && !doc.materialsFromWarehouse)
+			return { errorKey: "docs_edit.errors.field_started" }
+		throw redirect(`/docs/${params.id}`)
+	}
 
 	const editsUsed = await supervisorEditsUsed(user.role, doc.id)
 	if (editsUsed !== null && supervisorEditsLeft(editsUsed) === 0)
@@ -154,6 +176,32 @@ export async function action({ request, params }: Route.ActionArgs) {
 		return { errorKey: "docs_edit.errors.missing_fields" }
 	}
 
+	const answers = parseIntakeAnswers(form)
+	if (!answers.ok) return { errorKey: answers.errorKey }
+	const { materialsFromWarehouse, materialsReason, prefieldNeeded } =
+		answers.value
+	const toNoWarehouse = doc.materialsFromWarehouse && !materialsFromWarehouse
+	const toWarehouse = !doc.materialsFromWarehouse && materialsFromWarehouse
+	// Once the warehouse has prepped, the materials are already staged for
+	// this job; switching away would strand them.
+	if (toNoWarehouse && doc.status !== "CREATED")
+		return { errorKey: "docs_edit.errors.warehouse_started" }
+	// isEditableStatus already refuses a no-warehouse job once Field started.
+	if (toWarehouse && doc.fieldStartedAt)
+		return { errorKey: "docs_edit.errors.field_started" }
+	// No warehouse: straight to Field with no materials baseline. Back to the
+	// warehouse: the job waits for prep again.
+	const status = toNoWarehouse ? "SIGNED" : toWarehouse ? "CREATED" : doc.status
+	if (!materialsFromWarehouse) estimatedMaterials = []
+	const answersChanged =
+		materialsFromWarehouse !== doc.materialsFromWarehouse ||
+		materialsReason !== doc.materialsReason ||
+		prefieldNeeded !== doc.prefieldNeeded
+	// A generated but unsent package no longer matches the answers; the send
+	// stays disabled until it is generated again. A sent one is left as sent.
+	const markPacketStale =
+		answersChanged && !!doc.jafInvoicePdfPath && !doc.jafInvoiceGeneratedAt
+
 	const brigades = await Promise.all(
 		brigadeIds.map((id) => db.brigade.findUnique({ where: { id } })),
 	)
@@ -184,6 +232,11 @@ export async function action({ request, params }: Route.ActionArgs) {
 				jobAddressEstimated,
 				jobDescription,
 				estimatedMaterials,
+				materialsFromWarehouse,
+				materialsReason,
+				prefieldNeeded,
+				...(status !== doc.status && { status }),
+				...(markPacketStale && { packetStale: true }),
 				serviceLines,
 				brigadeId,
 				assignedCrewIds,
@@ -224,14 +277,46 @@ export async function action({ request, params }: Route.ActionArgs) {
 						"serviceLines",
 						"brigadeId",
 						"assignedCrewIds",
+						"materialsFromWarehouse",
+						"materialsReason",
+						"prefieldNeeded",
 					],
 					brigadeIds,
 					materialsChanged,
+					answersChanged,
+					...(materialsFromWarehouse !== doc.materialsFromWarehouse && {
+						materialsFromWarehouse: {
+							before: doc.materialsFromWarehouse,
+							after: materialsFromWarehouse,
+						},
+					}),
+					...(materialsReason !== doc.materialsReason && {
+						materialsReason: {
+							before: doc.materialsReason,
+							after: materialsReason,
+						},
+					}),
+					...(prefieldNeeded !== doc.prefieldNeeded && {
+						prefieldNeeded: {
+							before: doc.prefieldNeeded,
+							after: prefieldNeeded,
+						},
+					}),
+					...(status !== doc.status && {
+						status: { before: doc.status, after: status },
+					}),
+					...(markPacketStale && { packetStale: true }),
 					prepChangedSincePrep: doc.status === "PREPPED" && materialsChanged,
 				},
 			},
 		})
-		if (doc.status === "PREPPED" && materialsChanged) {
+		const warehouseMessage =
+			doc.status === "PREPPED" && materialsChanged
+				? `Job ${doc.controlNumber} estimated materials changed after prep — please re-confirm.`
+				: toWarehouse
+					? `Job ${doc.controlNumber} — ${jobType} at ${jobAddressEstimated} now takes materials from the warehouse. Please prepare materials.`
+					: null
+		if (warehouseMessage) {
 			const warehouseUsers = await tx.user.findMany({
 				where: { role: "WAREHOUSE", active: true },
 			})
@@ -241,7 +326,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 						data: {
 							userId: w.id,
 							docId: params.id,
-							message: `Job ${doc.controlNumber} estimated materials changed after prep — please re-confirm.`,
+							message: warehouseMessage,
 						},
 					}),
 				),
@@ -264,7 +349,14 @@ export default function EditDoc({
 		showPrices,
 		brigades,
 		assignedBrigadeIds,
+		intakeAnswers,
 	} = loaderData
+	const [materialsChoice, setMaterialsChoice] = useState<MaterialsChoice | "">(
+		intakeAnswers.materials,
+	)
+	const [prefieldChoice, setPrefieldChoice] = useState<PrefieldChoice | "">(
+		intakeAnswers.prefield,
+	)
 	const error = actionData as { errorKey?: ParseKeys } | undefined
 	const { t } = useTranslation()
 	const editsLeft = editsUsed === null ? null : supervisorEditsLeft(editsUsed)
@@ -372,21 +464,31 @@ export default function EditDoc({
 								/>
 							</div>
 						</div>
-						<div>
-							<Label>{t("docs_new.estimated_materials_label")}</Label>
-							<Hint>{t("docs_new.estimated_materials_hint")}</Hint>
-							<div className="mt-1">
-								<MaterialPicker
-									materials={serviceCodes}
-									initialItems={
-										(doc.estimatedMaterials as {
-											serviceCodeId: string
-											qty: number
-										}[]) ?? []
-									}
-								/>
+						<MaterialsSourceChoice
+							value={materialsChoice}
+							onChange={setMaterialsChoice}
+							defaultReason={intakeAnswers.materialsReason}
+						>
+							<div>
+								<Label>{t("docs_new.estimated_materials_label")}</Label>
+								<Hint>{t("docs_new.estimated_materials_hint")}</Hint>
+								<div className="mt-1">
+									<MaterialPicker
+										materials={serviceCodes}
+										initialItems={
+											(doc.estimatedMaterials as {
+												serviceCodeId: string
+												qty: number
+											}[]) ?? []
+										}
+									/>
+								</div>
 							</div>
-						</div>
+						</MaterialsSourceChoice>
+						<PrefieldNeededChoice
+							value={prefieldChoice}
+							onChange={setPrefieldChoice}
+						/>
 						{error?.errorKey && (
 							<p className="text-sm text-status-danger">{t(error.errorKey)}</p>
 						)}

@@ -4,6 +4,10 @@ import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
 import { CrewPicker } from "~/components/crew-picker"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import {
+	MaterialsSourceChoice,
+	PrefieldNeededChoice,
+} from "~/components/intake-choices"
 import { MaterialPicker } from "~/components/material-picker"
 import { ServicePicker } from "~/components/service-picker"
 import { SupervisorStepRail } from "~/components/supervisor-step-rail"
@@ -29,6 +33,12 @@ import { buildCrewAssignment, parseBrigadeIds } from "~/lib/crew-assignment"
 import { db } from "~/lib/db.server"
 import { uploadFileName, validateBlueprintFile } from "~/lib/file-upload.server"
 import { composeJobAddress, parseAddressInput } from "~/lib/intake-address"
+import {
+	type MaterialsChoice,
+	type PrefieldChoice,
+	parseIntakeAnswers,
+	prefieldChoiceFor,
+} from "~/lib/intake-answers"
 import { requireRole } from "~/lib/permissions.server"
 import {
 	getActiveMaterialCodes,
@@ -95,8 +105,6 @@ export async function action({ request }: Route.ActionArgs) {
 	const claroSupervisorId = (
 		(form.get("claroSupervisorId") as string) || ""
 	).trim()
-	const prefield = (key: string) =>
-		((form.get(key) as string | null) ?? "").trim() || null
 	const blueprints = form
 		.getAll("blueprint")
 		.filter((f): f is File => f instanceof File && f.size > 0)
@@ -130,6 +138,16 @@ export async function action({ request }: Route.ActionArgs) {
 	if (!claro?.active) {
 		return { errorKey: "docs_new.errors.claro_supervisor_required" }
 	}
+	// The supervisor's answers are stored and read from here on; the Claro
+	// supervisor's requiresPrefield tag only pre-selected the choice.
+	const answers = parseIntakeAnswers(form)
+	if (!answers.ok) return { errorKey: answers.errorKey }
+	const { materialsFromWarehouse, materialsReason, prefieldNeeded } =
+		answers.value
+	// No warehouse: nothing to prep or release, so the job goes straight to
+	// Field (SIGNED) and carries no materials baseline.
+	const status = materialsFromWarehouse ? "CREATED" : "SIGNED"
+	if (!materialsFromWarehouse) estimatedMaterials = []
 
 	const parsed = parseAddressInput(form)
 	if (!parsed.ok) return { errorKey: parsed.errorKey }
@@ -156,15 +174,15 @@ export async function action({ request }: Route.ActionArgs) {
 		brigades as NonNullable<(typeof brigades)[number]>[],
 	)
 	const controlNumber = await generateControlNumber()
-	const warehouse = await db.user.findMany({
-		where: { role: "WAREHOUSE", active: true },
-	})
+	const warehouse = materialsFromWarehouse
+		? await db.user.findMany({ where: { role: "WAREHOUSE", active: true } })
+		: []
 
 	await db.$transaction(async (tx) => {
 		const doc = await tx.jafInvoice.create({
 			data: {
 				controlNumber,
-				status: "CREATED",
+				status,
 				jobType,
 				jobAddressEstimated,
 				claroSupervisorId: claro.id,
@@ -177,11 +195,9 @@ export async function action({ request }: Route.ActionArgs) {
 				ciudad: address.ciudad,
 				tipoPlanta: address.tipoPlanta,
 				grupoPlan: address.grupoPlan,
-				avisoNumber: prefield("avisoNumber"),
-				ordenNumber: prefield("ordenNumber"),
-				pedido: prefield("pedido"),
-				smr: prefield("smr"),
-				titulo: prefield("titulo"),
+				materialsFromWarehouse,
+				materialsReason,
+				prefieldNeeded,
 				jobDescription,
 				estimatedMaterials,
 				serviceLines,
@@ -220,20 +236,24 @@ export async function action({ request }: Route.ActionArgs) {
 				userId: user.id,
 				action: "CREATED",
 				diffJson: {
-					status: { before: null, after: "CREATED" },
+					status: { before: null, after: status },
+					materialsFromWarehouse,
+					materialsReason,
+					prefieldNeeded,
 					brigadeId,
 					brigadeIds,
 					serviceLines,
 				},
 			},
 		})
-		await tx.notification.createMany({
-			data: warehouse.map((w) => ({
-				userId: w.id,
-				docId: doc.id,
-				message: `New job ${controlNumber} — ${jobType} at ${jobAddressEstimated}. Please prepare materials.`,
-			})),
-		})
+		if (warehouse.length > 0)
+			await tx.notification.createMany({
+				data: warehouse.map((w) => ({
+					userId: w.id,
+					docId: doc.id,
+					message: `New job ${controlNumber} — ${jobType} at ${jobAddressEstimated}. Please prepare materials.`,
+				})),
+			})
 		return doc
 	})
 
@@ -247,13 +267,28 @@ export default function NewDoc({
 	const { serviceCodes, brigades, showPrices, claroSupervisors, suggestions } =
 		loaderData
 	const [claroId, setClaroId] = useState("")
+	const [materialsChoice, setMaterialsChoice] = useState<MaterialsChoice | "">(
+		"",
+	)
+	const [prefieldChoice, setPrefieldChoice] = useState<PrefieldChoice | "">("")
 	const claro = claroSupervisors.find((c) => c.id === claroId)
+	const pickClaro = (id: string) => {
+		setClaroId(id)
+		// Pre-select Prefield from the Claro supervisor's tag; the supervisor
+		// confirms or changes it.
+		setPrefieldChoice(
+			prefieldChoiceFor(claroSupervisors.find((c) => c.id === id)),
+		)
+	}
 	const error = actionData as { errorKey?: ParseKeys } | undefined
 	const { t } = useTranslation()
 	return (
 		<div className="space-y-4">
 			<PageHeader title={t("docs_new.title")} />
-			<SupervisorStepRail stage="INTAKE" />
+			<SupervisorStepRail
+				stage="INTAKE"
+				warehouseSkipped={materialsChoice === "no"}
+			/>
 			<div className="rounded-xl border border-border bg-card px-3 py-2 text-sm">
 				<span className="font-semibold">{t("docs_new.callout_title")}</span>
 				<span className="ml-2 text-muted-foreground">
@@ -286,7 +321,7 @@ export default function NewDoc({
 								<Select
 									name="claroSupervisorId"
 									value={claroId}
-									onValueChange={(v) => setClaroId(v ?? "")}
+									onValueChange={(v) => pickClaro(v ?? "")}
 									items={claroSupervisors.map((c) => ({
 										value: c.id,
 										label: c.name,
@@ -335,25 +370,6 @@ export default function NewDoc({
 								/>
 							</div>
 						</div>
-						<fieldset className="space-y-3">
-							<legend className="text-sm font-semibold">
-								{t("docs_new.prefield_heading")}
-							</legend>
-							<Hint>{t("docs_new.prefield_hint")}</Hint>
-							<div className="grid gap-4 md:grid-cols-3">
-								<TextField
-									name="avisoNumber"
-									label={t("docs_new.aviso_label")}
-								/>
-								<TextField
-									name="ordenNumber"
-									label={t("docs_new.orden_label")}
-								/>
-								<TextField name="pedido" label={t("docs_new.pedido_label")} />
-								<TextField name="smr" label={t("docs_new.smr_label")} />
-								<TextField name="titulo" label={t("docs_new.titulo_label")} />
-							</div>
-						</fieldset>
 						<fieldset className="space-y-3">
 							<legend className="text-sm font-semibold">
 								{t("docs_new.address_heading")}
@@ -433,20 +449,31 @@ export default function NewDoc({
 								<ServicePicker showPrices={showPrices} />
 							</div>
 						</div>
-						<div>
-							<Label>{t("docs_new.estimated_materials_label")}</Label>
-							<Hint>{t("docs_new.estimated_materials_hint")}</Hint>
-							<div className="mt-1">
-								<MaterialPicker materials={serviceCodes} />
+						<MaterialsSourceChoice
+							value={materialsChoice}
+							onChange={setMaterialsChoice}
+						>
+							<div>
+								<Label>{t("docs_new.estimated_materials_label")}</Label>
+								<Hint>{t("docs_new.estimated_materials_hint")}</Hint>
+								<div className="mt-1">
+									<MaterialPicker materials={serviceCodes} />
+								</div>
 							</div>
-						</div>
+						</MaterialsSourceChoice>
+						<PrefieldNeededChoice
+							value={prefieldChoice}
+							onChange={setPrefieldChoice}
+						/>
 						{error?.errorKey && (
 							<p className="text-sm text-status-danger">{t(error.errorKey)}</p>
 						)}
 						<div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
 							<span>{t("docs_new.flow_prefix")}:</span>
 							<span className="rounded-md bg-muted px-2.5 py-1">
-								{t("docs_new.flow_warehouse")}
+								{materialsChoice === "no"
+									? t("docs_new.flow_field")
+									: t("docs_new.flow_warehouse")}
 							</span>
 						</div>
 						<Button type="submit">{t("docs_new.submit")}</Button>

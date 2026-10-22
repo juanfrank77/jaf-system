@@ -18,8 +18,23 @@ const ALL_ROLES: Role[] = [
 const EDITABLE_STATUSES = ["CREATED", "PREPPED"] as const
 type EditableStatus = (typeof EDITABLE_STATUSES)[number]
 
-export function isEditableStatus(status: string): status is EditableStatus {
-	return EDITABLE_STATUSES.includes(status as EditableStatus)
+/**
+ * The work order can still be edited. A job whose materials do not come from
+ * the warehouse skips straight to SIGNED at intake, so it stays editable at
+ * SIGNED until Field starts. Without `doc`, only the warehouse-path statuses
+ * count.
+ */
+export function isEditableStatus(
+	status: string,
+	doc?: { materialsFromWarehouse: boolean; fieldStartedAt: Date | null },
+): boolean {
+	if (EDITABLE_STATUSES.includes(status as EditableStatus)) return true
+	return (
+		status === "SIGNED" &&
+		doc !== undefined &&
+		!doc.materialsFromWarehouse &&
+		!doc.fieldStartedAt
+	)
 }
 
 // A crew can be swapped until it has reported from the field. Once the field

@@ -13,6 +13,8 @@ export function warehouseQueueWhere(
 		case "returns":
 			return {
 				status: { in: ["SIGNED", "FIELD_UPDATED"] },
+				// A no-warehouse job never took material out, so nothing comes back.
+				materialsFromWarehouse: true,
 				materialsReturned: { equals: Prisma.DbNull },
 			}
 	}

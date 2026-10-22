@@ -41,6 +41,28 @@ describe("SupervisorStepRail", () => {
 		},
 	)
 
+	it("shows Warehouse as Not required, unlinked, on a no-warehouse job", async ({
+		renderStub,
+	}) => {
+		await mount(
+			renderStub,
+			<SupervisorStepRail
+				stage="FIELD"
+				view="FIELD"
+				docId="d1"
+				warehouseSkipped
+			/>,
+		)
+		expect(screen.getByText("2. Warehouse · Not required")).toBeInTheDocument()
+		expect(
+			screen.queryByRole("link", { name: "2. Warehouse · Not required" }),
+		).toBeNull()
+		expect(screen.getByRole("link", { name: "1. Intake" })).toHaveAttribute(
+			"href",
+			"/docs/d1",
+		)
+	})
+
 	it("sends Intake, Warehouse and Field back to the job page, except on the job page itself", async ({
 		renderStub,
 	}) => {

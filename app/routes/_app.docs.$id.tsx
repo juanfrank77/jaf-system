@@ -540,7 +540,12 @@ export default function DocView({
 	return (
 		<div className="space-y-5">
 			{(user.role === "SUPERVISOR" || user.role === "ADMIN") && (
-				<SupervisorStepRail stage={stage} docId={doc.id} page="job" />
+				<SupervisorStepRail
+					stage={stage}
+					docId={doc.id}
+					page="job"
+					warehouseSkipped={!doc.materialsFromWarehouse}
+				/>
 			)}
 			<div className="flex items-center justify-between">
 				<div>
@@ -840,7 +845,7 @@ export default function DocView({
 			)}
 
 			{(user.role === "SUPERVISOR" || user.role === "ADMIN") &&
-				isEditableStatus(doc.status) &&
+				isEditableStatus(doc.status, doc) &&
 				(editsLeft === 0 ? (
 					<p className="text-sm text-muted-foreground">
 						{t("docs_edit.limit_reached", { max: MAX_SUPERVISOR_EDITS })}

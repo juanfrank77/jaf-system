@@ -322,11 +322,11 @@
 		"assigned_crew_label": "Assigned Crew",
 		"estimated_materials_label": "Materials to prep",
 		"callout_title": "Step 1 · You",
-		"callout_body": "A job came in from Claro. Pick the Claro supervisor, enter the address and the service codes, choose the brigade. On submit it goes to the warehouse to prepare materials.",
+		"callout_body": "A job came in from Claro. Pick the Claro supervisor, enter the address and the service codes, choose the brigade and answer the two questions. On submit it goes to the warehouse to prepare materials, or straight to Field when the materials do not come from the warehouse.",
 		"work_order_label": "JAF Work Order #",
 		"work_order_auto": "Assigned on create",
-		"work_order_hint": "Assigned automatically. Not the invoice, not the Aviso.",
-		"job_address_hint": "Enter the estimated address if you have one. If you only have coordinates, enter latitude, longitude as in the Claro Aviso. The crew corrects it on site.",
+		"work_order_hint": "Assigned automatically. Not the invoice, not Claro's number.",
+		"job_address_hint": "Enter the estimated address if you have one. If you only have coordinates, enter latitude, longitude as Claro sent them. The crew corrects it on site.",
 		"crew_hint": "Only your area’s brigades are listed.",
 		"flow_prefix": "On submit",
 		"flow_warehouse": "Warehouse — prep",
@@ -339,21 +339,18 @@
 			"brigade_invalid": "That brigade is not available.",
 			"claro_supervisor_required": "Select an active Claro supervisor.",
 			"address_required": "Dirección 1, Tipo, Tipo Planta and Grupo Plan are required.",
-			"blueprint_invalid": "The blueprint must be a PDF (up to 30 MB) or a photo (JPEG, PNG, WebP or HEIC, up to 10 MB)."
+			"blueprint_invalid": "The blueprint must be a PDF (up to 30 MB) or a photo (JPEG, PNG, WebP or HEIC, up to 10 MB).",
+			"materials_choice_required": "Go back and choose whether the materials come from the warehouse.",
+			"materials_reason_required": "Go back and write where the materials come from.",
+			"prefield_choice_required": "Go back and choose whether Prefield is needed."
 		},
 		"claro_supervisor_label": "Claro Supervisor",
 		"claro_supervisor_placeholder": "Select a Claro supervisor",
 		"claro_requires": "This supervisor requires:",
 		"requires_prefield_chip": "Prefield",
 		"requires_blueprint_chip": "Blueprint",
-		"prefield_heading": "Prefield",
-		"prefield_hint": "Optional now. Aviso # is cross-checked against the Aviso PDF at step 6. If this Claro supervisor requires the rest, they must be filled before the packet can be sent.",
-		"orden_label": "# Orden",
-		"pedido_label": "Pedido",
-		"smr_label": "SMR",
-		"titulo_label": "Título",
 		"address_heading": "Address",
-		"address_hint": "Same order as the Claro Aviso. Tipo, Tipo Planta and Grupo Plan are free text; suggestions come from earlier jobs.",
+		"address_hint": "Same order as Claro's documents. Tipo, Tipo Planta and Grupo Plan are free text; suggestions come from earlier jobs.",
 		"sector_label": "Sector",
 		"direccion1_label": "Dirección 1",
 		"direccion2_label": "Dirección 2",
@@ -365,7 +362,7 @@
 		"grupo_plan_label": "Grupo Plan",
 		"blueprint_label": "Blueprint (optional)",
 		"blueprint_hint": "PDF or photo. You can also add it later.",
-		"aviso_label": "Aviso # (if known)"
+		"flow_field": "Field — no warehouse"
 	},
 	"docs_edit": {
 		"edits_left_short": "{{left}} of {{max}} left",
@@ -381,8 +378,21 @@
 			"invalid_materials": "The materials list could not be read",
 			"invalid_service_lines": "Service codes could not be read.",
 			"missing_fields": "Job type, address, and at least one crew member are required",
-			"brigade_invalid": "That brigade is not available."
+			"brigade_invalid": "That brigade is not available.",
+			"warehouse_started": "The warehouse has already prepped this job, so its materials can no longer be switched away from the warehouse.",
+			"field_started": "Field work has started on this job, so it can no longer be sent to the warehouse."
 		}
+	},
+	"intake_choices": {
+		"materials_question": "Materials from the warehouse?",
+		"materials_yes": "Yes",
+		"materials_no": "No",
+		"materials_reason_label": "Where do the materials come from?",
+		"materials_reason_placeholder": "Own truck, Claro drop-off, existing plant… as the crew reports it",
+		"prefield_question": "Prefield",
+		"prefield_needed": "Needed",
+		"prefield_not_needed": "Not needed",
+		"prefield_hint": "Pre-selected from the Claro supervisor. Confirm or change it."
 	},
 	"admin_history": {
 		"timeline_heading": "Event timeline",
@@ -1999,7 +2009,8 @@
 			"release": "Release",
 			"field": "Work",
 			"return": "Return",
-			"close": "Supervisor · Finance"
+			"close": "Supervisor · Finance",
+			"not_required": "Not required"
 		},
 		"callout": {
 			"sign_title": "Step 3 · You + Crew",

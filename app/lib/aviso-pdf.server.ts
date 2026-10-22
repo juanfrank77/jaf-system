@@ -1,8 +1,11 @@
 import { extractText } from "unpdf"
+import { type AvisoMaterialRow, parseAvisoMaterials } from "./aviso-materials"
 
 /**
- * Step 6 reads one thing from the Aviso PDF: its number, to check it against
- * the typed one. Rows, quantities and amounts are never read (spec F2).
+ * Step 6 requires one thing from the Aviso PDF: its number, checked against the
+ * typed one. The materials table is also read, best-effort (`readAvisoMaterials`):
+ * it only ever feeds an advisory discrepancy and never blocks (spec F2). Amounts
+ * are never read.
  */
 type AvisoPdfErrorCode = "unreadable" | "no_number" | "multiple_numbers"
 
@@ -27,16 +30,33 @@ export function avisoNumberFromText(text: string): string {
 	return [...numbers][0]
 }
 
-/** Extracts the text layer (no OCR) and returns the 8-digit Aviso number. */
-export async function readAvisoNumber(bytes: Uint8Array): Promise<string> {
-	let text: string
+/**
+ * The merged text layer (no OCR); throws `unreadable` if extraction fails.
+ * pdf.js takes ownership of (detaches) the buffer it is given, so it reads a
+ * copy: step 6 reads the same bytes twice (number, then materials).
+ */
+async function extractAvisoText(bytes: Uint8Array): Promise<string> {
 	try {
-		const { text: extracted } = await extractText(bytes, {
-			mergePages: true,
-		})
-		text = extracted
+		const { text } = await extractText(bytes.slice(), { mergePages: true })
+		return text
 	} catch {
 		throw new AvisoPdfError("unreadable")
 	}
-	return avisoNumberFromText(text)
+}
+
+/** Extracts the text layer (no OCR) and returns the 8-digit Aviso number. */
+export async function readAvisoNumber(bytes: Uint8Array): Promise<string> {
+	return avisoNumberFromText(await extractAvisoText(bytes))
+}
+
+/** Materials used per the Aviso, or null when they cannot be read with confidence. */
+export async function readAvisoMaterials(
+	bytes: Uint8Array,
+	knownCodes: ReadonlySet<string>,
+): Promise<AvisoMaterialRow[] | null> {
+	try {
+		return parseAvisoMaterials(await extractAvisoText(bytes), knownCodes)
+	} catch {
+		return null
+	}
 }

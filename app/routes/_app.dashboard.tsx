@@ -1,6 +1,10 @@
 import { redirect } from "react-router"
 import { RoleDashboard } from "~/components/dashboards/role-dashboard"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import {
+	type AvisoDiscrepancy,
+	discrepancyAgeDays,
+} from "~/lib/aviso-discrepancy"
 import { isAvisoSaved } from "~/lib/aviso-document"
 import { refuseCrew } from "~/lib/crew-notice.server"
 import {
@@ -27,7 +31,11 @@ import {
 import { NO_WAREHOUSE_COUNTS } from "~/lib/warehouse-queues"
 import { countWarehouseQueues } from "~/lib/warehouse-queues.server"
 import { resolveWarehouseScope } from "~/lib/warehouse-scope.server"
-import type { DocStatus, Prisma, Role } from "../../generated/prisma/client"
+import {
+	type DocStatus,
+	Prisma,
+	type Role,
+} from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.dashboard"
 
 export const meta: Route.MetaFunction = ({ matches }) => [
@@ -122,6 +130,11 @@ type QueueRow = {
 	waitingOn?: WaitingOn
 }
 
+/** Has a recorded Aviso materials discrepancy (cleared only by a clean Aviso). */
+function hasAvisoDiscrepancy(): Prisma.JafInvoiceWhereInput {
+	return { avisoDiscrepancy: { not: Prisma.DbNull } }
+}
+
 const queueSelect = {
 	id: true,
 	controlNumber: true,
@@ -206,38 +219,52 @@ async function withStages<
 async function loadSupervisorQueues(userId: string) {
 	const areas = await supervisorAreas(db, userId)
 	const scope = ownedOrInArea(userId, areas)
-	const [intakeRaw, pending, approved, openRaw] = await Promise.all([
-		db.jafInvoice.findMany({
-			where: { ...scope, status: "CREATED" },
-			select: queueSelect,
-			orderBy: { createdAt: "desc" },
-			take: 50,
-		}),
-		db.jafInvoice.findMany({
-			where: { ...scope, status: "FIELD_UPDATED" },
-			select: queueSelect,
-			orderBy: { fieldSubmittedAt: "desc" },
-			take: 50,
-		}),
-		db.jafInvoice.findMany({
-			where: {
-				...scope,
-				supervisorApprovedAt: { not: null },
-				releasedToFinanceAt: null,
-				status: { not: "CANCELLED" },
-			},
-			select: queueSelect,
-			orderBy: { supervisorApprovedAt: "asc" },
-			take: 100,
-		}),
-		// The steps before the packet, same as the sidebar's My open jobs.
-		db.jafInvoice.findMany({
-			where: { AND: [scope, supervisorQueueWhere("open")] },
-			select: queueSelect,
-			orderBy: { createdAt: "desc" },
-			take: 100,
-		}),
-	])
+	const [intakeRaw, pending, approved, openRaw, discrepancyRaw] =
+		await Promise.all([
+			db.jafInvoice.findMany({
+				where: { ...scope, status: "CREATED" },
+				select: queueSelect,
+				orderBy: { createdAt: "desc" },
+				take: 50,
+			}),
+			db.jafInvoice.findMany({
+				where: { ...scope, status: "FIELD_UPDATED" },
+				select: queueSelect,
+				orderBy: { fieldSubmittedAt: "desc" },
+				take: 50,
+			}),
+			db.jafInvoice.findMany({
+				where: {
+					...scope,
+					supervisorApprovedAt: { not: null },
+					releasedToFinanceAt: null,
+					status: { not: "CANCELLED" },
+				},
+				select: queueSelect,
+				orderBy: { supervisorApprovedAt: "asc" },
+				take: 100,
+			}),
+			// The steps before the packet, same as the sidebar's My open jobs.
+			db.jafInvoice.findMany({
+				where: { AND: [scope, supervisorQueueWhere("open")] },
+				select: queueSelect,
+				orderBy: { createdAt: "desc" },
+				take: 100,
+			}),
+			// "Action needed": the Aviso differs from the work order. A note does
+			// not clear it; only a clean (replacement) Aviso does. Until release.
+			db.jafInvoice.findMany({
+				where: {
+					...scope,
+					...hasAvisoDiscrepancy(),
+					releasedToFinanceAt: null,
+					status: { not: "CANCELLED" },
+				},
+				select: { ...queueSelect, avisoDiscrepancy: true },
+				orderBy: { supervisorApprovedAt: "asc" },
+				take: 100,
+			}),
+		])
 	const intake = intakeRaw.map((d) => toRow(d, "INTAKE", d.createdAt))
 	const myOpen = (await withStages(openRaw)).map((d) => ({
 		...toRow(d, d.stage, d.createdAt),
@@ -258,12 +285,21 @@ async function loadSupervisorQueues(userId: string) {
 			missingAviso.push(toRow(d, stage, d.supervisorApprovedAt))
 		}
 	}
+	const now = new Date()
+	const actionNeeded = (await withStages(discrepancyRaw)).map((d) => {
+		const discrepancy = d.avisoDiscrepancy as AvisoDiscrepancy
+		return {
+			...toRow(d, d.stage, new Date(discrepancy.detectedAt)),
+			daysOpen: discrepancyAgeDays(discrepancy, now),
+		}
+	})
 	return {
 		intake,
 		myOpen,
 		pendingReview,
 		approved: approvedRows,
 		missingAviso,
+		actionNeeded,
 	}
 }
 
@@ -390,9 +426,26 @@ export async function loader({ request }: Route.LoaderArgs) {
 					})
 				).filter((d) => d.status !== "LC_REQUEST_GENERATED")
 			: visibleDocs
+	// The admin's "needs attention": the open Aviso discrepancies of live,
+	// unreleased jobs, as on the supervisor's card (only the stale ones raise
+	// the alert). Released or cancelled jobs would hold the alert forever.
+	const avisoDiscrepancies =
+		user.role === "ADMIN"
+			? (
+					await db.jafInvoice.findMany({
+						where: {
+							...hasAvisoDiscrepancy(),
+							releasedToFinanceAt: null,
+							status: { not: "CANCELLED" },
+						},
+						select: { avisoDiscrepancy: true },
+					})
+				).map((d) => d.avisoDiscrepancy as AvisoDiscrepancy)
+			: []
 	const { stats, alert, explainer } = computeDashboardStats(
 		user.role,
 		statsDocs,
+		{ avisoDiscrepancies },
 	)
 
 	const supervisorQueues =

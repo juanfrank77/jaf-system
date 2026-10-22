@@ -3,7 +3,7 @@ import type { ParseKeys } from "i18next"
 import { useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, Link, redirect } from "react-router"
-import { AvisoCard } from "~/components/aviso-card"
+import { AvisoCard, type AvisoHistoryRow } from "~/components/aviso-card"
 import { DocStageBadge } from "~/components/doc-stage-badge"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import {
@@ -25,10 +25,20 @@ import {
 	GeneratePackage,
 	WorkOrderDocumentCard,
 } from "~/components/work-order-document"
+import {
+	AVISO_REPLACE_LIMIT,
+	type AvisoDiscrepancy,
+	type AvisoHistoryEntry,
+} from "~/lib/aviso-discrepancy"
 import { isAvisoSaved } from "~/lib/aviso-document"
+import {
+	compareMaterials,
+	type MaterialDifference,
+} from "~/lib/aviso-materials"
 import {
 	AvisoPdfError,
 	normaliseAvisoNumber,
+	readAvisoMaterials,
 	readAvisoNumber,
 } from "~/lib/aviso-pdf.server"
 import {
@@ -84,15 +94,22 @@ import { assertDocInSupervisorScope } from "~/lib/supervisor-scope"
 import {
 	deriveSupervisorStage,
 	isAvisoStarted,
+	isPreCertSigned,
 	panelForStep,
 	resolveStepView,
 	SUPERVISOR_STAGES,
 } from "~/lib/supervisor-stage"
 import { getIvuRate } from "~/lib/system-settings.server"
 import { isLegacyPricedInvoice, uploadHref } from "~/lib/upload-href"
-import { photosThatLoad, saveBuffer, saveUpload } from "~/lib/uploads.server"
+import {
+	moveUpload,
+	photosThatLoad,
+	restoreUpload,
+	saveBuffer,
+	saveUpload,
+} from "~/lib/uploads.server"
 import { formatMoney, toNumberPrice } from "~/lib/utils"
-import type { PreCertSheet, Prisma } from "../../generated/prisma/client"
+import { type PreCertSheet, Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id_.review"
 
 type MaterialLine = { serviceCodeId: string; qty: number }
@@ -141,6 +158,64 @@ async function checkAvisoNumber(
 		}
 	return { avisoNumber: onFile }
 }
+
+type AvisoMaterialsCheck =
+	| { kind: "skipped" | "unreadable" }
+	| { kind: "compared"; differences: MaterialDifference[] }
+
+/**
+ * Step 6's best-effort materials comparison (never blocks on its own): the
+ * work order's material lines (the used rows the work order document prints)
+ * against the Aviso's "MATERIALES USADOS" table, by Claro code. Skipped when
+ * the materials did not come from the warehouse (no baseline); "unreadable"
+ * when the table cannot be read with confidence.
+ */
+async function checkAvisoMaterials(
+	doc: {
+		materialsFromWarehouse: boolean
+		fieldMaterials: unknown
+		materialsTaken: unknown
+	},
+	pdf: Uint8Array,
+): Promise<AvisoMaterialsCheck> {
+	if (!doc.materialsFromWarehouse) return { kind: "skipped" }
+	const rows = fieldMaterialsOrDefault(
+		doc.fieldMaterials,
+		(doc.materialsTaken as MaterialLine[] | null) ?? [],
+	).filter((r) => r.used > 0)
+	const [catalog, codes] = await Promise.all([
+		getActiveServiceCodes(),
+		rows.length > 0
+			? db.serviceCode.findMany({
+					where: { id: { in: rows.map((r) => r.serviceCodeId) } },
+					select: { id: true, claroCode: true, name: true },
+				})
+			: Promise.resolve([]),
+	])
+	const aviso = await readAvisoMaterials(
+		pdf,
+		new Set(catalog.map((c) => c.claroCode)),
+	)
+	if (aviso === null) return { kind: "unreadable" }
+	const byId = new Map(codes.map((c) => [c.id, c]))
+	const workOrder = rows.flatMap((r) => {
+		const code = byId.get(r.serviceCodeId)
+		return code
+			? [{ claroCode: code.claroCode, name: code.name, used: r.used }]
+			: []
+	})
+	return { kind: "compared", differences: compareMaterials(workOrder, aviso) }
+}
+
+/** Replace Aviso lost a race: the job's one replacement was used meanwhile. */
+class ReplaceLimitReached extends Error {}
+
+const differencesOf = (check: AvisoMaterialsCheck) =>
+	check.kind === "compared" ? check.differences : []
+
+/** A JSON column value, or SQL NULL for `null`. */
+const jsonOrDbNull = (v: unknown) =>
+	v === null ? Prisma.DbNull : (v as Prisma.InputJsonValue)
 
 const isSig = (v: unknown) =>
 	typeof v === "string" && v.startsWith("data:image") && v !== "data:,"
@@ -290,11 +365,41 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	])
 	const correctorNames = Object.fromEntries(people.map((u) => [u.id, u.name]))
 	const stage = deriveSupervisorStage(doc, sheet)
+	const preCertSigned = isPreCertSigned(sheet)
 	const { view, interactive } = resolveStepView(
 		stage,
 		isAvisoStarted(doc),
 		new URL(request.url).searchParams.get("step"),
+		preCertSigned,
 	)
+	// Step 6 after the save: the replaced Avisos (kept, marked "replaced") and
+	// whether the job's one replacement is still open.
+	const avisoReplacements = isAvisoSaved(doc)
+		? await db.auditTrail.count({
+				where: { docId: params.id, action: "AVISO_REPLACED" },
+			})
+		: 0
+	const replaceUsed = avisoReplacements >= AVISO_REPLACE_LIMIT
+	const avisoHistory: AvisoHistoryRow[] = (
+		(doc.avisoHistory as AvisoHistoryEntry[] | null) ?? []
+	).map((h) => ({
+		avisoNumber: h.avisoNumber,
+		href: `/files/aviso-docs/${h.path.split(/[\\/]/).pop()}`,
+		reason: h.reason,
+		replacedAt: h.replacedAt,
+	}))
+	const aviso = {
+		discrepancy: (doc.avisoDiscrepancy as AvisoDiscrepancy | null) ?? null,
+		history: avisoHistory,
+		replaceUsed,
+		canReplace:
+			interactive &&
+			view === "AVISO" &&
+			isAvisoSaved(doc) &&
+			!doc.releasedToFinanceAt &&
+			!preCertSigned &&
+			!replaceUsed,
+	}
 	const loadingPhotos = await photosThatLoad(params.id, photos)
 	const gate = evaluateReleaseGate({ doc, sheet, photos: loadingPhotos })
 	const lineTotal =
@@ -460,6 +565,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		showPrices,
 		correctorNames,
 		packet,
+		aviso,
 		workOrder,
 		workOrderIssuedOn: (doc.completionSignedAt ?? new Date()).toISOString(),
 		canGeneratePdf,
@@ -494,8 +600,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 		const installed = (doc.installedServiceLines as ServiceLine[] | null) ?? []
 		if (ordered.length > 0 && installed.length === 0)
 			return { errorKey: "docs_review.errors.installed_lines_required" }
-		const avisoNumber =
-			(form.get("avisoNumber") as string | null)?.trim() || doc.avisoNumber
 		const claroNotes = (form.get("claroNotes") as string | null)?.trim() || null
 		const now = new Date()
 		await db.$transaction([
@@ -507,7 +611,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 					completionSignature: signature as string,
 					completedById: user.id,
 					completionSignedAt: now,
-					avisoNumber,
 					claroNotes,
 				},
 			}),
@@ -801,8 +904,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	if (intent === "save_aviso") {
-		// Step 6 (spec F2): the only check is that the number on the file equals
-		// the typed one. Rows, quantities and amounts are never compared.
+		// Step 6: the hard check is that the number on the file equals the typed
+		// one. Then, best effort, the materials table is compared with the work
+		// order: differing rows need a note to continue (never a block on its
+		// own); an unreadable table only says so. Amounts are never compared.
 		if (!doc.jafInvoiceGeneratedAt)
 			return { errorKey: "docs_review.errors.invoice_required" }
 		if (doc.releasedToFinanceAt) throw redirect(`/docs/${params.id}/review`)
@@ -813,6 +918,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 		const avisoPdf = form.get("avisoPdf")
 		const newFile =
 			avisoPdf instanceof File && avisoPdf.size > 0 ? avisoPdf : null
+		// A saved Aviso only changes through Replace Aviso (limited, with a reason).
+		if (newFile && isAvisoSaved(doc))
+			return { errorKey: "docs_review.errors.aviso_use_replace" }
 		let pdfBytes: Uint8Array
 		if (newFile) {
 			const validation = validateFile(newFile, "pdf")
@@ -840,6 +948,38 @@ export async function action({ request, params }: Route.ActionArgs) {
 		if ((await preCertLinesFor(installed)).lines.length === 0)
 			return { errorKey: "docs_review.errors.installed_lines_required" }
 
+		// Only a new file is compared. A re-save of the file on record keeps
+		// the stored discrepancy as is (only a replacement clears it) and only
+		// fills a missing note.
+		const prior = doc.avisoDiscrepancy as AvisoDiscrepancy | null
+		const materials: AvisoMaterialsCheck | { kind: "kept" } = newFile
+			? await checkAvisoMaterials(doc, pdfBytes)
+			: { kind: "kept" }
+		const differences =
+			materials.kind === "kept"
+				? (prior?.differences ?? [])
+				: differencesOf(materials)
+		let discrepancy: AvisoDiscrepancy | null = null
+		if (differences.length > 0) {
+			const note = (form.get("discrepancyNote") as string | null)?.trim() || ""
+			const now = new Date().toISOString()
+			if (materials.kind === "kept" && prior?.note) discrepancy = prior
+			else if (!note)
+				return {
+					errorKey: "docs_review.errors.aviso_materials_differ",
+					differences,
+				}
+			else
+				discrepancy = {
+					// Still the same open difference: its age keeps counting.
+					detectedAt: prior?.detectedAt ?? now,
+					differences,
+					note,
+					noteAt: now,
+					noteById: user.id,
+				}
+		}
+
 		// A new file or number regenerates the sheet; a signed one is kept as is.
 		const sheet = await activeSheet(params.id)
 		const changed = !!newFile || avisoNumber !== doc.avisoNumber
@@ -857,6 +997,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 				data: {
 					avisoNumber,
 					avisoDocPath,
+					avisoDiscrepancy: jsonOrDbNull(discrepancy),
 					...(transition
 						? { status: "CLARO_UPLOADED", claroUploadedAt: new Date() }
 						: {}),
@@ -866,8 +1007,14 @@ export async function action({ request, params }: Route.ActionArgs) {
 				data: {
 					docId: params.id,
 					userId: user.id,
-					action: "AVISO_CAPTURED",
-					diffJson: { avisoNumber, fileUploaded: !!newFile },
+					action: "AVISO_SAVED",
+					diffJson: {
+						avisoNumber,
+						fileUploaded: !!newFile,
+						materials: materials.kind,
+						differences,
+						note: discrepancy?.note ?? null,
+					} as unknown as Prisma.InputJsonValue,
 				},
 			}),
 			...(transition
@@ -891,7 +1038,158 @@ export async function action({ request, params }: Route.ActionArgs) {
 				actor: { id: user.id, role: user.role },
 			})
 		if (keepSigned) return { noteKey: "docs_review.aviso_resaved_signed" }
+		if (materials.kind === "unreadable")
+			return { info: "docs_review.aviso_materials_unreadable" }
 		throw redirect(`/docs/${params.id}/review`)
+	}
+
+	// Replace Aviso (from step 7 back to step 6): for a one-time mistake (wrong
+	// document, typo). One per job, counted from the audit trail, with a reason;
+	// only until any Pre-cert signature exists, and never after the release.
+	// The old file is moved aside (never overwritten) and kept in the history.
+	// The number check and the materials comparison run again: a clean result
+	// clears the discrepancy, a new difference raises a fresh one.
+	if (intent === "replace_aviso") {
+		if (doc.releasedToFinanceAt) throw redirect(`/docs/${params.id}/review`)
+		if (!isAvisoSaved(doc) || !doc.avisoDocPath)
+			return { errorKey: "docs_review.errors.aviso_pdf_required" }
+		if (isPreCertSigned(await activeSheet(params.id)))
+			return { errorKey: "docs_review.errors.replace_locked" }
+		const used = await db.auditTrail.count({
+			where: { docId: params.id, action: "AVISO_REPLACED" },
+		})
+		if (used >= AVISO_REPLACE_LIMIT)
+			return { errorKey: "docs_review.errors.replace_limit" }
+		const reason = (form.get("replaceReason") as string | null)?.trim() || ""
+		if (!reason)
+			return { errorKey: "docs_review.errors.replace_reason_required" }
+		const typed = (form.get("avisoNumber") as string | null)?.trim() || null
+		if (!typed) return { errorKey: "docs_review.errors.aviso_number_required" }
+		const avisoPdf = form.get("avisoPdf")
+		if (!(avisoPdf instanceof File) || avisoPdf.size === 0)
+			return { errorKey: "docs_review.errors.aviso_pdf_required" }
+		const validation = validateFile(avisoPdf, "pdf")
+		if (!validation.valid) return { errorMessage: validation.error }
+		const pdfBytes = new Uint8Array(await avisoPdf.arrayBuffer())
+		const checked = await checkAvisoNumber(typed, pdfBytes)
+		if ("errorKey" in checked)
+			return {
+				errorKey: checked.errorKey,
+				typedNumber: checked.typedNumber,
+				pdfAvisoNumber: checked.pdfAvisoNumber,
+			}
+		const { avisoNumber } = checked
+		const installed = (doc.installedServiceLines as ServiceLine[] | null) ?? []
+		if ((await preCertLinesFor(installed)).lines.length === 0)
+			return { errorKey: "docs_review.errors.installed_lines_required" }
+
+		const materials = await checkAvisoMaterials(doc, pdfBytes)
+		const differences = differencesOf(materials)
+		const now = new Date().toISOString()
+		// Same rule as the first save: a differing Aviso needs a note. It is a
+		// fresh discrepancy: the note on the replaced Aviso is not carried over.
+		let discrepancy: AvisoDiscrepancy | null = null
+		if (differences.length > 0) {
+			const note = (form.get("discrepancyNote") as string | null)?.trim() || ""
+			if (!note)
+				return {
+					errorKey: "docs_review.errors.aviso_materials_differ",
+					differences,
+				}
+			discrepancy = {
+				detectedAt: now,
+				differences,
+				note,
+				noteAt: now,
+				noteById: user.id,
+			}
+		}
+
+		// Everything validated: move the old file aside (never over an existing
+		// one: a concurrent replacement already took the slot), then store the
+		// new one and record both. Any failure after the move puts the old file
+		// back, so the job still points at a file that exists.
+		const original = doc.avisoDocPath
+		let replacedPath: string
+		try {
+			replacedPath = await moveUpload(
+				original,
+				"aviso-docs",
+				`${params.id}-aviso-replaced-${used + 1}.pdf`,
+			)
+		} catch (e) {
+			if ((e as { code?: string }).code === "EEXIST")
+				return { errorKey: "docs_review.errors.replace_limit" }
+			return { errorKey: "docs_review.errors.replace_failed" }
+		}
+		const history: AvisoHistoryEntry[] = [
+			...((doc.avisoHistory as AvisoHistoryEntry[] | null) ?? []),
+			{
+				avisoNumber: doc.avisoNumber,
+				path: replacedPath,
+				reason,
+				replacedAt: now,
+				replacedById: user.id,
+			},
+		]
+		try {
+			const avisoDocPath = await saveUpload(
+				"aviso-docs",
+				`${params.id}-aviso.pdf`,
+				avisoPdf,
+			)
+			await db.$transaction(async (tx) => {
+				// Re-checked here: another request may have replaced it meanwhile.
+				const replaced = await tx.auditTrail.count({
+					where: { docId: params.id, action: "AVISO_REPLACED" },
+				})
+				if (replaced >= AVISO_REPLACE_LIMIT) throw new ReplaceLimitReached()
+				await tx.jafInvoice.update({
+					where: { id: params.id },
+					data: {
+						avisoNumber,
+						avisoDocPath,
+						avisoDiscrepancy: jsonOrDbNull(discrepancy),
+						avisoHistory: history as unknown as Prisma.InputJsonValue,
+					},
+				})
+				await tx.auditTrail.create({
+					data: {
+						docId: params.id,
+						userId: user.id,
+						action: "AVISO_REPLACED",
+						diffJson: {
+							before: { avisoNumber: doc.avisoNumber, path: replacedPath },
+							after: { avisoNumber },
+							reason,
+							materials: materials.kind,
+							differences,
+							note: discrepancy?.note ?? null,
+						} as unknown as Prisma.InputJsonValue,
+					},
+				})
+			})
+		} catch (e) {
+			try {
+				await restoreUpload(replacedPath, original)
+			} catch {
+				// Best effort: the job's record still names the original path.
+			}
+			return {
+				errorKey:
+					e instanceof ReplaceLimitReached
+						? "docs_review.errors.replace_limit"
+						: "docs_review.errors.replace_failed",
+			}
+		}
+		// No Pre-cert signature exists (checked above): the sheet is regenerated.
+		await createPreCertSheet({
+			docId: params.id,
+			actor: { id: user.id, role: user.role },
+		})
+		if (materials.kind === "unreadable")
+			return { info: "docs_review.aviso_materials_unreadable" }
+		throw redirect(`/docs/${params.id}/review?step=AVISO`)
 	}
 
 	// Manual fallback: the sheet is generated on Aviso save, but a failed render
@@ -1669,6 +1967,7 @@ export default function ReviewDoc({
 		invoiceHeader,
 		showPrices,
 		packet,
+		aviso,
 		workOrder,
 		workOrderIssuedOn,
 		canGeneratePdf,
@@ -1680,8 +1979,10 @@ export default function ReviewDoc({
 				errorKey?: string
 				errorMessage?: string
 				noteKey?: string
+				info?: string
 				typedNumber?: string
 				pdfAvisoNumber?: string
+				differences?: MaterialDifference[]
 				rows?: { key: string; ok: boolean }[]
 		  }
 		| undefined
@@ -1847,6 +2148,13 @@ export default function ReviewDoc({
 					locked={!!doc.releasedToFinanceAt}
 					readOnly={!interactive}
 					result={error ?? null}
+					discrepancy={aviso.discrepancy}
+					history={aviso.history}
+					canReplace={aviso.canReplace}
+					replaceUsed={aviso.replaceUsed}
+					continueHref={
+						isAvisoSaved(doc) && stage !== "AVISO" ? "?step=PRECERT" : null
+					}
 				>
 					{interactive && doc.status === "SUPERVISOR_APPROVED" && (
 						<details className="pt-3">
@@ -1923,6 +2231,19 @@ export default function ReviewDoc({
 							readOnly={!interactive}
 							showPrices={showPrices}
 						/>
+					)}
+					{/* Back to step 6: Replace Aviso until a Pre-cert signature,
+					    view-only after it (`resolveStepView`). */}
+					{!doc.releasedToFinanceAt && (
+						<Link
+							to="?step=AVISO"
+							className={buttonVariants({
+								variant: "ghost",
+								className: "w-full",
+							})}
+						>
+							{t("precert.back_to_aviso")}
+						</Link>
 					)}
 				</section>
 			)}

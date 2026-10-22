@@ -7,6 +7,7 @@ import {
 	type ServiceLine,
 	sumLines,
 } from "~/lib/service-lines"
+import { isPreCertSigned } from "~/lib/supervisor-stage"
 import { saveBuffer } from "~/lib/uploads.server"
 import type { PreCertSheet, Prisma, Role } from "../../generated/prisma/client"
 
@@ -55,11 +56,7 @@ export const activeSheet = (docId: string) =>
 	})
 
 /** Any signature on the sheet: it is then never regenerated silently. */
-export const isSheetSigned = (sheet: {
-	sigSupervisorAt: Date | null
-	sigSubcontractorAt: Date | null
-	sigClaroAt: Date | null
-}) => !!(sheet.sigSupervisorAt || sheet.sigSubcontractorAt || sheet.sigClaroAt)
+export const isSheetSigned = isPreCertSigned
 
 /**
  * The sheet's lines: what the crew reported installed (extras included), never

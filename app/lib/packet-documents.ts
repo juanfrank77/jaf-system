@@ -11,6 +11,8 @@ type PacketDocument = {
 	detail: string
 	/** Where the document opens, or null when it is missing. */
 	href: string | null
+	/** Every original photo, in `takenAt` order; empty for the other rows. */
+	files: { name: string; href: string }[]
 }
 
 const basename = (p: string) => p.split(/[\\/]/).filter(Boolean).at(-1) ?? ""
@@ -39,18 +41,26 @@ export function packetDocuments(
 ): PacketDocument[] {
 	const gate = evaluateReleaseGate({ doc, sheet, photos })
 	const ok = (key: string) => gate.rows.find((r) => r.key === key)?.ok === true
-	const first = [...photos].sort(
+	const sorted = [...photos].sort(
 		(a, b) => a.takenAt.getTime() - b.takenAt.getTime(),
-	)[0]
+	)
+	// The photos route serves per-job folders: /files/photos/<docId>/<file>.
+	const photoFiles = sorted.map((p) => ({
+		name: basename(p.localPath),
+		href: `/files/photos/${encodeURIComponent(doc.id)}/${encodeURIComponent(basename(p.localPath))}`,
+	}))
+	const first = photoFiles[0]
 	const row = (
 		key: PacketDocumentKey,
 		detail: string,
 		href: string | null,
+		files: PacketDocument["files"] = [],
 	): PacketDocument => ({
 		key,
 		label: `finance_verify.packet.${key}`,
 		detail,
 		href,
+		files,
 	})
 	return [
 		row(
@@ -73,10 +83,9 @@ export function packetDocuments(
 		row(
 			"photos",
 			String(photos.length),
-			// The photos route serves per-job folders: /files/photos/<docId>/<file>.
-			ok("photos") && first
-				? `/files/photos/${encodeURIComponent(doc.id)}/${encodeURIComponent(basename(first.localPath))}`
-				: null,
+			// Kept for callers that open one file: the first photo taken.
+			ok("photos") && first ? first.href : null,
+			photoFiles,
 		),
 	]
 }

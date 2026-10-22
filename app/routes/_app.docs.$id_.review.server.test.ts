@@ -1,5 +1,16 @@
-import { readFile } from "node:fs/promises"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest"
 
 vi.mock("~/lib/db.server", () => {
 	const db: any = {
@@ -8,7 +19,11 @@ vi.mock("~/lib/db.server", () => {
 			update: vi.fn(),
 			updateMany: vi.fn(async () => ({ count: 1 })),
 		},
-		auditTrail: { create: vi.fn(), findFirst: vi.fn() },
+		auditTrail: {
+			create: vi.fn(),
+			findFirst: vi.fn(),
+			count: vi.fn(async () => 0),
+		},
 		notification: { create: vi.fn(), createMany: vi.fn() },
 		user: { findMany: vi.fn(), findUnique: vi.fn() },
 		photo: { findMany: vi.fn() },
@@ -42,6 +57,8 @@ vi.mock("~/lib/system-settings.server", () => ({
 vi.mock("~/lib/uploads.server", () => ({
 	saveBuffer: vi.fn(),
 	saveUpload: vi.fn(),
+	moveUpload: vi.fn(),
+	restoreUpload: vi.fn(),
 	// Default: every Photo row's file loads; individual tests override.
 	photosThatLoad: vi.fn(async (_docId: string, photos: unknown[]) => photos),
 }))
@@ -67,7 +84,7 @@ vi.mock("~/lib/aviso-pdf.server", async (importOriginal) => {
 	return { ...actual, readAvisoNumber: vi.fn(actual.readAvisoNumber) }
 })
 
-import { Document, Page, renderToBuffer } from "@react-pdf/renderer"
+import { Document, Page, renderToBuffer, Text } from "@react-pdf/renderer"
 import { createElement } from "react"
 import { AvisoPdfError, readAvisoNumber } from "~/lib/aviso-pdf.server"
 import { db } from "~/lib/db.server"
@@ -85,7 +102,14 @@ import {
 	getAvisoAmountTolerance,
 	getIvuRate,
 } from "~/lib/system-settings.server"
-import { photosThatLoad, saveBuffer, saveUpload } from "~/lib/uploads.server"
+import {
+	moveUpload,
+	photosThatLoad,
+	restoreUpload,
+	saveBuffer,
+	saveUpload,
+} from "~/lib/uploads.server"
+import { Prisma } from "../../generated/prisma/client"
 import { action, loader } from "./_app.docs.$id_.review"
 
 const CATALOG = [
@@ -406,7 +430,7 @@ describe("review: save_aviso (step 6: the number on the file is the only check)"
 		expectNothingWritten()
 	})
 
-	it("saves the number and file, logs one AVISO_CAPTURED and creates exactly one pre-cert sheet", async () => {
+	it("saves the number and file, logs one AVISO_SAVED and creates exactly one pre-cert sheet", async () => {
 		await expect(saveAviso()).rejects.toMatchObject({ status: 302 })
 		expect(readAvisoNumber).toHaveBeenCalledTimes(1)
 		expect(db.jafInvoice.update).toHaveBeenCalledTimes(1)
@@ -420,7 +444,7 @@ describe("review: save_aviso (step 6: the number on the file is the only check)"
 		expect(data).not.toHaveProperty("avisoLines")
 		expect(data).not.toHaveProperty("avisoLineTotal")
 		expect(data).not.toHaveProperty("avisoMatchedAt")
-		expect(audits().filter((a) => a === "AVISO_CAPTURED")).toHaveLength(1)
+		expect(audits().filter((a) => a === "AVISO_SAVED")).toHaveLength(1)
 		expect(audits()).not.toContain("QUANTITY_DISCREPANCY")
 		expect(audits()).toContain("PRECERT_GENERATED")
 		expect(db.preCertSheet.create).toHaveBeenCalledTimes(1)
@@ -528,50 +552,14 @@ describe("review: save_aviso (step 6: the number on the file is the only check)"
 		expectNothingWritten()
 	})
 
-	it("re-saving with a new file supersedes the unsigned sheet (version 2), not a duplicate", async () => {
-		vi.mocked(db.preCertSheet.findFirst).mockResolvedValue({
-			id: "sheet-1",
-			version: 1,
-			sigSupervisorAt: null,
-			sigSubcontractorAt: null,
-			sigClaroAt: null,
-		} as any)
-		await expect(
-			saveAviso({
-				status: "CLARO_UPLOADED",
-				avisoNumber: "10354739",
-				avisoDocPath: "/uploads/aviso-docs/doc-1-aviso.pdf",
-			}),
-		).rejects.toMatchObject({ status: 302 })
-		expect(db.preCertSheet.update).toHaveBeenCalledWith({
-			where: { id: "sheet-1" },
-			data: { supersededAt: expect.any(Date) },
-		})
-		expect(db.preCertSheet.create).toHaveBeenCalledTimes(1)
-		expect(db.preCertSheet.create).toHaveBeenCalledWith({
-			data: expect.objectContaining({ version: 2 }),
-		})
-	})
-
-	it("re-saving after the sheet was signed leaves the signed sheet alone and says so", async () => {
-		vi.mocked(db.preCertSheet.findFirst).mockResolvedValue({
-			id: "sheet-1",
-			version: 1,
-			sigSupervisorAt: new Date(),
-			sigSubcontractorAt: null,
-			sigClaroAt: null,
-		} as any)
+	it("a new file on a saved Aviso must go through Replace Aviso: save_aviso refuses it", async () => {
 		const res = await saveAviso({
 			status: "CLARO_UPLOADED",
 			avisoNumber: "10354739",
 			avisoDocPath: "/uploads/aviso-docs/doc-1-aviso.pdf",
 		})
-		expect(res).toEqual({ noteKey: "docs_review.aviso_resaved_signed" })
-		expect(db.jafInvoice.update).toHaveBeenCalledTimes(1)
-		expect(audits()).toEqual(["AVISO_CAPTURED"])
-		expect(db.preCertSheet.create).not.toHaveBeenCalled()
-		expect(db.preCertSheet.update).not.toHaveBeenCalled()
-		expect(generatePreCertSheetPdf).not.toHaveBeenCalled()
+		expect(res).toEqual({ errorKey: "docs_review.errors.aviso_use_replace" })
+		expectNothingWritten()
 	})
 
 	it("requires the packet to have been sent first", async () => {
@@ -583,6 +571,541 @@ describe("review: save_aviso (step 6: the number on the file is the only check)"
 			params: { id: "doc-1" },
 		} as any)
 		expect(res).toEqual({ errorKey: "docs_review.errors.invoice_required" })
+	})
+})
+
+describe("review: Aviso materials comparison and Replace Aviso (step 6)", () => {
+	// Two warehouse materials on the work order: 3 poles and 2 cables.
+	const MATERIAL_CODES = [
+		{ id: "m1", claroCode: "4003587", name: "POSTE 30 PIES", unit: "EA" },
+		{ id: "m2", claroCode: "4003887", name: "CABLE", unit: "EA" },
+	]
+	const ACTIVE = [
+		...CATALOG,
+		...MATERIAL_CODES.map((c) => ({ ...c, accountCode: "1" })),
+	]
+	const sentDoc = {
+		...approvedDoc,
+		jafInvoiceGeneratedAt: new Date(),
+		materialsFromWarehouse: true,
+		fieldMaterials: [
+			{ serviceCodeId: "m1", used: 3, returned: 0, source: "WAREHOUSE_ISSUE" },
+			{ serviceCodeId: "m2", used: 2, returned: 0, source: "WAREHOUSE_ISSUE" },
+		],
+		avisoDiscrepancy: null,
+		avisoHistory: null,
+	}
+	const savedDoc = {
+		...sentDoc,
+		status: "CLARO_UPLOADED",
+		avisoNumber: "10354739",
+		avisoDocPath: "/uploads/aviso-docs/doc-1-aviso.pdf",
+	}
+
+	/** A one-page Aviso print whose text layer is `lines`. */
+	async function pdfWith(lines: string[]): Promise<File> {
+		const page = createElement(
+			Page,
+			{ size: "A4" },
+			...lines.map((l) => createElement(Text, { key: l }, l)),
+		)
+		const bytes = new Uint8Array(
+			await renderToBuffer(createElement(Document, null, page)),
+		)
+		return new File([bytes], "aviso.pdf", { type: "application/pdf" })
+	}
+	const aviso = (number: string, rows: string[]) =>
+		pdfWith([
+			`Aviso # ${number}`,
+			"MATERIALES USADOS TOTALES",
+			...rows,
+			"Comentarios",
+		])
+	const MATCHING = ["4003587 POSTE 30 PIES 3 3 0", "4003887 CABLE 2 2 0"]
+	// The Aviso says 2 poles where the work order says 3.
+	const DIFFERING = ["4003587 POSTE 30 PIES 3 2 1", "4003887 CABLE 2 2 0"]
+	// OCR noise: 4D03S87 is not a catalog code, so nothing is trusted.
+	const GARBLED = ["4D03S87 P0STE 3O PlES 3 3 0", "4003887 CABLE 2 2 0"]
+
+	async function run(
+		name: string,
+		over: Record<string, unknown>,
+		fields: Record<string, string>,
+		file: File | null,
+	) {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...over,
+		} as any)
+		const form = intent(name, fields)
+		if (file) form.set("avisoPdf", file)
+		return action({ request: post(form), params: { id: "doc-1" } } as any)
+	}
+	const saveAviso = async (
+		file: File,
+		fields: Record<string, string> = {},
+		over: Record<string, unknown> = {},
+	) =>
+		run(
+			"save_aviso",
+			{ ...sentDoc, ...over },
+			{ avisoNumber: "10354739", ...fields },
+			file,
+		)
+	const replaceAviso = async (
+		file: File | null,
+		fields: Record<string, string> = {},
+		over: Record<string, unknown> = {},
+	) =>
+		run(
+			"replace_aviso",
+			{ ...savedDoc, ...over },
+			{ avisoNumber: "10354740", replaceReason: "Wrong document", ...fields },
+			file,
+		)
+	const updateData = () =>
+		vi.mocked(db.jafInvoice.update).mock.calls[0]?.[0].data as any
+	const auditOf = (action: string) =>
+		vi
+			.mocked(db.auditTrail.create)
+			.mock.calls.map((c) => c[0].data)
+			.find((d) => d.action === action) as any
+
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1", role: "SUPERVISOR", name: "E" },
+			session: {},
+		} as any)
+		vi.mocked(getActiveServiceCodes).mockResolvedValue(ACTIVE as any)
+		vi.mocked(db.serviceCode.findMany).mockResolvedValue(MATERIAL_CODES as any)
+		vi.mocked(db.auditTrail.count).mockResolvedValue(0)
+		vi.mocked(saveUpload).mockResolvedValue(
+			"/uploads/aviso-docs/doc-1-aviso.pdf",
+		)
+		vi.mocked(moveUpload).mockResolvedValue(
+			"/uploads/aviso-docs/doc-1-aviso-replaced-1.pdf",
+		)
+		vi.mocked(generatePreCertSheetPdf).mockResolvedValue(Buffer.from("pdf"))
+		vi.mocked(saveBuffer).mockResolvedValue("/uploads/precert/doc-1-v1.pdf")
+		vi.mocked(db.preCertSheet.findFirst).mockResolvedValue(null)
+		vi.mocked(db.preCertSheet.create).mockResolvedValue({
+			id: "sheet-new",
+		} as any)
+		vi.mocked(db.user.findMany).mockResolvedValue([])
+	})
+
+	describe("save_aviso", () => {
+		it("(a) saves an Aviso whose materials match, with no discrepancy", async () => {
+			const res = await saveAviso(await aviso("10354739", MATCHING)).catch(
+				(e) => e,
+			)
+			expect(res).toMatchObject({ status: 302 })
+			expect(updateData()).toMatchObject({
+				avisoNumber: "10354739",
+				avisoDiscrepancy: Prisma.DbNull,
+			})
+			expect(auditOf("AVISO_SAVED").diffJson).toMatchObject({
+				avisoNumber: "10354739",
+				differences: [],
+			})
+		})
+
+		it("(b) shows the differing lines and saves nothing without a note", async () => {
+			const res = await saveAviso(await aviso("10354739", DIFFERING))
+			expect(res).toEqual({
+				errorKey: "docs_review.errors.aviso_materials_differ",
+				differences: [
+					{
+						claroCode: "4003587",
+						name: "POSTE 30 PIES",
+						workOrder: 3,
+						aviso: 2,
+					},
+				],
+			})
+			expect(saveUpload).not.toHaveBeenCalled()
+			expect(db.jafInvoice.update).not.toHaveBeenCalled()
+			expect(db.auditTrail.create).not.toHaveBeenCalled()
+		})
+
+		it("(c) continues with a note: saved, and the discrepancy is stored with the note", async () => {
+			const res = await saveAviso(await aviso("10354739", DIFFERING), {
+				discrepancyNote: "Claro counted one pole as returned",
+			}).catch((e) => e)
+			expect(res).toMatchObject({ status: 302 })
+			const data = updateData()
+			expect(data).toMatchObject({
+				avisoNumber: "10354739",
+				status: "CLARO_UPLOADED",
+				avisoDiscrepancy: {
+					detectedAt: expect.any(String),
+					differences: [
+						expect.objectContaining({ claroCode: "4003587", aviso: 2 }),
+					],
+					note: "Claro counted one pole as returned",
+					noteAt: expect.any(String),
+					noteById: "sup-1",
+				},
+			})
+			expect(auditOf("AVISO_SAVED").diffJson.differences).toHaveLength(1)
+			expect(db.preCertSheet.create).toHaveBeenCalledTimes(1)
+		})
+
+		it("(d) an unreadable materials table saves with an info message and no discrepancy", async () => {
+			const res = await saveAviso(await aviso("10354739", GARBLED))
+			expect(res).toEqual({ info: "docs_review.aviso_materials_unreadable" })
+			expect(updateData()).toMatchObject({
+				avisoNumber: "10354739",
+				avisoDiscrepancy: Prisma.DbNull,
+			})
+		})
+
+		it("(e) the number check runs first and still refuses a mismatch", async () => {
+			const res = await saveAviso(await aviso("10354738", DIFFERING))
+			expect(res).toEqual({
+				errorKey: "docs_review.errors.aviso_number_mismatch",
+				typedNumber: "10354739",
+				pdfAvisoNumber: "10354738",
+			})
+			expect(db.jafInvoice.update).not.toHaveBeenCalled()
+		})
+
+		it("(f) a job whose materials did not come from the warehouse skips the comparison", async () => {
+			const res = await saveAviso(
+				await aviso("10354739", DIFFERING),
+				{},
+				{ materialsFromWarehouse: false },
+			).catch((e) => e)
+			expect(res).toMatchObject({ status: 302 })
+			expect(updateData().avisoDiscrepancy).toBe(Prisma.DbNull)
+		})
+	})
+
+	describe("save_aviso without a new file (re-save of the file on record)", () => {
+		const stored = {
+			detectedAt: "2026-10-01T12:00:00.000Z",
+			differences: [
+				{ claroCode: "4003587", name: "POSTE 30 PIES", workOrder: 3, aviso: 2 },
+			],
+			note: "Claro counted one pole as returned",
+			noteAt: "2026-10-01T12:05:00.000Z",
+			noteById: "sup-0",
+		}
+		let dir: string
+		/** Writes an Aviso print to disk and returns it as the file on record. */
+		const onRecord = async (rows: string[]) => {
+			const file = await aviso("10354739", rows)
+			const path = join(dir, `aviso-${Math.random()}.pdf`)
+			await writeFile(path, new Uint8Array(await file.arrayBuffer()))
+			return path
+		}
+		const resave = (
+			over: Record<string, unknown>,
+			fields: Record<string, string> = {},
+		) =>
+			run(
+				"save_aviso",
+				{ ...sentDoc, avisoNumber: "10354739", ...over },
+				{ avisoNumber: "10354739", ...fields },
+				null,
+			).catch((e) => e)
+
+		beforeAll(async () => {
+			dir = await mkdtemp(join(tmpdir(), "aviso-resave-"))
+		})
+		afterAll(async () => {
+			await rm(dir, { recursive: true, force: true })
+		})
+
+		it("keeps a stored discrepancy as is, even if the file now compares clean", async () => {
+			const res = await resave({
+				avisoDocPath: await onRecord(MATCHING),
+				avisoDiscrepancy: stored,
+			})
+			expect(res).toMatchObject({ status: 302 })
+			expect(updateData().avisoDiscrepancy).toEqual(stored)
+		})
+
+		it("does not raise a discrepancy that was not stored", async () => {
+			const res = await resave({
+				avisoDocPath: await onRecord(DIFFERING),
+				avisoDiscrepancy: null,
+			})
+			expect(res).toMatchObject({ status: 302 })
+			expect(updateData().avisoDiscrepancy).toBe(Prisma.DbNull)
+		})
+
+		it("fills a missing note on the stored discrepancy, keeping its lines and age", async () => {
+			const res = await resave(
+				{
+					avisoDocPath: await onRecord(MATCHING),
+					avisoDiscrepancy: {
+						...stored,
+						note: null,
+						noteAt: null,
+						noteById: null,
+					},
+				},
+				{ discrepancyNote: "Checked with Claro" },
+			)
+			expect(res).toMatchObject({ status: 302 })
+			expect(updateData().avisoDiscrepancy).toEqual({
+				...stored,
+				note: "Checked with Claro",
+				noteAt: expect.any(String),
+				noteById: "sup-1",
+			})
+		})
+
+		it("still asks for the note when the stored discrepancy has none", async () => {
+			const res = await resave({
+				avisoDocPath: await onRecord(MATCHING),
+				avisoDiscrepancy: {
+					...stored,
+					note: null,
+					noteAt: null,
+					noteById: null,
+				},
+			})
+			expect(res).toEqual({
+				errorKey: "docs_review.errors.aviso_materials_differ",
+				differences: stored.differences,
+			})
+			expect(db.jafInvoice.update).not.toHaveBeenCalled()
+		})
+	})
+
+	describe("replace_aviso", () => {
+		it("(g) a clean replacement keeps the old file in history and clears the discrepancy", async () => {
+			vi.mocked(db.preCertSheet.findFirst).mockResolvedValue({
+				id: "sheet-1",
+				version: 1,
+				sigSupervisorAt: null,
+				sigSubcontractorAt: null,
+				sigClaroAt: null,
+			} as any)
+			const res = await replaceAviso(
+				await aviso("10354740", MATCHING),
+				{},
+				{
+					avisoDiscrepancy: {
+						detectedAt: "2026-10-01T00:00:00.000Z",
+						differences: [],
+						note: "x",
+						noteAt: null,
+						noteById: null,
+					},
+				},
+			).catch((e) => e)
+			expect(res).toMatchObject({ status: 302 })
+			expect(moveUpload).toHaveBeenCalledWith(
+				"/uploads/aviso-docs/doc-1-aviso.pdf",
+				"aviso-docs",
+				"doc-1-aviso-replaced-1.pdf",
+			)
+			expect(saveUpload).toHaveBeenCalledWith(
+				"aviso-docs",
+				"doc-1-aviso.pdf",
+				expect.any(File),
+			)
+			const data = updateData()
+			expect(data).toMatchObject({
+				avisoNumber: "10354740",
+				avisoDocPath: "/uploads/aviso-docs/doc-1-aviso.pdf",
+				avisoDiscrepancy: Prisma.DbNull,
+				avisoHistory: [
+					{
+						avisoNumber: "10354739",
+						path: "/uploads/aviso-docs/doc-1-aviso-replaced-1.pdf",
+						reason: "Wrong document",
+						replacedAt: expect.any(String),
+						replacedById: "sup-1",
+					},
+				],
+			})
+			expect(auditOf("AVISO_REPLACED").diffJson).toMatchObject({
+				reason: "Wrong document",
+				before: { avisoNumber: "10354739" },
+				after: { avisoNumber: "10354740" },
+				differences: [],
+			})
+			// The unsigned sheet is superseded by a fresh one.
+			expect(db.preCertSheet.create).toHaveBeenCalledWith({
+				data: expect.objectContaining({ version: 2 }),
+			})
+		})
+
+		it("(h) a replacement that still differs needs a note: without one nothing is replaced", async () => {
+			const res = await replaceAviso(await aviso("10354740", DIFFERING))
+			expect(res).toEqual({
+				errorKey: "docs_review.errors.aviso_materials_differ",
+				differences: [
+					{
+						claroCode: "4003587",
+						name: "POSTE 30 PIES",
+						workOrder: 3,
+						aviso: 2,
+					},
+				],
+			})
+			expect(moveUpload).not.toHaveBeenCalled()
+			expect(saveUpload).not.toHaveBeenCalled()
+			expect(db.jafInvoice.update).not.toHaveBeenCalled()
+			expect(db.auditTrail.create).not.toHaveBeenCalled()
+		})
+
+		it("(h) with a note, a differing replacement raises a fresh discrepancy carrying the new note", async () => {
+			await replaceAviso(
+				await aviso("10354740", DIFFERING),
+				{ discrepancyNote: "Claro will not correct it" },
+				{
+					avisoDiscrepancy: {
+						detectedAt: "2026-10-01T00:00:00.000Z",
+						differences: [],
+						note: "old note",
+						noteAt: "2026-10-01T00:00:00.000Z",
+						noteById: "sup-9",
+					},
+				},
+			).catch(() => {})
+			const d = updateData().avisoDiscrepancy
+			expect(d).toMatchObject({
+				differences: [expect.objectContaining({ claroCode: "4003587" })],
+				note: "Claro will not correct it",
+				noteAt: expect.any(String),
+				noteById: "sup-1",
+			})
+			expect(d.detectedAt).not.toBe("2026-10-01T00:00:00.000Z")
+			expect(auditOf("AVISO_REPLACED").diffJson).toMatchObject({
+				differences: [expect.objectContaining({ claroCode: "4003587" })],
+				note: "Claro will not correct it",
+			})
+		})
+
+		it("(i) only one replacement per job", async () => {
+			vi.mocked(db.auditTrail.count).mockResolvedValue(1)
+			const res = await replaceAviso(await aviso("10354740", MATCHING))
+			expect(res).toEqual({ errorKey: "docs_review.errors.replace_limit" })
+			expect(db.auditTrail.count).toHaveBeenCalledWith({
+				where: { docId: "doc-1", action: "AVISO_REPLACED" },
+			})
+			expect(moveUpload).not.toHaveBeenCalled()
+			expect(db.jafInvoice.update).not.toHaveBeenCalled()
+		})
+
+		it.each([
+			["supervisor", { sigSupervisorAt: new Date(), sigSubcontractorAt: null }],
+			[
+				"sub-contractor",
+				{ sigSupervisorAt: null, sigSubcontractorAt: new Date() },
+			],
+			[
+				"Claro",
+				{
+					sigSupervisorAt: null,
+					sigSubcontractorAt: null,
+					sigClaroAt: new Date(),
+				},
+			],
+		])(
+			"(j) is locked once the Pre-cert has a %s signature",
+			async (_l, sigs) => {
+				vi.mocked(db.preCertSheet.findFirst).mockResolvedValue({
+					id: "sheet-1",
+					version: 1,
+					sigClaroAt: null,
+					...sigs,
+				} as any)
+				const res = await replaceAviso(await aviso("10354740", MATCHING))
+				expect(res).toEqual({ errorKey: "docs_review.errors.replace_locked" })
+				expect(moveUpload).not.toHaveBeenCalled()
+				expect(db.jafInvoice.update).not.toHaveBeenCalled()
+			},
+		)
+
+		it("a failing save puts the original file back and leaves the job unchanged", async () => {
+			vi.mocked(saveUpload).mockRejectedValueOnce(new Error("disk full"))
+			const res = await replaceAviso(await aviso("10354740", MATCHING))
+			expect(res).toEqual({ errorKey: "docs_review.errors.replace_failed" })
+			expect(restoreUpload).toHaveBeenCalledWith(
+				"/uploads/aviso-docs/doc-1-aviso-replaced-1.pdf",
+				"/uploads/aviso-docs/doc-1-aviso.pdf",
+			)
+			expect(db.jafInvoice.update).not.toHaveBeenCalled()
+			expect(db.auditTrail.create).not.toHaveBeenCalled()
+			expect(db.preCertSheet.create).not.toHaveBeenCalled()
+		})
+
+		it("a failing write puts the original file back", async () => {
+			vi.mocked(db.jafInvoice.update).mockRejectedValueOnce(
+				new Error("db down"),
+			)
+			const res = await replaceAviso(await aviso("10354740", MATCHING))
+			expect(res).toEqual({ errorKey: "docs_review.errors.replace_failed" })
+			expect(restoreUpload).toHaveBeenCalledWith(
+				"/uploads/aviso-docs/doc-1-aviso-replaced-1.pdf",
+				"/uploads/aviso-docs/doc-1-aviso.pdf",
+			)
+			expect(db.preCertSheet.create).not.toHaveBeenCalled()
+		})
+
+		it("a concurrent second replacement gets replace_limit, not an error", async () => {
+			// The other request already moved the file to the replaced slot.
+			vi.mocked(moveUpload).mockRejectedValueOnce(
+				Object.assign(new Error("exists"), { code: "EEXIST" }),
+			)
+			expect(await replaceAviso(await aviso("10354740", MATCHING))).toEqual({
+				errorKey: "docs_review.errors.replace_limit",
+			})
+			expect(db.jafInvoice.update).not.toHaveBeenCalled()
+			expect(restoreUpload).not.toHaveBeenCalled()
+		})
+
+		it("re-checks the limit inside the transaction and restores the file when it was used meanwhile", async () => {
+			vi.mocked(db.auditTrail.count)
+				.mockResolvedValueOnce(0)
+				.mockResolvedValueOnce(1)
+			expect(await replaceAviso(await aviso("10354740", MATCHING))).toEqual({
+				errorKey: "docs_review.errors.replace_limit",
+			})
+			expect(db.jafInvoice.update).not.toHaveBeenCalled()
+			expect(restoreUpload).toHaveBeenCalledTimes(1)
+		})
+
+		it("(k) needs a reason", async () => {
+			const res = await replaceAviso(await aviso("10354740", MATCHING), {
+				replaceReason: "  ",
+			})
+			expect(res).toEqual({
+				errorKey: "docs_review.errors.replace_reason_required",
+			})
+			expect(db.jafInvoice.update).not.toHaveBeenCalled()
+		})
+
+		it("re-runs the number check on the new file", async () => {
+			const res = await replaceAviso(await aviso("10354741", MATCHING))
+			expect(res).toMatchObject({
+				errorKey: "docs_review.errors.aviso_number_mismatch",
+				pdfAvisoNumber: "10354741",
+			})
+			expect(moveUpload).not.toHaveBeenCalled()
+		})
+
+		it("needs a new file and a saved Aviso to replace", async () => {
+			expect(await replaceAviso(null)).toEqual({
+				errorKey: "docs_review.errors.aviso_pdf_required",
+			})
+			await expect(
+				replaceAviso(
+					await aviso("10354740", MATCHING),
+					{},
+					{
+						releasedToFinanceAt: new Date(),
+					},
+				),
+			).rejects.toMatchObject({ status: 302 })
+			expect(db.jafInvoice.update).not.toHaveBeenCalled()
+		})
 	})
 })
 
@@ -1388,6 +1911,20 @@ describe("review: approve (Sign off)", () => {
 				}),
 			}),
 		})
+	})
+
+	it("no longer takes an Aviso number at sign-off", async () => {
+		await action({
+			request: post(
+				intent("approve", {
+					completionSignature: SIG,
+					avisoNumber: "10350001",
+				}),
+			),
+			params: { id: "doc-1" },
+		} as any).catch(() => {})
+		const { data } = vi.mocked(db.jafInvoice.update).mock.calls[0][0] as any
+		expect(data).not.toHaveProperty("avisoNumber")
 	})
 
 	it("an out-of-scope supervisor is refused", async () => {

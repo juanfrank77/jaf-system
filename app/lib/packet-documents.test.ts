@@ -32,24 +32,31 @@ describe("packetDocuments", () => {
 				key: "work_order_pdf",
 				label: "finance_verify.packet.work_order_pdf",
 				detail: "",
+				files: [],
 				href: "/files/packets/job-1-packet-2-ab.pdf",
 			},
 			{
 				key: "aviso",
 				label: "finance_verify.packet.aviso",
 				detail: "job-1-aviso.pdf",
+				files: [],
 				href: "/files/aviso-docs/job-1-aviso.pdf",
 			},
 			{
 				key: "precert",
 				label: "finance_verify.packet.precert",
 				detail: "",
+				files: [],
 				href: "/files/precert/job-1-v2.pdf",
 			},
 			{
 				key: "photos",
 				label: "finance_verify.packet.photos",
 				detail: "2",
+				files: [
+					{ name: "before.jpg", href: "/files/photos/job-1/before.jpg" },
+					{ name: "after.jpg", href: "/files/photos/job-1/after.jpg" },
+				],
 				// The first photo taken; the photos route serves per-job folders.
 				href: "/files/photos/job-1/before.jpg",
 			},
@@ -76,10 +83,10 @@ describe("packetDocuments", () => {
 		expect(rows.find((r) => r.key === "photos")?.detail).toBe("0")
 	})
 
-	it("does not link an unsigned pre-cert sheet", () => {
+	it("does not link a pre-cert sheet the supervisor has not signed", () => {
 		const rows = packetDocuments(
 			doc,
-			{ ...sheet, sigSubcontractorAt: null },
+			{ ...sheet, sigSupervisorAt: null },
 			photos,
 		)
 		expect(rows.find((r) => r.key === "precert")?.href).toBeNull()
@@ -91,5 +98,20 @@ describe("packetDocuments", () => {
 			href: null,
 			detail: "1",
 		})
+	})
+
+	it("returns exactly the four keys and never the Prefield, blueprints or a zip", () => {
+		const rows = packetDocuments(doc, sheet, photos)
+		expect(rows.map((r) => r.key)).toEqual([
+			"work_order_pdf",
+			"aviso",
+			"precert",
+			"photos",
+		])
+		expect(rows.find((r) => r.key === "photos")?.files).toHaveLength(2)
+		for (const r of rows.filter((r) => r.key !== "photos"))
+			expect(r.files).toEqual([])
+		const text = JSON.stringify(rows)
+		expect(text).not.toMatch(/prefield|blueprint|\.zip/i)
 	})
 })

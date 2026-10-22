@@ -9,6 +9,7 @@ import { MaterialLineItems } from "~/components/material-line-items"
 import { Button } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
 import { Textarea } from "~/components/ui/textarea"
+import type { AvisoDiscrepancy } from "~/lib/aviso-discrepancy"
 import { brigadeStockFor } from "~/lib/brigade-stock.server"
 import { db } from "~/lib/db.server"
 import { sendInternalEmail } from "~/lib/email.server"
@@ -84,6 +85,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		stage,
 		amount,
 		ivuRate,
+		// The supervisor's Aviso-vs-work-order flag, shown read-only.
+		avisoDiscrepancy: (doc.avisoDiscrepancy as AvisoDiscrepancy | null) ?? null,
 		sendBackNotes: (doc.financeSendBackNotes as SendBackNote[]) || [],
 		// The released packet's four documents, each opening its file.
 		packetDocs: packetDocuments(doc, doc.preCertSheets[0] ?? null, doc.photos),
@@ -214,6 +217,7 @@ export default function FinanceVerify({
 		ivuRate,
 		sendBackNotes,
 		packetDocs,
+		avisoDiscrepancy,
 		lineTotal,
 		packetHref,
 		legacyPricedHref,
@@ -296,20 +300,60 @@ export default function FinanceVerify({
 										: t("finance_verify.packet.missing")}
 								</p>
 							</div>
-							{d.href && (
-								<a
-									href={d.href}
-									target="_blank"
-									rel="noreferrer"
-									className="text-accent-text underline"
-								>
-									{t("finance_verify.packet.open")}
-								</a>
+							{d.files.length > 0 ? (
+								<ul className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+									{d.files.map((f) => (
+										<li key={f.href}>
+											<a
+												href={f.href}
+												target="_blank"
+												rel="noreferrer"
+												className="text-accent-text underline"
+											>
+												{f.name}
+											</a>
+										</li>
+									))}
+								</ul>
+							) : (
+								d.href && (
+									<a
+										href={d.href}
+										target="_blank"
+										rel="noreferrer"
+										className="text-accent-text underline"
+									>
+										{t("finance_verify.packet.open")}
+									</a>
+								)
 							)}
 						</li>
 					))}
 				</ul>
 			</div>
+
+			{avisoDiscrepancy && (
+				<Callout title={t("finance_verify.aviso_discrepancy_title")}>
+					<ul className="list-disc pl-5">
+						{avisoDiscrepancy.differences.map((d) => (
+							<li key={d.claroCode}>
+								{t("docs_review.aviso_difference", {
+									workOrder: d.workOrder,
+									aviso: d.aviso,
+									name: d.name,
+								})}
+							</li>
+						))}
+					</ul>
+					{avisoDiscrepancy.note && (
+						<p className="mt-1">
+							{t("docs_review.aviso_discrepancy_note", {
+								note: avisoDiscrepancy.note,
+							})}
+						</p>
+					)}
+				</Callout>
+			)}
 
 			<div className="grid grid-cols-1 gap-4">
 				<div className="bg-card border rounded-lg p-4 space-y-3">

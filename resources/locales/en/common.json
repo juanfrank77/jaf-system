@@ -789,7 +789,13 @@
 			"precert_edit_reason_required": "A reason is required to change a certified quantity.",
 			"signature_required": "A signature is required.",
 			"contractor_code_required": "This crew has no contractor code. Enter it to sign.",
-			"release_blocked": "The packet is incomplete. See the checklist."
+			"release_blocked": "The packet is incomplete. See the checklist.",
+			"aviso_materials_differ": "The Aviso's materials differ from your work order. Ask Claro to correct it and upload it again, or continue with a note explaining the difference.",
+			"aviso_use_replace": "This job already has an Aviso. Use Replace Aviso to change it.",
+			"replace_limit": "This job's one Aviso replacement has already been used.",
+			"replace_locked": "The Pre-cert sheet is signed: the Aviso can no longer be replaced.",
+			"replace_reason_required": "Give a short reason for replacing the Aviso.",
+			"replace_failed": "The Aviso could not be replaced. Nothing was changed; try again."
 		},
 		"ordered_vs_installed": "Ordered vs Installed",
 		"per_service_code": "per service code",
@@ -809,7 +815,23 @@
 		"signoff_hint": "You answer for the brigade's work. Signing confirms the Field step is complete as entered and locks it.",
 		"signoff_name": "Name",
 		"signoff_date": "Date",
-		"signed_off_by": "Signed off by {{name}} · {{when}}"
+		"signed_off_by": "Signed off by {{name}} · {{when}}",
+		"aviso_materials_unreadable": "The Aviso's materials table could not be read with confidence, so it was not compared. The job continues.",
+		"aviso_difference": "work order: {{workOrder}} {{name}}, Aviso: {{aviso}} {{name}}",
+		"aviso_discrepancy_title": "Aviso differs from your work order.",
+		"aviso_discrepancy_body": "JAF's warehouse figure is the inventory record; the Aviso figure is Claro's version. Finance sees this flag.",
+		"aviso_discrepancy_note": "Note: {{note}}",
+		"aviso_discrepancy_note_label": "Explain the difference (required to continue)",
+		"aviso_continue_anyway": "Continue anyway",
+		"aviso_history_heading": "Replaced Avisos",
+		"aviso_history_number": "Aviso #{{number}}",
+		"aviso_history_replaced": "replaced {{date}} · not used · {{reason}}",
+		"aviso_replace_heading": "Replace Aviso",
+		"aviso_replace_hint": "For a wrong document or a typo: one replacement per job, until the Pre-cert sheet is signed.",
+		"aviso_replace_reason_label": "Reason for replacing",
+		"aviso_replace_submit": "Replace Aviso",
+		"aviso_replace_used": "This job's one Aviso replacement has been used.",
+		"aviso_continue_precert": "Continue to Pre-cert →"
 	},
 	"open_job": {
 		"material_requested": "Material requested",
@@ -848,7 +870,7 @@
 			"work_date": "Work date"
 		},
 		"aviso_heading": "Aviso",
-		"aviso_note": "JAF does not match labor or materials against it.",
+		"aviso_note": "JAF checks the number on the file and, when it can read them, compares the materials with your work order.",
 		"aviso_number_label": "Aviso # (8 digits)",
 		"aviso_doc_empty": "No document yet",
 		"aviso_saved": "Number on the file matches ({{number}}). Pre-cert sheet is generated automatically.",
@@ -919,7 +941,8 @@
 		"col_cost": "Cost",
 		"total": "TOTAL",
 		"continue_release": "Continue to Release →",
-		"continue_hint": "Release unlocks automatically once the contractor supervisor has signed."
+		"continue_hint": "Release unlocks automatically once the contractor supervisor has signed.",
+		"back_to_aviso": "← Aviso"
 	},
 	"docs_lc": {
 		"title": "LC Request — Lissette Review",
@@ -1284,6 +1307,7 @@
 		"priced_invoice": "JAF invoice (priced)",
 		"claro_packet": "Claro packet (no prices)",
 		"priced_invoice_legacy": "JAF invoice (priced, legacy)",
+		"aviso_discrepancy_title": "Aviso differs from the supervisor's work order",
 		"packet": {
 			"heading": "Packet documents",
 			"work_order_pdf": "JAF work order PDF",
@@ -1501,7 +1525,9 @@
 			"ready_for_pickup_one": "{{count}} job ready for pickup",
 			"ready_for_pickup_other": "{{count}} jobs ready for pickup",
 			"receivables_open_one": "{{count}} receivable open",
-			"receivables_open_other": "{{count}} receivables open"
+			"receivables_open_other": "{{count}} receivables open",
+			"stale_aviso_discrepancy_one": "{{count}} job has had an Aviso discrepancy open for 3 days or more",
+			"stale_aviso_discrepancy_other": "{{count}} jobs have had an Aviso discrepancy open for 3 days or more"
 		},
 		"signal": {
 			"overage": "Overage",
@@ -1538,7 +1564,13 @@
 		"to_prep_badge": "To prep",
 		"warehouse_prep_stat": "To prep",
 		"warehouse_release_stat": "Awaiting pickup",
-		"warehouse_returns_stat": "Returns due"
+		"warehouse_returns_stat": "Returns due",
+		"action_needed": {
+			"title": "Action needed",
+			"body": "Aviso differs from your work order. Reconcile with your Claro supervisor.",
+			"days_open_one": "Open {{count}} day",
+			"days_open_other": "Open {{count}} days"
+		}
 	},
 	"docs_status": {
 		"created": "Created",

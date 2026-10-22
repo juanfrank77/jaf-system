@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs"
 import { readFile } from "node:fs/promises"
 import { Document, Page, renderToBuffer, Text } from "@react-pdf/renderer"
 import { createElement } from "react"
@@ -6,6 +7,7 @@ import {
 	AvisoPdfError,
 	avisoNumberFromText,
 	normaliseAvisoNumber,
+	readAvisoMaterials,
 	readAvisoNumber,
 } from "./aviso-pdf.server"
 
@@ -90,5 +92,38 @@ describe("readAvisoNumber", () => {
 				readAvisoNumber(await pdfWith(["Aviso #10350001", "Aviso #10350002"])),
 			),
 		).toBe("multiple_numbers")
+	})
+})
+
+const GARBLED =
+	"docs/JAF_Package/05 Lissette Complete Close File/JAF COMPLETE AVISO PART 3/10354522.pdf"
+
+describe("readAvisoMaterials", () => {
+	const known = new Set(["4003587", "4003887"])
+
+	it.skipIf(!existsSync(FIXTURE))(
+		"reads the empty materials table of the real print as []",
+		async () => {
+			const bytes = new Uint8Array(await readFile(FIXTURE))
+			expect(await readAvisoMaterials(bytes, known)).toEqual([])
+		},
+	)
+
+	it.skipIf(!existsSync(GARBLED))(
+		"returns null for the garbled OCR print",
+		async () => {
+			const bytes = new Uint8Array(await readFile(GARBLED))
+			expect(await readAvisoMaterials(bytes, known)).toBeNull()
+		},
+	)
+
+	it("returns null for a PDF with no text", async () => {
+		expect(await readAvisoMaterials(await pdfWith([]), known)).toBeNull()
+	})
+
+	it("returns null for garbage bytes", async () => {
+		expect(
+			await readAvisoMaterials(new Uint8Array([1, 2, 3]), known),
+		).toBeNull()
 	})
 })

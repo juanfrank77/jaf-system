@@ -1,4 +1,5 @@
 import type { DocStatus, Role } from "../../generated/prisma/client"
+import { type AvisoDiscrepancy, isDiscrepancyStale } from "./aviso-discrepancy"
 
 type MaterialLine = { serviceCodeId: string; qty: number }
 
@@ -56,6 +57,7 @@ export type DashboardAlertKey =
 	| "dashboard.alert.ready_to_close"
 	| "dashboard.alert.ready_for_pickup"
 	| "dashboard.alert.receivables_open"
+	| "dashboard.alert.stale_aviso_discrepancy"
 
 export type DashboardStat = { labelKey: DashboardStatLabelKey; value: number }
 
@@ -215,6 +217,11 @@ export function computeMaterialSignals(
 export function computeDashboardStats(
 	role: Role,
 	docs: DashboardDoc[],
+	/**
+	 * The `avisoDiscrepancy` of every live (not cancelled), unreleased job, for
+	 * the admin's "needs attention" alert on stale ones.
+	 */
+	extra: { avisoDiscrepancies?: (AvisoDiscrepancy | null)[]; now?: Date } = {},
 ): {
 	stats: DashboardStat[]
 	alert: DashboardAlert
@@ -399,6 +406,13 @@ export function computeDashboardStats(
 	)
 	const { shortage, overage } = computeMaterialSignals(docs)
 	const aging = computeAgingBuckets(docs)
+	const now = extra.now ?? new Date()
+	const staleDiscrepancies =
+		role === "ADMIN"
+			? (extra.avisoDiscrepancies ?? []).filter((d) =>
+					isDiscrepancyStale(d, now),
+				).length
+			: 0
 	return {
 		stats: [
 			{ labelKey: "dashboard.stat.total_documents", value: totalDocs },
@@ -436,13 +450,19 @@ export function computeDashboardStats(
 			},
 		],
 		alert:
-			openReceivables > 0
+			staleDiscrepancies > 0
 				? {
-						variant: "info",
-						key: "dashboard.alert.receivables_open",
-						count: openReceivables,
+						variant: "warn",
+						key: "dashboard.alert.stale_aviso_discrepancy",
+						count: staleDiscrepancies,
 					}
-				: null,
+				: openReceivables > 0
+					? {
+							variant: "info",
+							key: "dashboard.alert.receivables_open",
+							count: openReceivables,
+						}
+					: null,
 		explainer: aging.anyThresholdBreached
 			? { labelKey: "dashboard.explainer.finance_aging_alert" }
 			: openReceivables > 0

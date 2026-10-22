@@ -86,6 +86,7 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 				row({ id: "p", status: "FIELD_UPDATED", supervisorApprovedAt: null }),
 				row({ id: "m", jafInvoiceGeneratedAt: new Date() }),
 			] as any) // my open work orders
+			.mockResolvedValueOnce([]) // action needed
 		const data = await loader({
 			request: new Request("http://localhost/dashboard"),
 			params: {},
@@ -129,6 +130,7 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 				}),
 			] as any)
 			.mockResolvedValueOnce([] as any) // my open work orders
+			.mockResolvedValueOnce([] as any) // action needed
 		const data = await loader({
 			request: new Request("http://localhost/dashboard"),
 			params: {},

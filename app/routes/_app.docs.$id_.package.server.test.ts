@@ -18,7 +18,11 @@ const TAG = `pkz-${Date.now()}`
 const userIds: string[] = []
 const docIds: string[] = []
 
-type Seeded = { id: string; name: string; role: "SUPERVISOR" | "ADMIN" }
+type Seeded = {
+	id: string
+	name: string
+	role: "SUPERVISOR" | "ADMIN" | "FINANCE" | "COMPTROLLER"
+}
 let sup: Seeded
 let otherSup: Seeded
 
@@ -150,4 +154,17 @@ describe("GET /docs/:id/package", { timeout: HOOK_TIMEOUT }, () => {
 		expect(res.status).toBe(302)
 		expect(res.headers.get("Location")).toBe("/dashboard")
 	})
+
+	it.each(["FINANCE", "COMPTROLLER"] as const)(
+		"refuses %s (the package is the supervisor's)",
+		async (role) => {
+			const doc = await seedDoc({
+				jafInvoicePdfPath: "/x/packets/a-work-order-1.pdf",
+			})
+			as(await seedUser(role))
+			const res = await get(doc.id)
+			expect(res.status).toBe(302)
+			expect(res.headers.get("Location")).toBe("/dashboard")
+		},
+	)
 })

@@ -32,7 +32,7 @@ describe("evaluateReleaseGate", () => {
 		["precert_signed", { sheet: null }],
 		[
 			"precert_signed",
-			{ sheet: { sigSupervisorAt: now, sigSubcontractorAt: null } },
+			{ sheet: { sigSupervisorAt: null, sigSubcontractorAt: now } },
 		],
 		["photos", { photos: [] }],
 	])("fails %s when missing", (key, patch) => {
@@ -40,6 +40,14 @@ describe("evaluateReleaseGate", () => {
 		expect(r.ok).toBe(false)
 		expect(r.rows.find((x) => x.key === key)?.ok).toBe(false)
 		expect(r.rows.filter((x) => !x.ok)).toHaveLength(1)
+	})
+	it("passes precert_signed on the supervisor signature alone", () => {
+		const r = evaluateReleaseGate({
+			...good,
+			sheet: { sigSupervisorAt: now, sigSubcontractorAt: null },
+		})
+		expect(r.rows.find((x) => x.key === "precert_signed")?.ok).toBe(true)
+		expect(r.ok).toBe(true)
 	})
 	it("fails photos with only DURING photos", () => {
 		const r = evaluateReleaseGate({ ...good, photos: [{ tag: "DURING" }] })

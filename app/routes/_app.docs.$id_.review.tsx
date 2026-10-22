@@ -1783,6 +1783,9 @@ function PreCertPanel({
 				))}
 			<div className="space-y-2 pt-1">
 				<h3 className="text-sm font-medium">{t("precert.signatures")}</h3>
+				<p className="text-xs text-muted-foreground">
+					{t("docs_review.precert.note")}
+				</p>
 				{!readOnly && (
 					<p className="text-xs text-muted-foreground">
 						{t("precert.signatures_hint")}
@@ -1818,6 +1821,7 @@ function PreCertPanel({
 					intent="sign_precert_subcontractor"
 					labelKey="precert.sig_subcontractor"
 					readOnly={readOnly}
+					optional
 					signed={
 						sheet?.sigSubcontractorName ? (
 							<div className="space-y-1">
@@ -1924,7 +1928,7 @@ function PreCertPanel({
 					</p>
 				</div>
 			)}
-			{readOnly && sheet?.sigSupervisorAt && sheet?.sigSubcontractorAt && (
+			{readOnly && sheet?.sigSupervisorAt && (
 				<div className="flex justify-end border-t pt-3">
 					<Link to="?step=RELEASE" className={buttonVariants({})}>
 						{t("precert.continue_release")}

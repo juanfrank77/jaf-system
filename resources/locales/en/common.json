@@ -770,6 +770,9 @@
 		"not_uploaded": "Not uploaded",
 		"save_aviso": "Save Aviso #",
 		"aviso_resaved_signed": "Aviso saved. The pre-cert sheet was already signed, so it was kept as signed and not regenerated.",
+		"precert": {
+			"note": "Pre-cert unlocks on the supervisor's signature alone."
+		},
 		"errors": {
 			"pdf_required": "Please select the Claro PDF to upload",
 			"back_note_required": "Enter a note saying what is wrong.",
@@ -928,7 +931,7 @@
 		"clear_signature": "Clear",
 		"regenerate_confirm": "Regenerating creates a new version and clears all signatures. Continue?",
 		"signatures": "Signatures",
-		"signatures_hint": "Both the contractor supervisor and the sub-contractor must sign. Draw the signature in the box, then press Sign.",
+		"signatures_hint": "The contractor supervisor must sign; the sub-contractor signature is optional. Draw the signature in the box, then press Sign.",
 		"signed": "Signed",
 		"required": "Required",
 		"optional": "Optional",
@@ -938,7 +941,7 @@
 		"col_cost": "Cost",
 		"total": "TOTAL",
 		"continue_release": "Continue to Release →",
-		"continue_hint": "Release unlocks automatically once the contractor supervisor and the sub-contractor have both signed.",
+		"continue_hint": "Release unlocks automatically once the contractor supervisor has signed.",
 		"back_to_aviso": "← Aviso"
 	},
 	"docs_lc": {

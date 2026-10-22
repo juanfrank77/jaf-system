@@ -44,9 +44,7 @@ export function deriveSupervisorStage(
 ): SupervisorStage {
 	if (doc.releasedToFinanceAt) return "RELEASED"
 	if (isAvisoSaved(doc)) {
-		return sheet?.sigSupervisorAt && sheet?.sigSubcontractorAt
-			? "RELEASE"
-			: "PRECERT"
+		return sheet?.sigSupervisorAt ? "RELEASE" : "PRECERT"
 	}
 	if (doc.jafInvoiceGeneratedAt) return "AVISO"
 	if (doc.supervisorApprovedAt) return "INVOICE"

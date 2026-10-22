@@ -22,7 +22,7 @@ export function isPacketPath(path: string | null): boolean {
 
 /**
  * The release gate is exactly four documents: the JAF work order PDF, the
- * Aviso (number + file), the signed pre-cert sheet and before + after photos.
+ * Aviso (number + file), the pre-cert sheet signed by the supervisor and before + after photos.
  */
 export function evaluateReleaseGate(input: {
 	doc: {
@@ -50,7 +50,7 @@ export function evaluateReleaseGate(input: {
 		},
 		{
 			key: "precert_signed",
-			ok: !!sheet?.sigSupervisorAt && !!sheet?.sigSubcontractorAt,
+			ok: !!sheet?.sigSupervisorAt,
 			detail: null,
 		},
 		{

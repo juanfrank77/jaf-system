@@ -770,6 +770,9 @@
 		"not_uploaded": "No cargado",
 		"save_aviso": "Guardar aviso",
 		"aviso_resaved_signed": "Aviso guardado. La hoja de pre-certificación ya estaba firmada, así que se conservó firmada y no se regeneró.",
+		"precert": {
+			"note": "La Pre-cert se desbloquea solo con la firma del supervisor."
+		},
 		"errors": {
 			"pdf_required": "Por favor selecciona el PDF de Claro para cargar",
 			"back_note_required": "Escriba una nota con lo que está mal.",
@@ -928,7 +931,7 @@
 		"clear_signature": "Borrar",
 		"regenerate_confirm": "Regenerar crea una nueva versión y borra todas las firmas. ¿Continuar?",
 		"signatures": "Firmas",
-		"signatures_hint": "Deben firmar el supervisor del contratista y el subcontratista. Dibuje la firma en el recuadro y presione Firmar.",
+		"signatures_hint": "Debe firmar el supervisor del contratista; la firma del subcontratista es opcional. Dibuje la firma en el recuadro y presione Firmar.",
 		"signed": "Firmada",
 		"required": "Requerida",
 		"optional": "Opcional",

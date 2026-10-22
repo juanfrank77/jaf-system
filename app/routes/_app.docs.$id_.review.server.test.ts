@@ -1437,6 +1437,34 @@ describe("review: release_to_finance", () => {
 		} as any)
 	})
 
+	it("releases on the supervisor signature alone, even with an open Aviso discrepancy", async () => {
+		vi.mocked(db.preCertSheet.findFirst).mockResolvedValue({
+			id: "s1",
+			sigSupervisorAt: new Date(),
+			sigSubcontractorAt: null,
+			sigClaroAt: null,
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...ready,
+			avisoDiscrepancy: {
+				detectedAt: new Date().toISOString(),
+				differences: [{ kind: "MATERIAL", detail: "x" }],
+			},
+		} as any)
+		const res = await action({
+			request: post(intent("release_to_finance")),
+			params: { id: "doc-1" },
+		} as any).catch((r) => r)
+		expect(res.status).toBe(302)
+		expect(db.jafInvoice.update).toHaveBeenCalledWith({
+			where: { id: "doc-1" },
+			data: {
+				releasedToFinanceAt: expect.any(Date),
+				releasedToFinanceById: "sup-1",
+			},
+		})
+	})
+
 	it("releases when the four documents are present and notifies Finance", async () => {
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(ready as any)
 		const res = await action({

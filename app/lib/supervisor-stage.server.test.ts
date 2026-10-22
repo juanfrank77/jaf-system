@@ -74,10 +74,16 @@ describe("deriveSupervisorStage", () => {
 		expect(deriveSupervisorStage(matched, null)).toBe("PRECERT")
 		expect(
 			deriveSupervisorStage(matched, {
+				sigSupervisorAt: null,
+				sigSubcontractorAt: now,
+			}),
+		).toBe("PRECERT")
+		expect(
+			deriveSupervisorStage(matched, {
 				sigSupervisorAt: now,
 				sigSubcontractorAt: null,
 			}),
-		).toBe("PRECERT")
+		).toBe("RELEASE")
 		expect(
 			deriveSupervisorStage(matched, {
 				sigSupervisorAt: now,

@@ -46,6 +46,7 @@ export function SupervisorStepRail({
 			steps={steps}
 			current={SUPERVISOR_STAGES.indexOf(view)}
 			ariaLabel={t("step_rail.aria")}
+			phoneSummary
 		/>
 	)
 }

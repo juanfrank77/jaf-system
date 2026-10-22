@@ -109,7 +109,12 @@ describe("GET /docs/:id/package", { timeout: HOOK_TIMEOUT }, () => {
 		const jpg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 7, 7])
 		await writeFile(photo, jpg)
 		await db.photo.create({
-			data: { docId: doc.id, uploadedById: sup.id, localPath: photo },
+			data: {
+				docId: doc.id,
+				uploadedById: sup.id,
+				localPath: photo,
+				tag: "BEFORE",
+			},
 		})
 		await db.jafInvoice.update({
 			where: { id: doc.id },
@@ -129,14 +134,14 @@ describe("GET /docs/:id/package", { timeout: HOOK_TIMEOUT }, () => {
 		const entries = unzipSync(new Uint8Array(await res.arrayBuffer()))
 		expect(Object.keys(entries).sort()).toEqual(
 			[
-				`${doc.id}-prefield-1.pdf`,
-				`${doc.id}-work-order-1.pdf`,
-				"before.jpg",
-				"plano.pdf",
+				`Prefield ${doc.controlNumber}.pdf`,
+				`JAF work order ${doc.controlNumber}.pdf`,
+				"Photo 1 - before.jpg",
+				"Blueprint 1.pdf",
 			].sort(),
 		)
-		expect(strFromU8(entries["plano.pdf"])).toBe("%PDF-plan")
-		expect(Buffer.from(entries["before.jpg"]).equals(jpg)).toBe(true)
+		expect(strFromU8(entries["Blueprint 1.pdf"])).toBe("%PDF-plan")
+		expect(Buffer.from(entries["Photo 1 - before.jpg"]).equals(jpg)).toBe(true)
 	})
 
 	it("is 404 when there is nothing in the package", async () => {

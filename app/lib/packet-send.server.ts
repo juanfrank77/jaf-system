@@ -50,8 +50,17 @@ type SendPacketErrorKey =
 	| "packet.errors.pdf_missing"
 	// Building or storing the PDF failed; logged as a FAILED attempt.
 	| "packet.errors.render_failed"
+	// The attachments would pass the mailbox's message size limit.
+	| "packet.errors.too_large"
 	// Nothing installed to put in the work summary.
 	| "docs_review.errors.installed_lines_required"
+
+/**
+ * The sending mailbox takes messages up to 35 MB, and base64 makes an
+ * attachment about a third bigger on the wire, so the files themselves may add
+ * up to about 25 MB.
+ */
+export const MAX_ATTACHMENTS_BYTES = 25 * 1024 * 1024
 
 type SendPacketResult =
 	| { ok: true; outcome: PacketSendOutcome }
@@ -156,6 +165,9 @@ export async function sendPacket(args: {
 				pdf,
 			)
 			attachments = await packageAttachments(doc, pdf)
+			const size = attachments.reduce((n, a) => n + a.content.length, 0)
+			if (size > MAX_ATTACHMENTS_BYTES)
+				return { ok: false, errorKey: "packet.errors.too_large" }
 		}
 	} catch (cause) {
 		const error = sanitizedError(cause)
@@ -319,31 +331,32 @@ async function packageAttachments(
 ): Promise<{ filename: string; content: Buffer }[]> {
 	const photos = await db.photo.findMany({
 		where: { docId: doc.id },
-		select: { localPath: true, takenAt: true },
+		select: { localPath: true, takenAt: true, tag: true },
 	})
 	const rest = packageFiles(
 		{ ...doc, jafInvoicePdfPath: null },
 		photos.map((p) => ({
 			localPath: photoFile(doc.id, p.localPath),
 			takenAt: p.takenAt,
+			tag: p.tag,
 		})),
 	)
 	const files: { filename: string; content: Buffer }[] = [
 		{
-			filename: `JAF-work-order-${doc.controlNumber}.pdf`,
+			filename: `JAF work order ${doc.controlNumber}.pdf`,
 			content: workOrderPdf,
 		},
 	]
 	for (const f of rest) {
 		if (f.key === "prefield_pdf") {
 			files.push({
-				filename: `JAF-prefield-${doc.controlNumber}.pdf`,
+				filename: f.fileName,
 				content: await readFile(f.path),
 			})
 			continue
 		}
 		const content = await readFile(f.path).catch(() => null)
-		if (content) files.push({ filename: f.name, content })
+		if (content) files.push({ filename: f.fileName, content })
 	}
 	const names = uniqueFileNames(files.map((f) => f.filename))
 	return files.map((f, i) => ({ ...f, filename: names[i] }))

@@ -206,6 +206,18 @@ export function AvisoCard({
 								{t("docs_review_steps.aviso_saved", { number: avisoNumber })}
 							</Pill>
 						)}
+						{/* The one way on: big, right under the confirmation. Replacing the
+						    Aviso is the small print below it. */}
+						{!readOnly && continueHref && (
+							<Link
+								to={continueHref}
+								className={buttonVariants({
+									className: "h-12 w-full text-base",
+								})}
+							>
+								{t("docs_review.aviso_continue_precert")}
+							</Link>
+						)}
 						{discrepancy && (
 							<div className="space-y-2 rounded-lg border border-status-warn p-3">
 								<p className="flex gap-1 text-sm font-semibold">
@@ -322,14 +334,6 @@ export function AvisoCard({
 							<p className="text-xs text-muted-foreground">
 								{t("docs_review.aviso_replace_used")}
 							</p>
-						)}
-						{!readOnly && continueHref && (
-							<Link
-								to={continueHref}
-								className={buttonVariants({ className: "w-full" })}
-							>
-								{t("docs_review.aviso_continue_precert")}
-							</Link>
 						)}
 					</>
 				) : (

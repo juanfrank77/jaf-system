@@ -46,7 +46,7 @@ const mount = (renderStub: any, props: { initialSelected?: string[] } = {}) =>
 
 const share = () =>
 	userEvent.click(
-		screen.getByRole("button", { name: "Share this job with other crews" }),
+		screen.getByRole("button", { name: "+ Share with another crew" }),
 	)
 
 describe("CrewPicker", () => {
@@ -126,7 +126,7 @@ describe("CrewPicker", () => {
 		await mount(renderStub, { initialSelected: ["b2"] })
 		expect(submitted()).toEqual(["b2"])
 		expect(
-			screen.getByRole("button", { name: "Share this job with other crews" }),
+			screen.getByRole("button", { name: "+ Share with another crew" }),
 		).toBeInTheDocument()
 	})
 

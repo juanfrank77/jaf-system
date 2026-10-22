@@ -2,21 +2,22 @@ import path from "node:path"
 import { File01Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 import type { ParseKeys } from "i18next"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import {
 	data,
 	Form,
 	redirect,
 	useFetcher,
-	useNavigate,
 	useNavigation,
+	useSubmit,
 } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import {
 	FieldMaterialsTable,
 	type FieldMaterialsTableRow,
 } from "~/components/field-materials-table"
+import { StepActionBar } from "~/components/step-action-bar"
 import { SupervisorStepRail } from "~/components/supervisor-step-rail"
 import { Button } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
@@ -32,6 +33,7 @@ import {
 	fieldMaterialsOrDefault,
 	parseFieldMaterials,
 } from "~/lib/field-materials"
+import { blockingMissing, fieldTargets, nextEmpty } from "~/lib/field-progress"
 import {
 	type AddressCorrection,
 	buildAddressCorrection,
@@ -57,6 +59,7 @@ import {
 	SUPERVISOR_STAGES,
 } from "~/lib/supervisor-stage"
 import { photosThatLoad, saveUpload } from "~/lib/uploads.server"
+import { cn } from "~/lib/utils"
 import type { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id_.field"
 
@@ -356,7 +359,9 @@ function addressUpdate(
 }
 
 /**
- * Two intents. `save` writes whatever the post carries (partial, idempotent,
+ * Three intents. `back` is `save` that then leaves for the job page, where
+ * the earlier steps (Warehouse, Intake) are shown, so going back keeps the
+ * draft. `save` writes whatever the post carries (partial, idempotent,
  * never changes status; the first one stamps `fieldStartedAt`). `continue`
  * does the same, then checks the materials table and moves SIGNED →
  * FIELD_UPDATED. No signature here (that is Sign off) and no crew
@@ -367,7 +372,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const { user, doc } = await openFieldDoc(request, params.id)
 	const form = await request.formData()
 	const intent = form.get("intent")
-	if (intent !== "save" && intent !== "continue")
+	if (intent !== "save" && intent !== "continue" && intent !== "back")
 		throw data({ error: "Unknown intent" }, { status: 400 })
 
 	const photos = PHOTO_FIELDS.flatMap(([name, tag]) =>
@@ -483,6 +488,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	if (ops.length > 0) await db.$transaction(ops)
 
 	if (intent === "continue") throw redirect(`/docs/${doc.id}/review`)
+	if (intent === "back") throw redirect(`/docs/${doc.id}`)
 	return { ok: true as const }
 }
 
@@ -520,16 +526,25 @@ function PhotoBox({
 	name,
 	labelKey,
 	photos,
+	boxId,
+	next = false,
 }: {
 	name: string
 	labelKey: ParseKeys
 	photos: { id: string; src: string }[]
+	/** Anchor for "jump to the missing box". */
+	boxId?: string
+	/** This is the box to fill next. */
+	next?: boolean
 }) {
 	const { t } = useTranslation()
 	const upload = useFileAutosave()
 	const room = Math.max(0, MAX_PHOTOS_PER_BOX - photos.length)
 	return (
-		<div className="space-y-2">
+		<div
+			id={boxId}
+			className={cn("space-y-2", next && "field-next rounded-lg p-1")}
+		>
 			<div className="flex items-baseline justify-between gap-2">
 				<Label htmlFor={room > 0 ? name : undefined}>{t(labelKey)}</Label>
 				<span className="text-xs text-muted-foreground">
@@ -700,7 +715,8 @@ export default function FieldUpdate({
 	} = loaderData
 	const { t } = useTranslation()
 	const navigation = useNavigation()
-	const navigate = useNavigate()
+	const submit = useSubmit()
+	const formRef = useRef<HTMLFormElement>(null)
 	const busy = navigation.state !== "idle"
 	const result = actionData as ActionResult
 
@@ -739,6 +755,12 @@ export default function FieldUpdate({
 		.map((l) => ({ ...l, qty: Number(actuals[l.serviceCodeId]) }))
 	const shared = services.brigadeNames.length > 0
 
+	// The Field report is required; "N/A" is pre-filled so a job with nothing to
+	// report does not get stuck on it.
+	const [notes, setNotes] = useState(
+		doc.fieldNotes?.trim() ? doc.fieldNotes : "N/A",
+	)
+
 	const [rows, setRows] = useState<FieldMaterialRow[]>(fieldMaterials)
 	const codeOf = new Map(serviceCodes.map((c) => [c.id, c]))
 	const qtyOf = (list: MaterialLine[]) =>
@@ -758,6 +780,74 @@ export default function FieldUpdate({
 				: 0,
 		}
 	})
+
+	const actualId = (serviceCodeId: string) => `actual-${serviceCodeId}`
+	const targets = fieldTargets({
+		actuals: services.rows.map((r) => ({
+			id: actualId(r.serviceCodeId),
+			value: actuals[r.serviceCodeId] ?? "",
+		})),
+		notes,
+		beforePhotos: photos.BEFORE.length,
+		afterPhotos: photos.AFTER.length,
+	})
+	const next = nextEmpty(targets)
+	const missing = blockingMissing(targets)
+	const missingLabels = missing.map((m) =>
+		t(
+			m.kind === "notes"
+				? "docs_field.field_notes_label"
+				: m.kind === "before"
+					? "docs_field.photos_before_label"
+					: "docs_field.photos_after_label",
+		),
+	)
+	const jumpTo = (id: string | undefined) => {
+		const el = id ? document.getElementById(id) : null
+		if (!el) return
+		el.scrollIntoView({ block: "center", behavior: "smooth" })
+		const box = el.matches("input, textarea")
+			? el
+			: el.querySelector<HTMLElement>("input, textarea")
+		box?.focus({ preventScroll: true })
+	}
+
+	// On a computer the cursor starts in the first empty box. Not on a phone:
+	// that would open the keyboard and scroll the page under the supervisor.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: only when the page opens
+	useEffect(() => {
+		if (!window.matchMedia("(pointer: fine)").matches) return
+		const first = nextEmpty(targets)
+		if (first && (first.kind === "actual" || first.kind === "notes"))
+			jumpTo(first.id)
+	}, [])
+
+	// Auto-save the draft a moment after any box changes. Address fields stay out
+	// of it: each change to them is logged as a correction with the user's name.
+	const draft = useFetcher<ActionResult>()
+	const [savedAt, setSavedAt] = useState<Date | null>(null)
+	const mounted = useRef(false)
+	// biome-ignore lint/correctness/useExhaustiveDependencies: re-run only when the boxes change
+	useEffect(() => {
+		if (!mounted.current) {
+			mounted.current = true
+			return
+		}
+		if (busy) return
+		const timer = setTimeout(() => {
+			const form = new FormData()
+			form.set("intent", "save")
+			if (installed.length > 0)
+				form.set("installedServiceLines", JSON.stringify(installed))
+			form.set("fieldMaterials", JSON.stringify(rows))
+			form.set("fieldNotes", notes)
+			draft.submit(form, { method: "post" })
+		}, 1000)
+		return () => clearTimeout(timer)
+	}, [actuals, rows, notes])
+	useEffect(() => {
+		if (draft.state === "idle" && draft.data?.ok) setSavedAt(new Date())
+	}, [draft.state, draft.data])
 
 	return (
 		<div className="space-y-5">
@@ -780,7 +870,7 @@ export default function FieldUpdate({
 				</Callout>
 			)}
 
-			<Form method="post" className="space-y-5">
+			<Form ref={formRef} method="post" className="space-y-5">
 				{services.rows.length > 0 && (
 					<Card>
 						<CardHeader>{t("docs_field.services_performed_label")}</CardHeader>
@@ -836,8 +926,23 @@ export default function FieldUpdate({
 														type="number"
 														min={0}
 														inputMode="decimal"
-														className="field-required w-20"
+														id={actualId(r.serviceCodeId)}
+														className={cn(
+															"field-required w-20",
+															next?.id === actualId(r.serviceCodeId) &&
+																"field-next",
+														)}
 														aria-label={`${t("docs_field.services.actual")} ${r.claroCode}`}
+														onKeyDown={(e) => {
+															// Enter moves on to the next empty box instead of
+															// submitting the form.
+															if (e.key !== "Enter") return
+															e.preventDefault()
+															jumpTo(
+																nextEmpty(targets, actualId(r.serviceCodeId))
+																	?.id,
+															)
+														}}
 														value={actuals[r.serviceCodeId] ?? ""}
 														onChange={(e) =>
 															setActuals({
@@ -880,6 +985,7 @@ export default function FieldUpdate({
 								onChange={(i, row) =>
 									setRows(rows.map((r, j) => (j === i ? row : r)))
 								}
+								onRemove={(i) => setRows(rows.filter((_, j) => j !== i))}
 							/>
 						)}
 						<p className="text-xs text-muted-foreground">
@@ -924,6 +1030,20 @@ export default function FieldUpdate({
 								name={name}
 								labelKey={labelKey}
 								photos={photos[tag]}
+								boxId={
+									tag === "BEFORE"
+										? "photo-box-before"
+										: tag === "AFTER"
+											? "photo-box-after"
+											: undefined
+								}
+								next={
+									tag === "BEFORE"
+										? next?.id === "photo-box-before"
+										: tag === "AFTER"
+											? next?.id === "photo-box-after"
+											: false
+								}
 							/>
 						))}
 						<BlueprintBox
@@ -942,9 +1062,17 @@ export default function FieldUpdate({
 						id="fieldNotes"
 						name="fieldNotes"
 						rows={3}
-						className="field-required"
+						className={cn(
+							"field-required",
+							next?.id === "fieldNotes" && "field-next",
+						)}
 						placeholder={t("docs_field.field_notes_placeholder")}
-						defaultValue={doc.fieldNotes ?? ""}
+						value={notes}
+						onChange={(e) => setNotes(e.target.value)}
+						onFocus={(e) => {
+							// Typing over the pre-filled N/A replaces it.
+							if (e.target.value === "N/A") e.target.select()
+						}}
 					/>
 				</div>
 
@@ -1020,34 +1148,89 @@ export default function FieldUpdate({
 					</Callout>
 				)}
 
-				<div className="flex flex-wrap gap-2">
-					<Button
-						type="button"
-						variant="ghost"
-						disabled={busy}
-						onClick={() => navigate(-1)}
-					>
-						{t("navigation.back")}
-					</Button>
-					<Button
-						type="submit"
-						name="intent"
-						value="save"
-						variant="outline"
-						disabled={busy}
-					>
-						{t("docs_field.save_progress")}
-					</Button>
-					<Button
-						type="submit"
-						name="intent"
-						value="continue"
-						disabled={busy}
-						className="ml-auto"
-					>
-						{t("docs_field.continue_to_signoff", { n: SIGN_OFF_STEP })}
-					</Button>
-				</div>
+				<StepActionBar
+					status={
+						<>
+							{missing.length > 0 && (
+								<button
+									type="button"
+									onClick={() => jumpTo(missing[0].id)}
+									className="text-left text-xs text-muted-foreground underline-offset-4 hover:underline md:text-sm"
+								>
+									{t("docs_field.boxes_left", {
+										count: missing.length,
+										items: missingLabels.join(", "),
+									})}
+								</button>
+							)}
+							<p
+								className="text-xs text-muted-foreground"
+								aria-live="polite"
+								data-testid="draft-status"
+							>
+								{draft.state !== "idle"
+									? t("docs_field.draft_saving")
+									: draft.data?.errorKey
+										? t(draft.data.errorKey)
+										: savedAt
+											? t("docs_field.draft_saved", {
+													time: savedAt.toLocaleTimeString([], {
+														hour: "2-digit",
+														minute: "2-digit",
+													}),
+												})
+											: null}
+							</p>
+						</>
+					}
+					left={
+						<Button
+							type="button"
+							variant="ghost"
+							disabled={busy}
+							onClick={() => {
+								// Save the draft, then the server sends us to the job page.
+								const form = new FormData(formRef.current ?? undefined)
+								form.set("intent", "back")
+								submit(form, {
+									method: "post",
+									encType: "multipart/form-data",
+								})
+							}}
+						>
+							{t("navigation.back")}
+						</Button>
+					}
+					center={
+						<Button
+							type="submit"
+							name="intent"
+							value="save"
+							variant="outline"
+							disabled={busy}
+						>
+							{t("docs_field.save_progress")}
+						</Button>
+					}
+					right={
+						<Button
+							type="submit"
+							name="intent"
+							value="continue"
+							disabled={busy}
+							aria-disabled={missing.length > 0 || undefined}
+							className={cn("h-10", missing.length > 0 && "opacity-50")}
+							onClick={(e) => {
+								// Not ready: go to the first missing box instead.
+								if (missing.length === 0) return
+								e.preventDefault()
+								jumpTo(missing[0].id)
+							}}
+						>
+							{t("docs_field.continue_to_signoff", { n: SIGN_OFF_STEP })}
+						</Button>
+					}
+				/>
 			</Form>
 		</div>
 	)

@@ -481,6 +481,34 @@ describe("POST /docs/:id/field — save", () => {
 	})
 })
 
+describe("POST /docs/:id/field — back", () => {
+	it("saves the draft like Save, never advances, and goes to the job page", async () => {
+		as("SUPERVISOR")
+		withDoc()
+		const form = new FormData()
+		form.set("intent", "back")
+		form.set("fieldNotes", "half written")
+		const res = await run(form)
+		expect(res.status).toBe(302)
+		expect(res.headers.get("Location")).toBe("/docs/doc-1")
+		const { data } = lastUpdate()
+		expect(data.fieldNotes).toBe("half written")
+		expect(data).not.toHaveProperty("status")
+		expect(data).not.toHaveProperty("fieldSubmittedAt")
+	})
+
+	it("does not leave the page when the draft cannot be saved", async () => {
+		as("SUPERVISOR")
+		withDoc()
+		const form = new FormData()
+		form.set("intent", "back")
+		form.set("fieldMaterials", "not json")
+		expect(await run(form)).toEqual({
+			errorKey: "docs_field.errors.invalid_materials",
+		})
+	})
+})
+
 describe("POST /docs/:id/field — continue", () => {
 	function cont(
 		rows: unknown[],

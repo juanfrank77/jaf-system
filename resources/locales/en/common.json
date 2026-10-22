@@ -302,7 +302,7 @@
 		"body": "Crew members no longer sign in to JAF Ops. Your supervisor records the field work for your brigade. If you think this is a mistake, ask your supervisor or an administrator."
 	},
 	"crew_picker": {
-		"share": "Share this job with other crews",
+		"share": "+ Share with another crew",
 		"single": "Back to one crew",
 		"select_all": "Select all crews",
 		"clear": "Clear",
@@ -322,6 +322,7 @@
 		"assigned_crew_label": "Assigned Crew",
 		"estimated_materials_label": "Materials to prep",
 		"callout_title": "Step 1 · You",
+		"callout_toggle": "How this works",
 		"callout_body": "A job came in from Claro. Pick the Claro supervisor, enter the address and the service codes, choose the brigade and answer the two questions. On submit it goes to the warehouse to prepare materials, or straight to Field when the materials do not come from the warehouse.",
 		"work_order_label": "JAF Work Order #",
 		"work_order_auto": "Assigned on create",
@@ -331,6 +332,7 @@
 		"flow_prefix": "On submit",
 		"flow_warehouse": "Warehouse — prep",
 		"estimated_materials_hint": "Physical materials the warehouse should prep for this job — separate from the service codes above. Search by name or code.",
+		"cancel": "Cancel",
 		"submit": "Create Work Order",
 		"errors": {
 			"invalid_materials": "Invalid materials data",
@@ -696,6 +698,10 @@
 		"blueprint_label": "Blueprint",
 		"blueprint_required_hint": "Required by this Claro supervisor before the packet is sent.",
 		"saved": "Saved",
+		"draft_saving": "Saving…",
+		"draft_saved": "Saved {{time}}",
+		"boxes_left_one": "{{count}} box left: {{items}}",
+		"boxes_left_other": "{{count}} boxes left: {{items}}",
 		"save_progress": "Save progress",
 		"continue_to_signoff": "Continue to {{n}}. Sign off",
 		"materials": {
@@ -712,6 +718,7 @@
 			"code": "Code",
 			"estimated": "Estimated",
 			"add": "+ Material from another source",
+			"remove": "Remove material",
 			"empty": "No material was issued at pickup.",
 			"hint": "Only material issued from the warehouse is billed. Anything else you used, enter under its own Source."
 		},
@@ -847,6 +854,7 @@
 	},
 	"step_rail": {
 		"aria": "Work order progress",
+		"progress": "Step {{current}} of {{total}} · {{label}}",
 		"intake": "Intake",
 		"warehouse": "Warehouse",
 		"field": "Field",
@@ -856,6 +864,15 @@
 		"precert": "Pre-cert sheet",
 		"release": "Release",
 		"released": "In Finance"
+	},
+	"fix_mistake": {
+		"button": "Fix a mistake",
+		"reason_label": "What is wrong? (required, it is logged)",
+		"reopen_hint": "The job goes back to Field with your sign-off cleared. Fix what is wrong, then sign off again and generate the package. Nothing has gone to Claro yet.",
+		"reopen_submit": "Reopen the job",
+		"request_hint": "This job was already sent to Claro, so it cannot be reopened here. Tell an administrator what is wrong and they will reopen it.",
+		"request_submit": "Ask an administrator",
+		"requested": "Request sent. An administrator has been told and will reopen the job."
 	},
 	"docs_review_steps": {
 		"invoice_back": "Back to Sign off",
@@ -940,7 +957,6 @@
 		"col_qty": "Qty",
 		"col_cost": "Cost",
 		"total": "TOTAL",
-		"continue_release": "Continue to Release →",
 		"continue_hint": "Release unlocks automatically once the contractor supervisor has signed.",
 		"back_to_aviso": "← Aviso"
 	},
@@ -2278,7 +2294,6 @@
 		"confirm_resend": "Email the packet again to {{email}}? This is the Claro supervisor's current address in the directory.",
 		"pdf_generated": "Package ✓ generated",
 		"pdf_not_generated": "No package yet: generate it at step 4.",
-		"send_coming_later": "Send to Claro supervisor (coming later)",
 		"mark_sent": "I sent the package to Claro →",
 		"manual_only_hint": "For now: email the files yourself, then mark the package sent.",
 		"back": "Back",
@@ -2318,6 +2333,7 @@
 			"locked": "This work order is locked: it was released to Finance or closed, or its PDF was already sent to Claro and can no longer be regenerated.",
 			"email_disabled": "Emailing the packet is not turned on. Email the PDF yourself, then mark it sent.",
 			"pdf_missing": "There is no work order PDF yet. Generate it at step 4 first.",
+			"too_large": "The package is too big to email (over the 35 MB limit). Download it and send it yourself, then use \"Mark as sent manually\".",
 			"render_failed": "The packet PDF could not be built. The attempt was logged; try again, and tell an administrator if it keeps failing.",
 			"prefield_locked": "The package has already been sent: the Claro supervisor and the blueprint can no longer be changed.",
 			"claro_supervisor_invalid": "That Claro supervisor is not active. Choose another one.",
@@ -2332,6 +2348,10 @@
 		"details_save": "Save",
 		"files_title": "Files for Claro",
 		"files_empty": "No files yet: generate the package at step 4.",
+		"file_view": "View",
+		"file_open_tab": "Open in new tab",
+		"file_close": "Close",
+		"send_to": "Send to {{name}}",
 		"file_download": "Download",
 		"download_all": "Download all (zip)",
 		"file_kind": {

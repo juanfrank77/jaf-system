@@ -311,7 +311,7 @@ describe("sendPacket outcomes", { timeout: HOOK_TIMEOUT }, () => {
 		// The issuer is JAF, in the subject, the body and the file name.
 		expect(sent[0].subject).toContain("JAF")
 		expect(sent[0].text).toContain("JAF")
-		expect(sent[0].attachments[0].filename).toMatch(/^JAF-/)
+		expect(sent[0].attachments[0].filename).toMatch(/^JAF /)
 		expect(JSON.stringify(sent[0])).not.toContain("IMS")
 
 		const after = await reload(doc.id)
@@ -548,6 +548,7 @@ describe("sendPacket outcomes", { timeout: HOOK_TIMEOUT }, () => {
 					uploadedById: sup.id,
 					localPath: file,
 					takenAt: new Date(takenAt),
+					tag: name === "after.jpg" ? "AFTER" : "BEFORE",
 				},
 			})
 		}
@@ -565,16 +566,39 @@ describe("sendPacket outcomes", { timeout: HOOK_TIMEOUT }, () => {
 		).toEqual({ ok: true, outcome: "SENT" })
 		const files = sent[0].attachments.map((a) => a.filename)
 		expect(files).toEqual([
-			`JAF-work-order-${doc.controlNumber}.pdf`,
-			`JAF-prefield-${doc.controlNumber}.pdf`,
-			"before.png",
-			"after.jpg",
-			"plano.pdf",
+			`JAF work order ${doc.controlNumber}.pdf`,
+			`Prefield ${doc.controlNumber}.pdf`,
+			"Photo 1 - before.png",
+			"Photo 2 - after.jpg",
+			"Blueprint 1.pdf",
 		])
 		expect(sent[0].attachments[1].content.toString()).toBe("%PDF-prefield")
 		// Originals, never converted.
 		expect(sent[0].attachments[2].content.equals(photoBytes)).toBe(true)
 		expect(sent[0].attachments[4].content.toString()).toBe("%PDF-plan")
+	})
+
+	it("email refuses a package past the mailbox size limit, sends nothing, and leaves the job unsent", async () => {
+		const claro = await seedClaro()
+		const doc = await seedDoc({ claroSupervisorId: claro.id })
+		const blueprintDir = path.join(
+			process.env.UPLOAD_DIR as string,
+			"blueprints",
+			doc.id,
+		)
+		await mkdir(blueprintDir, { recursive: true })
+		const big = path.join(blueprintDir, "big.pdf")
+		await writeFile(big, Buffer.alloc(26 * 1024 * 1024))
+		await db.jafInvoice.update({
+			where: { id: doc.id },
+			data: { blueprintPaths: [big] },
+		})
+		setMailTransport(okTransport)
+		expect(
+			await sendPacket({ docId: doc.id, actor: sup, mode: "email" }),
+		).toEqual({ ok: false, errorKey: "packet.errors.too_large" })
+		expect(sent).toHaveLength(0)
+		expect((await reload(doc.id)).jafInvoiceGeneratedAt).toBeNull()
 	})
 
 	it("email leaves a stored Prefield PDF out when the job does not need one", async () => {
@@ -587,7 +611,7 @@ describe("sendPacket outcomes", { timeout: HOOK_TIMEOUT }, () => {
 		setMailTransport(okTransport)
 		await sendPacket({ docId: doc.id, actor: sup, mode: "email" })
 		expect(sent[0].attachments.map((a) => a.filename)).toEqual([
-			`JAF-work-order-${doc.controlNumber}.pdf`,
+			`JAF work order ${doc.controlNumber}.pdf`,
 		])
 	})
 })

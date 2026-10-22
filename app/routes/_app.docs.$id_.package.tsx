@@ -25,7 +25,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		doc.id,
 		await db.photo.findMany({
 			where: { docId: doc.id },
-			select: { localPath: true, takenAt: true },
+			select: { localPath: true, takenAt: true, tag: true },
 		}),
 	)
 	// The file the viewer serves for each photo row.
@@ -34,10 +34,13 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		photos.map((p) => ({
 			localPath: photoFile(doc.id, p.localPath),
 			takenAt: p.takenAt,
+			tag: p.tag,
 		})),
 	)
 	if (files.length === 0) return new Response("Not found", { status: 404 })
-	const zip = await zipPackage(files)
+	const zip = await zipPackage(
+		files.map((f) => ({ name: f.fileName, path: f.path })),
+	)
 	return new Response(new Uint8Array(zip), {
 		headers: {
 			"Content-Type": "application/zip",

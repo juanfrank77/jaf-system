@@ -3,6 +3,7 @@ import { packageFiles, uniqueFileNames } from "./package-files"
 
 const doc = (over: Partial<Parameters<typeof packageFiles>[0]> = {}) => ({
 	id: "d1",
+	controlNumber: "MAINT-261026-025",
 	jafInvoicePdfPath: "/u/packets/d1-work-order-1.pdf",
 	prefieldPdfPath: "/u/packets/d1-prefield-2.pdf",
 	prefieldNeeded: true,
@@ -13,10 +14,12 @@ const photos = [
 	{
 		localPath: "/u/photos/d1/after.jpg",
 		takenAt: new Date("2026-10-19T12:00Z"),
+		tag: "AFTER",
 	},
 	{
 		localPath: "/u/photos/d1/before.png",
 		takenAt: new Date("2026-10-19T09:00Z"),
+		tag: "BEFORE",
 	},
 ]
 
@@ -50,6 +53,25 @@ describe("packageFiles", () => {
 			path: "/u/blueprints/d1/plano 1.pdf",
 			href: "/files/blueprints/d1/plano%201.pdf",
 		})
+	})
+
+	it("gives every file a friendly name: work order number, numbered photos with their stage", () => {
+		const files = packageFiles(doc(), photos)
+		expect(files.map((f) => f.fileName)).toEqual([
+			"JAF work order MAINT-261026-025.pdf",
+			"Prefield MAINT-261026-025.pdf",
+			"Photo 1 - before.png",
+			"Photo 2 - after.jpg",
+			"Blueprint 1.pdf",
+		])
+	})
+
+	it("numbers a photo without a stage plainly", () => {
+		const files = packageFiles(
+			doc({ blueprintPaths: [], prefieldNeeded: false }),
+			[{ localPath: "/u/photos/d1/x.JPG", takenAt: new Date() }],
+		)
+		expect(files.at(-1)?.fileName).toBe("Photo 1.jpg")
 	})
 
 	it("leaves the Prefield PDF out when it is not needed, even if one is stored", () => {

@@ -1787,14 +1787,14 @@ describe("review: back_to_approve", () => {
 		expect(db.jafInvoice.update).not.toHaveBeenCalled()
 	})
 
-	it("reopens the Approve step with the note in the audit trail", async () => {
+	it("reopens the Approve step with the note in the audit trail, and lands on Field to fix it", async () => {
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(doc as any)
-		await expect(
-			action({
-				request: post(intent("back_to_approve", { note: "qty is off" })),
-				params: { id: "doc-1" },
-			} as any),
-		).rejects.toMatchObject({ status: 302 })
+		const res = await action({
+			request: post(intent("back_to_approve", { note: "qty is off" })),
+			params: { id: "doc-1" },
+		} as any).catch((r: unknown) => r)
+		expect((res as Response).status).toBe(302)
+		expect((res as Response).headers.get("Location")).toBe("/docs/doc-1/field")
 		expect(db.jafInvoice.update).toHaveBeenCalledWith({
 			where: { id: "doc-1" },
 			data: { status: "FIELD_UPDATED", supervisorApprovedAt: null },
@@ -1851,6 +1851,78 @@ describe("review: back_to_approve", () => {
 			} as any),
 		).rejects.toMatchObject({ status: 302 })
 		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+})
+
+describe("review: request_fix (after the packet was sent)", () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1", role: "SUPERVISOR", name: "Edgard Ocasio" },
+			session: {},
+		} as any)
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["OESTE"],
+		} as any)
+		vi.mocked(db.user.findMany).mockResolvedValue([
+			{ id: "admin-1" },
+			{ id: "admin-2" },
+		] as any)
+	})
+
+	const sent = {
+		...approvedDoc,
+		jafInvoiceGeneratedAt: new Date(),
+		brigade: { area: "OESTE" },
+	}
+
+	it("tells every administrator and logs the request, without reopening anything", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(sent as any)
+		const res = await action({
+			request: post(intent("request_fix", { note: "wrong qty on the pole" })),
+			params: { id: "doc-1" },
+		} as any)
+		expect(res).toEqual({ requestedFix: true })
+		expect(db.notification.createMany).toHaveBeenCalledWith({
+			data: [
+				expect.objectContaining({ userId: "admin-1", docId: "doc-1" }),
+				expect.objectContaining({ userId: "admin-2", docId: "doc-1" }),
+			],
+		})
+		const first = vi.mocked(db.notification.createMany).mock.calls[0][0] as any
+		expect(first.data[0].message).toContain("wrong qty on the pole")
+		expect(db.auditTrail.create).toHaveBeenCalledWith({
+			data: expect.objectContaining({
+				action: "FIX_REQUESTED",
+				diffJson: expect.objectContaining({ note: "wrong qty on the pole" }),
+			}),
+		})
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("needs a note", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(sent as any)
+		expect(
+			await action({
+				request: post(intent("request_fix", { note: " " })),
+				params: { id: "doc-1" },
+			} as any),
+		).toEqual({ errorKey: "docs_review.errors.back_note_required" })
+		expect(db.notification.createMany).not.toHaveBeenCalled()
+	})
+
+	it("is not for a job that has not been sent yet: that one the supervisor reopens", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...sent,
+			jafInvoiceGeneratedAt: null,
+		} as any)
+		await expect(
+			action({
+				request: post(intent("request_fix", { note: "x" })),
+				params: { id: "doc-1" },
+			} as any),
+		).rejects.toMatchObject({ status: 302 })
+		expect(db.notification.createMany).not.toHaveBeenCalled()
 	})
 })
 
@@ -2241,26 +2313,31 @@ describe("review loader: Packet → Claro step", () => {
 			{
 				key: "work_order_pdf",
 				name: "doc-1-work-order-1.pdf",
+				fileName: "JAF work order MAINT-260903-001.pdf",
 				href: "/files/packets/doc-1-work-order-1.pdf",
 			},
 			{
 				key: "prefield_pdf",
 				name: "doc-1-prefield-1.pdf",
+				fileName: "Prefield MAINT-260903-001.pdf",
 				href: "/files/packets/doc-1-prefield-1.pdf",
 			},
 			{
 				key: "photo",
 				name: "before.jpg",
+				fileName: "Photo 1 - before.jpg",
 				href: "/files/photos/doc-1/before.jpg",
 			},
 			{
 				key: "photo",
 				name: "after.jpg",
+				fileName: "Photo 2 - after.jpg",
 				href: "/files/photos/doc-1/after.jpg",
 			},
 			{
 				key: "blueprint",
 				name: "plano 1.pdf",
+				fileName: "Blueprint 1.pdf",
 				href: "/files/blueprints/doc-1/plano%201.pdf",
 			},
 		])

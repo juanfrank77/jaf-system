@@ -49,7 +49,7 @@ describe("PacketStepCard send button", () => {
 		const action = vi.fn(async () => null)
 		await mount(renderStub, packet(), action)
 		await userEvent.click(
-			screen.getByRole("button", { name: "Send to Claro supervisor" }),
+			screen.getByRole("button", { name: "Send to Ramón Claro" }),
 		)
 		expect(confirm).toHaveBeenCalledWith(
 			"Email the packet to ramon.now@claro.example?",
@@ -67,7 +67,7 @@ describe("PacketStepCard send button", () => {
 		)
 		await mount(renderStub, packet(), action)
 		const button = screen.getByRole("button", {
-			name: "Send to Claro supervisor",
+			name: "Send to Ramón Claro",
 		})
 		await userEvent.dblClick(button)
 		await waitFor(() =>
@@ -79,7 +79,7 @@ describe("PacketStepCard send button", () => {
 		release()
 		await waitFor(() =>
 			expect(
-				screen.getByRole("button", { name: "Send to Claro supervisor" }),
+				screen.getByRole("button", { name: "Send to Ramón Claro" }),
 			).toBeEnabled(),
 		)
 		expect(action).toHaveBeenCalledTimes(1)
@@ -140,7 +140,7 @@ describe("PacketStepCard send button", () => {
 		)
 		await mount(renderStub, packet({ canMarkManual: true }), action)
 		await userEvent.click(
-			screen.getByRole("button", { name: "Send to Claro supervisor" }),
+			screen.getByRole("button", { name: "Send to Ramón Claro" }),
 		)
 		await waitFor(() =>
 			expect(
@@ -164,7 +164,7 @@ describe("PacketStepCard send button", () => {
 	it("cannot be pressed while a blocker stands", async ({ renderStub }) => {
 		await mount(renderStub, packet({ blockers: ["blueprint"] }), vi.fn())
 		expect(
-			screen.getByRole("button", { name: "Send to Claro supervisor" }),
+			screen.getByRole("button", { name: "Send to Ramón Claro" }),
 		).toBeDisabled()
 	})
 })
@@ -204,7 +204,7 @@ describe("PacketStepCard with email off (manual only)", () => {
 			...over,
 		})
 
-	it("shows PDF generated, a disabled coming-later send, the manual button and Back", async ({
+	it("shows PDF generated, no send button, the manual button and Back", async ({
 		renderStub,
 	}) => {
 		await mount(
@@ -213,11 +213,8 @@ describe("PacketStepCard with email off (manual only)", () => {
 			vi.fn(async () => null),
 		)
 		expect(screen.getByText("Package ✓ generated")).toBeVisible()
-		expect(
-			screen.getByRole("button", {
-				name: "Send to Claro supervisor (coming later)",
-			}),
-		).toBeDisabled()
+		// Nothing greyed-out to puzzle over while emailing is off.
+		expect(screen.queryByRole("button", { name: /Send to/ })).toBeNull()
 		expect(
 			screen.getByRole("button", { name: "I sent the package to Claro →" }),
 		).toBeEnabled()
@@ -252,17 +249,25 @@ describe("PacketStepCard package files", () => {
 		{
 			key: "work_order_pdf",
 			name: "d1-work-order-1.pdf",
+			fileName: "JAF work order MAINT-1.pdf",
 			href: "/files/packets/d1-work-order-1.pdf",
 		},
 		{
 			key: "prefield_pdf",
 			name: "d1-prefield-2.pdf",
+			fileName: "Prefield MAINT-1.pdf",
 			href: "/files/packets/d1-prefield-2.pdf",
 		},
-		{ key: "photo", name: "before.jpg", href: "/files/photos/d1/before.jpg" },
+		{
+			key: "photo",
+			name: "before.jpg",
+			fileName: "Photo 1 - before.jpg",
+			href: "/files/photos/d1/before.jpg",
+		},
 		{
 			key: "blueprint",
 			name: "plano 1.pdf",
+			fileName: "Blueprint 1.pdf",
 			href: "/files/blueprints/d1/plano%201.pdf",
 		},
 	]
@@ -277,12 +282,34 @@ describe("PacketStepCard package files", () => {
 		)
 		for (const f of FILES)
 			expect(
-				screen.getByRole("link", { name: `Download ${f.name}` }),
+				screen.getByRole("link", { name: `Download ${f.fileName}` }),
 			).toHaveAttribute("href", f.href)
 		expect(screen.getByText("Claro Prefield (PDF)")).toBeVisible()
 		expect(
-			screen.getByRole("link", { name: "Download all (zip)" }),
+			screen.getByRole("link", { name: /Download all \(zip\)/ }),
 		).toHaveAttribute("href", "/docs/d1/package")
+	})
+
+	it("the eye button opens a photo in a pop-up, and a PDF in a frame, without downloading", async ({
+		renderStub,
+	}) => {
+		await mount(renderStub, packet({ files: FILES }), vi.fn())
+		await userEvent.click(
+			screen.getByRole("button", { name: "View Photo 1 - before.jpg" }),
+		)
+		const photo = await screen.findByRole("img", {
+			name: "Photo 1 - before.jpg",
+		})
+		expect(photo).toHaveAttribute("src", "/files/photos/d1/before.jpg")
+		expect(screen.getByRole("link", { name: "Open in new tab" })).toBeVisible()
+		await userEvent.click(screen.getByRole("button", { name: "Close" }))
+		await userEvent.click(
+			screen.getByRole("button", { name: "View Blueprint 1.pdf" }),
+		)
+		expect(await screen.findByTitle("Blueprint 1.pdf")).toHaveAttribute(
+			"src",
+			"/files/blueprints/d1/plano%201.pdf",
+		)
 	})
 
 	it("has no Prefield inputs: the boxes are Claro's", async ({

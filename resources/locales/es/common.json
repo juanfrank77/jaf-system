@@ -302,7 +302,7 @@
 		"body": "Los miembros de brigada ya no inician sesión en JAF Ops. Tu supervisor registra el trabajo de campo de tu brigada. Si crees que es un error, consulta con tu supervisor o con un administrador."
 	},
 	"crew_picker": {
-		"share": "Compartir este trabajo con otras brigadas",
+		"share": "+ Compartir con otra brigada",
 		"single": "Volver a una sola brigada",
 		"select_all": "Seleccionar todas las brigadas",
 		"clear": "Limpiar",
@@ -322,6 +322,7 @@
 		"assigned_crew_label": "Cuadrilla asignada",
 		"estimated_materials_label": "Materiales a preparar",
 		"callout_title": "Paso 1 · Usted",
+		"callout_toggle": "Cómo funciona",
 		"callout_body": "Entró un trabajo de Claro. Elija el supervisor de Claro, escriba la dirección y los códigos de servicio, escoja la brigada y conteste las dos preguntas. Al enviar, va al almacén para preparar los materiales, o directo a Campo cuando los materiales no salen del almacén.",
 		"work_order_label": "# de orden de trabajo JAF",
 		"work_order_auto": "Se asigna al crear",
@@ -331,6 +332,7 @@
 		"flow_prefix": "Al enviar",
 		"flow_warehouse": "Almacén — preparar",
 		"estimated_materials_hint": "Materiales físicos que el almacén debe preparar para este trabajo — aparte de los códigos de servicio de arriba. Busque por nombre o código.",
+		"cancel": "Cancelar",
 		"submit": "Crear orden de trabajo",
 		"errors": {
 			"invalid_materials": "Datos de materiales inválidos",
@@ -696,6 +698,10 @@
 		"blueprint_label": "Plano",
 		"blueprint_required_hint": "Este supervisor de Claro lo requiere antes de enviar el paquete.",
 		"saved": "Guardado",
+		"draft_saving": "Guardando…",
+		"draft_saved": "Guardado {{time}}",
+		"boxes_left_one": "Falta {{count}} casilla: {{items}}",
+		"boxes_left_other": "Faltan {{count}} casillas: {{items}}",
 		"save_progress": "Guardar progreso",
 		"continue_to_signoff": "Continuar a {{n}}. Firma",
 		"materials": {
@@ -712,6 +718,7 @@
 			"code": "Código",
 			"estimated": "Estimado",
 			"add": "+ Material de otra fuente",
+			"remove": "Quitar material",
 			"empty": "No se entregó material en la recogida.",
 			"hint": "Solo se factura el material entregado por el almacén. Cualquier otro material usado, regístralo con su propia Fuente."
 		},
@@ -847,6 +854,7 @@
 	},
 	"step_rail": {
 		"aria": "Progreso de la orden",
+		"progress": "Paso {{current}} de {{total}} · {{label}}",
 		"intake": "Creación",
 		"warehouse": "Almacén",
 		"field": "Campo",
@@ -856,6 +864,15 @@
 		"precert": "Hoja pre-cert.",
 		"release": "Liberar",
 		"released": "En Finanzas"
+	},
+	"fix_mistake": {
+		"button": "Corregir un error",
+		"reason_label": "¿Qué está mal? (obligatorio, queda registrado)",
+		"reopen_hint": "El trabajo vuelve a Campo y se borra su firma. Corrija lo que está mal, firme de nuevo y genere el paquete. Todavía no se ha enviado nada a Claro.",
+		"reopen_submit": "Reabrir el trabajo",
+		"request_hint": "Este trabajo ya se envió a Claro, así que no se puede reabrir aquí. Dígale a un administrador qué está mal y él lo reabrirá.",
+		"request_submit": "Pedir a un administrador",
+		"requested": "Solicitud enviada. Un administrador fue avisado y reabrirá el trabajo."
 	},
 	"docs_review_steps": {
 		"invoice_back": "Volver a Firma",
@@ -940,7 +957,6 @@
 		"col_qty": "Cant.",
 		"col_cost": "Costo",
 		"total": "TOTAL",
-		"continue_release": "Continuar a Liberación →",
 		"continue_hint": "La liberación se habilita automáticamente cuando el supervisor del contratista haya firmado.",
 		"back_to_aviso": "← Aviso"
 	},
@@ -2278,7 +2294,6 @@
 		"confirm_resend": "¿Enviar el paquete otra vez a {{email}}? Es la dirección actual del supervisor de Claro en el directorio.",
 		"pdf_generated": "Paquete ✓ generado",
 		"pdf_not_generated": "Aún no hay paquete: genérelo en el paso 4.",
-		"send_coming_later": "Enviar al supervisor de Claro (próximamente)",
 		"mark_sent": "Envié el paquete a Claro →",
 		"manual_only_hint": "Por ahora: envíe los archivos por correo usted mismo y luego marque el paquete como enviado.",
 		"back": "Atrás",
@@ -2318,6 +2333,7 @@
 			"locked": "Esta orden de trabajo está bloqueada: se entregó a Finanzas o se cerró, o su PDF ya se envió a Claro y no se puede volver a generar.",
 			"email_disabled": "El envío del paquete por correo no está activado. Envíe el PDF usted mismo y luego márquelo como enviado.",
 			"pdf_missing": "Aún no hay PDF de la orden de trabajo. Genérelo primero en el paso 4.",
+			"too_large": "El paquete es demasiado grande para enviarlo por correo (pasa el límite de 35 MB). Descárguelo y envíelo usted, y luego use \"Marcar como enviado a mano\".",
 			"render_failed": "No se pudo generar el PDF del paquete. El intento quedó registrado; vuelva a intentarlo y avise a un administrador si sigue fallando.",
 			"prefield_locked": "El paquete ya se envió: el supervisor de Claro y el plano ya no se pueden cambiar.",
 			"claro_supervisor_invalid": "Ese supervisor de Claro no está activo. Elija otro.",
@@ -2332,6 +2348,10 @@
 		"details_save": "Guardar",
 		"files_title": "Archivos para Claro",
 		"files_empty": "Aún no hay archivos: genere el paquete en el paso 4.",
+		"file_view": "Ver",
+		"file_open_tab": "Abrir en otra pestaña",
+		"file_close": "Cerrar",
+		"send_to": "Enviar a {{name}}",
 		"file_download": "Descargar",
 		"download_all": "Descargar todo (zip)",
 		"file_kind": {

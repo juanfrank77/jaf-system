@@ -1,11 +1,30 @@
 import { screen } from "@testing-library/react"
-import { describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it } from "vitest"
+import { page } from "vitest/browser"
 import { SupervisorStepRail } from "./supervisor-step-rail"
 
 const mount = (renderStub: any, ui: React.ReactElement) =>
 	renderStub({ entries: [{ path: "/", Component: () => ui }] })
 
 describe("SupervisorStepRail", () => {
+	// The full row of steps shows from `md`; below it a summary replaces it.
+	beforeEach(async () => {
+		await page.viewport(1024, 768)
+	})
+
+	it("shows 'Step N of 9' with a progress bar on a phone", async ({
+		renderStub,
+	}) => {
+		await page.viewport(390, 800)
+		await mount(renderStub, <SupervisorStepRail stage="INTAKE" />)
+		expect(screen.getByText("Step 1 of 9 · Intake")).toBeVisible()
+		expect(screen.getByRole("progressbar")).toHaveAttribute(
+			"aria-valuenow",
+			"1",
+		)
+		expect(screen.getByText("1. Intake")).not.toBeVisible()
+	})
+
 	it("keeps the nine supervisor steps and their labels", async ({
 		renderStub,
 	}) => {

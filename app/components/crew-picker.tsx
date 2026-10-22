@@ -79,50 +79,39 @@ export function CrewPicker({
 			{selected.map((id) => (
 				<input key={id} type="hidden" name={name} value={id} />
 			))}
-			<div className="flex flex-wrap items-center gap-2">
-				{shared ? (
-					<>
-						<Button
-							type="button"
-							variant="outline"
-							size="sm"
-							onClick={() =>
-								setSelected([
-									...selected,
-									...brigades
-										.map((b) => b.id)
-										.filter((id) => !selected.includes(id)),
-								])
-							}
-						>
-							{t("crew_picker.select_all")}
-						</Button>
-						<Button
-							type="button"
-							variant="ghost"
-							size="sm"
-							onClick={() => {
-								setShared(false)
-								setSelected((cur) => cur.slice(0, 1))
-							}}
-						>
-							{t("crew_picker.single")}
-						</Button>
-						<span className="text-xs text-muted-foreground" aria-live="polite">
-							{t("crew_picker.selected_count", { count: selected.length })}
-						</span>
-					</>
-				) : (
+			{shared && (
+				<div className="flex flex-wrap items-center gap-2">
 					<Button
 						type="button"
 						variant="outline"
 						size="sm"
-						onClick={() => setShared(true)}
+						onClick={() =>
+							setSelected([
+								...selected,
+								...brigades
+									.map((b) => b.id)
+									.filter((id) => !selected.includes(id)),
+							])
+						}
 					>
-						{t("crew_picker.share")}
+						{t("crew_picker.select_all")}
 					</Button>
-				)}
-			</div>
+					<Button
+						type="button"
+						variant="ghost"
+						size="sm"
+						onClick={() => {
+							setShared(false)
+							setSelected((cur) => cur.slice(0, 1))
+						}}
+					>
+						{t("crew_picker.single")}
+					</Button>
+					<span className="text-xs text-muted-foreground" aria-live="polite">
+						{t("crew_picker.selected_count", { count: selected.length })}
+					</span>
+				</div>
+			)}
 			<div className="grid gap-2 sm:grid-cols-2">
 				{brigades.map((b) => {
 					const on = selected.includes(b.id)
@@ -167,6 +156,15 @@ export function CrewPicker({
 					)
 				})}
 			</div>
+			{!shared && (
+				<button
+					type="button"
+					onClick={() => setShared(true)}
+					className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+				>
+					{t("crew_picker.share")}
+				</button>
+			)}
 			{selected.length > 1 && (
 				<LeadPaymentNote
 					leadName={brigades.find((b) => b.id === selected[0])?.name ?? ""}

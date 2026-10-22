@@ -11,6 +11,12 @@ export type PackageFile = {
 	key: "work_order_pdf" | "prefield_pdf" | "photo" | "blueprint"
 	/** The file name as stored (photos and blueprints: as uploaded). */
 	name: string
+	/**
+	 * What the supervisor and Claro see: the list, the download, the zip entry
+	 * and the email attachment ("JAF work order MAINT-261026-025.pdf",
+	 * "Photo 1 - before.jpg"). The stored names are system names.
+	 */
+	fileName: string
 	/** Where the server reads it. */
 	path: string
 	/** Where the browser downloads it (`/files/...`). */
@@ -18,6 +24,11 @@ export type PackageFile = {
 }
 
 const basename = (p: string) => p.split(/[\\/]/).filter(Boolean).at(-1) ?? p
+
+const extension = (p: string) => {
+	const dot = basename(p).lastIndexOf(".")
+	return dot > 0 ? basename(p).slice(dot).toLowerCase() : ""
+}
 
 /**
  * The package, in order: work order PDF, Prefield PDF, photos by the time they
@@ -27,12 +38,13 @@ const basename = (p: string) => p.split(/[\\/]/).filter(Boolean).at(-1) ?? p
 export function packageFiles(
 	doc: {
 		id: string
+		controlNumber: string
 		jafInvoicePdfPath: string | null
 		prefieldPdfPath: string | null
 		prefieldNeeded: boolean
 		blueprintPaths: string[]
 	},
-	photos: { localPath: string; takenAt: Date }[],
+	photos: { localPath: string; takenAt: Date; tag?: string | null }[],
 ): PackageFile[] {
 	const files: PackageFile[] = []
 	if (isPacketPath(doc.jafInvoicePdfPath)) {
@@ -40,6 +52,7 @@ export function packageFiles(
 		files.push({
 			key: "work_order_pdf",
 			name: basename(p),
+			fileName: `JAF work order ${doc.controlNumber}.pdf`,
 			path: p,
 			href: uploadHref(p),
 		})
@@ -49,6 +62,7 @@ export function packageFiles(
 		files.push({
 			key: "prefield_pdf",
 			name: basename(p),
+			fileName: `Prefield ${doc.controlNumber}.pdf`,
 			path: p,
 			href: uploadHref(p),
 		})
@@ -56,20 +70,23 @@ export function packageFiles(
 	const byTime = [...photos].sort(
 		(a, b) => new Date(a.takenAt).getTime() - new Date(b.takenAt).getTime(),
 	)
-	for (const photo of byTime) {
+	for (const [i, photo] of byTime.entries()) {
 		const name = basename(photo.localPath)
+		const tag = photo.tag ? ` - ${photo.tag.toLowerCase()}` : ""
 		files.push({
 			key: "photo",
 			name,
+			fileName: `Photo ${i + 1}${tag}${extension(photo.localPath)}`,
 			path: photo.localPath,
 			href: `/files/photos/${encodeURIComponent(doc.id)}/${encodeURIComponent(name)}`,
 		})
 	}
-	for (const p of doc.blueprintPaths) {
+	for (const [i, p] of doc.blueprintPaths.entries()) {
 		const name = basename(p)
 		files.push({
 			key: "blueprint",
 			name,
+			fileName: `Blueprint ${i + 1}${extension(p)}`,
 			path: p,
 			href: `/files/blueprints/${encodeURIComponent(doc.id)}/${encodeURIComponent(name)}`,
 		})

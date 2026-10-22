@@ -6,6 +6,8 @@ import { Form, Link, redirect } from "react-router"
 import { AvisoCard, type AvisoHistoryRow } from "~/components/aviso-card"
 import { DocStageBadge } from "~/components/doc-stage-badge"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { DownloadIconLink } from "~/components/file-viewer"
+import { FixMistakeCard } from "~/components/fix-mistake-card"
 import {
 	type PacketStepBlocker,
 	PacketStepCard,
@@ -54,6 +56,7 @@ import {
 	validateBlueprintFile,
 	validateFile,
 } from "~/lib/file-upload.server"
+import { fixModeFor } from "~/lib/fix-mode"
 import { invoiceNumberFor } from "~/lib/invoice-number"
 import { openJobLabel } from "~/lib/open-job-label"
 import { packageFiles } from "~/lib/package-files"
@@ -569,6 +572,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		workOrder,
 		workOrderIssuedOn: (doc.completionSignedAt ?? new Date()).toISOString(),
 		canGeneratePdf,
+		fixMode: fixModeFor(doc, user.role),
 		// Who signed off (Step 4). Before this redesign it was the crew lead.
 		signedOffBy: doc.completedById
 			? (correctorNames[doc.completedById] ?? null)
@@ -900,7 +904,44 @@ export async function action({ request, params }: Route.ActionArgs) {
 				},
 			}),
 		])
-		throw redirect(`/docs/${params.id}/review`)
+		// Back to Field, where the mistake is fixed; sign-off comes after.
+		throw redirect(`/docs/${params.id}/field`)
+	}
+
+	// "Fix a mistake" once the packet has gone to Claro (or later): the job is
+	// not reopened here. Every administrator is told what is wrong, and the
+	// request is logged on the job.
+	if (intent === "request_fix") {
+		const note = (form.get("note") as string | null)?.trim() || ""
+		if (!note) return { errorKey: "docs_review.errors.back_note_required" }
+		if (user.role !== "SUPERVISOR" || fixModeFor(doc, user.role) !== "request")
+			throw redirect(`/docs/${params.id}/review`)
+		const admins = await db.user.findMany({
+			where: { role: "ADMIN", active: true },
+			select: { id: true },
+		})
+		await db.$transaction([
+			...(admins.length > 0
+				? [
+						db.notification.createMany({
+							data: admins.map((a) => ({
+								userId: a.id,
+								docId: params.id,
+								message: `${user.name} asks to fix ${doc.controlNumber}: ${note}`,
+							})),
+						}),
+					]
+				: []),
+			db.auditTrail.create({
+				data: {
+					docId: params.id,
+					userId: user.id,
+					action: "FIX_REQUESTED",
+					diffJson: { note, status: doc.status },
+				},
+			}),
+		])
+		return { requestedFix: true as const }
 	}
 
 	if (intent === "save_aviso") {
@@ -1710,12 +1751,11 @@ function PreCertPanel({
 					{t("precert.version", { n: sheet?.version ?? 1 })}
 				</span>
 				{sheet?.pdfPath && (
-					<a
+					<DownloadIconLink
 						href={`/files/precert/${doc.id}-v${sheet.version}.pdf`}
-						className="text-accent-text underline"
-					>
-						{t("precert.download")}
-					</a>
+						name={`Pre-cert ${doc.controlNumber} v${sheet.version}.pdf`}
+						label={t("precert.download")}
+					/>
 				)}
 			</div>
 			<table className="w-full text-sm">
@@ -1880,12 +1920,11 @@ function PreCertPanel({
 									/>
 								)}
 								{sheet.sigClaroScanPath && (
-									<a
+									<DownloadIconLink
 										href={`/files/precert/${doc.id}-claro-scan.jpg`}
-										className="text-accent-text underline text-xs"
-									>
-										{t("precert.download")}
-									</a>
+										name={`Pre-cert Claro scan ${doc.controlNumber}.jpg`}
+										label={t("precert.download")}
+									/>
 								)}
 								<p className="text-sm">{sheet.sigClaroName}</p>
 							</div>
@@ -1938,13 +1977,6 @@ function PreCertPanel({
 					</p>
 				</div>
 			)}
-			{readOnly && sheet?.sigSupervisorAt && (
-				<div className="flex justify-end border-t pt-3">
-					<Link to="?step=RELEASE" className={buttonVariants({})}>
-						{t("precert.continue_release")}
-					</Link>
-				</div>
-			)}
 		</div>
 	)
 }
@@ -1971,6 +2003,7 @@ export default function ReviewDoc({
 		workOrder,
 		workOrderIssuedOn,
 		canGeneratePdf,
+		fixMode,
 		signedOffBy,
 	} = loaderData
 	const { t } = useTranslation()
@@ -1984,6 +2017,7 @@ export default function ReviewDoc({
 				pdfAvisoNumber?: string
 				differences?: MaterialDifference[]
 				rows?: { key: string; ok: boolean }[]
+				requestedFix?: true
 		  }
 		| undefined
 	const panel = panelForStep(view)
@@ -2044,6 +2078,13 @@ export default function ReviewDoc({
 						{t("docs_review.readonly_work_order")}
 					</Link>
 				</Pill>
+			)}
+			{fixMode && (
+				<FixMistakeCard
+					mode={fixMode}
+					errorKey={error?.errorKey}
+					requested={!!error?.requestedFix}
+				/>
 			)}
 			{calloutKey && (
 				<Callout
@@ -2234,7 +2275,7 @@ export default function ReviewDoc({
 					)}
 					{/* Back to step 6: Replace Aviso until a Pre-cert signature,
 					    view-only after it (`resolveStepView`). */}
-					{!doc.releasedToFinanceAt && (
+					{interactive && !doc.releasedToFinanceAt && (
 						<Link
 							to="?step=AVISO"
 							className={buttonVariants({

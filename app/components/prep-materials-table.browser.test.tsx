@@ -199,7 +199,45 @@ describe("PrepMaterialsTable", () => {
 				"Select material…",
 			),
 		).toBeInTheDocument()
-		await userEvent.click(screen.getByRole("button", { name: "Remove line" }))
+		await userEvent.click(
+			screen.getAllByRole("button", { name: "Remove line" })[0],
+		)
+		expect(onRemove).toHaveBeenCalledWith(0)
+	})
+
+	it("a material the warehouse picked can still be removed or changed", async ({
+		renderStub,
+	}) => {
+		const onRemove = vi.fn()
+		const onChange = vi.fn()
+		await mount(
+			renderStub,
+			<PrepMaterialsTable
+				rows={[
+					row({
+						_key: "n",
+						serviceCodeId: codes[0].id,
+						estimatedQty: 0,
+						preppedQty: 1,
+					}),
+				]}
+				codes={codes}
+				availability={availability}
+				onChange={onChange}
+				onRemove={onRemove}
+			/>,
+		)
+		await userEvent.selectOptions(
+			screen.getByLabelText("Select material…"),
+			codes[1].id,
+		)
+		expect(onChange).toHaveBeenCalledWith(0, {
+			serviceCodeId: codes[1].id,
+			substitutedWith: null,
+		})
+		await userEvent.click(
+			screen.getAllByRole("button", { name: "Remove line" })[0],
+		)
 		expect(onRemove).toHaveBeenCalledWith(0)
 	})
 })

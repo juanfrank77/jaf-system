@@ -118,6 +118,38 @@ const inputs = (html: string, re: RegExp) =>
 	(html.match(/<input[^>]*>/g) ?? []).filter((i) => re.test(i))
 
 describe("Field screen (render)", () => {
+	it("pre-fills the Field report with N/A, but keeps a report already written", async () => {
+		expect(await render()).toMatch(/<textarea[^>]*>N\/A<\/textarea>/)
+		const written = loaderData()
+		;(written.doc as any).fieldNotes = "Cable replaced"
+		expect(await render(written)).toMatch(
+			/<textarea[^>]*>Cable replaced<\/textarea>/,
+		)
+	})
+
+	it("greys out Continue and says what is missing: the After photo", async () => {
+		const html = await render()
+		expect(html).toContain("1 box left: After Photos")
+		expect(html).toMatch(
+			/<button[^>]*aria-disabled="true"[^>]*>Continue to 4\. Sign off/,
+		)
+	})
+
+	it("lets Continue through, with no line, once the required boxes are filled", async () => {
+		const data = loaderData()
+		;(data.photos as any).AFTER = [photo("a1")]
+		const html = await render(data)
+		expect(html).not.toMatch(/box(es)? left/)
+		expect(html).not.toMatch(/aria-disabled="true"/)
+	})
+
+	it("rings the first empty box (Actual) as the next one to fill", async () => {
+		const html = await render()
+		expect(inputs(html, /aria-label="Actual 34006301"/)[0]).toMatch(
+			/class="[^"]*field-next/,
+		)
+	})
+
 	it("marks Actual, Used and Source as required fields and offers Back", async () => {
 		const html = await render()
 		expect(inputs(html, /aria-label="Actual 34006301"/)[0]).toMatch(

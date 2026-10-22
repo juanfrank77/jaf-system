@@ -326,7 +326,7 @@ describe("Packet → Claro step (render)", () => {
 		const html = await render(step5())
 		expect(html).toContain("Packet → Claro")
 		expect(html).toMatch(/<input[^>]*name="intent"[^>]*value="send_packet"/)
-		expect(html).toContain("Send to Claro supervisor")
+		expect(html).toContain("Send to Ramón Claro")
 		expect(html).toContain("ramon.now@claro.example")
 		expect(html).toContain(
 			'data-confirm="Email the packet to ramon.now@claro.example?"',
@@ -355,21 +355,25 @@ describe("Packet → Claro step (render)", () => {
 					{
 						key: "work_order_pdf",
 						name: "doc-1-work-order-1.pdf",
+						fileName: "JAF work order MAINT-1.pdf",
 						href: "/files/packets/doc-1-work-order-1.pdf",
 					},
 					{
 						key: "prefield_pdf",
 						name: "doc-1-prefield-1.pdf",
+						fileName: "Prefield MAINT-1.pdf",
 						href: "/files/packets/doc-1-prefield-1.pdf",
 					},
 					{
 						key: "photo",
 						name: "before.jpg",
+						fileName: "Photo 1 - before.jpg",
 						href: "/files/photos/doc-1/before.jpg",
 					},
 					{
 						key: "blueprint",
 						name: "plano 1.pdf",
+						fileName: "Blueprint 1.pdf",
 						href: "/files/blueprints/doc-1/plano%201.pdf",
 					},
 				],
@@ -384,9 +388,11 @@ describe("Packet → Claro step (render)", () => {
 			"/files/blueprints/doc-1/plano%201.pdf",
 		])
 			expect(html).toContain(`href="${href}"`)
-		expect(html.match(/>Download</g)).toHaveLength(4)
+		expect(html.match(/aria-label="Download /g)).toHaveLength(4)
+		expect(html.match(/aria-label="View /g)).toHaveLength(4)
+		expect(html).toContain("Photo 1 - before.jpg")
 		expect(html).toMatch(
-			/<a[^>]*href="\/docs\/doc-1\/package"[^>]*>Download all \(zip\)/,
+			/<a[^>]*href="\/docs\/doc-1\/package"[^>]*>⬇ Download all \(zip\)/,
 		)
 		expect(html).toContain("Claro Prefield (PDF)")
 		expect(html).not.toMatch(/Aviso \(PDF\)|Certificado/)
@@ -458,9 +464,7 @@ describe("Packet → Claro step (render)", () => {
 			"The work order answers changed after the package was generated.",
 		)
 		expect(html).toContain("Add a blueprint")
-		expect(html).toMatch(
-			/<button[^>]*disabled=""[^>]*>Send to Claro supervisor/,
-		)
+		expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Send to Ramón Claro/)
 	})
 
 	it("after an UNCONFIGURED attempt: says so, offers the download and Mark as sent manually", async () => {
@@ -496,7 +500,7 @@ describe("Packet → Claro step (render)", () => {
 		)
 		expect(html).toContain("Mark as sent manually")
 		// Still not sent: the main button keeps its first-send label.
-		expect(html).toContain("Send to Claro supervisor")
+		expect(html).toContain("Send to Ramón Claro")
 		expect(html).toContain("Not sent yet")
 	})
 
@@ -572,7 +576,7 @@ describe("Packet → Claro step (render)", () => {
 			{ errorKey: "packet.errors.blueprint_missing" },
 			"es",
 		)
-		expect(html).toContain("Enviar al supervisor de Claro")
+		expect(html).toContain("Enviar a Ramón Claro")
 		expect(html).toContain("Este supervisor de Claro requiere un plano")
 		expect(html).toContain(
 			"¿Enviar el paquete por correo a ramon.now@claro.example?",
@@ -611,5 +615,86 @@ describe("Packet → Claro step (render)", () => {
 		const html = await render({ ...step5(), interactive: false })
 		expect(html).not.toContain('value="send_packet"')
 		expect(html).toContain("Packet → Claro")
+	})
+})
+
+describe("Pre-cert step (render)", () => {
+	const precert = (interactive: boolean, doc = {}) => ({
+		...loaderData(
+			{
+				status: "SUPERVISOR_APPROVED",
+				supervisorApprovedAt: "2026-10-18T10:00:00.000Z",
+				jafInvoiceGeneratedAt: "2026-10-18T11:00:00.000Z",
+				avisoNumber: "10359519",
+				avisoDocPath: "/u/aviso/doc-1.pdf",
+				...doc,
+			},
+			interactive,
+		),
+		stage: "RELEASE",
+		view: "PRECERT",
+		invoiceHeader: { address: "Calle Luna 1" },
+		sheet: {
+			id: "s1",
+			version: 1,
+			lines: [],
+			pdfPath: "/u/precert/doc-1-v1.pdf",
+			sigSupervisorAt: "2026-10-26T10:00:00.000Z",
+			sigSupervisorName: "Edgard Ocasio",
+			sigSupervisorImage: null,
+		},
+	})
+
+	it("a completed (read-only) step offers no Continue or back-to-Aviso button, only the banner's way back", async () => {
+		const html = await render(precert(false))
+		expect(html).toContain("Completed step.")
+		expect(html).toContain("Back to the current step")
+		expect(html).not.toContain("Continue to Release")
+		expect(html).not.toContain("← Aviso")
+	})
+
+	it("downloads the sheet with the same ⬇ button as Packet → Claro, under a friendly name", async () => {
+		const html = await render(precert(false))
+		const link = html.match(
+			/<a[^>]*href="\/files\/precert\/doc-1-v1\.pdf"[^>]*>/,
+		)
+		expect(link?.[0]).toContain('download="Pre-cert JAF-1001 v1.pdf"')
+		expect(html).toMatch(/<a[^>]*precert[^>]*>.*?Download PDF/s)
+	})
+})
+
+describe("Fix a mistake (render)", () => {
+	const signed = (doc = {}, role = "SUPERVISOR") => ({
+		...loaderData(
+			{
+				status: "SUPERVISOR_APPROVED",
+				supervisorApprovedAt: "2026-10-18T10:00:00.000Z",
+				...doc,
+			},
+			false,
+		),
+		user: { id: "u1", role, name: "Edgard Ocasio" },
+	})
+
+	it("offers the button on a signed job that has not been sent, to reopen it", async () => {
+		const html = await render({
+			...signed(),
+			fixMode: "reopen",
+		})
+		expect(html).toContain('data-testid="fix-mistake"')
+		expect(html).toContain("Fix a mistake")
+	})
+
+	it("says the job was sent and an administrator reopens it, after the send", async () => {
+		const html = await render({
+			...signed({ jafInvoiceGeneratedAt: "2026-10-19T10:00:00.000Z" }),
+			fixMode: "request",
+		})
+		expect(html).toContain("Fix a mistake")
+	})
+
+	it("is not there when the loader says there is nothing to fix", async () => {
+		const html = await render({ ...signed(), fixMode: null })
+		expect(html).not.toContain("Fix a mistake")
 	})
 })

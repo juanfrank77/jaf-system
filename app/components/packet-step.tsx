@@ -2,6 +2,7 @@ import type { ParseKeys } from "i18next"
 import { type RefObject, useEffect, useRef } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, Link, useNavigation } from "react-router"
+import { DownloadIconLink, FileViewerButton } from "~/components/file-viewer"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { Card, CardContent, CardHeader } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
@@ -247,18 +248,12 @@ function PackageFileList({ packet }: { packet: PacketStepData }) {
 								<span className="block text-xs text-muted-foreground">
 									{t(FILE_KIND_KEY[f.key])}
 								</span>
-								<span className="block truncate">{f.name}</span>
+								<span className="block truncate">{f.fileName}</span>
 							</span>
-							<a
-								href={f.href}
-								target="_blank"
-								rel="noreferrer"
-								download={f.name}
-								aria-label={`${t("packet.file_download")} ${f.name}`}
-								className={buttonVariants({ variant: "outline", size: "sm" })}
-							>
-								{t("packet.file_download")}
-							</a>
+							<span className="flex shrink-0 gap-2">
+								<FileViewerButton href={f.href} name={f.fileName} />
+								<DownloadIconLink href={f.href} name={f.fileName} />
+							</span>
 						</li>
 					))}
 				</ul>
@@ -267,11 +262,11 @@ function PackageFileList({ packet }: { packet: PacketStepData }) {
 				<a
 					href={packet.zipHref}
 					className={buttonVariants({
-						variant: "outline",
-						className: "w-full",
+						className:
+							"h-11 w-full bg-action-orange text-white hover:bg-action-orange/90",
 					})}
 				>
-					{t("packet.download_all")}
+					{`⬇ ${t("packet.download_all")}`}
 				</a>
 			)}
 		</section>
@@ -382,9 +377,6 @@ export function PacketStepCard({
 					)}
 					{interactive && !packet.emailEnabled && (
 						<>
-							<Button type="button" className="w-full" disabled>
-								{t("packet.send_coming_later")}
-							</Button>
 							{!packet.sent && (
 								<>
 									<ConfirmedSubmit
@@ -416,7 +408,13 @@ export function PacketStepCard({
 						<>
 							<ConfirmedSubmit
 								intent="send_packet"
-								label={packet.sent ? t("packet.resend") : t("packet.send")}
+								label={
+									packet.sent
+										? t("packet.resend")
+										: claro
+											? t("packet.send_to", { name: claro.name })
+											: t("packet.send")
+								}
 								confirmText={t(
 									packet.sent ? "packet.confirm_resend" : "packet.confirm_send",
 									{ email: claro?.email ?? "" },

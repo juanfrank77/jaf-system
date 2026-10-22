@@ -1,7 +1,7 @@
 import type { ParseKeys } from "i18next"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Form, redirect } from "react-router"
+import { Form, Link, redirect } from "react-router"
 import { CrewPicker } from "~/components/crew-picker"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import {
@@ -11,7 +11,7 @@ import {
 import { MaterialPicker } from "~/components/material-picker"
 import { ServicePicker } from "~/components/service-picker"
 import { SupervisorStepRail } from "~/components/supervisor-step-rail"
-import { Button } from "~/components/ui/button"
+import { Button, buttonVariants } from "~/components/ui/button"
 import { Card, CardContent } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
@@ -289,15 +289,71 @@ export default function NewDoc({
 				stage="INTAKE"
 				warehouseSkipped={materialsChoice === "no"}
 			/>
-			<div className="rounded-xl border border-border bg-card px-3 py-2 text-sm">
+			<div className="hidden rounded-xl border border-border bg-card px-3 py-2 text-sm md:block">
 				<span className="font-semibold">{t("docs_new.callout_title")}</span>
 				<span className="ml-2 text-muted-foreground">
 					{t("docs_new.callout_body")}
 				</span>
 			</div>
+			<details className="rounded-xl border border-border bg-card px-3 py-2 text-sm md:hidden">
+				<summary className="cursor-pointer font-semibold">
+					{t("docs_new.callout_title")} · {t("docs_new.callout_toggle")}
+				</summary>
+				<p className="mt-2 text-muted-foreground">
+					{t("docs_new.callout_body")}
+				</p>
+			</details>
 			<Form method="post" encType="multipart/form-data">
 				<Card>
 					<CardContent className="space-y-5">
+						<div>
+							<Label htmlFor="claroSupervisorId">
+								{t("docs_new.claro_supervisor_label")}
+							</Label>
+							<Select
+								name="claroSupervisorId"
+								value={claroId}
+								onValueChange={(v) => pickClaro(v ?? "")}
+								items={claroSupervisors.map((c) => ({
+									value: c.id,
+									label: c.name,
+								}))}
+							>
+								<SelectTrigger
+									id="claroSupervisorId"
+									autoFocus
+									className="mt-1 h-11 w-full"
+								>
+									<SelectValue
+										placeholder={t("docs_new.claro_supervisor_placeholder")}
+									/>
+								</SelectTrigger>
+								<SelectContent>
+									{claroSupervisors.map((c) => (
+										<SelectItem key={c.id} value={c.id}>
+											{c.name}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+							{claro && (claro.requiresPrefield || claro.requiresBlueprint) && (
+								<div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+									<span className="text-muted-foreground">
+										{t("docs_new.claro_requires")}
+									</span>
+									{claro.requiresPrefield && (
+										<span className="rounded-md bg-muted px-2 py-0.5">
+											{t("docs_new.requires_prefield_chip")}
+										</span>
+									)}
+									{claro.requiresBlueprint && (
+										<span className="rounded-md bg-muted px-2 py-0.5">
+											{t("docs_new.requires_blueprint_chip")}
+										</span>
+									)}
+								</div>
+							)}
+						</div>
 						<div className="grid gap-4 md:grid-cols-2">
 							<div>
 								<Label htmlFor="workOrderNumber">
@@ -311,53 +367,6 @@ export default function NewDoc({
 									className="mt-1 font-mono"
 								/>
 								<Hint>{t("docs_new.work_order_hint")}</Hint>
-							</div>
-						</div>
-						<div className="grid gap-4 md:grid-cols-2">
-							<div>
-								<Label htmlFor="claroSupervisorId">
-									{t("docs_new.claro_supervisor_label")}
-								</Label>
-								<Select
-									name="claroSupervisorId"
-									value={claroId}
-									onValueChange={(v) => pickClaro(v ?? "")}
-									items={claroSupervisors.map((c) => ({
-										value: c.id,
-										label: c.name,
-									}))}
-								>
-									<SelectTrigger id="claroSupervisorId" className="mt-1">
-										<SelectValue
-											placeholder={t("docs_new.claro_supervisor_placeholder")}
-										/>
-									</SelectTrigger>
-									<SelectContent>
-										{claroSupervisors.map((c) => (
-											<SelectItem key={c.id} value={c.id}>
-												{c.name}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-								{claro &&
-									(claro.requiresPrefield || claro.requiresBlueprint) && (
-										<div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-											<span className="text-muted-foreground">
-												{t("docs_new.claro_requires")}
-											</span>
-											{claro.requiresPrefield && (
-												<span className="rounded-md bg-muted px-2 py-0.5">
-													{t("docs_new.requires_prefield_chip")}
-												</span>
-											)}
-											{claro.requiresBlueprint && (
-												<span className="rounded-md bg-muted px-2 py-0.5">
-													{t("docs_new.requires_blueprint_chip")}
-												</span>
-											)}
-										</div>
-									)}
 							</div>
 							<div>
 								<Label htmlFor="jobType">{t("docs_new.job_type_label")}</Label>
@@ -468,17 +477,29 @@ export default function NewDoc({
 						{error?.errorKey && (
 							<p className="text-sm text-status-danger">{t(error.errorKey)}</p>
 						)}
-						<div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-							<span>{t("docs_new.flow_prefix")}:</span>
-							<span className="rounded-md bg-muted px-2.5 py-1">
-								{materialsChoice === "no"
-									? t("docs_new.flow_field")
-									: t("docs_new.flow_warehouse")}
-							</span>
-						</div>
-						<Button type="submit">{t("docs_new.submit")}</Button>
 					</CardContent>
 				</Card>
+				<div className="sticky bottom-0 z-20 -mx-4 mt-4 space-y-1.5 border-t border-border bg-background/95 px-4 py-2 backdrop-blur md:-mx-8 md:space-y-2 md:px-8 md:py-3">
+					<div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground md:text-sm">
+						<span>{t("docs_new.flow_prefix")}:</span>
+						<span className="rounded-md bg-muted px-2 py-0.5 md:px-2.5 md:py-1">
+							{materialsChoice === "no"
+								? t("docs_new.flow_field")
+								: t("docs_new.flow_warehouse")}
+						</span>
+					</div>
+					<div className="flex items-center justify-between gap-3">
+						<Link
+							to="/dashboard"
+							className={buttonVariants({ variant: "outline" })}
+						>
+							{t("docs_new.cancel")}
+						</Link>
+						<Button type="submit" className="h-10 px-5">
+							{t("docs_new.submit")}
+						</Button>
+					</div>
+				</div>
 			</Form>
 		</div>
 	)

@@ -24,7 +24,7 @@ function RadioOption({
 	return (
 		<label
 			htmlFor={id}
-			className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+			className="flex min-h-11 flex-1 cursor-pointer items-center justify-center rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium has-[:checked]:border-primary has-[:checked]:bg-primary has-[:checked]:text-primary-foreground has-focus-visible:ring-[3px] has-focus-visible:ring-ring/50"
 		>
 			<input
 				type="radio"
@@ -34,6 +34,7 @@ function RadioOption({
 				checked={checked}
 				onChange={onChange}
 				required
+				className="sr-only"
 			/>
 			{label}
 		</label>
@@ -60,7 +61,7 @@ export function MaterialsSourceChoice({
 				<legend className="text-sm font-semibold">
 					{t("intake_choices.materials_question")}
 				</legend>
-				<div className="flex flex-wrap gap-2">
+				<div className="flex gap-2">
 					<RadioOption
 						name="materialsFromWarehouse"
 						value="yes"
@@ -113,7 +114,7 @@ export function PrefieldNeededChoice({
 			<legend className="text-sm font-semibold">
 				{t("intake_choices.prefield_question")}
 			</legend>
-			<div className="flex flex-wrap gap-2">
+			<div className="flex gap-2">
 				<RadioOption
 					name="prefieldNeeded"
 					value="needed"

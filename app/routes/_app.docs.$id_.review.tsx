@@ -1,5 +1,4 @@
 import { readFile } from "node:fs/promises"
-import path from "node:path"
 import type { ParseKeys } from "i18next"
 import { useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -8,7 +7,7 @@ import { AvisoCard } from "~/components/aviso-card"
 import { DocStageBadge } from "~/components/doc-stage-badge"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import {
-	type PacketBlocker,
+	type PacketStepBlocker,
 	PacketStepCard,
 	type PacketStepData,
 } from "~/components/packet-step"
@@ -23,7 +22,7 @@ import { Card, CardContent, CardHeader } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
 import { Pill } from "~/components/ui/pill"
 import {
-	GenerateWorkOrderPdf,
+	GeneratePackage,
 	WorkOrderDocumentCard,
 } from "~/components/work-order-document"
 import { isAvisoSaved } from "~/lib/aviso-document"
@@ -47,12 +46,16 @@ import {
 } from "~/lib/file-upload.server"
 import { invoiceNumberFor } from "~/lib/invoice-number"
 import { openJobLabel } from "~/lib/open-job-label"
+import { packageFiles } from "~/lib/package-files"
+import { packetBlockers } from "~/lib/packet-blockers"
 import {
 	buildPacketInput,
+	buildPrefieldInput,
 	loadWorkOrderDocument,
 	sendPacket,
 } from "~/lib/packet-send.server"
 import { generateClaroPacketPdf } from "~/lib/pdf/claro-packet.server"
+import { generateClaroPrefieldPdf } from "~/lib/pdf/claro-prefield.server"
 import { canTransition, isTerminalStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import {
@@ -62,7 +65,6 @@ import {
 	preCertLinesFor,
 	renderPreCert,
 } from "~/lib/pre-cert.server"
-import { packetBlockers, prefieldMissing } from "~/lib/prefield"
 import { evaluateReleaseGate, isPacketPath } from "~/lib/release-gate"
 import {
 	getActiveServiceCodes,
@@ -94,9 +96,6 @@ import type { PreCertSheet, Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id_.review"
 
 type MaterialLine = { serviceCodeId: string; qty: number }
-
-/** The Prefield inputs the packet step edits (Aviso # is entered at step 6). */
-const PREFIELD_INPUTS = ["ordenNumber", "pedido", "smr", "titulo"] as const
 
 const AVISO_PDF_ERROR_KEYS = {
 	unreadable: "docs_review.errors.aviso_pdf_unreadable",
@@ -296,11 +295,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		isAvisoStarted(doc),
 		new URL(request.url).searchParams.get("step"),
 	)
-	const gate = evaluateReleaseGate({
-		doc,
-		sheet,
-		photos: await photosThatLoad(params.id, photos),
-	})
+	const loadingPhotos = await photosThatLoad(params.id, photos)
+	const gate = evaluateReleaseGate({ doc, sheet, photos: loadingPhotos })
 	const lineTotal =
 		doc.jafInvoiceLineTotal != null
 			? toNumberPrice(doc.jafInvoiceLineTotal)
@@ -361,47 +357,35 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	// UNCONFIGURED attempt also stores one for the manual path.
 	const claro = doc.claroSupervisor
 	const sent = doc.jafInvoiceGeneratedAt != null
-	const blockers: PacketBlocker[] = sent
+	const blockers: PacketStepBlocker[] = sent
 		? []
-		: claro
-			? packetBlockers(doc, claro)
-			: ["claro_supervisor"]
+		: [
+				...(claro ? [] : (["claro_supervisor"] as const)),
+				...packetBlockers(doc, {
+					requiresBlueprint: claro?.requiresBlueprint ?? false,
+				}),
+			]
 	const codeById = new Map(materialCodes.map((c) => [c.id, c]))
 	const emailEnabled = isPacketEmailEnabled()
+	// The package: the generated PDFs and the original photos and blueprints,
+	// as step 5 lists them. Server paths stay on the server.
+	const files = packageFiles(doc, loadingPhotos).map(
+		({ path: _path, ...f }) => f,
+	)
 	const packet: PacketStepData = {
 		sent,
 		sentAt: doc.jafInvoiceGeneratedAt,
-		claroSupervisor: claro
-			? {
-					name: claro.name,
-					email: claro.email,
-					requiresPrefield: claro.requiresPrefield,
-				}
-			: null,
+		claroSupervisor: claro ? { name: claro.name, email: claro.email } : null,
 		claroSupervisorId: doc.claroSupervisorId,
 		claroOptions,
-		showPrefield: claro?.requiresPrefield ?? false,
-		prefield: {
-			avisoNumber: doc.avisoNumber,
-			ordenNumber: doc.ordenNumber,
-			pedido: doc.pedido,
-			smr: doc.smr,
-			titulo: doc.titulo,
-			description: doc.jobDescription,
-		},
-		prefieldMissing: claro?.requiresPrefield ? prefieldMissing(doc) : [],
+		prefieldNeeded: doc.prefieldNeeded,
 		blockers,
 		// Only a real packet: a legacy priced invoice in jaf-invoices/ is not one.
 		packetHref: isPacketPath(doc.jafInvoicePdfPath)
 			? uploadHref(doc.jafInvoicePdfPath as string)
 			: null,
-		blueprints: doc.blueprintPaths.map((p) => {
-			const name = path.basename(p)
-			return {
-				name,
-				href: `/files/blueprints/${encodeURIComponent(doc.id)}/${encodeURIComponent(name)}`,
-			}
-		}),
+		files,
+		zipHref: files.length > 0 ? `/docs/${doc.id}/package` : null,
 		materials: materialRows.map((r) => {
 			const code = codeById.get(r.serviceCodeId)
 			return {
@@ -433,22 +417,20 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			: !sent && isPacketPath(doc.jafInvoicePdfPath),
 	}
 
-	// Step 4 · the work order document, and Generate PDF: open once the
-	// supervisor has signed and the Claro supervisor's rules are met, until the
-	// first send to Claro locks it. A job sent under the old flow has no work
-	// order PDF yet, so it stays open for it until the release.
+	// Step 4 · the work order document, and Generate package: open once the
+	// supervisor has signed and a Claro supervisor is chosen, until the first
+	// send to Claro locks it. A job sent under the old flow has no work order
+	// PDF yet, so it stays open for it until the release.
 	const workOrder =
 		panelForStep(view) === "APPROVE"
-			? await loadWorkOrderDocument(params.id, "urls", user.name)
+			? await loadWorkOrderDocument(params.id, user.name)
 			: null
 	const canGeneratePdf =
 		!!doc.supervisorApprovedAt &&
 		!doc.releasedToFinanceAt &&
 		!isTerminalStatus(doc.status) &&
 		(isSentUnderOldFlow(doc) ||
-			(isSig(doc.completionSignature) &&
-				!doc.jafInvoiceGeneratedAt &&
-				blockers.length === 0))
+			(isSig(doc.completionSignature) && !doc.jafInvoiceGeneratedAt && !!claro))
 
 	const { claroSupervisor: _claro, ...docData } = doc
 	return {
@@ -540,18 +522,21 @@ export async function action({ request, params }: Route.ActionArgs) {
 				},
 			}),
 		])
-		// Signed: stay on step 4, where Generate PDF is now open.
+		// Signed: stay on step 4, where Generate package is now open.
 		throw redirect(`/docs/${params.id}/review?step=APPROVE`)
 	}
 
-	// Step 4 · Generate PDF: render the work order document and store it as
-	// the job's packet PDF. Only after sign-off (a missing warehouse or crew
-	// signature prints "Pending" and never blocks), and only until the first
-	// send to Claro: regenerating before then replaces the stored file. A job
+	// Step 4 · Generate package: render the work order document and store it
+	// as the job's packet PDF and, when the job's intake answer is "Prefield
+	// needed", render the Claro Prefield (JAF's part filled in, Claro's boxes
+	// blank) next to it. Nothing about the Prefield blocks it. Only after
+	// sign-off (a missing warehouse or crew signature prints "Pending" and
+	// never blocks), and only until the first send to Claro: regenerating
+	// before then replaces the stored files and clears a stale package. A job
 	// sent under the old flow (a priced invoice, or nothing, stored) has no
 	// work order PDF for the release gate, so it may generate one until the
-	// release; the Claro supervisor's rules stopped applying at its send.
-	if (intent === "generate_work_order_pdf") {
+	// release; what it already sent is not touched (no Prefield, no stale).
+	if (intent === "generate_package") {
 		const oldFlow = isSentUnderOldFlow(doc)
 		if (
 			(doc.jafInvoiceGeneratedAt && !oldFlow) ||
@@ -564,30 +549,36 @@ export async function action({ request, params }: Route.ActionArgs) {
 			(!oldFlow && !isSig(doc.completionSignature))
 		)
 			return { errorKey: "packet.errors.not_signed_off" }
-		if (!oldFlow) {
-			const claro = doc.claroSupervisor
-			if (!claro) return { errorKey: "packet.errors.no_claro_supervisor" }
-			const blockers = packetBlockers(doc, claro)
-			if (blockers.includes("prefield"))
-				return { errorKey: "packet.errors.prefield_missing" }
-			if (blockers.includes("blueprint"))
-				return { errorKey: "packet.errors.blueprint_missing" }
-		}
+		if (!oldFlow && !doc.claroSupervisor)
+			return { errorKey: "packet.errors.no_claro_supervisor" }
+		const withPrefield = !oldFlow && doc.prefieldNeeded
 		let pdfPath: string
-		// The layout of this file, so the send that records it can say so.
-		let showPrefield: boolean
+		let prefieldPath: string | null = null
 		try {
-			const input = await buildPacketInput(params.id)
-			showPrefield = input.document.prefield !== "not_required"
-			const pdf = await generateClaroPacketPdf(input)
+			const pdf = await generateClaroPacketPdf(
+				await buildPacketInput(params.id),
+			)
 			pdfPath = await saveBuffer(
 				"packets",
 				`${params.id}-work-order-${Date.now()}.pdf`,
 				pdf,
 			)
+			if (withPrefield)
+				prefieldPath = await saveBuffer(
+					"packets",
+					`${params.id}-prefield-${Date.now()}.pdf`,
+					await generateClaroPrefieldPdf(await buildPrefieldInput(params.id)),
+				)
 		} catch {
 			return { errorKey: "packet.errors.render_failed" }
 		}
+		const data: Prisma.JafInvoiceUncheckedUpdateManyInput = oldFlow
+			? { jafInvoicePdfPath: pdfPath }
+			: {
+					jafInvoicePdfPath: pdfPath,
+					prefieldPdfPath: prefieldPath,
+					packetStale: false,
+				}
 		const stored = await db.$transaction(async (tx) => {
 			// A send that landed while rendering wins: nothing changes. An
 			// old-flow job only checks nobody stored another file meanwhile.
@@ -595,7 +586,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 				where: oldFlow
 					? { id: params.id, jafInvoicePdfPath: doc.jafInvoicePdfPath }
 					: { id: params.id, jafInvoiceGeneratedAt: null },
-				data: { jafInvoicePdfPath: pdfPath },
+				data,
 			})
 			if (updated.count === 0) return false
 			await tx.auditTrail.create({
@@ -608,7 +599,18 @@ export async function action({ request, params }: Route.ActionArgs) {
 							before: doc.jafInvoicePdfPath,
 							after: pdfPath,
 						},
-						showPrefield,
+						prefieldGenerated: withPrefield,
+						...(!oldFlow && doc.prefieldPdfPath !== prefieldPath
+							? {
+									prefieldPdfPath: {
+										before: doc.prefieldPdfPath,
+										after: prefieldPath,
+									},
+								}
+							: {}),
+						...(!oldFlow && doc.packetStale
+							? { packetStale: { before: true, after: false } }
+							: {}),
 					},
 				},
 			})
@@ -666,10 +668,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	// Step 5 · Packet → Claro: email the packet, or record that the
-	// supervisor sent the downloaded PDF themselves. `sendPacket` owns the gates
-	// (sign-off, Claro supervisor, Prefield / blueprint), the send log and the
-	// first-send lock; every outcome lands back on the step, whose history and
-	// banner say what happened.
+	// supervisor sent the downloaded package themselves. `sendPacket` owns the
+	// gates (sign-off, Claro supervisor, Prefield PDF, stale package,
+	// blueprint), the send log and the first-send lock; every outcome lands
+	// back on the step, whose history and banner say what happened.
 	if (intent === "send_packet" || intent === "mark_packet_sent") {
 		const result = await sendPacket({
 			docId: params.id,
@@ -680,28 +682,21 @@ export async function action({ request, params }: Route.ActionArgs) {
 		throw redirect(`/docs/${params.id}/review`)
 	}
 
-	// Step 5 · the Prefield fields, the Claro supervisor and (when that
-	// supervisor needs one) a blueprint can be filled or corrected here until
-	// the first send; after it they are what Claro received. Any change makes
-	// the stored PDF out of date, so it is cleared and step 4 generates it again.
-	if (intent === "save_prefield") {
+	// Step 5 · the Claro supervisor and (when that supervisor needs one) a
+	// blueprint can be changed here until the first send; after it they are
+	// what Claro received. The Prefield boxes are Claro's: there is no input
+	// for them. A new Claro supervisor changes what both generated PDFs print,
+	// so they are cleared and step 4 generates the package again; a blueprint
+	// travels as its own file and leaves them as they are.
+	if (intent === "save_packet_details") {
 		if (doc.jafInvoiceGeneratedAt)
 			return { errorKey: "packet.errors.prefield_locked" }
 		if (doc.releasedToFinanceAt || isTerminalStatus(doc.status))
 			return { errorKey: "packet.errors.locked" }
-		const text = (k: string) =>
-			((form.get(k) as string | null) ?? "").trim() || null
 		const data: Prisma.JafInvoiceUncheckedUpdateInput = {}
 		const changes: Record<string, { before: unknown; after: unknown }> = {}
-		for (const k of PREFIELD_INPUTS) {
-			if (!form.has(k)) continue
-			const after = text(k)
-			if (after !== doc[k]) {
-				data[k] = after
-				changes[k] = { before: doc[k], after }
-			}
-		}
-		const claroId = text("claroSupervisorId")
+		const claroId =
+			((form.get("claroSupervisorId") as string | null) ?? "").trim() || null
 		if (claroId && claroId !== doc.claroSupervisorId) {
 			const claro = await db.claroSupervisor.findUnique({
 				where: { id: claroId },
@@ -714,6 +709,11 @@ export async function action({ request, params }: Route.ActionArgs) {
 				before: doc.claroSupervisorId,
 				after: claroId,
 			}
+			for (const k of ["jafInvoicePdfPath", "prefieldPdfPath"] as const)
+				if (doc[k]) {
+					data[k] = null
+					changes[k] = { before: doc[k], after: null }
+				}
 		}
 		const blueprints = form
 			.getAll("blueprint")
@@ -731,10 +731,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 			)
 		if (added.length > 0)
 			data.blueprintPaths = [...doc.blueprintPaths, ...added]
-		if (Object.keys(data).length > 0 && doc.jafInvoicePdfPath) {
-			data.jafInvoicePdfPath = null
-			changes.jafInvoicePdfPath = { before: doc.jafInvoicePdfPath, after: null }
-		}
 		if (Object.keys(data).length > 0)
 			await db.$transaction([
 				db.jafInvoice.update({ where: { id: params.id }, data }),
@@ -755,7 +751,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 	// Something is wrong with what the brigade reported: reopen the Approve step
 	// (not the crew) so the supervisor can fix it before anything goes to Claro.
-	// The stored PDF no longer matches what will be signed: it is cleared.
+	// The generated package no longer matches what will be signed: it is
+	// cleared, and step 4 generates it again.
 	if (intent === "back_to_approve") {
 		const note = (form.get("note") as string | null)?.trim() || ""
 		if (!note) return { errorKey: "docs_review.errors.back_note_required" }
@@ -772,6 +769,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 					status: "FIELD_UPDATED",
 					supervisorApprovedAt: null,
 					...(doc.jafInvoicePdfPath ? { jafInvoicePdfPath: null } : {}),
+					...(doc.prefieldPdfPath ? { prefieldPdfPath: null } : {}),
 				},
 			}),
 			db.auditTrail.create({
@@ -788,6 +786,11 @@ export async function action({ request, params }: Route.ActionArgs) {
 										before: doc.jafInvoicePdfPath,
 										after: null,
 									},
+								}
+							: {}),
+						...(doc.prefieldPdfPath
+							? {
+									prefieldPdfPath: { before: doc.prefieldPdfPath, after: null },
 								}
 							: {}),
 					},
@@ -1679,11 +1682,13 @@ export default function ReviewDoc({
 		  }
 		| undefined
 	const panel = panelForStep(view)
-	// Signed, not sent, but the Claro supervisor's rules block Generate PDF:
-	// step 4 says what to fix on step 5.
+	// Signed, not sent, but no Claro supervisor to generate the package for:
+	// step 4 says to choose one on step 5.
 	const pdfBlocked =
-		!!doc.supervisorApprovedAt && !packet.sent && packet.blockers.length > 0
-	// Step 4 stays actionable after signing, for Generate PDF, until the send.
+		!!doc.supervisorApprovedAt &&
+		!packet.sent &&
+		packet.blockers.includes("claro_supervisor")
+	// Step 4 stays actionable after signing, for Generate package, until the send.
 	const signOffOpen =
 		view === "APPROVE" && (stage === "APPROVE" || canGeneratePdf || pdfBlocked)
 	// The one-line "Step N of 9" callout under the rail. Approve only shows while
@@ -1766,21 +1771,7 @@ export default function ReviewDoc({
 						<Pill variant="warn" icon="⚠">
 							<b>{t("work_order_doc.blockers_title")}</b>
 							<ul className="mt-1 list-disc pl-5">
-								{packet.blockers.map((b) => (
-									<li key={b}>
-										{b === "prefield"
-											? t("work_order_doc.blocker.prefield", {
-													fields: packet.prefieldMissing
-														.map((k) =>
-															t(
-																`packet.prefield.${k as (typeof PREFIELD_INPUTS)[number]}`,
-															),
-														)
-														.join(", "),
-												})
-											: t(`work_order_doc.blocker.${b}`)}
-									</li>
-								))}
+								<li>{t("work_order_doc.blocker.claro_supervisor")}</li>
 							</ul>
 							<Link to="?step=INVOICE" className="underline">
 								{t("work_order_doc.blockers_fix")}
@@ -1788,9 +1779,14 @@ export default function ReviewDoc({
 						</Pill>
 					)}
 					{signOffOpen && (
-						<GenerateWorkOrderPdf
+						<GeneratePackage
 							enabled={canGeneratePdf}
 							pdfHref={packet.packetHref}
+							continueHref={
+								packet.sent || doc.packetStale
+									? null
+									: `/docs/${doc.id}/review?step=INVOICE`
+							}
 						/>
 					)}
 					{signOffOpen && error?.errorKey?.startsWith("packet.errors.") && (

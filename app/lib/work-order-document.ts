@@ -7,13 +7,13 @@ import type { MaterialSource } from "./material-source"
  * prints. The step 4 page and the PDF render this one value, so they cannot
  * drift. It carries no price, amount or difference of any kind (rule R1).
  *
- * Image references (photos, blueprint) are whatever the caller resolved them
- * to: page URLs for the screen, file paths for the PDF.
+ * Photos, the blueprint and the Claro Prefield are not part of it: they go to
+ * Claro as their own files in the package (step 5).
  */
 
 export const WORK_ORDER_ISSUER = "JAF"
 
-/** The blocks in their fixed B5 order (block 14, Generate PDF, is an action). */
+/** The blocks in their fixed B5 order (block 14, Generate package, is an action). */
 export const WORK_ORDER_BLOCKS = [
 	"workOrderNumber",
 	"claroSupervisor",
@@ -23,9 +23,6 @@ export const WORK_ORDER_BLOCKS = [
 	"description",
 	"services",
 	"materials",
-	"photos",
-	"blueprint",
-	"prefield",
 	"fieldReport",
 	"signatures",
 ] as const
@@ -33,13 +30,6 @@ export const WORK_ORDER_BLOCKS = [
 export type WorkOrderBlock = (typeof WORK_ORDER_BLOCKS)[number]
 
 export type WorkOrderSignature = { name: string; image: string } | "pending"
-
-export type WorkOrderPrefield = {
-	ordenNumber: string | null
-	pedido: string | null
-	smr: string | null
-	titulo: string | null
-}
 
 export type WorkOrderDocument = {
 	workOrderNumber: string
@@ -55,10 +45,10 @@ export type WorkOrderDocument = {
 		unit: string | null
 		source: MaterialSource
 	}[]
-	photos: { before: string[]; during: string[]; after: string[] }
-	/** Image references, or "not_required" when none is required or attached. */
-	blueprint: string[] | "not_required"
-	prefield: WorkOrderPrefield | "not_required"
+	/** The intake answer: false when the job skipped the warehouse. */
+	materialsFromWarehouse: boolean
+	/** Where the material came from on a no-warehouse job; null otherwise. */
+	materialsReason: string | null
 	fieldReport: string | null
 	signatures: {
 		supervisor: WorkOrderSignature
@@ -68,7 +58,7 @@ export type WorkOrderDocument = {
 }
 
 /** The job columns the document is built from. */
-export type WorkOrderSourceDoc = WorkOrderPrefield & {
+export type WorkOrderSourceDoc = {
 	controlNumber: string
 	jobDescription: string | null
 	jobAddressEstimated: string
@@ -86,25 +76,19 @@ export type WorkOrderSourceDoc = WorkOrderPrefield & {
 	fieldMaterials: unknown
 	materialsTaken: unknown
 	fieldNotes: string | null
-	blueprintPaths: string[]
+	materialsFromWarehouse: boolean
+	materialsReason: string | null
 	completionSignature: string | null
 	releaseSignature: string | null
 	crewSignature: string | null
 }
 
 export type WorkOrderContext = {
-	claroSupervisor: {
-		name: string
-		requiresPrefield: boolean
-		requiresBlueprint: boolean
-	} | null
+	claroSupervisor: { name: string } | null
 	jafSupervisor: string
 	/** Every brigade on the job, lead first. */
 	crews: { name: string; code: string | null }[]
 	materialCodes: { id: string; name: string; unit: string | null }[]
-	photos: { before: string[]; during: string[]; after: string[] }
-	/** `doc.blueprintPaths`, resolved for the renderer. */
-	blueprints: string[]
 	signers: {
 		supervisor: string | null
 		warehouse: string | null
@@ -119,7 +103,22 @@ const clean = (v: string | null | undefined) => v?.trim() || null
  * Dirección 1 and 2, Latitud, Longitud, Tipo, Ciudad, Tipo Planta, Grupo
  * Plan). Jobs from before those fields keep their one-line address.
  */
-function avisoAddress(doc: WorkOrderSourceDoc): string {
+export function workOrderAddress(
+	doc: Pick<
+		WorkOrderSourceDoc,
+		| "jobAddressEstimated"
+		| "jobAddressActual"
+		| "sector"
+		| "direccion1"
+		| "direccion2"
+		| "latitud"
+		| "longitud"
+		| "tipo"
+		| "ciudad"
+		| "tipoPlanta"
+		| "grupoPlan"
+	>,
+): string {
 	if (!clean(doc.direccion1))
 		return doc.jobAddressActual ?? doc.jobAddressEstimated
 	return [
@@ -159,13 +158,12 @@ export function buildWorkOrderDocument(
 		? (doc.materialsTaken as { serviceCodeId: string; qty: number }[])
 		: []
 	const codes = new Map(ctx.materialCodes.map((c) => [c.id, c]))
-	const blueprintRequired = claro?.requiresBlueprint ?? false
 	return {
 		workOrderNumber: doc.controlNumber,
 		claroSupervisor: claro?.name ?? null,
 		jafSupervisor: ctx.jafSupervisor,
 		crews: ctx.crews.map((c) => ({ name: c.name, contractNumber: c.code })),
-		address: avisoAddress(doc),
+		address: workOrderAddress(doc),
 		description: clean(doc.jobDescription),
 		services: installed
 			.filter((l) => (l.qty ?? 0) > 0)
@@ -185,19 +183,10 @@ export function buildWorkOrderDocument(
 					source: r.source,
 				}
 			}),
-		photos: ctx.photos,
-		blueprint:
-			ctx.blueprints.length === 0 && !blueprintRequired
-				? "not_required"
-				: ctx.blueprints,
-		prefield: claro?.requiresPrefield
-			? {
-					ordenNumber: doc.ordenNumber,
-					pedido: doc.pedido,
-					smr: doc.smr,
-					titulo: doc.titulo,
-				}
-			: "not_required",
+		materialsFromWarehouse: doc.materialsFromWarehouse,
+		materialsReason: doc.materialsFromWarehouse
+			? null
+			: clean(doc.materialsReason),
 		fieldReport: clean(doc.fieldNotes),
 		signatures: {
 			supervisor: signature(doc.completionSignature, ctx.signers.supervisor),

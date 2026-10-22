@@ -105,7 +105,7 @@ sudo chown -R <app-user>:<app-user> /var/lib/jaf-operations/uploads
 
 ### Outbound email for the Claro packet (SMTP)
 
-**Off by default.** Step 5 emails the packet only when `PACKET_EMAIL_ENABLED=true` is set in the app's environment. With it unset (or any other value) the "Send to Claro supervisor" button is shown disabled ("coming later"); the supervisor emails the work order PDF generated at step 4 themselves and presses **I sent the PDF to Claro**, which records a manual send and sends nothing. The SMTP settings below are needed only if you turn the flag on.
+**Off by default.** Step 5 emails the packet only when `PACKET_EMAIL_ENABLED=true` is set in the app's environment. With it unset (or any other value) the "Send to Claro supervisor" button is shown disabled ("coming later"); the supervisor emails the package generated at step 4 (the files listed on step 5, or its zip) themselves and presses **I sent the package to Claro**, which records a manual send and sends nothing. The SMTP settings below are needed only if you turn the flag on.
 
 Step 5 of the supervisor workflow ("Send to Claro supervisor") emails the packet PDF, plus any blueprint files, to the Claro supervisor's address in the directory. The app sends it over SMTP using the mail account JAF's IT creates for it:
 

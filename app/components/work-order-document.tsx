@@ -1,7 +1,7 @@
 import type { ParseKeys } from "i18next"
 import type { ReactNode } from "react"
 import { useTranslation } from "react-i18next"
-import { Form, useNavigation } from "react-router"
+import { Form, Link, useNavigation } from "react-router"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { sourceLabelKey } from "~/lib/material-source"
 import {
@@ -32,8 +32,6 @@ function Block({
 	)
 }
 
-const IMAGE_FILE = /\.(png|jpe?g|gif|webp)$/i
-
 function SignatureBox({
 	label,
 	sig,
@@ -60,9 +58,11 @@ function SignatureBox({
 }
 
 /**
- * Step 4 · the JAF work order document, blocks 1–13 in the fixed B5 order,
- * on the same yellow-tinted document look as the reference. The PDF renders
- * the same `WorkOrderDocument`. No prices: the type carries none.
+ * Step 4 · the JAF work order document, its blocks in the fixed B5 order, on
+ * the same yellow-tinted document look as the reference. The PDF renders the
+ * same `WorkOrderDocument`. No prices: the type carries none. Photos, the
+ * blueprint and the Prefield are not on it: they go to Claro as their own
+ * files (step 5).
  */
 export function WorkOrderDocumentCard({
 	document: doc,
@@ -73,7 +73,6 @@ export function WorkOrderDocumentCard({
 }) {
 	const { t } = useTranslation()
 	const k = (key: string) => t(`work_order_doc.${key}` as ParseKeys)
-	const prefield = doc.prefield
 	return (
 		<article className="space-y-4 rounded-lg border border-status-warn/40 bg-status-warn-soft/40 p-4 shadow-sm">
 			<header className="flex flex-wrap items-start justify-between gap-3 border-b border-status-warn/40 pb-3">
@@ -153,6 +152,14 @@ export function WorkOrderDocumentCard({
 			</Block>
 
 			<Block name="materials" label={k("materials")}>
+				{!doc.materialsFromWarehouse && (
+					<p className="mb-1">
+						<span className="text-muted-foreground">
+							{k("materials_not_from_warehouse")}:
+						</span>{" "}
+						<span className="font-medium">{doc.materialsReason ?? "—"}</span>
+					</p>
+				)}
 				{doc.materials.length === 0 ? (
 					<p className="text-muted-foreground">{k("no_materials")}</p>
 				) : (
@@ -180,74 +187,6 @@ export function WorkOrderDocumentCard({
 				)}
 			</Block>
 
-			<Block name="photos" label={k("photos")}>
-				<div className="space-y-2">
-					{(["before", "during", "after"] as const).map((g) => (
-						<div key={g}>
-							<p className="text-xs text-muted-foreground">
-								{k(`photo_${g}`)} ({doc.photos[g].length})
-							</p>
-							{doc.photos[g].length > 0 && (
-								<div className="mt-1 grid grid-cols-3 gap-2 sm:grid-cols-6">
-									{doc.photos[g].map((src) => (
-										<a key={src} href={src} target="_blank" rel="noreferrer">
-											<img
-												src={src}
-												alt={k(`photo_${g}`)}
-												className="h-20 w-full rounded border border-border object-cover"
-											/>
-										</a>
-									))}
-								</div>
-							)}
-						</div>
-					))}
-				</div>
-			</Block>
-
-			<Block name="blueprint" label={k("blueprint")}>
-				{doc.blueprint === "not_required" ? (
-					<p>{k("not_required")}</p>
-				) : doc.blueprint.length === 0 ? (
-					<p className="text-status-danger">{k("missing")}</p>
-				) : (
-					<div className="flex flex-wrap gap-2">
-						{doc.blueprint.map((href) => (
-							<a key={href} href={href} target="_blank" rel="noreferrer">
-								{IMAGE_FILE.test(href) ? (
-									<img
-										src={href}
-										alt={k("blueprint")}
-										className="h-32 rounded border border-border object-contain"
-									/>
-								) : (
-									<span className="underline">
-										{decodeURIComponent(href.split("/").pop() ?? href)}
-									</span>
-								)}
-							</a>
-						))}
-					</div>
-				)}
-			</Block>
-
-			<Block name="prefield" label={k("prefield")}>
-				{prefield === "not_required" ? (
-					<p>{k("prefield_not_required")}</p>
-				) : (
-					<dl className="grid grid-cols-2 gap-x-4 gap-y-1">
-						{(["ordenNumber", "pedido", "smr", "titulo"] as const).map((f) => (
-							<div key={f} className="flex gap-2">
-								<dt className="text-muted-foreground">
-									{t(`packet.prefield.${f}`)}:
-								</dt>
-								<dd className="font-medium">{prefield[f] ?? "—"}</dd>
-							</div>
-						))}
-					</dl>
-				)}
-			</Block>
-
 			<Block name="fieldReport" label={k("field_report")}>
 				<p className="whitespace-pre-wrap">{doc.fieldReport ?? "—"}</p>
 			</Block>
@@ -258,11 +197,16 @@ export function WorkOrderDocumentCard({
 						label={k("sig_supervisor")}
 						sig={doc.signatures.supervisor}
 					/>
-					<SignatureBox
-						label={k("sig_warehouse")}
-						sig={doc.signatures.warehouse}
-					/>
-					<SignatureBox label={k("sig_crew")} sig={doc.signatures.crew} />
+					{/* The pickup signatures exist only on the warehouse path. */}
+					{doc.materialsFromWarehouse && (
+						<>
+							<SignatureBox
+								label={k("sig_warehouse")}
+								sig={doc.signatures.warehouse}
+							/>
+							<SignatureBox label={k("sig_crew")} sig={doc.signatures.crew} />
+						</>
+					)}
 				</div>
 			</Block>
 		</article>
@@ -270,26 +214,31 @@ export function WorkOrderDocumentCard({
 }
 
 /**
- * Block 14 · Generate PDF: disabled until the supervisor has signed; a
+ * Block 14 · Generate package: the JAF work order PDF and, when the job needs
+ * one, the Claro Prefield PDF. Disabled until the supervisor has signed; a
  * missing warehouse or crew signature never blocks it. Regenerating replaces
- * the stored PDF until the first send to Claro.
+ * the stored files until the first send to Claro. Once generated, step 5
+ * (the package) is one click away.
  */
-export function GenerateWorkOrderPdf({
+export function GeneratePackage({
 	enabled,
 	pdfHref,
+	continueHref,
 }: {
 	enabled: boolean
 	pdfHref: string | null
+	/** Step 5, shown once the package is generated and current. */
+	continueHref?: string | null
 }) {
 	const { t } = useTranslation()
 	const navigation = useNavigation()
 	const busy =
 		navigation.state !== "idle" &&
-		navigation.formData?.get("intent") === "generate_work_order_pdf"
+		navigation.formData?.get("intent") === "generate_package"
 	return (
 		<div className="space-y-2">
 			<Form method="post">
-				<input type="hidden" name="intent" value="generate_work_order_pdf" />
+				<input type="hidden" name="intent" value="generate_package" />
 				<Button type="submit" className="w-full" disabled={!enabled || busy}>
 					{busy ? t("work_order_doc.generating") : t("work_order_doc.generate")}
 				</Button>
@@ -311,6 +260,14 @@ export function GenerateWorkOrderPdf({
 				>
 					{t("work_order_doc.generated")} · {t("work_order_doc.download")}
 				</a>
+			)}
+			{pdfHref && continueHref && (
+				<Link
+					to={continueHref}
+					className={buttonVariants({ className: "w-full" })}
+				>
+					{t("work_order_doc.continue_to_package")} →
+				</Link>
 			)}
 		</div>
 	)

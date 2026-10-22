@@ -51,10 +51,14 @@ vi.mock("~/lib/pdf/pre-cert-sheet.server", () => ({
 vi.mock("~/lib/packet-send.server", () => ({
 	sendPacket: vi.fn(),
 	buildPacketInput: vi.fn(),
+	buildPrefieldInput: vi.fn(),
 	loadWorkOrderDocument: vi.fn(async () => null),
 }))
 vi.mock("~/lib/pdf/claro-packet.server", () => ({
 	generateClaroPacketPdf: vi.fn(async () => Buffer.from("%PDF-wo")),
+}))
+vi.mock("~/lib/pdf/claro-prefield.server", () => ({
+	generateClaroPrefieldPdf: vi.fn(async () => Buffer.from("%PDF-prefield")),
 }))
 // The real Aviso reader runs on the real sample PDF; the spy only lets a
 // test feed it a different number or a read failure.
@@ -67,8 +71,13 @@ import { Document, Page, renderToBuffer } from "@react-pdf/renderer"
 import { createElement } from "react"
 import { AvisoPdfError, readAvisoNumber } from "~/lib/aviso-pdf.server"
 import { db } from "~/lib/db.server"
-import { buildPacketInput, sendPacket } from "~/lib/packet-send.server"
+import {
+	buildPacketInput,
+	buildPrefieldInput,
+	sendPacket,
+} from "~/lib/packet-send.server"
 import { generateClaroPacketPdf } from "~/lib/pdf/claro-packet.server"
+import { generateClaroPrefieldPdf } from "~/lib/pdf/claro-prefield.server"
 import { generatePreCertSheetPdf } from "~/lib/pdf/pre-cert-sheet.server"
 import { requireRole } from "~/lib/permissions.server"
 import { getActiveServiceCodes } from "~/lib/service-codes.server"
@@ -252,7 +261,8 @@ describe("review: send_packet and mark_packet_sent", () => {
 	})
 
 	it.each([
-		"packet.errors.prefield_missing",
+		"packet.errors.prefield_pdf_missing",
+		"packet.errors.package_stale",
 		"packet.errors.blueprint_missing",
 		"packet.errors.no_claro_supervisor",
 		"packet.errors.render_failed",
@@ -1424,10 +1434,9 @@ describe("review loader: Packet → Claro step", () => {
 		brigade: { area: "OESTE" },
 		claroSupervisorId: "cs-1",
 		claroSupervisor: CLARO,
-		ordenNumber: "ORD-1",
-		pedido: null,
-		smr: "SMR-1",
-		titulo: "Poste",
+		prefieldNeeded: true,
+		prefieldPdfPath: null,
+		packetStale: false,
 		blueprintPaths: [],
 		fieldMaterials: [
 			{ serviceCodeId: "m1", used: 3, returned: 1, source: "WAREHOUSE_ISSUE" },
@@ -1469,7 +1478,6 @@ describe("review loader: Packet → Claro step", () => {
 		expect(data.packet.claroSupervisor).toEqual({
 			name: "Ramón Claro",
 			email: "ramon.now@claro.example",
-			requiresPrefield: true,
 		})
 	})
 
@@ -1601,10 +1609,16 @@ describe("review loader: Packet → Claro step", () => {
 		expect(data.packet.sentAt).toEqual(at)
 	})
 
-	it("lists the blockers from the Claro supervisor's rules before the first send", async () => {
+	it("lists the blockers before the first send: the Prefield PDF, the blueprint rule, a stale package", async () => {
 		const data = await loadAs("SUPERVISOR", signedOff)
-		expect(data.packet.blockers).toEqual(["prefield", "blueprint"])
-		expect(data.packet.prefieldMissing).toEqual(["pedido"])
+		expect(data.packet.blockers).toEqual(["prefield_pdf", "blueprint"])
+		expect(data.packet.prefieldNeeded).toBe(true)
+		const stale = await loadAs("SUPERVISOR", {
+			...signedOff,
+			prefieldNeeded: false,
+			packetStale: true,
+		})
+		expect(stale.packet.blockers).toEqual(["blueprint", "stale"])
 	})
 
 	it("blocks on a missing Claro supervisor, and the rules stop applying after the first send", async () => {
@@ -1613,7 +1627,7 @@ describe("review loader: Packet → Claro step", () => {
 			claroSupervisorId: null,
 			claroSupervisor: null,
 		})
-		expect(none.packet.blockers).toEqual(["claro_supervisor"])
+		expect(none.packet.blockers).toEqual(["claro_supervisor", "prefield_pdf"])
 		const sent = await loadAs("SUPERVISOR", {
 			...signedOff,
 			jafInvoiceGeneratedAt: new Date(),
@@ -1639,17 +1653,55 @@ describe("review loader: Packet → Claro step", () => {
 		).toBe("JESUS MARTINEZ")
 	})
 
-	it("carries blueprint download links and the materials table, by code", async () => {
+	it("lists the package files (no server paths) with the zip, and the materials table, by code", async () => {
+		vi.mocked(db.photo.findMany).mockResolvedValue([
+			{
+				localPath: "/uploads/photos/doc-1/after.jpg",
+				takenAt: new Date("2026-10-19T12:00:00Z"),
+				tag: "AFTER",
+			},
+			{
+				localPath: "/uploads/photos/doc-1/before.jpg",
+				takenAt: new Date("2026-10-19T09:00:00Z"),
+				tag: "BEFORE",
+			},
+		] as any)
 		const data = await loadAs("SUPERVISOR", {
 			...signedOff,
+			jafInvoicePdfPath: "/uploads/packets/doc-1-work-order-1.pdf",
+			prefieldPdfPath: "/uploads/packets/doc-1-prefield-1.pdf",
 			blueprintPaths: ["/uploads/blueprints/doc-1/plano 1.pdf"],
 		})
-		expect(data.packet.blueprints).toEqual([
+		expect(data.packet.files).toEqual([
 			{
+				key: "work_order_pdf",
+				name: "doc-1-work-order-1.pdf",
+				href: "/files/packets/doc-1-work-order-1.pdf",
+			},
+			{
+				key: "prefield_pdf",
+				name: "doc-1-prefield-1.pdf",
+				href: "/files/packets/doc-1-prefield-1.pdf",
+			},
+			{
+				key: "photo",
+				name: "before.jpg",
+				href: "/files/photos/doc-1/before.jpg",
+			},
+			{
+				key: "photo",
+				name: "after.jpg",
+				href: "/files/photos/doc-1/after.jpg",
+			},
+			{
+				key: "blueprint",
 				name: "plano 1.pdf",
 				href: "/files/blueprints/doc-1/plano%201.pdf",
 			},
 		])
+		expect(data.packet.zipHref).toBe("/docs/doc-1/package")
+		vi.mocked(db.photo.findMany).mockResolvedValue([])
+		expect((await loadAs("SUPERVISOR", signedOff)).packet.zipHref).toBeNull()
 		expect(data.packet.materials).toEqual([
 			{
 				serviceCodeId: "m1",
@@ -1810,7 +1862,7 @@ describe("review loader: Packet → Claro step", () => {
 	})
 })
 
-describe("review: generate_work_order_pdf (step 4)", () => {
+describe("review: generate_package (step 4)", () => {
 	const CLARO = {
 		id: "cs-1",
 		name: "Ramón Claro",
@@ -1827,18 +1879,19 @@ describe("review: generate_work_order_pdf (step 4)", () => {
 		completionSignature: "data:image/png;base64,iVBORw0KGgo=",
 		completionSignedAt: new Date(),
 		jafInvoicePdfPath: null,
-		ordenNumber: null,
-		pedido: null,
-		smr: null,
-		titulo: null,
+		prefieldNeeded: false,
+		prefieldPdfPath: null,
+		packetStale: false,
 	}
 	const PACKET = {
-		document: { workOrderNumber: "MAINT-260903-001", prefield: "not_required" },
+		document: { workOrderNumber: "MAINT-260903-001" },
 		issuedOn: new Date(),
+		showPickupSignatures: true,
 	}
+	const PREFIELD = { workOrderNumber: "MAINT-260903-001", deptNumber: "OESTE" }
 	const run = () =>
 		action({
-			request: post(intent("generate_work_order_pdf")),
+			request: post(intent("generate_package")),
 			params: { id: "doc-1" },
 		} as any).catch((r) => r)
 
@@ -1853,7 +1906,12 @@ describe("review: generate_work_order_pdf (step 4)", () => {
 		} as any)
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(signed as any)
 		vi.mocked(buildPacketInput).mockResolvedValue(PACKET as any)
-		vi.mocked(saveBuffer).mockResolvedValue("/var/jaf/uploads/packets/wo.pdf")
+		vi.mocked(buildPrefieldInput).mockResolvedValue(PREFIELD as any)
+		vi.mocked(saveBuffer).mockImplementation(async (_kind, name) =>
+			name.includes("-prefield-")
+				? "/var/jaf/uploads/packets/pf.pdf"
+				: "/var/jaf/uploads/packets/wo.pdf",
+		)
 		vi.mocked(db.jafInvoice.updateMany).mockResolvedValue({ count: 1 } as any)
 	})
 
@@ -1863,10 +1921,17 @@ describe("review: generate_work_order_pdf (step 4)", () => {
 		expect(res.headers.get("Location")).toBe("/docs/doc-1/review?step=APPROVE")
 		expect(buildPacketInput).toHaveBeenCalledWith("doc-1")
 		expect(generateClaroPacketPdf).toHaveBeenCalledWith(PACKET)
+		// Prefield not needed: no Prefield PDF.
+		expect(generateClaroPrefieldPdf).not.toHaveBeenCalled()
+		expect(saveBuffer).toHaveBeenCalledTimes(1)
 		expect(vi.mocked(saveBuffer).mock.calls[0][0]).toBe("packets")
 		expect(db.jafInvoice.updateMany).toHaveBeenCalledWith({
 			where: { id: "doc-1", jafInvoiceGeneratedAt: null },
-			data: { jafInvoicePdfPath: "/var/jaf/uploads/packets/wo.pdf" },
+			data: {
+				jafInvoicePdfPath: "/var/jaf/uploads/packets/wo.pdf",
+				prefieldPdfPath: null,
+				packetStale: false,
+			},
 		})
 		expect(db.auditTrail.create).toHaveBeenCalledWith({
 			data: {
@@ -1878,10 +1943,46 @@ describe("review: generate_work_order_pdf (step 4)", () => {
 						before: null,
 						after: "/var/jaf/uploads/packets/wo.pdf",
 					},
-					// The layout of this file, for the send that records it.
-					showPrefield: false,
+					prefieldGenerated: false,
 				},
 			},
+		})
+	})
+
+	it("Prefield needed: renders the Prefield PDF too, named with the -prefield- infix", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...signed,
+			prefieldNeeded: true,
+			packetStale: true,
+		} as any)
+		await run()
+		expect(buildPrefieldInput).toHaveBeenCalledWith("doc-1")
+		expect(generateClaroPrefieldPdf).toHaveBeenCalledWith(PREFIELD)
+		const names = vi.mocked(saveBuffer).mock.calls.map((c) => c[1])
+		expect(names[1]).toMatch(/^doc-1-prefield-\d+\.pdf$/)
+		expect(db.jafInvoice.updateMany).toHaveBeenCalledWith({
+			where: { id: "doc-1", jafInvoiceGeneratedAt: null },
+			data: {
+				jafInvoicePdfPath: "/var/jaf/uploads/packets/wo.pdf",
+				prefieldPdfPath: "/var/jaf/uploads/packets/pf.pdf",
+				packetStale: false,
+			},
+		})
+		expect(db.auditTrail.create).toHaveBeenCalledWith({
+			data: expect.objectContaining({
+				diffJson: {
+					jafInvoicePdfPath: {
+						before: null,
+						after: "/var/jaf/uploads/packets/wo.pdf",
+					},
+					prefieldGenerated: true,
+					prefieldPdfPath: {
+						before: null,
+						after: "/var/jaf/uploads/packets/pf.pdf",
+					},
+					packetStale: { before: true, after: false },
+				},
+			}),
 		})
 	})
 
@@ -1893,7 +1994,9 @@ describe("review: generate_work_order_pdf (step 4)", () => {
 		await run()
 		expect(db.jafInvoice.updateMany).toHaveBeenCalledWith({
 			where: { id: "doc-1", jafInvoiceGeneratedAt: null },
-			data: { jafInvoicePdfPath: "/var/jaf/uploads/packets/wo.pdf" },
+			data: expect.objectContaining({
+				jafInvoicePdfPath: "/var/jaf/uploads/packets/wo.pdf",
+			}),
 		})
 	})
 
@@ -1985,12 +2088,28 @@ describe("review: generate_work_order_pdf (step 4)", () => {
 		expect(db.auditTrail.create).not.toHaveBeenCalled()
 	})
 
-	it("keeps the Claro supervisor's Prefield rule", async () => {
+	it("nothing about the Prefield or the blueprint blocks it", async () => {
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
 			...signed,
-			claroSupervisor: { ...CLARO, requiresPrefield: true },
+			prefieldNeeded: true,
+			claroSupervisor: {
+				...CLARO,
+				requiresPrefield: true,
+				requiresBlueprint: true,
+			},
 		} as any)
-		expect(await run()).toEqual({ errorKey: "packet.errors.prefield_missing" })
+		expect((await run()).status).toBe(302)
+	})
+
+	it("needs a Claro supervisor to name on the documents", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...signed,
+			claroSupervisorId: null,
+			claroSupervisor: null,
+		} as any)
+		expect(await run()).toEqual({
+			errorKey: "packet.errors.no_claro_supervisor",
+		})
 		expect(generateClaroPacketPdf).not.toHaveBeenCalled()
 	})
 
@@ -2033,15 +2152,11 @@ describe("review loader: step 4 work-order document", () => {
 			workOrderNumber: "W",
 		} as any)
 		const data = await load({ ...approvedDoc, brigade: { area: "OESTE" } })
-		expect(loadWorkOrderDocument).toHaveBeenCalledWith(
-			"doc-1",
-			"urls",
-			"Edgard Ocasio",
-		)
+		expect(loadWorkOrderDocument).toHaveBeenCalledWith("doc-1", "Edgard Ocasio")
 		expect(data.workOrder).toEqual({ workOrderNumber: "W" })
 	})
 
-	it("Generate PDF is open once signed and until the first send", async () => {
+	it("Generate package is open once signed and until the first send", async () => {
 		const signedDoc = {
 			...approvedDoc,
 			brigade: { area: "OESTE" },
@@ -2082,7 +2197,7 @@ describe("review loader: step 4 work-order document", () => {
 		).toBe(false)
 	})
 
-	it("Generate PDF stays closed while the action would refuse it: no Claro supervisor, or its Prefield / blueprint rules unmet", async () => {
+	it("Generate package stays closed without a Claro supervisor; the Prefield and blueprint rules never close it", async () => {
 		const base = {
 			...approvedDoc,
 			brigade: { area: "OESTE" },
@@ -2111,8 +2226,8 @@ describe("review loader: step 4 work-order document", () => {
 				requiresBlueprint: true,
 			},
 		})
-		expect(strict.canGeneratePdf).toBe(false)
-		expect(strict.packet.blockers).toEqual(["prefield", "blueprint"])
+		expect(strict.canGeneratePdf).toBe(true)
+		expect(strict.packet.blockers).toEqual(["blueprint"])
 	})
 
 	it("a job sent under the old flow (priced invoice stored) can generate its work order PDF", async () => {

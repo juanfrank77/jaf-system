@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import path from "node:path"
+import { readFile } from "node:fs/promises"
 import { redirect } from "react-router"
 import type {
 	PacketSendOutcome,
@@ -9,14 +9,15 @@ import type {
 import { assignedBrigadeIds } from "./crew-assignment"
 import { db } from "./db.server"
 import { isPacketEmailEnabled } from "./features.server"
+import { packageFiles, uniqueFileNames } from "./package-files"
+import { packetBlockers } from "./packet-blockers"
 import { sendPacketEmail } from "./packet-mail.server"
 import {
-	blueprintAttachments,
 	type ClaroPacketInput,
 	generateClaroPacketPdf,
 } from "./pdf/claro-packet.server"
+import type { ClaroPrefieldInput } from "./pdf/claro-prefield.server"
 import { isTerminalStatus } from "./permissions"
-import { packetBlockers } from "./prefield"
 import { sanitizedError } from "./redact"
 import { isPacketPath } from "./release-gate"
 import { getActiveServiceCodes } from "./service-codes.server"
@@ -32,10 +33,14 @@ import { photoFile, saveBuffer } from "./uploads.server"
 import {
 	buildWorkOrderDocument,
 	type WorkOrderDocument,
+	workOrderAddress,
 } from "./work-order-document"
 
 type SendPacketErrorKey =
-	| "packet.errors.prefield_missing"
+	// "Prefield needed" and "Generate package" has not made the Prefield PDF.
+	| "packet.errors.prefield_pdf_missing"
+	// An intake answer changed after the package was generated.
+	| "packet.errors.package_stale"
 	| "packet.errors.blueprint_missing"
 	| "packet.errors.no_claro_supervisor"
 	| "packet.errors.not_signed_off"
@@ -55,15 +60,18 @@ type SendPacketResult =
 const SIGNED_OFF_STATUSES = ["SUPERVISOR_APPROVED", "CLARO_UPLOADED"]
 
 /**
- * Step 5 · Packet → Claro: record a manual send of the work order PDF stored at
- * step 4 (no re-render), or, with PACKET_EMAIL_ENABLED, build the packet PDF
- * and email it to the job's Claro supervisor; log the attempt either way.
+ * Step 5 · Packet → Claro: record a manual send of the package generated at
+ * step 4 (no re-render), or, with PACKET_EMAIL_ENABLED, build the work order
+ * PDF and email it to the job's Claro supervisor with the rest of the package
+ * (the Prefield PDF when the job needs it, and the original photo and
+ * blueprint files, each as its own attachment); log the attempt either way.
  *
  * The first SENT or MANUAL attempt locks the invoice lines and sets
  * `jafInvoiceGeneratedAt`, conditionally (`where jafInvoiceGeneratedAt is
- * null`) so a double click or a resend can never move it. Until then the
- * Claro supervisor's Prefield / blueprint rules gate the send; after it they
- * no longer apply, but every resend goes to that supervisor's current email.
+ * null`) so a double click or a resend can never move it. Until then
+ * `packetBlockers` gates the send (the Prefield PDF when needed, a stale
+ * package, the Claro supervisor's blueprint rule); after it nothing does, and
+ * every resend goes to that supervisor's current email.
  */
 export async function sendPacket(args: {
 	docId: string
@@ -96,8 +104,10 @@ export async function sendPacket(args: {
 	const firstSent = doc.jafInvoiceGeneratedAt !== null
 	if (!firstSent) {
 		const blockers = packetBlockers(doc, claro)
-		if (blockers.includes("prefield"))
-			return { ok: false, errorKey: "packet.errors.prefield_missing" }
+		if (blockers.includes("prefield_pdf"))
+			return { ok: false, errorKey: "packet.errors.prefield_pdf_missing" }
+		if (blockers.includes("stale"))
+			return { ok: false, errorKey: "packet.errors.package_stale" }
 		if (blockers.includes("blueprint"))
 			return { ok: false, errorKey: "packet.errors.blueprint_missing" }
 	}
@@ -123,36 +133,29 @@ export async function sendPacket(args: {
 	const ivuRate = firstSent ? null : await getIvuRate()
 
 	// Manual mode sends nothing: it records that the supervisor emailed the
-	// work order PDF stored at step 4 (never an old priced invoice), so that
-	// file is reused as is, with the Prefield layout it was generated with.
+	// package generated at step 4 (never an old priced invoice), so that work
+	// order PDF is reused as is.
 	if (mode === "manual" && !isPacketPath(doc.jafInvoicePdfPath))
 		return { ok: false, errorKey: "packet.errors.pdf_missing" }
 
 	const recipientEmail = claro.email
-	let showPrefield =
-		mode === "manual"
-			? await prefieldShownInStoredPdf(
-					docId,
-					doc.jafInvoicePdfPath as string,
-					claro.requiresPrefield,
-				)
-			: false
+	// The intake answer, as stored on the job (never the Claro supervisor's tag).
+	const prefieldNeeded = doc.prefieldNeeded
 	// An email send renders one file per attempt, so two quick clicks never
 	// write the same file; it is the PDF that was attached.
-	let pdf: Buffer | null = null
+	let attachments: { filename: string; content: Buffer }[] = []
 	let pdfPath: string
 	try {
 		if (mode === "manual") {
 			pdfPath = doc.jafInvoicePdfPath as string
 		} else {
-			const packet = await buildPacketInput(docId)
-			showPrefield = packet.document.prefield !== "not_required"
-			pdf = await generateClaroPacketPdf(packet)
+			const pdf = await generateClaroPacketPdf(await buildPacketInput(docId))
 			pdfPath = await saveBuffer(
 				"packets",
 				`${docId}-packet-${Date.now()}-${randomUUID().slice(0, 8)}.pdf`,
 				pdf,
 			)
+			attachments = await packageAttachments(doc, pdf)
 		}
 	} catch (cause) {
 		const error = sanitizedError(cause)
@@ -177,7 +180,7 @@ export async function sendPacket(args: {
 						outcome: "FAILED",
 						recipientEmail,
 						claroSupervisorId: claro.id,
-						showPrefield,
+						prefieldNeeded,
 						firstSend: false,
 						renderFailed: true,
 						error,
@@ -200,13 +203,7 @@ export async function sendPacket(args: {
 				`JAF work order ${doc.controlNumber}, attached.`,
 				`Adjunta la orden de trabajo de JAF ${doc.controlNumber}.`,
 			].join("\n\n"),
-			attachments: [
-				{
-					filename: `JAF-work-order-${doc.controlNumber}.pdf`,
-					content: pdf as Buffer,
-				},
-				...(await blueprintAttachments(doc.blueprintPaths)),
-			],
+			attachments,
 		})
 		outcome = result.outcome
 		error = result.error
@@ -261,7 +258,7 @@ export async function sendPacket(args: {
 					recipientEmail,
 					claroSupervisorId: claro.id,
 					path: pdfPath,
-					showPrefield,
+					prefieldNeeded,
 					firstSend: first.count === 1,
 					// The IVU rate at the first send, so the priced invoice Finance
 					// re-renders later keeps it whatever the setting becomes.
@@ -277,7 +274,6 @@ export async function sendPacket(args: {
 
 type FirstSendDiff = {
 	firstSend?: boolean
-	showPrefield?: boolean
 	ivuRate?: number
 }
 
@@ -305,63 +301,67 @@ export async function ivuRateAtFirstSend(docId: string): Promise<number> {
 }
 
 /**
- * Whether the stored step 4 PDF has the Prefield block, as recorded when it
- * was generated; the Claro supervisor's flag for a file generated before
- * that was recorded.
+ * The email's attachments, in package order: the work order PDF just
+ * rendered, the Prefield PDF generated at step 4 (only when the job needs it;
+ * the send gate makes sure it exists), then the original photo and blueprint
+ * files as stored, never converted. A missing original is skipped; a missing
+ * Prefield PDF fails the attempt.
  */
-async function prefieldShownInStoredPdf(
-	docId: string,
-	pdfPath: string,
-	fallback: boolean,
-): Promise<boolean> {
-	const generated = await db.auditTrail.findFirst({
-		where: { docId, action: "WORK_ORDER_PDF_GENERATED" },
-		orderBy: { timestamp: "desc" },
-		select: { diffJson: true },
+async function packageAttachments(
+	doc: {
+		id: string
+		controlNumber: string
+		prefieldPdfPath: string | null
+		prefieldNeeded: boolean
+		blueprintPaths: string[]
+	},
+	workOrderPdf: Buffer,
+): Promise<{ filename: string; content: Buffer }[]> {
+	const photos = await db.photo.findMany({
+		where: { docId: doc.id },
+		select: { localPath: true, takenAt: true },
 	})
-	const diff = (generated?.diffJson ?? {}) as {
-		jafInvoicePdfPath?: { after?: unknown }
-		showPrefield?: unknown
+	const rest = packageFiles(
+		{ ...doc, jafInvoicePdfPath: null },
+		photos.map((p) => ({
+			localPath: photoFile(doc.id, p.localPath),
+			takenAt: p.takenAt,
+		})),
+	)
+	const files: { filename: string; content: Buffer }[] = [
+		{
+			filename: `JAF-work-order-${doc.controlNumber}.pdf`,
+			content: workOrderPdf,
+		},
+	]
+	for (const f of rest) {
+		if (f.key === "prefield_pdf") {
+			files.push({
+				filename: `JAF-prefield-${doc.controlNumber}.pdf`,
+				content: await readFile(f.path),
+			})
+			continue
+		}
+		const content = await readFile(f.path).catch(() => null)
+		if (content) files.push({ filename: f.name, content })
 	}
-	return diff.jafInvoicePdfPath?.after === pdfPath &&
-		typeof diff.showPrefield === "boolean"
-		? diff.showPrefield
-		: fallback
+	const names = uniqueFileNames(files.map((f) => f.filename))
+	return files.map((f, i) => ({ ...f, filename: names[i] }))
 }
-
-/** After the first send flag edits no longer apply: keep that send's layout. */
-async function prefieldShownAtFirstSend(
-	docId: string,
-	fallback: boolean,
-): Promise<boolean> {
-	const first = await firstSendDiff(docId)
-	return typeof first?.showPrefield === "boolean"
-		? first.showPrefield
-		: fallback
-}
-
-type Refs = "files" | "urls"
 
 /**
- * The job's work order document (spec step 4, B5) from stored data. `refs`
- * says how photos and blueprints are referenced: file paths for the PDF,
- * page URLs for the step 4 screen. The JAF supervisor is whoever signed off,
- * else `viewerName` (the logged-in supervisor on the page), else the job's
- * supervisor. After the first send the Prefield block keeps that send's
- * layout, whatever the Claro supervisor's flag says now.
+ * The job's work order document (spec step 4, B5) from stored data. The JAF
+ * supervisor is whoever signed off, else `viewerName` (the logged-in
+ * supervisor on the page), else the job's supervisor.
  */
 export async function loadWorkOrderDocument(
 	docId: string,
-	refs: Refs,
 	viewerName?: string,
 ): Promise<WorkOrderDocument> {
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: docId },
 		include: {
-			claroSupervisor: {
-				select: { name: true, requiresPrefield: true, requiresBlueprint: true },
-			},
-			photos: { select: { localPath: true, tag: true, takenAt: true } },
+			claroSupervisor: { select: { name: true } },
 			supervisor: { select: { name: true } },
 			completedBy: { select: { name: true } },
 			releasedBy: { select: { name: true } },
@@ -385,25 +385,14 @@ export async function loadWorkOrderDocument(
 			: Promise.resolve([]),
 	])
 	const byId = new Map(brigades.map((b) => [b.id, b]))
-	const claro = doc.claroSupervisor
-	const requiresPrefield =
-		claro && doc.jafInvoiceGeneratedAt
-			? await prefieldShownAtFirstSend(docId, claro.requiresPrefield)
-			: (claro?.requiresPrefield ?? false)
 	return buildWorkOrderDocument(doc, {
-		claroSupervisor: claro ? { ...claro, requiresPrefield } : null,
+		claroSupervisor: doc.claroSupervisor,
 		jafSupervisor: doc.completedBy?.name ?? viewerName ?? doc.supervisor.name,
 		crews: brigadeIds.flatMap((id) => {
 			const b = byId.get(id)
 			return b ? [{ name: b.name, code: b.code }] : []
 		}),
 		materialCodes: codes,
-		photos: photoGroups(docId, doc.photos, refs),
-		blueprints: doc.blueprintPaths.map((p) =>
-			refs === "files"
-				? p
-				: `/files/blueprints/${encodeURIComponent(docId)}/${encodeURIComponent(path.basename(p))}`,
-		),
 		signers: {
 			supervisor: doc.completedBy?.name ?? null,
 			warehouse: doc.releasedBy?.name ?? null,
@@ -412,12 +401,15 @@ export async function loadWorkOrderDocument(
 	})
 }
 
-/** What the work order PDF renders: the document with file paths, dated at sign-off. */
+/**
+ * What the work order PDF renders: the document, dated at sign-off, with the
+ * pickup signatures page on the warehouse path only.
+ */
 export async function buildPacketInput(
 	docId: string,
 ): Promise<ClaroPacketInput> {
 	const [document, dates] = await Promise.all([
-		loadWorkOrderDocument(docId, "files"),
+		loadWorkOrderDocument(docId),
 		db.jafInvoice.findUniqueOrThrow({
 			where: { id: docId },
 			select: { completionSignedAt: true, supervisorApprovedAt: true },
@@ -427,6 +419,37 @@ export async function buildPacketInput(
 		document,
 		issuedOn:
 			dates.completionSignedAt ?? dates.supervisorApprovedAt ?? new Date(),
+		showPickupSignatures: document.materialsFromWarehouse,
+	}
+}
+
+/**
+ * What the Claro Prefield PDF prints in JAF's part: the work order, the job,
+ * the JAF supervisor (whoever signed off, else the job's supervisor) with
+ * their area as the Dept # (the first one; null when none is assigned), and
+ * the Claro supervisor. Claro's boxes are not inputs: they print blank.
+ */
+export async function buildPrefieldInput(
+	docId: string,
+): Promise<ClaroPrefieldInput> {
+	const person = { select: { name: true, supervisorAreas: true } }
+	const doc = await db.jafInvoice.findUniqueOrThrow({
+		where: { id: docId },
+		include: {
+			claroSupervisor: { select: { name: true } },
+			supervisor: person,
+			completedBy: person,
+		},
+	})
+	const jaf = doc.completedBy ?? doc.supervisor
+	return {
+		workOrderNumber: doc.controlNumber,
+		address: workOrderAddress(doc),
+		title: doc.jobDescription?.trim() || null,
+		jafSupervisor: jaf.name,
+		deptNumber: jaf.supervisorAreas[0]?.trim() || null,
+		claroSupervisor: doc.claroSupervisor?.name ?? null,
+		issuedOn: doc.completionSignedAt ?? doc.supervisorApprovedAt ?? new Date(),
 	}
 }
 
@@ -438,36 +461,4 @@ function fieldMaterialIds(stored: unknown, taken: unknown): string[] {
 			for (const r of list)
 				if (r && typeof r.serviceCodeId === "string") ids.add(r.serviceCodeId)
 	return [...ids]
-}
-
-/**
- * Photos grouped Before / During / After in the order taken, as the files
- * the viewer serves (`<UPLOAD_DIR>/photos/<docId>/<basename>`) or their URLs.
- * Untagged photos count as During. Missing files are skipped by the PDF.
- */
-function photoGroups(
-	docId: string,
-	photos: {
-		localPath: string
-		tag: "BEFORE" | "DURING" | "AFTER" | null
-		takenAt: Date
-	}[],
-	refs: Refs,
-): WorkOrderDocument["photos"] {
-	const groups: WorkOrderDocument["photos"] = {
-		before: [],
-		during: [],
-		after: [],
-	}
-	const key = { BEFORE: "before", DURING: "during", AFTER: "after" } as const
-	const sorted = [...photos].sort(
-		(a, b) => a.takenAt.getTime() - b.takenAt.getTime(),
-	)
-	for (const p of sorted)
-		groups[key[p.tag ?? "DURING"]].push(
-			refs === "files"
-				? photoFile(docId, p.localPath)
-				: `/files/photos/${docId}/${path.basename(p.localPath)}`,
-		)
-	return groups
 }

@@ -1,4 +1,6 @@
 import path from "node:path"
+import { File01Icon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 import type { ParseKeys } from "i18next"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -548,7 +550,21 @@ function PhotoBox({
 						rel="noreferrer"
 						className="block aspect-square overflow-hidden rounded-lg border"
 					>
-						<img src={p.src} alt="" className="h-full w-full object-cover" />
+						{/\.pdf$/i.test(p.src) ? (
+							<span
+								data-testid="photo-pdf"
+								className="flex h-full w-full flex-col items-center justify-center gap-1 bg-muted text-xs text-muted-foreground"
+							>
+								<HugeiconsIcon
+									icon={File01Icon}
+									className="size-6"
+									aria-hidden="true"
+								/>
+								PDF
+							</span>
+						) : (
+							<img src={p.src} alt="" className="h-full w-full object-cover" />
+						)}
 					</a>
 				))}
 				{Array.from({ length: room }, (_, i) => (

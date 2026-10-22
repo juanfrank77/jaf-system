@@ -227,7 +227,7 @@ function PrefieldForm({
 						id="packet-blueprint"
 						name="blueprint"
 						type="file"
-						accept="application/pdf,image/*"
+						accept="image/jpeg,image/png,application/pdf"
 						multiple
 						className="h-auto py-1.5 text-xs"
 					/>

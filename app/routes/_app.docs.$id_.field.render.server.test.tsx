@@ -179,6 +179,21 @@ describe("Field screen (render)", () => {
 		for (const a of all) expect(a).toBe("image/jpeg,image/png,application/pdf")
 	})
 
+	it("shows a PDF photo as a file link, not a broken image", async () => {
+		const html = await render(
+			loaderData({
+				photos: {
+					BEFORE: [{ id: "p1", src: "/files/photos/doc-1/scan.pdf" }],
+					DURING: [],
+					AFTER: [],
+				},
+			}),
+		)
+		expect(html).toContain('data-testid="photo-pdf"')
+		expect(html).not.toContain('<img src="/files/photos/doc-1/scan.pdf"')
+		expect(html).toContain('href="/files/photos/doc-1/scan.pdf"')
+	})
+
 	it("marks the Field report required", async () => {
 		const html = await render()
 		expect(html).toMatch(/<textarea[^>]*field-required/)

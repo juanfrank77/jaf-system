@@ -808,7 +808,7 @@
 		"callout_aviso_title": "Step {{n}} of {{total}} · You",
 		"callout_aviso_body": "Enter the Aviso number and upload the document.",
 		"callout_precert_title": "Step {{n}} of {{total}} · You + the contractor",
-		"callout_precert_body": "Every field below already exists in the system. Sign, get the sub-contractor's signature, and release.",
+		"callout_precert_body": "Every field below already exists in the system. Sign and release; the sub-contractor's signature is optional.",
 		"callout_release_title": "Step {{n}} of {{total}} · You",
 		"callout_release_body": "Check the packet and release it to Finance.",
 		"signoff_heading": "Sign off the field work",

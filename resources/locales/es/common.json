@@ -808,7 +808,7 @@
 		"callout_aviso_title": "Paso {{n}} de {{total}} · Usted",
 		"callout_aviso_body": "Ingrese el número de Aviso y suba el documento.",
 		"callout_precert_title": "Paso {{n}} de {{total}} · Usted + el contratista",
-		"callout_precert_body": "Todos los campos de abajo ya existen en el sistema. Firme, obtenga la firma del subcontratista y libere.",
+		"callout_precert_body": "Todos los campos de abajo ya existen en el sistema. Firme y libere; la firma del subcontratista es opcional.",
 		"callout_release_title": "Paso {{n}} de {{total}} · Usted",
 		"callout_release_body": "Revise el paquete y libérelo a Finanzas.",
 		"signoff_heading": "Firma del trabajo de campo",

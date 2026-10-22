@@ -85,3 +85,13 @@ it("has en and es copy for the Finance sidebar", () => {
 		expect(esKeys.has(k), `es missing ${k}`).toBe(true)
 	}
 })
+
+it("the pre-cert callout makes the sub-contractor's signature optional", () => {
+	// The supervisor's signature alone unlocks the release.
+	expect(en.docs_review.callout_precert_body).toMatch(
+		/sub-contractor's signature is optional/,
+	)
+	expect(es.docs_review.callout_precert_body).toMatch(
+		/firma del subcontratista es opcional/,
+	)
+})

@@ -102,9 +102,21 @@ export function isAvisoStarted(doc: {
 
 const stageIndex = (s: SupervisorStage) => SUPERVISOR_STAGES.indexOf(s)
 
-/** Any Pre-cert signature (supervisor or sub-contractor) locks Replace Aviso. */
-export function isPreCertSigned(sheet: StageSheet): boolean {
-	return !!(sheet?.sigSupervisorAt || sheet?.sigSubcontractorAt)
+/**
+ * Any Pre-cert signature (supervisor, sub-contractor or Claro): the sheet is
+ * then never regenerated silently, and Replace Aviso is locked.
+ */
+export function isPreCertSigned(
+	sheet: {
+		sigSupervisorAt: Date | null
+		sigSubcontractorAt: Date | null
+		sigClaroAt: Date | null
+	} | null,
+): boolean {
+	return !!(
+		sheet &&
+		(sheet.sigSupervisorAt || sheet.sigSubcontractorAt || sheet.sigClaroAt)
+	)
 }
 
 /**

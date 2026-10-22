@@ -32,8 +32,9 @@ export async function saveBuffer(
 }
 
 /**
- * Move an already-saved upload to <UPLOAD_DIR>/<kind>/<filename> (never over
- * an existing file); returns the new absolute path.
+ * Move an already-saved upload to <UPLOAD_DIR>/<kind>/<filename>; returns the
+ * new absolute path. Never overwrites: an existing target throws with
+ * `code: "EEXIST"`.
  */
 export async function moveUpload(
 	from: string,
@@ -44,9 +45,16 @@ export async function moveUpload(
 	await fs.mkdir(dir, { recursive: true })
 	const localPath = path.join(dir, filename)
 	if (await fs.stat(localPath).catch(() => null))
-		throw new Error(`Refusing to overwrite ${localPath}`)
+		throw Object.assign(new Error(`Refusing to overwrite ${localPath}`), {
+			code: "EEXIST",
+		})
 	await fs.rename(from, localPath)
 	return localPath
+}
+
+/** Undo a `moveUpload`: put the file back at its original path. */
+export async function restoreUpload(movedTo: string, original: string) {
+	await fs.rename(movedTo, original)
 }
 
 /**

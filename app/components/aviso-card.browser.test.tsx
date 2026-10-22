@@ -251,4 +251,36 @@ describe("AvisoCard (step 6)", () => {
 		expect(screen.queryByRole("button", { name: "Replace Aviso" })).toBeNull()
 		expect(screen.queryByLabelText(/Reason for replacing/)).toBeNull()
 	})
+
+	it("a replacement that still differs asks for a note inside the replace form", async ({
+		renderStub,
+	}) => {
+		await mount(
+			renderStub,
+			<AvisoCard
+				{...base}
+				saved
+				canReplace
+				avisoNumber="10353961"
+				avisoDocPath="/a"
+				result={{
+					errorKey: "docs_review.errors.aviso_materials_differ",
+					differences: [DIFF],
+				}}
+			/>,
+		)
+		const note = screen.getByLabelText(/Explain the difference/)
+		const form = note.closest("form") as HTMLFormElement
+		expect(form.querySelector('input[name="intent"]')).toHaveValue(
+			"replace_aviso",
+		)
+		expect(note).toHaveAttribute("name", "discrepancyNote")
+		expect(
+			screen.getByText("work order: 3 poles, Aviso: 2 poles"),
+		).toBeVisible()
+		const go = screen.getByRole("button", { name: "Continue anyway" })
+		expect(go).toBeDisabled()
+		fireEvent.change(note, { target: { value: "Claro will not correct it" } })
+		expect(go).toBeEnabled()
+	})
 })

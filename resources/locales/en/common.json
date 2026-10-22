@@ -791,7 +791,8 @@
 			"aviso_use_replace": "This job already has an Aviso. Use Replace Aviso to change it.",
 			"replace_limit": "This job's one Aviso replacement has already been used.",
 			"replace_locked": "The Pre-cert sheet is signed: the Aviso can no longer be replaced.",
-			"replace_reason_required": "Give a short reason for replacing the Aviso."
+			"replace_reason_required": "Give a short reason for replacing the Aviso.",
+			"replace_failed": "The Aviso could not be replaced. Nothing was changed; try again."
 		},
 		"ordered_vs_installed": "Ordered vs Installed",
 		"per_service_code": "per service code",

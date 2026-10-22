@@ -78,16 +78,16 @@ function DifferenceList({
 }
 
 /** The note that lets the job continue with a difference (required). */
-function ContinueWithNote() {
+function ContinueWithNote({ id = "discrepancyNote" }: { id?: string }) {
 	const { t } = useTranslation()
 	const [note, setNote] = useState("")
 	return (
 		<div className="space-y-2">
-			<Label htmlFor="discrepancyNote" className="text-xs">
+			<Label htmlFor={id} className="text-xs">
 				{t("docs_review.aviso_discrepancy_note_label")}
 			</Label>
 			<Textarea
-				id="discrepancyNote"
+				id={id}
 				name="discrepancyNote"
 				rows={2}
 				value={note}
@@ -160,6 +160,8 @@ export function AvisoCard({
 	const { t } = useTranslation()
 	const [pickedFile, setPickedFile] = useState<string | null>(null)
 	const savedName = avisoDocPath?.split(/[\\/]/).pop() ?? null
+	// A saved Aviso only returns differences from a replacement attempt.
+	const replaceDiffers = saved && (result?.differences?.length ?? 0) > 0
 	const fileName = pickedFile ?? savedName
 
 	return (
@@ -237,9 +239,6 @@ export function AvisoCard({
 							</div>
 						)}
 						<ResultMessages result={result} />
-						{result?.differences && result.differences.length > 0 && (
-							<DifferenceList differences={result.differences} />
-						)}
 						{history.length > 0 && (
 							<div>
 								<h3 className="text-xs font-semibold text-muted-foreground">
@@ -264,7 +263,7 @@ export function AvisoCard({
 							</div>
 						)}
 						{!readOnly && canReplace && (
-							<details className="rounded-lg border p-3">
+							<details className="rounded-lg border p-3" open={replaceDiffers}>
 								<summary className="cursor-pointer text-sm font-semibold">
 									{t("docs_review.aviso_replace_heading")}
 								</summary>
@@ -316,9 +315,18 @@ export function AvisoCard({
 											className="mt-1"
 										/>
 									</div>
-									<Button type="submit" variant="outline" className="w-full">
-										{t("docs_review.aviso_replace_submit")}
-									</Button>
+									{/* The replacement still differs: same rule as the first
+									    save, a note is required to go ahead with it. */}
+									{replaceDiffers && result?.differences ? (
+										<>
+											<DifferenceList differences={result.differences} />
+											<ContinueWithNote id="replaceDiscrepancyNote" />
+										</>
+									) : (
+										<Button type="submit" variant="outline" className="w-full">
+											{t("docs_review.aviso_replace_submit")}
+										</Button>
+									)}
 								</Form>
 							</details>
 						)}

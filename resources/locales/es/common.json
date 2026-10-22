@@ -791,7 +791,8 @@
 			"aviso_use_replace": "Este trabajo ya tiene un Aviso. Use Reemplazar Aviso para cambiarlo.",
 			"replace_limit": "Ya se usó el único reemplazo de Aviso de este trabajo.",
 			"replace_locked": "La hoja de pre-certificación está firmada: el Aviso ya no se puede reemplazar.",
-			"replace_reason_required": "Indique una razón breve para reemplazar el Aviso."
+			"replace_reason_required": "Indique una razón breve para reemplazar el Aviso.",
+			"replace_failed": "No se pudo reemplazar el Aviso. No se cambió nada; intente de nuevo."
 		},
 		"ordered_vs_installed": "Ordenado vs Instalado",
 		"per_service_code": "por código de servicio",

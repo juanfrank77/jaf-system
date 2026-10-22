@@ -210,22 +210,19 @@ describe("supervisorStepHref", () => {
 })
 
 describe("isPreCertSigned", () => {
-	it("is true with either the supervisor or the sub-contractor signature", () => {
+	it("is true with any Pre-cert signature: supervisor, sub-contractor or Claro", () => {
+		const none = {
+			sigSupervisorAt: null,
+			sigSubcontractorAt: null,
+			sigClaroAt: null,
+		}
 		expect(isPreCertSigned(null)).toBe(false)
-		expect(
-			isPreCertSigned({ sigSupervisorAt: null, sigSubcontractorAt: null }),
-		).toBe(false)
-		expect(
-			isPreCertSigned({
-				sigSupervisorAt: new Date(),
-				sigSubcontractorAt: null,
-			}),
-		).toBe(true)
-		expect(
-			isPreCertSigned({
-				sigSupervisorAt: null,
-				sigSubcontractorAt: new Date(),
-			}),
-		).toBe(true)
+		expect(isPreCertSigned(none)).toBe(false)
+		expect(isPreCertSigned({ ...none, sigSupervisorAt: new Date() })).toBe(true)
+		expect(isPreCertSigned({ ...none, sigSubcontractorAt: new Date() })).toBe(
+			true,
+		)
+		// A Claro-only signature counts too: nothing downstream may be signed.
+		expect(isPreCertSigned({ ...none, sigClaroAt: new Date() })).toBe(true)
 	})
 })

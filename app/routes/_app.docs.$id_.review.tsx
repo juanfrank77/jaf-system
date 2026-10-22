@@ -104,6 +104,7 @@ import { isLegacyPricedInvoice, uploadHref } from "~/lib/upload-href"
 import {
 	moveUpload,
 	photosThatLoad,
+	restoreUpload,
 	saveBuffer,
 	saveUpload,
 } from "~/lib/uploads.server"
@@ -205,6 +206,9 @@ async function checkAvisoMaterials(
 	})
 	return { kind: "compared", differences: compareMaterials(workOrder, aviso) }
 }
+
+/** Replace Aviso lost a race: the job's one replacement was used meanwhile. */
+class ReplaceLimitReached extends Error {}
 
 const differencesOf = (check: AvisoMaterialsCheck) =>
 	check.kind === "compared" ? check.differences : []
@@ -1072,29 +1076,42 @@ export async function action({ request, params }: Route.ActionArgs) {
 		const materials = await checkAvisoMaterials(doc, pdfBytes)
 		const differences = differencesOf(materials)
 		const now = new Date().toISOString()
-		// A fresh discrepancy: the note on the replaced Aviso is not carried over.
-		const discrepancy: AvisoDiscrepancy | null =
-			differences.length > 0
-				? {
-						detectedAt: now,
-						differences,
-						note: null,
-						noteAt: null,
-						noteById: null,
-					}
-				: null
+		// Same rule as the first save: a differing Aviso needs a note. It is a
+		// fresh discrepancy: the note on the replaced Aviso is not carried over.
+		let discrepancy: AvisoDiscrepancy | null = null
+		if (differences.length > 0) {
+			const note = (form.get("discrepancyNote") as string | null)?.trim() || ""
+			if (!note)
+				return {
+					errorKey: "docs_review.errors.aviso_materials_differ",
+					differences,
+				}
+			discrepancy = {
+				detectedAt: now,
+				differences,
+				note,
+				noteAt: now,
+				noteById: user.id,
+			}
+		}
 
-		// Everything validated: move the old file aside, then store the new one.
-		const replacedPath = await moveUpload(
-			doc.avisoDocPath,
-			"aviso-docs",
-			`${params.id}-aviso-replaced-${used + 1}.pdf`,
-		)
-		const avisoDocPath = await saveUpload(
-			"aviso-docs",
-			`${params.id}-aviso.pdf`,
-			avisoPdf,
-		)
+		// Everything validated: move the old file aside (never over an existing
+		// one: a concurrent replacement already took the slot), then store the
+		// new one and record both. Any failure after the move puts the old file
+		// back, so the job still points at a file that exists.
+		const original = doc.avisoDocPath
+		let replacedPath: string
+		try {
+			replacedPath = await moveUpload(
+				original,
+				"aviso-docs",
+				`${params.id}-aviso-replaced-${used + 1}.pdf`,
+			)
+		} catch (e) {
+			if ((e as { code?: string }).code === "EEXIST")
+				return { errorKey: "docs_review.errors.replace_limit" }
+			return { errorKey: "docs_review.errors.replace_failed" }
+		}
 		const history: AvisoHistoryEntry[] = [
 			...((doc.avisoHistory as AvisoHistoryEntry[] | null) ?? []),
 			{
@@ -1105,31 +1122,56 @@ export async function action({ request, params }: Route.ActionArgs) {
 				replacedById: user.id,
 			},
 		]
-		await db.$transaction([
-			db.jafInvoice.update({
-				where: { id: params.id },
-				data: {
-					avisoNumber,
-					avisoDocPath,
-					avisoDiscrepancy: jsonOrDbNull(discrepancy),
-					avisoHistory: history as unknown as Prisma.InputJsonValue,
-				},
-			}),
-			db.auditTrail.create({
-				data: {
-					docId: params.id,
-					userId: user.id,
-					action: "AVISO_REPLACED",
-					diffJson: {
-						before: { avisoNumber: doc.avisoNumber, path: replacedPath },
-						after: { avisoNumber },
-						reason,
-						materials: materials.kind,
-						differences,
-					} as unknown as Prisma.InputJsonValue,
-				},
-			}),
-		])
+		try {
+			const avisoDocPath = await saveUpload(
+				"aviso-docs",
+				`${params.id}-aviso.pdf`,
+				avisoPdf,
+			)
+			await db.$transaction(async (tx) => {
+				// Re-checked here: another request may have replaced it meanwhile.
+				const replaced = await tx.auditTrail.count({
+					where: { docId: params.id, action: "AVISO_REPLACED" },
+				})
+				if (replaced >= AVISO_REPLACE_LIMIT) throw new ReplaceLimitReached()
+				await tx.jafInvoice.update({
+					where: { id: params.id },
+					data: {
+						avisoNumber,
+						avisoDocPath,
+						avisoDiscrepancy: jsonOrDbNull(discrepancy),
+						avisoHistory: history as unknown as Prisma.InputJsonValue,
+					},
+				})
+				await tx.auditTrail.create({
+					data: {
+						docId: params.id,
+						userId: user.id,
+						action: "AVISO_REPLACED",
+						diffJson: {
+							before: { avisoNumber: doc.avisoNumber, path: replacedPath },
+							after: { avisoNumber },
+							reason,
+							materials: materials.kind,
+							differences,
+							note: discrepancy?.note ?? null,
+						} as unknown as Prisma.InputJsonValue,
+					},
+				})
+			})
+		} catch (e) {
+			try {
+				await restoreUpload(replacedPath, original)
+			} catch {
+				// Best effort: the job's record still names the original path.
+			}
+			return {
+				errorKey:
+					e instanceof ReplaceLimitReached
+						? "docs_review.errors.replace_limit"
+						: "docs_review.errors.replace_failed",
+			}
+		}
 		// No Pre-cert signature exists (checked above): the sheet is regenerated.
 		await createPreCertSheet({
 			docId: params.id,

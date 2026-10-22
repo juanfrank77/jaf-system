@@ -61,6 +61,7 @@ const PRICE_FREE_DOC_SELECT = {
 	materialsTaken: true,
 	materialsUsed: true,
 	materialsReturned: true,
+	materialsFromWarehouse: true,
 	fieldMaterials: true,
 	prepChangedSincePrep: true,
 	preppedAt: true,

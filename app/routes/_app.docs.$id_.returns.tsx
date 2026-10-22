@@ -57,7 +57,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
-	if (!["SIGNED", "FIELD_UPDATED"].includes(doc.status))
+	// A no-warehouse job never took material out: nothing comes back.
+	if (
+		!["SIGNED", "FIELD_UPDATED"].includes(doc.status) ||
+		!doc.materialsFromWarehouse
+	)
 		throw redirect(`/docs/${params.id}`)
 	const taken = (doc.materialsTaken as unknown as MaterialLine[]) || []
 	// A taken line whose material has since been deactivated must still resolve
@@ -107,7 +111,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
-	if (!["SIGNED", "FIELD_UPDATED"].includes(doc.status)) {
+	if (
+		!["SIGNED", "FIELD_UPDATED"].includes(doc.status) ||
+		!doc.materialsFromWarehouse
+	) {
 		throw redirect(`/docs/${params.id}`)
 	}
 

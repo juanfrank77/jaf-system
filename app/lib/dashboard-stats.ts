@@ -9,6 +9,7 @@ type DashboardDoc = {
 	receivableClosedAt: Date | null
 	prepChangedSincePrep?: boolean
 	materialsReturned?: unknown
+	materialsFromWarehouse?: boolean
 	sendBackHistory?: unknown
 	estimatedMaterials?: unknown
 	materialsTaken?: unknown
@@ -296,10 +297,13 @@ export function computeDashboardStats(
 			docs,
 			(d) => d.status === "CREATED" && !!d.prepChangedSincePrep,
 		)
+		// Same filter as the warehouse "returns" queue: a no-warehouse job took
+		// nothing out, so nothing comes back.
 		const returnsToLog = count(
 			docs,
 			(d) =>
 				(d.status === "SIGNED" || d.status === "FIELD_UPDATED") &&
+				d.materialsFromWarehouse !== false &&
 				d.materialsReturned === null,
 		)
 		return {

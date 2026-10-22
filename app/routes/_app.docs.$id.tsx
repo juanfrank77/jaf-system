@@ -925,6 +925,7 @@ export default function DocView({
 
 			{(user.role === "WAREHOUSE" || user.role === "ADMIN") &&
 				(doc.status === "SIGNED" || doc.status === "FIELD_UPDATED") &&
+				doc.materialsFromWarehouse &&
 				!doc.materialsReturned && (
 					<Link
 						to={`/docs/${doc.id}/returns`}

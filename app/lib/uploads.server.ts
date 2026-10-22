@@ -32,6 +32,24 @@ export async function saveBuffer(
 }
 
 /**
+ * Move an already-saved upload to <UPLOAD_DIR>/<kind>/<filename> (never over
+ * an existing file); returns the new absolute path.
+ */
+export async function moveUpload(
+	from: string,
+	kind: string,
+	filename: string,
+): Promise<string> {
+	const dir = path.join(uploadRoot(), kind)
+	await fs.mkdir(dir, { recursive: true })
+	const localPath = path.join(dir, filename)
+	if (await fs.stat(localPath).catch(() => null))
+		throw new Error(`Refusing to overwrite ${localPath}`)
+	await fs.rename(from, localPath)
+	return localPath
+}
+
+/**
  * Photos whose file can actually be served. The photo viewer requests
  * `/files/photos/<docId>/<basename>` (see `files.$.tsx`), i.e.
  * `<UPLOAD_DIR>/photos/<docId>/<basename>`, so that is the file checked here:

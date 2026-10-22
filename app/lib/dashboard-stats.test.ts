@@ -164,6 +164,36 @@ describe("computeDashboardStats", () => {
 		)
 	})
 
+	it("ADMIN: alerts on jobs whose Aviso discrepancy is stale (3+ days), any release state", () => {
+		const disc = (days: number) => ({
+			detectedAt: dayAgo(days).toISOString(),
+			differences: [],
+			note: "noted",
+			noteAt: null,
+			noteById: null,
+		})
+		const docs = [doc("CLARO_UPLOADED")]
+		const { alert } = computeDashboardStats("ADMIN", docs, {
+			avisoDiscrepancies: [disc(3), disc(10), disc(1), null],
+		})
+		expect(alert).toEqual({
+			variant: "warn",
+			key: "dashboard.alert.stale_aviso_discrepancy",
+			count: 2,
+		})
+		// Nothing stale: the usual receivables alert.
+		expect(
+			computeDashboardStats("ADMIN", docs, { avisoDiscrepancies: [disc(1)] })
+				.alert?.key,
+		).toBe("dashboard.alert.receivables_open")
+		// Finance's view is unchanged.
+		expect(
+			computeDashboardStats("FINANCE", docs, {
+				avisoDiscrepancies: [disc(10)],
+			}).alert?.key,
+		).toBe("dashboard.alert.receivables_open")
+	})
+
 	it("returns no alert when the doc list is empty", () => {
 		expect(computeDashboardStats("SUPERVISOR", []).alert).toBeNull()
 		expect(computeDashboardStats("SUPERVISOR", []).explainer).toEqual({

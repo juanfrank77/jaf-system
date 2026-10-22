@@ -22,3 +22,16 @@ export function isDiscrepancyStale(
 ): boolean {
 	return d !== null && discrepancyAgeDays(d, now) >= DISCREPANCY_STALE_DAYS
 }
+
+/** One Aviso replaced by Replace Aviso (`jaf_invoice.avisoHistory`): kept, not used. */
+export type AvisoHistoryEntry = {
+	avisoNumber: string | null
+	/** Where the replaced file was moved (`aviso-docs/<id>-aviso-replaced-<n>.pdf`). */
+	path: string
+	reason: string
+	replacedAt: string
+	replacedById: string
+}
+
+/** Replace Aviso is for a one-time mistake: one replacement per job. */
+export const AVISO_REPLACE_LIMIT = 1

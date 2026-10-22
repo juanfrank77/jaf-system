@@ -30,10 +30,14 @@ export function avisoNumberFromText(text: string): string {
 	return [...numbers][0]
 }
 
-/** The merged text layer (no OCR); throws `unreadable` if extraction fails. */
+/**
+ * The merged text layer (no OCR); throws `unreadable` if extraction fails.
+ * pdf.js takes ownership of (detaches) the buffer it is given, so it reads a
+ * copy: step 6 reads the same bytes twice (number, then materials).
+ */
 async function extractAvisoText(bytes: Uint8Array): Promise<string> {
 	try {
-		const { text } = await extractText(bytes, { mergePages: true })
+		const { text } = await extractText(bytes.slice(), { mergePages: true })
 		return text
 	} catch {
 		throw new AvisoPdfError("unreadable")

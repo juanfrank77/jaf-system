@@ -41,6 +41,8 @@ export type SupervisorQueues = {
 	pendingReview: QueueRow[]
 	approved: QueueRow[]
 	missingAviso: QueueRow[]
+	/** Unreleased jobs whose Aviso differs from the work order. */
+	actionNeeded?: (QueueRow & { daysOpen: number })[]
 }
 
 export const STAGE_KEY: Record<SupervisorStage, ParseKeys> = {
@@ -173,6 +175,51 @@ function Queue({
 	)
 }
 
+/**
+ * "Action needed": the Aviso differs from the work order. Shown only while a
+ * job has a recorded discrepancy; a note does not clear it, a clean Aviso does.
+ */
+function ActionNeeded({
+	rows,
+}: {
+	rows: NonNullable<SupervisorQueues["actionNeeded"]>
+}) {
+	const { t } = useTranslation()
+	if (rows.length === 0) return null
+	return (
+		<QueueCard
+			id="action-needed"
+			title={t("dashboard.action_needed.title")}
+			count={rows.length}
+			variant="danger"
+			className="border-status-danger"
+		>
+			<p className="text-sm">{t("dashboard.action_needed.body")}</p>
+			<ul className="divide-y text-sm">
+				{rows.map((r) => (
+					<li
+						key={r.id}
+						className="flex flex-wrap items-baseline justify-between gap-2 py-1.5"
+					>
+						<Link
+							to={`/docs/${r.id}/review?step=AVISO`}
+							className="font-mono underline"
+						>
+							{r.controlNumber}
+						</Link>
+						<span className="min-w-0 flex-1 truncate">
+							{r.jobAddressActual ?? r.jobAddressEstimated}
+						</span>
+						<span className="text-xs text-status-danger">
+							{t("dashboard.action_needed.days_open", { count: r.daysOpen })}
+						</span>
+					</li>
+				))}
+			</ul>
+		</QueueCard>
+	)
+}
+
 export function SupervisorDashboard({
 	queues,
 	scope,
@@ -258,6 +305,8 @@ export function SupervisorDashboard({
 					{t(alert.key, { count: alert.count })}
 				</Pill>
 			)}
+
+			<ActionNeeded rows={queues.actionNeeded ?? []} />
 
 			<div
 				data-testid="supervisor-tiles"

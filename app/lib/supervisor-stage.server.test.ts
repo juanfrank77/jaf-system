@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
 	deriveSupervisorStage,
 	isAvisoStarted,
+	isPreCertSigned,
 	panelForStep,
 	resolveStepView,
 	SUPERVISOR_STAGES,
@@ -110,41 +111,58 @@ describe("isAvisoStarted", () => {
 
 describe("resolveStepView", () => {
 	it("defaults to the derived stage and is interactive there", () => {
-		expect(resolveStepView("PRECERT", true, null)).toEqual({
+		expect(resolveStepView("PRECERT", true, null, false)).toEqual({
 			view: "PRECERT",
 			interactive: true,
 		})
 	})
 	it("keeps the invoice screen until an Aviso is started", () => {
-		expect(resolveStepView("AVISO", false, null)).toEqual({
+		expect(resolveStepView("AVISO", false, null, false)).toEqual({
 			view: "INVOICE",
 			interactive: true,
 		})
-		expect(resolveStepView("AVISO", true, null)).toEqual({
+		expect(resolveStepView("AVISO", true, null, false)).toEqual({
 			view: "AVISO",
 			interactive: true,
 		})
 	})
 	it("lets the invoice screen continue forward to the current stage", () => {
-		expect(resolveStepView("AVISO", false, "AVISO")).toEqual({
+		expect(resolveStepView("AVISO", false, "AVISO", false)).toEqual({
 			view: "AVISO",
 			interactive: true,
 		})
 	})
 	it("makes earlier reached steps read-only", () => {
-		expect(resolveStepView("RELEASE", true, "AVISO")).toEqual({
+		expect(resolveStepView("RELEASE", true, "AVISO", false)).toEqual({
 			view: "AVISO",
 			interactive: false,
 		})
-		expect(resolveStepView("RELEASE", true, "APPROVE")).toEqual({
+		expect(resolveStepView("RELEASE", true, "APPROVE", false)).toEqual({
 			view: "APPROVE",
 			interactive: false,
 		})
 	})
+	it("keeps the Aviso screen interactive from Pre-cert until a Pre-cert signature", () => {
+		expect(resolveStepView("PRECERT", false, "AVISO", false)).toEqual({
+			view: "AVISO",
+			interactive: true,
+		})
+		expect(resolveStepView("PRECERT", false, "AVISO", true)).toEqual({
+			view: "AVISO",
+			interactive: false,
+		})
+		// Pre-cert itself and earlier steps are unaffected.
+		expect(
+			resolveStepView("PRECERT", false, "INVOICE", false).interactive,
+		).toBe(false)
+		expect(resolveStepView("PRECERT", false, null, true).interactive).toBe(true)
+	})
 	it("ignores steps not yet reached, pre-approval steps and junk", () => {
-		expect(resolveStepView("AVISO", true, "RELEASE").view).toBe("AVISO")
-		expect(resolveStepView("RELEASE", true, "FIELD").view).toBe("RELEASE")
-		expect(resolveStepView("PRECERT", true, "NOPE").view).toBe("PRECERT")
+		expect(resolveStepView("AVISO", true, "RELEASE", false).view).toBe("AVISO")
+		expect(resolveStepView("RELEASE", true, "FIELD", false).view).toBe(
+			"RELEASE",
+		)
+		expect(resolveStepView("PRECERT", true, "NOPE", false).view).toBe("PRECERT")
 	})
 })
 
@@ -173,8 +191,8 @@ describe("supervisorStepHref", () => {
 		const url = new URL(supervisorStepHref("d1", "AVISO"), "http://x")
 		const step = url.searchParams.get("step")
 		// No legacy Aviso lines saved: the default view would be Step 5.
-		expect(resolveStepView("AVISO", false, null).view).toBe("INVOICE")
-		expect(resolveStepView("AVISO", false, step)).toEqual({
+		expect(resolveStepView("AVISO", false, null, false).view).toBe("INVOICE")
+		expect(resolveStepView("AVISO", false, step, false)).toEqual({
 			view: "AVISO",
 			interactive: true,
 		})
@@ -186,7 +204,28 @@ describe("supervisorStepHref", () => {
 				supervisorStepHref("d1", stage),
 				"http://x",
 			).searchParams.get("step")
-			expect(resolveStepView(stage, false, step).view).toBe(stage)
+			expect(resolveStepView(stage, false, step, false).view).toBe(stage)
 		}
+	})
+})
+
+describe("isPreCertSigned", () => {
+	it("is true with either the supervisor or the sub-contractor signature", () => {
+		expect(isPreCertSigned(null)).toBe(false)
+		expect(
+			isPreCertSigned({ sigSupervisorAt: null, sigSubcontractorAt: null }),
+		).toBe(false)
+		expect(
+			isPreCertSigned({
+				sigSupervisorAt: new Date(),
+				sigSubcontractorAt: null,
+			}),
+		).toBe(true)
+		expect(
+			isPreCertSigned({
+				sigSupervisorAt: null,
+				sigSubcontractorAt: new Date(),
+			}),
+		).toBe(true)
 	})
 })

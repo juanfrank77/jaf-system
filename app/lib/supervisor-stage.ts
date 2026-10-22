@@ -102,18 +102,26 @@ export function isAvisoStarted(doc: {
 
 const stageIndex = (s: SupervisorStage) => SUPERVISOR_STAGES.indexOf(s)
 
+/** Any Pre-cert signature (supervisor or sub-contractor) locks Replace Aviso. */
+export function isPreCertSigned(sheet: StageSheet): boolean {
+	return !!(sheet?.sigSupervisorAt || sheet?.sigSubcontractorAt)
+}
+
 /**
  * Which step's screen to show. Defaults to the derived stage, except that a
  * job sent to Claro (stage AVISO) opens on step 5 ("Continue to Aviso"),
  * which stays interactive; only a legacy job whose Aviso lines were saved
  * (`isAvisoStarted`) opens on step 6. Once the Aviso is saved the stage moves
  * on. `requested` (from `?step=`) may only point at a supervisor step
- * (APPROVE onward) that has already been reached.
+ * (APPROVE onward) that has already been reached. From Pre-cert, the Aviso
+ * screen stays interactive (for Replace Aviso) until the Pre-cert sheet has a
+ * signature (`preCertSigned`); after that it is view-only.
  */
 export function resolveStepView(
 	stage: SupervisorStage,
 	avisoStarted: boolean,
 	requested: string | null,
+	preCertSigned: boolean,
 ): StepView {
 	const fallback: SupervisorStage =
 		stage === "AVISO" && !avisoStarted ? "INVOICE" : stage
@@ -126,7 +134,10 @@ export function resolveStepView(
 	const view = reachable ? asked : fallback
 	return {
 		view,
-		interactive: view === stage || (view === "INVOICE" && stage === "AVISO"),
+		interactive:
+			view === stage ||
+			(view === "INVOICE" && stage === "AVISO") ||
+			(view === "AVISO" && stage === "PRECERT" && !preCertSigned),
 	}
 }
 

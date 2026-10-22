@@ -219,6 +219,49 @@ describe("SupervisorDashboard", () => {
 			/>,
 		)
 
+	it("shows an Action needed card with days open for each Aviso discrepancy", async ({
+		renderStub,
+	}) => {
+		await mountSupervisor(renderStub, {
+			supervisorQueues: {
+				...emptyQueues,
+				actionNeeded: [
+					{
+						...queueRow({
+							id: "d9",
+							controlNumber: "JAF-DISC",
+							stage: "PRECERT",
+						}),
+						daysOpen: 4,
+					},
+				],
+			},
+		})
+		const card = screen
+			.getByRole("heading", { level: 2, name: /Action needed/ })
+			.closest("section") as HTMLElement
+		expect(
+			within(card).getByText(
+				"Aviso differs from your work order. Reconcile with your Claro supervisor.",
+			),
+		).toBeVisible()
+		expect(
+			within(card).getByRole("link", { name: "JAF-DISC" }),
+		).toHaveAttribute("href", "/docs/d9/review?step=AVISO")
+		expect(within(card).getByText("Open 4 days")).toBeVisible()
+	})
+
+	it("has no Action needed card when no job has a discrepancy", async ({
+		renderStub,
+	}) => {
+		await mountSupervisor(renderStub, {
+			supervisorQueues: { ...emptyQueues, actionNeeded: [] },
+		})
+		expect(
+			screen.queryByRole("heading", { level: 2, name: /Action needed/ }),
+		).toBeNull()
+	})
+
 	it("shows four working tiles and folds the nine accounting metrics", async ({
 		renderStub,
 	}) => {

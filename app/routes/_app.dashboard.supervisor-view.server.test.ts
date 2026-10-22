@@ -274,3 +274,100 @@ describe("Packets to Claro queue (integration)", () => {
 		expect(byId.get(attemptedId)?.openLabel).toBe("READY_TO_SEND")
 	})
 })
+
+describe("Aviso discrepancy: Action needed card and the admin alert (integration)", () => {
+	const tag = `ad${Date.now()}`
+	const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000)
+	const discrepancy = (days: number, note: string | null) => ({
+		detectedAt: daysAgo(days).toISOString(),
+		differences: [
+			{ claroCode: "4003587", name: "POSTE", workOrder: 3, aviso: 2 },
+		],
+		note,
+		noteAt: note ? daysAgo(days).toISOString() : null,
+		noteById: null,
+	})
+	let supId: string
+	let adminId: string
+	let notedId: string
+	let freshId: string
+	let cleanId: string
+	let releasedId: string
+	let baselineStale = 0
+
+	const staleCount = (data: Awaited<ReturnType<typeof runLoaderAs>>) =>
+		data.alert?.key === "dashboard.alert.stale_aviso_discrepancy"
+			? data.alert.count
+			: 0
+
+	beforeAll(async () => {
+		adminId = (
+			await db.user.create({
+				data: {
+					email: `dash-ad-admin-${tag}@x.com`,
+					name: "AdAdmin",
+					role: "ADMIN",
+				},
+			})
+		).id
+		baselineStale = staleCount(await runLoaderAs(adminId))
+		supId = (
+			await db.user.create({
+				data: {
+					email: `dash-ad-${tag}@x.com`,
+					name: "AdSup",
+					role: "SUPERVISOR",
+					supervisorAreas: [],
+				},
+			})
+		).id
+		const make = (name: string, data: Record<string, unknown>) =>
+			db.jafInvoice
+				.create({
+					data: {
+						...baseInvoice,
+						controlNumber: `DASH-AD-${name}-${tag}`,
+						supervisorId: supId,
+						status: "CLARO_UPLOADED",
+						supervisorApprovedAt: daysAgo(10),
+						jafInvoiceGeneratedAt: daysAgo(9),
+						avisoNumber: "10354739",
+						avisoDocPath: "/uploads/aviso-docs/x-aviso.pdf",
+						...data,
+					},
+				})
+				.then((d) => d.id)
+		// Continued with a note: the card stays until a clean Aviso.
+		notedId = await make("noted", { avisoDiscrepancy: discrepancy(4, "noted") })
+		freshId = await make("fresh", { avisoDiscrepancy: discrepancy(1, null) })
+		cleanId = await make("clean", {})
+		releasedId = await make("released", {
+			avisoDiscrepancy: discrepancy(5, "noted"),
+			releasedToFinanceAt: daysAgo(1),
+		})
+	})
+
+	afterAll(async () => {
+		await db.jafInvoice.deleteMany({
+			where: { controlNumber: { endsWith: tag } },
+		})
+		await db.user.deleteMany({ where: { id: { in: [supId, adminId] } } })
+	})
+
+	it("lists the supervisor's unreleased jobs with a discrepancy, with days open", async () => {
+		const data = await runLoaderAs(supId)
+		const rows = data.supervisorQueues?.actionNeeded ?? []
+		const byId = new Map(rows.map((r) => [r.id, r]))
+		expect([...byId.keys()].sort()).toEqual([notedId, freshId].sort())
+		expect(byId.get(notedId)?.daysOpen).toBe(4)
+		expect(byId.get(freshId)?.daysOpen).toBe(1)
+		expect(byId.has(cleanId)).toBe(false)
+		expect(byId.has(releasedId)).toBe(false)
+	})
+
+	it("alerts the admin on stale discrepancies, released or not", async () => {
+		const data = await runLoaderAs(adminId)
+		// noted (4 days) and released (5 days); fresh (1 day) is not stale.
+		expect(staleCount(data)).toBe(baselineStale + 2)
+	})
+})

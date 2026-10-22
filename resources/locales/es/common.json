@@ -786,7 +786,12 @@
 			"precert_edit_reason_required": "Se requiere una razón para cambiar una cantidad certificada.",
 			"signature_required": "Se requiere una firma.",
 			"contractor_code_required": "Esta brigada no tiene código de contratista. Ingréselo para firmar.",
-			"release_blocked": "El paquete está incompleto. Vea la lista de condiciones."
+			"release_blocked": "El paquete está incompleto. Vea la lista de condiciones.",
+			"aviso_materials_differ": "Los materiales del Aviso no coinciden con su orden de trabajo. Pida a Claro que lo corrija y súbalo de nuevo, o continúe con una nota que explique la diferencia.",
+			"aviso_use_replace": "Este trabajo ya tiene un Aviso. Use Reemplazar Aviso para cambiarlo.",
+			"replace_limit": "Ya se usó el único reemplazo de Aviso de este trabajo.",
+			"replace_locked": "La hoja de pre-certificación está firmada: el Aviso ya no se puede reemplazar.",
+			"replace_reason_required": "Indique una razón breve para reemplazar el Aviso."
 		},
 		"ordered_vs_installed": "Ordenado vs Instalado",
 		"per_service_code": "por código de servicio",
@@ -806,7 +811,23 @@
 		"signoff_hint": "Usted responde por el trabajo de la brigada. Al firmar confirma que el paso de Campo está completo como se ingresó y lo bloquea.",
 		"signoff_name": "Nombre",
 		"signoff_date": "Fecha",
-		"signed_off_by": "Firmado por {{name}} · {{when}}"
+		"signed_off_by": "Firmado por {{name}} · {{when}}",
+		"aviso_materials_unreadable": "No se pudo leer con confianza la tabla de materiales del Aviso, así que no se comparó. El trabajo continúa.",
+		"aviso_difference": "orden de trabajo: {{workOrder}} {{name}}, Aviso: {{aviso}} {{name}}",
+		"aviso_discrepancy_title": "El Aviso no coincide con su orden de trabajo.",
+		"aviso_discrepancy_body": "La cifra del almacén de JAF es el registro de inventario; la del Aviso es la versión de Claro. Finanzas ve esta alerta.",
+		"aviso_discrepancy_note": "Nota: {{note}}",
+		"aviso_discrepancy_note_label": "Explique la diferencia (requerido para continuar)",
+		"aviso_continue_anyway": "Continuar de todos modos",
+		"aviso_history_heading": "Avisos reemplazados",
+		"aviso_history_number": "Aviso #{{number}}",
+		"aviso_history_replaced": "reemplazado {{date}} · no se usa · {{reason}}",
+		"aviso_replace_heading": "Reemplazar Aviso",
+		"aviso_replace_hint": "Para un documento equivocado o un error de tecleo: un reemplazo por trabajo, hasta que se firme la hoja de pre-certificación.",
+		"aviso_replace_reason_label": "Razón del reemplazo",
+		"aviso_replace_submit": "Reemplazar Aviso",
+		"aviso_replace_used": "Ya se usó el único reemplazo de Aviso de este trabajo.",
+		"aviso_continue_precert": "Continuar a Pre-certificación →"
 	},
 	"open_job": {
 		"material_requested": "Material solicitado",
@@ -845,7 +866,7 @@
 			"work_date": "Fecha del trabajo"
 		},
 		"aviso_heading": "Aviso",
-		"aviso_note": "JAF no coteja mano de obra ni materiales contra él.",
+		"aviso_note": "JAF verifica el número del archivo y, cuando puede leerlos, compara los materiales con su orden de trabajo.",
 		"aviso_number_label": "# de Aviso (8 dígitos)",
 		"aviso_doc_empty": "Aún no hay documento",
 		"aviso_saved": "El número del archivo coincide ({{number}}). La hoja de pre-certificación se genera automáticamente.",
@@ -916,7 +937,8 @@
 		"col_cost": "Costo",
 		"total": "TOTAL",
 		"continue_release": "Continuar a Liberación →",
-		"continue_hint": "La liberación se habilita automáticamente cuando el supervisor del contratista y el subcontratista hayan firmado."
+		"continue_hint": "La liberación se habilita automáticamente cuando el supervisor del contratista y el subcontratista hayan firmado.",
+		"back_to_aviso": "← Aviso"
 	},
 	"docs_lc": {
 		"title": "Solicitud de LC — Revisión de Lissette",
@@ -1498,7 +1520,9 @@
 			"ready_for_pickup_one": "{{count}} trabajo listo para recoger",
 			"ready_for_pickup_other": "{{count}} trabajos listos para recoger",
 			"receivables_open_one": "{{count}} cuenta por cobrar abierta",
-			"receivables_open_other": "{{count}} cuentas por cobrar abiertas"
+			"receivables_open_other": "{{count}} cuentas por cobrar abiertas",
+			"stale_aviso_discrepancy_one": "{{count}} trabajo tiene una discrepancia de Aviso abierta hace 3 días o más",
+			"stale_aviso_discrepancy_other": "{{count}} trabajos tienen una discrepancia de Aviso abierta hace 3 días o más"
 		},
 		"signal": {
 			"overage": "Exceso",
@@ -1535,7 +1559,13 @@
 		"to_prep_badge": "Por preparar",
 		"warehouse_prep_stat": "Por preparar",
 		"warehouse_release_stat": "Pendiente de recogida",
-		"warehouse_returns_stat": "Devoluciones pendientes"
+		"warehouse_returns_stat": "Devoluciones pendientes",
+		"action_needed": {
+			"title": "Acción requerida",
+			"body": "El Aviso no coincide con su orden de trabajo. Concílielo con su supervisor de Claro.",
+			"days_open_one": "Abierto {{count}} día",
+			"days_open_other": "Abierto {{count}} días"
+		}
 	},
 	"docs_status": {
 		"created": "Creado",

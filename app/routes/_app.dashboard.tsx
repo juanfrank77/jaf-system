@@ -423,13 +423,18 @@ export async function loader({ request }: Route.LoaderArgs) {
 					})
 				).filter((d) => d.status !== "LC_REQUEST_GENERATED")
 			: visibleDocs
-	// The admin's "needs attention": every job's open Aviso discrepancy,
-	// released or not (only the stale ones raise the alert).
+	// The admin's "needs attention": the open Aviso discrepancies of live,
+	// unreleased jobs, as on the supervisor's card (only the stale ones raise
+	// the alert). Released or cancelled jobs would hold the alert forever.
 	const avisoDiscrepancies =
 		user.role === "ADMIN"
 			? (
 					await db.jafInvoice.findMany({
-						where: hasAvisoDiscrepancy(),
+						where: {
+							...hasAvisoDiscrepancy(),
+							releasedToFinanceAt: null,
+							status: { not: "CANCELLED" },
+						},
 						select: { avisoDiscrepancy: true },
 					})
 				).map((d) => d.avisoDiscrepancy as AvisoDiscrepancy)

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 import { db } from "~/lib/db.server"
+import { Prisma } from "../../generated/prisma/client"
 
 // Integration test against the real (test) Postgres DB. The supervisor
 // dashboard now renders the same stat tiles / filters / list as the other
@@ -345,6 +346,10 @@ describe("Aviso discrepancy: Action needed card and the admin alert (integration
 			avisoDiscrepancy: discrepancy(5, "noted"),
 			releasedToFinanceAt: daysAgo(1),
 		})
+		await make("cancelled", {
+			avisoDiscrepancy: discrepancy(6, "noted"),
+			status: "CANCELLED",
+		})
 	})
 
 	afterAll(async () => {
@@ -365,9 +370,20 @@ describe("Aviso discrepancy: Action needed card and the admin alert (integration
 		expect(byId.has(releasedId)).toBe(false)
 	})
 
-	it("alerts the admin on stale discrepancies, released or not", async () => {
+	it("alerts the admin on stale discrepancies of unreleased, live jobs only", async () => {
 		const data = await runLoaderAs(adminId)
-		// noted (4 days) and released (5 days); fresh (1 day) is not stale.
-		expect(staleCount(data)).toBe(baselineStale + 2)
+		// noted (4 days); fresh (1 day) is not stale; released (5 days) and
+		// cancelled (6 days) are out of the open flow, like the supervisor card.
+		expect(staleCount(data)).toBe(baselineStale + 1)
+	})
+
+	it("clears the admin alert once the open job's discrepancy clears", async () => {
+		await db.jafInvoice.update({
+			where: { id: notedId },
+			data: { avisoDiscrepancy: Prisma.DbNull },
+		})
+		// Released and cancelled stale ones remain, yet no longer hold the
+		// single alert slot (which would hide receivables_open forever).
+		expect(staleCount(await runLoaderAs(adminId))).toBe(baselineStale)
 	})
 })

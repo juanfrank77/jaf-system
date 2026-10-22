@@ -217,8 +217,8 @@ export function computeDashboardStats(
 	role: Role,
 	docs: DashboardDoc[],
 	/**
-	 * Every job's `avisoDiscrepancy` (all jobs, any release state), for the
-	 * admin's "needs attention" alert on stale ones.
+	 * The `avisoDiscrepancy` of every live (not cancelled), unreleased job, for
+	 * the admin's "needs attention" alert on stale ones.
 	 */
 	extra: { avisoDiscrepancies?: (AvisoDiscrepancy | null)[]; now?: Date } = {},
 ): {

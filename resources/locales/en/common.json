@@ -712,6 +712,7 @@
 			"code": "Code",
 			"estimated": "Estimated",
 			"add": "+ Material from another source",
+			"remove": "Remove material",
 			"empty": "No material was issued at pickup.",
 			"hint": "Only material issued from the warehouse is billed. Anything else you used, enter under its own Source."
 		},

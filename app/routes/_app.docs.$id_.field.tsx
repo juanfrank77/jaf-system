@@ -880,6 +880,7 @@ export default function FieldUpdate({
 								onChange={(i, row) =>
 									setRows(rows.map((r, j) => (j === i ? row : r)))
 								}
+								onRemove={(i) => setRows(rows.filter((_, j) => j !== i))}
 							/>
 						)}
 						<p className="text-xs text-muted-foreground">

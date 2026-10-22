@@ -1,3 +1,5 @@
+import { Cancel01Icon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 import { useTranslation } from "react-i18next"
 import { Input } from "~/components/ui/input"
 import type { FieldMaterialRow } from "~/lib/field-materials"
@@ -40,9 +42,12 @@ function qty(value: string): number {
 export function FieldMaterialsTable({
 	rows,
 	onChange,
+	onRemove,
 }: {
 	rows: FieldMaterialsTableRow[]
 	onChange: (index: number, row: FieldMaterialRow) => void
+	/** Rows the crew added (nothing signed out for them) can be taken back off. */
+	onRemove: (index: number) => void
 }) {
 	const { t } = useTranslation()
 	const edit = (i: number, patch: Partial<FieldMaterialRow>) =>
@@ -66,7 +71,8 @@ export function FieldMaterialsTable({
 						<th className="py-1.5 pr-2">
 							{t("docs_field.materials.returned")}
 						</th>
-						<th className="py-1.5">{t("docs_field.materials.source")}</th>
+						<th className="py-1.5 pr-2">{t("docs_field.materials.source")}</th>
+						<th className="py-1.5" />
 					</tr>
 				</thead>
 				<tbody className="tabular-nums">
@@ -109,7 +115,7 @@ export function FieldMaterialsTable({
 									onChange={(e) => edit(i, { returned: qty(e.target.value) })}
 								/>
 							</td>
-							<td className="py-1.5">
+							<td className="py-1.5 pr-2">
 								<select
 									aria-label={t("docs_field.materials.source")}
 									className="field-required h-8 rounded-lg border border-input px-2 text-sm"
@@ -124,6 +130,22 @@ export function FieldMaterialsTable({
 										</option>
 									))}
 								</select>
+							</td>
+							<td className="py-1.5">
+								{r.signed === 0 && (
+									<button
+										type="button"
+										onClick={() => onRemove(i)}
+										aria-label={`${t("docs_field.materials.remove")} ${r.claroCode}`}
+										className="flex size-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:border-status-danger hover:bg-status-danger-soft hover:text-status-danger"
+									>
+										<HugeiconsIcon
+											icon={Cancel01Icon}
+											strokeWidth={2}
+											className="size-4"
+										/>
+									</button>
+								)}
 							</td>
 						</tr>
 					))}

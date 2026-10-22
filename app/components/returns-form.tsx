@@ -1,3 +1,5 @@
+import { Cancel01Icon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 import type { ParseKeys } from "i18next"
 import { useEffect, useState } from "react"
 import { Trans, useTranslation } from "react-i18next"
@@ -292,9 +294,14 @@ export function ReturnsForm({
 								<button
 									type="button"
 									onClick={() => removeLine(index)}
-									className="text-muted-foreground hover:text-status-danger text-lg"
+									aria-label={t("docs_prep.remove_line")}
+									className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:border-status-danger hover:bg-status-danger-soft hover:text-status-danger"
 								>
-									×
+									<HugeiconsIcon
+										icon={Cancel01Icon}
+										strokeWidth={2}
+										className="size-4"
+									/>
 								</button>
 							</div>
 
@@ -404,9 +411,14 @@ export function ReturnsForm({
 						<button
 							type="button"
 							onClick={() => removeSerialLine(index)}
-							className="text-muted-foreground hover:text-status-danger text-lg"
+							aria-label={t("docs_prep.remove_line")}
+							className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:border-status-danger hover:bg-status-danger-soft hover:text-status-danger"
 						>
-							×
+							<HugeiconsIcon
+								icon={Cancel01Icon}
+								strokeWidth={2}
+								className="size-4"
+							/>
 						</button>
 					</div>
 				))}

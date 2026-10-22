@@ -712,6 +712,7 @@
 			"code": "Código",
 			"estimated": "Estimado",
 			"add": "+ Material de otra fuente",
+			"remove": "Quitar material",
 			"empty": "No se entregó material en la recogida.",
 			"hint": "Solo se factura el material entregado por el almacén. Cualquier otro material usado, regístralo con su propia Fuente."
 		},

@@ -171,6 +171,14 @@
 }
 
 @layer base {
+	/* Native <select> popups are painted by the browser from the option's own
+	   colours, not the select's: a transparent select gives a white popup with
+	   light text in dark mode. */
+	option,
+	optgroup {
+		background-color: var(--popover);
+		color: var(--popover-foreground);
+	}
 	* {
 		@apply border-border outline-ring/50;
 	}

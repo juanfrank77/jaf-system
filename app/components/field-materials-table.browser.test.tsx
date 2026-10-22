@@ -40,7 +40,7 @@ describe("FieldMaterialsTable", () => {
 	}) => {
 		await mount(
 			renderStub,
-			<FieldMaterialsTable rows={rows} onChange={vi.fn()} />,
+			<FieldMaterialsTable rows={rows} onChange={vi.fn()} onRemove={vi.fn()} />,
 		)
 		const table = screen.getByTestId("field-materials")
 		const headers = within(table)
@@ -54,6 +54,7 @@ describe("FieldMaterialsTable", () => {
 			"Used",
 			"Returned",
 			"Source",
+			"",
 		])
 		const wrap = within(table)
 			.getByText("WRAP NET")
@@ -70,7 +71,11 @@ describe("FieldMaterialsTable", () => {
 		const onChange = vi.fn()
 		await mount(
 			renderStub,
-			<FieldMaterialsTable rows={rows} onChange={onChange} />,
+			<FieldMaterialsTable
+				rows={rows}
+				onChange={onChange}
+				onRemove={vi.fn()}
+			/>,
 		)
 		const wrap = screen.getByText("WRAP NET").closest("tr") as HTMLElement
 		await userEvent.fill(within(wrap).getByLabelText("Used"), "3")
@@ -88,7 +93,11 @@ describe("FieldMaterialsTable", () => {
 		const onChange = vi.fn()
 		await mount(
 			renderStub,
-			<FieldMaterialsTable rows={rows} onChange={onChange} />,
+			<FieldMaterialsTable
+				rows={rows}
+				onChange={onChange}
+				onRemove={vi.fn()}
+			/>,
 		)
 		const wrap = screen.getByText("WRAP NET").closest("tr") as HTMLElement
 		await userEvent.fill(within(wrap).getByLabelText("Returned"), "2")
@@ -104,7 +113,11 @@ describe("FieldMaterialsTable", () => {
 		const onChange = vi.fn()
 		await mount(
 			renderStub,
-			<FieldMaterialsTable rows={rows} onChange={onChange} />,
+			<FieldMaterialsTable
+				rows={rows}
+				onChange={onChange}
+				onRemove={vi.fn()}
+			/>,
 		)
 		const wrap = screen.getByText("WRAP NET").closest("tr") as HTMLElement
 		const clamp = screen.getByText("CLAMP").closest("tr") as HTMLElement
@@ -135,7 +148,7 @@ describe("FieldMaterialsTable", () => {
 	}) => {
 		await mount(
 			renderStub,
-			<FieldMaterialsTable rows={rows} onChange={vi.fn()} />,
+			<FieldMaterialsTable rows={rows} onChange={vi.fn()} onRemove={vi.fn()} />,
 		)
 		const wrap = screen.getByText("WRAP NET").closest("tr") as HTMLElement
 		expect(within(wrap).getByLabelText("Used")).toHaveClass("field-required")
@@ -158,7 +171,11 @@ describe("FieldMaterialsTable", () => {
 				{
 					path: "/",
 					Component: () => (
-						<FieldMaterialsTable rows={rows} onChange={vi.fn()} />
+						<FieldMaterialsTable
+							rows={rows}
+							onChange={vi.fn()}
+							onRemove={vi.fn()}
+						/>
 					),
 				},
 			],
@@ -175,5 +192,24 @@ describe("FieldMaterialsTable", () => {
 			"Almacén personal de la brigada",
 		])
 			expect(screen.getAllByText(label).length).toBeGreaterThan(0)
+	})
+
+	it("only a row the crew added can be removed", async ({ renderStub }) => {
+		const onRemove = vi.fn()
+		await mount(
+			renderStub,
+			<FieldMaterialsTable
+				rows={rows}
+				onChange={vi.fn()}
+				onRemove={onRemove}
+			/>,
+		)
+		expect(
+			screen.queryByRole("button", { name: /Remove material 1020002/ }),
+		).toBeNull()
+		await userEvent.click(
+			screen.getByRole("button", { name: /Remove material 1020003/ }),
+		)
+		expect(onRemove).toHaveBeenCalledWith(1)
 	})
 })

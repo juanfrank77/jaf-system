@@ -1,3 +1,5 @@
+import { Cancel01Icon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 import { Fragment, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Button } from "~/components/ui/button"
@@ -130,13 +132,18 @@ export function PrepMaterialsTable({
 										{code?.claroCode ?? "—"}
 									</td>
 									<td className="py-1.5 pr-2">
-										{row.serviceCodeId === "" ? (
+										{requested === 0 ? (
+											// A material the warehouse added stays changeable, so a
+											// wrong pick can be corrected or the line removed.
 											<select
 												aria-label={t("docs_prep.select_material")}
 												className="h-8 w-full max-w-64 rounded-lg border border-input bg-transparent px-2 text-sm"
-												value=""
+												value={row.serviceCodeId}
 												onChange={(e) =>
-													onChange(index, { serviceCodeId: e.target.value })
+													onChange(index, {
+														serviceCodeId: e.target.value,
+														substitutedWith: null,
+													})
 												}
 											>
 												<option value="">
@@ -202,15 +209,31 @@ export function PrepMaterialsTable({
 										)}
 									</td>
 									<td className="py-1.5 pr-1 text-right">
-										<Button
-											type="button"
-											variant="ghost"
-											size="sm"
-											aria-expanded={isOpen}
-											onClick={() => setRowOpen(row._key, !isOpen)}
-										>
-											{isOpen ? t("docs_prep.less") : t("docs_prep.more")}
-										</Button>
+										<div className="flex items-center justify-end gap-1">
+											{requested === 0 && (
+												<button
+													type="button"
+													onClick={() => onRemove(index)}
+													aria-label={t("docs_prep.remove_line")}
+													className="flex size-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:border-status-danger hover:bg-status-danger-soft hover:text-status-danger"
+												>
+													<HugeiconsIcon
+														icon={Cancel01Icon}
+														strokeWidth={2}
+														className="size-4"
+													/>
+												</button>
+											)}
+											<Button
+												type="button"
+												variant="ghost"
+												size="sm"
+												aria-expanded={isOpen}
+												onClick={() => setRowOpen(row._key, !isOpen)}
+											>
+												{isOpen ? t("docs_prep.less") : t("docs_prep.more")}
+											</Button>
+										</div>
 									</td>
 								</tr>
 								{isOpen && (

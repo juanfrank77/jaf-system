@@ -948,26 +948,36 @@ export async function action({ request, params }: Route.ActionArgs) {
 		if ((await preCertLinesFor(installed)).lines.length === 0)
 			return { errorKey: "docs_review.errors.installed_lines_required" }
 
-		const materials = await checkAvisoMaterials(doc, pdfBytes)
-		const differences = differencesOf(materials)
+		// Only a new file is compared. A re-save of the file on record keeps
+		// the stored discrepancy as is (only a replacement clears it) and only
+		// fills a missing note.
+		const prior = doc.avisoDiscrepancy as AvisoDiscrepancy | null
+		const materials: AvisoMaterialsCheck | { kind: "kept" } = newFile
+			? await checkAvisoMaterials(doc, pdfBytes)
+			: { kind: "kept" }
+		const differences =
+			materials.kind === "kept"
+				? (prior?.differences ?? [])
+				: differencesOf(materials)
 		let discrepancy: AvisoDiscrepancy | null = null
 		if (differences.length > 0) {
 			const note = (form.get("discrepancyNote") as string | null)?.trim() || ""
-			if (!note)
+			const now = new Date().toISOString()
+			if (materials.kind === "kept" && prior?.note) discrepancy = prior
+			else if (!note)
 				return {
 					errorKey: "docs_review.errors.aviso_materials_differ",
 					differences,
 				}
-			const now = new Date().toISOString()
-			// Still the same open difference: its age keeps counting.
-			const prior = doc.avisoDiscrepancy as AvisoDiscrepancy | null
-			discrepancy = {
-				detectedAt: prior?.detectedAt ?? now,
-				differences,
-				note,
-				noteAt: now,
-				noteById: user.id,
-			}
+			else
+				discrepancy = {
+					// Still the same open difference: its age keeps counting.
+					detectedAt: prior?.detectedAt ?? now,
+					differences,
+					note,
+					noteAt: now,
+					noteById: user.id,
+				}
 		}
 
 		// A new file or number regenerates the sheet; a signed one is kept as is.

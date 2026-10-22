@@ -1,5 +1,16 @@
-import { readFile } from "node:fs/promises"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest"
 
 vi.mock("~/lib/db.server", () => {
 	const db: any = {
@@ -767,6 +778,100 @@ describe("review: Aviso materials comparison and Replace Aviso (step 6)", () => 
 			).catch((e) => e)
 			expect(res).toMatchObject({ status: 302 })
 			expect(updateData().avisoDiscrepancy).toBe(Prisma.DbNull)
+		})
+	})
+
+	describe("save_aviso without a new file (re-save of the file on record)", () => {
+		const stored = {
+			detectedAt: "2026-10-01T12:00:00.000Z",
+			differences: [
+				{ claroCode: "4003587", name: "POSTE 30 PIES", workOrder: 3, aviso: 2 },
+			],
+			note: "Claro counted one pole as returned",
+			noteAt: "2026-10-01T12:05:00.000Z",
+			noteById: "sup-0",
+		}
+		let dir: string
+		/** Writes an Aviso print to disk and returns it as the file on record. */
+		const onRecord = async (rows: string[]) => {
+			const file = await aviso("10354739", rows)
+			const path = join(dir, `aviso-${Math.random()}.pdf`)
+			await writeFile(path, new Uint8Array(await file.arrayBuffer()))
+			return path
+		}
+		const resave = (
+			over: Record<string, unknown>,
+			fields: Record<string, string> = {},
+		) =>
+			run(
+				"save_aviso",
+				{ ...sentDoc, avisoNumber: "10354739", ...over },
+				{ avisoNumber: "10354739", ...fields },
+				null,
+			).catch((e) => e)
+
+		beforeAll(async () => {
+			dir = await mkdtemp(join(tmpdir(), "aviso-resave-"))
+		})
+		afterAll(async () => {
+			await rm(dir, { recursive: true, force: true })
+		})
+
+		it("keeps a stored discrepancy as is, even if the file now compares clean", async () => {
+			const res = await resave({
+				avisoDocPath: await onRecord(MATCHING),
+				avisoDiscrepancy: stored,
+			})
+			expect(res).toMatchObject({ status: 302 })
+			expect(updateData().avisoDiscrepancy).toEqual(stored)
+		})
+
+		it("does not raise a discrepancy that was not stored", async () => {
+			const res = await resave({
+				avisoDocPath: await onRecord(DIFFERING),
+				avisoDiscrepancy: null,
+			})
+			expect(res).toMatchObject({ status: 302 })
+			expect(updateData().avisoDiscrepancy).toBe(Prisma.DbNull)
+		})
+
+		it("fills a missing note on the stored discrepancy, keeping its lines and age", async () => {
+			const res = await resave(
+				{
+					avisoDocPath: await onRecord(MATCHING),
+					avisoDiscrepancy: {
+						...stored,
+						note: null,
+						noteAt: null,
+						noteById: null,
+					},
+				},
+				{ discrepancyNote: "Checked with Claro" },
+			)
+			expect(res).toMatchObject({ status: 302 })
+			expect(updateData().avisoDiscrepancy).toEqual({
+				...stored,
+				note: "Checked with Claro",
+				noteAt: expect.any(String),
+				noteById: "sup-1",
+			})
+		})
+
+		it("still asks for the note when the stored discrepancy has none", async () => {
+			const res = await resave({
+				avisoDocPath: await onRecord(MATCHING),
+				avisoDiscrepancy: {
+					...stored,
+					note: null,
+					noteAt: null,
+					noteById: null,
+				},
+			})
+			expect(res).toEqual({
+				errorKey: "docs_review.errors.aviso_materials_differ",
+				differences: stored.differences,
+			})
+			expect(db.jafInvoice.update).not.toHaveBeenCalled()
 		})
 	})
 

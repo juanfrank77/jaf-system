@@ -155,6 +155,7 @@ const queueSelect = {
 	materialsTaken: true,
 	materialsUsed: true,
 	materialsReturned: true,
+	materialsFromWarehouse: true,
 	fieldMaterials: true,
 	brigade: { select: { name: true } },
 } as const
@@ -198,6 +199,7 @@ async function withStages<
 		avisoNumber: string | null
 		avisoDocPath: string | null
 		releasedToFinanceAt: Date | null
+		materialsFromWarehouse: boolean
 	},
 >(
 	docs: T[],

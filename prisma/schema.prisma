@@ -449,6 +449,13 @@ model JafInvoice {
   smr               String?
   titulo            String?
   blueprintPaths    String[] @default([])
+  materialsFromWarehouse Boolean @default(true)
+  materialsReason   String?
+  prefieldNeeded    Boolean  @default(false)
+  prefieldPdfPath   String?
+  packetStale       Boolean  @default(false)
+  avisoDiscrepancy  Json?
+  avisoHistory      Json?
   fieldStartedAt    DateTime?
   fieldMaterials    Json?
 

@@ -106,4 +106,16 @@ describe("supervisor workflow schema", () => {
 		expect(doc.fieldStartedAt).toBeNull()
 		expect(doc.claroSupervisorId).toBeNull()
 	})
+
+	it("stores the walkthrough-feedback columns with legacy defaults", async () => {
+		const user = await seedUser()
+		const doc = await seedDoc(user.id)
+		expect(doc.materialsFromWarehouse).toBe(true)
+		expect(doc.materialsReason).toBeNull()
+		expect(doc.prefieldNeeded).toBe(false)
+		expect(doc.prefieldPdfPath).toBeNull()
+		expect(doc.packetStale).toBe(false)
+		expect(doc.avisoDiscrepancy).toBeNull()
+		expect(doc.avisoHistory).toBeNull()
+	})
 })

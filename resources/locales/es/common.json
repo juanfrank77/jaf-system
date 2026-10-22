@@ -941,7 +941,7 @@
 		"col_cost": "Costo",
 		"total": "TOTAL",
 		"continue_release": "Continuar a Liberación →",
-		"continue_hint": "La liberación se habilita automáticamente cuando el supervisor del contratista y el subcontratista hayan firmado.",
+		"continue_hint": "La liberación se habilita automáticamente cuando el supervisor del contratista haya firmado.",
 		"back_to_aviso": "← Aviso"
 	},
 	"docs_lc": {

@@ -44,6 +44,7 @@ export function openJobLabel(
 		| "avisoNumber"
 		| "avisoDocPath"
 		| "releasedToFinanceAt"
+		| "materialsFromWarehouse"
 	>,
 	sheet: {
 		sigSupervisorAt: Date | null
@@ -62,7 +63,10 @@ export function openJobLabel(
 		case "PREPPED":
 			return "READY_FOR_PICKUP"
 		case "SIGNED":
-			return doc.fieldStartedAt ? "FIELD" : "PICKED_UP"
+			// A no-warehouse job has nothing to pick up: it goes straight to Field.
+			return doc.fieldStartedAt || !doc.materialsFromWarehouse
+				? "FIELD"
+				: "PICKED_UP"
 		case "FIELD_UPDATED":
 			return "SIGN_OFF"
 		default:

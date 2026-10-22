@@ -84,6 +84,9 @@ describe("POST /docs/new", () => {
 		form.set("tipo", "calle")
 		form.set("tipoPlanta", "Aerea")
 		form.set("grupoPlan", "G1")
+		if (!form.has("materialsFromWarehouse"))
+			form.set("materialsFromWarehouse", "yes")
+		if (!form.has("prefieldNeeded")) form.set("prefieldNeeded", "not_needed")
 		return form
 	}
 
@@ -128,47 +131,125 @@ describe("POST /docs/new", () => {
 		})
 	})
 
-	function validForm(aviso?: string) {
+	function validForm() {
 		const form = new FormData()
 		form.set("jobType", "Mantenimiento")
 		addr(form)
 		form.set("brigadeId", "b1")
 		form.set("materials", "[]")
 		form.set("serviceLines", "[]")
-		if (aviso !== undefined) form.set("avisoNumber", aviso)
 		return form
 	}
 
-	it("stores a typed Aviso number (trimmed) and null when blank", async () => {
-		await action({
-			request: post(validForm("  10353961 ")),
-			params: {},
-		} as any).catch((r) => r)
-		expect(tx.jafInvoice.create.mock.calls[0][0].data.avisoNumber).toBe(
-			"10353961",
-		)
-		tx.jafInvoice.create.mockClear()
-		await action({ request: post(validForm()), params: {} } as any).catch(
-			(r) => r,
-		)
-		expect(tx.jafInvoice.create.mock.calls[0][0].data.avisoNumber).toBeNull()
-	})
-
-	it("stores whitespace-only Prefield values as null", async () => {
-		const form = validForm("   ")
-		for (const k of ["ordenNumber", "pedido", "smr", "titulo"])
-			form.set(k, "  ")
+	it("no longer stores Aviso # or the Prefield fields from the form", async () => {
+		const form = validForm()
+		form.set("avisoNumber", "10353961")
+		for (const k of ["ordenNumber", "pedido", "smr", "titulo"]) form.set(k, "X")
 		await action({ request: post(form), params: {} } as any).catch((r) => r)
 		const { data } = tx.jafInvoice.create.mock.calls[0][0]
-		expect(data).toEqual(
-			expect.objectContaining({
-				avisoNumber: null,
-				ordenNumber: null,
-				pedido: null,
-				smr: null,
-				titulo: null,
-			}),
-		)
+		for (const k of ["avisoNumber", "ordenNumber", "pedido", "smr", "titulo"])
+			expect(data).not.toHaveProperty(k)
+	})
+
+	describe("intake answers", () => {
+		it.each([
+			["materialsFromWarehouse", "docs_new.errors.materials_choice_required"],
+			["prefieldNeeded", "docs_new.errors.prefield_choice_required"],
+		])("blocks Create without %s", async (field, errorKey) => {
+			const form = validForm()
+			form.delete(field)
+			expect(await action({ request: post(form), params: {} } as any)).toEqual({
+				errorKey,
+			})
+			expect(tx.jafInvoice.create).not.toHaveBeenCalled()
+			expect(tx.notification.createMany).not.toHaveBeenCalled()
+		})
+
+		it("blocks Create on No without a reason", async () => {
+			const form = validForm()
+			form.set("materialsFromWarehouse", "no")
+			form.set("materialsReason", "  ")
+			expect(await action({ request: post(form), params: {} } as any)).toEqual({
+				errorKey: "docs_new.errors.materials_reason_required",
+			})
+			expect(tx.jafInvoice.create).not.toHaveBeenCalled()
+		})
+
+		it("No skips the warehouse: SIGNED, reason stored, no materials, no warehouse notice", async () => {
+			const form = validForm()
+			form.set("materialsFromWarehouse", "no")
+			form.set("materialsReason", " own truck ")
+			form.set("materials", JSON.stringify([{ serviceCodeId: "m1", qty: 3 }]))
+			const res = await action({
+				request: post(form),
+				params: {},
+			} as any).catch((r) => r)
+			expect(res.status).toBe(302)
+			const { data } = tx.jafInvoice.create.mock.calls[0][0]
+			expect(data).toEqual(
+				expect.objectContaining({
+					status: "SIGNED",
+					materialsFromWarehouse: false,
+					materialsReason: "own truck",
+					estimatedMaterials: [],
+				}),
+			)
+			expect(tx.notification.createMany).not.toHaveBeenCalled()
+			expect(tx.auditTrail.create).toHaveBeenCalledWith({
+				data: expect.objectContaining({
+					diffJson: expect.objectContaining({
+						status: { before: null, after: "SIGNED" },
+						materialsFromWarehouse: false,
+						materialsReason: "own truck",
+						prefieldNeeded: false,
+					}),
+				}),
+			})
+		})
+
+		it("Yes keeps the warehouse path: CREATED, materials kept, warehouse notified", async () => {
+			const form = validForm()
+			form.set("materials", JSON.stringify([{ serviceCodeId: "m1", qty: 3 }]))
+			await action({ request: post(form), params: {} } as any).catch((r) => r)
+			const { data } = tx.jafInvoice.create.mock.calls[0][0]
+			expect(data).toEqual(
+				expect.objectContaining({
+					status: "CREATED",
+					materialsFromWarehouse: true,
+					materialsReason: null,
+					estimatedMaterials: [{ serviceCodeId: "m1", qty: 3 }],
+				}),
+			)
+			expect(tx.notification.createMany).toHaveBeenCalledTimes(1)
+		})
+
+		it("stores the posted Prefield answer, not the Claro supervisor's tag", async () => {
+			vi.mocked(db.claroSupervisor.findUnique).mockResolvedValue({
+				id: "cs-1",
+				active: true,
+				requiresPrefield: true,
+				requiresBlueprint: false,
+			} as any)
+			const form = validForm()
+			form.set("prefieldNeeded", "not_needed")
+			await action({ request: post(form), params: {} } as any).catch((r) => r)
+			expect(tx.jafInvoice.create.mock.calls[0][0].data.prefieldNeeded).toBe(
+				false,
+			)
+			tx.jafInvoice.create.mockClear()
+			vi.mocked(db.claroSupervisor.findUnique).mockResolvedValue({
+				id: "cs-1",
+				active: true,
+				requiresPrefield: false,
+				requiresBlueprint: false,
+			} as any)
+			const needed = validForm()
+			needed.set("prefieldNeeded", "needed")
+			await action({ request: post(needed), params: {} } as any).catch((r) => r)
+			expect(tx.jafInvoice.create.mock.calls[0][0].data.prefieldNeeded).toBe(
+				true,
+			)
+		})
 	})
 
 	it("requires a job type", async () => {
@@ -179,10 +260,8 @@ describe("POST /docs/new", () => {
 		})
 	})
 
-	it("stores the canonicalised address, Prefield, supervisor and composed jobAddressEstimated", async () => {
+	it("stores the canonicalised address, supervisor and composed jobAddressEstimated", async () => {
 		const form = addr(validForm())
-		form.set("ordenNumber", "O-1")
-		form.set("pedido", "P-1")
 		const res = await action({ request: post(form), params: {} } as any).catch(
 			(r) => r,
 		)
@@ -197,10 +276,6 @@ describe("POST /docs/new", () => {
 				tipoPlanta: "Aerea",
 				grupoPlan: "G1",
 				jobAddressEstimated: "119, Sector Palomar",
-				ordenNumber: "O-1",
-				pedido: "P-1",
-				smr: null,
-				titulo: null,
 			}),
 		)
 	})
@@ -294,14 +369,12 @@ describe("POST /docs/new", () => {
 		expect(saveUpload).toHaveBeenCalledTimes(1)
 	})
 
-	it("creates fine with no blueprint and no Prefield", async () => {
+	it("creates fine with no blueprint", async () => {
 		await action({ request: post(addr(validForm())), params: {} } as any).catch(
 			(r) => r,
 		)
 		expect(saveUpload).not.toHaveBeenCalled()
 		expect(tx.jafInvoice.update).not.toHaveBeenCalled()
-		const { data } = tx.jafInvoice.create.mock.calls[0][0]
-		expect(data.ordenNumber).toBeNull()
 	})
 
 	describe("several brigades", () => {

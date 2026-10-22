@@ -529,3 +529,51 @@ describe("returns: action-level validation (review fixes)", () => {
 		)
 	})
 })
+
+describe("returns: a no-warehouse job has nothing to return", () => {
+	afterAll(() => vi.clearAllMocks())
+
+	async function seedNoWarehouseDoc() {
+		const seeded = await seedFieldUpdatedDoc({ taken: [], used: [] })
+		await db.jafInvoice.update({
+			where: { id: seeded.doc.id },
+			data: { materialsFromWarehouse: false },
+		})
+		return seeded
+	}
+
+	it("the loader redirects back to the job", async () => {
+		const { doc, user } = await seedNoWarehouseDoc()
+		mocks.requireRole.mockResolvedValue({ user })
+		const res = await loader({
+			request: new Request(`http://x/docs/${doc.id}/returns`),
+			params: { id: doc.id },
+			context: {},
+		} as never).then(
+			() => null,
+			(e) => (e instanceof Response ? e.headers.get("location") : e),
+		)
+		expect(res).toBe(`/docs/${doc.id}`)
+	})
+
+	it("the action refuses and writes nothing", async () => {
+		const { doc, warehouse, user } = await seedNoWarehouseDoc()
+		mocks.requireRole.mockResolvedValue({ user })
+		const res = await confirmReturns(doc, {
+			idempotencyKey: runToken("idem"),
+			returnWarehouseId: warehouse.id,
+			lines: [],
+		})
+		expect(res.redirectedTo).toBe(`/docs/${doc.id}`)
+		const after = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: doc.id },
+			select: { materialsReturned: true },
+		})
+		expect(after.materialsReturned).toBeNull()
+		expect(
+			await db.auditTrail.count({
+				where: { docId: doc.id, action: "RETURNS_LOGGED" },
+			}),
+		).toBe(0)
+	})
+})

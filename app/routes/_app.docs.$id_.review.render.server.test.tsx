@@ -64,26 +64,14 @@ function packetData(over: Record<string, unknown> = {}) {
 		claroSupervisor: {
 			name: "Ramón Claro",
 			email: "ramon.now@claro.example",
-			requiresPrefield: true,
 		},
 		claroSupervisorId: "claro-1",
 		claroOptions: [],
-		showPrefield: true,
-		prefield: {
-			avisoNumber: null,
-			ordenNumber: "ORD-77",
-			pedido: "P-1",
-			smr: "SMR-9",
-			titulo: "Poste nuevo",
-			description: "Instalar poste",
-		},
-		prefieldMissing: [] as string[],
+		prefieldNeeded: true,
 		blockers: [] as string[],
 		packetHref: null as string | null,
-		blueprints: [
-			{ name: "plano 1.pdf", href: "/files/blueprints/doc-1/plano%201.pdf" },
-			{ name: "plano 2.pdf", href: "/files/blueprints/doc-1/plano%202.pdf" },
-		],
+		files: [] as Record<string, string>[],
+		zipHref: null as string | null,
 		materials: [
 			{
 				serviceCodeId: "m1",
@@ -174,9 +162,8 @@ describe("Step 4 · the work order document (render)", () => {
 		materials: [
 			{ name: "Cable drop", used: 3, unit: "FT", source: "WAREHOUSE_ISSUE" },
 		],
-		photos: { before: [], during: [], after: [] },
-		blueprint: "not_required",
-		prefield: "not_required",
+		materialsFromWarehouse: true,
+		materialsReason: null,
 		fieldReport: null,
 		signatures: {
 			supervisor: "pending",
@@ -192,10 +179,10 @@ describe("Step 4 · the work order document (render)", () => {
 		...over,
 	})
 
-	it("shows the banner, the document, the sign-off below it, a disabled Generate PDF and Back to step 3", async () => {
+	it("shows the banner, the document, the sign-off below it, a disabled Generate package and Back to step 3", async () => {
 		const html = await render(step4())
 		expect(html).toContain(
-			"Check the document below, sign, and generate the JAF Work Order PDF for the Claro supervisor.",
+			"Check the document below, sign, and generate the package for the Claro supervisor.",
 		)
 		expect(html).toContain("JAF Work Order")
 		expect(html).toContain("JESUS MARTINEZ · 009")
@@ -203,7 +190,8 @@ describe("Step 4 · the work order document (render)", () => {
 		expect(html.indexOf("JAF Work Order")).toBeLessThan(
 			html.indexOf("Sign off the field work"),
 		)
-		expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Generate PDF/)
+		expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Generate package/)
+		expect(html).not.toContain("Continue to step 5")
 		expect(html).toContain('href="/docs/doc-1/field"')
 		expect(html).toContain("Back to step 3")
 		// The old cards are gone; no prices, no Difference, no job location.
@@ -212,7 +200,7 @@ describe("Step 4 · the work order document (render)", () => {
 		expect(html).not.toMatch(/\$|Difference|Job location/)
 	})
 
-	it("once signed: Generate PDF is enabled on the step, no read-only banner, no Back", async () => {
+	it("once signed: Generate package is enabled on the step, no read-only banner, no Back", async () => {
 		const html = await render(
 			step4(
 				{ stage: "INVOICE", interactive: false, canGeneratePdf: true },
@@ -224,14 +212,52 @@ describe("Step 4 · the work order document (render)", () => {
 			),
 		)
 		expect(html).toMatch(
-			/<input[^>]*name="intent"[^>]*value="generate_work_order_pdf"/,
+			/<input[^>]*name="intent"[^>]*value="generate_package"/,
 		)
-		expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>Generate PDF/)
+		expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>Generate package/)
 		expect(html).not.toContain("Completed step.")
 		expect(html).not.toContain("Back to step 3")
 	})
 
-	it("once signed, lists what blocks Generate PDF and links to step 5 to fix it", async () => {
+	it("after Generate package, offers Continue to step 5; not while the package is stale", async () => {
+		const signed = {
+			status: "SUPERVISOR_APPROVED",
+			supervisorApprovedAt: "2026-10-18T10:00:00.000Z",
+			completionSignature: "data:image/png;base64,abc",
+		}
+		const generated = packetData({
+			packetHref: "/files/packets/doc-1-work-order-1.pdf",
+		})
+		const html = await render(
+			step4(
+				{
+					stage: "INVOICE",
+					interactive: false,
+					canGeneratePdf: true,
+					packet: generated,
+				},
+				signed,
+			),
+		)
+		expect(html).toContain("Package generated")
+		expect(html).toMatch(
+			/<a[^>]*href="\/docs\/doc-1\/review\?step=INVOICE"[^>]*>Continue to step 5/,
+		)
+		const stale = await render(
+			step4(
+				{
+					stage: "INVOICE",
+					interactive: false,
+					canGeneratePdf: true,
+					packet: generated,
+				},
+				{ ...signed, packetStale: true },
+			),
+		)
+		expect(stale).not.toContain("Continue to step 5")
+	})
+
+	it("once signed, says Generate package needs a Claro supervisor and links to step 5 to choose one", async () => {
 		const html = await render(
 			step4(
 				{
@@ -239,8 +265,7 @@ describe("Step 4 · the work order document (render)", () => {
 					interactive: false,
 					canGeneratePdf: false,
 					packet: packetData({
-						blockers: ["prefield", "claro_supervisor"],
-						prefieldMissing: ["pedido"],
+						blockers: ["claro_supervisor", "prefield_pdf"],
 					}),
 				},
 				{
@@ -250,17 +275,18 @@ describe("Step 4 · the work order document (render)", () => {
 				},
 			),
 		)
-		expect(html).toContain("Before the PDF can be generated:")
-		expect(html).toContain("Prefield: fill in Pedido")
+		expect(html).toContain("Before the package can be generated:")
 		expect(html).toContain("Choose the Claro supervisor for this job")
+		// The Prefield never blocks generating: it is what Generate makes.
+		expect(html).not.toContain("Prefield")
 		expect(html).toContain('href="/?step=INVOICE"')
-		expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Generate PDF/)
+		expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Generate package/)
 	})
 
 	it("speaks Spanish too", async () => {
 		const html = await render(step4(), undefined, "es")
 		expect(html).toContain("Orden de trabajo JAF")
-		expect(html).toContain("Generar PDF")
+		expect(html).toContain("Generar paquete")
 		expect(html).toContain("Pendiente")
 	})
 })
@@ -312,34 +338,61 @@ describe("Packet → Claro step (render)", () => {
 		expect(html).not.toContain(">Resend<")
 	})
 
-	it("shows the Prefield and leaves the work summary, materials and blueprint list to step 4", async () => {
+	it("has no Prefield inputs, and leaves the work summary and materials to step 4", async () => {
 		const html = await render(step5())
-		expect(html).toContain("Prefield")
-		expect(html).toContain("ORD-77")
-		expect(html).toContain("SMR-9")
+		for (const name of ["ordenNumber", "pedido", "smr", "titulo"])
+			expect(html).not.toContain(`name="${name}"`)
 		expect(html).not.toContain("34006301")
 		expect(html).not.toContain("Cable drop")
 		expect(html).not.toContain("Work summary")
-		expect(html).not.toContain("plano%201.pdf")
 		expect(html).not.toContain("$")
 	})
 
-	it("once sent, leaves the Prefield out when the Claro supervisor does not require it", async () => {
+	it("lists the package files, each with its download, and Download all (zip)", async () => {
 		const html = await render(
-			step5(
-				{
-					showPrefield: false,
-					sent: true,
-					sentAt: "2026-10-18T12:00:00.000Z",
-				},
-				{ jafInvoiceGeneratedAt: "2026-10-18T12:00:00.000Z" },
-			),
+			step5({
+				files: [
+					{
+						key: "work_order_pdf",
+						name: "doc-1-work-order-1.pdf",
+						href: "/files/packets/doc-1-work-order-1.pdf",
+					},
+					{
+						key: "prefield_pdf",
+						name: "doc-1-prefield-1.pdf",
+						href: "/files/packets/doc-1-prefield-1.pdf",
+					},
+					{
+						key: "photo",
+						name: "before.jpg",
+						href: "/files/photos/doc-1/before.jpg",
+					},
+					{
+						key: "blueprint",
+						name: "plano 1.pdf",
+						href: "/files/blueprints/doc-1/plano%201.pdf",
+					},
+				],
+				zipHref: "/docs/doc-1/package",
+			}),
 		)
-		expect(html).not.toContain("ORD-77")
-		expect(html).not.toContain('value="save_prefield"')
+		expect(html).toContain("Files for Claro")
+		for (const href of [
+			"/files/packets/doc-1-work-order-1.pdf",
+			"/files/packets/doc-1-prefield-1.pdf",
+			"/files/photos/doc-1/before.jpg",
+			"/files/blueprints/doc-1/plano%201.pdf",
+		])
+			expect(html).toContain(`href="${href}"`)
+		expect(html.match(/>Download</g)).toHaveLength(4)
+		expect(html).toMatch(
+			/<a[^>]*href="\/docs\/doc-1\/package"[^>]*>Download all \(zip\)/,
+		)
+		expect(html).toContain("Claro Prefield (PDF)")
+		expect(html).not.toMatch(/Aviso \(PDF\)|Certificado/)
 	})
 
-	it("before the first send the Prefield and the Claro supervisor are editable", async () => {
+	it("before the first send the Claro supervisor is editable", async () => {
 		const html = await render(
 			step5({
 				claroOptions: [
@@ -360,27 +413,27 @@ describe("Packet → Claro step (render)", () => {
 				],
 			}),
 		)
-		expect(html).toContain('value="save_prefield"')
+		expect(html).toContain('value="save_packet_details"')
 		expect(html).toMatch(/<select[^>]*name="claroSupervisorId"/)
 		expect(html).toMatch(/<option value="claro-1" selected="">Ramón Claro/)
 		expect(html).toContain("Ana Claro")
-		for (const name of ["ordenNumber", "pedido", "smr", "titulo"])
-			expect(html).toContain(`name="${name}"`)
-		// The Aviso # comes at step 6, so it is not a Prefield input here.
-		expect(html).not.toContain('name="avisoNumber"')
-		expect(html).toMatch(
-			/name="ordenNumber"[^>]*value="ORD-77"|value="ORD-77"[^>]*name="ordenNumber"/,
-		)
+		// The Prefield boxes are Claro's; the Aviso # comes at step 6.
+		for (const name of [
+			"ordenNumber",
+			"pedido",
+			"smr",
+			"titulo",
+			"avisoNumber",
+		])
+			expect(html).not.toContain(`name="${name}"`)
 		// No blueprint is required here, so there is no upload.
 		expect(html).not.toContain('name="blueprint"')
 	})
 
 	it("offers the blueprint upload when the Claro supervisor requires one and there is none", async () => {
-		const html = await render(
-			step5({ blockers: ["blueprint"], blueprints: [] }),
-		)
+		const html = await render(step5({ blockers: ["blueprint"] }))
 		expect(html).toContain('name="blueprint"')
-		expect(html).toContain("upload in the Prefield form below")
+		expect(html).toContain("Add a blueprint with the upload below")
 	})
 
 	it("is read-only after the first send", async () => {
@@ -390,19 +443,20 @@ describe("Packet → Claro step (render)", () => {
 				{ jafInvoiceGeneratedAt: "2026-10-18T12:00:00.000Z" },
 			),
 		)
-		expect(html).toContain("ORD-77")
-		expect(html).not.toContain('value="save_prefield"')
+		expect(html).not.toContain('value="save_packet_details"')
 	})
 
 	it("lists the blockers and disables Send", async () => {
 		const html = await render(
-			step5({
-				blockers: ["prefield", "blueprint"],
-				prefieldMissing: ["pedido", "smr"],
-			}),
+			step5({ blockers: ["prefield_pdf", "stale", "blueprint"] }),
 		)
 		expect(html).toContain("Before the packet can be sent:")
-		expect(html).toContain("Prefield: fill in Pedido, SMR")
+		expect(html).toContain(
+			"Prefield PDF: this job needs one. Generate the package at step 4.",
+		)
+		expect(html).toContain(
+			"The work order answers changed after the package was generated.",
+		)
 		expect(html).toContain("Add a blueprint")
 		expect(html).toMatch(
 			/<button[^>]*disabled=""[^>]*>Send to Claro supervisor/,
@@ -413,6 +467,14 @@ describe("Packet → Claro step (render)", () => {
 		const html = await render(
 			step5({
 				packetHref: "/files/packets/doc-1-packet-1-ab.pdf",
+				files: [
+					{
+						key: "work_order_pdf",
+						name: "doc-1-packet-1-ab.pdf",
+						href: "/files/packets/doc-1-packet-1-ab.pdf",
+					},
+				],
+				zipHref: "/docs/doc-1/package",
 				canMarkManual: true,
 				history: [
 					{
@@ -428,7 +490,7 @@ describe("Packet → Claro step (render)", () => {
 		)
 		expect(html).toContain("Email is not set up on this server")
 		expect(html).toContain('href="/files/packets/doc-1-packet-1-ab.pdf"')
-		expect(html).toContain("Download packet")
+		expect(html).toContain("Download all (zip)")
 		expect(html).toMatch(
 			/<input[^>]*name="intent"[^>]*value="mark_packet_sent"/,
 		)
@@ -481,10 +543,8 @@ describe("Packet → Claro step (render)", () => {
 	})
 
 	it.each([
-		[
-			"packet.errors.prefield_missing",
-			"This Claro supervisor requires the Prefield form",
-		],
+		["packet.errors.prefield_pdf_missing", "This job needs the Prefield PDF"],
+		["packet.errors.package_stale", "The package is out of date"],
 		[
 			"packet.errors.blueprint_missing",
 			"This Claro supervisor requires a blueprint",
@@ -531,7 +591,7 @@ describe("Packet → Claro step (render)", () => {
 		expect(html).not.toContain("Back to Sign off")
 		expect(html.match(/← <!-- -->Back/g)).toHaveLength(1)
 		expect(html).toContain(
-			"Send the PDF to the Claro supervisor, who creates the Aviso from your work order.",
+			"Send the package to the Claro supervisor, who creates the Aviso from your work order.",
 		)
 		const sent = await render(
 			step5(

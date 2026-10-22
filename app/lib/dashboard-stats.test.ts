@@ -105,6 +105,23 @@ describe("computeDashboardStats", () => {
 		})
 	})
 
+	it("WAREHOUSE: a no-warehouse job is not a return to log (count == list)", () => {
+		const { stats } = computeDashboardStats("WAREHOUSE", [
+			doc("SIGNED", null, { materialsReturned: null }),
+			doc("FIELD_UPDATED", null, {
+				materialsReturned: null,
+				materialsFromWarehouse: false,
+			}),
+			doc("SIGNED", null, {
+				materialsReturned: null,
+				materialsFromWarehouse: false,
+			}),
+		])
+		expect(
+			stats.find((s) => s.labelKey === "dashboard.stat.returns_to_log")?.value,
+		).toBe(1)
+	})
+
 	it("WAREHOUSE: no alert when nothing is pending", () => {
 		const { alert } = computeDashboardStats("WAREHOUSE", [
 			doc("SIGNED", null, { materialsReturned: {} }),

@@ -9,23 +9,14 @@ const packet = (over: Partial<PacketStepData> = {}): PacketStepData => ({
 	claroSupervisor: {
 		name: "Ramón Claro",
 		email: "ramon.now@claro.example",
-		requiresPrefield: false,
 	},
 	claroSupervisorId: "claro-1",
 	claroOptions: [],
-	showPrefield: false,
-	prefield: {
-		avisoNumber: null,
-		ordenNumber: null,
-		pedido: null,
-		smr: null,
-		titulo: null,
-		description: null,
-	},
-	prefieldMissing: [],
+	prefieldNeeded: false,
 	blockers: [],
 	packetHref: null,
-	blueprints: [],
+	files: [],
+	zipHref: null,
 	materials: [],
 	history: [],
 	canMarkManual: false,
@@ -133,9 +124,6 @@ describe("PacketStepCard send button", () => {
 			}),
 			action,
 		)
-		expect(
-			screen.getByRole("link", { name: "Download packet" }),
-		).toHaveAttribute("href", "/files/packets/d1-packet-1-ab.pdf")
 		await userEvent.click(
 			screen.getByRole("button", { name: "Mark as sent manually" }),
 		)
@@ -224,17 +212,19 @@ describe("PacketStepCard with email off (manual only)", () => {
 			manual(),
 			vi.fn(async () => null),
 		)
-		expect(screen.getByText("PDF ✓ generated")).toBeVisible()
+		expect(screen.getByText("Package ✓ generated")).toBeVisible()
 		expect(
 			screen.getByRole("button", {
 				name: "Send to Claro supervisor (coming later)",
 			}),
 		).toBeDisabled()
 		expect(
-			screen.getByRole("button", { name: "I sent the PDF to Claro →" }),
+			screen.getByRole("button", { name: "I sent the package to Claro →" }),
 		).toBeEnabled()
 		expect(
-			screen.getByText("For now: email the PDF yourself, then mark it sent."),
+			screen.getByText(
+				"For now: email the files yourself, then mark the package sent.",
+			),
 		).toBeVisible()
 		expect(screen.getByRole("link", { name: /Back/ })).toHaveAttribute(
 			"href",
@@ -250,9 +240,84 @@ describe("PacketStepCard with email off (manual only)", () => {
 		const action = vi.fn(async () => null)
 		await mount(renderStub, manual(), action)
 		await userEvent.click(
-			screen.getByRole("button", { name: "I sent the PDF to Claro →" }),
+			screen.getByRole("button", { name: "I sent the package to Claro →" }),
 		)
 		await waitFor(() => expect(action).toHaveBeenCalledWith("mark_packet_sent"))
 		expect(action).not.toHaveBeenCalledWith("send_packet")
 	})
+})
+
+describe("PacketStepCard package files", () => {
+	const FILES: PacketStepData["files"] = [
+		{
+			key: "work_order_pdf",
+			name: "d1-work-order-1.pdf",
+			href: "/files/packets/d1-work-order-1.pdf",
+		},
+		{
+			key: "prefield_pdf",
+			name: "d1-prefield-2.pdf",
+			href: "/files/packets/d1-prefield-2.pdf",
+		},
+		{ key: "photo", name: "before.jpg", href: "/files/photos/d1/before.jpg" },
+		{
+			key: "blueprint",
+			name: "plano 1.pdf",
+			href: "/files/blueprints/d1/plano%201.pdf",
+		},
+	]
+
+	it("lists one download per file and Download all (zip)", async ({
+		renderStub,
+	}) => {
+		await mount(
+			renderStub,
+			packet({ files: FILES, zipHref: "/docs/d1/package" }),
+			vi.fn(),
+		)
+		for (const f of FILES)
+			expect(
+				screen.getByRole("link", { name: `Download ${f.name}` }),
+			).toHaveAttribute("href", f.href)
+		expect(screen.getByText("Claro Prefield (PDF)")).toBeVisible()
+		expect(
+			screen.getByRole("link", { name: "Download all (zip)" }),
+		).toHaveAttribute("href", "/docs/d1/package")
+	})
+
+	it("has no Prefield inputs: the boxes are Claro's", async ({
+		renderStub,
+	}) => {
+		await mount(renderStub, packet({ files: FILES }), vi.fn())
+		for (const name of ["ordenNumber", "pedido", "smr", "titulo"])
+			expect(document.querySelector(`[name="${name}"]`)).toBeNull()
+		expect(screen.getByLabelText("Claro supervisor")).toBeVisible()
+	})
+
+	it.for([
+		["prefield_pdf", true],
+		["stale", true],
+		["blueprint", true],
+		[null, false],
+	] as const)(
+		"with email off, blocker %s → I sent the package to Claro disabled: %s",
+		async ([blocker, disabled], { renderStub }) => {
+			await mount(
+				renderStub,
+				packet({
+					emailEnabled: false,
+					canMarkManual: true,
+					packetHref: "/files/packets/d1-work-order-1.pdf",
+					files: FILES,
+					blockers: blocker ? [blocker] : [],
+				}),
+				vi.fn(),
+			)
+			const button = screen.getByRole("button", {
+				name: "I sent the package to Claro →",
+			})
+			if (disabled) expect(button).toBeDisabled()
+			else expect(button).toBeEnabled()
+		},
+	)
 })

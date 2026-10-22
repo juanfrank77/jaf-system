@@ -1,6 +1,3 @@
-import { mkdtemp, writeFile } from "node:fs/promises"
-import { tmpdir } from "node:os"
-import path from "node:path"
 import { extractText, getDocumentProxy } from "unpdf"
 import { describe, expect, it } from "vitest"
 import type { WorkOrderDocument } from "~/lib/work-order-document"
@@ -12,7 +9,6 @@ import {
 // 1x1 transparent PNG.
 const PNG_B64 =
 	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
-const PNG = Buffer.from(PNG_B64, "base64")
 const SIG = `data:image/png;base64,${PNG_B64}`
 
 async function textOf(pdf: Buffer): Promise<string> {
@@ -36,14 +32,8 @@ function document(over: Partial<WorkOrderDocument> = {}): WorkOrderDocument {
 			{ name: "CLAMP", used: 3, unit: "EA", source: "TRUCK_STOCK" },
 			{ name: "CONNECTOR", used: 1, unit: null, source: "CLARO_DROP_OFF" },
 		],
-		photos: { before: [], during: [], after: [] },
-		blueprint: "not_required",
-		prefield: {
-			ordenNumber: "ORD-77",
-			pedido: "PED-12",
-			smr: "SMR-9",
-			titulo: "Poste caído",
-		},
+		materialsFromWarehouse: true,
+		materialsReason: null,
 		fieldReport: "Two drops replaced.",
 		signatures: {
 			supervisor: { name: "Edgard Ocasio", image: SIG },
@@ -54,10 +44,14 @@ function document(over: Partial<WorkOrderDocument> = {}): WorkOrderDocument {
 	}
 }
 
-function input(over: Partial<WorkOrderDocument> = {}): ClaroPacketInput {
+function input(
+	over: Partial<WorkOrderDocument> = {},
+	showPickupSignatures = true,
+): ClaroPacketInput {
 	return {
 		document: document(over),
 		issuedOn: new Date("2026-10-19T15:00:00Z"),
+		showPickupSignatures,
 	}
 }
 
@@ -78,7 +72,6 @@ describe("generateClaroPacketPdf (the JAF work order)", () => {
 		expect(text).toContain("34006301")
 		expect(text).toContain("TRANSFER ATTCH")
 		expect(text).toContain("CABLE")
-		expect(text).toContain("SMR-9")
 		expect(text).toContain("Two drops replaced.")
 	})
 
@@ -127,33 +120,32 @@ describe("generateClaroPacketPdf (the JAF work order)", () => {
 		expect(text).toContain("LUIS ORTIZ · 014")
 	})
 
-	it("says Prefield and blueprint are not required when the Claro supervisor does not require them", async () => {
-		const text = await textOf(
-			await generateClaroPacketPdf(input({ prefield: "not_required" })),
-		)
-		expect(text).not.toContain("SMR-9")
-		expect(text).toContain("Not required by this Claro supervisor")
-		expect(text).toContain("Not required")
+	it("has no Prefield, Blueprint or Photos section: those travel as their own files", async () => {
+		const text = await textOf(await generateClaroPacketPdf(input()))
+		expect(text).not.toContain("Prefield")
+		expect(text).not.toMatch(/Blueprint|Plano/)
+		expect(text).not.toMatch(/Photos|Fotos/)
 	})
 
-	it("embeds photos and image blueprints, skipping missing files", async () => {
-		const dir = await mkdtemp(path.join(tmpdir(), "packet-"))
-		const photo = path.join(dir, "before.png")
-		const blueprint = path.join(dir, "plan.png")
-		await writeFile(photo, PNG)
-		await writeFile(blueprint, PNG)
-		const pdf = await generateClaroPacketPdf(
-			input({
-				photos: {
-					before: [photo, path.join(dir, "missing.png")],
-					during: [],
-					after: [],
-				},
-				blueprint: [blueprint, path.join(dir, "gone.pdf")],
-			}),
+	it("prints the pickup signatures only on the warehouse path", async () => {
+		const withPickup = await textOf(await generateClaroPacketPdf(input()))
+		expect(withPickup).toContain("Pickup signatures")
+		const without = await textOf(await generateClaroPacketPdf(input({}, false)))
+		expect(without).not.toContain("Pickup signatures")
+		expect(without).not.toContain("Pending")
+	})
+
+	it("prints the supervisor's reason under Materials on a no-warehouse job", async () => {
+		const text = await textOf(
+			await generateClaroPacketPdf(
+				input(
+					{ materialsFromWarehouse: false, materialsReason: "own truck" },
+					false,
+				),
+			),
 		)
-		const text = await textOf(pdf)
-		expect(text).toContain("Antes")
-		expect(text).toContain("Plano")
+		expect(text).toContain("own truck")
+		expect(text.indexOf("own truck")).toBeGreaterThan(text.indexOf("Materials"))
+		expect(text.indexOf("own truck")).toBeLessThan(text.indexOf("Field report"))
 	})
 })

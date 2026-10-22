@@ -25,10 +25,8 @@ function doc(over: Partial<WorkOrderSourceDoc> = {}): WorkOrderSourceDoc {
 		ciudad: "Yabucoa",
 		tipoPlanta: "Cobre",
 		grupoPlan: "G1",
-		ordenNumber: "ORD-77",
-		pedido: "PED-12",
-		smr: "SMR-9",
-		titulo: "Poste caído",
+		materialsFromWarehouse: true,
+		materialsReason: null,
 		installedServiceLines: [
 			{
 				serviceCodeId: "c1",
@@ -59,7 +57,6 @@ function doc(over: Partial<WorkOrderSourceDoc> = {}): WorkOrderSourceDoc {
 		],
 		materialsTaken: [{ serviceCodeId: "m1", qty: 42 }],
 		fieldNotes: "Two drops replaced.",
-		blueprintPaths: [],
 		completionSignature: SIG,
 		releaseSignature: SIG,
 		crewSignature: SIG,
@@ -69,11 +66,7 @@ function doc(over: Partial<WorkOrderSourceDoc> = {}): WorkOrderSourceDoc {
 
 function ctx(over: Partial<WorkOrderContext> = {}): WorkOrderContext {
 	return {
-		claroSupervisor: {
-			name: "Ana Rivera",
-			requiresPrefield: true,
-			requiresBlueprint: false,
-		},
+		claroSupervisor: { name: "Ana Rivera" },
 		jafSupervisor: "Edgard Ocasio",
 		crews: [{ name: "JESUS MARTINEZ", code: "009" }],
 		materialCodes: [
@@ -81,8 +74,6 @@ function ctx(over: Partial<WorkOrderContext> = {}): WorkOrderContext {
 			{ id: "m2", name: "CLAMP", unit: "EA" },
 			{ id: "m3", name: "CONNECTOR", unit: null },
 		],
-		photos: { before: ["b.png"], during: [], after: ["a.png"] },
-		blueprints: [],
 		signers: {
 			supervisor: "Edgard Ocasio",
 			warehouse: "Wanda Almacén",
@@ -103,7 +94,11 @@ function keysDeep(v: unknown): string[] {
 describe("buildWorkOrderDocument", () => {
 	it("returns the blocks in the fixed B5 order", () => {
 		const d = buildWorkOrderDocument(doc(), ctx())
-		expect(Object.keys(d)).toEqual([...WORK_ORDER_BLOCKS])
+		expect(
+			Object.keys(d).filter((k) =>
+				(WORK_ORDER_BLOCKS as readonly string[]).includes(k),
+			),
+		).toEqual([...WORK_ORDER_BLOCKS])
 		expect(WORK_ORDER_BLOCKS).toEqual([
 			"workOrderNumber",
 			"claroSupervisor",
@@ -113,9 +108,6 @@ describe("buildWorkOrderDocument", () => {
 			"description",
 			"services",
 			"materials",
-			"photos",
-			"blueprint",
-			"prefield",
 			"fieldReport",
 			"signatures",
 		])
@@ -152,11 +144,6 @@ describe("buildWorkOrderDocument", () => {
 			{ name: "CLAMP", used: 3, unit: "EA", source: "TRUCK_STOCK" },
 			{ name: "CONNECTOR", used: 1, unit: null, source: "CLARO_DROP_OFF" },
 		])
-		expect(d.photos).toEqual({
-			before: ["b.png"],
-			during: [],
-			after: ["a.png"],
-		})
 		expect(d.fieldReport).toBe("Two drops replaced.")
 	})
 
@@ -231,48 +218,27 @@ describe("buildWorkOrderDocument", () => {
 		expect(d.signatures.supervisor).toBe("pending")
 	})
 
-	it("Prefield is not_required when the Claro supervisor does not require it", () => {
-		const off = buildWorkOrderDocument(
-			doc(),
-			ctx({
-				claroSupervisor: {
-					name: "Ana Rivera",
-					requiresPrefield: false,
-					requiresBlueprint: false,
-				},
-			}),
-		)
-		expect(off.prefield).toBe("not_required")
-		const on = buildWorkOrderDocument(doc(), ctx())
-		expect(on.prefield).toEqual({
-			ordenNumber: "ORD-77",
-			pedido: "PED-12",
-			smr: "SMR-9",
-			titulo: "Poste caído",
-		})
+	it("carries no photos, blueprint or Prefield: they travel as their own files", () => {
+		const d = buildWorkOrderDocument(doc(), ctx())
+		for (const k of ["photos", "blueprint", "prefield"])
+			expect(d).not.toHaveProperty(k)
 	})
 
-	it("blueprint is not_required when none is required or attached", () => {
-		expect(buildWorkOrderDocument(doc(), ctx()).blueprint).toBe("not_required")
-		expect(
-			buildWorkOrderDocument(
-				doc({ blueprintPaths: ["/u/plan.png"] }),
-				ctx({ blueprints: ["/files/plan.png"] }),
-			).blueprint,
-		).toEqual(["/files/plan.png"])
-		// Required but missing: an empty list, never "not required".
-		expect(
-			buildWorkOrderDocument(
-				doc(),
-				ctx({
-					claroSupervisor: {
-						name: "Ana Rivera",
-						requiresPrefield: false,
-						requiresBlueprint: true,
-					},
-				}),
-			).blueprint,
-		).toEqual([])
+	it("carries the materials answer: a warehouse job has no reason", () => {
+		const d = buildWorkOrderDocument(doc(), ctx())
+		expect(d.materialsFromWarehouse).toBe(true)
+		expect(d.materialsReason).toBeNull()
+	})
+
+	it("a no-warehouse job carries the supervisor's reason with the materials", () => {
+		const d = buildWorkOrderDocument(
+			doc({ materialsFromWarehouse: false, materialsReason: "  own truck " }),
+			ctx(),
+		)
+		expect(d.materialsFromWarehouse).toBe(false)
+		expect(d.materialsReason).toBe("own truck")
+		const keys = Object.keys(d)
+		expect(keys.indexOf("materialsReason")).toBe(keys.indexOf("materials") + 2)
 	})
 
 	it("the issuer is JAF", () => {

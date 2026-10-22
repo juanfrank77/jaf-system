@@ -377,7 +377,7 @@ model JafInvoice {
   // Finance pipeline (Phase 2)
   financeVerifiedAt    DateTime?
   financeVerifiedById  String?
-  financeVerifiedBy    User?     @relation("FinanceVerifiedDocs", fields: [financeVerifiedById], references: [id])
+  financeVerifiedBy    User?         @relation("FinanceVerifiedDocs", fields: [financeVerifiedById], references: [id])
   financeSendBackNotes Json? // [{ note, byUserId, createdAt }] — Finance→Supervisor Aviso issues
   pbccRequestPdfPath   String?
   bankInvoicePdfPath   String?
@@ -433,24 +433,31 @@ model JafInvoice {
   payrollRun           PayrollRun?        @relation(fields: [payrollRunId], references: [id])
 
   // Supervisor workflow redesign
-  claroSupervisorId String?
-  claroSupervisor   ClaroSupervisor? @relation(fields: [claroSupervisorId], references: [id])
-  sector            String?
-  direccion1        String?
-  direccion2        String?
-  latitud           String?
-  longitud          String?
-  tipo              String?
-  ciudad            String?
-  tipoPlanta        String?
-  grupoPlan         String?
-  ordenNumber       String?
-  pedido            String?
-  smr               String?
-  titulo            String?
-  blueprintPaths    String[] @default([])
-  fieldStartedAt    DateTime?
-  fieldMaterials    Json?
+  claroSupervisorId      String?
+  claroSupervisor        ClaroSupervisor? @relation(fields: [claroSupervisorId], references: [id])
+  sector                 String?
+  direccion1             String?
+  direccion2             String?
+  latitud                String?
+  longitud               String?
+  tipo                   String?
+  ciudad                 String?
+  tipoPlanta             String?
+  grupoPlan              String?
+  ordenNumber            String?
+  pedido                 String?
+  smr                    String?
+  titulo                 String?
+  blueprintPaths         String[]         @default([])
+  materialsFromWarehouse Boolean          @default(true)
+  materialsReason        String?
+  prefieldNeeded         Boolean          @default(false)
+  prefieldPdfPath        String?
+  packetStale            Boolean          @default(false)
+  avisoDiscrepancy       Json?
+  avisoHistory           Json?
+  fieldStartedAt         DateTime?
+  fieldMaterials         Json?
 
   preCertSheets  PreCertSheet[]
   auditTrail     AuditTrail[]

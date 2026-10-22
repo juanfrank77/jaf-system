@@ -1,10 +1,7 @@
 import { screen } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
 import type { WorkOrderDocument } from "~/lib/work-order-document"
-import {
-	GenerateWorkOrderPdf,
-	WorkOrderDocumentCard,
-} from "./work-order-document"
+import { GeneratePackage, WorkOrderDocumentCard } from "./work-order-document"
 
 const SIG = "data:image/png;base64,iVBORw0KGgo="
 
@@ -21,9 +18,8 @@ const wo = (over: Partial<WorkOrderDocument> = {}): WorkOrderDocument => ({
 		{ name: "CABLE", used: 40, unit: "FT", source: "WAREHOUSE_ISSUE" },
 		{ name: "CLAMP", used: 3, unit: "EA", source: "TRUCK_STOCK" },
 	],
-	photos: { before: ["/files/photos/d/b.png"], during: [], after: [] },
-	blueprint: "not_required",
-	prefield: "not_required",
+	materialsFromWarehouse: true,
+	materialsReason: null,
 	fieldReport: "Two drops replaced.",
 	signatures: {
 		supervisor: { name: "Edgard Ocasio", image: SIG },
@@ -75,9 +71,6 @@ describe("WorkOrderDocumentCard", () => {
 			"description",
 			"services",
 			"materials",
-			"photos",
-			"blueprint",
-			"prefield",
 			"fieldReport",
 			"signatures",
 		])
@@ -120,7 +113,7 @@ describe("WorkOrderDocumentCard", () => {
 		expect(screen.getByText("Truck stock")).toBeInTheDocument()
 	})
 
-	it("shows Pending for missing warehouse and crew signatures, Not required for Prefield and blueprint", async ({
+	it("shows Pending for missing warehouse and crew signatures, and no Prefield, Photos or Blueprint block", async ({
 		renderStub,
 	}) => {
 		await mount(
@@ -131,54 +124,62 @@ describe("WorkOrderDocumentCard", () => {
 			/>,
 		)
 		expect(screen.getAllByText("Pending")).toHaveLength(2)
-		expect(
-			screen.getByText("Not required by this Claro supervisor"),
-		).toBeInTheDocument()
-		expect(screen.getByText("Not required")).toBeInTheDocument()
+		for (const heading of ["Prefield", "Pictures", "Blueprint"])
+			expect(screen.queryByRole("heading", { name: heading })).toBeNull()
 	})
 
-	it("shows the Prefield fields when required", async ({ renderStub }) => {
-		await mount(
-			renderStub,
-			<WorkOrderDocumentCard
-				document={wo({
-					prefield: {
-						ordenNumber: "ORD-77",
-						pedido: "PED-12",
-						smr: "SMR-9",
-						titulo: "Poste caído",
-					},
-				})}
-				issuedOn="2026-10-19T15:00:00.000Z"
-			/>,
-		)
-		expect(screen.getByText("SMR-9")).toBeInTheDocument()
-		expect(
-			screen.queryByText("Not required by this Claro supervisor"),
-		).toBeNull()
-	})
-})
-
-describe("GenerateWorkOrderPdf", () => {
-	it("is disabled until the supervisor has signed", async ({ renderStub }) => {
-		await mount(
-			renderStub,
-			<GenerateWorkOrderPdf enabled={false} pdfHref={null} />,
-		)
-		expect(screen.getByRole("button", { name: "Generate PDF" })).toBeDisabled()
-	})
-
-	it("is enabled once signed, and links the stored PDF", async ({
+	it("a no-warehouse job shows the reason under Materials and no pickup signatures", async ({
 		renderStub,
 	}) => {
 		await mount(
 			renderStub,
-			<GenerateWorkOrderPdf enabled pdfHref="/files/packets/wo.pdf" />,
+			<WorkOrderDocumentCard
+				document={wo({
+					materialsFromWarehouse: false,
+					materialsReason: "own truck",
+				})}
+				issuedOn="2026-10-19T15:00:00.000Z"
+			/>,
 		)
-		expect(screen.getByRole("button", { name: "Generate PDF" })).toBeEnabled()
+		const materials = document.querySelector('[data-block="materials"]')
+		expect(materials?.textContent).toContain("own truck")
+		expect(materials?.textContent).toContain("Not from the warehouse")
+		expect(screen.queryByText("Pending")).toBeNull()
+		expect(screen.queryByText("Warehouse")).toBeNull()
+	})
+})
+
+describe("GeneratePackage", () => {
+	it("is disabled until the supervisor has signed", async ({ renderStub }) => {
+		await mount(renderStub, <GeneratePackage enabled={false} pdfHref={null} />)
+		expect(
+			screen.getByRole("button", { name: "Generate package" }),
+		).toBeDisabled()
+		expect(
+			screen.queryByRole("link", { name: /Continue to step 5/ }),
+		).toBeNull()
+	})
+
+	it("is enabled once signed; after generating it links the PDF and Continue to step 5", async ({
+		renderStub,
+	}) => {
+		await mount(
+			renderStub,
+			<GeneratePackage
+				enabled
+				pdfHref="/files/packets/wo.pdf"
+				continueHref="/docs/d1/review?step=INVOICE"
+			/>,
+		)
+		expect(
+			screen.getByRole("button", { name: "Generate package" }),
+		).toBeEnabled()
 		expect(screen.getByRole("link", { name: /Download PDF/ })).toHaveAttribute(
 			"href",
 			"/files/packets/wo.pdf",
 		)
+		expect(
+			screen.getByRole("link", { name: /Continue to step 5/ }),
+		).toHaveAttribute("href", "/docs/d1/review?step=INVOICE")
 	})
 })

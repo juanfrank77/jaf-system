@@ -13,12 +13,19 @@ vi.mock("~/lib/pdf/claro-packet.server", async (importOriginal) => ({
 	generateClaroPacketPdf: vi.fn(async () => Buffer.from("%PDF-packet")),
 }))
 
+import { mkdir, writeFile } from "node:fs/promises"
+import path from "node:path"
 import { extractText, getDocumentProxy } from "unpdf"
 import { db } from "~/lib/db.server"
 import { type MailTransport, setMailTransport } from "~/lib/packet-mail.server"
-import { buildPacketInput, sendPacket } from "~/lib/packet-send.server"
+import {
+	buildPacketInput,
+	buildPrefieldInput,
+	sendPacket,
+} from "~/lib/packet-send.server"
 import { generateClaroPacketPdf } from "~/lib/pdf/claro-packet.server"
 import { getIvuRate } from "~/lib/system-settings.server"
+import { photoFile, saveBuffer } from "~/lib/uploads.server"
 
 // The shared shadow DB is remote and can be slow under a parallel suite run.
 const HOOK_TIMEOUT = 60_000
@@ -158,6 +165,7 @@ beforeEach(() => {
 afterAll(async () => {
 	setMailTransport(null)
 	await db.auditTrail.deleteMany({ where: { docId: { in: docIds } } })
+	await db.photo.deleteMany({ where: { docId: { in: docIds } } })
 	await db.packetSend.deleteMany({ where: { docId: { in: docIds } } })
 	await db.jafInvoice.deleteMany({ where: { id: { in: docIds } } })
 	await db.claroSupervisor.deleteMany({ where: { id: { in: claroIds } } })
@@ -200,26 +208,68 @@ describe("sendPacket gates", { timeout: HOOK_TIMEOUT }, () => {
 		).toEqual({ ok: false, errorKey: "packet.errors.locked" })
 	})
 
-	it("blocks on the Claro supervisor's Prefield and blueprint rules, with no row and no email", async () => {
-		const claro = await seedClaro({
-			requiresPrefield: true,
-			requiresBlueprint: true,
+	it.each(["email", "manual"] as const)(
+		"%s: Prefield needed and no Prefield PDF yet is refused, with no row and no email",
+		async (mode) => {
+			if (mode === "manual") delete process.env.PACKET_EMAIL_ENABLED
+			const claro = await seedClaro()
+			const doc = await seedDoc({
+				claroSupervisorId: claro.id,
+				prefieldNeeded: true,
+				jafInvoicePdfPath: "packets/stored.pdf",
+			})
+			setMailTransport(okTransport)
+			expect(await sendPacket({ docId: doc.id, actor: sup, mode })).toEqual({
+				ok: false,
+				errorKey: "packet.errors.prefield_pdf_missing",
+			})
+			expect(await rows(doc.id)).toHaveLength(0)
+			expect(sent).toHaveLength(0)
+			expect((await reload(doc.id)).jafInvoiceGeneratedAt).toBeNull()
+		},
+	)
+
+	it.each(["email", "manual"] as const)(
+		"%s: a stale package is refused until it is generated again",
+		async (mode) => {
+			if (mode === "manual") delete process.env.PACKET_EMAIL_ENABLED
+			const claro = await seedClaro()
+			const doc = await seedDoc({
+				claroSupervisorId: claro.id,
+				packetStale: true,
+				jafInvoicePdfPath: "packets/stored.pdf",
+			})
+			setMailTransport(okTransport)
+			expect(await sendPacket({ docId: doc.id, actor: sup, mode })).toEqual({
+				ok: false,
+				errorKey: "packet.errors.package_stale",
+			})
+			expect(await rows(doc.id)).toHaveLength(0)
+			expect(sent).toHaveLength(0)
+		},
+	)
+
+	it("Prefield not needed is never gated, whatever the Claro supervisor's tag says", async () => {
+		delete process.env.PACKET_EMAIL_ENABLED
+		const claro = await seedClaro({ requiresPrefield: true })
+		const doc = await seedDoc({
+			claroSupervisorId: claro.id,
+			prefieldNeeded: false,
+			jafInvoicePdfPath: "packets/stored.pdf",
 		})
+		expect(
+			await sendPacket({ docId: doc.id, actor: sup, mode: "manual" }),
+		).toEqual({ ok: true, outcome: "MANUAL" })
+	})
+
+	it("keeps the Claro supervisor's blueprint rule", async () => {
+		const claro = await seedClaro({ requiresBlueprint: true })
 		const doc = await seedDoc({ claroSupervisorId: claro.id })
 		setMailTransport(okTransport)
 		expect(
 			await sendPacket({ docId: doc.id, actor: sup, mode: "email" }),
-		).toEqual({ ok: false, errorKey: "packet.errors.prefield_missing" })
-		await db.jafInvoice.update({
-			where: { id: doc.id },
-			data: { ordenNumber: "O1", pedido: "P1", smr: "S1", titulo: "T1" },
-		})
-		expect(
-			await sendPacket({ docId: doc.id, actor: sup, mode: "manual" }),
 		).toEqual({ ok: false, errorKey: "packet.errors.blueprint_missing" })
-		expect(await rows(doc.id)).toHaveLength(0)
 		expect(sent).toHaveLength(0)
-		expect((await reload(doc.id)).jafInvoiceGeneratedAt).toBeNull()
 	})
 
 	it("refuses a supervisor outside the job's scope; ADMIN may send", async () => {
@@ -239,16 +289,8 @@ describe("sendPacket gates", { timeout: HOOK_TIMEOUT }, () => {
 
 describe("sendPacket outcomes", { timeout: HOOK_TIMEOUT }, () => {
 	it("SENT: logs the directory email, locks the invoice lines, sets the first-send time", async () => {
-		const claro = await seedClaro({
-			requiresPrefield: true,
-		})
-		const doc = await seedDoc({
-			claroSupervisorId: claro.id,
-			ordenNumber: "O1",
-			pedido: "P1",
-			smr: "S1",
-			titulo: "T1",
-		})
+		const claro = await seedClaro()
+		const doc = await seedDoc({ claroSupervisorId: claro.id })
 		setMailTransport(okTransport)
 		expect(
 			await sendPacket({ docId: doc.id, actor: sup, mode: "email" }),
@@ -300,12 +342,8 @@ describe("sendPacket outcomes", { timeout: HOOK_TIMEOUT }, () => {
 		expect(Number(after.jafInvoiceLineTotal)).toBe(59)
 
 		const pdfInput = vi.mocked(generateClaroPacketPdf).mock.calls[0][0]
-		expect(pdfInput.document.prefield).toEqual({
-			ordenNumber: "O1",
-			pedido: "P1",
-			smr: "S1",
-			titulo: "T1",
-		})
+		expect(pdfInput.document).not.toHaveProperty("prefield")
+		expect(pdfInput.showPickupSignatures).toBe(true)
 		expect(pdfInput.document.claroSupervisor).toBe(claro.name)
 		expect(JSON.stringify(pdfInput)).not.toMatch(/unitPrice|lineAmount/)
 
@@ -457,7 +495,7 @@ describe("sendPacket outcomes", { timeout: HOOK_TIMEOUT }, () => {
 		expect((await reload(doc.id)).jafInvoiceGeneratedAt).not.toBeNull()
 	})
 
-	it("after the first send, new flags do not block and a resend uses the current email", async () => {
+	it("after the first send nothing gates a resend, and it uses the current email", async () => {
 		const claro = await seedClaro()
 		const doc = await seedDoc({ claroSupervisorId: claro.id })
 		setMailTransport(okTransport)
@@ -466,11 +504,11 @@ describe("sendPacket outcomes", { timeout: HOOK_TIMEOUT }, () => {
 		const newEmail = `moved-${Math.random()}@claro.test`
 		await db.claroSupervisor.update({
 			where: { id: claro.id },
-			data: {
-				requiresPrefield: true,
-				requiresBlueprint: true,
-				email: newEmail,
-			},
+			data: { requiresBlueprint: true, email: newEmail },
+		})
+		await db.jafInvoice.update({
+			where: { id: doc.id },
+			data: { prefieldNeeded: true, packetStale: true },
 		})
 		expect(
 			await sendPacket({ docId: doc.id, actor: sup, mode: "email" }),
@@ -478,9 +516,79 @@ describe("sendPacket outcomes", { timeout: HOOK_TIMEOUT }, () => {
 		const log = await rows(doc.id)
 		expect(log.map((r) => r.recipientEmail)).toEqual([claro.email, newEmail])
 		expect(sent[1].to).toBe(newEmail)
-		// The flag turned on after the first send does not add a Prefield page.
-		const resendInput = vi.mocked(generateClaroPacketPdf).mock.calls.at(-1)?.[0]
-		expect(resendInput?.document.prefield).toBe("not_required")
+	})
+
+	it("email attaches the work order PDF, the Prefield PDF and every original photo and blueprint, each its own file", async () => {
+		const claro = await seedClaro()
+		const doc = await seedDoc({ claroSupervisorId: claro.id })
+		const prefieldPdf = await saveBuffer(
+			"packets",
+			`${doc.id}-prefield-${Date.now()}.pdf`,
+			Buffer.from("%PDF-prefield"),
+		)
+		const blueprintDir = path.join(
+			process.env.UPLOAD_DIR as string,
+			"blueprints",
+			doc.id,
+		)
+		await mkdir(blueprintDir, { recursive: true })
+		const plan = path.join(blueprintDir, "plano.pdf")
+		await writeFile(plan, "%PDF-plan")
+		const photoBytes = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 9, 9])
+		for (const [name, takenAt] of [
+			["after.jpg", "2026-10-19T12:00:00Z"],
+			["before.png", "2026-10-19T09:00:00Z"],
+		] as const) {
+			const file = photoFile(doc.id, name)
+			await mkdir(path.dirname(file), { recursive: true })
+			await writeFile(file, photoBytes)
+			await db.photo.create({
+				data: {
+					docId: doc.id,
+					uploadedById: sup.id,
+					localPath: file,
+					takenAt: new Date(takenAt),
+				},
+			})
+		}
+		await db.jafInvoice.update({
+			where: { id: doc.id },
+			data: {
+				prefieldNeeded: true,
+				prefieldPdfPath: prefieldPdf,
+				blueprintPaths: [plan, path.join(blueprintDir, "missing.pdf")],
+			},
+		})
+		setMailTransport(okTransport)
+		expect(
+			await sendPacket({ docId: doc.id, actor: sup, mode: "email" }),
+		).toEqual({ ok: true, outcome: "SENT" })
+		const files = sent[0].attachments.map((a) => a.filename)
+		expect(files).toEqual([
+			`JAF-work-order-${doc.controlNumber}.pdf`,
+			`JAF-prefield-${doc.controlNumber}.pdf`,
+			"before.png",
+			"after.jpg",
+			"plano.pdf",
+		])
+		expect(sent[0].attachments[1].content.toString()).toBe("%PDF-prefield")
+		// Originals, never converted.
+		expect(sent[0].attachments[2].content.equals(photoBytes)).toBe(true)
+		expect(sent[0].attachments[4].content.toString()).toBe("%PDF-plan")
+	})
+
+	it("email leaves a stored Prefield PDF out when the job does not need one", async () => {
+		const claro = await seedClaro()
+		const doc = await seedDoc({
+			claroSupervisorId: claro.id,
+			prefieldNeeded: false,
+			prefieldPdfPath: "/nowhere/packets/x-prefield-1.pdf",
+		})
+		setMailTransport(okTransport)
+		await sendPacket({ docId: doc.id, actor: sup, mode: "email" })
+		expect(sent[0].attachments.map((a) => a.filename)).toEqual([
+			`JAF-work-order-${doc.controlNumber}.pdf`,
+		])
 	})
 })
 
@@ -596,8 +704,11 @@ describe("buildPacketInput", { timeout: HOOK_TIMEOUT }, () => {
 		])
 		expect(d.address).toBe("Bo. Centro, Calle 1")
 		expect(d.services.map((l) => l.qty)).toEqual([5, 2])
-		expect(d.prefield).toBe("not_required")
-		expect(d.blueprint).toBe("not_required")
+		expect(d).not.toHaveProperty("prefield")
+		expect(d).not.toHaveProperty("blueprint")
+		expect(d).not.toHaveProperty("photos")
+		expect(d.materialsFromWarehouse).toBe(true)
+		expect(input.showPickupSignatures).toBe(true)
 		expect(d.signatures).toEqual({
 			supervisor: {
 				name: sup.name,
@@ -608,6 +719,49 @@ describe("buildPacketInput", { timeout: HOOK_TIMEOUT }, () => {
 		})
 		expect(input.issuedOn).toBeInstanceOf(Date)
 		expect(JSON.stringify(input)).not.toMatch(/unitPrice|lineAmount|price/i)
+	})
+
+	it("a no-warehouse job prints its reason and no pickup signatures", async () => {
+		const claro = await seedClaro()
+		const doc = await seedDoc({
+			claroSupervisorId: claro.id,
+			materialsFromWarehouse: false,
+			materialsReason: "own truck",
+		})
+		const input = await buildPacketInput(doc.id)
+		expect(input.showPickupSignatures).toBe(false)
+		expect(input.document.materialsReason).toBe("own truck")
+	})
+})
+
+describe("buildPrefieldInput", { timeout: HOOK_TIMEOUT }, () => {
+	it("fills in JAF's part: number, address, title, supervisor, Dept # from their area, Claro supervisor", async () => {
+		const claro = await seedClaro()
+		await db.user.update({
+			where: { id: sup.id },
+			data: { supervisorAreas: ["OESTE", "SUR"] },
+		})
+		const doc = await seedDoc({
+			claroSupervisorId: claro.id,
+			jobDescription: "Poste nuevo",
+			direccion1: "Calle 1",
+			sector: "Bo. Centro",
+		})
+		const input = await buildPrefieldInput(doc.id)
+		expect(input).toEqual({
+			workOrderNumber: doc.controlNumber,
+			address: "Bo. Centro, Calle 1",
+			title: "Poste nuevo",
+			jafSupervisor: sup.name,
+			deptNumber: "OESTE",
+			claroSupervisor: claro.name,
+			issuedOn: expect.any(Date),
+		})
+		await db.user.update({
+			where: { id: sup.id },
+			data: { supervisorAreas: [] },
+		})
+		expect((await buildPrefieldInput(doc.id)).deptNumber).toBeNull()
 	})
 })
 
@@ -682,43 +836,5 @@ describe("sendPacket: manual-only step 5", { timeout: HOOK_TIMEOUT }, () => {
 		).toEqual({ ok: false, errorKey: "packet.errors.pdf_missing" })
 		expect(await rows(doc.id)).toHaveLength(0)
 		expect((await reload(doc.id)).jafInvoiceGeneratedAt).toBeNull()
-	})
-
-	it("the manual send records the Prefield layout the stored PDF was generated with", async () => {
-		delete process.env.PACKET_EMAIL_ENABLED
-		const claro = await seedClaro()
-		const doc = await seedDoc({
-			claroSupervisorId: claro.id,
-			jafInvoicePdfPath: "packets/with-prefield.pdf",
-		})
-		// Generated while the Claro supervisor required the Prefield; the flag
-		// has been turned off in the directory since.
-		await db.auditTrail.create({
-			data: {
-				docId: doc.id,
-				userId: sup.id,
-				action: "WORK_ORDER_PDF_GENERATED",
-				diffJson: {
-					jafInvoicePdfPath: {
-						before: null,
-						after: "packets/with-prefield.pdf",
-					},
-					showPrefield: true,
-				},
-			},
-		})
-		expect(
-			await sendPacket({ docId: doc.id, actor: sup, mode: "manual" }),
-		).toEqual({ ok: true, outcome: "MANUAL" })
-		const audit = await db.auditTrail.findFirst({
-			where: { docId: doc.id, action: "PACKET_SENT" },
-		})
-		expect(audit?.diffJson).toMatchObject({
-			firstSend: true,
-			showPrefield: true,
-		})
-		// Step 4 and the release then show that layout, not today's flag.
-		const input = await buildPacketInput(doc.id)
-		expect(input.document.prefield).not.toBe("not_required")
 	})
 })

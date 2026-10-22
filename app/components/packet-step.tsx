@@ -8,17 +8,12 @@ import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Pill } from "~/components/ui/pill"
 import type { MaterialSource } from "~/lib/material-source"
+import type { PackageFile } from "~/lib/package-files"
+import type { PacketBlocker } from "~/lib/packet-blockers"
 import type { PacketSendOutcome } from "../../generated/prisma/client"
 
-type PrefieldField =
-	| "avisoNumber"
-	| "ordenNumber"
-	| "pedido"
-	| "smr"
-	| "titulo"
-	| "description"
-
-export type PacketBlocker = "prefield" | "blueprint" | "claro_supervisor"
+/** Why the first send would be refused, plus "no Claro supervisor chosen". */
+export type PacketStepBlocker = PacketBlocker | "claro_supervisor"
 
 /** The Step 5 payload the review loader builds. It never carries prices. */
 export type PacketStepData = {
@@ -26,11 +21,7 @@ export type PacketStepData = {
 	sent: boolean
 	sentAt: Date | string | null
 	/** The job's Claro supervisor as the directory has them now. */
-	claroSupervisor: {
-		name: string
-		email: string
-		requiresPrefield: boolean
-	} | null
+	claroSupervisor: { name: string; email: string } | null
 	/** The job's Claro supervisor id (null if none was chosen at intake). */
 	claroSupervisorId: string | null
 	/**
@@ -44,14 +35,16 @@ export type PacketStepData = {
 		requiresPrefield: boolean
 		requiresBlueprint: boolean
 	}[]
-	showPrefield: boolean
-	prefield: Record<PrefieldField, string | null>
-	prefieldMissing: string[]
+	/** The intake answer: the package carries a Claro Prefield PDF. */
+	prefieldNeeded: boolean
 	/** Why the first send would be refused; empty once sent. */
-	blockers: PacketBlocker[]
-	/** The stored packet PDF (the last delivered, or the latest attempt before the first send). */
+	blockers: PacketStepBlocker[]
+	/** The stored work order PDF (the last delivered, or the latest attempt before the first send). */
 	packetHref: string | null
-	blueprints: { name: string; href: string }[]
+	/** The package for Claro, in order, each its own download. */
+	files: Omit<PackageFile, "path">[]
+	/** "Download all (zip)"; null when there is nothing to zip. */
+	zipHref: string | null
 	materials: {
 		serviceCodeId: string
 		claroCode: string
@@ -78,23 +71,21 @@ export type PacketStepData = {
 	emailEnabled: boolean
 }
 
-/** The Prefield inputs the packet step edits until the first send. */
-const PREFIELD_INPUTS = [
-	"ordenNumber",
-	"pedido",
-	"smr",
-	"titulo",
-] as const satisfies PrefieldField[]
-
 const PACKET_INTENTS = ["send_packet", "mark_packet_sent"]
 
-const PREFIELD_FIELDS: PrefieldField[] = [
-	"ordenNumber",
-	"pedido",
-	"smr",
-	"titulo",
-	"description",
-]
+const BLOCKER_KEY = {
+	prefield_pdf: "packet.blocker.prefield_pdf",
+	stale: "packet.blocker.stale",
+	blueprint: "packet.blocker.blueprint",
+	claro_supervisor: "packet.blocker.claro_supervisor",
+} as const satisfies Record<PacketStepBlocker, ParseKeys>
+
+const FILE_KIND_KEY = {
+	work_order_pdf: "packet.file_kind.work_order_pdf",
+	prefield_pdf: "packet.file_kind.prefield_pdf",
+	photo: "packet.file_kind.photo",
+	blueprint: "packet.file_kind.blueprint",
+} as const satisfies Record<PackageFile["key"], ParseKeys>
 
 const OUTCOME_KEY = {
 	SENT: "packet.outcome.SENT",
@@ -164,10 +155,11 @@ function ConfirmedSubmit({
 }
 
 /**
- * The Prefield fields, the Claro supervisor and (when that supervisor needs
- * one and there is none yet) a blueprint, editable until the first send.
+ * The Claro supervisor and (when that supervisor needs one and there is none
+ * yet) a blueprint, editable until the first send. There is no Prefield
+ * input: the Prefield boxes are Claro's and print blank.
  */
-function PrefieldForm({
+function PacketDetailsForm({
 	packet,
 	blueprintNeeded,
 }: {
@@ -178,15 +170,15 @@ function PrefieldForm({
 	const navigation = useNavigation()
 	const saving =
 		navigation.state !== "idle" &&
-		navigation.formData?.get("intent") === "save_prefield"
+		navigation.formData?.get("intent") === "save_packet_details"
 	return (
 		<Form
 			method="post"
 			encType="multipart/form-data"
 			className="space-y-3"
-			data-testid="prefield-form"
+			data-testid="packet-details-form"
 		>
-			<input type="hidden" name="intent" value="save_prefield" />
+			<input type="hidden" name="intent" value="save_packet_details" />
 			<div className="space-y-1">
 				<Label htmlFor="packet-claro">{t("packet.claro_label")}</Label>
 				<select
@@ -205,19 +197,6 @@ function PrefieldForm({
 					))}
 				</select>
 			</div>
-			<div className="grid gap-3 sm:grid-cols-2">
-				{PREFIELD_INPUTS.map((k) => (
-					<div key={k} className="space-y-1">
-						<Label htmlFor={`packet-${k}`}>{t(`packet.prefield.${k}`)}</Label>
-						<Input
-							id={`packet-${k}`}
-							name={k}
-							defaultValue={packet.prefield[k] ?? ""}
-							aria-invalid={packet.prefieldMissing.includes(k) || undefined}
-						/>
-					</div>
-				))}
-			</div>
 			{blueprintNeeded && (
 				<div className="space-y-1">
 					<Label htmlFor="packet-blueprint">
@@ -227,19 +206,75 @@ function PrefieldForm({
 						id="packet-blueprint"
 						name="blueprint"
 						type="file"
-						accept="application/pdf,image/*"
+						accept="image/jpeg,image/png,application/pdf"
 						multiple
 						className="h-auto py-1.5 text-xs"
 					/>
 				</div>
 			)}
 			<p className="text-xs text-muted-foreground">
-				{t("packet.prefield_hint")}
+				{t("packet.details_hint")}
 			</p>
 			<Button type="submit" variant="outline" size="sm" disabled={saving}>
-				{t("packet.prefield_save")}
+				{t("packet.details_save")}
 			</Button>
 		</Form>
+	)
+}
+
+/**
+ * The package for Claro: one download per file (the JAF work order PDF, the
+ * Prefield PDF when the job needs it, the original photos and blueprints)
+ * and "Download all (zip)".
+ */
+function PackageFileList({ packet }: { packet: PacketStepData }) {
+	const { t } = useTranslation()
+	return (
+		<section className="space-y-2" data-testid="package-files">
+			<h3 className="text-sm font-medium">{t("packet.files_title")}</h3>
+			{packet.files.length === 0 ? (
+				<p className="text-xs text-muted-foreground">
+					{t("packet.files_empty")}
+				</p>
+			) : (
+				<ul className="divide-y rounded-lg border border-border">
+					{packet.files.map((f) => (
+						<li
+							key={f.href}
+							className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
+						>
+							<span className="min-w-0">
+								<span className="block text-xs text-muted-foreground">
+									{t(FILE_KIND_KEY[f.key])}
+								</span>
+								<span className="block truncate">{f.name}</span>
+							</span>
+							<a
+								href={f.href}
+								target="_blank"
+								rel="noreferrer"
+								download={f.name}
+								aria-label={`${t("packet.file_download")} ${f.name}`}
+								className={buttonVariants({ variant: "outline", size: "sm" })}
+							>
+								{t("packet.file_download")}
+							</a>
+						</li>
+					))}
+				</ul>
+			)}
+			{packet.zipHref && (
+				<a
+					href={packet.zipHref}
+					className={buttonVariants({
+						variant: "outline",
+						className: "w-full",
+					})}
+				>
+					{t("packet.download_all")}
+				</a>
+			)}
+		</section>
 	)
 }
 
@@ -266,9 +301,6 @@ export function PacketStepCard({
 	const editable = interactive && !packet.sent
 	const last = packet.history[0]?.outcome ?? null
 	const blocked = packet.blockers.length > 0
-	const missing = packet.prefieldMissing
-		.map((k) => t(`packet.prefield.${k as PrefieldField}`))
-		.join(", ")
 	return (
 		<Card data-testid="packet-step">
 			<CardHeader className="items-start">
@@ -306,13 +338,7 @@ export function PacketStepCard({
 						<b>{t("packet.blockers_title")}</b>
 						<ul className="mt-1 list-disc pl-5">
 							{packet.blockers.map((b) => (
-								<li key={b}>
-									{b === "prefield"
-										? t("packet.blocker.prefield", { fields: missing })
-										: b === "blueprint"
-											? t("packet.blocker.blueprint")
-											: t("packet.blocker.claro_supervisor")}
-								</li>
+								<li key={b}>{t(BLOCKER_KEY[b])}</li>
 							))}
 						</ul>
 					</Pill>
@@ -320,42 +346,15 @@ export function PacketStepCard({
 
 				{editable && (
 					<section className="space-y-1">
-						<h3 className="text-sm font-medium">
-							{t("packet.prefield_title")}
-						</h3>
-						<PrefieldForm
+						<h3 className="text-sm font-medium">{t("packet.details_title")}</h3>
+						<PacketDetailsForm
 							packet={packet}
 							blueprintNeeded={packet.blockers.includes("blueprint")}
 						/>
 					</section>
 				)}
 
-				{!editable && packet.showPrefield && (
-					<section className="space-y-1">
-						<h3 className="text-sm font-medium">
-							{t("packet.prefield_title")}
-						</h3>
-						<dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
-							{PREFIELD_FIELDS.map((k) => (
-								<div key={k} className="flex gap-2">
-									<dt className="text-muted-foreground">
-										{t(`packet.prefield.${k}`)}:
-									</dt>
-									<dd className="font-medium">
-										{packet.prefield[k] ||
-											(packet.prefieldMissing.includes(k) ? (
-												<span className="text-status-danger">
-													{t("packet.missing")}
-												</span>
-											) : (
-												"—"
-											))}
-									</dd>
-								</div>
-							))}
-						</dl>
-					</section>
-				)}
+				<PackageFileList packet={packet} />
 
 				{last === "UNCONFIGURED" && (
 					<Pill variant="warn" icon="✉">
@@ -374,19 +373,6 @@ export function PacketStepCard({
 				)}
 
 				<div className="space-y-2">
-					{packet.packetHref && (
-						<a
-							href={packet.packetHref}
-							target="_blank"
-							rel="noreferrer"
-							className={buttonVariants({
-								variant: "outline",
-								className: "w-full",
-							})}
-						>
-							{t("packet.download")}
-						</a>
-					)}
 					{!packet.emailEnabled && (
 						<p className="text-sm font-medium">
 							{packet.packetHref

@@ -38,8 +38,27 @@ function baseDoc(overrides: Record<string, unknown> = {}) {
 		estimatedMaterials: [],
 		serviceLines: [],
 		avisoNumber: null,
+		materialsFromWarehouse: true,
+		materialsReason: null,
+		prefieldNeeded: false,
+		fieldStartedAt: null,
+		jafInvoicePdfPath: null,
+		jafInvoiceGeneratedAt: null,
 		...overrides,
 	}
+}
+
+/** The edit form always posts both intake answers (pre-filled from the doc). */
+function answers(
+	f: FormData,
+	materials = "yes",
+	prefield = "not_needed",
+	reason?: string,
+) {
+	f.set("materialsFromWarehouse", materials)
+	f.set("prefieldNeeded", prefield)
+	if (reason !== undefined) f.set("materialsReason", reason)
+	return f
 }
 
 describe("GET /docs/:id/edit — supervisor scope", () => {
@@ -107,7 +126,7 @@ describe("POST /docs/:id/edit — supervisor scope", () => {
 		form.set("jobAddressEstimated", "123 Main")
 		form.set("brigadeId", "b1")
 		form.set("materials", "[]")
-		return form
+		return answers(form)
 	}
 
 	it("blocks a Supervisor from editing a doc outside their area", async () => {
@@ -207,7 +226,7 @@ describe("several brigades on a work order", () => {
 		f.set("jobAddressEstimated", "123 Main")
 		f.set("materials", "[]")
 		for (const id of ids) f.append("brigadeId", id)
-		return f
+		return answers(f)
 	}
 	const run = (ids: string[]) =>
 		action({
@@ -339,6 +358,7 @@ describe("edit never touches the Aviso number", () => {
 		f.set("materials", "[]")
 		f.set("brigadeId", "b1")
 		f.set("avisoNumber", aviso)
+		answers(f)
 		return action({
 			request: new Request("http://localhost/docs/doc-1/edit", {
 				method: "POST",
@@ -389,6 +409,7 @@ describe("three-edit limit for supervisors", () => {
 		form.set("jobAddressEstimated", "123 Main")
 		form.set("brigadeId", "b1")
 		form.set("materials", "[]")
+		answers(form)
 		return action({
 			request: new Request("http://localhost/docs/doc-1/edit", {
 				method: "POST",
@@ -438,5 +459,233 @@ describe("three-edit limit for supervisors", () => {
 		await expect(post()).rejects.toMatchObject({ status: 302 })
 		expect(db.auditTrail.count).not.toHaveBeenCalled()
 		expect(tx.jafInvoice.update).toHaveBeenCalled()
+	})
+})
+
+describe("intake answers on the edit page", () => {
+	const brigade = { id: "b1", area: "SUR", memberIds: ["u1"] }
+	beforeEach(() => {
+		vi.clearAllMocks()
+		tx.user.findMany.mockResolvedValue([{ id: "wh-1" }])
+		vi.mocked(db.auditTrail.count).mockResolvedValue(0)
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["SUR"],
+		} as any)
+		vi.mocked(db.brigade.findUnique).mockResolvedValue(brigade as any)
+		vi.mocked(db.brigade.findMany).mockResolvedValue([])
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "user-1", role: "SUPERVISOR" },
+			session: {},
+		} as any)
+	})
+	function doc(overrides: Record<string, unknown> = {}) {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			baseDoc(overrides) as any,
+		)
+	}
+	function edit(
+		materials: string,
+		prefield: string,
+		reason?: string,
+		items = "[]",
+	) {
+		const f = new FormData()
+		f.set("jobType", "Install")
+		f.set("jobAddressEstimated", "123 Main")
+		f.set("brigadeId", "b1")
+		f.set("materials", items)
+		answers(f, materials, prefield, reason)
+		return action({
+			request: new Request("http://localhost/docs/doc-1/edit", {
+				method: "POST",
+				body: f,
+			}),
+			params: { id: "doc-1" },
+		} as any).catch((r) => r)
+	}
+	const updated = () => tx.jafInvoice.update.mock.calls[0][0].data
+
+	it("the loader exposes both stored answers", async () => {
+		doc({
+			materialsFromWarehouse: false,
+			materialsReason: "own truck",
+			prefieldNeeded: true,
+			status: "SIGNED",
+		})
+		const data = await loader({
+			request: new Request("http://localhost/docs/doc-1/edit"),
+			params: { id: "doc-1" },
+		} as any)
+		expect(data.intakeAnswers).toEqual({
+			materials: "no",
+			materialsReason: "own truck",
+			prefield: "needed",
+		})
+	})
+
+	it("changing an answer is one edit: one WORK_ORDER_EDITED row naming it", async () => {
+		doc()
+		const res = await edit("yes", "needed")
+		expect(res.status).toBe(302)
+		expect(updated().prefieldNeeded).toBe(true)
+		expect(tx.auditTrail.create).toHaveBeenCalledTimes(1)
+		expect(tx.auditTrail.create).toHaveBeenCalledWith({
+			data: expect.objectContaining({
+				action: "WORK_ORDER_EDITED",
+				diffJson: expect.objectContaining({
+					answersChanged: true,
+					prefieldNeeded: { before: false, after: true },
+				}),
+			}),
+		})
+	})
+
+	it("an answer change still counts against the three-edit limit", async () => {
+		doc()
+		vi.mocked(db.auditTrail.count).mockResolvedValue(3)
+		expect(await edit("yes", "needed")).toEqual({
+			errorKey: "docs_edit.errors.limit_reached",
+		})
+		expect(tx.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("rejects a missing answer", async () => {
+		doc()
+		expect(await edit("no", "needed", "  ")).toEqual({
+			errorKey: "docs_new.errors.materials_reason_required",
+		})
+		expect(tx.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("Yes→No before prep skips the warehouse: SIGNED, materials cleared", async () => {
+		doc({ estimatedMaterials: [{ serviceCodeId: "m1", qty: 2 }] })
+		const res = await edit(
+			"no",
+			"not_needed",
+			" Claro drop-off ",
+			JSON.stringify([{ serviceCodeId: "m1", qty: 2 }]),
+		)
+		expect(res.status).toBe(302)
+		expect(updated()).toEqual(
+			expect.objectContaining({
+				status: "SIGNED",
+				materialsFromWarehouse: false,
+				materialsReason: "Claro drop-off",
+				estimatedMaterials: [],
+			}),
+		)
+		expect(tx.auditTrail.create).toHaveBeenCalledWith({
+			data: expect.objectContaining({
+				diffJson: expect.objectContaining({
+					status: { before: "CREATED", after: "SIGNED" },
+				}),
+			}),
+		})
+	})
+
+	it("Yes→No after prep is refused and saves nothing", async () => {
+		doc({ status: "PREPPED" })
+		expect(await edit("no", "not_needed", "own truck")).toEqual({
+			errorKey: "docs_edit.errors.warehouse_started",
+		})
+		expect(tx.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("No→Yes before Field sends the job to the warehouse", async () => {
+		doc({
+			status: "SIGNED",
+			materialsFromWarehouse: false,
+			materialsReason: "own truck",
+		})
+		const res = await edit(
+			"yes",
+			"not_needed",
+			"own truck",
+			JSON.stringify([{ serviceCodeId: "m1", qty: 4 }]),
+		)
+		expect(res.status).toBe(302)
+		expect(updated()).toEqual(
+			expect.objectContaining({
+				status: "CREATED",
+				materialsFromWarehouse: true,
+				materialsReason: null,
+				estimatedMaterials: [{ serviceCodeId: "m1", qty: 4 }],
+			}),
+		)
+		expect(tx.user.findMany).toHaveBeenCalledWith({
+			where: { role: "WAREHOUSE", active: true },
+		})
+		expect(tx.notification.create).toHaveBeenCalledWith({
+			data: expect.objectContaining({ userId: "wh-1", docId: "doc-1" }),
+		})
+	})
+
+	it("No→Yes after Field started is refused", async () => {
+		doc({
+			status: "SIGNED",
+			materialsFromWarehouse: false,
+			materialsReason: "own truck",
+			fieldStartedAt: new Date(),
+		})
+		expect(await edit("yes", "not_needed")).toEqual({
+			errorKey: "docs_edit.errors.field_started",
+		})
+		expect(tx.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("a no-warehouse job before Field is editable; a warehouse job at SIGNED is not", async () => {
+		doc({
+			status: "SIGNED",
+			materialsFromWarehouse: false,
+			materialsReason: "x",
+		})
+		const ok = await loader({
+			request: new Request("http://localhost/docs/doc-1/edit"),
+			params: { id: "doc-1" },
+		} as any)
+		expect(ok.doc.id).toBe("doc-1")
+		doc({ status: "SIGNED" })
+		await expect(
+			loader({
+				request: new Request("http://localhost/docs/doc-1/edit"),
+				params: { id: "doc-1" },
+			} as any),
+		).rejects.toMatchObject({ status: 302 })
+	})
+
+	describe("generated package", () => {
+		const generated = { jafInvoicePdfPath: "/uploads/packets/doc-1.pdf" }
+
+		it.each([
+			["prefield", () => edit("yes", "needed")],
+			["materials answer", () => edit("no", "not_needed", "own truck")],
+		])("changing the %s marks an unsent package stale", async (_, run) => {
+			doc(generated)
+			await run()
+			expect(updated().packetStale).toBe(true)
+		})
+
+		it("changing the reason marks it stale", async () => {
+			doc({
+				...generated,
+				status: "SIGNED",
+				materialsFromWarehouse: false,
+				materialsReason: "own truck",
+			})
+			await edit("no", "not_needed", "Claro drop-off")
+			expect(updated().packetStale).toBe(true)
+		})
+
+		it("an edit that leaves the answers alone does not", async () => {
+			doc(generated)
+			await edit("yes", "not_needed")
+			expect(updated()).not.toHaveProperty("packetStale")
+		})
+
+		it("after the first send the package is left as sent", async () => {
+			doc({ ...generated, jafInvoiceGeneratedAt: new Date() })
+			await edit("yes", "needed")
+			expect(updated()).not.toHaveProperty("packetStale")
+		})
 	})
 })

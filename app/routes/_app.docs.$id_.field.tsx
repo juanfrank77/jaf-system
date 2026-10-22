@@ -1,4 +1,6 @@
 import path from "node:path"
+import { File01Icon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 import type { ParseKeys } from "i18next"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -38,7 +40,7 @@ import {
 import {
 	uploadFileName,
 	validateBlueprintFile,
-	validateFile,
+	validateOriginalUpload,
 } from "~/lib/file-upload.server"
 import { composeJobAddress } from "~/lib/intake-address"
 import { isBillableSource } from "~/lib/material-source"
@@ -131,6 +133,7 @@ const FIELD_DOC_SELECT = {
 	fieldNotes: true,
 	fieldStartedAt: true,
 	fieldSubmittedAt: true,
+	materialsFromWarehouse: true,
 	supervisorApprovedAt: true,
 	jafInvoiceGeneratedAt: true,
 	avisoNumber: true,
@@ -138,7 +141,7 @@ const FIELD_DOC_SELECT = {
 	releasedToFinanceAt: true,
 	blueprintPaths: true,
 	claroSupervisor: {
-		select: { name: true, requiresBlueprint: true, requiresPrefield: true },
+		select: { name: true, requiresBlueprint: true },
 	},
 } satisfies Prisma.JafInvoiceSelect
 
@@ -232,6 +235,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			fieldNotes: doc.fieldNotes,
 			fieldStartedAt: doc.fieldStartedAt,
 			fieldSubmittedAt: doc.fieldSubmittedAt,
+			materialsFromWarehouse: doc.materialsFromWarehouse,
 		},
 		addressCorrections: corrections,
 		correctorNames: Object.fromEntries(
@@ -240,7 +244,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		photos,
 		blueprints: doc.blueprintPaths.map((p) => path.basename(p)),
 		blueprintRequired: doc.claroSupervisor?.requiresBlueprint ?? false,
-		prefieldRequired: doc.claroSupervisor?.requiresPrefield ?? false,
 		stage: deriveSupervisorStage(doc, null),
 		materialsTaken: taken,
 		estimatedMaterials: lines(doc.estimatedMaterials),
@@ -370,7 +373,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const photos = PHOTO_FIELDS.flatMap(([name, tag]) =>
 		files(form, name).map((file) => ({ file, tag })),
 	)
-	if (photos.some(({ file }) => !validateFile(file, "photo").valid))
+	if (photos.some(({ file }) => !validateOriginalUpload(file).valid))
 		return refusal("docs_field.errors.photo_invalid")
 	const blueprints = files(form, "blueprint")
 	if (blueprints.some((file) => !validateBlueprintFile(file).valid))
@@ -547,7 +550,21 @@ function PhotoBox({
 						rel="noreferrer"
 						className="block aspect-square overflow-hidden rounded-lg border"
 					>
-						<img src={p.src} alt="" className="h-full w-full object-cover" />
+						{/\.pdf$/i.test(p.src) ? (
+							<span
+								data-testid="photo-pdf"
+								className="flex h-full w-full flex-col items-center justify-center gap-1 bg-muted text-xs text-muted-foreground"
+							>
+								<HugeiconsIcon
+									icon={File01Icon}
+									className="size-6"
+									aria-hidden="true"
+								/>
+								PDF
+							</span>
+						) : (
+							<img src={p.src} alt="" className="h-full w-full object-cover" />
+						)}
 					</a>
 				))}
 				{Array.from({ length: room }, (_, i) => (
@@ -567,7 +584,7 @@ function PhotoBox({
 					id={name}
 					name={name}
 					type="file"
-					accept="image/*"
+					accept="image/jpeg,image/png,application/pdf"
 					multiple
 					className="sr-only"
 					disabled={upload.busy}
@@ -636,7 +653,7 @@ function BlueprintBox({
 				id="blueprint"
 				name="blueprint"
 				type="file"
-				accept="application/pdf,image/*"
+				accept="image/jpeg,image/png,application/pdf"
 				multiple
 				className="sr-only"
 				disabled={upload.busy}
@@ -673,7 +690,6 @@ export default function FieldUpdate({
 		photos,
 		blueprints,
 		blueprintRequired,
-		prefieldRequired,
 		stage,
 		materialsTaken,
 		estimatedMaterials,
@@ -751,7 +767,12 @@ export default function FieldUpdate({
 					{doc.controlNumber}
 				</p>
 			</div>
-			<SupervisorStepRail stage={stage} view="FIELD" docId={doc.id} />
+			<SupervisorStepRail
+				stage={stage}
+				view="FIELD"
+				docId={doc.id}
+				warehouseSkipped={!doc.materialsFromWarehouse}
+			/>
 
 			{doc.status === "SUPERVISOR_APPROVED" && (
 				<Callout tone="warn" title={t("docs_field.admin_override")}>
@@ -912,17 +933,6 @@ export default function FieldUpdate({
 						/>
 					</CardContent>
 				</Card>
-
-				{prefieldRequired && (
-					<Card>
-						<CardHeader>{t("docs_field.prefield_label")}</CardHeader>
-						<CardContent>
-							<p className="text-sm text-muted-foreground">
-								{t("docs_field.prefield_note")}
-							</p>
-						</CardContent>
-					</Card>
-				)}
 
 				<div className="space-y-1">
 					<Label htmlFor="fieldNotes">

@@ -388,6 +388,35 @@ describe("POST /docs/:id/field — save", () => {
 		expect(db.jafInvoice.update).not.toHaveBeenCalled()
 	})
 
+	it("accepts a PDF among the photos and saves the original file unchanged", async () => {
+		as("SUPERVISOR")
+		withDoc()
+		const bytes = new Uint8Array([37, 80, 68, 70, 45, 1, 2, 3])
+		const pdf = new File([bytes], "scan.pdf", { type: "application/pdf" })
+		const form = new FormData()
+		form.set("intent", "save")
+		form.append("photosBefore", pdf)
+		expect(await run(form)).toEqual({ ok: true })
+		expect(saveUpload).toHaveBeenCalledTimes(1)
+		const saved = vi.mocked(saveUpload).mock.calls[0][2]
+		expect(new Uint8Array(await saved.arrayBuffer())).toEqual(bytes)
+		expect(saved.type).toBe("application/pdf")
+	})
+
+	it("refuses a WebP photo", async () => {
+		as("SUPERVISOR")
+		withDoc()
+		const form = new FormData()
+		form.set("intent", "save")
+		form.append(
+			"photosBefore",
+			new File(["x"], "a.webp", { type: "image/webp" }),
+		)
+		expect(await run(form)).toEqual({
+			errorKey: "docs_field.errors.photo_invalid",
+		})
+	})
+
 	it("refuses a blueprint that is neither a PDF nor a photo and writes nothing", async () => {
 		as("SUPERVISOR")
 		withDoc()

@@ -322,11 +322,11 @@
 		"assigned_crew_label": "Cuadrilla asignada",
 		"estimated_materials_label": "Materiales a preparar",
 		"callout_title": "Paso 1 · Usted",
-		"callout_body": "Entró un trabajo de Claro. Elija el supervisor de Claro, escriba la dirección y los códigos de servicio, y escoja la brigada. Al enviar, va al almacén para preparar los materiales.",
+		"callout_body": "Entró un trabajo de Claro. Elija el supervisor de Claro, escriba la dirección y los códigos de servicio, escoja la brigada y conteste las dos preguntas. Al enviar, va al almacén para preparar los materiales, o directo a Campo cuando los materiales no salen del almacén.",
 		"work_order_label": "# de orden de trabajo JAF",
 		"work_order_auto": "Se asigna al crear",
-		"work_order_hint": "Se asigna automáticamente. No es la factura ni el Aviso.",
-		"job_address_hint": "Escribe la dirección estimada si la tienes. Si solo tienes coordenadas, escribe latitud, longitud como en el Aviso de Claro. La brigada la corrige en sitio.",
+		"work_order_hint": "Se asigna automáticamente. No es la factura ni el número de Claro.",
+		"job_address_hint": "Escribe la dirección estimada si la tienes. Si solo tienes coordenadas, escribe latitud, longitud como las envió Claro. La brigada la corrige en sitio.",
 		"crew_hint": "Solo se listan las brigadas de su área.",
 		"flow_prefix": "Al enviar",
 		"flow_warehouse": "Almacén — preparar",
@@ -339,21 +339,18 @@
 			"brigade_invalid": "Esa brigada no está disponible.",
 			"claro_supervisor_required": "Seleccione un supervisor de Claro activo.",
 			"address_required": "Dirección 1, Tipo, Tipo Planta y Grupo Plan son obligatorios.",
-			"blueprint_invalid": "El plano debe ser un PDF (hasta 30 MB) o una foto (JPEG, PNG, WebP o HEIC, hasta 10 MB)."
+			"blueprint_invalid": "El plano debe ser un PDF (hasta 30 MB) o una foto (JPEG, PNG, WebP o HEIC, hasta 10 MB).",
+			"materials_choice_required": "Regrese y elija si los materiales salen del almacén.",
+			"materials_reason_required": "Regrese y escriba de dónde salen los materiales.",
+			"prefield_choice_required": "Regrese y elija si se necesita Prefield."
 		},
 		"claro_supervisor_label": "Supervisor de Claro",
 		"claro_supervisor_placeholder": "Seleccione un supervisor de Claro",
 		"claro_requires": "Este supervisor requiere:",
 		"requires_prefield_chip": "Prefield",
 		"requires_blueprint_chip": "Plano",
-		"prefield_heading": "Prefield",
-		"prefield_hint": "Opcional por ahora. El # de Aviso se verifica contra el PDF del Aviso en el paso 6. Si este supervisor de Claro requiere el resto, deben completarse antes de enviar el paquete.",
-		"orden_label": "# Orden",
-		"pedido_label": "Pedido",
-		"smr_label": "SMR",
-		"titulo_label": "Título",
 		"address_heading": "Dirección",
-		"address_hint": "En el mismo orden que el Aviso de Claro. Tipo, Tipo Planta y Grupo Plan son texto libre; las sugerencias vienen de trabajos anteriores.",
+		"address_hint": "En el mismo orden que los documentos de Claro. Tipo, Tipo Planta y Grupo Plan son texto libre; las sugerencias vienen de trabajos anteriores.",
 		"sector_label": "Sector",
 		"direccion1_label": "Dirección 1",
 		"direccion2_label": "Dirección 2",
@@ -365,7 +362,7 @@
 		"grupo_plan_label": "Grupo Plan",
 		"blueprint_label": "Plano (opcional)",
 		"blueprint_hint": "PDF o foto. También puede añadirlo después.",
-		"aviso_label": "# Aviso (si se conoce)"
+		"flow_field": "Campo — sin almacén"
 	},
 	"docs_edit": {
 		"edits_left_short": "quedan {{left}} de {{max}}",
@@ -381,8 +378,21 @@
 			"invalid_materials": "No se pudo leer la lista de materiales",
 			"invalid_service_lines": "No se pudieron leer los códigos de servicio.",
 			"missing_fields": "Se requieren tipo de trabajo, dirección y al menos un miembro de la cuadrilla",
-			"brigade_invalid": "Esa brigada no está disponible."
+			"brigade_invalid": "Esa brigada no está disponible.",
+			"warehouse_started": "El almacén ya preparó este trabajo, así que sus materiales ya no pueden dejar de salir del almacén.",
+			"field_started": "El trabajo de campo ya empezó, así que ya no se puede enviar al almacén."
 		}
+	},
+	"intake_choices": {
+		"materials_question": "¿Materiales del almacén?",
+		"materials_yes": "Sí",
+		"materials_no": "No",
+		"materials_reason_label": "¿De dónde salen los materiales?",
+		"materials_reason_placeholder": "Camión propio, entrega de Claro, planta existente… según lo reporte la brigada",
+		"prefield_question": "Prefield",
+		"prefield_needed": "Se necesita",
+		"prefield_not_needed": "No se necesita",
+		"prefield_hint": "Preseleccionado según el supervisor de Claro. Confírmelo o cámbielo."
 	},
 	"admin_history": {
 		"timeline_heading": "Línea de tiempo",
@@ -643,7 +653,7 @@
 		"used_entry_label": "Instalado",
 		"ordered_vs_installed_hint": "La diferencia entre pedido e instalado es solo informativa.",
 		"field_notes_label": "Reporte de campo",
-		"field_notes_placeholder": "Cualquier otro detalle del trabajo. Escribe N/A si no hay nada que añadir.",
+		"field_notes_placeholder": "Lo que la cuadrilla reportó en el sitio. Anote de dónde salieron los materiales (almacén o inventario propio de la cuadrilla). Escriba N/A si no hay nada que agregar.",
 		"photos_label": "Fotos",
 		"photos_hint": "Las fotos son el respaldo para la presentación a Claro del supervisor — se guardan en el servidor.",
 		"photos_before_label": "Fotos antes",
@@ -662,8 +672,8 @@
 			"used_exceeds_took": "El material entregado por el almacén no puede superar lo firmado en la recogida. Registra el material adicional con otra Fuente.",
 			"completion_signature_required": "Se requiere la firma de completado.",
 			"invalid_service_lines": "No se pudieron leer las cantidades de servicio instaladas.",
-			"photo_invalid": "Las fotos deben ser JPEG, PNG, WebP o HEIC, de hasta 10 MB.",
-			"blueprint_invalid": "El plano debe ser un PDF (hasta 30 MB) o una foto (JPEG, PNG, WebP o HEIC, hasta 10 MB).",
+			"photo_invalid": "Las fotos deben ser JPG, PNG o PDF, de hasta 10 MB (PDF hasta 30 MB).",
+			"blueprint_invalid": "El plano debe ser JPG, PNG o PDF (PDF hasta 30 MB, imágenes hasta 10 MB).",
 			"address_required": "La Dirección 1 es obligatoria.",
 			"photos_required": "Agrega al menos una foto de Antes y una de Después para continuar.",
 			"field_report_required": "El reporte de campo es obligatorio para continuar. Escribe N/A si no hay nada que añadir."
@@ -721,9 +731,7 @@
 			"unit": "Unidad",
 			"brigade": "Brigada"
 		},
-		"admin_override": "Ya está firmado. Lo está editando como Admin.",
-		"prefield_label": "Prefield",
-		"prefield_note": "Este supervisor de Claro requiere Prefield. Se completa desde la orden de trabajo en el paso del Aviso (5) y va en el paquete."
+		"admin_override": "Ya está firmado. Lo está editando como Admin."
 	},
 	"docs_review": {
 		"readonly_title": "Paso completado.",
@@ -788,9 +796,9 @@
 		"materials_detail": "Materiales: estimado, retirado, utilizado",
 		"approve_field_work": "Firma",
 		"callout_approve_title": "Paso {{n}} de {{total}} · Usted",
-		"callout_approve_body": "Revise el documento abajo, firme y genere el PDF de la Orden de trabajo JAF para el supervisor de Claro.",
+		"callout_approve_body": "Revise el documento abajo, firme y genere el paquete para el supervisor de Claro.",
 		"callout_invoice_title": "Paso {{n}} de {{total}} · Usted",
-		"callout_invoice_body": "Envíe el PDF al supervisor de Claro, quien crea el Aviso a partir de su orden de trabajo.",
+		"callout_invoice_body": "Envíe el paquete al supervisor de Claro, quien crea el Aviso a partir de su orden de trabajo.",
 		"callout_aviso_title": "Paso {{n}} de {{total}} · Usted",
 		"callout_aviso_body": "Ingrese el número de Aviso y suba el documento.",
 		"callout_precert_title": "Paso {{n}} de {{total}} · Usted + el contratista",
@@ -2002,7 +2010,8 @@
 			"release": "Entrega",
 			"field": "Trabajo",
 			"return": "Devolución",
-			"close": "Supervisor · Finanzas"
+			"close": "Supervisor · Finanzas",
+			"not_required": "No requerido"
 		},
 		"callout": {
 			"sign_title": "Paso 3 · Tú + Cuadrilla",
@@ -2195,34 +2204,25 @@
 		"col_used": "Usado",
 		"col_source": "Origen",
 		"no_materials": "No hay materiales registrados.",
-		"photos": "Fotos",
-		"photo_before": "Antes",
-		"photo_during": "Durante",
-		"photo_after": "Después",
-		"blueprint": "Plano",
-		"not_required": "No requerido",
-		"missing": "Falta",
-		"prefield": "Prefield",
-		"prefield_not_required": "No requerido por este supervisor de Claro",
 		"field_report": "Informe de campo",
 		"signatures": "Firmas",
 		"sig_supervisor": "Supervisor de JAF",
 		"sig_warehouse": "Almacén",
 		"sig_crew": "Brigada",
 		"pending": "Pendiente",
-		"generate": "Generar PDF",
+		"generate": "Generar paquete",
 		"generating": "Generando…",
-		"generate_hint": "Firme abajo primero: el PDF se puede generar cuando haya firmado.",
-		"generated": "PDF generado",
+		"generate_hint": "Firme abajo primero: el paquete se puede generar cuando haya firmado.",
+		"generated": "Paquete generado",
 		"download": "Descargar PDF",
-		"blockers_title": "Antes de poder generar el PDF:",
+		"blockers_title": "Antes de poder generar el paquete:",
 		"blocker": {
-			"prefield": "Prefield: complete {{fields}} (este supervisor de Claro lo requiere).",
-			"blueprint": "Añada un plano (este supervisor de Claro lo requiere).",
 			"claro_supervisor": "Elija el supervisor de Claro de este trabajo."
 		},
-		"blockers_fix": "Corríjalo en el paso 5 (Paquete → Claro) y vuelva para generar el PDF →",
-		"back_to_field": "Volver al paso 3"
+		"blockers_fix": "Corríjalo en el paso 5 (Paquete → Claro) y vuelva para generar el paquete →",
+		"back_to_field": "Volver al paso 3",
+		"materials_not_from_warehouse": "No del almacén",
+		"continue_to_package": "Continuar al paso 5"
 	},
 	"packet": {
 		"title": "Paquete → Claro",
@@ -2231,8 +2231,6 @@
 		"recipient": "Enviar a",
 		"no_recipient": "No hay supervisor de Claro elegido para este trabajo.",
 		"blockers_title": "Antes de poder enviar el paquete:",
-		"prefield_title": "Prefield",
-		"missing": "Falta",
 		"work_summary": "Resumen del trabajo",
 		"materials": "Materiales",
 		"no_materials": "No hay materiales registrados.",
@@ -2246,32 +2244,24 @@
 		"sending": "Enviando…",
 		"confirm_send": "¿Enviar el paquete por correo a {{email}}?",
 		"confirm_resend": "¿Enviar el paquete otra vez a {{email}}? Es la dirección actual del supervisor de Claro en el directorio.",
-		"download": "Descargar paquete",
-		"pdf_generated": "PDF ✓ generado",
-		"pdf_not_generated": "Aún no hay PDF: genérelo en el paso 4.",
+		"pdf_generated": "Paquete ✓ generado",
+		"pdf_not_generated": "Aún no hay paquete: genérelo en el paso 4.",
 		"send_coming_later": "Enviar al supervisor de Claro (próximamente)",
-		"mark_sent": "Envié el PDF a Claro →",
-		"manual_only_hint": "Por ahora: envíe el PDF por correo usted mismo y luego márquelo como enviado.",
+		"mark_sent": "Envié el paquete a Claro →",
+		"manual_only_hint": "Por ahora: envíe los archivos por correo usted mismo y luego marque el paquete como enviado.",
 		"back": "Atrás",
 		"mark_manual": "Marcar como enviado a mano",
 		"confirm_manual": "¿Marcar el paquete como enviado? Hágalo solo después de haber enviado usted mismo el paquete descargado a {{email}}.",
-		"manual_hint": "¿Lo envía usted? Adjunte el PDF del paquete y cada archivo de plano: la descarga es solo el paquete.",
-		"unconfigured": "El correo no está configurado en este servidor, así que no se envió nada. Descargue el paquete, envíelo usted al supervisor de Claro y luego pulse Marcar como enviado a mano.",
+		"manual_hint": "¿Lo envía usted? Adjunte cada archivo de la lista de arriba, o el zip.",
+		"unconfigured": "El correo no está configurado en este servidor, así que no se envió nada. Descargue los archivos, envíelos usted al supervisor de Claro y luego pulse Marcar como enviado a mano.",
 		"failed": "El último intento falló: el correo no salió. Vuelva a intentarlo y avise a un administrador si sigue fallando.",
 		"history_title": "Historial de envíos",
 		"history_empty": "Aún no hay intentos.",
 		"blocker": {
-			"prefield": "Prefield: complete {{fields}} en el formulario Prefield de abajo (este supervisor de Claro lo requiere).",
-			"blueprint": "Añada un plano con el campo de carga del formulario Prefield de abajo (este supervisor de Claro lo requiere).",
-			"claro_supervisor": "Elija el supervisor de Claro de este trabajo en el formulario Prefield de abajo."
-		},
-		"prefield": {
-			"avisoNumber": "Aviso #",
-			"ordenNumber": "# Orden",
-			"pedido": "Pedido",
-			"smr": "SMR",
-			"titulo": "Título",
-			"description": "Descripción"
+			"prefield_pdf": "PDF de Prefield: este trabajo lo necesita. Genere el paquete en el paso 4.",
+			"stale": "Las respuestas de la orden de trabajo cambiaron después de generar el paquete. Vuelva a generar el paquete en el paso 4.",
+			"blueprint": "Añada un plano con el campo de carga de abajo (este supervisor de Claro lo requiere).",
+			"claro_supervisor": "Elija el supervisor de Claro de este trabajo abajo."
 		},
 		"history": {
 			"time": "Hora",
@@ -2290,7 +2280,6 @@
 			"not_sent": "No enviado"
 		},
 		"errors": {
-			"prefield_missing": "Este supervisor de Claro requiere el formulario Prefield: complete # Orden, Pedido, SMR y Título antes de enviar.",
 			"blueprint_missing": "Este supervisor de Claro requiere un plano: añada uno antes de enviar.",
 			"no_claro_supervisor": "Elija el supervisor de Claro de este trabajo antes de enviar el paquete.",
 			"not_signed_off": "Apruebe el trabajo de campo antes de enviar el paquete.",
@@ -2298,14 +2287,27 @@
 			"email_disabled": "El envío del paquete por correo no está activado. Envíe el PDF usted mismo y luego márquelo como enviado.",
 			"pdf_missing": "Aún no hay PDF de la orden de trabajo. Genérelo primero en el paso 4.",
 			"render_failed": "No se pudo generar el PDF del paquete. El intento quedó registrado; vuelva a intentarlo y avise a un administrador si sigue fallando.",
-			"prefield_locked": "El paquete ya se envió: los datos Prefield y el supervisor de Claro ya no se pueden cambiar.",
-			"claro_supervisor_invalid": "Ese supervisor de Claro no está activo. Elija otro."
+			"prefield_locked": "El paquete ya se envió: el supervisor de Claro y el plano ya no se pueden cambiar.",
+			"claro_supervisor_invalid": "Ese supervisor de Claro no está activo. Elija otro.",
+			"prefield_pdf_missing": "Este trabajo necesita el PDF de Prefield: genere el paquete en el paso 4 antes de enviar.",
+			"package_stale": "El paquete está desactualizado: las respuestas de la orden de trabajo cambiaron después de generarlo. Vuelva a generarlo en el paso 4 antes de enviar."
 		},
 		"claro_label": "Supervisor de Claro",
 		"claro_placeholder": "Elija un supervisor de Claro…",
 		"blueprint_upload": "Añada un plano (PDF o foto)",
-		"prefield_hint": "Puede completar o corregir estos datos hasta que se envíe el paquete.",
-		"prefield_save": "Guardar"
+		"details_title": "Supervisor de Claro y plano",
+		"details_hint": "Puede cambiar estos datos hasta que se envíe el paquete.",
+		"details_save": "Guardar",
+		"files_title": "Archivos para Claro",
+		"files_empty": "Aún no hay archivos: genere el paquete en el paso 4.",
+		"file_download": "Descargar",
+		"download_all": "Descargar todo (zip)",
+		"file_kind": {
+			"work_order_pdf": "Orden de trabajo JAF (PDF)",
+			"prefield_pdf": "Prefield de Claro (PDF)",
+			"photo": "Foto",
+			"blueprint": "Plano"
+		}
 	},
 	"brigade_stock_tracked": {
 		"heading": "Inventario de la brigada (registrado, no facturado)",

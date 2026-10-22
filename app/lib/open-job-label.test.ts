@@ -21,6 +21,7 @@ const doc = (status: DocStatus, over: Partial<Doc> = {}): Doc => ({
 	avisoNumber: null,
 	avisoDocPath: null,
 	releasedToFinanceAt: null,
+	materialsFromWarehouse: true,
 	...over,
 })
 
@@ -69,6 +70,12 @@ describe("openJobLabel", () => {
 		],
 	] as const)("%s %j -> %s", (status, over, sheet, expected) => {
 		expect(openJobLabel(doc(status, over), sheet)).toBe(expected)
+	})
+
+	it("is Field, not Picked up, for a no-warehouse job (nothing to pick up)", () => {
+		expect(
+			openJobLabel(doc("SIGNED", { materialsFromWarehouse: false }), null),
+		).toBe("FIELD")
 	})
 
 	it("is Sign off, not Field, once the supervisor finishes Field", () => {

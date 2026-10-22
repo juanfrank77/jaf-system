@@ -1,5 +1,3 @@
-import { readFile } from "node:fs/promises"
-import path from "node:path"
 import {
 	Document,
 	Image,
@@ -22,13 +20,20 @@ import { resources } from "~/localization/resource"
  * The JAF work order a Claro supervisor receives for a finished job (spec
  * "Step 4 · Sign off", B5/B6): the same `WorkOrderDocument` the step 4 page
  * shows, block for block in the B5 order. Bilingual EN / ES, JAF as the
- * issuer, and no prices anywhere: the document type carries none.
+ * issuer, and no prices anywhere: the document type carries none. Photos, the
+ * blueprint and the Claro Prefield are never drawn here: they travel as their
+ * own original files in the package.
  */
 
 export interface ClaroPacketInput {
-	/** Photo and blueprint references are file paths. */
 	document: WorkOrderDocument
 	issuedOn: Date
+	/**
+	 * The warehouse path (`materialsFromWarehouse`): prints the pickup
+	 * signatures page. A no-warehouse job has no pickup; its reason prints
+	 * under Materials instead.
+	 */
+	showPickupSignatures: boolean
 }
 
 const s = StyleSheet.create({
@@ -72,9 +77,6 @@ const s = StyleSheet.create({
 	num: { flex: 0.8, textAlign: "right" },
 	source: { flex: 1.8, paddingLeft: 6 },
 	empty: { fontSize: 8, color: "#94a3b8", padding: 4 },
-	photoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-	photo: { width: 165, height: 124, objectFit: "contain" },
-	blueprint: { width: "100%", maxHeight: 560, objectFit: "contain" },
 	sigRow: { flexDirection: "row", gap: 8, marginTop: 4 },
 	sigBox: {
 		flex: 1,
@@ -85,15 +87,6 @@ const s = StyleSheet.create({
 	sigImage: { height: 40, objectFit: "contain", marginVertical: 4 },
 	pending: { color: "#b45309", marginTop: 12 },
 })
-
-const PHOTO_GROUPS: {
-	key: keyof WorkOrderDocument["photos"]
-	label: string
-}[] = [
-	{ key: "before", label: "Before / Antes" },
-	{ key: "during", label: "During / Durante" },
-	{ key: "after", label: "After / Después" },
-]
 
 /** "English / Español" from the app's own locale files, so the PDF says what the page says. */
 function bilingual(key: string): string {
@@ -126,35 +119,6 @@ function asImage(data: Buffer): LoadedImage | null {
 	if (data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff)
 		return { data, format: "jpg" }
 	return null
-}
-
-/** A missing or unreadable file is skipped: the packet still goes out. */
-const readOrNull = (file: string) => readFile(file).catch(() => null)
-
-async function loadImages(files: string[]): Promise<LoadedImage[]> {
-	const loaded = await Promise.all(
-		files.map(async (f) => {
-			const data = await readOrNull(f)
-			return data ? asImage(data) : null
-		}),
-	)
-	return loaded.filter((i): i is LoadedImage => i !== null)
-}
-
-/**
- * Blueprints the renderer cannot draw (a PDF plan, a WebP photo): they travel
- * as their own email attachments, and the packet lists them by name.
- */
-export async function blueprintAttachments(
-	files: string[],
-): Promise<{ filename: string; content: Buffer }[]> {
-	const out: { filename: string; content: Buffer }[] = []
-	for (const f of files) {
-		const data = await readOrNull(f)
-		if (data && !asImage(data))
-			out.push({ filename: path.basename(f), content: data })
-	}
-	return out
 }
 
 /** A drawn signature (a data URL) as an image the renderer can draw. */
@@ -215,18 +179,7 @@ export async function generateClaroPacketPdf(
 	input: ClaroPacketInput,
 ): Promise<Buffer> {
 	const doc = input.document
-	const blueprintFiles = doc.blueprint === "not_required" ? [] : doc.blueprint
-	const [before, during, after, blueprintImages, attached] = await Promise.all([
-		loadImages(doc.photos.before),
-		loadImages(doc.photos.during),
-		loadImages(doc.photos.after),
-		loadImages(blueprintFiles),
-		blueprintAttachments(blueprintFiles),
-	])
-	const photos = { before, during, after }
-	const attachedBlueprints = attached.map((a) => a.filename)
 	const issued = formatDocDate(input.issuedOn)
-	const prefield = doc.prefield
 
 	const element = (
 		<Document
@@ -290,6 +243,12 @@ export async function generateClaroPacketPdf(
 
 				{/* 8 */}
 				<Text style={s.h2}>Materials / Materiales</Text>
+				{!doc.materialsFromWarehouse && (
+					<Field
+						label="Not from the warehouse / No del almacén"
+						value={doc.materialsReason}
+					/>
+				)}
 				<View style={s.tableHeader}>
 					<Text style={s.name}>Material</Text>
 					<Text style={s.num}>Used / Usado</Text>
@@ -310,68 +269,10 @@ export async function generateClaroPacketPdf(
 				)}
 
 				{/* 9 */}
-				<Text style={s.h2}>Photos / Fotos</Text>
-				{PHOTO_GROUPS.map((g) => (
-					<View key={g.key}>
-						<Text style={s.h3}>{g.label}</Text>
-						{photos[g.key].length === 0 ? (
-							<Text style={s.empty}>No photos / Sin fotos</Text>
-						) : (
-							<View style={s.photoGrid}>
-								{photos[g.key].map((img, i) => (
-									// biome-ignore lint/suspicious/noArrayIndexKey: static render, no reordering
-									<Image key={i} src={img} style={s.photo} />
-								))}
-							</View>
-						)}
-					</View>
-				))}
-
-				{/* 10 */}
-				<Text style={s.h2}>Blueprint / Plano</Text>
-				{doc.blueprint === "not_required" ? (
-					<Text>Not required / No requerido</Text>
-				) : (
-					<>
-						{blueprintImages.map((img, i) => (
-							// biome-ignore lint/suspicious/noArrayIndexKey: static render, no reordering
-							<Image key={i} src={img} style={s.blueprint} />
-						))}
-						{attachedBlueprints.length > 0 && (
-							<View>
-								<Text style={s.h3}>
-									Attached separately / Adjunto por separado
-								</Text>
-								{attachedBlueprints.map((name) => (
-									<Text key={name}>{name}</Text>
-								))}
-							</View>
-						)}
-						{blueprintFiles.length === 0 && <Text style={s.empty}>—</Text>}
-					</>
-				)}
-
-				{/* 11 */}
-				<Text style={s.h2}>Prefield</Text>
-				{prefield === "not_required" ? (
-					<Text>
-						Not required by this Claro supervisor / No requerido por este
-						supervisor de Claro
-					</Text>
-				) : (
-					<>
-						<Field label="Order # / # Orden" value={prefield.ordenNumber} />
-						<Field label="Order request / Pedido" value={prefield.pedido} />
-						<Field label="SMR" value={prefield.smr} />
-						<Field label="Title / Título" value={prefield.titulo} />
-					</>
-				)}
-
-				{/* 12 */}
 				<Text style={s.h2}>Field report / Informe de campo</Text>
 				<Text>{doc.fieldReport ?? "—"}</Text>
 
-				{/* 13 */}
+				{/* 10 */}
 				<View wrap={false}>
 					<Text style={s.h2}>Signatures / Firmas</Text>
 					<View style={s.sigRow}>
@@ -379,14 +280,24 @@ export async function generateClaroPacketPdf(
 							label="JAF supervisor / Supervisor de JAF"
 							sig={doc.signatures.supervisor}
 						/>
+					</View>
+				</View>
+			</Page>
+
+			{/* The pickup signatures: the warehouse path only. */}
+			{input.showPickupSignatures && (
+				<Page size="LETTER" style={s.page}>
+					<Header doc={doc} issued={issued} />
+					<Text style={s.h2}>Pickup signatures / Firmas de recogido</Text>
+					<View style={s.sigRow}>
 						<SignatureBox
 							label="Warehouse / Almacén"
 							sig={doc.signatures.warehouse}
 						/>
 						<SignatureBox label="Crew / Brigada" sig={doc.signatures.crew} />
 					</View>
-				</View>
-			</Page>
+				</Page>
+			)}
 		</Document>
 	)
 

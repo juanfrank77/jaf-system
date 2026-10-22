@@ -7,17 +7,69 @@ export type MaterialDifference = {
 }
 
 const SECTION = /MATERIALES\s+USADOS/
-const EMPTY = /No\s+items\s+to\s+show/i
-const END = /^(Comentarios|Todos los derechos)/i
+const SECTION_LINE = /^(MATERIALES\s+USADOS\s+TOTALES\s*)+$/
+const EMPTY = /^No\s+items\s+to\s+show\.*$/i
+const END = /^Comentarios$/i
 const INT = /^\d+$/
-// A token that looks like a material number (digits, maybe OCR-garbled).
-const CODE_LIKE = /^(?=[0-9A-Za-z]*\d)[0-9A-Za-z]{6,8}$/
+// A material number as Claro prints it: digits only (checked against the catalog).
+const CODE = /^\d{6,8}$/
+const HEADER_WORDS = new Set([
+	"NUMERO",
+	"DE",
+	"MATERIAL",
+	"DESCRIPCION",
+	"CUENTA",
+	"CANTIDAD",
+	"INICIAL",
+	"USADA",
+	"DEVOLVER",
+])
+// Page chrome of a Claro print, repeated on every page: skipped so a table can
+// continue onto the next page. Nothing else is ever skipped.
+const CHROME = [
+	/^Todos los derechos reservados\b/i, // page footer
+	/^Incidencias\s+Mesa\s+de\s+Control\b/i, // app nav bar under the footer
+	/^https?:\/\/\S+$/i, // browser print header/footer: URL
+	/^\d{1,2}\/\d{1,2}\/\d{2,4},?\s+\d{1,2}:\d{2}\s*[AP]M\b/i, // browser print header: date
+	/^[A-Z][a-z]{2}\s+\d{1,2},\s+\d{4}\s+\d{1,2}:\d{2}\s*[AP]M$/, // block timestamp
+	/^\d+\s*\/\s*\d+$/, // browser page counter
+	/^[\uE000-\uF8FF\s]+$/, // icon glyphs only
+]
+
+const stripAccents = (s: string) =>
+	s.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+const isHeaderLine = (line: string) =>
+	line
+		.split(/\s+/)
+		.every((w) => HEADER_WORDS.has(stripAccents(w).toUpperCase()))
+
+/** code, description (ending in a non-number), initial, used, return. */
+function parseRow(
+	line: string,
+): { code: string; initial: number; used: number; ret: number } | null {
+	const tokens = line.split(/\s+/)
+	if (tokens.length < 5 || !CODE.test(tokens[0])) return null
+	const [last4, initial, used, ret] = tokens.slice(-4)
+	if (![initial, used, ret].every((t) => INT.test(t))) return null
+	// Exactly three trailing integers: a description ending in a number leaves
+	// the columns ambiguous (e.g. quantities wrapped to the next line).
+	if (INT.test(last4)) return null
+	return {
+		code: tokens[0],
+		initial: Number(initial),
+		used: Number(used),
+		ret: Number(ret),
+	}
+}
 
 /**
  * Best-effort read of the "MATERIALES USADOS TOTALES" table of an Aviso print.
  * Returns the rows (code + cantidad usada), `[]` for the explicit empty table,
- * or `null` whenever it cannot place everything with confidence (OCR noise,
- * unknown code, duplicate code, odd quantity, missing section). Never guesses.
+ * or `null` whenever it cannot place everything with confidence. Never guesses:
+ * between the section heading and the `Comentarios` line every line must be a
+ * column-header line (before any row), the empty marker (as the only content),
+ * a well-formed row of a known, not repeated code whose quantities add up
+ * (initial = used + return), or known page chrome. Anything else is null.
  */
 export function parseAvisoMaterials(
 	text: string,
@@ -30,28 +82,31 @@ export function parseAvisoMaterials(
 		.split(/\r?\n/)
 		.map((l) => l.trim())
 		.filter(Boolean)
+	if (!SECTION_LINE.test(lines[0] ?? "")) return null
 	const rows: AvisoMaterialRow[] = []
 	const seen = new Set<string>()
-	let sawEmpty = false
-	for (const line of lines) {
-		if (END.test(line)) break
+	let empties = 0
+	let ended = false
+	for (const line of lines.slice(1)) {
+		if (END.test(line)) {
+			ended = true
+			break
+		}
+		if (CHROME.some((re) => re.test(line))) continue
+		if (rows.length === 0 && empties === 0 && isHeaderLine(line)) continue
 		if (EMPTY.test(line)) {
-			sawEmpty = true
+			empties++
 			continue
 		}
-		const tokens = line.split(/\s+/)
-		if (!CODE_LIKE.test(tokens[0])) continue
-		// A row: code, description/cuenta, then initial, used, return.
-		if (tokens.length < 5) return null
-		const [initial, used, ret] = tokens.slice(-3)
-		if (!INT.test(initial) || !INT.test(used) || !INT.test(ret)) return null
-		const code = tokens[0]
-		if (!knownCodes.has(code) || seen.has(code)) return null
-		seen.add(code)
-		rows.push({ claroCode: code, used: Number(used) })
+		const row = parseRow(line)
+		if (!row || row.initial !== row.used + row.ret) return null
+		if (!knownCodes.has(row.code) || seen.has(row.code)) return null
+		seen.add(row.code)
+		rows.push({ claroCode: row.code, used: row.used })
 	}
-	if (rows.length > 0) return sawEmpty ? null : rows
-	return sawEmpty ? [] : null
+	if (!ended) return null
+	if (empties === 0) return rows.length > 0 ? rows : null
+	return empties === 1 && rows.length === 0 ? [] : null
 }
 
 /** Differences between what the work order says and what the Aviso shows. */

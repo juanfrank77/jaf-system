@@ -47,7 +47,6 @@ function loaderData(overrides: Record<string, unknown> = {}) {
 		},
 		blueprints: ["1-0-plan.pdf"],
 		blueprintRequired: true,
-		prefieldRequired: false,
 		stage: "FIELD",
 		materialsTaken: [{ serviceCodeId: "sc-1", qty: 5 }],
 		estimatedMaterials: [{ serviceCodeId: "sc-1", qty: 4 }],
@@ -159,11 +158,25 @@ describe("Field screen (render)", () => {
 		expect(order).toEqual([...order].sort((x, y) => x - y))
 	})
 
-	it("shows the Prefield note only when the Claro supervisor requires it", async () => {
-		expect(await render()).not.toContain("requires Prefield")
-		expect(await render(loaderData({ prefieldRequired: true }))).toContain(
-			"requires Prefield",
-		)
+	it("has no Prefield card (Prefield is filled in at the Aviso step, not here)", async () => {
+		const html = await render()
+		expect(html).not.toContain("Prefield")
+		expect(html).not.toContain("Aviso step")
+	})
+
+	it("asks the supervisor for the material source the crew reports", async () => {
+		const html = await render()
+		expect(html).toContain("Field report")
+		expect(html).toMatch(/placeholder="[^"]*where the materials came from/i)
+	})
+
+	it("both file inputs accept exactly JPG, PNG and PDF", async () => {
+		const html = await render()
+		const accepts = [...html.matchAll(/type="file"[^>]*accept="([^"]*)"/g)]
+		const alt = [...html.matchAll(/accept="([^"]*)"[^>]*type="file"/g)]
+		const all = [...accepts, ...alt].map((m) => m[1])
+		expect(all.length).toBeGreaterThan(0)
+		for (const a of all) expect(a).toBe("image/jpeg,image/png,application/pdf")
 	})
 
 	it("marks the Field report required", async () => {

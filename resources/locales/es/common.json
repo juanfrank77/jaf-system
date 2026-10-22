@@ -653,7 +653,7 @@
 		"used_entry_label": "Instalado",
 		"ordered_vs_installed_hint": "La diferencia entre pedido e instalado es solo informativa.",
 		"field_notes_label": "Reporte de campo",
-		"field_notes_placeholder": "Cualquier otro detalle del trabajo. Escribe N/A si no hay nada que añadir.",
+		"field_notes_placeholder": "Lo que la cuadrilla reportó en el sitio. Anote de dónde salieron los materiales (almacén o inventario propio de la cuadrilla). Escriba N/A si no hay nada que agregar.",
 		"photos_label": "Fotos",
 		"photos_hint": "Las fotos son el respaldo para la presentación a Claro del supervisor — se guardan en el servidor.",
 		"photos_before_label": "Fotos antes",
@@ -672,8 +672,8 @@
 			"used_exceeds_took": "El material entregado por el almacén no puede superar lo firmado en la recogida. Registra el material adicional con otra Fuente.",
 			"completion_signature_required": "Se requiere la firma de completado.",
 			"invalid_service_lines": "No se pudieron leer las cantidades de servicio instaladas.",
-			"photo_invalid": "Las fotos deben ser JPEG, PNG, WebP o HEIC, de hasta 10 MB.",
-			"blueprint_invalid": "El plano debe ser un PDF (hasta 30 MB) o una foto (JPEG, PNG, WebP o HEIC, hasta 10 MB).",
+			"photo_invalid": "Las fotos deben ser JPG, PNG o PDF, de hasta 10 MB (PDF hasta 30 MB).",
+			"blueprint_invalid": "El plano debe ser JPG, PNG o PDF (PDF hasta 30 MB, imágenes hasta 10 MB).",
 			"address_required": "La Dirección 1 es obligatoria.",
 			"photos_required": "Agrega al menos una foto de Antes y una de Después para continuar.",
 			"field_report_required": "El reporte de campo es obligatorio para continuar. Escribe N/A si no hay nada que añadir."
@@ -731,9 +731,7 @@
 			"unit": "Unidad",
 			"brigade": "Brigada"
 		},
-		"admin_override": "Ya está firmado. Lo está editando como Admin.",
-		"prefield_label": "Prefield",
-		"prefield_note": "Este supervisor de Claro requiere Prefield. Se completa desde la orden de trabajo en el paso del Aviso (5) y va en el paquete."
+		"admin_override": "Ya está firmado. Lo está editando como Admin."
 	},
 	"docs_review": {
 		"readonly_title": "Paso completado.",

@@ -181,6 +181,31 @@ describe("AvisoCard (step 6)", () => {
 		expect(screen.getByText(/Claro counted a returned pole/)).toBeVisible()
 	})
 
+	it("offers no note form on a saved discrepancy (a note is always saved with it)", async ({
+		renderStub,
+	}) => {
+		await mount(
+			renderStub,
+			<AvisoCard
+				{...base}
+				saved
+				avisoNumber="10353961"
+				avisoDocPath="/a"
+				discrepancy={{
+					detectedAt: "2026-10-20T00:00:00.000Z",
+					differences: [DIFF],
+					note: null,
+					noteAt: null,
+					noteById: null,
+				}}
+			/>,
+		)
+		expect(
+			screen.getByText("Aviso differs from your work order."),
+		).toBeVisible()
+		expect(screen.queryByLabelText(/Explain the difference/)).toBeNull()
+	})
+
 	it("lists replaced Avisos in the history, marked replaced", async ({
 		renderStub,
 	}) => {

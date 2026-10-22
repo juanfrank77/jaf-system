@@ -216,25 +216,13 @@ export function AvisoCard({
 									{t("docs_review.aviso_discrepancy_body")}
 								</p>
 								<DifferenceList differences={discrepancy.differences} />
-								{discrepancy.note ? (
+								{/* A discrepancy is only ever saved with its note. */}
+								{discrepancy.note && (
 									<p className="text-sm">
 										{t("docs_review.aviso_discrepancy_note", {
 											note: discrepancy.note,
 										})}
 									</p>
-								) : (
-									!readOnly &&
-									!locked && (
-										<Form method="post">
-											<input type="hidden" name="intent" value="save_aviso" />
-											<input
-												type="hidden"
-												name="avisoNumber"
-												value={avisoNumber ?? ""}
-											/>
-											<ContinueWithNote />
-										</Form>
-									)
 								)}
 							</div>
 						)}

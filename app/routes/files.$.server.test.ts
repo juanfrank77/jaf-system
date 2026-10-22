@@ -378,3 +378,69 @@ describe("files loader — legacy priced JAF invoices (jaf-invoices/)", () => {
 		expect((await get("packets/job-1-packet-1-ab.pdf")).status).toBe(200)
 	})
 })
+
+describe("files loader — Finance and Comptroller never see the Prefield or blueprints", () => {
+	let dir: string
+	const rels = [
+		"blueprints/job-1/1-0-plan.pdf",
+		"packets/job-1-prefield-123.pdf",
+		"packets/job-1-work-order-123.pdf",
+		"aviso-docs/job-1-aviso.pdf",
+		"precert/job-1-v2.pdf",
+		"photos/job-1/1-0-a.jpg",
+	]
+
+	beforeEach(async () => {
+		vi.clearAllMocks()
+		dir = await mkdtemp(path.join(tmpdir(), "files-test-"))
+		process.env.UPLOAD_DIR = dir
+		for (const rel of rels) {
+			await mkdir(path.dirname(path.join(dir, rel)), { recursive: true })
+			await writeFile(path.join(dir, rel), "bytes")
+		}
+		mocks.requireSession.mockResolvedValue({ user: { id: "u-1" } })
+		mocks.db.jafInvoice.findUnique.mockResolvedValue({
+			status: "SUPERVISOR_APPROVED",
+			supervisorId: "sup-1",
+			brigade: { area: "CENTRAL" },
+		} as any)
+	})
+
+	const as = (role: string, rel: string) => {
+		mocks.db.user.findUniqueOrThrow.mockResolvedValue({
+			id: "u-1",
+			role,
+		} as any)
+		return loader({
+			request: requestFor(`/files/${rel}`),
+			params: { "*": rel },
+		} as any) as Promise<Response>
+	}
+
+	for (const role of ["FINANCE", "COMPTROLLER"]) {
+		it(`denies ${role} the blueprints and the Prefield PDF`, async () => {
+			expect((await as(role, rels[0])).status).toBe(403)
+			expect((await as(role, rels[1])).status).toBe(403)
+		})
+
+		it(`still lets ${role} open the packet PDF, Aviso, Pre-cert and photos`, async () => {
+			for (const rel of rels.slice(2))
+				expect((await as(role, rel)).status).toBe(200)
+		})
+	}
+
+	it("keeps Admin and Supervisor on every file", async () => {
+		mocks.db.user.findUnique.mockResolvedValue({ supervisorAreas: [] } as any)
+		for (const rel of rels) {
+			expect((await as("ADMIN", rel)).status).toBe(200)
+		}
+		mocks.db.jafInvoice.findUnique.mockResolvedValue({
+			status: "SUPERVISOR_APPROVED",
+			supervisorId: "u-1",
+			brigade: { area: "CENTRAL" },
+		} as any)
+		for (const rel of rels) {
+			expect((await as("SUPERVISOR", rel)).status).toBe(200)
+		}
+	})
+})

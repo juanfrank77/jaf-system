@@ -1307,6 +1307,7 @@
 		"priced_invoice": "JAF invoice (priced)",
 		"claro_packet": "Claro packet (no prices)",
 		"priced_invoice_legacy": "JAF invoice (priced, legacy)",
+		"aviso_discrepancy_title": "Aviso differs from the supervisor's work order",
 		"packet": {
 			"heading": "Packet documents",
 			"work_order_pdf": "JAF work order PDF",

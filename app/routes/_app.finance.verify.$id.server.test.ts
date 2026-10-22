@@ -370,3 +370,52 @@ describe("Finance verify loader: the listed materials are the billed ones", () =
 		expect(data.materials).toEqual([{ serviceCodeId: "m1", qty: 10 }])
 	})
 })
+
+describe("Finance verify loader: the Aviso discrepancy flag", () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+		mocks.requireRole.mockResolvedValue({
+			user: { id: "finance-1", role: "FINANCE" },
+		})
+		mocks.computeFinanceStage.mockReturnValue("TO_VERIFY")
+		mocks.invoiceTotalUsed.mockReturnValue(100)
+		mocks.fetchInvoiceTotalContext.mockResolvedValue({
+			serviceCodes: [],
+			codeMap: {},
+			ivuRate: 0.115,
+			tolerance: 0.01,
+		})
+	})
+
+	const load = (doc: Record<string, unknown>) => {
+		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue({
+			...baseDoc(),
+			materialsUsed: [],
+			fieldMaterials: [],
+			...doc,
+		})
+		return loader({
+			request: new Request("http://localhost/finance/verify/job-1"),
+			params: { id: "job-1" },
+		} as any)
+	}
+
+	it("returns the discrepancy with its note for a flagged job", async () => {
+		const avisoDiscrepancy = {
+			detectedAt: "2026-10-20T00:00:00.000Z",
+			differences: [
+				{ claroCode: "12345678", name: "Cable", workOrder: 4, aviso: 3 },
+			],
+			note: "Claro miscounted",
+			noteAt: "2026-10-21T00:00:00.000Z",
+			noteById: "sup-1",
+		}
+		const data = await load({ avisoDiscrepancy })
+		expect(data.avisoDiscrepancy).toEqual(avisoDiscrepancy)
+	})
+
+	it("returns null when the job is not flagged", async () => {
+		expect((await load({ avisoDiscrepancy: null })).avisoDiscrepancy).toBeNull()
+		expect((await load({})).avisoDiscrepancy).toBeNull()
+	})
+})

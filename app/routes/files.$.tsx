@@ -40,6 +40,18 @@ function extractDocId(relativePath: string): string | null {
 	return docId
 }
 
+/**
+ * The stored Prefield PDF and the job's blueprints are for the supervisor and
+ * the brigade, not Finance or the Comptroller.
+ */
+const PACKET_PREFIELD = /^packets\/[^/]*-prefield-[^/]*$/
+const FINANCE_SIDE_ROLES = ["FINANCE", "COMPTROLLER"]
+function isFinanceHiddenFile(normalized: string): boolean {
+	return (
+		normalized.startsWith("blueprints/") || PACKET_PREFIELD.test(normalized)
+	)
+}
+
 async function canAccessDoc(
 	doc: {
 		status: string
@@ -217,6 +229,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		if (
 			normalized.startsWith(PRICED_FOLDER) &&
 			!PRICED_ROLES.includes(user.role)
+		)
+			return new Response("Forbidden", { status: 403 })
+		if (
+			FINANCE_SIDE_ROLES.includes(user.role) &&
+			isFinanceHiddenFile(normalized)
 		)
 			return new Response("Forbidden", { status: 403 })
 		const docId = extractDocId(relativePath)

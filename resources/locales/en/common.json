@@ -1344,6 +1344,8 @@
 		"priced_invoice_legacy": "JAF invoice (priced, legacy)",
 		"aviso_discrepancy_title": "Aviso differs from the supervisor's work order",
 		"packet": {
+			"download_all": "Download all",
+			"open_new_tab": "Open in a new tab",
 			"heading": "Packet documents",
 			"work_order_pdf": "JAF work order PDF",
 			"work_order_pdf_detail": "Sent to Claro",

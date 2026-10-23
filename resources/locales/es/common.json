@@ -1344,6 +1344,8 @@
 		"priced_invoice_legacy": "Factura JAF (con precios, anterior)",
 		"aviso_discrepancy_title": "El Aviso difiere de la orden de trabajo del supervisor",
 		"packet": {
+			"download_all": "Descargar todo",
+			"open_new_tab": "Abrir en una pestaña nueva",
 			"heading": "Documentos del paquete",
 			"work_order_pdf": "PDF de orden de trabajo JAF",
 			"work_order_pdf_detail": "Enviado a Claro",

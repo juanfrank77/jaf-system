@@ -102,9 +102,7 @@ export function PoConfirmView({
 				)}
 				{po.readError && (
 					<p className="text-sm text-status-warn">
-						{po.readError === "reader_not_configured"
-							? t("po_inbox.reader_off")
-							: t("po_inbox.read_failed")}
+						{t("po_inbox.read_failed")}
 					</p>
 				)}
 				{po.checks.length > 0 && (

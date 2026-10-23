@@ -2455,7 +2455,6 @@
 		"pages": "{{have}} de {{of}} páginas en el archivo",
 		"po_title": "PO {{number}}",
 		"n_checks": "{{count}} por revisar",
-		"reader_off": "El lector automático no está configurado. Escriba los campos del PO que se ve a la izquierda.",
 		"read_failed": "No se pudo leer el PO automáticamente. Escriba los campos del PO a la izquierda, o léalo de nuevo.",
 		"field": {
 			"po": "PO #",

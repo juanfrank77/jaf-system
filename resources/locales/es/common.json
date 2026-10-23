@@ -239,6 +239,8 @@
 			"comptroller_brigades": "Brigadas",
 			"comptroller_installers": "Instaladores",
 			"finance_payment_advice": "Aviso de pago",
+			"finance_avisos": "Registros de Avisos",
+			"finance_ledger": "Libro y reportes",
 			"finance_returned": "Devueltos",
 			"supervisor_stock": "Reabastecimiento e inventario",
 			"warehouse_brigade_stock": "Material de brigadas"
@@ -2703,6 +2705,111 @@
 			"reason_required": "Se requiere un motivo para aceptar un pago parcial.",
 			"invoice_not_found": "No hay una factura con ese número.",
 			"line_not_unmatched": "Esta fila ya tiene coincidencia."
+		}
+	},
+	"aviso_record": {
+		"source": {
+			"document": "Leído de un documento",
+			"stamped": "Sellado con un clic",
+			"entered": "Escrito a mano"
+		},
+		"missing": "FALTA",
+		"title": "Aviso {{number}}",
+		"closed": "Cerrado",
+		"open": "Abierto",
+		"not_started": "Sin iniciar",
+		"arm_a": "Brazo A",
+		"arm_b": "Brazo B",
+		"done": "Aviso terminado",
+		"supervisor": "Supervisor",
+		"work_order": "Orden de trabajo",
+		"billed": "Facturado",
+		"pod": "Con PO de Claro",
+		"in_ariba": "En Ariba",
+		"paid": "Pagado por Claro",
+		"outstanding": "Pendiente",
+		"a": {
+			"released": "Liberado",
+			"accepted": "Aceptado",
+			"sold": "Vendido a PBCC",
+			"payroll": "Solicitud de nómina",
+			"paid": "Brigada pagada",
+			"days": "Días Brazo A"
+		},
+		"batch": "lote #{{number}}",
+		"b": {
+			"po": "PO #",
+			"amount": "Monto",
+			"po_date": "Fecha del PO",
+			"invoice": "Factura #",
+			"in_ariba": "En Ariba",
+			"due": "Vence",
+			"paid": "Pagado por Claro",
+			"days": "Días"
+		},
+		"short": "faltan {{diff}}",
+		"past_due": "vencida",
+		"no_pos": "Aún no hay un PO confirmado para este Aviso.",
+		"legend": "D = leído de un documento · S = sellado con un clic · E = escrito a mano",
+		"documents": "Documentos",
+		"history": "Historial",
+		"back": "← Búsqueda de Avisos",
+		"search_title": "Registros de Avisos",
+		"search_placeholder": "Aviso #",
+		"search": "Buscar",
+		"no_results": "Ningún Aviso coincide."
+	},
+	"ledger": {
+		"title": "Libro y reportes",
+		"from": "Desde",
+		"to": "Hasta",
+		"apply_range": "Aplicar rango",
+		"export": "Exportar a Excel",
+		"report": {
+			"ledger": "Libro",
+			"arm_a": "Reloj Brazo A",
+			"waiting_po": "Esperando PO",
+			"aging": "Antigüedad Claro",
+			"open_money": "Dinero abierto"
+		},
+		"col": {
+			"aviso": "Aviso #",
+			"supervisor": "Supervisor",
+			"billed": "Facturado",
+			"sold": "Vendido a PBCC",
+			"brigade_paid": "Brigada pagada",
+			"pos": "POs",
+			"outstanding": "Pendiente",
+			"status": "Estado",
+			"month": "Mes de pago",
+			"count": "Avisos",
+			"avg_days": "Días promedio",
+			"batch": "Lote #",
+			"days": "Días",
+			"zone": "Zona",
+			"completed": "Trabajo terminado",
+			"first_po": "Primer PO",
+			"days_first": "Días al primer PO",
+			"fully_po": "PO completo",
+			"days_full": "Días al PO completo",
+			"still_to_po": "Falta por PO",
+			"invoice": "Factura #",
+			"loaded": "Cargada en Ariba",
+			"paid": "Pagada",
+			"terms": "Términos",
+			"days_late": "Días de atraso",
+			"amount": "Monto"
+		},
+		"status": {
+			"done": "Terminado",
+			"open": "Abierto"
+		},
+		"arm_a_average": "Promedio de {{days}} días desde vendido hasta brigada pagada, en {{count}} Avisos.",
+		"aging_summary": "{{count}} facturas vencidas, {{amount}}. Promedio de {{avg}} días desde cargada en Ariba hasta pagada.",
+		"open": {
+			"billed_not_pod": "Facturado, sin PO",
+			"pod_not_invoiced": "Con PO, sin factura",
+			"in_ariba_not_paid": "En Ariba, sin pagar"
 		}
 	},
 	"brigade_stock": {

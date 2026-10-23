@@ -89,6 +89,8 @@ describe("navGroupsFor", () => {
 					"/finance/awaiting-po",
 					"/finance/awaiting-ariba",
 					"/finance/payment-advice",
+					"/finance/avisos",
+					"/finance/ledger",
 					"/finance/receivables",
 				],
 			],

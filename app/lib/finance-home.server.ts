@@ -1,3 +1,4 @@
+import { claroPastDue } from "~/lib/aviso-ledger.server"
 import { db } from "~/lib/db.server"
 import { type FinanceHome, NEXT_UP_LIMIT } from "~/lib/finance-home"
 import { ageDays } from "~/lib/finance-stage-rows.server"
@@ -36,6 +37,7 @@ export async function loadFinanceHome(
 		nextUpRows,
 		posWaiting,
 		notLoaded,
+		pastDue,
 	] = await Promise.all([
 		db.jafInvoice.count({ where: stageWhere("PACKETS") }),
 		db.jafInvoice.findFirst({
@@ -87,6 +89,7 @@ export async function loadFinanceHome(
 			_count: true,
 			_min: { madeAt: true },
 		}),
+		claroPastDue(now),
 	])
 	const posToConfirm = {
 		count: posWaiting._count,
@@ -163,7 +166,12 @@ export async function loadFinanceHome(
 					? ageDays(notLoaded._min.madeAt, now)
 					: null,
 			},
-			{ key: "claro_past_due", count: null, href: null },
+			{
+				key: "claro_past_due",
+				count: pastDue.count,
+				href: "/finance/ledger?report=aging",
+				oldestDays: pastDue.count > 0 ? pastDue.oldestDays : null,
+			},
 		],
 		nextUp,
 	}

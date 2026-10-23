@@ -89,7 +89,7 @@ describe("navGroupsFor", () => {
 		])
 	})
 
-	it("marks Awaiting PO and Awaiting Ariba as disabled placeholders", () => {
+	it("marks PO inbox and Claro invoices as disabled placeholders", () => {
 		const items = navGroupsFor("FINANCE").flatMap((g) => g.items)
 		const disabled = items.filter((i) => i.disabled).map((i) => i.to)
 		expect(disabled).toEqual([

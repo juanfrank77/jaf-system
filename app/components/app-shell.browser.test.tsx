@@ -201,7 +201,7 @@ describe("AppShell", () => {
 		).toBeInTheDocument()
 	})
 
-	it("renders Awaiting PO as a disabled, non-link placeholder for FINANCE", async ({
+	it("renders PO inbox as a disabled, non-link placeholder for FINANCE", async ({
 		renderStub,
 	}) => {
 		await renderStub({
@@ -220,9 +220,9 @@ describe("AppShell", () => {
 			],
 		})
 		expect(
-			screen.queryByRole("link", { name: /Awaiting PO/, hidden: true }),
+			screen.queryByRole("link", { name: /PO inbox/, hidden: true }),
 		).toBeNull()
-		expect(screen.getAllByText(/Awaiting PO/).length).toBeGreaterThan(0)
+		expect(screen.getAllByText(/PO inbox/).length).toBeGreaterThan(0)
 		expect(screen.getAllByText("Soon").length).toBeGreaterThan(0)
 	})
 

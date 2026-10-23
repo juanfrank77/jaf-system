@@ -25,7 +25,7 @@ describe("finance step rails", () => {
 		expect(hrefs).toContain("/finance/awaiting-carmen")
 	})
 
-	it("locks Awaiting PO and Awaiting Ariba on the Arm B rail", async ({
+	it("locks PO inbox and Claro invoices on the Arm B rail", async ({
 		renderStub,
 	}) => {
 		await renderStub({

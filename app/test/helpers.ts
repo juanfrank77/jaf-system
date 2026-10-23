@@ -108,6 +108,14 @@ export function makeTracker() {
 					OR: [{ id: { in: b.notification } }, { userId: { in: b.user } }],
 				},
 			})
+		// ClaroInvoice→ClaroPo/JafInvoice/User are FK'd: invoices go before POs.
+		if (b.jafInvoice.length || b.user.length) {
+			await db.claroInvoice.deleteMany({
+				where: {
+					OR: [{ docId: { in: b.jafInvoice } }, { madeById: { in: b.user } }],
+				},
+			})
+		}
 		// ClaroPo→JafInvoice/User are FK'd: the PO rows go first.
 		if (b.claroPo.length || b.jafInvoice.length || b.user.length) {
 			await db.claroPo.deleteMany({

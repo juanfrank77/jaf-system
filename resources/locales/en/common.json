@@ -2498,5 +2498,34 @@
 			"already_confirmed": "This PO is already confirmed.",
 			"unknown": "Something went wrong."
 		}
+	},
+	"claro_invoices": {
+		"tab": {
+			"to_make": "To make",
+			"not_loaded": "Not loaded",
+			"in_ariba": "In Ariba"
+		},
+		"col": {
+			"po": "PO #",
+			"aviso": "Aviso",
+			"total": "Total",
+			"work_month": "Work month",
+			"invoice": "Invoice #",
+			"made": "Made",
+			"loaded": "Loaded in Ariba",
+			"due": "Due"
+		},
+		"empty_to_make": "No confirmed POs are waiting for an invoice.",
+		"empty_not_loaded": "Every invoice made has been loaded in Ariba.",
+		"empty_in_ariba": "No invoice has been loaded in Ariba yet.",
+		"select_row": "Select {{number}}",
+		"make": "Make invoices",
+		"download": "Download selected (zip)",
+		"mark_loaded": "Mark loaded in Ariba",
+		"made_summary": "Made {{made}} invoices; {{failed}} could not be made.",
+		"marked_summary": "Marked {{count}} invoices as loaded in Ariba.",
+		"errors": {
+			"none_selected": "Select at least one row."
+		}
 	}
 }

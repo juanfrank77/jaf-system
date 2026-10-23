@@ -196,6 +196,8 @@ model User {
   payrollRunSender       PayrollRun[]        @relation("PayrollRunSender")
   claroPosUploaded       ClaroPo[]           @relation("ClaroPoUploader")
   claroPosConfirmed      ClaroPo[]           @relation("ClaroPoConfirmer")
+  claroInvoicesMade      ClaroInvoice[]      @relation("ClaroInvoiceMaker")
+  claroInvoicesLoaded    ClaroInvoice[]      @relation("ClaroInvoiceLoader")
   payrollRunPaidBy       PayrollRun[]        @relation("PayrollRunPaidBy")
   payrollRunAccountsPaid PayrollRunAccount[] @relation("PayrollRunAccountPaidBy")
   payrollRunReversedBy   PayrollRun[]        @relation("PayrollRunReversedBy")
@@ -468,6 +470,7 @@ model JafInvoice {
   photos         Photo[]
   poLinks        PoLink[]
   claroPos       ClaroPo[]
+  claroInvoices  ClaroInvoice[]
   paymentRecords PaymentRecord[]
   packetSends    PacketSend[]
 
@@ -633,11 +636,40 @@ model ClaroPo {
   confirmedAt     DateTime?
   confirmedById   String?
   confirmedBy     User?         @relation("ClaroPoConfirmer", fields: [confirmedById], references: [id])
+  invoice         ClaroInvoice?
 
   @@index([status, receivedAt])
   @@index([poNumber])
   @@index([docId])
   @@index([fileHash])
+}
+
+// The "Factura de Pago - Claro" JAF makes from a confirmed PO and loads in Ariba
+// by hand. One PO per invoice. `seq` is the M19 series number: unique, so two
+// invoices can never share one.
+model ClaroInvoice {
+  id         String     @id @default(cuid())
+  seq        Int        @unique
+  claroPoId  String     @unique
+  claroPo    ClaroPo    @relation(fields: [claroPoId], references: [id])
+  docId      String
+  doc        JafInvoice @relation(fields: [docId], references: [id])
+  workMonth  String // "2026-05"
+  subtotal   Decimal
+  ivu4       Decimal
+  ivu115     Decimal
+  total      Decimal
+  filePath   String
+  madeAt     DateTime   @default(now())
+  madeById   String
+  madeBy     User       @relation("ClaroInvoiceMaker", fields: [madeById], references: [id])
+  loadedAt   DateTime?
+  loadedById String?
+  loadedBy   User?      @relation("ClaroInvoiceLoader", fields: [loadedById], references: [id])
+  dueDate    DateTime?
+
+  @@index([docId])
+  @@index([loadedAt])
 }
 
 model PreCertSheet {

@@ -35,6 +35,7 @@ export async function loadFinanceHome(
 		oldestRun,
 		nextUpRows,
 		posWaiting,
+		notLoaded,
 	] = await Promise.all([
 		db.jafInvoice.count({ where: stageWhere("PACKETS") }),
 		db.jafInvoice.findFirst({
@@ -79,6 +80,12 @@ export async function loadFinanceHome(
 			},
 			_count: true,
 			_min: { receivedAt: true },
+		}),
+		// Invoices made but not yet loaded in Ariba.
+		db.claroInvoice.aggregate({
+			where: { loadedAt: null },
+			_count: true,
+			_min: { madeAt: true },
 		}),
 	])
 	const posToConfirm = {
@@ -148,7 +155,14 @@ export async function loadFinanceHome(
 					? ageDays(posToConfirm.oldest.receivedAt, now)
 					: null,
 			},
-			{ key: "invoices_to_load", count: null, href: null },
+			{
+				key: "invoices_to_load",
+				count: notLoaded._count,
+				href: `${ARM_B_STEP_HREF.AWAITING_ARIBA}?tab=not_loaded`,
+				oldestDays: notLoaded._min.madeAt
+					? ageDays(notLoaded._min.madeAt, now)
+					: null,
+			},
 			{ key: "claro_past_due", count: null, href: null },
 		],
 		nextUp,

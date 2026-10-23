@@ -2501,5 +2501,34 @@
 			"already_confirmed": "Este PO ya está confirmado.",
 			"unknown": "Algo salió mal."
 		}
+	},
+	"claro_invoices": {
+		"tab": {
+			"to_make": "Por hacer",
+			"not_loaded": "Sin cargar",
+			"in_ariba": "En Ariba"
+		},
+		"col": {
+			"po": "PO #",
+			"aviso": "Aviso",
+			"total": "Total",
+			"work_month": "Mes del trabajo",
+			"invoice": "Factura #",
+			"made": "Hecha",
+			"loaded": "Cargada en Ariba",
+			"due": "Vence"
+		},
+		"empty_to_make": "No hay POs confirmados esperando factura.",
+		"empty_not_loaded": "Todas las facturas hechas ya se cargaron en Ariba.",
+		"empty_in_ariba": "Aún no se ha cargado ninguna factura en Ariba.",
+		"select_row": "Seleccionar {{number}}",
+		"make": "Hacer facturas",
+		"download": "Descargar seleccionadas (zip)",
+		"mark_loaded": "Marcar cargadas en Ariba",
+		"made_summary": "{{made}} facturas hechas; {{failed}} no se pudieron hacer.",
+		"marked_summary": "{{count}} facturas marcadas como cargadas en Ariba.",
+		"errors": {
+			"none_selected": "Seleccione al menos una fila."
+		}
 	}
 }

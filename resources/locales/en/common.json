@@ -1392,39 +1392,6 @@
 		"precert_signers": "Signed by: {{supervisor}}, {{contractor}}, {{claro}}",
 		"precert_missing": "Pre-cert sheet missing"
 	},
-	"finance_po": {
-		"title": "Claro PO & Final Document",
-		"job_type": "Job Type",
-		"address": "Address",
-		"amount": "Invoice amount",
-		"ivu_rate": "IVU rate: {{rate}}%",
-		"recorded_pos": "Recorded POs",
-		"record_po_heading": "Record Claro PO",
-		"po_number_label": "Claro PO #",
-		"po_date_label": "PO Date",
-		"po_pdf_label": "PO PDF (optional)",
-		"amount_label": "PO Amount",
-		"amount_hint": "Enter the actual amount received from Claro.",
-		"amount_placeholder": "0.00",
-		"record_po": "Record PO",
-		"po_mismatch_warning": "PO amount {{poAmount}} differs from invoice total {{invoiceAmount}}. This does not block progression.",
-		"generate_final_doc_heading": "Generate Final Claro Document",
-		"generate_final_doc_hint": "Generate the signed-upload PDF for Claro's portal.",
-		"generate_final_doc": "Generate Final Document",
-		"final_doc_heading": "Final Claro Document",
-		"final_doc_hint": "Sign this PDF and upload it to Claro's portal.",
-		"download_final_doc": "Download final document",
-		"uploaded_on": "Uploaded on {{date}}",
-		"errors": {
-			"unknown_intent": "Unknown action.",
-			"record_po_stage": "This job is not at the Record PO stage.",
-			"generate_final_stage": "This job is not at the Generate final document stage.",
-			"po_number_required": "PO number is required.",
-			"invalid_po_amount": "Enter a valid non-negative PO amount.",
-			"record_po_first": "Record a PO before generating the final document.",
-			"terminal_status": "This job is no longer editable."
-		}
-	},
 	"material_picker": {
 		"results_count": "{{shown}} of {{total}} materials shown",
 		"search_placeholder": "type a material — \"cable\", \"poste\", \"splice\"…",
@@ -2016,7 +1983,10 @@
 		}
 	},
 	"pbcc_batch": {
-		"tab": { "open": "Open", "sent": "Sent" },
+		"tab": {
+			"open": "Open",
+			"sent": "Sent"
+		},
 		"open_heading": "PBCC batch #{{number}} · open",
 		"summary": "{{count}} of {{max}} packets · Subtotal {{subtotal}} · {{percent}}% advance {{advance}}",
 		"summary_note": "The advance is figured on the subtotal, before IVU.",

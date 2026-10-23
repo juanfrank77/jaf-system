@@ -121,7 +121,6 @@ export default [
 			"finance/payroll/:runId/journal",
 			"routes/_app.finance.payroll.$runId.journal.tsx",
 		),
-		route("finance/po/:id", "routes/_app.finance.po.$id.tsx"),
 		route("comptroller", "routes/_app.comptroller.tsx"),
 		route("comptroller/lists", "routes/_app.comptroller.lists.tsx"),
 		route("comptroller/to-pay", "routes/_app.comptroller.to-pay.tsx"),

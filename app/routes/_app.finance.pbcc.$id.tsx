@@ -20,10 +20,10 @@ import { sendInternalEmail } from "~/lib/email.server"
 import {
 	computeFinanceStage,
 	financeLineItems,
-	invoiceTotalUsed,
 } from "~/lib/finance-pipeline.server"
 import { FINANCE_STEPS, pbccStep, stepNumber } from "~/lib/finance-steps"
 import { armAOpenWhere } from "~/lib/payroll-run.server"
+import { rowAmounts } from "~/lib/pbcc-batch.server"
 import { generatePbccRequestPdf } from "~/lib/pdf/pbcc-request.server"
 import { isTerminalStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
@@ -78,7 +78,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		getIvuRate(),
 		getLcPbccAdvanceRate(),
 	])
-	const amount = invoiceTotalUsed(doc, codeMap, ivuRate)
+	const amount = rowAmounts(doc).total
 
 	// A job already swept into a run (grossPayable set) has its payment
 	// frozen — show that, never live-recompute it, so a later catalog price

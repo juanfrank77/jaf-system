@@ -9,6 +9,7 @@ export type StageRow = {
 	controlNumber: string
 	avisoNumber: string | null
 	contractorLabel: string | null
+	supervisorName?: string | null
 	ageDays: number
 	amount: number
 	docs: {
@@ -16,7 +17,6 @@ export type StageRow = {
 		aviso: boolean
 		preCert: boolean
 		photos: boolean
-		account: boolean
 	}
 	/** Step 4 only: contractor account resolves, so a list can include it. */
 	accountResolved?: boolean
@@ -50,6 +50,9 @@ export function FinanceStageTable({
 						<th className="p-2">{t("finance_stage.col.work_order")}</th>
 						<th className="p-2">{t("finance_stage.col.aviso")}</th>
 						<th className="p-2">{t("finance_stage.col.contractor")}</th>
+						{showDocs && (
+							<th className="p-2">{t("finance_stage.col.supervisor")}</th>
+						)}
 						<th className="p-2 text-right">{t("finance_stage.col.amount")}</th>
 						{showDocs && <th className="p-2">{t("finance_stage.col.docs")}</th>}
 						<th className="p-2 text-right">{t(ageLabelKey as never)}</th>
@@ -76,6 +79,7 @@ export function FinanceStageTable({
 							</td>
 							<td className="p-2">{r.avisoNumber ?? "—"}</td>
 							<td className="p-2">{r.contractorLabel ?? "—"}</td>
+							{showDocs && <td className="p-2">{r.supervisorName ?? "—"}</td>}
 							<td className="p-2 text-right font-mono">
 								{formatMoney(r.amount)}
 							</td>
@@ -92,9 +96,6 @@ export function FinanceStageTable({
 									</Badge>
 									<Badge variant={r.docs.photos ? "ok" : "warn"}>
 										{t("finance_stage.doc.photos")}
-									</Badge>
-									<Badge variant={r.docs.account ? "ok" : "warn"}>
-										{t("finance_stage.doc.account")}
 									</Badge>
 								</td>
 							)}
@@ -113,15 +114,20 @@ export function StagePagination({
 	basePath,
 	pagination,
 	pageSize,
+	params = {},
 }: {
 	basePath: string
 	pagination: { page: number; totalPages: number; totalCount: number }
 	pageSize: number
+	/** Filters to keep when paging, e.g. `{ search: "1035" }`. */
+	params?: Record<string, string>
 }) {
 	const { t } = useTranslation()
 	if (pagination.totalPages <= 1) return null
 	// basePath may already carry a query (the Returned view).
 	const sep = basePath.includes("?") ? "&" : "?"
+	const pageHref = (page: number) =>
+		`${basePath}${sep}${new URLSearchParams({ ...params, page: String(page) })}`
 	return (
 		<div className="flex items-center justify-between text-sm">
 			<span className="text-muted-foreground">
@@ -133,7 +139,7 @@ export function StagePagination({
 			</span>
 			<div className="flex gap-2">
 				<Link
-					to={`${basePath}${sep}page=${Math.max(1, pagination.page - 1)}`}
+					to={pageHref(Math.max(1, pagination.page - 1))}
 					className={
 						pagination.page <= 1 ? "pointer-events-none opacity-50" : undefined
 					}
@@ -147,7 +153,7 @@ export function StagePagination({
 					})}
 				</span>
 				<Link
-					to={`${basePath}${sep}page=${pagination.page + 1}`}
+					to={pageHref(pagination.page + 1)}
 					className={
 						pagination.page >= pagination.totalPages
 							? "pointer-events-none opacity-50"

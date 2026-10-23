@@ -11,7 +11,9 @@ import {
 	financeSendBackIds,
 	stageWhere,
 } from "~/lib/finance-stages.server"
+import { computeInvoiceTotals } from "~/lib/invoice-totals"
 import { evaluateReleaseGate } from "~/lib/release-gate"
+import type { InvoiceLine } from "~/lib/service-lines"
 import type { Prisma } from "../../generated/prisma/client"
 
 /** Whole days elapsed since `from` (0 when unset). */
@@ -30,8 +32,11 @@ export async function loadStageRows(opts: {
 	 * the ids of every stage job (all pages) whose contractor account resolves.
 	 * One `resolveContractorAccounts` call covers the whole stage. */
 	withAccounts?: boolean
+	/** Work order or Aviso number, matched anywhere in the number. */
+	search?: string
+	supervisorId?: string
 	/** Step 1 only (S4): "all" leaves the packets Finance sent back out and
-	 * lists a resent one first; "only" is the Returned list. */
+	 * lists a resent one first; "returned" is the Returned list. */
 	view?: "all" | "returned"
 }): Promise<{ rows: StageRow[]; totalCount: number; sweepableIds: string[] }> {
 	const packets = opts.stage === "PACKETS"
@@ -39,12 +44,23 @@ export async function loadStageRows(opts: {
 		? await financeSendBackIds()
 		: { returned: [], resent: [] as string[] }
 	const returnedView = packets && opts.view === "returned"
+	const search = opts.search?.trim()
+	const filters: Prisma.JafInvoiceWhereInput = {
+		...(opts.supervisorId && { supervisorId: opts.supervisorId }),
+		...(search && {
+			OR: [
+				{ controlNumber: { contains: search, mode: "insensitive" } },
+				{ avisoNumber: { contains: search, mode: "insensitive" } },
+			],
+		}),
+	}
 	const where: Prisma.JafInvoiceWhereInput = returnedView
 		? {
 				...stageWhere(opts.stage),
 				id: { in: sent.returned },
+				...filters,
 			}
-		: stageWhere(opts.stage, sent.returned)
+		: { ...stageWhere(opts.stage, sent.returned), ...filters }
 	const orderBy: Prisma.JafInvoiceOrderByWithRelationInput[] = [
 		{ releasedToFinanceAt: "asc" },
 		{ id: "asc" },
@@ -103,6 +119,7 @@ export async function loadStageRows(opts: {
 				},
 				photos: { select: { tag: true } },
 				brigade: { select: { leadName: true, name: true } },
+				supervisor: { select: { name: true } },
 			},
 		}),
 	])
@@ -154,11 +171,20 @@ export async function loadStageRows(opts: {
 				aviso: isAvisoSaved(d),
 				preCert: has("precert_signed"),
 				photos: has("photos"),
-				account: Boolean(d.contractorAccountCode),
 			},
-			amount: computeContractorPayment(
-				toContractorPaymentLines(d.jafInvoiceLines),
-			).grossPayable,
+			supervisorName: d.supervisor?.name ?? null,
+			// The packet-side lists show the invoice record's total; only the
+			// payroll list is the brigade's labor share.
+			amount:
+				opts.stage === "LISTS"
+					? computeContractorPayment(
+							toContractorPaymentLines(d.jafInvoiceLines),
+						).grossPayable
+					: computeInvoiceTotals(
+							Array.isArray(d.jafInvoiceLines)
+								? (d.jafInvoiceLines as InvoiceLine[])
+								: [],
+						).total,
 			...(packets && {
 				resent: sent.resent.includes(d.id) && !d.financeVerifiedAt,
 				returned: returnedView,

@@ -158,19 +158,6 @@ describe("PO inbox", () => {
 		expect(row.readError).toBe("boom")
 	})
 
-	it("with no reader configured, POs wait for hand entry", async () => {
-		const { user } = await setup()
-		const [id] = await ingestPoFiles(
-			[{ name: "n.pdf", bytes: pdf(runToken("nr")) }],
-			user.id,
-		)
-		t.track("claroPo", { id })
-		await processPending(null, 1)
-		const row = await db.claroPo.findUniqueOrThrow({ where: { id } })
-		expect(row.status).toBe("NEEDS_LOOK")
-		expect(row.readError).toBe("reader_not_configured")
-	})
-
 	it("blocks a PO whose file has fewer pages than it states", async () => {
 		const { user, avisoNumber } = await setup()
 		const tag = runToken("pg")

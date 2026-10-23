@@ -34,9 +34,9 @@ export const ARM_B_STEP_HREF: Record<ArmBStep, string> = {
 	RECEIVABLES: "/finance/receivables",
 }
 
-/** Awaiting PO / Awaiting Ariba are placeholders until the Arm B phase. */
+/** Awaiting Ariba is a placeholder until its step is built. */
 export const ARM_B_STEP_AVAILABLE: Record<ArmBStep, boolean> = {
-	AWAITING_PO: false,
+	AWAITING_PO: true,
 	AWAITING_ARIBA: false,
 	RECEIVABLES: true,
 }

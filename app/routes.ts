@@ -68,6 +68,12 @@ export default [
 		route("finance/queue", "routes/_app.finance.queue.tsx"),
 		route("finance/lc-requests", "routes/_app.finance.lc-requests.tsx"),
 		route("finance/receivables", "routes/_app.finance.receivables.tsx"),
+		route("finance/awaiting-po", "routes/_app.finance.awaiting-po.tsx"),
+		route("finance/awaiting-po/:id", "routes/_app.finance.awaiting-po.$id.tsx"),
+		route(
+			"finance/awaiting-po/:id/file",
+			"routes/_app.finance.awaiting-po.$id.file.tsx",
+		),
 		route("finance/verify/:id", "routes/_app.finance.verify.$id.tsx"),
 		route(
 			"finance/verify/:id/packet.zip",

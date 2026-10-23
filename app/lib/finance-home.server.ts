@@ -6,7 +6,11 @@ import {
 	carmenOpenSummary,
 	stageWhere,
 } from "~/lib/finance-stages.server"
-import { FINANCE_STEP_HREF, type FinanceStep } from "~/lib/finance-steps"
+import {
+	ARM_B_STEP_HREF,
+	FINANCE_STEP_HREF,
+	type FinanceStep,
+} from "~/lib/finance-steps"
 import { rowAmounts } from "~/lib/pbcc-batch.server"
 
 const NEXT_UP_STAGES: { stage: ArmAListStage; step: FinanceStep }[] = [
@@ -23,45 +27,66 @@ function itemHref(step: FinanceStep, id: string): string {
 export async function loadFinanceHome(
 	now: Date = new Date(),
 ): Promise<FinanceHome> {
-	const [inboxCount, inboxOldest, openBatch, carmen, oldestRun, nextUpRows] =
-		await Promise.all([
-			db.jafInvoice.count({ where: stageWhere("PACKETS") }),
-			db.jafInvoice.findFirst({
-				where: stageWhere("PACKETS"),
-				orderBy: { releasedToFinanceAt: "asc" },
-				select: { releasedToFinanceAt: true },
-			}),
-			// The open PBCC batch (rows and subtotal); until one exists, the
-			// accepted packets waiting for it.
-			db.bankSchedule.findFirst({
-				where: { closedAt: null },
-				orderBy: { generatedAt: "desc" },
-				select: { total: true, _count: { select: { invoices: true } } },
-			}),
-			carmenOpenSummary(now),
-			db.payrollRun.findFirst({
-				where: { paidAt: null, reversedAt: null, sentAt: { not: null } },
-				orderBy: { sentAt: "asc" },
-				select: { sentAt: true },
-			}),
-			Promise.all(
-				NEXT_UP_STAGES.map(({ stage, step }) =>
-					db.jafInvoice
-						.findMany({
-							where: stageWhere(stage),
-							orderBy: [{ releasedToFinanceAt: "asc" }, { id: "asc" }],
-							take: NEXT_UP_LIMIT,
-							select: {
-								id: true,
-								controlNumber: true,
-								avisoNumber: true,
-								releasedToFinanceAt: true,
-							},
-						})
-						.then((rows) => rows.map((row) => ({ ...row, step }))),
-				),
+	const [
+		inboxCount,
+		inboxOldest,
+		openBatch,
+		carmen,
+		oldestRun,
+		nextUpRows,
+		posWaiting,
+	] = await Promise.all([
+		db.jafInvoice.count({ where: stageWhere("PACKETS") }),
+		db.jafInvoice.findFirst({
+			where: stageWhere("PACKETS"),
+			orderBy: { releasedToFinanceAt: "asc" },
+			select: { releasedToFinanceAt: true },
+		}),
+		// The open PBCC batch (rows and subtotal); until one exists, the
+		// accepted packets waiting for it.
+		db.bankSchedule.findFirst({
+			where: { closedAt: null },
+			orderBy: { generatedAt: "desc" },
+			select: { total: true, _count: { select: { invoices: true } } },
+		}),
+		carmenOpenSummary(now),
+		db.payrollRun.findFirst({
+			where: { paidAt: null, reversedAt: null, sentAt: { not: null } },
+			orderBy: { sentAt: "asc" },
+			select: { sentAt: true },
+		}),
+		Promise.all(
+			NEXT_UP_STAGES.map(({ stage, step }) =>
+				db.jafInvoice
+					.findMany({
+						where: stageWhere(stage),
+						orderBy: [{ releasedToFinanceAt: "asc" }, { id: "asc" }],
+						take: NEXT_UP_LIMIT,
+						select: {
+							id: true,
+							controlNumber: true,
+							avisoNumber: true,
+							releasedToFinanceAt: true,
+						},
+					})
+					.then((rows) => rows.map((row) => ({ ...row, step }))),
 			),
-		])
+		),
+		// POs read but not yet confirmed, whatever their colour.
+		db.claroPo.aggregate({
+			where: {
+				status: { in: ["READY", "NEEDS_LOOK", "BLOCKED", "UNMATCHED"] },
+			},
+			_count: true,
+			_min: { receivedAt: true },
+		}),
+	])
+	const posToConfirm = {
+		count: posWaiting._count,
+		oldest: posWaiting._min.receivedAt
+			? { receivedAt: posWaiting._min.receivedAt }
+			: null,
+	}
 
 	// Nothing is batched until the first accept after batches arrived: show the
 	// packets waiting to be taken in, so the box is never a false "all clear".
@@ -113,9 +138,16 @@ export async function loadFinanceHome(
 				oldestDays: oldestRun ? ageDays(oldestRun.sentAt, now) : null,
 			},
 		],
-		// Arm B screens arrive in later steps; until then their boxes are not live.
+		// The other Arm B boxes go live with their steps.
 		armB: [
-			{ key: "pos_to_confirm", count: null, href: null },
+			{
+				key: "pos_to_confirm",
+				count: posToConfirm.count,
+				href: ARM_B_STEP_HREF.AWAITING_PO,
+				oldestDays: posToConfirm.oldest
+					? ageDays(posToConfirm.oldest.receivedAt, now)
+					: null,
+			},
 			{ key: "invoices_to_load", count: null, href: null },
 			{ key: "claro_past_due", count: null, href: null },
 		],

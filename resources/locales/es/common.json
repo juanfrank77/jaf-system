@@ -2420,5 +2420,86 @@
 		"code": "Código",
 		"name": "Material",
 		"qty": "Cant."
+	},
+	"po_inbox": {
+		"uploaded_today": "{{count}} POs subidos hoy",
+		"choose_files": "Elegir PDFs de PO",
+		"upload": "Subir POs",
+		"confirm_all_green": "Confirmar todos los verdes ({{count}})",
+		"reading": "Leyendo {{count}} POs…",
+		"confirmed_summary": "{{confirmed}} POs confirmados; {{skipped}} quedan para revisar.",
+		"tab": {
+			"ready": "Listos",
+			"needs_look": "Por revisar",
+			"blocked": "Bloqueados",
+			"unmatched": "Sin Aviso",
+			"confirmed": "Confirmados"
+		},
+		"empty": "No hay POs aquí.",
+		"col": {
+			"po": "PO #",
+			"date": "Fecha del PO",
+			"aviso": "Aviso",
+			"total": "Total",
+			"checks": "Verificaciones"
+		},
+		"missing": "Falta",
+		"no_aviso": "Sin Aviso",
+		"all_passed": "Todo en orden",
+		"open": "Abrir",
+		"fix": "Corregir",
+		"link_aviso": "Enlazar Aviso",
+		"confirm": "Confirmar",
+		"image": "Orden de compra",
+		"open_file": "Abrir el PDF del PO",
+		"pages": "{{have}} de {{of}} páginas en el archivo",
+		"po_title": "PO {{number}}",
+		"n_checks": "{{count}} por revisar",
+		"reader_off": "El lector automático no está configurado. Escriba los campos del PO que se ve a la izquierda.",
+		"read_failed": "No se pudo leer el PO automáticamente. Escriba los campos del PO a la izquierda, o léalo de nuevo.",
+		"field": {
+			"po": "PO #",
+			"date": "Fecha del PO",
+			"aviso": "Aviso #",
+			"terms": "Términos de pago (días)",
+			"subtotal": "Subtotal",
+			"ivu4": "IVU 4%",
+			"ivu115": "IVU 11.5%",
+			"total": "Total"
+		},
+		"line": {
+			"item": "Partida",
+			"amount": "Monto",
+			"rate": "Tasa de IVU",
+			"ivu": "IVU"
+		},
+		"save_fix": "Guardar campos",
+		"aviso_money": "Este Aviso: JAF facturó {{billed}} · ya con PO {{already}} · este PO {{thisPo}}",
+		"confirm_po": "Confirmar PO",
+		"reread": "Leer de nuevo",
+		"back": "← Buzón de POs",
+		"check": {
+			"lines_sum": "Las líneas no suman el subtotal ({{detail}}).",
+			"totals": "El subtotal más el IVU no es igual al total.",
+			"ivu_line": "El IVU no es exacto al centavo en {{detail}}.",
+			"po_number_format": "El número de PO no tiene 10 dígitos.",
+			"duplicate": "Este PO ya está en el sistema.",
+			"pages_missing": "Faltan páginas ({{detail}}).",
+			"pages_unknown": "No se pudo leer el número de páginas.",
+			"po_date_missing": "Falta la fecha del PO.",
+			"terms_missing": "Faltan los términos de pago.",
+			"over_billed": "Los POs de este Aviso suman más de lo que JAF facturó ({{detail}}).",
+			"unreadable": "No se pudo leer el PO automáticamente."
+		},
+		"errors": {
+			"not_pdf": "Solo se pueden subir archivos PDF.",
+			"no_files": "Elija al menos un PDF.",
+			"not_confirmable": "Este PO aún no se puede confirmar. Corrija las verificaciones primero.",
+			"incomplete": "El PO necesita su número, fecha y Aviso antes de confirmarse.",
+			"duplicate": "Ya hay un PO confirmado con este número.",
+			"aviso_not_found": "No hay un Aviso con ese número.",
+			"already_confirmed": "Este PO ya está confirmado.",
+			"unknown": "Algo salió mal."
+		}
 	}
 }

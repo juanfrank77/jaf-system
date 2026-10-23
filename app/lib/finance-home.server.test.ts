@@ -96,12 +96,12 @@ describe("loadFinanceHome (integration)", () => {
 		expect(PBCC_BATCH_CAPACITY).toBe(100)
 	})
 
-	it("marks the Arm B boxes as not live", () => {
-		for (const key of [
-			"pos_to_confirm",
-			"invoices_to_load",
-			"claro_past_due",
-		]) {
+	it("makes POs to confirm live and leaves the later Arm B boxes not live", () => {
+		expect(tile(after, "pos_to_confirm")).toMatchObject({
+			href: "/finance/awaiting-po",
+		})
+		expect(typeof tile(after, "pos_to_confirm")?.count).toBe("number")
+		for (const key of ["invoices_to_load", "claro_past_due"]) {
 			expect(tile(after, key)).toMatchObject({ count: null, href: null })
 		}
 	})

@@ -80,13 +80,10 @@ describe("navGroupsFor", () => {
 		])
 	})
 
-	it("marks PO inbox and Claro invoices as disabled placeholders", () => {
+	it("keeps only Claro invoices as a disabled placeholder", () => {
 		const items = navGroupsFor("FINANCE").flatMap((g) => g.items)
 		const disabled = items.filter((i) => i.disabled).map((i) => i.to)
-		expect(disabled).toEqual([
-			"/finance/awaiting-po",
-			"/finance/awaiting-ariba",
-		])
+		expect(disabled).toEqual(["/finance/awaiting-ariba"])
 	})
 
 	it("gives WAREHOUSE a Work link per owned step first, then Workflow, then the other links", () => {

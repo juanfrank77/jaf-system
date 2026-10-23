@@ -65,6 +65,7 @@ export function makeTracker() {
 		bankSchedule: [] as string[],
 		auditTrail: [] as string[],
 		paymentRecord: [] as string[],
+		claroPo: [] as string[],
 		payrollRun: [] as string[],
 		payrollRunAccount: [] as string[],
 		contractorAccount: [] as string[],
@@ -107,6 +108,19 @@ export function makeTracker() {
 					OR: [{ id: { in: b.notification } }, { userId: { in: b.user } }],
 				},
 			})
+		// ClaroPo→JafInvoice/User are FK'd: the PO rows go first.
+		if (b.claroPo.length || b.jafInvoice.length || b.user.length) {
+			await db.claroPo.deleteMany({
+				where: {
+					OR: [
+						{ id: { in: b.claroPo } },
+						{ docId: { in: b.jafInvoice } },
+						{ uploadedById: { in: b.user } },
+					],
+				},
+			})
+			await db.poLink.deleteMany({ where: { docId: { in: b.jafInvoice } } })
+		}
 		// AuditTrail→JafInvoice is FK'd, and JafInvoice→Warehouse/User are FK'd, so
 		// both must go before warehouse/user cleanup below.
 		if (b.auditTrail.length || b.jafInvoice.length)

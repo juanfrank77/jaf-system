@@ -191,12 +191,14 @@ model User {
   restockApprovals    RestockRequest[]    @relation("RestockApprovals")
 
   // Arm A (payroll) — Finance-Billing Arm A phase, back-relations
-  payablesClosedDocs   JafInvoice[] @relation("PayablesClosedDocs")
-  payrollRunGenerator  PayrollRun[] @relation("PayrollRunGenerator")
-  payrollRunSender     PayrollRun[] @relation("PayrollRunSender")
-  payrollRunPaidBy     PayrollRun[] @relation("PayrollRunPaidBy")
+  payablesClosedDocs     JafInvoice[]        @relation("PayablesClosedDocs")
+  payrollRunGenerator    PayrollRun[]        @relation("PayrollRunGenerator")
+  payrollRunSender       PayrollRun[]        @relation("PayrollRunSender")
+  claroPosUploaded       ClaroPo[]           @relation("ClaroPoUploader")
+  claroPosConfirmed      ClaroPo[]           @relation("ClaroPoConfirmer")
+  payrollRunPaidBy       PayrollRun[]        @relation("PayrollRunPaidBy")
   payrollRunAccountsPaid PayrollRunAccount[] @relation("PayrollRunAccountPaidBy")
-  payrollRunReversedBy PayrollRun[] @relation("PayrollRunReversedBy")
+  payrollRunReversedBy   PayrollRun[]        @relation("PayrollRunReversedBy")
 
   createdRepairBatches    RepairBatch[]   @relation("RepairBatchCreator")
   voidedRepairBatches     RepairBatch[]   @relation("RepairBatchVoider")
@@ -465,6 +467,7 @@ model JafInvoice {
   auditTrail     AuditTrail[]
   photos         Photo[]
   poLinks        PoLink[]
+  claroPos       ClaroPo[]
   paymentRecords PaymentRecord[]
   packetSends    PacketSend[]
 
@@ -587,6 +590,54 @@ model PoLink {
   createdAt        DateTime   @default(now())
 
   @@index([docId])
+}
+
+enum ClaroPoStatus {
+  PENDING // uploaded, not read yet
+  READING
+  READY // every check passed
+  NEEDS_LOOK
+  BLOCKED
+  UNMATCHED // no Aviso found
+  CONFIRMED
+}
+
+// A purchase order Claro sent, as uploaded to the PO inbox. One row per file;
+// lines stay JSON like the JAF invoice's. `docId` is the Aviso it belongs to.
+model ClaroPo {
+  id              String        @id @default(cuid())
+  poNumber        String?
+  poDate          DateTime?
+  termsDays       Int?
+  statedPages     Int? // "1 de 4" -> 4
+  filePages       Int? // pages actually in the uploaded PDF
+  filePath        String
+  fileName        String
+  fileHash        String
+  status          ClaroPoStatus @default(PENDING)
+  docId           String?
+  doc             JafInvoice?   @relation(fields: [docId], references: [id])
+  avisoCandidates String[]
+  lines           Json? // [{ item, description, amount, ivuRate, ivu }]
+  subtotal        Decimal?
+  ivu4            Decimal?
+  ivu115          Decimal?
+  total           Decimal?
+  checks          Json? // [{ code, severity, detail }]
+  readError       String?
+  entered         Json? // { field: { byId, at } } for values typed by hand
+  receivedAt      DateTime      @default(now())
+  readStartedAt   DateTime?
+  uploadedById    String
+  uploadedBy      User          @relation("ClaroPoUploader", fields: [uploadedById], references: [id])
+  confirmedAt     DateTime?
+  confirmedById   String?
+  confirmedBy     User?         @relation("ClaroPoConfirmer", fields: [confirmedById], references: [id])
+
+  @@index([status, receivedAt])
+  @@index([poNumber])
+  @@index([docId])
+  @@index([fileHash])
 }
 
 model PreCertSheet {

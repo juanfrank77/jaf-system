@@ -27,6 +27,8 @@ export type NavLabelKey =
 	| "app_shell.nav.new_document"
 	| "app_shell.nav.receivables"
 	| "app_shell.nav.finance_packets"
+	| "app_shell.nav.finance_avisos"
+	| "app_shell.nav.finance_ledger"
 	| "app_shell.nav.finance_payment_advice"
 	| "app_shell.nav.finance_lc_request"
 	| "app_shell.nav.finance_lists"
@@ -312,6 +314,20 @@ const NAV_ITEMS: NavItem[] = [
 	{
 		to: "/finance/payment-advice",
 		labelKey: "app_shell.nav.finance_payment_advice",
+		icon: Invoice02Icon,
+		group: "arm_b",
+		roles: ["FINANCE", "ADMIN"],
+	},
+	{
+		to: "/finance/avisos",
+		labelKey: "app_shell.nav.finance_avisos",
+		icon: Invoice02Icon,
+		group: "arm_b",
+		roles: ["FINANCE", "ADMIN"],
+	},
+	{
+		to: "/finance/ledger",
+		labelKey: "app_shell.nav.finance_ledger",
 		icon: Invoice02Icon,
 		group: "arm_b",
 		roles: ["FINANCE", "ADMIN"],

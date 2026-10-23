@@ -237,7 +237,9 @@
 			"comptroller_paid": "Paid runs",
 			"comptroller_brigades": "Brigades",
 			"comptroller_installers": "Installers",
-			"finance_payment_advice": "Payment Advice"
+			"finance_payment_advice": "Payment Advice",
+			"finance_avisos": "Aviso records",
+			"finance_ledger": "Ledger & reports"
 		},
 		"notifications": {
 			"bell_label": "Notifications",
@@ -2579,6 +2581,111 @@
 			"reason_required": "A reason is required to accept a short pay.",
 			"invoice_not_found": "No invoice with that number.",
 			"line_not_unmatched": "This row is already matched."
+		}
+	},
+	"aviso_record": {
+		"source": {
+			"document": "Read from a document",
+			"stamped": "Stamped by a click",
+			"entered": "Typed in"
+		},
+		"missing": "MISSING",
+		"title": "Aviso {{number}}",
+		"closed": "Closed",
+		"open": "Open",
+		"not_started": "Not started",
+		"arm_a": "Arm A",
+		"arm_b": "Arm B",
+		"done": "Aviso done",
+		"supervisor": "Supervisor",
+		"work_order": "Work order",
+		"billed": "Billed",
+		"pod": "PO'd by Claro",
+		"in_ariba": "In Ariba",
+		"paid": "Paid by Claro",
+		"outstanding": "Outstanding",
+		"a": {
+			"released": "Released",
+			"accepted": "Accepted",
+			"sold": "Sold to PBCC",
+			"payroll": "Payroll request",
+			"paid": "Brigade paid",
+			"days": "Arm A days"
+		},
+		"batch": "batch #{{number}}",
+		"b": {
+			"po": "PO #",
+			"amount": "Amount",
+			"po_date": "PO date",
+			"invoice": "Invoice #",
+			"in_ariba": "In Ariba",
+			"due": "Due",
+			"paid": "Claro paid",
+			"days": "Days"
+		},
+		"short": "short {{diff}}",
+		"past_due": "past due",
+		"no_pos": "No PO has been confirmed for this Aviso yet.",
+		"legend": "D = read from a document · S = stamped by a click · E = typed in",
+		"documents": "Documents",
+		"history": "History",
+		"back": "← Aviso search",
+		"search_title": "Aviso records",
+		"search_placeholder": "Aviso #",
+		"search": "Search",
+		"no_results": "No Aviso matches."
+	},
+	"ledger": {
+		"title": "Ledger & reports",
+		"from": "From",
+		"to": "To",
+		"apply_range": "Apply range",
+		"export": "Export to Excel",
+		"report": {
+			"ledger": "Ledger",
+			"arm_a": "Arm A clock",
+			"waiting_po": "Waiting for PO",
+			"aging": "Claro aging",
+			"open_money": "Open money"
+		},
+		"col": {
+			"aviso": "Aviso #",
+			"supervisor": "Supervisor",
+			"billed": "Billed",
+			"sold": "Sold to PBCC",
+			"brigade_paid": "Brigade paid",
+			"pos": "POs",
+			"outstanding": "Outstanding",
+			"status": "Status",
+			"month": "Month paid",
+			"count": "Avisos",
+			"avg_days": "Average days",
+			"batch": "Batch #",
+			"days": "Days",
+			"zone": "Zone",
+			"completed": "Job completed",
+			"first_po": "First PO",
+			"days_first": "Days to first PO",
+			"fully_po": "Fully PO'd",
+			"days_full": "Days to fully PO'd",
+			"still_to_po": "Still to be PO'd",
+			"invoice": "Invoice #",
+			"loaded": "Loaded in Ariba",
+			"paid": "Paid",
+			"terms": "Terms",
+			"days_late": "Days late",
+			"amount": "Amount"
+		},
+		"status": {
+			"done": "Done",
+			"open": "Open"
+		},
+		"arm_a_average": "Average {{days}} days from sold to brigade paid, over {{count}} Avisos.",
+		"aging_summary": "{{count}} invoices past due, {{amount}}. Average {{avg}} days from loaded in Ariba to paid.",
+		"open": {
+			"billed_not_pod": "Billed, not PO'd",
+			"pod_not_invoiced": "PO'd, not invoiced",
+			"in_ariba_not_paid": "In Ariba, not paid"
 		}
 	}
 }

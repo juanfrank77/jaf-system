@@ -238,6 +238,7 @@
 			"comptroller_paid": "Corridas pagadas",
 			"comptroller_brigades": "Brigadas",
 			"comptroller_installers": "Instaladores",
+			"finance_payment_advice": "Aviso de pago",
 			"finance_returned": "Devueltos",
 			"supervisor_stock": "Reabastecimiento e inventario",
 			"warehouse_brigade_stock": "Material de brigadas"
@@ -2244,7 +2245,8 @@
 			"step": {
 				"awaiting_po": "Bandeja de POs",
 				"awaiting_ariba": "Facturas Claro",
-				"receivables": "Cuentas por cobrar"
+				"receivables": "Cuentas por cobrar",
+				"payment_advice": "Aviso de pago"
 			}
 		},
 		"step": {
@@ -2649,6 +2651,58 @@
 		"marked_summary": "{{count}} facturas marcadas como cargadas en Ariba.",
 		"errors": {
 			"none_selected": "Seleccione al menos una fila."
+		}
+	},
+	"payment_advice": {
+		"tab": {
+			"upload": "Subir",
+			"applied": "Aplicados",
+			"unmatched": "Sin coincidencia"
+		},
+		"choose_file": "Elegir el PDF del Payment Advice",
+		"upload": "Subir aviso de pago",
+		"empty_upload": "No hay avisos de pago pendientes de aplicar.",
+		"empty_applied": "Aún no se ha aplicado ningún aviso de pago.",
+		"empty_unmatched": "No hay filas sin coincidencia.",
+		"card_title": "Aviso de pago · {{date}} · Ref {{ref}} · {{count}} filas · {{total}}",
+		"total_ok": "Las filas suman el total",
+		"total_off": "Las filas suman {{rows}}, no el total",
+		"summary": "Con coincidencia {{matched}} · Pago parcial {{short}} · Sin coincidencia {{unmatched}} · Ya pagadas {{already}}",
+		"open_pdf": "Abrir el PDF del aviso",
+		"apply": "Aplicar pagos",
+		"unmatched_kept": "Las filas sin coincidencia se conservan; nunca se descartan.",
+		"invoice_number": "Número de factura",
+		"link": "Enlazar",
+		"reason": "Motivo",
+		"accept_short": "Aceptar pago parcial",
+		"col": {
+			"invoice": "Factura #",
+			"voucher": "Voucher",
+			"invoice_date": "Fecha de factura",
+			"net": "Neto pagado",
+			"ours": "Nuestra factura",
+			"result": "Resultado",
+			"advice": "Aviso"
+		},
+		"result": {
+			"matched": "Coincide → cierra el PO",
+			"short": "Pago parcial {{diff}}",
+			"already_paid": "Ya pagada",
+			"unmatched": "No está en el sistema"
+		},
+		"errors": {
+			"no_file": "Elija el PDF del aviso de pago.",
+			"not_pdf": "Solo se puede subir un PDF.",
+			"unreadable": "No se pudo leer ninguna fila de factura en este aviso.",
+			"date_missing": "No se pudo leer la fecha del aviso.",
+			"duplicate": "Este aviso de pago ya se subió.",
+			"total_mismatch": "Las filas no suman el total del aviso, por lo que no se puede aplicar.",
+			"already_applied": "Este aviso de pago ya se aplicó.",
+			"not_found": "No encontrado.",
+			"not_short": "Esta factura no tiene pago parcial.",
+			"reason_required": "Se requiere un motivo para aceptar un pago parcial.",
+			"invoice_not_found": "No hay una factura con ese número.",
+			"line_not_unmatched": "Esta fila ya tiene coincidencia."
 		}
 	},
 	"brigade_stock": {

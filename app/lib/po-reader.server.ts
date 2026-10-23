@@ -101,8 +101,8 @@ const PASSES = [
 	{ binary: false, psm: PSM.AUTO },
 ] as const
 
-/** Reads the PO with Tesseract, four ways per page, and votes on what it says. */
-const tesseractPoReader: PoReader = async (pdf) => {
+/** OCR a scanned PDF four ways per page: one text per way, all pages joined. */
+export async function ocrPdfPasses(pdf: Uint8Array): Promise<string[]> {
 	const pages = await renderPages(pdf)
 	const binary = await Promise.all(pages.map(binarize))
 	const worker = await createWorker("eng", 1, {
@@ -122,11 +122,14 @@ const tesseractPoReader: PoReader = async (pdf) => {
 				text += `${(await worker.recognize(img)).data.text}\n`
 			texts.push(text)
 		}
-		return parseOcrPasses(texts)
+		return texts
 	} finally {
 		await worker.terminate()
 	}
 }
+
+const tesseractPoReader: PoReader = async (pdf) =>
+	parseOcrPasses(await ocrPdfPasses(pdf))
 
 /** The reader the inbox uses. Always available: nothing leaves the server. */
 export function getPoReader(): PoReader {

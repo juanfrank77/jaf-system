@@ -109,6 +109,15 @@ export function makeTracker() {
 					OR: [{ id: { in: b.notification } }, { userId: { in: b.user } }],
 				},
 			})
+		// AdviceLine→ClaroInvoice and PaymentAdvice→User are FK'd.
+		if (b.jafInvoice.length || b.user.length) {
+			await db.adviceLine.deleteMany({
+				where: { invoice: { docId: { in: b.jafInvoice } } },
+			})
+			await db.paymentAdvice.deleteMany({
+				where: { uploadedById: { in: b.user } },
+			})
+		}
 		// ClaroInvoice→ClaroPo/JafInvoice/User are FK'd: invoices go before POs.
 		if (b.jafInvoice.length || b.user.length) {
 			await db.claroInvoice.deleteMany({

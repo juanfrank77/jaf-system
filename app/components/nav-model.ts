@@ -28,9 +28,7 @@ export type NavLabelKey =
 	| "app_shell.nav.receivables"
 	| "app_shell.nav.finance_packets"
 	| "app_shell.nav.finance_lc_request"
-	| "app_shell.nav.finance_lc_funded"
 	| "app_shell.nav.finance_lists"
-	| "app_shell.nav.finance_carmen"
 	| "app_shell.nav.finance_awaiting_po"
 	| "app_shell.nav.finance_awaiting_ariba"
 	| "app_shell.nav.admin_settings"
@@ -290,22 +288,8 @@ const NAV_ITEMS: NavItem[] = [
 		roles: ["FINANCE", "ADMIN"],
 	},
 	{
-		to: "/finance/lc-funded",
-		labelKey: "app_shell.nav.finance_lc_funded",
-		icon: Invoice02Icon,
-		group: "arm_a",
-		roles: ["FINANCE", "ADMIN"],
-	},
-	{
 		to: "/finance/payroll",
 		labelKey: "app_shell.nav.finance_lists",
-		icon: Invoice02Icon,
-		group: "arm_a",
-		roles: ["FINANCE", "ADMIN"],
-	},
-	{
-		to: "/finance/awaiting-carmen",
-		labelKey: "app_shell.nav.finance_carmen",
 		icon: Invoice02Icon,
 		group: "arm_a",
 		roles: ["FINANCE", "ADMIN"],

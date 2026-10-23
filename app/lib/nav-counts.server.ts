@@ -105,10 +105,9 @@ export async function loadNavCounts(
 		return {
 			"/finance/queue": { value: stages.PACKETS, tone: "neutral" },
 			"/finance/lc-requests": { value: stages.LC_REQUEST, tone: "neutral" },
-			"/finance/lc-funded": { value: stages.LC_FUNDED, tone: "neutral" },
-			"/finance/payroll": { value: stages.LISTS, tone: "neutral" },
-			"/finance/awaiting-carmen": {
-				value: carmen.openAccounts,
+			// Ready to send, plus the brigades still waiting on Carmen.
+			"/finance/payroll": {
+				value: stages.LISTS + carmen.openAccounts,
 				tone: carmen.overdueRuns > 0 ? "critical" : "neutral",
 			},
 		}

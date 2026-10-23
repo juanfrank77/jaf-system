@@ -1,38 +1,23 @@
-// Finance's two arms (Lissette's file, mockup v3), one rail each. Arm A is JAF
-// paying its people: a packet arrives and is accepted, an LC request goes to
-// the bank, the bank funds it, the funded packets become a Production Journal
-// list for Carmen, and Carmen pays. Arm B is Claro paying JAF. Every Finance
-// screen is exactly one step of one arm.
-export type FinanceStep =
-	| "PACKETS"
-	| "LC_REQUEST"
-	| "LC_FUNDED"
-	| "LISTS"
-	| "CARMEN"
+// Finance's two arms, one rail each. Arm A is JAF paying its people: a packet
+// arrives in the Inbox and is accepted into the PBCC batch, the batch is sold
+// to PBCC, and the sold Avisos go to Carmen as a payroll request that she pays.
+// The bank's wire is not a step: payroll is paid on schedule regardless. Arm B
+// is Claro paying JAF. Every Finance screen is exactly one step of one arm.
+export type FinanceStep = "PACKETS" | "LC_REQUEST" | "LISTS"
 
-export const FINANCE_STEPS: FinanceStep[] = [
-	"PACKETS",
-	"LC_REQUEST",
-	"LC_FUNDED",
-	"LISTS",
-	"CARMEN",
-]
+export const FINANCE_STEPS: FinanceStep[] = ["PACKETS", "LC_REQUEST", "LISTS"]
 
 /** One screen per step: no two steps share a URL. */
 export const FINANCE_STEP_HREF: Record<FinanceStep, string> = {
 	PACKETS: "/finance/queue",
 	LC_REQUEST: "/finance/lc-requests",
-	LC_FUNDED: "/finance/lc-funded",
 	LISTS: "/finance/payroll",
-	CARMEN: "/finance/awaiting-carmen",
 }
 
 export const FINANCE_STEP_LABEL_KEY = {
 	PACKETS: "finance_flow.step.packets",
 	LC_REQUEST: "finance_flow.step.lc_request",
-	LC_FUNDED: "finance_flow.step.lc_funded",
 	LISTS: "finance_flow.step.lists",
-	CARMEN: "finance_flow.step.carmen",
 } as const
 
 export type ArmBStep = "AWAITING_PO" | "AWAITING_ARIBA" | "RECEIVABLES"
@@ -62,30 +47,24 @@ export const ARM_B_STEP_LABEL_KEY = {
 	RECEIVABLES: "finance_flow.arm_b.step.receivables",
 } as const
 
-/** Which Arm A step a packet's request/funding screen belongs to. */
+/** Which Arm A step a packet's request screen belongs to: sold, or still in the batch. */
 export function pbccStep(job: {
 	pbccRequestSentAt: Date | string | null
-	advanceReceivedAt: Date | string | null
 }): FinanceStep {
-	if (job.advanceReceivedAt) return "LISTS"
-	if (job.pbccRequestSentAt) return "LC_FUNDED"
-	return "LC_REQUEST"
+	return job.pbccRequestSentAt ? "LISTS" : "LC_REQUEST"
 }
 
 /**
- * Which Arm A list a released job is on, from its three milestone timestamps.
- * Mirrors `stageWhere` in finance-stages.server.ts (the sent date is tested
+ * Which Arm A list a released job is on, from its milestone timestamps.
+ * Mirrors `stageWhere` in finance-stages.server.ts (the sold date is tested
  * first), which is what the sidebar counts and list screens filter on, so a
  * dashboard badge and the screen it points at cannot disagree.
  */
 export function armAStepOf(job: {
 	financeVerifiedAt: Date | string | null
 	pbccRequestSentAt: Date | string | null
-	advanceReceivedAt: Date | string | null
 }): FinanceStep {
-	if (job.pbccRequestSentAt) {
-		return job.advanceReceivedAt ? "LISTS" : "LC_FUNDED"
-	}
+	if (job.pbccRequestSentAt) return "LISTS"
 	return job.financeVerifiedAt ? "LC_REQUEST" : "PACKETS"
 }
 

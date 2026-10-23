@@ -1,20 +1,27 @@
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Form, Link, redirect } from "react-router"
+import { Form, Link, redirect, useRevalidator } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import {
 	FinanceStageTable,
 	StagePagination,
 } from "~/components/finance-stage-table"
 import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
+import { PayrollRequestCard } from "~/components/payroll-request-card"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
 import { db } from "~/lib/db.server"
-import { isPayrollFallbackEnabled } from "~/lib/features.server"
 import { PAGE_SIZE } from "~/lib/finance-stage-paging"
-import { ageDays, loadStageRows } from "~/lib/finance-stage-rows.server"
+import { loadStageRows } from "~/lib/finance-stage-rows.server"
 import { RUN_OVERDUE_DAYS } from "~/lib/finance-stages.server"
+import { FINANCE_STEPS } from "~/lib/finance-steps"
+import {
+	defaultPeriodLabel,
+	type PayrollTab,
+	parsePayrollTab,
+} from "~/lib/payroll-request-view"
+import { loadPayrollRequests } from "~/lib/payroll-request-view.server"
 import {
 	blockedSentJobs,
 	EmptyRunError,
@@ -24,17 +31,63 @@ import { requireRole } from "~/lib/permissions.server"
 import type { Route } from "./+types/_app.finance.payroll"
 
 export const meta: Route.MetaFunction = () => [
-	{ title: "Lists to Carmen — JAF Ops" },
+	{ title: "Payroll to Carmen — JAF Ops" },
 ]
+
+/** How often the Waiting tab looks again, so Carmen's ticks appear on their own. */
+const WAITING_REFRESH_MS = 5000
 
 export async function loader({ request }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])
 	const url = new URL(request.url)
+	const tab = parsePayrollTab(url.searchParams.get("tab"))
 	const page = Math.max(
 		1,
 		Number.parseInt(url.searchParams.get("page") ?? "1", 10) || 1,
 	)
-	const [{ rows, totalCount, sweepableIds }, sentRuns, blocked] =
+	const [waitingCount, paidCount] = await Promise.all([
+		db.payrollRun.count({
+			where: { reversedAt: null, sentAt: { not: null }, paidAt: null },
+		}),
+		db.payrollRun.count({ where: { reversedAt: null, paidAt: { not: null } } }),
+	])
+	const base = {
+		user,
+		tab,
+		waitingCount,
+		paidCount,
+		overdueDays: RUN_OVERDUE_DAYS,
+		defaultLabel: defaultPeriodLabel(),
+	}
+	if (tab === "waiting") {
+		return {
+			...base,
+			requests: await loadPayrollRequests({
+				sentAt: { not: null },
+				paidAt: null,
+			}),
+			eligible: [],
+			sweepableIds: [] as string[],
+			drafts: [],
+			blocked: [],
+			pagination: { page, totalPages: 1, totalCount: 0 },
+		}
+	}
+	if (tab === "paid") {
+		return {
+			...base,
+			requests: await loadPayrollRequests(
+				{ paidAt: { not: null } },
+				{ take: 20 },
+			),
+			eligible: [],
+			sweepableIds: [] as string[],
+			drafts: [],
+			blocked: [],
+			pagination: { page, totalPages: 1, totalCount: 0 },
+		}
+	}
+	const [{ rows, totalCount, sweepableIds }, drafts, blocked] =
 		await Promise.all([
 			loadStageRows({
 				stage: "LISTS",
@@ -43,35 +96,18 @@ export async function loader({ request }: Route.LoaderArgs) {
 				ageFrom: "sent",
 				withAccounts: true,
 			}),
-			db.payrollRun.findMany({
-				orderBy: { generatedAt: "desc" },
-				take: 20,
-				select: {
-					id: true,
-					label: true,
-					generatedAt: true,
-					paidAt: true,
-					reversedAt: true,
-					_count: { select: { invoices: true } },
-				},
-			}),
+			loadPayrollRequests({ sentAt: null }),
 			blockedSentJobs(),
 		])
-	const now = new Date()
 	return {
-		user,
-		eligible: rows,
-		// Every funded, mapped packet on any page: the client keeps an accurate
+		...base,
+		requests: [],
+		// Every sold, mapped Aviso on any page: the client keeps an accurate
 		// "N selected" across pages from this.
+		eligible: rows,
 		sweepableIds,
-		sweepableCount: sweepableIds.length,
-		sentRuns: sentRuns.map((r) => ({
-			...r,
-			ageDays: ageDays(r.generatedAt, now),
-		})),
+		drafts,
 		blocked,
-		fallbackEnabled: isPayrollFallbackEnabled(),
-		overdueDays: RUN_OVERDUE_DAYS,
 		pagination: {
 			page,
 			totalPages: Math.max(1, Math.ceil(totalCount / PAGE_SIZE)),
@@ -85,10 +121,9 @@ export async function action({ request }: Route.ActionArgs) {
 	const form = await request.formData()
 	const intent = form.get("intent") as string
 	if (intent !== "generate_run")
-		return { errorKey: "finance_payroll.errors.unknown_intent" }
+		return { errorKey: "finance_payroll.errors.unknown_intent" as const }
 	const label =
-		(form.get("label") as string | null)?.trim() ||
-		new Date().toISOString().slice(0, 10)
+		(form.get("label") as string | null)?.trim() || defaultPeriodLabel()
 	const excludeIds = form
 		.getAll("excludeIds")
 		.filter((v): v is string => typeof v === "string" && v !== "")
@@ -106,12 +141,65 @@ export async function action({ request }: Route.ActionArgs) {
 	}
 }
 
+function PayrollTabs({
+	tab,
+	waitingCount,
+	paidCount,
+}: {
+	tab: PayrollTab
+	waitingCount: number
+	paidCount: number
+}) {
+	const { t } = useTranslation()
+	const cls = (active: boolean) =>
+		active
+			? "border-b-2 border-primary px-3 py-2 text-sm font-medium"
+			: "px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
+	return (
+		<nav className="flex border-b">
+			<Link to="?tab=ready" className={cls(tab === "ready")}>
+				{t("finance_payroll.tab.ready")}
+			</Link>
+			<Link to="?tab=waiting" className={cls(tab === "waiting")}>
+				{t("finance_payroll.tab.waiting")} {waitingCount}
+			</Link>
+			<Link to="?tab=paid" className={cls(tab === "paid")}>
+				{t("finance_payroll.tab.paid")} {paidCount}
+			</Link>
+		</nav>
+	)
+}
+
+/** Looks again on a timer while the Waiting tab is open and visible. */
+function useAutoRefresh(active: boolean) {
+	const { revalidate, state } = useRevalidator()
+	useEffect(() => {
+		if (!active) return
+		const id = window.setInterval(() => {
+			if (document.visibilityState === "visible" && state === "idle")
+				revalidate()
+		}, WAITING_REFRESH_MS)
+		return () => window.clearInterval(id)
+	}, [active, revalidate, state])
+}
+
 export default function FinancePayrollList({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { eligible, sweepableIds, sentRuns, blocked, pagination, overdueDays } =
-		loaderData
+	const {
+		tab,
+		eligible,
+		sweepableIds,
+		requests,
+		drafts,
+		blocked,
+		pagination,
+		overdueDays,
+		defaultLabel,
+		waitingCount,
+		paidCount,
+	} = loaderData
 	const { t } = useTranslation()
 	// Everything ready is in the list by default; the set holds the packets
 	// Lissette UNticked to hold back. Kept across pages, in this component.
@@ -133,18 +221,24 @@ export default function FinancePayrollList({
 	}
 	// Only mapped packets can be swept, so only they count toward the button.
 	const listCount = sweepableIds.filter((id) => !held.has(id)).length
+	useAutoRefresh(tab === "waiting")
 	return (
 		<div className="space-y-4">
 			<div className="flex items-center justify-between">
 				<h1 className="text-xl font-semibold">
 					{t("finance_flow.step.lists")}
 				</h1>
-				<StageChip arm="A" step={4} total={5} />
+				<StageChip arm="A" step={3} total={FINANCE_STEPS.length} />
 			</div>
 			<FinanceStepRail current="LISTS" />
 			<Callout title={t("finance_flow.callout.lists_title")}>
 				{t("finance_flow.callout.lists_body")}
 			</Callout>
+			<PayrollTabs
+				tab={tab}
+				waitingCount={waitingCount}
+				paidCount={paidCount}
+			/>
 			{actionData?.errorKey && (
 				<p role="alert" className="text-sm text-status-danger">
 					{actionData.errorKey === "finance_payroll.errors.empty_run"
@@ -153,179 +247,150 @@ export default function FinancePayrollList({
 				</p>
 			)}
 
-			<section className="space-y-3">
-				<h2 className="font-semibold">{t("finance_payroll.ready_title")}</h2>
-				{eligible.length === 0 ? (
-					<p className="text-sm text-muted-foreground">
-						{t("finance_payroll.none_ready")}
-					</p>
-				) : (
-					<>
-						<label className="flex items-center gap-2 text-xs text-muted-foreground">
-							<input
-								type="checkbox"
-								ref={selectAllRef}
-								checked={selectable.length > 0 && pageHeld === 0}
-								disabled={selectable.length === 0}
-								onChange={toggleAll}
-							/>
-							{t("finance_payroll.select_all")}
-						</label>
-						<FinanceStageTable
-							rows={eligible}
-							to={(r) => `/finance/pbcc/${r.id}`}
-							ageLabelKey="finance_stage.age.sent"
-							action={(r) => (
-								<div className="flex flex-wrap items-center gap-2">
+			{tab === "ready" && (
+				<>
+					{drafts.length > 0 && (
+						<section className="space-y-3">
+							<h2 className="font-semibold">
+								{t("finance_payroll.drafts_title")}
+							</h2>
+							{drafts.map((d) => (
+								<PayrollRequestCard
+									key={d.id}
+									request={d}
+									actions={
+										<Link
+											to={`/finance/payroll/${d.id}`}
+											className="text-sm underline"
+										>
+											{t("finance_payroll.review")}
+										</Link>
+									}
+								/>
+							))}
+						</section>
+					)}
+
+					<section className="space-y-3">
+						<h2 className="font-semibold">
+							{t("finance_payroll.ready_title")}
+						</h2>
+						{eligible.length === 0 ? (
+							<p className="text-sm text-muted-foreground">
+								{t("finance_payroll.none_ready")}
+							</p>
+						) : (
+							<>
+								<label className="flex items-center gap-2 text-xs text-muted-foreground">
 									<input
 										type="checkbox"
-										aria-label={t("finance_payroll.include_row", {
-											number: r.controlNumber,
-										})}
-										checked={!held.has(r.id)}
-										disabled={!r.accountResolved}
-										onChange={(e) => {
-											const next = new Set(held)
-											if (e.target.checked) next.delete(r.id)
-											else next.add(r.id)
-											setHeld(next)
-										}}
+										ref={selectAllRef}
+										checked={selectable.length > 0 && pageHeld === 0}
+										disabled={selectable.length === 0}
+										onChange={toggleAll}
 									/>
-									{!r.accountResolved && (
-										<Badge variant="warn">
-											{t("finance_queue.account_unmapped")}
-										</Badge>
+									{t("finance_payroll.select_all")}
+								</label>
+								<FinanceStageTable
+									rows={eligible}
+									to={(r) => `/finance/pbcc/${r.id}`}
+									ageLabelKey="finance_stage.age.sent"
+									action={(r) => (
+										<div className="flex flex-wrap items-center gap-2">
+											<input
+												type="checkbox"
+												aria-label={t("finance_payroll.include_row", {
+													number: r.controlNumber,
+												})}
+												checked={!held.has(r.id)}
+												disabled={!r.accountResolved}
+												onChange={(e) => {
+													const next = new Set(held)
+													if (e.target.checked) next.delete(r.id)
+													else next.add(r.id)
+													setHeld(next)
+												}}
+											/>
+											{!r.accountResolved && (
+												<Badge variant="warn">
+													{t("finance_queue.account_unmapped")}
+												</Badge>
+											)}
+										</div>
 									)}
-								</div>
-							)}
-						/>
-						<StagePagination
-							basePath="/finance/payroll"
-							pagination={pagination}
-							pageSize={PAGE_SIZE}
-						/>
-					</>
-				)}
-				<Form method="post" className="flex items-center gap-2">
-					<input type="hidden" name="intent" value="generate_run" />
-					{Array.from(held).map((id) => (
-						<input key={id} type="hidden" name="excludeIds" value={id} />
-					))}
-					<input
-						type="text"
-						name="label"
-						placeholder={t("finance_payroll.run_label_placeholder")}
-						className="border rounded px-2 py-1"
-					/>
-					<Button type="submit" disabled={listCount === 0}>
-						{t("finance_payroll.create_list", { count: listCount })}
-					</Button>
-				</Form>
-			</section>
+								/>
+								<StagePagination
+									basePath="/finance/payroll"
+									pagination={pagination}
+									pageSize={PAGE_SIZE}
+								/>
+							</>
+						)}
+						<Form method="post" className="flex flex-wrap items-center gap-2">
+							<input type="hidden" name="intent" value="generate_run" />
+							{Array.from(held).map((id) => (
+								<input key={id} type="hidden" name="excludeIds" value={id} />
+							))}
+							<input
+								type="text"
+								name="label"
+								defaultValue={defaultLabel}
+								aria-label={t("finance_payroll.period_label")}
+								className="border rounded px-2 py-1"
+							/>
+							<Button type="submit" disabled={listCount === 0}>
+								{t("finance_payroll.create_request", { count: listCount })}
+							</Button>
+						</Form>
+					</section>
 
-			{blocked.length > 0 && (
-				<div className="bg-card border rounded-lg p-4 space-y-1">
-					<h2 className="font-semibold text-sm">
-						{t("finance_payroll.blocked_title")}
-					</h2>
-					<ul className="text-sm space-y-1">
-						{blocked.map((job) => (
-							<li key={job.id}>
-								<span className="font-mono">{job.controlNumber}</span>{" "}
-								<span className="text-muted-foreground">
-									{t("finance_payroll.blocked_reason")}
-								</span>
-							</li>
-						))}
-					</ul>
-				</div>
+					{blocked.length > 0 && (
+						<div className="bg-card border rounded-lg p-4 space-y-1">
+							<h2 className="font-semibold text-sm">
+								{t("finance_payroll.blocked_title")}
+							</h2>
+							<ul className="text-sm space-y-1">
+								{blocked.map((job) => (
+									<li key={job.id}>
+										<span className="font-mono">{job.controlNumber}</span>{" "}
+										<span className="text-muted-foreground">
+											{t("finance_payroll.blocked_reason")}
+										</span>
+									</li>
+								))}
+							</ul>
+						</div>
+					)}
+				</>
 			)}
 
-			<section className="space-y-3">
-				<h2 className="font-semibold">{t("finance_payroll.sent_title")}</h2>
-				{sentRuns.length === 0 ? (
-					<p className="text-sm text-muted-foreground">
-						{t("finance_payroll.no_sent_lists")}
-					</p>
-				) : (
-					<div className="overflow-x-auto bg-card border rounded-lg">
-						<table className="w-full text-sm">
-							<thead>
-								<tr className="text-xs text-muted-foreground text-left border-b">
-									<th className="p-2">{t("finance_payroll.col.list")}</th>
-									<th className="p-2">{t("finance_payroll.col.date")}</th>
-									<th className="p-2 text-right">
-										{t("finance_payroll.col.jobs")}
-									</th>
-									<th className="p-2 text-right">
-										{t("finance_payroll.col.age")}
-									</th>
-									<th className="p-2">{t("finance_payroll.col.status")}</th>
-									<th className="p-2" />
-								</tr>
-							</thead>
-							<tbody>
-								{sentRuns.map((run) => {
-									const overdue =
-										!run.paidAt && !run.reversedAt && run.ageDays > overdueDays
-									return (
-										<tr
-											key={run.id}
-											className="border-b last:border-0 hover:bg-muted/40"
-										>
-											<td className="p-2">
-												<Link
-													to={`/finance/payroll/${run.id}`}
-													className="underline"
-												>
-													{run.label}
-												</Link>
-											</td>
-											<td className="p-2">
-												{new Date(run.generatedAt).toLocaleDateString()}
-											</td>
-											<td className="p-2 text-right font-mono">
-												{run._count.invoices}
-											</td>
-											<td className="p-2 text-right font-mono">
-												{run.ageDays}
-											</td>
-											<td className="p-2 space-x-1">
-												{run.paidAt ? (
-													<Badge variant="ok">
-														{t("finance_payroll.paid_on", {
-															date: new Date(run.paidAt).toLocaleDateString(),
-														})}
-													</Badge>
-												) : run.reversedAt ? (
-													<Badge>{t("finance_payroll.reversed")}</Badge>
-												) : (
-													<Badge>{t("finance_payroll.open")}</Badge>
-												)}
-												{overdue && (
-													<Badge variant="warn">
-														{t("finance_payroll.overdue", {
-															days: run.ageDays,
-														})}
-													</Badge>
-												)}
-											</td>
-											<td className="p-2">
-												<Link
-													to="/finance/awaiting-carmen"
-													className="underline"
-												>
-													{t("finance_payroll.see_carmen")}
-												</Link>
-											</td>
-										</tr>
-									)
-								})}
-							</tbody>
-						</table>
-					</div>
-				)}
-			</section>
+			{tab !== "ready" && (
+				<section className="space-y-3">
+					{requests.length === 0 ? (
+						<p className="text-sm text-muted-foreground">
+							{tab === "waiting"
+								? t("finance_payroll.none_waiting")
+								: t("finance_payroll.none_paid")}
+						</p>
+					) : (
+						requests.map((r) => (
+							<PayrollRequestCard
+								key={r.id}
+								request={r}
+								overdueDays={overdueDays}
+								actions={
+									<Link
+										to={`/finance/payroll/${r.id}`}
+										className="text-sm underline"
+									>
+										{t("finance_payroll.open_request")}
+									</Link>
+								}
+							/>
+						))
+					)}
+				</section>
+			)}
 		</div>
 	)
 }

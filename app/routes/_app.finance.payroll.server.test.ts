@@ -1,10 +1,11 @@
-import { afterAll, afterEach, describe, expect, it, vi } from "vitest"
+import { afterAll, describe, expect, it, vi } from "vitest"
 import { db } from "~/lib/db.server"
 import {
 	makeTracker,
 	runToken,
 	seedContractorAccount,
 	seedFinanceableInvoice,
+	seedSweptInvoice,
 	seedUser,
 } from "~/test/helpers"
 
@@ -25,40 +26,23 @@ import { loader } from "./_app.finance.payroll"
 const t = makeTracker()
 afterAll(() => t.cleanup())
 
-const originalFallback = process.env.PAYROLL_FALLBACK_ENABLED
-afterEach(() => {
-	if (originalFallback === undefined)
-		delete process.env.PAYROLL_FALLBACK_ENABLED
-	else process.env.PAYROLL_FALLBACK_ENABLED = originalFallback
-})
-
-async function callLoader() {
+async function callLoader(tab?: "ready" | "waiting" | "paid") {
 	return loader({
-		request: new Request("http://localhost/finance/payroll"),
+		request: new Request(
+			`http://localhost/finance/payroll${tab ? `?tab=${tab}` : ""}`,
+		),
 		params: {},
 		context: {},
 	} as never)
 }
 
-describe("L3 payroll list", () => {
-	it("loader lists sent runs (newest first, last 20)", async () => {
-		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
-		mocks.requireRole.mockResolvedValue({ user: finance })
-		const run = t.track(
-			"payrollRun",
-			await db.payrollRun.create({
-				data: { label: "Run A", generatedById: finance.id },
-			}),
-		)
+async function financeUser() {
+	const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+	mocks.requireRole.mockResolvedValue({ user: finance })
+	return finance
+}
 
-		const result = await loader({
-			request: new Request("http://localhost/finance/payroll"),
-			params: {},
-			context: {},
-		} as never)
-		expect(result.sentRuns.map((r: { id: string }) => r.id)).toContain(run.id)
-	})
-
+describe("Payroll to Carmen", () => {
 	// The `generate_run` action calls generateRun, which sweeps EVERY Arm-A-open
 	// job in the shared dev DB. Running it in this file in parallel with
 	// app/lib/payroll-run.server.test.ts makes the two race for the same global
@@ -66,60 +50,50 @@ describe("L3 payroll list", () => {
 	// in the same file as every other generateRun caller, where those tests run
 	// sequentially.
 
-	async function seedFunded(
+	async function seedSold(
 		code: string | null,
 		over: Parameters<typeof seedFinanceableInvoice>[0] = {},
-		funded = true,
 	) {
-		const inv = t.track(
+		return t.track(
 			"jafInvoice",
 			await seedFinanceableInvoice({ contractorAccountCode: code, ...over }),
 		)
-		if (funded)
-			await db.jafInvoice.update({
-				where: { id: inv.id },
-				data: { advanceReceivedAt: new Date(), advanceAmount: 10 },
-			})
-		return inv
 	}
 
-	it("eligible holds funded packets only: unfunded and unsent are not listed", async () => {
-		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
-		mocks.requireRole.mockResolvedValue({ user: finance })
+	it("the Ready tab lists every Aviso sold to PBCC, funded or not, and no unsold one", async () => {
+		await financeUser()
 		const account = t.track("contractorAccount", await seedContractorAccount())
-		const unfunded = await seedFunded(account.code, {}, false)
-		const funded = await seedFunded(account.code)
-		const unsent = await seedFunded(account.code, { pbccRequestSentAt: null })
+		const sold = await seedSold(account.code)
+		const soldFunded = await seedSold(account.code, { funded: true })
+		const unsold = await seedSold(account.code, { pbccRequestSentAt: null })
 
-		const { eligible } = await callLoader()
+		const { eligible, tab } = await callLoader()
+		expect(tab).toBe("ready")
 		const ids = eligible.map((r: { id: string }) => r.id)
-		expect(ids).toContain(funded.id)
-		expect(ids).not.toContain(unfunded.id)
-		expect(ids).not.toContain(unsent.id)
+		expect(ids).toContain(sold.id)
+		expect(ids).toContain(soldFunded.id)
+		expect(ids).not.toContain(unsold.id)
 		expect(
-			eligible.find((r: { id: string }) => r.id === funded.id)?.accountResolved,
+			eligible.find((r: { id: string }) => r.id === sold.id)?.accountResolved,
 		).toBe(true)
 	})
 
-	it("flags a funded packet whose account code does not resolve", async () => {
-		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
-		mocks.requireRole.mockResolvedValue({ user: finance })
+	it("flags a sold Aviso whose account code does not resolve", async () => {
+		await financeUser()
 		const account = t.track("contractorAccount", await seedContractorAccount())
-		const mapped = await seedFunded(account.code)
-		const bad = await seedFunded(runToken("NOPE"))
-		const { eligible, sweepableIds, sweepableCount } = await callLoader()
+		const mapped = await seedSold(account.code)
+		const bad = await seedSold(runToken("NOPE"))
+		const { eligible, sweepableIds } = await callLoader()
 		const row = eligible.find((r: { id: string }) => r.id === bad.id)
 		expect(row?.accountResolved).toBe(false)
 		expect(sweepableIds).toContain(mapped.id)
 		expect(sweepableIds).not.toContain(bad.id)
-		expect(sweepableCount).toBe(sweepableIds.length)
 	})
 
 	it("excludes a closed (payablesClosedAt) job", async () => {
-		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
-		mocks.requireRole.mockResolvedValue({ user: finance })
+		await financeUser()
 		const account = t.track("contractorAccount", await seedContractorAccount())
-		const closed = await seedFunded(account.code, {
+		const closed = await seedSold(account.code, {
 			payablesClosedAt: new Date(),
 		})
 		const { eligible } = await callLoader()
@@ -127,11 +101,10 @@ describe("L3 payroll list", () => {
 	})
 
 	it("resolves contractor accounts once for the whole page, not per row", async () => {
-		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
-		mocks.requireRole.mockResolvedValue({ user: finance })
+		await financeUser()
 		for (let i = 0; i < 3; i++) {
 			const acc = t.track("contractorAccount", await seedContractorAccount())
-			await seedFunded(acc.code)
+			await seedSold(acc.code)
 		}
 		mocks.resolveSpy.mockClear()
 		const { eligible } = await callLoader()
@@ -145,63 +118,92 @@ describe("L3 payroll list", () => {
 		expect(pageCall).toBeDefined()
 	})
 
-	it("sentRuns lists recent runs newest first with paid state", async () => {
-		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
-		mocks.requireRole.mockResolvedValue({ user: finance })
-		const run = t.track(
-			"payrollRun",
-			await db.payrollRun.create({
-				data: { label: "Run S", generatedById: finance.id },
-			}),
-		)
-		const { sentRuns } = await callLoader()
-		const row = sentRuns.find((r: { id: string }) => r.id === run.id)
-		expect(row).toMatchObject({ label: "Run S", paidAt: null })
-	})
-
-	it("blocked lists a sent job with an unmapped code, not unsent or inactive-account ones", async () => {
-		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
-		mocks.requireRole.mockResolvedValue({ user: finance })
+	it("blocked lists a sold job with an unmapped code, not unsold or inactive-account ones", async () => {
+		await financeUser()
 		const inactive = t.track(
 			"contractorAccount",
 			await seedContractorAccount({ active: false }),
 		)
-		const unmapped = t.track(
-			"jafInvoice",
-			await seedFinanceableInvoice({
-				funded: true,
-				contractorAccountCode: runToken("NOPE"),
-			}),
-		)
-		const unsent = t.track(
-			"jafInvoice",
-			await seedFinanceableInvoice({
-				funded: true,
-				contractorAccountCode: runToken("NOPE"),
-				pbccRequestSentAt: null,
-			}),
-		)
-		const onInactive = t.track(
-			"jafInvoice",
-			await seedFinanceableInvoice({
-				funded: true,
-				contractorAccountCode: inactive.code,
-			}),
-		)
+		const unmapped = await seedSold(runToken("NOPE"))
+		const unsold = await seedSold(runToken("NOPE"), {
+			pbccRequestSentAt: null,
+		})
+		const onInactive = await seedSold(inactive.code)
 
 		const { blocked } = await callLoader()
 		const ids = blocked.map((b: { id: string }) => b.id)
 		expect(ids).toContain(unmapped.id)
-		expect(ids).not.toContain(unsent.id)
+		expect(ids).not.toContain(unsold.id)
 		expect(ids).not.toContain(onInactive.id)
 	})
 
-	it("fallbackEnabled follows PAYROLL_FALLBACK_ENABLED", async () => {
-		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
-		mocks.requireRole.mockResolvedValue({ user: finance })
-		process.env.PAYROLL_FALLBACK_ENABLED = "false"
-		expect((await callLoader()).fallbackEnabled).toBe(false)
-		delete process.env.PAYROLL_FALLBACK_ENABLED
-		expect((await callLoader()).fallbackEnabled).toBe(true)
+	it("shows a draft on the Ready tab and a sent request only on Waiting", async () => {
+		const finance = await financeUser()
+		const account = t.track("contractorAccount", await seedContractorAccount())
+		const draft = await seedSweptInvoice({
+			generatedById: finance.id,
+			contractorAccountId: account.id,
+			runLabel: runToken("DRAFT"),
+			draft: true,
+		})
+		t.track("payrollRun", draft.run)
+		t.track("jafInvoice", draft.invoice)
+		const sent = await seedSweptInvoice({
+			generatedById: finance.id,
+			contractorAccountId: account.id,
+			runLabel: runToken("SENT"),
+		})
+		t.track("payrollRun", sent.run)
+		t.track("jafInvoice", sent.invoice)
+
+		const ready = await callLoader("ready")
+		const readyIds = ready.drafts.map((r: { id: string }) => r.id)
+		expect(readyIds).toContain(draft.run.id)
+		expect(readyIds).not.toContain(sent.run.id)
+
+		const waiting = await callLoader("waiting")
+		const waitingIds = waiting.requests.map((r: { id: string }) => r.id)
+		expect(waitingIds).toContain(sent.run.id)
+		expect(waitingIds).not.toContain(draft.run.id)
+		const req = waiting.requests.find(
+			(r: { id: string }) => r.id === sent.run.id,
+		)
+		expect(req?.status).toBe("waiting")
+		// Rule 6, from Lissette's side too: the JAF price is not in the data.
+		expect(JSON.stringify(waiting.requests)).not.toMatch(/gross/i)
+	})
+
+	it("the Paid tab lists paid requests and the tab counts follow", async () => {
+		const finance = await financeUser()
+		const account = t.track("contractorAccount", await seedContractorAccount())
+		const seeded = await seedSweptInvoice({
+			generatedById: finance.id,
+			contractorAccountId: account.id,
+			runLabel: runToken("PAID"),
+		})
+		t.track("payrollRun", seeded.run)
+		t.track("jafInvoice", seeded.invoice)
+		const before = await callLoader("ready")
+		await db.payrollRun.update({
+			where: { id: seeded.run.id },
+			data: { paidAt: new Date(), paidById: finance.id },
+		})
+		const paid = await callLoader("paid")
+		expect(paid.requests.map((r: { id: string }) => r.id)).toContain(
+			seeded.run.id,
+		)
+		const after = await callLoader("ready")
+		expect(after.paidCount).toBe(before.paidCount + 1)
+		expect(after.waitingCount).toBe(before.waitingCount - 1)
+	})
+
+	it("requires FINANCE or ADMIN", async () => {
+		await financeUser()
+		mocks.requireRole.mockClear()
+		await callLoader()
+		expect(mocks.requireRole).toHaveBeenCalledWith(expect.anything(), [
+			"FINANCE",
+			"ADMIN",
+		])
 	})
 })

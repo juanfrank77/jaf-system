@@ -5,24 +5,29 @@ import { ArmBStepRail, FinanceStepRail, StageChip } from "./finance-step-rail"
 
 describe("finance step rails", () => {
 	it("gives every Arm A step its own screen", () => {
-		expect(new Set(Object.values(FINANCE_STEP_HREF)).size).toBe(5)
+		expect(new Set(Object.values(FINANCE_STEP_HREF)).size).toBe(3)
 	})
 
-	it("renders the five Arm A steps with distinct hrefs", async ({
+	it("renders the three Arm A steps and the Closed marker, with distinct hrefs", async ({
 		renderStub,
 	}) => {
 		await renderStub({
 			entries: [
-				{ path: "/", Component: () => <FinanceStepRail current="LC_FUNDED" /> },
+				{
+					path: "/",
+					Component: () => <FinanceStepRail current="LC_REQUEST" />,
+				},
 			],
 		})
-		expect(await screen.findAllByRole("listitem")).toHaveLength(5)
+		const items = await screen.findAllByRole("listitem")
+		expect(items).toHaveLength(4)
+		// Closed is where Arm A ends, not a screen.
+		expect(items[3].dataset.state).toBe("locked")
 		const links = screen.getAllByRole("link")
-		expect(links).toHaveLength(4)
+		expect(links).toHaveLength(2)
 		const hrefs = links.map((a) => a.getAttribute("href"))
-		expect(new Set(hrefs).size).toBe(4)
 		expect(hrefs).toContain("/finance/queue")
-		expect(hrefs).toContain("/finance/awaiting-carmen")
+		expect(hrefs).toContain("/finance/payroll")
 	})
 
 	it("locks PO inbox and Claro invoices on the Arm B rail", async ({
@@ -66,14 +71,14 @@ describe("finance step rails", () => {
 					path: "/",
 					Component: () => (
 						<>
-							<StageChip arm="A" step={3} total={5} />
+							<StageChip arm="A" step={3} total={3} />
 							<StageChip arm="B" name="Receivables" />
 						</>
 					),
 				},
 			],
 		})
-		expect(await screen.findByText("Arm A · Stage 3 of 5")).toBeInTheDocument()
+		expect(await screen.findByText("Arm A · Stage 3 of 3")).toBeInTheDocument()
 		expect(screen.getByText("Arm B · Receivables")).toBeInTheDocument()
 	})
 })

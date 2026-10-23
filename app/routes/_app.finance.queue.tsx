@@ -13,6 +13,7 @@ import { db } from "~/lib/db.server"
 import { PAGE_SIZE } from "~/lib/finance-stage-paging"
 import { loadStageRows } from "~/lib/finance-stage-rows.server"
 import { stageWhere } from "~/lib/finance-stages.server"
+import { FINANCE_STEPS } from "~/lib/finance-steps"
 import { requireRole } from "~/lib/permissions.server"
 import type { Route } from "./+types/_app.finance.queue"
 
@@ -73,7 +74,7 @@ export default function FinancePackets({ loaderData }: Route.ComponentProps) {
 				<h1 className="text-xl font-semibold">
 					{t("finance_flow.step.packets")}
 				</h1>
-				<StageChip arm="A" step={1} total={5} />
+				<StageChip arm="A" step={1} total={FINANCE_STEPS.length} />
 			</div>
 			<FinanceStepRail current="PACKETS" />
 			<Callout title={t("finance_flow.callout.packets_title")}>

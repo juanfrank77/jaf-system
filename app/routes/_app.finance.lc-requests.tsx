@@ -7,6 +7,7 @@ import {
 	PbccBatchTabs,
 } from "~/components/pbcc-batch-open"
 import { Callout } from "~/components/ui/callout"
+import { FINANCE_STEPS } from "~/lib/finance-steps"
 import {
 	BatchError,
 	closeOpenBatch,
@@ -91,7 +92,7 @@ export default function FinancePbccBatch({
 				<h1 className="text-xl font-semibold">
 					{t("finance_flow.step.lc_request")}
 				</h1>
-				<StageChip arm="A" step={2} total={5} />
+				<StageChip arm="A" step={2} total={FINANCE_STEPS.length} />
 			</div>
 			<FinanceStepRail current="LC_REQUEST" />
 			<Callout title={t("finance_flow.callout.lc_request_title")}>

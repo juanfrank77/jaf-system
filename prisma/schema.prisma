@@ -193,6 +193,7 @@ model User {
   // Arm A (payroll) — Finance-Billing Arm A phase, back-relations
   payablesClosedDocs   JafInvoice[] @relation("PayablesClosedDocs")
   payrollRunGenerator  PayrollRun[] @relation("PayrollRunGenerator")
+  payrollRunSender     PayrollRun[] @relation("PayrollRunSender")
   payrollRunPaidBy     PayrollRun[] @relation("PayrollRunPaidBy")
   payrollRunAccountsPaid PayrollRunAccount[] @relation("PayrollRunAccountPaidBy")
   payrollRunReversedBy PayrollRun[] @relation("PayrollRunReversedBy")
@@ -705,6 +706,11 @@ model PayrollRun {
   generatedAt         DateTime  @default(now())
   generatedById       String
   generatedBy         User      @relation("PayrollRunGenerator", fields: [generatedById], references: [id])
+  // A request is a draft on Lissette's desk until she sends it; Carmen only
+  // ever sees sent ones.
+  sentAt              DateTime?
+  sentById            String?
+  sentBy              User?     @relation("PayrollRunSender", fields: [sentById], references: [id])
   paidAt              DateTime?
   paidById            String?
   paidBy              User?     @relation("PayrollRunPaidBy", fields: [paidById], references: [id])

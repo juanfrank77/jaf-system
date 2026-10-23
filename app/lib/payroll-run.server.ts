@@ -4,9 +4,8 @@ import {
 	toContractorPaymentLines,
 } from "~/lib/contractor-payment.server"
 import { db } from "~/lib/db.server"
-import { isPayrollFallbackEnabled } from "~/lib/features.server"
 import { toNumberPrice } from "~/lib/utils"
-import type { Prisma } from "../../generated/prisma/client"
+import { Prisma } from "../../generated/prisma/client"
 
 const INVOICE_SELECT = {
 	id: true,
@@ -142,23 +141,22 @@ export function armAOpenWhere(
 }
 
 /**
- * What a payroll run may sweep: everything open on Arm A whose bank request
- * has been sent to PBCC and that the bank has funded. `armAOpenWhere` itself
+ * What a payroll request may sweep: everything open on Arm A that is Sold to
+ * PBCC (its batch was marked sent). Payroll is paid on schedule whether or not
+ * the bank has wired yet, so funding is not a condition. `armAOpenWhere` itself
  * is unchanged, so the packets list and packet view keep showing unsent jobs.
- * Nothing here filters on `active`: an inactive brigade is still paid.
+ * Nothing here filters on `active`: an inactive brigade is still paid for jobs
+ * already finished.
  */
 function sweepableWhere(): Prisma.JafInvoiceWhereInput {
 	return {
 		...armAOpenWhere(),
 		pbccRequestSentAt: { not: null },
-		// Business rule: a packet goes on a Production Journal only once the
-		// bank has funded it.
-		advanceReceivedAt: { not: null },
 	}
 }
 
 /**
- * Funded-but-blocked: the packet is funded and open on Arm A, but its
+ * Sold-but-blocked: the packet is sold to PBCC and open on Arm A, but its
  * brigade code is missing or does not resolve to a contractor account, so a
  * run would skip it. Shown on the payroll screen so Lissette
  * can fix the mapping.
@@ -186,35 +184,14 @@ export class EmptyRunError extends Error {
 }
 
 /**
- * Open jobs a run could actually sweep: on Arm A and mapped to a contractor
- * account. A job with an unmapped code stays open and visible on L1 (with a
- * badge) but sweeps to nothing, so it must not inflate the "Generate run (N)"
- * count. Uses the same predicate and the same resolver as `generateRun`.
- */
-export async function countSweepableJobs(
-	excludeIds: ReadonlyArray<string> = [],
-): Promise<number> {
-	const docs = await db.jafInvoice.findMany({
-		where: {
-			...sweepableWhere(),
-			...(excludeIds.length ? { id: { notIn: [...excludeIds] } } : {}),
-		},
-		select: { contractorAccountCode: true },
-	})
-	const resolved = await resolveContractorAccounts(
-		docs.map((d) => d.contractorAccountCode),
-	)
-	return docs.filter(
-		(d) => d.contractorAccountCode && resolved.has(d.contractorAccountCode),
-	).length
-}
-
-/**
- * Sweep the open Arm A jobs into one payroll run.
+ * Sweep the open Arm A jobs into one payroll request, as a draft.
  *
  * Default is "everything ready" (q&a 15.4); `excludeIds` is the jobs Lissette
- * unticked on L1 to hold back from this report. They stay open and visible.
- * Throws `EmptyRunError`, writing nothing, when no job would be swept.
+ * unticked to hold back from this request. They stay open and visible. The
+ * request is Lissette's alone until `sendPayrollRun` hands it to Carmen.
+ * Throws `EmptyRunError`, writing nothing, when no job would be swept: a
+ * request with no jobs can never exist, and a brigade only appears on it
+ * through a job.
  */
 export async function generateRun(opts: {
 	generatedById: string
@@ -300,18 +277,6 @@ export async function generateRun(opts: {
 					contractorAccountId,
 				})),
 			})
-			const comptrollers = await tx.user.findMany({
-				where: { role: "COMPTROLLER", active: true },
-				select: { id: true },
-			})
-			if (comptrollers.length > 0) {
-				await tx.notification.createMany({
-					data: comptrollers.map((u) => ({
-						userId: u.id,
-						message: `Production Journal ${opts.label} is ready to pay — ${claimedAccountIds.size} accounts.`,
-					})),
-				})
-			}
 			return { created, swept }
 			// The first run sweeps the whole released backlog (one write per job), so
 			// the 5s interactive-transaction default is not enough.
@@ -323,15 +288,91 @@ export async function generateRun(opts: {
 }
 
 /**
- * Tick one contractor account of a payroll run as paid (Carmen's per-account
- * PAID, or finance's paper fallback): stamps the account row and
- * `payablesClosedAt`/`payablesClosedById` on that account's jobs in the run
- * (which removes them from Arm A and therefore from L1). When it was the last
- * unpaid account the run itself is closed and FINANCE is notified, exactly
- * once even under concurrent last ticks. No ACH reference is kept (q&a 15.2).
+ * Hand a draft request to Carmen: stamps it sent and tells the comptrollers.
+ * Sending is once only; a request already sent is left as it was (409).
+ */
+export async function sendPayrollRun(opts: {
+	runId: string
+	sentById: string
+}): Promise<void> {
+	await db.$transaction(async (tx) => {
+		const run = await tx.payrollRun.findUnique({
+			where: { id: opts.runId },
+			select: { label: true, sentAt: true, reversedAt: true },
+		})
+		if (!run) throw new Response("Not Found", { status: 404 })
+		if (run.sentAt || run.reversedAt) {
+			throw new Response("Payroll request is already sent", { status: 409 })
+		}
+		// The jobs are the request: never send one that has none.
+		const jobs = await tx.jafInvoice.count({
+			where: { payrollRunId: opts.runId },
+		})
+		if (jobs === 0) throw new EmptyRunError()
+		const claimed = await tx.payrollRun.updateMany({
+			where: { id: opts.runId, sentAt: null },
+			data: { sentAt: new Date(), sentById: opts.sentById },
+		})
+		if (claimed.count === 0) {
+			throw new Response("Payroll request is already sent", { status: 409 })
+		}
+		const comptrollers = await tx.user.findMany({
+			where: { role: "COMPTROLLER", active: true },
+			select: { id: true },
+		})
+		if (comptrollers.length > 0) {
+			await tx.notification.createMany({
+				data: comptrollers.map((u) => ({
+					userId: u.id,
+					message: `Payroll request ${run.label} is ready to pay — ${jobs} Avisos.`,
+				})),
+			})
+		}
+	})
+}
+
+/**
+ * Put a draft request's jobs back on the Ready tab. Only a request Carmen has
+ * not been given yet can go: once sent it stays, and a mistake is fixed with
+ * her, not by deleting it.
+ */
+export async function discardDraftRun(runId: string): Promise<void> {
+	await db.$transaction(async (tx) => {
+		const run = await tx.payrollRun.findUnique({
+			where: { id: runId },
+			select: { sentAt: true },
+		})
+		if (!run) throw new Response("Not Found", { status: 404 })
+		if (run.sentAt) {
+			throw new Response("Payroll request is already sent", { status: 409 })
+		}
+		await tx.jafInvoice.updateMany({
+			where: { payrollRunId: runId },
+			data: {
+				payrollRunId: null,
+				contractorAccountId: null,
+				contractorShareLines: Prisma.DbNull,
+				grossPayable: null,
+				retentionAmount: null,
+				netPayable: null,
+			},
+		})
+		await tx.payrollRunAccount.deleteMany({ where: { payrollRunId: runId } })
+		await tx.payrollRun.delete({ where: { id: runId } })
+	})
+}
+
+/**
+ * Tick one brigade of a payroll request as paid. Only Carmen does this: there
+ * is no way to confirm on her behalf. Stamps the account row and
+ * `payablesClosedAt`/`payablesClosedById` on that brigade's jobs in the
+ * request (which closes Arm A for them and removes them from Arm A's lists).
+ * When it was the last unpaid brigade the request itself is closed and FINANCE
+ * is notified, exactly once even under concurrent last ticks. No ACH reference
+ * is kept (q&a 15.2).
  *
- * Throws 403 for a fallback tick when PAYROLL_FALLBACK_ENABLED is off, 404 if
- * the account is not part of the run, 409 if it is already paid.
+ * Throws 404 if the brigade is not part of the request, 409 if it is already
+ * paid or the request has not been sent to Carmen yet.
  * `reversedAt` / `reversedById` / `reverseReason` on PayrollRun are the schema
  * hook for the admin-only reversal planned for Phase 5 (q&a 15.5).
  */
@@ -340,13 +381,7 @@ export async function closePayrollRunAccount(opts: {
 	accountId: string
 	paidById: string
 	paidDate: Date
-	confirmedByFallback: boolean
 }): Promise<{ runClosed: boolean }> {
-	// Finance confirming from paper is a side-by-side-period fallback; once
-	// switched off at go-live only the comptroller ticks.
-	if (opts.confirmedByFallback && !isPayrollFallbackEnabled()) {
-		throw new Response("Fallback confirmation is switched off", { status: 403 })
-	}
 	return db.$transaction(async (tx) => {
 		const exists = await tx.payrollRunAccount.findUnique({
 			where: {
@@ -364,10 +399,16 @@ export async function closePayrollRunAccount(opts: {
 		await tx.$queryRaw`SELECT "id" FROM "PayrollRun" WHERE "id" = ${opts.runId} FOR UPDATE`
 		const runState = await tx.payrollRun.findUniqueOrThrow({
 			where: { id: opts.runId },
-			select: { reversedAt: true, paidAt: true },
+			select: { reversedAt: true, paidAt: true, sentAt: true },
 		})
 		if (runState.reversedAt || runState.paidAt) {
 			throw new Response("Run is reversed or already paid", { status: 409 })
+		}
+		// A draft is still Lissette's to review: nobody pays against it.
+		if (!runState.sentAt) {
+			throw new Response("Request has not been sent to Carmen", {
+				status: 409,
+			})
 		}
 		// Conditional claim: same double-submit guard as the old whole-run close.
 		const claimed = await tx.payrollRunAccount.updateMany({
@@ -376,11 +417,7 @@ export async function closePayrollRunAccount(opts: {
 				contractorAccountId: opts.accountId,
 				paidAt: null,
 			},
-			data: {
-				paidAt: opts.paidDate,
-				paidById: opts.paidById,
-				confirmedByFallback: opts.confirmedByFallback,
-			},
+			data: { paidAt: opts.paidDate, paidById: opts.paidById },
 		})
 		if (claimed.count === 0) {
 			throw new Response("Account already paid", { status: 409 })
@@ -400,18 +437,9 @@ export async function closePayrollRunAccount(opts: {
 			where: { payrollRunId: opts.runId, paidAt: null },
 		})
 		if (remaining > 0) return { runClosed: false }
-		// The run is "confirmed by fallback" if ANY of its accounts was, not just the last tick.
-		const anyFallback =
-			(await tx.payrollRunAccount.count({
-				where: { payrollRunId: opts.runId, confirmedByFallback: true },
-			})) > 0
 		const closed = await tx.payrollRun.updateMany({
 			where: { id: opts.runId, paidAt: null, reversedAt: null },
-			data: {
-				paidAt: opts.paidDate,
-				paidById: opts.paidById,
-				confirmedByFallback: anyFallback,
-			},
+			data: { paidAt: opts.paidDate, paidById: opts.paidById },
 		})
 		if (closed.count === 0) return { runClosed: false }
 		const [{ label }, count, financeUsers] = await Promise.all([
@@ -429,7 +457,7 @@ export async function closePayrollRunAccount(opts: {
 			await tx.notification.createMany({
 				data: financeUsers.map((u) => ({
 					userId: u.id,
-					message: `Run ${label} paid — ${count} Avisos payroll confirmed.`,
+					message: `Request ${label} paid — ${count} Avisos payroll confirmed.`,
 				})),
 			})
 		}
@@ -437,64 +465,7 @@ export async function closePayrollRunAccount(opts: {
 	})
 }
 
-/**
- * Whole-run confirm (finance's paper fallback): ticks every still-unpaid
- * account of the run through `closePayrollRunAccount`, so the last tick closes
- * the run and notifies FINANCE. Returns the number of member invoices closed.
- *
- * Throws 403 if `confirmedByFallback` and the fallback switch is off, 404 for
- * an unknown run, 409 if the run is already closed.
- */
-export async function closePayrollRun(opts: {
-	runId: string
-	paidById: string
-	/** The date the run was paid; stamped on `PayrollRun.paidAt`. */
-	paidDate: Date
-	evidencePath?: string | null
-	confirmedByFallback: boolean
-}): Promise<{ closedCount: number }> {
-	if (opts.confirmedByFallback && !isPayrollFallbackEnabled()) {
-		throw new Response("Fallback confirmation is switched off", { status: 403 })
-	}
-	const run = await db.payrollRun.findUnique({
-		where: { id: opts.runId },
-		select: { paidAt: true, reversedAt: true },
-	})
-	if (!run) throw new Response("Not Found", { status: 404 })
-	if (run.paidAt || run.reversedAt) {
-		throw new Response("Payroll run is already closed", { status: 409 })
-	}
-	if (opts.evidencePath) {
-		await db.payrollRun.update({
-			where: { id: opts.runId },
-			data: { evidencePath: opts.evidencePath },
-		})
-	}
-	const open = await db.payrollRunAccount.findMany({
-		where: { payrollRunId: opts.runId, paidAt: null },
-		select: { contractorAccountId: true },
-	})
-	for (const { contractorAccountId } of open) {
-		try {
-			await closePayrollRunAccount({
-				runId: opts.runId,
-				accountId: contractorAccountId,
-				paidById: opts.paidById,
-				paidDate: opts.paidDate,
-				confirmedByFallback: opts.confirmedByFallback,
-			})
-		} catch (e) {
-			// Lost a race with another tick of the same account: fine, skip it.
-			if (!(e instanceof Response && e.status === 409)) throw e
-		}
-	}
-	const closedCount = await db.jafInvoice.count({
-		where: { payrollRunId: opts.runId, payablesClosedAt: { not: null } },
-	})
-	return { closedCount }
-}
-
-export type JournalLine = {
+type JournalLine = {
 	claroCode: string
 	description: string
 	qty: number
@@ -506,7 +477,7 @@ export type JournalLine = {
 	adjNet: number
 }
 
-export type JournalJob = {
+type JournalJob = {
 	invoiceId: string
 	controlNumber: string
 	avisoNumber: string | null
@@ -519,7 +490,7 @@ export type JournalJob = {
 	adjNetRunning: number
 }
 
-export type JournalBlock = {
+type JournalBlock = {
 	brigadeCode: string
 	brigadeLabel: string
 	gross: number
@@ -638,4 +609,37 @@ function parseShareLines(value: unknown): JournalLine[] {
 			adjNet: toNumberPrice(line.adjNet),
 		}
 	})
+}
+
+/** One line of the payroll request sheet: a brigade, the Avisos it covers, what it is paid. */
+export type PayrollSheetLine = {
+	brigadeCode: string
+	brigadeLabel: string
+	avisoNumbers: string[]
+	/** 65% of the pre-IVU labor. */
+	net: number
+	/** 10% of net, held back. */
+	retention: number
+	/** Net less retention: the amount Carmen pays. */
+	toPay: number
+}
+
+/**
+ * The request as Carmen and Lissette read it. Gross is the JAF price and is
+ * deliberately not carried: this is the only shape of a request that leaves
+ * Lissette's desk, so nothing downstream can print what it does not have.
+ */
+export function payrollSheetLines(blocks: JournalBlock[]): PayrollSheetLine[] {
+	return blocks.map((b) => ({
+		brigadeCode: b.brigadeCode,
+		brigadeLabel: b.brigadeLabel,
+		avisoNumbers: [
+			...new Set(
+				b.jobs.map((j) => j.avisoNumber).filter((n): n is string => !!n),
+			),
+		].sort(),
+		net: b.net,
+		retention: b.retention,
+		toPay: b.totalSC,
+	}))
 }

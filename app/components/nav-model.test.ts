@@ -68,16 +68,7 @@ describe("navGroupsFor", () => {
 	it("groups FINANCE items into Arm A and Arm B, in process order", () => {
 		expect(tos(navGroupsFor("FINANCE"))).toEqual([
 			["overview", ["/dashboard"]],
-			[
-				"arm_a",
-				[
-					"/finance/queue",
-					"/finance/lc-requests",
-					"/finance/lc-funded",
-					"/finance/payroll",
-					"/finance/awaiting-carmen",
-				],
-			],
+			["arm_a", ["/finance/queue", "/finance/lc-requests", "/finance/payroll"]],
 			[
 				"arm_b",
 				[

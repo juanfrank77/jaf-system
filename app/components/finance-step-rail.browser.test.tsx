@@ -30,7 +30,7 @@ describe("finance step rails", () => {
 		expect(hrefs).toContain("/finance/payroll")
 	})
 
-	it("locks PO inbox and Claro invoices on the Arm B rail", async ({
+	it("opens the PO inbox and keeps Claro invoices locked on the Arm B rail", async ({
 		renderStub,
 	}) => {
 		await renderStub({
@@ -40,8 +40,10 @@ describe("finance step rails", () => {
 		})
 		const items = await screen.findAllByRole("listitem")
 		expect(items).toHaveLength(3)
-		expect(screen.queryAllByRole("link")).toHaveLength(0)
-		expect(items.filter((li) => li.dataset.state === "locked")).toHaveLength(2)
+		expect(
+			screen.getAllByRole("link").map((a) => a.getAttribute("href")),
+		).toEqual(["/finance/awaiting-po"])
+		expect(items.filter((li) => li.dataset.state === "locked")).toHaveLength(1)
 	})
 
 	it("marks the current Arm B step as current even when it is unavailable", async ({

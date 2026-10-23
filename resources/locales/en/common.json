@@ -770,6 +770,8 @@
 		"admin_override": "Signed off. You are editing it as Admin."
 	},
 	"docs_review": {
+		"finance_return_title": "Returned by Finance.",
+		"finance_return_body": "{{date}}: {{note}} Fix it, then release the packet again.",
 		"readonly_title": "Completed step.",
 		"readonly_body": "This is a read-only look back; nothing can be changed here.",
 		"readonly_back": "Back to the current step",
@@ -1399,6 +1401,31 @@
 		}
 	},
 	"finance_verify": {
+		"subtotal": "Subtotal",
+		"ivu_4": "IVU 4%",
+		"ivu_115": "IVU 11.5%",
+		"total": "Total",
+		"preview": {
+			"heading": "PBCC invoice preview",
+			"code": "Code",
+			"service": "Service",
+			"qty": "Qty",
+			"price": "Price",
+			"ivu": "IVU",
+			"amount": "Amount",
+			"empty": "No service lines on this invoice."
+		},
+		"checks": {
+			"invoice": "Invoice correct",
+			"aviso": "Aviso # matches the Aviso PDF",
+			"photos": "Photos are this job",
+			"precert": "Pre-cert signed"
+		},
+		"accept_next": "Accept & next",
+		"position": "{{position}} of {{total}}",
+		"prev": "Prev",
+		"next": "Next",
+		"sent_back_to_supervisor": "Sent back to the supervisor.",
 		"line_sum_pre_ivu": "Line sum (pre-IVU)",
 		"title": "Verify packet",
 		"amount": "Invoice amount",
@@ -1417,6 +1444,8 @@
 		"send_back_placeholder": "Explain the Aviso issue to the supervisor…",
 		"send_back": "Send Back to Supervisor",
 		"errors": {
+			"checks_required": "Tick all four checks before accepting.",
+			"documents_missing": "A document is missing from the packet. Send it back instead.",
 			"unknown_intent": "Unknown action.",
 			"note_required": "A send-back note is required.",
 			"invalid_stage": "This job is not at the Verify stage.",

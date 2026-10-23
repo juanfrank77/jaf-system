@@ -1,31 +1,35 @@
 import type { ParseKeys } from "i18next"
-import type { ComponentProps } from "react"
+import { type ComponentProps, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Form, redirect } from "react-router"
+import { Form, Link, redirect } from "react-router"
 import { BrigadeStockTracked } from "~/components/brigade-stock-tracked"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
 import { MaterialLineItems } from "~/components/material-line-items"
+import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
+import { Checkbox } from "~/components/ui/checkbox"
 import { Textarea } from "~/components/ui/textarea"
 import type { AvisoDiscrepancy } from "~/lib/aviso-discrepancy"
 import { brigadeStockFor } from "~/lib/brigade-stock.server"
 import { db } from "~/lib/db.server"
 import { sendInternalEmail } from "~/lib/email.server"
+import { inboxNeighbors } from "~/lib/finance-inbox.server"
 import {
 	billableMaterials,
 	computeFinanceStage,
 	FINANCEABLE_STATUSES,
 	fetchInvoiceTotalContext,
-	invoiceTotalUsed,
 } from "~/lib/finance-pipeline.server"
+import { computeInvoiceTotals } from "~/lib/invoice-totals"
 import { packetDocuments } from "~/lib/packet-documents"
 import { isTerminalStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import { isResent, isReturned, latestReturn } from "~/lib/returned-packet"
+import type { InvoiceLine } from "~/lib/service-lines"
 import { storedPdfLinks } from "~/lib/upload-href"
-import { cn, formatMoney, toNumberPrice } from "~/lib/utils"
+import { formatMoney } from "~/lib/utils"
 import type { Route } from "./+types/_app.finance.verify.$id"
 
 export const meta: Route.MetaFunction = ({ data }) => [
@@ -39,6 +43,8 @@ export const meta: Route.MetaFunction = ({ data }) => [
 type MaterialServiceCode = ComponentProps<
 	typeof MaterialLineItems
 >["serviceCodes"][number]
+
+const CHECKS = ["invoice", "aviso", "photos", "precert"] as const
 
 type SendBackNote = {
 	note: string
@@ -73,13 +79,17 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		throw redirect(`/docs/${params.id}`)
 	}
 
-	const { serviceCodes, codeMap, ivuRate } = await fetchInvoiceTotalContext()
+	const { serviceCodes, ivuRate } = await fetchInvoiceTotalContext()
 	const stage = computeFinanceStage(
 		doc,
 		doc.poLinks.length > 0,
 		doc.paymentRecords,
 	)
-	const amount = invoiceTotalUsed(doc, codeMap, ivuRate)
+	// The invoice record: its service lines, each with its own IVU, rounded once.
+	const invoiceLines = Array.isArray(doc.jafInvoiceLines)
+		? (doc.jafInvoiceLines as InvoiceLine[])
+		: []
+	const totals = computeInvoiceTotals(invoiceLines, ivuRate)
 	// Same guards as the action: only a released packet is hers to act on, and
 	// one the supervisor has not resent cannot be verified (S4).
 	const returned = isReturned(doc)
@@ -104,17 +114,23 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		},
 		serviceCodes,
 		stage,
-		amount,
-		ivuRate,
+		invoiceLines: invoiceLines.map((l, i) => ({
+			...l,
+			ivuRate: totals.lines[i].ivuRate,
+			lineAmount: totals.lines[i].lineAmount,
+		})),
+		totals: {
+			subtotal: totals.subtotal,
+			ivu4: totals.ivu4,
+			ivu115: totals.ivu115,
+			total: totals.total,
+		},
+		neighbors: await inboxNeighbors(doc.id),
 		// The supervisor's Aviso-vs-work-order flag, shown read-only.
 		avisoDiscrepancy: (doc.avisoDiscrepancy as AvisoDiscrepancy | null) ?? null,
 		sendBackNotes: (doc.financeSendBackNotes as SendBackNote[]) || [],
 		// The released packet's four documents, each opening its file.
 		packetDocs: packetDocuments(doc, doc.preCertSheets, doc.photos),
-		lineTotal:
-			doc.jafInvoiceLineTotal != null
-				? toNumberPrice(doc.jafInvoiceLineTotal)
-				: null,
 		// The stored file is the price-free Claro packet; the priced JAF invoice
 		// is rendered on demand (Finance/Admin only) once the packet was sent.
 		...storedPdfLinks(doc.jafInvoicePdfPath),
@@ -136,6 +152,17 @@ export async function action({ request, params }: Route.ActionArgs) {
 			supervisor: true,
 			poLinks: true,
 			paymentRecords: { select: { type: true } },
+			preCertSheets: {
+				where: { supersededAt: null },
+				orderBy: { version: "desc" },
+				take: 1,
+				select: {
+					pdfPath: true,
+					sigSupervisorAt: true,
+					sigSubcontractorAt: true,
+				},
+			},
+			photos: { select: { localPath: true, tag: true, takenAt: true } },
 		},
 	})
 	if (isTerminalStatus(doc.status)) {
@@ -158,6 +185,17 @@ export async function action({ request, params }: Route.ActionArgs) {
 		return { errorKey: "finance_verify.errors.invalid_stage" }
 
 	if (intent === "verify") {
+		// All four checks, and all four documents, before a packet is accepted.
+		if (!CHECKS.every((c) => form.get(`check_${c}`) === "on"))
+			return { errorKey: "finance_verify.errors.checks_required" }
+		const present = packetDocuments(
+			doc,
+			doc.preCertSheets[0] ?? null,
+			doc.photos,
+		)
+		if (present.some((d) => !d.href))
+			return { errorKey: "finance_verify.errors.documents_missing" }
+		const { nextId } = await inboxNeighbors(params.id)
 		// No Aviso-amount check (F2): verifying never asks for or compares one.
 		const note = (form.get("note") as string | null)?.trim() || null
 		await db.$transaction([
@@ -173,11 +211,12 @@ export async function action({ request, params }: Route.ActionArgs) {
 					docId: params.id,
 					userId: user.id,
 					action: "FINANCE_VERIFIED",
-					diffJson: { note },
+					diffJson: { note, source: "STAMPED" },
 				},
 			}),
 		])
-		throw redirect("/finance/queue")
+		// Accept & next: straight on to the next packet, no trip back to the list.
+		throw redirect(nextId ? `/finance/verify/${nextId}` : "/finance/queue")
 	}
 
 	if (intent === "send_back") {
@@ -199,6 +238,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 					financeVerifiedAt: null,
 					financeVerifiedById: null,
 					financeSendBackNotes: history,
+					// Back on the supervisor's desk: no longer released, so it leaves
+					// the Inbox and the supervisor can fix it and release it again.
+					releasedToFinanceAt: null,
+					releasedToFinanceById: null,
 				},
 			}),
 			db.auditTrail.create({
@@ -206,7 +249,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 					docId: params.id,
 					userId: user.id,
 					action: "FINANCE_SEND_BACK",
-					diffJson: { note },
+					diffJson: { note, source: "STAMPED" },
 				},
 			}),
 			db.notification.create({
@@ -224,22 +267,26 @@ export async function action({ request, params }: Route.ActionArgs) {
 			subject: `Finance returned job ${doc.controlNumber}`,
 			context: "FINANCE_SEND_BACK",
 		})
-		throw redirect(`/finance/receivables`)
+		throw redirect("/finance/queue")
 	}
 
 	throw redirect(`/finance/verify/${params.id}`)
 }
 
-export default function FinanceVerify({
-	loaderData,
-	actionData,
-}: Route.ComponentProps) {
+// Keyed by packet: "Accept & next" keeps this screen mounted, and the four
+// checks must start unticked for every packet.
+export default function FinanceVerify(props: Route.ComponentProps) {
+	return <VerifyPacket key={props.loaderData.doc.id} {...props} />
+}
+
+function VerifyPacket({ loaderData, actionData }: Route.ComponentProps) {
 	const {
 		doc,
 		serviceCodes,
 		stage,
-		amount,
-		ivuRate,
+		invoiceLines,
+		totals,
+		neighbors,
 		sendBackNotes,
 		returnState,
 		notReleased,
@@ -247,7 +294,6 @@ export default function FinanceVerify({
 		canSendBack,
 		packetDocs,
 		avisoDiscrepancy,
-		lineTotal,
 		packetHref,
 		legacyPricedHref,
 		pricedInvoiceHref,
@@ -259,6 +305,15 @@ export default function FinanceVerify({
 
 	const cannotVerify =
 		stage !== "TO_VERIFY" || doc.status === "LC_REQUEST_GENERATED"
+	const [checks, setChecks] = useState({
+		invoice: false,
+		aviso: false,
+		photos: false,
+		precert: false,
+	})
+	// Accept stays grey until all four are ticked and no document is missing.
+	const readyToAccept =
+		CHECKS.every((c) => checks[c]) && packetDocs.every((d) => d.href)
 
 	return (
 		<div className="space-y-5">
@@ -274,34 +329,106 @@ export default function FinanceVerify({
 						{doc.controlNumber} — {doc.jobType}
 					</p>
 				</div>
-				<span
-					className={cn(
-						"text-xs bg-muted px-3 py-1 rounded-full font-medium",
-						stage === "TO_VERIFY" && "bg-status-info-soft text-status-info",
+				<nav className="flex items-center gap-3 text-sm">
+					{neighbors.position > 0 && (
+						<span className="text-muted-foreground">
+							{t("finance_verify.position", {
+								position: neighbors.position,
+								total: neighbors.total,
+							})}
+						</span>
 					)}
-				>
-					{stage?.replace(/_/g, " ")}
-				</span>
+					{neighbors.prevId ? (
+						<Link
+							to={`/finance/verify/${neighbors.prevId}`}
+							className="underline"
+						>
+							‹ {t("finance_verify.prev")}
+						</Link>
+					) : null}
+					{neighbors.nextId ? (
+						<Link
+							to={`/finance/verify/${neighbors.nextId}`}
+							className="underline"
+						>
+							{t("finance_verify.next")} ›
+						</Link>
+					) : null}
+				</nav>
 			</div>
 			<FinanceStepRail current="PACKETS" />
 			<Callout title={t("finance_flow.callout.packets_title")}>
 				{t("finance_flow.callout.packets_body")}
 			</Callout>
 
-			<div className="text-sm">
-				<p>
-					{t("finance_verify.amount")}:{" "}
-					<span className="font-medium">{formatMoney(amount)}</span>
-				</p>
-				{lineTotal != null && (
-					<p>
-						{t("finance_verify.line_sum_pre_ivu")}:{" "}
-						<span className="font-medium">{formatMoney(lineTotal)}</span>
+			<div className="bg-card border rounded-lg p-4 space-y-3">
+				<h2 className="text-sm font-medium">
+					{t("finance_verify.preview.heading")}
+				</h2>
+				{invoiceLines.length === 0 ? (
+					<p className="text-sm text-muted-foreground">
+						{t("finance_verify.preview.empty")}
 					</p>
+				) : (
+					<div className="overflow-x-auto">
+						<table className="w-full text-sm">
+							<thead>
+								<tr className="border-b text-left text-xs text-muted-foreground">
+									<th className="p-2">{t("finance_verify.preview.code")}</th>
+									<th className="p-2">{t("finance_verify.preview.service")}</th>
+									<th className="p-2 text-right">
+										{t("finance_verify.preview.qty")}
+									</th>
+									<th className="p-2 text-right">
+										{t("finance_verify.preview.price")}
+									</th>
+									<th className="p-2 text-right">
+										{t("finance_verify.preview.ivu")}
+									</th>
+									<th className="p-2 text-right">
+										{t("finance_verify.preview.amount")}
+									</th>
+								</tr>
+							</thead>
+							<tbody>
+								{invoiceLines.map((l) => (
+									<tr key={l.serviceCodeId} className="border-b last:border-0">
+										<td className="p-2 font-mono">{l.claroCode}</td>
+										<td className="p-2">{l.name}</td>
+										<td className="p-2 text-right font-mono">{l.qty}</td>
+										<td className="p-2 text-right font-mono">
+											{formatMoney(l.unitPrice)}
+										</td>
+										<td className="p-2 text-right font-mono">
+											{`${+(l.ivuRate * 100).toFixed(2)}%`}
+										</td>
+										<td className="p-2 text-right font-mono">
+											{formatMoney(l.lineAmount)}
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
 				)}
-				<p>
-					{t("finance_verify.ivu_rate", { rate: (ivuRate * 100).toFixed(1) })}
-				</p>
+				<dl className="ml-auto grid w-full max-w-xs grid-cols-2 gap-x-4 text-sm">
+					<dt className="text-muted-foreground">
+						{t("finance_verify.subtotal")}
+					</dt>
+					<dd className="text-right font-mono">
+						{formatMoney(totals.subtotal)}
+					</dd>
+					<dt className="text-muted-foreground">{t("finance_verify.ivu_4")}</dt>
+					<dd className="text-right font-mono">{formatMoney(totals.ivu4)}</dd>
+					<dt className="text-muted-foreground">
+						{t("finance_verify.ivu_115")}
+					</dt>
+					<dd className="text-right font-mono">{formatMoney(totals.ivu115)}</dd>
+					<dt className="font-medium">{t("finance_verify.total")}</dt>
+					<dd className="text-right font-mono font-medium">
+						{formatMoney(totals.total)}
+					</dd>
+				</dl>
 			</div>
 
 			<div className="bg-card border rounded-lg p-4 space-y-2">
@@ -320,14 +447,18 @@ export default function FinanceVerify({
 										number: doc.avisoNumber ?? "—",
 									})}
 								</p>
-								<p className="text-xs text-muted-foreground">
-									{d.href
-										? t(`finance_verify.packet.${d.key}_detail` as ParseKeys, {
-												file: d.detail,
-												count: Number(d.detail) || 0,
-											})
-										: t("finance_verify.packet.missing")}
-								</p>
+								{d.href ? (
+									<p className="text-xs text-muted-foreground">
+										{t(`finance_verify.packet.${d.key}_detail` as ParseKeys, {
+											file: d.detail,
+											count: Number(d.detail) || 0,
+										})}
+									</p>
+								) : (
+									<Badge variant="warn">
+										{t("finance_verify.packet.missing")}
+									</Badge>
+								)}
 							</div>
 							{d.files.length > 0 ? (
 								<ul className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
@@ -508,13 +639,32 @@ export default function FinanceVerify({
 					{canVerify ? (
 						<Form method="post" className="space-y-3">
 							<input type="hidden" name="intent" value="verify" />
+							<fieldset className="space-y-2">
+								{CHECKS.map((c) => (
+									<label
+										key={c}
+										htmlFor={`check_${c}`}
+										className="flex items-center gap-2 text-sm"
+									>
+										<Checkbox
+											id={`check_${c}`}
+											name={`check_${c}`}
+											checked={checks[c]}
+											onCheckedChange={(v) =>
+												setChecks((prev) => ({ ...prev, [c]: v === true }))
+											}
+										/>
+										{t(`finance_verify.checks.${c}`)}
+									</label>
+								))}
+							</fieldset>
 							<Textarea
 								name="note"
 								rows={2}
 								placeholder={t("finance_verify.verify_note_placeholder")}
 							/>
-							<Button type="submit" disabled={cannotVerify}>
-								{t("finance_verify.mark_verified")}
+							<Button type="submit" disabled={cannotVerify || !readyToAccept}>
+								{t("finance_verify.accept_next")}
 							</Button>
 							{cannotVerify && (
 								<p className="text-sm text-status-warn">
@@ -531,6 +681,11 @@ export default function FinanceVerify({
 							)}
 						</p>
 					)}
+					{error?.errorKey && (
+						<p className="text-sm text-status-danger">
+							{t(error.errorKey as ParseKeys)}
+						</p>
+					)}
 					{canSendBack && (
 						<Form method="post" className="space-y-3">
 							<input type="hidden" name="intent" value="send_back" />
@@ -543,11 +698,6 @@ export default function FinanceVerify({
 							<Button type="submit" variant="outline">
 								{t("finance_verify.send_back")}
 							</Button>
-							{error?.errorKey && (
-								<p className="text-sm text-status-danger">
-									{t(error.errorKey as ParseKeys)}
-								</p>
-							)}
 						</Form>
 					)}
 				</div>

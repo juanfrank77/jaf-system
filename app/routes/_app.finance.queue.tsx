@@ -151,7 +151,7 @@ export default function FinancePackets({ loaderData }: Route.ComponentProps) {
 						{t("finance_queue.filter")}
 					</Button>
 				</Form>
-				{startId && (
+				{view === "all" && startId && (
 					<Link
 						to={`/finance/verify/${startId}`}
 						className={buttonVariants({})}

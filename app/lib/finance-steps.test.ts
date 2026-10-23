@@ -53,10 +53,10 @@ describe("armAStepOf", () => {
 	}
 	const at = new Date()
 
-	it("puts a job nobody has accepted in Packets in", () => {
+	it("puts a job nobody has accepted in the Inbox", () => {
 		expect(armAStepOf(none)).toBe("PACKETS")
 	})
-	it("moves an accepted, unsent job to LC request", () => {
+	it("moves an accepted, unsent job to the PBCC batch", () => {
 		expect(armAStepOf({ ...none, financeVerifiedAt: at })).toBe("LC_REQUEST")
 	})
 	it("moves a sent, unfunded job to LC funded", () => {

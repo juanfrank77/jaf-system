@@ -7,6 +7,7 @@ import { MaterialLineItems } from "~/components/material-line-items"
 import { Button } from "~/components/ui/button"
 import { avisoPdfUrl } from "~/lib/aviso-document"
 import { db } from "~/lib/db.server"
+import { computeInvoiceTotals } from "~/lib/invoice-totals"
 import { generateActaConformidadPdf } from "~/lib/pdf/acta-conformidad.server"
 import { generateScheduleAccountsPdf } from "~/lib/pdf/schedule-accounts.server"
 import { canTransition } from "~/lib/permissions"
@@ -114,8 +115,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	if (intent === "generate_schedule") {
-		const subtotal = lineItems.reduce((sum, i) => sum + i.qty * i.unitPrice, 0)
-		const amount = subtotal + subtotal * ivuRate
+		const amount = computeInvoiceTotals(lineItems, ivuRate).total
 
 		const lcPbccAdvanceRate = await getLcPbccAdvanceRate()
 		const pdfBytes = await generateScheduleAccountsPdf({

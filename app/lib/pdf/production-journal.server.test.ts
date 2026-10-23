@@ -2,65 +2,34 @@ import { describe, expect, it } from "vitest"
 import { generateProductionJournalPdf } from "~/lib/pdf/production-journal.server"
 
 describe("generateProductionJournalPdf", () => {
-	it("generates a non-empty PDF buffer for a run with blocks", async () => {
+	it("generates a non-empty PDF for a request with brigades", async () => {
 		const bytes = await generateProductionJournalPdf(
-			{ label: "Run 9/10", generatedAt: new Date("2026-09-10") },
+			{ label: "10/12/2026 – 10/25/2026" },
 			[
 				{
-					brigadeCode: "016",
-					brigadeLabel: "CARLOS MARTINEZ",
-					gross: 118.45,
+					brigadeCode: "025",
+					brigadeLabel: "ALEXIS DIAZ",
+					avisoNumbers: ["30077820"],
+					net: 131.52,
+					retention: 13.15,
+					toPay: 118.37,
+				},
+				{
+					brigadeCode: "009",
+					brigadeLabel: "JESUS MARTINEZ",
+					avisoNumbers: ["10356113", "10356247"],
 					net: 76.99,
 					retention: 7.69,
-					totalSC: 69.28,
-					jobs: [
-						{
-							invoiceId: "i1",
-							controlNumber: "M-3545",
-							avisoNumber: "10354739",
-							lines: [
-								{
-									claroCode: "34012039",
-									description: "REMOCION BAJANTE GPON",
-									qty: 1,
-									unitPrice: 23.0,
-									gross: 23.0,
-									net: 14.95,
-									pctRet: 0,
-									retention: 1.49,
-									adjNet: 13.45,
-								},
-								{
-									claroCode: "34012040",
-									description: "REEMPLAZO DE BAJANTE FRONTAL",
-									qty: 1,
-									unitPrice: 95.45,
-									gross: 95.45,
-									net: 62.04,
-									pctRet: 0,
-									retention: 6.2,
-									adjNet: 55.83,
-								},
-							],
-							gross: 118.45,
-							net: 76.99,
-							retention: 7.69,
-							adjNet: 69.28,
-							adjNetRunning: 69.28,
-						},
-					],
+					toPay: 69.3,
 				},
 			],
 		)
-		expect(bytes.length).toBeGreaterThan(0)
-		expect(bytes.subarray(0, 4).toString("utf-8")).toBe("%PDF")
+		expect(bytes.length).toBeGreaterThan(500)
+		expect(bytes.subarray(0, 4).toString()).toBe("%PDF")
 	})
 
-	it("generates a valid empty-run PDF without throwing", async () => {
-		const bytes = await generateProductionJournalPdf(
-			{ label: "Run empty", generatedAt: new Date() },
-			[],
-		)
-		expect(bytes.length).toBeGreaterThan(0)
+	it("renders a request with no brigades without throwing", async () => {
+		const bytes = await generateProductionJournalPdf({ label: "empty" }, [])
+		expect(bytes.subarray(0, 4).toString()).toBe("%PDF")
 	})
 })

@@ -197,9 +197,7 @@
 			"receivables": "Receivables",
 			"finance_packets": "Inbox",
 			"finance_lc_request": "PBCC batch",
-			"finance_lc_funded": "LC funded",
 			"finance_lists": "Payroll to Carmen",
-			"finance_carmen": "Carmen's payment",
 			"finance_awaiting_po": "PO inbox",
 			"finance_awaiting_ariba": "Claro invoices",
 			"soon": "Soon",
@@ -1486,15 +1484,7 @@
 		"errors": {
 			"on_schedule": "This packet is on bank schedule {{list}}. Send or discard the schedule instead of sending it by hand.",
 			"unknown_intent": "Unknown action.",
-			"terminal_status": "This job is no longer editable.",
-			"not_sent": "Send the request to the bank first.",
-			"already_funded": "This packet is already marked funded.",
-			"future_date": "The funded date cannot be in the future.",
-			"invalid_date": "Enter a valid date.",
-			"invalid_amount": "Enter the amount PBCC paid (more than 0).",
-			"reason_required": "Give a reason for the correction.",
-			"not_funded": "This packet has no funding to correct.",
-			"locked_in_paid_run": "This packet is already in a paid payroll run and can no longer be corrected."
+			"terminal_status": "This job is no longer editable."
 		},
 		"contractor_payment": "Contractor payment (Arm A)",
 		"frozen": "Frozen in run",
@@ -1509,15 +1499,7 @@
 		"precert_title": "Pre-certification sheet",
 		"precert_download": "Download pre-cert sheet",
 		"precert_signers": "Signed by: {{supervisor}}, {{contractor}}, {{claro}}",
-		"precert_missing": "Pre-cert sheet missing",
-		"mark_funded": "Mark funded",
-		"funded_on": "Funded {{date}}",
-		"funded_date": "Funded date",
-		"funded_amount": "Amount PBCC paid",
-		"funded_ref": "Bank reference (optional)",
-		"correct_funding": "Correct funding",
-		"correction_reason": "Reason for the correction",
-		"save_correction": "Save correction"
+		"precert_missing": "Pre-cert sheet missing"
 	},
 	"finance_po": {
 		"title": "Claro PO & Final Document",
@@ -2233,21 +2215,16 @@
 		"step": {
 			"packets": "Inbox",
 			"lc_request": "PBCC batch",
-			"lc_funded": "LC funded",
 			"lists": "Payroll to Carmen",
-			"carmen": "Carmen's payment"
+			"closed": "Closed"
 		},
 		"callout": {
-			"packets_title": "Stage 1 of 5 · Inbox",
+			"packets_title": "Stage 1 of 3 · Inbox",
 			"packets_body": "Packets the supervisors have released, with the documents that have arrived for each one. When every document is in, check the packet and accept it. Accepted packets move to the PBCC batch.",
-			"lc_request_title": "Stage 2 of 5 · PBCC batch",
-			"lc_request_body": "Every packet you accept joins this batch as its next row; its invoice PDF and Excel row are made for you. Close the batch (or let the 100th packet close it), check it, send the package to PBCC and mark it sent. The packets then wait in LC funded.",
-			"lc_funded_title": "Stage 3 of 5 · LC funded",
-			"lc_funded_body": "Packets whose request is with the bank and not funded yet. When the bank funds one, mark it funded here with the date and amount. That moves it to Lists to Carmen and starts the Arm B clock.",
-			"lists_title": "Stage 4 of 5 · Payroll to Carmen",
-			"lists_body": "Funded packets ready to go on a Production Journal, and the lists already sent. Create a list from the funded packets and send it to Carmen. Carmen then pays each account.",
-			"carmen_title": "Stage 5 of 5 · Carmen's payment",
-			"carmen_body": "Each list sent to Carmen, with the accounts she has paid and the ones still open. Wait for Carmen, or — if she has been out — confirm an account from the paper copy. When every account is paid, Arm A is closed for that list.",
+			"lc_request_title": "Stage 2 of 3 · PBCC batch",
+			"lc_request_body": "Every packet you accept joins this batch as its next row; its invoice PDF and Excel row are made for you. Close the batch (or let the 100th packet close it), check it, send the package to PBCC and mark it sent. The packets are then Sold to PBCC and ready for Payroll to Carmen.",
+			"lists_title": "Stage 3 of 3 · Payroll to Carmen",
+			"lists_body": "Avisos sold to PBCC that are not on a request yet, and the requests already made. Create a request from them, check it and send it to Carmen. Carmen pays each brigade in WinPay and ticks it; when every brigade on an Aviso is paid, Arm A is closed for that Aviso. Payroll does not wait for the bank's wire.",
 			"arm_b_receivables_title": "Arm B · Receivables",
 			"arm_b_receivables_body": "Claro paying JAF. Record payments as they land, then close the job once both exist. A half-closed job is normal here, not an error — the job closes for good when Claro's payment is in.",
 			"arm_b_po_title": "Arm B · PO inbox",
@@ -2305,53 +2282,58 @@
 		}
 	},
 	"finance_payroll": {
-		"ready_title": "Ready to send to Carmen",
-		"sent_title": "Lists already sent to Carmen",
-		"none_ready": "No funded packets are waiting for a list.",
-		"no_sent_lists": "No lists have been sent to Carmen yet.",
-		"create_list": "Create list for Carmen ({{count}})",
-		"see_carmen": "See Carmen's payment",
+		"tab": {
+			"ready": "Ready",
+			"waiting": "Waiting on Carmen",
+			"paid": "Paid"
+		},
+		"ready_title": "Sold to PBCC, ready for Carmen",
+		"drafts_title": "Draft requests — review, then send to Carmen",
+		"none_ready": "No sold Avisos are waiting for a payroll request.",
+		"none_waiting": "Nothing is waiting on Carmen.",
+		"none_paid": "No payroll request has been paid yet.",
+		"create_request": "Create payroll request ({{count}})",
+		"period_label": "Pay period",
+		"review": "Review and send",
+		"open_request": "Open",
 		"select_all": "Include all on this page",
-		"include_row": "Include {{number}} in the list",
+		"include_row": "Include {{number}} in the request",
 		"reversed": "Reversed",
-		"run_label_placeholder": "Run label (e.g. 9/10)",
-		"blocked_title": "Sent but blocked",
-		"fallback_count": "{{count}} accounts confirmed from paper",
+		"blocked_title": "Sold but blocked",
 		"blocked_reason": "No contractor account for this brigade",
-		"paid_by": "Paid {{date}} by {{name}}",
-		"from_paper": "confirmed from paper",
-		"awaiting_comptroller": "Awaiting the comptroller",
-		"confirm_account": "Confirm from paper",
 		"overdue": "{{days}}d, overdue",
+		"request_title": "Payroll request · {{label}}",
+		"sent_on": "sent to Carmen {{date}}",
+		"draft": "Draft — not sent",
+		"draft_body": "Check the brigades and the Aviso numbers, then send the request to Carmen. Until you send it, Carmen cannot see it.",
+		"progress": "{{paid}} of {{total}} brigades paid",
+		"paid_on": "Paid {{date}}",
+		"send": "Send to Carmen",
+		"discard": "Discard draft",
+		"total": "Total",
+		"net_note": "Net is on pre-IVU labor.",
+		"back": "← Payroll to Carmen",
+		"download_journal_pdf": "⬇ Request sheet (PDF)",
+		"status": {
+			"waiting": "Waiting on Carmen",
+			"paid": "Paid {{date}} by {{name}}"
+		},
+		"col": {
+			"brigade": "Brigade",
+			"avisos": "Avisos",
+			"net": "Net 65%",
+			"retention": "10% ret.",
+			"to_pay": "To pay",
+			"status": "Status"
+		},
 		"errors": {
 			"unknown_intent": "Unknown action.",
 			"missing_fields": "The paid date is required.",
 			"invalid_date": "That date could not be read.",
 			"future_date": "The paid date cannot be in the future.",
-			"empty_run": "No jobs could be added to a run — every ready job is held back or has no contractor account mapped.",
-			"invalid_evidence": "Evidence must be a PDF or image."
-		},
-		"back": "← Lists to Carmen",
-		"open": "Open — not yet paid",
-		"paid_on": "Paid on {{date}}",
-		"download_journal_pdf": "⬇ Journal PDF",
-		"col": {
-			"list": "List",
-			"date": "Sent",
-			"age": "Days",
-			"brigade": "Brigade",
-			"gross": "Gross",
-			"net": "Net",
-			"retention": "10% ret.",
-			"status": "Status",
-			"jobs": "Jobs",
-			"total_sc": "Total SC"
-		},
-		"grand_total": "Grand Total",
-		"batch_confirm": "Batch-confirm from paper",
-		"batch_confirm_submit": "Close run from paper",
-		"paid_date": "Paid date",
-		"evidence": "Upload evidence (PDF or image)"
+			"empty_run": "No payroll request could be made — every sold Aviso is held back or has no contractor account mapped.",
+			"already_sent": "This request has already been sent to Carmen."
+		}
 	},
 	"qty_stepper": {
 		"decrease": "Decrease",
@@ -2362,42 +2344,39 @@
 		"remove": "Remove photo"
 	},
 	"comptroller_lists": {
-		"title": "Lists from Lissette",
-		"callout_body": "Every payroll list Finance has sent. Open a list to pay its accounts in Runs to pay.",
+		"title": "Requests from Lissette",
+		"callout_body": "Every payroll request Finance has sent you. Open one to pay its brigades.",
 		"status_unpaid": "{{unpaid}} of {{total}} unpaid",
 		"status_paid": "Paid",
 		"open": "Open",
 		"view": "View",
 		"col": {
-			"list": "List",
+			"list": "Request",
 			"sent": "Sent",
 			"work_orders": "Work orders",
-			"total": "Total",
+			"total": "To pay",
 			"status": "Status"
 		}
 	},
 	"comptroller_payroll": {
 		"title": "Brigades · payroll",
 		"callout_title": "Your step",
-		"callout_body": "Open a run, pay each account in WinPay, then tick it here. Finance sees who has been paid.",
-		"runs_to_pay": "Runs to pay",
-		"paid_runs": "Paid runs",
-		"accounts_progress": "{{paid}} of {{total}} accounts",
+		"callout_body": "Open a request, pay each brigade in WinPay, then tick it here. The pay date starts as today; change it if you paid on another day. Finance sees each tick right away.",
 		"paid_button": "Paid",
 		"paid_by": "Paid {{date}} by {{name}}",
-		"from_paper": "confirmed from paper by finance",
-		"empty": "No runs yet.",
-		"back": "Back to runs",
-		"download_pdf": "Download journal PDF",
+		"pay_date": "Pay date",
+		"empty": "No requests yet.",
+		"back": "Back to requests",
+		"download_pdf": "Download request sheet (PDF)",
+		"request_title": "Payroll request · {{label}}",
+		"accounts_progress": "{{paid}} of {{total}} brigades",
+		"runs_to_pay": "Requests to pay",
+		"paid_runs": "Paid requests",
 		"col": {
-			"account": "Acct",
-			"contractor": "Contractor",
-			"jobs": "Jobs",
-			"gross": "Gross",
-			"net": "Net",
-			"retention": "10% Ret.",
-			"adj_net_running": "Adj. net running",
-			"status": "Status"
+			"brigade": "Brigade",
+			"avisos": "Avisos",
+			"to_pay": "To pay",
+			"status": "Paid in WinPay"
 		}
 	},
 	"finance_stage": {
@@ -2421,25 +2400,7 @@
 		"age": {
 			"packets": "Days waiting",
 			"sent": "Days since sent"
-		},
-		"funded": {
-			"mark": "Mark funded",
-			"date": "Funded on",
-			"amount": "Amount",
-			"ref": "Bank reference"
 		}
-	},
-	"finance_carmen": {
-		"title": "Carmen's payment",
-		"none": "No lists are waiting for Carmen.",
-		"paid_of": "{{paid}} of {{total}} accounts paid",
-		"age": "{{days}} days",
-		"overdue": "Overdue",
-		"waiting": "Waiting for Carmen",
-		"confirm": "Confirm from paper",
-		"confirm_prompt": "Mark this account paid from the paper copy? This closes Arm A for the account.",
-		"fallback_off": "Confirming from paper is switched off. Carmen marks accounts paid.",
-		"open_list": "Open list"
 	},
 	"work_order_doc": {
 		"title": "JAF Work Order",

@@ -184,7 +184,6 @@ export function DashboardDocList({
 														armAStepOf({
 															financeVerifiedAt: doc.financeVerifiedAt ?? null,
 															pbccRequestSentAt: doc.pbccRequestSentAt ?? null,
-															advanceReceivedAt: doc.advanceReceivedAt ?? null,
 														})
 													],
 												)}

@@ -13,7 +13,7 @@ import {
 import { StepRail } from "./step-rail"
 
 // Arm A rail: every step is finance's own work (`mine`), the screen you are on
-// is the current step, the others link to their own screen. Packets, funding
+// is the current step, the others link to their own screen. Packets, batches
 // and payroll move at different speeds across different jobs, so steps after
 // the current one stay navigable rather than locked.
 export function FinanceStepRail({ current }: { current: FinanceStep }) {
@@ -23,12 +23,16 @@ export function FinanceStepRail({ current }: { current: FinanceStep }) {
 		<StepRail
 			ariaLabel={t("finance_flow.aria")}
 			current={index}
-			steps={FINANCE_STEPS.map((step, i) => ({
-				key: step,
-				href: i === index ? undefined : FINANCE_STEP_HREF[step],
-				label: t(FINANCE_STEP_LABEL_KEY[step]),
-				mine: true,
-			}))}
+			steps={[
+				...FINANCE_STEPS.map((step, i) => ({
+					key: step,
+					href: i === index ? undefined : FINANCE_STEP_HREF[step],
+					label: t(FINANCE_STEP_LABEL_KEY[step]),
+					mine: true,
+				})),
+				// Where Arm A ends once Carmen has paid: a marker, never a screen.
+				{ key: "CLOSED", label: t("finance_flow.step.closed"), locked: true },
+			]}
 		/>
 	)
 }
@@ -53,7 +57,7 @@ export function ArmBStepRail({ current }: { current: ArmBStep }) {
 	)
 }
 
-/** "Arm A · Stage 3 of 5" / "Arm B · Receivables" label shown beside the title. */
+/** "Arm A · Stage 3 of 3" / "Arm B · Receivables" label shown beside the title. */
 export function StageChip(
 	props: { arm: "A"; step: number; total: number } | { arm: "B"; name: string },
 ) {

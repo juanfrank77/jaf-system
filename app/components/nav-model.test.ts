@@ -80,9 +80,7 @@ describe("navGroupsFor", () => {
 					"/finance/queue",
 					"/finance/queue?stage=returned",
 					"/finance/lc-requests",
-					"/finance/lc-funded",
 					"/finance/payroll",
-					"/finance/awaiting-carmen",
 				],
 			],
 			[

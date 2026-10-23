@@ -156,11 +156,10 @@ describe("loadNavCounts", () => {
 		})
 	})
 
-	it("gives FINANCE one count per Arm A screen, critical when a run is overdue", async () => {
+	it("gives FINANCE one count per Arm A screen, critical when a request is overdue", async () => {
 		vi.mocked(db.jafInvoice.count)
 			.mockResolvedValueOnce(4) // PACKETS
 			.mockResolvedValueOnce(3) // LC_REQUEST
-			.mockResolvedValueOnce(2) // LC_FUNDED
 			.mockResolvedValueOnce(1) // LISTS
 		vi.mocked(db.payrollRunAccount.count).mockResolvedValue(7)
 		vi.mocked(db.payrollRun.count).mockResolvedValue(1)
@@ -168,9 +167,8 @@ describe("loadNavCounts", () => {
 			"/finance/queue": { value: 4, tone: "neutral" },
 			"/finance/queue?stage=returned": { value: 0, tone: "neutral" },
 			"/finance/lc-requests": { value: 3, tone: "neutral" },
-			"/finance/lc-funded": { value: 2, tone: "neutral" },
-			"/finance/payroll": { value: 1, tone: "neutral" },
-			"/finance/awaiting-carmen": { value: 7, tone: "critical" },
+			// Sold and ready for a request (1) plus brigades waiting on Carmen (7).
+			"/finance/payroll": { value: 8, tone: "critical" },
 		})
 	})
 
@@ -204,12 +202,12 @@ describe("loadNavCounts", () => {
 		})
 	})
 
-	it("keeps the Carmen count neutral when no run is overdue", async () => {
+	it("keeps the payroll count neutral when no request is overdue", async () => {
 		vi.mocked(db.jafInvoice.count).mockResolvedValue(0)
 		vi.mocked(db.payrollRunAccount.count).mockResolvedValue(2)
 		vi.mocked(db.payrollRun.count).mockResolvedValue(0)
 		const counts = await loadNavCounts({ id: "f1", role: "FINANCE" })
-		expect(counts["/finance/awaiting-carmen"]).toEqual({
+		expect(counts["/finance/payroll"]).toEqual({
 			value: 2,
 			tone: "neutral",
 		})

@@ -1,12 +1,11 @@
 import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
-import { Badge } from "~/components/ui/badge"
 
 export type ComptrollerRunRow = {
 	id: string
 	label: string
 	generatedAt: Date | string
-	accounts: { paidAt: Date | string | null; confirmedByFallback: boolean }[]
+	accounts: { paidAt: Date | string | null }[]
 }
 
 export function ComptrollerRunsTable({ runs }: { runs: ComptrollerRunRow[] }) {
@@ -23,9 +22,6 @@ export function ComptrollerRunsTable({ runs }: { runs: ComptrollerRunRow[] }) {
 			<tbody>
 				{runs.map((run) => {
 					const paid = run.accounts.filter((a) => a.paidAt).length
-					const fromPaper = run.accounts.filter(
-						(a) => a.confirmedByFallback,
-					).length
 					return (
 						<tr key={run.id} className="border-b last:border-0">
 							<td className="p-2">
@@ -47,13 +43,6 @@ export function ComptrollerRunsTable({ runs }: { runs: ComptrollerRunRow[] }) {
 											total: run.accounts.length,
 										})}
 									</span>
-									{fromPaper > 0 && (
-										<Badge variant="warn">
-											{t("finance_payroll.fallback_count", {
-												count: fromPaper,
-											})}
-										</Badge>
-									)}
 								</span>
 							</td>
 						</tr>

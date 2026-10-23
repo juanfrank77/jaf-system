@@ -11,6 +11,7 @@ import { Button, buttonVariants } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
 import { Checkbox } from "~/components/ui/checkbox"
 import { Textarea } from "~/components/ui/textarea"
+import { FINANCE_STEPS } from "~/lib/finance-steps"
 import { VERIFY_CHECKS as CHECKS } from "~/lib/finance-verify-checks"
 import { formatMoney } from "~/lib/utils"
 import type { Route } from "../routes/+types/_app.finance.verify.$id"
@@ -88,7 +89,7 @@ function VerifyPacket({ loaderData, actionData }: ViewProps) {
 						<h1 className="text-xl font-semibold">
 							{t("finance_verify.title")}
 						</h1>
-						<StageChip arm="A" step={1} total={5} />
+						<StageChip arm="A" step={1} total={FINANCE_STEPS.length} />
 					</div>
 					<p className="font-mono text-sm text-muted-foreground">
 						{doc.controlNumber} — {doc.jobType}

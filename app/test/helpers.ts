@@ -176,7 +176,7 @@ export function makeTracker() {
 		if (b.warehouse.length)
 			await db.warehouse.deleteMany({ where: { id: { in: b.warehouse } } })
 		if (b.user.length) {
-			// `closePayrollRun` fans a Notification out to every active FINANCE
+			// `sendPayrollRun` and the last tick fan a Notification out to every active FINANCE
 			// user in the database, so a sibling test file running in parallel
 			// against the shared dev DB can insert one for our tracked users
 			// *after* the notification sweep above and before this delete. Re-clear
@@ -327,12 +327,17 @@ export async function seedSweptInvoice(
 		grossPayable?: number
 		retentionAmount?: number
 		netPayable?: number
+		/** A draft is Lissette's alone; the default run has been sent to Carmen. */
+		draft?: boolean
 	} = { generatedById: "", contractorAccountId: "" },
 ) {
 	const run = await db.payrollRun.create({
 		data: {
 			label: opts.runLabel ?? runToken("RUN"),
 			generatedById: opts.generatedById,
+			...(opts.draft
+				? {}
+				: { sentAt: new Date(), sentById: opts.generatedById }),
 		},
 	})
 	const gross = opts.grossPayable ?? 0

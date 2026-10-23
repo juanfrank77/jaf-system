@@ -6,7 +6,8 @@ import { db } from "~/lib/db.server"
  */
 export async function loadComptrollerRuns() {
 	const runs = await db.payrollRun.findMany({
-		where: { reversedAt: null },
+		// Carmen only sees requests Lissette has sent her.
+		where: { reversedAt: null, sentAt: { not: null } },
 		orderBy: { generatedAt: "desc" },
 		take: 50,
 		select: {
@@ -14,8 +15,9 @@ export async function loadComptrollerRuns() {
 			label: true,
 			generatedAt: true,
 			paidAt: true,
-			accounts: { select: { paidAt: true, confirmedByFallback: true } },
-			invoices: { select: { grossPayable: true } },
+			accounts: { select: { paidAt: true } },
+			// What she pays: net of retention. Never the gross (the JAF price).
+			invoices: { select: { netPayable: true } },
 		},
 	})
 	return {
@@ -28,8 +30,12 @@ export async function loadComptrollerRuns() {
 /** Sidebar pills: how many runs still need paying, and how many are done. */
 export async function countComptrollerRuns() {
 	const [toPay, paid] = await Promise.all([
-		db.payrollRun.count({ where: { reversedAt: null, paidAt: null } }),
-		db.payrollRun.count({ where: { reversedAt: null, paidAt: { not: null } } }),
+		db.payrollRun.count({
+			where: { reversedAt: null, sentAt: { not: null }, paidAt: null },
+		}),
+		db.payrollRun.count({
+			where: { reversedAt: null, sentAt: { not: null }, paidAt: { not: null } },
+		}),
 	])
 	return { toPay, paid }
 }

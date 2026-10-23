@@ -3,6 +3,7 @@ import { redirect, useNavigation } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
 import { PbccBatchDetailView } from "~/components/pbcc-batch-detail"
+import { FINANCE_STEPS } from "~/lib/finance-steps"
 import { BatchError, checkBatch, markBatchSent } from "~/lib/pbcc-batch.server"
 import { loadBatchView } from "~/lib/pbcc-batch-view.server"
 import { planPackage } from "~/lib/pbcc-package.server"
@@ -73,7 +74,7 @@ export default function PbccBatchPage({
 				<h1 className="text-xl font-semibold">
 					{t("finance_flow.step.lc_request")}
 				</h1>
-				<StageChip arm="A" step={2} total={5} />
+				<StageChip arm="A" step={2} total={FINANCE_STEPS.length} />
 			</div>
 			<FinanceStepRail current="LC_REQUEST" />
 			<PbccBatchDetailView

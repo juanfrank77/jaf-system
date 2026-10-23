@@ -15,15 +15,6 @@ export function isDashboardFiltersEnabled(): boolean {
 }
 
 /**
- * Finance may confirm payroll accounts from paper while Carmen's flow runs
- * side by side with the paper journal. Set PAYROLL_FALLBACK_ENABLED=false at
- * go-live: after that only the comptroller ticks. On unless set to "false".
- */
-export function isPayrollFallbackEnabled(): boolean {
-	return process.env.PAYROLL_FALLBACK_ENABLED !== "false"
-}
-
-/**
  * Step 5 emails the packet to the Claro supervisor only when
  * PACKET_EMAIL_ENABLED=true. Off by default: the supervisor emails the PDF
  * stored at step 4 and marks it sent.

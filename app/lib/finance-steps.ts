@@ -20,29 +20,37 @@ export const FINANCE_STEP_LABEL_KEY = {
 	LISTS: "finance_flow.step.lists",
 } as const
 
-export type ArmBStep = "AWAITING_PO" | "AWAITING_ARIBA" | "RECEIVABLES"
+export type ArmBStep =
+	| "AWAITING_PO"
+	| "AWAITING_ARIBA"
+	| "PAYMENT_ADVICE"
+	| "RECEIVABLES"
 
 export const ARM_B_STEPS: ArmBStep[] = [
 	"AWAITING_PO",
 	"AWAITING_ARIBA",
+	"PAYMENT_ADVICE",
 	"RECEIVABLES",
 ]
 
 export const ARM_B_STEP_HREF: Record<ArmBStep, string> = {
 	AWAITING_PO: "/finance/awaiting-po",
 	AWAITING_ARIBA: "/finance/awaiting-ariba",
+	PAYMENT_ADVICE: "/finance/payment-advice",
 	RECEIVABLES: "/finance/receivables",
 }
 
 export const ARM_B_STEP_AVAILABLE: Record<ArmBStep, boolean> = {
 	AWAITING_PO: true,
 	AWAITING_ARIBA: true,
+	PAYMENT_ADVICE: true,
 	RECEIVABLES: true,
 }
 
 export const ARM_B_STEP_LABEL_KEY = {
 	AWAITING_PO: "finance_flow.arm_b.step.awaiting_po",
 	AWAITING_ARIBA: "finance_flow.arm_b.step.awaiting_ariba",
+	PAYMENT_ADVICE: "finance_flow.arm_b.step.payment_advice",
 	RECEIVABLES: "finance_flow.arm_b.step.receivables",
 } as const
 

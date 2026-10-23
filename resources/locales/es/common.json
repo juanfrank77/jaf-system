@@ -1271,6 +1271,11 @@
 		}
 	},
 	"finance_queue": {
+		"search_placeholder": "Buscar orden de trabajo o Aviso #",
+		"supervisor_filter": "Supervisor",
+		"all_supervisors": "Todos los supervisores",
+		"filter": "Filtrar",
+		"start_reviewing": "Empezar a revisar",
 		"empty": "No hay paquetes en espera.",
 		"account_unmapped": "Cuenta de contratista no asignada",
 		"missing_claro_pdf": "Falta PDF de Claro",
@@ -2181,6 +2186,7 @@
 			"work_order": "Orden de trabajo",
 			"aviso": "Aviso",
 			"contractor": "Contratista",
+			"supervisor": "Supervisor",
 			"amount": "Monto",
 			"docs": "Documentos"
 		},
@@ -2188,8 +2194,7 @@
 			"jaf_invoice": "Factura JAF",
 			"aviso": "Aviso",
 			"precert": "Pre-cert firmada",
-			"photos": "Fotos",
-			"account": "Cuenta del contratista"
+			"photos": "Fotos"
 		},
 		"accept": "Revisar y aceptar",
 		"review": "Revisar",

@@ -7,7 +7,10 @@ import {
 } from "~/lib/contractor-payment.server"
 import { db } from "~/lib/db.server"
 import { type ArmAListStage, stageWhere } from "~/lib/finance-stages.server"
+import { computeInvoiceTotals } from "~/lib/invoice-totals"
 import { evaluateReleaseGate } from "~/lib/release-gate"
+import type { InvoiceLine } from "~/lib/service-lines"
+import type { Prisma } from "../../generated/prisma/client"
 
 /** Whole days elapsed since `from` (0 when unset). */
 export function ageDays(from: Date | null, now: Date = new Date()): number {
@@ -25,8 +28,21 @@ export async function loadStageRows(opts: {
 	 * the ids of every stage job (all pages) whose contractor account resolves.
 	 * One `resolveContractorAccounts` call covers the whole stage. */
 	withAccounts?: boolean
+	/** Work order or Aviso number, matched anywhere in the number. */
+	search?: string
+	supervisorId?: string
 }): Promise<{ rows: StageRow[]; totalCount: number; sweepableIds: string[] }> {
-	const where = stageWhere(opts.stage)
+	const search = opts.search?.trim()
+	const where: Prisma.JafInvoiceWhereInput = {
+		...stageWhere(opts.stage),
+		...(opts.supervisorId && { supervisorId: opts.supervisorId }),
+		...(search && {
+			OR: [
+				{ controlNumber: { contains: search, mode: "insensitive" } },
+				{ avisoNumber: { contains: search, mode: "insensitive" } },
+			],
+		}),
+	}
 	const [totalCount, docs] = await Promise.all([
 		db.jafInvoice.count({ where }),
 		db.jafInvoice.findMany({
@@ -55,6 +71,7 @@ export async function loadStageRows(opts: {
 				},
 				photos: { select: { tag: true } },
 				brigade: { select: { leadName: true, name: true } },
+				supervisor: { select: { name: true } },
 			},
 		}),
 	])
@@ -103,11 +120,20 @@ export async function loadStageRows(opts: {
 				aviso: isAvisoSaved(d),
 				preCert: has("precert_signed"),
 				photos: has("photos"),
-				account: Boolean(d.contractorAccountCode),
 			},
-			amount: computeContractorPayment(
-				toContractorPaymentLines(d.jafInvoiceLines),
-			).grossPayable,
+			supervisorName: d.supervisor?.name ?? null,
+			// The packet-side lists show the invoice record's total; only the
+			// payroll list is the brigade's labor share.
+			amount:
+				opts.stage === "LISTS"
+					? computeContractorPayment(
+							toContractorPaymentLines(d.jafInvoiceLines),
+						).grossPayable
+					: computeInvoiceTotals(
+							Array.isArray(d.jafInvoiceLines)
+								? (d.jafInvoiceLines as InvoiceLine[])
+								: [],
+						).total,
 			...(resolved && {
 				accountResolved: d.contractorAccountCode
 					? resolved.has(d.contractorAccountCode)

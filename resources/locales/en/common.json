@@ -1271,6 +1271,11 @@
 		}
 	},
 	"finance_queue": {
+		"search_placeholder": "Search work order or Aviso #",
+		"supervisor_filter": "Supervisor",
+		"all_supervisors": "All supervisors",
+		"filter": "Filter",
+		"start_reviewing": "Start reviewing",
 		"empty": "No packets waiting.",
 		"account_unmapped": "Contractor account not mapped",
 		"missing_claro_pdf": "Missing Claro PDF",
@@ -2181,6 +2186,7 @@
 			"work_order": "Work order",
 			"aviso": "Aviso",
 			"contractor": "Contractor",
+			"supervisor": "Supervisor",
 			"amount": "Amount",
 			"docs": "Documents"
 		},
@@ -2188,8 +2194,7 @@
 			"jaf_invoice": "JAF invoice",
 			"aviso": "Aviso",
 			"precert": "Pre-cert signed",
-			"photos": "Photos",
-			"account": "Contractor account"
+			"photos": "Photos"
 		},
 		"accept": "Review & accept",
 		"review": "Review",

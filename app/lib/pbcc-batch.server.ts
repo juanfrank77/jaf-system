@@ -340,7 +340,7 @@ function invoiceLinesOf(
  * the day the packet was accepted. Retried by every later step, so a failed
  * write on Accept never leaves a row without its invoice for good.
  */
-export async function ensureInvoicePdfs(batchId: string): Promise<void> {
+async function ensureInvoicePdfs(batchId: string): Promise<void> {
 	const docs = (await loadBatchDocs(batchId)).filter(
 		(d) => !d.bankInvoicePdfPath,
 	)
@@ -433,7 +433,7 @@ const exists = (p: string | null | undefined) =>
 			)
 		: Promise.resolve(false)
 
-export type BatchCheck = {
+type BatchCheck = {
 	rows: number
 	avisoPdfs: number
 	invoicePdfs: number

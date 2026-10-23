@@ -1,24 +1,24 @@
 import { round2 } from "./service-lines"
 
 /** Puerto Rico IVU on JAF's work: the rate every JAF line uses unless it says otherwise. */
-export const IVU_RATE_STANDARD = 0.115
+const IVU_RATE_STANDARD = 0.115
 /** The reduced rate some Claro PO lines carry. */
 export const IVU_RATE_REDUCED = 0.04
 
-export type TotalsInput = {
+type TotalsInput = {
 	qty: number
 	unitPrice: number
 	/** Falls back to the rate passed to `computeInvoiceTotals`. */
 	ivuRate?: number
 }
 
-export type TotalsLine = {
+type TotalsLine = {
 	lineAmount: number
 	ivuRate: number
 	lineIvu: number
 }
 
-export type InvoiceTotals = {
+type InvoiceTotals = {
 	lines: TotalsLine[]
 	/** Pre-IVU. */
 	subtotal: number

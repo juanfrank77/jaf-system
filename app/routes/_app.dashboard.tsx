@@ -13,6 +13,7 @@ import {
 } from "~/lib/dashboard-stats"
 import { db } from "~/lib/db.server"
 import { isDashboardFiltersEnabled } from "~/lib/features.server"
+import { loadFinanceHome } from "~/lib/finance-home.server"
 import { type OpenJobLabel, openJobLabel } from "~/lib/open-job-label"
 import { pageTitle } from "~/lib/page-title"
 import { requireSession } from "~/lib/permissions.server"
@@ -452,6 +453,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		user.role === "SUPERVISOR" ? await loadSupervisorQueues(user.id) : null
 	const supervisorScope =
 		user.role === "SUPERVISOR" ? await loadSupervisorScope(user.id) : null
+	const financeHome = user.role === "FINANCE" ? await loadFinanceHome() : null
 
 	// WAREHOUSE counts come from the shared warehouse-queues module so the
 	// dashboard cards and the sidebar pills always agree.
@@ -492,6 +494,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		sentBackDocs: [],
 		supervisorQueues,
 		supervisorScope,
+		financeHome,
 		showFilters: isDashboardFiltersEnabled(),
 		crewOptions,
 		jobTypeOptions: jobTypeOptions
@@ -518,6 +521,7 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 		sentBackDocs,
 		supervisorQueues,
 		supervisorScope,
+		financeHome,
 		showFilters,
 		crewOptions,
 		jobTypeOptions,
@@ -538,6 +542,7 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 			role={role}
 			supervisorQueues={supervisorQueues}
 			supervisorScope={supervisorScope}
+			financeHome={financeHome}
 			stageQueue={stageQueue}
 			stats={stats}
 			alert={alert}

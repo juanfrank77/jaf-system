@@ -1,4 +1,5 @@
 import { DashboardView } from "~/components/dashboard-view"
+import type { FinanceHome } from "~/lib/finance-home"
 import type { SupervisorQueue } from "~/lib/supervisor-queues"
 import type { Role } from "../../../generated/prisma/client"
 import { AdminDashboard } from "./admin-dashboard"
@@ -16,6 +17,8 @@ type RoleDashboardProps = DashboardViewProps & {
 	role: Role
 	supervisorQueues: SupervisorQueues | null
 	supervisorScope?: SupervisorScope | null
+	/** Lissette's six-box Home; without it Finance falls back to the generic view. */
+	financeHome?: FinanceHome | null
 	/** The supervisor's sidebar queue (`?stage=`), when one is selected. */
 	stageQueue?: SupervisorQueue | null
 }
@@ -24,6 +27,7 @@ export function RoleDashboard({
 	role,
 	supervisorQueues,
 	supervisorScope = null,
+	financeHome = null,
 	stageQueue = null,
 	...view
 }: RoleDashboardProps) {
@@ -41,7 +45,7 @@ export function RoleDashboard({
 		case "WAREHOUSE":
 			return <WarehouseDashboard {...view} />
 		case "FINANCE":
-			return <FinanceDashboard {...view} />
+			return <FinanceDashboard {...view} financeHome={financeHome} />
 		case "ADMIN":
 			return <AdminDashboard {...view} />
 		case "INSTALLER":

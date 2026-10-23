@@ -1967,6 +1967,33 @@
 			"success": "Returned successfully."
 		}
 	},
+	"finance_home": {
+		"arm_a": "Paying our people",
+		"arm_b": "Claro paying JAF",
+		"all_clear": "All clear",
+		"not_live": "Not live yet",
+		"tile": {
+			"inbox": "Inbox to review",
+			"pbcc_batch": "Open PBCC batch",
+			"waiting_carmen": "Waiting on Carmen",
+			"pos_to_confirm": "POs to confirm",
+			"invoices_to_load": "Invoices to load in Ariba",
+			"claro_past_due": "Claro past 60 days"
+		},
+		"sub": {
+			"oldest_one": "oldest {{count}} day",
+			"oldest_other": "oldest {{count}} days",
+			"batch": "{{count}} / {{max}}",
+			"sent_one": "sent {{count}} day ago",
+			"sent_other": "sent {{count}} days ago"
+		},
+		"next_up": {
+			"title": "Next up",
+			"empty": "Nothing is waiting on you.",
+			"days_one": "{{count}} day",
+			"days_other": "{{count}} days"
+		}
+	},
 	"finance_flow": {
 		"aria": "Finance Arm A work loop",
 		"chip_a": "Arm A · Stage {{step}} of {{total}}",

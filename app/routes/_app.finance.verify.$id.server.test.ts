@@ -13,7 +13,6 @@ const mocks = vi.hoisted(() => ({
 	isTerminalStatus: vi.fn(),
 	computeFinanceStage: vi.fn(),
 	fetchInvoiceTotalContext: vi.fn(),
-	invoiceTotalUsed: vi.fn(),
 	checkAmountTolerance: vi.fn(),
 	isMissingAvisoPdf: vi.fn(),
 	sendInternalEmail: vi.fn(),
@@ -32,7 +31,6 @@ vi.mock("~/lib/finance-pipeline.server", async (importOriginal) => ({
 	).billableMaterials,
 	computeFinanceStage: mocks.computeFinanceStage,
 	fetchInvoiceTotalContext: mocks.fetchInvoiceTotalContext,
-	invoiceTotalUsed: mocks.invoiceTotalUsed,
 	checkAmountTolerance: mocks.checkAmountTolerance,
 	isMissingAvisoPdf: mocks.isMissingAvisoPdf,
 	FINANCEABLE_STATUSES: ["SUPERVISOR_APPROVED", "CLARO_UPLOADED"],
@@ -121,7 +119,6 @@ describe("Finance verify action guards", () => {
 			ivuRate: 0.115,
 			tolerance: 0.01,
 		})
-		mocks.invoiceTotalUsed.mockReturnValue(100)
 		mocks.checkAmountTolerance.mockReturnValue({
 			withinTolerance: true,
 			difference: 0,

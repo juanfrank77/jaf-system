@@ -23,11 +23,11 @@ import {
 	type FinancePipelineRow,
 	fetchInvoiceTotalContext,
 	financeStageAlertDays,
-	invoiceTotalUsed,
 	isMissingAvisoPdf,
 } from "~/lib/finance-pipeline.server"
 import { parsePaymentDate, paymentForType } from "~/lib/payment-records"
 import { recordReceivablePayment } from "~/lib/payment-records.server"
+import { rowAmounts } from "~/lib/pbcc-batch.server"
 import { requireRole } from "~/lib/permissions.server"
 import { isReturned } from "~/lib/returned-packet"
 import { getAgingAlertDays } from "~/lib/system-settings.server"
@@ -88,7 +88,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		const ageDays = daysInStage(inv, stage, poDate, inv.paymentRecords)
 		const alertDays = financeStageAlertDays(stage, agingAlertDays)
 		const isAlert = alertDays !== null && ageDays > alertDays
-		const amount = invoiceTotalUsed(inv, codeMap, ivuRate)
+		const amount = rowAmounts(inv).total
 		const poLink = inv.poLinks[0] ?? null
 		const poAmount = poLink?.amount ? Number(poLink.amount) : null
 		const poMismatch =
@@ -440,7 +440,7 @@ export default function FinancePipeline({
 
 									{row.stage === "PO_RECEIVED_UPLOAD" && (
 										<Link
-											to={`/finance/po/${row.id}`}
+											to="/finance/awaiting-po"
 											className={buttonVariants({ size: "sm" })}
 										>
 											{t("finance_receivables.upload_final_doc")}
@@ -468,7 +468,7 @@ export default function FinancePipeline({
 
 									{row.stage === "WAITING_CLARO_PO" && (
 										<Link
-											to={`/finance/po/${row.id}`}
+											to="/finance/awaiting-po"
 											className={buttonVariants({
 												variant: "outline",
 												size: "sm",

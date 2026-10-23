@@ -96,14 +96,19 @@ describe("loadFinanceHome (integration)", () => {
 		expect(PBCC_BATCH_CAPACITY).toBe(100)
 	})
 
-	it("makes POs to confirm live and leaves the later Arm B boxes not live", () => {
+	it("makes POs to confirm and Invoices to load live, and leaves Claro past due not live", () => {
 		expect(tile(after, "pos_to_confirm")).toMatchObject({
 			href: "/finance/awaiting-po",
 		})
 		expect(typeof tile(after, "pos_to_confirm")?.count).toBe("number")
-		for (const key of ["invoices_to_load", "claro_past_due"]) {
-			expect(tile(after, key)).toMatchObject({ count: null, href: null })
-		}
+		expect(tile(after, "invoices_to_load")).toMatchObject({
+			href: "/finance/awaiting-ariba?tab=not_loaded",
+		})
+		expect(typeof tile(after, "invoices_to_load")?.count).toBe("number")
+		expect(tile(after, "claro_past_due")).toMatchObject({
+			count: null,
+			href: null,
+		})
 	})
 
 	it("lists the oldest waiting items first, at most five, each opening its screen", () => {

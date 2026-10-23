@@ -2810,3 +2810,63 @@ describe("review loader: step 4 work-order document", () => {
 		expect(data.packet.packetHref).toBeNull()
 	})
 })
+
+describe("review loader: a packet Finance sent back", () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["OESTE"],
+		} as any)
+		vi.mocked(db.photo.findMany).mockResolvedValue([])
+		vi.mocked(db.preCertSheet.findFirst).mockResolvedValue(null)
+		vi.mocked(db.brigade.findUnique).mockResolvedValue(null)
+		vi.mocked(db.user.findMany).mockResolvedValue([])
+		vi.mocked(getActiveServiceCodes).mockResolvedValue(CATALOG as any)
+		vi.mocked(getAvisoAmountTolerance).mockResolvedValue(0.01)
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1", role: "SUPERVISOR", name: "Edgard Ocasio" },
+			session: {},
+		} as any)
+	})
+
+	const load = async (doc: Record<string, unknown>) => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...approvedDoc,
+			brigade: { area: "OESTE" },
+			...doc,
+		} as any)
+		return loader({
+			request: new Request("http://localhost/docs/doc-1/review"),
+			params: { id: "doc-1" },
+		} as any)
+	}
+
+	const notes = [
+		{ note: "first", byUserId: "f1", createdAt: "2026-10-20T12:00:00.000Z" },
+		{
+			note: "wrong Aviso",
+			byUserId: "f1",
+			createdAt: "2026-10-22T12:00:00.000Z",
+		},
+	]
+
+	it("shows the latest reason while the packet is back on the supervisor's desk", async () => {
+		const data = await load({
+			releasedToFinanceAt: null,
+			financeSendBackNotes: notes,
+		})
+		expect(data.financeReturn).toEqual(notes[1])
+	})
+
+	it("drops the banner once the packet is released again", async () => {
+		const data = await load({
+			releasedToFinanceAt: new Date(),
+			financeSendBackNotes: notes,
+		})
+		expect(data.financeReturn).toBeNull()
+	})
+
+	it("has no banner for a packet Finance never sent back", async () => {
+		expect((await load({ releasedToFinanceAt: null })).financeReturn).toBeNull()
+	})
+})

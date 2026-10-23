@@ -197,7 +197,7 @@ async function evaluatePo(id: string): Promise<void> {
 }
 
 /** Read one queued PO and store what it says. A failure leaves it Needs a look, never lost. */
-async function readPo(id: string, reader: PoReader | null) {
+async function readPo(id: string, reader: PoReader) {
 	const row = await db.claroPo.findUniqueOrThrow({ where: { id } })
 	const bytes = new Uint8Array(await fs.readFile(row.filePath))
 	const filePages = await pagesIn(bytes).catch(() => 0)
@@ -215,7 +215,6 @@ async function readPo(id: string, reader: PoReader | null) {
 			},
 		})
 	}
-	if (!reader) return unreadable("reader_not_configured")
 	let read: PoRead
 	try {
 		read = await reader(bytes)
@@ -269,7 +268,7 @@ async function requeueStuckReads(now = new Date()) {
 
 /** Read everything queued, a few at a time. Resolves when the queue is empty. */
 export async function processPending(
-	reader: PoReader | null = getPoReader(),
+	reader: PoReader = getPoReader(),
 	size = POOL_SIZE,
 ): Promise<void> {
 	const worker = async () => {

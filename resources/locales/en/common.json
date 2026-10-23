@@ -2576,7 +2576,6 @@
 		"pages": "{{have}} of {{of}} pages in the file",
 		"po_title": "PO {{number}}",
 		"n_checks": "{{count}} to check",
-		"reader_off": "The automatic reader is not set up. Type the fields from the PO on the left.",
 		"read_failed": "The PO could not be read automatically. Type the fields from the PO on the left, or read it again.",
 		"field": {
 			"po": "PO #",

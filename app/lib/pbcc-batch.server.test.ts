@@ -419,6 +419,37 @@ describe("marking a batch sent", { timeout: 60_000 }, () => {
 	})
 })
 
+describe("a packet that falls out after it was batched", {
+	timeout: 60_000,
+}, () => {
+	it("blocks Mark sent and stamps nobody", async () => {
+		const u = await user()
+		const a = await accepted()
+		const b = await accepted()
+		let batchId = ""
+		for (const d of [a, b])
+			batchId = (await addToOpenBatch({ docId: d.id, userId: u.id })).batchId
+		await closeOpenBatch({ batchId, userId: u.id })
+		// Sent back to the supervisor after it was batched.
+		await db.jafInvoice.update({
+			where: { id: b.id },
+			data: { financeVerifiedAt: null },
+		})
+		await expect(
+			markBatchSent({ batchId, sentById: u.id }),
+		).rejects.toMatchObject({ code: "not_eligible" })
+		for (const id of [a.id, b.id])
+			expect(
+				(await db.jafInvoice.findUniqueOrThrow({ where: { id } }))
+					.pbccRequestSentAt,
+			).toBeNull()
+		expect(
+			(await db.bankSchedule.findUniqueOrThrow({ where: { id: batchId } }))
+				.sentAt,
+		).toBeNull()
+	})
+})
+
 describe("the package", { timeout: 60_000 }, () => {
 	it("names files by row, puts the Excel in part 1 and splits to stay under the limit", async () => {
 		const u = await user()

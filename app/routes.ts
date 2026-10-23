@@ -89,6 +89,10 @@ export default [
 		),
 		route("finance/schedules/:id", "routes/_app.finance.schedules.$id.tsx"),
 		route(
+			"finance/schedules/:id/package/:part",
+			"routes/_app.finance.schedules.$id.package.$part.tsx",
+		),
+		route(
 			"finance/schedules/:id/xlsx",
 			"routes/_app.finance.schedules.$id.xlsx.tsx",
 		),

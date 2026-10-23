@@ -23,7 +23,7 @@ export type FinanceHomeTile = {
 	href: string | null
 	/** Days since the oldest item in this box started waiting. */
 	oldestDays?: number | null
-	/** Money in the box (pbcc_batch), IVU included. */
+	/** Money in the box (pbcc_batch): the subtotal the advance is figured on. */
 	amount?: number | null
 }
 

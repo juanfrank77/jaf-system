@@ -6,13 +6,13 @@ import { BATCH_ROW_ORDER, BatchError } from "~/lib/pbcc-batch.server"
 import { getBankInvoicePrefix } from "~/lib/system-settings.server"
 
 /** No emailed part goes over this (zip headers and the email itself included). */
-export const PACKAGE_PART_LIMIT = 20 * 1024 * 1024
+const PACKAGE_PART_LIMIT = 20 * 1024 * 1024
 /** Slack kept under the limit for zip headers. */
 const PER_FILE_OVERHEAD = 1024
 
 type PackageFile = { name: string; path: string; bytes: number }
 
-export type PackagePartPlan = {
+type PackagePartPlan = {
 	part: number
 	of: number
 	/** 1-based row numbers this part carries. */

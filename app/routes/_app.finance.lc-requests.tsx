@@ -1,128 +1,90 @@
-import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Form, Link, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
-import {
-	FinanceStageTable,
-	StagePagination,
-} from "~/components/finance-stage-table"
 import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
-import { Button } from "~/components/ui/button"
+import {
+	PbccBatchListView,
+	PbccBatchOpenView,
+	PbccBatchTabs,
+} from "~/components/pbcc-batch-open"
 import { Callout } from "~/components/ui/callout"
 import {
-	buildBankSchedule,
-	ScheduleValidationError,
-} from "~/lib/bank-schedule.server"
-import { db } from "~/lib/db.server"
-import { PAGE_SIZE } from "~/lib/finance-stage-paging"
-import { loadStageRows } from "~/lib/finance-stage-rows.server"
+	BatchError,
+	closeOpenBatch,
+	getOpenBatch,
+	takeOutRow,
+} from "~/lib/pbcc-batch.server"
+import { listBatches, loadBatchView } from "~/lib/pbcc-batch-view.server"
 import { requireRole } from "~/lib/permissions.server"
-import { formatMoney } from "~/lib/utils"
 import type { Route } from "./+types/_app.finance.lc-requests"
 
 export const meta: Route.MetaFunction = () => [
-	{ title: "LC request — JAF Ops" },
+	{ title: "PBCC batch — JAF Ops" },
 ]
 
 export async function loader({ request }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])
-	const url = new URL(request.url)
-	const page = Math.max(
-		1,
-		Number.parseInt(url.searchParams.get("page") ?? "1", 10) || 1,
-	)
-	const { rows, totalCount } = await loadStageRows({
-		stage: "LC_REQUEST",
-		page,
-		pageSize: PAGE_SIZE,
-		ageFrom: "released",
-	})
-	// Packets already claimed by a schedule still match the LC request stage
-	// until the schedule is sent; they must not be selectable again.
-	const claimed = await db.jafInvoice.findMany({
-		where: { id: { in: rows.map((r) => r.id) }, bankScheduleId: { not: null } },
-		select: { id: true, bankSchedule: { select: { id: true, number: true } } },
-	})
-	const scheduleByPacket: Record<string, { id: string; number: number }> = {}
-	for (const c of claimed)
-		if (c.bankSchedule)
-			scheduleByPacket[c.id] = {
-				id: c.bankSchedule.id,
-				number: c.bankSchedule.number,
-			}
-	const schedules = await db.bankSchedule.findMany({
-		orderBy: { generatedAt: "desc" },
-		take: 5,
-		select: { id: true, number: true, sentAt: true, total: true },
-	})
+	const tab: "open" | "sent" =
+		new URL(request.url).searchParams.get("tab") === "sent" ? "sent" : "open"
+	// There is always one open batch; this is where it is first made.
+	const open = await getOpenBatch(user.id)
+	if (tab === "sent")
+		return {
+			user,
+			tab,
+			batch: null,
+			batches: await listBatches(),
+			openBatch: { id: open.id, number: open.number },
+		}
 	return {
 		user,
-		jobs: rows,
-		scheduleByPacket,
-		schedules: schedules.map((s) => ({
-			id: s.id,
-			number: s.number,
-			sentAt: s.sentAt?.toISOString() ?? null,
-			total: Number(s.total),
-		})),
-		pagination: {
-			page,
-			totalPages: Math.max(1, Math.ceil(totalCount / PAGE_SIZE)),
-			totalCount,
-		},
+		tab,
+		batch: await loadBatchView(open.id),
+		batches: [],
+		openBatch: { id: open.id, number: open.number },
 	}
 }
 
 export async function action({ request }: Route.ActionArgs) {
 	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])
 	const form = await request.formData()
-	if (form.get("intent") !== "build_schedule")
-		return { errorKey: "finance_payroll.errors.unknown_intent" as const }
-	const packetIds = form
-		.getAll("packetId")
-		.filter((v): v is string => typeof v === "string" && v !== "")
-	let scheduleId: string
+	const intent = form.get("intent")
 	try {
-		;({ scheduleId } = await buildBankSchedule({
-			packetIds,
-			generatedById: user.id,
-		}))
+		if (intent === "close_batch") {
+			await closeOpenBatch({
+				batchId: String(form.get("batchId") ?? ""),
+				userId: user.id,
+			})
+			return { ok: true as const }
+		}
+		if (intent === "take_out") {
+			await takeOutRow({
+				docId: String(form.get("docId") ?? ""),
+				reason: String(form.get("reason") ?? ""),
+				userId: user.id,
+			})
+			return { ok: true as const }
+		}
 	} catch (e) {
-		if (!(e instanceof ScheduleValidationError)) throw e
-		switch (e.code) {
-			case "empty":
-			case "not_found":
-			case "already_scheduled":
-			case "no_area":
-				return {
-					errorKey: `finance_schedule.errors.${e.code}` as const,
-					list: e.controlNumbers.join(", "),
-				}
-			default:
-				return {
-					errorKey: "finance_schedule.errors.build_not_eligible" as const,
-					list: e.controlNumbers.join(", "),
-				}
+		if (!(e instanceof BatchError)) throw e
+		return {
+			ok: false as const,
+			errorKey: `pbcc_batch.errors.${e.code}` as const,
+			list: e.controlNumbers.join(", "),
 		}
 	}
-	throw redirect(`/finance/schedules/${scheduleId}`)
+	return {
+		ok: false as const,
+		errorKey: "pbcc_batch.errors.unknown_intent" as const,
+		list: "",
+	}
 }
 
-export default function FinanceLcRequests({
+export default function FinancePbccBatch({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { jobs, pagination, scheduleByPacket, schedules } = loaderData
-	const { t, i18n } = useTranslation()
-	const [ticked, setTicked] = useState<Set<string>>(new Set())
-	const selectedCount = jobs.filter((r) => ticked.has(r.id)).length
-	const toggle = (id: string, on: boolean) =>
-		setTicked((prev) => {
-			const next = new Set(prev)
-			if (on) next.add(id)
-			else next.delete(id)
-			return next
-		})
+	const { tab, batch, batches, openBatch } = loaderData
+	const { t } = useTranslation()
 	return (
 		<div className="space-y-4">
 			<div className="flex items-center justify-between">
@@ -135,94 +97,11 @@ export default function FinanceLcRequests({
 			<Callout title={t("finance_flow.callout.lc_request_title")}>
 				{t("finance_flow.callout.lc_request_body")}
 			</Callout>
-			{jobs.length === 0 ? (
-				<p className="text-sm text-muted-foreground">
-					{t("finance_queue.empty")}
-				</p>
+			<PbccBatchTabs tab={tab} />
+			{tab === "open" && batch ? (
+				<PbccBatchOpenView batch={batch} action={actionData} />
 			) : (
-				<>
-					<Form
-						id="schedule-form"
-						method="post"
-						className="flex items-center gap-3"
-					>
-						<input type="hidden" name="intent" value="build_schedule" />
-						<Button type="submit" disabled={selectedCount === 0}>
-							{t("finance_schedule.build", { count: selectedCount })}
-						</Button>
-						{actionData?.errorKey && (
-							<p role="alert" className="text-sm text-status-danger">
-								{t(actionData.errorKey as never, {
-									list: (actionData as { list?: string }).list,
-								})}
-							</p>
-						)}
-					</Form>
-					<FinanceStageTable
-						rows={jobs}
-						to={(r) => `/finance/pbcc/${r.id}`}
-						ageLabelKey="finance_stage.age.packets"
-						action={(r) => {
-							const s = scheduleByPacket[r.id]
-							if (s)
-								return (
-									<Link to={`/finance/schedules/${s.id}`} className="underline">
-										{t("finance_schedule.on_schedule", { number: s.number })}
-									</Link>
-								)
-							return (
-								<span className="flex items-center gap-3">
-									<input
-										type="checkbox"
-										name="packetId"
-										value={r.id}
-										form="schedule-form"
-										aria-label={r.controlNumber}
-										checked={ticked.has(r.id)}
-										onChange={(e) => toggle(r.id, e.target.checked)}
-									/>
-									<Link to={`/finance/pbcc/${r.id}`} className="underline">
-										{t("finance_stage.build_request")}
-									</Link>
-								</span>
-							)
-						}}
-					/>
-				</>
-			)}
-			<StagePagination
-				basePath="/finance/lc-requests"
-				pagination={pagination}
-				pageSize={PAGE_SIZE}
-			/>
-			{schedules.length > 0 && (
-				<div className="space-y-1">
-					<h2 className="text-sm font-semibold">
-						{t("finance_schedule.recent")}
-					</h2>
-					<ul className="text-sm space-y-1">
-						{schedules.map((s) => (
-							<li key={s.id}>
-								<Link to={`/finance/schedules/${s.id}`} className="underline">
-									#{s.number}
-								</Link>{" "}
-								<span className="text-muted-foreground">
-									{formatMoney(s.total)} ·{" "}
-									{s.sentAt
-										? t("finance_schedule.sent_on", {
-												date: new Date(s.sentAt).toLocaleDateString(
-													i18n.language,
-													{
-														timeZone: "America/Puerto_Rico",
-													},
-												),
-											})
-										: t("finance_schedule.not_sent")}
-								</span>
-							</li>
-						))}
-					</ul>
-				</div>
+				<PbccBatchListView batches={batches} openBatch={openBatch} />
 			)}
 		</div>
 	)

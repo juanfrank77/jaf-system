@@ -1280,6 +1280,7 @@
 		"filter": "Filter",
 		"start_reviewing": "Start reviewing",
 		"empty": "No packets waiting.",
+		"brigade_not_linked": "Brigade not linked",
 		"account_unmapped": "Contractor account not mapped",
 		"missing_claro_pdf": "Missing Claro PDF",
 		"pagination": {
@@ -2158,6 +2159,7 @@
 		"include_row": "Include {{number}} in the request",
 		"reversed": "Reversed",
 		"blocked_title": "Sold but blocked",
+		"none_selected_blocked": "0 selected. All {{count}} are blocked: Carmen needs to link the brigade.",
 		"blocked_reason": "No contractor account for this brigade",
 		"overdue": "{{days}}d, overdue",
 		"request_title": "Payroll request · {{label}}",

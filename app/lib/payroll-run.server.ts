@@ -1,5 +1,6 @@
 import {
 	computeContractorPayment,
+	payeeCode,
 	resolveContractorAccounts,
 	toContractorPaymentLines,
 } from "~/lib/contractor-payment.server"
@@ -164,15 +165,24 @@ function sweepableWhere(): Prisma.JafInvoiceWhereInput {
 export async function blockedSentJobs() {
 	const docs = await db.jafInvoice.findMany({
 		where: sweepableWhere(),
-		select: { id: true, controlNumber: true, contractorAccountCode: true },
+		select: {
+			id: true,
+			controlNumber: true,
+			contractorAccountCode: true,
+			brigade: { select: { code: true, name: true } },
+			preCertSheets: {
+				orderBy: { version: "desc" },
+				take: 1,
+				select: { sigSubcontractorName: true },
+			},
+		},
 		orderBy: { controlNumber: "asc" },
 	})
-	const resolved = await resolveContractorAccounts(
-		docs.map((d) => d.contractorAccountCode),
-	)
-	return docs.filter(
-		(d) => !d.contractorAccountCode || !resolved.has(d.contractorAccountCode),
-	)
+	const resolved = await resolveContractorAccounts(docs.map(payeeCode))
+	return docs.filter((d) => {
+		const code = payeeCode(d)
+		return !code || !resolved.has(code)
+	})
 }
 
 /** Thrown (before anything is written) when a run would contain no jobs. */
@@ -204,7 +214,12 @@ export async function generateRun(opts: {
 			...sweepableWhere(),
 			...(excludeIds.length ? { id: { notIn: [...excludeIds] } } : {}),
 		},
-		select: { id: true, jafInvoiceLines: true, contractorAccountCode: true },
+		select: {
+			id: true,
+			jafInvoiceLines: true,
+			contractorAccountCode: true,
+			brigade: { select: { code: true } },
+		},
 	})
 
 	// Resolve accounts before opening the transaction — a job whose code
@@ -213,17 +228,15 @@ export async function generateRun(opts: {
 	// One query for the whole batch, not one per candidate: the candidate set
 	// is unbounded (see the deploy guide's §7 note), so this loop is the
 	// widest in the feature.
-	const resolved = await resolveContractorAccounts(
-		candidates.map((c) => c.contractorAccountCode),
-	)
+	const resolved = await resolveContractorAccounts(candidates.map(payeeCode))
 	const toSweep: Array<{
 		id: string
 		payment: ReturnType<typeof computeContractorPayment>
 		accountId: string
 	}> = []
 	for (const doc of candidates) {
-		if (!doc.contractorAccountCode) continue
-		const account = resolved.get(doc.contractorAccountCode)
+		const code = payeeCode(doc)
+		const account = code ? resolved.get(code) : undefined
 		if (!account) continue
 		toSweep.push({
 			id: doc.id,

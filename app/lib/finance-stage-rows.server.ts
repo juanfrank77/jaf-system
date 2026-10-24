@@ -2,6 +2,7 @@ import type { StageRow } from "~/components/finance-stage-table"
 import { isAvisoSaved } from "~/lib/aviso-document"
 import {
 	computeContractorPayment,
+	payeeCode,
 	resolveContractorAccounts,
 	toContractorPaymentLines,
 } from "~/lib/contractor-payment.server"
@@ -70,7 +71,7 @@ export async function loadStageRows(opts: {
 					},
 				},
 				photos: { select: { tag: true } },
-				brigade: { select: { leadName: true, name: true } },
+				brigade: { select: { leadName: true, name: true, code: true } },
 				supervisor: { select: { name: true } },
 			},
 		}),
@@ -80,16 +81,18 @@ export async function loadStageRows(opts: {
 	if (opts.withAccounts) {
 		const all = await db.jafInvoice.findMany({
 			where,
-			select: { id: true, contractorAccountCode: true },
+			select: {
+				id: true,
+				contractorAccountCode: true,
+				brigade: { select: { code: true } },
+			},
 		})
-		resolved = await resolveContractorAccounts(
-			all.map((d) => d.contractorAccountCode),
-		)
+		resolved = await resolveContractorAccounts(all.map(payeeCode))
 		sweepableIds = all
-			.filter(
-				(d) =>
-					d.contractorAccountCode && resolved?.has(d.contractorAccountCode),
-			)
+			.filter((d) => {
+				const code = payeeCode(d)
+				return code && resolved?.has(code)
+			})
 			.map((d) => d.id)
 	}
 	const now = new Date()
@@ -135,8 +138,8 @@ export async function loadStageRows(opts: {
 								: [],
 						).total,
 			...(resolved && {
-				accountResolved: d.contractorAccountCode
-					? resolved.has(d.contractorAccountCode)
+				accountResolved: payeeCode(d)
+					? resolved.has(payeeCode(d) as string)
 					: false,
 			}),
 		}

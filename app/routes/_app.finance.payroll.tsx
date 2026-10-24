@@ -328,7 +328,7 @@ export default function FinancePayrollList({
 											/>
 											{!r.accountResolved && (
 												<Badge variant="warn">
-													{t("finance_queue.account_unmapped")}
+													{t("finance_queue.brigade_not_linked")}
 												</Badge>
 											)}
 										</div>
@@ -356,26 +356,15 @@ export default function FinancePayrollList({
 							<Button type="submit" disabled={listCount === 0}>
 								{t("finance_payroll.create_request", { count: listCount })}
 							</Button>
+							{listCount === 0 && blocked.length > 0 && (
+								<span className="text-sm text-muted-foreground">
+									{t("finance_payroll.none_selected_blocked", {
+										count: blocked.length,
+									})}
+								</span>
+							)}
 						</Form>
 					</section>
-
-					{blocked.length > 0 && (
-						<div className="bg-card border rounded-lg p-4 space-y-1">
-							<h2 className="font-semibold text-sm">
-								{t("finance_payroll.blocked_title")}
-							</h2>
-							<ul className="text-sm space-y-1">
-								{blocked.map((job) => (
-									<li key={job.id}>
-										<span className="font-mono">{job.controlNumber}</span>{" "}
-										<span className="text-muted-foreground">
-											{t("finance_payroll.blocked_reason")}
-										</span>
-									</li>
-								))}
-							</ul>
-						</div>
-					)}
 				</>
 			)}
 

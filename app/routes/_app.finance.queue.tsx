@@ -6,6 +6,7 @@ import {
 	StagePagination,
 } from "~/components/finance-stage-table"
 import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
+import { Badge } from "~/components/ui/badge"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
 import { Input } from "~/components/ui/input"
@@ -29,6 +30,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const search = url.searchParams.get("search")?.trim() ?? ""
 	const supervisorId = url.searchParams.get("supervisor") ?? ""
 	const stage = {
+		withAccounts: true,
 		stage: "PACKETS",
 		pageSize: PAGE_SIZE,
 		ageFrom: "released",
@@ -126,11 +128,18 @@ export default function FinancePackets({ loaderData }: Route.ComponentProps) {
 					showDocs
 					ageLabelKey="finance_stage.age.packets"
 					action={(r) => (
-						<Link to={`/finance/verify/${r.id}`} className="underline">
-							{Object.values(r.docs).every(Boolean)
-								? t("finance_stage.accept")
-								: t("finance_stage.review")}
-						</Link>
+						<div className="flex flex-wrap items-center gap-2">
+							<Link to={`/finance/verify/${r.id}`} className="underline">
+								{Object.values(r.docs).every(Boolean)
+									? t("finance_stage.accept")
+									: t("finance_stage.review")}
+							</Link>
+							{r.accountResolved === false && (
+								<Badge variant="warn">
+									{t("finance_queue.brigade_not_linked")}
+								</Badge>
+							)}
+						</div>
 					)}
 				/>
 			)}

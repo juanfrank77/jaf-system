@@ -9,7 +9,7 @@ import {
 import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
 import { PayrollRequestCard } from "~/components/payroll-request-card"
 import { Badge } from "~/components/ui/badge"
-import { Button } from "~/components/ui/button"
+import { Button, buttonVariants } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
 import { db } from "~/lib/db.server"
 import { PAGE_SIZE } from "~/lib/finance-stage-paging"
@@ -259,12 +259,27 @@ export default function FinancePayrollList({
 									key={d.id}
 									request={d}
 									actions={
-										<Link
-											to={`/finance/payroll/${d.id}`}
-											className="text-sm underline"
-										>
-											{t("finance_payroll.review")}
-										</Link>
+										<>
+											<Link
+												to={`/finance/payroll/${d.id}`}
+												className="text-sm underline"
+											>
+												{t("finance_payroll.open_request")}
+											</Link>
+											<a
+												href={`/finance/payroll/${d.id}/journal`}
+												download
+												className={buttonVariants({ variant: "secondary" })}
+											>
+												{t("finance_payroll.download_journal_pdf")}
+											</a>
+											<Form method="post" action={`/finance/payroll/${d.id}`}>
+												<input type="hidden" name="intent" value="send_run" />
+												<Button type="submit" disabled={d.lines.length === 0}>
+													{t("finance_payroll.send")}
+												</Button>
+											</Form>
+										</>
 									}
 								/>
 							))}

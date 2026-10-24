@@ -200,6 +200,7 @@ describe("accepting fills the open batch", { timeout: 60_000 }, () => {
 
 	it("closes the batch on its last packet and opens the next by itself", async () => {
 		const u = await user()
+		const { _max } = await db.bankSchedule.aggregate({ _max: { number: true } })
 		// Accepted one at a time, as Lissette does.
 		let last: Awaited<ReturnType<typeof addToOpenBatch>> | undefined
 		const earlier: Awaited<ReturnType<typeof addToOpenBatch>>[] = []
@@ -220,7 +221,9 @@ describe("accepting fills the open batch", { timeout: 60_000 }, () => {
 		const open = await db.bankSchedule.findMany({ where: { closedAt: null } })
 		expect(open).toHaveLength(1)
 		expect(open[0].id).not.toBe(closed.id)
-		expect(open[0].number).toBeGreaterThan(closed.number)
+		expect(open[0].number).toBeNull()
+		// Numbered at close, one after the highest: no gaps.
+		expect(closed.number).toBe((_max.number ?? 0) + 1)
 		// A fourth packet goes to the new batch.
 		const d4 = await accepted()
 		const fourth = await addToOpenBatch({ docId: d4.id, userId: u.id })

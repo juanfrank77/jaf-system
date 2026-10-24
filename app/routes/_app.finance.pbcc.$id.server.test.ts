@@ -61,6 +61,8 @@ describe("L2 Packet", () => {
 						advanceRate: 0.8,
 						total: 100,
 						advanceAmount: 80,
+						closedAt: new Date(),
+						number: 1_000_000 + Math.floor(Math.random() * 1_000_000),
 						sentAt,
 					},
 				}),

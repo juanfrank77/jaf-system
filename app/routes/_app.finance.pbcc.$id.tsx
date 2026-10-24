@@ -118,10 +118,12 @@ function onUnsentSchedule(doc: {
 	return doc.bankSchedule != null && doc.bankSchedule.sentAt === null
 }
 
-function onScheduleError(doc: { bankSchedule: { number: number } | null }) {
+function onScheduleError(doc: {
+	bankSchedule: { number: number | null } | null
+}) {
 	return {
 		errorKey: "finance_pbcc.errors.on_schedule",
-		list: `#${doc.bankSchedule?.number}`,
+		list: doc.bankSchedule?.number ? `#${doc.bankSchedule.number}` : "(open)",
 	}
 }
 
@@ -405,7 +407,9 @@ export default function PbccRequest({
 							to={`/finance/schedules/${bankSchedule.id}`}
 							className="text-accent-text underline"
 						>
-							{t("finance_pbcc.on_schedule", { number: bankSchedule.number })}
+							{bankSchedule.number
+								? t("finance_pbcc.on_schedule", { number: bankSchedule.number })
+								: t("finance_pbcc.on_open_batch")}
 						</Link>
 					)}
 					{hasBankInvoice && (

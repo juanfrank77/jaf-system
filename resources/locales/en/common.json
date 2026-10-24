@@ -2086,7 +2086,14 @@
 			"invoices_to_load": "Invoices to load in Ariba",
 			"claro_past_due": "Claro past 60 days"
 		},
+		"blocked": "Blocked: brigade not linked, {{count}} sold to PBCC but cannot be requested",
+		"note": {
+			"blocked": "Blocked: brigade not linked",
+			"overdue": "Past pay day"
+		},
 		"sub": {
+			"overdue_one": "past pay day",
+			"overdue_other": "past pay day",
 			"oldest_one": "oldest {{count}} day",
 			"oldest_other": "oldest {{count}} days",
 			"batch": "{{count}} / {{max}}",

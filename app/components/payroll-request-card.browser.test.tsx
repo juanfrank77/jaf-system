@@ -12,6 +12,7 @@ const request = (
 	sentAt: "2026-10-24T13:12:00Z",
 	paidAt: null,
 	ageDays: 2,
+	pastPayDay: false,
 	avisoCount: 3,
 	lines: [
 		{
@@ -103,12 +104,9 @@ describe("PayrollRequestCard", () => {
 		expect(screen.queryByText(/sent to Carmen/)).toBeNull()
 	})
 
-	it("flags a waiting request past the overdue days, and a paid one as paid", async ({
-		renderStub,
-	}) => {
+	it("flags a waiting request past its pay day", async ({ renderStub }) => {
 		await mount(renderStub, {
-			request: request({ ageDays: 20 }),
-			overdueDays: 14,
+			request: request({ ageDays: 20, pastPayDay: true }),
 		})
 		expect(await screen.findByText("20d, overdue")).toBeInTheDocument()
 	})

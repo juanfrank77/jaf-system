@@ -15,13 +15,10 @@ import { formatMoney } from "~/lib/utils"
 export function PayrollRequestCard({
 	request,
 	actions,
-	overdueDays,
 }: {
 	request: PayrollRequestView
 	/** Draft buttons (send / discard) and downloads, owned by the screen. */
 	actions?: ReactNode
-	/** A sent request this many days old with brigades unpaid is flagged. */
-	overdueDays?: number
 }) {
 	const { t } = useTranslation()
 	const totals = request.lines.reduce(
@@ -33,14 +30,15 @@ export function PayrollRequestCard({
 		{ net: 0, retention: 0, toPay: 0 },
 	)
 	const paid = request.lines.filter((l) => l.paidAt).length
-	const overdue =
-		request.status === "waiting" &&
-		overdueDays !== undefined &&
-		request.ageDays > overdueDays
+	const overdue = request.status === "waiting" && request.pastPayDay
 	return (
 		<section
 			aria-label={request.label}
-			className="space-y-2 rounded-lg border bg-card p-4"
+			className={
+				overdue
+					? "space-y-2 rounded-lg border border-status-danger/40 bg-status-danger-soft p-4"
+					: "space-y-2 rounded-lg border bg-card p-4"
+			}
 		>
 			<div className="flex flex-wrap items-center justify-between gap-2">
 				<h3 className="text-sm font-semibold">

@@ -6,7 +6,6 @@ import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
 import { PayrollRequestCard } from "~/components/payroll-request-card"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
-import { RUN_OVERDUE_DAYS } from "~/lib/finance-stages.server"
 import { FINANCE_STEPS } from "~/lib/finance-steps"
 import { loadPayrollRequests } from "~/lib/payroll-request-view.server"
 import {
@@ -27,7 +26,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])
 	const [req] = await loadPayrollRequests({ id: params.runId }, { take: 1 })
 	if (!req) throw new Response("Not Found", { status: 404 })
-	return { user, req, overdueDays: RUN_OVERDUE_DAYS }
+	return { user, req }
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
@@ -58,7 +57,7 @@ export default function FinancePayrollRequest({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { req, overdueDays } = loaderData
+	const { req } = loaderData
 	const { t } = useTranslation()
 	const { revalidate, state } = useRevalidator()
 	// A sent request is Carmen's to tick: keep looking so her ticks show up.
@@ -95,7 +94,7 @@ export default function FinancePayrollRequest({
 					{t(actionData.errorKey)}
 				</p>
 			)}
-			<PayrollRequestCard request={req} overdueDays={overdueDays} />
+			<PayrollRequestCard request={req} />
 			<div className="flex flex-wrap items-center gap-2">
 				<a
 					href={`/finance/payroll/${req.id}/journal`}

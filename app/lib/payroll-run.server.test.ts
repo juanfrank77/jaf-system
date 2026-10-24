@@ -1098,3 +1098,32 @@ describe("payroll request lifecycle", () => {
 		expect(Object.keys(line)).not.toContain("gross")
 	})
 })
+
+describe("payrollSheetLines", () => {
+	it("takes retention as 10% of the row's net and pays net less retention", () => {
+		// Per-line retention would add up to 58.01 here; the row rule gives 58.04.
+		const shareLine = (net: number, retention: number) => ({
+			net,
+			retention,
+			gross: 0,
+			adjNet: Math.round((net - retention) * 100) / 100,
+		})
+		const blocks = buildJournalBlocks([
+			{
+				id: "i1",
+				controlNumber: "MAINT-1",
+				avisoNumber: "1",
+				contractorAccount: { id: "a", code: "178", label: "ZARIEL" },
+				contractorShareLines: [
+					shareLine(290.2, 29.0),
+					shareLine(290.19, 29.01),
+				],
+			},
+		])
+		const [row] = payrollSheetLines(blocks)
+		expect(row.net).toBe(580.39)
+		expect(row.retention).toBe(58.04)
+		expect(row.toPay).toBe(522.35)
+		expect(Math.round((row.net - row.retention - row.toPay) * 100)).toBe(0)
+	})
+})

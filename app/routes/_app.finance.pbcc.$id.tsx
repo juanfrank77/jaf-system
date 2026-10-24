@@ -367,7 +367,7 @@ export default function PbccRequest({
 								{t("finance_pbcc.gross")}
 							</td>
 							<td className="text-right font-mono">
-								{formatMoney(payment.grossPayable)}
+								{formatMoney(rowAmounts(doc).subtotal)}
 							</td>
 						</tr>
 						<tr>

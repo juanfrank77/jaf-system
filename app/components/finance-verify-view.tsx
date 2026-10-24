@@ -13,7 +13,7 @@ import { Checkbox } from "~/components/ui/checkbox"
 import { Textarea } from "~/components/ui/textarea"
 import { FINANCE_STEPS } from "~/lib/finance-steps"
 import { VERIFY_CHECKS as CHECKS } from "~/lib/finance-verify-checks"
-import { formatMoney } from "~/lib/utils"
+import { formatMoney, formatUnitPrice } from "~/lib/utils"
 import type { Route } from "../routes/+types/_app.finance.verify.$id"
 
 type MaterialServiceCode = ComponentProps<
@@ -163,7 +163,7 @@ function VerifyPacket({ loaderData, actionData }: ViewProps) {
 										<td className="p-2">{l.name}</td>
 										<td className="p-2 text-right font-mono">{l.qty}</td>
 										<td className="p-2 text-right font-mono">
-											{formatMoney(l.unitPrice)}
+											{formatUnitPrice(l.unitPrice)}
 										</td>
 										<td className="p-2 text-right font-mono">
 											{`${+(l.ivuRate * 100).toFixed(2)}%`}

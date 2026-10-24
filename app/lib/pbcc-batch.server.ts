@@ -153,9 +153,17 @@ async function openBatchIn(tx: Tx, userId: string) {
 }
 
 async function closeIn(tx: Tx, batchId: string, userId: string) {
+	// The number is given at close, one after the highest so far, so sent
+	// batches run 1, 2, 3 with no gaps. Same lock as opening a batch.
+	await tx.$executeRaw`SELECT pg_advisory_xact_lock(${OPEN_BATCH_LOCK})`
+	const { _max } = await tx.bankSchedule.aggregate({ _max: { number: true } })
 	await tx.bankSchedule.update({
 		where: { id: batchId },
-		data: { closedAt: new Date(), closedById: userId },
+		data: {
+			closedAt: new Date(),
+			closedById: userId,
+			number: (_max.number ?? 0) + 1,
+		},
 	})
 }
 

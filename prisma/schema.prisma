@@ -1206,7 +1206,9 @@ model RestockRequest {
 
 model BankSchedule {
   id            String    @id @default(cuid())
-  number        Int       @unique @default(autoincrement())
+  // Given when the batch is closed (1, 2, 3 with no gaps), never when an empty
+  // one is opened: null while the batch is open.
+  number        Int?      @unique
   generatedAt   DateTime  @default(now())
   generatedById String
   generatedBy   User      @relation("BankScheduleGenerator", fields: [generatedById], references: [id])

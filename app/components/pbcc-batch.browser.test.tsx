@@ -75,7 +75,7 @@ describe("open PBCC batch", () => {
 		renderStub,
 	}) => {
 		await mount(renderStub, <PbccBatchOpenView batch={batch()} />)
-		expect(screen.getByText("PBCC batch #6 · open")).toBeInTheDocument()
+		expect(screen.getByText("PBCC batch · open")).toBeInTheDocument()
 		expect(
 			screen.getByText(
 				"2 of 100 packets · Subtotal $200.00 · 80% advance $160.00",
@@ -138,7 +138,7 @@ describe("Sent tab", () => {
 		await mount(
 			renderStub,
 			<PbccBatchListView
-				openBatch={{ id: "b7", number: 7 }}
+				openBatch={{ id: "b7" }}
 				batches={[
 					{
 						id: "b6",
@@ -166,9 +166,7 @@ describe("Sent tab", () => {
 		expect(screen.getByText("Ready to send")).toBeInTheDocument()
 		expect(screen.getByText(/^Sent /)).toBeInTheDocument()
 		expect(screen.getByText("47 packets · $18442.10")).toBeInTheDocument()
-		expect(
-			screen.getByRole("link", { name: "Open batch #7" }),
-		).toBeInTheDocument()
+		expect(screen.getByRole("link", { name: "Open batch" })).toBeInTheDocument()
 	})
 })
 

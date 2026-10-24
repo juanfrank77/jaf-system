@@ -1483,6 +1483,7 @@
 		"advance": "Adelanto PBCC ({{rate}}%)",
 		"ivu_rate": "Tasa de IVU: {{rate}}%",
 		"hint": "Generar este PDF guarda la solicitud, la marca como enviada y envía una copia a la Contralora.",
+		"on_open_batch": "En el lote PBCC abierto",
 		"on_schedule": "En el cronograma bancario #{{number}}",
 		"invoice_pdf": "PDF de factura",
 		"errors": {
@@ -2136,7 +2137,7 @@
 			"open": "Abierto",
 			"sent": "Enviados"
 		},
-		"open_heading": "Lote PBCC #{{number}} · abierto",
+		"open_heading": "Lote PBCC · abierto",
 		"summary": "{{count}} de {{max}} paquetes · Subtotal {{subtotal}} · {{percent}}% de adelanto {{advance}}",
 		"summary_note": "El adelanto se calcula sobre el subtotal, antes del IVU.",
 		"close": "Cerrar lote",

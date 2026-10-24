@@ -47,6 +47,8 @@ async function schedule(
 			// Closed unless a test says otherwise: batches built before the open
 			// state existed all count as closed.
 			closedAt: new Date(),
+			// Numbered when closed; a high random one cannot collide with real batches.
+			number: 1_000_000 + Math.floor(Math.random() * 1_000_000),
 			...extra,
 		},
 	})

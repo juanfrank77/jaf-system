@@ -1483,6 +1483,7 @@
 		"advance": "PBCC advance ({{rate}}%)",
 		"ivu_rate": "IVU rate: {{rate}}%",
 		"hint": "Generating this PDF saves the request, marks it sent, and sends a copy to the Comptroller.",
+		"on_open_batch": "On the open PBCC batch",
 		"on_schedule": "On bank schedule #{{number}}",
 		"invoice_pdf": "Invoice PDF",
 		"errors": {
@@ -2104,7 +2105,7 @@
 			"open": "Open",
 			"sent": "Sent"
 		},
-		"open_heading": "PBCC batch #{{number}} · open",
+		"open_heading": "PBCC batch · open",
 		"summary": "{{count}} of {{max}} packets · Subtotal {{subtotal}} · {{percent}}% advance {{advance}}",
 		"summary_note": "The advance is figured on the subtotal, before IVU.",
 		"close": "Close batch",

@@ -424,7 +424,7 @@ function VerifyPacket({ loaderData, actionData }: ViewProps) {
 			)}
 
 			{stage === "TO_VERIFY" && doc.status !== "LC_REQUEST_GENERATED" && (
-				<div className="flex flex-wrap items-start gap-4">
+				<div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-start gap-4 border-t bg-card p-3 shadow-card">
 					<Form method="post" className="space-y-3">
 						<input type="hidden" name="intent" value="verify" />
 						<fieldset className="space-y-2">

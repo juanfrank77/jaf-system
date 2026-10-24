@@ -1405,6 +1405,7 @@
 		"empty": "Aún no hay materiales. Agregue los materiales físicos que el almacén debe preparar para este trabajo."
 	},
 	"material_line_items": {
+		"claro_supplied": "Suministrado por Claro",
 		"select_placeholder": "Selecciona un material...",
 		"add_material": "+ Agregar material",
 		"remove": "Quitar material",
@@ -2064,7 +2065,8 @@
 			"closed": "Listo para enviar",
 			"sent": "Enviado {{date}}"
 		},
-		"packets": "{{count}} paquetes",
+		"packets_one": "{{count}} paquete",
+		"packets_other": "{{count}} paquetes",
 		"none_sent": "Aún no hay lotes cerrados.",
 		"open_batch": "Lote abierto",
 		"detail": {

@@ -1,5 +1,6 @@
 import { db } from "~/lib/db.server"
 import { ageDays } from "~/lib/finance-stage-rows.server"
+import { isPastPayDay } from "~/lib/pay-day"
 import type { PayrollRequestView } from "~/lib/payroll-request-view"
 import {
 	buildJournalBlocks,
@@ -45,13 +46,18 @@ export async function loadPayrollRequests(
 				}
 			},
 		)
+		const status = run.paidAt ? "paid" : run.sentAt ? "waiting" : "draft"
 		return {
 			id: run.id,
 			label: run.label,
-			status: run.paidAt ? "paid" : run.sentAt ? "waiting" : "draft",
+			status,
 			sentAt: run.sentAt?.toISOString() ?? null,
 			paidAt: run.paidAt?.toISOString() ?? null,
 			ageDays: ageDays(run.sentAt ?? run.generatedAt, now),
+			pastPayDay:
+				status === "waiting" && run.sentAt
+					? isPastPayDay(run.sentAt, now)
+					: false,
 			avisoCount: run.invoices.length,
 			lines,
 		}

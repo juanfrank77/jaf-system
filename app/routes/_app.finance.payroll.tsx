@@ -14,7 +14,6 @@ import { Callout } from "~/components/ui/callout"
 import { db } from "~/lib/db.server"
 import { PAGE_SIZE } from "~/lib/finance-stage-paging"
 import { loadStageRows } from "~/lib/finance-stage-rows.server"
-import { RUN_OVERDUE_DAYS } from "~/lib/finance-stages.server"
 import { FINANCE_STEPS } from "~/lib/finance-steps"
 import {
 	defaultPeriodLabel,
@@ -56,7 +55,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 		tab,
 		waitingCount,
 		paidCount,
-		overdueDays: RUN_OVERDUE_DAYS,
 		defaultLabel: defaultPeriodLabel(),
 	}
 	if (tab === "waiting") {
@@ -195,7 +193,6 @@ export default function FinancePayrollList({
 		drafts,
 		blocked,
 		pagination,
-		overdueDays,
 		defaultLabel,
 		waitingCount,
 		paidCount,
@@ -381,7 +378,6 @@ export default function FinancePayrollList({
 							<PayrollRequestCard
 								key={r.id}
 								request={r}
-								overdueDays={overdueDays}
 								actions={
 									<Link
 										to={`/finance/payroll/${r.id}`}

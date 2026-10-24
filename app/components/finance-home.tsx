@@ -52,9 +52,13 @@ function HomeTile({ tile }: { tile: FinanceHomeTile }) {
 		<Stat
 			label={label}
 			value={value}
-			sub={sub}
+			sub={
+				tile.overdue
+					? `${sub ?? ""} · ${t("finance_home.sub.overdue", { count: tile.overdue })}`
+					: sub
+			}
 			href={tile.href ?? undefined}
-			tone={tile.count === 0 ? "neutral" : "info"}
+			tone={tile.overdue ? "flag" : tile.count === 0 ? "neutral" : "info"}
 			className={tile.count === 0 ? "opacity-70" : undefined}
 		/>
 	)
@@ -88,6 +92,15 @@ export function FinanceHomeView({ home }: { home: FinanceHome }) {
 				</div>
 			</section>
 
+			{home.blockedCount > 0 && (
+				<Link
+					to="/finance/payroll"
+					className="block rounded-lg border border-status-warn/30 bg-status-warn-soft p-3 text-sm"
+				>
+					{t("finance_home.blocked", { count: home.blockedCount })}
+				</Link>
+			)}
+
 			<section className="space-y-2">
 				<h2 className="text-sm font-semibold">
 					{t("finance_home.next_up.title")}
@@ -108,7 +121,14 @@ export function FinanceHomeView({ home }: { home: FinanceHome }) {
 										{item.controlNumber}
 										{item.avisoNumber ? ` · ${item.avisoNumber}` : ""}
 									</span>
-									<span className="text-muted-foreground">
+									<span
+										className={
+											item.note === "overdue"
+												? "text-status-danger"
+												: "text-muted-foreground"
+										}
+									>
+										{item.note && `${t(`finance_home.note.${item.note}`)} · `}
 										{t(FINANCE_STEP_LABEL_KEY[item.step])} ·{" "}
 										{t("finance_home.next_up.days", {
 											count: item.waitingDays,

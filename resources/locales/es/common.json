@@ -2002,7 +2002,14 @@
 			"invoices_to_load": "Facturas por cargar en Ariba",
 			"claro_past_due": "Claro pasado de 60 días"
 		},
+		"blocked": "Bloqueado: brigada sin vincular, {{count}} vendidos a PBCC que no se pueden solicitar",
+		"note": {
+			"blocked": "Bloqueado: brigada sin vincular",
+			"overdue": "Pasó el día de pago"
+		},
 		"sub": {
+			"overdue_one": "pasó el día de pago",
+			"overdue_other": "pasó el día de pago",
 			"oldest_one": "más antiguo {{count}} día",
 			"oldest_other": "más antiguo {{count}} días",
 			"batch": "{{count}} / {{max}}",

@@ -1,10 +1,12 @@
 import {
 	computeContractorPayment,
 	payeeCode,
+	RETENTION_RATE,
 	resolveContractorAccounts,
 	toContractorPaymentLines,
 } from "~/lib/contractor-payment.server"
 import { db } from "~/lib/db.server"
+import { round2 } from "~/lib/service-lines"
 import { toNumberPrice } from "~/lib/utils"
 import { Prisma } from "../../generated/prisma/client"
 
@@ -643,16 +645,22 @@ export type PayrollSheetLine = {
  * Lissette's desk, so nothing downstream can print what it does not have.
  */
 export function payrollSheetLines(blocks: JournalBlock[]): PayrollSheetLine[] {
-	return blocks.map((b) => ({
-		brigadeCode: b.brigadeCode,
-		brigadeLabel: b.brigadeLabel,
-		avisoNumbers: [
-			...new Set(
-				b.jobs.map((j) => j.avisoNumber).filter((n): n is string => !!n),
-			),
-		].sort(),
-		net: b.net,
-		retention: b.retention,
-		toPay: b.totalSC,
-	}))
+	return blocks.map((b) => {
+		// One rule per brigade row, rounded once, so Net - Retention = To pay on
+		// every screen and on the sheet: retention is 10% of the row's net.
+		const net = round2(b.net)
+		const retention = round2(net * RETENTION_RATE)
+		return {
+			brigadeCode: b.brigadeCode,
+			brigadeLabel: b.brigadeLabel,
+			avisoNumbers: [
+				...new Set(
+					b.jobs.map((j) => j.avisoNumber).filter((n): n is string => !!n),
+				),
+			].sort(),
+			net,
+			retention,
+			toPay: round2(net - retention),
+		}
+	})
 }

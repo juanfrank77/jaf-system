@@ -32,6 +32,16 @@ export function toNumberPrice(value: unknown): number {
 	return 0
 }
 
+/**
+ * A unit price exactly as the price list stores it: at least cents, up to three
+ * decimals ("$1.518"), so Qty x Price visibly equals the line Amount.
+ */
+export function formatUnitPrice(amount: unknown, currency = "$"): string {
+	const n = toNumberPrice(amount)
+	const text = n.toFixed(3)
+	return `${currency}${text.endsWith("0") ? n.toFixed(2) : text}`
+}
+
 export function formatMoney(amount: unknown, currency = "$"): string {
 	return `${currency}${toNumberPrice(amount).toFixed(2)}`
 }

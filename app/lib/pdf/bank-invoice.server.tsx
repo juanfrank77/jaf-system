@@ -143,6 +143,8 @@ export type BankInvoiceInput = {
 }
 
 const money = (n: number) => n.toFixed(2)
+const unitPriceText = (n: number) =>
+	n.toFixed(3).endsWith("0") ? n.toFixed(2) : n.toFixed(3)
 
 /** Text placed at (left, top) inside the enclosing relative box. */
 function At({
@@ -500,7 +502,7 @@ function BankInvoice({ input }: { input: BankInvoiceInput }) {
 						<Text style={cell(1, { fontSize: 7 })}>{l.description}</Text>
 						<Text style={cell(2)}>{l.qty.toFixed(2)}</Text>
 						<Text style={cell(3)}>{l.unit}</Text>
-						<Text style={cell(4)}>{money(l.unitPrice)}</Text>
+						<Text style={cell(4)}>{unitPriceText(l.unitPrice)}</Text>
 						<Text style={cell(5)}>{money(l.amount)}</Text>
 						<Text style={cell(6)}>{l.accountCode}</Text>
 						<Text style={cell(7)}>{l.subAct}</Text>

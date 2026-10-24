@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -284,4 +285,25 @@ describe("Payment Advice", () => {
 			),
 		).rejects.toMatchObject({ code: "not_pdf" })
 	})
+})
+
+const REAL_ADVICE =
+	"docs/JAF_Package/07 All of JAF Forms/Monica Claro Payment received Sample.pdf"
+
+describe.skipIf(!existsSync(REAL_ADVICE))("a real Claro advice", () => {
+	it("is kept whole: every row, the printed total, none of ours matched", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const bytes = new Uint8Array(readFileSync(REAL_ADVICE))
+		const { id } = await ingestAdvice({ name: "real.pdf", bytes }, u.id)
+		const advice = await db.paymentAdvice.findUniqueOrThrow({ where: { id } })
+		expect(advice.adviceDate.toISOString().slice(0, 10)).toBe("2026-08-28")
+		expect(Number(advice.total)).toBe(107863.5)
+		// The rows add up to the printed total, so it can be applied.
+		expect(Number(advice.rowsTotal)).toBe(107863.5)
+		expect(
+			await db.adviceLine.count({ where: { adviceId: id } }),
+		).toBeGreaterThan(166)
+		await db.adviceLine.deleteMany({ where: { adviceId: id } })
+		await db.paymentAdvice.delete({ where: { id } })
+	}, 120000)
 })

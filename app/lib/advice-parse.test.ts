@@ -61,3 +61,43 @@ Total $1,905.11`
 		expect(parseAdvice("nothing here").rows).toEqual([])
 	})
 })
+
+describe("parseAdvice on a page-broken advice with a second series", () => {
+	const text = `PAYMENT ADVICE
+Invoice # Voucher ID Invoice Date Amount Withholding Discount Net amount
+M19-2949 5920039203 03.06.2026 14.58 (0.00) 0.00 14.58
+M19-2902 5920038507 03.06.2026 20.48 (0.00) 0.00 20.48
+Agosto 28, 2026
+Bank: BANCO SANTANDER PUERTO
+RICO
+Bank ID: 021502341
+Reference: 5440019914
+M19-2950 5920039204 Junio 03, 106.42 (0.00) 0.00 106.42
+JA-1616276 5920042289 03.06.2026 1,399.06 (0.00) 0.00 1,399.06
+Agosto 28, 2026
+Bank: BANCO SANTANDER
+Reference: 5440019914
+Total 1,540.54 (0.00 ) 0.00 1,540.54`
+
+	it("takes the header from where the page breaks print it, Spanish month included", () => {
+		const r = parseAdvice(text)
+		expect(r.adviceDate).toBe("2026-08-28")
+		expect(r.bank).toBe("BANCO SANTANDER PUERTO RICO")
+		expect(r.reference).toBe("5440019914")
+		expect(r.total).toBe(1540.54)
+	})
+
+	it("keeps the other series as rows so the rows add up to the printed total", () => {
+		const r = parseAdvice(text)
+		expect(r.rows.map((x) => x.invoiceRef)).toEqual([
+			"M19-2949",
+			"M19-2902",
+			"M19-2950",
+			"JA-1616276",
+		])
+		expect(r.rows[3].net).toBe(1399.06)
+		expect(r.rows.reduce((s, x) => s + x.net, 0)).toBeCloseTo(1540.54, 2)
+		// A split date ("Junio 03,") has no year to read: the row keeps its amount.
+		expect(r.rows[2]).toMatchObject({ invoiceDate: null, net: 106.42 })
+	})
+})

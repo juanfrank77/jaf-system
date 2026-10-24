@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, displayRequestLabel, expect, it } from "vitest"
 import {
 	defaultPeriodLabel,
 	formatShortDate,
@@ -32,5 +32,14 @@ describe("parsePayrollTab", () => {
 describe("formatShortDate", () => {
 	it("writes the date the JAF way", () => {
 		expect(formatShortDate("2026-10-24T14:12:00Z")).toBe("10/24/2026")
+	})
+})
+
+describe("displayRequestLabel", () => {
+	it("reads an old 8-digit title as MM/DD/YYYY and leaves pay periods alone", () => {
+		expect(displayRequestLabel("20261012")).toBe("10/12/2026")
+		expect(displayRequestLabel("10/10/2026 – 10/23/2026")).toBe(
+			"10/10/2026 – 10/23/2026",
+		)
 	})
 })

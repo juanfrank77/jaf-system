@@ -1517,6 +1517,7 @@
 		"empty": "No materials yet. Add the physical materials the warehouse should prep for this job."
 	},
 	"material_line_items": {
+		"claro_supplied": "Claro-supplied",
 		"select_placeholder": "Select material...",
 		"add_material": "+ Add material",
 		"remove": "Remove material",
@@ -2148,7 +2149,8 @@
 			"closed": "Ready to send",
 			"sent": "Sent {{date}}"
 		},
-		"packets": "{{count}} packets",
+		"packets_one": "{{count}} packet",
+		"packets_other": "{{count}} packets",
 		"none_sent": "No closed batches yet.",
 		"open_batch": "Open batch",
 		"detail": {

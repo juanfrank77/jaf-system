@@ -175,7 +175,9 @@ export function MaterialLineItems({
 							</span>
 							{showPrice && code?.unitPrice !== undefined && (
 								<span className="w-20 text-right">
-									${(toNumberPrice(code.unitPrice) * item.qty).toFixed(2)}
+									{toNumberPrice(code.unitPrice) === 0
+										? t("material_line_items.claro_supplied")
+										: `$${(toNumberPrice(code.unitPrice) * item.qty).toFixed(2)}`}
 								</span>
 							)}
 							{isOverdrawn && (

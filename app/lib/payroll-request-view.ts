@@ -44,6 +44,12 @@ export function defaultPeriodLabel(today: Date = new Date()): string {
 	return `${mmddyyyy(start)} – ${mmddyyyy(today)}`
 }
 
+/** A request titled before pay periods ("20261012") reads as a date, MM/DD/YYYY. */
+export function displayRequestLabel(label: string): string {
+	const m = /^(\d{4})(\d{2})(\d{2})$/.exec(label.trim())
+	return m ? `${m[2]}/${m[3]}/${m[1]}` : label
+}
+
 /** A date as Lissette writes it, MM/DD/YYYY, on the Puerto Rico calendar. */
 export function formatShortDate(iso: string | Date): string {
 	return mmddyyyy(new Date(iso))

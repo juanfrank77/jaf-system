@@ -1,6 +1,7 @@
-import { describe, displayRequestLabel, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 import {
 	defaultPeriodLabel,
+	displayRequestLabel,
 	formatShortDate,
 	parsePayrollTab,
 } from "./payroll-request-view"

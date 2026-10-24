@@ -2073,6 +2073,18 @@
 			"success": "Returned successfully."
 		}
 	},
+	"finance_closed": {
+		"title": "Closed",
+		"callout_title": "Stage 4 · Closed",
+		"callout_body": "Every Aviso that is sold to PBCC and paid to its brigade. Search by work order or Aviso number; this is the backup you can print any time.",
+		"empty": "Nothing is closed yet.",
+		"col": {
+			"sold": "Sold to PBCC",
+			"request_sent": "Request sent",
+			"paid": "Brigade paid",
+			"days": "Days sold to paid"
+		}
+	},
 	"finance_home": {
 		"arm_a": "Paying our people",
 		"arm_b": "Claro paying JAF",

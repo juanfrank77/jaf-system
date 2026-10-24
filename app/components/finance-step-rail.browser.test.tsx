@@ -8,7 +8,7 @@ describe("finance step rails", () => {
 		expect(new Set(Object.values(FINANCE_STEP_HREF)).size).toBe(3)
 	})
 
-	it("renders the three Arm A steps and the Closed marker, with distinct hrefs", async ({
+	it("renders the three Arm A steps and Closed, with distinct hrefs", async ({
 		renderStub,
 	}) => {
 		await renderStub({
@@ -21,13 +21,14 @@ describe("finance step rails", () => {
 		})
 		const items = await screen.findAllByRole("listitem")
 		expect(items).toHaveLength(4)
-		// Closed is where Arm A ends, not a screen.
-		expect(items[3].dataset.state).toBe("locked")
+		// Closed is where Arm A ends, and it has its own screen.
+		expect(items[3].dataset.state).toBe("todo")
 		const links = screen.getAllByRole("link")
-		expect(links).toHaveLength(2)
+		expect(links).toHaveLength(3)
 		const hrefs = links.map((a) => a.getAttribute("href"))
 		expect(hrefs).toContain("/finance/queue")
 		expect(hrefs).toContain("/finance/payroll")
+		expect(hrefs).toContain("/finance/closed")
 	})
 
 	it("links the other three Arm B steps from the current one", async ({

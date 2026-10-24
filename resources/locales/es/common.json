@@ -1989,6 +1989,18 @@
 			"stock_body": "Cada movimiento lleva actor, hora y trabajo. Los ajustes requieren una razón; las instantáneas defienden el conteo ante auditoría."
 		}
 	},
+	"finance_closed": {
+		"title": "Cerrados",
+		"callout_title": "Etapa 4 · Cerrados",
+		"callout_body": "Cada Aviso vendido a PBCC y pagado a su brigada. Busca por orden de trabajo o número de Aviso; es el respaldo que puedes imprimir cuando quieras.",
+		"empty": "Todavía no hay nada cerrado.",
+		"col": {
+			"sold": "Vendido a PBCC",
+			"request_sent": "Solicitud enviada",
+			"paid": "Brigada pagada",
+			"days": "Días de venta a pago"
+		}
+	},
 	"finance_home": {
 		"arm_a": "Pago a nuestra gente",
 		"arm_b": "Claro paga a JAF",

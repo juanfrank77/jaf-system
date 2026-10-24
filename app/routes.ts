@@ -115,6 +115,7 @@ export default [
 			"finance/schedules/:id/xlsx",
 			"routes/_app.finance.schedules.$id.xlsx.tsx",
 		),
+		route("finance/closed", "routes/_app.finance.closed.tsx"),
 		route("finance/payroll", "routes/_app.finance.payroll.tsx"),
 		route("finance/payroll/:runId", "routes/_app.finance.payroll.$runId.tsx"),
 		route(

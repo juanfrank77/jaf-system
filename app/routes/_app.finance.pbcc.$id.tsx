@@ -102,6 +102,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		user,
 		serviceCodes,
 		amount,
+		invoiceSubtotal: rowAmounts(doc).subtotal,
 		ivuRate,
 		lcPbccAdvanceRate,
 		payment,
@@ -286,6 +287,7 @@ export default function PbccRequest({
 		contractorAccountResolved,
 		bankSchedule,
 		hasBankInvoice,
+		invoiceSubtotal,
 	} = loaderData
 	const { t } = useTranslation()
 
@@ -377,7 +379,7 @@ export default function PbccRequest({
 								{t("finance_pbcc.gross")}
 							</td>
 							<td className="text-right font-mono">
-								{formatMoney(rowAmounts(doc).subtotal)}
+								{formatMoney(invoiceSubtotal)}
 							</td>
 						</tr>
 						<tr>

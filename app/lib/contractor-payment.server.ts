@@ -131,6 +131,19 @@ export function computeContractorPayment(
 	}
 }
 
+/**
+ * The code a job's payee resolves by: the one copied at the pre-cert
+ * signature, else the lead brigade's own code. The brigade is linked by id on
+ * the job, so a packet released without the subcontractor code still reaches
+ * its brigade; no names are matched.
+ */
+export function payeeCode(doc: {
+	contractorAccountCode: string | null
+	brigade?: { code: string | null } | null
+}): string | null {
+	return doc.contractorAccountCode ?? doc.brigade?.code ?? null
+}
+
 export async function resolveContractorAccount(
 	contractorAccountCode: string | null | undefined,
 ): Promise<{ id: string } | null> {

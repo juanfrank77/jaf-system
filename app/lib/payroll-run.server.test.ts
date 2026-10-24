@@ -2,6 +2,7 @@ import { afterAll, describe, expect, it, vi } from "vitest"
 import { db } from "~/lib/db.server"
 import {
 	armAOpenWhere,
+	blockedSentJobs,
 	buildJournalBlocks,
 	closePayrollRunAccount,
 	discardDraftRun,
@@ -16,6 +17,7 @@ import {
 import {
 	makeTracker,
 	runToken,
+	seedBrigade,
 	seedContractorAccount,
 	seedFinanceableInvoice,
 	seedUser,
@@ -203,6 +205,63 @@ describe("generateRun", () => {
 			where: { id: doc.id },
 		})
 		expect(reloaded.payrollRunId).toBeNull()
+	})
+
+	it("sweeps a job with no pre-cert code through its lead brigade, linked by id", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		const brigade = t.track("brigade", await seedBrigade())
+		const account = t.track(
+			"contractorAccount",
+			await seedContractorAccount({
+				code: brigade.code as string,
+				brigadeId: brigade.id,
+			}),
+		)
+		const doc = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				funded: true,
+				contractorAccountId: null,
+				contractorAccountCode: null,
+			}),
+		)
+		await db.jafInvoice.update({
+			where: { id: doc.id },
+			data: { brigadeId: brigade.id },
+		})
+		expect(await blockedSentJobs()).not.toContainEqual(
+			expect.objectContaining({ id: doc.id }),
+		)
+
+		const { run } = await generateRun({
+			generatedById: finance.id,
+			label: "R-brigade-link",
+		})
+		t.track("payrollRun", run as { id: string })
+		const reloaded = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: doc.id },
+		})
+		expect(reloaded.payrollRunId).toBe(run.id)
+		expect(reloaded.contractorAccountId).toBe(account.id)
+	})
+
+	it("keeps a job blocked when neither its code nor its brigade has an account", async () => {
+		const brigade = t.track("brigade", await seedBrigade())
+		const doc = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				funded: true,
+				contractorAccountId: null,
+				contractorAccountCode: null,
+			}),
+		)
+		await db.jafInvoice.update({
+			where: { id: doc.id },
+			data: { brigadeId: brigade.id },
+		})
+		expect(await blockedSentJobs()).toContainEqual(
+			expect.objectContaining({ id: doc.id }),
+		)
 	})
 
 	it("still sweeps a job whose brigade account is inactive (q&a 14.4: deactivation blocks new work, not payment)", async () => {

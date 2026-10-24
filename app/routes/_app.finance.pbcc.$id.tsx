@@ -12,6 +12,7 @@ import {
 	type ContractorPayment,
 	type ContractorShareLine,
 	computeContractorPayment,
+	payeeCode,
 	resolveContractorAccount,
 	toContractorPaymentLines,
 } from "~/lib/contractor-payment.server"
@@ -55,6 +56,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		where: { id: params.id, ...armAOpenWhere({ packetView: true }) },
 		include: {
 			supervisor: true,
+			brigade: { select: { code: true } },
 			poLinks: true,
 			paymentRecords: { select: { type: true, note: true } },
 			payrollRun: { select: { paidAt: true } },
@@ -80,7 +82,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	// A job already swept into a run (grossPayable set) has its payment
 	// frozen — show that, never live-recompute it, so a later catalog price
 	// change can't appear to move an already-generated run's figures.
-	const account = await resolveContractorAccount(doc.contractorAccountCode)
+	const account = await resolveContractorAccount(payeeCode(doc))
 	const frozen = doc.grossPayable != null
 	const payment: ContractorPayment = frozen
 		? {

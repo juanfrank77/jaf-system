@@ -1392,6 +1392,7 @@
 		"filter": "Filtrar",
 		"start_reviewing": "Empezar a revisar",
 		"empty": "No hay paquetes en espera.",
+		"brigade_not_linked": "Brigada sin vincular",
 		"account_unmapped": "Cuenta de contratista no asignada",
 		"missing_claro_pdf": "Falta PDF de Claro",
 		"pagination": {
@@ -2274,6 +2275,7 @@
 		"include_row": "Incluir {{number}} en la solicitud",
 		"reversed": "Revertida",
 		"blocked_title": "Vendidos pero bloqueados",
+		"none_selected_blocked": "0 seleccionados. Los {{count}} están bloqueados: Carmen debe vincular la brigada.",
 		"blocked_reason": "Sin cuenta de contratista para esta brigada",
 		"overdue": "{{days}}d, atrasada",
 		"request_title": "Solicitud de nómina · {{label}}",

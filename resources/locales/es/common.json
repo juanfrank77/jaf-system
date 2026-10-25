@@ -2032,6 +2032,7 @@
 		"blocked": "Bloqueado: brigada sin vincular, {{count}} vendidos a PBCC que no se pueden solicitar",
 		"note": {
 			"blocked": "Bloqueado: brigada sin vincular",
+			"draft": "Borrador sin enviar",
 			"overdue": "Pasó el día de pago"
 		},
 		"sub": {

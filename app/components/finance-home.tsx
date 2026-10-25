@@ -123,7 +123,7 @@ export function FinanceHomeView({ home }: { home: FinanceHome }) {
 									</span>
 									<span
 										className={
-											item.note === "overdue"
+											item.note === "overdue" || item.note === "draft"
 												? "text-status-danger"
 												: "text-muted-foreground"
 										}

@@ -76,6 +76,27 @@ describe("loadFinanceHome (integration)", () => {
 		await cleanup()
 	})
 
+	it("lists a payroll draft nobody sent in Next up, with its age", async () => {
+		const draft = track(
+			"payrollRun",
+			await db.payrollRun.create({
+				data: {
+					label: "PR9999 · draft",
+					generatedById: supervisorId,
+					generatedAt: new Date(Date.now() - 9 * DAY),
+				},
+			}),
+		)
+		const home = await loadFinanceHome()
+		const item = home.nextUp.find((i) => i.id === draft.id)
+		expect(item).toMatchObject({
+			note: "draft",
+			step: "LISTS",
+			waitingDays: 9,
+			href: `/finance/payroll/${draft.id}`,
+		})
+	})
+
 	it("counts packets in the Inbox and finds the oldest", () => {
 		expect(tile(after, "inbox")?.count).toBe(
 			(tile(before, "inbox")?.count ?? 0) + 2,

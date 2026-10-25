@@ -37,7 +37,7 @@ export type NextUpItem = {
 	waitingDays: number
 	href: string
 	/** Why it needs her now, when waiting its turn is not the whole story. */
-	note?: "blocked" | "overdue"
+	note?: "blocked" | "overdue" | "draft"
 }
 
 export type FinanceHome = {

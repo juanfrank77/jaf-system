@@ -2000,6 +2000,7 @@
 		"blocked": "Blocked: brigade not linked, {{count}} sold to PBCC but cannot be requested",
 		"note": {
 			"blocked": "Blocked: brigade not linked",
+			"draft": "Draft not sent",
 			"overdue": "Past pay day"
 		},
 		"sub": {

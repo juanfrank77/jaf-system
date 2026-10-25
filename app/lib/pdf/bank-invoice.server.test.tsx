@@ -263,7 +263,16 @@ describe("generateBankInvoicePdf", () => {
 		expect(text).toContain("TOTAL A PAGAR $$ 118.45")
 		expect(text).toContain("Certificado por:FECHA:")
 		expect(text.match(/Aprobado por:FECHA:/g)).toHaveLength(3)
-		expect(text).toContain("M-3545ORDEN TRABAJO PLANTA:")
+		// No fixed sample job # on every invoice: blank until JAF OS has one.
+		expect(text).not.toContain("M-3545")
+		expect(text).toContain("ORDEN TRABAJO PLANTA:")
+	})
+
+	it("prints the job's own job # when it has one", async () => {
+		const text = fullText(
+			await generateBankInvoicePdf({ ...input, jobNumber: "M-3471" }),
+		)
+		expect(text).toContain("M-3471ORDEN TRABAJO PLANTA:")
 	})
 
 	it("omits the barrio line when there is none", async () => {

@@ -17,6 +17,7 @@ import {
 	type FinanceStep,
 } from "~/lib/finance-steps"
 import { pastPayDayCutoff } from "~/lib/pay-day"
+import { displayRequestLabel } from "~/lib/payroll-request-view"
 import { blockedSentJobs } from "~/lib/payroll-run.server"
 import { rowAmounts } from "~/lib/pbcc-batch.server"
 import { getPayDayWeekday } from "~/lib/system-settings.server"
@@ -48,6 +49,7 @@ export async function loadFinanceHome(
 		pastDue,
 		overdueRuns,
 		blocked,
+		draftRuns,
 	] = await Promise.all([
 		db.jafInvoice.count({ where: stageWhere("PACKETS") }),
 		db.jafInvoice.findFirst({
@@ -111,6 +113,12 @@ export async function loadFinanceHome(
 			select: { id: true, label: true, sentAt: true },
 		}),
 		blockedSentJobs(),
+		// Made but never sent to Carmen: nothing else on Home mentions them.
+		db.payrollRun.findMany({
+			where: { sentAt: null, reversedAt: null },
+			orderBy: { generatedAt: "asc" },
+			select: { id: true, label: true, generatedAt: true },
+		}),
 	])
 	const blockedIds = new Set(blocked.map((b) => b.id))
 	const posToConfirm = {
@@ -142,8 +150,18 @@ export async function loadFinanceHome(
 		href: `${FINANCE_STEP_HREF.LISTS}?tab=waiting`,
 		note: "overdue",
 	}))
+	const draftItems: NextUpItem[] = draftRuns.map((run) => ({
+		id: run.id,
+		controlNumber: displayRequestLabel(run.label),
+		avisoNumber: null,
+		step: "LISTS",
+		waitingDays: ageDays(run.generatedAt, now),
+		href: `${FINANCE_STEP_HREF.LISTS}/${run.id}`,
+		note: "draft",
+	}))
 	const nextUp = [
 		...overdueItems,
+		...draftItems,
 		...nextUpRows
 			.flat()
 			.map(

@@ -8,6 +8,7 @@ import {
 import {
 	buildJournalBlocks,
 	payrollSheetLines,
+	puertoRicoDay,
 	RUN_INVOICES,
 } from "~/lib/payroll-run.server"
 import { getPayDayWeekday } from "~/lib/system-settings.server"
@@ -48,6 +49,16 @@ export async function loadPayrollRequests(
 					accountId: account?.contractorAccountId ?? "",
 					paidAt: account?.paidAt?.toISOString() ?? null,
 					paidByName: account?.paidBy?.name ?? null,
+					undoable:
+						!!account?.paidAt &&
+						!run.reversedAt &&
+						run.invoices
+							.filter((i) => i.contractorAccount?.code === line.accountCode)
+							.every(
+								(i) =>
+									i.payablesClosedAt &&
+									puertoRicoDay(i.payablesClosedAt) === puertoRicoDay(now),
+							),
 				}
 			},
 		)

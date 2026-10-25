@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next"
-import { Form, Link, useNavigation } from "react-router"
+import { Form, Link, redirect, useNavigation } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { ReceiptBanner, receiptUrl } from "~/components/receipt-banner"
 import { Badge } from "~/components/ui/badge"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
@@ -11,6 +12,7 @@ import {
 	closePayrollRunAccount,
 	parsePaidDate,
 	puertoRicoToday,
+	undoPayrollRunAccount,
 } from "~/lib/payroll-run.server"
 import { requireRole } from "~/lib/permissions.server"
 import { formatMoney } from "~/lib/utils"
@@ -28,6 +30,8 @@ const ERROR_KEYS = {
 		"finance_payroll.errors.missing_fields",
 	"finance_payroll.errors.invalid_date": "finance_payroll.errors.invalid_date",
 	"finance_payroll.errors.future_date": "finance_payroll.errors.future_date",
+	"finance_payroll.errors.undo_reason": "finance_payroll.errors.undo_reason",
+	"finance_payroll.errors.undo_expired": "finance_payroll.errors.undo_expired",
 } as const
 
 type ActionErrorKey = keyof typeof ERROR_KEYS
@@ -74,6 +78,39 @@ export async function action({ request, params }: Route.ActionArgs) {
 			// show success. 403/404 and everything else still propagate.
 			if (!(e instanceof Response && e.status === 409)) throw e
 		}
+		const acc = await db.contractorAccount.findUnique({
+			where: { id: accountId },
+			select: { code: true },
+		})
+		return redirect(
+			receiptUrl(`/comptroller/runs/${params.runId}`, "paid", {
+				a: acc?.code,
+				b: formatShortDate(parsed.date),
+			}),
+		)
+	}
+
+	if (intent === "undo_paid") {
+		const accountId = form.get("accountId")
+		const reason = String(form.get("reason") ?? "").trim()
+		if (typeof accountId !== "string" || !accountId) {
+			return { errorKey: "finance_payroll.errors.missing_fields" as const }
+		}
+		if (!reason) {
+			return { errorKey: "finance_payroll.errors.undo_reason" as const }
+		}
+		try {
+			await undoPayrollRunAccount({
+				runId: params.runId,
+				accountId,
+				userId: user.id,
+				reason,
+			})
+		} catch (e) {
+			if (e instanceof Response && e.status === 409)
+				return { errorKey: "finance_payroll.errors.undo_expired" as const }
+			throw e
+		}
 		return { ok: true as const }
 	}
 
@@ -105,6 +142,7 @@ export default function ComptrollerPayrollRun({
 					{t("comptroller_payroll.back")}
 				</Link>
 			</div>
+			<ReceiptBanner />
 			<Callout title={t("comptroller_payroll.callout_title")}>
 				{t("comptroller_payroll.callout_body")}
 			</Callout>
@@ -147,12 +185,43 @@ export default function ComptrollerPayrollRun({
 								</td>
 								<td className="p-2">
 									{l.paidAt ? (
-										<Badge variant="ok">
-											{t("comptroller_payroll.paid_by", {
-												date: formatShortDate(l.paidAt),
-												name: l.paidByName ?? "—",
-											})}
-										</Badge>
+										<div className="flex flex-wrap items-center gap-2">
+											<Badge variant="ok">
+												{t("comptroller_payroll.paid_by", {
+													date: formatShortDate(l.paidAt),
+													name: l.paidByName ?? "—",
+												})}
+											</Badge>
+											{l.undoable ? (
+												<Form method="post" className="flex items-center gap-1">
+													<input
+														type="hidden"
+														name="intent"
+														value="undo_paid"
+													/>
+													<input
+														type="hidden"
+														name="accountId"
+														value={l.accountId}
+													/>
+													<input
+														name="reason"
+														required
+														placeholder={t("comptroller_payroll.undo_reason")}
+														aria-label={t("comptroller_payroll.undo_reason")}
+														className="border rounded px-2 py-1 text-xs"
+													/>
+													<Button
+														type="submit"
+														size="xs"
+														variant="outline"
+														disabled={submitting}
+													>
+														{t("comptroller_payroll.undo")}
+													</Button>
+												</Form>
+											) : null}
+										</div>
 									) : (
 										<Form method="post" className="flex items-center gap-2">
 											<input type="hidden" name="intent" value="pay_account" />

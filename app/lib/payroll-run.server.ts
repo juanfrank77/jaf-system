@@ -21,6 +21,7 @@ const INVOICE_SELECT = {
 	controlNumber: true,
 	avisoNumber: true,
 	contractorShareLines: true,
+	payablesClosedAt: true,
 	contractorAccount: {
 		select: {
 			id: true,
@@ -50,6 +51,9 @@ export const RUN_INVOICES = {
 } as const satisfies Prisma.PayrollRun$invoicesArgs
 
 /** Today's calendar date (YYYY-MM-DD) in Puerto Rico, whatever the server TZ. */
+export const puertoRicoDay = (d: Date) =>
+	d.toLocaleDateString("en-CA", { timeZone: "America/Puerto_Rico" })
+
 export function puertoRicoToday(): string {
 	return new Date().toLocaleDateString("en-CA", {
 		timeZone: "America/Puerto_Rico",
@@ -484,6 +488,81 @@ export async function closePayrollRunAccount(opts: {
 			})
 		}
 		return { runClosed: true }
+	})
+}
+
+/**
+ * Undo a Paid tick (rule R6): the same day it was made, with a reason that is
+ * logged on each of the brigade's Avisos. The Avisos reopen, and the request
+ * reopens if that tick had closed it. The tick's day is when the system
+ * stamped it (`payablesClosedAt`), not the pay date Carmen typed.
+ */
+export async function undoPayrollRunAccount(opts: {
+	runId: string
+	accountId: string
+	userId: string
+	reason: string
+	now?: Date
+}): Promise<void> {
+	const reason = opts.reason.trim()
+	if (!reason) throw new Response("A reason is required", { status: 400 })
+	await db.$transaction(async (tx) => {
+		await tx.$queryRaw`SELECT "id" FROM "PayrollRun" WHERE "id" = ${opts.runId} FOR UPDATE`
+		const run = await tx.payrollRun.findUniqueOrThrow({
+			where: { id: opts.runId },
+			select: { reversedAt: true },
+		})
+		if (run.reversedAt) throw new Response("Run is reversed", { status: 409 })
+		const account = await tx.payrollRunAccount.findUnique({
+			where: {
+				payrollRunId_contractorAccountId: {
+					payrollRunId: opts.runId,
+					contractorAccountId: opts.accountId,
+				},
+			},
+			select: { paidAt: true },
+		})
+		if (!account) throw new Response("Account not in this run", { status: 404 })
+		if (!account.paidAt) throw new Response("Not paid", { status: 409 })
+		const invoices = await tx.jafInvoice.findMany({
+			where: { payrollRunId: opts.runId, contractorAccountId: opts.accountId },
+			select: { id: true, payablesClosedAt: true },
+		})
+		const today = puertoRicoDay(opts.now ?? new Date())
+		if (
+			invoices.some(
+				(i) =>
+					!i.payablesClosedAt || puertoRicoDay(i.payablesClosedAt) !== today,
+			)
+		)
+			throw new Response("Only a tick made today can be undone", {
+				status: 409,
+			})
+		await tx.payrollRunAccount.update({
+			where: {
+				payrollRunId_contractorAccountId: {
+					payrollRunId: opts.runId,
+					contractorAccountId: opts.accountId,
+				},
+			},
+			data: { paidAt: null, paidById: null },
+		})
+		await tx.jafInvoice.updateMany({
+			where: { payrollRunId: opts.runId, contractorAccountId: opts.accountId },
+			data: { payablesClosedAt: null, payablesClosedById: null },
+		})
+		await tx.payrollRun.updateMany({
+			where: { id: opts.runId, paidAt: { not: null } },
+			data: { paidAt: null, paidById: null },
+		})
+		await tx.auditTrail.createMany({
+			data: invoices.map((i) => ({
+				docId: i.id,
+				userId: opts.userId,
+				action: "PAYROLL_PAID_UNDONE",
+				diffJson: { reason, source: "STAMPED" },
+			})),
+		})
 	})
 }
 

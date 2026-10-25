@@ -3,6 +3,7 @@ import { db } from "~/lib/db.server"
 import {
 	buildJournalBlocks,
 	payrollSheetLines,
+	puertoRicoToday,
 	RUN_INVOICES,
 } from "~/lib/payroll-run.server"
 import {
@@ -248,7 +249,9 @@ describe("pay_account", () => {
 			accountId: accounts[0].id,
 			paidDate: "2026-09-12",
 		}
-		expect(await post(run.id, fields)).toMatchObject({ ok: true })
+		const receipt = (await post(run.id, fields)) as Response
+		expect(receipt.status).toBe(302)
+		expect(receipt.headers.get("Location")).toContain("receipt=paid")
 		const row = await db.payrollRunAccount.findFirstOrThrow({
 			where: { payrollRunId: run.id, contractorAccountId: accounts[0].id },
 		})
@@ -260,7 +263,66 @@ describe("pay_account", () => {
 		])
 
 		// A replay (double-click, stale tab) is treated as success, not an error.
-		expect(await post(run.id, fields)).toMatchObject({ ok: true })
+		expect(((await post(run.id, fields)) as Response).status).toBe(302)
+	})
+
+	it("undoes a tick made today with a reason, and reopens the brigade", async () => {
+		const { accounts, run } = await seedRun(1)
+		const fields = {
+			intent: "pay_account",
+			accountId: accounts[0].id,
+			paidDate: puertoRicoToday(),
+		}
+		await post(run.id, fields)
+		expect(
+			await post(run.id, { intent: "undo_paid", accountId: accounts[0].id }),
+		).toMatchObject({ errorKey: "finance_payroll.errors.undo_reason" })
+		expect(
+			await post(run.id, {
+				intent: "undo_paid",
+				accountId: accounts[0].id,
+				reason: "wrong brigade",
+			}),
+		).toMatchObject({ ok: true })
+		const row = await db.payrollRunAccount.findFirstOrThrow({
+			where: { payrollRunId: run.id, contractorAccountId: accounts[0].id },
+		})
+		expect(row.paidAt).toBeNull()
+		expect(row.paidById).toBeNull()
+		const audit = await db.auditTrail.findMany({
+			where: {
+				action: "PAYROLL_PAID_UNDONE",
+				diffJson: { path: ["reason"], equals: "wrong brigade" },
+			},
+		})
+		expect(audit.length).toBeGreaterThan(0)
+		await db.auditTrail.deleteMany({
+			where: { id: { in: audit.map((a) => a.id) } },
+		})
+	})
+
+	it("refuses to undo a tick stamped on an earlier day", async () => {
+		const { accounts, run } = await seedRun(1)
+		await post(run.id, {
+			intent: "pay_account",
+			accountId: accounts[0].id,
+			paidDate: puertoRicoToday(),
+		})
+		await db.jafInvoice.updateMany({
+			where: { payrollRunId: run.id },
+			data: { payablesClosedAt: new Date(Date.now() - 2 * 86_400_000) },
+		})
+		expect(
+			await post(run.id, {
+				intent: "undo_paid",
+				accountId: accounts[0].id,
+				reason: "late",
+			}),
+		).toMatchObject({ errorKey: "finance_payroll.errors.undo_expired" })
+		const row = await db.payrollRunAccount.findFirstOrThrow({
+			where: { payrollRunId: run.id, contractorAccountId: accounts[0].id },
+		})
+		expect(row.paidAt).not.toBeNull()
 	})
 
 	it("404s for an account from another run", async () => {

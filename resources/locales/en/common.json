@@ -2242,6 +2242,8 @@
 			"missing_fields": "The paid date is required.",
 			"invalid_date": "That date could not be read.",
 			"future_date": "The paid date cannot be in the future.",
+			"undo_reason": "Give a reason to undo a payment.",
+			"undo_expired": "Only a payment ticked today can be undone.",
 			"empty_run": "No payroll request could be made — every sold Aviso is held back or has no contractor account mapped.",
 			"already_sent": "This request has already been sent to Carmen."
 		},
@@ -2278,6 +2280,8 @@
 		"callout_body": "Open a request, pay each brigade in WinPay, then tick it here. The pay date starts as today; change it if you paid on another day. Finance sees each tick right away.",
 		"paid_button": "Paid",
 		"paid_by": "Paid {{date}} by {{name}}",
+		"undo": "Undo",
+		"undo_reason": "Reason for undoing",
 		"pay_date": "Pay date",
 		"empty": "No requests yet.",
 		"back": "Back to requests",

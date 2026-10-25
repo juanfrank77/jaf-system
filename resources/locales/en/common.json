@@ -233,7 +233,7 @@
 			"warehouse_serials": "Serial register",
 			"warehouse_movements": "Movement log",
 			"comptroller_lists": "Lists from Lissette",
-			"comptroller_to_pay": "Runs to pay",
+			"comptroller_to_pay": "Payroll requests",
 			"comptroller_paid": "Paid runs",
 			"comptroller_brigades": "Brigades",
 			"comptroller_installers": "Installers",
@@ -2279,6 +2279,8 @@
 		}
 	},
 	"comptroller_payroll": {
+		"tab_to_pay": "To pay",
+		"tab_paid": "Paid",
 		"title": "Brigades · payroll",
 		"callout_title": "Your step",
 		"callout_body": "Open a request, pay each brigade in WinPay, then tick it here. The pay date starts as today; change it if you paid on another day. Finance sees each tick right away.",

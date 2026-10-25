@@ -340,22 +340,8 @@ const NAV_ITEMS: NavItem[] = [
 		roles: ["FINANCE", "ADMIN"],
 	},
 	{
-		to: "/comptroller/lists",
-		labelKey: "app_shell.nav.comptroller_lists",
-		icon: Wallet01Icon,
-		group: "money",
-		roles: ["COMPTROLLER", "ADMIN"],
-	},
-	{
 		to: "/comptroller/to-pay",
 		labelKey: "app_shell.nav.comptroller_to_pay",
-		icon: Wallet01Icon,
-		group: "money",
-		roles: ["COMPTROLLER", "ADMIN"],
-	},
-	{
-		to: "/comptroller/paid",
-		labelKey: "app_shell.nav.comptroller_paid",
 		icon: Wallet01Icon,
 		group: "money",
 		roles: ["COMPTROLLER", "ADMIN"],
@@ -441,7 +427,12 @@ export function isNavItemActive(
 ): boolean {
 	const [rest, hash = ""] = to.split("#")
 	const [path, search = ""] = rest.split("?")
-	if (location.pathname !== path) return false
+	// Payroll requests is one menu item: its Paid tab and each request page keep it lit.
+	const here =
+		path === "/comptroller/to-pay" &&
+		(location.pathname === "/comptroller/paid" ||
+			location.pathname.startsWith("/comptroller/runs/"))
+	if (location.pathname !== path && !here) return false
 	if (search) {
 		return (
 			new URLSearchParams(location.search).get("stage") ===

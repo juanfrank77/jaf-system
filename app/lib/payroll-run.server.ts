@@ -12,6 +12,11 @@ import {
 	shareFigures,
 } from "~/lib/contractor-share"
 import { db } from "~/lib/db.server"
+import {
+	highestRequestNumber,
+	payPeriodLabel,
+	requestNumberLabel,
+} from "~/lib/payroll-request-view"
 import { round2 } from "~/lib/service-lines"
 import { toNumberPrice } from "~/lib/utils"
 import { Prisma } from "../../generated/prisma/client"
@@ -51,6 +56,13 @@ export const RUN_INVOICES = {
 } as const satisfies Prisma.PayrollRun$invoicesArgs
 
 /** Today's calendar date (YYYY-MM-DD) in Puerto Rico, whatever the server TZ. */
+/** "PR0004 · 10/19/2026 – 11/01/2026": what a new request is called unless Lissette retitles it. */
+export async function defaultRequestLabel(now: Date = new Date()) {
+	const labels = await db.payrollRun.findMany({ select: { label: true } })
+	const next = highestRequestNumber(labels.map((l) => l.label)) + 1
+	return `${requestNumberLabel(next)} · ${payPeriodLabel(now)}`
+}
+
 export const puertoRicoDay = (d: Date) =>
 	d.toLocaleDateString("en-CA", { timeZone: "America/Puerto_Rico" })
 

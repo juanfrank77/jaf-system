@@ -9,6 +9,16 @@ import {
 	batchStatus,
 } from "~/lib/pbcc-batch-view"
 import { getBankInvoicePrefix } from "~/lib/system-settings.server"
+import { uploadHref } from "~/lib/upload-href"
+
+/** "025 ALEXIS DIAZ": the brigade # the Aviso is paid through, then its name. */
+function brigadeText(
+	b: { code: string | null; name: string; leadName: string | null } | null,
+): string | null {
+	if (!b) return null
+	const name = (b.leadName ?? b.name).toUpperCase()
+	return b.code ? `${b.code} ${name}` : name
+}
 
 /** One batch with its rows, as the open-batch and batch screens show it. */
 export async function loadBatchView(
@@ -19,7 +29,9 @@ export async function loadBatchView(
 		db.jafInvoice.findMany({
 			where: { bankScheduleId: batchId },
 			orderBy: BATCH_ROW_ORDER,
-			include: { brigade: { select: { name: true, leadName: true } } },
+			include: {
+				brigade: { select: { code: true, name: true, leadName: true } },
+			},
 		}),
 		getBankInvoicePrefix(),
 	])
@@ -43,7 +55,7 @@ export async function loadBatchView(
 				row: i + 1,
 				controlNumber: doc.controlNumber,
 				avisoNumber: doc.avisoNumber,
-				brigade: doc.brigade?.leadName ?? doc.brigade?.name ?? null,
+				brigade: brigadeText(doc.brigade),
 				invoiceNumber: bankInvoiceNumber(
 					prefix,
 					doc.avisoNumber || doc.controlNumber,
@@ -51,8 +63,10 @@ export async function loadBatchView(
 				subtotal: amounts.subtotal,
 				ivu: amounts.ivu,
 				total: amounts.total,
-				hasAvisoPdf: Boolean(doc.avisoDocPath),
-				hasInvoicePdf: Boolean(doc.bankInvoicePdfPath),
+				avisoHref: doc.avisoDocPath ? uploadHref(doc.avisoDocPath) : null,
+				invoiceHref: doc.bankInvoicePdfPath
+					? uploadHref(doc.bankInvoicePdfPath)
+					: null,
 			}
 		}),
 	}

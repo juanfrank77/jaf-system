@@ -11,8 +11,9 @@ export type BatchRowView = {
 	subtotal: number
 	ivu: number
 	total: number
-	hasAvisoPdf: boolean
-	hasInvoicePdf: boolean
+	/** Where the Aviso and the invoice open; null when the file is not made yet. */
+	avisoHref: string | null
+	invoiceHref: string | null
 }
 
 export type BatchView = {

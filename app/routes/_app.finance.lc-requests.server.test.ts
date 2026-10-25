@@ -166,7 +166,7 @@ describe("PBCC batch screen", { timeout: 60_000 }, () => {
 					subtotal: number
 					ivu: number
 					total: number
-					hasAvisoPdf: boolean
+					avisoHref: string | null
 				}[]
 			}
 		}
@@ -184,7 +184,7 @@ describe("PBCC batch screen", { timeout: 60_000 }, () => {
 		// 100.00 + 11.5% IVU
 		expect(row).toMatchObject({ subtotal: 100, ivu: 11.5, total: 111.5 })
 		expect(row?.invoiceNumber).toMatch(new RegExp(`-${a.aviso}$`))
-		expect(row?.hasAvisoPdf).toBe(true)
+		expect(row?.avisoHref).toMatch(/^\/files\/aviso-docs\//)
 		// Loading twice never makes a second open batch.
 		await load()
 		expect(await db.bankSchedule.count({ where: { closedAt: null } })).toBe(1)
@@ -201,9 +201,9 @@ describe("PBCC batch screen", { timeout: 60_000 }, () => {
 			batchId: open.batch.id,
 		})) as Response
 		expect(closed.status).toBe(302)
-		expect(closed.headers.get("Location")).toBe(
-			`/finance/schedules/${open.batch.id}`,
-		)
+		const to = new URL(closed.headers.get("Location") ?? "", "http://x")
+		expect(to.pathname).toBe(`/finance/schedules/${open.batch.id}`)
+		expect(to.searchParams.get("receipt")).toBe("closed")
 		const ready = (await load("?tab=ready")) as never as {
 			tab: string
 			batches: { id: string; status: string; count: number }[]

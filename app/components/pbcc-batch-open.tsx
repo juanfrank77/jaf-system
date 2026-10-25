@@ -36,11 +36,18 @@ function Tabs({ tab, readyCount = 0 }: { tab: BatchTab; readyCount?: number }) {
 	)
 }
 
-function Mark({ ok }: { ok: boolean }) {
-	return ok ? (
-		<span className="text-status-ok" role="img" aria-label="ok">
+/** A ✓ that opens the PDF it stands for, so she can look before she closes. */
+function Mark({ href, label }: { href: string | null; label: string }) {
+	return href ? (
+		<a
+			href={href}
+			target="_blank"
+			rel="noreferrer"
+			className="text-status-ok underline"
+			aria-label={label}
+		>
 			✓
-		</span>
+		</a>
 	) : (
 		<Badge variant="warn">—</Badge>
 	)
@@ -129,10 +136,16 @@ export function PbccBatchOpenView({
 										{formatMoney(r.total)}
 									</td>
 									<td className="p-2">
-										<Mark ok={r.hasAvisoPdf} />
+										<Mark
+											href={r.avisoHref}
+											label={`${t("pbcc_batch.col.aviso_pdf")} ${r.controlNumber}`}
+										/>
 									</td>
 									<td className="p-2">
-										<Mark ok={r.hasInvoicePdf} />
+										<Mark
+											href={r.invoiceHref}
+											label={`${t("pbcc_batch.col.invoice_pdf")} ${r.controlNumber}`}
+										/>
 									</td>
 									<td className="p-2">
 										<Form method="post" className="flex items-center gap-1">

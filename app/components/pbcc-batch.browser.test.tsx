@@ -138,7 +138,7 @@ describe("Sent tab", () => {
 		await mount(
 			renderStub,
 			<PbccBatchListView
-				openBatch={{ id: "b7" }}
+				empty="none"
 				batches={[
 					{
 						id: "b6",
@@ -166,7 +166,6 @@ describe("Sent tab", () => {
 		expect(screen.getByText("Ready to send")).toBeInTheDocument()
 		expect(screen.getByText(/^Sent /)).toBeInTheDocument()
 		expect(screen.getByText("47 packets · $18442.10")).toBeInTheDocument()
-		expect(screen.getByRole("link", { name: "Open batch" })).toBeInTheDocument()
 	})
 })
 

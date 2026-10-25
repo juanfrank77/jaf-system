@@ -2136,6 +2136,7 @@
 	"pbcc_batch": {
 		"tab": {
 			"open": "Open",
+			"ready": "Ready to send",
 			"sent": "Sent"
 		},
 		"open_heading": "PBCC batch · open",
@@ -2164,7 +2165,8 @@
 		},
 		"packets_one": "{{count}} packet",
 		"packets_other": "{{count}} packets",
-		"none_sent": "No closed batches yet.",
+		"none_ready": "No closed batches waiting to be sent.",
+		"none_sent": "No batches sent yet.",
 		"open_batch": "Open batch",
 		"detail": {
 			"heading_closed": "PBCC batch #{{number}} · closed, ready to send",

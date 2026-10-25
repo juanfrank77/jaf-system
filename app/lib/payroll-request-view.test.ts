@@ -1,23 +1,50 @@
 import { describe, expect, it } from "vitest"
 import {
-	defaultPeriodLabel,
 	displayRequestLabel,
 	formatShortDate,
+	highestRequestNumber,
 	parsePayrollTab,
+	payPeriodLabel,
 } from "./payroll-request-view"
 
-describe("defaultPeriodLabel", () => {
-	it("is the two weeks ending today, MM/DD/YYYY", () => {
-		expect(defaultPeriodLabel(new Date("2026-10-25T16:00:00Z"))).toBe(
+describe("payPeriodLabel", () => {
+	it("is the fixed two-week period holding today, MM/DD/YYYY", () => {
+		expect(payPeriodLabel(new Date("2026-10-25T16:00:00Z"))).toBe(
 			"10/12/2026 – 10/25/2026",
 		)
 	})
 
 	it("reads the Puerto Rico calendar day, not UTC", () => {
 		// 01:00 UTC on the 26th is still the evening of the 25th in Puerto Rico.
-		expect(defaultPeriodLabel(new Date("2026-10-26T01:00:00Z"))).toBe(
+		expect(payPeriodLabel(new Date("2026-10-26T01:00:00Z"))).toBe(
 			"10/12/2026 – 10/25/2026",
 		)
+	})
+})
+
+describe("fixed periods and request numbers", () => {
+	it("gives every day of a period the same period, and the next day the next", () => {
+		expect(payPeriodLabel(new Date("2026-10-12T16:00:00Z"))).toBe(
+			"10/12/2026 – 10/25/2026",
+		)
+		expect(payPeriodLabel(new Date("2026-10-11T16:00:00Z"))).toBe(
+			"09/28/2026 – 10/11/2026",
+		)
+		expect(payPeriodLabel(new Date("2026-10-26T16:00:00Z"))).toBe(
+			"10/26/2026 – 11/08/2026",
+		)
+	})
+
+	it("numbers requests after the highest PR number, ignoring old titles", () => {
+		expect(highestRequestNumber([])).toBe(0)
+		expect(
+			highestRequestNumber([
+				"20261012",
+				"10/11/2026 – 10/24/2026",
+				"PR0004 · 10/12/2026 – 10/25/2026",
+				"PR0002 · x",
+			]),
+		).toBe(4)
 	})
 })
 

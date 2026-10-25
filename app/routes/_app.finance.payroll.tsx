@@ -17,7 +17,6 @@ import { PAGE_SIZE } from "~/lib/finance-stage-paging"
 import { loadStageRows } from "~/lib/finance-stage-rows.server"
 import { FINANCE_STEPS } from "~/lib/finance-steps"
 import {
-	defaultPeriodLabel,
 	displayRequestLabel,
 	type PayrollTab,
 	parsePayrollTab,
@@ -25,6 +24,7 @@ import {
 import { loadPayrollRequests } from "~/lib/payroll-request-view.server"
 import {
 	blockedSentJobs,
+	defaultRequestLabel,
 	EmptyRunError,
 	generateRun,
 } from "~/lib/payroll-run.server"
@@ -57,7 +57,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		tab,
 		waitingCount,
 		paidCount,
-		defaultLabel: defaultPeriodLabel(),
+		defaultLabel: await defaultRequestLabel(),
 	}
 	if (tab === "waiting") {
 		return {
@@ -123,7 +123,8 @@ export async function action({ request }: Route.ActionArgs) {
 	if (intent !== "generate_run")
 		return { errorKey: "finance_payroll.errors.unknown_intent" as const }
 	const label =
-		(form.get("label") as string | null)?.trim() || defaultPeriodLabel()
+		(form.get("label") as string | null)?.trim() ||
+		(await defaultRequestLabel())
 	const excludeIds = form
 		.getAll("excludeIds")
 		.filter((v): v is string => typeof v === "string" && v !== "")

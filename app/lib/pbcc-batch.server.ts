@@ -269,6 +269,49 @@ export async function takeOutRow(opts: {
 	})
 }
 
+/**
+ * Undo an Accept (rule R6): the packet leaves the open batch and goes back to
+ * the Inbox, unverified. Only while its batch is still open; once a batch is
+ * closed it has its number and package, and "Take out" is no longer possible.
+ */
+export async function undoAccept(opts: {
+	docId: string
+	userId: string
+}): Promise<void> {
+	await db.$transaction(async (tx) => {
+		const doc = await tx.jafInvoice.findUnique({
+			where: { id: opts.docId },
+			select: {
+				financeVerifiedAt: true,
+				bankScheduleId: true,
+				bankInvoicePdfPath: true,
+				bankSchedule: { select: { number: true, closedAt: true } },
+			},
+		})
+		if (!doc?.financeVerifiedAt) throw new BatchError("not_in_batch")
+		if (doc.bankSchedule?.closedAt) throw new BatchError("not_open")
+		await tx.jafInvoice.update({
+			where: { id: opts.docId },
+			data: {
+				bankScheduleId: null,
+				financeVerifiedAt: null,
+				financeVerifiedById: null,
+				// Made again on the next accept, with that day's date.
+				bankInvoicePdfPath: null,
+			},
+		})
+		if (doc.bankScheduleId) await refreshTotals(tx, doc.bankScheduleId)
+		await tx.auditTrail.create({
+			data: {
+				docId: opts.docId,
+				userId: opts.userId,
+				action: "FINANCE_ACCEPT_UNDONE",
+				diffJson: { source: "STAMPED" },
+			},
+		})
+	})
+}
+
 /** Close the open batch early, at any count. The next batch opens by itself. */
 export async function closeOpenBatch(opts: {
 	batchId: string

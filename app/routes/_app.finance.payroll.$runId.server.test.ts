@@ -146,8 +146,8 @@ describe("payroll request detail", () => {
 	it("send_run hands a draft to Carmen and lands on the Waiting tab", async () => {
 		const { run } = await seed({ draft: true })
 		expect((await load(run.id)).req.status).toBe("draft")
-		expect(await redirectOf(post(run.id, { intent: "send_run" }))).toBe(
-			"/finance/payroll?tab=waiting",
+		expect(await redirectOf(post(run.id, { intent: "send_run" }))).toMatch(
+			/^\/finance\/payroll\?tab=waiting&receipt=request_sent&a=/,
 		)
 		const sent = await db.payrollRun.findUniqueOrThrow({
 			where: { id: run.id },

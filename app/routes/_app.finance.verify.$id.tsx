@@ -1,6 +1,7 @@
 import { redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { FinanceVerifyView } from "~/components/finance-verify-view"
+import { ReceiptBanner, receiptUrl } from "~/components/receipt-banner"
 import type { AvisoDiscrepancy } from "~/lib/aviso-discrepancy"
 import { brigadeStockFor } from "~/lib/brigade-stock.server"
 import { db } from "~/lib/db.server"
@@ -15,7 +16,8 @@ import {
 import { VERIFY_CHECKS as CHECKS } from "~/lib/finance-verify-checks"
 import { computeInvoiceTotals } from "~/lib/invoice-totals"
 import { packetDocuments } from "~/lib/packet-documents"
-import { addToOpenBatch } from "~/lib/pbcc-batch.server"
+import { addToOpenBatch, BatchError, undoAccept } from "~/lib/pbcc-batch.server"
+import { loadBatchView } from "~/lib/pbcc-batch-view.server"
 import { isTerminalStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import { isResent, isReturned, latestReturn } from "~/lib/returned-packet"
@@ -155,6 +157,16 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 	const form = await request.formData()
 	const intent = form.get("intent") as string
+	if (intent === "undo_accept") {
+		try {
+			await undoAccept({ docId: params.id, userId: user.id })
+		} catch (e) {
+			if (e instanceof BatchError)
+				return { errorKey: "finance_verify.errors.undo_closed" }
+			throw e
+		}
+		throw redirect(`/finance/verify/${params.id}`)
+	}
 	if (intent !== "verify" && intent !== "send_back")
 		return { errorKey: "finance_verify.errors.unknown_intent" }
 	const stage = computeFinanceStage(
@@ -203,14 +215,32 @@ export async function action({ request, params }: Route.ActionArgs) {
 		// The packet becomes the next row of the open PBCC batch, its invoice PDF
 		// made on the spot. The accept stands even if this fails: the next batch
 		// takes in any accepted packet that is not in one yet.
+		let receipt: Record<string, string> = {}
 		try {
-			await addToOpenBatch({ docId: params.id, userId: user.id })
+			const { batchId } = await addToOpenBatch({
+				docId: params.id,
+				userId: user.id,
+			})
+			const row = (await loadBatchView(batchId))?.rows.find(
+				(r) => r.id === params.id,
+			)
+			if (row) receipt = { b: String(row.row), c: row.invoiceNumber }
 		} catch (error) {
 			// biome-ignore lint/suspicious/noConsole: the accept already committed; batching is retried
 			console.error(`PBCC batch: could not add ${params.id}`, error)
 		}
 		// Accept & next: straight on to the next packet, no trip back to the list.
-		throw redirect(nextId ? `/finance/verify/${nextId}` : "/finance/queue")
+		throw redirect(
+			receiptUrl(
+				nextId ? `/finance/verify/${nextId}` : "/finance/queue",
+				"accepted",
+				{
+					a: doc.avisoNumber || doc.controlNumber,
+					...receipt,
+					undo: params.id,
+				},
+			),
+		)
 	}
 
 	if (intent === "send_back") {
@@ -271,7 +301,12 @@ export default function FinanceVerify({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	return <FinanceVerifyView loaderData={loaderData} actionData={actionData} />
+	return (
+		<div className="space-y-3">
+			<ReceiptBanner />
+			<FinanceVerifyView loaderData={loaderData} actionData={actionData} />
+		</div>
+	)
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {

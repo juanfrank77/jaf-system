@@ -8,6 +8,7 @@ import {
 } from "~/components/finance-stage-table"
 import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
 import { PayrollRequestCard } from "~/components/payroll-request-card"
+import { ReceiptBanner, receiptUrl } from "~/components/receipt-banner"
 import { Badge } from "~/components/ui/badge"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
@@ -17,6 +18,7 @@ import { loadStageRows } from "~/lib/finance-stage-rows.server"
 import { FINANCE_STEPS } from "~/lib/finance-steps"
 import {
 	defaultPeriodLabel,
+	displayRequestLabel,
 	type PayrollTab,
 	parsePayrollTab,
 } from "~/lib/payroll-request-view"
@@ -131,7 +133,11 @@ export async function action({ request }: Route.ActionArgs) {
 			label,
 			excludeIds,
 		})
-		throw redirect(`/finance/payroll/${run.id}`)
+		throw redirect(
+			receiptUrl(`/finance/payroll/${run.id}`, "request_created", {
+				a: displayRequestLabel(run.label),
+			}),
+		)
 	} catch (e) {
 		if (e instanceof EmptyRunError)
 			return { errorKey: "finance_payroll.errors.empty_run" as const }
@@ -228,6 +234,7 @@ export default function FinancePayrollList({
 				<StageChip arm="A" step={3} total={FINANCE_STEPS.length} />
 			</div>
 			<FinanceStepRail current="LISTS" />
+			<ReceiptBanner />
 			<Callout title={t("finance_flow.callout.lists_title")}>
 				{t("finance_flow.callout.lists_body")}
 			</Callout>

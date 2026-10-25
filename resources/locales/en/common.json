@@ -1460,6 +1460,7 @@
 		"send_back": "Send Back to Supervisor",
 		"errors": {
 			"checks_required": "Tick all four checks before accepting.",
+			"undo_closed": "This batch is already closed, so the accept can no longer be undone.",
 			"documents_missing": "A document is missing from the packet. Send it back instead.",
 			"unknown_intent": "Unknown action.",
 			"note_required": "A send-back note is required.",
@@ -2132,6 +2133,19 @@
 			"days_one": "{{count}} day",
 			"days_other": "{{count}} days"
 		}
+	},
+	"receipt": {
+		"accepted": "{{a}} accepted · row {{b}} in the PBCC batch · invoice {{c}} · Excel row added",
+		"closed": "Batch #{{a}} closed · {{n}} packets · invoice PDFs and Excel ready",
+		"sent": "Batch #{{a}} marked sent · {{n}} Avisos ready for payroll",
+		"request_created": "Payroll request {{a}} created",
+		"request_sent": "Request {{a}} sent to Carmen · she can see it now",
+		"paid": "{{a}} paid {{b}}",
+		"view_batch": "View batch",
+		"go_payroll": "Go to Payroll →",
+		"view_waiting": "View waiting",
+		"undo": "Undo",
+		"dismiss": "Dismiss"
 	},
 	"pbcc_batch": {
 		"tab": {

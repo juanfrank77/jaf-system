@@ -40,6 +40,7 @@ import {
 	getOpenBatch,
 	markBatchSent,
 	takeOutRow,
+	undoAccept,
 } from "./pbcc-batch.server"
 import { planPackage } from "./pbcc-package.server"
 
@@ -274,6 +275,35 @@ describe("taking a row out", { timeout: 60_000 }, () => {
 			where: { closedAt: null },
 		})
 		expect((await rowsOf(next.id)).map((r) => r.id)).toEqual([b.id])
+	})
+
+	it("undoes an Accept while the batch is open, and not once it is closed", async () => {
+		const u = await user()
+		const a = await accepted()
+		const { batchId } = await addToOpenBatch({ docId: a.id, userId: u.id })
+		await undoAccept({ docId: a.id, userId: u.id })
+		const back = await db.jafInvoice.findUniqueOrThrow({ where: { id: a.id } })
+		expect(back.financeVerifiedAt).toBeNull()
+		expect(back.bankScheduleId).toBeNull()
+		expect(back.bankInvoicePdfPath).toBeNull()
+		expect(
+			await db.auditTrail.count({
+				where: { docId: a.id, action: "FINANCE_ACCEPT_UNDONE" },
+			}),
+		).toBe(1)
+		// A second undo has nothing left to undo.
+		await expect(
+			undoAccept({ docId: a.id, userId: u.id }),
+		).rejects.toMatchObject({ code: "not_in_batch" })
+
+		// Once the batch is closed it can no longer be undone.
+		const b = await accepted()
+		const placed = await addToOpenBatch({ docId: b.id, userId: u.id })
+		await closeOpenBatch({ batchId: placed.batchId, userId: u.id })
+		await expect(
+			undoAccept({ docId: b.id, userId: u.id }),
+		).rejects.toMatchObject({ code: "not_open" })
+		expect(batchId).toBeTruthy()
 	})
 
 	it("refuses a closed or sent batch, and a packet that is in no batch", async () => {

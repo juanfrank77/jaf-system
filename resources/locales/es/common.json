@@ -1460,6 +1460,7 @@
 		"send_back": "Devolver al supervisor",
 		"errors": {
 			"checks_required": "Marca las cuatro verificaciones antes de aceptar.",
+			"undo_closed": "Este lote ya está cerrado, por lo que ya no se puede deshacer la aceptación.",
 			"documents_missing": "Falta un documento en el paquete. Devuélvelo en su lugar.",
 			"unknown_intent": "Acción desconocida.",
 			"note_required": "Se requiere una nota de devolución.",
@@ -2164,6 +2165,19 @@
 			"days_one": "{{count}} día",
 			"days_other": "{{count}} días"
 		}
+	},
+	"receipt": {
+		"accepted": "{{a}} aceptado · fila {{b}} del lote PBCC · factura {{c}} · fila de Excel añadida",
+		"closed": "Lote #{{a}} cerrado · {{n}} paquetes · PDFs de facturas y Excel listos",
+		"sent": "Lote #{{a}} marcado como enviado · {{n}} Avisos listos para nómina",
+		"request_created": "Solicitud de nómina {{a}} creada",
+		"request_sent": "Solicitud {{a}} enviada a Carmen · ya la puede ver",
+		"paid": "{{a}} pagado {{b}}",
+		"view_batch": "Ver lote",
+		"go_payroll": "Ir a Nómina →",
+		"view_waiting": "Ver en espera",
+		"undo": "Deshacer",
+		"dismiss": "Cerrar"
 	},
 	"pbcc_batch": {
 		"tab": {

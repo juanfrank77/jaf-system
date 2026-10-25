@@ -1,3 +1,4 @@
+import { DEFAULT_PAY_DAY } from "~/lib/pay-day"
 import { db } from "./db.server"
 
 const DEFAULT_LC_PBCC_ADVANCE_RATE = 0.8
@@ -112,5 +113,27 @@ export async function setBankInvoicePrefix(
 		where: { key: "bank_invoice_prefix" },
 		update: { value: prefix.trim(), updatedById },
 		create: { key: "bank_invoice_prefix", value: prefix.trim(), updatedById },
+	})
+}
+
+/** Weekday brigades are paid, 0 = Sunday .. 6 = Saturday. Thursday unless set. */
+export async function getPayDayWeekday(): Promise<number> {
+	const setting = await db.systemSetting.findUnique({
+		where: { key: "pay_day_weekday" },
+	})
+	const parsed = Number.parseInt(setting?.value ?? "", 10)
+	return Number.isInteger(parsed) && parsed >= 0 && parsed <= 6
+		? parsed
+		: DEFAULT_PAY_DAY
+}
+
+export async function setPayDayWeekday(
+	weekday: number,
+	updatedById: string,
+): Promise<void> {
+	await db.systemSetting.upsert({
+		where: { key: "pay_day_weekday" },
+		update: { value: String(weekday), updatedById },
+		create: { key: "pay_day_weekday", value: String(weekday), updatedById },
 	})
 }

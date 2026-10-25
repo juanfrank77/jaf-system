@@ -13,10 +13,13 @@ const request = (
 	paidAt: null,
 	ageDays: 2,
 	pastPayDay: false,
+	dueToday: false,
 	avisoCount: 3,
 	lines: [
 		{
 			brigadeCode: "025",
+			accountCode: "025",
+			unverified: false,
 			brigadeLabel: "Alexis Díaz",
 			avisoNumbers: ["30077820"],
 			net: 131.52,
@@ -28,6 +31,8 @@ const request = (
 		},
 		{
 			brigadeCode: "009",
+			accountCode: "009",
+			unverified: false,
 			brigadeLabel: "Jesús Martínez",
 			avisoNumbers: ["10356113", "10356247"],
 			net: 76.99,

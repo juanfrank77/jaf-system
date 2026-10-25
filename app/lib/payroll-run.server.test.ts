@@ -1100,30 +1100,51 @@ describe("payroll request lifecycle", () => {
 })
 
 describe("payrollSheetLines", () => {
-	it("takes retention as 10% of the row's net and pays net less retention", () => {
-		// Per-line retention would add up to 58.01 here; the row rule gives 58.04.
-		const shareLine = (net: number, retention: number) => ({
-			net,
-			retention,
-			gross: 0,
-			adjNet: Math.round((net - retention) * 100) / 100,
-		})
+	const job = (
+		id: string,
+		code: string,
+		lines: Array<{ gross: number; sharePercent?: number }>,
+	) => ({
+		id,
+		controlNumber: id,
+		avisoNumber: id,
+		contractorAccount: { id: code, code, label: `BRIGADE ${code}` },
+		contractorShareLines: lines.map((l) => ({
+			gross: l.gross,
+			sharePercent: l.sharePercent ?? 0.65,
+		})),
+	})
+
+	it("figures the brigade row from the brigade's gross, truncated", () => {
+		// Brigade 009, gross 10,679.00: pay 6,247.21 (Net − Ret would say .22).
+		const [row] = payrollSheetLines(
+			buildJournalBlocks([job("j1", "009", [{ gross: 10679 }])]),
+		)
+		expect(row.net).toBe(6941.35)
+		expect(row.retention).toBe(694.13)
+		expect(row.toPay).toBe(6247.21)
+	})
+
+	it("pays the brigade total even when the jobs do not add up to it", () => {
 		const blocks = buildJournalBlocks([
-			{
-				id: "i1",
-				controlNumber: "MAINT-1",
-				avisoNumber: "1",
-				contractorAccount: { id: "a", code: "178", label: "ZARIEL" },
-				contractorShareLines: [
-					shareLine(290.2, 29.0),
-					shareLine(290.19, 29.01),
-				],
-			},
+			job("j1", "009", [{ gross: 5339.5 }]),
+			job("j2", "009", [{ gross: 5339.5 }]),
 		])
-		const [row] = payrollSheetLines(blocks)
-		expect(row.net).toBe(580.39)
-		expect(row.retention).toBe(58.04)
-		expect(row.toPay).toBe(522.35)
-		expect(Math.round((row.net - row.retention - row.toPay) * 100)).toBe(0)
+		// Each job: floor(5339.50 × 0.585) = 3123.60; together 6247.20.
+		expect(blocks[0].jobs.map((j) => j.adjNet)).toEqual([3123.6, 3123.6])
+		expect(blocks[0].totalSC).toBe(6247.21)
+		expect(payrollSheetLines(blocks)[0].toPay).toBe(6247.21)
+	})
+
+	it("prints D lines at 80% under the brigade's D account, marked unverified", () => {
+		const rows = payrollSheetLines(
+			buildJournalBlocks([
+				job("j1", "009", [{ gross: 1000 }, { gross: 1000, sharePercent: 0.8 }]),
+			]),
+		)
+		expect(rows.map((r) => r.brigadeCode)).toEqual(["009", "009D"])
+		expect(rows.map((r) => r.accountCode)).toEqual(["009", "009"])
+		expect(rows.map((r) => r.toPay)).toEqual([585, 720])
+		expect(rows.map((r) => r.unverified)).toEqual([false, true])
 	})
 })

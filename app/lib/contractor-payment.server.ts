@@ -1,3 +1,9 @@
+import {
+	BASE_SHARE_PERCENT,
+	D_SHARE_PERCENT,
+	percentOf,
+	shareFigures,
+} from "~/lib/contractor-share"
 import { db } from "~/lib/db.server"
 import { toNumberPrice } from "~/lib/utils"
 import { Prisma } from "../../generated/prisma/client"
@@ -5,11 +11,21 @@ import { Prisma } from "../../generated/prisma/client"
 const { Decimal } = Prisma
 type Decimal = Prisma.Decimal
 
-/** Fixed brigade share of a JAF invoice. There are no per-account or per-line
- * overrides — see docs/JAF_Finance_answer_Journey.pdf Part 2 §009D/80%.
- * Snapshotted onto each contractorShareLines row at sweep time so a later
- * catalog or rate change never rewrites an already-generated run. */
-export const CONTRACTOR_SHARE_PERCENT = 0.65
+/** Brigade share of a JAF invoice line: 65%, or 80% on machinery / truck lines
+ * (D lines). The rate goes by the LINE, read from the service code on the
+ * Aviso, never by brigade — there is no custom rate per brigade. Snapshotted
+ * onto each contractorShareLines row at sweep time so a later catalog or rate
+ * change never rewrites an already-generated run. */
+export const CONTRACTOR_SHARE_PERCENT = BASE_SHARE_PERCENT / 100
+export const D_LINE_SHARE_PERCENT = D_SHARE_PERCENT / 100
+
+/** A catalog contractor factor of 0.80 marks a D line; anything else is the base rate. */
+export function sharePercentForFactor(factor: unknown): number {
+	const f = toNumberPrice(factor)
+	return Math.abs(f - D_LINE_SHARE_PERCENT) < 1e-9
+		? D_LINE_SHARE_PERCENT
+		: CONTRACTOR_SHARE_PERCENT
+}
 
 export type ContractorPaymentLine = {
 	serviceCodeId: string
@@ -17,6 +33,8 @@ export type ContractorPaymentLine = {
 	name: string
 	qty: number
 	jafPrice: number
+	/** Fraction (0.65 or 0.8). Absent reads as the base rate. */
+	sharePercent?: number
 }
 
 export type ContractorShareLine = ContractorPaymentLine & {
@@ -58,6 +76,7 @@ function cents(value: Decimal): Decimal {
  */
 export function toContractorPaymentLines(
 	value: unknown,
+	shares?: ReadonlyMap<string, number>,
 ): ContractorPaymentLine[] {
 	if (!Array.isArray(value)) return []
 	return value.map((raw) => {
@@ -68,6 +87,9 @@ export function toContractorPaymentLines(
 			name: String(line.name ?? ""),
 			qty: toNumberPrice(line.qty),
 			jafPrice: toNumberPrice(line.unitPrice),
+			sharePercent:
+				shares?.get(String(line.serviceCodeId ?? "")) ??
+				CONTRACTOR_SHARE_PERCENT,
 		}
 	})
 }
@@ -75,30 +97,18 @@ export function toContractorPaymentLines(
 /**
  * Compute the brigade's share of an invoice.
  *
- * Rules (from docs/JAF_Finance_answer_Journey.pdf Part 1 § "How the report is built"):
- *   Net       = Gross × 0.65 (CONTRACTOR_SHARE_PERCENT), truncated to cents
- *   Retention = Net × 10%, truncated to cents  (NOT 10% of gross)
- *   Adj. Net  = Gross × 0.65 × 0.90, truncated to cents
- *
- * Adj. Net is truncated from gross, not derived as Net − Retention: the two
- * can differ by a cent, and the client's worked example ($118.45 gross →
- * $69.29) is the truncated gross × 0.585 figure.
- *
- * Per-line values are truncated independently, and every job-level total is
- * the sum of those truncated per-line values — so the stored figures, the L1
- * tiles, the packet and the Production Journal always agree. `netPayable` is
- * the sum of the lines' Adj. Net (what the brigade is actually paid).
+ * Every figure is truncated to the cent from the gross at its own level (see
+ * `shareFigures`): each line from its gross, the job's totals from the job's
+ * gross. A job with lines at two rates (65% and the 80% D lines) totals each
+ * rate on its own gross, then adds the two. So a job's total can differ from
+ * the sum of its lines by a few cents; that is expected, and the same figures
+ * feed the packet, the Production Journal and Carmen's request.
  */
 export function computeContractorPayment(
 	lines: ContractorPaymentLine[],
 ): ContractorPayment {
-	const share = new Decimal(CONTRACTOR_SHARE_PERCENT)
-	const retentionRate = new Decimal(RETENTION_RATE)
-	const keep = new Decimal(1).minus(retentionRate)
-
+	const groups = new Map<number, Decimal>()
 	let grossPayable = new Decimal(0)
-	let retentionAmount = new Decimal(0)
-	let netPayable = new Decimal(0)
 
 	const contractorShareLines: ContractorShareLine[] = (lines ?? []).map(
 		(line) => {
@@ -107,28 +117,55 @@ export function computeContractorPayment(
 					toNumberPrice(line.jafPrice),
 				),
 			)
-			const net = cents(gross.times(share))
-			const retention = cents(net.times(retentionRate))
-			const adjNet = cents(gross.times(share).times(keep))
+			const percent = percentOf(line.sharePercent)
+			const f = shareFigures(gross.toNumber(), percent)
 			grossPayable = grossPayable.plus(gross)
-			retentionAmount = retentionAmount.plus(retention)
-			netPayable = netPayable.plus(adjNet)
+			groups.set(percent, (groups.get(percent) ?? new Decimal(0)).plus(gross))
 			return {
 				...line,
 				gross: gross.toNumber(),
-				sharePercent: CONTRACTOR_SHARE_PERCENT,
-				net: net.toNumber(),
-				retention: retention.toNumber(),
-				adjNet: adjNet.toNumber(),
+				sharePercent: percent / 100,
+				net: f.net,
+				retention: f.retention,
+				adjNet: f.adjNet,
 			}
 		},
 	)
+	let retentionAmount = 0
+	let netPayable = 0
+	for (const [percent, gross] of groups) {
+		const f = shareFigures(gross.toNumber(), percent)
+		retentionAmount += f.retention
+		netPayable += f.adjNet
+	}
 	return {
 		contractorShareLines,
 		grossPayable: grossPayable.toNumber(),
-		retentionAmount: retentionAmount.toNumber(),
-		netPayable: netPayable.toNumber(),
+		retentionAmount: Math.round(retentionAmount * 100) / 100,
+		netPayable: Math.round(netPayable * 100) / 100,
 	}
+}
+
+/**
+ * The share fraction of each service code on these invoice lines, keyed by
+ * service code id, read from the catalog (one query). A code absent from the
+ * map takes the base rate.
+ */
+export async function loadLineShares(
+	lineSets: ReadonlyArray<unknown>,
+): Promise<Map<string, number>> {
+	const ids = new Set<string>()
+	for (const set of lineSets)
+		for (const l of toContractorPaymentLines(set))
+			if (l.serviceCodeId) ids.add(l.serviceCodeId)
+	if (ids.size === 0) return new Map()
+	const codes = await db.serviceCode.findMany({
+		where: { id: { in: [...ids] } },
+		select: { id: true, contractorFactor: true },
+	})
+	return new Map(
+		codes.map((c) => [c.id, sharePercentForFactor(c.contractorFactor)]),
+	)
 }
 
 /**

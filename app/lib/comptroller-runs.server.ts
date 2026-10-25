@@ -1,4 +1,9 @@
 import { db } from "~/lib/db.server"
+import {
+	buildJournalBlocks,
+	payrollSheetLines,
+	RUN_INVOICES,
+} from "~/lib/payroll-run.server"
 
 /**
  * The runs the Comptroller sees (reversed runs never appear). `toPay` is
@@ -16,14 +21,26 @@ export async function loadComptrollerRuns() {
 			generatedAt: true,
 			paidAt: true,
 			accounts: { select: { paidAt: true } },
-			// What she pays: net of retention. Never the gross (the JAF price).
-			invoices: { select: { netPayable: true } },
+			// What she pays: the brigade totals. Never the gross (the JAF price).
+			invoices: RUN_INVOICES,
 		},
 	})
+	// One total per run, the sum of its brigade rows, so every screen agrees
+	// with the request she pays from.
+	const withTotal = runs.map((r) => ({
+		...r,
+		toPayTotal:
+			Math.round(
+				payrollSheetLines(buildJournalBlocks(r.invoices)).reduce(
+					(sum, l) => sum + l.toPay,
+					0,
+				) * 100,
+			) / 100,
+	}))
 	return {
-		toPay: runs.filter((r) => !r.paidAt).reverse(),
-		paid: runs.filter((r) => r.paidAt),
-		all: runs,
+		toPay: withTotal.filter((r) => !r.paidAt).reverse(),
+		paid: withTotal.filter((r) => r.paidAt),
+		all: withTotal,
 	}
 }
 

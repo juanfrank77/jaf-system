@@ -1,6 +1,6 @@
 import { db } from "~/lib/db.server"
 import { ageDays } from "~/lib/finance-stage-rows.server"
-import { isPastPayDay } from "~/lib/pay-day"
+import { isPastPayDay, isPayDayToday } from "~/lib/pay-day"
 import {
 	displayRequestLabel,
 	type PayrollRequestView,
@@ -10,6 +10,7 @@ import {
 	payrollSheetLines,
 	RUN_INVOICES,
 } from "~/lib/payroll-run.server"
+import { getPayDayWeekday } from "~/lib/system-settings.server"
 import type { Prisma } from "../../generated/prisma/client"
 
 /**
@@ -21,6 +22,7 @@ export async function loadPayrollRequests(
 	opts: { take?: number; now?: Date } = {},
 ): Promise<PayrollRequestView[]> {
 	const now = opts.now ?? new Date()
+	const payDay = await getPayDayWeekday()
 	const runs = await db.payrollRun.findMany({
 		where: { reversedAt: null, ...where },
 		orderBy: [{ generatedAt: "desc" }],
@@ -39,7 +41,7 @@ export async function loadPayrollRequests(
 		const lines = payrollSheetLines(buildJournalBlocks(run.invoices)).map(
 			(line) => {
 				const account = run.accounts.find(
-					(a) => a.contractorAccount.code === line.brigadeCode,
+					(a) => a.contractorAccount.code === line.accountCode,
 				)
 				return {
 					...line,
@@ -59,7 +61,11 @@ export async function loadPayrollRequests(
 			ageDays: ageDays(run.sentAt ?? run.generatedAt, now),
 			pastPayDay:
 				status === "waiting" && run.sentAt
-					? isPastPayDay(run.sentAt, now)
+					? isPastPayDay(run.sentAt, now, payDay)
+					: false,
+			dueToday:
+				status === "waiting" && run.sentAt
+					? isPayDayToday(run.sentAt, now, payDay)
 					: false,
 			avisoCount: run.invoices.length,
 			lines,

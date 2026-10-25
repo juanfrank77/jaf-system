@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto"
 import { extractText } from "unpdf"
-import { type AdviceRead, parseAdvice } from "~/lib/advice-parse"
+import { type AdviceRead, isOtherJafRef, parseAdvice } from "~/lib/advice-parse"
 import { db } from "~/lib/db.server"
 import { computeInvoiceTotals } from "~/lib/invoice-totals"
 import { ocrPdfPasses } from "~/lib/po-reader.server"
@@ -322,12 +322,17 @@ export async function adviceFile(id: string) {
 	})
 }
 
+/** JA- rows are their own group, not unmatched errors (see listOtherJaf). */
+const NOT_OTHER_JAF = {
+	NOT: { invoiceRef: { startsWith: "JA-", mode: "insensitive" as const } },
+}
+
 /** Counts for the tabs. */
 export async function adviceCounts() {
 	const [pending, applied, unmatched] = await Promise.all([
 		db.paymentAdvice.count({ where: { appliedAt: null } }),
 		db.paymentAdvice.count({ where: { appliedAt: { not: null } } }),
-		db.adviceLine.count({ where: { result: "UNMATCHED" } }),
+		db.adviceLine.count({ where: { result: "UNMATCHED", ...NOT_OTHER_JAF } }),
 	])
 	return { pending, applied, unmatched }
 }
@@ -371,6 +376,7 @@ export async function listAdvices(applied: boolean) {
 			net: Number(l.net),
 			ourTotal: l.invoice ? Number(l.invoice.total) : null,
 			result: l.result,
+			otherJaf: isOtherJafRef(l.invoiceRef),
 			invoiceId: l.invoiceId,
 			/** Short paid and not yet accepted. */
 			needsAccept:
@@ -383,7 +389,7 @@ export async function listAdvices(applied: boolean) {
 
 export async function listUnmatched() {
 	const rows = await db.adviceLine.findMany({
-		where: { result: "UNMATCHED" },
+		where: { result: "UNMATCHED", ...NOT_OTHER_JAF },
 		orderBy: [{ advice: { adviceDate: "desc" } }, { position: "asc" }],
 		take: 200,
 		include: { advice: { select: { adviceDate: true, reference: true } } },
@@ -396,4 +402,28 @@ export async function listUnmatched() {
 		adviceDate: l.advice.adviceDate.toISOString(),
 		reference: l.advice.reference,
 	}))
+}
+
+/**
+ * "Other JAF invoices (JA-)": a second series Claro pays on the same advices.
+ * They are not tracked yet, so they are listed with their total instead of
+ * being counted as unmatched errors.
+ */
+export async function listOtherJaf() {
+	const rows = await db.adviceLine.findMany({
+		where: { invoiceRef: { startsWith: "JA-", mode: "insensitive" } },
+		orderBy: [{ advice: { adviceDate: "desc" } }, { position: "asc" }],
+		include: { advice: { select: { adviceDate: true, reference: true } } },
+	})
+	return {
+		total: r2(rows.reduce((s, l) => s + Number(l.net), 0)),
+		lines: rows.map((l) => ({
+			id: l.id,
+			invoiceRef: l.invoiceRef,
+			voucher: l.voucher,
+			net: Number(l.net),
+			adviceDate: l.advice.adviceDate.toISOString(),
+			reference: l.advice.reference,
+		})),
+	}
 }

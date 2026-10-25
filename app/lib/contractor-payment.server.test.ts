@@ -4,7 +4,9 @@ import {
 	computeContractorPayment,
 	resolveContractorAccount,
 	resolveContractorAccounts,
+	sharePercentForFactor,
 } from "~/lib/contractor-payment.server"
+import { shareFigures } from "~/lib/contractor-share"
 import { db } from "~/lib/db.server"
 import { makeTracker, seedContractorAccount } from "~/test/helpers"
 
@@ -26,7 +28,7 @@ describe("computeContractorPayment", () => {
 		expect(result.grossPayable).toBeCloseTo(211.71, 2)
 		// Net = truncate(211.715 × 0.65, 2) = truncate(137.61475, 2) = 137.61
 		expect(result.contractorShareLines[0].net).toBeCloseTo(137.61, 2)
-		// Retention = 10% of NET (not gross): truncate(137.61475 × 0.10, 2) = truncate(13.761475, 2) = 13.76
+		// Retention = truncate(gross × 0.065, 2) = truncate(13.76, 2) = 13.76
 		expect(result.retentionAmount).toBeCloseTo(13.76, 2)
 		// netPayable = truncate(211.715 × 0.65 × 0.90, 2) = truncate(123.853275, 2) = 123.85
 		expect(result.netPayable).toBeCloseTo(123.85, 2)
@@ -66,7 +68,7 @@ describe("computeContractorPayment", () => {
 		}
 	})
 
-	it("stored totals are exactly the sums of the per-line values", () => {
+	it("job totals are figured on the job's gross, not summed from the lines", () => {
 		const lines = [
 			{ qty: 1, jafPrice: 0.58 },
 			{ qty: 3, jafPrice: 1.07 },
@@ -79,12 +81,31 @@ describe("computeContractorPayment", () => {
 			...l,
 		}))
 		const r = computeContractorPayment(lines)
-		const sum = (f: (l: (typeof r.contractorShareLines)[number]) => number) =>
-			Math.round(r.contractorShareLines.reduce((a, l) => a + f(l), 0) * 100) /
-			100
-		expect(r.grossPayable).toBe(sum((l) => l.gross))
-		expect(r.retentionAmount).toBe(sum((l) => l.retention))
-		expect(r.netPayable).toBe(sum((l) => l.adjNet))
+		const gross = r.contractorShareLines.reduce((a, l) => a + l.gross, 0)
+		expect(r.grossPayable).toBe(Math.round(gross * 100) / 100)
+		expect(r.retentionAmount).toBe(shareFigures(r.grossPayable, 65).retention)
+		expect(r.netPayable).toBe(shareFigures(r.grossPayable, 65).adjNet)
+	})
+
+	it("pays 80% on D lines and totals each rate on its own gross", () => {
+		const line = (price: number, sharePercent: number) => ({
+			serviceCodeId: "s",
+			claroCode: "c",
+			name: "n",
+			qty: 1,
+			jafPrice: price,
+			sharePercent,
+		})
+		const r = computeContractorPayment([line(1000, 0.65), line(1000, 0.8)])
+		expect(r.contractorShareLines.map((l) => l.adjNet)).toEqual([585, 720])
+		expect(r.netPayable).toBe(1305)
+		expect(r.retentionAmount).toBe(65 + 80)
+	})
+
+	it("reads the rate off the service code: factor 0.80 is a D line", () => {
+		expect(sharePercentForFactor("0.80")).toBe(0.8)
+		expect(sharePercentForFactor(0.65)).toBe(0.65)
+		expect(sharePercentForFactor(null)).toBe(0.65)
 	})
 
 	it("returns all zeros for an empty line list, never throws", () => {

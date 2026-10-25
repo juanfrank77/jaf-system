@@ -2,6 +2,7 @@ import { db } from "~/lib/db.server"
 import { pastPayDayCutoff } from "~/lib/pay-day"
 import { armAOpenWhere } from "~/lib/payroll-run.server"
 import { sendBackIds } from "~/lib/returned-packet.server"
+import { getPayDayWeekday } from "~/lib/system-settings.server"
 import type { Prisma } from "../../generated/prisma/client"
 
 /** The three Arm A list stages. Carmen's payment is a request/brigade view, not
@@ -68,7 +69,7 @@ export async function carmenOpenSummary(
 	now: Date = new Date(),
 ): Promise<{ openAccounts: number; overdueRuns: number }> {
 	// Same rule as the pages: the pay day the request was sent for has passed.
-	const cutoff = pastPayDayCutoff(now)
+	const cutoff = pastPayDayCutoff(now, await getPayDayWeekday())
 	const [openAccounts, overdueRuns] = await Promise.all([
 		db.payrollRunAccount.count({
 			where: {

@@ -19,6 +19,7 @@ import {
 import { pastPayDayCutoff } from "~/lib/pay-day"
 import { blockedSentJobs } from "~/lib/payroll-run.server"
 import { rowAmounts } from "~/lib/pbcc-batch.server"
+import { getPayDayWeekday } from "~/lib/system-settings.server"
 
 const NEXT_UP_STAGES: { stage: ArmAListStage; step: FinanceStep }[] = [
 	{ stage: "PACKETS", step: "PACKETS" },
@@ -34,6 +35,7 @@ function itemHref(step: FinanceStep, id: string): string {
 export async function loadFinanceHome(
 	now: Date = new Date(),
 ): Promise<FinanceHome> {
+	const payDay = await getPayDayWeekday()
 	const [
 		inboxCount,
 		inboxOldest,
@@ -103,7 +105,7 @@ export async function loadFinanceHome(
 			where: {
 				paidAt: null,
 				reversedAt: null,
-				sentAt: { not: null, lt: pastPayDayCutoff(now) },
+				sentAt: { not: null, lt: pastPayDayCutoff(now, payDay) },
 			},
 			orderBy: { sentAt: "asc" },
 			select: { id: true, label: true, sentAt: true },

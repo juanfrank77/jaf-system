@@ -14,6 +14,8 @@ export type PayrollRequestView = {
 	ageDays: number
 	/** Sent, not fully paid, and the Thursday it was sent for has passed. */
 	pastPayDay: boolean
+	/** Sent, not fully paid, and today is the pay day it was sent for. */
+	dueToday: boolean
 	avisoCount: number
 	lines: Array<
 		PayrollSheetLine & {

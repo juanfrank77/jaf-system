@@ -54,13 +54,6 @@ export type ContractorPayment = {
 
 export const RETENTION_RATE = 0.1
 
-/** Truncate (never round) an exact decimal to whole cents. Money here is
- * computed in `Decimal`, not `number`: `Math.trunc(0.29 * 100) / 100` is 0.28
- * and `4.35` gives 4.34, which would short a brigade a cent on exact values. */
-function cents(value: Decimal): Decimal {
-	return value.toDecimalPlaces(2, Decimal.ROUND_DOWN)
-}
-
 /**
  * Map a `JafInvoice.jafInvoiceLines` JSON value into the shape the payment
  * computation needs.
@@ -112,11 +105,11 @@ export function computeContractorPayment(
 
 	const contractorShareLines: ContractorShareLine[] = (lines ?? []).map(
 		(line) => {
-			const gross = cents(
-				new Decimal(toNumberPrice(line.qty)).times(
-					toNumberPrice(line.jafPrice),
-				),
-			)
+			// The line's gross is the amount printed on the invoice: qty × price
+			// rounded to the cent. Only the share figures below are truncated.
+			const gross = new Decimal(toNumberPrice(line.qty))
+				.times(toNumberPrice(line.jafPrice))
+				.toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
 			const percent = percentOf(line.sharePercent)
 			const f = shareFigures(gross.toNumber(), percent)
 			grossPayable = grossPayable.plus(gross)

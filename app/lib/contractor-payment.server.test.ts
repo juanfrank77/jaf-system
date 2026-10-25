@@ -24,13 +24,13 @@ describe("computeContractorPayment", () => {
 				jafPrice: 42.343,
 			},
 		])
-		// 5 × 42.343 = 211.715 gross; truncated to 211.71
-		expect(result.grossPayable).toBeCloseTo(211.71, 2)
-		// Net = truncate(211.715 × 0.65, 2) = truncate(137.61475, 2) = 137.61
+		// 5 × 42.343 = 211.715 gross; rounded like the invoice line, 211.72
+		expect(result.grossPayable).toBeCloseTo(211.72, 2)
+		// Net = truncate(211.72 × 0.65, 2) = truncate(137.618, 2) = 137.61
 		expect(result.contractorShareLines[0].net).toBeCloseTo(137.61, 2)
-		// Retention = truncate(gross × 0.065, 2) = truncate(13.76, 2) = 13.76
+		// Retention = truncate(211.72 × 0.065, 2) = truncate(13.7618, 2) = 13.76
 		expect(result.retentionAmount).toBeCloseTo(13.76, 2)
-		// netPayable = truncate(211.715 × 0.65 × 0.90, 2) = truncate(123.853275, 2) = 123.85
+		// netPayable = truncate(211.72 × 0.585, 2) = truncate(123.8562, 2) = 123.85
 		expect(result.netPayable).toBeCloseTo(123.85, 2)
 		// sharePercent is snapshotted on every line for the generated report
 		expect(result.contractorShareLines[0].sharePercent).toBe(
@@ -106,6 +106,22 @@ describe("computeContractorPayment", () => {
 		expect(sharePercentForFactor("0.80")).toBe(0.8)
 		expect(sharePercentForFactor(0.65)).toBe(0.65)
 		expect(sharePercentForFactor(null)).toBe(0.65)
+	})
+
+	it("takes the invoice's rounded line as the gross: 29.509 × 1 -> 19.18 / 1.91 / 17.26", () => {
+		const r = computeContractorPayment([
+			{
+				serviceCodeId: "s",
+				claroCode: "c",
+				name: "n",
+				qty: 1,
+				jafPrice: 29.509,
+			},
+		])
+		expect(r.grossPayable).toBe(29.51)
+		expect(r.contractorShareLines[0].net).toBe(19.18)
+		expect(r.retentionAmount).toBe(1.91)
+		expect(r.netPayable).toBe(17.26)
 	})
 
 	it("returns all zeros for an empty line list, never throws", () => {

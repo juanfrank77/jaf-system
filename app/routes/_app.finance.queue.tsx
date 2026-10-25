@@ -6,6 +6,7 @@ import {
 	StagePagination,
 } from "~/components/finance-stage-table"
 import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
+import { ReceiptBanner, receiptUrl } from "~/components/receipt-banner"
 import { Badge } from "~/components/ui/badge"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
@@ -78,6 +79,7 @@ export default function FinancePackets({ loaderData }: Route.ComponentProps) {
 				</h1>
 				<StageChip arm="A" step={1} total={FINANCE_STEPS.length} />
 			</div>
+			<ReceiptBanner />
 			<FinanceStepRail current="PACKETS" />
 			<Callout title={t("finance_flow.callout.packets_title")}>
 				{t("finance_flow.callout.packets_body")}

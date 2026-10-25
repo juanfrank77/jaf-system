@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
 	sendInternalEmail: vi.fn(),
 	inboxNeighbors: vi.fn(),
 	addToOpenBatch: vi.fn(),
+	undoAccept: vi.fn(),
 }))
 
 vi.mock("~/lib/db.server", () => ({ db: mocks.db }))
@@ -37,6 +38,13 @@ vi.mock("~/lib/finance-pipeline.server", async (importOriginal) => ({
 }))
 vi.mock("~/lib/pbcc-batch.server", () => ({
 	addToOpenBatch: mocks.addToOpenBatch,
+	undoAccept: mocks.undoAccept,
+	BatchError: class BatchError extends Error {},
+}))
+vi.mock("~/lib/pbcc-batch-view.server", () => ({
+	loadBatchView: async () => ({
+		rows: [{ id: "job-1", row: 3, invoiceNumber: "M1730077820" }],
+	}),
 }))
 vi.mock("~/lib/finance-inbox.server", () => ({
 	inboxNeighbors: mocks.inboxNeighbors,
@@ -169,13 +177,24 @@ describe("Finance verify action guards", () => {
 
 	it("verifies without an Aviso amount and records no amount check", async () => {
 		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue(completeDoc())
+		mocks.addToOpenBatch.mockResolvedValueOnce({
+			batchId: "b1",
+			closedBatchIds: [],
+		})
 		const result = await action({
 			request: requestWith({ intent: "verify", note: "ok", ...ALL_CHECKS }),
 			params: { id: "job-1" },
 		} as any).catch((r: any) => r)
 		expect(result.status).toBe(302)
-		// Accept & next: straight to the next packet in the Inbox.
-		expect(result.headers.get("Location")).toBe("/finance/verify/job-2")
+		// Accept & next: straight to the next packet, with a receipt and an Undo.
+		const to = new URL(result.headers.get("Location"), "http://x")
+		expect(to.pathname).toBe("/finance/verify/job-2")
+		expect(Object.fromEntries(to.searchParams)).toMatchObject({
+			receipt: "accepted",
+			b: "3",
+			c: "M1730077820",
+			undo: "job-1",
+		})
 		expect(mocks.db.jafInvoice.update).toHaveBeenCalledWith(
 			expect.objectContaining({
 				data: expect.objectContaining({ financeVerifiedAt: expect.any(Date) }),
@@ -267,6 +286,16 @@ describe("Finance verify action: the accept gate and send back", () => {
 		expect(mocks.db.jafInvoice.update).not.toHaveBeenCalled()
 	})
 
+	it("undo_accept hands the packet back to the Inbox, even though it is no longer to verify", async () => {
+		mocks.computeFinanceStage.mockReturnValue("PBCC_REQUEST_PENDING")
+		const result = await run({ intent: "undo_accept" }).catch((r: any) => r)
+		expect(mocks.undoAccept).toHaveBeenCalledWith({
+			docId: "job-1",
+			userId: "finance-1",
+		})
+		expect(result.headers.get("Location")).toBe("/finance/verify/job-1")
+	})
+
 	it("puts an accepted packet in the open PBCC batch, and the accept stands if batching fails", async () => {
 		mocks.addToOpenBatch.mockResolvedValueOnce({
 			batchId: "b1",
@@ -296,7 +325,9 @@ describe("Finance verify action: the accept gate and send back", () => {
 		const result = await run({ intent: "verify", ...ALL_CHECKS }).catch(
 			(r: any) => r,
 		)
-		expect(result.headers.get("Location")).toBe("/finance/queue")
+		expect(result.headers.get("Location")).toMatch(
+			/^\/finance\/queue\?receipt=accepted&/,
+		)
 	})
 
 	it("sends back to the supervisor: releases nothing, keeps the reason, lands on the Inbox", async () => {

@@ -8,7 +8,9 @@ import {
 	PbccBatchOpenView,
 	PbccBatchTabs,
 } from "~/components/pbcc-batch-open"
+import { ReceiptBanner, receiptUrl } from "~/components/receipt-banner"
 import { Callout } from "~/components/ui/callout"
+import { db } from "~/lib/db.server"
 import { FINANCE_STEPS } from "~/lib/finance-steps"
 import {
 	BatchError,
@@ -57,7 +59,16 @@ export async function action({ request }: Route.ActionArgs) {
 			// Land on the batch just closed, with its check and Download / Mark sent.
 			const batchId = String(form.get("batchId") ?? "")
 			await closeOpenBatch({ batchId, userId: user.id })
-			return redirect(`/finance/schedules/${batchId}`)
+			const closed = await db.bankSchedule.findUniqueOrThrow({
+				where: { id: batchId },
+				select: { number: true, _count: { select: { invoices: true } } },
+			})
+			return redirect(
+				receiptUrl(`/finance/schedules/${batchId}`, "closed", {
+					a: closed.number,
+					n: closed._count.invoices,
+				}),
+			)
 		}
 		if (intent === "take_out") {
 			await takeOutRow({
@@ -97,6 +108,7 @@ export default function FinancePbccBatch({
 				<StageChip arm="A" step={2} total={FINANCE_STEPS.length} />
 			</div>
 			<FinanceStepRail current="LC_REQUEST" />
+			<ReceiptBanner />
 			<Callout title={t("finance_flow.callout.lc_request_title")}>
 				{t("finance_flow.callout.lc_request_body")}
 			</Callout>

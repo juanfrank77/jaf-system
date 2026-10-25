@@ -3,6 +3,8 @@ import { redirect, useNavigation } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
 import { PbccBatchDetailView } from "~/components/pbcc-batch-detail"
+import { ReceiptBanner, receiptUrl } from "~/components/receipt-banner"
+import { db } from "~/lib/db.server"
 import { FINANCE_STEPS } from "~/lib/finance-steps"
 import { BatchError, checkBatch, markBatchSent } from "~/lib/pbcc-batch.server"
 import { loadBatchView } from "~/lib/pbcc-batch-view.server"
@@ -48,8 +50,21 @@ export async function action({ request, params }: Route.ActionArgs) {
 			list: "",
 		}
 	try {
-		await markBatchSent({ batchId: params.id, sentById: user.id })
-		return { ok: true as const, errorKey: undefined, list: "" }
+		const { alreadySent } = await markBatchSent({
+			batchId: params.id,
+			sentById: user.id,
+		})
+		if (alreadySent) return { ok: true as const, errorKey: undefined, list: "" }
+		const sent = await db.bankSchedule.findUniqueOrThrow({
+			where: { id: params.id },
+			select: { number: true, _count: { select: { invoices: true } } },
+		})
+		return redirect(
+			receiptUrl(`/finance/schedules/${params.id}`, "sent", {
+				a: sent.number,
+				n: sent._count.invoices,
+			}),
+		)
 	} catch (e) {
 		if (!(e instanceof BatchError)) throw e
 		if (e.code === "not_found") throw new Response("Not found", { status: 404 })
@@ -77,6 +92,7 @@ export default function PbccBatchPage({
 				<StageChip arm="A" step={2} total={FINANCE_STEPS.length} />
 			</div>
 			<FinanceStepRail current="LC_REQUEST" />
+			<ReceiptBanner />
 			<PbccBatchDetailView
 				batch={batch}
 				check={check}

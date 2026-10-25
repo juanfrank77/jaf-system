@@ -4,9 +4,12 @@ import { Form, Link, redirect, useRevalidator } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
 import { PayrollRequestCard } from "~/components/payroll-request-card"
+import { ReceiptBanner, receiptUrl } from "~/components/receipt-banner"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
+import { db } from "~/lib/db.server"
 import { FINANCE_STEPS } from "~/lib/finance-steps"
+import { displayRequestLabel } from "~/lib/payroll-request-view"
 import { loadPayrollRequests } from "~/lib/payroll-request-view.server"
 import {
 	discardDraftRun,
@@ -36,7 +39,15 @@ export async function action({ request, params }: Route.ActionArgs) {
 	try {
 		if (intent === "send_run") {
 			await sendPayrollRun({ runId: params.runId, sentById: user.id })
-			throw redirect("/finance/payroll?tab=waiting")
+			const sent = await db.payrollRun.findUniqueOrThrow({
+				where: { id: params.runId },
+				select: { label: true },
+			})
+			throw redirect(
+				receiptUrl("/finance/payroll?tab=waiting", "request_sent", {
+					a: displayRequestLabel(sent.label),
+				}),
+			)
 		}
 		if (intent === "discard_run") {
 			await discardDraftRun(params.runId)
@@ -84,6 +95,7 @@ export default function FinancePayrollRequest({
 				</div>
 			</div>
 			<FinanceStepRail current="LISTS" />
+			<ReceiptBanner />
 			<Callout title={t("finance_flow.callout.lists_title")}>
 				{req.status === "draft"
 					? t("finance_payroll.draft_body")

@@ -1,11 +1,8 @@
 import { db } from "~/lib/db.server"
-import {
-	buildJournalBlocks,
-	payrollSheetLines,
-	RUN_INVOICES,
-} from "~/lib/payroll-run.server"
+import { buildJournalBlocks, RUN_INVOICES } from "~/lib/payroll-run.server"
 import { generateProductionJournalPdf } from "~/lib/pdf/production-journal.server"
 import { requireRole } from "~/lib/permissions.server"
+import { getBankInvoicePrefix } from "~/lib/system-settings.server"
 import type { Route } from "./+types/_app.finance.payroll.$runId.journal"
 
 /**
@@ -27,8 +24,15 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	if (user.role === "COMPTROLLER" && !run.sentAt) {
 		throw new Response("Not Found", { status: 404 })
 	}
-	const lines = payrollSheetLines(buildJournalBlocks(run.invoices))
-	const bytes = await generateProductionJournalPdf(run, lines)
+	// Carmen's copy goes to the brigades, so JAF's prices stay off it (D1).
+	const bytes = await generateProductionJournalPdf(
+		run,
+		buildJournalBlocks(run.invoices),
+		{
+			showPrices: user.role !== "COMPTROLLER",
+			invoicePrefix: await getBankInvoicePrefix(),
+		},
+	)
 	return new Response(new Uint8Array(bytes), {
 		headers: {
 			"Content-Type": "application/pdf",

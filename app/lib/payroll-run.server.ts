@@ -487,7 +487,7 @@ export async function closePayrollRunAccount(opts: {
 	})
 }
 
-type JournalLine = {
+export type JournalLine = {
 	/** Whole percent the line was swept at: 65, or 80 on a D line. */
 	percent: number
 	claroCode: string
@@ -501,7 +501,7 @@ type JournalLine = {
 	adjNet: number
 }
 
-type JournalJob = {
+export type JournalJob = {
 	invoiceId: string
 	controlNumber: string
 	avisoNumber: string | null
@@ -514,7 +514,7 @@ type JournalJob = {
 	adjNetRunning: number
 }
 
-type JournalBlock = {
+export type JournalBlock = {
 	/** The brigade's account code, "009D" for its D lines. */
 	brigadeCode: string
 	/** The brigade's real account (no D), what a payment is ticked against. */
@@ -614,10 +614,12 @@ export function buildJournalBlocks(
 	for (const block of blocks) {
 		block.jobs.sort((a, b) => a.controlNumber.localeCompare(b.controlNumber))
 		// Running adj. net restarts at each brigade (PDF Part 1 § "Brigade total").
-		let running = 0
+		// Adj. Net on a Sub Total is figured on the brigade's gross so far, as
+		// the paper journal does, not summed from the jobs' own Adj. Net.
+		let runningGross = 0
 		for (const job of block.jobs) {
-			running = round2(running + job.adjNet)
-			job.adjNetRunning = running
+			runningGross = round2(runningGross + job.gross)
+			job.adjNetRunning = shareFigures(runningGross, block.percent).adjNet
 		}
 		// The brigade's figures come from the brigade's gross. The running
 		// column and the jobs may differ from it by a few cents; this is what

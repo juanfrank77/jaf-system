@@ -41,12 +41,25 @@ export default function FinanceClosed({ loaderData }: Route.ComponentProps) {
 	const date = (iso: string | null) => (iso ? formatShortDate(iso) : "—")
 	return (
 		<div className="space-y-4">
-			<h1 className="text-xl font-semibold">{t("finance_closed.title")}</h1>
+			<div className="flex items-center justify-between">
+				<h1 className="text-xl font-semibold">{t("finance_closed.title")}</h1>
+				<Button
+					type="button"
+					variant="outline"
+					className="print:hidden"
+					onClick={() => window.print()}
+				>
+					{t("finance_closed.print")}
+				</Button>
+			</div>
 			<FinanceStepRail current="CLOSED" />
 			<Callout title={t("finance_closed.callout_title")}>
 				{t("finance_closed.callout_body")}
 			</Callout>
-			<Form method="get" className="flex flex-wrap items-end gap-2">
+			<Form
+				method="get"
+				className="flex flex-wrap items-end gap-2 print:hidden"
+			>
 				<Input
 					name="search"
 					defaultValue={search}

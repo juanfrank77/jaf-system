@@ -279,7 +279,7 @@ function AppShell({
 	return (
 		<Dialog.Root open={drawerOpen} onOpenChange={setDrawerOpen}>
 			<div className="flex min-h-screen flex-col bg-background">
-				<header className="sticky top-0 z-30 flex items-center gap-2 border-b border-border bg-card px-3 sm:gap-3.5 sm:px-4.5 py-2.5">
+				<header className="print:hidden sticky top-0 z-30 flex items-center gap-2 border-b border-border bg-card px-3 sm:gap-3.5 sm:px-4.5 py-2.5">
 					<Dialog.Trigger
 						className="-ml-1.5 flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground md:hidden"
 						aria-label={t("app_shell.open_menu")}
@@ -320,7 +320,7 @@ function AppShell({
 				</header>
 				<ConnectionBar state={connection} />
 				<div className="flex flex-1">
-					<aside className="hidden w-60 shrink-0 border-r border-sidebar-border bg-sidebar p-3 md:block">
+					<aside className="print:hidden hidden w-60 shrink-0 border-r border-sidebar-border bg-sidebar p-3 md:block">
 						<div className="mb-2 flex items-center gap-2.5 rounded-lg px-2.5 py-2">
 							<span className="flex size-8 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">
 								{initials(user.name)}

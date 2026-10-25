@@ -617,6 +617,21 @@ describe("parsePaidDate", () => {
 	})
 })
 
+describe("parsePaidDate, MM/DD/YYYY", () => {
+	it("reads the date as the app writes it, and refuses nonsense or the future", () => {
+		expect(parsePaidDate("10/24/2026")).toHaveProperty("date")
+		expect(parsePaidDate("24/10/2026")).toEqual({
+			errorKey: "finance_payroll.errors.invalid_date",
+		})
+		expect(parsePaidDate("12/31/2999")).toEqual({
+			errorKey: "finance_payroll.errors.future_date",
+		})
+		expect(parsePaidDate("not a date")).toEqual({
+			errorKey: "finance_payroll.errors.invalid_date",
+		})
+	})
+})
+
 describe("closePayrollRunAccount", () => {
 	async function twoAccountRun() {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))

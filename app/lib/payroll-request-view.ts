@@ -92,3 +92,10 @@ export function displayRequestLabel(label: string): string {
 export function formatShortDate(iso: string | Date): string {
 	return mmddyyyy(new Date(iso))
 }
+
+/** A package size: KB under 1 MB (a 16 KB package is not "0.0 MB"), else MB. */
+export function formatPackageSize(megabytes: number): string {
+	return megabytes < 1
+		? `${Math.max(1, Math.round(megabytes * 1024))} KB`
+		: `${megabytes.toFixed(1)} MB`
+}

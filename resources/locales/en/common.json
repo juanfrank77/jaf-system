@@ -1974,6 +1974,7 @@
 		}
 	},
 	"finance_closed": {
+		"print": "Print / Export",
 		"title": "Closed",
 		"callout_title": "Stage 4 · Closed",
 		"callout_body": "Every Aviso that is sold to PBCC and paid to its brigade. Search by work order or Aviso number; this is the backup you can print any time.",

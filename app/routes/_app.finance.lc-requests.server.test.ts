@@ -190,28 +190,36 @@ describe("PBCC batch screen", { timeout: 60_000 }, () => {
 		expect(await db.bankSchedule.count({ where: { closedAt: null } })).toBe(1)
 	})
 
-	it("closes the batch, then lists it as ready to send on the Sent tab", async () => {
+	it("closes the batch, lands on it, and lists it under Ready to send", async () => {
 		await finance()
 		await accepted()
 		const open = (await load()) as never as {
 			batch: { id: string; number: number }
 		}
-		expect(
-			await post({ intent: "close_batch", batchId: open.batch.id }),
-		).toEqual({
-			ok: true,
-		})
-		const sent = (await load("?tab=sent")) as never as {
+		const closed = (await post({
+			intent: "close_batch",
+			batchId: open.batch.id,
+		})) as Response
+		expect(closed.status).toBe(302)
+		expect(closed.headers.get("Location")).toBe(
+			`/finance/schedules/${open.batch.id}`,
+		)
+		const ready = (await load("?tab=ready")) as never as {
 			tab: string
 			batches: { id: string; status: string; count: number }[]
-			openBatch: { id: string }
+			readyCount: number
 		}
-		expect(sent.tab).toBe("sent")
-		expect(sent.batches.find((b) => b.id === open.batch.id)).toMatchObject({
+		expect(ready.tab).toBe("ready")
+		expect(ready.batches.find((b) => b.id === open.batch.id)).toMatchObject({
 			status: "closed",
 			count: 1,
 		})
-		expect(sent.openBatch.id).not.toBe(open.batch.id)
+		expect(ready.readyCount).toBeGreaterThanOrEqual(1)
+		// A closed, unsent batch is not under Sent.
+		const sent = (await load("?tab=sent")) as never as {
+			batches: { id: string }[]
+		}
+		expect(sent.batches.some((b) => b.id === open.batch.id)).toBe(false)
 	})
 
 	it("returns typed errors: empty batch, row with no area, take-out without a reason", async () => {

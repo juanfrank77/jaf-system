@@ -8,7 +8,9 @@ import { formatMoney } from "~/lib/utils"
 
 type ActionResult = { errorKey?: string; list?: string } | undefined
 
-function Tabs({ tab }: { tab: "open" | "sent" }) {
+export type BatchTab = "open" | "ready" | "sent"
+
+function Tabs({ tab, readyCount = 0 }: { tab: BatchTab; readyCount?: number }) {
 	const { t } = useTranslation()
 	const cls = (active: boolean) =>
 		active
@@ -18,6 +20,14 @@ function Tabs({ tab }: { tab: "open" | "sent" }) {
 		<nav className="flex border-b">
 			<Link to="?tab=open" className={cls(tab === "open")}>
 				{t("pbcc_batch.tab.open")}
+			</Link>
+			<Link to="?tab=ready" className={cls(tab === "ready")}>
+				{t("pbcc_batch.tab.ready")}
+				{readyCount > 0 ? (
+					<Badge variant="warn" className="ml-1.5">
+						{readyCount}
+					</Badge>
+				) : null}
 			</Link>
 			<Link to="?tab=sent" className={cls(tab === "sent")}>
 				{t("pbcc_batch.tab.sent")}
@@ -156,10 +166,10 @@ export function PbccBatchOpenView({
 /** The Sent tab: closed batches waiting to be sent, then the ones already sent. */
 export function PbccBatchListView({
 	batches,
-	openBatch,
+	empty,
 }: {
 	batches: BatchSummary[]
-	openBatch: { id: string }
+	empty: string
 }) {
 	const { t, i18n } = useTranslation()
 	const date = (iso: string) =>
@@ -168,15 +178,8 @@ export function PbccBatchListView({
 		})
 	return (
 		<div className="space-y-2">
-			<p className="text-sm">
-				<Link to="?tab=open" className="underline">
-					{t("pbcc_batch.open_batch")}
-				</Link>
-			</p>
 			{batches.length === 0 ? (
-				<p className="text-sm text-muted-foreground">
-					{t("pbcc_batch.none_sent")}
-				</p>
+				<p className="text-sm text-muted-foreground">{empty}</p>
 			) : (
 				<ul className="divide-y rounded-lg border bg-card text-sm">
 					{batches.map((b) => (

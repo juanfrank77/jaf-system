@@ -2052,6 +2052,7 @@
 	"pbcc_batch": {
 		"tab": {
 			"open": "Abierto",
+			"ready": "Listo para enviar",
 			"sent": "Enviados"
 		},
 		"open_heading": "Lote PBCC · abierto",
@@ -2080,7 +2081,8 @@
 		},
 		"packets_one": "{{count}} paquete",
 		"packets_other": "{{count}} paquetes",
-		"none_sent": "Aún no hay lotes cerrados.",
+		"none_ready": "No hay lotes cerrados pendientes de enviar.",
+		"none_sent": "Aún no hay lotes enviados.",
 		"open_batch": "Lote abierto",
 		"detail": {
 			"heading_closed": "Lote PBCC #{{number}} · cerrado, listo para enviar",

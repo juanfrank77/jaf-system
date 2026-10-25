@@ -10,6 +10,7 @@ const line = (over: object) => ({
 	net: 100,
 	ourTotal: 100,
 	result: "MATCHED" as const,
+	otherJaf: false,
 	invoiceId: "i1",
 	needsAccept: false,
 	...over,
@@ -32,12 +33,14 @@ const card = (over: object = {}) => ({
 			net: 90,
 			ourTotal: 100,
 			result: "SHORT",
+			otherJaf: false,
 			invoiceId: "i2",
 		}),
 		line({
 			id: "l3",
 			invoiceRef: "M19-9999",
 			result: "UNMATCHED",
+			otherJaf: false,
 			invoiceId: null,
 			ourTotal: null,
 		}),
@@ -59,6 +62,7 @@ describe("PaymentAdviceView", () => {
 							tab="upload"
 							advices={[card()]}
 							unmatched={[]}
+							otherJaf={{ total: 0, lines: [] }}
 						/>
 					),
 				},
@@ -84,6 +88,7 @@ describe("PaymentAdviceView", () => {
 							tab="upload"
 							advices={[card({ totalOk: false, rowsTotal: 180 })]}
 							unmatched={[]}
+							otherJaf={{ total: 0, lines: [] }}
 						/>
 					),
 				},

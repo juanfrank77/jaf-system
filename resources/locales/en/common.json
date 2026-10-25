@@ -982,14 +982,27 @@
 			"invalid_tolerance": "Tolerance must be a non-negative number.",
 			"unknown_intent": "Unknown action.",
 			"invalid_lc_pbcc_rate": "Enter a rate greater than 0 and no greater than 1.",
-			"invalid_bank_prefix": "Use 1–8 letters or digits."
+			"invalid_bank_prefix": "Use 1–8 letters or digits.",
+			"invalid_pay_day": "Choose a day of the week."
 		},
 		"lc_pbcc_heading": "LC/PBCC advance rate",
 		"lc_pbcc_description": "PBCC advance is currently {current}% of the verified invoice total. Keep IVU separate.",
 		"lc_pbcc_label": "Advance rate (decimal)",
 		"bank_prefix_heading": "Bank invoice prefix",
 		"bank_prefix_description": "Contract prefix on bank invoice numbers, e.g. M17 gives M17-10354739. Current: {{current}}.",
-		"bank_prefix_label": "Prefix"
+		"bank_prefix_label": "Prefix",
+		"pay_day_heading": "Pay day",
+		"pay_day_description": "The weekday brigades are paid. A payroll request is due on the first one after it is sent: yellow that day, red from the day after.",
+		"pay_day_label": "Pay day",
+		"weekday": {
+			"0": "Sunday",
+			"1": "Monday",
+			"2": "Tuesday",
+			"3": "Wednesday",
+			"4": "Thursday",
+			"5": "Friday",
+			"6": "Saturday"
+		}
 	},
 	"admin_catalog": {
 		"title": "Service Catalog",
@@ -2215,7 +2228,10 @@
 			"future_date": "The paid date cannot be in the future.",
 			"empty_run": "No payroll request could be made — every sold Aviso is held back or has no contractor account mapped.",
 			"already_sent": "This request has already been sent to Carmen."
-		}
+		},
+		"due_today": "Pay day today",
+		"d_unverified": "D line · retention not confirmed yet",
+		"d_note": "D rows are machinery / truck lines paid at 80%. Their retention is not confirmed with Lissette yet."
 	},
 	"qty_stepper": {
 		"decrease": "Decrease",
@@ -2560,7 +2576,8 @@
 			"matched": "Match → closes PO",
 			"short": "Short paid {{diff}}",
 			"already_paid": "Already paid",
-			"unmatched": "Not in system"
+			"unmatched": "Not in system",
+			"other_jaf": "Other JAF invoice"
 		},
 		"errors": {
 			"no_file": "Choose the advice PDF.",
@@ -2575,7 +2592,10 @@
 			"reason_required": "A reason is required to accept a short pay.",
 			"invoice_not_found": "No invoice with that number.",
 			"line_not_unmatched": "This row is already matched."
-		}
+		},
+		"other_jaf_title": "Other JAF invoices (JA-) - not tracked yet",
+		"other_jaf_body": "{{count}} rows in Claro's second invoice series. They are kept with the advice and counted in its total, but are not matched against our invoices yet.",
+		"other_jaf_summary": "Other JAF (JA-) {{count}} · {{total}}"
 	},
 	"aviso_record": {
 		"source": {

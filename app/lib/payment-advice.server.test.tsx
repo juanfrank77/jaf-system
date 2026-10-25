@@ -13,6 +13,7 @@ import {
 	applyAdvice,
 	ingestAdvice,
 	linkLine,
+	listOtherJaf,
 } from "~/lib/payment-advice.server"
 import {
 	makeTracker,
@@ -132,6 +133,26 @@ describe("Payment Advice", () => {
 		})
 		expect(doc.receivableClosedAt).not.toBeNull()
 		expect((await adviceCounts()).unmatched).toBeGreaterThanOrEqual(1)
+	}, 60000)
+
+	it("keeps JA- rows as their own group, not as unmatched errors", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const a = await invoiceFor(u.id)
+		const before = await adviceCounts()
+		const beforeJa = await listOtherJaf()
+		const bytes = await advicePdf([
+			...head(ref()),
+			row(a.seq, 5920050318, a.total),
+			"JA-1616276 5920042289 03.06.2026 1,399.06 (0.00) 0.00 1,399.06",
+			`Total $${(a.total + 1399.06).toFixed(2)}`,
+		])
+		const { id } = await ingestAdvice({ name: "ja.pdf", bytes }, u.id)
+		expect((await adviceCounts()).unmatched).toBe(before.unmatched)
+		const ja = await listOtherJaf()
+		expect(ja.lines.length).toBe(beforeJa.lines.length + 1)
+		expect(ja.total).toBeCloseTo(beforeJa.total + 1399.06, 2)
+		expect(ja.lines.some((l) => l.invoiceRef === "JA-1616276")).toBe(true)
+		await applyAdvice(id, u.id)
 	}, 60000)
 
 	it("refuses the same advice twice, even saved as another file", async () => {

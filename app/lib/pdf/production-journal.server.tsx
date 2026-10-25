@@ -49,7 +49,7 @@ const fmt = (n: number) => n.toFixed(2)
 
 /**
  * Render the payroll request sheet Carmen pays from: one line per brigade with
- * the Aviso #s it covers, net (65% of the pre-IVU labor), the 10% retention and
+ * the Aviso #s it covers, net (65% of the pre-IVU labor, 80% on D rows), the 10% retention and
  * what to pay. It is built from `PayrollSheetLine`, which has no gross and no
  * service-line detail, so the JAF price cannot reach Carmen's page (Rule 6).
  */
@@ -81,7 +81,7 @@ export async function generateProductionJournalPdf(
 					<Text style={[styles.cell, { width: COL.brigade }]}>Brigade</Text>
 					<Text style={[styles.cell, { width: COL.avisos }]}>Avisos</Text>
 					<Text style={[styles.cell, { width: COL.net, textAlign: "right" }]}>
-						Net 65%
+						Net
 					</Text>
 					<Text style={[styles.cell, { width: COL.ret, textAlign: "right" }]}>
 						10% ret.
@@ -94,6 +94,7 @@ export async function generateProductionJournalPdf(
 					<View key={l.brigadeCode} style={styles.row} wrap={false}>
 						<Text style={[styles.cell, { width: COL.brigade }]}>
 							{l.brigadeCode} — {l.brigadeLabel}
+							{l.unverified ? " (D · 80%, ret. unverified)" : ""}
 						</Text>
 						<Text style={[styles.cell, { width: COL.avisos }]}>
 							{l.avisoNumbers.join(" · ") || "—"}

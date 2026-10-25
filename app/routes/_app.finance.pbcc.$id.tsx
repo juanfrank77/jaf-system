@@ -12,6 +12,7 @@ import {
 	type ContractorPayment,
 	type ContractorShareLine,
 	computeContractorPayment,
+	loadLineShares,
 	payeeCode,
 	resolveContractorAccount,
 	toContractorPaymentLines,
@@ -95,7 +96,12 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 				retentionAmount: toNumberPrice(doc.retentionAmount),
 				netPayable: toNumberPrice(doc.netPayable),
 			}
-		: computeContractorPayment(toContractorPaymentLines(doc.jafInvoiceLines))
+		: computeContractorPayment(
+				toContractorPaymentLines(
+					doc.jafInvoiceLines,
+					await loadLineShares([doc.jafInvoiceLines]),
+				),
+			)
 
 	return {
 		doc,

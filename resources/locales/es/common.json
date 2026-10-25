@@ -982,14 +982,27 @@
 			"invalid_tolerance": "La tolerancia debe ser un número no negativo.",
 			"unknown_intent": "Acción desconocida.",
 			"invalid_lc_pbcc_rate": "Ingrese una tasa mayor que 0 y no mayor que 1.",
-			"invalid_bank_prefix": "Use de 1 a 8 letras o dígitos."
+			"invalid_bank_prefix": "Use de 1 a 8 letras o dígitos.",
+			"invalid_pay_day": "Elige un día de la semana."
 		},
 		"lc_pbcc_heading": "Tasa de anticipo LC/PBCC",
 		"lc_pbcc_description": "El anticipo de PBCC es actualmente {current}% del total de factura verificado. IVU se mantiene separado.",
 		"lc_pbcc_label": "Tasa de anticipo (decimal)",
 		"bank_prefix_heading": "Prefijo de factura al banco",
 		"bank_prefix_description": "Prefijo de contrato en los números de factura al banco, p. ej. M17 da M17-10354739. Actual: {{current}}.",
-		"bank_prefix_label": "Prefijo"
+		"bank_prefix_label": "Prefijo",
+		"pay_day_heading": "Día de pago",
+		"pay_day_description": "El día de la semana en que se paga a las brigadas. Una solicitud de nómina vence el primero después de enviarse: amarilla ese día, roja desde el día siguiente.",
+		"pay_day_label": "Día de pago",
+		"weekday": {
+			"0": "Domingo",
+			"1": "Lunes",
+			"2": "Martes",
+			"3": "Miércoles",
+			"4": "Jueves",
+			"5": "Viernes",
+			"6": "Sábado"
+		}
 	},
 	"admin_catalog": {
 		"title": "Catálogo de servicios",
@@ -2215,7 +2228,10 @@
 			"future_date": "La fecha de pago no puede estar en el futuro.",
 			"empty_run": "No se pudo hacer ninguna solicitud de nómina: todos los Avisos vendidos están retenidos o no tienen cuenta de contratista asignada.",
 			"already_sent": "Esta solicitud ya fue enviada a Carmen."
-		}
+		},
+		"due_today": "Hoy es día de pago",
+		"d_unverified": "Línea D · retención sin confirmar",
+		"d_note": "Las filas D son líneas de maquinaria / camión pagadas al 80%. Su retención aún no está confirmada con Lissette."
 	},
 	"qty_stepper": {
 		"decrease": "Disminuir",
@@ -2560,7 +2576,8 @@
 			"matched": "Coincide → cierra el PO",
 			"short": "Pago parcial {{diff}}",
 			"already_paid": "Ya pagada",
-			"unmatched": "No está en el sistema"
+			"unmatched": "No está en el sistema",
+			"other_jaf": "Otra factura JAF"
 		},
 		"errors": {
 			"no_file": "Elija el PDF del aviso de pago.",
@@ -2575,7 +2592,10 @@
 			"reason_required": "Se requiere un motivo para aceptar un pago parcial.",
 			"invoice_not_found": "No hay una factura con ese número.",
 			"line_not_unmatched": "Esta fila ya tiene coincidencia."
-		}
+		},
+		"other_jaf_title": "Otras facturas JAF (JA-) - aún sin seguimiento",
+		"other_jaf_body": "{{count}} filas de la segunda serie de facturas de Claro. Se guardan con el aviso de pago y cuentan en su total, pero aún no se cotejan con nuestras facturas.",
+		"other_jaf_summary": "Otras JAF (JA-) {{count}} · {{total}}"
 	},
 	"aviso_record": {
 		"source": {

@@ -15,6 +15,8 @@ vi.mock("~/lib/system-settings.server", () => ({
 	setLcPbccAdvanceRate: vi.fn(),
 	getBankInvoicePrefix: vi.fn(),
 	setBankInvoicePrefix: vi.fn(),
+	getPayDayWeekday: vi.fn().mockResolvedValue(4),
+	setPayDayWeekday: vi.fn(),
 }))
 
 import { requireRole } from "~/lib/permissions.server"
@@ -64,6 +66,7 @@ describe("GET /admin/settings", () => {
 			avisoAmountTolerance: 0.01,
 			lcPbccAdvanceRate: 0.8,
 			bankInvoicePrefix: "M17",
+			payDayWeekday: 4,
 		})
 	})
 })

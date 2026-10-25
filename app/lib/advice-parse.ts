@@ -38,6 +38,9 @@ const MONTHS: Record<string, string> = {
 	dic: "12",
 }
 
+/** A JA- row is JAF's own second series: not one of the Claro invoices we track yet. */
+export const isOtherJafRef = (ref: string) => /^JA-/i.test(ref)
+
 const money = (s: string) => Number(s.replace(/[,$\s]/g, ""))
 const MONEY_RE = /\$?\s*(?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2}/g
 // With a dash any run of digits is a number; without one it needs 3+ ("M193423").

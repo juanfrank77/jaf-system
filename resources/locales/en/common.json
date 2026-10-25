@@ -1437,6 +1437,7 @@
 			"precert": "Pre-cert signed"
 		},
 		"accept_next": "Accept & next",
+		"add_note": "Add note",
 		"position": "{{position}} of {{total}}",
 		"prev": "Prev",
 		"next": "Next",
@@ -2136,6 +2137,7 @@
 		}
 	},
 	"receipt": {
+		"counter": "Reviewed {{reviewed}} · {{left}} left",
 		"accepted": "{{a}} accepted · row {{b}} in the PBCC batch · invoice {{c}} · Excel row added",
 		"closed": "Batch #{{a}} closed · {{n}} packets · invoice PDFs and Excel ready",
 		"sent": "Batch #{{a}} marked sent · {{n}} Avisos ready for payroll",
@@ -2397,6 +2399,8 @@
 		"callout_body": "Open a request, pay each brigade in WinPay, then tick it here. The pay date starts as today; change it if you paid on another day. Finance sees each tick right away.",
 		"paid_button": "Paid",
 		"paid_by": "Paid {{date}} by {{name}}",
+		"select_all": "Select all",
+		"mark_selected": "Mark {{count}} selected paid",
 		"undo": "Undo",
 		"undo_reason": "Reason for undoing",
 		"pay_date": "Pay date",

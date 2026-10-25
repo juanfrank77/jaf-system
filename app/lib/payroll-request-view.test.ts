@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
 	displayRequestLabel,
+	formatPackageSize,
 	formatShortDate,
 	highestRequestNumber,
 	parsePayrollTab,
@@ -69,5 +70,13 @@ describe("displayRequestLabel", () => {
 		expect(displayRequestLabel("10/10/2026 – 10/23/2026")).toBe(
 			"10/10/2026 – 10/23/2026",
 		)
+	})
+})
+
+describe("formatPackageSize", () => {
+	it("shows KB under 1 MB and MB above", () => {
+		expect(formatPackageSize(16 / 1024)).toBe("16 KB")
+		expect(formatPackageSize(0)).toBe("1 KB")
+		expect(formatPackageSize(18.24)).toBe("18.2 MB")
 	})
 })

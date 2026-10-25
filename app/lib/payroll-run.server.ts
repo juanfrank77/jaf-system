@@ -88,16 +88,19 @@ export function parsePaidDate(raw: string | null | undefined):
 	  } {
 	const value = raw?.trim()
 	if (!value) return { errorKey: "finance_payroll.errors.missing_fields" }
-	if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+	// Typed as MM/DD/YYYY, as the whole app writes dates; a picker's YYYY-MM-DD still works.
+	const us = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value)
+	const iso = us ? `${us[3]}-${us[1]}-${us[2]}` : value
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
 		return { errorKey: "finance_payroll.errors.invalid_date" }
 	}
-	const date = new Date(`${value}T12:00:00`)
+	const date = new Date(`${iso}T12:00:00`)
 	if (Number.isNaN(date.getTime())) {
 		return { errorKey: "finance_payroll.errors.invalid_date" }
 	}
 	// Compare calendar days (YYYY-MM-DD sorts lexically), not instants: "today"
 	// is valid at any hour. Today is the Puerto Rico calendar day.
-	if (value > puertoRicoToday()) {
+	if (iso > puertoRicoToday()) {
 		return { errorKey: "finance_payroll.errors.future_date" }
 	}
 	return { date }

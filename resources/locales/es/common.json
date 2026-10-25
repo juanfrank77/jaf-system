@@ -2122,6 +2122,7 @@
 		}
 	},
 	"finance_closed": {
+		"print": "Imprimir / Exportar",
 		"title": "Cerrados",
 		"callout_title": "Etapa 4 · Cerrados",
 		"callout_body": "Cada Aviso vendido a PBCC y pagado a su brigada. Busca por orden de trabajo o número de Aviso; es el respaldo que puedes imprimir cuando quieras.",

@@ -159,6 +159,8 @@ export default function ComptrollerPayrollRun({
 	const { req, today } = loaderData
 	const { t } = useTranslation()
 	const submitting = useNavigation().state !== "idle"
+	const [y, m, d] = today.split("-")
+	const todayUs = `${m}/${d}/${y}`
 	const [picked, setPicked] = useState<string[]>([])
 	const unpaid = req.lines.filter((l) => !l.paidAt)
 	const errorKey =
@@ -217,12 +219,14 @@ export default function ComptrollerPayrollRun({
 							{t("comptroller_payroll.pay_date")}
 						</span>
 						<input
-							type="date"
+							type="text"
+							inputMode="numeric"
 							name="paidDate"
 							required
-							defaultValue={today}
-							max={today}
-							className="border rounded px-2 py-1 text-xs"
+							pattern="\d{2}/\d{2}/\d{4}"
+							placeholder="MM/DD/YYYY"
+							defaultValue={todayUs}
+							className="border rounded px-2 py-1 text-xs w-28"
 						/>
 					</label>
 					<Button
@@ -331,12 +335,14 @@ export default function ComptrollerPayrollRun({
 													{t("comptroller_payroll.pay_date")}
 												</span>
 												<input
-													type="date"
+													type="text"
+													inputMode="numeric"
 													name="paidDate"
 													required
-													defaultValue={today}
-													max={today}
-													className="border rounded px-2 py-1 text-xs"
+													pattern="\d{2}/\d{2}/\d{4}"
+													placeholder="MM/DD/YYYY"
+													defaultValue={todayUs}
+													className="border rounded px-2 py-1 text-xs w-28"
 												/>
 											</label>
 											<Button type="submit" size="xs" disabled={submitting}>

@@ -3,6 +3,7 @@ import { Form, Link } from "react-router"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
+import { formatShortDate } from "~/lib/payroll-request-view"
 import type { BatchSummary, BatchView } from "~/lib/pbcc-batch-view"
 import { formatMoney } from "~/lib/utils"
 
@@ -184,11 +185,8 @@ export function PbccBatchListView({
 	batches: BatchSummary[]
 	empty: string
 }) {
-	const { t, i18n } = useTranslation()
-	const date = (iso: string) =>
-		new Date(iso).toLocaleDateString(i18n.language, {
-			timeZone: "America/Puerto_Rico",
-		})
+	const { t } = useTranslation()
+	const date = (iso: string) => formatShortDate(iso)
 	return (
 		<div className="space-y-2">
 			{batches.length === 0 ? (

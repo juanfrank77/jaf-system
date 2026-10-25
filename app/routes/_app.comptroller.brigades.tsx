@@ -565,11 +565,22 @@ export default function ComptrollerBrigades({
 							return (
 								<Fragment key={brigade.id}>
 									<tr className="hover:bg-muted">
-										<td className="px-4 py-3 font-medium">{brigade.name}</td>
+										<td className="px-4 py-3 font-medium">
+											{brigade.code ? (
+												<span className="font-mono">{brigade.code} </span>
+											) : null}
+											{brigade.name}
+										</td>
 										<td className="px-4 py-3 text-muted-foreground">
 											{brigade.area}
 										</td>
-										<td className="px-4 py-3 text-muted-foreground">
+										<td
+											className={
+												brigade.active && members.length === 0
+													? "px-4 py-3 font-medium text-status-warn"
+													: "px-4 py-3 text-muted-foreground"
+											}
+										>
 											{members.map((m) => m.name).join(", ") ||
 												t("comptroller_brigades.no_members")}
 										</td>

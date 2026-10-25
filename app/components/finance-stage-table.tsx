@@ -9,6 +9,8 @@ export type StageRow = {
 	controlNumber: string
 	avisoNumber: string | null
 	contractorLabel: string | null
+	/** The brigade # the Aviso is paid through ("025"), shown before the name. */
+	brigadeCode?: string | null
 	supervisorName?: string | null
 	ageDays: number
 	amount: number
@@ -78,7 +80,12 @@ export function FinanceStageTable({
 								)}
 							</td>
 							<td className="p-2">{r.avisoNumber ?? "—"}</td>
-							<td className="p-2">{r.contractorLabel ?? "—"}</td>
+							<td className="p-2">
+								{r.brigadeCode ? (
+									<span className="font-mono">{r.brigadeCode} </span>
+								) : null}
+								{r.contractorLabel ?? "—"}
+							</td>
 							{showDocs && <td className="p-2">{r.supervisorName ?? "—"}</td>}
 							<td className="p-2 text-right font-mono">
 								{formatMoney(r.amount)}

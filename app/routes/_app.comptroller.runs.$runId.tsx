@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, Link, redirect, useNavigation } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
@@ -90,6 +91,40 @@ export async function action({ request, params }: Route.ActionArgs) {
 		)
 	}
 
+	if (intent === "pay_accounts") {
+		const sent = await db.payrollRun.count({
+			where: { id: params.runId, sentAt: { not: null } },
+		})
+		if (sent === 0) throw new Response("Not Found", { status: 404 })
+		const ids = form
+			.getAll("accountId")
+			.filter((v): v is string => typeof v === "string" && v !== "")
+		if (ids.length === 0) {
+			return { errorKey: "finance_payroll.errors.missing_fields" as const }
+		}
+		const parsed = parsePaidDate(form.get("paidDate") as string | null)
+		if ("errorKey" in parsed) return { errorKey: parsed.errorKey }
+		for (const accountId of ids) {
+			try {
+				await closePayrollRunAccount({
+					runId: params.runId,
+					accountId,
+					paidById: user.id,
+					paidDate: parsed.date,
+				})
+			} catch (e) {
+				// Already paid (stale tab): that brigade is done, carry on.
+				if (!(e instanceof Response && e.status === 409)) throw e
+			}
+		}
+		return redirect(
+			receiptUrl(`/comptroller/runs/${params.runId}`, "paid", {
+				a: `${ids.length} brigades`,
+				b: formatShortDate(parsed.date),
+			}),
+		)
+	}
+
 	if (intent === "undo_paid") {
 		const accountId = form.get("accountId")
 		const reason = String(form.get("reason") ?? "").trim()
@@ -124,6 +159,8 @@ export default function ComptrollerPayrollRun({
 	const { req, today } = loaderData
 	const { t } = useTranslation()
 	const submitting = useNavigation().state !== "idle"
+	const [picked, setPicked] = useState<string[]>([])
+	const unpaid = req.lines.filter((l) => !l.paidAt)
 	const errorKey =
 		actionData && "errorKey" in actionData ? actionData.errorKey : null
 	const error = errorKey
@@ -156,6 +193,47 @@ export default function ComptrollerPayrollRun({
 				{t("comptroller_payroll.download_pdf")}
 			</a>
 
+			{unpaid.length > 1 && (
+				<Form
+					id="bulk-pay"
+					method="post"
+					className="flex flex-wrap items-center gap-3 text-sm"
+				>
+					<input type="hidden" name="intent" value="pay_accounts" />
+					<label className="flex items-center gap-1.5">
+						<input
+							type="checkbox"
+							checked={picked.length === unpaid.length}
+							onChange={(e) =>
+								setPicked(
+									e.target.checked ? unpaid.map((l) => l.accountId) : [],
+								)
+							}
+						/>
+						{t("comptroller_payroll.select_all")}
+					</label>
+					<label className="flex items-center gap-1 text-xs">
+						<span className="text-muted-foreground">
+							{t("comptroller_payroll.pay_date")}
+						</span>
+						<input
+							type="date"
+							name="paidDate"
+							required
+							defaultValue={today}
+							max={today}
+							className="border rounded px-2 py-1 text-xs"
+						/>
+					</label>
+					<Button
+						type="submit"
+						size="sm"
+						disabled={submitting || picked.length === 0}
+					>
+						{t("comptroller_payroll.mark_selected", { count: picked.length })}
+					</Button>
+				</Form>
+			)}
 			<div className="overflow-x-auto bg-card border rounded-lg">
 				<table className="w-full text-sm">
 					<thead>
@@ -172,6 +250,24 @@ export default function ComptrollerPayrollRun({
 						{req.lines.map((l) => (
 							<tr key={l.accountId} className="border-b last:border-0">
 								<td className="p-2">
+									{unpaid.length > 1 && !l.paidAt ? (
+										<input
+											type="checkbox"
+											form="bulk-pay"
+											name="accountId"
+											value={l.accountId}
+											checked={picked.includes(l.accountId)}
+											onChange={(e) =>
+												setPicked((prev) =>
+													e.target.checked
+														? [...prev, l.accountId]
+														: prev.filter((id) => id !== l.accountId),
+												)
+											}
+											aria-label={l.brigadeCode}
+											className="mr-2"
+										/>
+									) : null}
 									<span className="font-mono">{l.brigadeCode}</span>{" "}
 									<span className="text-muted-foreground">
 										{l.brigadeLabel}

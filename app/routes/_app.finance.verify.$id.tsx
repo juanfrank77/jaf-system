@@ -16,6 +16,7 @@ import {
 import { VERIFY_CHECKS as CHECKS } from "~/lib/finance-verify-checks"
 import { computeInvoiceTotals } from "~/lib/invoice-totals"
 import { packetDocuments } from "~/lib/packet-documents"
+import { puertoRicoToday } from "~/lib/payroll-run.server"
 import { addToOpenBatch, BatchError, undoAccept } from "~/lib/pbcc-batch.server"
 import { loadBatchView } from "~/lib/pbcc-batch-view.server"
 import { isTerminalStatus } from "~/lib/permissions"
@@ -167,7 +168,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 		)
 		if (present.some((d) => !d.href))
 			return { errorKey: "finance_verify.errors.documents_missing" }
-		const { nextId } = await inboxNeighbors(params.id)
+		const { nextId, total } = await inboxNeighbors(params.id)
 		// No Aviso-amount check (F2): verifying never asks for or compares one.
 		const note = (form.get("note") as string | null)?.trim() || null
 		await db.$transaction([
@@ -190,6 +191,15 @@ export async function action({ request, params }: Route.ActionArgs) {
 		// The packet becomes the next row of the open PBCC batch, its invoice PDF
 		// made on the spot. The accept stands even if this fails: the next batch
 		// takes in any accepted packet that is not in one yet.
+		// "Reviewed 12 · 28 left": this user's accepts today, and what is still waiting.
+		const dayStart = new Date(`${puertoRicoToday()}T00:00:00-04:00`)
+		const reviewed = await db.auditTrail.count({
+			where: {
+				userId: user.id,
+				action: "FINANCE_VERIFIED",
+				timestamp: { gte: dayStart },
+			},
+		})
 		let receipt: Record<string, string> = {}
 		try {
 			const { batchId } = await addToOpenBatch({
@@ -213,6 +223,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 					a: doc.avisoNumber || doc.controlNumber,
 					...receipt,
 					undo: params.id,
+					reviewed,
+					left: Math.max(total - 1, 0),
 				},
 			),
 		)

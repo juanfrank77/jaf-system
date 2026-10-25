@@ -80,11 +80,14 @@ const load = (runId: string) =>
 		context: {},
 	} as never)
 
-function post(runId: string, fields: Record<string, string>) {
+function post(runId: string, fields: Record<string, string | string[]>) {
+	const body = new URLSearchParams()
+	for (const [k, v] of Object.entries(fields))
+		for (const one of Array.isArray(v) ? v : [v]) body.append(k, one)
 	return action({
 		request: new Request(`http://localhost/comptroller/runs/${runId}`, {
 			method: "POST",
-			body: new URLSearchParams(fields),
+			body,
 		}),
 		params: { runId },
 		context: {},
@@ -264,6 +267,25 @@ describe("pay_account", () => {
 
 		// A replay (double-click, stale tab) is treated as success, not an error.
 		expect(((await post(run.id, fields)) as Response).status).toBe(302)
+	})
+
+	it("pays several brigades at once with one date, skipping any already paid", async () => {
+		const { accounts, run } = await seedRun(2)
+		await post(run.id, {
+			intent: "pay_account",
+			accountId: accounts[0].id,
+			paidDate: puertoRicoToday(),
+		})
+		const result = (await post(run.id, {
+			intent: "pay_accounts",
+			accountId: accounts.map((a) => a.id),
+			paidDate: puertoRicoToday(),
+		})) as Response
+		expect(result.status).toBe(302)
+		const rows = await db.payrollRunAccount.findMany({
+			where: { payrollRunId: run.id },
+		})
+		expect(rows.every((r) => r.paidAt)).toBe(true)
 	})
 
 	it("undoes a tick made today with a reason, and reopens the brigade", async () => {

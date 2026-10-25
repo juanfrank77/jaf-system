@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
 		jafInvoice: { findUniqueOrThrow: vi.fn(), update: vi.fn() },
 		user: { findUniqueOrThrow: vi.fn() },
 		serviceCode: { findMany: vi.fn(async (): Promise<unknown[]> => []) },
-		auditTrail: { create: vi.fn() },
+		auditTrail: { create: vi.fn(), count: vi.fn(async () => 7) },
 		notification: { create: vi.fn() },
 		$transaction: vi.fn(),
 	},
@@ -194,6 +194,7 @@ describe("Finance verify action guards", () => {
 			b: "3",
 			c: "M1730077820",
 			undo: "job-1",
+			reviewed: "7",
 		})
 		expect(mocks.db.jafInvoice.update).toHaveBeenCalledWith(
 			expect.objectContaining({

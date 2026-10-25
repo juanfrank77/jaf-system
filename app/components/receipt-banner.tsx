@@ -59,11 +59,20 @@ export function ReceiptBanner() {
 	}
 	const undo = params.get("undo")
 	const rest = new URLSearchParams(params)
-	for (const k of ["receipt", "a", "b", "c", "n", "undo"]) rest.delete(k)
+	for (const k of ["receipt", "a", "b", "c", "n", "undo", "reviewed", "left"])
+		rest.delete(k)
 	const dismiss = `${location.pathname}${rest.size ? `?${rest}` : ""}`
 	return (
 		<Callout title={`✓ ${messages[key as ReceiptKey]}`} tone="ok">
 			<span className="inline-flex flex-wrap items-center gap-3 align-middle">
+				{params.get("reviewed") ? (
+					<span>
+						{t("receipt.counter", {
+							reviewed: params.get("reviewed") ?? "0",
+							left: params.get("left") ?? "0",
+						})}
+					</span>
+				) : null}
 				{receipt.to && receipt.link ? (
 					<Link to={receipt.to} className="underline">
 						{links[receipt.link]}

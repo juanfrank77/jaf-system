@@ -1325,6 +1325,7 @@
 			"precert": "Precertificación firmada"
 		},
 		"accept_next": "Aceptar y siguiente",
+		"add_note": "Añadir nota",
 		"position": "{{position}} de {{total}}",
 		"prev": "Anterior",
 		"next": "Siguiente",
@@ -2052,6 +2053,7 @@
 		}
 	},
 	"receipt": {
+		"counter": "Revisados {{reviewed}} · quedan {{left}}",
 		"accepted": "{{a}} aceptado · fila {{b}} del lote PBCC · factura {{c}} · fila de Excel añadida",
 		"closed": "Lote #{{a}} cerrado · {{n}} paquetes · PDFs de facturas y Excel listos",
 		"sent": "Lote #{{a}} marcado como enviado · {{n}} Avisos listos para nómina",
@@ -2281,6 +2283,8 @@
 		"callout_body": "Abra una solicitud, pague cada brigada en WinPay y márquela aquí. La fecha de pago empieza en hoy; cámbiela si pagó otro día. Finanzas ve cada marca al instante.",
 		"paid_button": "Pagado",
 		"paid_by": "Pagado {{date}} por {{name}}",
+		"select_all": "Seleccionar todo",
+		"mark_selected": "Marcar {{count}} seleccionados como pagados",
 		"undo": "Deshacer",
 		"undo_reason": "Motivo para deshacer",
 		"pay_date": "Fecha de pago",

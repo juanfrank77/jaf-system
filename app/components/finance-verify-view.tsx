@@ -10,7 +10,7 @@ import { Badge } from "~/components/ui/badge"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
 import { Checkbox } from "~/components/ui/checkbox"
-import { Textarea } from "~/components/ui/textarea"
+import { Input } from "~/components/ui/input"
 import { FINANCE_STEPS } from "~/lib/finance-steps"
 import { VERIFY_CHECKS as CHECKS } from "~/lib/finance-verify-checks"
 import { formatMoney, formatUnitPrice } from "~/lib/utils"
@@ -50,6 +50,8 @@ function VerifyPacket({ loaderData, actionData }: ViewProps) {
 
 	const cannotVerify =
 		stage !== "TO_VERIFY" || doc.status === "LC_REQUEST_GENERATED"
+	const [noteOpen, setNoteOpen] = useState(false)
+	const [sendBackOpen, setSendBackOpen] = useState(false)
 	const [checks, setChecks] = useState({
 		invoice: false,
 		aviso: false,
@@ -424,15 +426,18 @@ function VerifyPacket({ loaderData, actionData }: ViewProps) {
 			)}
 
 			{stage === "TO_VERIFY" && doc.status !== "LC_REQUEST_GENERATED" && (
-				<div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-start gap-4 border-t bg-card p-3 shadow-card">
-					<Form method="post" className="space-y-3">
-						<input type="hidden" name="intent" value="verify" />
-						<fieldset className="space-y-2">
+				<div className="sticky bottom-0 z-10 -mx-1 border-t bg-card p-2 shadow-card">
+					<div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+						<Form
+							method="post"
+							className="flex flex-wrap items-center gap-x-4 gap-y-2"
+						>
+							<input type="hidden" name="intent" value="verify" />
 							{CHECKS.map((c) => (
 								<label
 									key={c}
 									htmlFor={`check_${c}`}
-									className="flex items-center gap-2 text-sm"
+									className="flex items-center gap-1.5 text-sm"
 								>
 									<Checkbox
 										id={`check_${c}`}
@@ -445,38 +450,62 @@ function VerifyPacket({ loaderData, actionData }: ViewProps) {
 									{t(`finance_verify.checks.${c}`)}
 								</label>
 							))}
-						</fieldset>
-						<Textarea
-							name="note"
-							rows={2}
-							placeholder={t("finance_verify.verify_note_placeholder")}
-						/>
-						<Button type="submit" disabled={cannotVerify || !readyToAccept}>
-							{t("finance_verify.accept_next")}
-						</Button>
-						{cannotVerify && (
-							<p className="text-sm text-status-warn">
-								{t("finance_verify.cannot_verify_hint")}
-							</p>
+							{noteOpen && (
+								<Input
+									name="note"
+									className="h-8 w-56"
+									placeholder={t("finance_verify.verify_note_placeholder")}
+								/>
+							)}
+							<Button
+								type="submit"
+								size="sm"
+								disabled={cannotVerify || !readyToAccept}
+							>
+								{t("finance_verify.accept_next")}
+							</Button>
+						</Form>
+						<button
+							type="button"
+							className="text-sm text-muted-foreground underline"
+							onClick={() => setNoteOpen((v) => !v)}
+						>
+							{t("finance_verify.add_note")}
+						</button>
+						{sendBackOpen ? (
+							<Form method="post" className="flex items-center gap-2">
+								<input type="hidden" name="intent" value="send_back" />
+								<Input
+									name="note"
+									required
+									className="h-8 w-64"
+									placeholder={t("finance_verify.send_back_placeholder")}
+								/>
+								<Button type="submit" size="sm" variant="outline">
+									{t("finance_verify.send_back")}
+								</Button>
+							</Form>
+						) : (
+							<Button
+								type="button"
+								size="sm"
+								variant="outline"
+								onClick={() => setSendBackOpen(true)}
+							>
+								{t("finance_verify.send_back")}
+							</Button>
 						)}
-						{error?.errorKey && (
-							<p className="text-sm text-status-danger">
-								{t(error.errorKey as ParseKeys)}
-							</p>
-						)}
-					</Form>
-					<Form method="post" className="space-y-3">
-						<input type="hidden" name="intent" value="send_back" />
-						<Textarea
-							name="note"
-							rows={2}
-							required
-							placeholder={t("finance_verify.send_back_placeholder")}
-						/>
-						<Button type="submit" variant="outline">
-							{t("finance_verify.send_back")}
-						</Button>
-					</Form>
+					</div>
+					{cannotVerify && (
+						<p className="mt-1 text-sm text-status-warn">
+							{t("finance_verify.cannot_verify_hint")}
+						</p>
+					)}
+					{error?.errorKey && (
+						<p className="mt-1 text-sm text-status-danger">
+							{t(error.errorKey as ParseKeys)}
+						</p>
+					)}
 				</div>
 			)}
 			{stage !== "TO_VERIFY" && (

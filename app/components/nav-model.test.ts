@@ -150,13 +150,10 @@ describe("navGroupsFor", () => {
 		])
 	})
 
-	it("gives COMPTROLLER its own dashboard, then Lists, Runs to pay, Paid runs, and a Team group with Brigades and a Soon Installers", () => {
+	it("gives COMPTROLLER its own dashboard, one Payroll requests item, and a Team group with Brigades and a Soon Installers", () => {
 		expect(tos(navGroupsFor("COMPTROLLER"))).toEqual([
 			["overview", ["/comptroller"]],
-			[
-				"money",
-				["/comptroller/lists", "/comptroller/to-pay", "/comptroller/paid"],
-			],
+			["money", ["/comptroller/to-pay"]],
 			["team", ["/comptroller/brigades", "/comptroller/installers"]],
 		])
 		const installers = navGroupsFor("COMPTROLLER")
@@ -210,6 +207,18 @@ describe("isNavItemActive", () => {
 
 	it("never matches a different path", () => {
 		expect(isNavItemActive("/comptroller/paid", at("/comptroller/lists"))).toBe(
+			false,
+		)
+	})
+
+	it("keeps Payroll requests lit on the Paid tab and on a request page", () => {
+		expect(
+			isNavItemActive("/comptroller/to-pay", at("/comptroller/paid")),
+		).toBe(true)
+		expect(
+			isNavItemActive("/comptroller/to-pay", at("/comptroller/runs/abc")),
+		).toBe(true)
+		expect(isNavItemActive("/comptroller/to-pay", at("/comptroller"))).toBe(
 			false,
 		)
 	})

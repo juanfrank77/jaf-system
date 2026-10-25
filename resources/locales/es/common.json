@@ -234,7 +234,7 @@
 			"warehouse_serials": "Registro de seriales",
 			"warehouse_movements": "Registro de movimientos",
 			"comptroller_lists": "Listas de Lissette",
-			"comptroller_to_pay": "Corridas por pagar",
+			"comptroller_to_pay": "Solicitudes de nómina",
 			"comptroller_paid": "Corridas pagadas",
 			"comptroller_brigades": "Brigadas",
 			"comptroller_installers": "Instaladores",
@@ -2395,6 +2395,8 @@
 		}
 	},
 	"comptroller_payroll": {
+		"tab_to_pay": "Por pagar",
+		"tab_paid": "Pagadas",
 		"title": "Brigadas · nómina",
 		"callout_title": "Su paso",
 		"callout_body": "Abra una solicitud, pague cada brigada en WinPay y márquela aquí. La fecha de pago empieza en hoy; cámbiela si pagó otro día. Finanzas ve cada marca al instante.",

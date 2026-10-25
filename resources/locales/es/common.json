@@ -2358,6 +2358,8 @@
 			"missing_fields": "Se requiere la fecha de pago.",
 			"invalid_date": "No se pudo interpretar esa fecha.",
 			"future_date": "La fecha de pago no puede estar en el futuro.",
+			"undo_reason": "Indica un motivo para deshacer un pago.",
+			"undo_expired": "Solo se puede deshacer un pago marcado hoy.",
 			"empty_run": "No se pudo hacer ninguna solicitud de nómina: todos los Avisos vendidos están retenidos o no tienen cuenta de contratista asignada.",
 			"already_sent": "Esta solicitud ya fue enviada a Carmen."
 		},
@@ -2394,6 +2396,8 @@
 		"callout_body": "Abra una solicitud, pague cada brigada en WinPay y márquela aquí. La fecha de pago empieza en hoy; cámbiela si pagó otro día. Finanzas ve cada marca al instante.",
 		"paid_button": "Pagado",
 		"paid_by": "Pagado {{date}} por {{name}}",
+		"undo": "Deshacer",
+		"undo_reason": "Motivo para deshacer",
 		"pay_date": "Fecha de pago",
 		"empty": "Aún no hay solicitudes.",
 		"back": "Volver a solicitudes",

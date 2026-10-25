@@ -22,6 +22,8 @@ export type PayrollRequestView = {
 			accountId: string
 			paidAt: string | null
 			paidByName: string | null
+			/** Ticked today, so Carmen can still undo it. */
+			undoable: boolean
 		}
 	>
 }

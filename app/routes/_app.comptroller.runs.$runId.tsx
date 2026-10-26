@@ -10,9 +10,12 @@ import { db } from "~/lib/db.server"
 import { formatShortDate } from "~/lib/payroll-request-view"
 import { loadPayrollRequests } from "~/lib/payroll-request-view.server"
 import {
+	askAboutPayrollRunAccount,
 	closePayrollRunAccount,
+	holdPayrollRunAccount,
 	parsePaidDate,
 	puertoRicoToday,
+	releasePayrollRunAccount,
 	undoPayrollRunAccount,
 } from "~/lib/payroll-run.server"
 import { requireRole } from "~/lib/permissions.server"
@@ -33,6 +36,9 @@ const ERROR_KEYS = {
 	"finance_payroll.errors.future_date": "finance_payroll.errors.future_date",
 	"finance_payroll.errors.undo_reason": "finance_payroll.errors.undo_reason",
 	"finance_payroll.errors.undo_expired": "finance_payroll.errors.undo_expired",
+	"finance_payroll.errors.on_hold": "finance_payroll.errors.on_hold",
+	"finance_payroll.errors.note_required":
+		"finance_payroll.errors.note_required",
 } as const
 
 type ActionErrorKey = keyof typeof ERROR_KEYS
@@ -77,6 +83,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 		} catch (e) {
 			// Already paid (double-click, stale tab): the brigade IS paid, so
 			// show success. 403/404 and everything else still propagate.
+			if (e instanceof Response && e.status === 423)
+				return { errorKey: "finance_payroll.errors.on_hold" as const }
 			if (!(e instanceof Response && e.status === 409)) throw e
 		}
 		const acc = await db.contractorAccount.findUnique({
@@ -113,8 +121,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 					paidDate: parsed.date,
 				})
 			} catch (e) {
-				// Already paid (stale tab): that brigade is done, carry on.
-				if (!(e instanceof Response && e.status === 409)) throw e
+				// Already paid (stale tab) or on hold: skip it, carry on with the rest.
+				if (!(e instanceof Response && [409, 423].includes(e.status))) throw e
 			}
 		}
 		return redirect(
@@ -123,6 +131,39 @@ export async function action({ request, params }: Route.ActionArgs) {
 				b: formatShortDate(parsed.date),
 			}),
 		)
+	}
+
+	if (intent === "hold" || intent === "release" || intent === "ask") {
+		const accountId = form.get("accountId")
+		if (typeof accountId !== "string" || !accountId) {
+			return { errorKey: "finance_payroll.errors.missing_fields" as const }
+		}
+		const text = String(form.get("text") ?? "").trim()
+		if (intent !== "release" && !text) {
+			return { errorKey: "finance_payroll.errors.note_required" as const }
+		}
+		try {
+			if (intent === "hold")
+				await holdPayrollRunAccount({
+					runId: params.runId,
+					accountId,
+					userId: user.id,
+					reason: text,
+				})
+			else if (intent === "ask")
+				await askAboutPayrollRunAccount({
+					runId: params.runId,
+					accountId,
+					userId: user.id,
+					note: text,
+				})
+			else await releasePayrollRunAccount({ runId: params.runId, accountId })
+		} catch (e) {
+			if (e instanceof Response && e.status === 409)
+				return { ok: true as const }
+			throw e
+		}
+		return { ok: true as const }
 	}
 
 	if (intent === "undo_paid") {
@@ -162,7 +203,7 @@ export default function ComptrollerPayrollRun({
 	const [y, m, d] = today.split("-")
 	const todayUs = `${m}/${d}/${y}`
 	const [picked, setPicked] = useState<string[]>([])
-	const unpaid = req.lines.filter((l) => !l.paidAt)
+	const unpaid = req.lines.filter((l) => !l.paidAt && !l.holdReason)
 	const errorKey =
 		actionData && "errorKey" in actionData ? actionData.errorKey : null
 	const error = errorKey
@@ -322,33 +363,113 @@ export default function ComptrollerPayrollRun({
 												</Form>
 											) : null}
 										</div>
-									) : (
-										<Form method="post" className="flex items-center gap-2">
-											<input type="hidden" name="intent" value="pay_account" />
-											<input
-												type="hidden"
-												name="accountId"
-												value={l.accountId}
-											/>
-											<label className="flex items-center gap-1 text-xs">
-												<span className="text-muted-foreground">
-													{t("comptroller_payroll.pay_date")}
-												</span>
+									) : l.holdReason ? (
+										<div className="space-y-1">
+											<Badge variant="danger">
+												{t("comptroller_payroll.held", {
+													reason: l.holdReason,
+												})}
+											</Badge>
+											<Form method="post">
+												<input type="hidden" name="intent" value="release" />
 												<input
-													type="text"
-													inputMode="numeric"
-													name="paidDate"
-													required
-													pattern="\d{2}/\d{2}/\d{4}"
-													placeholder="MM/DD/YYYY"
-													defaultValue={todayUs}
-													className="border rounded px-2 py-1 text-xs w-28"
+													type="hidden"
+													name="accountId"
+													value={l.accountId}
 												/>
-											</label>
-											<Button type="submit" size="xs" disabled={submitting}>
-												{t("comptroller_payroll.paid_button")}
-											</Button>
-										</Form>
+												<Button
+													type="submit"
+													size="xs"
+													variant="outline"
+													disabled={submitting}
+												>
+													{t("comptroller_payroll.release")}
+												</Button>
+											</Form>
+										</div>
+									) : (
+										<div className="space-y-2">
+											<Form method="post" className="flex items-center gap-2">
+												<input
+													type="hidden"
+													name="intent"
+													value="pay_account"
+												/>
+												<input
+													type="hidden"
+													name="accountId"
+													value={l.accountId}
+												/>
+												<label className="flex items-center gap-1 text-xs">
+													<span className="text-muted-foreground">
+														{t("comptroller_payroll.pay_date")}
+													</span>
+													<input
+														type="text"
+														inputMode="numeric"
+														name="paidDate"
+														required
+														pattern="\d{2}/\d{2}/\d{4}"
+														placeholder="MM/DD/YYYY"
+														defaultValue={todayUs}
+														className="border rounded px-2 py-1 text-xs w-28"
+													/>
+												</label>
+												<Button type="submit" size="xs" disabled={submitting}>
+													{t("comptroller_payroll.paid_button")}
+												</Button>
+											</Form>
+											<div className="flex flex-wrap items-center gap-2">
+												{["hold", "ask"].map((intent) => (
+													<Form
+														key={intent}
+														method="post"
+														className="flex items-center gap-1"
+													>
+														<input type="hidden" name="intent" value={intent} />
+														<input
+															type="hidden"
+															name="accountId"
+															value={l.accountId}
+														/>
+														<input
+															name="text"
+															required
+															placeholder={t(
+																intent === "hold"
+																	? "comptroller_payroll.hold_reason"
+																	: "comptroller_payroll.ask_note",
+															)}
+															aria-label={t(
+																intent === "hold"
+																	? "comptroller_payroll.hold_reason"
+																	: "comptroller_payroll.ask_note",
+															)}
+															className="border rounded px-2 py-1 text-xs w-36"
+														/>
+														<Button
+															type="submit"
+															size="xs"
+															variant="outline"
+															disabled={submitting}
+														>
+															{t(
+																intent === "hold"
+																	? "comptroller_payroll.hold"
+																	: "comptroller_payroll.ask",
+															)}
+														</Button>
+													</Form>
+												))}
+											</div>
+											{l.askNote ? (
+												<p className="text-xs text-muted-foreground">
+													{t("comptroller_payroll.you_asked", {
+														note: l.askNote,
+													})}
+												</p>
+											) : null}
+										</div>
 									)}
 								</td>
 							</tr>

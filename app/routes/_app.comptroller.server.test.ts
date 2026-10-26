@@ -288,6 +288,62 @@ describe("pay_account", () => {
 		expect(rows.every((r) => r.paidAt)).toBe(true)
 	})
 
+	it("holds a line with a reason: it cannot be ticked until released, and Lissette is told", async () => {
+		const { accounts, run } = await seedRun(1)
+		const pay = {
+			intent: "pay_account",
+			accountId: accounts[0].id,
+			paidDate: puertoRicoToday(),
+		}
+		expect(
+			await post(run.id, { intent: "hold", accountId: accounts[0].id }),
+		).toMatchObject({ errorKey: "finance_payroll.errors.note_required" })
+		await post(run.id, {
+			intent: "hold",
+			accountId: accounts[0].id,
+			text: "paid a different amount in WinPay",
+		})
+		const held = await db.payrollRunAccount.findFirstOrThrow({
+			where: { payrollRunId: run.id },
+		})
+		expect(held.holdReason).toBe("paid a different amount in WinPay")
+		expect(await post(run.id, pay)).toMatchObject({
+			errorKey: "finance_payroll.errors.on_hold",
+		})
+		await post(run.id, { intent: "release", accountId: accounts[0].id })
+		expect(((await post(run.id, pay)) as Response).status).toBe(302)
+		const after = await db.payrollRunAccount.findFirstOrThrow({
+			where: { payrollRunId: run.id },
+		})
+		expect(after.holdReason).toBeNull()
+		expect(after.paidAt).not.toBeNull()
+		const notes = await db.notification.findMany({
+			where: { message: { contains: "paid a different amount in WinPay" } },
+		})
+		expect(notes.length).toBeGreaterThan(0)
+		await db.notification.deleteMany({
+			where: { id: { in: notes.map((n) => n.id) } },
+		})
+	})
+
+	it("keeps a note on a line for Lissette without changing its state", async () => {
+		const { accounts, run } = await seedRun(1)
+		await post(run.id, {
+			intent: "ask",
+			accountId: accounts[0].id,
+			text: "is the 009D share 80%?",
+		})
+		const row = await db.payrollRunAccount.findFirstOrThrow({
+			where: { payrollRunId: run.id },
+		})
+		expect(row.askNote).toBe("is the 009D share 80%?")
+		expect(row.paidAt).toBeNull()
+		expect(row.holdReason).toBeNull()
+		await db.notification.deleteMany({
+			where: { message: { contains: "is the 009D share 80%?" } },
+		})
+	})
+
 	it("undoes a tick made today with a reason, and reopens the brigade", async () => {
 		const { accounts, run } = await seedRun(1)
 		const fields = {

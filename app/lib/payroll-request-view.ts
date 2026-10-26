@@ -24,6 +24,10 @@ export type PayrollRequestView = {
 			paidByName: string | null
 			/** Ticked today, so Carmen can still undo it. */
 			undoable: boolean
+			/** Carmen's Hold: why the line is not being paid, null when it is not held. */
+			holdReason: string | null
+			/** Carmen's open question for Lissette on this line. */
+			askNote: string | null
 		}
 	>
 }

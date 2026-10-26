@@ -2209,6 +2209,7 @@
 		}
 	},
 	"finance_payroll": {
+		"asked": "Carmen pregunta: {{note}}",
 		"tab": {
 			"ready": "Listos",
 			"waiting": "Esperando a Carmen",
@@ -2243,6 +2244,7 @@
 		"back": "← Nómina a Carmen",
 		"download_journal_pdf": "⬇ Hoja de solicitud (PDF)",
 		"status": {
+			"held": "Retenido: {{reason}}",
 			"waiting": "Esperando a Carmen",
 			"paid": "Pagado {{date}} por {{name}}"
 		},
@@ -2261,6 +2263,8 @@
 			"future_date": "La fecha de pago no puede estar en el futuro.",
 			"undo_reason": "Indica un motivo para deshacer un pago.",
 			"undo_expired": "Solo se puede deshacer un pago marcado hoy.",
+			"on_hold": "Esta línea está retenida. Libérela primero.",
+			"note_required": "Escriba primero el motivo o la nota.",
 			"empty_run": "No se pudo hacer ninguna solicitud de nómina: todos los Avisos vendidos están retenidos o no tienen cuenta de contratista asignada.",
 			"already_sent": "Esta solicitud ya fue enviada a Carmen."
 		},
@@ -2292,6 +2296,13 @@
 		}
 	},
 	"comptroller_payroll": {
+		"held": "En espera: {{reason}}",
+		"release": "Liberar",
+		"hold": "Retener",
+		"hold_reason": "Motivo para retener",
+		"ask": "Preguntar",
+		"ask_note": "Nota para Lissette",
+		"you_asked": "Preguntaste: {{note}}",
 		"tab_to_pay": "Por pagar",
 		"tab_paid": "Pagadas",
 		"title": "Brigadas · nómina",

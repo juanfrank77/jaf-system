@@ -2209,6 +2209,7 @@
 		}
 	},
 	"finance_payroll": {
+		"asked": "Carmen asks: {{note}}",
 		"tab": {
 			"ready": "Ready",
 			"waiting": "Waiting on Carmen",
@@ -2243,6 +2244,7 @@
 		"back": "← Payroll to Carmen",
 		"download_journal_pdf": "⬇ Request sheet (PDF)",
 		"status": {
+			"held": "On hold: {{reason}}",
 			"waiting": "Waiting on Carmen",
 			"paid": "Paid {{date}} by {{name}}"
 		},
@@ -2261,6 +2263,8 @@
 			"future_date": "The paid date cannot be in the future.",
 			"undo_reason": "Give a reason to undo a payment.",
 			"undo_expired": "Only a payment ticked today can be undone.",
+			"on_hold": "This line is on hold. Release it first.",
+			"note_required": "Write the reason or the note first.",
 			"empty_run": "No payroll request could be made — every sold Aviso is held back or has no contractor account mapped.",
 			"already_sent": "This request has already been sent to Carmen."
 		},
@@ -2292,6 +2296,13 @@
 		}
 	},
 	"comptroller_payroll": {
+		"held": "On hold: {{reason}}",
+		"release": "Release",
+		"hold": "Hold",
+		"hold_reason": "Reason to hold",
+		"ask": "Ask",
+		"ask_note": "Note for Lissette",
+		"you_asked": "You asked: {{note}}",
 		"tab_to_pay": "To pay",
 		"tab_paid": "Paid",
 		"title": "Brigades · payroll",

@@ -29,6 +29,8 @@ const request = (
 			paidAt: "2026-10-24T15:00:00Z",
 			paidByName: "Carmen",
 			undoable: false,
+			holdReason: null,
+			askNote: null,
 		},
 		{
 			brigadeCode: "009",
@@ -43,6 +45,8 @@ const request = (
 			paidAt: null,
 			paidByName: null,
 			undoable: false,
+			holdReason: null,
+			askNote: null,
 		},
 	],
 	...over,

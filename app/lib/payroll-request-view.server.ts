@@ -49,6 +49,8 @@ export async function loadPayrollRequests(
 					accountId: account?.contractorAccountId ?? "",
 					paidAt: account?.paidAt?.toISOString() ?? null,
 					paidByName: account?.paidBy?.name ?? null,
+					holdReason: account?.holdReason ?? null,
+					askNote: account?.askNote ?? null,
 					undoable:
 						!!account?.paidAt &&
 						!run.reversedAt &&

@@ -13,6 +13,7 @@ import {
 } from "~/lib/contractor-share"
 import { db } from "~/lib/db.server"
 import {
+	displayRequestLabel,
 	highestRequestNumber,
 	payPeriodLabel,
 	requestNumberLabel,
@@ -452,6 +453,15 @@ export async function closePayrollRunAccount(opts: {
 				status: 409,
 			})
 		}
+		// A line on hold is not paid until it is released.
+		const held = await tx.payrollRunAccount.count({
+			where: {
+				payrollRunId: opts.runId,
+				contractorAccountId: opts.accountId,
+				heldAt: { not: null },
+			},
+		})
+		if (held > 0) throw new Response("Line is on hold", { status: 423 })
 		// Conditional claim: same double-submit guard as the old whole-run close.
 		const claimed = await tx.payrollRunAccount.updateMany({
 			where: {
@@ -505,6 +515,91 @@ export async function closePayrollRunAccount(opts: {
 		}
 		return { runClosed: true }
 	})
+}
+
+const lineKey = (runId: string, accountId: string) => ({
+	payrollRunId_contractorAccountId: {
+		payrollRunId: runId,
+		contractorAccountId: accountId,
+	},
+})
+
+async function tellFinance(message: string) {
+	const users = await db.user.findMany({
+		where: { role: "FINANCE", active: true },
+		select: { id: true },
+	})
+	if (users.length > 0)
+		await db.notification.createMany({
+			data: users.map((u) => ({ userId: u.id, message })),
+		})
+}
+
+async function openLine(runId: string, accountId: string) {
+	const line = await db.payrollRunAccount.findUnique({
+		where: lineKey(runId, accountId),
+		select: {
+			paidAt: true,
+			contractorAccount: { select: { code: true } },
+			payrollRun: { select: { label: true, sentAt: true, reversedAt: true } },
+		},
+	})
+	if (!line || !line.payrollRun.sentAt || line.payrollRun.reversedAt)
+		throw new Response("Not Found", { status: 404 })
+	return line
+}
+
+/**
+ * Carmen's Hold: the line cannot be ticked paid until she releases it.
+ * Lissette sees it in red with the reason and corrects or confirms.
+ */
+export async function holdPayrollRunAccount(opts: {
+	runId: string
+	accountId: string
+	userId: string
+	reason: string
+}): Promise<void> {
+	const reason = opts.reason.trim()
+	if (!reason) throw new Response("A reason is required", { status: 400 })
+	const line = await openLine(opts.runId, opts.accountId)
+	if (line.paidAt) throw new Response("Already paid", { status: 409 })
+	await db.payrollRunAccount.update({
+		where: lineKey(opts.runId, opts.accountId),
+		data: { heldAt: new Date(), heldById: opts.userId, holdReason: reason },
+	})
+	await tellFinance(
+		`Carmen put ${line.contractorAccount.code} on hold (${displayRequestLabel(line.payrollRun.label)}): ${reason}`,
+	)
+}
+
+export async function releasePayrollRunAccount(opts: {
+	runId: string
+	accountId: string
+}): Promise<void> {
+	await openLine(opts.runId, opts.accountId)
+	await db.payrollRunAccount.update({
+		where: lineKey(opts.runId, opts.accountId),
+		data: { heldAt: null, heldById: null, holdReason: null },
+	})
+}
+
+/** Carmen's Ask: a note on the line for Lissette. It changes nothing else. */
+export async function askAboutPayrollRunAccount(opts: {
+	runId: string
+	accountId: string
+	userId: string
+	note: string
+}): Promise<void> {
+	const note = opts.note.trim()
+	if (!note) throw new Response("A note is required", { status: 400 })
+	const line = await openLine(opts.runId, opts.accountId)
+	await db.payrollRunAccount.update({
+		where: lineKey(opts.runId, opts.accountId),
+		data: { askNote: note, askAt: new Date(), askById: opts.userId },
+	})
+	await tellFinance(
+		`Carmen asks about ${line.contractorAccount.code} (${displayRequestLabel(line.payrollRun.label)}): ${note}`,
+	)
 }
 
 /**

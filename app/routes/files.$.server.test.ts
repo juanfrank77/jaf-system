@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
 		user: { findUniqueOrThrow: vi.fn(), findUnique: vi.fn() },
 		jafInvoice: { findUnique: vi.fn() },
 		installCompletion: { findUnique: vi.fn(), findFirst: vi.fn() },
+		sentReport: { findUnique: vi.fn() },
 	},
 	requireSession: vi.fn(),
 }))
@@ -442,5 +443,53 @@ describe("files loader — Finance and Comptroller never see the Prefield or blu
 		for (const rel of rels) {
 			expect((await as("SUPERVISOR", rel)).status).toBe(200)
 		}
+	})
+})
+
+describe("files loader — Carmen's installer money files", () => {
+	const as = (role: string, id = "user-1") => {
+		mocks.requireSession.mockResolvedValue({ user: { id } })
+		mocks.db.user.findUniqueOrThrow.mockResolvedValue({ id, role } as any)
+	}
+	const get = (p: string) =>
+		loader({ request: requestFor(`/files/${p}`), params: { "*": p } } as any)
+
+	beforeEach(() => vi.clearAllMocks())
+
+	it("lets Carmen open a warranty photo, but not a completion PDF or an unknown file", async () => {
+		as("COMPTROLLER")
+		mocks.db.installCompletion.findFirst.mockResolvedValue({ id: "c1" })
+		expect((await get("completions/photo-1.jpg")).status).not.toBe(403)
+		mocks.db.installCompletion.findFirst.mockResolvedValue(null)
+		expect((await get("completions/c1.pdf")).status).toBe(403)
+	})
+
+	it("serves EWIT invoices, installer batches and PBCC statements to Carmen and Admin only", async () => {
+		for (const folder of ["ewit-invoices", "ewit-batches", "pbcc-statements"]) {
+			as("COMPTROLLER")
+			expect((await get(`${folder}/x.pdf`)).status).not.toBe(403)
+			as("ADMIN")
+			expect((await get(`${folder}/x.pdf`)).status).not.toBe(403)
+			for (const role of ["FINANCE", "SUPERVISOR", "INSTALLER", "WAREHOUSE"]) {
+				as(role)
+				expect((await get(`${folder}/x.pdf`)).status).toBe(403)
+			}
+		}
+	})
+
+	it("serves a report only to the person who sent it and the one it went to", async () => {
+		mocks.db.sentReport.findUnique.mockResolvedValue({
+			fromId: "carmen",
+			toId: "monica",
+		})
+		as("COMPTROLLER", "carmen")
+		expect((await get("reports/r1.pdf")).status).not.toBe(403)
+		as("ADMIN", "monica")
+		expect((await get("reports/r1.pdf")).status).not.toBe(403)
+		as("ADMIN", "someone-else")
+		expect((await get("reports/r1.pdf")).status).toBe(403)
+		mocks.db.sentReport.findUnique.mockResolvedValue(null)
+		as("ADMIN", "monica")
+		expect((await get("reports/r2.pdf")).status).toBe(403)
 	})
 })

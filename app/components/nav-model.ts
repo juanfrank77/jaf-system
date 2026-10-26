@@ -73,7 +73,12 @@ export type NavLabelKey =
 	| "app_shell.nav.comptroller_to_pay"
 	| "app_shell.nav.comptroller_paid"
 	| "app_shell.nav.comptroller_brigades"
-	| "app_shell.nav.comptroller_installers"
+	| "app_shell.nav.comptroller_warranty_docs"
+	| "app_shell.nav.comptroller_ewit"
+	| "app_shell.nav.comptroller_pbcc_batches"
+	| "app_shell.nav.comptroller_installer_pay"
+	| "app_shell.nav.comptroller_log"
+	| "app_shell.nav.admin_reports"
 
 export type NavCount = { value: number; tone: "critical" | "neutral" }
 
@@ -85,6 +90,7 @@ export type NavGroupKey =
 	| "arm_a"
 	| "arm_b"
 	| "money"
+	| "installers"
 	| "stock"
 	| "other"
 	| "field"
@@ -115,6 +121,7 @@ const GROUP_ORDER: NavGroupKey[] = [
 	"arm_a",
 	"arm_b",
 	"money",
+	"installers",
 	"team",
 	"stock",
 	"other",
@@ -129,6 +136,7 @@ export const GROUP_LABEL_KEY: Record<NavGroupKey, GroupLabelKey | null> = {
 	arm_a: "app_shell.group.arm_a",
 	arm_b: "app_shell.group.arm_b",
 	money: "app_shell.group.money",
+	installers: "app_shell.group.installers",
 	stock: "app_shell.group.stock",
 	other: "app_shell.group.other",
 	field: "app_shell.group.field",
@@ -378,13 +386,42 @@ const NAV_ITEMS: NavItem[] = [
 		roles: ["COMPTROLLER", "ADMIN"],
 	},
 	{
-		to: "/comptroller/installers",
-		labelKey: "app_shell.nav.comptroller_installers",
-		icon: UserGroup03Icon,
-		group: "team",
+		to: "/comptroller/log",
+		labelKey: "app_shell.nav.comptroller_log",
+		icon: Invoice02Icon,
+		group: "money",
 		roles: ["COMPTROLLER", "ADMIN"],
-		disabled: true,
 	},
+	{
+		to: "/comptroller/installers",
+		labelKey: "app_shell.nav.comptroller_warranty_docs",
+		icon: FileAddIcon,
+		group: "installers",
+		roles: ["COMPTROLLER", "ADMIN"],
+		exact: true,
+	},
+	{
+		to: "/comptroller/installers/ewit",
+		labelKey: "app_shell.nav.comptroller_ewit",
+		icon: Invoice02Icon,
+		group: "installers",
+		roles: ["COMPTROLLER", "ADMIN"],
+	},
+	{
+		to: "/comptroller/installers/batches",
+		labelKey: "app_shell.nav.comptroller_pbcc_batches",
+		icon: GridViewIcon,
+		group: "installers",
+		roles: ["COMPTROLLER", "ADMIN"],
+	},
+	{
+		to: "/comptroller/installers/pay",
+		labelKey: "app_shell.nav.comptroller_installer_pay",
+		icon: Wallet01Icon,
+		group: "installers",
+		roles: ["COMPTROLLER", "ADMIN"],
+	},
+
 	...WAREHOUSE_WORKFLOW_ITEMS,
 	...WAREHOUSE_QUEUE_ITEMS,
 	...WAREHOUSE_OTHER_ITEMS,
@@ -402,6 +439,13 @@ const NAV_ITEMS: NavItem[] = [
 		icon: TruckDeliveryIcon,
 		group: "field",
 		roles: ["INSTALLER_SUPERVISOR", "ADMIN"],
+	},
+	{
+		to: "/reports",
+		labelKey: "app_shell.nav.admin_reports",
+		icon: Invoice02Icon,
+		group: "admin",
+		roles: ["ADMIN"],
 	},
 	{
 		to: "/admin/settings",

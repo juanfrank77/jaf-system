@@ -143,6 +143,7 @@ describe("navGroupsFor", () => {
 			"arm_a",
 			"arm_b",
 			"money",
+			"installers",
 			"team",
 			"stock",
 			"field",

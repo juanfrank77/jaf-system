@@ -5,6 +5,7 @@ import {
 	type ScheduleRow,
 } from "~/lib/bank-schedule-xlsx.server"
 import { db } from "~/lib/db.server"
+import { EWIT_INVOICE_LIMIT } from "~/lib/ewit-limits"
 import { zipPackage } from "~/lib/package-zip.server"
 import { puertoRicoDay } from "~/lib/payroll-run.server"
 import { getLcPbccAdvanceRate } from "~/lib/system-settings.server"
@@ -14,7 +15,7 @@ import type { Prisma } from "../../generated/prisma/client"
 type Tx = Prisma.TransactionClient
 
 /** One EWIT invoice holds at most this much (Carmen's rule 4). */
-export const EWIT_INVOICE_LIMIT = 5000
+export { EWIT_INVOICE_LIMIT }
 /** A warranty doc waiting longer than this is amber: done, but Claro has not released the PO. */
 export const WARRANTY_STALE_DAYS = 14
 /** Held while the open batch is found or created, so there is only ever one. */

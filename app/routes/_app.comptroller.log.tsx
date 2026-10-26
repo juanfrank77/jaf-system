@@ -10,7 +10,6 @@ import {
 	LOG_FILTER_KEYS,
 	loadLogRows,
 	logColumns,
-	logTabOf,
 } from "~/lib/log.server"
 import {
 	formatLogCell,

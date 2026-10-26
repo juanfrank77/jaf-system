@@ -11,10 +11,10 @@ import { Label } from "~/components/ui/label"
 import { db } from "~/lib/db.server"
 import {
 	createEwitInvoice,
-	EWIT_INVOICE_LIMIT,
 	EwitError,
 	loadWarrantyDocs,
 } from "~/lib/ewit.server"
+import { EWIT_INVOICE_LIMIT } from "~/lib/ewit-limits"
 import { formatShortDate } from "~/lib/payroll-request-view"
 import { parsePaidDate, puertoRicoToday } from "~/lib/payroll-run.server"
 import { requireRole } from "~/lib/permissions.server"

@@ -2,9 +2,10 @@ import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, Link, redirect, useNavigation } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { PacketActions, PrintBrigadeButton } from "~/components/payroll-packet"
 import { ReceiptBanner, receiptUrl } from "~/components/receipt-banner"
 import { Badge } from "~/components/ui/badge"
-import { Button, buttonVariants } from "~/components/ui/button"
+import { Button } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
 import { db } from "~/lib/db.server"
 import { formatShortDate } from "~/lib/payroll-request-view"
@@ -228,13 +229,7 @@ export default function ComptrollerPayrollRun({
 			</Callout>
 			{error && <p className="text-sm text-status-danger">{error}</p>}
 
-			<a
-				href={`/finance/payroll/${req.id}/journal`}
-				download
-				className={buttonVariants({ variant: "secondary" })}
-			>
-				{t("comptroller_payroll.download_pdf")}
-			</a>
+			<PacketActions runId={req.id} label={req.label} />
 
 			{unpaid.length > 1 && (
 				<Form
@@ -316,7 +311,11 @@ export default function ComptrollerPayrollRun({
 									<span className="font-mono">{l.brigadeCode}</span>{" "}
 									<span className="text-muted-foreground">
 										{l.brigadeLabel}
-									</span>
+									</span>{" "}
+									<PrintBrigadeButton
+										runId={req.id}
+										brigadeCodes={[l.brigadeCode]}
+									/>
 								</td>
 								<td className="p-2 font-mono">
 									{l.avisoNumbers.join(" · ") || "—"}

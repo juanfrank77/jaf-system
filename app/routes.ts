@@ -122,6 +122,10 @@ export default [
 			"finance/payroll/:runId/journal",
 			"routes/_app.finance.payroll.$runId.journal.tsx",
 		),
+		route(
+			"finance/payroll/:runId/journal/outline",
+			"routes/_app.finance.payroll.$runId.journal.outline.tsx",
+		),
 		route("comptroller", "routes/_app.comptroller.tsx"),
 		route("comptroller/lists", "routes/_app.comptroller.lists.tsx"),
 		route("comptroller/to-pay", "routes/_app.comptroller.to-pay.tsx"),

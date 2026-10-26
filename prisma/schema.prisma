@@ -217,6 +217,18 @@ model User {
 
   packetSends PacketSend[] @relation("PacketSendSender")
 
+  // Carmen's installer money loop and her reports
+  ewitInvoicesCreated   EwitInvoice[]      @relation("EwitInvoiceCreator")
+  ewitInvoicesVoided    EwitInvoice[]      @relation("EwitInvoiceVoider")
+  ewitBatchesCreated    EwitBatch[]        @relation("EwitBatchCreator")
+  ewitBatchesClosed     EwitBatch[]        @relation("EwitBatchCloser")
+  ewitBatchesSent       EwitBatch[]        @relation("EwitBatchSender")
+  ewitBatchesReceived   EwitBatch[]        @relation("EwitBatchReceiver")
+  installerPaymentsOwed InstallerPayment[] @relation("InstallerPaid")
+  installerPaymentsMade InstallerPayment[] @relation("InstallerPaymentMaker")
+  reportsSent           SentReport[]       @relation("ReportSender")
+  reportsReceived       SentReport[]       @relation("ReportReceiver")
+
   @@index([role, active])
 }
 
@@ -797,6 +809,8 @@ model Notification {
   message   String
   docId     String?
   read      Boolean  @default(false)
+  // Where tapping it goes (an app path), for notifications that are not about a job.
+  href      String?
   createdAt DateTime @default(now())
 
   @@index([userId, read, createdAt])
@@ -1103,8 +1117,20 @@ model InstallCompletion {
   createdAt         DateTime         @default(now())
   swapEvents        SwapEvent[]
 
+  // Carmen's side: the EWIT invoice this order went on, and the pay that closed it.
+  ewitInvoiceId        String?
+  ewitInvoice          EwitInvoice?      @relation(fields: [ewitInvoiceId], references: [id])
+  installerPaymentId   String?
+  installerPayment     InstallerPayment? @relation(fields: [installerPaymentId], references: [id])
+  // Paid ahead of PBCC's money (with the reason Carmen gave).
+  paidBeforePbccReason String?
+  // The order # as first typed, kept when Carmen corrects it (with the reason).
+  orderNoCorrections   Json?
+
   @@index([installerId, createdAt])
   @@index([claroOrderNo])
+  @@index([ewitInvoiceId])
+  @@index([installerPaymentId])
   @@map("install_completion")
 }
 
@@ -1191,4 +1217,103 @@ model BankSchedule {
   invoices JafInvoice[]
 
   @@index([generatedAt])
+}
+
+// ── Carmen's installer loop: EWIT invoices → PBCC batch → statement → pay ──
+
+/**
+ * One EWIT invoice (at most $5,000), typed and attached by Carmen.
+ */
+model EwitInvoice {
+  id                String     @id @default(cuid())
+  number            String     @unique
+  invoiceDate       DateTime
+  total             Decimal
+  filePath          String
+  batchId           String?
+  batch             EwitBatch? @relation(fields: [batchId], references: [id])
+  createdAt         DateTime   @default(now())
+  createdById       String
+  createdBy         User       @relation("EwitInvoiceCreator", fields: [createdById], references: [id])
+  // Set when PBCC's statement lists it.
+  receivedAt        DateTime?
+  // A mistake: removed before its batch is sent; held (with a reason) after.
+  voidedAt          DateTime?
+  voidedById        String?
+  voidedBy          User?      @relation("EwitInvoiceVoider", fields: [voidedById], references: [id])
+  voidReason        String?
+  heldAt            DateTime?
+  holdReason        String?
+  // Order #s Carmen typed that have no warranty photo yet (saved, flagged).
+  unmatchedOrderNos String[]   @default([])
+
+  completions InstallCompletion[]
+
+  @@index([batchId])
+}
+
+/**
+ * The installer PBCC batch: open until Carmen closes it, closed until she sends it.
+ */
+model EwitBatch {
+  id             String    @id @default(cuid())
+  // Given at close (1, 2, 3, no gaps), null while open.
+  number         Int?      @unique
+  createdAt      DateTime  @default(now())
+  createdById    String
+  createdBy      User      @relation("EwitBatchCreator", fields: [createdById], references: [id])
+  closedAt       DateTime?
+  closedById     String?
+  closedBy       User?     @relation("EwitBatchCloser", fields: [closedById], references: [id])
+  sentAt         DateTime?
+  sentById       String?
+  sentBy         User?     @relation("EwitBatchSender", fields: [sentById], references: [id])
+  xlsxPath       String?
+  // PBCC's statement (typed + attached).
+  receivedAt     DateTime?
+  receivedAmount Decimal?
+  receivedById   String?
+  receivedBy     User?     @relation("EwitBatchReceiver", fields: [receivedById], references: [id])
+  statementPath  String?
+
+  invoices EwitInvoice[]
+}
+
+/**
+ * Carmen's tick on an installer's jobs: one payment, many orders.
+ */
+model InstallerPayment {
+  id          String    @id @default(cuid())
+  installerId String
+  installer   User      @relation("InstallerPaid", fields: [installerId], references: [id])
+  paidAt      DateTime
+  amount      Decimal
+  paidById    String
+  paidBy      User      @relation("InstallerPaymentMaker", fields: [paidById], references: [id])
+  createdAt   DateTime  @default(now())
+  // Same-day undo, with a reason; the row stays.
+  undoneAt    DateTime?
+  undoReason  String?
+
+  completions InstallCompletion[]
+
+  @@index([installerId, paidAt])
+}
+
+/**
+ * A report Carmen sent to Monica: the PDF, her note, and when it was opened.
+ */
+model SentReport {
+  id       String    @id @default(cuid())
+  title    String
+  note     String?
+  pdfPath  String
+  fromId   String
+  from     User      @relation("ReportSender", fields: [fromId], references: [id])
+  toId     String
+  to       User      @relation("ReportReceiver", fields: [toId], references: [id])
+  sentAt   DateTime  @default(now())
+  openedAt DateTime?
+
+  @@index([toId, sentAt])
 }

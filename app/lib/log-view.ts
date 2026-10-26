@@ -230,3 +230,41 @@ export function chainDates(chain: (string | null)[]): (string | null)[] {
 	const lastFilled = chain.reduce((acc, v, i) => (v ? i : acc), -1)
 	return chain.map((v, i) => (v ? v : i < lastFilled ? MISSING : null))
 }
+
+/** A cell as text, the same on the screen, the PDF and the Excel. */
+export function formatLogCell(col: LogColumn, v: LogCell): string {
+	if (v === MISSING) return MISSING
+	if (v == null || v === "") return "—"
+	if (col.type === "date" && typeof v === "string" && ISO.test(v))
+		return `${v.slice(5, 7)}/${v.slice(8, 10)}/${v.slice(0, 4)}`
+	if (col.type === "money" && typeof v === "number")
+		return `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+	return String(v)
+}
+
+/** A short, readable line of what the view is showing, for the PDF header. */
+export function describeLogView(view: LogView, columns: LogColumn[]): string {
+	const date = columns.find((c) => c.key === view.dateBy)?.label ?? view.dateBy
+	const parts: string[] = []
+	if (view.from || view.to)
+		parts.push(`${date}: ${view.from ?? "…"} to ${view.to ?? "…"}`)
+	for (const [k, v] of Object.entries(view.filters))
+		parts.push(`${columns.find((c) => c.key === k)?.label ?? k}: ${v}`)
+	if (view.q) parts.push(`Search: "${view.q}"`)
+	if (view.group !== "none") parts.push(`Grouped by ${view.group}`)
+	return parts.length ? parts.join(" · ") : "No filters"
+}
+
+/** `JAF_Installers_2026-10-01_to_10-31.pdf`-style names. */
+export function logFileName(tab: string, view: LogView, ext: string): string {
+	const name = tab === "brigades" ? "Brigades" : "Installers"
+	const range =
+		view.from && view.to
+			? `_${view.from}_to_${view.to.slice(5)}`
+			: view.from
+				? `_from_${view.from}`
+				: view.to
+					? `_to_${view.to}`
+					: ""
+	return `JAF_${name}${range}.${ext}`
+}

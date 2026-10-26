@@ -130,6 +130,10 @@ export default [
 		route("comptroller/lists", "routes/_app.comptroller.lists.tsx"),
 		route("comptroller/to-pay", "routes/_app.comptroller.to-pay.tsx"),
 		route("comptroller/paid", "routes/_app.comptroller.paid.tsx"),
+		route("comptroller/log", "routes/_app.comptroller.log.tsx"),
+		route("comptroller/log/pdf", "routes/_app.comptroller.log.pdf.tsx"),
+		route("comptroller/log/xlsx", "routes/_app.comptroller.log.xlsx.tsx"),
+		route("reports", "routes/_app.reports.tsx"),
 		route(
 			"comptroller/installers",
 			"routes/_app.comptroller.installers._index.tsx",

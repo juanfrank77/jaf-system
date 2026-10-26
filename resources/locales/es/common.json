@@ -1098,6 +1098,10 @@
 		"col_brigade": "Brigada"
 	},
 	"comptroller_brigades": {
+		"supervisor_label": "Supervisor",
+		"add_button": "Añadir brigada",
+		"no_code": "Sin n.º de cuenta",
+		"deactivate_hint": "Desactivar: no recibe trabajos nuevos. Se le sigue pagando lo ya terminado.",
 		"title": "Brigadas",
 		"add_heading": "Agregar brigada",
 		"name_label": "Nombre de brigada *",
@@ -1118,6 +1122,8 @@
 		"yes": "Sí",
 		"no": "No",
 		"table": {
+			"code": "N.º de cuenta",
+			"supervisor": "Supervisor",
 			"name": "Nombre",
 			"area": "Área",
 			"members": "Miembros",

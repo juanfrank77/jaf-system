@@ -1098,6 +1098,10 @@
 		"col_brigade": "Brigade"
 	},
 	"comptroller_brigades": {
+		"supervisor_label": "Supervisor",
+		"add_button": "Add brigade",
+		"no_code": "No Acct #",
+		"deactivate_hint": "Deactivate: can't get new jobs. Still paid for jobs already finished.",
 		"title": "Brigades",
 		"add_heading": "Add Brigade",
 		"name_label": "Brigade Name *",
@@ -1118,6 +1122,8 @@
 		"yes": "Yes",
 		"no": "No",
 		"table": {
+			"code": "Acct #",
+			"supervisor": "Supervisor",
 			"name": "Name",
 			"area": "Area",
 			"members": "Members",

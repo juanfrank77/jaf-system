@@ -12,6 +12,7 @@ vi.mock("~/lib/permissions.server", () => ({ requireRole: mocks.requireRole }))
 
 import { action, loader } from "./_app.finance.payroll.$runId"
 import { loader as journalLoader } from "./_app.finance.payroll.$runId.journal"
+import { loader as outlineLoader } from "./_app.finance.payroll.$runId.journal.outline"
 
 const t = makeTracker()
 afterAll(() => t.cleanup())
@@ -223,5 +224,45 @@ describe("request sheet PDF", () => {
 		mocks.requireRole.mockResolvedValue({ user: finance })
 		const res = await get(run.id)
 		expect(res.headers.get("Content-Type")).toBe("application/pdf")
+	})
+
+	const getAs = (runId: string, query: string) =>
+		journalLoader({
+			request: new Request(
+				`http://localhost/finance/payroll/${runId}/journal?${query}`,
+			),
+			params: { runId },
+			context: {},
+		} as never)
+
+	it("serves the viewer inline, the summary page and picked brigades; refuses an empty pick", async () => {
+		const { run, finance } = await seed({ code: "7731" })
+		mocks.requireRole.mockResolvedValue({ user: finance })
+		const inline = await getAs(run.id, "inline=1")
+		expect(inline.headers.get("Content-Disposition")).toContain("inline")
+		expect((await getAs(run.id, "mode=summary")).status).toBe(200)
+		expect((await getAs(run.id, "mode=brigades&brigades=7731")).status).toBe(200)
+		await expect(getAs(run.id, "mode=brigades")).rejects.toMatchObject({
+			status: 400,
+		})
+	})
+
+	it("Carmen gets the outline of a sent request, not a draft", async () => {
+		const draft = await seed({ draft: true })
+		const sent = await seed({ code: "7732" })
+		const comptroller = t.track("user", await seedUser({ role: "COMPTROLLER" }))
+		mocks.requireRole.mockResolvedValue({ user: comptroller })
+		const outline = (runId: string) =>
+			outlineLoader({
+				request: new Request(
+					`http://localhost/finance/payroll/${runId}/journal/outline`,
+				),
+				params: { runId },
+				context: {},
+			} as never)
+		await expect(outline(draft.run.id)).rejects.toMatchObject({ status: 404 })
+		const result = await outline(sent.run.id)
+		expect(result.brigades.map((b) => b.code)).toContain("7732")
+		expect(result.totalPages).toBeGreaterThan(result.brigades.length)
 	})
 })

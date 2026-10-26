@@ -6,6 +6,7 @@ import {
 	Text,
 	View,
 } from "@react-pdf/renderer"
+import { getDocumentProxy } from "unpdf"
 import { shareFigures } from "~/lib/contractor-share"
 import type { JournalBlock } from "~/lib/payroll-run.server"
 
@@ -74,7 +75,22 @@ export type JournalOptions = {
 	/** Prefix of the PBCC invoice number: "M17" + the Aviso #. */
 	invoicePrefix?: string
 	printedAt?: Date
+	/** Print only these brigades' pages (their codes, "009D" for D lines) and no report totals. */
+	onlyBrigades?: string[]
+	/** Carmen's copy: "Carmen's copy · sent by Lissette 10/28/26 8:12 am", then " · page x of y" on every page. */
+	footer?: string
 }
+
+const pageFooter = (footer: string | undefined) =>
+	footer ? (
+		<Text
+			fixed
+			style={{ position: "absolute", bottom: 14, left: 30, fontSize: 7 }}
+			render={({ pageNumber, totalPages }) =>
+				`${footer} · page ${pageNumber} of ${totalPages}`
+			}
+		/>
+	) : null
 
 function Cell({
 	w,
@@ -105,12 +121,18 @@ export async function generateProductionJournalPdf(
 	opts: JournalOptions,
 ): Promise<Buffer> {
 	const prefix = opts.invoicePrefix ?? "M17"
+	const all_ = blocks
+	if (opts.onlyBrigades) {
+		const keep = new Set(opts.onlyBrigades)
+		blocks = blocks.filter((b) => keep.has(b.brigadeCode))
+	}
+	const withTotals = !opts.onlyBrigades
 	const date = printDate(opts.printedAt ?? new Date())
 	const money0 = (n: number) => (opts.showPrices ? money(n) : "")
-	const allGross = blocks.reduce((s, b) => s + b.gross, 0)
+	const allGross = all_.reduce((s, b) => s + b.gross, 0)
 	// The report totals take the grand gross at the first block's rate, as the
 	// old report does; D blocks add their own share on top.
-	const totals = blocks.reduce(
+	const totals = all_.reduce(
 		(acc, b) => {
 			const f = shareFigures(b.gross, b.percent)
 			return {
@@ -121,7 +143,7 @@ export async function generateProductionJournalPdf(
 		},
 		{ net: 0, ret: 0, adj: 0 },
 	)
-	const hasD = blocks.some((b) => b.percent !== 65)
+	const hasD = all_.some((b) => b.percent !== 65)
 	const all = shareFigures(allGross, 65)
 	const grand = hasD
 		? totals
@@ -150,6 +172,7 @@ export async function generateProductionJournalPdf(
 					style={styles.page}
 				>
 					{header}
+					{pageFooter(opts.footer)}
 					{title}
 					<Text style={styles.brigade}>
 						{b.brigadeCode} {b.brigadeLabel.toUpperCase()} Acct. ID:
@@ -217,14 +240,123 @@ export async function generateProductionJournalPdf(
 					</View>
 				</Page>
 			))}
+			{withTotals && (
+				<Page size="LETTER" orientation="landscape" style={styles.page}>
+					{pageFooter(opts.footer)}
+					<Text>{run.label}</Text>
+					<View style={styles.reportTotals}>
+						<Text>Totals: Gross Amt. {money0(allGross) || "-"}</Text>
+						<Text>Net Amt. {money(grand.net)}</Text>
+						<Text>Ret. {money(0)}</Text>
+						<Text>10% Ret. {money(grand.ret)}</Text>
+						<Text>Adj. Net Amount {money(grand.adj)}</Text>
+					</View>
+				</Page>
+			)}
+		</Document>
+	)
+	return renderToBuffer(doc)
+}
+
+async function pageCount(bytes: Buffer): Promise<number> {
+	const pdf = await getDocumentProxy(new Uint8Array(bytes))
+	return pdf.numPages
+}
+
+export type JournalOutline = {
+	/** Pages of the whole packet: every brigade, then the report totals. */
+	totalPages: number
+	brigades: {
+		code: string
+		label: string
+		jobs: number
+		adjNet: number
+		startPage: number
+		pages: number
+	}[]
+}
+
+/**
+ * Where each brigade starts in the whole packet, for the viewer's "jump to
+ * brigade" and the print choices' page counts. A brigade's page run is found by
+ * rendering it on its own; the packet is those runs in order plus the totals.
+ */
+export async function journalOutline(
+	run: { label: string },
+	blocks: JournalBlock[],
+	opts: JournalOptions,
+): Promise<JournalOutline> {
+	const brigades: JournalOutline["brigades"] = []
+	let next = 1
+	for (const b of blocks) {
+		const pages = await pageCount(
+			await generateProductionJournalPdf(run, blocks, {
+				...opts,
+				footer: undefined,
+				onlyBrigades: [b.brigadeCode],
+			}),
+		)
+		brigades.push({
+			code: b.brigadeCode,
+			label: b.brigadeLabel,
+			jobs: b.jobs.length,
+			adjNet: b.totalSC,
+			startPage: next,
+			pages,
+		})
+		next += pages
+	}
+	return { totalPages: next, brigades }
+}
+
+/** The one-page brigade list: who is on the packet, what each is owed and where to find it. */
+export async function generatePacketSummaryPdf(
+	run: { label: string },
+	outline: JournalOutline,
+	opts: { footer?: string; printedAt?: Date },
+): Promise<Buffer> {
+	const total = outline.brigades.reduce((s, b) => s + b.adjNet, 0)
+	const doc = (
+		<Document>
 			<Page size="LETTER" orientation="landscape" style={styles.page}>
-				<Text>{run.label}</Text>
-				<View style={styles.reportTotals}>
-					<Text>Totals: Gross Amt. {money0(allGross) || "-"}</Text>
-					<Text>Net Amt. {money(grand.net)}</Text>
-					<Text>Ret. {money(0)}</Text>
-					<Text>10% Ret. {money(grand.ret)}</Text>
-					<Text>Adj. Net Amount {money(grand.adj)}</Text>
+				<View style={styles.pageHeader} fixed>
+					<Text>{printDate(opts.printedAt ?? new Date())}</Text>
+					<Text>JAF Communications, Inc.</Text>
+					<Text />
+				</View>
+				{pageFooter(opts.footer)}
+				<Text style={styles.title}>PAYROLL PACKET SUMMARY</Text>
+				<Text style={styles.brigade}>{run.label}</Text>
+				<View style={styles.columns}>
+					<Cell w={60} right={false}>
+						ACCT
+					</Cell>
+					<Cell w={260} right={false}>
+						BRIGADE
+					</Cell>
+					<Cell w={50}>JOBS</Cell>
+					<Cell w={110}>ADJ. NET AMOUNT</Cell>
+					<Cell w={60}>PAGE</Cell>
+				</View>
+				{outline.brigades.map((b) => (
+					<View key={b.code} style={styles.row} wrap={false}>
+						<Cell w={60} right={false}>
+							{b.code}
+						</Cell>
+						<Cell w={260} right={false}>
+							{b.label.toUpperCase()}
+						</Cell>
+						<Cell w={50}>{b.jobs}</Cell>
+						<Cell w={110}>{money(b.adjNet)}</Cell>
+						<Cell w={60}>{b.startPage}</Cell>
+					</View>
+				))}
+				<View style={styles.totalRow} wrap={false}>
+					<Cell w={320} right={false}>
+						Total
+					</Cell>
+					<Cell w={50}>{outline.brigades.reduce((s, b) => s + b.jobs, 0)}</Cell>
+					<Cell w={110}>{money(total)}</Cell>
 				</View>
 			</Page>
 		</Document>

@@ -17,6 +17,7 @@ import { db } from "~/lib/db.server"
 import { PBCC_BATCH_CAPACITY } from "~/lib/finance-home"
 import { stageWhere } from "~/lib/finance-stages.server"
 import { computeInvoiceTotals } from "~/lib/invoice-totals"
+import { ensureJobNumber, jobNumberOf } from "~/lib/job-number.server"
 import {
 	type BankInvoiceLine,
 	generateBankInvoicePdf,
@@ -24,6 +25,7 @@ import {
 import type { InvoiceLine } from "~/lib/service-lines"
 import {
 	getBankInvoicePrefix,
+	getInvoiceCodes,
 	getLcPbccAdvanceRate,
 } from "~/lib/system-settings.server"
 import { saveBuffer } from "~/lib/uploads.server"
@@ -358,14 +360,12 @@ function invoiceLinesOf(
 	byId: Map<
 		string,
 		{
-			accountCode: string | null
 			subAct: string | null
-			dept: string | null
 			profitCenter: string | null
 			act: string | null
-			costCenterCode: string | null
 		}
 	>,
+	codes: { dept: string; costCenter: string },
 ): BankInvoiceLine[] {
 	return ((doc.jafInvoiceLines as InvoiceLine[] | null) ?? []).map((l) => {
 		const c = byId.get(l.serviceCodeId)
@@ -376,12 +376,15 @@ function invoiceLinesOf(
 			unit: l.unit ?? "EA",
 			unitPrice: l.unitPrice,
 			amount: l.lineAmount,
-			accountCode: c?.accountCode ?? l.accountCode ?? "",
+			// A/C is blank on the real invoice (the catalog's 615 is the Aviso's
+			// activity code, not an account). DEPT. and CENTRO are the same for
+			// all maintenance work, so they come from settings.
+			accountCode: "",
 			subAct: c?.subAct ?? "",
-			dept: c?.dept ?? "",
+			dept: codes.dept,
 			profitCenter: c?.profitCenter ?? "",
 			act: c?.act ?? "",
-			costCenter: c?.costCenterCode ?? "",
+			costCenter: codes.costCenter,
 		}
 	})
 }
@@ -396,9 +399,10 @@ async function ensureInvoicePdfs(batchId: string): Promise<void> {
 		(d) => !d.bankInvoicePdfPath,
 	)
 	if (docs.length === 0) return
-	const [prefix, catalog] = await Promise.all([
+	const [prefix, catalog, codes] = await Promise.all([
 		getBankInvoicePrefix(),
 		db.serviceCode.findMany(),
+		getInvoiceCodes(),
 	])
 	const byId = new Map(catalog.map((c) => [c.id, c]))
 	for (const doc of docs) {
@@ -412,7 +416,11 @@ async function ensureInvoicePdfs(batchId: string): Promise<void> {
 			// the prefixed form stays on the Excel schedule.
 			avisoNumber: aviso,
 			org: ORG,
-			invoiceDate: bankDateLabel(doc.financeVerifiedAt ?? new Date()),
+			// FECHA prints blank, as on the real invoice; the accept date stays stored.
+			invoiceDate: "",
+			// JAF's own M-number, one per Aviso; assigned here for any packet that has none.
+			jobNumber:
+				jobNumberOf(doc.jobSeq ?? (await ensureJobNumber(doc.id))) ?? undefined,
 			contractLabel: contractLabel(prefix),
 			workFrom: bankDateLabel(from),
 			workTo: bankDateLabel(to),
@@ -420,7 +428,7 @@ async function ensureInvoicePdfs(batchId: string): Promise<void> {
 			barrio: barrioFromAddress(address),
 			locality: localityFromAddress(address),
 			kind: jobKind(doc.jobType),
-			lines: invoiceLinesOf(doc, byId),
+			lines: invoiceLinesOf(doc, byId, codes),
 			total: rowAmounts(doc).subtotal,
 		})
 		const pdfPath = await saveBuffer(

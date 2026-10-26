@@ -55,6 +55,19 @@ describe("generateProductionJournalPdf", () => {
 		expect(bytes.subarray(0, 4).toString()).toBe("%PDF")
 	})
 
+	it("orders jobs by their M-number, ascending", () => {
+		const blocks = buildJournalBlocks([
+			{ ...invoice("i1", "MAINT-B", "1", 10), jobSeq: 3546 },
+			{ ...invoice("i2", "MAINT-A", "2", 10), jobSeq: 3545 },
+			invoice("i3", "MAINT-C", "3", 10),
+		])
+		expect(blocks[0].jobs.map((j) => j.controlNumber)).toEqual([
+			"MAINT-A",
+			"MAINT-B",
+			"MAINT-C",
+		])
+	})
+
 	it("running Adj. Net is figured on the brigade's gross so far", () => {
 		const blocks = buildJournalBlocks([
 			invoice("i1", "M-1", "1", 928.88),

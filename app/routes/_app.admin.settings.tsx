@@ -9,13 +9,17 @@ import {
 	getAgingAlertDays,
 	getAvisoAmountTolerance,
 	getBankInvoicePrefix,
+	getInvoiceCodes,
 	getIvuRate,
+	getJobNumberFirst,
 	getLcPbccAdvanceRate,
 	getPayDayWeekday,
 	setAgingAlertDays,
 	setAvisoAmountTolerance,
 	setBankInvoicePrefix,
+	setInvoiceCodes,
 	setIvuRate,
+	setJobNumberFirst,
 	setLcPbccAdvanceRate,
 	setPayDayWeekday,
 } from "~/lib/system-settings.server"
@@ -35,6 +39,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 		lcPbccAdvanceRate,
 		bankInvoicePrefix,
 		payDayWeekday,
+		invoiceCodes,
+		jobNumberFirst,
 	] = await Promise.all([
 		getIvuRate(),
 		getAgingAlertDays(),
@@ -42,6 +48,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 		getLcPbccAdvanceRate(),
 		getBankInvoicePrefix(),
 		getPayDayWeekday(),
+		getInvoiceCodes(),
+		getJobNumberFirst(),
 	])
 	return {
 		ivuRate,
@@ -50,6 +58,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 		lcPbccAdvanceRate,
 		bankInvoicePrefix,
 		payDayWeekday,
+		invoiceCodes,
+		jobNumberFirst,
 	}
 }
 
@@ -127,6 +137,23 @@ export async function action({ request }: Route.ActionArgs) {
 		return { successBankPrefix: true }
 	}
 
+	if (intent === "invoice_codes") {
+		const dept = String(form.get("bank_invoice_dept") ?? "").trim()
+		const costCenter = String(form.get("bank_invoice_cost_center") ?? "").trim()
+		const first = Number.parseInt(String(form.get("job_number_first")), 10)
+		if (
+			!/^[A-Za-z0-9-]{1,10}$/.test(dept) ||
+			!/^[A-Za-z0-9-]{1,10}$/.test(costCenter) ||
+			!Number.isInteger(first) ||
+			first < 1
+		) {
+			return { errorKey: "admin_settings.errors.invalid_invoice_codes" }
+		}
+		await setInvoiceCodes({ dept, costCenter }, user.id)
+		await setJobNumberFirst(first, user.id)
+		return { successInvoiceCodes: true }
+	}
+
 	if (intent === "pay_day") {
 		const day = Number.parseInt(String(form.get("pay_day_weekday")), 10)
 		if (!Number.isInteger(day) || day < 0 || day > 6) {
@@ -150,6 +177,8 @@ export default function AdminSettings({
 		lcPbccAdvanceRate,
 		bankInvoicePrefix,
 		payDayWeekday,
+		invoiceCodes,
+		jobNumberFirst,
 	} = loaderData
 	const { t } = useTranslation()
 	const error =
@@ -165,6 +194,10 @@ export default function AdminSettings({
 	const successBankPrefix =
 		actionData && "successBankPrefix" in actionData
 			? actionData.successBankPrefix
+			: null
+	const successInvoiceCodes =
+		actionData && "successInvoiceCodes" in actionData
+			? actionData.successInvoiceCodes
 			: null
 	const successPayDay =
 		actionData && "successPayDay" in actionData
@@ -403,6 +436,70 @@ export default function AdminSettings({
 						<p className="text-sm text-status-danger">{t(error as never)}</p>
 					)}
 					{successBankPrefix && (
+						<p className="text-sm text-status-ok">
+							{t("admin_settings.saved")}
+						</p>
+					)}
+					<Button type="submit" size="sm">
+						{t("admin_settings.save")}
+					</Button>
+				</Form>
+			</div>
+
+			<div className="bg-card border rounded-lg p-4 space-y-3">
+				<h2 className="font-medium text-sm">
+					{t("admin_settings.invoice_codes_heading")}
+				</h2>
+				<p className="text-xs text-muted-foreground">
+					{t("admin_settings.invoice_codes_description")}
+				</p>
+				<Form method="post" className="space-y-3">
+					<input type="hidden" name="intent" value="invoice_codes" />
+					<div>
+						<Label htmlFor="bank_invoice_dept">
+							{t("admin_settings.invoice_dept_label")}
+						</Label>
+						<Input
+							id="bank_invoice_dept"
+							name="bank_invoice_dept"
+							defaultValue={invoiceCodes.dept}
+							maxLength={10}
+							required
+						/>
+					</div>
+					<div>
+						<Label htmlFor="bank_invoice_cost_center">
+							{t("admin_settings.invoice_cost_center_label")}
+						</Label>
+						<Input
+							id="bank_invoice_cost_center"
+							name="bank_invoice_cost_center"
+							defaultValue={invoiceCodes.costCenter}
+							maxLength={10}
+							required
+						/>
+					</div>
+					<div>
+						<Label htmlFor="job_number_first">
+							{t("admin_settings.job_number_first_label")}
+						</Label>
+						<Input
+							id="job_number_first"
+							name="job_number_first"
+							type="number"
+							min={1}
+							step={1}
+							defaultValue={jobNumberFirst}
+							required
+						/>
+						<p className="mt-1 text-xs text-muted-foreground">
+							{t("admin_settings.job_number_first_hint")}
+						</p>
+					</div>
+					{error && (
+						<p className="text-sm text-status-danger">{t(error as never)}</p>
+					)}
+					{successInvoiceCodes && (
 						<p className="text-sm text-status-ok">
 							{t("admin_settings.saved")}
 						</p>

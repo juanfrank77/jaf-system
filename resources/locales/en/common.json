@@ -1032,6 +1032,12 @@
 		"footer_note": "Generating the Schedule of Accounts marks this document as LC Request Generated. Email the PDF to hs@pbcc.com."
 	},
 	"admin_settings": {
+		"invoice_codes_heading": "Invoice codes and job numbers",
+		"invoice_codes_description": "Printed on every maintenance invoice to PBCC. A/C is left blank.",
+		"invoice_dept_label": "DEPT.",
+		"invoice_cost_center_label": "CENTRO CODIGO COSTO",
+		"job_number_first_label": "Job numbers start at",
+		"job_number_first_hint": "Each accepted Aviso gets the next M-number. This is used only until the first one exists: set it to Lissette's last M-number + 1.",
 		"title": "System Settings",
 		"ivu_heading": "IVU Tax Rate",
 		"ivu_description": "Applied to all invoice PDF generation. Enter as decimal (e.g. 0.115 = 11.5%). Current: {{current}}%",
@@ -1051,6 +1057,7 @@
 			"unknown_intent": "Unknown action.",
 			"invalid_lc_pbcc_rate": "Enter a rate greater than 0 and no greater than 1.",
 			"invalid_bank_prefix": "Use 1–8 letters or digits.",
+			"invalid_invoice_codes": "Use letters, digits or dashes for the codes, and a whole number from 1 for the job number.",
 			"invalid_pay_day": "Choose a day of the week."
 		},
 		"lc_pbcc_heading": "LC/PBCC advance rate",

@@ -25,7 +25,7 @@ import { requireRole } from "~/lib/permissions.server"
 import { ALL_AREAS } from "~/lib/supervisor-scope"
 import type { Route } from "./+types/_app.comptroller.brigades"
 
-type CrewUser = { id: string; name: string; active: boolean }
+type Supervisor = { id: string; name: string }
 
 /** Shared area `<select>` for the brigade create and edit forms. */
 function BrigadeAreaSelect({
@@ -58,57 +58,6 @@ function BrigadeAreaSelect({
 	)
 }
 
-/** Shared member-checkbox list for the brigade create and edit forms. */
-function BrigadeMemberList({
-	idPrefix,
-	crewUsers,
-	selectedIds,
-	gridCols,
-}: {
-	idPrefix: string
-	crewUsers: CrewUser[]
-	selectedIds: string[]
-	gridCols: string
-}) {
-	const { t } = useTranslation()
-	return (
-		<>
-			<p className="text-sm font-medium">
-				{t("comptroller_brigades.members_label")}
-			</p>
-			<p className="text-xs text-muted-foreground">
-				{t("comptroller_brigades.members_hint")}
-			</p>
-			<div className={`grid grid-cols-1 gap-2 ${gridCols}`}>
-				{crewUsers.map((u) => (
-					<label
-						key={u.id}
-						htmlFor={`${idPrefix}-${u.id}`}
-						className="flex items-center gap-2 text-sm"
-					>
-						<Checkbox
-							id={`${idPrefix}-${u.id}`}
-							name="memberIds"
-							value={u.id}
-							defaultChecked={selectedIds.includes(u.id)}
-						/>
-						<span>
-							{u.name}{" "}
-							<span className="text-muted-foreground">
-								(
-								{u.active
-									? t("comptroller_brigades.active")
-									: t("comptroller_brigades.inactive")}
-								)
-							</span>
-						</span>
-					</label>
-				))}
-			</div>
-		</>
-	)
-}
-
 export const meta: Route.MetaFunction = () => [{ title: "Brigades — JAF Ops" }]
 
 /**
@@ -119,16 +68,16 @@ export const meta: Route.MetaFunction = () => [{ title: "Brigades — JAF Ops" }
 export async function loader({ request }: Route.LoaderArgs) {
 	await requireRole(request, ["COMPTROLLER", "ADMIN"])
 
-	const [brigades, crewUsers] = await Promise.all([
+	const [brigades, supervisors] = await Promise.all([
 		db.brigade.findMany({ orderBy: { name: "asc" } }),
 		db.user.findMany({
-			where: { role: "CREW" },
+			where: { role: "SUPERVISOR", active: true },
 			orderBy: { name: "asc" },
-			select: { id: true, name: true, active: true },
+			select: { id: true, name: true },
 		}),
 	])
 
-	return { brigades, crewUsers, areaOptions: [...ALL_AREAS] }
+	return { brigades, supervisors, areaOptions: [...ALL_AREAS] }
 }
 
 const isP2002 = (error: unknown) =>
@@ -311,7 +260,7 @@ export async function action({ request }: Route.ActionArgs) {
 		const name = form.get("name")
 		const areaRaw = form.get("area")
 		const code = form.get("code")
-		const memberIds = form.getAll("memberIds")
+		const supervisorRaw = form.get("supervisorId")
 		const active = form.get("active") === "on"
 		const area = typeof areaRaw === "string" ? areaRaw.trim() : ""
 
@@ -319,7 +268,9 @@ export async function action({ request }: Route.ActionArgs) {
 			typeof name !== "string" ||
 			!name.trim() ||
 			!(ALL_AREAS as readonly string[]).includes(area) ||
-			!memberIds.every((m): m is string => typeof m === "string")
+			// The Acct # is what the journal prints and Carmen pays by.
+			typeof code !== "string" ||
+			!code.trim()
 		) {
 			return data(
 				{ errorKey: "comptroller_brigades.errors.invalid_fields" },
@@ -347,16 +298,15 @@ export async function action({ request }: Route.ActionArgs) {
 			}
 		}
 
-		const existingMemberIds = existing?.memberIds ?? []
-		const newMemberIds = (memberIds as string[]).filter(
-			(m) => !existingMemberIds.includes(m),
-		)
-		if (newMemberIds.length > 0) {
-			const validMembers = await db.user.findMany({
-				where: { id: { in: newMemberIds }, role: "CREW", active: true },
-				select: { id: true },
+		const supervisorId =
+			typeof supervisorRaw === "string" && supervisorRaw.trim()
+				? supervisorRaw.trim()
+				: null
+		if (supervisorId) {
+			const ok = await db.user.count({
+				where: { id: supervisorId, role: "SUPERVISOR", active: true },
 			})
-			if (validMembers.length !== new Set(newMemberIds).size) {
+			if (ok === 0) {
 				return data(
 					{ errorKey: "comptroller_brigades.errors.invalid_fields" },
 					{ status: 400 },
@@ -367,12 +317,13 @@ export async function action({ request }: Route.ActionArgs) {
 		try {
 			const payload = {
 				name: name.trim(),
-				memberIds: memberIds as string[],
 				area,
-				code: typeof code === "string" && code.trim() ? code.trim() : null,
+				code: code.trim(),
+				supervisorId,
 			}
-			// An update keeps the brigade's existing owner (`supervisorId`) and
-			// its active flag: only the toggle button changes that.
+			// Crews have no logins, so Members is no longer edited here: whatever
+			// is stored stays. An update keeps the active flag: only the toggle
+			// button changes that.
 			const saved = existing
 				? await db.brigade.update({ where: { id: existing.id }, data: payload })
 				: await db.brigade.create({ data: { ...payload, active } })
@@ -422,16 +373,16 @@ export default function ComptrollerBrigades({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { brigades, crewUsers, areaOptions } = loaderData as {
+	const { brigades, supervisors, areaOptions } = loaderData as {
 		brigades: {
 			id: string
 			name: string
-			memberIds: string[]
 			active: boolean
 			area: string | null
 			code: string | null
+			supervisorId: string | null
 		}[]
-		crewUsers: CrewUser[]
+		supervisors: Supervisor[]
 		areaOptions: string[]
 	}
 	const { t } = useTranslation()
@@ -448,6 +399,7 @@ export default function ComptrollerBrigades({
 			? (actionData.errorKey as string)
 			: null
 	const [editingId, setEditingId] = useState<string | null>(null)
+	const [adding, setAdding] = useState(false)
 	const hasImportResult =
 		importFailed || !!importResult.preview || !!importResult.applied
 	const [showImport, setShowImport] = useState(hasImportResult)
@@ -458,87 +410,120 @@ export default function ComptrollerBrigades({
 	// A finished save (or toggle) collapses the open edit form; a failed one
 	// keeps it open so the error stays next to the fields.
 	useEffect(() => {
-		if (navigation.state === "idle" && !error) setEditingId(null)
+		if (navigation.state === "idle" && !error) {
+			setEditingId(null)
+			setAdding(false)
+		}
 	}, [navigation.state, error])
 
 	return (
 		<div className="space-y-8">
-			<h1 className="text-xl font-semibold">
-				{t("comptroller_brigades.title")}
-			</h1>
-
-			<section className="bg-card border rounded-lg p-6 space-y-4">
-				<div className="flex items-center justify-between gap-2">
-					<h2 className="text-base font-medium">
-						{t("comptroller_brigades.add_heading")}
-					</h2>
+			<div className="flex items-center justify-between">
+				<h1 className="text-xl font-semibold">
+					{t("comptroller_brigades.title")}
+				</h1>
+				<div className="flex flex-wrap items-center gap-2">
 					<Button
 						type="button"
 						variant="outline"
-						size="sm"
 						aria-expanded={showImport}
 						onClick={() => setShowImport((v) => !v)}
 					>
 						{t("comptroller_brigades.import.button")}
 					</Button>
+					<Button type="button" onClick={() => setAdding((v) => !v)}>
+						{t("comptroller_brigades.add_button")}
+					</Button>
 				</div>
-				{showImport && (
+			</div>
+
+			{showImport && (
+				<section className="bg-card border rounded-lg p-6 space-y-4">
+					<h2 className="text-base font-medium">
+						{t("comptroller_brigades.import.button")}
+					</h2>
 					<ImportPanel
 						errorKey={importFailed ? (importResult.errorKey ?? null) : null}
 						preview={importResult.preview ?? null}
 						applied={importResult.applied ?? null}
 						ignoredOverrides={importResult.ignoredOverrides ?? []}
 					/>
-				)}
-				<Form method="post" className="space-y-4">
-					<input type="hidden" name="intent" value="create" />
-					<div className="space-y-1">
-						<Label htmlFor="name">{t("comptroller_brigades.name_label")}</Label>
-						<Input id="name" name="name" required />
-					</div>
-					<div className="space-y-1">
-						<BrigadeAreaSelect id="area" areaOptions={areaOptions} />
-					</div>
-					<div className="space-y-1">
-						<Label htmlFor="code">{t("comptroller_brigades.code_label")}</Label>
-						<Input id="code" name="code" />
-					</div>
-					<div className="space-y-2">
-						<BrigadeMemberList
-							idPrefix="member"
-							crewUsers={crewUsers}
-							selectedIds={[]}
-							gridCols="sm:grid-cols-2"
-						/>
-					</div>
-					<div className="flex items-start gap-2">
-						<Checkbox
-							id="active"
-							name="active"
-							defaultChecked
-							aria-describedby="active-hint"
-							className="mt-0.5"
-						/>
-						<div className="space-y-0.5">
-							<Label htmlFor="active" className="text-sm">
-								{t("comptroller_brigades.active_label")}
+				</section>
+			)}
+
+			{adding && (
+				<section className="bg-card border rounded-lg p-6 space-y-4">
+					<h2 className="text-base font-medium">
+						{t("comptroller_brigades.add_heading")}
+					</h2>
+					<Form method="post" className="space-y-4">
+						<input type="hidden" name="intent" value="create" />
+						<div className="space-y-1">
+							<Label htmlFor="name">
+								{t("comptroller_brigades.name_label")}
 							</Label>
-							<p id="active-hint" className="text-xs text-muted-foreground">
-								{t("comptroller_brigades.active_hint")}
-							</p>
+							<Input id="name" name="name" required />
 						</div>
-					</div>
-					<Button type="submit">{t("comptroller_brigades.add_submit")}</Button>
-					{error && (
-						<p className="text-sm text-status-danger">{t(error as never)}</p>
-					)}
-				</Form>
-			</section>
+						<div className="space-y-1">
+							<BrigadeAreaSelect id="area" areaOptions={areaOptions} />
+						</div>
+						<div className="space-y-1">
+							<Label htmlFor="code">
+								{t("comptroller_brigades.code_label")}
+							</Label>
+							<Input id="code" name="code" required />
+						</div>
+						<div className="space-y-1">
+							<Label htmlFor="supervisorId">
+								{t("comptroller_brigades.supervisor_label")}
+							</Label>
+							<select
+								id="supervisorId"
+								name="supervisorId"
+								className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm text-foreground shadow-sm"
+							>
+								<option value="">—</option>
+								{supervisors.map((u) => (
+									<option key={u.id} value={u.id}>
+										{u.name}
+									</option>
+								))}
+							</select>
+						</div>
+						<div className="flex items-start gap-2">
+							<Checkbox
+								id="active"
+								name="active"
+								defaultChecked
+								aria-describedby="active-hint"
+								className="mt-0.5"
+							/>
+							<div className="space-y-0.5">
+								<Label htmlFor="active" className="text-sm">
+									{t("comptroller_brigades.active_label")}
+								</Label>
+								<p id="active-hint" className="text-xs text-muted-foreground">
+									{t("comptroller_brigades.active_hint")}
+								</p>
+							</div>
+						</div>
+						<Button type="submit">
+							{t("comptroller_brigades.add_submit")}
+						</Button>
+						{error && (
+							<p className="text-sm text-status-danger">{t(error as never)}</p>
+						)}
+					</Form>
+				</section>
+			)}
 
 			<section className="bg-card border rounded-lg overflow-hidden">
 				<table className="w-full text-sm">
 					<thead className="bg-muted border-b">
 						<tr>
+							<th className="px-4 py-3 text-left font-medium text-muted-foreground">
+								{t("comptroller_brigades.table.code")}
+							</th>
 							<th className="px-4 py-3 text-left font-medium text-muted-foreground">
 								{t("comptroller_brigades.table.name")}
 							</th>
@@ -546,7 +531,7 @@ export default function ComptrollerBrigades({
 								{t("comptroller_brigades.table.area")}
 							</th>
 							<th className="px-4 py-3 text-left font-medium text-muted-foreground">
-								{t("comptroller_brigades.table.members")}
+								{t("comptroller_brigades.table.supervisor")}
 							</th>
 							<th className="px-4 py-3 text-center font-medium text-muted-foreground">
 								{t("comptroller_brigades.table.active")}
@@ -558,31 +543,28 @@ export default function ComptrollerBrigades({
 					</thead>
 					<tbody className="divide-y">
 						{brigades.map((brigade) => {
-							const members = crewUsers.filter((u) =>
-								brigade.memberIds.includes(u.id),
+							const supervisor = supervisors.find(
+								(u) => u.id === brigade.supervisorId,
 							)
 							const editing = editingId === brigade.id
 							return (
 								<Fragment key={brigade.id}>
 									<tr className="hover:bg-muted">
-										<td className="px-4 py-3 font-medium">
-											{brigade.code ? (
-												<span className="font-mono">{brigade.code} </span>
-											) : null}
-											{brigade.name}
+										<td
+											className={
+												brigade.active && !brigade.code
+													? "px-4 py-3 font-mono font-medium text-status-warn"
+													: "px-4 py-3 font-mono"
+											}
+										>
+											{brigade.code ?? t("comptroller_brigades.no_code")}
 										</td>
+										<td className="px-4 py-3 font-medium">{brigade.name}</td>
 										<td className="px-4 py-3 text-muted-foreground">
 											{brigade.area}
 										</td>
-										<td
-											className={
-												brigade.active && members.length === 0
-													? "px-4 py-3 font-medium text-status-warn"
-													: "px-4 py-3 text-muted-foreground"
-											}
-										>
-											{members.map((m) => m.name).join(", ") ||
-												t("comptroller_brigades.no_members")}
+										<td className="px-4 py-3 text-muted-foreground">
+											{supervisor?.name ?? "—"}
 										</td>
 										<td className="px-4 py-3 text-center">
 											<span
@@ -624,10 +606,10 @@ export default function ComptrollerBrigades({
 									</tr>
 									{editing && (
 										<tr>
-											<td colSpan={5} className="bg-muted/40 px-4 py-4">
+											<td colSpan={6} className="bg-muted/40 px-4 py-4">
 												<EditBrigadeForm
 													brigade={brigade}
-													crewUsers={crewUsers}
+													supervisors={supervisors}
 													areaOptions={areaOptions}
 													error={error}
 													onCancel={() => setEditingId(null)}
@@ -641,7 +623,7 @@ export default function ComptrollerBrigades({
 						{brigades.length === 0 && (
 							<tr>
 								<td
-									colSpan={5}
+									colSpan={6}
 									className="px-4 py-6 text-center text-muted-foreground text-sm"
 								>
 									{t("comptroller_brigades.no_brigades")}
@@ -651,6 +633,9 @@ export default function ComptrollerBrigades({
 					</tbody>
 				</table>
 			</section>
+			<p className="text-xs text-muted-foreground">
+				{t("comptroller_brigades.deactivate_hint")}
+			</p>
 		</div>
 	)
 }
@@ -870,7 +855,7 @@ function ImportPreview({ preview }: { preview: BrigadeImportPreview }) {
 
 function EditBrigadeForm({
 	brigade,
-	crewUsers,
+	supervisors,
 	areaOptions,
 	error,
 	onCancel,
@@ -878,12 +863,12 @@ function EditBrigadeForm({
 	brigade: {
 		id: string
 		name: string
-		memberIds: string[]
 		active: boolean
 		area: string | null
 		code: string | null
+		supervisorId: string | null
 	}
-	crewUsers: CrewUser[]
+	supervisors: Supervisor[]
 	areaOptions: string[]
 	error: string | null
 	onCancel: () => void
@@ -893,7 +878,7 @@ function EditBrigadeForm({
 		<Form method="post" className="space-y-4 text-left">
 			<input type="hidden" name="intent" value="update" />
 			<input type="hidden" name="id" value={brigade.id} />
-			<div className="grid gap-3 md:grid-cols-3">
+			<div className="grid gap-3 md:grid-cols-4">
 				<div className="space-y-1">
 					<Label htmlFor={`name-${brigade.id}`}>
 						{t("comptroller_brigades.name_label")}
@@ -919,17 +904,28 @@ function EditBrigadeForm({
 					<Input
 						id={`code-${brigade.id}`}
 						name="code"
+						required
 						defaultValue={brigade.code ?? ""}
 					/>
 				</div>
-			</div>
-			<div className="space-y-2">
-				<BrigadeMemberList
-					idPrefix={`member-${brigade.id}`}
-					crewUsers={crewUsers}
-					selectedIds={brigade.memberIds}
-					gridCols="sm:grid-cols-2 lg:grid-cols-3"
-				/>
+				<div className="space-y-1">
+					<Label htmlFor={`supervisor-${brigade.id}`}>
+						{t("comptroller_brigades.supervisor_label")}
+					</Label>
+					<select
+						id={`supervisor-${brigade.id}`}
+						name="supervisorId"
+						defaultValue={brigade.supervisorId ?? ""}
+						className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm text-foreground shadow-sm"
+					>
+						<option value="">—</option>
+						{supervisors.map((u) => (
+							<option key={u.id} value={u.id}>
+								{u.name}
+							</option>
+						))}
+					</select>
+				</div>
 			</div>
 			<div className="flex items-center gap-2">
 				<Button type="submit" size="sm">

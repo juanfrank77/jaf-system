@@ -8,7 +8,7 @@ vi.mock("~/lib/db.server", () => ({
 			create: vi.fn(),
 			update: vi.fn(),
 		},
-		user: { findMany: vi.fn() },
+		user: { findMany: vi.fn(), count: vi.fn() },
 	},
 }))
 vi.mock("~/lib/permissions.server", () => ({ requireRole: vi.fn() }))
@@ -46,13 +46,15 @@ describe("/comptroller/brigades", () => {
 			user: { id: "carmen" },
 			session: {},
 		} as any)
-		vi.mocked(db.user.findMany).mockResolvedValue([{ id: "crew-1" }] as any)
+		vi.mocked(db.user.findMany).mockResolvedValue([])
+		vi.mocked(db.user.count).mockResolvedValue(1)
 		vi.mocked(db.brigade.create).mockResolvedValue({ id: "b1" } as any)
 		vi.mocked(db.brigade.update).mockResolvedValue({ id: "b1" } as any)
 	})
 
 	it("is open to the Comptroller and Admin, not to supervisors", async () => {
 		vi.mocked(db.brigade.findMany).mockResolvedValue([])
+		vi.mocked(db.user.findMany).mockResolvedValue([])
 		await loader({ request: request(), params: {} } as any)
 		expect(requireRole).toHaveBeenCalledWith(expect.anything(), [
 			"COMPTROLLER",
@@ -62,6 +64,7 @@ describe("/comptroller/brigades", () => {
 
 	it("lists every brigade, in every area", async () => {
 		vi.mocked(db.brigade.findMany).mockResolvedValue([{ id: "b1" }] as any)
+		vi.mocked(db.user.findMany).mockResolvedValue([])
 		const result = (await loader({
 			request: request(),
 			params: {},
@@ -78,35 +81,56 @@ describe("/comptroller/brigades", () => {
 		])
 	})
 
-	it("creates a brigade and syncs its contractor account", async () => {
+	it("creates a brigade with its Acct # and supervisor, and syncs its contractor account", async () => {
 		const result = await run(
-			formOf(
-				{
-					intent: "create",
-					name: "Brigada Central",
-					area: "CENTRAL",
-					code: "204",
-					active: "on",
-				},
-				["crew-1"],
-			),
+			formOf({
+				intent: "create",
+				name: "Brigada Central",
+				area: "CENTRAL",
+				code: " 204 ",
+				supervisorId: "sup-1",
+				active: "on",
+			}),
 		)
 		expect(result.status).toBe(302)
 		expect(db.brigade.create).toHaveBeenCalledWith({
 			data: {
 				name: "Brigada Central",
-				memberIds: ["crew-1"],
 				active: true,
 				area: "CENTRAL",
 				code: "204",
+				supervisorId: "sup-1",
 			},
 		})
 		expect(syncContractorAccount).toHaveBeenCalledWith(db, { id: "b1" })
 	})
 
+	it("requires an Acct #", async () => {
+		const result = await run(
+			formOf({ intent: "create", name: "X", area: "SUR", code: "  " }),
+		)
+		expect(result.init.status).toBe(400)
+		expect(db.brigade.create).not.toHaveBeenCalled()
+	})
+
+	it("rejects a supervisor who is not an active supervisor", async () => {
+		vi.mocked(db.user.count).mockResolvedValue(0)
+		const result = await run(
+			formOf({
+				intent: "create",
+				name: "X",
+				area: "SUR",
+				code: "204",
+				supervisorId: "ghost",
+			}),
+		)
+		expect(result.init.status).toBe(400)
+		expect(db.brigade.create).not.toHaveBeenCalled()
+	})
+
 	it("rejects an area outside the canonical set", async () => {
 		const result = await run(
-			formOf({ intent: "create", name: "X", area: "MARS" }),
+			formOf({ intent: "create", name: "X", area: "MARS", code: "1" }),
 		)
 		expect(result.init.status).toBe(400)
 		expect(db.brigade.create).not.toHaveBeenCalled()
@@ -114,7 +138,7 @@ describe("/comptroller/brigades", () => {
 
 	it("trims the area before checking it", async () => {
 		const result = await run(
-			formOf({ intent: "create", name: "X", area: " SUR " }),
+			formOf({ intent: "create", name: "X", area: " SUR ", code: "1" }),
 		)
 		expect(result.status).toBe(302)
 		expect(db.brigade.create).toHaveBeenCalledWith({
@@ -122,29 +146,18 @@ describe("/comptroller/brigades", () => {
 		})
 	})
 
-	it("rejects a new member who is not an active CREW user", async () => {
-		vi.mocked(db.user.findMany).mockResolvedValue([])
-		const result = await run(
-			formOf({ intent: "create", name: "X", area: "SUR" }, ["ghost"]),
-		)
-		expect(result.init.status).toBe(400)
-		expect(db.brigade.create).not.toHaveBeenCalled()
-	})
-
-	it("updates an existing brigade without re-validating members already on it", async () => {
+	it("updates a brigade and leaves the members it already has alone", async () => {
 		vi.mocked(db.brigade.findUnique).mockResolvedValue({
 			id: "b1",
 			memberIds: ["old"],
 		} as any)
 		const result = await run(
-			formOf({ intent: "update", id: "b1", name: "X", area: "SUR" }, ["old"]),
+			formOf({ intent: "update", id: "b1", name: "X", area: "SUR", code: "9" }),
 		)
 		expect(result.status).toBe(302)
-		expect(db.user.findMany).not.toHaveBeenCalled()
-		expect(db.brigade.update).toHaveBeenCalledWith({
-			where: { id: "b1" },
-			data: expect.objectContaining({ memberIds: ["old"], area: "SUR" }),
-		})
+		const { data } = vi.mocked(db.brigade.update).mock.calls[0][0] as any
+		expect(data).toMatchObject({ area: "SUR", code: "9" })
+		expect(data).not.toHaveProperty("memberIds")
 	})
 
 	it("leaves the active flag alone on update, even if the form omits it", async () => {
@@ -153,19 +166,27 @@ describe("/comptroller/brigades", () => {
 			memberIds: [],
 			active: true,
 		} as any)
-		await run(formOf({ intent: "update", id: "b1", name: "X", area: "SUR" }))
+		await run(
+			formOf({ intent: "update", id: "b1", name: "X", area: "SUR", code: "9" }),
+		)
 		const { data } = vi.mocked(db.brigade.update).mock.calls[0][0] as any
 		expect(data).not.toHaveProperty("active")
 	})
 
 	it("rejects an update with a blank or unknown id instead of creating", async () => {
 		const blank = await run(
-			formOf({ intent: "update", id: " ", name: "X", area: "SUR" }),
+			formOf({ intent: "update", id: " ", name: "X", area: "SUR", code: "9" }),
 		)
 		expect(blank.init.status).toBe(400)
 		vi.mocked(db.brigade.findUnique).mockResolvedValue(null)
 		const unknown = await run(
-			formOf({ intent: "update", id: "nope", name: "X", area: "SUR" }),
+			formOf({
+				intent: "update",
+				id: "nope",
+				name: "X",
+				area: "SUR",
+				code: "9",
+			}),
 		)
 		expect(unknown.init.status).toBe(400)
 		expect(db.brigade.create).not.toHaveBeenCalled()

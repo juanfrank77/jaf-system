@@ -964,6 +964,12 @@
 		"footer_note": "Generar la Relación de Cuentas marca este documento como LC solicitada. Envía el PDF por correo a hs@pbcc.com."
 	},
 	"admin_settings": {
+		"invoice_codes_heading": "Códigos de factura y números de trabajo",
+		"invoice_codes_description": "Se imprimen en cada factura de mantenimiento a PBCC. A/C queda en blanco.",
+		"invoice_dept_label": "DEPT.",
+		"invoice_cost_center_label": "CENTRO CODIGO COSTO",
+		"job_number_first_label": "Los números de trabajo empiezan en",
+		"job_number_first_hint": "Cada Aviso aceptado recibe el próximo número M. Solo se usa hasta que exista el primero: ponga el último número M de Lissette + 1.",
 		"title": "Configuración del sistema",
 		"ivu_heading": "Tasa de IVU",
 		"ivu_description": "Se aplica a la generación de todos los PDF de facturas. Ingresa como decimal (ej. 0.115 = 11.5%). Actual: {{current}}%",
@@ -983,6 +989,7 @@
 			"unknown_intent": "Acción desconocida.",
 			"invalid_lc_pbcc_rate": "Ingrese una tasa mayor que 0 y no mayor que 1.",
 			"invalid_bank_prefix": "Use de 1 a 8 letras o dígitos.",
+			"invalid_invoice_codes": "Use letras, dígitos o guiones en los códigos, y un número entero desde 1 para el trabajo.",
 			"invalid_pay_day": "Elige un día de la semana."
 		},
 		"lc_pbcc_heading": "Tasa de anticipo LC/PBCC",

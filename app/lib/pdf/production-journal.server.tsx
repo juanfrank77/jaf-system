@@ -170,7 +170,7 @@ export async function generateProductionJournalPdf(
 						<View key={`${j.invoiceId}-${j.lines[0]?.percent}`}>
 							<View style={[styles.row, styles.bold]} wrap={false}>
 								<Cell w={W.assoc + W.qty} right={false}>
-									{j.controlNumber}{" "}
+									{j.jobSeq == null ? j.controlNumber : `M-${j.jobSeq}`}{" "}
 									{j.avisoNumber ? `${prefix}${j.avisoNumber}` : ""}
 								</Cell>
 							</View>

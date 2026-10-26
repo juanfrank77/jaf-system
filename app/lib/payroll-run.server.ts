@@ -24,6 +24,7 @@ import { Prisma } from "../../generated/prisma/client"
 const INVOICE_SELECT = {
 	id: true,
 	controlNumber: true,
+	jobSeq: true,
 	avisoNumber: true,
 	contractorShareLines: true,
 	payablesClosedAt: true,
@@ -598,6 +599,8 @@ export type JournalLine = {
 export type JournalJob = {
 	invoiceId: string
 	controlNumber: string
+	/** JAF's M-number, the ASSOC column; null on a job accepted before job numbers. */
+	jobSeq: number | null
 	avisoNumber: string | null
 	lines: JournalLine[]
 	gross: number
@@ -649,6 +652,7 @@ export function buildJournalBlocks(
 	invoices: Array<{
 		id: string
 		controlNumber: string
+		jobSeq?: number | null
 		avisoNumber: string | null
 		contractorAccount: {
 			id: string
@@ -691,6 +695,7 @@ export function buildJournalBlocks(
 			block.jobs.push({
 				invoiceId: doc.id,
 				controlNumber: doc.controlNumber,
+				jobSeq: doc.jobSeq ?? null,
 				avisoNumber: doc.avisoNumber,
 				lines,
 				gross,
@@ -706,7 +711,13 @@ export function buildJournalBlocks(
 		a.brigadeCode.localeCompare(b.brigadeCode),
 	)
 	for (const block of blocks) {
-		block.jobs.sort((a, b) => a.controlNumber.localeCompare(b.controlNumber))
+		// Ascending job #; a job with no M-number yet sorts after, by work order.
+		block.jobs.sort(
+			(a, b) =>
+				(a.jobSeq ?? Number.MAX_SAFE_INTEGER) -
+					(b.jobSeq ?? Number.MAX_SAFE_INTEGER) ||
+				a.controlNumber.localeCompare(b.controlNumber),
+		)
 		// Running adj. net restarts at each brigade (PDF Part 1 § "Brigade total").
 		// Adj. Net on a Sub Total is figured on the brigade's gross so far, as
 		// the paper journal does, not summed from the jobs' own Adj. Net.

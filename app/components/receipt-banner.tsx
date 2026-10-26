@@ -16,6 +16,19 @@ const RECEIPTS = {
 	request_created: { to: null, link: null },
 	request_sent: { to: "/finance/payroll?tab=waiting", link: "view_waiting" },
 	paid: { to: null, link: null },
+	ewit_saved: {
+		to: "/comptroller/installers/batches",
+		link: "view_installer_batch",
+	},
+	ewit_removed: { to: null, link: null },
+	ewit_batch_closed: { to: null, link: null },
+	ewit_batch_sent: { to: null, link: null },
+	statement_saved: {
+		to: "/comptroller/installers/pay",
+		link: "go_installer_pay",
+	},
+	installers_paid: { to: null, link: null },
+	payment_undone: { to: null, link: null },
 } as const
 
 type ReceiptKey = keyof typeof RECEIPTS
@@ -51,11 +64,20 @@ export function ReceiptBanner() {
 		request_created: t("receipt.request_created", values),
 		request_sent: t("receipt.request_sent", values),
 		paid: t("receipt.paid", values),
+		ewit_saved: t("receipt.ewit_saved", values),
+		ewit_removed: t("receipt.ewit_removed", values),
+		ewit_batch_closed: t("receipt.ewit_batch_closed", values),
+		ewit_batch_sent: t("receipt.ewit_batch_sent", values),
+		statement_saved: t("receipt.statement_saved", values),
+		installers_paid: t("receipt.installers_paid", values),
+		payment_undone: t("receipt.payment_undone", values),
 	}
 	const links = {
 		view_batch: t("receipt.view_batch"),
 		go_payroll: t("receipt.go_payroll"),
 		view_waiting: t("receipt.view_waiting"),
+		view_installer_batch: t("receipt.view_installer_batch"),
+		go_installer_pay: t("receipt.go_installer_pay"),
 	}
 	const undo = params.get("undo")
 	const rest = new URLSearchParams(params)

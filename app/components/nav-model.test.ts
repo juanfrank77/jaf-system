@@ -135,16 +135,21 @@ describe("navGroupsFor", () => {
 		])
 	})
 
-	it("gives COMPTROLLER its own dashboard, one Payroll requests item, and a Team group with Brigades and a Soon Installers", () => {
+	it("gives COMPTROLLER its own dashboard, one Payroll requests item, the log and an Installers group", () => {
 		expect(tos(navGroupsFor("COMPTROLLER"))).toEqual([
 			["overview", ["/comptroller"]],
-			["money", ["/comptroller/to-pay"]],
-			["team", ["/comptroller/brigades", "/comptroller/installers"]],
+			["money", ["/comptroller/to-pay", "/comptroller/log"]],
+			[
+				"installers",
+				[
+					"/comptroller/installers",
+					"/comptroller/installers/ewit",
+					"/comptroller/installers/batches",
+					"/comptroller/installers/pay",
+				],
+			],
+			["team", ["/comptroller/brigades"]],
 		])
-		const installers = navGroupsFor("COMPTROLLER")
-			.flatMap((g) => g.items)
-			.find((i) => i.to === "/comptroller/installers")
-		expect(installers?.disabled).toBe(true)
 	})
 
 	it("keeps finance screens away from COMPTROLLER and the payroll queues open to ADMIN", () => {

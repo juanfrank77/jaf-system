@@ -39,6 +39,7 @@ CREATE TABLE "EwitBatch" (
     "sentAt" TIMESTAMP(3),
     "sentById" TEXT,
     "xlsxPath" TEXT,
+    "total" DECIMAL(65,30),
     "receivedAt" TIMESTAMP(3),
     "receivedAmount" DECIMAL(65,30),
     "receivedById" TEXT,

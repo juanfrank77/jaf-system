@@ -1269,6 +1269,8 @@ model EwitBatch {
   sentById       String?
   sentBy         User?     @relation("EwitBatchSender", fields: [sentById], references: [id])
   xlsxPath       String?
+  // The total the Excel was written with; the batch check compares it to the rows.
+  total          Decimal?
   // PBCC's statement (typed + attached).
   receivedAt     DateTime?
   receivedAmount Decimal?

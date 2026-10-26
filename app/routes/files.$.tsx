@@ -102,6 +102,15 @@ async function canAccessCompletionFile(
 		})
 		return Boolean(photo)
 	}
+	// Carmen reads the warranty photos (never the completion PDF, which carries
+	// the customer's details).
+	if (user.role === "COMPTROLLER") {
+		const photo = await db.installCompletion.findFirst({
+			where: { formPhotoPath: absolutePath },
+			select: { id: true },
+		})
+		return Boolean(photo)
+	}
 	if (user.role === "INSTALLER") {
 		const pdfMatch = relativePath.match(/^completions\/([^/]+)\.pdf$/)
 		if (pdfMatch) {
@@ -191,6 +200,36 @@ async function canAccessPayrollRunFile(
 	)
 }
 
+/**
+ * EWIT invoices, the installer batch Excel and PBCC statements are Carmen's
+ * (and Admin's). A report is only for the person who sent it and the one it
+ * was sent to.
+ */
+async function canAccessInstallerMoneyFile(
+	relativePath: string,
+	user: { id: string; role: string },
+): Promise<boolean> {
+	if (relativePath.startsWith("reports/")) {
+		const m = relativePath.match(/^reports\/([^/]+)\.pdf$/)
+		if (!m) return false
+		const report = await db.sentReport.findUnique({
+			where: { id: m[1] },
+			select: { fromId: true, toId: true },
+		})
+		return Boolean(
+			report && (report.fromId === user.id || report.toId === user.id),
+		)
+	}
+	return user.role === "COMPTROLLER" || user.role === "ADMIN"
+}
+
+const INSTALLER_MONEY_FOLDERS = [
+	"ewit-invoices/",
+	"ewit-batches/",
+	"pbcc-statements/",
+	"reports/",
+]
+
 export async function loader({ request, params }: Route.LoaderArgs) {
 	const session = await requireSession(request)
 	const user = await db.user.findUniqueOrThrow({
@@ -216,6 +255,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		if (!allowed) return new Response("Forbidden", { status: 403 })
 	} else if (relativePath.startsWith("snapshots/")) {
 		const allowed = await canAccessSnapshotFile(relativePath, user)
+		if (!allowed) return new Response("Forbidden", { status: 403 })
+	} else if (INSTALLER_MONEY_FOLDERS.some((f) => relativePath.startsWith(f))) {
+		const allowed = await canAccessInstallerMoneyFile(relativePath, user)
 		if (!allowed) return new Response("Forbidden", { status: 403 })
 	} else if (relativePath.startsWith("payroll-runs/")) {
 		const allowed = await canAccessPayrollRunFile(relativePath, user)

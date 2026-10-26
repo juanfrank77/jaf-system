@@ -70,6 +70,12 @@ export function makeTracker() {
 		payrollRunAccount: [] as string[],
 		contractorAccount: [] as string[],
 		brigade: [] as string[],
+		installCompletion: [] as string[],
+		van: [] as string[],
+		ewitInvoice: [] as string[],
+		ewitBatch: [] as string[],
+		installerPayment: [] as string[],
+		sentReport: [] as string[],
 	}
 	function track<M extends keyof typeof b, R extends { id: string }>(
 		model: M,
@@ -179,6 +185,50 @@ export function makeTracker() {
 			})
 		if (b.brigade.length)
 			await db.brigade.deleteMany({ where: { id: { in: b.brigade } } })
+		// Carmen's installer loop: completions point at invoices and payments, those
+		// at batches and users, so they go in that order, before the users.
+		if (b.installCompletion.length || b.user.length)
+			await db.installCompletion.deleteMany({
+				where: {
+					OR: [
+						{ id: { in: b.installCompletion } },
+						{ installerId: { in: b.user } },
+					],
+				},
+			})
+		if (b.ewitInvoice.length || b.user.length)
+			await db.ewitInvoice.deleteMany({
+				where: {
+					OR: [{ id: { in: b.ewitInvoice } }, { createdById: { in: b.user } }],
+				},
+			})
+		if (b.ewitBatch.length || b.user.length)
+			await db.ewitBatch.deleteMany({
+				where: {
+					OR: [{ id: { in: b.ewitBatch } }, { createdById: { in: b.user } }],
+				},
+			})
+		if (b.installerPayment.length || b.user.length)
+			await db.installerPayment.deleteMany({
+				where: {
+					OR: [
+						{ id: { in: b.installerPayment } },
+						{ installerId: { in: b.user } },
+						{ paidById: { in: b.user } },
+					],
+				},
+			})
+		if (b.sentReport.length || b.user.length)
+			await db.sentReport.deleteMany({
+				where: {
+					OR: [
+						{ id: { in: b.sentReport } },
+						{ fromId: { in: b.user } },
+						{ toId: { in: b.user } },
+					],
+				},
+			})
+		if (b.van.length) await db.van.deleteMany({ where: { id: { in: b.van } } })
 		if (b.warehouseAssignment.length)
 			await db.warehouseAssignment.deleteMany({
 				where: { id: { in: b.warehouseAssignment } },
@@ -442,6 +492,52 @@ export async function seedFinanceableInvoice(
 					: overrides.pbccRequestSentAt,
 			advanceReceivedAt: overrides.funded ? new Date() : null,
 			advanceAmount: overrides.funded ? 80 : null,
+		},
+	})
+}
+
+/** An installer with a profile (Emp #) and a van, ready to submit completions. */
+export async function seedInstaller(
+	opts: { name?: string; jafNumber?: string } = {},
+) {
+	const user = await seedUser({ role: "INSTALLER", name: opts.name })
+	const token = runToken("INS")
+	await db.installerProfile.create({
+		data: {
+			userId: user.id,
+			jafNumber: opts.jafNumber ?? "1808",
+			toaNumber: token,
+		},
+	})
+	const van = await db.van.create({
+		data: { name: `Van ${token}`, installerId: user.id },
+	})
+	return { user, van }
+}
+
+/** A submitted installer completion (the warranty doc) for an order #. */
+export async function seedCompletion(opts: {
+	installerId: string
+	vanId: string
+	orderNo: string
+	installedAt?: Date
+	photo?: boolean
+}) {
+	return db.installCompletion.create({
+		data: {
+			idempotencyKey: runToken("IDK"),
+			claroOrderNo: opts.orderNo,
+			installerId: opts.installerId,
+			vanId: opts.vanId,
+			status: "SUBMITTED",
+			address: "Test address",
+			installedAt: opts.installedAt ?? new Date(),
+			submittedAt: opts.installedAt ?? new Date(),
+			serialInstalled: `ALCLED${opts.orderNo}`,
+			formPhotoPath:
+				opts.photo === false
+					? null
+					: `/tmp/uploads/completions/${opts.orderNo}.jpg`,
 		},
 	})
 }

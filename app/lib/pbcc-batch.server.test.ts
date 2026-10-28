@@ -1,6 +1,7 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import ExcelJS from "exceljs"
+import { extractText, getDocumentProxy } from "unpdf"
 import {
 	afterAll,
 	afterEach,
@@ -47,6 +48,14 @@ import { planPackage } from "./pbcc-package.server"
 const t = makeTracker()
 const docIds: string[] = []
 const userIds: string[] = []
+
+const pdfText = async (file: string) =>
+	(
+		await extractText(
+			await getDocumentProxy(new Uint8Array(await fs.readFile(file))),
+			{ mergePages: true },
+		)
+	).text
 
 const uploadDir = () => process.env.UPLOAD_DIR || "/tmp/jaf/uploads"
 const exists = (p: string) =>
@@ -188,6 +197,64 @@ describe("accepting fills the open batch", { timeout: 60_000 }, () => {
 			expect(doc.bankScheduleId).toBe(batch.id)
 			expect(await exists(doc.bankInvoicePdfPath as string)).toBe(true)
 		}
+	})
+
+	it("prints the M17- number, the invoice date, the contract and the job's own work dates on the invoice", async () => {
+		const u = await user()
+		const a = await accepted({ aviso: "10359519" })
+		await db.jafInvoice.update({
+			where: { id: a.id },
+			data: {
+				startedAt: new Date("2026-10-14T14:00:00Z"),
+				endedAt: new Date("2026-10-16T20:00:00Z"),
+				// a test-day submit date that must never leak onto the invoice
+				fieldSubmittedAt: new Date("2026-09-02T14:00:00Z"),
+				financeVerifiedAt: new Date("2026-10-27T15:00:00Z"),
+			},
+		})
+		await db.systemSetting.deleteMany({
+			where: { key: "bank_contract_number" },
+		})
+		await addToOpenBatch({ docId: a.id, userId: u.id })
+		const doc = await db.jafInvoice.findUniqueOrThrow({ where: { id: a.id } })
+		const text = await pdfText(doc.bankInvoicePdfPath as string)
+		expect(text).toContain("M17-10359519")
+		expect(text).toContain("10/27/26")
+		expect(text).toContain("10/14/26")
+		expect(text).toContain("10/16/26")
+		expect(text).not.toContain("09/02/26")
+		// no contract number set yet: the placeholder, until Lissette gives it
+		expect(text).toContain("17-xxx")
+	})
+
+	it("prints the contract number setting, and leaves the work dates blank rather than guessing", async () => {
+		const u = await user()
+		const a = await accepted({ aviso: "10359520" })
+		await db.jafInvoice.update({
+			where: { id: a.id },
+			data: { fieldSubmittedAt: new Date("2026-09-02T14:00:00Z") },
+		})
+		await db.systemSetting.upsert({
+			where: { key: "bank_contract_number" },
+			update: { value: "17-0456", updatedById: u.id },
+			create: {
+				key: "bank_contract_number",
+				value: "17-0456",
+				updatedById: u.id,
+			},
+		})
+		try {
+			await addToOpenBatch({ docId: a.id, userId: u.id })
+		} finally {
+			await db.systemSetting.deleteMany({
+				where: { key: "bank_contract_number" },
+			})
+		}
+		const doc = await db.jafInvoice.findUniqueOrThrow({ where: { id: a.id } })
+		const text = await pdfText(doc.bankInvoicePdfPath as string)
+		expect(text).toContain("Contrato Núm. 17-0456")
+		expect(text).not.toContain("17-xxx")
+		expect(text).not.toContain("09/02/26")
 	})
 
 	it("is safe to call again for a packet that is already in a batch", async () => {

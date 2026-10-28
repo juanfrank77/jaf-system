@@ -241,7 +241,9 @@ describe("request sheet PDF", () => {
 		const inline = await getAs(run.id, "inline=1")
 		expect(inline.headers.get("Content-Disposition")).toContain("inline")
 		expect((await getAs(run.id, "mode=summary")).status).toBe(200)
-		expect((await getAs(run.id, "mode=brigades&brigades=7731")).status).toBe(200)
+		expect((await getAs(run.id, "mode=brigades&brigades=7731")).status).toBe(
+			200,
+		)
 		await expect(getAs(run.id, "mode=brigades")).rejects.toMatchObject({
 			status: 400,
 		})
@@ -263,6 +265,7 @@ describe("request sheet PDF", () => {
 		await expect(outline(draft.run.id)).rejects.toMatchObject({ status: 404 })
 		const result = await outline(sent.run.id)
 		expect(result.brigades.map((b) => b.code)).toContain("7732")
-		expect(result.totalPages).toBeGreaterThan(result.brigades.length)
+		// the report totals sit under the last brigade, on no page of their own
+		expect(result.totalPages).toBeGreaterThanOrEqual(result.brigades.length)
 	})
 })

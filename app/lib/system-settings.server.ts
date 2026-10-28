@@ -1,3 +1,4 @@
+import { contractLabel } from "~/lib/bank-schedule"
 import { DEFAULT_PAY_DAY } from "~/lib/pay-day"
 import { db } from "./db.server"
 
@@ -113,6 +114,35 @@ export async function setBankInvoicePrefix(
 		where: { key: "bank_invoice_prefix" },
 		update: { value: prefix.trim(), updatedById },
 		create: { key: "bank_invoice_prefix", value: prefix.trim(), updatedById },
+	})
+}
+
+/**
+ * JAF's contract number with PBCC, printed as "Contrato Núm." on every bank
+ * invoice. Unset until Lissette provides it; the invoice then carries the
+ * prefix's placeholder ("17-xxx"), which is the one thing to fix before go-live.
+ */
+export async function getBankContractNumber(prefix: string): Promise<string> {
+	const setting = await db.systemSetting.findUnique({
+		where: { key: "bank_contract_number" },
+	})
+	const value = setting?.value?.trim()
+	return value ? value : contractLabel(prefix)
+}
+
+/** An empty value clears the setting, back to the placeholder. */
+export async function setBankContractNumber(
+	contract: string,
+	updatedById: string,
+): Promise<void> {
+	await db.systemSetting.upsert({
+		where: { key: "bank_contract_number" },
+		update: { value: contract.trim(), updatedById },
+		create: {
+			key: "bank_contract_number",
+			value: contract.trim(),
+			updatedById,
+		},
 	})
 }
 

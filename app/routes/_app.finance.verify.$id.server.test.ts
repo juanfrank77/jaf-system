@@ -83,6 +83,8 @@ const completeDoc = () => ({
 	...baseDoc(),
 	jafInvoiceGeneratedAt: new Date("2026-10-01T12:00:00Z"),
 	jafInvoicePdfPath: "/uploads/packets/job-1-packet-1.pdf",
+	startedAt: new Date("2026-10-14T14:00:00Z"),
+	endedAt: new Date("2026-10-14T20:00:00Z"),
 	avisoNumber: "10353961",
 	avisoDocPath: "/uploads/aviso-docs/job-1-aviso.pdf",
 	preCertSheets: [
@@ -347,6 +349,17 @@ describe("Finance verify action: the accept gate and send back", () => {
 		})
 		expect(await run({ intent: "verify", ...ALL_CHECKS })).toEqual({
 			errorKey: "finance_verify.errors.documents_missing",
+		})
+		expect(mocks.db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("refuses to accept a job with no work dates, and never fills in today's", async () => {
+		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue({
+			...completeDoc(),
+			startedAt: null,
+		})
+		expect(await run({ intent: "verify", ...ALL_CHECKS })).toEqual({
+			errorKey: "finance_verify.errors.work_dates_missing",
 		})
 		expect(mocks.db.jafInvoice.update).not.toHaveBeenCalled()
 	})

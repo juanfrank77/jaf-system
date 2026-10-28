@@ -8,6 +8,7 @@ import { requireRole } from "~/lib/permissions.server"
 import {
 	getAgingAlertDays,
 	getAvisoAmountTolerance,
+	getBankContractNumber,
 	getBankInvoicePrefix,
 	getInvoiceCodes,
 	getIvuRate,
@@ -16,6 +17,7 @@ import {
 	getPayDayWeekday,
 	setAgingAlertDays,
 	setAvisoAmountTolerance,
+	setBankContractNumber,
 	setBankInvoicePrefix,
 	setInvoiceCodes,
 	setIvuRate,
@@ -38,6 +40,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		avisoAmountTolerance,
 		lcPbccAdvanceRate,
 		bankInvoicePrefix,
+		bankContractNumber,
 		payDayWeekday,
 		invoiceCodes,
 		jobNumberFirst,
@@ -47,6 +50,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		getAvisoAmountTolerance(),
 		getLcPbccAdvanceRate(),
 		getBankInvoicePrefix(),
+		getBankInvoicePrefix().then(getBankContractNumber),
 		getPayDayWeekday(),
 		getInvoiceCodes(),
 		getJobNumberFirst(),
@@ -57,6 +61,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		avisoAmountTolerance,
 		lcPbccAdvanceRate,
 		bankInvoicePrefix,
+		bankContractNumber,
 		payDayWeekday,
 		invoiceCodes,
 		jobNumberFirst,
@@ -133,7 +138,12 @@ export async function action({ request }: Route.ActionArgs) {
 		if (!/^[A-Za-z0-9]{1,8}$/.test(raw)) {
 			return { errorKey: "admin_settings.errors.invalid_bank_prefix" }
 		}
+		const contract = String(form.get("bank_contract_number") ?? "").trim()
+		if (!/^[A-Za-z0-9-]{0,20}$/.test(contract)) {
+			return { errorKey: "admin_settings.errors.invalid_bank_prefix" }
+		}
 		await setBankInvoicePrefix(raw.toUpperCase(), user.id)
+		await setBankContractNumber(contract, user.id)
 		return { successBankPrefix: true }
 	}
 
@@ -176,6 +186,7 @@ export default function AdminSettings({
 		avisoAmountTolerance,
 		lcPbccAdvanceRate,
 		bankInvoicePrefix,
+		bankContractNumber,
 		payDayWeekday,
 		invoiceCodes,
 		jobNumberFirst,
@@ -431,6 +442,21 @@ export default function AdminSettings({
 							defaultValue={bankInvoicePrefix}
 							required
 						/>
+					</div>
+					<div>
+						<Label htmlFor="bank_contract_number">
+							{t("admin_settings.bank_contract_label")}
+						</Label>
+						<Input
+							id="bank_contract_number"
+							name="bank_contract_number"
+							type="text"
+							maxLength={20}
+							defaultValue={bankContractNumber}
+						/>
+						<p className="mt-1 text-xs text-muted-foreground">
+							{t("admin_settings.bank_contract_description")}
+						</p>
 					</div>
 					{error && (
 						<p className="text-sm text-status-danger">{t(error as never)}</p>

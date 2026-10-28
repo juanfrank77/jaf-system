@@ -7,7 +7,8 @@ import {
 	View,
 } from "@react-pdf/renderer"
 import { getDocumentProxy } from "unpdf"
-import { shareFigures } from "~/lib/contractor-share"
+import { bankInvoiceNumber } from "~/lib/bank-schedule"
+import { displayRequestLabel } from "~/lib/payroll-request-view"
 import type { JournalBlock } from "~/lib/payroll-run.server"
 
 const styles = StyleSheet.create({
@@ -39,7 +40,6 @@ const styles = StyleSheet.create({
 		marginTop: 4,
 		fontFamily: "Courier-Bold",
 	},
-	reportTotals: { marginTop: 40, fontFamily: "Courier-Bold" },
 })
 
 // Column widths in points. ASSOC/description share the left block.
@@ -68,12 +68,16 @@ const printDate = (d: Date) => {
 
 export type JournalOptions = {
 	/**
-	 * Print the JAF Unit Price and Gross columns. The brigade copy leaves them
-	 * blank (the columns stay in place); Lissette's copy shows them.
+	 * Print the JAF Unit Price and Gross columns. The brigade copy prints 0.00
+	 * in them (the columns stay in place); Lissette's copy shows them.
 	 */
 	showPrices: boolean
-	/** Prefix of the PBCC invoice number: "M17" + the Aviso #. */
+	/** Prefix of the PBCC invoice number: "M17" + "-" + the Aviso #. */
 	invoicePrefix?: string
+	/** The request's pay date, printed in every page header when known. */
+	payDate?: Date | null
+	/** Put the report totals row under the last brigade (default: unless a partial print). */
+	withTotals?: boolean
 	printedAt?: Date
 	/** Print only these brigades' pages (their codes, "009D" for D lines) and no report totals. */
 	onlyBrigades?: string[]
@@ -126,34 +130,35 @@ export async function generateProductionJournalPdf(
 		const keep = new Set(opts.onlyBrigades)
 		blocks = blocks.filter((b) => keep.has(b.brigadeCode))
 	}
-	const withTotals = !opts.onlyBrigades
+	const withTotals = opts.withTotals ?? !opts.onlyBrigades
 	const date = printDate(opts.printedAt ?? new Date())
-	const money0 = (n: number) => (opts.showPrices ? money(n) : "")
+	// Lissette's rule: Gross is the JAF total, so the brigade copy prints 0.00 in
+	// its place (like Unit Price). Net is already computed from the real gross.
+	const money0 = (n: number) => money(opts.showPrices ? n : 0)
 	const allGross = all_.reduce((s, b) => s + b.gross, 0)
-	// The report totals take the grand gross at the first block's rate, as the
-	// old report does; D blocks add their own share on top.
-	const totals = all_.reduce(
-		(acc, b) => {
-			const f = shareFigures(b.gross, b.percent)
-			return {
-				net: acc.net + f.net,
-				ret: acc.ret + f.retention,
-				adj: acc.adj + f.adjNet,
-			}
-		},
-		{ net: 0, ret: 0, adj: 0 },
-	)
-	const hasD = all_.some((b) => b.percent !== 65)
-	const all = shareFigures(allGross, 65)
-	const grand = hasD
-		? totals
-		: { net: all.net, ret: all.retention, adj: all.adjNet }
+	// The grand total is the brigades' Total SC rows added up, to the cent.
+	const sumCents = (pick: (b: JournalBlock) => number) =>
+		all_.reduce((s, b) => s + Math.round(pick(b) * 100), 0) / 100
+	const grand = {
+		net: sumCents((b) => b.net),
+		ret: sumCents((b) => b.retention),
+		adj: sumCents((b) => b.totalSC),
+	}
+	const request = [
+		displayRequestLabel(run.label),
+		opts.payDate ? `Pay date ${printDate(opts.payDate)}` : "",
+	]
+		.filter(Boolean)
+		.join(" · ")
 
 	const header = (
 		<View style={styles.pageHeader} fixed>
 			<Text>{date}</Text>
 			<Text>JAF Communications, Inc.</Text>
-			<Text render={({ pageNumber }) => `page ${pageNumber}`} />
+			<View style={{ alignItems: "flex-end" }}>
+				<Text>{request}</Text>
+				<Text render={({ pageNumber }) => `page ${pageNumber}`} />
+			</View>
 		</View>
 	)
 	const title = (
@@ -161,10 +166,23 @@ export async function generateProductionJournalPdf(
 			<Text style={styles.title}>PRODUCTION JOURNAL</Text>
 		</View>
 	)
+	// The report totals, lined up with the columns, right after the last Total SC.
+	const grandTotals = (
+		<View style={[styles.totalRow, { marginTop: 14 }]} wrap={false}>
+			<Cell w={W.assoc + W.qty + W.unit} right={false}>
+				Totals
+			</Cell>
+			<Cell w={W.gross}>{money0(allGross)}</Cell>
+			<Cell w={W.net}>{money(grand.net)}</Cell>
+			<Cell w={W.pct}>{money(0)}</Cell>
+			<Cell w={W.ret}>{money(grand.ret)}</Cell>
+			<Cell w={W.adj}>{money(grand.adj)}</Cell>
+		</View>
+	)
 
 	const doc = (
 		<Document>
-			{blocks.map((b) => (
+			{blocks.map((b, i) => (
 				<Page
 					key={b.brigadeCode}
 					size="LETTER"
@@ -175,7 +193,8 @@ export async function generateProductionJournalPdf(
 					{pageFooter(opts.footer)}
 					{title}
 					<Text style={styles.brigade}>
-						{b.brigadeCode} {b.brigadeLabel.toUpperCase()} Acct. ID:
+						{b.brigadeCode} {b.brigadeLabel.toUpperCase()} Acct. ID:{" "}
+						{b.acctId ?? ""}
 					</Text>
 					<View style={styles.columns}>
 						<Cell w={W.assoc} right={false}>
@@ -194,7 +213,9 @@ export async function generateProductionJournalPdf(
 							<View style={[styles.row, styles.bold]} wrap={false}>
 								<Cell w={W.assoc + W.qty} right={false}>
 									{j.jobSeq == null ? j.controlNumber : `M-${j.jobSeq}`}{" "}
-									{j.avisoNumber ? `${prefix}${j.avisoNumber}` : ""}
+									{j.avisoNumber
+										? bankInvoiceNumber(prefix, j.avisoNumber)
+										: ""}
 								</Cell>
 							</View>
 							{j.lines.map((l, i) => (
@@ -238,19 +259,15 @@ export async function generateProductionJournalPdf(
 						<Cell w={W.ret}>{money(b.retention)}</Cell>
 						<Cell w={W.adj}>{money(b.totalSC)}</Cell>
 					</View>
+					{withTotals && i === blocks.length - 1 && grandTotals}
 				</Page>
 			))}
-			{withTotals && (
+			{withTotals && blocks.length === 0 && (
 				<Page size="LETTER" orientation="landscape" style={styles.page}>
+					{header}
 					{pageFooter(opts.footer)}
-					<Text>{run.label}</Text>
-					<View style={styles.reportTotals}>
-						<Text>Totals: Gross Amt. {money0(allGross) || "-"}</Text>
-						<Text>Net Amt. {money(grand.net)}</Text>
-						<Text>Ret. {money(0)}</Text>
-						<Text>10% Ret. {money(grand.ret)}</Text>
-						<Text>Adj. Net Amount {money(grand.adj)}</Text>
-					</View>
+					{title}
+					{grandTotals}
 				</Page>
 			)}
 		</Document>
@@ -264,7 +281,7 @@ async function pageCount(bytes: Buffer): Promise<number> {
 }
 
 export type JournalOutline = {
-	/** Pages of the whole packet: every brigade, then the report totals. */
+	/** Pages of the whole packet: every brigade, the report totals under the last. */
 	totalPages: number
 	brigades: {
 		code: string
@@ -288,12 +305,14 @@ export async function journalOutline(
 ): Promise<JournalOutline> {
 	const brigades: JournalOutline["brigades"] = []
 	let next = 1
-	for (const b of blocks) {
+	for (const [i, b] of blocks.entries()) {
+		// The report totals ride on the last brigade's page run, so count them there.
 		const pages = await pageCount(
 			await generateProductionJournalPdf(run, blocks, {
 				...opts,
 				footer: undefined,
 				onlyBrigades: [b.brigadeCode],
+				withTotals: i === blocks.length - 1,
 			}),
 		)
 		brigades.push({
@@ -306,7 +325,7 @@ export async function journalOutline(
 		})
 		next += pages
 	}
-	return { totalPages: next, brigades }
+	return { totalPages: Math.max(1, next - 1), brigades }
 }
 
 /** The one-page brigade list: who is on the packet, what each is owed and where to find it. */

@@ -34,6 +34,8 @@ const INVOICE_SELECT = {
 			id: true,
 			code: true,
 			label: true,
+			// Carmen's Acct # for the brigade, printed as Acct. ID on the journal.
+			brigade: { select: { code: true } },
 		},
 	},
 } as const
@@ -712,6 +714,8 @@ export type JournalBlock = {
 	/** The brigade's real account (no D), what a payment is ticked against. */
 	accountCode: string
 	brigadeLabel: string
+	/** Carmen's Acct # for the brigade (its record's code), null if not set yet. */
+	acctId: string | null
 	/** 65, or 80 for a D block. */
 	percent: number
 	/** D-line retention is not confirmed with Lissette yet. */
@@ -732,10 +736,12 @@ export type JournalBlock = {
  * Rules from docs/JAF_Finance_answer_Journey.pdf Part 1 § "How the report is built":
  *  - Columns: ASSOC/code · DESCRIPTION · QTY · UNIT PRICE · GROSS · NET ·
  *    Pct. RET. (always 0.00) · 10% RET. · ADJ. NET
- *  - Net = Gross × 0.65; Retention = Net × 0.10; Adj. Net = Gross × 0.585
- *    (all truncated to cents per line — see computeContractorPayment)
- *  - Sub Total: Gross, Net, Ret summed per job; Adj. Net = running total
- *    within the brigade
+ *  - Net = Gross × 0.65 and Retention = Net-rate × 0.10, each truncated to
+ *    the cent from the LINE's gross; Adj. Net = Net − Retention. Round once
+ *    per line: every Sub Total, Total SC and grand total only adds the
+ *    printed lines, so a column always equals its calculator sum
+ *  - Sub Total: Gross, Net, Ret, Adj. Net summed per job; the Adj. Net column
+ *    on it is the running total within the brigade
  *  - Total SC: ends each brigade; running restarts at the next brigade
  *  - Order: brigades by number, jobs by M-number (controlNumber) inside
  *
@@ -753,6 +759,7 @@ export function buildJournalBlocks(
 			id: string
 			code: string
 			label: string
+			brigade?: { code: string | null } | null
 		} | null
 		contractorShareLines: unknown
 	}>,
@@ -764,7 +771,19 @@ export function buildJournalBlocks(
 		const all: JournalLine[] = parseShareLines(doc.contractorShareLines)
 		// A D line prints under the brigade's D account ("009D"), at its own rate.
 		for (const percent of [...new Set(all.map((l) => l.percent))]) {
-			const lines = all.filter((l) => l.percent === percent)
+			// Round once, per line: net and retention are truncated from the line's
+			// gross, Adj. Net is their difference. Everything above only adds.
+			const lines = all
+				.filter((l) => l.percent === percent)
+				.map((l) => {
+					const f = shareFigures(l.gross, percent)
+					return {
+						...l,
+						net: f.net,
+						retention: f.retention,
+						adjNet: cents(f.net - f.retention),
+					}
+				})
 			const isD = isDPercent(percent)
 			const key = isD ? `${acc.code}D` : acc.code
 			let block = byBrigade.get(key)
@@ -773,6 +792,7 @@ export function buildJournalBlocks(
 					brigadeCode: key,
 					accountCode: acc.code,
 					brigadeLabel: acc.label,
+					acctId: acc.brigade?.code ?? null,
 					percent,
 					unverified: isD,
 					gross: 0,
@@ -783,9 +803,7 @@ export function buildJournalBlocks(
 				}
 				byBrigade.set(key, block)
 			}
-			// The job's figures come from the job's gross, not from its lines.
 			const gross = round2(lines.reduce((s, l) => s + l.gross, 0))
-			const f = shareFigures(gross, percent)
 			block.gross = round2(block.gross + gross)
 			block.jobs.push({
 				invoiceId: doc.id,
@@ -794,9 +812,9 @@ export function buildJournalBlocks(
 				avisoNumber: doc.avisoNumber,
 				lines,
 				gross,
-				net: f.net,
-				retention: f.retention,
-				adjNet: f.adjNet,
+				net: sumCents(lines, (l) => l.net),
+				retention: sumCents(lines, (l) => l.retention),
+				adjNet: sumCents(lines, (l) => l.adjNet),
 				adjNetRunning: 0,
 			})
 		}
@@ -813,26 +831,26 @@ export function buildJournalBlocks(
 					(b.jobSeq ?? Number.MAX_SAFE_INTEGER) ||
 				a.controlNumber.localeCompare(b.controlNumber),
 		)
-		// Running adj. net restarts at each brigade (PDF Part 1 § "Brigade total").
-		// Adj. Net on a Sub Total is figured on the brigade's gross so far, as
-		// the paper journal does, not summed from the jobs' own Adj. Net.
-		let runningGross = 0
+		// Running adj. net restarts at each brigade and is a plain running sum of
+		// the jobs above it, so the last one is the brigade's Total SC.
+		let running = 0
 		for (const job of block.jobs) {
-			runningGross = round2(runningGross + job.gross)
-			job.adjNetRunning = shareFigures(runningGross, block.percent).adjNet
+			running = cents(running + job.adjNet)
+			job.adjNetRunning = running
 		}
-		// The brigade's figures come from the brigade's gross. The running
-		// column and the jobs may differ from it by a few cents; this is what
-		// gets paid.
-		const f = shareFigures(block.gross, block.percent)
-		block.net = f.net
-		block.retention = f.retention
-		block.totalSC = f.adjNet
+		block.net = sumCents(block.jobs, (j) => j.net)
+		block.retention = sumCents(block.jobs, (j) => j.retention)
+		block.totalSC = running
 	}
 	return blocks
 }
 
 const PCT_RET_DEFAULT = 0
+
+/** A money figure rounded to whole cents, so sums of cents never drift. */
+const cents = (n: number) => Math.round(n * 100) / 100
+const sumCents = <T>(items: T[], pick: (item: T) => number) =>
+	items.reduce((s, i) => s + Math.round(pick(i) * 100), 0) / 100
 
 function parseShareLines(value: unknown): JournalLine[] {
 	if (!Array.isArray(value)) return []

@@ -193,6 +193,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 		)
 		if (present.some((d) => !d.href))
 			return { errorKey: "finance_verify.errors.documents_missing" }
+		// The PBCC invoice and Excel carry the job's real work dates, which feed
+		// the PBCC clock: never accept without them, never fill in today's.
+		if (!doc.startedAt || !doc.endedAt)
+			return { errorKey: "finance_verify.errors.work_dates_missing" }
 		const { nextId, total } = await inboxNeighbors(params.id)
 		// No Aviso-amount check (F2): verifying never asks for or compares one.
 		const note = (form.get("note") as string | null)?.trim() || null

@@ -13,6 +13,7 @@ import { Checkbox } from "~/components/ui/checkbox"
 import { Input } from "~/components/ui/input"
 import { FINANCE_STEPS } from "~/lib/finance-steps"
 import { VERIFY_CHECKS as CHECKS } from "~/lib/finance-verify-checks"
+import { formatShortDate } from "~/lib/payroll-request-view"
 import { formatMoney, formatUnitPrice } from "~/lib/utils"
 import type { Route } from "../routes/+types/_app.finance.verify.$id"
 
@@ -396,6 +397,18 @@ function VerifyPacket({ loaderData, actionData }: ViewProps) {
 								{t("finance_verify.aviso_number")}:
 							</span>{" "}
 							{doc.avisoNumber || "—"}
+						</p>
+						<p>
+							<span className="text-muted-foreground">
+								{t("finance_verify.work_dates")}:
+							</span>{" "}
+							{doc.startedAt && doc.endedAt ? (
+								`${formatShortDate(doc.startedAt)} – ${formatShortDate(doc.endedAt)}`
+							) : (
+								<span className="font-medium text-status-danger">
+									{t("finance_verify.work_dates_missing")}
+								</span>
+							)}
 						</p>
 						<p>
 							<span className="text-muted-foreground">

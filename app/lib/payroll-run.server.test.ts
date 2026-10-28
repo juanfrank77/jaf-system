@@ -1130,25 +1130,25 @@ describe("payrollSheetLines", () => {
 		})),
 	})
 
-	it("figures the brigade row from the brigade's gross, truncated", () => {
-		// Brigade 009, gross 10,679.00: pay 6,247.21 (Net − Ret would say .22).
+	it("figures each line from its own gross, truncated, and pays Net − Retention", () => {
+		// Brigade 009, gross 10,679.00: net 6,941.35 − ret 694.13 = 6,247.22.
 		const [row] = payrollSheetLines(
 			buildJournalBlocks([job("j1", "009", [{ gross: 10679 }])]),
 		)
 		expect(row.net).toBe(6941.35)
 		expect(row.retention).toBe(694.13)
-		expect(row.toPay).toBe(6247.21)
+		expect(row.toPay).toBe(6247.22)
 	})
 
-	it("pays the brigade total even when the jobs do not add up to it", () => {
+	it("pays the sum of the jobs, so the printed column adds up", () => {
 		const blocks = buildJournalBlocks([
 			job("j1", "009", [{ gross: 5339.5 }]),
 			job("j2", "009", [{ gross: 5339.5 }]),
 		])
-		// Each job: floor(5339.50 × 0.585) = 3123.60; together 6247.20.
-		expect(blocks[0].jobs.map((j) => j.adjNet)).toEqual([3123.6, 3123.6])
-		expect(blocks[0].totalSC).toBe(6247.21)
-		expect(payrollSheetLines(blocks)[0].toPay).toBe(6247.21)
+		// Each job: 3470.67 net − 347.06 ret = 3123.61; together 6247.22.
+		expect(blocks[0].jobs.map((j) => j.adjNet)).toEqual([3123.61, 3123.61])
+		expect(blocks[0].totalSC).toBe(6247.22)
+		expect(payrollSheetLines(blocks)[0].toPay).toBe(6247.22)
 	})
 
 	it("prints D lines at 80% under the brigade's D account, marked unverified", () => {

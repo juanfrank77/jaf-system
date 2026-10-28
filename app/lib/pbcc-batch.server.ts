@@ -4,7 +4,6 @@ import {
 	areaLetter,
 	bankInvoiceNumber,
 	barrioFromAddress,
-	contractLabel,
 	jobKind,
 	localityFromAddress,
 	scheduleTotals,
@@ -24,6 +23,7 @@ import {
 } from "~/lib/pdf/bank-invoice.server"
 import type { InvoiceLine } from "~/lib/service-lines"
 import {
+	getBankContractNumber,
 	getBankInvoicePrefix,
 	getInvoiceCodes,
 	getLcPbccAdvanceRate,
@@ -399,31 +399,35 @@ async function ensureInvoicePdfs(batchId: string): Promise<void> {
 		(d) => !d.bankInvoicePdfPath,
 	)
 	if (docs.length === 0) return
-	const [prefix, catalog, codes] = await Promise.all([
+	const [prefix, catalog, codes, batch] = await Promise.all([
 		getBankInvoicePrefix(),
 		db.serviceCode.findMany(),
 		getInvoiceCodes(),
+		db.bankSchedule.findUniqueOrThrow({ where: { id: batchId } }),
 	])
+	const contract = await getBankContractNumber(prefix)
 	const byId = new Map(catalog.map((c) => [c.id, c]))
 	for (const doc of docs) {
 		const aviso = doc.avisoNumber || doc.controlNumber
-		const from = doc.startedAt ?? doc.fieldSubmittedAt ?? doc.createdAt
+		// The work dates are the job's own start and finish. A missing one prints
+		// blank (Finance cannot accept it); it is never filled with another date.
+		const from = doc.startedAt
 		const to = doc.endedAt ?? from
 		const address = doc.jobAddressActual ?? doc.jobAddressEstimated
 		const pdf = await generateBankInvoicePdf({
 			supplierNumber: SUPPLIER_NUMBER,
-			// The PDF's NUMERO DE FACTURA is the plain aviso, as on JAF's sample;
-			// the prefixed form stays on the Excel schedule.
-			avisoNumber: aviso,
+			// NUMERO DE FACTURA is the prefixed number, as on the Excel schedule and
+			// the file names: that is how PBCC knows it is a JAF file.
+			avisoNumber: bankInvoiceNumber(prefix, aviso),
 			org: ORG,
-			// FECHA prints blank, as on the real invoice; the accept date stays stored.
-			invoiceDate: "",
+			// The invoice date, the same day the Excel schedule's Inv. Date shows.
+			invoiceDate: bankDateLabel(doc.financeVerifiedAt ?? batch.generatedAt),
 			// JAF's own M-number, one per Aviso; assigned here for any packet that has none.
 			jobNumber:
 				jobNumberOf(doc.jobSeq ?? (await ensureJobNumber(doc.id))) ?? undefined,
-			contractLabel: contractLabel(prefix),
-			workFrom: bankDateLabel(from),
-			workTo: bankDateLabel(to),
+			contractLabel: contract,
+			workFrom: from ? bankDateLabel(from) : "",
+			workTo: to ? bankDateLabel(to) : "",
 			description: doc.jobDescription ?? doc.jobType,
 			barrio: barrioFromAddress(address),
 			locality: localityFromAddress(address),

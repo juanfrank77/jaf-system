@@ -15,7 +15,6 @@ import {
 	ingestAdvice,
 	linkLine,
 	listAdvices,
-	listOtherJaf,
 	listUnmatched,
 } from "~/lib/payment-advice.server"
 import { requireRole } from "~/lib/permissions.server"
@@ -25,16 +24,15 @@ const TABS: AdviceTabKey[] = ["upload", "applied", "unmatched"]
 
 export async function loader({ request }: Route.LoaderArgs) {
 	await requireRole(request, ["FINANCE", "ADMIN"])
-	const counts = await adviceCounts()
+	const counts = await adviceCounts("m19")
 	const raw = new URL(request.url).searchParams.get("tab")
 	const tab: AdviceTabKey = TABS.find((t) => t === raw) ?? "upload"
 	return {
 		counts,
 		tab,
-		advices: tab === "unmatched" ? [] : await listAdvices(tab === "applied"),
-		unmatched: tab === "unmatched" ? await listUnmatched() : [],
-		otherJaf:
-			tab === "unmatched" ? await listOtherJaf() : { total: 0, lines: [] },
+		advices:
+			tab === "unmatched" ? [] : await listAdvices(tab === "applied", "m19"),
+		unmatched: tab === "unmatched" ? await listUnmatched("m19") : [],
 	}
 }
 

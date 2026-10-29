@@ -2769,6 +2769,7 @@
 		"invoice_number": "Número de factura",
 		"link": "Enlazar",
 		"reason": "Motivo",
+		"ja_check_hint": "Aún no hay factura de instalador con este número. Necesita que una persona lo revise.",
 		"accept_short": "Aceptar pago parcial",
 		"col": {
 			"invoice": "Factura #",
@@ -2784,7 +2785,7 @@
 			"short": "Pago parcial {{diff}}",
 			"already_paid": "Ya pagada",
 			"unmatched": "No está en el sistema",
-			"other_jaf": "Otra factura JAF"
+			"ja_check": "Necesita que una persona lo revise"
 		},
 		"errors": {
 			"no_file": "Elija el PDF del aviso de pago.",
@@ -2798,11 +2799,9 @@
 			"not_short": "Esta factura no tiene pago parcial.",
 			"reason_required": "Se requiere un motivo para aceptar un pago parcial.",
 			"invoice_not_found": "No hay una factura con ese número.",
-			"line_not_unmatched": "Esta fila ya tiene coincidencia."
-		},
-		"other_jaf_title": "Otras facturas JAF (JA-) - aún sin seguimiento",
-		"other_jaf_body": "{{count}} filas de la segunda serie de facturas de Claro. Se guardan con el aviso de pago y cuentan en su total, pero aún no se cotejan con nuestras facturas.",
-		"other_jaf_summary": "Otras JAF (JA-) {{count}} · {{total}}"
+			"line_not_unmatched": "Esta fila ya tiene coincidencia.",
+			"not_ja_line": "Esta fila no es una factura de instalador (JA)."
+		}
 	},
 	"aviso_record": {
 		"source": {
@@ -2915,7 +2914,13 @@
 			"ewit": "Facturas EWIT",
 			"batch": "Lote PBCC",
 			"received": "PBCC recibido",
-			"pay": "Pagar y marcar"
+			"pay": "Pagar y marcar",
+			"po": "PO + IVU",
+			"ariba": "Ariba",
+			"claro": "Claro pagó"
+		},
+		"claro": {
+			"title": "Pagos de Claro"
 		},
 		"warranty": {
 			"title": "Documentos de garantía",

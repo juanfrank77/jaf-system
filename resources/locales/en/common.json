@@ -2769,6 +2769,7 @@
 		"invoice_number": "Invoice number",
 		"link": "Link",
 		"reason": "Reason",
+		"ja_check_hint": "No installer invoice with this number yet. Needs a person to check.",
 		"accept_short": "Accept short pay",
 		"col": {
 			"invoice": "Invoice #",
@@ -2784,7 +2785,7 @@
 			"short": "Short paid {{diff}}",
 			"already_paid": "Already paid",
 			"unmatched": "Not in system",
-			"other_jaf": "Other JAF invoice"
+			"ja_check": "Needs a person to check"
 		},
 		"errors": {
 			"no_file": "Choose the advice PDF.",
@@ -2798,11 +2799,9 @@
 			"not_short": "This invoice is not short paid.",
 			"reason_required": "A reason is required to accept a short pay.",
 			"invoice_not_found": "No invoice with that number.",
-			"line_not_unmatched": "This row is already matched."
-		},
-		"other_jaf_title": "Other JAF invoices (JA-) - not tracked yet",
-		"other_jaf_body": "{{count}} rows in Claro's second invoice series. They are kept with the advice and counted in its total, but are not matched against our invoices yet.",
-		"other_jaf_summary": "Other JAF (JA-) {{count}} · {{total}}"
+			"line_not_unmatched": "This row is already matched.",
+			"not_ja_line": "This row is not an installer (JA) invoice."
+		}
 	},
 	"aviso_record": {
 		"source": {
@@ -2915,7 +2914,13 @@
 			"ewit": "EWIT invoices",
 			"batch": "PBCC batch",
 			"received": "PBCC received",
-			"pay": "Pay & tick"
+			"pay": "Pay & tick",
+			"po": "PO + IVU",
+			"ariba": "Ariba",
+			"claro": "Claro paid"
+		},
+		"claro": {
+			"title": "Claro payments"
 		},
 		"warranty": {
 			"title": "Warranty docs",

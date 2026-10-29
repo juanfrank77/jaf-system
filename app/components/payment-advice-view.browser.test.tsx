@@ -62,7 +62,6 @@ describe("PaymentAdviceView", () => {
 							tab="upload"
 							advices={[card()]}
 							unmatched={[]}
-							otherJaf={{ total: 0, lines: [] }}
 						/>
 					),
 				},
@@ -88,7 +87,6 @@ describe("PaymentAdviceView", () => {
 							tab="upload"
 							advices={[card({ totalOk: false, rowsTotal: 180 })]}
 							unmatched={[]}
-							otherJaf={{ total: 0, lines: [] }}
 						/>
 					),
 				},
@@ -97,5 +95,55 @@ describe("PaymentAdviceView", () => {
 		expect(
 			await screen.findByRole("button", { name: "Apply payments" }),
 		).toBeDisabled()
+	})
+	it("on Carmen's desk marks an unmatched JA row for a person, with no M19 link form, and shows the real shortfall", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<PaymentAdviceView
+							kind="ja"
+							counts={{ pending: 0, applied: 1, unmatched: 1 }}
+							tab="applied"
+							advices={[
+								card({
+									applied: true,
+									lines: [
+										line({
+											id: "j1",
+											invoiceRef: "JA1616329",
+											net: 1857.61,
+											ourTotal: 1895.06,
+											result: "SHORT",
+											otherJaf: true,
+											invoiceId: null,
+											needsAccept: true,
+										}),
+										line({
+											id: "j2",
+											invoiceRef: "JA1616999",
+											result: "UNMATCHED",
+											otherJaf: true,
+											invoiceId: null,
+											ourTotal: null,
+										}),
+									],
+								}),
+							]}
+							unmatched={[]}
+						/>
+					),
+				},
+			],
+		})
+		expect(await screen.findByText("Short paid $37.45")).toBeInTheDocument()
+		expect(screen.getByText("Needs a person to check")).toBeInTheDocument()
+		expect(screen.queryByPlaceholderText("M19-0000")).not.toBeInTheDocument()
+		expect(
+			screen.getByRole("button", { name: "Accept short pay" }),
+		).toBeInTheDocument()
 	})
 })

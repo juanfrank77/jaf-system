@@ -43,8 +43,6 @@ type UnmatchedView = {
 	reference: string | null
 }
 
-type OtherJafView = { total: number; lines: UnmatchedView[] }
-
 type AdviceCounts = { pending: number; applied: number; unmatched: number }
 
 export type AdviceErrorKey =
@@ -59,6 +57,7 @@ export type AdviceErrorKey =
 	| "payment_advice.errors.reason_required"
 	| "payment_advice.errors.invoice_not_found"
 	| "payment_advice.errors.line_not_unmatched"
+	| "payment_advice.errors.not_ja_line"
 	| "payment_advice.errors.no_file"
 
 function ResultBadge({ line }: { line: AdviceLineView }) {
@@ -78,7 +77,7 @@ function ResultBadge({ line }: { line: AdviceLineView }) {
 			<Badge variant="warn">{t("payment_advice.result.already_paid")}</Badge>
 		)
 	if (line.otherJaf)
-		return <Badge>{t("payment_advice.result.other_jaf")}</Badge>
+		return <Badge variant="danger">{t("payment_advice.result.ja_check")}</Badge>
 	return <Badge variant="danger">{t("payment_advice.result.unmatched")}</Badge>
 }
 
@@ -102,14 +101,23 @@ function LinkForm({ lineId }: { lineId: string }) {
 	)
 }
 
-function AdviceCard({ a }: { a: AdviceCardView }) {
+export type AdviceKind = "m19" | "ja"
+
+const defaultFileHref = (id: string) => `/finance/payment-advice/${id}/file`
+
+function AdviceCard({
+	a,
+	kind,
+	fileHref,
+}: {
+	a: AdviceCardView
+	kind: AdviceKind
+	fileHref: (id: string) => string
+}) {
 	const { t } = useTranslation()
 	const matched = a.lines.filter((l) => l.result === "MATCHED").length
 	const short = a.lines.filter((l) => l.result === "SHORT").length
-	const unmatched = a.lines.filter(
-		(l) => l.result === "UNMATCHED" && !l.otherJaf,
-	).length
-	const otherJaf = a.lines.filter((l) => l.otherJaf)
+	const unmatched = a.lines.filter((l) => l.result === "UNMATCHED").length
 	const already = a.lines.filter((l) => l.result === "ALREADY_PAID").length
 	return (
 		<section className="space-y-2 rounded-lg border bg-card p-3">
@@ -131,20 +139,12 @@ function AdviceCard({ a }: { a: AdviceCardView }) {
 						</Badge>
 					)}
 				</h3>
-				<Link
-					to={`/finance/payment-advice/${a.id}/file`}
-					className="text-sm underline"
-				>
+				<Link to={fileHref(a.id)} className="text-sm underline">
 					{t("payment_advice.open_pdf")}
 				</Link>
 			</div>
 			<p className="text-sm text-muted-foreground">
 				{t("payment_advice.summary", { matched, short, unmatched, already })}
-				{otherJaf.length > 0 &&
-					` · ${t("payment_advice.other_jaf_summary", {
-						count: otherJaf.length,
-						total: formatMoney(otherJaf.reduce((s, l) => s + l.net, 0)),
-					})}`}
 			</p>
 			<div className="overflow-x-auto">
 				<table className="w-full text-sm">
@@ -177,17 +177,32 @@ function AdviceCard({ a }: { a: AdviceCardView }) {
 									<ResultBadge line={l} />
 								</td>
 								<td className="p-2">
-									{l.result === "UNMATCHED" && !l.otherJaf && (
+									{l.result === "UNMATCHED" && kind === "m19" && (
 										<LinkForm lineId={l.id} />
 									)}
-									{l.needsAccept && l.invoiceId && (
+									{l.result === "UNMATCHED" && kind === "ja" && (
+										<span className="text-xs text-status-danger">
+											{t("payment_advice.ja_check_hint")}
+										</span>
+									)}
+									{l.needsAccept && (kind === "ja" || l.invoiceId) && (
 										<Form method="post" className="flex items-center gap-1">
-											<input type="hidden" name="intent" value="accept_short" />
 											<input
 												type="hidden"
-												name="invoiceId"
-												value={l.invoiceId}
+												name="intent"
+												value={
+													kind === "ja" ? "accept_ja_short" : "accept_short"
+												}
 											/>
+											{kind === "ja" ? (
+												<input type="hidden" name="lineId" value={l.id} />
+											) : (
+												<input
+													type="hidden"
+													name="invoiceId"
+													value={l.invoiceId ?? ""}
+												/>
+											)}
 											<Input
 												name="reason"
 												required
@@ -237,15 +252,18 @@ export function PaymentAdviceView({
 	tab,
 	advices,
 	unmatched,
-	otherJaf,
 	errorKey,
+	kind = "m19",
+	fileHref = defaultFileHref,
 }: {
 	counts: AdviceCounts
 	tab: AdviceTabKey
 	advices: AdviceCardView[]
 	unmatched: UnmatchedView[]
-	otherJaf: OtherJafView
 	errorKey?: AdviceErrorKey
+	kind?: AdviceKind
+	/** Where the advice PDF opens for this desk. */
+	fileHref?: (id: string) => string
 }) {
 	const { t } = useTranslation()
 	const count: Record<AdviceTabKey, number> = {
@@ -293,37 +311,6 @@ export function PaymentAdviceView({
 					<Button type="submit">{t("payment_advice.upload")}</Button>
 				</Form>
 			)}
-			{tab === "unmatched" && otherJaf.lines.length > 0 && (
-				<section className="space-y-2 rounded-lg border bg-card p-3">
-					<h3 className="text-sm font-semibold">
-						{t("payment_advice.other_jaf_title")} ·{" "}
-						{formatMoney(otherJaf.total)}
-					</h3>
-					<p className="text-sm text-muted-foreground">
-						{t("payment_advice.other_jaf_body", {
-							count: otherJaf.lines.length,
-						})}
-					</p>
-					<div className="overflow-x-auto">
-						<table className="w-full text-sm">
-							<tbody>
-								{otherJaf.lines.map((u) => (
-									<tr key={u.id} className="border-b last:border-0">
-										<td className="p-2 font-mono">{u.invoiceRef}</td>
-										<td className="p-2 font-mono">{u.voucher ?? "—"}</td>
-										<td className="p-2 text-right font-mono">
-											{formatMoney(u.net)}
-										</td>
-										<td className="p-2">
-											{usDate(u.adviceDate)} · {u.reference ?? "—"}
-										</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
-					</div>
-				</section>
-			)}
 			{tab === "unmatched" ? (
 				unmatched.length === 0 ? (
 					<p className="text-sm text-muted-foreground">
@@ -355,7 +342,13 @@ export function PaymentAdviceView({
 											{usDate(u.adviceDate)} · {u.reference ?? "—"}
 										</td>
 										<td className="p-2">
-											<LinkForm lineId={u.id} />
+											{kind === "m19" ? (
+												<LinkForm lineId={u.id} />
+											) : (
+												<span className="text-xs text-status-danger">
+													{t("payment_advice.ja_check_hint")}
+												</span>
+											)}
 										</td>
 									</tr>
 								))}
@@ -372,7 +365,7 @@ export function PaymentAdviceView({
 			) : (
 				<div className="space-y-3">
 					{advices.map((a) => (
-						<AdviceCard key={a.id} a={a} />
+						<AdviceCard key={a.id} a={a} kind={kind} fileHref={fileHref} />
 					))}
 				</div>
 			)}

@@ -154,6 +154,10 @@ export default [
 			"routes/_app.comptroller.installers.pay.tsx",
 		),
 		route(
+			"comptroller/installers/claro",
+			"routes/_app.comptroller.installers.claro.tsx",
+		),
+		route(
 			"comptroller/installers/batches",
 			"routes/_app.comptroller.installers.batches.tsx",
 		),

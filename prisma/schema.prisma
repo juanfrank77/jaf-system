@@ -229,17 +229,18 @@ model User {
   packetSends PacketSend[] @relation("PacketSendSender")
 
   // Carmen's installer money loop and her reports
-  ewitInvoicesCreated   EwitInvoice[]      @relation("EwitInvoiceCreator")
-  ewitInvoicesVoided    EwitInvoice[]      @relation("EwitInvoiceVoider")
-  ewitInvoicesAribaSent EwitInvoice[]      @relation("EwitInvoiceAribaSender")
-  ewitBatchesCreated    EwitBatch[]        @relation("EwitBatchCreator")
-  ewitBatchesClosed     EwitBatch[]        @relation("EwitBatchCloser")
-  ewitBatchesSent       EwitBatch[]        @relation("EwitBatchSender")
-  ewitBatchesReceived   EwitBatch[]        @relation("EwitBatchReceiver")
-  installerPaymentsOwed InstallerPayment[] @relation("InstallerPaid")
-  installerPaymentsMade InstallerPayment[] @relation("InstallerPaymentMaker")
-  reportsSent           SentReport[]       @relation("ReportSender")
-  reportsReceived       SentReport[]       @relation("ReportReceiver")
+  ewitInvoicesCreated       EwitInvoice[]      @relation("EwitInvoiceCreator")
+  ewitInvoicesVoided        EwitInvoice[]      @relation("EwitInvoiceVoider")
+  ewitInvoicesAribaSent     EwitInvoice[]      @relation("EwitInvoiceAribaSender")
+  ewitInvoicesShortAccepted EwitInvoice[]      @relation("EwitInvoiceShortAcceptor")
+  ewitBatchesCreated        EwitBatch[]        @relation("EwitBatchCreator")
+  ewitBatchesClosed         EwitBatch[]        @relation("EwitBatchCloser")
+  ewitBatchesSent           EwitBatch[]        @relation("EwitBatchSender")
+  ewitBatchesReceived       EwitBatch[]        @relation("EwitBatchReceiver")
+  installerPaymentsOwed     InstallerPayment[] @relation("InstallerPaid")
+  installerPaymentsMade     InstallerPayment[] @relation("InstallerPaymentMaker")
+  reportsSent               SentReport[]       @relation("ReportSender")
+  reportsReceived           SentReport[]       @relation("ReportReceiver")
 
   @@index([role, active])
 }
@@ -1401,19 +1402,23 @@ model EwitInvoice {
   unmatchedOrderNos String[]   @default([])
 
   // Claro half: the PO, IVU, Ariba submission and Claro's payment.
-  poNumber        String?
-  poDate          DateTime?
-  poFilePath      String?
-  ivuRate         Decimal?
-  ivuAmount       Decimal?
-  claroTotal      Decimal? // amount + IVU
-  aribaSentAt     DateTime?
-  aribaSentById   String?
-  aribaSentBy     User?     @relation("EwitInvoiceAribaSender", fields: [aribaSentById], references: [id])
-  claroPaidAt     DateTime?
-  claroPaidNet    Decimal?
-  claroBankRef    String?
-  shortAcceptedAt DateTime?
+  poNumber            String?
+  poDate              DateTime?
+  poFilePath          String?
+  ivuRate             Decimal?
+  ivuAmount           Decimal?
+  claroTotal          Decimal? // amount + IVU
+  aribaSentAt         DateTime?
+  aribaSentById       String?
+  aribaSentBy         User?     @relation("EwitInvoiceAribaSender", fields: [aribaSentById], references: [id])
+  claroPaidAt         DateTime?
+  claroPaidNet        Decimal?
+  claroBankRef        String?
+  shortAcceptedAt     DateTime?
+  // Why Carmen accepted a short Claro payment (required), and who.
+  shortAcceptedReason String?
+  shortAcceptedById   String?
+  shortAcceptedBy     User?     @relation("EwitInvoiceShortAcceptor", fields: [shortAcceptedById], references: [id])
 
   completions InstallCompletion[]
   adviceLines AdviceLine[]

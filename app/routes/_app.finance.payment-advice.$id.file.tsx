@@ -3,9 +3,9 @@ import { adviceFile } from "~/lib/payment-advice.server"
 import { requireRole } from "~/lib/permissions.server"
 import type { Route } from "./+types/_app.finance.payment-advice.$id.file"
 
-/** The uploaded advice as Claro sent it. */
+/** The uploaded advice as Claro sent it; both desks (Lissette's M19, Carmen's JA) open it. */
 export async function loader({ request, params }: Route.LoaderArgs) {
-	await requireRole(request, ["FINANCE", "ADMIN"])
+	await requireRole(request, ["FINANCE", "COMPTROLLER", "ADMIN"])
 	const f = await adviceFile(params.id)
 	const bytes = f ? await fs.readFile(f.filePath).catch(() => null) : null
 	if (!f || !bytes) throw new Response("Not Found", { status: 404 })

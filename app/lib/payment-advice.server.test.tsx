@@ -9,12 +9,15 @@ import { db } from "~/lib/db.server"
 import { createEwitInvoice } from "~/lib/ewit.server"
 import {
 	AdviceError,
+	acceptJaShort,
 	acceptShort,
 	adviceCounts,
 	applyAdvice,
 	ingestAdvice,
 	linkLine,
-	listOtherJaf,
+	listAdvices,
+	listUnmatched,
+	rematchJaLines,
 } from "~/lib/payment-advice.server"
 import {
 	makeTracker,
@@ -136,11 +139,11 @@ describe("Payment Advice", () => {
 		expect((await adviceCounts()).unmatched).toBeGreaterThanOrEqual(1)
 	}, 60000)
 
-	it("keeps JA- rows as their own group, not as unmatched errors", async () => {
+	it("keeps JA- rows out of the M19 desk's counts and lists", async () => {
 		const u = t.track("user", await seedUser({ role: "FINANCE" }))
 		const a = await invoiceFor(u.id)
-		const before = await adviceCounts()
-		const beforeJa = await listOtherJaf()
+		const before = await adviceCounts("m19")
+		const beforeJa = await adviceCounts("ja")
 		const bytes = await advicePdf([
 			...head(ref()),
 			row(a.seq, 5920050318, a.total),
@@ -148,11 +151,18 @@ describe("Payment Advice", () => {
 			`Total $${(a.total + 1399.06).toFixed(2)}`,
 		])
 		const { id } = await ingestAdvice({ name: "ja.pdf", bytes }, u.id)
-		expect((await adviceCounts()).unmatched).toBe(before.unmatched)
-		const ja = await listOtherJaf()
-		expect(ja.lines.length).toBe(beforeJa.lines.length + 1)
-		expect(ja.total).toBeCloseTo(beforeJa.total + 1399.06, 2)
-		expect(ja.lines.some((l) => l.invoiceRef === "JA1616276")).toBe(true)
+		expect((await adviceCounts("m19")).unmatched).toBe(before.unmatched)
+		expect((await adviceCounts("ja")).unmatched).toBe(beforeJa.unmatched + 1)
+		const m19 = (await listAdvices(false, "m19")).find((x) => x.id === id)
+		expect(m19?.lines.map((l) => l.invoiceRef)).toEqual([`M19-${a.seq}`])
+		const ja = (await listAdvices(false, "ja")).find((x) => x.id === id)
+		expect(ja?.lines.map((l) => l.invoiceRef)).toEqual(["JA1616276"])
+		expect(
+			(await listUnmatched("m19")).some((l) => l.invoiceRef === "JA1616276"),
+		).toBe(false)
+		expect(
+			(await listUnmatched("ja")).some((l) => l.invoiceRef === "JA1616276"),
+		).toBe(true)
 		await applyAdvice(id, u.id)
 	}, 60000)
 
@@ -531,4 +541,92 @@ describe("Payment Advice: JA rows against Carmen's installer invoices", () => {
 			linkLine(lines[0].id, `M19-${a.seq}`, u.id),
 		).rejects.toMatchObject({ code: "line_not_unmatched" })
 	}, 60000)
+	it("shows the real shortfall for a short JA row: ourTotal is what Claro owes", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const inv = await ewit(u.id, { claroTotal: 1895.06 })
+		const full = await ewit(u.id, { claroTotal: 100 })
+		const { id } = await ingest(u.id, [
+			[inv.number, 1857.61],
+			[full.number, 100],
+		])
+		const card = (await listAdvices(false, "ja")).find((x) => x.id === id)
+		const [s, f] = card?.lines ?? []
+		expect(s.result).toBe("SHORT")
+		expect(s.ourTotal).toBe(1895.06)
+		expect(Math.round((s.ourTotal! - s.net) * 100) / 100).toBe(37.45)
+		expect(f.result).toBe("MATCHED")
+		expect(f.ourTotal).toBe(100)
+	}, 60000)
+
+	it("re-matches an unmatched JA row once its PO exists, only on an unapplied advice", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const noPo = await ewit(u.id, { claroTotal: null })
+		const pending = await ingest(u.id, [[noPo.number, 200]])
+		expect(pending.lines[0].result).toBe("UNMATCHED")
+		await db.ewitInvoice.update({
+			where: { id: noPo.id },
+			data: { claroTotal: 200 },
+		})
+		expect(await rematchJaLines()).toBeGreaterThanOrEqual(1)
+		const l = await db.adviceLine.findUniqueOrThrow({
+			where: { id: pending.lines[0].id },
+		})
+		expect(l.result).toBe("MATCHED")
+		expect(l.ewitInvoiceId).toBe(noPo.id)
+		// Short once the PO arrives for a larger amount.
+		const late = await ewit(u.id, { claroTotal: null })
+		const p2 = await ingest(u.id, [[late.number, 150]])
+		await db.ewitInvoice.update({
+			where: { id: late.id },
+			data: { claroTotal: 187.45 },
+		})
+		await rematchJaLines()
+		expect(
+			(await db.adviceLine.findUniqueOrThrow({ where: { id: p2.lines[0].id } }))
+				.result,
+		).toBe("SHORT")
+		// An applied advice is left alone.
+		const gone = await ewit(u.id, { claroTotal: null })
+		const p3 = await ingest(u.id, [[gone.number, 90]])
+		await applyAdvice(p3.id, u.id)
+		await db.ewitInvoice.update({
+			where: { id: gone.id },
+			data: { claroTotal: 90 },
+		})
+		await rematchJaLines()
+		expect(
+			(await db.adviceLine.findUniqueOrThrow({ where: { id: p3.lines[0].id } }))
+				.result,
+		).toBe("UNMATCHED")
+	}, 90000)
+
+	it("accepts a short JA payment only with a reason, once, and not an M19 line", async () => {
+		const u = t.track("user", await seedUser({ role: "COMPTROLLER" }))
+		const inv = await ewit(u.id, { claroTotal: 1895.06 })
+		const { id, lines } = await ingest(u.id, [[inv.number, 1857.61]])
+		await applyAdvice(id, u.id)
+		await expect(acceptJaShort(lines[0].id, "  ", u.id)).rejects.toMatchObject({
+			code: "reason_required",
+		})
+		await acceptJaShort(lines[0].id, "Claro kept the fee", u.id)
+		const after = await db.ewitInvoice.findUniqueOrThrow({
+			where: { id: inv.id },
+		})
+		expect(after.shortAcceptedAt).not.toBeNull()
+		expect(after.shortAcceptedReason).toBe("Claro kept the fee")
+		expect(after.shortAcceptedById).toBe(u.id)
+		await expect(
+			acceptJaShort(lines[0].id, "again", u.id),
+		).rejects.toMatchObject({ code: "not_short" })
+		const card = (await listAdvices(true, "ja")).find((x) => x.id === id)
+		expect(card?.lines[0].needsAccept).toBe(false)
+		// An unpaid short line is not acceptable yet.
+		const inv2 = await ewit(u.id, { claroTotal: 500 })
+		const p2 = await ingest(u.id, [[inv2.number, 400]])
+		await expect(
+			acceptJaShort(p2.lines[0].id, "x", u.id),
+		).rejects.toMatchObject({
+			code: "not_short",
+		})
+	}, 90000)
 })

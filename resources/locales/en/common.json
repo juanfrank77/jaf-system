@@ -2460,7 +2460,6 @@
 		"you_asked": "You asked: {{note}}",
 		"tab_to_pay": "To pay",
 		"tab_paid": "Paid",
-		"title": "Brigades · payroll",
 		"callout_title": "Your step",
 		"callout_body": "Open a request, pay each brigade in WinPay, then tick it here. The pay date starts as today; change it if you paid on another day. Finance sees each tick right away.",
 		"paid_button": "Paid",
@@ -2475,8 +2474,6 @@
 		"download_pdf": "Download request sheet (PDF)",
 		"request_title": "Payroll request · {{label}}",
 		"accounts_progress": "{{paid}} of {{total}} brigades",
-		"runs_to_pay": "Requests to pay",
-		"paid_runs": "Paid requests",
 		"col": {
 			"brigade": "Brigade",
 			"avisos": "Avisos",
@@ -3073,6 +3070,7 @@
 			"check_failed": "The batch check is not green yet.",
 			"no_reason": "Write the reason first.",
 			"nothing_to_pay": "Nothing to pay for that selection. Reload the page.",
+			"claro_started": "This invoice already has a PO, went to Ariba or was paid by Claro, so it can't be taken back.",
 			"bad_amount": "Type the amount paid, more than 0.",
 			"undo_expired": "Only a payment ticked today can be undone.",
 			"invalid_date": "Use a date like 10/28/2026.",
@@ -3258,7 +3256,7 @@
 			"short": "{{amount}} short",
 			"missing": "{{count}} missing (60+ d)",
 			"ariba": "oldest Ariba {{date}}",
-			"retention": "sent payroll runs · D-line retention unconfirmed"
+			"retention": "sent payroll runs · this year"
 		}
 	},
 	"brigade_stock": {

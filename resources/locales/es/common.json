@@ -2460,7 +2460,6 @@
 		"you_asked": "Preguntaste: {{note}}",
 		"tab_to_pay": "Por pagar",
 		"tab_paid": "Pagadas",
-		"title": "Brigadas · nómina",
 		"callout_title": "Su paso",
 		"callout_body": "Abra una solicitud, pague cada brigada en WinPay y márquela aquí. La fecha de pago empieza en hoy; cámbiela si pagó otro día. Finanzas ve cada marca al instante.",
 		"paid_button": "Pagado",
@@ -2475,8 +2474,6 @@
 		"download_pdf": "Descargar hoja de solicitud (PDF)",
 		"request_title": "Solicitud de nómina · {{label}}",
 		"accounts_progress": "{{paid}} de {{total}} brigadas",
-		"runs_to_pay": "Solicitudes por pagar",
-		"paid_runs": "Solicitudes pagadas",
 		"col": {
 			"brigade": "Brigada",
 			"avisos": "Avisos",
@@ -3073,6 +3070,7 @@
 			"check_failed": "La verificación del lote aún no está en verde.",
 			"no_reason": "Escriba el motivo primero.",
 			"nothing_to_pay": "No hay nada que pagar con esa selección. Recargue la página.",
+			"claro_started": "Esta factura ya tiene PO, se envió a Ariba o Claro la pagó, así que no se puede retirar.",
 			"bad_amount": "Escriba el monto pagado, mayor que 0.",
 			"undo_expired": "Solo se puede deshacer un pago marcado hoy.",
 			"invalid_date": "Use una fecha como 10/28/2026.",
@@ -3258,7 +3256,7 @@
 			"short": "{{amount}} corto",
 			"missing": "{{count}} faltantes (60+ d)",
 			"ariba": "Ariba más antigua {{date}}",
-			"retention": "corridas de nómina enviadas · retención de línea D sin confirmar"
+			"retention": "corridas de nómina enviadas · este año"
 		}
 	},
 	"brigade_stock": {

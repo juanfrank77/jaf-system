@@ -38,6 +38,7 @@ export type EwitErrorCode =
 	| "check_failed"
 	| "no_reason"
 	| "nothing_to_pay"
+	| "claro_started"
 	| "bad_amount"
 	| "undo_expired"
 
@@ -231,7 +232,8 @@ export async function createEwitInvoice(opts: {
 /**
  * Take an EWIT invoice back. Before its batch is closed it is removed and its
  * row leaves the batch; once the batch is sent it is held with a reason. Either
- * way the orders return to the warranty list and nothing is deleted.
+ * way the orders return to the warranty list and nothing is deleted. Refused
+ * once the invoice has a PO, went to Ariba or was paid by Claro.
  */
 export async function removeEwitInvoice(opts: {
 	invoiceId: string
@@ -245,6 +247,10 @@ export async function removeEwitInvoice(opts: {
 			include: { batch: true },
 		})
 		if (!inv || inv.voidedAt || inv.heldAt) throw new EwitError("not_found")
+		// Once Claro's side has started (PO, Ariba or Claro's payment) taking it
+		// back would hide that money from every Claro view and the Log.
+		if (inv.poNumber || inv.aribaSentAt || inv.claroPaidAt)
+			throw new EwitError("claro_started")
 		const sent = Boolean(inv.batch?.sentAt)
 		if (inv.batch?.closedAt && !sent) throw new EwitError("batch_closed")
 		if (sent && !reason) throw new EwitError("no_reason")

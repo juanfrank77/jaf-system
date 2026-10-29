@@ -57,6 +57,48 @@ export function expectedClaroTotal(total: number, rate = DEFAULT_IVU_RATE) {
 
 const OVERDUE_DAYS = 60
 
+/** Invoices the Claro desk may act on: sent to PBCC, not voided, not held. One definition for the page and its action. */
+export const CLARO_ELIGIBLE = {
+	voidedAt: null,
+	heldAt: null,
+	batch: { sentAt: { not: null } },
+} as const
+
+type RowInput = ClaroStageInput & {
+	id: string
+	number: string
+	invoiceDate: Date
+	total: Num
+	batch: { sentAt: Date | null } | null
+}
+
+/** One display row of the Claro invoices page: stage, days waiting, overdue, shortfall. */
+export function claroRowView(i: RowInput, now: Date) {
+	const stage = claroStage(i)
+	const total = n(i.total)
+	const claroTotal = i.claroTotal == null ? null : n(i.claroTotal)
+	const paidNet = i.claroPaidNet == null ? null : n(i.claroPaidNet)
+	return {
+		id: i.id,
+		number: i.number,
+		stage,
+		date: i.invoiceDate.toISOString(),
+		total,
+		claroTotal,
+		poNumber: i.poNumber,
+		expected: expectedClaroTotal(total),
+		daysWaiting: i.batch?.sentAt
+			? Math.floor((now.getTime() - i.batch.sentAt.getTime()) / 86400000)
+			: 0,
+		overdue: stage === "sent" && isClaroOverdue(i.aribaSentAt, now),
+		aribaSentAt: i.aribaSentAt?.toISOString() ?? null,
+		shortBy:
+			stage === "short" && claroTotal != null && paidNet != null
+				? r2(claroTotal - paidNet)
+				: null,
+	}
+}
+
 /** Sent to Ariba more than 60 days ago (the caller has checked it is unpaid). */
 export function isClaroOverdue(aribaSentAt: Date | null, now = new Date()) {
 	if (!aribaSentAt) return false
@@ -78,12 +120,10 @@ export async function addPo(opts: {
 	const rate = opts.ivuRate ?? DEFAULT_IVU_RATE
 	if (inv.aribaSentAt || inv.claroPaidAt)
 		throw new ClaroInstallerError("already_sent")
-	// Integer cents: half-cent ties must round up, not drift with float error.
 	const totalCents = Math.round(Number(inv.total) * 100)
-	const ivuCents = Math.round((totalCents * Math.round(rate * 10000)) / 10000)
-	const ivuAmount = ivuCents / 100
-	const claroTotal = (totalCents + ivuCents) / 100
-	if (Math.round(opts.reprintTotal * 100) !== totalCents + ivuCents)
+	const claroTotal = expectedClaroTotal(Number(inv.total), rate)
+	const ivuAmount = (Math.round(claroTotal * 100) - totalCents) / 100
+	if (Math.round(opts.reprintTotal * 100) !== Math.round(claroTotal * 100))
 		throw new ClaroInstallerError("po_total_mismatch", [
 			`expected ${claroTotal.toFixed(2)}`,
 		])

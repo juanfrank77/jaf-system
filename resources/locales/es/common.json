@@ -3102,12 +3102,14 @@
 				"no_file": "Adjunte el PDF de la factura EWIT reimpresa.",
 				"not_pdf": "La reimpresión debe ser un PDF.",
 				"none_selected": "Seleccione al menos una factura.",
-				"po_total_mismatch": "El total reimpreso no coincide: se esperaba {{expected}}.",
+				"po_total_mismatch": "El total reimpreso no coincide: se esperaba {{expected}} con {{rate}}% de IVU.",
 				"not_found": "Factura no encontrada.",
 				"voided": "Esa factura está anulada o retenida.",
-				"already_sent": "Ya enviada a Ariba o pagada: {{detail}}",
-				"no_po": "Agregue el PO primero: {{detail}}"
-			}
+				"already_sent": "Ya enviada a Ariba o pagada.",
+				"no_po": "Agregue el PO primero.",
+				"ineligible": "Esa factura no está disponible: debe estar enviada a PBCC y no anulada ni retenida."
+			},
+			"ivu_rate": "Tasa de IVU % (vacío = 4)"
 		}
 	},
 	"log": {

@@ -3102,12 +3102,14 @@
 				"no_file": "Attach the reprinted EWIT invoice PDF.",
 				"not_pdf": "The reprint must be a PDF.",
 				"none_selected": "Select at least one invoice.",
-				"po_total_mismatch": "The reprinted total does not match: expected {{expected}}.",
+				"po_total_mismatch": "The reprinted total does not match: expected {{expected}} at {{rate}}% IVU.",
 				"not_found": "Invoice not found.",
 				"voided": "That invoice is voided or on hold.",
-				"already_sent": "Already sent to Ariba or paid: {{detail}}",
-				"no_po": "Add the PO first: {{detail}}"
-			}
+				"already_sent": "Already sent to Ariba or paid.",
+				"no_po": "Add the PO first.",
+				"ineligible": "That invoice is not available: it must be sent to PBCC and not voided or on hold."
+			},
+			"ivu_rate": "IVU rate % (blank = 4)"
 		}
 	},
 	"log": {

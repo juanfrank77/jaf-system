@@ -9,11 +9,10 @@ import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import {
 	addPo,
+	CLARO_ELIGIBLE,
 	ClaroInstallerError,
 	type ClaroStage,
-	claroStage,
-	expectedClaroTotal,
-	isClaroOverdue,
+	claroRowView,
 	markAribaSent,
 } from "~/lib/claro-installer.server"
 import { db } from "~/lib/db.server"
@@ -40,45 +39,42 @@ const STAGES: ClaroStage[] = [
 export async function loader({ request }: Route.LoaderArgs) {
 	await requireRole(request, ["COMPTROLLER", "ADMIN"])
 	const rows = await db.ewitInvoice.findMany({
-		where: {
-			voidedAt: null,
-			heldAt: null,
-			batch: { sentAt: { not: null } },
-		},
+		where: CLARO_ELIGIBLE,
 		include: { batch: { select: { sentAt: true } } },
 		orderBy: [{ invoiceDate: "asc" }, { id: "asc" }],
 		take: 500,
 	})
 	const now = new Date()
-	const view = rows.map((i) => {
-		const stage = claroStage(i)
-		const total = Number(i.total)
-		const claroTotal = i.claroTotal == null ? null : Number(i.claroTotal)
-		const paidNet = i.claroPaidNet == null ? null : Number(i.claroPaidNet)
-		return {
-			id: i.id,
-			number: i.number,
-			stage,
-			date: i.invoiceDate.toISOString(),
-			total,
-			claroTotal,
-			poNumber: i.poNumber,
-			expected: expectedClaroTotal(total),
-			daysWaiting: i.batch?.sentAt
-				? Math.floor((now.getTime() - i.batch.sentAt.getTime()) / 86400000)
-				: 0,
-			overdue: stage === "sent" && isClaroOverdue(i.aribaSentAt, now),
-			aribaSentAt: i.aribaSentAt?.toISOString() ?? null,
-			shortBy:
-				stage === "short" && claroTotal != null && paidNet != null
-					? Math.round((claroTotal - paidNet) * 100) / 100
-					: null,
-		}
-	})
+	const view = rows.map((i) => claroRowView(i, now))
 	return { rows: view, today: now.toISOString().slice(0, 10) }
 }
 
-type Fail = { errorKey: string; expected?: string; detail?: string }
+/** "YYYY-MM-DD" at noon UTC, or null for anything that is not a real calendar day. */
+function parseDay(v: FormDataEntryValue | null): Date | null {
+	const text = String(v ?? "")
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return null
+	const d = new Date(`${text}T12:00:00Z`)
+	return Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== text
+		? null
+		: d
+}
+
+/** Every id is a live invoice already sent to PBCC (the same filter the page lists). */
+async function allEligible(ids: string[]) {
+	const unique = [...new Set(ids)]
+	return (
+		(await db.ewitInvoice.count({
+			where: { id: { in: unique }, ...CLARO_ELIGIBLE },
+		})) === unique.length
+	)
+}
+
+type Fail = {
+	errorKey: string
+	expected?: string
+	rate?: string
+	detail?: string
+}
 
 export async function action({ request }: Route.ActionArgs) {
 	const { user } = await requireRole(request, ["COMPTROLLER", "ADMIN"])
@@ -87,19 +83,31 @@ export async function action({ request }: Route.ActionArgs) {
 	try {
 		if (intent === "add_po") {
 			const file = form.get("poFile")
+			const invoiceId = String(form.get("invoiceId") ?? "")
 			const poNumber = String(form.get("poNumber") ?? "").trim()
-			const poDate = new Date(`${String(form.get("poDate") ?? "")}T12:00:00Z`)
+			const poDate = parseDay(form.get("poDate"))
 			const reprintTotal = Number(
 				String(form.get("reprintTotal") ?? "").replace(/[$,\s]/g, ""),
 			)
-			if (!poNumber || Number.isNaN(poDate.getTime()) || !(reprintTotal > 0))
+			const rateText = String(form.get("ivuRate") ?? "").trim()
+			const ratePct = rateText === "" ? 4 : Number(rateText)
+			if (
+				!invoiceId ||
+				!poNumber ||
+				!poDate ||
+				!(reprintTotal > 0) ||
+				!Number.isFinite(reprintTotal) ||
+				!(ratePct >= 0 && ratePct <= 20)
+			)
 				return { errorKey: `${E}.bad_input` } satisfies Fail
 			if (!(file instanceof File) || file.size === 0)
 				return { errorKey: `${E}.no_file` } satisfies Fail
 			if (!validateFile(file, "pdf").valid)
 				return { errorKey: `${E}.not_pdf` } satisfies Fail
+			if (!(await allEligible([invoiceId])))
+				return { errorKey: `${E}.ineligible` } satisfies Fail
 			await addPo({
-				invoiceId: String(form.get("invoiceId")),
+				invoiceId,
 				poNumber,
 				poDate,
 				poFile: {
@@ -107,17 +115,24 @@ export async function action({ request }: Route.ActionArgs) {
 					bytes: new Uint8Array(await file.arrayBuffer()),
 				},
 				reprintTotal,
+				ivuRate: ratePct / 100,
 				userId: user.id,
 			})
 			// The PO gives the invoice a Claro total, so a waiting JA row may now match.
-			await rematchJaLines()
+			// The PO is already saved: a failure here must not turn into a 500.
+			try {
+				await rematchJaLines()
+			} catch (err) {
+				console.error("rematchJaLines after addPo failed", err)
+			}
 		} else if (intent === "mark_sent") {
 			const ids = form.getAll("invoiceIds").map(String)
 			if (ids.length === 0)
 				return { errorKey: `${E}.none_selected` } satisfies Fail
-			const sentOn = new Date(`${String(form.get("sentOn") ?? "")}T12:00:00Z`)
-			if (Number.isNaN(sentOn.getTime()))
-				return { errorKey: `${E}.bad_input` } satisfies Fail
+			const sentOn = parseDay(form.get("sentOn"))
+			if (!sentOn) return { errorKey: `${E}.bad_input` } satisfies Fail
+			if (!(await allEligible(ids)))
+				return { errorKey: `${E}.ineligible` } satisfies Fail
 			await markAribaSent({ invoiceIds: ids, sentOn, userId: user.id })
 		} else {
 			throw new Response("Unknown intent", { status: 400 })
@@ -127,12 +142,14 @@ export async function action({ request }: Route.ActionArgs) {
 		if (e instanceof ClaroInstallerError) {
 			if (e.code === "po_total_mismatch") {
 				const total = e.detail[0]?.replace("expected ", "") ?? ""
+				const pct = Number(String(form.get("ivuRate") ?? "").trim() || 4)
 				return {
 					errorKey: `${E}.po_total_mismatch`,
 					expected: Number(total).toLocaleString("en-US", {
 						minimumFractionDigits: 2,
 						maximumFractionDigits: 2,
 					}),
+					rate: String(pct),
 				} satisfies Fail
 			}
 			return {
@@ -166,23 +183,27 @@ export default function ClaroInvoices({
 	const { rows, today } = loaderData
 	const by = (s: ClaroStage) => rows.filter((r) => r.stage === s)
 	const err = actionData?.errorKey
-		? t(actionData.errorKey as never, {
-				expected: actionData.expected ?? "",
-				detail: actionData.detail ?? "",
-			})
+		? [
+				t(actionData.errorKey as never, {
+					expected: actionData.expected ?? "",
+					rate: actionData.rate ?? "4",
+				}),
+				actionData.detail,
+			]
+				.filter(Boolean)
+				.join(" ")
 		: null
-	const head = (
-		<tr className="border-b text-left text-muted-foreground">
-			<th className="px-3 py-2">{t("installers.claro_invoices.col_number")}</th>
-			<th className="px-3 py-2">{t("installers.claro_invoices.col_date")}</th>
-			<th className="px-3 py-2 text-right">
-				{t("installers.claro_invoices.col_amount")}
-			</th>
-			<th className="px-3 py-2 text-right">
-				{t("installers.claro_invoices.col_with_ivu")}
-			</th>
-		</tr>
-	)
+	const cols = [
+		["col_number", ""],
+		["col_date", ""],
+		["col_amount", " text-right"],
+		["col_with_ivu", " text-right"],
+	] as const
+	const head = cols.map(([k, cls]) => (
+		<th key={k} className={`px-3 py-2${cls}`}>
+			{t(`installers.claro_invoices.${k}`)}
+		</th>
+	))
 	return (
 		<div className="space-y-4 p-6">
 			<h1 className="text-2xl font-bold">
@@ -214,7 +235,7 @@ export default function ClaroInvoices({
 											<thead>
 												<tr className="border-b text-left text-muted-foreground">
 													<th className="w-8 px-3 py-2" />
-													{head.props.children}
+													{head}
 												</tr>
 											</thead>
 											<tbody>
@@ -263,7 +284,7 @@ export default function ClaroInvoices({
 									<table className="w-full text-sm">
 										<thead>
 											<tr className="border-b text-left text-muted-foreground">
-												{head.props.children}
+												{head}
 												<th className="px-3 py-2">
 													{t("installers.claro_invoices.col_status")}
 												</th>
@@ -340,6 +361,14 @@ export default function ClaroInvoices({
 																				inputMode="decimal"
 																				placeholder={r.expected.toFixed(2)}
 																				required
+																			/>
+																		</Label>
+																		<Label>
+																			{t("installers.claro_invoices.ivu_rate")}
+																			<Input
+																				name="ivuRate"
+																				inputMode="decimal"
+																				placeholder="4"
 																			/>
 																		</Label>
 																		<Button type="submit" disabled={busy}>

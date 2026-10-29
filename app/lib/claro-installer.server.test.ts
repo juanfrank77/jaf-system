@@ -4,6 +4,7 @@ import { db } from "~/lib/db.server"
 import { makeTracker, runToken, seedUser } from "~/test/helpers"
 import {
 	addPo,
+	claroRowView,
 	claroStage,
 	expectedClaroTotal,
 	isClaroOverdue,
@@ -204,5 +205,53 @@ describe("expectedClaroTotal / isClaroOverdue", () => {
 		expect(isClaroOverdue(ago(61), now)).toBe(true)
 		expect(isClaroOverdue(ago(59), now)).toBe(false)
 		expect(isClaroOverdue(null, now)).toBe(false)
+		// exactly 60 days is not yet over; a minute more is
+		expect(isClaroOverdue(ago(60), now)).toBe(false)
+		expect(isClaroOverdue(new Date(ago(60).getTime() - 60000), now)).toBe(true)
+	})
+})
+
+describe("claroRowView", () => {
+	const now = new Date("2026-10-28T12:00:00Z")
+	const day = 86400000
+	const base = {
+		id: "i",
+		number: "JA1",
+		invoiceDate: new Date("2026-09-01T12:00:00Z"),
+		total: 4871.55,
+		poNumber: null as string | null,
+		aribaSentAt: null as Date | null,
+		claroPaidAt: null as Date | null,
+		claroPaidNet: null as number | null,
+		claroTotal: null as number | null,
+		shortAcceptedAt: null,
+		batch: { sentAt: new Date(now.getTime() - 12 * day - 5000) },
+	}
+	it("groups each stage and reports days waiting, amber and shortfall", () => {
+		const noPo = claroRowView(base, now)
+		expect(noPo.stage).toBe("no_po")
+		expect(noPo.daysWaiting).toBe(12)
+		expect(noPo.expected).toBe(5066.41)
+		const ready = { ...base, poNumber: "P", claroTotal: 5066.41 }
+		expect(claroRowView(ready, now).stage).toBe("ready_for_ariba")
+		const sent = (d: number) => ({
+			...ready,
+			aribaSentAt: new Date(now.getTime() - d * day),
+		})
+		expect(claroRowView(sent(61), now)).toMatchObject({
+			stage: "sent",
+			overdue: true,
+		})
+		expect(claroRowView(sent(59), now).overdue).toBe(false)
+		const paid = { ...sent(10), claroPaidAt: now, claroPaidNet: 5066.41 }
+		expect(claroRowView(paid, now)).toMatchObject({
+			stage: "paid",
+			overdue: false,
+		})
+		const short = { ...paid, claroPaidNet: 5000 }
+		expect(claroRowView(short, now)).toMatchObject({
+			stage: "short",
+			shortBy: 66.41,
+		})
 	})
 })

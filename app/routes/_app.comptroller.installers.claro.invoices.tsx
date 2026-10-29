@@ -12,8 +12,7 @@ import {
 	CLARO_ELIGIBLE,
 	ClaroInstallerError,
 	type ClaroStage,
-	claroFilterMatches,
-	claroRowView,
+	loadClaroInvoiceRows,
 	markAribaSent,
 	parseClaroFilter,
 } from "~/lib/claro-installer.server"
@@ -40,20 +39,12 @@ const STAGES: ClaroStage[] = [
 
 export async function loader({ request }: Route.LoaderArgs) {
 	await requireRole(request, ["COMPTROLLER", "ADMIN"])
-	const rows = await db.ewitInvoice.findMany({
-		where: CLARO_ELIGIBLE,
-		include: { batch: { select: { sentAt: true } } },
-		orderBy: [{ invoiceDate: "asc" }, { id: "asc" }],
-		take: 500,
-	})
 	const now = new Date()
 	const filter = parseClaroFilter(
 		new URL(request.url).searchParams.get("stage"),
 	)
-	const view = rows
-		.map((i) => claroRowView(i, now))
-		.filter((r) => !filter || claroFilterMatches(filter, r))
-	return { rows: view, filter, today: now.toISOString().slice(0, 10) }
+	const rows = await loadClaroInvoiceRows(filter, now)
+	return { rows, filter, today: now.toISOString().slice(0, 10) }
 }
 
 /** "YYYY-MM-DD" at noon UTC, or null for anything that is not a real calendar day. */

@@ -1,5 +1,5 @@
 import {
-	CLARO_ELIGIBLE,
+	CLARO_OPEN,
 	claroStage,
 	isClaroOverdue,
 } from "~/lib/claro-installer.server"
@@ -51,6 +51,104 @@ function minDate(dates: (Date | null)[]): Date | null {
 		: null
 }
 
+/** What each Claro box needs of an invoice. */
+export const CLARO_HOME_SELECT = {
+	poNumber: true,
+	aribaSentAt: true,
+	claroPaidAt: true,
+	claroPaidNet: true,
+	claroTotal: true,
+	shortAcceptedAt: true,
+	total: true,
+	batch: { select: { sentAt: true } },
+} as const
+
+type ClaroHomeRow = {
+	poNumber: string | null
+	aribaSentAt: Date | null
+	claroPaidAt: Date | null
+	claroPaidNet: { toString(): string } | null
+	claroTotal: { toString(): string } | null
+	shortAcceptedAt: Date | null
+	total: { toString(): string }
+	batch: { sentAt: Date | null } | null
+}
+
+/** The four Claro boxes, from the open invoices (CLARO_OPEN, CLARO_HOME_SELECT). */
+export function claroHomeTiles(
+	eligible: ClaroHomeRow[],
+	now: Date,
+): ComptrollerHomeTile[] {
+	let noPoCents = 0
+	const noPo: (Date | null)[] = []
+	let ariba = { count: 0, cents: 0 }
+	const sentAriba: (Date | null)[] = []
+	let short = { count: 0, cents: 0 }
+	let missing = 0
+	for (const inv of eligible) {
+		const stage = claroStage(inv)
+		if (stage === "no_po") {
+			noPoCents += toCents(inv.total)
+			noPo.push(inv.batch?.sentAt ?? null)
+		} else if (stage === "ready_for_ariba" || stage === "sent") {
+			ariba = {
+				count: ariba.count + 1,
+				cents: ariba.cents + toCents(inv.claroTotal),
+			}
+			if (stage === "sent") {
+				sentAriba.push(inv.aribaSentAt)
+				if (isClaroOverdue(inv.aribaSentAt, now)) missing += 1
+			}
+		} else if (stage === "short") {
+			short = {
+				count: short.count + 1,
+				cents:
+					short.cents + toCents(inv.claroTotal) - toCents(inv.claroPaidNet),
+			}
+		}
+	}
+	const noPoCount = noPo.length
+	const oldestAriba = minDate(sentAriba)
+
+	const exposure = eligible.filter((e) => e.claroPaidAt == null)
+	const exposureAges = summarizeAges(
+		exposure.map((e) => e.batch?.sentAt ?? null),
+		now,
+	)
+
+	return [
+		{
+			key: "ja_waiting_po",
+			count: noPoCount,
+			href: "/comptroller/installers/claro/invoices?stage=no_po",
+			amount: dollars(noPoCents),
+			oldestDays: noPoCount ? ageDays(minDate(noPo), now) : null,
+		},
+		{
+			key: "ready_or_sent_not_paid",
+			count: ariba.count,
+			href: "/comptroller/installers/claro/invoices?stage=ariba_open",
+			amount: dollars(ariba.cents),
+			oldestAribaAt: oldestAriba?.toISOString() ?? null,
+		},
+		{
+			key: "short_or_missing",
+			count: short.count + missing,
+			href: "/comptroller/installers/claro/invoices?stage=short",
+			amount: dollars(short.cents),
+			missing,
+		},
+		{
+			key: "pbcc_exposure",
+			count: exposure.length,
+			href: "/comptroller/installers/claro/invoices?stage=exposure",
+			amount: dollars(exposure.reduce((s, e) => s + toCents(e.total), 0)),
+			oldestDays: exposureAges.oldest,
+			averageDays: exposureAges.average,
+		},
+	]
+}
+
 /** Everything on Carmen's Home: the week strip and a box per list she works from. */
 export async function loadComptrollerHome(now: Date): Promise<ComptrollerHome> {
 	const [
@@ -75,31 +173,7 @@ export async function loadComptrollerHome(now: Date): Promise<ComptrollerHome> {
 		loadInstallerPayList(),
 		// One read feeds every Claro box. Invoices paid in full (or short but
 		// accepted) are in no box, so they are not loaded.
-		db.ewitInvoice.findMany({
-			where: {
-				...CLARO_ELIGIBLE,
-				OR: [
-					{ claroPaidAt: null },
-					{
-						shortAcceptedAt: null,
-						OR: [
-							{ claroPaidNet: null },
-							{ claroPaidNet: { lt: db.ewitInvoice.fields.claroTotal } },
-						],
-					},
-				],
-			},
-			select: {
-				poNumber: true,
-				aribaSentAt: true,
-				claroPaidAt: true,
-				claroPaidNet: true,
-				claroTotal: true,
-				shortAcceptedAt: true,
-				total: true,
-				batch: { select: { sentAt: true } },
-			},
-		}),
+		db.ewitInvoice.findMany({ where: CLARO_OPEN, select: CLARO_HOME_SELECT }),
 		// The 10% already worked out per job when the payroll request was made.
 		db.jafInvoice.aggregate({
 			where: {
@@ -152,77 +226,12 @@ export async function loadComptrollerHome(now: Date): Promise<ComptrollerHome> {
 		],
 	}
 
-	let noPoCents = 0
-	const noPo: (Date | null)[] = []
-	let ariba = { count: 0, cents: 0 }
-	const sentAriba: (Date | null)[] = []
-	let short = { count: 0, cents: 0 }
-	let missing = 0
-	for (const inv of eligible) {
-		const stage = claroStage(inv)
-		if (stage === "no_po") {
-			noPoCents += toCents(inv.total)
-			noPo.push(inv.batch?.sentAt ?? null)
-		} else if (stage === "ready_for_ariba" || stage === "sent") {
-			ariba = {
-				count: ariba.count + 1,
-				cents: ariba.cents + toCents(inv.claroTotal),
-			}
-			if (stage === "sent") {
-				sentAriba.push(inv.aribaSentAt)
-				if (isClaroOverdue(inv.aribaSentAt, now)) missing += 1
-			}
-		} else if (stage === "short") {
-			short = {
-				count: short.count + 1,
-				cents:
-					short.cents + toCents(inv.claroTotal) - toCents(inv.claroPaidNet),
-			}
-		}
-	}
-	const noPoCount = noPo.length
-	const oldestAriba = minDate(sentAriba)
-
-	const exposure = eligible.filter((e) => e.claroPaidAt == null)
-	const exposureAges = summarizeAges(
-		exposure.map((e) => e.batch?.sentAt ?? null),
-		now,
-	)
-
 	return {
 		week: weekStrip(now),
 		tiles: [
 			payrollTile,
 			installerTile,
-			{
-				key: "ja_waiting_po",
-				count: noPoCount,
-				href: "/comptroller/installers/claro/invoices?stage=no_po",
-				amount: dollars(noPoCents),
-				oldestDays: noPoCount ? ageDays(minDate(noPo), now) : null,
-			},
-			{
-				key: "ready_or_sent_not_paid",
-				count: ariba.count,
-				href: "/comptroller/installers/claro/invoices?stage=ariba_open",
-				amount: dollars(ariba.cents),
-				oldestAribaAt: oldestAriba?.toISOString() ?? null,
-			},
-			{
-				key: "short_or_missing",
-				count: short.count + missing,
-				href: "/comptroller/installers/claro/invoices?stage=short",
-				amount: dollars(short.cents),
-				missing,
-			},
-			{
-				key: "pbcc_exposure",
-				count: exposure.length,
-				href: "/comptroller/installers/claro/invoices?stage=exposure",
-				amount: dollars(exposure.reduce((s, e) => s + toCents(e.total), 0)),
-				oldestDays: exposureAges.oldest,
-				averageDays: exposureAges.average,
-			},
+			...claroHomeTiles(eligible, now),
 			{
 				key: "retention_year",
 				count: retention._count,

@@ -1,13 +1,16 @@
 import fs from "node:fs/promises"
-import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
+import { loadComptrollerHome } from "~/lib/comptroller-home.server"
 import { db } from "~/lib/db.server"
 import { makeTracker, runToken, seedUser } from "~/test/helpers"
 import {
 	addPo,
+	CLARO_OPEN,
 	claroRowView,
 	claroStage,
 	expectedClaroTotal,
 	isClaroOverdue,
+	loadClaroInvoiceRows,
 	markAribaSent,
 } from "./claro-installer.server"
 
@@ -253,5 +256,79 @@ describe("claroRowView", () => {
 			stage: "short",
 			shortBy: 66.41,
 		})
+	})
+})
+
+describe("loadClaroInvoiceRows (Claro invoices page)", () => {
+	const sentBatch = async () => {
+		const b = await db.ewitBatch.create({
+			data: {
+				createdById: carmen.id,
+				sentAt: new Date(),
+				closedAt: new Date(),
+			},
+		})
+		t.track("ewitBatch", { id: b.id })
+		return b
+	}
+	const paidOn = (day: string) => ({
+		poNumber: "PO-P",
+		claroTotal: 100,
+		aribaSentAt: new Date("2026-09-01T12:00:00Z"),
+		claroPaidAt: new Date(`${day}T12:00:00Z`),
+		claroPaidNet: 100,
+	})
+
+	it("lists every open invoice, newest included, and only the most recent paid ones", async () => {
+		const b = await sentBatch()
+		// Paid in full on days later than anything else in the shared database.
+		const p1 = await mk({ batchId: b.id, ...paidOn("2099-01-01") })
+		const p2 = await mk({ batchId: b.id, ...paidOn("2099-01-02") })
+		const p3 = await mk({ batchId: b.id, ...paidOn("2099-01-03") })
+		const accepted = await mk({
+			batchId: b.id,
+			...paidOn("2099-01-04"),
+			claroPaidNet: 90,
+			shortAcceptedAt: new Date(),
+		})
+		const newest = await mk({
+			batchId: b.id,
+			invoiceDate: new Date("2099-06-01T12:00:00Z"),
+		})
+		const now = new Date()
+
+		const all = await loadClaroInvoiceRows(null, now, 2)
+		const ids = all.map((r) => r.id)
+		expect(ids).toContain(newest.id)
+		// The two most recent paid ones, most recent first; older paid are left out.
+		const paid = all.filter((r) => r.stage === "paid").map((r) => r.id)
+		expect(paid).toEqual([accepted.id, p3.id])
+		expect(ids).not.toContain(p2.id)
+		expect(ids).not.toContain(p1.id)
+
+		const noPo = await loadClaroInvoiceRows("no_po", now, 2)
+		expect(noPo.map((r) => r.id)).toContain(newest.id)
+		expect(noPo.every((r) => r.stage === "no_po")).toBe(true)
+
+		const onlyPaid = await loadClaroInvoiceRows("paid", now, 2)
+		expect(onlyPaid.map((r) => r.id)).toEqual([accepted.id, p3.id])
+	})
+
+	it("a short not yet accepted stays open; Home and the page read the same filter", async () => {
+		const b = await sentBatch()
+		const short = await mk({
+			batchId: b.id,
+			...paidOn("2099-02-01"),
+			claroPaidNet: 90,
+		})
+		const rows = await loadClaroInvoiceRows("short", new Date(), 2)
+		expect(rows.find((r) => r.id === short.id)?.stage).toBe("short")
+
+		const findMany = vi.spyOn(db.ewitInvoice, "findMany")
+		await loadClaroInvoiceRows("no_po", new Date(), 2)
+		await loadComptrollerHome(new Date())
+		const wheres = findMany.mock.calls.map((c) => c[0]?.where)
+		findMany.mockRestore()
+		expect(wheres.filter((w) => w === CLARO_OPEN)).toHaveLength(2)
 	})
 })

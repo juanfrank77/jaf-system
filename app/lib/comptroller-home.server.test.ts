@@ -1,5 +1,10 @@
 import { afterAll, describe, expect, it, vi } from "vitest"
-import { loadComptrollerHome } from "~/lib/comptroller-home.server"
+import { CLARO_OPEN } from "~/lib/claro-installer.server"
+import {
+	CLARO_HOME_SELECT,
+	claroHomeTiles,
+	loadComptrollerHome,
+} from "~/lib/comptroller-home.server"
 import { db } from "~/lib/db.server"
 import {
 	makeTracker,
@@ -26,7 +31,8 @@ const tile = (
 
 describe("loadComptrollerHome", () => {
 	it("counts each Claro stage once, with amounts and ages", async () => {
-		const before = await loadComptrollerHome(NOW)
+		// Read only the invoices seeded here, through the same filter and select
+		// Home uses: other test files add and remove invoices in parallel.
 		const carmen = t.track("user", await seedUser({ role: "COMPTROLLER" }))
 		const batch = t.track(
 			"ewitBatch",
@@ -40,20 +46,23 @@ describe("loadComptrollerHome", () => {
 		)
 		const base = 9500000 + Math.floor(Math.random() * 400000)
 		let k = 0
+		const seeded: { id: string }[] = []
 		const mk = async (data: Record<string, unknown>) =>
-			t.track(
-				"ewitInvoice",
-				await db.ewitInvoice.create({
-					data: {
-						number: `JA${base + k++}`,
-						invoiceDate: daysAgo(100),
-						total: 1000,
-						filePath: "/files/x.pdf",
-						createdById: carmen.id,
-						batchId: batch.id,
-						...data,
-					} as never,
-				}),
+			seeded.push(
+				t.track(
+					"ewitInvoice",
+					await db.ewitInvoice.create({
+						data: {
+							number: `JA${base + k++}`,
+							invoiceDate: daysAgo(100),
+							total: 1000,
+							filePath: "/files/x.pdf",
+							createdById: carmen.id,
+							batchId: batch.id,
+							...data,
+						} as never,
+					}),
+				),
 			)
 		// no_po
 		await mk({ total: 2000 })
@@ -83,36 +92,41 @@ describe("loadComptrollerHome", () => {
 			claroPaidNet: 1040,
 		})
 
-		const after = await loadComptrollerHome(NOW)
-		const d = (key: string) => ({
-			b: tile(before, key),
-			a: tile(after, key),
+		const rows = await db.ewitInvoice.findMany({
+			where: { AND: [CLARO_OPEN, { id: { in: seeded.map((x) => x.id) } }] },
+			select: CLARO_HOME_SELECT,
 		})
+		// The fully paid one is not loaded at all.
+		expect(rows).toHaveLength(4)
+		const tiles = claroHomeTiles(rows, NOW)
+		const get = (key: string) => {
+			const found = tiles.find((x) => x.key === key)
+			if (!found) throw new Error(`no tile ${key}`)
+			return found
+		}
 
-		const po = d("ja_waiting_po")
-		expect((po.a.count ?? 0) - (po.b.count ?? 0)).toBe(1)
-		expect((po.a.amount ?? 0) - (po.b.amount ?? 0)).toBeCloseTo(2000, 2)
-		// The new invoice is 94 days old; older rows in a shared DB may exceed it.
-		expect(po.a.oldestDays).toBe(Math.max(po.b.oldestDays ?? 0, 94))
+		const po = get("ja_waiting_po")
+		expect(po.count).toBe(1)
+		expect(po.amount).toBeCloseTo(2000, 2)
+		expect(po.oldestDays).toBe(94)
 
-		const rs = d("ready_or_sent_not_paid")
-		expect((rs.a.count ?? 0) - (rs.b.count ?? 0)).toBe(2)
-		expect((rs.a.amount ?? 0) - (rs.b.amount ?? 0)).toBeCloseTo(2080, 2)
-		expect(rs.a.oldestAribaAt).not.toBeNull()
+		const rs = get("ready_or_sent_not_paid")
+		expect(rs.count).toBe(2)
+		expect(rs.amount).toBeCloseTo(2080, 2)
+		expect(rs.oldestAribaAt).toBe(daysAgo(70).toISOString())
 
-		const sm = d("short_or_missing")
-		expect((sm.a.count ?? 0) - (sm.b.count ?? 0)).toBe(2)
-		expect((sm.a.missing ?? 0) - (sm.b.missing ?? 0)).toBe(1)
-		expect((sm.a.amount ?? 0) - (sm.b.amount ?? 0)).toBeCloseTo(37.45, 2)
+		const sm = get("short_or_missing")
+		expect(sm.count).toBe(2)
+		expect(sm.missing).toBe(1)
+		expect(sm.amount).toBeCloseTo(37.45, 2)
 
 		// Exposure: sold to PBCC (batch sent), Claro has not paid. The two
 		// paid invoices drop out; 2000 + 1000 + 1000 remain.
-		const ex = d("pbcc_exposure")
-		expect((ex.a.count ?? 0) - (ex.b.count ?? 0)).toBe(3)
-		expect((ex.a.amount ?? 0) - (ex.b.amount ?? 0)).toBeCloseTo(4000, 2)
-		expect(ex.a.oldestDays).toBe(Math.max(ex.b.oldestDays ?? 0, 94))
-		expect(ex.a.averageDays).toBeGreaterThan(0)
-		expect(Number.isNaN(ex.a.averageDays)).toBe(false)
+		const ex = get("pbcc_exposure")
+		expect(ex.count).toBe(3)
+		expect(ex.amount).toBeCloseTo(4000, 2)
+		expect(ex.oldestDays).toBe(94)
+		expect(ex.averageDays).toBe(94)
 	})
 
 	it("gives every tile a link and returns the week strip", async () => {

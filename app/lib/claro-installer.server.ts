@@ -64,6 +64,31 @@ export const CLARO_ELIGIBLE = {
 	batch: { sentAt: { not: null } },
 } as const
 
+/**
+ * Eligible invoices still in some Claro box: not paid by Claro, or paid short
+ * and the short not accepted. Invoices paid in full (or short but accepted) are
+ * "paid" and are left out. One definition for Carmen's Home and the invoices page.
+ */
+export const CLARO_OPEN = {
+	...CLARO_ELIGIBLE,
+	OR: [
+		{ claroPaidAt: null },
+		{
+			shortAcceptedAt: null,
+			OR: [
+				{ claroPaidNet: null },
+				{ claroPaidNet: { lt: db.ewitInvoice.fields.claroTotal } },
+			],
+		},
+	],
+}
+
+/** The paid ones: eligible and not open. */
+const CLARO_PAID = { ...CLARO_ELIGIBLE, NOT: { OR: CLARO_OPEN.OR } }
+
+/** How many paid invoices the invoices page shows: the most recent ones. */
+export const CLARO_PAID_LIMIT = 100
+
 type RowInput = ClaroStageInput & {
 	id: string
 	number: string
@@ -137,6 +162,39 @@ export function claroFilterMatches(
 		default:
 			return r.stage === filter
 	}
+}
+
+/**
+ * The rows of the Claro invoices page for a filter. Every open invoice is
+ * loaded (oldest first), so a new one is never cut off; paid ones only when the
+ * page shows them (no filter, or "paid"), the `paidLimit` most recent first.
+ */
+export async function loadClaroInvoiceRows(
+	filter: ClaroFilter | null,
+	now: Date,
+	paidLimit = CLARO_PAID_LIMIT,
+) {
+	const include = { batch: { select: { sentAt: true } } } as const
+	const [open, paid] = await Promise.all([
+		filter === "paid"
+			? []
+			: db.ewitInvoice.findMany({
+					where: CLARO_OPEN,
+					include,
+					orderBy: [{ invoiceDate: "asc" }, { id: "asc" }],
+				}),
+		filter === null || filter === "paid"
+			? db.ewitInvoice.findMany({
+					where: CLARO_PAID,
+					include,
+					orderBy: [{ claroPaidAt: "desc" }, { id: "desc" }],
+					take: paidLimit,
+				})
+			: [],
+	])
+	return [...open, ...paid]
+		.map((i) => claroRowView(i, now))
+		.filter((r) => !filter || claroFilterMatches(filter, r))
 }
 
 /** Sent to Ariba more than 60 days ago (the caller has checked it is unpaid). */

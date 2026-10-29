@@ -2,7 +2,13 @@ import fs from "node:fs/promises"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { db } from "~/lib/db.server"
 import { makeTracker, runToken, seedUser } from "~/test/helpers"
-import { addPo, claroStage, markAribaSent } from "./claro-installer.server"
+import {
+	addPo,
+	claroStage,
+	expectedClaroTotal,
+	isClaroOverdue,
+	markAribaSent,
+} from "./claro-installer.server"
 
 const t = makeTracker()
 let carmen: Awaited<ReturnType<typeof seedUser>>
@@ -184,5 +190,19 @@ describe("claroStage", () => {
 		expect(
 			claroStage({ ...paid, claroPaidNet: 90, shortAcceptedAt: new Date() }),
 		).toBe("paid")
+	})
+})
+
+describe("expectedClaroTotal / isClaroOverdue", () => {
+	it("adds 4% IVU in cents", () => {
+		expect(expectedClaroTotal(4871.55)).toBe(5066.41)
+		expect(expectedClaroTotal(100, 0.115)).toBe(111.5)
+	})
+	it("flags Ariba sends more than 60 days old", () => {
+		const now = new Date("2026-10-28T12:00:00Z")
+		const ago = (d: number) => new Date(now.getTime() - d * 86400000)
+		expect(isClaroOverdue(ago(61), now)).toBe(true)
+		expect(isClaroOverdue(ago(59), now)).toBe(false)
+		expect(isClaroOverdue(null, now)).toBe(false)
 	})
 })

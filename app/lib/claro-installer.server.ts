@@ -48,6 +48,21 @@ export function claroStage(inv: ClaroStageInput): ClaroStage {
 	return inv.aribaSentAt ? "sent" : "ready_for_ariba"
 }
 
+/** What the reprinted EWIT invoice must total: amount + IVU, in integer cents. */
+export function expectedClaroTotal(total: number, rate = DEFAULT_IVU_RATE) {
+	const totalCents = Math.round(total * 100)
+	const ivuCents = Math.round((totalCents * Math.round(rate * 10000)) / 10000)
+	return (totalCents + ivuCents) / 100
+}
+
+const OVERDUE_DAYS = 60
+
+/** Sent to Ariba more than 60 days ago (the caller has checked it is unpaid). */
+export function isClaroOverdue(aribaSentAt: Date | null, now = new Date()) {
+	if (!aribaSentAt) return false
+	return now.getTime() - aribaSentAt.getTime() > OVERDUE_DAYS * 86400000
+}
+
 export async function addPo(opts: {
 	invoiceId: string
 	poNumber: string

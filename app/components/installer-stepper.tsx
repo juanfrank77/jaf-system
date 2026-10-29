@@ -7,8 +7,8 @@ const STEPS = [
 	{ key: "batch", to: "/comptroller/installers/batches" },
 	{ key: "received", to: "/comptroller/installers/batches" },
 	{ key: "pay", to: "/comptroller/installers/pay" },
-	{ key: "po", to: "/comptroller/installers/claro" },
-	{ key: "ariba", to: "/comptroller/installers/claro" },
+	{ key: "po", to: "/comptroller/installers/claro/invoices" },
+	{ key: "ariba", to: "/comptroller/installers/claro/invoices" },
 	{ key: "claro", to: "/comptroller/installers/claro" },
 ] as const
 

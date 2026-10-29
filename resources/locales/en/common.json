@@ -3068,6 +3068,46 @@
 			"undo_expired": "Only a payment ticked today can be undone.",
 			"invalid_date": "Use a date like 10/28/2026.",
 			"pick_installer": "Tick at least one installer."
+		},
+		"claro_invoices": {
+			"title": "Claro invoices",
+			"none": "None",
+			"col_number": "EWIT invoice #",
+			"col_date": "Invoice date",
+			"col_amount": "Amount",
+			"col_with_ivu": "Amount + IVU",
+			"col_status": "Status",
+			"stage": {
+				"no_po": "No PO yet",
+				"ready_for_ariba": "Ready for Ariba",
+				"sent": "Sent to Ariba",
+				"short": "Paid short",
+				"paid": "Paid"
+			},
+			"days_waiting_one": "{{count}} day waiting",
+			"days_waiting_other": "{{count}} days waiting",
+			"add_po": "Add PO",
+			"po_number": "PO #",
+			"po_date": "PO date",
+			"reprint_pdf": "Reprinted EWIT invoice (PDF)",
+			"reprint_total": "Reprinted total (with IVU)",
+			"save_po": "Save PO",
+			"sent_on": "Sent on",
+			"mark_sent": "Mark sent in Ariba",
+			"sent_on_date": "Sent {{date}}",
+			"overdue": "Sent {{date}} - over 60 days, follow up",
+			"short_by": "Short by {{amount}}",
+			"errors": {
+				"bad_input": "Fill in the PO number, PO date and reprinted total.",
+				"no_file": "Attach the reprinted EWIT invoice PDF.",
+				"not_pdf": "The reprint must be a PDF.",
+				"none_selected": "Select at least one invoice.",
+				"po_total_mismatch": "The reprinted total does not match: expected {{expected}}.",
+				"not_found": "Invoice not found.",
+				"voided": "That invoice is voided or on hold.",
+				"already_sent": "Already sent to Ariba or paid: {{detail}}",
+				"no_po": "Add the PO first: {{detail}}"
+			}
 		}
 	},
 	"log": {

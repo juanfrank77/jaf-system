@@ -3068,6 +3068,46 @@
 			"undo_expired": "Solo se puede deshacer un pago marcado hoy.",
 			"invalid_date": "Use una fecha como 10/28/2026.",
 			"pick_installer": "Marque al menos un instalador."
+		},
+		"claro_invoices": {
+			"title": "Facturas de Claro",
+			"none": "Ninguna",
+			"col_number": "Factura EWIT #",
+			"col_date": "Fecha de factura",
+			"col_amount": "Monto",
+			"col_with_ivu": "Monto + IVU",
+			"col_status": "Estado",
+			"stage": {
+				"no_po": "Sin PO todavía",
+				"ready_for_ariba": "Lista para Ariba",
+				"sent": "Enviada a Ariba",
+				"short": "Pagada incompleta",
+				"paid": "Pagada"
+			},
+			"days_waiting_one": "{{count}} día esperando",
+			"days_waiting_other": "{{count}} días esperando",
+			"add_po": "Agregar PO",
+			"po_number": "PO #",
+			"po_date": "Fecha del PO",
+			"reprint_pdf": "Factura EWIT reimpresa (PDF)",
+			"reprint_total": "Total reimpreso (con IVU)",
+			"save_po": "Guardar PO",
+			"sent_on": "Enviada el",
+			"mark_sent": "Marcar enviada en Ariba",
+			"sent_on_date": "Enviada {{date}}",
+			"overdue": "Enviada {{date}} - más de 60 días, dar seguimiento",
+			"short_by": "Faltan {{amount}}",
+			"errors": {
+				"bad_input": "Complete el número de PO, la fecha del PO y el total reimpreso.",
+				"no_file": "Adjunte el PDF de la factura EWIT reimpresa.",
+				"not_pdf": "La reimpresión debe ser un PDF.",
+				"none_selected": "Seleccione al menos una factura.",
+				"po_total_mismatch": "El total reimpreso no coincide: se esperaba {{expected}}.",
+				"not_found": "Factura no encontrada.",
+				"voided": "Esa factura está anulada o retenida.",
+				"already_sent": "Ya enviada a Ariba o pagada: {{detail}}",
+				"no_po": "Agregue el PO primero: {{detail}}"
+			}
 		}
 	},
 	"log": {

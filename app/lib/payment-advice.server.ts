@@ -227,67 +227,77 @@ async function applyLine(
 	userId: string,
 ) {
 	if (line.ewitInvoiceId) {
+		const ewitInvoiceId = line.ewitInvoiceId
 		// Carmen's installer invoice: no ClaroInvoice, no Aviso, no M19 audit entry.
-		// Only an unpaid, live invoice: a second advice naming it must not overwrite.
-		const paid = await db.ewitInvoice.updateMany({
-			where: {
-				id: line.ewitInvoiceId,
-				claroPaidAt: null,
-				voidedAt: null,
-				heldAt: null,
-			},
-			data: {
-				claroPaidAt: advice.adviceDate,
-				claroPaidNet: line.net as never,
-				claroBankRef: advice.reference,
-			},
-		})
-		if (paid.count === 0) {
-			// Not payable any more: flag the row and leave it unapplied.
-			await db.adviceLine.update({
-				where: { id: line.id },
-				data: { result: "ALREADY_PAID" },
+		// The row claim and the payment are one transaction: a crash cannot leave
+		// "paid but row unapplied", and only the call that owns the claim may flag it.
+		await db.$transaction(async (tx) => {
+			const claim = await tx.adviceLine.updateMany({
+				where: { id: line.id, appliedAt: null },
+				data: { appliedAt: new Date() },
 			})
-			return
-		}
-		await db.adviceLine.update({
-			where: { id: line.id },
-			data: { appliedAt: new Date() },
+			if (claim.count === 0) return
+			// Only an unpaid, live invoice: a second advice naming it must not overwrite.
+			const paid = await tx.ewitInvoice.updateMany({
+				where: {
+					id: ewitInvoiceId,
+					claroPaidAt: null,
+					voidedAt: null,
+					heldAt: null,
+				},
+				data: {
+					claroPaidAt: advice.adviceDate,
+					claroPaidNet: line.net as never,
+					claroBankRef: advice.reference,
+				},
+			})
+			if (paid.count === 0)
+				// Not payable any more: flag the row and leave it unapplied.
+				await tx.adviceLine.update({
+					where: { id: line.id },
+					data: { result: "ALREADY_PAID", appliedAt: null },
+				})
 		})
 		return
 	}
 	if (!line.invoiceId) return
-	// Claim the row first so a double submit cannot pay it twice.
-	const claim = await db.adviceLine.updateMany({
-		where: { id: line.id, appliedAt: null },
-		data: { appliedAt: new Date() },
-	})
-	if (claim.count === 0) return
-	const inv = await db.claroInvoice.update({
-		where: { id: line.invoiceId },
-		data: {
-			paidAt: advice.adviceDate,
-			paidNet: line.net as never,
-			voucherId: line.voucher,
-			bankReference: advice.reference,
-		},
-	})
-	await db.auditTrail.create({
-		data: {
-			docId: inv.docId,
-			userId,
-			action: "CLARO_PAID",
-			diffJson: {
-				// The paid date is read off the advice, not typed (Rule 4).
-				source: "FROM_DOCUMENT",
-				invoice: `M19-${inv.seq}`,
-				paidAt: advice.adviceDate.toISOString().slice(0, 10),
-				net: num(line.net as never),
-				voucher: line.voucher,
-				reference: advice.reference,
+	const invoiceId = line.invoiceId
+	// Claim the row, pay the invoice and write the audit entry as one unit, so a
+	// double submit cannot pay twice and a crash cannot leave a half-applied row.
+	const inv = await db.$transaction(async (tx) => {
+		const claim = await tx.adviceLine.updateMany({
+			where: { id: line.id, appliedAt: null },
+			data: { appliedAt: new Date() },
+		})
+		if (claim.count === 0) return null
+		const paid = await tx.claroInvoice.update({
+			where: { id: invoiceId },
+			data: {
+				paidAt: advice.adviceDate,
+				paidNet: line.net as never,
+				voucherId: line.voucher,
+				bankReference: advice.reference,
 			},
-		},
+		})
+		await tx.auditTrail.create({
+			data: {
+				docId: paid.docId,
+				userId,
+				action: "CLARO_PAID",
+				diffJson: {
+					// The paid date is read off the advice, not typed (Rule 4).
+					source: "FROM_DOCUMENT",
+					invoice: `M19-${paid.seq}`,
+					paidAt: advice.adviceDate.toISOString().slice(0, 10),
+					net: num(line.net as never),
+					voucher: line.voucher,
+					reference: advice.reference,
+				},
+			},
+		})
+		return paid
 	})
+	if (!inv) return
 	await tryCloseAviso(inv.docId, userId)
 }
 

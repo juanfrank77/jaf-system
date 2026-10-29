@@ -714,4 +714,29 @@ describe("Payment Advice: JA rows against Carmen's installer invoices", () => {
 			}),
 		).toBe(1)
 	}, 90000)
+	it("a concurrent double apply by Carmen keeps a short JA row SHORT, pays once, and the short can still be accepted", async () => {
+		const u = t.track("user", await seedUser({ role: "COMPTROLLER" }))
+		const inv = await ewit(u.id, { claroTotal: 1895.06 })
+		const { id, lines } = await ingest(u.id, [[inv.number, 1857.61]])
+		await Promise.all([
+			applyAdvice(id, u.id, "ja"),
+			applyAdvice(id, u.id, "ja"),
+		])
+		const line = await db.adviceLine.findUniqueOrThrow({
+			where: { id: lines[0].id },
+		})
+		expect(line.result).toBe("SHORT")
+		expect(line.appliedAt).not.toBeNull()
+		const paid = await db.ewitInvoice.findUniqueOrThrow({
+			where: { id: inv.id },
+		})
+		expect(Number(paid.claroPaidNet)).toBe(1857.61)
+		const card = (await listAdvices(true, "ja")).find((x) => x.id === id)
+		expect(card?.lines[0].needsAccept).toBe(true)
+		await acceptJaShort(lines[0].id, "Claro kept the fee", u.id)
+		expect(
+			(await db.ewitInvoice.findUniqueOrThrow({ where: { id: inv.id } }))
+				.shortAcceptedAt,
+		).not.toBeNull()
+	}, 90000)
 })

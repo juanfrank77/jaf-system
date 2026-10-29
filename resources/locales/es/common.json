@@ -246,6 +246,7 @@
 			"finance_payment_advice": "Aviso de pago",
 			"finance_avisos": "Registros de Avisos",
 			"finance_ledger": "Libro y reportes",
+			"comptroller_home": "Inicio",
 			"finance_returned": "Devueltos",
 			"supervisor_stock": "Reabastecimiento e inventario",
 			"warehouse_brigade_stock": "Material de brigadas"
@@ -3196,6 +3197,56 @@
 		"from": "De {{name}} · {{date}}",
 		"open": "Abrir",
 		"download": "Descargar"
+	},
+	"comptroller_home": {
+		"title": "Inicio",
+		"greeting": "Hola, {{name}}",
+		"brigades": "Pago a brigadas",
+		"installers": "Instaladores y Claro",
+		"not_live": "Aún no disponible",
+		"all_clear": "Todo al día",
+		"all_requests": "Todas las solicitudes de nómina",
+		"week": {
+			"title": "Esta semana",
+			"day": {
+				"mon": "Lunes",
+				"tue": "Martes",
+				"wed": "Miércoles",
+				"thu": "Jueves"
+			},
+			"items": {
+				"ewit": "Facturas EWIT",
+				"pbcc": "Lote PBCC",
+				"received": "Estado de cuenta de PBCC recibido",
+				"installer_pay": "Pagar instaladores",
+				"brigade_pay": "Pagar brigadas"
+			}
+		},
+		"tile": {
+			"payroll_to_pay": "Solicitudes de nómina por pagar",
+			"installer_week": "Semana de instaladores",
+			"ja_waiting_po": "Facturas JA esperando PO",
+			"ready_or_sent_not_paid": "Listas para Ariba / enviadas, sin pagar",
+			"short_or_missing": "Pagos cortos o faltantes",
+			"pbcc_exposure": "Exposición PBCC",
+			"retention_year": "Retención del 10% este año"
+		},
+		"part": {
+			"waiting_ewit": "{{count}} órdenes esperando EWIT",
+			"not_batched": "{{count}} facturas sin lote",
+			"batch_sent_this_week": {
+				"yes": "lote enviado esta semana",
+				"no": "lote aún sin enviar"
+			},
+			"installers_to_tick": "{{count}} instaladores por marcar"
+		},
+		"sub": {
+			"oldest": "más antigua {{count}} d",
+			"average": "promedio {{count}} d",
+			"short": "{{amount}} corto",
+			"missing": "{{count}} faltantes (60+ d)",
+			"ariba": "Ariba más antigua {{date}}"
+		}
 	},
 	"brigade_stock": {
 		"title": "Reabastecimiento e inventario de brigadas",

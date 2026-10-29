@@ -70,6 +70,7 @@ export type NavLabelKey =
 	| "app_shell.nav.warehouse_serials"
 	| "app_shell.nav.warehouse_movements"
 	| "app_shell.nav.comptroller_lists"
+	| "app_shell.nav.comptroller_home"
 	| "app_shell.nav.comptroller_to_pay"
 	| "app_shell.nav.comptroller_paid"
 	| "app_shell.nav.comptroller_brigades"
@@ -267,7 +268,7 @@ const NAV_ITEMS: NavItem[] = [
 	},
 	{
 		to: "/comptroller",
-		labelKey: "app_shell.nav.dashboard",
+		labelKey: "app_shell.nav.comptroller_home",
 		icon: DashboardSquare01Icon,
 		group: "overview",
 		roles: ["COMPTROLLER"],

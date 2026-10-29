@@ -59,7 +59,7 @@ export async function action({ request }: Route.ActionArgs) {
 				user.id,
 			)
 		} else if (intent === "apply") {
-			await applyAdvice(String(form.get("adviceId")), user.id)
+			await applyAdvice(String(form.get("adviceId")), user.id, "ja")
 		} else if (intent === "accept_ja_short") {
 			await acceptJaShort(
 				String(form.get("lineId")),

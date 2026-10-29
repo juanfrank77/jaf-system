@@ -52,7 +52,7 @@ export async function action({ request }: Route.ActionArgs) {
 				user.id,
 			)
 		} else if (intent === "apply") {
-			await applyAdvice(String(form.get("adviceId")), user.id)
+			await applyAdvice(String(form.get("adviceId")), user.id, "m19")
 		} else if (intent === "link") {
 			await linkLine(
 				String(form.get("lineId")),

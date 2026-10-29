@@ -257,6 +257,12 @@ async function applyLine(
 		return
 	}
 	if (!line.invoiceId) return
+	// Claim the row first so a double submit cannot pay it twice.
+	const claim = await db.adviceLine.updateMany({
+		where: { id: line.id, appliedAt: null },
+		data: { appliedAt: new Date() },
+	})
+	if (claim.count === 0) return
 	const inv = await db.claroInvoice.update({
 		where: { id: line.invoiceId },
 		data: {
@@ -265,10 +271,6 @@ async function applyLine(
 			voucherId: line.voucher,
 			bankReference: advice.reference,
 		},
-	})
-	await db.adviceLine.update({
-		where: { id: line.id },
-		data: { appliedAt: new Date() },
 	})
 	await db.auditTrail.create({
 		data: {
@@ -315,8 +317,18 @@ export async function rematchJaLines(): Promise<number> {
 	return found
 }
 
-/** Apply the advice: matched and short rows are paid; unmatched rows stay for linking. */
-export async function applyAdvice(adviceId: string, userId: string) {
+/**
+ * Apply one desk's share of the advice: matched and short rows of `kind` are
+ * paid ("m19" is Lissette's, "ja" is Carmen's); the other desk's rows and the
+ * unmatched rows stay. The advice itself is stamped applied only once no
+ * payable row of either kind is left, so it stays pending for the other desk.
+ * Each row is claimed on its own, so a double submit pays nothing twice.
+ */
+export async function applyAdvice(
+	adviceId: string,
+	userId: string,
+	kind: AdviceKind = "m19",
+) {
 	const advice = await db.paymentAdvice.findUnique({
 		where: { id: adviceId },
 		include: { lines: true },
@@ -325,16 +337,26 @@ export async function applyAdvice(adviceId: string, userId: string) {
 	if (advice.appliedAt) throw new AdviceError("already_applied")
 	if (r2(Number(advice.rowsTotal)) !== r2(Number(advice.total)))
 		throw new AdviceError("total_mismatch")
-	// Claim first so a double click cannot pay twice.
-	const claimed = await db.paymentAdvice.updateMany({
-		where: { id: adviceId, appliedAt: null },
-		data: { appliedAt: new Date(), appliedById: userId },
-	})
-	if (claimed.count === 0) throw new AdviceError("already_applied")
 	for (const line of advice.lines) {
-		if (line.result === "MATCHED" || line.result === "SHORT")
+		if (
+			isOtherJafRef(line.invoiceRef) === (kind === "ja") &&
+			!line.appliedAt &&
+			(line.result === "MATCHED" || line.result === "SHORT")
+		)
 			await applyLine(line, advice, userId)
 	}
+	const left = await db.adviceLine.count({
+		where: {
+			adviceId,
+			appliedAt: null,
+			result: { in: ["MATCHED", "SHORT"] },
+		},
+	})
+	if (left === 0)
+		await db.paymentAdvice.updateMany({
+			where: { id: adviceId, appliedAt: null },
+			data: { appliedAt: new Date(), appliedById: userId },
+		})
 }
 
 /** Point an unmatched row at an invoice by number; on an applied advice it is paid at once. */
@@ -362,7 +384,18 @@ export async function linkLine(
 		where: { id: lineId },
 		data: { result: m.result, invoiceId: inv.id },
 	})
-	if (line.advice.appliedAt && (m.result === "MATCHED" || m.result === "SHORT"))
+	// The M19 desk is done with this advice when it is applied, or when its own
+	// rows were paid while the JA rows still wait for Carmen.
+	const deskDone =
+		line.advice.appliedAt !== null ||
+		(await db.adviceLine.count({
+			where: {
+				adviceId: line.adviceId,
+				appliedAt: { not: null },
+				NOT: JA_LINE,
+			},
+		})) > 0
+	if (deskDone && (m.result === "MATCHED" || m.result === "SHORT"))
 		await applyLine({ ...line, invoiceId: inv.id }, line.advice, userId)
 }
 
@@ -453,23 +486,42 @@ const JA_LINE = {
 const lineKind = (kind: AdviceKind) =>
 	kind === "ja" ? JA_LINE : { NOT: JA_LINE }
 
+const PAYABLE = ["MATCHED" as const, "SHORT" as const]
+
+/** A desk is done with an advice once it paid some rows and has no payable row left. */
+const deskDone = (kind: AdviceKind) => ({
+	AND: [
+		{ lines: { some: { ...lineKind(kind), appliedAt: { not: null } } } },
+		{
+			lines: {
+				none: { ...lineKind(kind), result: { in: PAYABLE }, appliedAt: null },
+			},
+		},
+	],
+})
+
 /** Counts for the tabs, for one desk's rows. */
 export async function adviceCounts(kind: AdviceKind = "m19") {
 	const has = { lines: { some: lineKind(kind) } }
 	const [pending, applied, unmatched] = await Promise.all([
-		db.paymentAdvice.count({ where: { appliedAt: null, ...has } }),
-		db.paymentAdvice.count({ where: { appliedAt: { not: null }, ...has } }),
+		db.paymentAdvice.count({
+			where: { ...has, appliedAt: null, NOT: deskDone(kind) },
+		}),
+		db.paymentAdvice.count({
+			where: { ...has, OR: [{ appliedAt: { not: null } }, deskDone(kind)] },
+		}),
 		db.adviceLine.count({ where: { result: "UNMATCHED", ...lineKind(kind) } }),
 	])
 	return { pending, applied, unmatched }
 }
 
-/** Advices that carry rows for this desk, showing only that desk's rows. */
 export async function listAdvices(applied: boolean, kind: AdviceKind = "m19") {
 	const rows = await db.paymentAdvice.findMany({
 		where: {
-			appliedAt: applied ? { not: null } : null,
 			lines: { some: lineKind(kind) },
+			...(applied
+				? { OR: [{ appliedAt: { not: null } }, deskDone(kind)] }
+				: { appliedAt: null, NOT: deskDone(kind) }),
 		},
 		orderBy: [{ adviceDate: "desc" }, { uploadedAt: "desc" }],
 		take: 50,
@@ -507,7 +559,15 @@ export async function listAdvices(applied: boolean, kind: AdviceKind = "m19") {
 		total: Number(a.total),
 		rowsTotal: Number(a.rowsTotal),
 		totalOk: r2(Number(a.total)) === r2(Number(a.rowsTotal)),
-		applied: a.appliedAt !== null,
+		// For this desk: the advice is applied, or this desk's rows are all paid.
+		applied:
+			a.appliedAt !== null ||
+			(a.lines.some((l) => l.appliedAt !== null) &&
+				!a.lines.some(
+					(l) =>
+						l.appliedAt === null &&
+						(l.result === "MATCHED" || l.result === "SHORT"),
+				)),
 		lines: a.lines.map((l) => {
 			const e = l.ewitInvoice
 			return {
@@ -532,7 +592,7 @@ export async function listAdvices(applied: boolean, kind: AdviceKind = "m19") {
 						e.shortAcceptedAt === null &&
 						r2(num(e.claroPaidNet) ?? 0) < r2(num(e.claroTotal) ?? 0)
 					: l.result === "SHORT" &&
-						a.appliedAt !== null &&
+						l.appliedAt !== null &&
 						l.invoice?.shortAcceptedAt === null,
 			}
 		}),

@@ -166,7 +166,7 @@ export function ComptrollerHomeView({
 			</section>
 			<Link
 				to="/comptroller/to-pay"
-				className="block text-sm text-primary underline"
+				className="block text-sm text-accent-text underline"
 			>
 				{t("comptroller_home.all_requests")}
 			</Link>

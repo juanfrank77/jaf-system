@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it } from "vitest"
+import { afterAll, describe, expect, it, vi } from "vitest"
 import { loadComptrollerHome } from "~/lib/comptroller-home.server"
 import { db } from "~/lib/db.server"
 import {
@@ -147,13 +147,16 @@ describe("loadComptrollerHome", () => {
 	})
 
 	it("installer_week parts reflect an open batch and waiting EWIT invoices", async () => {
-		const before = await loadComptrollerHome(NOW)
+		// Other test files add and remove EWIT invoices in parallel, so a
+		// before/after difference of the global count is not reliable. Instead,
+		// capture the filter the tile counts with and check it against our own
+		// invoice: counted while its batch is open, not once the batch is sent.
 		const carmen = t.track("user", await seedUser({ role: "COMPTROLLER" }))
 		const open = t.track(
 			"ewitBatch",
 			await db.ewitBatch.create({ data: { createdById: carmen.id } }),
 		)
-		t.track(
+		const inv = t.track(
 			"ewitInvoice",
 			await db.ewitInvoice.create({
 				data: {
@@ -166,10 +169,27 @@ describe("loadComptrollerHome", () => {
 				},
 			}),
 		)
+		const count = vi.spyOn(db.ewitInvoice, "count")
 		const after = await loadComptrollerHome(NOW)
+		const idx = count.mock.calls.findIndex((c) =>
+			JSON.stringify(c[0]?.where ?? {}).includes('"batchId":null'),
+		)
+		expect(idx).toBeGreaterThanOrEqual(0)
+		const where = count.mock.calls[idx][0]?.where ?? {}
+		const tileCount = await count.mock.results[idx].value
+		count.mockRestore()
+
 		const part = (h: typeof after, key: string) =>
 			tile(h, "installer_week").parts?.find((p) => p.key === key)?.count ?? 0
-		expect(part(after, "not_batched") - part(before, "not_batched")).toBe(1)
+		expect(part(after, "not_batched")).toBe(tileCount)
+		const ours = () =>
+			db.ewitInvoice.count({ where: { AND: [where, { id: inv.id }] } })
+		expect(await ours()).toBe(1)
+		await db.ewitBatch.update({
+			where: { id: open.id },
+			data: { closedAt: NOW, sentAt: NOW },
+		})
+		expect(await ours()).toBe(0)
 		expect([0, 1]).toContain(part(after, "batch_sent_this_week"))
 	})
 

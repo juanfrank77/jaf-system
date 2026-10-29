@@ -328,7 +328,7 @@ export default function ClaroInvoices({
 																	})}
 																</Badge>
 																<details>
-																	<summary className="cursor-pointer text-primary">
+																	<summary className="cursor-pointer text-accent-text">
 																		{t("installers.claro_invoices.add_po")}
 																	</summary>
 																	<Form

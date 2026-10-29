@@ -18,6 +18,8 @@ type AdviceLineView = {
 	ourTotal: number | null
 	result: "MATCHED" | "SHORT" | "UNMATCHED" | "ALREADY_PAID"
 	otherJaf: boolean
+	/** An unmatched JA row whose installer invoice exists but has no PO yet. */
+	jaNoPo?: boolean
 	invoiceId: string | null
 	needsAccept: boolean
 }
@@ -31,6 +33,10 @@ type AdviceCardView = {
 	rowsTotal: number
 	totalOk: boolean
 	applied: boolean
+	/** This desk's rows add to this; the other desk's rows are counted apart. */
+	deskTotal?: number
+	otherCount?: number
+	otherTotal?: number
 	lines: AdviceLineView[]
 }
 
@@ -41,6 +47,7 @@ type UnmatchedView = {
 	net: number
 	adviceDate: string
 	reference: string | null
+	jaNoPo?: boolean
 }
 
 type AdviceCounts = { pending: number; applied: number; unmatched: number }
@@ -127,8 +134,15 @@ function AdviceCard({
 						date: usDate(a.adviceDate),
 						ref: a.reference ?? "—",
 						count: a.lines.length,
-						total: formatMoney(a.total),
-					})}{" "}
+						total: formatMoney(
+							a.deskTotal ?? a.lines.reduce((s, l) => s + l.net, 0),
+						),
+					})}
+					{(a.otherCount ?? 0) > 0 &&
+						` · ${t("payment_advice.card_other_desk", {
+							count: a.otherCount,
+							total: formatMoney(a.otherTotal ?? 0),
+						})}`}{" "}
 					{a.totalOk ? (
 						<Badge variant="ok">{t("payment_advice.total_ok")}</Badge>
 					) : (
@@ -182,7 +196,11 @@ function AdviceCard({
 									)}
 									{l.result === "UNMATCHED" && kind === "ja" && (
 										<span className="text-xs text-status-danger">
-											{t("payment_advice.ja_check_hint")}
+											{t(
+												l.jaNoPo
+													? "payment_advice.ja_check_no_po"
+													: "payment_advice.ja_check_hint",
+											)}
 										</span>
 									)}
 									{l.needsAccept && (kind === "ja" || l.invoiceId) && (
@@ -346,7 +364,11 @@ export function PaymentAdviceView({
 												<LinkForm lineId={u.id} />
 											) : (
 												<span className="text-xs text-status-danger">
-													{t("payment_advice.ja_check_hint")}
+													{t(
+														u.jaNoPo
+															? "payment_advice.ja_check_no_po"
+															: "payment_advice.ja_check_hint",
+													)}
 												</span>
 											)}
 										</td>

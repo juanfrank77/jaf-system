@@ -146,4 +146,55 @@ describe("PaymentAdviceView", () => {
 			screen.getByRole("button", { name: "Accept short pay" }),
 		).toBeInTheDocument()
 	})
+
+	it("titles a card with this desk's rows and total, the other desk's apart, and says when a JA row only waits on its PO", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<PaymentAdviceView
+							kind="ja"
+							counts={{ pending: 1, applied: 0, unmatched: 1 }}
+							tab="upload"
+							advices={[
+								card({
+									total: 590,
+									rowsTotal: 590,
+									deskTotal: 200,
+									otherCount: 2,
+									otherTotal: 390,
+									lines: [
+										line({
+											id: "j1",
+											invoiceRef: "JA1616329",
+											net: 200,
+											result: "UNMATCHED",
+											otherJaf: true,
+											invoiceId: null,
+											ourTotal: null,
+											jaNoPo: true,
+										}),
+									],
+								}),
+							]}
+							unmatched={[]}
+						/>
+					),
+				},
+			],
+		})
+		expect(
+			await screen.findByText(
+				/Ref 5440033483 · 1 rows · \$200\.00 · 2 rows on the other desk · \$390\.00/,
+			),
+		).toBeInTheDocument()
+		expect(
+			screen.getByText(
+				"The installer invoice exists but has no PO yet. Add its PO and this row is matched.",
+			),
+		).toBeInTheDocument()
+	})
 })

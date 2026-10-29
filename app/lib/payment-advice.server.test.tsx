@@ -590,7 +590,8 @@ describe("Payment Advice: JA rows against Carmen's installer invoices", () => {
 			(await db.adviceLine.findUniqueOrThrow({ where: { id: p2.lines[0].id } }))
 				.result,
 		).toBe("SHORT")
-		// An applied advice is left alone.
+		// An advice already stamped applied is not a dead end: the row is
+		// matched and paid at once (see the next test).
 		const gone = await ewit(u.id, { claroTotal: null })
 		const p3 = await ingest(u.id, [[gone.number, 90]])
 		await applyAdvice(p3.id, u.id, "ja")
@@ -599,10 +600,119 @@ describe("Payment Advice: JA rows against Carmen's installer invoices", () => {
 			data: { claroTotal: 90 },
 		})
 		await rematchJaLines()
+		const l3 = await db.adviceLine.findUniqueOrThrow({
+			where: { id: p3.lines[0].id },
+		})
+		expect(l3.result).toBe("MATCHED")
+		expect(l3.appliedAt).not.toBeNull()
+	}, 90000)
+
+	it("pays a JA row left unmatched on a stamped advice once its PO exists, exactly once, leaving M19 rows alone", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const m = await invoiceFor(u.id)
+		const noPo = await ewit(u.id, { claroTotal: null })
+		const bankRef = ref()
+		const bytes = await advicePdf([
+			...head(bankRef),
+			row(m.seq, 5920050318, m.total),
+			jaRow(noPo.number, 200),
+			`Total $${(m.total + 200).toFixed(2)}`,
+		])
+		const { id } = await ingestAdvice({ name: "stamped.pdf", bytes }, u.id)
+		const lines = await db.adviceLine.findMany({
+			where: { adviceId: id },
+			orderBy: { position: "asc" },
+		})
+		const [mLine, jaLine] = lines
+		expect(jaLine.result).toBe("UNMATCHED")
+
+		// Each desk's card shows its own rows and the other desk's apart.
+		const jaCard = (await listAdvices(false, "ja")).find((a) => a.id === id)
+		expect(jaCard?.lines).toHaveLength(1)
+		expect(jaCard?.deskTotal).toBe(200)
+		expect(jaCard?.otherCount).toBe(1)
+		expect(jaCard?.otherTotal).toBeCloseTo(m.total, 2)
+		// The row waits on a PO, not on an invoice that does not exist.
+		expect(jaCard?.lines[0].jaNoPo).toBe(true)
+		const waiting = (await listUnmatched("ja")).find((x) => x.id === jaLine.id)
+		expect(waiting?.jaNoPo).toBe(true)
+
+		// Lissette pays her row: no payable row is left, so the advice is stamped.
+		await applyAdvice(id, u.id, "m19")
+		const advice = await db.paymentAdvice.findUniqueOrThrow({ where: { id } })
+		expect(advice.appliedAt).not.toBeNull()
+		const mPaid = await db.claroInvoice.findUniqueOrThrow({
+			where: { id: m.id },
+		})
+		const mLineApplied = await db.adviceLine.findUniqueOrThrow({
+			where: { id: mLine.id },
+		})
+		const audits = await db.auditTrail.count({ where: { docId: m.doc.id } })
+
+		// Carmen adds the PO: the next rematch matches and pays the row at once.
+		await db.ewitInvoice.update({
+			where: { id: noPo.id },
+			data: { claroTotal: 200 },
+		})
+		expect(await rematchJaLines()).toBeGreaterThanOrEqual(1)
+		const paid = await db.ewitInvoice.findUniqueOrThrow({
+			where: { id: noPo.id },
+		})
+		expect(paid.claroPaidAt).toEqual(advice.adviceDate)
+		expect(Number(paid.claroPaidNet)).toBe(200)
+		expect(paid.claroBankRef).toBe(advice.reference)
+		const applied = await db.adviceLine.findUniqueOrThrow({
+			where: { id: jaLine.id },
+		})
+		expect(applied.result).toBe("MATCHED")
+		expect(applied.ewitInvoiceId).toBe(noPo.id)
+		expect(applied.appliedAt).not.toBeNull()
+
+		// Running it again changes nothing.
+		await rematchJaLines()
+		const again = await db.ewitInvoice.findUniqueOrThrow({
+			where: { id: noPo.id },
+		})
+		expect(again).toEqual(paid)
 		expect(
-			(await db.adviceLine.findUniqueOrThrow({ where: { id: p3.lines[0].id } }))
-				.result,
-		).toBe("UNMATCHED")
+			(await db.adviceLine.findUniqueOrThrow({ where: { id: jaLine.id } }))
+				.appliedAt,
+		).toEqual(applied.appliedAt)
+
+		// The M19 row and its invoice are untouched.
+		expect(
+			await db.claroInvoice.findUniqueOrThrow({ where: { id: m.id } }),
+		).toEqual(mPaid)
+		expect(
+			await db.adviceLine.findUniqueOrThrow({ where: { id: mLine.id } }),
+		).toEqual(mLineApplied)
+		expect(await db.auditTrail.count({ where: { docId: m.doc.id } })).toBe(
+			audits,
+		)
+	}, 120000)
+
+	it("Carmen's apply never pays an M19 invoice from a JA row that has no installer invoice", async () => {
+		const u = t.track("user", await seedUser({ role: "COMPTROLLER" }))
+		const m = await invoiceFor(u.id)
+		const unknown = jaNo()
+		const { id, lines } = await ingest(u.id, [[unknown, m.total]])
+		expect(lines[0].result).toBe("UNMATCHED")
+		expect(
+			(await listUnmatched("ja")).find((x) => x.id === lines[0].id)?.jaNoPo,
+		).toBe(false)
+		// A row pointed at an M19 invoice by bad data must still not pay it.
+		await db.adviceLine.update({
+			where: { id: lines[0].id },
+			data: { result: "MATCHED", invoiceId: m.id },
+		})
+		await applyAdvice(id, u.id, "ja")
+		expect(
+			(await db.claroInvoice.findUniqueOrThrow({ where: { id: m.id } })).paidAt,
+		).toBeNull()
+		expect(
+			(await db.adviceLine.findUniqueOrThrow({ where: { id: lines[0].id } }))
+				.appliedAt,
+		).toBeNull()
 	}, 90000)
 
 	it("accepts a short JA payment only with a reason, once, and not an M19 line", async () => {

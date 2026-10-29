@@ -2765,6 +2765,7 @@
 		"empty_applied": "No advice has been applied yet.",
 		"empty_unmatched": "No unmatched rows.",
 		"card_title": "Payment Advice · {{date}} · Ref {{ref}} · {{count}} rows · {{total}}",
+		"card_other_desk": "{{count}} rows on the other desk · {{total}}",
 		"total_ok": "Rows add up to the total",
 		"total_off": "Rows add to {{rows}}, not the total",
 		"summary": "Matched {{matched}} · Short paid {{short}} · Unmatched {{unmatched}} · Already paid {{already}}",
@@ -2774,7 +2775,8 @@
 		"invoice_number": "Invoice number",
 		"link": "Link",
 		"reason": "Reason",
-		"ja_check_hint": "No installer invoice with this number yet. Needs a person to check.",
+		"ja_check_hint": "No installer invoice with this number (or it is voided or on hold). Needs a person to check.",
+		"ja_check_no_po": "The installer invoice exists but has no PO yet. Add its PO and this row is matched.",
 		"accept_short": "Accept short pay",
 		"col": {
 			"invoice": "Invoice #",

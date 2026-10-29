@@ -2765,6 +2765,7 @@
 		"empty_applied": "Aún no se ha aplicado ningún aviso de pago.",
 		"empty_unmatched": "No hay filas sin coincidencia.",
 		"card_title": "Aviso de pago · {{date}} · Ref {{ref}} · {{count}} filas · {{total}}",
+		"card_other_desk": "{{count}} filas en el otro escritorio · {{total}}",
 		"total_ok": "Las filas suman el total",
 		"total_off": "Las filas suman {{rows}}, no el total",
 		"summary": "Con coincidencia {{matched}} · Pago parcial {{short}} · Sin coincidencia {{unmatched}} · Ya pagadas {{already}}",
@@ -2774,7 +2775,8 @@
 		"invoice_number": "Número de factura",
 		"link": "Enlazar",
 		"reason": "Motivo",
-		"ja_check_hint": "Aún no hay factura de instalador con este número. Necesita que una persona lo revise.",
+		"ja_check_hint": "No hay factura de instalador con este número (o está anulada o retenida). Necesita que una persona lo revise.",
+		"ja_check_no_po": "La factura de instalador existe pero aún no tiene PO. Añada su PO y esta fila queda conciliada.",
 		"accept_short": "Aceptar pago parcial",
 		"col": {
 			"invoice": "Factura #",

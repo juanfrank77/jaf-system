@@ -70,22 +70,41 @@ type Match = {
 	ewitInvoiceId: string | null
 }
 
-/** A JA row matches Carmen's installer invoice by number, against what Claro owes (claroTotal). */
-async function matchJaRow(ref: string, net: number): Promise<Match> {
-	const none: Match = {
-		result: "UNMATCHED",
-		invoiceId: null,
-		ewitInvoiceId: null,
-	}
-	const number = ref.replace(/[^a-z0-9]/gi, "").toUpperCase() // canonical, as stored
-	const inv = await db.ewitInvoice.findUnique({ where: { number } })
-	if (!inv || inv.voidedAt || inv.heldAt || inv.claroTotal === null) return none
+/** "ja-1616328" -> "JA1616328": the canonical form installer invoices are stored in. */
+const jaNumber = (ref: string) => ref.replace(/[^a-z0-9]/gi, "").toUpperCase()
+
+type JaInvoiceForMatch = {
+	id: string
+	voidedAt: Date | null
+	heldAt: Date | null
+	claroTotal: unknown
+	claroPaidAt: Date | null
+}
+
+const NO_MATCH: Match = {
+	result: "UNMATCHED",
+	invoiceId: null,
+	ewitInvoiceId: null,
+}
+
+/** What a JA row of `net` is against this installer invoice (or none). */
+function jaMatch(inv: JaInvoiceForMatch | null, net: number): Match {
+	if (!inv || inv.voidedAt || inv.heldAt || inv.claroTotal === null)
+		return NO_MATCH
 	const base = { invoiceId: null, ewitInvoiceId: inv.id }
 	if (inv.claroPaidAt) return { ...base, result: "ALREADY_PAID" }
 	return {
 		...base,
 		result: cents(net) < cents(Number(inv.claroTotal)) ? "SHORT" : "MATCHED",
 	}
+}
+
+/** A JA row matches Carmen's installer invoice by number, against what Claro owes (claroTotal). */
+async function matchJaRow(ref: string, net: number): Promise<Match> {
+	const inv = await db.ewitInvoice.findUnique({
+		where: { number: jaNumber(ref) },
+	})
+	return jaMatch(inv, net)
 }
 
 async function matchRow(ref: string, net: number): Promise<Match> {
@@ -218,6 +237,7 @@ async function tryCloseAviso(docId: string, userId: string) {
 async function applyLine(
 	line: {
 		id: string
+		invoiceRef: string
 		invoiceId: string | null
 		ewitInvoiceId?: string | null
 		net: unknown
@@ -226,7 +246,9 @@ async function applyLine(
 	advice: { adviceDate: Date; reference: string | null },
 	userId: string,
 ) {
-	if (line.ewitInvoiceId) {
+	if (isOtherJafRef(line.invoiceRef)) {
+		// A JA row only ever pays Carmen's installer invoice, never an M19 one.
+		if (!line.ewitInvoiceId) return
 		const ewitInvoiceId = line.ewitInvoiceId
 		// Carmen's installer invoice: no ClaroInvoice, no Aviso, no M19 audit entry.
 		// The row claim and the payment are one transaction: a crash cannot leave
@@ -302,27 +324,65 @@ async function applyLine(
 }
 
 /**
- * Re-run the JA matcher over JA rows that found no invoice on an advice still
- * waiting to be applied: Carmen may have added the PO (so claroTotal exists) or
- * the invoice itself after the upload. Returns how many rows found their invoice.
+ * Re-run the JA matcher over JA rows that found no invoice: Carmen may have
+ * added the PO (so claroTotal exists) or the invoice itself after the upload.
+ * A row found on an advice Carmen's desk is already done with (the advice is
+ * stamped applied, or her other rows on it were paid) is paid at once, the way
+ * linkLine pays an M19 row, so it never waits for another Apply click.
+ * Returns how many rows found their invoice.
  */
 export async function rematchJaLines(): Promise<number> {
 	const lines = await db.adviceLine.findMany({
-		where: {
-			result: "UNMATCHED",
-			advice: { appliedAt: null },
-			invoiceRef: { startsWith: "JA", mode: "insensitive" },
+		where: { result: "UNMATCHED", ...JA_LINE },
+		include: {
+			advice: {
+				select: {
+					id: true,
+					adviceDate: true,
+					reference: true,
+					appliedAt: true,
+				},
+			},
 		},
 	})
+	if (lines.length === 0) return 0
+	// One read for every row's invoice, instead of one per row.
+	const invoices = await db.ewitInvoice.findMany({
+		where: {
+			number: { in: [...new Set(lines.map((l) => jaNumber(l.invoiceRef)))] },
+		},
+		select: {
+			id: true,
+			number: true,
+			voidedAt: true,
+			heldAt: true,
+			claroTotal: true,
+			claroPaidAt: true,
+		},
+	})
+	const byNumber = new Map(invoices.map((i) => [i.number, i]))
 	let found = 0
 	for (const l of lines) {
-		const m = await matchJaRow(l.invoiceRef, Number(l.net))
+		const m = jaMatch(
+			byNumber.get(jaNumber(l.invoiceRef)) ?? null,
+			Number(l.net),
+		)
 		if (m.result === "UNMATCHED") continue
 		const done = await db.adviceLine.updateMany({
-			where: { id: l.id, result: "UNMATCHED", advice: { appliedAt: null } },
+			where: { id: l.id, result: "UNMATCHED" },
 			data: { result: m.result, ewitInvoiceId: m.ewitInvoiceId },
 		})
-		found += done.count
+		if (done.count === 0) continue
+		found += 1
+		if (m.result !== "MATCHED" && m.result !== "SHORT") continue
+		const jaDeskDone =
+			l.advice.appliedAt !== null ||
+			(await db.adviceLine.count({
+				where: { adviceId: l.adviceId, appliedAt: { not: null }, ...JA_LINE },
+			})) > 0
+		if (jaDeskDone)
+			// Carmen's installer invoice carries no audit entry, so no user is needed.
+			await applyLine({ ...l, ewitInvoiceId: m.ewitInvoiceId }, l.advice, "")
 	}
 	return found
 }
@@ -498,6 +558,25 @@ const lineKind = (kind: AdviceKind) =>
 
 const PAYABLE = ["MATCHED" as const, "SHORT" as const]
 
+/**
+ * Of these rows' JA numbers, the ones whose installer invoice exists and is live
+ * but has no PO yet (no claroTotal): adding the PO is all those rows wait for.
+ */
+async function jaNumbersWithoutPo(refs: string[]): Promise<Set<string>> {
+	const numbers = [...new Set(refs.filter(isOtherJafRef).map(jaNumber))]
+	if (numbers.length === 0) return new Set()
+	const rows = await db.ewitInvoice.findMany({
+		where: {
+			number: { in: numbers },
+			claroTotal: null,
+			voidedAt: null,
+			heldAt: null,
+		},
+		select: { number: true },
+	})
+	return new Set(rows.map((r) => r.number))
+}
+
 /** A desk is done with an advice once it paid some rows and has no payable row left. */
 const deskDone = (kind: AdviceKind) => ({
 	AND: [
@@ -561,9 +640,30 @@ export async function listAdvices(applied: boolean, kind: AdviceKind = "m19") {
 			},
 		},
 	})
+	const noPo = await jaNumbersWithoutPo(
+		rows.flatMap((a) =>
+			a.lines.filter((l) => l.result === "UNMATCHED").map((l) => l.invoiceRef),
+		),
+	)
+	// The other desk's rows on the same advice, so a card shows both shares.
+	const other = rows.length
+		? await db.adviceLine.groupBy({
+				by: ["adviceId"],
+				where: {
+					adviceId: { in: rows.map((a) => a.id) },
+					...lineKind(kind === "ja" ? "m19" : "ja"),
+				},
+				_count: { _all: true },
+				_sum: { net: true },
+			})
+		: []
+	const otherBy = new Map(other.map((o) => [o.adviceId, o]))
 	return rows.map((a) => ({
 		id: a.id,
 		adviceDate: a.adviceDate.toISOString(),
+		deskTotal: a.lines.reduce((sum, l) => sum + cents(Number(l.net)), 0) / 100,
+		otherCount: otherBy.get(a.id)?._count._all ?? 0,
+		otherTotal: Number(otherBy.get(a.id)?._sum.net ?? 0),
 		bank: a.bank,
 		reference: a.reference,
 		total: Number(a.total),
@@ -594,6 +694,8 @@ export async function listAdvices(applied: boolean, kind: AdviceKind = "m19") {
 						: null,
 				result: l.result,
 				otherJaf: isOtherJafRef(l.invoiceRef),
+				/** An unmatched JA row whose invoice exists but has no PO yet. */
+				jaNoPo: l.result === "UNMATCHED" && noPo.has(jaNumber(l.invoiceRef)),
 				invoiceId: l.invoiceId,
 				/** Short paid and not yet accepted. */
 				needsAccept: e
@@ -616,6 +718,7 @@ export async function listUnmatched(kind: AdviceKind = "m19") {
 		take: 200,
 		include: { advice: { select: { adviceDate: true, reference: true } } },
 	})
+	const noPo = await jaNumbersWithoutPo(rows.map((l) => l.invoiceRef))
 	return rows.map((l) => ({
 		id: l.id,
 		invoiceRef: l.invoiceRef,
@@ -623,5 +726,6 @@ export async function listUnmatched(kind: AdviceKind = "m19") {
 		net: Number(l.net),
 		adviceDate: l.advice.adviceDate.toISOString(),
 		reference: l.advice.reference,
+		jaNoPo: noPo.has(jaNumber(l.invoiceRef)),
 	}))
 }

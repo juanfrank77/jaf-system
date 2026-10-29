@@ -283,6 +283,24 @@ async function installerRows(): Promise<LogRow[]> {
 			installerPayment: true,
 		},
 	})
+	// An invoice covers many orders: its money shows on one order row only, chosen
+	// over the whole set (earliest installed, then order #, then id) so it never
+	// depends on the view. A filter that hides that row omits the invoice's money.
+	const when = (c: (typeof docs)[number]) =>
+		(c.installedAt ?? c.submittedAt ?? c.createdAt).getTime()
+	const moneyRow = new Map<string, (typeof docs)[number]>()
+	for (const c of docs) {
+		if (!c.ewitInvoiceId) continue
+		const cur = moneyRow.get(c.ewitInvoiceId)
+		if (
+			!cur ||
+			when(c) < when(cur) ||
+			(when(c) === when(cur) &&
+				(c.claroOrderNo < cur.claroOrderNo ||
+					(c.claroOrderNo === cur.claroOrderNo && c.id < cur.id)))
+		)
+			moneyRow.set(c.ewitInvoiceId, c)
+	}
 	return docs.map((c) => {
 		const batch = c.ewitInvoice?.batch ?? null
 		const payment =
@@ -298,6 +316,8 @@ async function installerRows(): Promise<LogRow[]> {
 		const inv = c.ewitInvoice
 		const stage = inv ? claroStage(inv) : null
 		const claroPaid = day(inv?.claroPaidAt)
+		const showMoney =
+			!!c.ewitInvoiceId && moneyRow.get(c.ewitInvoiceId)?.id === c.id
 		const withCents = inv?.claroTotal == null ? null : cents(inv.claroTotal)
 		const paidCents = inv?.claroPaidNet == null ? null : cents(inv.claroPaidNet)
 		const shortCents =
@@ -336,11 +356,11 @@ async function installerRows(): Promise<LogRow[]> {
 			paid,
 			amount: payment ? Number(payment.amount) : null,
 			po: inv?.poNumber ?? null,
-			withIvu: withCents == null ? null : withCents / 100,
+			withIvu: !showMoney || withCents == null ? null : withCents / 100,
 			aribaSent: day(inv?.aribaSentAt),
 			claroPaid,
-			claroAmount: paidCents == null ? null : paidCents / 100,
-			short: shortCents == null ? null : shortCents / 100,
+			claroAmount: !showMoney || paidCents == null ? null : paidCents / 100,
+			short: !showMoney || shortCents == null ? null : shortCents / 100,
 			daysPbccClaro: daysBetween(sold, claroPaid),
 			status: claroText ? `${status} · ${claroText}` : status,
 		} satisfies Record<string, LogCell> & { id: string }

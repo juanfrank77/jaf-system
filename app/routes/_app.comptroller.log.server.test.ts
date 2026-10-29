@@ -2,6 +2,7 @@ import fs from "node:fs/promises"
 import { getDocumentProxy } from "unpdf"
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 import { db } from "~/lib/db.server"
+import { formatLogCell } from "~/lib/log-view"
 import {
 	makeTracker,
 	runToken,
@@ -246,7 +247,8 @@ describe("Carmen's Log", () => {
 		expect(res.totals.claroAmount).toBeCloseTo(10126.04, 2)
 		expect(res.totals.short).toBeCloseTo(37.45, 2)
 		const keys = res.columns.map((c) => c.key)
-		expect(keys.slice(keys.indexOf("amount") + 1, -1)).toEqual([
+		const from = keys.indexOf("amount") + 1
+		expect(keys.slice(from, from + 7)).toEqual([
 			"po",
 			"withIvu",
 			"aribaSent",
@@ -255,5 +257,84 @@ describe("Carmen's Log", () => {
 			"short",
 			"daysPbccClaro",
 		])
+	})
+
+	it("counts an invoice's money once when it covers several orders, and keeps blanks blank", async () => {
+		as(carmen)
+		const tok = `MO${runToken("m").replace(/\D/g, "").slice(-6)}`
+		const noon = (d: string) => new Date(`${d}T16:00:00Z`)
+		const batch = await db.ewitBatch.create({
+			data: { createdById: carmen.id, sentAt: noon("2026-07-07") },
+		})
+		t.track("ewitBatch", { id: batch.id })
+		const inv = await db.ewitInvoice.create({
+			data: {
+				number: `${tok}I`,
+				invoiceDate: noon("2026-07-01"),
+				total: 4600,
+				filePath: "/files/x.pdf",
+				createdById: carmen.id,
+				batchId: batch.id,
+				receivedAt: noon("2026-07-10"),
+				poNumber: "4500518065",
+				aribaSentAt: noon("2026-07-27"),
+				claroPaidAt: noon("2026-10-09"),
+				claroTotal: 5097.08,
+				claroPaidNet: 5059.63,
+			} as never,
+		})
+		t.track("ewitInvoice", { id: inv.id })
+		const comp = async (suffix: string, day: string, ewit: string | null) =>
+			t.track(
+				"installCompletion",
+				await db.installCompletion.create({
+					data: {
+						idempotencyKey: runToken("IDK"),
+						claroOrderNo: `${tok}${suffix}`,
+						installerId: installer.user.id,
+						vanId: installer.van.id,
+						status: "SUBMITTED",
+						address: "x",
+						installedAt: noon(day),
+						submittedAt: noon(day),
+						ewitInvoiceId: ewit,
+					},
+				}),
+			)
+		await comp("B", "2026-07-03", inv.id)
+		await comp("A", "2026-07-02", inv.id)
+		await comp("Z", "2026-07-04", null)
+		const res = await logLoader(args(req(`tab=installers&q=${tok}`)))
+		const rows = res.groups.flatMap((g) => g.rows)
+		const money = ["withIvu", "claroAmount", "short"]
+		const shown = rows.filter((r) => money.some((k) => r[k] != null))
+		expect(shown.map((r) => r.order)).toEqual([`${tok}A`])
+		expect(shown[0]).toMatchObject({
+			withIvu: 5097.08,
+			claroAmount: 5059.63,
+			short: 37.45,
+		})
+		const b = rows.find((r) => r.order === `${tok}B`)
+		expect(b).toMatchObject({ po: "4500518065", daysPbccClaro: 94 })
+		expect(res.totals.withIvu).toBeCloseTo(5097.08, 2)
+		expect(res.totals.claroAmount).toBeCloseTo(5059.63, 2)
+		expect(res.totals.short).toBeCloseTo(37.45, 2)
+
+		const blank = rows.find((r) => r.order === `${tok}Z`)
+		const blankKeys = [
+			"po",
+			"withIvu",
+			"aribaSent",
+			"claroPaid",
+			"claroAmount",
+			"short",
+			"daysPbccClaro",
+		]
+		for (const k of blankKeys) {
+			expect(blank?.[k]).toBeNull()
+			const col = res.columns.find((c) => c.key === k)
+			if (!col) throw new Error(k)
+			expect(formatLogCell(col, blank?.[k] ?? null)).toBe("—")
+		}
 	})
 })

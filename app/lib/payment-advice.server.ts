@@ -76,7 +76,7 @@ async function matchJaRow(ref: string, net: number): Promise<Match> {
 		invoiceId: null,
 		ewitInvoiceId: null,
 	}
-	const number = ref.replace(/[^a-z0-9]/gi, "").toUpperCase()
+	const number = ref.replace(/[^a-z0-9]/gi, "").toUpperCase() // canonical, as stored
 	const inv = await db.ewitInvoice.findUnique({ where: { number } })
 	if (!inv || inv.voidedAt || inv.heldAt || inv.claroTotal === null) return none
 	const base = { invoiceId: null, ewitInvoiceId: inv.id }
@@ -227,14 +227,28 @@ async function applyLine(
 ) {
 	if (line.ewitInvoiceId) {
 		// Carmen's installer invoice: no ClaroInvoice, no Aviso, no M19 audit entry.
-		await db.ewitInvoice.update({
-			where: { id: line.ewitInvoiceId },
+		// Only an unpaid, live invoice: a second advice naming it must not overwrite.
+		const paid = await db.ewitInvoice.updateMany({
+			where: {
+				id: line.ewitInvoiceId,
+				claroPaidAt: null,
+				voidedAt: null,
+				heldAt: null,
+			},
 			data: {
 				claroPaidAt: advice.adviceDate,
 				claroPaidNet: line.net as never,
 				claroBankRef: advice.reference,
 			},
 		})
+		if (paid.count === 0) {
+			// Not payable any more: flag the row and leave it unapplied.
+			await db.adviceLine.update({
+				where: { id: line.id },
+				data: { result: "ALREADY_PAID" },
+			})
+			return
+		}
 		await db.adviceLine.update({
 			where: { id: line.id },
 			data: { appliedAt: new Date() },
@@ -308,6 +322,9 @@ export async function linkLine(
 	})
 	if (!line) throw new AdviceError("not_found")
 	if (line.result !== "UNMATCHED") throw new AdviceError("line_not_unmatched")
+	// A JA row is Carmen's installer invoice: never link it to an M19 invoice.
+	if (isOtherJafRef(line.invoiceRef))
+		throw new AdviceError("line_not_unmatched")
 	const seq = seqOf(invoiceNumber)
 	const inv = Number.isInteger(seq)
 		? await db.claroInvoice.findUnique({ where: { seq } })
@@ -331,21 +348,7 @@ export async function acceptShort(
 	const why = reason.trim()
 	if (!why) throw new AdviceError("reason_required")
 	const inv = await db.claroInvoice.findUnique({ where: { id: invoiceId } })
-	if (!inv) {
-		// Not an M19 invoice: it may be one of Carmen's installer invoices.
-		const ja = await db.ewitInvoice.findUnique({ where: { id: invoiceId } })
-		if (
-			!ja?.claroPaidAt ||
-			ja.shortAcceptedAt ||
-			cents(Number(ja.claroPaidNet ?? 0)) >= cents(Number(ja.claroTotal ?? 0))
-		)
-			throw new AdviceError("not_short")
-		await db.ewitInvoice.update({
-			where: { id: invoiceId },
-			data: { shortAcceptedAt: new Date() },
-		})
-		return
-	}
+	if (!inv) throw new AdviceError("not_short")
 	if (!inv.paidAt || inv.shortAcceptedAt) throw new AdviceError("not_short")
 	if (r2(num(inv.paidNet) ?? 0) >= r2(Number(inv.total)))
 		throw new AdviceError("not_short")

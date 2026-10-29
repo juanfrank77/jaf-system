@@ -6,6 +6,7 @@ import { Document, Page, renderToBuffer, Text } from "@react-pdf/renderer"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { makeInvoice } from "~/lib/claro-invoice.server"
 import { db } from "~/lib/db.server"
+import { createEwitInvoice } from "~/lib/ewit.server"
 import {
 	AdviceError,
 	acceptShort,
@@ -383,10 +384,17 @@ describe("Payment Advice: JA rows against Carmen's installer invoices", () => {
 		expect(lines.map((l) => l.ewitInvoiceId)).toEqual([full.id, s1.id, s2.id])
 		expect(lines.every((l) => l.invoiceId === null)).toBe(true)
 		expect(lines[0].invoiceRef).toBe(full.number)
-		const diff = (c: number, l: (typeof lines)[number]) =>
-			Math.round(c * 100 - Number(l.net) * 100) / 100
-		expect(diff(5097.08, lines[1])).toBe(37.45)
-		expect(diff(1895.06, lines[2])).toBe(18.26)
+		const stored = await db.ewitInvoice.findMany({
+			where: { id: { in: [s1.id, s2.id] } },
+		})
+		const gap = (invId: string, l: (typeof lines)[number]) =>
+			Math.round(
+				(Number(stored.find((i) => i.id === invId)?.claroTotal) -
+					Number(l.net)) *
+					100,
+			) / 100
+		expect(gap(s1.id, lines[1])).toBe(37.45)
+		expect(gap(s2.id, lines[2])).toBe(18.26)
 	}, 60000)
 
 	it("is UNMATCHED for an unknown ref, a missing PO, a voided or a held invoice", async () => {
@@ -446,7 +454,11 @@ describe("Payment Advice: JA rows against Carmen's installer invoices", () => {
 
 	it("flags an already paid invoice and leaves a short row for acceptance", async () => {
 		const u = t.track("user", await seedUser({ role: "FINANCE" }))
-		const paid = await ewit(u.id, { claroPaidAt: new Date() })
+		const paid = await ewit(u.id, {
+			claroPaidAt: new Date("2026-09-30T12:00:00Z"),
+			claroPaidNet: 5066.41,
+			claroBankRef: "PRIOR1",
+		})
 		const short = await ewit(u.id)
 		const { id, lines } = await ingest(u.id, [
 			[paid.number, 5066.41],
@@ -454,15 +466,69 @@ describe("Payment Advice: JA rows against Carmen's installer invoices", () => {
 		])
 		expect(lines.map((l) => l.result)).toEqual(["ALREADY_PAID", "SHORT"])
 		await applyAdvice(id, u.id)
+		const still = await db.ewitInvoice.findUniqueOrThrow({
+			where: { id: paid.id },
+		})
+		expect(still.claroPaidAt?.toISOString().slice(0, 10)).toBe("2026-09-30")
+		expect(Number(still.claroPaidNet)).toBe(5066.41)
+		expect(still.claroBankRef).toBe("PRIOR1")
 		const s = await db.ewitInvoice.findUniqueOrThrow({
 			where: { id: short.id },
 		})
 		expect(Number(s.claroPaidNet)).toBe(5000)
 		expect(s.shortAcceptedAt).toBeNull()
-		await acceptShort(short.id, "Claro deducted a fee", u.id)
-		const acc = await db.ewitInvoice.findUniqueOrThrow({
-			where: { id: short.id },
+		await expect(acceptShort(short.id, "fee", u.id)).rejects.toMatchObject({
+			code: "not_short",
 		})
-		expect(acc.shortAcceptedAt).not.toBeNull()
+	}, 60000)
+
+	it("matches an invoice created as 'ja-1616328' by an advice row JA1616328", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const n = Math.floor(1000000 + Math.random() * 8999999)
+		const made = await createEwitInvoice({
+			number: `ja-${n}`,
+			invoiceDate: new Date("2026-09-20T12:00:00Z"),
+			total: 100,
+			file: new File([new Uint8Array([37, 80, 68, 70])], "i.pdf"),
+			completionIds: [],
+			typedOrderNos: [`ORD${n}`],
+			userId: u.id,
+		} as never)
+		t.track("ewitInvoice", made)
+		await db.ewitInvoice.update({
+			where: { id: made.id },
+			data: { claroTotal: 110 },
+		})
+		const { lines } = await ingest(u.id, [[`JA${n}`, 110]])
+		expect(lines[0].result).toBe("MATCHED")
+		expect(lines[0].ewitInvoiceId).toBe(made.id)
+	}, 60000)
+
+	it("does not overwrite a payment when a second advice names the same invoice", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const inv = await ewit(u.id)
+		const first = await ingest(u.id, [[inv.number, 5066.41]])
+		const second = await ingest(u.id, [[inv.number, 5066.41]])
+		await applyAdvice(first.id, u.id)
+		const a1 = await db.ewitInvoice.findUniqueOrThrow({ where: { id: inv.id } })
+		await applyAdvice(second.id, u.id)
+		const a2 = await db.ewitInvoice.findUniqueOrThrow({ where: { id: inv.id } })
+		expect(a2.claroPaidAt).toEqual(a1.claroPaidAt)
+		expect(a2.claroPaidNet).toEqual(a1.claroPaidNet)
+		expect(a2.claroBankRef).toBe(a1.claroBankRef)
+		const l2 = await db.adviceLine.findFirstOrThrow({
+			where: { adviceId: second.id },
+		})
+		expect(l2.appliedAt).toBeNull()
+		expect(l2.result).toBe("ALREADY_PAID")
+	}, 60000)
+
+	it("never links a JA line to an M19 invoice", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const a = await invoiceFor(u.id)
+		const { lines } = await ingest(u.id, [[jaNo(), 100]])
+		await expect(
+			linkLine(lines[0].id, `M19-${a.seq}`, u.id),
+		).rejects.toMatchObject({ code: "line_not_unmatched" })
 	}, 60000)
 })

@@ -116,7 +116,11 @@ export async function loadWarrantyDocs(
 
 // ── B2 · EWIT invoice ──────────────────────────────────────────────────
 
-const normNumber = (s: string) => s.trim().replace(/\s+/g, "")
+/** JA numbers are canonical "JA1616328" (the form a Payment Advice row normalises to). */
+const normNumber = (s: string) => {
+	const t = s.trim().replace(/\s+/g, "")
+	return /^JA-?\d/i.test(t) ? t.replace(/[^a-z0-9]/gi, "").toUpperCase() : t
+}
 
 /** The one open installer batch, created when there is none. */
 async function openBatchIn(tx: Tx, userId: string) {

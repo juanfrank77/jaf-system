@@ -2383,6 +2383,8 @@
 		"request_title": "Solicitud de nómina · {{label}}",
 		"sent_on": "enviada a Carmen {{date}}",
 		"draft": "Borrador — no enviada",
+		"draft_banner_title": "Carmen aún no puede verlo.",
+		"draft_banner_body": "Envíelo a Carmen cuando esté listo.",
 		"draft_body": "Revisa las brigadas y los números de Aviso y luego envía la solicitud a Carmen. Mientras no la envíes, Carmen no la ve.",
 		"progress": "{{paid}} de {{total}} brigadas pagadas",
 		"paid_on": "Pagada {{date}}",

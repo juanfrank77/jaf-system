@@ -2383,6 +2383,8 @@
 		"request_title": "Payroll request · {{label}}",
 		"sent_on": "sent to Carmen {{date}}",
 		"draft": "Draft — not sent",
+		"draft_banner_title": "Carmen can't see this yet.",
+		"draft_banner_body": "Send to Carmen when it is ready.",
 		"draft_body": "Check the brigades and the Aviso numbers, then send the request to Carmen. Until you send it, Carmen cannot see it.",
 		"progress": "{{paid}} of {{total}} brigades paid",
 		"paid_on": "Paid {{date}}",

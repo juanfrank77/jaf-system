@@ -151,7 +151,7 @@ describe("Payment Advice", () => {
 		const ja = await listOtherJaf()
 		expect(ja.lines.length).toBe(beforeJa.lines.length + 1)
 		expect(ja.total).toBeCloseTo(beforeJa.total + 1399.06, 2)
-		expect(ja.lines.some((l) => l.invoiceRef === "JA-1616276")).toBe(true)
+		expect(ja.lines.some((l) => l.invoiceRef === "JA1616276")).toBe(true)
 		await applyAdvice(id, u.id)
 	}, 60000)
 
@@ -327,4 +327,142 @@ describe.skipIf(!existsSync(REAL_ADVICE))("a real Claro advice", () => {
 		await db.adviceLine.deleteMany({ where: { adviceId: id } })
 		await db.paymentAdvice.delete({ where: { id } })
 	}, 120000)
+})
+
+describe("Payment Advice: JA rows against Carmen's installer invoices", () => {
+	const jaNo = () => `JA${Math.floor(1000000 + Math.random() * 8999999)}`
+	async function ewit(
+		userId: string,
+		over: Record<string, unknown> = {},
+		number = jaNo(),
+	) {
+		const inv = await db.ewitInvoice.create({
+			data: {
+				number,
+				invoiceDate: new Date("2026-09-20T12:00:00Z"),
+				total: 4871.55,
+				filePath: "/files/x.pdf",
+				createdById: userId,
+				claroTotal: 5066.41,
+				...over,
+			} as never,
+		})
+		t.track("ewitInvoice", { id: inv.id })
+		return inv
+	}
+	const jaRow = (refText: string, net: number) =>
+		`${refText} 5920042289 03.06.2026 ${net.toFixed(2)} (0.00) 0.00 ${net.toFixed(2)}`
+	async function ingest(userId: string, rows: [string, number][]) {
+		const sum = rows.reduce((s, r) => s + r[1], 0)
+		const bytes = await advicePdf([
+			...head(ref()),
+			...rows.map(([r, n]) => jaRow(r, n)),
+			`Total $${sum.toFixed(2)}`,
+		])
+		const { id } = await ingestAdvice({ name: "ja.pdf", bytes }, userId)
+		return {
+			id,
+			lines: await db.adviceLine.findMany({
+				where: { adviceId: id },
+				orderBy: { position: "asc" },
+			}),
+		}
+	}
+
+	it("matches paid-in-full MATCHED, short rows SHORT, dashed form too", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const full = await ewit(u.id)
+		const s1 = await ewit(u.id, { claroTotal: 5097.08 })
+		const s2 = await ewit(u.id, { claroTotal: 1895.06 })
+		const { lines } = await ingest(u.id, [
+			[full.number.replace("JA", "JA-"), 5066.41],
+			[s1.number, 5059.63],
+			[s2.number.replace("JA", "JA "), 1876.8],
+		])
+		expect(lines.map((l) => l.result)).toEqual(["MATCHED", "SHORT", "SHORT"])
+		expect(lines.map((l) => l.ewitInvoiceId)).toEqual([full.id, s1.id, s2.id])
+		expect(lines.every((l) => l.invoiceId === null)).toBe(true)
+		expect(lines[0].invoiceRef).toBe(full.number)
+		const diff = (c: number, l: (typeof lines)[number]) =>
+			Math.round(c * 100 - Number(l.net) * 100) / 100
+		expect(diff(5097.08, lines[1])).toBe(37.45)
+		expect(diff(1895.06, lines[2])).toBe(18.26)
+	}, 60000)
+
+	it("is UNMATCHED for an unknown ref, a missing PO, a voided or a held invoice", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const noPo = await ewit(u.id, { claroTotal: null })
+		const voided = await ewit(u.id, { voidedAt: new Date() })
+		const held = await ewit(u.id, { heldAt: new Date() })
+		const { lines } = await ingest(u.id, [
+			[jaNo(), 100],
+			[noPo.number, 100],
+			[voided.number, 100],
+			[held.number, 100],
+		])
+		expect(lines.map((l) => l.result)).toEqual(Array(4).fill("UNMATCHED"))
+		expect(lines.every((l) => l.ewitInvoiceId === null)).toBe(true)
+	}, 60000)
+
+	it("applies the paid date, net and bank ref to the installer invoice only", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const a = await invoiceFor(u.id)
+		const inv = await ewit(u.id)
+		const reference = ref()
+		const bytes = await advicePdf([
+			...head(reference),
+			row(a.seq, 5920050318, a.total),
+			jaRow(inv.number, 5066.41),
+			`Total $${(a.total + 5066.41).toFixed(2)}`,
+		])
+		const { id } = await ingestAdvice({ name: "mix.pdf", bytes }, u.id)
+		const lines = await db.adviceLine.findMany({
+			where: { adviceId: id },
+			orderBy: { position: "asc" },
+		})
+		expect(lines.map((l) => l.result)).toEqual(["MATCHED", "MATCHED"])
+		expect(lines[0].invoiceId).toBe(a.id)
+		await applyAdvice(id, u.id)
+		const paid = await db.ewitInvoice.findUniqueOrThrow({
+			where: { id: inv.id },
+		})
+		expect(paid.claroPaidAt?.toISOString().slice(0, 10)).toBe("2026-10-01")
+		expect(Number(paid.claroPaidNet)).toBe(5066.41)
+		expect(paid.claroBankRef).toBe(reference)
+		// The M19 row still lands on ClaroInvoice, with its audit entry.
+		const m19 = await db.claroInvoice.findUniqueOrThrow({ where: { id: a.id } })
+		expect(m19.paidAt).not.toBeNull()
+		expect(
+			await db.auditTrail.count({
+				where: { docId: a.doc.id, action: "CLARO_PAID" },
+			}),
+		).toBe(1)
+		expect(
+			(await db.adviceLine.findMany({ where: { adviceId: id } })).every(
+				(l) => l.appliedAt !== null,
+			),
+		).toBe(true)
+	}, 60000)
+
+	it("flags an already paid invoice and leaves a short row for acceptance", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const paid = await ewit(u.id, { claroPaidAt: new Date() })
+		const short = await ewit(u.id)
+		const { id, lines } = await ingest(u.id, [
+			[paid.number, 5066.41],
+			[short.number, 5000],
+		])
+		expect(lines.map((l) => l.result)).toEqual(["ALREADY_PAID", "SHORT"])
+		await applyAdvice(id, u.id)
+		const s = await db.ewitInvoice.findUniqueOrThrow({
+			where: { id: short.id },
+		})
+		expect(Number(s.claroPaidNet)).toBe(5000)
+		expect(s.shortAcceptedAt).toBeNull()
+		await acceptShort(short.id, "Claro deducted a fee", u.id)
+		const acc = await db.ewitInvoice.findUniqueOrThrow({
+			where: { id: short.id },
+		})
+		expect(acc.shortAcceptedAt).not.toBeNull()
+	}, 60000)
 })

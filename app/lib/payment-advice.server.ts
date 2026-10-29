@@ -61,19 +61,45 @@ function invoiceClosed(inv: {
 	)
 }
 
-async function matchRow(
-	ref: string,
-	net: number,
-): Promise<{ result: AdviceResult; invoiceId: string | null }> {
+const cents = (n: number) => Math.round((n + Number.EPSILON) * 100)
+
+type Match = {
+	result: AdviceResult
+	invoiceId: string | null
+	ewitInvoiceId: string | null
+}
+
+/** A JA row matches Carmen's installer invoice by number, against what Claro owes (claroTotal). */
+async function matchJaRow(ref: string, net: number): Promise<Match> {
+	const none: Match = {
+		result: "UNMATCHED",
+		invoiceId: null,
+		ewitInvoiceId: null,
+	}
+	const number = ref.replace(/[^a-z0-9]/gi, "").toUpperCase()
+	const inv = await db.ewitInvoice.findUnique({ where: { number } })
+	if (!inv || inv.voidedAt || inv.heldAt || inv.claroTotal === null) return none
+	const base = { invoiceId: null, ewitInvoiceId: inv.id }
+	if (inv.claroPaidAt) return { ...base, result: "ALREADY_PAID" }
+	return {
+		...base,
+		result: cents(net) < cents(Number(inv.claroTotal)) ? "SHORT" : "MATCHED",
+	}
+}
+
+async function matchRow(ref: string, net: number): Promise<Match> {
+	if (isOtherJafRef(ref)) return matchJaRow(ref, net)
 	const seq = seqOf(ref)
 	const inv = Number.isInteger(seq)
 		? await db.claroInvoice.findUnique({ where: { seq } })
 		: null
-	if (!inv) return { result: "UNMATCHED", invoiceId: null }
-	if (inv.paidAt) return { result: "ALREADY_PAID", invoiceId: inv.id }
+	if (!inv) return { result: "UNMATCHED", invoiceId: null, ewitInvoiceId: null }
+	if (inv.paidAt)
+		return { result: "ALREADY_PAID", invoiceId: inv.id, ewitInvoiceId: null }
 	return {
 		result: r2(net) < r2(Number(inv.total)) ? "SHORT" : "MATCHED",
 		invoiceId: inv.id,
+		ewitInvoiceId: null,
 	}
 }
 
@@ -138,6 +164,7 @@ export async function ingestAdvice(
 					net: r.net,
 					result: matched[i].result,
 					invoiceId: matched[i].invoiceId,
+					ewitInvoiceId: matched[i].ewitInvoiceId,
 				})),
 			},
 		},
@@ -191,12 +218,29 @@ async function applyLine(
 	line: {
 		id: string
 		invoiceId: string | null
+		ewitInvoiceId?: string | null
 		net: unknown
 		voucher: string | null
 	},
 	advice: { adviceDate: Date; reference: string | null },
 	userId: string,
 ) {
+	if (line.ewitInvoiceId) {
+		// Carmen's installer invoice: no ClaroInvoice, no Aviso, no M19 audit entry.
+		await db.ewitInvoice.update({
+			where: { id: line.ewitInvoiceId },
+			data: {
+				claroPaidAt: advice.adviceDate,
+				claroPaidNet: line.net as never,
+				claroBankRef: advice.reference,
+			},
+		})
+		await db.adviceLine.update({
+			where: { id: line.id },
+			data: { appliedAt: new Date() },
+		})
+		return
+	}
 	if (!line.invoiceId) return
 	const inv = await db.claroInvoice.update({
 		where: { id: line.invoiceId },
@@ -287,8 +331,22 @@ export async function acceptShort(
 	const why = reason.trim()
 	if (!why) throw new AdviceError("reason_required")
 	const inv = await db.claroInvoice.findUnique({ where: { id: invoiceId } })
-	if (!inv || !inv.paidAt || inv.shortAcceptedAt)
-		throw new AdviceError("not_short")
+	if (!inv) {
+		// Not an M19 invoice: it may be one of Carmen's installer invoices.
+		const ja = await db.ewitInvoice.findUnique({ where: { id: invoiceId } })
+		if (
+			!ja?.claroPaidAt ||
+			ja.shortAcceptedAt ||
+			cents(Number(ja.claroPaidNet ?? 0)) >= cents(Number(ja.claroTotal ?? 0))
+		)
+			throw new AdviceError("not_short")
+		await db.ewitInvoice.update({
+			where: { id: invoiceId },
+			data: { shortAcceptedAt: new Date() },
+		})
+		return
+	}
+	if (!inv.paidAt || inv.shortAcceptedAt) throw new AdviceError("not_short")
 	if (r2(num(inv.paidNet) ?? 0) >= r2(Number(inv.total)))
 		throw new AdviceError("not_short")
 	await db.claroInvoice.update({
@@ -322,9 +380,9 @@ export async function adviceFile(id: string) {
 	})
 }
 
-/** JA- rows are their own group, not unmatched errors (see listOtherJaf). */
+/** JA rows are their own group, not unmatched errors (see listOtherJaf). */
 const NOT_OTHER_JAF = {
-	NOT: { invoiceRef: { startsWith: "JA-", mode: "insensitive" as const } },
+	NOT: { invoiceRef: { startsWith: "JA", mode: "insensitive" as const } },
 }
 
 /** Counts for the tabs. */
@@ -405,13 +463,13 @@ export async function listUnmatched() {
 }
 
 /**
- * "Other JAF invoices (JA-)": a second series Claro pays on the same advices.
+ * "Other JAF invoices (JA)": a second series Claro pays on the same advices.
  * They are not tracked yet, so they are listed with their total instead of
  * being counted as unmatched errors.
  */
 export async function listOtherJaf() {
 	const rows = await db.adviceLine.findMany({
-		where: { invoiceRef: { startsWith: "JA-", mode: "insensitive" } },
+		where: { invoiceRef: { startsWith: "JA", mode: "insensitive" } },
 		orderBy: [{ advice: { adviceDate: "desc" } }, { position: "asc" }],
 		include: { advice: { select: { adviceDate: true, reference: true } } },
 	})

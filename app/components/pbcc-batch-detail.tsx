@@ -255,8 +255,6 @@ export function PbccBatchDetailView({
 							<th className="p-2">{t("pbcc_batch.col.brigade")}</th>
 							<th className="p-2">{t("pbcc_batch.col.invoice")}</th>
 							<th className="p-2 text-right">{t("pbcc_batch.col.subtotal")}</th>
-							<th className="p-2 text-right">{t("pbcc_batch.col.ivu")}</th>
-							<th className="p-2 text-right">{t("pbcc_batch.col.total")}</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -271,12 +269,6 @@ export function PbccBatchDetailView({
 								<td className="p-2 font-mono">{r.invoiceNumber}</td>
 								<td className="p-2 text-right font-mono">
 									{formatMoney(r.subtotal)}
-								</td>
-								<td className="p-2 text-right font-mono">
-									{formatMoney(r.ivu)}
-								</td>
-								<td className="p-2 text-right font-mono">
-									{formatMoney(r.total)}
 								</td>
 							</tr>
 						))}

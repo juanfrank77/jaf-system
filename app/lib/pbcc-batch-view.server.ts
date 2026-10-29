@@ -61,8 +61,6 @@ export async function loadBatchView(
 					doc.avisoNumber || doc.controlNumber,
 				),
 				subtotal: amounts.subtotal,
-				ivu: amounts.ivu,
-				total: amounts.total,
 				avisoHref: doc.avisoDocPath ? uploadHref(doc.avisoDocPath) : null,
 				invoiceHref: doc.bankInvoicePdfPath
 					? uploadHref(doc.bankInvoicePdfPath)

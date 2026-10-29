@@ -75,7 +75,10 @@ function VerifyPacket({ loaderData, actionData }: ViewProps) {
 		label: string
 		tab: string
 	} | null>(() => {
-		const first = packetDocs.find((d) => d.href && d.key !== "photos")
+		// The Aviso is what Lissette checks the lines against: open on it.
+		const first =
+			packetDocs.find((d) => d.key === "aviso" && d.href) ??
+			packetDocs.find((d) => d.href && d.key !== "photos")
 		return first?.href
 			? {
 					href: first.href,

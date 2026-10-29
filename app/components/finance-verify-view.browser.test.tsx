@@ -159,16 +159,16 @@ describe("Finance review screen", () => {
 		renderStub,
 	}) => {
 		await mount(renderStub, data())
-		// The JAF invoice is already in the viewer.
-		expect(document.querySelector("iframe")).toHaveAttribute(
-			"src",
-			"/files/packets/j1.pdf#page=1&zoom=100",
-		)
-		const openButtons = screen.getAllByRole("button", { name: "Open" })
-		await userEvent.click(openButtons[1])
+		// The viewer opens on the Aviso, not the first document in the list.
 		expect(document.querySelector("iframe")).toHaveAttribute(
 			"src",
 			"/files/aviso-docs/aviso.pdf#page=1&zoom=100",
+		)
+		const openButtons = screen.getAllByRole("button", { name: "Open" })
+		await userEvent.click(openButtons[0])
+		expect(document.querySelector("iframe")).toHaveAttribute(
+			"src",
+			"/files/packets/j1.pdf#page=1&zoom=100",
 		)
 		await userEvent.click(screen.getByRole("button", { name: "a.jpg" }))
 		expect(document.querySelector("iframe")).toBeNull()

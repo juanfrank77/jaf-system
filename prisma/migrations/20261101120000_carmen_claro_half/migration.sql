@@ -13,7 +13,9 @@ ADD COLUMN     "ivuRate" DECIMAL(65,30),
 ADD COLUMN     "poDate" TIMESTAMP(3),
 ADD COLUMN     "poFilePath" TEXT,
 ADD COLUMN     "poNumber" TEXT,
-ADD COLUMN     "shortAcceptedAt" TIMESTAMP(3);
+ADD COLUMN     "shortAcceptedAt" TIMESTAMP(3),
+ADD COLUMN     "shortAcceptedById" TEXT,
+ADD COLUMN     "shortAcceptedReason" TEXT;
 
 -- AlterTable
 ALTER TABLE "installer_profile" ADD COLUMN     "ewitInstallerNo" TEXT;
@@ -29,4 +31,7 @@ ALTER TABLE "AdviceLine" ADD CONSTRAINT "AdviceLine_ewitInvoiceId_fkey" FOREIGN 
 
 -- AddForeignKey
 ALTER TABLE "EwitInvoice" ADD CONSTRAINT "EwitInvoice_aribaSentById_fkey" FOREIGN KEY ("aribaSentById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EwitInvoice" ADD CONSTRAINT "EwitInvoice_shortAcceptedById_fkey" FOREIGN KEY ("shortAcceptedById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 

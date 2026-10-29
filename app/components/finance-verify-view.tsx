@@ -617,7 +617,12 @@ function VerifyPacket({ loaderData, actionData }: ViewProps) {
 												className="h-8 w-64"
 												placeholder={t("finance_verify.send_back_placeholder")}
 											/>
-											<Button type="submit" size="sm" variant="outline">
+											<Button
+												type="submit"
+												size="sm"
+												variant="outline"
+												className="border-2 border-status-warn bg-status-warn-soft font-medium text-status-warn hover:bg-status-warn-soft/70"
+											>
 												{t("finance_verify.send_back")}
 											</Button>
 										</Form>
@@ -626,6 +631,7 @@ function VerifyPacket({ loaderData, actionData }: ViewProps) {
 											type="button"
 											size="sm"
 											variant="outline"
+											className="border-2 border-status-warn bg-status-warn-soft font-medium text-status-warn hover:bg-status-warn-soft/70"
 											onClick={() => setSendBackOpen(true)}
 										>
 											{t("finance_verify.send_back")}

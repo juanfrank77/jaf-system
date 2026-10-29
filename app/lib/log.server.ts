@@ -283,24 +283,31 @@ async function installerRows(): Promise<LogRow[]> {
 			installerPayment: true,
 		},
 	})
-	// An invoice covers many orders: its money shows on one order row only, chosen
-	// over the whole set (earliest installed, then order #, then id) so it never
-	// depends on the view. A filter that hides that row omits the invoice's money.
+	// An invoice (and an installer payment) covers many orders: its money shows
+	// on one order row only, chosen over the whole set (earliest installed, then
+	// order #, then id) so it never depends on the view. A filter that hides that
+	// row omits the money.
 	const when = (c: (typeof docs)[number]) =>
 		(c.installedAt ?? c.submittedAt ?? c.createdAt).getTime()
-	const moneyRow = new Map<string, (typeof docs)[number]>()
-	for (const c of docs) {
-		if (!c.ewitInvoiceId) continue
-		const cur = moneyRow.get(c.ewitInvoiceId)
-		if (
-			!cur ||
-			when(c) < when(cur) ||
-			(when(c) === when(cur) &&
-				(c.claroOrderNo < cur.claroOrderNo ||
-					(c.claroOrderNo === cur.claroOrderNo && c.id < cur.id)))
-		)
-			moneyRow.set(c.ewitInvoiceId, c)
+	const firstRowBy = (key: (c: (typeof docs)[number]) => string | null) => {
+		const first = new Map<string, (typeof docs)[number]>()
+		for (const c of docs) {
+			const k = key(c)
+			if (!k) continue
+			const cur = first.get(k)
+			if (
+				!cur ||
+				when(c) < when(cur) ||
+				(when(c) === when(cur) &&
+					(c.claroOrderNo < cur.claroOrderNo ||
+						(c.claroOrderNo === cur.claroOrderNo && c.id < cur.id)))
+			)
+				first.set(k, c)
+		}
+		return first
 	}
+	const moneyRow = firstRowBy((c) => c.ewitInvoiceId)
+	const paymentRow = firstRowBy((c) => c.installerPaymentId)
 	return docs.map((c) => {
 		const batch = c.ewitInvoice?.batch ?? null
 		const payment =
@@ -354,7 +361,11 @@ async function installerRows(): Promise<LogRow[]> {
 			sold,
 			received,
 			paid,
-			amount: payment ? Number(payment.amount) : null,
+			// One payment pays several orders: its amount counts once.
+			amount:
+				payment && paymentRow.get(payment.id)?.id === c.id
+					? Number(payment.amount)
+					: null,
 			po: inv?.poNumber ?? null,
 			withIvu: !showMoney || withCents == null ? null : withCents / 100,
 			aribaSent: day(inv?.aribaSentAt),

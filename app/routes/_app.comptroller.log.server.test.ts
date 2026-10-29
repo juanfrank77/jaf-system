@@ -337,4 +337,47 @@ describe("Carmen's Log", () => {
 			expect(formatLogCell(col, blank?.[k] ?? null)).toBe("—")
 		}
 	})
+
+	it("counts an installer payment once when it pays several orders", async () => {
+		as(carmen)
+		const tok = `PP${runToken("p").replace(/\D/g, "").slice(-6)}`
+		const noon = (d: string) => new Date(`${d}T16:00:00Z`)
+		const payment = await db.installerPayment.create({
+			data: {
+				installerId: installer.user.id,
+				paidAt: noon("2026-07-20"),
+				amount: 850,
+				paidById: carmen.id,
+			},
+		})
+		t.track("installerPayment", { id: payment.id })
+		const comp = async (suffix: string, day: string) =>
+			t.track(
+				"installCompletion",
+				await db.installCompletion.create({
+					data: {
+						idempotencyKey: runToken("IDK"),
+						claroOrderNo: `${tok}${suffix}`,
+						installerId: installer.user.id,
+						vanId: installer.van.id,
+						status: "SUBMITTED",
+						address: "x",
+						installedAt: noon(day),
+						submittedAt: noon(day),
+						installerPaymentId: payment.id,
+					},
+				}),
+			)
+		await comp("B", "2026-07-03")
+		await comp("A", "2026-07-02")
+		const res = await logLoader(args(req(`tab=installers&q=${tok}`)))
+		const rows = res.groups.flatMap((g) => g.rows)
+		expect(rows).toHaveLength(2)
+		// Both orders show they were paid; the amount sits on the earliest one.
+		expect(rows.every((r) => r.paid === "2026-07-20")).toBe(true)
+		const withAmount = rows.filter((r) => r.amount != null)
+		expect(withAmount.map((r) => r.order)).toEqual([`${tok}A`])
+		expect(withAmount[0].amount).toBe(850)
+		expect(res.totals.amount).toBeCloseTo(850, 2)
+	})
 })

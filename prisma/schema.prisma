@@ -231,6 +231,7 @@ model User {
   // Carmen's installer money loop and her reports
   ewitInvoicesCreated   EwitInvoice[]      @relation("EwitInvoiceCreator")
   ewitInvoicesVoided    EwitInvoice[]      @relation("EwitInvoiceVoider")
+  ewitInvoicesAribaSent EwitInvoice[]      @relation("EwitInvoiceAribaSender")
   ewitBatchesCreated    EwitBatch[]        @relation("EwitBatchCreator")
   ewitBatchesClosed     EwitBatch[]        @relation("EwitBatchCloser")
   ewitBatchesSent       EwitBatch[]        @relation("EwitBatchSender")
@@ -767,24 +768,27 @@ model PaymentAdvice {
 }
 
 model AdviceLine {
-  id          String        @id @default(cuid())
-  adviceId    String
-  advice      PaymentAdvice @relation(fields: [adviceId], references: [id], onDelete: Cascade)
-  position    Int
-  invoiceRef  String // as read, e.g. "M19-3423"
-  voucher     String?
-  invoiceDate DateTime?
-  amount      Decimal
-  withholding Decimal
-  discount    Decimal
-  net         Decimal
-  result      AdviceResult
-  invoiceId   String?
-  invoice     ClaroInvoice? @relation(fields: [invoiceId], references: [id])
-  appliedAt   DateTime?
+  id            String        @id @default(cuid())
+  adviceId      String
+  advice        PaymentAdvice @relation(fields: [adviceId], references: [id], onDelete: Cascade)
+  position      Int
+  invoiceRef    String // as read, e.g. "M19-3423"
+  voucher       String?
+  invoiceDate   DateTime?
+  amount        Decimal
+  withholding   Decimal
+  discount      Decimal
+  net           Decimal
+  result        AdviceResult
+  invoiceId     String?
+  invoice       ClaroInvoice? @relation(fields: [invoiceId], references: [id])
+  ewitInvoiceId String?
+  ewitInvoice   EwitInvoice?  @relation(fields: [ewitInvoiceId], references: [id])
+  appliedAt     DateTime?
 
   @@index([adviceId])
   @@index([invoiceId])
+  @@index([ewitInvoiceId])
 }
 
 model PreCertSheet {
@@ -988,13 +992,15 @@ model Van {
 }
 
 model InstallerProfile {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  user      User     @relation("InstallerProfile", fields: [userId], references: [id], onDelete: Cascade)
-  jafNumber String
-  toaNumber String   @unique
-  region    String?
-  createdAt DateTime @default(now())
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation("InstallerProfile", fields: [userId], references: [id], onDelete: Cascade)
+  jafNumber       String
+  // Claro's 5-digit installer number on EWIT invoices (e.g. 01821); format checked in app code.
+  ewitInstallerNo String?  @unique
+  toaNumber       String   @unique
+  region          String?
+  createdAt       DateTime @default(now())
 
   @@map("installer_profile")
 }
@@ -1394,7 +1400,23 @@ model EwitInvoice {
   // Order #s Carmen typed that have no warranty photo yet (saved, flagged).
   unmatchedOrderNos String[]   @default([])
 
+  // Claro half: the PO, IVU, Ariba submission and Claro's payment.
+  poNumber        String?
+  poDate          DateTime?
+  poFilePath      String?
+  ivuRate         Decimal?
+  ivuAmount       Decimal?
+  claroTotal      Decimal? // amount + IVU
+  aribaSentAt     DateTime?
+  aribaSentById   String?
+  aribaSentBy     User?     @relation("EwitInvoiceAribaSender", fields: [aribaSentById], references: [id])
+  claroPaidAt     DateTime?
+  claroPaidNet    Decimal?
+  claroBankRef    String?
+  shortAcceptedAt DateTime?
+
   completions InstallCompletion[]
+  adviceLines AdviceLine[]
 
   @@index([batchId])
 }

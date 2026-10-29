@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next"
-import { Form, useNavigation } from "react-router"
+import { Form, Link, useNavigation } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { InstallerStepper } from "~/components/installer-stepper"
 import { Badge } from "~/components/ui/badge"
@@ -12,8 +12,10 @@ import {
 	CLARO_ELIGIBLE,
 	ClaroInstallerError,
 	type ClaroStage,
+	claroFilterMatches,
 	claroRowView,
 	markAribaSent,
+	parseClaroFilter,
 } from "~/lib/claro-installer.server"
 import { db } from "~/lib/db.server"
 import { validateFile } from "~/lib/file-upload.server"
@@ -45,8 +47,13 @@ export async function loader({ request }: Route.LoaderArgs) {
 		take: 500,
 	})
 	const now = new Date()
-	const view = rows.map((i) => claroRowView(i, now))
-	return { rows: view, today: now.toISOString().slice(0, 10) }
+	const filter = parseClaroFilter(
+		new URL(request.url).searchParams.get("stage"),
+	)
+	const view = rows
+		.map((i) => claroRowView(i, now))
+		.filter((r) => !filter || claroFilterMatches(filter, r))
+	return { rows: view, filter, today: now.toISOString().slice(0, 10) }
 }
 
 /** "YYYY-MM-DD" at noon UTC, or null for anything that is not a real calendar day. */
@@ -181,7 +188,7 @@ export default function ClaroInvoices({
 }: Route.ComponentProps) {
 	const { t } = useTranslation()
 	const busy = useNavigation().state !== "idle"
-	const { rows, today } = loaderData
+	const { rows, today, filter } = loaderData
 	const by = (s: ClaroStage) => rows.filter((r) => r.stage === s)
 	const err = actionData?.errorKey
 		? [
@@ -211,6 +218,16 @@ export default function ClaroInvoices({
 				{t("installers.claro_invoices.title")}
 			</h1>
 			<InstallerStepper current="po" />
+			{filter && (
+				<Link
+					to="/comptroller/installers/claro/invoices"
+					className="inline-block rounded-full border px-3 py-1 text-sm"
+				>
+					{t("installers.claro_invoices.filter_chip", {
+						filter: t(`installers.claro_invoices.filter.${filter}`),
+					})}
+				</Link>
+			)}
 			{err && (
 				<p role="alert" className="text-sm text-status-danger">
 					{err}

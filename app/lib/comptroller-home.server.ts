@@ -6,6 +6,7 @@ import {
 import {
 	type ComptrollerHome,
 	type ComptrollerHomeTile,
+	summarizeAges,
 	weekStrip,
 } from "~/lib/comptroller-home"
 import { loadComptrollerRuns } from "~/lib/comptroller-runs.server"
@@ -59,27 +60,35 @@ export async function loadComptrollerHome(now: Date): Promise<ComptrollerHome> {
 		batchesSentThisWeek,
 		toTick,
 		eligible,
-		exposure,
 		retention,
 	] = await Promise.all([
 		loadComptrollerRuns(),
 		loadWarrantyDocs(now),
 		// Invoices made but whose batch has not gone to PBCC.
-		db.ewitInvoice
-			.count({
-				where: { voidedAt: null, batch: { is: null } },
-			})
-			.then(
-				async (noBatch) =>
-					noBatch +
-					(await db.ewitInvoice.count({
-						where: { voidedAt: null, batch: { is: { sentAt: null } } },
-					})),
-			),
+		db.ewitInvoice.count({
+			where: {
+				voidedAt: null,
+				OR: [{ batchId: null }, { batch: { is: { sentAt: null } } }],
+			},
+		}),
 		db.ewitBatch.count({ where: { sentAt: { gte: mondayStart(now) } } }),
 		loadInstallerPayList(),
+		// One read feeds every Claro box. Invoices paid in full (or short but
+		// accepted) are in no box, so they are not loaded.
 		db.ewitInvoice.findMany({
-			where: CLARO_ELIGIBLE,
+			where: {
+				...CLARO_ELIGIBLE,
+				OR: [
+					{ claroPaidAt: null },
+					{
+						shortAcceptedAt: null,
+						OR: [
+							{ claroPaidNet: null },
+							{ claroPaidNet: { lt: db.ewitInvoice.fields.claroTotal } },
+						],
+					},
+				],
+			},
 			select: {
 				poNumber: true,
 				aribaSentAt: true,
@@ -91,14 +100,10 @@ export async function loadComptrollerHome(now: Date): Promise<ComptrollerHome> {
 				batch: { select: { sentAt: true } },
 			},
 		}),
-		// Sold to PBCC (batch sent), not paid by Claro yet.
-		db.ewitInvoice.findMany({
-			where: { ...CLARO_ELIGIBLE, claroPaidAt: null },
-			select: { total: true, batch: { select: { sentAt: true } } },
-		}),
 		// The 10% already worked out per job when the payroll request was made.
 		db.jafInvoice.aggregate({
 			where: {
+				retentionAmount: { gt: 0 },
 				payrollRun: { reversedAt: null, sentAt: { gte: yearStart(now) } },
 			},
 			_sum: { retentionAmount: true },
@@ -178,8 +183,11 @@ export async function loadComptrollerHome(now: Date): Promise<ComptrollerHome> {
 	const noPoCount = noPo.length
 	const oldestAriba = minDate(sentAriba)
 
-	const soldDates = exposure.map((e) => e.batch?.sentAt ?? null)
-	const exposureAges = soldDates.map((d) => ageDays(d, now))
+	const exposure = eligible.filter((e) => e.claroPaidAt == null)
+	const exposureAges = summarizeAges(
+		exposure.map((e) => e.batch?.sentAt ?? null),
+		now,
+	)
 
 	return {
 		week: weekStrip(now),
@@ -189,35 +197,31 @@ export async function loadComptrollerHome(now: Date): Promise<ComptrollerHome> {
 			{
 				key: "ja_waiting_po",
 				count: noPoCount,
-				href: "/comptroller/installers/claro/invoices",
+				href: "/comptroller/installers/claro/invoices?stage=no_po",
 				amount: dollars(noPoCents),
 				oldestDays: noPoCount ? ageDays(minDate(noPo), now) : null,
 			},
 			{
 				key: "ready_or_sent_not_paid",
 				count: ariba.count,
-				href: "/comptroller/installers/claro/invoices",
+				href: "/comptroller/installers/claro/invoices?stage=ariba_open",
 				amount: dollars(ariba.cents),
 				oldestAribaAt: oldestAriba?.toISOString() ?? null,
 			},
 			{
 				key: "short_or_missing",
 				count: short.count + missing,
-				href: "/comptroller/installers/claro/invoices",
+				href: "/comptroller/installers/claro/invoices?stage=short",
 				amount: dollars(short.cents),
 				missing,
 			},
 			{
 				key: "pbcc_exposure",
 				count: exposure.length,
-				href: "/comptroller/installers/claro/invoices",
+				href: "/comptroller/installers/claro/invoices?stage=exposure",
 				amount: dollars(exposure.reduce((s, e) => s + toCents(e.total), 0)),
-				oldestDays: exposure.length ? Math.max(...exposureAges) : null,
-				averageDays: exposure.length
-					? Math.round(
-							exposureAges.reduce((s, a) => s + a, 0) / exposure.length,
-						)
-					: null,
+				oldestDays: exposureAges.oldest,
+				averageDays: exposureAges.average,
 			},
 			{
 				key: "retention_year",

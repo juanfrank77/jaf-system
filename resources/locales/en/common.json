@@ -3116,7 +3116,17 @@
 				"no_po": "Add the PO first.",
 				"ineligible": "That invoice is not available: it must be sent to PBCC and not voided or on hold."
 			},
-			"ivu_rate": "IVU rate % (blank = 4)"
+			"ivu_rate": "IVU rate % (blank = 4)",
+			"filter_chip": "{{filter}} filter · clear",
+			"filter": {
+				"no_po": "Waiting for a PO",
+				"ready_for_ariba": "Ready for Ariba",
+				"sent": "Sent to Ariba",
+				"paid": "Paid",
+				"short": "Short or missing",
+				"exposure": "PBCC exposure",
+				"ariba_open": "Ariba, not paid"
+			}
 		}
 	},
 	"log": {
@@ -3245,7 +3255,8 @@
 			"average": "average {{count}} d",
 			"short": "{{amount}} short",
 			"missing": "{{count}} missing (60+ d)",
-			"ariba": "oldest Ariba {{date}}"
+			"ariba": "oldest Ariba {{date}}",
+			"retention": "sent payroll runs · D-line retention unconfirmed"
 		}
 	},
 	"brigade_stock": {

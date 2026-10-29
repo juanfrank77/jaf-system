@@ -51,6 +51,10 @@ function subFor(tile: ComptrollerHomeTile, t: TFunction) {
 			)
 		return bits.join(" · ")
 	}
+	if (tile.key === "retention_year") {
+		bits.push(t("comptroller_home.sub.retention"))
+		return bits.join(" · ")
+	}
 	if (tile.amount != null && tile.key !== "payroll_to_pay")
 		bits.push(
 			tile.key === "short_or_missing"
@@ -95,7 +99,10 @@ function HomeTile({ tile }: { tile: ComptrollerHomeTile }) {
 	// The retention box leads with money; the rest lead with how many.
 	const value =
 		tile.key === "retention_year" ? formatMoney(tile.amount ?? 0) : tile.count
-	const clear = tile.count === 0 && tile.key !== "installer_week"
+	const clear =
+		tile.count === 0 &&
+		tile.key !== "installer_week" &&
+		tile.key !== "retention_year"
 	return (
 		<Stat
 			label={label}

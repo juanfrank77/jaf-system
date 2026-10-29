@@ -89,3 +89,18 @@ export function weekStrip(now: Date): WeekStripDay[] {
 	const today = SHORT_DAY[puertoRicoWeekday(now)]
 	return WEEK.map((d) => ({ ...d, today: d.day === today }))
 }
+
+/** Oldest and average whole days since the given send dates; nulls when there are none. */
+export function summarizeAges(
+	sentAt: (Date | null)[],
+	now: Date,
+): { oldest: number | null; average: number | null } {
+	if (sentAt.length === 0) return { oldest: null, average: null }
+	const ages = sentAt.map((d) =>
+		d ? Math.max(0, Math.floor((now.getTime() - d.getTime()) / 86_400_000)) : 0,
+	)
+	return {
+		oldest: Math.max(...ages),
+		average: Math.round(ages.reduce((a, b) => a + b, 0) / ages.length),
+	}
+}

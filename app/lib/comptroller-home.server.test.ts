@@ -1,7 +1,12 @@
 import { afterAll, describe, expect, it } from "vitest"
 import { loadComptrollerHome } from "~/lib/comptroller-home.server"
 import { db } from "~/lib/db.server"
-import { makeTracker, seedUser } from "~/test/helpers"
+import {
+	makeTracker,
+	seedContractorAccount,
+	seedSweptInvoice,
+	seedUser,
+} from "~/test/helpers"
 
 const t = makeTracker()
 afterAll(() => t.cleanup())
@@ -87,7 +92,8 @@ describe("loadComptrollerHome", () => {
 		const po = d("ja_waiting_po")
 		expect((po.a.count ?? 0) - (po.b.count ?? 0)).toBe(1)
 		expect((po.a.amount ?? 0) - (po.b.amount ?? 0)).toBeCloseTo(2000, 2)
-		expect(po.a.oldestDays).toBeGreaterThanOrEqual(94)
+		// The new invoice is 94 days old; older rows in a shared DB may exceed it.
+		expect(po.a.oldestDays).toBe(Math.max(po.b.oldestDays ?? 0, 94))
 
 		const rs = d("ready_or_sent_not_paid")
 		expect((rs.a.count ?? 0) - (rs.b.count ?? 0)).toBe(2)
@@ -104,8 +110,9 @@ describe("loadComptrollerHome", () => {
 		const ex = d("pbcc_exposure")
 		expect((ex.a.count ?? 0) - (ex.b.count ?? 0)).toBe(3)
 		expect((ex.a.amount ?? 0) - (ex.b.amount ?? 0)).toBeCloseTo(4000, 2)
-		expect(ex.a.oldestDays).toBeGreaterThanOrEqual(94)
-		expect(ex.a.averageDays).not.toBeNull()
+		expect(ex.a.oldestDays).toBe(Math.max(ex.b.oldestDays ?? 0, 94))
+		expect(ex.a.averageDays).toBeGreaterThan(0)
+		expect(Number.isNaN(ex.a.averageDays)).toBe(false)
 	})
 
 	it("gives every tile a link and returns the week strip", async () => {
@@ -122,6 +129,82 @@ describe("loadComptrollerHome", () => {
 		for (const x of home.tiles) expect(x.href).toMatch(/^\/comptroller/)
 		expect(home.week).toHaveLength(4)
 		expect(tile(home, "payroll_to_pay").href).toBe("/comptroller/to-pay")
-		expect(tile(home, "installer_week").parts).toHaveLength(4)
+		expect(
+			tile(home, "installer_week").parts?.map((p) => [p.key, p.href]),
+		).toEqual([
+			["waiting_ewit", "/comptroller/installers"],
+			["not_batched", "/comptroller/installers/batches"],
+			["batch_sent_this_week", "/comptroller/installers/batches"],
+			["installers_to_tick", "/comptroller/installers/pay"],
+		])
+		const base = "/comptroller/installers/claro/invoices"
+		expect(tile(home, "ja_waiting_po").href).toBe(`${base}?stage=no_po`)
+		expect(tile(home, "ready_or_sent_not_paid").href).toBe(
+			`${base}?stage=ariba_open`,
+		)
+		expect(tile(home, "short_or_missing").href).toBe(`${base}?stage=short`)
+		expect(tile(home, "pbcc_exposure").href).toBe(`${base}?stage=exposure`)
+	})
+
+	it("installer_week parts reflect an open batch and waiting EWIT invoices", async () => {
+		const before = await loadComptrollerHome(NOW)
+		const carmen = t.track("user", await seedUser({ role: "COMPTROLLER" }))
+		const open = t.track(
+			"ewitBatch",
+			await db.ewitBatch.create({ data: { createdById: carmen.id } }),
+		)
+		t.track(
+			"ewitInvoice",
+			await db.ewitInvoice.create({
+				data: {
+					number: `JA${9900000 + Math.floor(Math.random() * 90000)}`,
+					invoiceDate: daysAgo(1),
+					total: 10,
+					filePath: "/files/x.pdf",
+					createdById: carmen.id,
+					batchId: open.id,
+				},
+			}),
+		)
+		const after = await loadComptrollerHome(NOW)
+		const part = (h: typeof after, key: string) =>
+			tile(h, "installer_week").parts?.find((p) => p.key === key)?.count ?? 0
+		expect(part(after, "not_batched") - part(before, "not_batched")).toBe(1)
+		expect([0, 1]).toContain(part(after, "batch_sent_this_week"))
+	})
+
+	it("retention counts sent, non-reversed runs this year and skips reversed ones", async () => {
+		const before = tile(await loadComptrollerHome(NOW), "retention_year")
+		const carmen = t.track("user", await seedUser({ role: "COMPTROLLER" }))
+		const account = t.track("contractorAccount", await seedContractorAccount())
+		const kept = await seedSweptInvoice({
+			generatedById: carmen.id,
+			contractorAccountId: account.id,
+			grossPayable: 1000,
+			retentionAmount: 37.5,
+			netPayable: 600,
+		})
+		const reversed = await seedSweptInvoice({
+			generatedById: carmen.id,
+			contractorAccountId: account.id,
+			grossPayable: 1000,
+			retentionAmount: 99.99,
+			netPayable: 600,
+		})
+		t.track("payrollRun", kept.run)
+		t.track("jafInvoice", kept.invoice)
+		t.track("payrollRun", reversed.run)
+		t.track("jafInvoice", reversed.invoice)
+		await db.payrollRun.update({
+			where: { id: kept.run.id },
+			data: { sentAt: NOW },
+		})
+		await db.payrollRun.update({
+			where: { id: reversed.run.id },
+			data: { sentAt: NOW, reversedAt: NOW },
+		})
+		const after = tile(await loadComptrollerHome(NOW), "retention_year")
+		expect((after.amount ?? 0) - (before.amount ?? 0)).toBeCloseTo(37.5, 2)
+		expect((after.count ?? 0) - (before.count ?? 0)).toBe(1)
 	})
 })

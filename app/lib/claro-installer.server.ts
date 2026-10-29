@@ -99,6 +99,46 @@ export function claroRowView(i: RowInput, now: Date) {
 	}
 }
 
+/** The filters Carmen's Home links to on the Claro invoices page. */
+export const CLARO_FILTERS = [
+	"no_po",
+	"ready_for_ariba",
+	"sent",
+	"paid",
+	"short",
+	"exposure",
+	"ariba_open",
+] as const
+export type ClaroFilter = (typeof CLARO_FILTERS)[number]
+
+/** Unknown or missing value means no filter. */
+export function parseClaroFilter(raw: string | null): ClaroFilter | null {
+	return CLARO_FILTERS.find((f) => f === raw) ?? null
+}
+
+/** Does a display row (from claroRowView) belong under this filter? */
+export function claroFilterMatches(
+	filter: ClaroFilter,
+	r: { stage: ClaroStage; overdue: boolean },
+): boolean {
+	switch (filter) {
+		case "short":
+			// Short-paid, or sent more than 60 days ago and still unpaid.
+			return r.stage === "short" || r.overdue
+		case "ariba_open":
+			return r.stage === "ready_for_ariba" || r.stage === "sent"
+		case "exposure":
+			// Sold to PBCC and not paid by Claro.
+			return (
+				r.stage === "no_po" ||
+				r.stage === "ready_for_ariba" ||
+				r.stage === "sent"
+			)
+		default:
+			return r.stage === filter
+	}
+}
+
 /** Sent to Ariba more than 60 days ago (the caller has checked it is unpaid). */
 export function isClaroOverdue(aribaSentAt: Date | null, now = new Date()) {
 	if (!aribaSentAt) return false

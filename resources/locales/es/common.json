@@ -3116,7 +3116,17 @@
 				"no_po": "Agregue el PO primero.",
 				"ineligible": "Esa factura no está disponible: debe estar enviada a PBCC y no anulada ni retenida."
 			},
-			"ivu_rate": "Tasa de IVU % (vacío = 4)"
+			"ivu_rate": "Tasa de IVU % (vacío = 4)",
+			"filter_chip": "filtro {{filter}} · quitar",
+			"filter": {
+				"no_po": "Esperando PO",
+				"ready_for_ariba": "Lista para Ariba",
+				"sent": "Enviada a Ariba",
+				"paid": "Pagada",
+				"short": "Corto o faltante",
+				"exposure": "Exposición PBCC",
+				"ariba_open": "Ariba, sin pagar"
+			}
 		}
 	},
 	"log": {
@@ -3245,7 +3255,8 @@
 			"average": "promedio {{count}} d",
 			"short": "{{amount}} corto",
 			"missing": "{{count}} faltantes (60+ d)",
-			"ariba": "Ariba más antigua {{date}}"
+			"ariba": "Ariba más antigua {{date}}",
+			"retention": "corridas de nómina enviadas · retención de línea D sin confirmar"
 		}
 	},
 	"brigade_stock": {

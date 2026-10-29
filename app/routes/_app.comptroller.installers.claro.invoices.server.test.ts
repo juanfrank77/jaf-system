@@ -264,3 +264,43 @@ describe("Claro invoices page", () => {
 		expect(ids).not.toContain(unsent.id)
 	})
 })
+
+describe("?stage filter (from Carmen's Home)", () => {
+	it("short returns only short or overdue-unpaid rows; unknown value is no filter", async () => {
+		const short = await mk({
+			poNumber: "PO-S",
+			claroTotal: 5097.08,
+			aribaSentAt: new Date(),
+			claroPaidAt: new Date(),
+			claroPaidNet: 5059.63,
+		})
+		const missing = await mk({
+			poNumber: "PO-M",
+			claroTotal: 100,
+			aribaSentAt: new Date(Date.now() - 70 * 86_400_000),
+		})
+		const noPo = await mk()
+		const call = async (q: string) =>
+			(await loader({
+				request: new Request(
+					`http://x/comptroller/installers/claro/invoices${q}`,
+				),
+				params: {},
+				context: {},
+			} as never)) as { rows: { id: string; stage: string }[] }
+		const ids = async (q: string) => (await call(q)).rows.map((r) => r.id)
+
+		const shortIds = await ids("?stage=short")
+		expect(shortIds).toContain(short.id)
+		expect(shortIds).toContain(missing.id)
+		expect(shortIds).not.toContain(noPo.id)
+
+		const noPoIds = await ids("?stage=no_po")
+		expect(noPoIds).toContain(noPo.id)
+		expect(noPoIds).not.toContain(short.id)
+
+		expect(await ids("?stage=nonsense")).toEqual(
+			expect.arrayContaining([short.id, noPo.id]),
+		)
+	})
+})

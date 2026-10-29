@@ -16,7 +16,8 @@ beforeAll(async () => {
 })
 afterAll(async () => {
 	await t.cleanup()
-	process.env.UPLOAD_DIR = prevUploadDir
+	if (prevUploadDir === undefined) delete process.env.UPLOAD_DIR
+	else process.env.UPLOAD_DIR = prevUploadDir
 	await fs.rm(uploadDir, { recursive: true, force: true })
 })
 
@@ -75,6 +76,48 @@ describe("addPo", () => {
 		const h = await mk({ heldAt: new Date() })
 		expect(await code(addPo(po(h.id)))).toBe("voided")
 	})
+	it("rounds half-cent ties up (1.10 at 5% -> 0.06)", async () => {
+		const inv = await mk({ total: 1.1 })
+		await addPo(po(inv.id, { ivuRate: 0.05, reprintTotal: 1.16 }))
+		const r = await db.ewitInvoice.findUniqueOrThrow({ where: { id: inv.id } })
+		expect(Number(r.ivuAmount)).toBe(0.06)
+		expect(Number(r.claroTotal)).toBe(1.16)
+	})
+	it("uses a custom ivuRate", async () => {
+		const inv = await mk({ total: 100 })
+		await addPo(po(inv.id, { ivuRate: 0.115, reprintTotal: 111.5 }))
+		const r = await db.ewitInvoice.findUniqueOrThrow({ where: { id: inv.id } })
+		expect(Number(r.ivuAmount)).toBe(11.5)
+		expect(Number(r.ivuRate)).toBe(0.115)
+	})
+	it("saves no file on mismatch", async () => {
+		const inv = await mk()
+		await code(addPo(po(inv.id, { reprintTotal: 5000 })))
+		const dir = `${uploadDir}/ewit-po`
+		const files = await fs.readdir(dir).catch(() => [] as string[])
+		expect(files.some((f) => f.includes(inv.number))).toBe(false)
+	})
+	it("refuses a sent or paid invoice and changes nothing", async () => {
+		const sent = await mk({
+			poNumber: "OLD",
+			claroTotal: 5066.41,
+			aribaSentAt: new Date(),
+		})
+		expect(await code(addPo(po(sent.id)))).toBe("already_sent")
+		const paid = await mk({ poNumber: "OLD", claroPaidAt: new Date() })
+		expect(await code(addPo(po(paid.id)))).toBe("already_sent")
+		for (const i of [sent, paid]) {
+			const r = await db.ewitInvoice.findUniqueOrThrow({ where: { id: i.id } })
+			expect(r.poNumber).toBe("OLD")
+			expect(r.ivuAmount).toBeNull()
+		}
+		expect(
+			Number(
+				(await db.ewitInvoice.findUniqueOrThrow({ where: { id: sent.id } }))
+					.claroTotal,
+			),
+		).toBe(5066.41)
+	})
 	it("not_found for unknown id", async () => {
 		expect(await code(addPo(po("nope")))).toBe("not_found")
 	})
@@ -91,6 +134,34 @@ describe("markAribaSent", () => {
 		expect(r.aribaSentById).toBe(carmen.id)
 		expect(claroStage(r)).toBe("sent")
 		expect(await code(markAribaSent(args))).toBe("already_sent")
+	})
+})
+
+describe("markAribaSent edge cases", () => {
+	it("is atomic: one already-sent row leaves the valid one unsent", async () => {
+		const good = await mk({ poNumber: "P1" })
+		const sent = await mk({ poNumber: "P2", aribaSentAt: new Date() })
+		expect(
+			await code(
+				markAribaSent({
+					invoiceIds: [good.id, sent.id],
+					sentOn: new Date(),
+					userId: carmen.id,
+				}),
+			),
+		).toBe("already_sent")
+		const r = await db.ewitInvoice.findUniqueOrThrow({ where: { id: good.id } })
+		expect(r.aribaSentAt).toBeNull()
+	})
+	it("not_found and voided", async () => {
+		const args = { sentOn: new Date(), userId: carmen.id }
+		expect(await code(markAribaSent({ ...args, invoiceIds: ["nope"] }))).toBe(
+			"not_found",
+		)
+		const v = await mk({ poNumber: "P3", voidedAt: new Date() })
+		expect(await code(markAribaSent({ ...args, invoiceIds: [v.id] }))).toBe(
+			"voided",
+		)
 	})
 })
 

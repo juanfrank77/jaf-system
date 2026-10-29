@@ -61,10 +61,14 @@ export async function addPo(opts: {
 	if (!inv) throw new ClaroInstallerError("not_found")
 	if (inv.voidedAt || inv.heldAt) throw new ClaroInstallerError("voided")
 	const rate = opts.ivuRate ?? DEFAULT_IVU_RATE
-	const total = Number(inv.total)
-	const ivuAmount = r2(total * rate)
-	const claroTotal = r2(total + ivuAmount)
-	if (r2(opts.reprintTotal) !== claroTotal)
+	if (inv.aribaSentAt || inv.claroPaidAt)
+		throw new ClaroInstallerError("already_sent")
+	// Integer cents: half-cent ties must round up, not drift with float error.
+	const totalCents = Math.round(Number(inv.total) * 100)
+	const ivuCents = Math.round((totalCents * Math.round(rate * 10000)) / 10000)
+	const ivuAmount = ivuCents / 100
+	const claroTotal = (totalCents + ivuCents) / 100
+	if (Math.round(opts.reprintTotal * 100) !== totalCents + ivuCents)
 		throw new ClaroInstallerError("po_total_mismatch", [
 			`expected ${claroTotal.toFixed(2)}`,
 		])
@@ -110,9 +114,11 @@ export async function markAribaSent(opts: {
 				"already_sent",
 				rows.filter((r) => r.aribaSentAt).map((r) => r.number),
 			)
-		await tx.ewitInvoice.updateMany({
+		const claimed = await tx.ewitInvoice.updateMany({
 			where: { id: { in: rows.map((r) => r.id) }, aribaSentAt: null },
 			data: { aribaSentAt: opts.sentOn, aribaSentById: opts.userId },
 		})
+		if (claimed.count !== rows.length)
+			throw new ClaroInstallerError("already_sent")
 	})
 }

@@ -93,6 +93,9 @@ export default function WarrantyDocs({ loaderData }: Route.ComponentProps) {
 									</th>
 									<th className="p-2">{t("installers.warranty.col_emp")}</th>
 									<th className="p-2">
+										{t("installers.warranty.col_ewit_no")}
+									</th>
+									<th className="p-2">
 										{t("installers.warranty.col_installed")}
 									</th>
 									<th className="p-2">{t("installers.warranty.col_modem")}</th>
@@ -115,6 +118,9 @@ export default function WarrantyDocs({ loaderData }: Route.ComponentProps) {
 										</td>
 										<td className="p-2">{d.installerName}</td>
 										<td className="p-2 font-mono">{d.empNo ?? "—"}</td>
+										<td className="p-2 font-mono">
+											{d.ewitInstallerNo ?? "—"}
+										</td>
 										<td className="p-2">{formatShortDate(d.installedAt)}</td>
 										<td className="p-2 font-mono text-xs">{d.modem ?? "—"}</td>
 										<td className="p-2">

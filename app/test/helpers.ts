@@ -530,7 +530,7 @@ export async function seedFinanceableInvoice(
 
 /** An installer with a profile (Emp #) and a van, ready to submit completions. */
 export async function seedInstaller(
-	opts: { name?: string; jafNumber?: string } = {},
+	opts: { name?: string; jafNumber?: string; ewitInstallerNo?: string } = {},
 ) {
 	const user = await seedUser({ role: "INSTALLER", name: opts.name })
 	const token = runToken("INS")
@@ -538,6 +538,7 @@ export async function seedInstaller(
 		data: {
 			userId: user.id,
 			jafNumber: opts.jafNumber ?? "1808",
+			ewitInstallerNo: opts.ewitInstallerNo,
 			toaNumber: token,
 		},
 	})

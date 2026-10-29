@@ -66,6 +66,8 @@ export type WarrantyDocRow = {
 	installerId: string
 	installerName: string
 	empNo: string | null
+	/** Claro's 5-digit installer # on EWIT invoices; null until Admin sets it. */
+	ewitInstallerNo: string | null
 	installedAt: Date
 	modem: string | null
 	/** The form photo, as a `/files` path; null when the installer saved none. */
@@ -104,6 +106,7 @@ export async function loadWarrantyDocs(
 			installerId: r.installer.id,
 			installerName: r.installer.name,
 			empNo: r.installer.installerProfile?.jafNumber ?? null,
+			ewitInstallerNo: r.installer.installerProfile?.ewitInstallerNo ?? null,
 			installedAt,
 			modem: r.serialInstalled,
 			photoPath: r.formPhotoPath,
@@ -495,6 +498,7 @@ export type InstallerPayRow = {
 	installerId: string
 	installerName: string
 	empNo: string | null
+	ewitInstallerNo: string | null
 	jobs: number
 	orders: string[]
 }
@@ -521,6 +525,7 @@ export async function loadInstallerPayList(): Promise<InstallerPayRow[]> {
 			installerId: j.installerId,
 			installerName: j.installer.name,
 			empNo: j.installer.installerProfile?.jafNumber ?? null,
+			ewitInstallerNo: j.installer.installerProfile?.ewitInstallerNo ?? null,
 			jobs: 0,
 			orders: [],
 		}

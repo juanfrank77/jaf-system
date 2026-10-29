@@ -14,6 +14,7 @@ import {
 	SelectValue,
 } from "~/components/ui/select"
 import { db } from "~/lib/db.server"
+import { setEwitInstallerNo } from "~/lib/ewit-installer-no.server"
 import { requireRole } from "~/lib/permissions.server"
 import { ALL_AREAS } from "~/lib/supervisor-scope"
 import type { Role } from "../../generated/prisma/client"
@@ -26,6 +27,8 @@ type UserRow = {
 	role: string
 	active: boolean
 	supervisorAreas: string[]
+	/** Null for non-installers; "" when an installer has no EWIT # yet. */
+	ewitInstallerNo: string | null
 }
 
 const ROLES: { value: string; labelKey: string }[] = [
@@ -49,10 +52,17 @@ function validateEmail(email: unknown): email is string {
 export async function loader({ request }: Route.LoaderArgs) {
 	await requireRole(request, ["ADMIN"])
 
-	const users = await db.user.findMany({
+	const rows = await db.user.findMany({
 		orderBy: { name: "asc" },
 		take: 200,
+		include: { installerProfile: { select: { ewitInstallerNo: true } } },
 	})
+	const users = rows.map(({ installerProfile, ...u }) => ({
+		...u,
+		ewitInstallerNo: installerProfile
+			? (installerProfile.ewitInstallerNo ?? "")
+			: null,
+	}))
 
 	return { users, roles: ROLES }
 }
@@ -196,6 +206,28 @@ export async function action({ request }: Route.ActionArgs) {
 			where: { id },
 			data: { supervisorAreas: areas as string[] },
 		})
+		return redirect("/admin/users")
+	}
+
+	if (intent === "updateEwitNo") {
+		const id = form.get("id")
+		const no = form.get("ewitInstallerNo")
+		if (typeof id !== "string" || !id.trim() || typeof no !== "string") {
+			return data(
+				{ errorKey: "admin_users.errors.update_invalid" },
+				{ status: 400 },
+			)
+		}
+		const res = await setEwitInstallerNo(id.trim(), no)
+		if (!res.ok) {
+			return data(
+				{ errorKey: res.errorKey },
+				{
+					status:
+						res.errorKey === "admin_users.errors.ewit_no_taken" ? 409 : 400,
+				},
+			)
+		}
 		return redirect("/admin/users")
 	}
 
@@ -352,6 +384,9 @@ export default function AdminUsers({
 							<th className="px-4 py-3 text-left font-medium text-muted-foreground">
 								{t("admin_users.table.areas")}
 							</th>
+							<th className="px-4 py-3 text-left font-medium text-muted-foreground">
+								{t("admin_users.table.ewit_no")}
+							</th>
 							<th className="px-4 py-3 text-center font-medium text-muted-foreground">
 								{t("admin_users.table.active")}
 							</th>
@@ -424,6 +459,29 @@ export default function AdminUsers({
 										<span className="text-muted-foreground">—</span>
 									)}
 								</td>
+								<td className="px-4 py-3">
+									{user.ewitInstallerNo !== null ? (
+										<Form method="post" className="flex items-center gap-2">
+											<input type="hidden" name="intent" value="updateEwitNo" />
+											<input type="hidden" name="id" value={user.id} />
+											<Input
+												name="ewitInstallerNo"
+												defaultValue={user.ewitInstallerNo}
+												inputMode="numeric"
+												maxLength={5}
+												pattern="[0-9]{5}"
+												placeholder="01821"
+												aria-label={t("admin_users.table.ewit_no")}
+												className="w-24 font-mono"
+											/>
+											<Button type="submit" variant="outline" size="sm">
+												{t("admin_users.save_ewit_no")}
+											</Button>
+										</Form>
+									) : (
+										<span className="text-muted-foreground">—</span>
+									)}
+								</td>
 								<td className="px-4 py-3 text-center">
 									<span
 										className={
@@ -464,7 +522,7 @@ export default function AdminUsers({
 						{users.length === 0 && (
 							<tr>
 								<td
-									colSpan={6}
+									colSpan={7}
 									className="px-4 py-6 text-center text-muted-foreground text-sm"
 								>
 									{t("admin_users.no_users")}

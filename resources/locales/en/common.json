@@ -1131,6 +1131,7 @@
 		"add_submit": "Create User",
 		"update_role": "Update Role",
 		"save_areas": "Save Areas",
+		"save_ewit_no": "Save EWIT #",
 		"deactivate": "Deactivate",
 		"activate": "Activate",
 		"reset_password": "Reset Password",
@@ -1144,6 +1145,7 @@
 			"email": "Email",
 			"role": "Role",
 			"areas": "Areas",
+			"ewit_no": "EWIT #",
 			"active": "Active",
 			"actions": "Actions"
 		},
@@ -1165,6 +1167,8 @@
 			"cannot_deactivate_self": "You cannot deactivate your own account.",
 			"cannot_change_own_role": "You cannot change your own role.",
 			"update_invalid": "Valid user id and role are required.",
+			"ewit_no_invalid": "The EWIT installer # must be exactly 5 digits (e.g. 01821).",
+			"ewit_no_taken": "That EWIT installer # already belongs to another installer.",
 			"areas_require_supervisor": "Only supervisors can be assigned areas.",
 			"unknown_intent": "Unknown action."
 		}
@@ -2931,6 +2935,7 @@
 			"col_order": "Order #",
 			"col_installer": "Installer",
 			"col_emp": "Emp #",
+			"col_ewit_no": "EWIT #",
 			"col_installed": "Installed",
 			"col_modem": "Modem",
 			"col_photo": "Photo",
@@ -3031,6 +3036,7 @@
 			"hint": "Pay in WinPay, then tick here. Only orders PBCC has paid for are listed.",
 			"col_installer": "Installer",
 			"col_emp": "Emp #",
+			"col_ewit_no": "EWIT #",
 			"col_jobs": "Jobs",
 			"col_orders": "Orders",
 			"col_amount": "Amount paid",

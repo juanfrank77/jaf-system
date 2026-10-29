@@ -30,6 +30,9 @@ const pdf = (name = "invoice.pdf") =>
 	})
 const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000)
 
+// 5 digits with a leading zero, unique per run.
+const EWIT_NO = `0${String(Math.floor(Math.random() * 9000) + 1000)}`
+
 let carmen: Awaited<ReturnType<typeof seedUser>>
 let installer: Awaited<ReturnType<typeof seedInstaller>>
 let uploadDir: string
@@ -39,7 +42,11 @@ beforeAll(async () => {
 	uploadDir = await fs.mkdtemp("/tmp/ewit-test-")
 	process.env.UPLOAD_DIR = uploadDir
 	carmen = t.track("user", await seedUser({ role: "COMPTROLLER" }))
-	installer = await seedInstaller({ name: "A. Rosario", jafNumber: "1820" })
+	installer = await seedInstaller({
+		name: "A. Rosario",
+		jafNumber: "1820",
+		ewitInstallerNo: EWIT_NO,
+	})
 	t.track("user", installer.user)
 	t.track("van", installer.van)
 })
@@ -96,6 +103,7 @@ describe("warranty docs", () => {
 		expect(f).toMatchObject({
 			installerName: "A. Rosario",
 			empNo: "1820",
+			ewitInstallerNo: EWIT_NO,
 			stale: false,
 			duplicate: false,
 		})
@@ -288,7 +296,11 @@ describe("installer batch, statement and pay", () => {
 		const row = (await loadInstallerPayList()).find(
 			(r) => r.installerId === installer.user.id,
 		)
-		expect(row).toMatchObject({ jobs: 1, empNo: "1820" })
+		expect(row).toMatchObject({
+			jobs: 1,
+			empNo: "1820",
+			ewitInstallerNo: EWIT_NO,
+		})
 		expect(row?.orders).toEqual([jobs[0].claroOrderNo])
 
 		await payInstallers({

@@ -3146,7 +3146,14 @@
 			"batch": "Lote PBCC",
 			"pbcc_paid": "PBCC pagó",
 			"installer_paid": "Instalador pagado",
-			"amount": "Pagado $"
+			"amount": "Pagado $",
+			"po": "PO #",
+			"with_ivu": "Monto + IVU",
+			"ariba_sent": "Enviado a Ariba",
+			"claro_paid": "Pagado por Claro",
+			"claro_amount": "Claro $",
+			"short": "Faltante $",
+			"days_pbcc_claro": "Días PBCC a Claro"
 		},
 		"date_by": "Columna de fecha",
 		"from": "Desde",

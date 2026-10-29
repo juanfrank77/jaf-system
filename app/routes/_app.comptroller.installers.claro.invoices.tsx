@@ -123,6 +123,7 @@ export async function action({ request }: Route.ActionArgs) {
 			try {
 				await rematchJaLines()
 			} catch (err) {
+				// biome-ignore lint/suspicious/noConsole: server-side failure log; the PO is already saved
 				console.error("rematchJaLines after addPo failed", err)
 			}
 		} else if (intent === "mark_sent") {

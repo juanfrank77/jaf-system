@@ -101,7 +101,11 @@ export async function generateLogPdf(
 		)
 	const doc = (
 		<Document>
-			<Page size="LETTER" orientation="landscape" style={styles.page}>
+			<Page
+				size="LETTER"
+				orientation="landscape"
+				style={[styles.page, columns.length > 14 ? { fontSize: 6 } : {}]}
+			>
 				<Text style={styles.title}>{meta.title}</Text>
 				<Text style={styles.sub}>
 					Printed by {meta.printedBy} · {printStamp(meta.printedAt)} ·{" "}

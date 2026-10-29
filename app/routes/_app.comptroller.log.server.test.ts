@@ -174,4 +174,86 @@ describe("Carmen's Log", () => {
 		)) as { data: { errorKey: string } }
 		expect(res.data.errorKey).toBe("log.errors.empty")
 	})
+
+	it("shows the Claro columns: PO, Ariba, Claro paid, short, days, and sums the money", async () => {
+		as(carmen)
+		const tok = `CL${runToken("c").replace(/\D/g, "").slice(-6)}`
+		const noon = (d: string) => new Date(`${d}T16:00:00Z`)
+		const batch = await db.ewitBatch.create({
+			data: { createdById: carmen.id, sentAt: noon("2026-07-07") },
+		})
+		t.track("ewitBatch", { id: batch.id })
+		const mk = async (
+			suffix: string,
+			over: Record<string, unknown>,
+		): Promise<void> => {
+			const inv = await db.ewitInvoice.create({
+				data: {
+					number: `${tok}${suffix}`,
+					invoiceDate: noon("2026-07-01"),
+					total: 4600,
+					filePath: "/files/x.pdf",
+					createdById: carmen.id,
+					batchId: batch.id,
+					receivedAt: noon("2026-07-10"),
+					poNumber: "4500518065",
+					aribaSentAt: noon("2026-07-27"),
+					claroPaidAt: noon("2026-10-09"),
+					...over,
+				} as never,
+			})
+			t.track("ewitInvoice", { id: inv.id })
+			t.track(
+				"installCompletion",
+				await db.installCompletion.create({
+					data: {
+						idempotencyKey: runToken("IDK"),
+						claroOrderNo: `${tok}${suffix}`,
+						installerId: installer.user.id,
+						vanId: installer.van.id,
+						status: "SUBMITTED",
+						address: "x",
+						installedAt: noon("2026-07-01"),
+						submittedAt: noon("2026-07-01"),
+						ewitInvoiceId: inv.id,
+					},
+				}),
+			)
+		}
+		await mk("A", { claroTotal: 5066.41, claroPaidNet: 5066.41 })
+		await mk("B", { claroTotal: 5097.08, claroPaidNet: 5059.63 })
+		const res = await logLoader(args(req(`tab=installers&q=${tok}`)))
+		const rows = res.groups.flatMap((g) => g.rows)
+		const a = rows.find((r) => r.order === `${tok}A`)
+		const b = rows.find((r) => r.order === `${tok}B`)
+		expect(a).toMatchObject({
+			sold: "2026-07-07",
+			po: "4500518065",
+			aribaSent: "2026-07-27",
+			claroPaid: "2026-10-09",
+			daysPbccClaro: 94,
+			claroAmount: 5066.41,
+			withIvu: 5066.41,
+			short: null,
+		})
+		expect(b).toMatchObject({
+			claroAmount: 5059.63,
+			withIvu: 5097.08,
+			short: 37.45,
+		})
+		expect(b?.status).toContain("Claro short")
+		expect(res.totals.withIvu).toBeCloseTo(10163.49, 2)
+		expect(res.totals.claroAmount).toBeCloseTo(10126.04, 2)
+		expect(res.totals.short).toBeCloseTo(37.45, 2)
+		const keys = res.columns.map((c) => c.key)
+		expect(keys.slice(keys.indexOf("amount") + 1, -1)).toEqual([
+			"po",
+			"withIvu",
+			"aribaSent",
+			"claroPaid",
+			"claroAmount",
+			"short",
+			"daysPbccClaro",
+		])
+	})
 })

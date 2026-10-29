@@ -9,8 +9,6 @@ export type BatchRowView = {
 	brigade: string | null
 	invoiceNumber: string
 	subtotal: number
-	ivu: number
-	total: number
 	/** Where the Aviso and the invoice open; null when the file is not made yet. */
 	avisoHref: string | null
 	invoiceHref: string | null

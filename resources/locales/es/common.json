@@ -1325,19 +1325,32 @@
 		}
 	},
 	"finance_verify": {
+		"materials_heading": "Materiales",
+		"viewer": {
+			"divider": "Arrastre para cambiar el tamaño del visor",
+			"tab_aviso": "Aviso",
+			"tab_work_order_pdf": "Orden de trabajo",
+			"tab_precert": "Pre-cert",
+			"tab_photos": "Fotos",
+			"jump_to": "Ir a:",
+			"services": "Servicios",
+			"materials": "Materiales",
+			"zoom_out": "Alejar",
+			"zoom_in": "Acercar",
+			"prev_page": "Página anterior",
+			"next_page": "Página siguiente",
+			"page": "Página {{page}}",
+			"empty": "Aún no hay documento para mostrar."
+		},
 		"work_dates": "Fechas de trabajo",
 		"work_dates_missing": "Falta: el trabajo no tiene fecha de inicio y fin",
 		"subtotal": "Subtotal",
-		"ivu_4": "IVU 4%",
-		"ivu_115": "IVU 11.5%",
-		"total": "Total",
 		"preview": {
 			"heading": "Vista previa de la factura PBCC",
 			"code": "Código",
 			"service": "Servicio",
 			"qty": "Cant.",
 			"price": "Precio",
-			"ivu": "IVU",
 			"amount": "Importe",
 			"empty": "Esta factura no tiene líneas de servicio."
 		},

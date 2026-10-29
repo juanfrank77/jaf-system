@@ -110,8 +110,6 @@ export function PbccBatchOpenView({
 								<th className="p-2 text-right">
 									{t("pbcc_batch.col.subtotal")}
 								</th>
-								<th className="p-2 text-right">{t("pbcc_batch.col.ivu")}</th>
-								<th className="p-2 text-right">{t("pbcc_batch.col.total")}</th>
 								<th className="p-2">{t("pbcc_batch.col.aviso_pdf")}</th>
 								<th className="p-2">{t("pbcc_batch.col.invoice_pdf")}</th>
 								<th className="p-2" />
@@ -129,12 +127,6 @@ export function PbccBatchOpenView({
 									<td className="p-2 font-mono">{r.invoiceNumber}</td>
 									<td className="p-2 text-right font-mono">
 										{formatMoney(r.subtotal)}
-									</td>
-									<td className="p-2 text-right font-mono">
-										{formatMoney(r.ivu)}
-									</td>
-									<td className="p-2 text-right font-mono">
-										{formatMoney(r.total)}
 									</td>
 									<td className="p-2">
 										<Mark

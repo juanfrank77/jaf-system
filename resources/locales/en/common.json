@@ -1325,19 +1325,32 @@
 		}
 	},
 	"finance_verify": {
+		"materials_heading": "Materials",
+		"viewer": {
+			"divider": "Drag to resize the document viewer",
+			"tab_aviso": "Aviso",
+			"tab_work_order_pdf": "Work order",
+			"tab_precert": "Pre-cert",
+			"tab_photos": "Photos",
+			"jump_to": "Jump to:",
+			"services": "Services",
+			"materials": "Materials",
+			"zoom_out": "Zoom out",
+			"zoom_in": "Zoom in",
+			"prev_page": "Previous page",
+			"next_page": "Next page",
+			"page": "Page {{page}}",
+			"empty": "No document to show yet."
+		},
 		"work_dates": "Work dates",
 		"work_dates_missing": "Missing: the job has no start and finish dates",
 		"subtotal": "Subtotal",
-		"ivu_4": "IVU 4%",
-		"ivu_115": "IVU 11.5%",
-		"total": "Total",
 		"preview": {
 			"heading": "PBCC invoice preview",
 			"code": "Code",
 			"service": "Service",
 			"qty": "Qty",
 			"price": "Price",
-			"ivu": "IVU",
 			"amount": "Amount",
 			"empty": "No service lines on this invoice."
 		},

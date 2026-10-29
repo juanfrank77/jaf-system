@@ -12,8 +12,6 @@ const row = (n: number, over: Partial<BatchView["rows"][number]> = {}) => ({
 	brigade: "025 ALEXIS DIAZ",
 	invoiceNumber: `M17-1035611${n}`,
 	subtotal: 100,
-	ivu: 11.5,
-	total: 111.5,
 	avisoHref: `/files/aviso-docs/j${n}-aviso.pdf`,
 	invoiceHref: `/files/bank-invoices/j${n}-bank-invoice.pdf`,
 	...over,
@@ -83,7 +81,8 @@ describe("open PBCC batch", () => {
 		).toBeInTheDocument()
 		const r1 = screen.getByRole("row", { name: /MAINT-261021-001/ })
 		expect(within(r1).getByText("001")).toBeInTheDocument()
-		expect(within(r1).getByText("$111.50")).toBeInTheDocument()
+		expect(within(r1).getByText("$100.00")).toBeInTheDocument()
+		expect(within(r1).queryByText("$111.50")).not.toBeInTheDocument()
 		expect(within(r1).getByText("M17-10356111")).toBeInTheDocument()
 	})
 

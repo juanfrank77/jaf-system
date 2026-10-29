@@ -2988,6 +2988,10 @@
 			"save": "Save invoice",
 			"cancel": "Cancel",
 			"pdf_preview": "PDF preview",
+			"reading": "Reading the PDF…",
+			"read_ok": "Filled from the PDF. Check before saving.",
+			"read_none": "Could not read this PDF. Type the number, date and total.",
+			"read_mismatch": "Filled from the PDF, but its rows add up to {{lines}}, not the printed total. Check the total.",
 			"ticked": "{{count}} orders ticked"
 		},
 		"batches": {

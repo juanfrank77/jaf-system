@@ -2988,6 +2988,10 @@
 			"save": "Guardar factura",
 			"cancel": "Cancelar",
 			"pdf_preview": "Vista previa del PDF",
+			"reading": "Leyendo el PDF…",
+			"read_ok": "Llenado desde el PDF. Revise antes de guardar.",
+			"read_none": "No se pudo leer este PDF. Escriba el número, la fecha y el total.",
+			"read_mismatch": "Llenado desde el PDF, pero sus filas suman {{lines}}, no el total impreso. Revise el total.",
 			"ticked": "{{count}} órdenes marcadas"
 		},
 		"batches": {

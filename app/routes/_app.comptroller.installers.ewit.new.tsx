@@ -1,6 +1,13 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { data, Form, Link, redirect, useNavigation } from "react-router"
+import {
+	data,
+	Form,
+	Link,
+	redirect,
+	useFetcher,
+	useNavigation,
+} from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { InstallerStepper } from "~/components/installer-stepper"
 import { receiptUrl } from "~/components/receipt-banner"
@@ -13,8 +20,10 @@ import {
 	createEwitInvoice,
 	EwitError,
 	loadWarrantyDocs,
+	readEwitPdf,
 } from "~/lib/ewit.server"
 import { EWIT_INVOICE_LIMIT } from "~/lib/ewit-limits"
+import type { EwitRead } from "~/lib/ewit-parse"
 import { formatShortDate } from "~/lib/payroll-request-view"
 import { parsePaidDate, puertoRicoToday } from "~/lib/payroll-run.server"
 import { requireRole } from "~/lib/permissions.server"
@@ -40,6 +49,11 @@ export async function loader({ request }: Route.LoaderArgs) {
 	}
 }
 
+const mmddyyyy = (iso: string) => {
+	const [y, m, d] = iso.split("-")
+	return `${m}/${d}/${y}`
+}
+
 const ERROR_KEYS = {
 	missing_number: "installers.errors.missing_number",
 	duplicate_number: "installers.errors.duplicate_number",
@@ -53,6 +67,10 @@ const ERROR_KEYS = {
 export async function action({ request }: Route.ActionArgs) {
 	const { user } = await requireRole(request, ["COMPTROLLER", "ADMIN"])
 	const form = await request.formData()
+	if (form.get("intent") === "read") {
+		const f = form.get("file")
+		return data({ read: f instanceof File ? await readEwitPdf(f) : null })
+	}
 	const parsed = parsePaidDate(String(form.get("invoiceDate") ?? ""))
 	if (!("date" in parsed))
 		return data({ errorKey: "installers.errors.invalid_date" as const }, 400)
@@ -99,16 +117,29 @@ export default function NewEwitInvoice({
 	const [picked, setPicked] = useState<string[]>([])
 	const [typed, setTyped] = useState("")
 	const [total, setTotal] = useState("")
+	const [number, setNumber] = useState("")
+	const [invoiceDate, setInvoiceDate] = useState(() => mmddyyyy(today))
+	const reader = useFetcher<{ read: EwitRead | null }>()
+	const read = reader.data?.read ?? null
 	const [preview, setPreview] = useState<string | null>(null)
+	// Whatever the attached PDF says fills the fields; Carmen can still correct them.
+	useEffect(() => {
+		if (!read) return
+		if (read.number) setNumber(read.number)
+		if (read.invoiceDate) setInvoiceDate(mmddyyyy(read.invoiceDate))
+		if (read.total != null) setTotal(read.total.toFixed(2))
+	}, [read])
+	const readNothing =
+		read !== null && !read.number && !read.invoiceDate && read.total == null
+	const readMismatch =
+		read?.total != null &&
+		read.linesTotal != null &&
+		Math.abs(read.total - read.linesTotal) > 0.005
 	const amount = Number(total.replace(/[$,\s]/g, ""))
 	const overLimit = Number.isFinite(amount) && amount > EWIT_INVOICE_LIMIT
 	const typedNos = typed.split(/[\s,;]+/).filter(Boolean)
 	const known = new Set(docs.map((d) => d.orderNo))
 	const unmatched = typedNos.filter((o) => !known.has(o))
-	const mmddyyyy = (iso: string) => {
-		const [y, m, d] = iso.split("-")
-		return `${m}/${d}/${y}`
-	}
 	return (
 		<div className="space-y-4 p-6">
 			<InstallerStepper current="ewit" />
@@ -136,7 +167,13 @@ export default function NewEwitInvoice({
 								<Label htmlFor="number">
 									{t("installers.ewit_new.number")}
 								</Label>
-								<Input id="number" name="number" required />
+								<Input
+									id="number"
+									name="number"
+									value={number}
+									onChange={(e) => setNumber(e.target.value)}
+									required
+								/>
 							</div>
 							<div className="grid grid-cols-2 gap-3">
 								<div>
@@ -146,7 +183,8 @@ export default function NewEwitInvoice({
 									<Input
 										id="invoiceDate"
 										name="invoiceDate"
-										defaultValue={mmddyyyy(today)}
+										value={invoiceDate}
+										onChange={(e) => setInvoiceDate(e.target.value)}
 										placeholder="MM/DD/YYYY"
 										required
 									/>
@@ -175,12 +213,44 @@ export default function NewEwitInvoice({
 									required
 									onChange={(e) => {
 										const f = e.target.files?.[0]
+										if (f) {
+											const body = new FormData()
+											body.set("intent", "read")
+											body.set("file", f)
+											reader.submit(body, {
+												method: "post",
+												encType: "multipart/form-data",
+											})
+										}
 										setPreview((old) => {
 											if (old) URL.revokeObjectURL(old)
 											return f ? URL.createObjectURL(f) : null
 										})
 									}}
 								/>
+								{reader.state !== "idle" ? (
+									<p className="text-xs text-muted-foreground">
+										{t("installers.ewit_new.reading")}
+									</p>
+								) : readNothing ? (
+									<p className="text-xs text-status-warn">
+										{t("installers.ewit_new.read_none")}
+									</p>
+								) : read ? (
+									<p
+										className={
+											readMismatch
+												? "text-xs text-status-warn"
+												: "text-xs text-muted-foreground"
+										}
+									>
+										{readMismatch
+											? t("installers.ewit_new.read_mismatch", {
+													lines: formatMoney(read.linesTotal ?? 0),
+												})
+											: t("installers.ewit_new.read_ok")}
+									</p>
+								) : null}
 							</div>
 						</CardContent>
 					</Card>

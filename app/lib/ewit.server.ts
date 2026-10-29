@@ -1,4 +1,5 @@
 import fs from "node:fs/promises"
+import { extractText } from "unpdf"
 import { scheduleTotals } from "~/lib/bank-schedule"
 import {
 	generateScheduleXlsx,
@@ -6,6 +7,7 @@ import {
 } from "~/lib/bank-schedule-xlsx.server"
 import { db } from "~/lib/db.server"
 import { EWIT_INVOICE_LIMIT } from "~/lib/ewit-limits"
+import { type EwitRead, parseEwitLiquidation } from "~/lib/ewit-parse"
 import { zipPackage } from "~/lib/package-zip.server"
 import { puertoRicoDay } from "~/lib/payroll-run.server"
 import { getLcPbccAdvanceRate } from "~/lib/system-settings.server"
@@ -138,6 +140,24 @@ async function openBatchIn(tx: Tx, userId: string) {
 
 export async function getOpenEwitBatch(userId: string) {
 	return db.$transaction((tx) => openBatchIn(tx, userId))
+}
+
+/**
+ * Pre-fill for the New EWIT invoice form: what the attached Liquidación
+ * Detallada says. A PDF that cannot be read gives all-null, so Carmen types it.
+ */
+export async function readEwitPdf(file: File): Promise<EwitRead> {
+	try {
+		const { text } = await extractText(
+			new Uint8Array(await file.arrayBuffer()),
+			{
+				mergePages: true,
+			},
+		)
+		return parseEwitLiquidation(text)
+	} catch {
+		return parseEwitLiquidation("")
+	}
 }
 
 export async function createEwitInvoice(opts: {

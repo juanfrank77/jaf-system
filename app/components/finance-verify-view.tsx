@@ -15,6 +15,7 @@ import { FINANCE_STEPS } from "~/lib/finance-steps"
 import { VERIFY_CHECKS as CHECKS } from "~/lib/finance-verify-checks"
 import { formatShortDate } from "~/lib/payroll-request-view"
 import { formatMoney, formatUnitPrice } from "~/lib/utils"
+import { workDatesOf } from "~/lib/work-dates"
 import type { Route } from "../routes/+types/_app.finance.verify.$id"
 
 type MaterialServiceCode = ComponentProps<
@@ -52,6 +53,12 @@ function VerifyPacket({ loaderData, actionData }: ViewProps) {
 	} = loaderData
 	const { t } = useTranslation()
 	const error = actionData as { errorKey?: string } | undefined
+	const asDate = (v: string | Date | null) => (v ? new Date(v) : null)
+	const workDates = workDatesOf({
+		createdAt: new Date(doc.createdAt),
+		completedAt: asDate(doc.completedAt),
+		fieldSubmittedAt: asDate(doc.fieldSubmittedAt),
+	})
 
 	const cannotVerify =
 		stage !== "TO_VERIFY" || doc.status === "LC_REQUEST_GENERATED"
@@ -402,13 +409,7 @@ function VerifyPacket({ loaderData, actionData }: ViewProps) {
 							<span className="text-muted-foreground">
 								{t("finance_verify.work_dates")}:
 							</span>{" "}
-							{doc.startedAt && doc.endedAt ? (
-								`${formatShortDate(doc.startedAt)} – ${formatShortDate(doc.endedAt)}`
-							) : (
-								<span className="font-medium text-status-danger">
-									{t("finance_verify.work_dates_missing")}
-								</span>
-							)}
+							{`${formatShortDate(workDates.from)} – ${formatShortDate(workDates.to)}`}
 						</p>
 						<p>
 							<span className="text-muted-foreground">

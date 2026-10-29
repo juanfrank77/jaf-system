@@ -1438,7 +1438,6 @@
 	},
 	"finance_verify": {
 		"work_dates": "Work dates",
-		"work_dates_missing": "Missing: the job has no start and finish dates",
 		"subtotal": "Subtotal",
 		"ivu_4": "IVU 4%",
 		"ivu_115": "IVU 11.5%",
@@ -1486,7 +1485,6 @@
 			"checks_required": "Tick all four checks before accepting.",
 			"undo_closed": "This batch is already closed, so the accept can no longer be undone.",
 			"documents_missing": "A document is missing from the packet. Send it back instead.",
-			"work_dates_missing": "Work dates are missing on this job. Send it back instead.",
 			"unknown_intent": "Unknown action.",
 			"note_required": "A send-back note is required.",
 			"invalid_stage": "This job is not at the Verify stage.",

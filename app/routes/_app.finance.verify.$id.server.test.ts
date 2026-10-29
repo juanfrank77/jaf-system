@@ -353,15 +353,21 @@ describe("Finance verify action: the accept gate and send back", () => {
 		expect(mocks.db.jafInvoice.update).not.toHaveBeenCalled()
 	})
 
-	it("refuses to accept a job with no work dates, and never fills in today's", async () => {
+	it("accepts a job whose start and end times were never recorded", async () => {
 		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue({
 			...completeDoc(),
 			startedAt: null,
+			endedAt: null,
 		})
-		expect(await run({ intent: "verify", ...ALL_CHECKS })).toEqual({
-			errorKey: "finance_verify.errors.work_dates_missing",
+		mocks.addToOpenBatch.mockResolvedValueOnce({
+			batchId: "b1",
+			closedBatchIds: [],
 		})
-		expect(mocks.db.jafInvoice.update).not.toHaveBeenCalled()
+		const result = await run({ intent: "verify", ...ALL_CHECKS }).catch(
+			(r: any) => r,
+		)
+		expect(result.status).toBe(302)
+		expect(mocks.db.jafInvoice.update).toHaveBeenCalled()
 	})
 
 	it("undo_accept hands the packet back to the Inbox, even though it is no longer to verify", async () => {

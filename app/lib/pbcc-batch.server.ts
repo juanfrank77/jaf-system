@@ -29,6 +29,7 @@ import {
 	getLcPbccAdvanceRate,
 } from "~/lib/system-settings.server"
 import { saveBuffer } from "~/lib/uploads.server"
+import { workDatesOf } from "~/lib/work-dates"
 import type { Prisma } from "../../generated/prisma/client"
 
 type BatchErrorCode =
@@ -409,10 +410,8 @@ async function ensureInvoicePdfs(batchId: string): Promise<void> {
 	const byId = new Map(catalog.map((c) => [c.id, c]))
 	for (const doc of docs) {
 		const aviso = doc.avisoNumber || doc.controlNumber
-		// The work dates are the job's own start and finish. A missing one prints
-		// blank (Finance cannot accept it); it is never filled with another date.
-		const from = doc.startedAt
-		const to = doc.endedAt ?? from
+		// Work order created → Field / Sign off, from what the system logged.
+		const { from, to } = workDatesOf(doc)
 		const address = doc.jobAddressActual ?? doc.jobAddressEstimated
 		const pdf = await generateBankInvoicePdf({
 			supplierNumber: SUPPLIER_NUMBER,
@@ -426,8 +425,8 @@ async function ensureInvoicePdfs(batchId: string): Promise<void> {
 			jobNumber:
 				jobNumberOf(doc.jobSeq ?? (await ensureJobNumber(doc.id))) ?? undefined,
 			contractLabel: contract,
-			workFrom: from ? bankDateLabel(from) : "",
-			workTo: to ? bankDateLabel(to) : "",
+			workFrom: bankDateLabel(from),
+			workTo: bankDateLabel(to),
 			description: doc.jobDescription ?? doc.jobType,
 			barrio: barrioFromAddress(address),
 			locality: localityFromAddress(address),

@@ -1438,7 +1438,6 @@
 	},
 	"finance_verify": {
 		"work_dates": "Fechas de trabajo",
-		"work_dates_missing": "Falta: el trabajo no tiene fecha de inicio y fin",
 		"subtotal": "Subtotal",
 		"ivu_4": "IVU 4%",
 		"ivu_115": "IVU 11.5%",
@@ -1486,7 +1485,6 @@
 			"checks_required": "Marca las cuatro verificaciones antes de aceptar.",
 			"undo_closed": "Este lote ya está cerrado, por lo que ya no se puede deshacer la aceptación.",
 			"documents_missing": "Falta un documento en el paquete. Devuélvelo en su lugar.",
-			"work_dates_missing": "Faltan las fechas de trabajo de este trabajo. Devuélvelo en su lugar.",
 			"unknown_intent": "Acción desconocida.",
 			"note_required": "Se requiere una nota de devolución.",
 			"invalid_stage": "Este trabajo no está en la etapa de verificación.",

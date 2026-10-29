@@ -199,16 +199,18 @@ describe("accepting fills the open batch", { timeout: 60_000 }, () => {
 		}
 	})
 
-	it("prints the M17- number, the invoice date, the contract and the job's own work dates on the invoice", async () => {
+	it("prints the M17- number, the invoice date, the contract and the work order's created → Field dates on the invoice", async () => {
 		const u = await user()
 		const a = await accepted({ aviso: "10359519" })
 		await db.jafInvoice.update({
 			where: { id: a.id },
 			data: {
-				startedAt: new Date("2026-10-14T14:00:00Z"),
-				endedAt: new Date("2026-10-16T20:00:00Z"),
-				// a test-day submit date that must never leak onto the invoice
-				fieldSubmittedAt: new Date("2026-09-02T14:00:00Z"),
+				// the invoice dates come from the audit trail: created → Field submit,
+				// not from the crew's on-site start/end times
+				createdAt: new Date("2026-10-14T14:00:00Z"),
+				fieldSubmittedAt: new Date("2026-10-16T20:00:00Z"),
+				startedAt: new Date("2026-09-02T14:00:00Z"),
+				endedAt: new Date("2026-09-03T14:00:00Z"),
 				financeVerifiedAt: new Date("2026-10-27T15:00:00Z"),
 			},
 		})
@@ -227,12 +229,17 @@ describe("accepting fills the open batch", { timeout: 60_000 }, () => {
 		expect(text).toContain("17-xxx")
 	})
 
-	it("prints the contract number setting, and leaves the work dates blank rather than guessing", async () => {
+	it("prints the contract number setting, and fills the work dates from the audit trail without any start/end times", async () => {
 		const u = await user()
 		const a = await accepted({ aviso: "10359520" })
 		await db.jafInvoice.update({
 			where: { id: a.id },
-			data: { fieldSubmittedAt: new Date("2026-09-02T14:00:00Z") },
+			data: {
+				createdAt: new Date("2026-09-01T14:00:00Z"),
+				fieldSubmittedAt: new Date("2026-09-02T14:00:00Z"),
+				startedAt: null,
+				endedAt: null,
+			},
 		})
 		await db.systemSetting.upsert({
 			where: { key: "bank_contract_number" },
@@ -254,7 +261,8 @@ describe("accepting fills the open batch", { timeout: 60_000 }, () => {
 		const text = await pdfText(doc.bankInvoicePdfPath as string)
 		expect(text).toContain("Contrato Núm. 17-0456")
 		expect(text).not.toContain("17-xxx")
-		expect(text).not.toContain("09/02/26")
+		expect(text).toContain("09/01/26")
+		expect(text).toContain("09/02/26")
 	})
 
 	it("is safe to call again for a packet that is already in a batch", async () => {

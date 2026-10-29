@@ -351,6 +351,13 @@ const NAV_ITEMS: NavItem[] = [
 		roles: ["FINANCE", "ADMIN"],
 	},
 	{
+		to: "/finance/receivables",
+		labelKey: "app_shell.nav.receivables",
+		icon: Invoice02Icon,
+		group: "arm_b",
+		roles: ["FINANCE", "ADMIN"],
+	},
+	{
 		to: "/finance/avisos",
 		labelKey: "app_shell.nav.finance_avisos",
 		icon: Invoice02Icon,
@@ -360,13 +367,6 @@ const NAV_ITEMS: NavItem[] = [
 	{
 		to: "/finance/ledger",
 		labelKey: "app_shell.nav.finance_ledger",
-		icon: Invoice02Icon,
-		group: "arm_b",
-		roles: ["FINANCE", "ADMIN"],
-	},
-	{
-		to: "/finance/receivables",
-		labelKey: "app_shell.nav.receivables",
 		icon: Invoice02Icon,
 		group: "arm_b",
 		roles: ["FINANCE", "ADMIN"],

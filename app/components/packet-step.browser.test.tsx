@@ -272,7 +272,7 @@ describe("PacketStepCard package files", () => {
 		},
 	]
 
-	it("lists one download per file and Download all (zip)", async ({
+	it("lists one download per file and Download all and a small zip link", async ({
 		renderStub,
 	}) => {
 		await mount(
@@ -285,9 +285,13 @@ describe("PacketStepCard package files", () => {
 				screen.getByRole("link", { name: `Download ${f.fileName}` }),
 			).toHaveAttribute("href", f.href)
 		expect(screen.getByText("Claro Prefield (PDF)")).toBeVisible()
+		expect(screen.getByRole("link", { name: /Download all/ })).toHaveAttribute(
+			"href",
+			"/docs/d1/package",
+		)
 		expect(
-			screen.getByRole("link", { name: /Download all \(zip\)/ }),
-		).toHaveAttribute("href", "/docs/d1/package")
+			screen.getByRole("link", { name: "Download as zip" }),
+		).toHaveAttribute("href", "/docs/d1/package?format=zip")
 	})
 
 	it("the eye button opens a photo in a pop-up, and a PDF in a frame, without downloading", async ({

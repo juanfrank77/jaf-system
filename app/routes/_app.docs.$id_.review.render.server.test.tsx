@@ -348,7 +348,7 @@ describe("Packet → Claro step (render)", () => {
 		expect(html).not.toContain("$")
 	})
 
-	it("lists the package files, each with its download, and Download all (zip)", async () => {
+	it("lists the package files, each with its download, and Download all", async () => {
 		const html = await render(
 			step5({
 				files: [
@@ -392,7 +392,7 @@ describe("Packet → Claro step (render)", () => {
 		expect(html.match(/aria-label="View /g)).toHaveLength(4)
 		expect(html).toContain("Photo 1 - before.jpg")
 		expect(html).toMatch(
-			/<a[^>]*href="\/docs\/doc-1\/package"[^>]*>⬇ Download all \(zip\)/,
+			/<a[^>]*href="\/docs\/doc-1\/package"[^>]*>⬇ Download all/,
 		)
 		expect(html).toContain("Claro Prefield (PDF)")
 		expect(html).not.toMatch(/Aviso \(PDF\)|Certificado/)
@@ -494,7 +494,7 @@ describe("Packet → Claro step (render)", () => {
 		)
 		expect(html).toContain("Email is not set up on this server")
 		expect(html).toContain('href="/files/packets/doc-1-packet-1-ab.pdf"')
-		expect(html).toContain("Download all (zip)")
+		expect(html).toContain("Download all")
 		expect(html).toMatch(
 			/<input[^>]*name="intent"[^>]*value="mark_packet_sent"/,
 		)

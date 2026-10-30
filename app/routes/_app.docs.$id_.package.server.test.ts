@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { strFromU8, unzipSync } from "fflate"
+import { PDFDocument } from "pdf-lib"
 import { redirect } from "react-router"
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 
@@ -9,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 vi.mock("~/lib/permissions.server", () => ({ requireRole: vi.fn() }))
 
 import { db } from "~/lib/db.server"
+import { makePdf, makePng, pageMatrices } from "~/lib/package-pdf.test-helpers"
 import { requireRole } from "~/lib/permissions.server"
 import { photoFile, saveBuffer } from "~/lib/uploads.server"
 import { loader } from "./_app.docs.$id_.package"
@@ -61,10 +63,10 @@ function as(user: Seeded) {
 	})
 }
 
-async function get(docId: string): Promise<Response> {
+async function get(docId: string, query = ""): Promise<Response> {
 	try {
 		return (await loader({
-			request: new Request(`http://localhost/docs/${docId}/package`),
+			request: new Request(`http://localhost/docs/${docId}/package${query}`),
 			params: { id: docId },
 		} as any)) as Response
 	} catch (e) {
@@ -85,7 +87,7 @@ afterAll(async () => {
 }, HOOK_TIMEOUT)
 
 describe("GET /docs/:id/package", { timeout: HOOK_TIMEOUT }, () => {
-	it("zips the work order PDF, the Prefield PDF and the original photos and blueprints, as stored", async () => {
+	it("with ?format=zip, zips the work order PDF, the Prefield PDF and the original photos and blueprints, as stored", async () => {
 		const doc = await seedDoc({ prefieldNeeded: true })
 		const wo = await saveBuffer(
 			"packets",
@@ -125,7 +127,7 @@ describe("GET /docs/:id/package", { timeout: HOOK_TIMEOUT }, () => {
 			},
 		})
 		as(sup)
-		const res = await get(doc.id)
+		const res = await get(doc.id, "?format=zip")
 		expect(res.status).toBe(200)
 		expect(res.headers.get("Content-Type")).toBe("application/zip")
 		expect(res.headers.get("Content-Disposition")).toContain(
@@ -142,6 +144,98 @@ describe("GET /docs/:id/package", { timeout: HOOK_TIMEOUT }, () => {
 		)
 		expect(strFromU8(entries["Blueprint 1.pdf"])).toBe("%PDF-plan")
 		expect(Buffer.from(entries["Photo 1 - before.jpg"]).equals(jpg)).toBe(true)
+	})
+
+	it("by default returns one PDF: report, Prefield, then the photos in order, skipping a .heic", async () => {
+		const doc = await seedDoc({ prefieldNeeded: true })
+		const wo = await saveBuffer(
+			"packets",
+			`${doc.id}-work-order-1.pdf`,
+			await makePdf([
+				[200, 200],
+				[200, 200],
+			]),
+		)
+		const pf = await saveBuffer(
+			"packets",
+			`${doc.id}-prefield-1.pdf`,
+			await makePdf([[320, 320]]),
+		)
+		const t0 = Date.now()
+		for (const [i, [name, buf, tag]] of (
+			[
+				["tall.png", makePng(100, 400), "BEFORE"],
+				["skip.heic", Buffer.from("x"), "DURING"],
+				["wide.png", makePng(400, 100), "AFTER"],
+			] as const
+		).entries()) {
+			const file = photoFile(doc.id, name)
+			await mkdir(path.dirname(file), { recursive: true })
+			await writeFile(file, buf)
+			await db.photo.create({
+				data: {
+					docId: doc.id,
+					uploadedById: sup.id,
+					localPath: file,
+					tag,
+					takenAt: new Date(t0 + i * 1000),
+				},
+			})
+		}
+		await db.jafInvoice.update({
+			where: { id: doc.id },
+			data: { jafInvoicePdfPath: wo, prefieldPdfPath: pf },
+		})
+		as(sup)
+		vi.spyOn(console, "warn").mockImplementation(() => {})
+		for (const q of ["", "?format=pdf"]) {
+			const res = await get(doc.id, q)
+			expect(res.status).toBe(200)
+			expect(res.headers.get("Content-Type")).toBe("application/pdf")
+			expect(res.headers.get("Content-Disposition")).toContain(
+				`${doc.controlNumber}-package.pdf`,
+			)
+			const out = await PDFDocument.load(
+				new Uint8Array(await res.arrayBuffer()),
+			)
+			const pages = out.getPages()
+			// report x2, Prefield, tall, wide, and the "Not included" page
+			expect(pages.map((p) => Math.round(p.getWidth()))).toEqual([
+				200, 200, 320, 595, 595, 595,
+			])
+			expect(
+				pageMatrices(pages[3])[2].filter((_n, i) => i === 0 || i === 3),
+			).toEqual([100, 400])
+			expect(
+				pageMatrices(pages[4])[2].filter((_n, i) => i === 0 || i === 3),
+			).toEqual([400, 100])
+		}
+	})
+
+	it("is 400 for an unknown ?format", async () => {
+		const doc = await seedDoc({
+			jafInvoicePdfPath: "/x/packets/a-work-order-1.pdf",
+		})
+		as(sup)
+		expect((await get(doc.id, "?format=docx")).status).toBe(400)
+	})
+
+	it("is 422, not a blank PDF, when none of the files can be read", async () => {
+		const doc = await seedDoc()
+		const wo = await saveBuffer(
+			"packets",
+			`${doc.id}-work-order-1.pdf`,
+			Buffer.from("not a pdf at all"),
+		)
+		await db.jafInvoice.update({
+			where: { id: doc.id },
+			data: { jafInvoicePdfPath: wo },
+		})
+		as(sup)
+		vi.spyOn(console, "warn").mockImplementation(() => {})
+		const res = await get(doc.id)
+		expect(res.status).toBe(422)
+		expect(res.headers.get("Content-Type")).not.toBe("application/pdf")
 	})
 
 	it("is 404 when there is nothing in the package", async () => {

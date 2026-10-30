@@ -2446,7 +2446,8 @@
 		"file_close": "Cerrar",
 		"send_to": "Enviar a {{name}}",
 		"file_download": "Descargar",
-		"download_all": "Descargar todo (zip)",
+		"download_all": "Descargar todo",
+		"download_zip": "Descargar como zip",
 		"file_kind": {
 			"work_order_pdf": "Orden de trabajo JAF (PDF)",
 			"prefield_pdf": "Prefield de Claro (PDF)",

@@ -78,7 +78,7 @@ export function FileViewerButton({
 								href={href}
 								target="_blank"
 								rel="noreferrer"
-								className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+								className="text-sm font-medium text-accent-text underline-offset-4 hover:underline"
 							>
 								{t("packet.file_open_tab")}
 							</a>

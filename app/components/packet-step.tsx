@@ -226,7 +226,7 @@ function PacketDetailsForm({
 /**
  * The package for Claro: one download per file (the JAF work order PDF, the
  * Prefield PDF when the job needs it, the original photos and blueprints)
- * and "Download all (zip)".
+ * "Download all" (one PDF) and a small zip link.
  */
 function PackageFileList({ packet }: { packet: PacketStepData }) {
 	const { t } = useTranslation()
@@ -267,6 +267,14 @@ function PackageFileList({ packet }: { packet: PacketStepData }) {
 					})}
 				>
 					{`⬇ ${t("packet.download_all")}`}
+				</a>
+			)}
+			{packet.zipHref && (
+				<a
+					href={`${packet.zipHref}?format=zip`}
+					className="block text-center text-xs text-muted-foreground underline"
+				>
+					{t("packet.download_zip")}
 				</a>
 			)}
 		</section>
@@ -375,33 +383,29 @@ export function PacketStepCard({
 								: t("packet.pdf_not_generated")}
 						</p>
 					)}
-					{interactive && !packet.emailEnabled && (
+					{interactive && !packet.emailEnabled && !packet.sent && (
 						<>
-							{!packet.sent && (
-								<>
-									<ConfirmedSubmit
-										intent="mark_packet_sent"
-										label={t("packet.mark_sent")}
-										confirmText={t("packet.confirm_manual", {
-											email: claro?.email ?? "",
-										})}
-										disabled={!claro || blocked || !packet.packetHref}
-										inFlight={inFlight}
-									/>
-									<p className="text-xs text-muted-foreground">
-										{t("packet.manual_only_hint")}
-									</p>
-									<Link
-										to="?step=APPROVE"
-										className={buttonVariants({
-											variant: "ghost",
-											className: "w-full",
-										})}
-									>
-										← {t("packet.back")}
-									</Link>
-								</>
-							)}
+							<ConfirmedSubmit
+								intent="mark_packet_sent"
+								label={t("packet.mark_sent")}
+								confirmText={t("packet.confirm_manual", {
+									email: claro?.email ?? "",
+								})}
+								disabled={!claro || blocked || !packet.packetHref}
+								inFlight={inFlight}
+							/>
+							<p className="text-xs text-muted-foreground">
+								{t("packet.manual_only_hint")}
+							</p>
+							<Link
+								to="?step=APPROVE"
+								className={buttonVariants({
+									variant: "ghost",
+									className: "w-full",
+								})}
+							>
+								← {t("packet.back")}
+							</Link>
 						</>
 					)}
 					{interactive && packet.emailEnabled && (

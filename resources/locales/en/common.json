@@ -2446,7 +2446,8 @@
 		"file_close": "Close",
 		"send_to": "Send to {{name}}",
 		"file_download": "Download",
-		"download_all": "Download all (zip)",
+		"download_all": "Download all",
+		"download_zip": "Download as zip",
 		"file_kind": {
 			"work_order_pdf": "JAF work order (PDF)",
 			"prefield_pdf": "Claro Prefield (PDF)",

@@ -5,14 +5,13 @@ import { PrismaPg } from "@prisma/adapter-pg"
 import { hashPassword } from "better-auth/crypto"
 import {
 	BRIGADE_SEED,
-	LEGACY_DEMO_CODES,
+	importCatalogRows,
 	LIMIT_TABLE_PLACEHOLDER_CODES,
 	LIMIT_TABLE_SEED,
 	parseCatalogCsv,
 	parseInstallerRosterCsv,
 	SERIALIZED_PREFIXES,
 	SUPERVISOR_SEED,
-	toServiceCodeData,
 	WAREHOUSE_BACKUP_SEED,
 	WAREHOUSE_SEED,
 	WAREHOUSE_STAFF_SEED,
@@ -30,7 +29,6 @@ const CSV_PATH = path.resolve(
 	process.cwd(),
 	"docs/JAF_Service_Catalog_seed.csv",
 )
-const BATCH = 100
 if (!process.env.SEED_TEMP_PASSWORD) {
 	throw new Error(
 		"SEED_TEMP_PASSWORD is required — no default credential password is shipped for seeded accounts.",
@@ -40,22 +38,10 @@ const TEMP_PASSWORD = process.env.SEED_TEMP_PASSWORD
 
 async function seedCatalog() {
 	const rows = parseCatalogCsv(await fs.readFile(CSV_PATH, "utf8"))
-	const data = rows.map(toServiceCodeData)
-	let inserted = 0
-	for (let i = 0; i < data.length; i += BATCH) {
-		const res = await db.serviceCode.createMany({
-			data: data.slice(i, i + BATCH),
-			skipDuplicates: true,
-		})
-		inserted += res.count
-	}
-	const deactivated = await db.serviceCode.updateMany({
-		where: { claroCode: { in: LEGACY_DEMO_CODES } },
-		data: { active: false },
-	})
+	const { inserted, refreshed } = await importCatalogRows(db, rows)
 	// biome-ignore lint/suspicious/noConsole: CLI seed output
 	console.log(
-		`catalog: ${rows.length} rows read, ${inserted} inserted, ${deactivated.count} legacy demo codes deactivated`,
+		`catalog: ${rows.length} rows read, ${inserted} inserted, ${refreshed} pre-existing demo codes refreshed`,
 	)
 }
 

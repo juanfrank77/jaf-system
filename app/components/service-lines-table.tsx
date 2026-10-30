@@ -1,11 +1,24 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { QtyStepper } from "~/components/ui/qty-stepper"
-import type { ServiceLine } from "~/lib/service-lines"
+import { installedNotOrdered, type ServiceLine } from "~/lib/service-lines"
+
+/** The small "Added in field" tag on a line the order did not have. */
+export function AddedInFieldLabel() {
+	const { t } = useTranslation()
+	return (
+		<span className="ml-1.5 inline-block rounded-md bg-status-info-soft px-1.5 py-0.5 align-middle text-xs font-medium text-status-info">
+			{t("service_picker.added_in_field")}
+		</span>
+	)
+}
 
 /**
  * Read-only ordered/installed table. When `editableName` is given, the
  * Installed column becomes inputs and a hidden field carries the JSON.
+ *
+ * Installed lines the order does not have (added in the field) follow the
+ * ordered ones with Ordered 0, so none is dropped by the join on the order.
  */
 export function ServiceLinesTable({
 	lines,
@@ -17,11 +30,17 @@ export function ServiceLinesTable({
 	editableName?: string
 }) {
 	const { t } = useTranslation()
-	const initial = lines.map((l) => ({
-		...l,
-		qty:
-			installed?.find((i) => i.serviceCodeId === l.serviceCodeId)?.qty ?? l.qty,
-	}))
+	const extras = installedNotOrdered(lines, installed)
+	const orderedQty = new Map(lines.map((l) => [l.serviceCodeId, l.qty]))
+	const initial = [
+		...lines.map((l) => ({
+			...l,
+			qty:
+				installed?.find((i) => i.serviceCodeId === l.serviceCodeId)?.qty ??
+				l.qty,
+		})),
+		...extras,
+	]
 	const [rows, setRows] = useState<ServiceLine[]>(initial)
 
 	function updateQty(index: number, qty: number) {
@@ -39,23 +58,27 @@ export function ServiceLinesTable({
 					<span>{t("service_picker.col_installed")}</span>
 				</div>
 				<ul>
-					{lines.map((l, i) => {
+					{rows.map((l, i) => {
 						return (
 							<li
 								key={l.serviceCodeId}
 								className="flex items-center justify-between gap-3 border-b py-2 last:border-0"
 							>
 								<div className="min-w-0">
-									<p className="text-sm font-medium leading-snug">{l.name}</p>
+									<p className="text-sm font-medium leading-snug">
+										{l.name}
+										{l.addedInField && <AddedInFieldLabel />}
+									</p>
 									<p className="font-mono text-xs text-muted-foreground">
 										{l.claroCode}
 									</p>
 									<p className="text-xs text-muted-foreground">
-										{t("service_picker.col_ordered")}: {l.qty}
+										{t("service_picker.col_ordered")}:{" "}
+										{orderedQty.get(l.serviceCodeId) ?? 0}
 									</p>
 								</div>
 								<QtyStepper
-									value={rows[i].qty}
+									value={l.qty}
 									onChange={(qty) => updateQty(i, qty)}
 									label={l.name}
 								/>
@@ -96,6 +119,17 @@ export function ServiceLinesTable({
 							</tr>
 						)
 					})}
+					{extras.map((l) => (
+						<tr key={l.serviceCodeId} className="border-b last:border-0">
+							<td className="py-1 font-mono text-xs">{l.claroCode}</td>
+							<td className="py-1">
+								{l.name}
+								{l.addedInField && <AddedInFieldLabel />}
+							</td>
+							<td className="py-1 text-right">0</td>
+							<td className="py-1 text-right">{l.qty}</td>
+						</tr>
+					))}
 				</tbody>
 			</table>
 		</div>

@@ -48,7 +48,7 @@ describe("GET /api/service-codes", () => {
 			params: {},
 		} as any)
 		const body = await (res as Response).json()
-		expect(searchServiceCodes).toHaveBeenCalledWith("transfer", 25)
+		expect(searchServiceCodes).toHaveBeenCalledWith("transfer", 8)
 		expect(body.total).toBe(934)
 		expect(body.results).toEqual([
 			{

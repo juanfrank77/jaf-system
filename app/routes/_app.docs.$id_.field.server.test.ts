@@ -1,11 +1,12 @@
 import { redirect } from "react-router"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("~/lib/db.server", () => ({
-	db: {
+vi.mock("~/lib/db.server", () => {
+	const db: Record<string, any> = {
 		jafInvoice: {
 			findUniqueOrThrow: vi.fn(),
 			update: vi.fn(),
+			updateMany: vi.fn(),
 		},
 		user: {
 			findUnique: vi.fn(),
@@ -20,13 +21,17 @@ vi.mock("~/lib/db.server", () => ({
 		},
 		serviceCode: {
 			findMany: vi.fn(),
+			findFirst: vi.fn(),
 		},
 		notification: {
 			create: vi.fn(),
 		},
-		$transaction: vi.fn(async (ops: unknown[]) => Promise.all(ops)),
-	},
-}))
+	}
+	db.$transaction = vi.fn(async (ops: unknown) =>
+		typeof ops === "function" ? ops(db) : Promise.all(ops as unknown[]),
+	)
+	return { db }
+})
 
 vi.mock("~/lib/service-codes.server", async (importOriginal) => ({
 	...(await importOriginal<typeof import("~/lib/service-codes.server")>()),
@@ -983,5 +988,386 @@ describe("GET /docs/:id/field", () => {
 		const res = await load()
 		expect(res.fieldMaterials).toEqual(stored)
 		expect(res.correctorNames).toEqual({ "sup-3": "Sup Tres" })
+	})
+})
+
+describe("POST /docs/:id/field — add a service in the field", () => {
+	const ordered = {
+		serviceCodeId: "svc-1",
+		claroCode: "34006301",
+		accountCode: "610",
+		name: "TRANSFER",
+		qty: 2,
+	}
+	const retensar = {
+		id: "svc-ret",
+		claroCode: "34006300",
+		accountCode: "610",
+		name: "RETENSAR MENSAJERO MO",
+	}
+	const added = {
+		serviceCodeId: "svc-ret",
+		claroCode: "34006300",
+		accountCode: "610",
+		name: "RETENSAR MENSAJERO MO",
+		qty: 1,
+		addedInField: true,
+	}
+
+	function addForm(serviceCodeId = "svc-ret", qty: string | null = "1") {
+		const form = new FormData()
+		form.set("intent", "add_service")
+		form.set("serviceCodeId", serviceCodeId)
+		if (qty !== null) form.set("qty", qty)
+		return form
+	}
+	function removeForm(serviceCodeId = "svc-ret") {
+		const form = new FormData()
+		form.set("intent", "remove_added_service")
+		form.set("serviceCodeId", serviceCodeId)
+		return form
+	}
+	const lastUpdateMany = () =>
+		vi.mocked(db.jafInvoice.updateMany).mock.calls.at(-1)?.[0] as any
+	const audits = () =>
+		vi.mocked(db.auditTrail.create).mock.calls.map((c) => (c[0] as any).data)
+
+	beforeEach(() => {
+		vi.mocked(db.serviceCode.findFirst).mockImplementation((async (
+			args: any,
+		) => (args.where.id === retensar.id ? retensar : null)) as any)
+		vi.mocked(db.jafInvoice.updateMany).mockResolvedValue({ count: 1 } as any)
+	})
+
+	it("adds 34006300 qty 1 to a job whose order lacks it, flagged and audited", async () => {
+		as("SUPERVISOR")
+		withDoc({ installedServiceLines: [{ ...ordered, qty: 2 }] })
+		expect(await run(addForm())).toEqual({ ok: true })
+
+		const write = lastUpdateMany()
+		// Never once the job is signed off or the packet is out, even if that
+		// happened between read and write.
+		expect(write.where).toEqual({
+			id: "doc-1",
+			jafInvoiceGeneratedAt: null,
+			supervisorApprovedAt: null,
+		})
+		expect(write.data.installedServiceLines).toEqual([
+			{ ...ordered, qty: 2 },
+			added,
+		])
+		expect(audits()).toEqual([
+			{
+				docId: "doc-1",
+				userId: "sup-1",
+				action: "SERVICE_ADDED_IN_FIELD",
+				diffJson: { code: "34006300", qty: 1 },
+			},
+		])
+		// The picker's catalog rules: an active SERVICE code, never a placeholder.
+		const where = vi.mocked(db.serviceCode.findFirst).mock.calls[0][0]!
+			.where as any
+		expect(where).toMatchObject({
+			id: "svc-ret",
+			active: true,
+			kind: "SERVICE",
+		})
+		expect(JSON.stringify(where)).toContain("NEEDS_CODE")
+		// The line is copied without any price column.
+		expect(JSON.stringify(write.data)).not.toMatch(/price|amount/i)
+	})
+
+	it("adds to a job with no installed quantities yet", async () => {
+		as("SUPERVISOR")
+		withDoc({ installedServiceLines: null })
+		expect(await run(addForm("svc-ret", "2.5"))).toEqual({ ok: true })
+		expect(lastUpdateMany().data.installedServiceLines).toEqual([
+			{ ...added, qty: 2.5 },
+		])
+	})
+
+	it("refuses a code already on the order: its installed qty is edited instead", async () => {
+		as("SUPERVISOR")
+		vi.mocked(db.serviceCode.findFirst).mockResolvedValue({
+			id: "svc-1",
+			claroCode: "34006301",
+			accountCode: "610",
+			name: "TRANSFER",
+		} as any)
+		withDoc()
+		expect(await run(addForm("svc-1"))).toEqual({
+			errorKey: "docs_field.errors.service_on_order",
+		})
+		expect(db.jafInvoice.updateMany).not.toHaveBeenCalled()
+		expect(db.auditTrail.create).not.toHaveBeenCalled()
+	})
+
+	it("refuses a code already added in the field", async () => {
+		as("SUPERVISOR")
+		withDoc({ installedServiceLines: [added] })
+		expect(await run(addForm())).toEqual({
+			errorKey: "docs_field.errors.service_already_added",
+		})
+		expect(db.jafInvoice.updateMany).not.toHaveBeenCalled()
+	})
+
+	it("refuses a code that is not an active SERVICE catalog code", async () => {
+		as("SUPERVISOR")
+		withDoc()
+		expect(await run(addForm("sc-1"))).toEqual({
+			errorKey: "docs_field.errors.service_not_found",
+		})
+		expect(await run(addForm(""))).toEqual({
+			errorKey: "docs_field.errors.service_not_found",
+		})
+		expect(db.jafInvoice.updateMany).not.toHaveBeenCalled()
+	})
+
+	it("refuses a quantity that is not a positive number", async () => {
+		as("SUPERVISOR")
+		withDoc()
+		for (const qty of ["0", "-1", "abc", "", null, "Infinity"]) {
+			expect(await run(addForm("svc-ret", qty))).toEqual({
+				errorKey: "docs_field.errors.service_qty_invalid",
+			})
+		}
+		expect(db.jafInvoice.updateMany).not.toHaveBeenCalled()
+	})
+
+	it("refuses once the packet has gone to Claro (ADMIN override included)", async () => {
+		as("ADMIN", "admin-1")
+		withDoc({
+			status: "SUPERVISOR_APPROVED",
+			supervisorApprovedAt: new Date(),
+			jafInvoiceGeneratedAt: new Date(),
+			installedServiceLines: [added],
+		})
+		expect(await run(addForm("svc-ret"))).toEqual({
+			errorKey: "docs_field.errors.service_packet_sent",
+		})
+		expect(await run(removeForm())).toEqual({
+			errorKey: "docs_field.errors.service_packet_sent",
+		})
+		expect(db.jafInvoice.updateMany).not.toHaveBeenCalled()
+		expect(db.auditTrail.create).not.toHaveBeenCalled()
+	})
+
+	it("refuses when the job is signed off (or the packet goes out) between the read and the write", async () => {
+		as("SUPERVISOR")
+		withDoc()
+		vi.mocked(db.jafInvoice.updateMany).mockResolvedValue({ count: 0 } as any)
+		expect(await run(addForm())).toEqual({
+			errorKey: "docs_field.errors.service_signed_off",
+		})
+		expect(db.auditTrail.create).not.toHaveBeenCalled()
+	})
+
+	it("an out-of-scope supervisor can neither add nor remove", async () => {
+		as("SUPERVISOR", "sup-2")
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["SUR"],
+		} as any)
+		withDoc({ installedServiceLines: [added] })
+		expect((await run(addForm())).headers.get("Location")).toBe("/dashboard")
+		expect((await run(removeForm())).headers.get("Location")).toBe("/dashboard")
+		expect(db.jafInvoice.updateMany).not.toHaveBeenCalled()
+	})
+
+	it("a supervisor cannot add after sign-off (the step is locked)", async () => {
+		as("SUPERVISOR")
+		withDoc({ status: "SUPERVISOR_APPROVED", supervisorApprovedAt: new Date() })
+		expect((await run(addForm())).headers.get("Location")).toBe("/docs/doc-1")
+		expect(db.jafInvoice.updateMany).not.toHaveBeenCalled()
+	})
+
+	it("Admin cannot add or remove once the job is signed off, even before the packet goes out", async () => {
+		as("ADMIN", "admin-1")
+		withDoc({
+			status: "SUPERVISOR_APPROVED",
+			supervisorApprovedAt: new Date(),
+			installedServiceLines: [added],
+		})
+		expect(await run(addForm("svc-ret", "1"))).toEqual({
+			errorKey: "docs_field.errors.service_signed_off",
+		})
+		expect(await run(removeForm())).toEqual({
+			errorKey: "docs_field.errors.service_signed_off",
+		})
+		expect(db.jafInvoice.updateMany).not.toHaveBeenCalled()
+		expect(db.auditTrail.create).not.toHaveBeenCalled()
+	})
+
+	it("Admin can still add before sign-off", async () => {
+		as("ADMIN", "admin-1")
+		withDoc({ installedServiceLines: [{ ...ordered, qty: 2 }] })
+		expect(await run(addForm())).toEqual({ ok: true })
+		expect(lastUpdateMany().where).toEqual({
+			id: "doc-1",
+			jafInvoiceGeneratedAt: null,
+			supervisorApprovedAt: null,
+		})
+	})
+
+	it("removes a line added in the field and audits it", async () => {
+		as("SUPERVISOR")
+		withDoc({ installedServiceLines: [{ ...ordered, qty: 2 }, added] })
+		expect(await run(removeForm())).toEqual({ ok: true })
+		const write = lastUpdateMany()
+		expect(write.where).toEqual({
+			id: "doc-1",
+			jafInvoiceGeneratedAt: null,
+			supervisorApprovedAt: null,
+		})
+		expect(write.data.installedServiceLines).toEqual([{ ...ordered, qty: 2 }])
+		expect(audits()).toEqual([
+			{
+				docId: "doc-1",
+				userId: "sup-1",
+				action: "SERVICE_REMOVED_IN_FIELD",
+				diffJson: { code: "34006300", qty: 1 },
+			},
+		])
+	})
+
+	it("removes only lines added in the field, never an ordered one", async () => {
+		as("SUPERVISOR")
+		withDoc({ installedServiceLines: [{ ...ordered, qty: 2 }, added] })
+		expect(await run(removeForm("svc-1"))).toEqual({
+			errorKey: "docs_field.errors.service_not_added",
+		})
+		expect(await run(removeForm("svc-unknown"))).toEqual({
+			errorKey: "docs_field.errors.service_not_added",
+		})
+		// Added in the field, then put on the order by an order edit.
+		withDoc({
+			serviceLines: [ordered, { ...added, qty: 1 }],
+			installedServiceLines: [{ ...ordered, qty: 2 }, added],
+		})
+		expect(await run(removeForm())).toEqual({
+			errorKey: "docs_field.errors.service_not_added",
+		})
+		expect(db.jafInvoice.updateMany).not.toHaveBeenCalled()
+	})
+
+	it("a draft save keeps the added lines, takes their new quantity and never adds a code itself", async () => {
+		as("SUPERVISOR")
+		withDoc({ installedServiceLines: [{ ...ordered, qty: 2 }, added] })
+		const form = new FormData()
+		form.set("intent", "save")
+		// An older draft: only the ordered line.
+		form.set("installedServiceLines", JSON.stringify([{ ...ordered, qty: 3 }]))
+		await run(form)
+		expect(lastUpdate().data.installedServiceLines).toEqual([
+			{ ...ordered, qty: 3 },
+			added,
+		])
+
+		withDoc({ installedServiceLines: [{ ...ordered, qty: 2 }, added] })
+		const form2 = new FormData()
+		form2.set("intent", "save")
+		form2.set(
+			"installedServiceLines",
+			JSON.stringify([
+				{ ...ordered, qty: 3, addedInField: true },
+				{ ...added, qty: 4, name: "renamed" },
+				// Not on the order and never added through "Add service".
+				{ ...added, serviceCodeId: "svc-x", claroCode: "999", qty: 9 },
+			]),
+		)
+		await run(form2)
+		expect(lastUpdate().data.installedServiceLines).toEqual([
+			{ ...ordered, qty: 3 },
+			{ ...added, qty: 4 },
+		])
+	})
+
+	it("a draft save after a remove does not bring the removed line back", async () => {
+		as("SUPERVISOR")
+		withDoc({ installedServiceLines: [{ ...ordered, qty: 2 }] })
+		const form = new FormData()
+		form.set("intent", "save")
+		form.set(
+			"installedServiceLines",
+			JSON.stringify([{ ...ordered, qty: 2 }, added]),
+		)
+		await run(form)
+		expect(lastUpdate().data.installedServiceLines).toEqual([
+			{ ...ordered, qty: 2 },
+		])
+	})
+})
+
+describe("GET /docs/:id/field — services added in the field", () => {
+	it("lists the added line after the ordered ones with Ordered 0, its unit and no price", async () => {
+		as("SUPERVISOR")
+		withDoc({
+			installedServiceLines: [
+				{
+					serviceCodeId: "svc-1",
+					claroCode: "34006301",
+					accountCode: "610",
+					name: "TRANSFER",
+					qty: 2,
+				},
+				{
+					serviceCodeId: "svc-ret",
+					claroCode: "34006300",
+					accountCode: "610",
+					name: "RETENSAR MENSAJERO MO",
+					qty: 1,
+					addedInField: true,
+				},
+			],
+		})
+		vi.mocked(db.serviceCode.findMany).mockResolvedValue([
+			{ id: "svc-1", unit: "EA" },
+			{ id: "svc-ret", unit: "EA" },
+		] as any)
+		const res = await load()
+		expect(res.services.rows).toEqual([
+			{
+				serviceCodeId: "svc-1",
+				claroCode: "34006301",
+				name: "TRANSFER",
+				estimated: 2,
+				actual: 2,
+				unit: "EA",
+			},
+			{
+				serviceCodeId: "svc-ret",
+				claroCode: "34006300",
+				name: "RETENSAR MENSAJERO MO",
+				estimated: 0,
+				actual: 1,
+				unit: "EA",
+				addedInField: true,
+			},
+		])
+		expect(res.addServiceOpen).toBe(true)
+		const unitLookup = vi.mocked(db.serviceCode.findMany).mock
+			.calls[0][0] as any
+		expect(unitLookup.where.id.in).toEqual(["svc-1", "svc-ret"])
+		// Only the unit is read for these lines, never a price column.
+		expect(unitLookup.select).toEqual({ id: true, unit: true })
+		expect(JSON.stringify(res)).not.toMatch(/unitPrice|lineAmount/)
+	})
+
+	it("closes Add service once the job is signed off (Admin, packet not sent yet)", async () => {
+		as("ADMIN", "admin-1")
+		withDoc({
+			status: "SUPERVISOR_APPROVED",
+			supervisorApprovedAt: new Date(),
+		})
+		expect((await load()).addServiceOpen).toBe(false)
+	})
+
+	it("closes Add service once the packet has gone to Claro", async () => {
+		as("ADMIN", "admin-1")
+		withDoc({
+			status: "SUPERVISOR_APPROVED",
+			supervisorApprovedAt: new Date(),
+			jafInvoiceGeneratedAt: new Date(),
+		})
+		expect((await load()).addServiceOpen).toBe(false)
 	})
 })

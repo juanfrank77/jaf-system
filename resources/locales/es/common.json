@@ -683,7 +683,14 @@
 			"blueprint_invalid": "El plano debe ser JPG, PNG o PDF (PDF hasta 30 MB, imágenes hasta 10 MB).",
 			"address_required": "La Dirección 1 es obligatoria.",
 			"photos_required": "Agrega al menos una foto de Antes y una de Después para continuar.",
-			"field_report_required": "El reporte de campo es obligatorio para continuar. Escribe N/A si no hay nada que añadir."
+			"field_report_required": "El reporte de campo es obligatorio para continuar. Escribe N/A si no hay nada que añadir.",
+			"service_packet_sent": "El paquete ya se envió a Claro. Ya no se pueden añadir ni quitar servicios.",
+			"service_signed_off": "El trabajo ya está firmado. Ya no se pueden añadir ni quitar servicios.",
+			"service_not_found": "Escoge un servicio del catálogo.",
+			"service_qty_invalid": "Entra una cantidad instalada mayor que 0.",
+			"service_on_order": "Ese servicio ya está en la orden. Entra su cantidad instalada en la tabla.",
+			"service_already_added": "Ese servicio ya se añadió. Cambia su cantidad en la tabla.",
+			"service_not_added": "Solo se pueden quitar los servicios añadidos en el campo."
 		},
 		"address_diff_hint": "Este cambio se registra con tu nombre y la hora al enviar.",
 		"address_edited_by_you": "Editado por ti · {{when}}",
@@ -741,7 +748,14 @@
 			"estimated": "Estimado",
 			"actual": "Real",
 			"unit": "Unidad",
-			"brigade": "Brigada"
+			"brigade": "Brigada",
+			"add": "+ Añadir servicio",
+			"add_hint": "¿Algo que la orden no tenía? Búscalo por código o descripción y entra lo que se instaló.",
+			"add_qty": "Instalado",
+			"add_confirm": "Añadir",
+			"add_cancel": "Cancelar",
+			"added_in_field": "Añadido en el campo",
+			"remove_added": "Quitar {{code}}"
 		},
 		"admin_override": "Ya está firmado. Lo está editando como Admin."
 	},
@@ -1938,7 +1952,8 @@
 		"col_unit_price": "Precio unit.",
 		"col_line": "Línea",
 		"subtotal": "Subtotal estimado",
-		"col_installed": "Instalado"
+		"col_installed": "Instalado",
+		"added_in_field": "Añadido en el campo"
 	},
 	"installer_supervisor": {
 		"below_par": "Bajo par",

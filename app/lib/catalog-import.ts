@@ -96,8 +96,58 @@ export function toServiceCodeData(
 	}
 }
 
-/** The three fabricated demo codes from the old seed. Deactivated, never deleted. */
+/**
+ * Codes the old demo seed fabricated before the real catalog was imported.
+ * The real catalog uses these same three codes (REMOCION MENSAJERO, REMOVER
+ * IPs, REMOVER PORTA CANDADO), so they must end up active with the catalog's
+ * data. The seed used to deactivate them, which hid real services from search.
+ */
 export const LEGACY_DEMO_CODES = ["34006428", "34006429", "34006430"]
+
+type CatalogWriter = {
+	serviceCode: {
+		createMany(args: {
+			data: Prisma.ServiceCodeCreateManyInput[]
+			skipDuplicates: boolean
+		}): Promise<{ count: number }>
+		update(args: {
+			where: { claroCode: string }
+			data: Prisma.ServiceCodeCreateManyInput
+		}): Promise<unknown>
+	}
+}
+
+/**
+ * Loads catalog rows. New codes are inserted; codes that predate the real
+ * catalog (`refreshCodes`) are overwritten with the catalog's data and
+ * re-activated. Returns how many rows were inserted and refreshed.
+ */
+export async function importCatalogRows(
+	client: CatalogWriter,
+	rows: CatalogRow[],
+	refreshCodes: readonly string[] = LEGACY_DEMO_CODES,
+	batch = 100,
+) {
+	const data = rows.map(toServiceCodeData)
+	let inserted = 0
+	for (let i = 0; i < data.length; i += batch) {
+		const res = await client.serviceCode.createMany({
+			data: data.slice(i, i + batch),
+			skipDuplicates: true,
+		})
+		inserted += res.count
+	}
+	let refreshed = 0
+	for (const d of data) {
+		if (!refreshCodes.includes(d.claroCode)) continue
+		await client.serviceCode.update({
+			where: { claroCode: d.claroCode },
+			data: d,
+		})
+		refreshed++
+	}
+	return { inserted, refreshed }
+}
 
 // Maintenance supervisors, one per area on the roster.
 // Addresses: `charlie@` and `irivera@` are the pair on file per the client's

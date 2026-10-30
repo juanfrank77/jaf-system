@@ -683,7 +683,14 @@
 			"blueprint_invalid": "The blueprint must be a JPG, PNG or PDF (PDFs up to 30 MB, images up to 10 MB).",
 			"address_required": "Dirección 1 is required.",
 			"photos_required": "Add at least one Before and one After photo to continue.",
-			"field_report_required": "The Field report is required to continue. Write N/A if there is nothing to add."
+			"field_report_required": "The Field report is required to continue. Write N/A if there is nothing to add.",
+			"service_packet_sent": "The packet already went to Claro. Services can no longer be added or removed.",
+			"service_signed_off": "The job is signed off. Services can no longer be added or removed.",
+			"service_not_found": "Pick a service from the catalog.",
+			"service_qty_invalid": "Enter an installed quantity greater than 0.",
+			"service_on_order": "That service is already on the order. Enter its installed quantity in the table.",
+			"service_already_added": "That service was already added. Change its quantity in the table.",
+			"service_not_added": "Only services added in the field can be removed."
 		},
 		"address_diff_hint": "This change is logged with your name and the time when you submit.",
 		"address_edited_by_you": "Edited by you · {{when}}",
@@ -741,7 +748,14 @@
 			"estimated": "Estimated",
 			"actual": "Actual",
 			"unit": "Unit",
-			"brigade": "Brigade"
+			"brigade": "Brigade",
+			"add": "+ Add service",
+			"add_hint": "Something the order did not have? Search it by code or description and enter what was installed.",
+			"add_qty": "Installed",
+			"add_confirm": "Add",
+			"add_cancel": "Cancel",
+			"added_in_field": "Added in field",
+			"remove_added": "Remove {{code}}"
 		},
 		"admin_override": "Signed off. You are editing it as Admin."
 	},
@@ -1938,7 +1952,8 @@
 		"col_unit_price": "Unit price",
 		"col_line": "Line",
 		"subtotal": "Estimated subtotal",
-		"col_installed": "Installed"
+		"col_installed": "Installed",
+		"added_in_field": "Added in field"
 	},
 	"installer_supervisor": {
 		"below_par": "Below par",

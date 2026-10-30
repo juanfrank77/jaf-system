@@ -292,4 +292,74 @@ describe("Field screen (render)", () => {
 		expect(html).toContain("Save progress")
 		expect(html).toContain("Continue to 4. Sign off")
 	})
+
+	const retensarLine = {
+		serviceCodeId: "svc-ret",
+		claroCode: "34006300",
+		accountCode: "610",
+		name: "RETENSAR MENSAJERO MO",
+		qty: 1,
+		addedInField: true,
+	}
+	const withAdded = (addServiceOpen: boolean) =>
+		loaderData({
+			installedServiceLines: [retensarLine],
+			services: {
+				rows: [
+					...loaderData().services.rows,
+					{
+						serviceCodeId: "svc-ret",
+						claroCode: "34006300",
+						name: "RETENSAR MENSAJERO MO",
+						estimated: 0,
+						actual: 1,
+						unit: "EA",
+						addedInField: true,
+					},
+				],
+				brigadeNames: [],
+			},
+			addServiceOpen,
+		})
+	const rowOf = (html: string, code: string) =>
+		html.match(/<tr[^>]*>.*?<\/tr>/g)?.find((r) => r.includes(`>${code}<`)) ??
+		""
+
+	it("lists a service added in the field: Ordered 0, its qty, labelled, removable", async () => {
+		const html = await render(withAdded(true))
+		const row = rowOf(html, "34006300")
+		expect(row).toContain("RETENSAR MENSAJERO MO")
+		expect(row).toContain("Added in field")
+		expect(row).toMatch(/<td[^>]*text-right[^>]*>0<\/td>/)
+		expect(inputs(row, /aria-label="Actual 34006300"/)[0]).toMatch(/value="1"/)
+		expect(row).toContain('aria-label="Remove 34006300"')
+		// The ordered row has neither.
+		expect(rowOf(html, "34006301")).not.toContain("Added in field")
+		expect(rowOf(html, "34006301")).not.toContain("Remove")
+		expect(html).toContain("+ Add service")
+		// The draft carries both lines, the added one flagged.
+		const hidden = inputs(html, /name="installedServiceLines"/)[0]
+		expect(hidden).toContain("svc-ret")
+		expect(html).not.toContain("$")
+	})
+
+	it("once the packet is out: still labelled, but no remove and no Add service", async () => {
+		const html = await render(withAdded(false))
+		const row = rowOf(html, "34006300")
+		expect(row).toContain("Added in field")
+		expect(row).not.toContain("Remove")
+		expect(html).not.toContain("+ Add service")
+	})
+
+	it("offers Add service on a job ordered with no services", async () => {
+		const html = await render(
+			loaderData({
+				serviceLines: [],
+				services: { rows: [], brigadeNames: [] },
+				addServiceOpen: true,
+			}),
+		)
+		expect(html).toContain("+ Add service")
+		expect(html).not.toContain('data-testid="field-services"')
+	})
 })

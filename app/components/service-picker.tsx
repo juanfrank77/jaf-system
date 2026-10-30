@@ -7,7 +7,7 @@ import { Input } from "~/components/ui/input"
 import { type ServiceLine, splitServiceSuffix } from "~/lib/service-lines"
 import { formatMoney } from "~/lib/utils"
 
-type Result = {
+export type ServiceSearchResult = {
 	id: string
 	claroCode: string
 	name: string
@@ -17,29 +17,27 @@ type Result = {
 	unitPrice?: number
 }
 
-export function ServicePicker({
-	name = "serviceLines",
-	initialLines = [],
-	initialMeta = {},
+/**
+ * The catalog search box and its results (code or description, SERVICE codes
+ * only, via /api/service-codes, which strips prices for price-blind roles).
+ * Picking a result calls `onPick` and clears the box.
+ */
+export function ServiceSearch({
+	onPick,
 	showPrices = true,
+	autoFocus,
 }: {
-	name?: string
-	/** False for roles that never see money: no price, line amount or subtotal. */
+	onPick: (r: ServiceSearchResult) => void
+	/** False for roles that never see money. */
 	showPrices?: boolean
-	initialLines?: ServiceLine[]
-	/** Catalog unit/price for the initial lines, so a saved table shows prices. */
-	initialMeta?: Record<string, { unit: string | null; unitPrice?: number }>
+	autoFocus?: boolean
 }) {
 	const { t } = useTranslation()
-	const fetcher = useFetcher<{ results: Result[]; total: number }>()
+	const fetcher = useFetcher<{
+		results: ServiceSearchResult[]
+		total: number
+	}>()
 	const [query, setQuery] = useState("")
-	const [lines, setLines] = useState<ServiceLine[]>(initialLines)
-	// Catalog unit/price for display only: the persisted ServiceLine stays
-	// price-free. Callers supply it for saved lines; added lines get it here.
-	const [meta, setMeta] =
-		useState<Record<string, { unit: string | null; unitPrice?: number }>>(
-			initialMeta,
-		)
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: fetcher identity is stable; re-run on query only
 	useEffect(() => {
@@ -63,47 +61,22 @@ export function ServicePicker({
 		{},
 	)
 
-	function add(r: Result) {
-		if (lines.some((l) => l.serviceCodeId === r.id)) return
-		setLines([
-			...lines,
-			{
-				serviceCodeId: r.id,
-				claroCode: r.claroCode,
-				accountCode: r.accountCode,
-				name: r.name,
-				qty: 1,
-			},
-		])
-		setMeta({ ...meta, [r.id]: { unit: r.unit, unitPrice: r.unitPrice } })
-		setQuery("")
-	}
-	function setQty(id: string, qty: number) {
-		setLines(lines.map((l) => (l.serviceCodeId === id ? { ...l, qty } : l)))
-	}
-	const priced =
-		showPrices &&
-		lines.every((l) => meta[l.serviceCodeId]?.unitPrice !== undefined)
-	const subtotal = lines.reduce(
-		(sum, l) => sum + l.qty * (meta[l.serviceCodeId]?.unitPrice ?? 0),
-		0,
-	)
-	function remove(id: string) {
-		setLines(lines.filter((l) => l.serviceCodeId !== id))
-	}
-
 	return (
 		<div className="space-y-2">
-			<input type="hidden" name={name} value={JSON.stringify(lines)} />
 			<Input
 				type="search"
 				value={query}
+				autoFocus={autoFocus}
 				onChange={(e) => setQuery(e.target.value)}
+				// Enter never submits the form around the picker.
+				onKeyDown={(e) => {
+					if (e.key === "Enter") e.preventDefault()
+				}}
 				placeholder={t("service_picker.search_placeholder")}
 				aria-label={t("service_picker.search_placeholder")}
 			/>
 			{query.trim().length >= 2 && (
-				<div className="border rounded-lg bg-card max-h-64 overflow-y-auto text-sm">
+				<div className="border rounded-lg bg-card text-sm">
 					{results.length === 0 ? (
 						<p className="p-2 text-muted-foreground">
 							{t("service_picker.no_results")}
@@ -114,7 +87,10 @@ export function ServicePicker({
 								<li key={r.id}>
 									<button
 										type="button"
-										onClick={() => add(r)}
+										onClick={() => {
+											onPick(r)
+											setQuery("")
+										}}
 										className="w-full text-left px-2 py-1.5 hover:bg-muted flex items-center gap-3"
 									>
 										<span className="font-mono text-xs text-muted-foreground">
@@ -155,6 +131,64 @@ export function ServicePicker({
 					</p>
 				</div>
 			)}
+		</div>
+	)
+}
+
+export function ServicePicker({
+	name = "serviceLines",
+	initialLines = [],
+	initialMeta = {},
+	showPrices = true,
+}: {
+	name?: string
+	/** False for roles that never see money: no price, line amount or subtotal. */
+	showPrices?: boolean
+	initialLines?: ServiceLine[]
+	/** Catalog unit/price for the initial lines, so a saved table shows prices. */
+	initialMeta?: Record<string, { unit: string | null; unitPrice?: number }>
+}) {
+	const { t } = useTranslation()
+	const [lines, setLines] = useState<ServiceLine[]>(initialLines)
+	// Catalog unit/price for display only: the persisted ServiceLine stays
+	// price-free. Callers supply it for saved lines; added lines get it here.
+	const [meta, setMeta] =
+		useState<Record<string, { unit: string | null; unitPrice?: number }>>(
+			initialMeta,
+		)
+
+	function add(r: ServiceSearchResult) {
+		if (lines.some((l) => l.serviceCodeId === r.id)) return
+		setLines([
+			...lines,
+			{
+				serviceCodeId: r.id,
+				claroCode: r.claroCode,
+				accountCode: r.accountCode,
+				name: r.name,
+				qty: 1,
+			},
+		])
+		setMeta({ ...meta, [r.id]: { unit: r.unit, unitPrice: r.unitPrice } })
+	}
+	function setQty(id: string, qty: number) {
+		setLines(lines.map((l) => (l.serviceCodeId === id ? { ...l, qty } : l)))
+	}
+	const priced =
+		showPrices &&
+		lines.every((l) => meta[l.serviceCodeId]?.unitPrice !== undefined)
+	const subtotal = lines.reduce(
+		(sum, l) => sum + l.qty * (meta[l.serviceCodeId]?.unitPrice ?? 0),
+		0,
+	)
+	function remove(id: string) {
+		setLines(lines.filter((l) => l.serviceCodeId !== id))
+	}
+
+	return (
+		<div className="space-y-2">
+			<input type="hidden" name={name} value={JSON.stringify(lines)} />
+			<ServiceSearch onPick={add} showPrices={showPrices} />
 			<div className="overflow-x-auto rounded-lg border">
 				<table className="w-full text-sm">
 					<thead>

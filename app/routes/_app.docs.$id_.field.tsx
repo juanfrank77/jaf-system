@@ -12,11 +12,16 @@ import {
 	useNavigation,
 	useSubmit,
 } from "react-router"
+import {
+	AddFieldService,
+	RemoveAddedService,
+} from "~/components/add-field-service"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import {
 	FieldMaterialsTable,
 	type FieldMaterialsTableRow,
 } from "~/components/field-materials-table"
+import { AddedInFieldLabel } from "~/components/service-lines-table"
 import { StepActionBar } from "~/components/step-action-bar"
 import { SupervisorStepRail } from "~/components/supervisor-step-rail"
 import { Button } from "~/components/ui/button"
@@ -49,10 +54,15 @@ import { isBillableSource } from "~/lib/material-source"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import {
+	findPickableServiceCode,
 	getActiveMaterialCodes,
 	serviceCodesForRole,
 } from "~/lib/service-codes.server"
-import type { ServiceLine } from "~/lib/service-lines"
+import {
+	installedNotOrdered,
+	mergeInstalledPost,
+	type ServiceLine,
+} from "~/lib/service-lines"
 import { assertDocInSupervisorScope } from "~/lib/supervisor-scope"
 import {
 	deriveSupervisorStage,
@@ -173,6 +183,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const taken = lines(doc.materialsTaken)
 	const ordered = (doc.serviceLines as ServiceLine[] | null) ?? []
 	const installed = (doc.installedServiceLines as ServiceLine[] | null) ?? null
+	// Lines added in the field (Ordered 0) follow the ordered ones.
+	const extras = installedNotOrdered(ordered, installed)
+	const listed = [...ordered, ...extras]
 	const corrections =
 		(doc.addressCorrections as AddressCorrection[] | null) ?? []
 	const shared = doc.assignedCrewIds.length > 1
@@ -184,9 +197,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			orderBy: { takenAt: "asc" },
 			select: { id: true, tag: true, localPath: true },
 		}),
-		ordered.length > 0
+		listed.length > 0
 			? db.serviceCode.findMany({
-					where: { id: { in: ordered.map((l) => l.serviceCodeId) } },
+					where: { id: { in: listed.map((l) => l.serviceCodeId) } },
 					select: { id: true, unit: true },
 				})
 			: Promise.resolve([]),
@@ -254,16 +267,27 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		serviceLines: ordered,
 		installedServiceLines: installed,
 		services: {
-			rows: ordered.map((l) => ({
-				serviceCodeId: l.serviceCodeId,
-				claroCode: l.claroCode,
-				name: l.name,
-				estimated: l.qty,
-				actual:
-					installed?.find((i) => i.serviceCodeId === l.serviceCodeId)?.qty ??
-					null,
-				unit: unitOf.get(l.serviceCodeId) ?? null,
-			})),
+			rows: [
+				...ordered.map((l) => ({
+					serviceCodeId: l.serviceCodeId,
+					claroCode: l.claroCode,
+					name: l.name,
+					estimated: l.qty,
+					actual:
+						installed?.find((i) => i.serviceCodeId === l.serviceCodeId)?.qty ??
+						null,
+					unit: unitOf.get(l.serviceCodeId) ?? null,
+				})),
+				...extras.map((l) => ({
+					serviceCodeId: l.serviceCodeId,
+					claroCode: l.claroCode,
+					name: l.name,
+					estimated: 0,
+					actual: l.qty as number | null,
+					unit: unitOf.get(l.serviceCodeId) ?? null,
+					...(l.addedInField ? { addedInField: true as const } : {}),
+				})),
+			],
 			brigadeNames: shared
 				? doc.assignedCrewIds
 						.map((id) => nameOf.get(id))
@@ -271,6 +295,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 				: [],
 		},
 		serviceCodes: serviceCodesForRole(user.role, codes),
+		// "Add service" and its remove (x) stay until the job is signed off
+		// (the Pre-cert and the packet are built from the lines from then on).
+		addServiceOpen: !doc.jafInvoiceGeneratedAt && !doc.supervisorApprovedAt,
 	}
 }
 
@@ -300,7 +327,98 @@ function parseInstalled(raw: string): ServiceLine[] {
 			accountCode: l.accountCode ? String(l.accountCode) : null,
 			name: String(l.name ?? ""),
 			qty: Number(l.qty),
+			...(l.addedInField === true ? { addedInField: true as const } : {}),
 		}))
+}
+
+/**
+ * "Add service" / its remove (x): a service the order did not have, found by
+ * the crew on site, goes on the installed lines flagged `addedInField`
+ * (Ordered 0) and from there everywhere the installed lines go. Only until the
+ * packet goes to Claro (`jafInvoiceGeneratedAt`, set by the first delivered
+ * send, which also locks the invoice lines); the write re-checks it so a send
+ * in between wins. Each change is audited with who and when.
+ */
+async function changeAddedService(
+	intent: "add_service" | "remove_added_service",
+	form: FormData,
+	doc: FieldDoc,
+	userId: string,
+): Promise<Refusal | { ok: true }> {
+	if (doc.jafInvoiceGeneratedAt)
+		return refusal("docs_field.errors.service_packet_sent")
+	// Admin can still open Field after sign-off; the lines are fixed then.
+	if (doc.supervisorApprovedAt)
+		return refusal("docs_field.errors.service_signed_off")
+	const ordered = (doc.serviceLines as ServiceLine[] | null) ?? []
+	const installed = (doc.installedServiceLines as ServiceLine[] | null) ?? []
+	const id = String(form.get("serviceCodeId") ?? "")
+
+	let next: ServiceLine[]
+	let line: ServiceLine
+	if (intent === "add_service") {
+		if (!id) return refusal("docs_field.errors.service_not_found")
+		if (ordered.some((l) => l.serviceCodeId === id))
+			return refusal("docs_field.errors.service_on_order")
+		if (
+			installedNotOrdered(ordered, installed).some(
+				(l) => l.serviceCodeId === id,
+			)
+		)
+			return refusal("docs_field.errors.service_already_added")
+		const qty = Number(form.get("qty"))
+		if (!Number.isFinite(qty) || qty <= 0)
+			return refusal("docs_field.errors.service_qty_invalid")
+		const code = await findPickableServiceCode(id)
+		if (!code) return refusal("docs_field.errors.service_not_found")
+		line = {
+			serviceCodeId: code.id,
+			claroCode: code.claroCode,
+			accountCode: code.accountCode,
+			name: code.name,
+			qty,
+			addedInField: true,
+		}
+		next = [...installed, line]
+	} else {
+		// Never a line the order has (even one later put on the order).
+		const found = installedNotOrdered(ordered, installed).find(
+			(l) => l.serviceCodeId === id && l.addedInField === true,
+		)
+		if (!found) return refusal("docs_field.errors.service_not_added")
+		line = found
+		next = installed.filter((l) => l !== found)
+	}
+
+	const written = await db.$transaction(async (tx) => {
+		const res = await tx.jafInvoice.updateMany({
+			where: {
+				id: doc.id,
+				jafInvoiceGeneratedAt: null,
+				supervisorApprovedAt: null,
+			},
+			data: {
+				installedServiceLines: next as unknown as Prisma.InputJsonValue,
+				...(doc.fieldStartedAt ? {} : { fieldStartedAt: new Date() }),
+			},
+		})
+		if (res.count === 0) return false
+		await tx.auditTrail.create({
+			data: {
+				docId: doc.id,
+				userId,
+				action:
+					intent === "add_service"
+						? "SERVICE_ADDED_IN_FIELD"
+						: "SERVICE_REMOVED_IN_FIELD",
+				diffJson: { code: line.claroCode, qty: line.qty },
+			},
+		})
+		return true
+	})
+	// Signed off (or sent, which comes after) between the read and the write.
+	if (!written) return refusal("docs_field.errors.service_signed_off")
+	return { ok: true }
 }
 
 /**
@@ -372,6 +490,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const { user, doc } = await openFieldDoc(request, params.id)
 	const form = await request.formData()
 	const intent = form.get("intent")
+	if (intent === "add_service" || intent === "remove_added_service")
+		return changeAddedService(intent, form, doc, user.id)
 	if (intent !== "save" && intent !== "continue" && intent !== "back")
 		throw data({ error: "Unknown intent" }, { status: 400 })
 
@@ -397,8 +517,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 	if (form.has("installedServiceLines")) {
 		try {
-			update.installedServiceLines = parseInstalled(
-				form.get("installedServiceLines") as string,
+			update.installedServiceLines = mergeInstalledPost(
+				parseInstalled(form.get("installedServiceLines") as string),
+				(doc.serviceLines as ServiceLine[] | null) ?? [],
+				(doc.installedServiceLines as ServiceLine[] | null) ?? null,
 			)
 		} catch {
 			return refusal("docs_field.errors.invalid_service_lines")
@@ -710,8 +832,10 @@ export default function FieldUpdate({
 		estimatedMaterials,
 		fieldMaterials,
 		serviceLines,
+		installedServiceLines,
 		services,
 		serviceCodes,
+		addServiceOpen,
 	} = loaderData
 	const { t } = useTranslation()
 	const navigation = useNavigation()
@@ -750,9 +874,21 @@ export default function FieldUpdate({
 			]),
 		),
 	)
-	const installed = serviceLines
-		.filter((l) => (actuals[l.serviceCodeId] ?? "") !== "")
-		.map((l) => ({ ...l, qty: Number(actuals[l.serviceCodeId]) }))
+	// A typed box wins; a line added after the page opened shows its saved qty.
+	const actualOf = (r: { serviceCodeId: string; actual: number | null }) =>
+		actuals[r.serviceCodeId] ?? (r.actual == null ? "" : String(r.actual))
+	// The ordered lines, then those added in the field (Ordered 0).
+	const lineOf = new Map(
+		[
+			...serviceLines,
+			...installedNotOrdered(serviceLines, installedServiceLines),
+		].map((l) => [l.serviceCodeId, l]),
+	)
+	const installed = services.rows.flatMap((r) => {
+		const line = lineOf.get(r.serviceCodeId)
+		const value = actualOf(r)
+		return line && value !== "" ? [{ ...line, qty: Number(value) }] : []
+	})
 	const shared = services.brigadeNames.length > 0
 
 	// The Field report is required; "N/A" is pre-filled so a job with nothing to
@@ -785,7 +921,7 @@ export default function FieldUpdate({
 	const targets = fieldTargets({
 		actuals: services.rows.map((r) => ({
 			id: actualId(r.serviceCodeId),
-			value: actuals[r.serviceCodeId] ?? "",
+			value: actualOf(r),
 		})),
 		notes,
 		beforePhotos: photos.BEFORE.length,
@@ -871,7 +1007,7 @@ export default function FieldUpdate({
 			)}
 
 			<Form ref={formRef} method="post" className="space-y-5">
-				{services.rows.length > 0 && (
+				{(services.rows.length > 0 || addServiceOpen) && (
 					<Card>
 						<CardHeader>{t("docs_field.services_performed_label")}</CardHeader>
 						<CardContent className="space-y-2">
@@ -882,87 +1018,108 @@ export default function FieldUpdate({
 									value={JSON.stringify(installed)}
 								/>
 							)}
-							<div className="overflow-x-auto">
-								<table className="w-full text-sm" data-testid="field-services">
-									<thead>
-										<tr className="border-b text-left text-xs text-muted-foreground">
-											<th className="py-1.5 pr-2">
-												{t("docs_field.services.code")}
-											</th>
-											<th className="py-1.5 pr-2">
-												{t("docs_field.services.name")}
-											</th>
-											<th className="py-1.5 pr-2 text-right">
-												{t("docs_field.services.estimated")}
-											</th>
-											<th className="py-1.5 pr-2">
-												{t("docs_field.services.actual")}
-											</th>
-											<th className="py-1.5 pr-2">
-												{t("docs_field.services.unit")}
-											</th>
-											{shared && (
-												<th className="py-1.5">
-													{t("docs_field.services.brigade")}
+							{services.rows.length > 0 && (
+								<div className="overflow-x-auto">
+									<table
+										className="w-full text-sm"
+										data-testid="field-services"
+									>
+										<thead>
+											<tr className="border-b text-left text-xs text-muted-foreground">
+												<th className="py-1.5 pr-2">
+													{t("docs_field.services.code")}
 												</th>
-											)}
-										</tr>
-									</thead>
-									<tbody className="tabular-nums">
-										{services.rows.map((r) => (
-											<tr
-												key={r.serviceCodeId}
-												className="border-b last:border-0"
-											>
-												<td className="py-1.5 pr-2 font-mono text-xs">
-													{r.claroCode}
-												</td>
-												<td className="py-1.5 pr-2">{r.name}</td>
-												<td className="py-1.5 pr-2 text-right">
-													{r.estimated}
-												</td>
-												<td className="py-1.5 pr-2">
-													<Input
-														type="number"
-														min={0}
-														inputMode="decimal"
-														id={actualId(r.serviceCodeId)}
-														className={cn(
-															"field-required w-20",
-															next?.id === actualId(r.serviceCodeId) &&
-																"field-next",
-														)}
-														aria-label={`${t("docs_field.services.actual")} ${r.claroCode}`}
-														onKeyDown={(e) => {
-															// Enter moves on to the next empty box instead of
-															// submitting the form.
-															if (e.key !== "Enter") return
-															e.preventDefault()
-															jumpTo(
-																nextEmpty(targets, actualId(r.serviceCodeId))
-																	?.id,
-															)
-														}}
-														value={actuals[r.serviceCodeId] ?? ""}
-														onChange={(e) =>
-															setActuals({
-																...actuals,
-																[r.serviceCodeId]: e.target.value,
-															})
-														}
-													/>
-												</td>
-												<td className="py-1.5 pr-2 text-xs">{r.unit ?? "—"}</td>
+												<th className="py-1.5 pr-2">
+													{t("docs_field.services.name")}
+												</th>
+												<th className="py-1.5 pr-2 text-right">
+													{t("docs_field.services.estimated")}
+												</th>
+												<th className="py-1.5 pr-2">
+													{t("docs_field.services.actual")}
+												</th>
+												<th className="py-1.5 pr-2">
+													{t("docs_field.services.unit")}
+												</th>
 												{shared && (
-													<td className="py-1.5 text-xs">
-														{services.brigadeNames.join(" + ")}
-													</td>
+													<th className="py-1.5">
+														{t("docs_field.services.brigade")}
+													</th>
 												)}
 											</tr>
-										))}
-									</tbody>
-								</table>
-							</div>
+										</thead>
+										<tbody className="tabular-nums">
+											{services.rows.map((r) => (
+												<tr
+													key={r.serviceCodeId}
+													className="border-b last:border-0"
+												>
+													<td className="py-1.5 pr-2 font-mono text-xs">
+														{r.claroCode}
+													</td>
+													<td className="py-1.5 pr-2">
+														{r.name}
+														{"addedInField" in r && r.addedInField === true && (
+															<div className="mt-1 flex flex-wrap items-center gap-2">
+																<AddedInFieldLabel />
+																{addServiceOpen && (
+																	<RemoveAddedService
+																		serviceCodeId={r.serviceCodeId}
+																		claroCode={r.claroCode}
+																	/>
+																)}
+															</div>
+														)}
+													</td>
+													<td className="py-1.5 pr-2 text-right">
+														{r.estimated}
+													</td>
+													<td className="py-1.5 pr-2">
+														<Input
+															type="number"
+															min={0}
+															inputMode="decimal"
+															id={actualId(r.serviceCodeId)}
+															className={cn(
+																"field-required w-20",
+																next?.id === actualId(r.serviceCodeId) &&
+																	"field-next",
+															)}
+															aria-label={`${t("docs_field.services.actual")} ${r.claroCode}`}
+															onKeyDown={(e) => {
+																// Enter moves on to the next empty box instead of
+																// submitting the form.
+																if (e.key !== "Enter") return
+																e.preventDefault()
+																jumpTo(
+																	nextEmpty(targets, actualId(r.serviceCodeId))
+																		?.id,
+																)
+															}}
+															value={actualOf(r)}
+															onChange={(e) =>
+																setActuals({
+																	...actuals,
+																	[r.serviceCodeId]: e.target.value,
+																})
+															}
+														/>
+													</td>
+													<td className="py-1.5 pr-2 text-xs">
+														{r.unit ?? "—"}
+													</td>
+													{shared && (
+														<td className="py-1.5 text-xs">
+															{services.brigadeNames.join(" + ")}
+														</td>
+													)}
+												</tr>
+											))}
+										</tbody>
+									</table>
+								</div>
+							)}
+							{addServiceOpen && <AddFieldService />}
 						</CardContent>
 					</Card>
 				)}

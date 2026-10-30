@@ -27,6 +27,7 @@ export type NavLabelKey =
 	| "app_shell.nav.new_document"
 	| "app_shell.nav.receivables"
 	| "app_shell.nav.finance_packets"
+	| "app_shell.nav.finance_returned"
 	| "app_shell.nav.finance_lc_request"
 	| "app_shell.nav.finance_lc_funded"
 	| "app_shell.nav.finance_lists"
@@ -50,6 +51,7 @@ export type NavLabelKey =
 	| "app_shell.nav.warehouse_restock"
 	| "app_shell.nav.warehouse_stock"
 	| "app_shell.nav.supervisor_open"
+	| "app_shell.nav.supervisor_returned"
 	| "app_shell.nav.supervisor_invoice"
 	| "app_shell.nav.supervisor_aviso"
 	| "app_shell.nav.supervisor_precert"
@@ -137,6 +139,7 @@ export const GROUP_LABEL_KEY: Record<NavGroupKey, GroupLabelKey | null> = {
 const SUPERVISOR_QUEUE_ITEMS: NavItem[] = (
 	[
 		["open", "app_shell.nav.supervisor_open"],
+		["returned", "app_shell.nav.supervisor_returned"],
 		["invoice", "app_shell.nav.supervisor_invoice"],
 		["aviso", "app_shell.nav.supervisor_aviso"],
 		["precert", "app_shell.nav.supervisor_precert"],
@@ -278,6 +281,13 @@ const NAV_ITEMS: NavItem[] = [
 	{
 		to: "/finance/queue",
 		labelKey: "app_shell.nav.finance_packets",
+		icon: Invoice02Icon,
+		group: "arm_a",
+		roles: ["FINANCE", "ADMIN"],
+	},
+	{
+		to: "/finance/queue?stage=returned",
+		labelKey: "app_shell.nav.finance_returned",
 		icon: Invoice02Icon,
 		group: "arm_a",
 		roles: ["FINANCE", "ADMIN"],

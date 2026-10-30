@@ -23,6 +23,7 @@ import {
 import { packetDocuments } from "~/lib/packet-documents"
 import { isTerminalStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
+import { isResent, isReturned, latestReturn } from "~/lib/returned-packet"
 import { storedPdfLinks } from "~/lib/upload-href"
 import { cn, formatMoney, toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.finance.verify.$id"
@@ -61,6 +62,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 					pdfPath: true,
 					sigSupervisorAt: true,
 					sigSubcontractorAt: true,
+					avisoNumber: true,
 				},
 			},
 			photos: { select: { localPath: true, tag: true, takenAt: true } },
@@ -77,10 +79,28 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		doc.paymentRecords,
 	)
 	const amount = invoiceTotalUsed(doc, codeMap, ivuRate)
+	// Same guards as the action: only a released packet is hers to act on, and
+	// one the supervisor has not resent cannot be verified (S4).
+	const returned = isReturned(doc)
+	const latest = latestReturn(doc)
+	const notReleased = !doc.releasedToFinanceAt
 
 	return {
 		doc,
 		user,
+		notReleased,
+		canVerify: !notReleased && !returned,
+		canSendBack: !notReleased,
+		returnState: {
+			returned,
+			// The latest return was answered (history), whatever happened since.
+			resent: !!latest?.resentAt,
+			// "Look at it first" only until Finance has verified the resent packet.
+			resentPending: isResent(doc),
+			note: latest?.note ?? null,
+			createdAt: latest?.createdAt ?? null,
+			resentAt: latest?.resentAt ?? null,
+		},
 		serviceCodes,
 		stage,
 		amount,
@@ -130,6 +150,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 		doc.paymentRecords,
 	)
 	if (stage !== "TO_VERIFY")
+		return { errorKey: "finance_verify.errors.invalid_stage" }
+	// Only a packet the supervisor released is Finance's to act on, and one
+	// sent back is his until he resends it (S4): no verifying it meanwhile.
+	if (!doc.releasedToFinanceAt || (intent === "verify" && isReturned(doc)))
 		return { errorKey: "finance_verify.errors.invalid_stage" }
 
 	if (intent === "verify") {
@@ -216,6 +240,10 @@ export default function FinanceVerify({
 		amount,
 		ivuRate,
 		sendBackNotes,
+		returnState,
+		notReleased,
+		canVerify,
+		canSendBack,
 		packetDocs,
 		avisoDiscrepancy,
 		lineTotal,
@@ -429,6 +457,35 @@ export default function FinanceVerify({
 				<BrigadeStockTracked lines={brigadeStock} />
 			</div>
 
+			{returnState.returned && returnState.createdAt && (
+				<Callout
+					tone="danger"
+					title={t("returned_packet.finance.verify_returned")}
+				>
+					<span className="block whitespace-pre-line">{returnState.note}</span>
+					<span className="block text-xs">
+						{new Date(returnState.createdAt).toLocaleString()}
+					</span>
+				</Callout>
+			)}
+			{returnState.resentPending && returnState.resentAt && (
+				<Callout tone="info" title={t("returned_packet.resent")}>
+					{t("returned_packet.finance.resent_on", {
+						date: new Date(returnState.resentAt).toLocaleString(),
+					})}
+					{returnState.note && (
+						<span className="block whitespace-pre-line">
+							{returnState.note}
+						</span>
+					)}
+				</Callout>
+			)}
+			{notReleased && (
+				<Callout tone="warn" title={t("returned_packet.finance.not_released")}>
+					{t("returned_packet.finance.not_released_body")}
+				</Callout>
+			)}
+
 			{sendBackNotes.length > 0 && (
 				<div className="bg-status-warn-soft border border-status-warn/30 rounded-lg p-4 space-y-2">
 					<h3 className="text-sm font-medium text-status-warn">
@@ -447,39 +504,51 @@ export default function FinanceVerify({
 
 			{stage === "TO_VERIFY" && doc.status !== "LC_REQUEST_GENERATED" && (
 				<div className="flex flex-wrap items-start gap-4">
-					<Form method="post" className="space-y-3">
-						<input type="hidden" name="intent" value="verify" />
-						<Textarea
-							name="note"
-							rows={2}
-							placeholder={t("finance_verify.verify_note_placeholder")}
-						/>
-						<Button type="submit" disabled={cannotVerify}>
-							{t("finance_verify.mark_verified")}
-						</Button>
-						{cannotVerify && (
-							<p className="text-sm text-status-warn">
-								{t("finance_verify.cannot_verify_hint")}
-							</p>
-						)}
-					</Form>
-					<Form method="post" className="space-y-3">
-						<input type="hidden" name="intent" value="send_back" />
-						<Textarea
-							name="note"
-							rows={2}
-							required
-							placeholder={t("finance_verify.send_back_placeholder")}
-						/>
-						<Button type="submit" variant="outline">
-							{t("finance_verify.send_back")}
-						</Button>
-						{error?.errorKey && (
-							<p className="text-sm text-status-danger">
-								{t(error.errorKey as ParseKeys)}
-							</p>
-						)}
-					</Form>
+					{canVerify ? (
+						<Form method="post" className="space-y-3">
+							<input type="hidden" name="intent" value="verify" />
+							<Textarea
+								name="note"
+								rows={2}
+								placeholder={t("finance_verify.verify_note_placeholder")}
+							/>
+							<Button type="submit" disabled={cannotVerify}>
+								{t("finance_verify.mark_verified")}
+							</Button>
+							{cannotVerify && (
+								<p className="text-sm text-status-warn">
+									{t("finance_verify.cannot_verify_hint")}
+								</p>
+							)}
+						</Form>
+					) : (
+						<p className="text-sm text-muted-foreground">
+							{t(
+								returnState.returned
+									? "returned_packet.finance.cannot_verify_returned"
+									: "returned_packet.finance.cannot_act_unreleased",
+							)}
+						</p>
+					)}
+					{canSendBack && (
+						<Form method="post" className="space-y-3">
+							<input type="hidden" name="intent" value="send_back" />
+							<Textarea
+								name="note"
+								rows={2}
+								required
+								placeholder={t("finance_verify.send_back_placeholder")}
+							/>
+							<Button type="submit" variant="outline">
+								{t("finance_verify.send_back")}
+							</Button>
+							{error?.errorKey && (
+								<p className="text-sm text-status-danger">
+									{t(error.errorKey as ParseKeys)}
+								</p>
+							)}
+						</Form>
+					)}
 				</div>
 			)}
 			{stage !== "TO_VERIFY" && (

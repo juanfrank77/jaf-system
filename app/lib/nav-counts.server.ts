@@ -2,6 +2,7 @@ import type { NavCount } from "~/components/nav-model"
 import { countComptrollerRuns } from "~/lib/comptroller-runs.server"
 import { db } from "~/lib/db.server"
 import { carmenOpenSummary, countArmAStages } from "~/lib/finance-stages.server"
+import { returnedDocIds } from "~/lib/returned-packet.server"
 import { needsReviewCount, repairPoolCount } from "~/lib/serial-stock"
 import {
 	SUPERVISOR_SIDEBAR_QUEUES,
@@ -14,16 +15,17 @@ import { WAREHOUSE_QUEUES, warehouseQueueHref } from "~/lib/warehouse-queues"
 import { countWarehouseQueues } from "~/lib/warehouse-queues.server"
 import type { Role } from "../../generated/prisma/client"
 
-/** Ready for pickup and Aviso are the supervisor's own action points, so they go red. */
-const CRITICAL_QUEUES: SupervisorQueue[] = ["open", "aviso"]
+/** Ready for pickup, Returned and Aviso are the supervisor's own action
+ * points, so they go red. */
+const CRITICAL_QUEUES: SupervisorQueue[] = ["open", "returned", "aviso"]
 const SUPERVISOR_QUEUE_ORDER = SUPERVISOR_SIDEBAR_QUEUES
 
 /** "My open jobs" lists the jobs before the packet, but its badge counts only the
  * jobs Ready for pickup (PREPPED): the ones waiting on the crew. */
-function supervisorCountWhere(queue: SupervisorQueue) {
+function supervisorCountWhere(queue: SupervisorQueue, returnedIds: string[]) {
 	return queue === "open"
 		? { status: "PREPPED" as const, releasedToFinanceAt: null }
-		: supervisorQueueWhere(queue)
+		: supervisorQueueWhere(queue, returnedIds)
 }
 
 /**
@@ -41,10 +43,11 @@ export async function loadNavCounts(
 	if (user.role === "SUPERVISOR") {
 		const areas = await supervisorAreas(db, user.id)
 		const scope = ownedOrInArea(user.id, areas)
+		const returnedIds = await returnedDocIds(scope)
 		const values = await Promise.all(
 			SUPERVISOR_QUEUE_ORDER.map((q) =>
 				db.jafInvoice.count({
-					where: { AND: [scope, supervisorCountWhere(q)] },
+					where: { AND: [scope, supervisorCountWhere(q, returnedIds)] },
 				}),
 			),
 		)
@@ -97,6 +100,10 @@ export async function loadNavCounts(
 		])
 		return {
 			"/finance/queue": { value: stages.PACKETS, tone: "neutral" },
+			"/finance/queue?stage=returned": {
+				value: stages.RETURNED,
+				tone: stages.RETURNED > 0 ? "critical" : "neutral",
+			},
 			"/finance/lc-requests": { value: stages.LC_REQUEST, tone: "neutral" },
 			"/finance/lc-funded": { value: stages.LC_FUNDED, tone: "neutral" },
 			"/finance/payroll": { value: stages.LISTS, tone: "neutral" },

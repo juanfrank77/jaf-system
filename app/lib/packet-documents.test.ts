@@ -11,6 +11,7 @@ const sheet = {
 	pdfPath: "/uploads/precert/job-1-v2.pdf",
 	sigSupervisorAt: new Date("2026-10-01"),
 	sigSubcontractorAt: new Date("2026-10-01"),
+	avisoNumber: "10353961" as string | null,
 }
 const photos = [
 	{

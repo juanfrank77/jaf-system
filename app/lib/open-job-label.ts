@@ -1,4 +1,5 @@
 import { isAvisoSaved } from "~/lib/aviso-document"
+import { isReturned } from "~/lib/returned-packet"
 import type { JafInvoice } from "../../generated/prisma/client"
 
 /**
@@ -19,6 +20,7 @@ export type OpenJobLabel =
 	| "PRECERT"
 	| "RELEASE"
 	| "RELEASED"
+	| "RETURNED"
 
 export const OPEN_JOB_LABEL_KEYS = {
 	MATERIAL_REQUESTED: "open_job.material_requested",
@@ -31,6 +33,7 @@ export const OPEN_JOB_LABEL_KEYS = {
 	PRECERT: "open_job.precert",
 	RELEASE: "open_job.release",
 	RELEASED: "open_job.released",
+	RETURNED: "open_job.returned",
 } as const satisfies Record<OpenJobLabel, string>
 
 /** Timestamps first (latest milestone wins), then status, like `deriveSupervisorStage`. */
@@ -44,13 +47,17 @@ export function openJobLabel(
 		| "avisoNumber"
 		| "avisoDocPath"
 		| "releasedToFinanceAt"
+		| "financeVerifiedAt"
+		| "pbccRequestSentAt"
 		| "materialsFromWarehouse"
-	>,
+	> & { financeSendBackNotes?: unknown },
 	sheet: {
 		sigSupervisorAt: Date | null
 		sigSubcontractorAt: Date | null
 	} | null,
 ): OpenJobLabel {
+	// Finance sent the packet back: never "Release" or "Released to Finance".
+	if (isReturned(doc)) return "RETURNED"
 	if (doc.releasedToFinanceAt) return "RELEASED"
 	if (isAvisoSaved(doc)) {
 		return sheet?.sigSupervisorAt ? "RELEASE" : "PRECERT"

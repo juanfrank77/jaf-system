@@ -8,7 +8,11 @@ const good = {
 		avisoNumber: "10353961",
 		avisoDocPath: "/x/aviso.pdf",
 	},
-	sheet: { sigSupervisorAt: now, sigSubcontractorAt: now },
+	sheet: {
+		sigSupervisorAt: now,
+		sigSubcontractorAt: now,
+		avisoNumber: "10353961" as string | null,
+	},
 	photos: [{ tag: "BEFORE" as const }, { tag: "AFTER" as const }],
 }
 
@@ -32,8 +36,16 @@ describe("evaluateReleaseGate", () => {
 		["precert_signed", { sheet: null }],
 		[
 			"precert_signed",
-			{ sheet: { sigSupervisorAt: null, sigSubcontractorAt: now } },
+			{
+				sheet: {
+					sigSupervisorAt: null,
+					sigSubcontractorAt: now,
+					avisoNumber: "10353961",
+				},
+			},
 		],
+		// Signed for an Aviso that was since replaced: it must be re-signed.
+		["precert_signed", { sheet: { ...good.sheet, avisoNumber: "10350000" } }],
 		["photos", { photos: [] }],
 	])("fails %s when missing", (key, patch) => {
 		const r = evaluateReleaseGate({ ...good, ...patch })
@@ -44,7 +56,15 @@ describe("evaluateReleaseGate", () => {
 	it("passes precert_signed on the supervisor signature alone", () => {
 		const r = evaluateReleaseGate({
 			...good,
-			sheet: { sigSupervisorAt: now, sigSubcontractorAt: null },
+			sheet: { ...good.sheet, sigSubcontractorAt: null },
+		})
+		expect(r.rows.find((x) => x.key === "precert_signed")?.ok).toBe(true)
+		expect(r.ok).toBe(true)
+	})
+	it("passes precert_signed on a sheet with no Aviso number on record (older sheets)", () => {
+		const r = evaluateReleaseGate({
+			...good,
+			sheet: { ...good.sheet, avisoNumber: null },
 		})
 		expect(r.rows.find((x) => x.key === "precert_signed")?.ok).toBe(true)
 		expect(r.ok).toBe(true)

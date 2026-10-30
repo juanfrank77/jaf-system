@@ -8,8 +8,10 @@ import { Card, CardContent } from "~/components/ui/card"
 import { EmptyState } from "~/components/ui/empty-state"
 import { armAStepOf, FINANCE_STEP_LABEL_KEY } from "~/lib/finance-steps"
 import type { OpenJobLabel } from "~/lib/open-job-label"
+import { isResent, isReturned } from "~/lib/returned-packet"
 import {
 	deriveSupervisorStage,
+	fixStepFor,
 	type SupervisorStage,
 	supervisorStepHref,
 } from "~/lib/supervisor-stage"
@@ -53,6 +55,17 @@ function hasShortage(doc: DashboardDocRow): boolean {
 
 type MaterialLine = { serviceCodeId: string; qty: number }
 
+/** The fields `isReturned` / `isResent` read. Every loader that sends
+ * `financeSendBackNotes` also sends the Finance timestamps. */
+function returnState(doc: DashboardDocRow) {
+	return {
+		financeSendBackNotes: doc.financeSendBackNotes,
+		releasedToFinanceAt: doc.releasedToFinanceAt ?? null,
+		financeVerifiedAt: doc.financeVerifiedAt ?? null,
+		pbccRequestSentAt: doc.pbccRequestSentAt ?? null,
+	}
+}
+
 export type DashboardDocRow = {
 	id: string
 	controlNumber: string
@@ -76,6 +89,8 @@ export type DashboardDocRow = {
 	avisoNumber?: string | null
 	avisoDocPath?: string | null
 	releasedToFinanceAt?: Date | null
+	/** Finance's returns: a returned packet is back on the supervisor's steps. */
+	financeSendBackNotes?: unknown
 	financeVerifiedAt?: Date | null
 	pbccRequestSentAt?: Date | null
 	advanceReceivedAt?: Date | null
@@ -114,6 +129,8 @@ export function DashboardDocList({
 				{docs.map((doc) => {
 					const overage = hasOverage(doc)
 					const shortage = hasShortage(doc)
+					const returned =
+						doc.openLabel === "RETURNED" || isReturned(returnState(doc))
 					const stage =
 						doc.stage ??
 						deriveSupervisorStage(
@@ -124,6 +141,9 @@ export function DashboardDocList({
 								avisoNumber: doc.avisoNumber ?? null,
 								avisoDocPath: doc.avisoDocPath ?? null,
 								releasedToFinanceAt: doc.releasedToFinanceAt ?? null,
+								financeVerifiedAt: doc.financeVerifiedAt ?? null,
+								pbccRequestSentAt: doc.pbccRequestSentAt ?? null,
+								financeSendBackNotes: doc.financeSendBackNotes,
 							},
 							null,
 						)
@@ -132,7 +152,11 @@ export function DashboardDocList({
 							key={doc.id}
 							to={
 								stepLinks
-									? supervisorStepHref(doc.id, stage)
+									? supervisorStepHref(
+											doc.id,
+											// A returned packet opens the step that fixes it.
+											fixStepFor(stage, returned),
+										)
 									: `/docs/${doc.id}`
 							}
 							className="block rounded-lg border border-transparent p-3 transition-colors hover:border-border hover:bg-muted/40"
@@ -144,21 +168,31 @@ export function DashboardDocList({
 								<div className="flex items-center gap-2">
 									{financeSteps &&
 									doc.releasedToFinanceAt &&
-									doc.status !== "CANCELLED" ? (
-										<Badge variant="ok">
-											{t(
-												FINANCE_STEP_LABEL_KEY[
-													armAStepOf({
-														financeVerifiedAt: doc.financeVerifiedAt ?? null,
-														pbccRequestSentAt: doc.pbccRequestSentAt ?? null,
-														advanceReceivedAt: doc.advanceReceivedAt ?? null,
-													})
-												],
+									doc.status !== "CANCELLED" &&
+									// A returned packet is the supervisor's again: the red
+									// Returned chip below, never a Finance step.
+									!returned ? (
+										<>
+											{isResent(returnState(doc)) && (
+												<Badge variant="info">
+													{t("returned_packet.resent")}
+												</Badge>
 											)}
-										</Badge>
+											<Badge variant="ok">
+												{t(
+													FINANCE_STEP_LABEL_KEY[
+														armAStepOf({
+															financeVerifiedAt: doc.financeVerifiedAt ?? null,
+															pbccRequestSentAt: doc.pbccRequestSentAt ?? null,
+															advanceReceivedAt: doc.advanceReceivedAt ?? null,
+														})
+													],
+												)}
+											</Badge>
+										</>
 									) : (
 										<DocStageBadge
-											openLabel={doc.openLabel}
+											openLabel={returned ? "RETURNED" : doc.openLabel}
 											stage={stage}
 											cancelled={doc.status === "CANCELLED"}
 										/>

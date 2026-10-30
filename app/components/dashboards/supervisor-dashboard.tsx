@@ -7,6 +7,7 @@ import {
 	DashboardFilters,
 	hasActiveFilters,
 } from "~/components/dashboard-filters"
+import { Badge } from "~/components/ui/badge"
 import { PageHeader } from "~/components/ui/page-header"
 import { Pill } from "~/components/ui/pill"
 import { QueueCard } from "~/components/ui/queue-card"
@@ -14,6 +15,7 @@ import { Stat } from "~/components/ui/stat"
 import { OPEN_JOB_LABEL_KEYS, type OpenJobLabel } from "~/lib/open-job-label"
 import type { SupervisorQueue } from "~/lib/supervisor-queues"
 import {
+	fixStepFor,
 	type SupervisorStage,
 	supervisorStepHref,
 	type WaitingOn,
@@ -43,6 +45,8 @@ export type SupervisorQueues = {
 	missingAviso: QueueRow[]
 	/** Unreleased jobs whose Aviso differs from the work order. */
 	actionNeeded?: (QueueRow & { daysOpen: number })[]
+	/** Packets Finance sent back, oldest return first; `note` is hers. */
+	returned?: QueueRow[]
 }
 
 export const STAGE_KEY: Record<SupervisorStage, ParseKeys> = {
@@ -176,6 +180,52 @@ function Queue({
 }
 
 /**
+ * "Returned (n)": packets Finance sent back, at the top of the dashboard. Each
+ * row opens the step that fixes it and shows her note word for word.
+ */
+function ReturnedBox({ rows }: { rows: QueueRow[] }) {
+	const { t } = useTranslation()
+	if (rows.length === 0) return null
+	return (
+		<QueueCard
+			id="returned"
+			title={t("dashboard.queue.returned")}
+			count={rows.length}
+			variant="danger"
+			className="border-status-danger"
+		>
+			<p className="text-sm">{t("returned_packet.box_body")}</p>
+			<ul className="divide-y text-sm">
+				{rows.map((r) => (
+					<li key={r.id} className="space-y-1 py-2">
+						<div className="flex flex-wrap items-baseline justify-between gap-2">
+							<Link
+								to={supervisorStepHref(r.id, fixStepFor(r.stage, true))}
+								className="font-mono underline"
+							>
+								{r.controlNumber}
+							</Link>
+							<Badge variant="danger">{t("open_job.returned")}</Badge>
+						</div>
+						<p className="truncate text-muted-foreground">
+							{r.jobAddressActual ?? r.jobAddressEstimated}
+						</p>
+						{r.note && (
+							<p className="whitespace-pre-line text-status-danger">{r.note}</p>
+						)}
+						{r.since && (
+							<p className="text-xs text-muted-foreground">
+								{t("dashboard.since.returned", { ago: ago(t, r.since) })}
+							</p>
+						)}
+					</li>
+				))}
+			</ul>
+		</QueueCard>
+	)
+}
+
+/**
  * "Action needed": the Aviso differs from the work order. Shown only while a
  * job has a recorded discrepancy; a note does not clear it, a clean Aviso does.
  */
@@ -296,6 +346,8 @@ export function SupervisorDashboard({
 						: undefined
 				}
 			/>
+
+			<ReturnedBox rows={queues.returned ?? []} />
 
 			{alert && (
 				<Pill

@@ -21,6 +21,8 @@ const doc = (status: DocStatus, over: Partial<Doc> = {}): Doc => ({
 	avisoNumber: null,
 	avisoDocPath: null,
 	releasedToFinanceAt: null,
+	financeVerifiedAt: null,
+	pbccRequestSentAt: null,
 	materialsFromWarehouse: true,
 	...over,
 })
@@ -72,6 +74,60 @@ describe("openJobLabel", () => {
 		expect(openJobLabel(doc(status, over), sheet)).toBe(expected)
 	})
 
+	it("is Returned while Finance has sent a released packet back, and Released again once resent or verified", () => {
+		const packet = {
+			supervisorApprovedAt: D,
+			jafInvoiceGeneratedAt: D,
+			...SAVED,
+		}
+		const sentBack = [
+			{ note: "Fix the Aviso", byUserId: "fin", createdAt: "x" },
+		]
+		expect(
+			openJobLabel(
+				doc("SUPERVISOR_APPROVED", {
+					...packet,
+					releasedToFinanceAt: D,
+					financeSendBackNotes: sentBack,
+				}),
+				signed,
+			),
+		).toBe("RETURNED")
+		// Never released: a return can only be live on a released packet.
+		expect(
+			openJobLabel(
+				doc("SUPERVISOR_APPROVED", {
+					...packet,
+					financeSendBackNotes: sentBack,
+				}),
+				signed,
+			),
+		).toBe("RELEASE")
+		// A master-era return (no resentAt) Finance then verified.
+		expect(
+			openJobLabel(
+				doc("SUPERVISOR_APPROVED", {
+					...packet,
+					releasedToFinanceAt: D,
+					financeVerifiedAt: D,
+					financeSendBackNotes: sentBack,
+				}),
+				signed,
+			),
+		).toBe("RELEASED")
+		expect(
+			openJobLabel(
+				doc("SUPERVISOR_APPROVED", {
+					...packet,
+					releasedToFinanceAt: D,
+					financeSendBackNotes: [{ ...sentBack[0], resentAt: "y" }],
+				}),
+				signed,
+			),
+		).toBe("RELEASED")
+		expect(OPEN_JOB_LABEL_KEYS.RETURNED).toBe("open_job.returned")
+	})
+
 	it("is Field, not Picked up, for a no-warehouse job (nothing to pick up)", () => {
 		expect(
 			openJobLabel(doc("SIGNED", { materialsFromWarehouse: false }), null),
@@ -86,7 +142,7 @@ describe("openJobLabel", () => {
 
 	it("has a distinct locale key for every label", () => {
 		const keys = Object.values(OPEN_JOB_LABEL_KEYS)
-		expect(new Set(keys).size).toBe(10)
+		expect(new Set(keys).size).toBe(11)
 		for (const k of keys) expect(k).toMatch(/^open_job\./)
 	})
 })

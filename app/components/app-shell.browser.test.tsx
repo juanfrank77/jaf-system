@@ -703,6 +703,17 @@ describe("AppShell", () => {
 		expect(screen.getByTestId("nav-pill")).toHaveTextContent("99+")
 	})
 
+	it("gives SUPERVISOR a Returned menu item with its count", async ({
+		renderStub,
+	}) => {
+		await renderShell(renderStub, "SUPERVISOR", {
+			"/dashboard?stage=returned": { value: 1, tone: "critical" },
+		})
+		const link = screen.getByRole("link", { name: /Returned/, hidden: true })
+		expect(link).toHaveAttribute("href", "/dashboard?stage=returned")
+		expect(within(link).getByTestId("nav-pill")).toHaveTextContent("1")
+	})
+
 	it("shows the group label for SUPERVISOR's work items", async ({
 		renderStub,
 	}) => {

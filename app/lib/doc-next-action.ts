@@ -1,3 +1,5 @@
+import { isReturned } from "~/lib/returned-packet"
+
 /**
  * The job page's "next action" link: where this viewer goes to move the job
  * on, or null when the next move is not theirs. Field (status SIGNED) is the
@@ -7,7 +9,10 @@ export function nextActionHref(
 	doc: {
 		id: string
 		status: string
-		releasedToFinanceAt?: Date | string | null
+		releasedToFinanceAt: Date | string | null
+		financeVerifiedAt: Date | string | null
+		pbccRequestSentAt: Date | string | null
+		financeSendBackNotes?: unknown
 	},
 	userRole: string,
 ): string | null {
@@ -28,12 +33,15 @@ export function nextActionHref(
 	if (
 		(doc.status === "SUPERVISOR_APPROVED" || doc.status === "CLARO_UPLOADED") &&
 		(userRole === "SUPERVISOR" || userRole === "ADMIN") &&
-		!doc.releasedToFinanceAt
+		// A packet Finance returned is the supervisor's to fix and resend.
+		(!doc.releasedToFinanceAt || isReturned(doc))
 	)
 		return `/docs/${doc.id}/review`
 	if (
 		(doc.status === "SUPERVISOR_APPROVED" || doc.status === "CLARO_UPLOADED") &&
-		(userRole === "FINANCE" || userRole === "ADMIN")
+		(userRole === "FINANCE" || userRole === "ADMIN") &&
+		// Finance only acts on a packet the supervisor released.
+		doc.releasedToFinanceAt
 	)
 		return `/finance/verify/${doc.id}`
 	return null

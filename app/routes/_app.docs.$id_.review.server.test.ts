@@ -1023,6 +1023,265 @@ describe("review: Aviso materials comparison and Replace Aviso (step 6)", () => 
 			},
 		)
 
+		describe("a packet Finance returned (S4: the Aviso step reopens)", () => {
+			const fullySigned = {
+				id: "sheet-1",
+				version: 1,
+				sigSupervisorAt: new Date(),
+				sigSubcontractorAt: new Date(),
+				sigClaroAt: new Date(),
+			}
+			const back = {
+				note: "Aviso 10354739 is the wrong job",
+				byUserId: "fin-1",
+				createdAt: "2026-10-26T14:00:00.000Z",
+			}
+			const released = { releasedToFinanceAt: new Date("2026-10-25") }
+
+			it("replaces the Aviso despite a signed Pre-cert and supersedes the signed sheet with an unsigned one", async () => {
+				vi.mocked(db.preCertSheet.findFirst).mockResolvedValue(
+					fullySigned as any,
+				)
+				const res = await replaceAviso(
+					await aviso("10354740", MATCHING),
+					{},
+					{ ...released, financeSendBackNotes: [back] },
+				).catch((e) => e)
+				expect(res).toMatchObject({ status: 302 })
+				expect(updateData()).toMatchObject({ avisoNumber: "10354740" })
+				// The signed sheet is kept (superseded), and the new active one
+				// carries no signature: the release gate is shut until he re-signs.
+				expect(db.preCertSheet.update).toHaveBeenCalledWith({
+					where: { id: "sheet-1" },
+					data: { supersededAt: expect.any(Date) },
+				})
+				const created = vi.mocked(db.preCertSheet.create).mock.calls[0][0]
+					.data as Record<string, unknown>
+				expect(created).toMatchObject({ version: 2 })
+				for (const sig of [
+					"sigSupervisorAt",
+					"sigSubcontractorAt",
+					"sigClaroAt",
+				])
+					expect(created[sig], sig).toBeUndefined()
+				// What the release gate now reads: the new, unsigned sheet.
+				vi.clearAllMocks()
+				vi.mocked(requireRole).mockResolvedValue({
+					user: { id: "sup-1", role: "SUPERVISOR", name: "E" },
+					session: {},
+				} as any)
+				vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+					...savedDoc,
+					...released,
+					avisoNumber: "10354740",
+					jafInvoicePdfPath: "/var/jaf/uploads/packets/doc-1-packet-1.pdf",
+					financeSendBackNotes: [back],
+				} as any)
+				vi.mocked(db.preCertSheet.findFirst).mockResolvedValue({
+					id: "sheet-2",
+					version: 2,
+					sigSupervisorAt: null,
+					sigSubcontractorAt: null,
+					sigClaroAt: null,
+				} as any)
+				vi.mocked(db.photo.findMany).mockResolvedValue([
+					{ tag: "BEFORE" },
+					{ tag: "AFTER" },
+				] as any)
+				const blocked = await action({
+					request: post(intent("release_to_finance")),
+					params: { id: "doc-1" },
+				} as any)
+				expect(blocked).toMatchObject({
+					errorKey: "docs_review.errors.release_blocked",
+				})
+				expect(
+					(blocked as any).rows.find(
+						(r: { key: string }) => r.key === "precert_signed",
+					).ok,
+				).toBe(false)
+				expect(db.jafInvoice.update).not.toHaveBeenCalled()
+			})
+
+			it("a Pre-cert that fails to render after the replacement returns an error, and the old signed sheet cannot release", async () => {
+				// The signed sheet was issued for the Aviso being replaced.
+				vi.mocked(db.preCertSheet.findFirst).mockResolvedValue({
+					...fullySigned,
+					avisoNumber: "10354739",
+				} as any)
+				vi.mocked(generatePreCertSheetPdf).mockRejectedValue(
+					new Error("render failed"),
+				)
+				const res = await replaceAviso(
+					await aviso("10354740", MATCHING),
+					{},
+					{ ...released, financeSendBackNotes: [back] },
+				).catch((e) => e)
+				expect(res).toEqual({
+					errorKey: "docs_review.errors.replace_precert_failed",
+				})
+				// The Aviso itself was replaced; the signed sheet stayed active.
+				expect(updateData()).toMatchObject({ avisoNumber: "10354740" })
+				expect(db.preCertSheet.create).not.toHaveBeenCalled()
+
+				vi.clearAllMocks()
+				vi.mocked(requireRole).mockResolvedValue({
+					user: { id: "sup-1", role: "SUPERVISOR", name: "E" },
+					session: {},
+				} as any)
+				vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+					...savedDoc,
+					...released,
+					avisoNumber: "10354740",
+					jafInvoicePdfPath: "/var/jaf/uploads/packets/doc-1-packet-1.pdf",
+					financeSendBackNotes: [back],
+				} as any)
+				vi.mocked(db.preCertSheet.findFirst).mockResolvedValue({
+					...fullySigned,
+					avisoNumber: "10354739",
+				} as any)
+				vi.mocked(db.photo.findMany).mockResolvedValue([
+					{ tag: "BEFORE" },
+					{ tag: "AFTER" },
+				] as any)
+				const blocked = await action({
+					request: post(intent("release_to_finance")),
+					params: { id: "doc-1" },
+				} as any)
+				expect(blocked).toMatchObject({
+					errorKey: "docs_review.errors.release_blocked",
+				})
+				expect(
+					(blocked as any).rows.find(
+						(r: { key: string }) => r.key === "precert_signed",
+					).ok,
+				).toBe(false)
+				expect(db.jafInvoice.update).not.toHaveBeenCalled()
+			})
+
+			it("is exempt from the one-replacement limit: a job that already replaced its Aviso can replace again once returned", async () => {
+				vi.mocked(db.auditTrail.count).mockResolvedValue(1)
+				vi.mocked(db.preCertSheet.findFirst).mockResolvedValue(
+					fullySigned as any,
+				)
+				vi.mocked(moveUpload).mockResolvedValue(
+					"/uploads/aviso-docs/doc-1-aviso-replaced-2.pdf",
+				)
+				const res = await replaceAviso(
+					await aviso("10354740", MATCHING),
+					{},
+					{ ...released, financeSendBackNotes: [back] },
+				).catch((e) => e)
+				expect(res).toMatchObject({ status: 302 })
+				// The second replacement takes the next history slot and is logged
+				// like any other.
+				expect(moveUpload).toHaveBeenCalledWith(
+					"/uploads/aviso-docs/doc-1-aviso.pdf",
+					"aviso-docs",
+					"doc-1-aviso-replaced-2.pdf",
+				)
+				expect(updateData()).toMatchObject({
+					avisoNumber: "10354740",
+					avisoHistory: [
+						expect.objectContaining({
+							avisoNumber: "10354739",
+							path: "/uploads/aviso-docs/doc-1-aviso-replaced-2.pdf",
+						}),
+					],
+				})
+				expect(auditOf("AVISO_REPLACED").diffJson).toMatchObject({
+					before: { avisoNumber: "10354739" },
+					after: { avisoNumber: "10354740" },
+				})
+				expect(db.preCertSheet.create).toHaveBeenCalledWith({
+					data: expect.objectContaining({ version: 2 }),
+				})
+			})
+
+			it.each([
+				["with Finance, never returned", { ...released }],
+				[
+					"with Finance again after a resend",
+					{
+						...released,
+						financeSendBackNotes: [
+							{ ...back, resentAt: "2026-10-27T09:00:00.000Z" },
+						],
+					},
+				],
+				["never released nor returned", {}],
+			])("keeps the one-replacement limit for a job %s", async (_l, over) => {
+				vi.mocked(db.auditTrail.count).mockResolvedValue(1)
+				const res = await replaceAviso(
+					await aviso("10354740", MATCHING),
+					{},
+					over,
+				).catch((e) => e)
+				if ("releasedToFinanceAt" in over)
+					expect(res).toMatchObject({ status: 302 })
+				else
+					expect(res).toEqual({
+						errorKey: "docs_review.errors.replace_limit",
+					})
+				expect(moveUpload).not.toHaveBeenCalled()
+				expect(db.jafInvoice.update).not.toHaveBeenCalled()
+			})
+
+			it("allows regenerating the Pre-cert of a returned packet", async () => {
+				vi.mocked(db.preCertSheet.findFirst).mockResolvedValue(
+					fullySigned as any,
+				)
+				const res = await run(
+					"generate_precert",
+					{ ...savedDoc, ...released, financeSendBackNotes: [back] },
+					{},
+					null,
+				).catch((e) => e)
+				expect(res).toMatchObject({ status: 302 })
+				expect(db.preCertSheet.create).toHaveBeenCalledWith({
+					data: expect.objectContaining({ version: 2 }),
+				})
+			})
+
+			it.each([
+				["never sent back", {}],
+				[
+					"sent back and already resent",
+					{
+						financeSendBackNotes: [
+							{ ...back, resentAt: "2026-10-27T09:00:00.000Z" },
+						],
+					},
+				],
+			])("stays locked for a packet with Finance (%s)", async (_l, notes) => {
+				vi.mocked(db.preCertSheet.findFirst).mockResolvedValue(
+					fullySigned as any,
+				)
+				for (const name of ["replace_aviso", "generate_precert"]) {
+					const res = await run(
+						name,
+						{ ...savedDoc, ...released, ...notes },
+						{ avisoNumber: "10354740", replaceReason: "Wrong document" },
+						await aviso("10354740", MATCHING),
+					).catch((e) => e)
+					expect(res, name).toMatchObject({ status: 302 })
+					expect(res.headers.get("Location"), name).toBe("/docs/doc-1/review")
+				}
+				expect(moveUpload).not.toHaveBeenCalled()
+				expect(db.jafInvoice.update).not.toHaveBeenCalled()
+				expect(db.preCertSheet.create).not.toHaveBeenCalled()
+			})
+
+			it("a returned packet that is not released still refuses nothing new: an unsigned sheet replaces as before", async () => {
+				const res = await replaceAviso(
+					await aviso("10354740", MATCHING),
+					{},
+					{ financeSendBackNotes: [back] },
+				).catch((e) => e)
+				expect(res).toMatchObject({ status: 302 })
+			})
+		})
+
 		it("a failing save puts the original file back and leaves the job unchanged", async () => {
 			vi.mocked(saveUpload).mockRejectedValueOnce(new Error("disk full"))
 			const res = await replaceAviso(await aviso("10354740", MATCHING))
@@ -1324,6 +1583,68 @@ describe("review: pre-cert sheet", () => {
 				],
 			}),
 		})
+	})
+
+	it("keeps a decimal certified qty (2.5 stays 2.5), accepts 0 and refuses a negative or non-numeric one", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(matched as any)
+		const sheet = {
+			id: "sheet-1",
+			version: 1,
+			sigSupervisorAt: null,
+			avisoNumber: "10353961",
+			issuedOn: new Date(),
+			title: "T",
+			certifiedAddress: "A",
+			lines: [
+				{
+					serviceCodeId: "c1",
+					claroCode: "34006301",
+					accountCode: "610",
+					description: "T",
+					installedQty: 3,
+					certifiedQty: 3,
+					unit: "FT",
+					unitPrice: 10,
+					lineAmount: 30,
+				},
+			],
+		}
+		vi.mocked(db.preCertSheet.findFirst).mockResolvedValue(sheet as any)
+		const edit = (certifiedQty: string) =>
+			action({
+				request: post(
+					intent("edit_precert_qty", {
+						serviceCodeId: "c1",
+						certifiedQty,
+						reason: "Claro measured 2.5",
+					}),
+				),
+				params: { id: "doc-1" },
+			} as any).catch((r) => r)
+		await edit("2.5")
+		expect(db.preCertSheet.update).toHaveBeenCalledWith({
+			where: { id: "sheet-1" },
+			data: expect.objectContaining({
+				total: 25,
+				lines: [expect.objectContaining({ certifiedQty: 2.5, lineAmount: 25 })],
+			}),
+		})
+		vi.mocked(db.preCertSheet.update).mockClear()
+		// A line can be certified at 0.
+		await edit("0")
+		expect(db.preCertSheet.update).toHaveBeenCalledWith({
+			where: { id: "sheet-1" },
+			data: expect.objectContaining({
+				total: 0,
+				lines: [expect.objectContaining({ certifiedQty: 0, lineAmount: 0 })],
+			}),
+		})
+		vi.mocked(db.preCertSheet.update).mockClear()
+		for (const bad of ["-1", "", "abc"])
+			expect(await edit(bad), bad).toEqual({
+				errorKey: "docs_review.errors.precert_qty_invalid",
+			})
+		expect(db.preCertSheet.update).not.toHaveBeenCalled()
 	})
 
 	it("requires a reason to edit and refuses after the supervisor signed", async () => {
@@ -1691,6 +2012,79 @@ describe("review: release_to_finance", () => {
 		expect(db.jafInvoice.update).not.toHaveBeenCalled()
 	})
 
+	it("resends a packet Finance returned: stamps resentAt on her latest note and logs FINANCE_RESEND with it", async () => {
+		const first = {
+			note: "Aviso PDF is blurry",
+			byUserId: "fin-1",
+			createdAt: "2026-10-26T14:00:00.000Z",
+		}
+		const second = {
+			note: "Crew signature missing",
+			byUserId: "fin-1",
+			createdAt: "2026-10-27T09:00:00.000Z",
+		}
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...ready,
+			releasedToFinanceAt: new Date("2026-10-25T12:00:00Z"),
+			financeSendBackNotes: [first, second],
+		} as any)
+		const res = await action({
+			request: post(intent("release_to_finance")),
+			params: { id: "doc-1" },
+		} as any).catch((r) => r)
+		expect(res.status).toBe(302)
+		const data = vi.mocked(db.jafInvoice.update).mock.calls[0][0].data as any
+		expect(data).toEqual({
+			releasedToFinanceAt: expect.any(Date),
+			releasedToFinanceById: "sup-1",
+			financeSendBackNotes: [
+				first,
+				{ ...second, resentAt: data.releasedToFinanceAt.toISOString() },
+			],
+		})
+		expect(db.auditTrail.create).toHaveBeenCalledWith({
+			data: {
+				docId: "doc-1",
+				userId: "sup-1",
+				action: "FINANCE_RESEND",
+				diffJson: { note: "Crew signature missing", rows: expect.any(Array) },
+			},
+		})
+		expect(db.auditTrail.create).not.toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({ action: "RELEASED_TO_FINANCE" }),
+			}),
+		)
+		expect(db.notification.create).toHaveBeenCalledWith({
+			data: {
+				userId: "fin-1",
+				docId: "doc-1",
+				message:
+					"MAINT-260903-001 · Aviso 10353961 · Jesús Martínez — fixed and sent back to Finance",
+			},
+		})
+	})
+
+	it("does not resend an already resent packet: it is with Finance again", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...ready,
+			releasedToFinanceAt: new Date(),
+			financeSendBackNotes: [
+				{
+					note: "x",
+					byUserId: "fin-1",
+					createdAt: "2026-10-26T14:00:00.000Z",
+					resentAt: "2026-10-27T14:00:00.000Z",
+				},
+			],
+		} as any)
+		await action({
+			request: post(intent("release_to_finance")),
+			params: { id: "doc-1" },
+		} as any).catch(() => {})
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
 	it("send_to_finance no longer exists", async () => {
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(ready as any)
 		await action({
@@ -1699,6 +2093,89 @@ describe("review: release_to_finance", () => {
 		} as any).catch(() => {})
 		expect(db.auditTrail.create).not.toHaveBeenCalled()
 		expect(db.notification.create).not.toHaveBeenCalled()
+	})
+})
+
+describe("review loader: a returned packet reopens the Aviso step", () => {
+	const doc = {
+		...approvedDoc,
+		supervisorId: "sup-1",
+		brigade: { area: "OESTE" },
+		status: "CLARO_UPLOADED",
+		jafInvoiceGeneratedAt: new Date("2026-10-14T15:10:00Z"),
+		avisoNumber: "10354739",
+		avisoDocPath: "/uploads/aviso-docs/doc-1-aviso.pdf",
+		releasedToFinanceAt: new Date("2026-10-25T12:00:00Z"),
+	}
+	const back = {
+		note: "Wrong Aviso",
+		byUserId: "fin-1",
+		createdAt: "2026-10-26T14:00:00.000Z",
+	}
+
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1", role: "SUPERVISOR", name: "X" },
+			session: {},
+		} as any)
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["OESTE"],
+			name: "Lissette",
+		} as any)
+		vi.mocked(db.photo.findMany).mockResolvedValue([])
+		vi.mocked(db.preCertSheet.findFirst).mockResolvedValue({
+			id: "sheet-1",
+			version: 1,
+			lines: [],
+			sigSupervisorAt: new Date(),
+			sigSubcontractorAt: new Date(),
+			sigClaroAt: null,
+		} as any)
+		vi.mocked(db.brigade.findUnique).mockResolvedValue(null)
+		vi.mocked(db.user.findMany).mockResolvedValue([])
+		vi.mocked(db.auditTrail.count).mockResolvedValue(0)
+		vi.mocked(getActiveServiceCodes).mockResolvedValue(CATALOG as any)
+		vi.mocked(getIvuRate).mockResolvedValue(0.115)
+	})
+
+	const load = (over: Record<string, unknown>) => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			...doc,
+			...over,
+		} as any)
+		return loader({
+			request: new Request("http://localhost/docs/doc-1/review?step=AVISO"),
+			params: { id: "doc-1" },
+		} as any)
+	}
+
+	it("opens Aviso interactive with Replace Aviso for a returned packet", async () => {
+		const data = await load({ financeSendBackNotes: [back] })
+		expect(data.stage).toBe("RELEASE")
+		expect(data).toMatchObject({ view: "AVISO", interactive: true })
+		expect(data.aviso.canReplace).toBe(true)
+		expect(data.withFinance).toBe(false)
+		expect(data.returned).toMatchObject({ note: "Wrong Aviso" })
+	})
+
+	it("offers Replace Aviso to a returned packet that already used its replacement", async () => {
+		vi.mocked(db.auditTrail.count).mockResolvedValue(1)
+		const data = await load({ financeSendBackNotes: [back] })
+		expect(data.aviso).toMatchObject({ canReplace: true, replaceUsed: false })
+		const withFinance = await load({ financeSendBackNotes: null })
+		expect(withFinance.aviso).toMatchObject({
+			canReplace: false,
+			replaceUsed: true,
+		})
+	})
+
+	it("keeps Aviso a read-only look back for a packet with Finance", async () => {
+		const data = await load({ financeSendBackNotes: null })
+		expect(data).toMatchObject({ view: "AVISO", interactive: false })
+		expect(data.aviso.canReplace).toBe(false)
+		expect(data.withFinance).toBe(true)
+		expect(data.returned).toBeNull()
 	})
 })
 

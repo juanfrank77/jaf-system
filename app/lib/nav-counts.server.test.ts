@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 vi.mock("~/lib/db.server", () => ({
 	db: {
 		user: { findUnique: vi.fn() },
-		jafInvoice: { count: vi.fn() },
+		jafInvoice: { count: vi.fn(), findMany: vi.fn(async () => []) },
 		restockRequest: { count: vi.fn() },
 		serialLocation: { count: vi.fn() },
 		payrollRunAccount: { count: vi.fn() },
@@ -22,9 +22,10 @@ describe("loadNavCounts", () => {
 		} as any)
 	})
 
-	it("gives a supervisor a count per sidebar queue, red for Ready for pickup and Aviso", async () => {
+	it("gives a supervisor a count per sidebar queue, red for Ready for pickup, Returned and Aviso", async () => {
 		vi.mocked(db.jafInvoice.count)
 			.mockResolvedValueOnce(3) // open: PREPPED jobs
+			.mockResolvedValueOnce(2) // returned
 			.mockResolvedValueOnce(5) // invoice
 			.mockResolvedValueOnce(1) // aviso
 			.mockResolvedValueOnce(14) // precert
@@ -33,6 +34,7 @@ describe("loadNavCounts", () => {
 		const counts = await loadNavCounts({ id: "sup-1", role: "SUPERVISOR" })
 		expect(counts).toEqual({
 			"/dashboard?stage=open": { value: 3, tone: "critical" },
+			"/dashboard?stage=returned": { value: 2, tone: "critical" },
 			"/dashboard?stage=invoice": { value: 5, tone: "neutral" },
 			"/dashboard?stage=aviso": { value: 1, tone: "critical" },
 			"/dashboard?stage=precert": { value: 14, tone: "neutral" },
@@ -56,8 +58,8 @@ describe("loadNavCounts", () => {
 	it("the red Aviso count is the jobs sent to Claro still awaiting a saved Aviso", async () => {
 		vi.mocked(db.jafInvoice.count).mockResolvedValue(0)
 		await loadNavCounts({ id: "sup-1", role: "SUPERVISOR" })
-		// Order: open, invoice, aviso, …
-		expect(db.jafInvoice.count).toHaveBeenNthCalledWith(3, {
+		// Order: open, returned, invoice, aviso, …
+		expect(db.jafInvoice.count).toHaveBeenNthCalledWith(4, {
 			where: {
 				AND: [
 					expect.objectContaining({ OR: expect.any(Array) }),
@@ -70,6 +72,40 @@ describe("loadNavCounts", () => {
 					},
 				],
 			},
+		})
+	})
+
+	it("takes the returned packets out of Released to Finance and counts them under Returned", async () => {
+		vi.mocked(db.jafInvoice.findMany).mockResolvedValueOnce([
+			{
+				id: "back",
+				releasedToFinanceAt: new Date(),
+				financeVerifiedAt: null,
+				pbccRequestSentAt: null,
+				financeSendBackNotes: [{ note: "Fix", byUserId: "f", createdAt: "x" }],
+			},
+			{
+				id: "resent",
+				releasedToFinanceAt: new Date(),
+				financeVerifiedAt: null,
+				pbccRequestSentAt: null,
+				financeSendBackNotes: [
+					{ note: "Fix", byUserId: "f", createdAt: "x", resentAt: "y" },
+				],
+			},
+		] as any)
+		vi.mocked(db.jafInvoice.count).mockResolvedValue(0)
+		await loadNavCounts({ id: "sup-1", role: "SUPERVISOR" })
+		const where = (n: number) =>
+			(vi.mocked(db.jafInvoice.count).mock.calls[n - 1][0] as any).where.AND[1]
+		// Order: open, returned, invoice, aviso, precert, released, all.
+		expect(where(2)).toEqual({
+			id: { in: ["back"] },
+			status: { not: "CANCELLED" },
+		})
+		expect(where(6)).toMatchObject({
+			releasedToFinanceAt: { not: null },
+			id: { notIn: ["back"] },
 		})
 	})
 
@@ -126,10 +162,41 @@ describe("loadNavCounts", () => {
 		vi.mocked(db.payrollRun.count).mockResolvedValue(1)
 		expect(await loadNavCounts({ id: "f1", role: "FINANCE" })).toEqual({
 			"/finance/queue": { value: 4, tone: "neutral" },
+			"/finance/queue?stage=returned": { value: 0, tone: "neutral" },
 			"/finance/lc-requests": { value: 3, tone: "neutral" },
 			"/finance/lc-funded": { value: 2, tone: "neutral" },
 			"/finance/payroll": { value: 1, tone: "neutral" },
 			"/finance/awaiting-carmen": { value: 7, tone: "critical" },
+		})
+	})
+
+	it("counts Lissette's returned packets in red and takes them out of Packets in", async () => {
+		vi.mocked(db.jafInvoice.findMany).mockResolvedValueOnce([
+			{
+				id: "back",
+				releasedToFinanceAt: new Date(),
+				financeVerifiedAt: null,
+				pbccRequestSentAt: null,
+				financeSendBackNotes: [{ note: "Fix", byUserId: "f", createdAt: "x" }],
+			},
+			{
+				id: "resent",
+				releasedToFinanceAt: new Date(),
+				financeVerifiedAt: null,
+				pbccRequestSentAt: null,
+				financeSendBackNotes: [
+					{ note: "Fix", byUserId: "f", createdAt: "x", resentAt: "y" },
+				],
+			},
+		] as any)
+		vi.mocked(db.jafInvoice.count).mockResolvedValue(0)
+		const counts = await loadNavCounts({ id: "f1", role: "FINANCE" })
+		expect(counts["/finance/queue?stage=returned"]).toEqual({
+			value: 1,
+			tone: "critical",
+		})
+		expect(vi.mocked(db.jafInvoice.count).mock.calls[0][0]).toMatchObject({
+			where: { id: { notIn: ["back"] } },
 		})
 	})
 

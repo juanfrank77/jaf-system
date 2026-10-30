@@ -91,3 +91,80 @@ describe("step 1 packets in", () => {
 		expect(byId(legacy.id)?.docs.jafInvoice).toBe(false)
 	})
 })
+
+describe("returned packets (S4)", () => {
+	const note = (resentAt?: string) => [
+		{
+			note: "Aviso lists the wrong pole",
+			byUserId: "someone",
+			createdAt: "2026-10-26T14:00:00.000Z",
+			...(resentAt && { resentAt }),
+		},
+	]
+	async function seedPacket(notes: unknown, released = OLD) {
+		const doc = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				pbccRequestSentAt: null,
+				releasedToFinanceAt: released,
+			}),
+		)
+		if (notes)
+			await db.jafInvoice.update({
+				where: { id: doc.id },
+				data: { financeSendBackNotes: notes as never },
+			})
+		return doc
+	}
+	const load = async (query = "") => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		mocks.requireRole.mockResolvedValue({ user: finance })
+		return (await loader({
+			request: new Request(`http://localhost/finance/queue${query}`),
+			params: {},
+			context: {},
+		} as never)) as unknown as {
+			jobs: { id: string; resent?: boolean; returned?: boolean }[]
+			returnedCount: number
+			view: string
+		}
+	}
+
+	it("takes a returned packet out of All, counts it, and lists it under Returned", async () => {
+		const plain = await seedPacket(null)
+		const returned = await seedPacket(note())
+		const all = await load()
+		const ids = all.jobs.map((j) => j.id)
+		expect(ids).toContain(plain.id)
+		expect(ids).not.toContain(returned.id)
+		expect(all.returnedCount).toBeGreaterThanOrEqual(1)
+		const only = await load("?stage=returned")
+		expect(only.view).toBe("returned")
+		expect(only.jobs.map((j) => j.id)).toContain(returned.id)
+		expect(only.jobs.map((j) => j.id)).not.toContain(plain.id)
+		expect(only.jobs.find((j) => j.id === returned.id)?.returned).toBe(true)
+	})
+
+	it("brings a resent packet back into All, flagged Resent and ahead of the older ones", async () => {
+		const plain = await seedPacket(null)
+		const resent = await seedPacket(
+			note("2026-10-28T10:00:00.000Z"),
+			new Date(),
+		)
+		const all = await load()
+		const ids = all.jobs.map((j) => j.id)
+		expect(ids.indexOf(resent.id)).toBeGreaterThanOrEqual(0)
+		expect(ids.indexOf(resent.id)).toBeLessThan(ids.indexOf(plain.id))
+		expect(all.jobs.find((j) => j.id === resent.id)?.resent).toBe(true)
+		expect(all.jobs.find((j) => j.id === plain.id)?.resent).toBeFalsy()
+	})
+
+	it("lists the most recently resent packet first", async () => {
+		const older = await seedPacket(note("2026-10-27T10:00:00.000Z"), new Date())
+		const newer = await seedPacket(note("2026-10-29T10:00:00.000Z"), new Date())
+		const plain = await seedPacket(null)
+		const ids = (await load()).jobs.map((j) => j.id)
+		expect(ids.indexOf(newer.id)).toBeLessThan(ids.indexOf(older.id))
+		expect(ids.indexOf(older.id)).toBeLessThan(ids.indexOf(plain.id))
+	})
+})

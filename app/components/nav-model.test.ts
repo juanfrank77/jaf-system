@@ -13,6 +13,7 @@ describe("navGroupsFor", () => {
 				[
 					"/docs/new",
 					"/dashboard?stage=open",
+					"/dashboard?stage=returned",
 					"/dashboard?stage=invoice",
 					"/dashboard?stage=aviso",
 					"/dashboard?stage=precert",
@@ -35,6 +36,7 @@ describe("navGroupsFor", () => {
 			g.items.map((i) => i.labelKey),
 		)
 		expect(labels).toContain("app_shell.nav.supervisor_open")
+		expect(labels).toContain("app_shell.nav.supervisor_returned")
 		expect(labels).toContain("app_shell.nav.supervisor_invoice")
 	})
 
@@ -46,6 +48,7 @@ describe("navGroupsFor", () => {
 				[
 					"/docs/new",
 					"/dashboard?stage=open",
+					"/dashboard?stage=returned",
 					"/dashboard?stage=invoice",
 					"/dashboard?stage=aviso",
 					"/dashboard?stage=precert",
@@ -72,6 +75,7 @@ describe("navGroupsFor", () => {
 				"arm_a",
 				[
 					"/finance/queue",
+					"/finance/queue?stage=returned",
 					"/finance/lc-requests",
 					"/finance/lc-funded",
 					"/finance/payroll",

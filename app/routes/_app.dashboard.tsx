@@ -16,6 +16,8 @@ import { isDashboardFiltersEnabled } from "~/lib/features.server"
 import { type OpenJobLabel, openJobLabel } from "~/lib/open-job-label"
 import { pageTitle } from "~/lib/page-title"
 import { requireSession } from "~/lib/permissions.server"
+import { latestReturn } from "~/lib/returned-packet"
+import { returnedDocIds } from "~/lib/returned-packet.server"
 import { isPriceBlind } from "~/lib/service-codes.server"
 import {
 	parseSupervisorQueue,
@@ -71,6 +73,8 @@ const PRICE_FREE_DOC_SELECT = {
 	claroUploadedAt: true,
 	avisoDocPath: true,
 	releasedToFinanceAt: true,
+	// Finance's returns: a returned packet's chip reads "Returned".
+	financeSendBackNotes: true,
 	financeVerifiedAt: true,
 	pbccRequestSentAt: true,
 	lcGeneratedAt: true,
@@ -149,6 +153,10 @@ const queueSelect = {
 	avisoNumber: true,
 	avisoDocPath: true,
 	releasedToFinanceAt: true,
+	// A return is live only before Finance verifies (`isReturned`).
+	financeSendBackNotes: true,
+	financeVerifiedAt: true,
+	pbccRequestSentAt: true,
 	fieldSubmittedAt: true,
 	claroPdfPath: true,
 	estimatedMaterials: true,
@@ -199,7 +207,10 @@ async function withStages<
 		avisoNumber: string | null
 		avisoDocPath: string | null
 		releasedToFinanceAt: Date | null
+		financeVerifiedAt: Date | null
+		pbccRequestSentAt: Date | null
 		materialsFromWarehouse: boolean
+		financeSendBackNotes?: unknown
 	},
 >(
 	docs: T[],
@@ -216,10 +227,10 @@ async function withStages<
 	}))
 }
 
-async function loadSupervisorQueues(userId: string) {
+async function loadSupervisorQueues(userId: string, returnedIds: string[]) {
 	const areas = await supervisorAreas(db, userId)
 	const scope = ownedOrInArea(userId, areas)
-	const [intakeRaw, pending, approved, openRaw, discrepancyRaw] =
+	const [intakeRaw, pending, approved, openRaw, discrepancyRaw, returnedRaw] =
 		await Promise.all([
 			db.jafInvoice.findMany({
 				where: { ...scope, status: "CREATED" },
@@ -239,6 +250,8 @@ async function loadSupervisorQueues(userId: string) {
 					supervisorApprovedAt: { not: null },
 					releasedToFinanceAt: null,
 					status: { not: "CANCELLED" },
+					// A returned packet sits in its own box at the top.
+					id: { notIn: returnedIds },
 				},
 				select: queueSelect,
 				orderBy: { supervisorApprovedAt: "asc" },
@@ -262,6 +275,12 @@ async function loadSupervisorQueues(userId: string) {
 				},
 				select: { ...queueSelect, avisoDiscrepancy: true },
 				orderBy: { supervisorApprovedAt: "asc" },
+				take: 100,
+			}),
+			// "Returned (n)": packets Finance sent back, not yet resent.
+			db.jafInvoice.findMany({
+				where: { AND: [scope, supervisorQueueWhere("returned", returnedIds)] },
+				select: queueSelect,
 				take: 100,
 			}),
 		])
@@ -293,6 +312,21 @@ async function loadSupervisorQueues(userId: string) {
 			daysOpen: discrepancyAgeDays(discrepancy, now),
 		}
 	})
+	// Oldest return first: the one waiting longest on the supervisor.
+	const returned = (await withStages(returnedRaw))
+		.map((d) => {
+			const latest = latestReturn(d)
+			return {
+				...toRow(
+					d,
+					d.stage,
+					latest ? new Date(latest.createdAt) : null,
+					latest?.note ?? null,
+				),
+				openLabel: d.openLabel,
+			}
+		})
+		.sort((a, b) => (a.since?.getTime() ?? 0) - (b.since?.getTime() ?? 0))
 	return {
 		intake,
 		myOpen,
@@ -300,6 +334,7 @@ async function loadSupervisorQueues(userId: string) {
 		approved: approvedRows,
 		missingAviso,
 		actionNeeded,
+		returned,
 	}
 }
 
@@ -389,10 +424,31 @@ export async function loader({ request }: Route.LoaderArgs) {
 		}
 	}
 
+	// The supervisor's returned packets: their own queue and box, and left
+	// out of every step queue (Released to Finance included).
+	const returnedIds =
+		user.role === "SUPERVISOR"
+			? await returnedDocIds(baseWhere as Prisma.JafInvoiceWhereInput)
+			: []
+
+	// Lissette's list leaves a packet she sent back until the supervisor
+	// resends it; it is counted and listed under Returned on Packets in.
+	if (user.role === "FINANCE") {
+		const financeReturned = await returnedDocIds(
+			baseWhere as Prisma.JafInvoiceWhereInput,
+		)
+		// An AND entry, so it can never overwrite an id condition set elsewhere.
+		if (financeReturned.length > 0)
+			where.AND = [
+				...(Array.isArray(where.AND) ? where.AND : []),
+				{ id: { notIn: financeReturned } },
+			]
+	}
+
 	if (stageQueue) {
 		where.AND = [
 			...(Array.isArray(where.AND) ? where.AND : []),
-			supervisorQueueWhere(stageQueue),
+			supervisorQueueWhere(stageQueue, returnedIds),
 		]
 	}
 
@@ -449,7 +505,9 @@ export async function loader({ request }: Route.LoaderArgs) {
 	)
 
 	const supervisorQueues =
-		user.role === "SUPERVISOR" ? await loadSupervisorQueues(user.id) : null
+		user.role === "SUPERVISOR"
+			? await loadSupervisorQueues(user.id, returnedIds)
+			: null
 	const supervisorScope =
 		user.role === "SUPERVISOR" ? await loadSupervisorScope(user.id) : null
 

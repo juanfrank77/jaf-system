@@ -72,6 +72,7 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 	it("returns the four queues alongside the stat tiles", async () => {
 		vi.mocked(db.jafInvoice.findMany)
 			.mockResolvedValueOnce([]) // jobTypeOptions
+			.mockResolvedValueOnce([]) // returned packet ids
 			.mockResolvedValueOnce([]) // docs list
 			.mockResolvedValueOnce([
 				row({ id: "n", status: "CREATED", createdAt: new Date() }),
@@ -87,6 +88,7 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 				row({ id: "m", jafInvoiceGeneratedAt: new Date() }),
 			] as any) // my open work orders
 			.mockResolvedValueOnce([]) // action needed
+			.mockResolvedValueOnce([]) // returned
 		const data = await loader({
 			request: new Request("http://localhost/dashboard"),
 			params: {},
@@ -110,6 +112,7 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 	it("never blocks a job on amounts: a legacy stored Aviso total is ignored", async () => {
 		vi.mocked(db.jafInvoice.findMany)
 			.mockResolvedValueOnce([] as any)
+			.mockResolvedValueOnce([] as any) // returned packet ids
 			.mockResolvedValueOnce([] as any)
 			.mockResolvedValueOnce([] as any) // intake
 			.mockResolvedValueOnce([] as any)
@@ -131,6 +134,7 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 			] as any)
 			.mockResolvedValueOnce([] as any) // my open work orders
 			.mockResolvedValueOnce([] as any) // action needed
+			.mockResolvedValueOnce([] as any) // returned
 		const data = await loader({
 			request: new Request("http://localhost/dashboard"),
 			params: {},

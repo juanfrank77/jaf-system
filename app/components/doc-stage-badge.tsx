@@ -13,7 +13,8 @@ export function DocStageBadge({
 }: {
 	stage: SupervisorStage
 	/** The finer supervisor-facing label (`openJobLabel`); the stage still
-	 * picks the colour, and is the text when no label is given. */
+	 * picks the colour (except Returned, always red), and is the text when no
+	 * label is given. */
 	openLabel?: OpenJobLabel
 	/** A cancelled job has no live step; show that instead. */
 	cancelled?: boolean
@@ -22,7 +23,12 @@ export function DocStageBadge({
 	const { t } = useTranslation()
 	return (
 		<Badge
-			variant={cancelled ? "danger" : STAGE_BADGE_VARIANT[stage]}
+			variant={
+				// Cancelled, or a packet Finance sent back: both are red.
+				cancelled || openLabel === "RETURNED"
+					? "danger"
+					: STAGE_BADGE_VARIANT[stage]
+			}
 			className={className}
 		>
 			{cancelled

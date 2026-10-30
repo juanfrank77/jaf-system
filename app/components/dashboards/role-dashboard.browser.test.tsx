@@ -251,6 +251,55 @@ describe("SupervisorDashboard", () => {
 		expect(within(card).getByText("Open 4 days")).toBeVisible()
 	})
 
+	it("puts a red Returned (n) box at the top with her note word for word and the way to the fix", async ({
+		renderStub,
+	}) => {
+		await mountSupervisor(renderStub, {
+			supervisorQueues: {
+				...emptyQueues,
+				returned: [
+					queueRow({
+						id: "back1",
+						controlNumber: "MAINT261026004",
+						stage: "RELEASE",
+						openLabel: "RETURNED",
+						note: "Aviso 10359868 lists 3 poles; the work order says 2.",
+						since: new Date(),
+					}),
+				],
+			},
+		})
+		const heading = screen.getByRole("heading", { level: 2, name: "Returned" })
+		const card = heading.closest("section") as HTMLElement
+		expect(within(card).getByText("1")).toBeVisible()
+		expect(
+			within(card).getByText(
+				"Aviso 10359868 lists 3 poles; the work order says 2.",
+			),
+		).toBeVisible()
+		expect(
+			within(card).getByRole("link", { name: "MAINT261026004" }),
+		).toHaveAttribute("href", "/docs/back1/review?step=AVISO")
+		const chip = within(card).getByText("Returned", { selector: "span" })
+		expect(chip).toHaveAttribute("data-variant", "danger")
+		// At the top: before the tiles.
+		const tiles = screen.getByTestId("supervisor-tiles")
+		expect(
+			card.compareDocumentPosition(tiles) & Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy()
+	})
+
+	it("has no Returned box when nothing was sent back", async ({
+		renderStub,
+	}) => {
+		await mountSupervisor(renderStub, {
+			supervisorQueues: { ...emptyQueues, returned: [] },
+		})
+		expect(
+			screen.queryByRole("heading", { level: 2, name: "Returned" }),
+		).toBeNull()
+	})
+
 	it("has no Action needed card when no job has a discrepancy", async ({
 		renderStub,
 	}) => {

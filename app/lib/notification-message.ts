@@ -27,6 +27,12 @@ const PATTERNS: { re: RegExp; key: string; params: string[] }[] = [
 		params: ["job"],
 	},
 	{
+		// Finance's send_back (S4): her note is kept word for word.
+		re: /^Finance returned job (\S+) for Aviso correction: ([\s\S]+)$/,
+		key: "finance_returned",
+		params: ["job", "note"],
+	},
+	{
 		re: /^Job (.+) was signed with material overage\. Review the quantities\.$/,
 		key: "sign_overage",
 		params: ["job"],

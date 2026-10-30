@@ -38,6 +38,15 @@ describe("localizeNotification", () => {
 		)
 	})
 
+	it("localizes Finance's return to the supervisor, keeping her note word for word", () => {
+		const msg =
+			"Finance returned job MAINT261026004 for Aviso correction: Aviso 10359868: 3 poles, not 2"
+		expect(localizeNotification(msg, i18next.getFixedT("en"))).toBe(msg)
+		expect(localizeNotification(msg, i18next.getFixedT("es"))).toBe(
+			"Finanzas devolvió el trabajo MAINT261026004 para corregir el Aviso: Aviso 10359868: 3 poles, not 2",
+		)
+	})
+
 	it("passes unknown messages through unchanged", () => {
 		const t = i18next.t.bind(i18next)
 		expect(localizeNotification("Something else happened.", t)).toBe(

@@ -13,6 +13,7 @@ const avisoNotSavedWhere = {
 
 export type SupervisorQueue =
 	| "open"
+	| "returned"
 	| "intake"
 	| "field"
 	| "review"
@@ -24,6 +25,7 @@ export type SupervisorQueue =
 
 export const SUPERVISOR_QUEUES: SupervisorQueue[] = [
 	"open",
+	"returned",
 	"intake",
 	"field",
 	"review",
@@ -40,6 +42,7 @@ export const SUPERVISOR_QUEUES: SupervisorQueue[] = [
 // nav-counts reads this list, so the sidebar order and the count set stay in sync.
 export const SUPERVISOR_SIDEBAR_QUEUES: SupervisorQueue[] = [
 	"open",
+	"returned",
 	"invoice",
 	"aviso",
 	"precert",
@@ -69,6 +72,21 @@ export function supervisorQueueHref(queue: SupervisorQueue): string {
  */
 export function supervisorQueueWhere(
 	queue: SupervisorQueue,
+	/** The supervisor's returned packets (`returnedDocIds`): their own queue,
+	 * and left out of every step queue. "Returned" lives in the JSON history,
+	 * so it is resolved to ids first rather than filtered in SQL. */
+	returnedIds: string[] = [],
+): Prisma.JafInvoiceWhereInput {
+	if (queue === "returned")
+		return { id: { in: returnedIds }, status: { not: "CANCELLED" } }
+	const where = stepQueueWhere(queue)
+	return queue === "all" || returnedIds.length === 0
+		? where
+		: { ...where, id: { notIn: returnedIds } }
+}
+
+function stepQueueWhere(
+	queue: Exclude<SupervisorQueue, "returned">,
 ): Prisma.JafInvoiceWhereInput {
 	switch (queue) {
 		// The steps before the packet exists: Intake, Warehouse, Field and Sign

@@ -13,6 +13,7 @@ import {
 	PacketStepCard,
 	type PacketStepData,
 } from "~/components/packet-step"
+import { ReturnedBanner } from "~/components/returned-banner"
 import {
 	SignaturePad,
 	type SignaturePadHandle,
@@ -80,6 +81,13 @@ import {
 } from "~/lib/pre-cert.server"
 import { evaluateReleaseGate, isPacketPath } from "~/lib/release-gate"
 import {
+	isReturned,
+	isWithFinance,
+	latestReturn,
+	markResent,
+} from "~/lib/returned-packet"
+import { returnedInfo } from "~/lib/returned-packet.server"
+import {
 	getActiveServiceCodes,
 	isPriceBlind,
 	serviceCodesForRole,
@@ -96,11 +104,13 @@ import {
 import { assertDocInSupervisorScope } from "~/lib/supervisor-scope"
 import {
 	deriveSupervisorStage,
+	fixStepFor,
 	isAvisoStarted,
 	isPreCertSigned,
 	panelForStep,
 	resolveStepView,
 	SUPERVISOR_STAGES,
+	supervisorStepHref,
 } from "~/lib/supervisor-stage"
 import { getIvuRate } from "~/lib/system-settings.server"
 import { isLegacyPricedInvoice, uploadHref } from "~/lib/upload-href"
@@ -368,12 +378,17 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	])
 	const correctorNames = Object.fromEntries(people.map((u) => [u.id, u.name]))
 	const stage = deriveSupervisorStage(doc, sheet)
+	// Released and not sent back: Finance holds it, the steps are locked.
+	const withFinance = isWithFinance(doc)
+	// Sent back by Finance: the Aviso step reopens, signed Pre-cert or not.
+	const sentBack = isReturned(doc)
 	const preCertSigned = isPreCertSigned(sheet)
 	const { view, interactive } = resolveStepView(
 		stage,
 		isAvisoStarted(doc),
 		new URL(request.url).searchParams.get("step"),
 		preCertSigned,
+		sentBack,
 	)
 	// Step 6 after the save: the replaced Avisos (kept, marked "replaced") and
 	// whether the job's one replacement is still open.
@@ -382,7 +397,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 				where: { docId: params.id, action: "AVISO_REPLACED" },
 			})
 		: 0
-	const replaceUsed = avisoReplacements >= AVISO_REPLACE_LIMIT
+	// A packet Finance returned is exempt: the return asks for an Aviso fix.
+	const replaceUsed = !sentBack && avisoReplacements >= AVISO_REPLACE_LIMIT
 	const avisoHistory: AvisoHistoryRow[] = (
 		(doc.avisoHistory as AvisoHistoryEntry[] | null) ?? []
 	).map((h) => ({
@@ -399,8 +415,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			interactive &&
 			view === "AVISO" &&
 			isAvisoSaved(doc) &&
-			!doc.releasedToFinanceAt &&
-			!preCertSigned &&
+			!withFinance &&
+			(!preCertSigned || sentBack) &&
 			!replaceUsed,
 	}
 	const loadingPhotos = await photosThatLoad(params.id, photos)
@@ -535,7 +551,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			: null
 	const canGeneratePdf =
 		!!doc.supervisorApprovedAt &&
-		!doc.releasedToFinanceAt &&
+		!withFinance &&
 		!isTerminalStatus(doc.status) &&
 		(isSentUnderOldFlow(doc) ||
 			(isSig(doc.completionSignature) && !doc.jafInvoiceGeneratedAt && !!claro))
@@ -572,6 +588,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		workOrder,
 		workOrderIssuedOn: (doc.completionSignedAt ?? new Date()).toISOString(),
 		canGeneratePdf,
+		withFinance,
+		returned: await returnedInfo(doc),
 		fixMode: fixModeFor(doc, user.role),
 		// Who signed off (Step 4). Before this redesign it was the crew lead.
 		signedOffBy: doc.completedById
@@ -647,7 +665,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 		const oldFlow = isSentUnderOldFlow(doc)
 		if (
 			(doc.jafInvoiceGeneratedAt && !oldFlow) ||
-			doc.releasedToFinanceAt ||
+			isWithFinance(doc) ||
 			isTerminalStatus(doc.status)
 		)
 			return { errorKey: "packet.errors.locked" }
@@ -798,7 +816,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	if (intent === "save_packet_details") {
 		if (doc.jafInvoiceGeneratedAt)
 			return { errorKey: "packet.errors.prefield_locked" }
-		if (doc.releasedToFinanceAt || isTerminalStatus(doc.status))
+		if (isWithFinance(doc) || isTerminalStatus(doc.status))
 			return { errorKey: "packet.errors.locked" }
 		const data: Prisma.JafInvoiceUncheckedUpdateInput = {}
 		const changes: Record<string, { before: unknown; after: unknown }> = {}
@@ -951,7 +969,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 		// own); an unreadable table only says so. Amounts are never compared.
 		if (!doc.jafInvoiceGeneratedAt)
 			return { errorKey: "docs_review.errors.invoice_required" }
-		if (doc.releasedToFinanceAt) throw redirect(`/docs/${params.id}/review`)
+		if (isWithFinance(doc)) throw redirect(`/docs/${params.id}/review`)
 
 		const typed = (form.get("avisoNumber") as string | null)?.trim() || null
 		if (!typed) return { errorKey: "docs_review.errors.aviso_number_required" }
@@ -1091,15 +1109,21 @@ export async function action({ request, params }: Route.ActionArgs) {
 	// The number check and the materials comparison run again: a clean result
 	// clears the discrepancy, a new difference raises a fresh one.
 	if (intent === "replace_aviso") {
-		if (doc.releasedToFinanceAt) throw redirect(`/docs/${params.id}/review`)
+		if (isWithFinance(doc)) throw redirect(`/docs/${params.id}/review`)
 		if (!isAvisoSaved(doc) || !doc.avisoDocPath)
 			return { errorKey: "docs_review.errors.aviso_pdf_required" }
-		if (isPreCertSigned(await activeSheet(params.id)))
+		// A signed Pre-cert locks the Aviso, unless Finance sent the packet back:
+		// then the replacement supersedes the signed sheet (below) and the
+		// supervisor re-signs a fresh one before the release gate passes again.
+		if (!isReturned(doc) && isPreCertSigned(await activeSheet(params.id)))
 			return { errorKey: "docs_review.errors.replace_locked" }
 		const used = await db.auditTrail.count({
 			where: { docId: params.id, action: "AVISO_REPLACED" },
 		})
-		if (used >= AVISO_REPLACE_LIMIT)
+		// A returned packet is exempt from the one-replacement limit: Finance
+		// sent it back for an Aviso correction. Every other job keeps it.
+		const limited = !isReturned(doc)
+		if (limited && used >= AVISO_REPLACE_LIMIT)
 			return { errorKey: "docs_review.errors.replace_limit" }
 		const reason = (form.get("replaceReason") as string | null)?.trim() || ""
 		if (!reason)
@@ -1184,7 +1208,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 				const replaced = await tx.auditTrail.count({
 					where: { docId: params.id, action: "AVISO_REPLACED" },
 				})
-				if (replaced >= AVISO_REPLACE_LIMIT) throw new ReplaceLimitReached()
+				if (limited && replaced >= AVISO_REPLACE_LIMIT)
+					throw new ReplaceLimitReached()
 				await tx.jafInvoice.update({
 					where: { id: params.id },
 					data: {
@@ -1223,11 +1248,19 @@ export async function action({ request, params }: Route.ActionArgs) {
 						: "docs_review.errors.replace_failed",
 			}
 		}
-		// No Pre-cert signature exists (checked above): the sheet is regenerated.
-		await createPreCertSheet({
-			docId: params.id,
-			actor: { id: user.id, role: user.role },
-		})
+		// The sheet is regenerated: a new, unsigned version supersedes the
+		// active one (signed only on a returned packet, kept in the history).
+		// The Aviso is already replaced; if the render fails the old sheet stays
+		// active, and the release gate refuses it (it names the old Aviso) until
+		// a new sheet is generated and signed.
+		try {
+			await createPreCertSheet({
+				docId: params.id,
+				actor: { id: user.id, role: user.role },
+			})
+		} catch {
+			return { errorKey: "docs_review.errors.replace_precert_failed" }
+		}
 		if (materials.kind === "unreadable")
 			return { info: "docs_review.aviso_materials_unreadable" }
 		throw redirect(`/docs/${params.id}/review?step=AVISO`)
@@ -1238,7 +1271,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	if (intent === "generate_precert") {
 		if (!isAvisoSaved(doc))
 			return { errorKey: "docs_review.errors.aviso_pdf_required" }
-		if (doc.releasedToFinanceAt) throw redirect(`/docs/${params.id}/review`)
+		if (isWithFinance(doc)) throw redirect(`/docs/${params.id}/review`)
 		const installed = (doc.installedServiceLines as ServiceLine[] | null) ?? []
 		if ((await preCertLinesFor(installed)).lines.length === 0)
 			return { errorKey: "docs_review.errors.installed_lines_required" }
@@ -1258,10 +1291,11 @@ export async function action({ request, params }: Route.ActionArgs) {
 		if (!reason)
 			return { errorKey: "docs_review.errors.precert_edit_reason_required" }
 		const serviceCodeId = form.get("serviceCodeId") as string
-		const certifiedQty = Math.max(
-			0,
-			Number.parseInt((form.get("certifiedQty") as string) || "0", 10) || 0,
-		)
+		// Decimals kept (2.5 ft stays 2.5); a line may be certified at 0.
+		const rawQty = ((form.get("certifiedQty") as string | null) ?? "").trim()
+		const certifiedQty = Number(rawQty)
+		if (!rawQty || !Number.isFinite(certifiedQty) || certifiedQty < 0)
+			return { errorKey: "docs_review.errors.precert_qty_invalid" }
 		const lines = (sheet.lines as PreCertLine[]).map((l) =>
 			l.serviceCodeId === serviceCodeId
 				? {
@@ -1435,7 +1469,14 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	if (intent === "release_to_finance") {
-		if (doc.releasedToFinanceAt) throw redirect(`/docs/${params.id}/review`)
+		if (isWithFinance(doc)) throw redirect(`/docs/${params.id}/review`)
+		// Finance sent it back: this release is the supervisor's answer to her
+		// latest note (S4), stamped on the note and logged with it. Any
+		// unanswered latest note counts, also one Finance wrote before this job
+		// was ever released (older data): left unstamped, the release itself
+		// would turn it Returned again with that stale note.
+		const latest = latestReturn(doc)
+		const answering = latest && !latest.resentAt ? latest : null
 		const [sheet, photos] = await Promise.all([
 			activeSheet(params.id),
 			db.photo.findMany({
@@ -1460,25 +1501,42 @@ export async function action({ request, params }: Route.ActionArgs) {
 			sheet?.sigSubcontractorName ?? brigade?.leadName ?? brigade?.name ?? ""
 		// No amount in the message: supervisors can read their own notifications
 		// back, and they never see money.
-		const message = `${doc.controlNumber} · Aviso ${doc.avisoNumber} · ${contractor} — ready for payment request`
+		const message = answering
+			? `${doc.controlNumber} · Aviso ${doc.avisoNumber} · ${contractor} — fixed and sent back to Finance`
+			: `${doc.controlNumber} · Aviso ${doc.avisoNumber} · ${contractor} — ready for payment request`
 		const finance = await db.user.findMany({
 			where: { role: "FINANCE", active: true },
 		})
+		const releasedAt = new Date()
 		await db.$transaction([
 			db.jafInvoice.update({
 				where: { id: params.id },
 				data: {
-					releasedToFinanceAt: new Date(),
+					releasedToFinanceAt: releasedAt,
 					releasedToFinanceById: user.id,
+					...(answering && {
+						financeSendBackNotes: markResent(
+							doc.financeSendBackNotes,
+							releasedAt,
+						) as Prisma.InputJsonValue,
+					}),
 				},
 			}),
 			db.auditTrail.create({
-				data: {
-					docId: params.id,
-					userId: user.id,
-					action: "RELEASED_TO_FINANCE",
-					diffJson: { rows: gate.rows },
-				},
+				data: answering
+					? {
+							docId: params.id,
+							userId: user.id,
+							action: "FINANCE_RESEND",
+							// The note answered, and the gate it passed again.
+							diffJson: { note: answering.note, rows: gate.rows },
+						}
+					: {
+							docId: params.id,
+							userId: user.id,
+							action: "RELEASED_TO_FINANCE",
+							diffJson: { rows: gate.rows },
+						},
 			}),
 			...finance.map((f) =>
 				db.notification.create({
@@ -1816,6 +1874,8 @@ function PreCertPanel({
 						<Input
 							name="certifiedQty"
 							type="number"
+							inputMode="decimal"
+							step="any"
 							min={0}
 							defaultValue={l.certifiedQty}
 							className="w-20"
@@ -1955,7 +2015,7 @@ function PreCertPanel({
 			) : error?.errorMessage ? (
 				<p className="text-sm text-status-danger">{error.errorMessage}</p>
 			) : null}
-			{!readOnly && !doc.releasedToFinanceAt && (
+			{!readOnly && !isWithFinance(doc) && (
 				<div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
 					<Form
 						method="post"
@@ -2003,6 +2063,8 @@ export default function ReviewDoc({
 		workOrder,
 		workOrderIssuedOn,
 		canGeneratePdf,
+		withFinance,
+		returned,
 		fixMode,
 		signedOffBy,
 	} = loaderData
@@ -2066,6 +2128,17 @@ export default function ReviewDoc({
 				docId={doc.id}
 				warehouseSkipped={!doc.materialsFromWarehouse}
 			/>
+			{returned && doc.status !== "CANCELLED" && (
+				<ReturnedBanner
+					returned={returned}
+					// Already on the step that fixes it: no link to itself.
+					fixHref={
+						view === fixStepFor(stage, true)
+							? null
+							: supervisorStepHref(doc.id, fixStepFor(stage, true))
+					}
+				/>
+			)}
 			{!interactive && !signOffOpen && (
 				<Pill variant="info" icon="🔒">
 					<b>{t("docs_review.readonly_title")}</b>{" "}
@@ -2186,7 +2259,7 @@ export default function ReviewDoc({
 					avisoNumber={doc.avisoNumber}
 					avisoDocPath={doc.avisoDocPath}
 					saved={isAvisoSaved(doc)}
-					locked={!!doc.releasedToFinanceAt}
+					locked={withFinance}
 					readOnly={!interactive}
 					result={error ?? null}
 					discrepancy={aviso.discrepancy}
@@ -2275,7 +2348,7 @@ export default function ReviewDoc({
 					)}
 					{/* Back to step 6: Replace Aviso until a Pre-cert signature,
 					    view-only after it (`resolveStepView`). */}
-					{interactive && !doc.releasedToFinanceAt && (
+					{interactive && !withFinance && (
 						<Link
 							to="?step=AVISO"
 							className={buttonVariants({
@@ -2317,7 +2390,7 @@ export default function ReviewDoc({
 							{t("docs_review.errors.release_blocked")}
 						</p>
 					)}
-					{doc.releasedToFinanceAt ? (
+					{withFinance && doc.releasedToFinanceAt ? (
 						<Pill variant="info" icon="✓">
 							{t("release.released_at", {
 								date: new Date(doc.releasedToFinanceAt).toLocaleString(),
@@ -2334,7 +2407,9 @@ export default function ReviewDoc({
 							<Form method="post" className="flex-1">
 								<input type="hidden" name="intent" value="release_to_finance" />
 								<Button type="submit" disabled={!gate.ok} className="w-full">
-									{t("release.button")}
+									{returned
+										? t("returned_packet.resend_button")
+										: t("release.button")}
 								</Button>
 							</Form>
 						</div>

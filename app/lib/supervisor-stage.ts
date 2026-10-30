@@ -1,4 +1,5 @@
 import { isAvisoSaved } from "~/lib/aviso-document"
+import { isReturned } from "~/lib/returned-packet"
 import type { JafInvoice } from "../../generated/prisma/client"
 
 export type SupervisorStage =
@@ -32,7 +33,14 @@ type StageDoc = Pick<
 	| "avisoNumber"
 	| "avisoDocPath"
 	| "releasedToFinanceAt"
->
+	| "financeVerifiedAt"
+	| "pbccRequestSentAt"
+> & {
+	/** Finance's returns (`returned-packet`). Select it (with the Finance
+	 * timestamps above) wherever the stage is shown to a supervisor: without it
+	 * a returned packet reads as Released. */
+	financeSendBackNotes?: unknown
+}
 type StageSheet = {
 	sigSupervisorAt: Date | null
 	sigSubcontractorAt: Date | null
@@ -42,7 +50,9 @@ export function deriveSupervisorStage(
 	doc: StageDoc,
 	sheet: StageSheet,
 ): SupervisorStage {
-	if (doc.releasedToFinanceAt) return "RELEASED"
+	// A returned packet is back on the supervisor's own steps, though it keeps
+	// `releasedToFinanceAt` for Finance's queues.
+	if (doc.releasedToFinanceAt && !isReturned(doc)) return "RELEASED"
 	if (isAvisoSaved(doc)) {
 		return sheet?.sigSupervisorAt ? "RELEASE" : "PRECERT"
 	}
@@ -132,6 +142,9 @@ export function resolveStepView(
 	avisoStarted: boolean,
 	requested: string | null,
 	preCertSigned: boolean,
+	/** Finance sent the packet back (`isReturned`): the Aviso and Pre-cert
+	 * steps reopen so the supervisor can replace the Aviso and re-sign. */
+	returned = false,
 ): StepView {
 	const fallback: SupervisorStage =
 		stage === "AVISO" && !avisoStarted ? "INVOICE" : stage
@@ -147,8 +160,21 @@ export function resolveStepView(
 		interactive:
 			view === stage ||
 			(view === "INVOICE" && stage === "AVISO") ||
-			(view === "AVISO" && stage === "PRECERT" && !preCertSigned),
+			(view === "AVISO" && stage === "PRECERT" && !preCertSigned) ||
+			(returned && (view === "AVISO" || view === "PRECERT")),
 	}
+}
+
+/**
+ * The step that fixes a job: a packet Finance returned reopens its Aviso step
+ * (replace the Aviso, then re-sign the Pre-cert); anything else, or a return
+ * that came before any Aviso was saved, is fixed on its own step.
+ */
+export function fixStepFor(
+	stage: SupervisorStage,
+	returned: boolean,
+): SupervisorStage {
+	return returned && stageIndex(stage) > stageIndex("AVISO") ? "AVISO" : stage
 }
 
 /** Which panel renders for a step: everything up to Approve shares the

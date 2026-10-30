@@ -220,6 +220,7 @@
 			"warehouse_restock": "Restocks to Release",
 			"warehouse_stock": "Stock",
 			"supervisor_open": "My open jobs",
+			"supervisor_returned": "Returned",
 			"supervisor_invoice": "Packets to Claro",
 			"supervisor_aviso": "Aviso",
 			"supervisor_precert": "Pre-cert sheets",
@@ -238,7 +239,8 @@
 			"comptroller_to_pay": "Runs to pay",
 			"comptroller_paid": "Paid runs",
 			"comptroller_brigades": "Brigades",
-			"comptroller_installers": "Installers"
+			"comptroller_installers": "Installers",
+			"finance_returned": "Returned"
 		},
 		"notifications": {
 			"bell_label": "Notifications",
@@ -250,6 +252,7 @@
 				"prep_missing": "Job {{job}} has missing materials flagged during prep. Please review.",
 				"prep_ready": "Job {{job}} is prepped and ready for pickup. Please sign at warehouse.",
 				"prep_ready_supervisor": "Job {{job}} is ready for pickup.",
+				"finance_returned": "Finance returned job {{job}} for Aviso correction: {{note}}",
 				"sign_overage": "Job {{job}} was signed with material overage. Review the quantities.",
 				"repair_held": "Serial {{serial}} is held for review before repair disposition.",
 				"repair_sent": "Repair batch {{batch}} sent ({{count}} units).",
@@ -812,6 +815,7 @@
 			"aviso_number_mismatch": "The Aviso # you typed ({{typedNumber}}) does not match the number on the file ({{pdfNumber}}). Check the number or upload the right file.",
 			"precert_required": "Generate the pre-certification sheet first.",
 			"precert_locked": "The sheet is signed. Regenerate it to change quantities.",
+			"precert_qty_invalid": "Enter a certified quantity of 0 or more.",
 			"precert_edit_reason_required": "A reason is required to change a certified quantity.",
 			"signature_required": "A signature is required.",
 			"contractor_code_required": "This crew has no contractor code. Enter it to sign.",
@@ -821,7 +825,8 @@
 			"replace_limit": "This job's one Aviso replacement has already been used.",
 			"replace_locked": "The Pre-cert sheet is signed: the Aviso can no longer be replaced.",
 			"replace_reason_required": "Give a short reason for replacing the Aviso.",
-			"replace_failed": "The Aviso could not be replaced. Nothing was changed; try again."
+			"replace_failed": "The Aviso could not be replaced. Nothing was changed; try again.",
+			"replace_precert_failed": "The Aviso was replaced, but the new Pre-cert could not be created. Generate the Pre-cert again and sign it before releasing to Finance."
 		},
 		"ordered_vs_installed": "Ordered vs Installed",
 		"per_service_code": "per service code",
@@ -869,7 +874,28 @@
 		"sent_waiting_aviso": "Sent to Claro · waiting Aviso",
 		"precert": "Pre-cert sheet",
 		"release": "Release",
-		"released": "Released to Finance"
+		"released": "Released to Finance",
+		"returned": "Returned"
+	},
+	"returned_packet": {
+		"banner_title": "Returned by {{name}} on {{date}}",
+		"unknown_user": "Finance",
+		"fix_button": "Fix and send back to Finance",
+		"resend_button": "Send back to Finance",
+		"box_body": "Finance sent these packets back. Read the note, fix the job and send it back.",
+		"resent": "Resent",
+		"finance": {
+			"all": "All",
+			"returned": "Returned ({{count}})",
+			"explainer": "These packets went back to the supervisor. They return to All, marked Resent, once he fixes and resends them.",
+			"empty": "No returned packets.",
+			"verify_returned": "Returned to the supervisor",
+			"resent_on": "The supervisor fixed it and resent it on {{date}}. His fix answers this note.",
+			"not_released": "Not released to Finance",
+			"not_released_body": "The supervisor has not released this job yet, so it cannot be verified or sent back.",
+			"cannot_verify_returned": "This packet is back with the supervisor. You can verify it once he resends it.",
+			"cannot_act_unreleased": "This job has not been released to Finance yet."
+		}
 	},
 	"step_rail": {
 		"aria": "Work order progress",
@@ -1510,6 +1536,7 @@
 		"stage_queue": {
 			"field": "Field work in progress",
 			"open": "My open jobs",
+			"returned": "Returned by Finance",
 			"intake": "New work orders",
 			"review": "Review queue",
 			"invoice": "Packets to Claro",
@@ -1526,7 +1553,8 @@
 		"since": {
 			"created": "Created {{ago}}",
 			"submitted": "Submitted {{ago}}",
-			"approved": "Signed off {{ago}}"
+			"approved": "Signed off {{ago}}",
+			"returned": "Returned {{ago}}"
 		},
 		"ago": {
 			"just_now": "just now",
@@ -1537,6 +1565,7 @@
 		"no_documents": "No documents yet.",
 		"queue": {
 			"my_open": "My open work orders",
+			"returned": "Returned",
 			"intake": "New — waiting for the warehouse",
 			"pending_review": "Awaiting your sign-off",
 			"approved": "Signed off",

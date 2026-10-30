@@ -58,6 +58,7 @@ const baseDoc = () => ({
 	poLinks: [],
 	paymentRecords: [],
 	financeSendBackNotes: [],
+	releasedToFinanceAt: new Date("2026-10-26T14:00:00Z"),
 	supervisor: { email: "sup@example.com" },
 	preCertSheets: [],
 	photos: [],
@@ -121,6 +122,69 @@ describe("Finance verify action guards", () => {
 		})
 		expect(mocks.db.jafInvoice.update).not.toHaveBeenCalled()
 	})
+
+	it("refuses to verify a packet Finance sent back until the supervisor resends it", async () => {
+		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue({
+			...baseDoc(),
+			financeSendBackNotes: [
+				{ note: "Fix the Aviso", byUserId: "finance-1", createdAt: "x" },
+			],
+		})
+		const result = await action({
+			request: requestWith({ intent: "verify" }),
+			params: { id: "job-1" },
+		} as any)
+		expect(result).toEqual({
+			errorKey: "finance_verify.errors.invalid_stage",
+		})
+		expect(mocks.db.$transaction).not.toHaveBeenCalled()
+	})
+
+	it("verifies a resent packet, and may send a returned one back again", async () => {
+		const note = {
+			note: "Fix the Aviso",
+			byUserId: "finance-1",
+			createdAt: "x",
+		}
+		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue({
+			...baseDoc(),
+			financeSendBackNotes: [{ ...note, resentAt: "y" }],
+		})
+		const verified = await action({
+			request: requestWith({ intent: "verify" }),
+			params: { id: "job-1" },
+		} as any).catch((r: any) => r)
+		expect(verified.status).toBe(302)
+		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue({
+			...baseDoc(),
+			financeSendBackNotes: [note],
+		})
+		const sentBack = await action({
+			request: requestWith({ intent: "send_back", note: "Still wrong" }),
+			params: { id: "job-1" },
+		} as any).catch((r: any) => r)
+		expect(sentBack.status).toBe(302)
+		expect(sentBack.headers.get("Location")).toBe("/finance/receivables")
+	})
+
+	it.each(["verify", "send_back"])(
+		"refuses %s on a job the supervisor never released",
+		async (intent) => {
+			mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue({
+				...baseDoc(),
+				releasedToFinanceAt: null,
+			})
+			const result = await action({
+				request: requestWith({ intent, note: "Fix the Aviso" }),
+				params: { id: "job-1" },
+			} as any)
+			expect(result).toEqual({
+				errorKey: "finance_verify.errors.invalid_stage",
+			})
+			expect(mocks.db.$transaction).not.toHaveBeenCalled()
+			expect(mocks.sendInternalEmail).not.toHaveBeenCalled()
+		},
+	)
 
 	it("verifies without an Aviso amount and records no amount check", async () => {
 		const result = await action({

@@ -85,6 +85,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 						avisoNumber: true,
 						avisoDocPath: true,
 						releasedToFinanceAt: true,
+						financeVerifiedAt: true,
+						pbccRequestSentAt: true,
 					},
 					orderBy: { createdAt: "desc" },
 					take: 100,

@@ -220,6 +220,7 @@
 			"warehouse_restock": "Reabastecimientos por Liberar",
 			"warehouse_stock": "Inventario",
 			"supervisor_open": "Mis trabajos abiertos",
+			"supervisor_returned": "Devueltos",
 			"supervisor_invoice": "Paquetes a Claro",
 			"supervisor_aviso": "Aviso",
 			"supervisor_precert": "Hojas de precertificación",
@@ -238,7 +239,8 @@
 			"comptroller_to_pay": "Corridas por pagar",
 			"comptroller_paid": "Corridas pagadas",
 			"comptroller_brigades": "Brigadas",
-			"comptroller_installers": "Instaladores"
+			"comptroller_installers": "Instaladores",
+			"finance_returned": "Devueltos"
 		},
 		"notifications": {
 			"bell_label": "Notificaciones",
@@ -250,6 +252,7 @@
 				"prep_missing": "Se marcaron materiales faltantes en la preparación del trabajo {{job}}. Por favor revise.",
 				"prep_ready": "El trabajo {{job}} está preparado y listo para recoger. Por favor firme en el almacén.",
 				"prep_ready_supervisor": "El trabajo {{job}} está listo para recoger.",
+				"finance_returned": "Finanzas devolvió el trabajo {{job}} para corregir el Aviso: {{note}}",
 				"sign_overage": "El trabajo {{job}} se firmó con exceso de material. Revise las cantidades.",
 				"repair_held": "El serial {{serial}} está retenido para revisión antes de la disposición de reparación.",
 				"repair_sent": "Lote de reparación {{batch}} enviado ({{count}} unidades).",
@@ -812,6 +815,7 @@
 			"aviso_number_mismatch": "El # de Aviso que escribió ({{typedNumber}}) no coincide con el número del archivo ({{pdfNumber}}). Revise el número o suba el archivo correcto.",
 			"precert_required": "Genere primero la hoja de pre-certificación.",
 			"precert_locked": "La hoja está firmada. Regenérela para cambiar cantidades.",
+			"precert_qty_invalid": "Escriba una cantidad certificada de 0 o más.",
 			"precert_edit_reason_required": "Se requiere una razón para cambiar una cantidad certificada.",
 			"signature_required": "Se requiere una firma.",
 			"contractor_code_required": "Esta brigada no tiene código de contratista. Ingréselo para firmar.",
@@ -821,7 +825,8 @@
 			"replace_limit": "Ya se usó el único reemplazo de Aviso de este trabajo.",
 			"replace_locked": "La hoja de pre-certificación está firmada: el Aviso ya no se puede reemplazar.",
 			"replace_reason_required": "Indique una razón breve para reemplazar el Aviso.",
-			"replace_failed": "No se pudo reemplazar el Aviso. No se cambió nada; intente de nuevo."
+			"replace_failed": "No se pudo reemplazar el Aviso. No se cambió nada; intente de nuevo.",
+			"replace_precert_failed": "El Aviso se reemplazó, pero no se pudo crear el nuevo Pre-cert. Genere el Pre-cert de nuevo y fírmelo antes de enviarlo a Finanzas."
 		},
 		"ordered_vs_installed": "Ordenado vs Instalado",
 		"per_service_code": "por código de servicio",
@@ -869,7 +874,28 @@
 		"sent_waiting_aviso": "Enviado a Claro · esperando Aviso",
 		"precert": "Hoja pre-cert.",
 		"release": "Liberar",
-		"released": "Liberado a Finanzas"
+		"released": "Liberado a Finanzas",
+		"returned": "Devuelto"
+	},
+	"returned_packet": {
+		"banner_title": "Devuelto por {{name}} el {{date}}",
+		"unknown_user": "Finanzas",
+		"fix_button": "Corregir y reenviar a Finanzas",
+		"resend_button": "Reenviar a Finanzas",
+		"box_body": "Finanzas devolvió estos paquetes. Lea la nota, corrija el trabajo y reenvíelo.",
+		"resent": "Reenviado",
+		"finance": {
+			"all": "Todos",
+			"returned": "Devueltos ({{count}})",
+			"explainer": "Estos paquetes volvieron al supervisor. Regresan a Todos, marcados como Reenviado, cuando él los corrige y los reenvía.",
+			"empty": "No hay paquetes devueltos.",
+			"verify_returned": "Devuelto al supervisor",
+			"resent_on": "El supervisor lo corrigió y lo reenvió el {{date}}. Su corrección responde a esta nota.",
+			"not_released": "No liberado a Finanzas",
+			"not_released_body": "El supervisor aún no ha liberado este trabajo, así que no se puede verificar ni devolver.",
+			"cannot_verify_returned": "Este paquete está de vuelta con el supervisor. Podrás verificarlo cuando lo reenvíe.",
+			"cannot_act_unreleased": "Este trabajo aún no ha sido liberado a Finanzas."
+		}
 	},
 	"step_rail": {
 		"aria": "Progreso de la orden",
@@ -1510,6 +1536,7 @@
 		"stage_queue": {
 			"field": "Trabajo de campo en curso",
 			"open": "Mis trabajos abiertos",
+			"returned": "Devueltos por Finanzas",
 			"intake": "Órdenes nuevas",
 			"review": "Cola de revisión",
 			"invoice": "Paquetes a Claro",
@@ -1526,7 +1553,8 @@
 		"since": {
 			"created": "Creada {{ago}}",
 			"submitted": "Entregado {{ago}}",
-			"approved": "Firmado {{ago}}"
+			"approved": "Firmado {{ago}}",
+			"returned": "Devuelto {{ago}}"
 		},
 		"ago": {
 			"just_now": "justo ahora",
@@ -1537,6 +1565,7 @@
 		"no_documents": "Aún no hay documentos.",
 		"queue": {
 			"my_open": "Mis órdenes de trabajo abiertas",
+			"returned": "Devueltos",
 			"intake": "Nuevas — esperando al almacén",
 			"pending_review": "Esperando su firma",
 			"approved": "Firmado",

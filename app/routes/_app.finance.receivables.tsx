@@ -29,6 +29,7 @@ import {
 import { parsePaymentDate, paymentForType } from "~/lib/payment-records"
 import { recordReceivablePayment } from "~/lib/payment-records.server"
 import { requireRole } from "~/lib/permissions.server"
+import { isReturned } from "~/lib/returned-packet"
 import { getAgingAlertDays } from "~/lib/system-settings.server"
 import { formatMoney } from "~/lib/utils"
 import type { DocStatus } from "../../generated/prisma/client"
@@ -69,7 +70,13 @@ export async function loader({ request }: Route.LoaderArgs) {
 		take: 200,
 	})
 
-	const rows: FinancePipelineRow[] = invoices.map((inv) => {
+	// A packet Finance sent back is the supervisor's until he resends it (S4):
+	// it sits under Returned on Packets in, not in this list.
+	// (A row that already carries money stays visible.)
+	const open = invoices.filter(
+		(inv) => !(isReturned(inv) && inv.paymentRecords.length === 0),
+	)
+	const rows: FinancePipelineRow[] = open.map((inv) => {
 		const stage = computeFinanceStage(
 			inv,
 			inv.poLinks.length > 0,

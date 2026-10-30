@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
 	deriveSupervisorStage,
+	fixStepFor,
 	isAvisoStarted,
 	isPreCertSigned,
 	panelForStep,
@@ -18,6 +19,8 @@ const base = {
 	avisoNumber: null,
 	avisoDocPath: null,
 	releasedToFinanceAt: null,
+	financeVerifiedAt: null,
+	pbccRequestSentAt: null,
 }
 
 describe("WAITING_ON", () => {
@@ -29,6 +32,43 @@ describe("WAITING_ON", () => {
 })
 
 describe("deriveSupervisorStage", () => {
+	it("sends a returned packet back to the supervisor's Release step until he resends it", () => {
+		const released = {
+			...base,
+			status: "SUPERVISOR_APPROVED" as const,
+			supervisorApprovedAt: now,
+			jafInvoiceGeneratedAt: now,
+			avisoNumber: "10359868",
+			avisoDocPath: "/x/aviso-docs/a.pdf",
+			releasedToFinanceAt: now,
+		}
+		const sheet = { sigSupervisorAt: now, sigSubcontractorAt: null }
+		const entry = { note: "Fix", byUserId: "fin", createdAt: "2026-10-26" }
+		expect(
+			deriveSupervisorStage(
+				{ ...released, financeSendBackNotes: [entry] },
+				sheet,
+			),
+		).toBe("RELEASE")
+		expect(
+			deriveSupervisorStage(
+				{
+					...released,
+					financeSendBackNotes: [{ ...entry, resentAt: "2026-10-27" }],
+				},
+				sheet,
+			),
+		).toBe("RELEASED")
+		expect(deriveSupervisorStage(released, sheet)).toBe("RELEASED")
+		// A master-era return (no resentAt) on a packet Finance verified.
+		expect(
+			deriveSupervisorStage(
+				{ ...released, financeVerifiedAt: now, financeSendBackNotes: [entry] },
+				sheet,
+			),
+		).toBe("RELEASED")
+	})
+
 	it("follows status before approval", () => {
 		expect(deriveSupervisorStage({ ...base, status: "CREATED" }, null)).toBe(
 			"INTAKE",
@@ -112,6 +152,44 @@ describe("isAvisoStarted", () => {
 	})
 	it("is not started with nothing saved", () => {
 		expect(isAvisoStarted({ avisoNumber: null, avisoLines: null })).toBe(false)
+	})
+})
+
+describe("resolveStepView: a returned packet reopens the Aviso", () => {
+	it("makes Aviso and Pre-cert interactive for a returned packet on Release, even with a signed Pre-cert", () => {
+		for (const step of ["AVISO", "PRECERT", "RELEASE"] as const)
+			expect(resolveStepView("RELEASE", true, step, true, true), step).toEqual({
+				view: step,
+				interactive: true,
+			})
+		// Not returned: unchanged, the earlier steps stay a read-only look back.
+		expect(resolveStepView("RELEASE", true, "AVISO", true, false)).toEqual({
+			view: "AVISO",
+			interactive: false,
+		})
+		expect(resolveStepView("RELEASED", true, "AVISO", true)).toEqual({
+			view: "AVISO",
+			interactive: false,
+		})
+	})
+	it("still opens the Release step by default for a returned packet", () => {
+		expect(resolveStepView("RELEASE", true, null, true, true)).toEqual({
+			view: "RELEASE",
+			interactive: true,
+		})
+	})
+})
+
+describe("fixStepFor", () => {
+	it("sends a returned packet to the Aviso step and anything else to its own step", () => {
+		expect(fixStepFor("RELEASE", true)).toBe("AVISO")
+		expect(fixStepFor("PRECERT", true)).toBe("AVISO")
+		expect(fixStepFor("RELEASE", false)).toBe("RELEASE")
+		// Returned before an Aviso was ever saved: there is no Aviso to reopen.
+		expect(fixStepFor("INVOICE", true)).toBe("INVOICE")
+		expect(supervisorStepHref("d1", fixStepFor("RELEASE", true))).toBe(
+			"/docs/d1/review?step=AVISO",
+		)
 	})
 })
 

@@ -63,3 +63,50 @@ describe("finance receivables — release gate (integration)", () => {
 		expect(ids).not.toContain(unreleasedId)
 	})
 })
+
+describe("finance receivables: returned packets (integration)", () => {
+	const note = [
+		{ note: "Fix", byUserId: "u", createdAt: "2026-10-26T14:00:00.000Z" },
+	]
+	it("hides a returned packet, unless it already carries a payment record", async () => {
+		const finance = track("user", await seedUser({ role: "FINANCE" }))
+		vi.mocked(requireRole).mockResolvedValue({ user: finance } as any)
+		const supervisor = track("user", await seedUser({ role: "SUPERVISOR" }))
+		const mk = async () =>
+			track(
+				"jafInvoice",
+				await seedFinanceableInvoice({
+					status: "CLARO_UPLOADED",
+					supervisorId: supervisor.id,
+					// At Packets in (no LC request yet): where a return is live.
+					pbccRequestSentAt: null,
+				}),
+			)
+		const bare = await mk()
+		const paid = await mk()
+		for (const d of [bare, paid])
+			await db.jafInvoice.update({
+				where: { id: d.id },
+				data: { financeSendBackNotes: note },
+			})
+		track(
+			"paymentRecord",
+			await db.paymentRecord.create({
+				data: {
+					jobId: paid.id,
+					type: "PBCC_ADVANCE",
+					amount: 10,
+					date: new Date(),
+					recordedById: finance.id,
+				},
+			}),
+		)
+		const result = (await loader({
+			request: new Request("http://localhost/finance/receivables"),
+			params: {},
+		} as any)) as { rows: { id: string }[] }
+		const ids = result.rows.map((r) => r.id)
+		expect(ids).not.toContain(bare.id)
+		expect(ids).toContain(paid.id)
+	})
+})

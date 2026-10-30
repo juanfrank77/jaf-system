@@ -6,8 +6,13 @@ import {
 	toContractorPaymentLines,
 } from "~/lib/contractor-payment.server"
 import { db } from "~/lib/db.server"
-import { type ArmAListStage, stageWhere } from "~/lib/finance-stages.server"
+import {
+	type ArmAListStage,
+	financeSendBackIds,
+	stageWhere,
+} from "~/lib/finance-stages.server"
 import { evaluateReleaseGate } from "~/lib/release-gate"
+import type { Prisma } from "../../generated/prisma/client"
 
 /** Whole days elapsed since `from` (0 when unset). */
 export function ageDays(from: Date | null, now: Date = new Date()): number {
@@ -25,15 +30,54 @@ export async function loadStageRows(opts: {
 	 * the ids of every stage job (all pages) whose contractor account resolves.
 	 * One `resolveContractorAccounts` call covers the whole stage. */
 	withAccounts?: boolean
+	/** Step 1 only (S4): "all" leaves the packets Finance sent back out and
+	 * lists a resent one first; "only" is the Returned list. */
+	view?: "all" | "returned"
 }): Promise<{ rows: StageRow[]; totalCount: number; sweepableIds: string[] }> {
-	const where = stageWhere(opts.stage)
-	const [totalCount, docs] = await Promise.all([
+	const packets = opts.stage === "PACKETS"
+	const sent = packets
+		? await financeSendBackIds()
+		: { returned: [], resent: [] as string[] }
+	const returnedView = packets && opts.view === "returned"
+	const where: Prisma.JafInvoiceWhereInput = returnedView
+		? {
+				...stageWhere(opts.stage),
+				id: { in: sent.returned },
+			}
+		: stageWhere(opts.stage, sent.returned)
+	const orderBy: Prisma.JafInvoiceOrderByWithRelationInput[] = [
+		{ releasedToFinanceAt: "asc" },
+		{ id: "asc" },
+	]
+	// A resent packet goes to the top of the list so she looks at it first.
+	// The page is cut from the ordered ids, then its rows are read.
+	let pageIds: string[] | null = null
+	if (!returnedView && sent.resent.length > 0) {
+		const ordered = await db.jafInvoice.findMany({
+			where,
+			orderBy,
+			select: { id: true },
+		})
+		const ids = ordered.map((d) => d.id)
+		const present = new Set(ids)
+		const resentFirst = sent.resent.filter((id) => present.has(id))
+		const resentSet = new Set(resentFirst)
+		pageIds = [...resentFirst, ...ids.filter((id) => !resentSet.has(id))].slice(
+			(opts.page - 1) * opts.pageSize,
+			opts.page * opts.pageSize,
+		)
+	}
+	const [totalCount, found] = await Promise.all([
 		db.jafInvoice.count({ where }),
 		db.jafInvoice.findMany({
-			where,
-			orderBy: [{ releasedToFinanceAt: "asc" }, { id: "asc" }],
-			skip: (opts.page - 1) * opts.pageSize,
-			take: opts.pageSize,
+			where: pageIds ? { AND: [where, { id: { in: pageIds } }] } : where,
+			orderBy,
+			...(pageIds
+				? {}
+				: {
+						skip: (opts.page - 1) * opts.pageSize,
+						take: opts.pageSize,
+					}),
 			select: {
 				id: true,
 				controlNumber: true,
@@ -41,6 +85,7 @@ export async function loadStageRows(opts: {
 				jafInvoicePdfPath: true,
 				avisoDocPath: true,
 				releasedToFinanceAt: true,
+				financeVerifiedAt: true,
 				pbccRequestSentAt: true,
 				jafInvoiceLines: true,
 				contractorAccountCode: true,
@@ -51,6 +96,8 @@ export async function loadStageRows(opts: {
 						sigSubcontractorName: true,
 						sigSupervisorAt: true,
 						sigSubcontractorAt: true,
+						// The gate counts a signed sheet only for the current Aviso.
+						avisoNumber: true,
 					},
 				},
 				photos: { select: { tag: true } },
@@ -58,6 +105,9 @@ export async function loadStageRows(opts: {
 			},
 		}),
 	])
+	const docs = pageIds
+		? pageIds.flatMap((id) => found.filter((d) => d.id === id))
+		: found
 	let resolved: Map<string, unknown> | null = null
 	let sweepableIds: string[] = []
 	if (opts.withAccounts) {
@@ -108,6 +158,10 @@ export async function loadStageRows(opts: {
 			amount: computeContractorPayment(
 				toContractorPaymentLines(d.jafInvoiceLines),
 			).grossPayable,
+			...(packets && {
+				resent: sent.resent.includes(d.id) && !d.financeVerifiedAt,
+				returned: returnedView,
+			}),
 			...(resolved && {
 				accountResolved: d.contractorAccountCode
 					? resolved.has(d.contractorAccountCode)

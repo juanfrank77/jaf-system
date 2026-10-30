@@ -20,6 +20,10 @@ export type StageRow = {
 	}
 	/** Step 4 only: contractor account resolves, so a list can include it. */
 	accountResolved?: boolean
+	/** The supervisor fixed a return and sent it back: look at it first. */
+	resent?: boolean
+	/** Finance sent it back and the supervisor has not resent it yet. */
+	returned?: boolean
 }
 
 /** Shared by steps 1-3. `showDocs` adds the documents-received column
@@ -59,6 +63,16 @@ export function FinanceStageTable({
 								<Link to={to(r)} className="underline">
 									{r.controlNumber}
 								</Link>
+								{r.returned && (
+									<Badge variant="danger" className="ml-2">
+										{t("open_job.returned")}
+									</Badge>
+								)}
+								{r.resent && (
+									<Badge variant="info" className="ml-2">
+										{t("returned_packet.resent")}
+									</Badge>
+								)}
 							</td>
 							<td className="p-2">{r.avisoNumber ?? "—"}</td>
 							<td className="p-2">{r.contractorLabel ?? "—"}</td>
@@ -106,6 +120,8 @@ export function StagePagination({
 }) {
 	const { t } = useTranslation()
 	if (pagination.totalPages <= 1) return null
+	// basePath may already carry a query (the Returned view).
+	const sep = basePath.includes("?") ? "&" : "?"
 	return (
 		<div className="flex items-center justify-between text-sm">
 			<span className="text-muted-foreground">
@@ -117,7 +133,7 @@ export function StagePagination({
 			</span>
 			<div className="flex gap-2">
 				<Link
-					to={`${basePath}?page=${Math.max(1, pagination.page - 1)}`}
+					to={`${basePath}${sep}page=${Math.max(1, pagination.page - 1)}`}
 					className={
 						pagination.page <= 1 ? "pointer-events-none opacity-50" : undefined
 					}
@@ -131,7 +147,7 @@ export function StagePagination({
 					})}
 				</span>
 				<Link
-					to={`${basePath}?page=${pagination.page + 1}`}
+					to={`${basePath}${sep}page=${pagination.page + 1}`}
 					className={
 						pagination.page >= pagination.totalPages
 							? "pointer-events-none opacity-50"

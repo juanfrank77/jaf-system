@@ -8,6 +8,7 @@ import { RouteErrorBoundary } from "~/components/error-boundary"
 import { JobLinesCard, preppedAsLines } from "~/components/job-lines-card"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { ReassignForm } from "~/components/reassign-form"
+import { ReturnedBanner } from "~/components/returned-banner"
 import { SupervisorStepRail } from "~/components/supervisor-step-rail"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
@@ -47,13 +48,18 @@ import {
 	isTerminalStatus,
 } from "~/lib/permissions"
 import { requireRole, requireSession } from "~/lib/permissions.server"
+import { returnedInfo } from "~/lib/returned-packet.server"
 import { serviceCodesForRole } from "~/lib/service-codes.server"
 import type { ServiceLine } from "~/lib/service-lines"
 import {
 	assertDocInSupervisorScope,
 	assignableBrigadesWhere,
 } from "~/lib/supervisor-scope"
-import { deriveSupervisorStage } from "~/lib/supervisor-stage"
+import {
+	deriveSupervisorStage,
+	fixStepFor,
+	supervisorStepHref,
+} from "~/lib/supervisor-stage"
 import { saveUpload } from "~/lib/uploads.server"
 import {
 	countWorkOrderEdits,
@@ -244,6 +250,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			: auditTrail.map((a) => ({ ...a, diffJson: null })),
 		stage: deriveSupervisorStage(doc, sheet),
 		openLabel: openJobLabel(doc, sheet),
+		// Finance sent the packet back: the supervisor (or an admin) fixes it.
+		returned:
+			user.role === "SUPERVISOR" || user.role === "ADMIN"
+				? await returnedInfo(doc)
+				: null,
 	}
 }
 
@@ -637,6 +648,7 @@ export default function DocView({
 		latestSendBack,
 		sentByName,
 		correctorNames,
+		returned,
 	} = loaderData
 	const editsLeft =
 		user.role === "SUPERVISOR"
@@ -695,6 +707,13 @@ export default function DocView({
 					cancelled={doc.status === "CANCELLED"}
 				/>
 			</div>
+
+			{returned && doc.status !== "CANCELLED" && (
+				<ReturnedBanner
+					returned={returned}
+					fixHref={supervisorStepHref(doc.id, fixStepFor(stage, true))}
+				/>
+			)}
 
 			{latestSendBack && (
 				<Callout

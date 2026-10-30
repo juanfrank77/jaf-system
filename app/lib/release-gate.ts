@@ -23,6 +23,9 @@ export function isPacketPath(path: string | null): boolean {
 /**
  * The release gate is exactly four documents: the JAF work order PDF, the
  * Aviso (number + file), the pre-cert sheet signed by the supervisor and before + after photos.
+ * The signed sheet must be the one for the job's current Aviso: a sheet that
+ * records another Aviso number (the Aviso was replaced and the new sheet was
+ * never created or signed) does not count. Sheets with no number pass.
  */
 export function evaluateReleaseGate(input: {
 	doc: {
@@ -33,6 +36,8 @@ export function evaluateReleaseGate(input: {
 	sheet: {
 		sigSupervisorAt: Date | null
 		sigSubcontractorAt: Date | null
+		/** The Aviso number the sheet was issued for. */
+		avisoNumber: string | null
 	} | null
 	photos: { tag: "BEFORE" | "DURING" | "AFTER" | null }[]
 }): { ok: boolean; rows: ReleaseRow[] } {
@@ -50,7 +55,12 @@ export function evaluateReleaseGate(input: {
 		},
 		{
 			key: "precert_signed",
-			ok: !!sheet?.sigSupervisorAt,
+			ok:
+				!!sheet?.sigSupervisorAt &&
+				// A missing Aviso number is the aviso row's failure, not this one.
+				(sheet.avisoNumber == null ||
+					!present(doc.avisoNumber) ||
+					sheet.avisoNumber === doc.avisoNumber),
 			detail: null,
 		},
 		{

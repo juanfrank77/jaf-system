@@ -152,6 +152,10 @@ const FIELD_DOC_SELECT = {
 	avisoNumber: true,
 	avisoDocPath: true,
 	releasedToFinanceAt: true,
+	// The rail's stage: a returned packet is back on the supervisor's steps.
+	financeSendBackNotes: true,
+	financeVerifiedAt: true,
+	pbccRequestSentAt: true,
 	blueprintPaths: true,
 	claroSupervisor: {
 		select: { name: true, requiresBlueprint: true },

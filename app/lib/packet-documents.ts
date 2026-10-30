@@ -32,6 +32,7 @@ export function packetDocuments(
 		pdfPath: string | null
 		sigSupervisorAt: Date | null
 		sigSubcontractorAt: Date | null
+		avisoNumber: string | null
 	} | null,
 	photos: {
 		localPath: string

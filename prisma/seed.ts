@@ -18,6 +18,7 @@ import {
 	WAREHOUSE_STAFF_SEED,
 } from "../app/lib/catalog-import"
 import { PrismaClient } from "../generated/prisma/client"
+import { CLARO_SUPERVISOR_LINKS } from "./claro-supervisor-links"
 import { seedContractorAccounts } from "./seed-contractor-accounts"
 import { seedWarehouseStartingBalances } from "./seed-warehouse-stock"
 
@@ -537,6 +538,35 @@ async function seedDemoClaroSupervisors() {
 	)
 }
 
+// Links each JAF supervisor to the Claro supervisors they work with (the
+// client's sheet, in claro-supervisor-links.ts). A Claro supervisor is found by
+// email and created if missing; links are only ever added, so an admin's later
+// edits on Admin → Claro supervisors survive a re-seed.
+async function seedClaroSupervisorLinks() {
+	let linked = 0
+	for (const { jafEmail, claro } of CLARO_SUPERVISOR_LINKS) {
+		const jaf = await db.user.findUnique({ where: { email: jafEmail } })
+		if (!jaf) {
+			// biome-ignore lint/suspicious/noConsole: CLI seed output
+			console.warn(`claro links: no user ${jafEmail}, skipped`)
+			continue
+		}
+		for (const c of claro) {
+			const found = await db.claroSupervisor.findFirst({
+				where: { email: c.email },
+			})
+			const id = found?.id ?? (await db.claroSupervisor.create({ data: c })).id
+			await db.user.update({
+				where: { id: jaf.id },
+				data: { claroSupervisors: { connect: { id } } },
+			})
+			linked++
+		}
+	}
+	// biome-ignore lint/suspicious/noConsole: CLI seed output
+	console.log(`claro supervisor links: ${linked} ensured`)
+}
+
 async function main() {
 	// Fail before any write, not after 9 other steps have already committed:
 	// the roster CSV is an out-of-band transfer (gitignored, real PII), and a
@@ -547,6 +577,7 @@ async function main() {
 	await seedCatalog()
 	await seedSupervisors()
 	await seedBrigades()
+	await seedClaroSupervisorLinks()
 	await seedContractorAccounts(db)
 	await seedWarehouses()
 	await seedWarehouseStaff()

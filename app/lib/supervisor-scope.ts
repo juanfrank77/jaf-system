@@ -86,27 +86,47 @@ export async function isBrigadeInSupervisorScope(
 	return !!brigade.area && areas.includes(brigade.area)
 }
 
+/** The columns `pickerState` reads, plus the name a "With [name]" row shows. */
+export const BRIGADE_PICKER_SELECT = {
+	active: true,
+	supervisorId: true,
+	isEquipmentAccount: true,
+	terminatedAt: true,
+	supervisor: { select: { name: true } },
+} as const
+
 /**
  * `db.brigade.findMany` args for the "pick a brigade to assign this job to"
- * picker every doc-intake/edit/reassign screen renders — active brigades
- * only, scoped and bounded for a SUPERVISOR (their own admin-assigned areas,
- * capped so the picker can't blow up), unscoped and unbounded for anyone
- * else (ADMIN sees every active brigade, matching its pre-existing
- * behavior). Shared so the `active`/`take`/scope rule can't drift between
- * routes the way it already had once. Not for the Comptroller's
- * brigade-management screen (`/comptroller/brigades`), which intentionally
- * shows inactive brigades too so they can be reactivated.
+ * picker every doc-intake/edit/reassign screen renders. A SUPERVISOR gets
+ * every brigade that is not an equipment ("D") account and not terminated —
+ * no area filter, no cap — because the picker shows their own, the inactive
+ * pool ("Activate and assign") and, greyed, the ones with other supervisors;
+ * `pickerState` (brigade-picker.ts) sorts them. Anyone else (ADMIN) keeps the
+ * unscoped, unbounded active list. `select` carries the columns `pickerState`
+ * needs; callers spread it into their own select.
+ *
+ * Listing is not authorization: `assignBrigades` (brigade-picker.server.ts)
+ * re-checks every pick on the server. Not for the Comptroller's
+ * brigade-management screen (`/comptroller/brigades`).
  */
 export async function assignableBrigadesWhere(
-	db: PrismaClient,
+	_db: PrismaClient,
 	user: { id: string; role: string },
 ): Promise<{
-	where: { active: true; area?: { in: string[] } }
-	take: number | undefined
+	where: { active: true } | { isEquipmentAccount: false; terminatedAt: null }
+	take: undefined
+	select: typeof BRIGADE_PICKER_SELECT
 }> {
 	if (user.role !== "SUPERVISOR") {
-		return { where: { active: true }, take: undefined }
+		return {
+			where: { active: true },
+			take: undefined,
+			select: BRIGADE_PICKER_SELECT,
+		}
 	}
-	const areas = await supervisorAreas(db, user.id)
-	return { where: { active: true, area: { in: areas } }, take: 100 }
+	return {
+		where: { isEquipmentAccount: false, terminatedAt: null },
+		take: undefined,
+		select: BRIGADE_PICKER_SELECT,
+	}
 }

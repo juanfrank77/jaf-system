@@ -8,7 +8,11 @@ const tx = vi.hoisted(() => ({
 }))
 vi.mock("~/lib/db.server", () => ({
 	db: {
-		jafInvoice: { findUniqueOrThrow: vi.fn(), update: vi.fn() },
+		jafInvoice: {
+			findUniqueOrThrow: vi.fn(),
+			update: vi.fn(),
+			groupBy: vi.fn(() => Promise.resolve([])),
+		},
 		auditTrail: { create: vi.fn(), count: vi.fn(() => Promise.resolve(0)) },
 		user: { findMany: vi.fn(), findUnique: vi.fn() },
 		brigade: { findMany: vi.fn(), findUnique: vi.fn() },
@@ -18,11 +22,22 @@ vi.mock("~/lib/db.server", () => ({
 }))
 
 vi.mock("~/lib/permissions.server", () => ({ requireRole: vi.fn() }))
+// The guard's database half is covered against a real DB in
+// brigade-picker.server.test.ts.
+vi.mock("~/lib/brigade-picker.server", async (importOriginal) => ({
+	...(await importOriginal<typeof import("~/lib/brigade-picker.server")>()),
+	assignBrigadesOrThrow: vi.fn(),
+}))
 vi.mock("~/lib/service-codes.server", async (importOriginal) => ({
 	...(await importOriginal<typeof import("~/lib/service-codes.server")>()),
 	getActiveMaterialCodes: vi.fn(() => Promise.resolve([])),
 }))
 
+import {
+	assignBrigadesOrThrow,
+	BRIGADE_INVALID,
+	BrigadeAssignError,
+} from "~/lib/brigade-picker.server"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
 import { action, loader } from "./_app.docs.$id_.edit"
@@ -93,6 +108,7 @@ describe("GET /docs/:id/edit — supervisor scope", () => {
 		vi.mocked(db.user.findUnique).mockResolvedValue({
 			supervisorAreas: ["SUR"],
 		} as any)
+		vi.mocked(db.brigade.findMany).mockResolvedValue([])
 
 		const result = await loader({
 			request: new Request("http://localhost/docs/doc-1/edit"),
@@ -157,6 +173,7 @@ describe("POST /docs/:id/edit — supervisor scope", () => {
 		vi.mocked(db.brigade.findUnique).mockResolvedValue({
 			id: "b1",
 			area: "SUR",
+			active: true,
 			memberIds: ["crew-1"],
 		} as any)
 
@@ -168,9 +185,11 @@ describe("POST /docs/:id/edit — supervisor scope", () => {
 		).rejects.toMatchObject({ status: 302 })
 
 		expect(db.brigade.findUnique).toHaveBeenCalled()
+		// b1 is already on the job: it passes through, no guard, no activation.
+		expect(assignBrigadesOrThrow).not.toHaveBeenCalled()
 	})
 
-	it("rejects reassigning to a brigade in a foreign area, even when the doc itself is in scope", async () => {
+	it("refuses an equipment (D) account posted by hand and saves nothing", async () => {
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
 			baseDoc() as any,
 		)
@@ -178,28 +197,52 @@ describe("POST /docs/:id/edit — supervisor scope", () => {
 			supervisorAreas: ["SUR"],
 		} as any)
 		vi.mocked(db.brigade.findUnique).mockResolvedValue({
-			id: "b-metro",
-			area: "METRO",
-			memberIds: ["crew-metro"],
+			id: "b-d",
+			area: "SUR",
+			active: true,
+			isEquipmentAccount: true,
+			memberIds: [],
 		} as any)
-
 		const form = validForm()
-		form.set("brigadeId", "b-metro")
-
+		form.set("brigadeId", "b-d")
 		const result = await action({
 			request: formRequest(form),
 			params: { id: "doc-1" },
 		} as any)
-
 		expect(result).toEqual({ errorKey: "docs_edit.errors.brigade_invalid" })
 		expect(db.$transaction).not.toHaveBeenCalled()
+	})
+
+	it("reports a brigade that became unavailable mid-save", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			baseDoc() as any,
+		)
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["SUR"],
+		} as any)
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
+			id: "b-idle",
+			area: null,
+			active: false,
+			memberIds: [],
+		} as any)
+		vi.mocked(assignBrigadesOrThrow).mockRejectedValueOnce(
+			new BrigadeAssignError(BRIGADE_INVALID),
+		)
+		const form = validForm()
+		form.set("brigadeId", "b-idle")
+		const result = await action({
+			request: formRequest(form),
+			params: { id: "doc-1" },
+		} as any)
+		expect(result).toEqual({ errorKey: "docs_edit.errors.brigade_invalid" })
 	})
 })
 
 describe("several brigades on a work order", () => {
 	const brigades: Record<string, any> = {
-		b1: { id: "b1", area: "SUR", memberIds: ["u1", "u2"] },
-		b2: { id: "b2", area: "SUR", memberIds: ["u2", "u3"] },
+		b1: { id: "b1", area: "SUR", active: true, memberIds: ["u1", "u2"] },
+		b2: { id: "b2", area: "SUR", active: true, memberIds: ["u2", "u3"] },
 	}
 	const history = [
 		{ userIds: ["u1", "u2"], brigadeId: "b1", brigadeIds: ["b1"] },
@@ -258,6 +301,12 @@ describe("several brigades on a work order", () => {
 		)
 		const res = await run(["b2", "b1"])
 		expect(res.status).toBe(302)
+		// Only the newly added brigade goes through the guard, with the save.
+		expect(assignBrigadesOrThrow).toHaveBeenCalledWith(tx, {
+			docId: "doc-1",
+			viewer: { id: "user-1", role: "SUPERVISOR", areas: ["SUR"] },
+			brigadeIds: ["b2"],
+		})
 		const { data } = tx.jafInvoice.update.mock.calls[0][0]
 		expect(data.brigadeId).toBe("b2")
 		expect(data.assignedCrewIds).toEqual(["u2", "u3", "u1"])
@@ -289,15 +338,35 @@ describe("several brigades on a work order", () => {
 		expect(data).not.toHaveProperty("crewAssignmentHistory")
 	})
 
-	it("rejects the edit if any selected brigade is outside the supervisor's areas", async () => {
-		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
-			baseDoc() as any,
-		)
-		brigades.bx = { id: "bx", area: "METRO", memberIds: ["u9"] }
-		const res = await run(["b1", "bx"])
-		expect(res).toEqual({ errorKey: "docs_edit.errors.brigade_invalid" })
-		expect(tx.jafInvoice.update).not.toHaveBeenCalled()
-	})
+	it.each([
+		[
+			"terminated",
+			{ active: true, terminatedAt: new Date() },
+			"docs_edit.errors.brigade_invalid",
+		],
+	])(
+		"refuses making a kept brigade %s the lead (payee), as change_lead does",
+		async (_label, extra, errorKey) => {
+			brigades.bk = { id: "bk", area: "SUR", memberIds: ["u7"], ...extra }
+			try {
+				vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+					baseDoc({
+						crewAssignmentHistory: [
+							{ brigadeId: "b1", brigadeIds: ["b1", "bk"] },
+						],
+					}) as any,
+				)
+				// Kept as a second crew: passes through unchanged.
+				expect((await run(["b1", "bk"])).status).toBe(302)
+				vi.clearAllMocks()
+				// Promoted to lead: the payee check applies.
+				expect(await run(["bk", "b1"])).toEqual({ errorKey })
+				expect(tx.jafInvoice.update).not.toHaveBeenCalled()
+			} finally {
+				delete brigades.bk
+			}
+		},
+	)
 })
 
 describe("edit form data", () => {
@@ -341,7 +410,7 @@ describe("edit form data", () => {
 })
 
 describe("edit never touches the Aviso number", () => {
-	const brigade = { id: "b1", area: "SUR", memberIds: ["u1"] }
+	const brigade = { id: "b1", area: "SUR", active: true, memberIds: ["u1"] }
 	beforeEach(() => {
 		vi.clearAllMocks()
 		tx.user.findMany.mockResolvedValue([])
@@ -463,7 +532,7 @@ describe("three-edit limit for supervisors", () => {
 })
 
 describe("intake answers on the edit page", () => {
-	const brigade = { id: "b1", area: "SUR", memberIds: ["u1"] }
+	const brigade = { id: "b1", area: "SUR", active: true, memberIds: ["u1"] }
 	beforeEach(() => {
 		vi.clearAllMocks()
 		tx.user.findMany.mockResolvedValue([{ id: "wh-1" }])

@@ -1,8 +1,9 @@
 import { useTranslation } from "react-i18next"
-import { Link } from "react-router"
+import { Link, useFetcher } from "react-router"
 import { STAGE_KEY } from "~/components/dashboards/supervisor-dashboard"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Badge } from "~/components/ui/badge"
+import { Button } from "~/components/ui/button"
 import {
 	DataTable,
 	DataTableHead,
@@ -12,6 +13,7 @@ import {
 } from "~/components/ui/data-table"
 import { EmptyState } from "~/components/ui/empty-state"
 import { PageHeader } from "~/components/ui/page-header"
+import { standByBrigade } from "~/lib/brigade-standby.server"
 import { assignedBrigadeIds } from "~/lib/crew-assignment"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
@@ -44,7 +46,13 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const areas = await supervisorAreas(db, user.id)
 
 	const brigades = await db.brigade.findMany({
-		where: { active: true, area: { in: areas } },
+		where: {
+			active: true,
+			isEquipmentAccount: false,
+			terminatedAt: null,
+			// An activated imported brigade has no area: it is mine by owner.
+			OR: [{ supervisorId: user.id }, { area: { in: areas } }],
+		},
 		orderBy: { name: "asc" },
 	})
 	const memberIds = [...new Set(brigades.flatMap((b) => b.memberIds))]
@@ -107,6 +115,52 @@ export async function loader({ request }: Route.LoaderArgs) {
 	}
 }
 
+/** Stand-by: send an idle brigade back to the pool (inactive, no supervisor). */
+export async function action({ request }: Route.ActionArgs) {
+	const { user } = await requireRole(request, ["SUPERVISOR"])
+	const form = await request.formData()
+	if (form.get("intent") !== "standby")
+		return { errorKey: "supervisor_brigades.errors.not_found" }
+	const result = await standByBrigade(db, {
+		brigadeId: String(form.get("brigadeId") ?? ""),
+		viewerId: user.id,
+	})
+	return result.ok ? { ok: true as const } : { errorKey: result.errorKey }
+}
+
+function StandByButton({ id, name }: { id: string; name: string }) {
+	const { t } = useTranslation()
+	const fetcher = useFetcher<typeof action>()
+	const errorKey =
+		fetcher.data && "errorKey" in fetcher.data ? fetcher.data.errorKey : null
+	return (
+		<fetcher.Form
+			method="post"
+			onSubmit={(e) => {
+				if (!window.confirm(t("supervisor_brigades.standby_confirm", { name })))
+					e.preventDefault()
+			}}
+			className="flex flex-col gap-1"
+		>
+			<input type="hidden" name="intent" value="standby" />
+			<input type="hidden" name="brigadeId" value={id} />
+			<Button
+				type="submit"
+				variant="outline"
+				size="sm"
+				disabled={fetcher.state !== "idle"}
+			>
+				{t("supervisor_brigades.standby")}
+			</Button>
+			{errorKey && (
+				<p role="alert" className="text-xs text-status-danger">
+					{t(errorKey, errorKey)}
+				</p>
+			)}
+		</fetcher.Form>
+	)
+}
+
 export default function SupervisorBrigades({
 	loaderData,
 }: Route.ComponentProps) {
@@ -128,11 +182,12 @@ export default function SupervisorBrigades({
 					</h2>
 					<ul className="flex flex-wrap gap-2">
 						{available.map((b) => (
-							<li key={b.id}>
+							<li key={b.id} className="flex items-start gap-2">
 								<Badge variant="ok">
 									{b.name}
 									{b.area ? ` · ${b.area}` : ""}
 								</Badge>
+								<StandByButton id={b.id} name={b.name} />
 							</li>
 						))}
 					</ul>

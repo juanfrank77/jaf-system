@@ -28,10 +28,16 @@ import {
 	canonicalizeAddress,
 	loadAddressSuggestions,
 } from "~/lib/address-suggestions.server"
+import { assignRejection, toPickerBrigades } from "~/lib/brigade-picker"
+import {
+	assignBrigadesOrThrow,
+	BrigadeAssignError,
+	lastWorkedByBrigade,
+	pickerViewer,
+} from "~/lib/brigade-picker.server"
 import { generateControlNumber } from "~/lib/control-number.server"
 import { buildCrewAssignment, parseBrigadeIds } from "~/lib/crew-assignment"
 import { db } from "~/lib/db.server"
-import { uploadFileName, validateBlueprintFile } from "~/lib/file-upload.server"
 import { composeJobAddress, parseAddressInput } from "~/lib/intake-address"
 import {
 	type MaterialsChoice,
@@ -46,21 +52,25 @@ import {
 	serviceCodesForRole,
 } from "~/lib/service-codes.server"
 import { parseServiceLines, type ServiceLine } from "~/lib/service-lines"
-import {
-	assignableBrigadesWhere,
-	isBrigadeInSupervisorScope,
-} from "~/lib/supervisor-scope"
-import { saveUpload } from "~/lib/uploads.server"
+import { assignableBrigadesWhere } from "~/lib/supervisor-scope"
 import type { Route } from "./+types/_app.docs.new"
 
 export const meta: Route.MetaFunction = () => [
 	{ title: "New Work Order — JAF Ops" },
 ]
 
+/** A supervisor's Claro list is the ones linked to them; Admin sees all. */
+function linkedToViewer(user: { id: string; role: string }) {
+	return user.role === "ADMIN"
+		? {}
+		: { jafSupervisors: { some: { id: user.id } } }
+}
+
 export async function loader({ request }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["SUPERVISOR", "ADMIN"])
 	const brigadeArgs = await assignableBrigadesWhere(db, user)
-	const [materials, brigades, claroSupervisors, suggestions] =
+	const viewer = await pickerViewer(db, user)
+	const [materials, brigadeRows, claroSupervisors, suggestions, lastWorked] =
 		await Promise.all([
 			getActiveMaterialCodes(),
 			db.brigade.findMany({
@@ -72,21 +82,23 @@ export async function loader({ request }: Route.LoaderArgs) {
 					area: true,
 					code: true,
 					leadName: true,
+					...brigadeArgs.select,
 				},
 				take: brigadeArgs.take,
 			}),
 			db.claroSupervisor.findMany({
-				where: { active: true },
+				where: { active: true, ...linkedToViewer(user) },
 				orderBy: { name: "asc" },
 				select: {
 					id: true,
 					name: true,
 					requiresPrefield: true,
-					requiresBlueprint: true,
 				},
 			}),
 			loadAddressSuggestions(),
+			lastWorkedByBrigade(db),
 		])
+	const brigades = toPickerBrigades(brigadeRows, viewer, lastWorked)
 	return {
 		user,
 		serviceCodes: serviceCodesForRole(user.role, materials),
@@ -105,11 +117,6 @@ export async function action({ request }: Route.ActionArgs) {
 	const claroSupervisorId = (
 		(form.get("claroSupervisorId") as string) || ""
 	).trim()
-	const blueprints = form
-		.getAll("blueprint")
-		.filter((f): f is File => f instanceof File && f.size > 0)
-	if (blueprints.some((f) => !validateBlueprintFile(f).valid))
-		return { errorKey: "docs_new.errors.blueprint_invalid" }
 	const jobDescription =
 		(form.get("jobDescription") as string | null)?.trim() || null
 	const brigadeIds = parseBrigadeIds(form)
@@ -132,8 +139,11 @@ export async function action({ request }: Route.ActionArgs) {
 		return { errorKey: "docs_new.errors.invalid_service_lines" }
 	}
 
+	// A supervisor can only pick a Claro supervisor linked to them (Admin: any).
 	const claro = claroSupervisorId
-		? await db.claroSupervisor.findUnique({ where: { id: claroSupervisorId } })
+		? await db.claroSupervisor.findFirst({
+				where: { id: claroSupervisorId, ...linkedToViewer(user) },
+			})
 		: null
 	if (!claro?.active) {
 		return { errorKey: "docs_new.errors.claro_supervisor_required" }
@@ -158,17 +168,17 @@ export async function action({ request }: Route.ActionArgs) {
 		return { errorKey: "docs_new.errors.missing_fields" }
 	}
 
+	const viewer = await pickerViewer(db, user)
 	const brigades = await Promise.all(
 		brigadeIds.map((id) => db.brigade.findUnique({ where: { id } })),
 	)
+	// An early refusal before anything is written; `assignBrigadesOrThrow`
+	// re-checks (and activates) inside the job transaction below.
 	for (const brigade of brigades) {
 		if (!brigade) return { errorKey: "docs_new.errors.brigade_invalid" }
-		if (
-			user.role === "SUPERVISOR" &&
-			!(await isBrigadeInSupervisorScope(db, user.id, brigade))
-		) {
+		const rejection = assignRejection(brigade, viewer)
+		if (rejection === "invalid")
 			return { errorKey: "docs_new.errors.brigade_invalid" }
-		}
 	}
 	const { brigadeId, assignedCrewIds } = buildCrewAssignment(
 		brigades as NonNullable<(typeof brigades)[number]>[],
@@ -178,84 +188,76 @@ export async function action({ request }: Route.ActionArgs) {
 		? await db.user.findMany({ where: { role: "WAREHOUSE", active: true } })
 		: []
 
-	await db.$transaction(async (tx) => {
-		const doc = await tx.jafInvoice.create({
-			data: {
-				controlNumber,
-				status,
-				jobType,
-				jobAddressEstimated,
-				claroSupervisorId: claro.id,
-				sector: address.sector,
-				direccion1: address.direccion1,
-				direccion2: address.direccion2,
-				latitud: address.latitud,
-				longitud: address.longitud,
-				tipo: address.tipo,
-				ciudad: address.ciudad,
-				tipoPlanta: address.tipoPlanta,
-				grupoPlan: address.grupoPlan,
-				materialsFromWarehouse,
-				materialsReason,
-				prefieldNeeded,
-				jobDescription,
-				estimatedMaterials,
-				serviceLines,
-				brigadeId,
-				assignedCrewIds,
-				supervisorId: user.id,
-				crewAssignmentHistory: [
-					{
-						userIds: assignedCrewIds,
-						brigadeId,
-						brigadeIds,
-						assignedById: user.id,
-						assignedAt: new Date().toISOString(),
-					},
-				],
-			},
-		})
-		if (blueprints.length > 0) {
-			const blueprintPaths: string[] = []
-			for (const [i, file] of blueprints.entries())
-				blueprintPaths.push(
-					await saveUpload(
-						`blueprints/${doc.id}`,
-						uploadFileName(file, i),
-						file,
-					),
-				)
-			await tx.jafInvoice.update({
-				where: { id: doc.id },
-				data: { blueprintPaths },
-			})
-		}
-		await tx.auditTrail.create({
-			data: {
-				docId: doc.id,
-				userId: user.id,
-				action: "CREATED",
-				diffJson: {
-					status: { before: null, after: status },
+	try {
+		await db.$transaction(async (tx) => {
+			const doc = await tx.jafInvoice.create({
+				data: {
+					controlNumber,
+					status,
+					jobType,
+					jobAddressEstimated,
+					claroSupervisorId: claro.id,
+					sector: address.sector,
+					direccion1: address.direccion1,
+					direccion2: address.direccion2,
+					latitud: address.latitud,
+					longitud: address.longitud,
+					tipo: address.tipo,
+					ciudad: address.ciudad,
+					tipoPlanta: address.tipoPlanta,
+					grupoPlan: address.grupoPlan,
 					materialsFromWarehouse,
 					materialsReason,
 					prefieldNeeded,
-					brigadeId,
-					brigadeIds,
+					jobDescription,
+					estimatedMaterials,
 					serviceLines,
+					brigadeId,
+					assignedCrewIds,
+					supervisorId: user.id,
+					crewAssignmentHistory: [
+						{
+							userIds: assignedCrewIds,
+							brigadeId,
+							brigadeIds,
+							assignedById: user.id,
+							assignedAt: new Date().toISOString(),
+						},
+					],
 				},
-			},
-		})
-		if (warehouse.length > 0)
-			await tx.notification.createMany({
-				data: warehouse.map((w) => ({
-					userId: w.id,
-					docId: doc.id,
-					message: `New job ${controlNumber} — ${jobType} at ${jobAddressEstimated}. Please prepare materials.`,
-				})),
 			})
-		return doc
-	})
+			// Inside the job transaction: Activate & assign succeeds or fails
+			// with the job.
+			await assignBrigadesOrThrow(tx, { docId: doc.id, viewer, brigadeIds })
+			await tx.auditTrail.create({
+				data: {
+					docId: doc.id,
+					userId: user.id,
+					action: "CREATED",
+					diffJson: {
+						status: { before: null, after: status },
+						materialsFromWarehouse,
+						materialsReason,
+						prefieldNeeded,
+						brigadeId,
+						brigadeIds,
+						serviceLines,
+					},
+				},
+			})
+			if (warehouse.length > 0)
+				await tx.notification.createMany({
+					data: warehouse.map((w) => ({
+						userId: w.id,
+						docId: doc.id,
+						message: `New job ${controlNumber} — ${jobType} at ${jobAddressEstimated}. Please prepare materials.`,
+					})),
+				})
+		})
+	} catch (e) {
+		if (e instanceof BrigadeAssignError) return { errorKey: e.errorKey }
+		throw e
+	}
 
 	throw redirect("/dashboard")
 }
@@ -303,7 +305,7 @@ export default function NewDoc({
 					{t("docs_new.callout_body")}
 				</p>
 			</details>
-			<Form method="post" encType="multipart/form-data">
+			<Form method="post">
 				<Card>
 					<CardContent className="space-y-5">
 						<div>
@@ -336,21 +338,17 @@ export default function NewDoc({
 									))}
 								</SelectContent>
 							</Select>
-							{claro && (claro.requiresPrefield || claro.requiresBlueprint) && (
+							{claroSupervisors.length === 0 && (
+								<Hint>{t("docs_new.claro_supervisor_none")}</Hint>
+							)}
+							{claro?.requiresPrefield && (
 								<div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
 									<span className="text-muted-foreground">
 										{t("docs_new.claro_requires")}
 									</span>
-									{claro.requiresPrefield && (
-										<span className="rounded-md bg-muted px-2 py-0.5">
-											{t("docs_new.requires_prefield_chip")}
-										</span>
-									)}
-									{claro.requiresBlueprint && (
-										<span className="rounded-md bg-muted px-2 py-0.5">
-											{t("docs_new.requires_blueprint_chip")}
-										</span>
-									)}
+									<span className="rounded-md bg-muted px-2 py-0.5">
+										{t("docs_new.requires_prefield_chip")}
+									</span>
 								</div>
 							)}
 						</div>
@@ -432,18 +430,6 @@ export default function NewDoc({
 								required
 								className="mt-1"
 							/>
-						</div>
-						<div>
-							<Label htmlFor="blueprint">{t("docs_new.blueprint_label")}</Label>
-							<Input
-								id="blueprint"
-								name="blueprint"
-								type="file"
-								accept="image/jpeg,image/png,application/pdf"
-								multiple
-								className="mt-1"
-							/>
-							<Hint>{t("docs_new.blueprint_hint")}</Hint>
 						</div>
 						<div>
 							<Label>{t("docs_new.assigned_crew_label")}</Label>

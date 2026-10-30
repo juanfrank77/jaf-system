@@ -302,16 +302,24 @@
 		"body": "Crew members no longer sign in to JAF Ops. Your supervisor records the field work for your brigade. If you think this is a mistake, ask your supervisor or an administrator."
 	},
 	"crew_picker": {
-		"share": "+ Share with another crew",
-		"single": "Back to one crew",
-		"select_all": "Select all crews",
-		"clear": "Clear",
-		"selected_count_one": "{{count}} crew selected",
-		"selected_count_other": "{{count}} crews selected",
+		"search_placeholder": "Search by name or code",
+		"search_label": "Search brigades",
+		"inactive": "Inactive",
 		"lead": "Lead",
 		"make_lead": "Make lead",
+		"hint": "Tap a chip, or search any brigade.",
+		"assigned_count_one": "Assigned crew · {{count}} crew",
+		"assigned_count_other": "Assigned crew · {{count}} crews",
+		"usually_with": "usually with {{name}}",
+		"active": "Active",
+		"add": "Add",
+		"activate_add": "Activate and add",
+		"remove": "Remove {{name}}",
+		"last_worked": "last worked {{date}}",
+		"never_worked": "no jobs yet",
+		"no_results": "No brigade matches that search.",
 		"payment_note_title": "Payment goes to the lead brigade only",
-		"payment_note_body": "{{lead}} is the lead. Only the lead is paid through the system. Finance splits shared jobs manually. The other crews can see and work the job."
+		"payment_note_body": "{{lead}} is the lead and the only crew paid through the system. Each extra crew works separately: when the job is done, create a separate certificate for each crew. Finance splits the payment by hand."
 	},
 	"docs_new": {
 		"title": "New Work Order",
@@ -328,7 +336,7 @@
 		"work_order_auto": "Assigned on create",
 		"work_order_hint": "Assigned automatically. Not the invoice, not Claro's number.",
 		"job_address_hint": "Enter the estimated address if you have one. If you only have coordinates, enter latitude, longitude as Claro sent them. The crew corrects it on site.",
-		"crew_hint": "Only your area’s brigades are listed.",
+		"crew_hint": "Your brigades are listed. Search by name or code to find any brigade, including inactive ones.",
 		"flow_prefix": "On submit",
 		"flow_warehouse": "Warehouse — prep",
 		"estimated_materials_hint": "Physical materials the warehouse should prep for this job — separate from the service codes above. Search by name or code.",
@@ -341,16 +349,15 @@
 			"brigade_invalid": "That brigade is not available.",
 			"claro_supervisor_required": "Select an active Claro supervisor.",
 			"address_required": "Dirección 1, Tipo, Tipo Planta and Grupo Plan are required.",
-			"blueprint_invalid": "The blueprint must be a PDF (up to 30 MB) or a photo (JPEG, PNG, WebP or HEIC, up to 10 MB).",
 			"materials_choice_required": "Go back and choose whether the materials come from the warehouse.",
 			"materials_reason_required": "Go back and write where the materials come from.",
 			"prefield_choice_required": "Go back and choose whether Prefield is needed."
 		},
 		"claro_supervisor_label": "Claro Supervisor",
 		"claro_supervisor_placeholder": "Select a Claro supervisor",
+		"claro_supervisor_none": "You have no Claro supervisors linked yet. Ask your admin to add them.",
 		"claro_requires": "This supervisor requires:",
 		"requires_prefield_chip": "Prefield",
-		"requires_blueprint_chip": "Blueprint",
 		"address_heading": "Address",
 		"address_hint": "Same order as Claro's documents. Tipo, Tipo Planta and Grupo Plan are free text; suggestions come from earlier jobs.",
 		"sector_label": "Sector",
@@ -362,8 +369,6 @@
 		"ciudad_label": "Ciudad",
 		"tipo_planta_label": "Tipo Planta",
 		"grupo_plan_label": "Grupo Plan",
-		"blueprint_label": "Blueprint (optional)",
-		"blueprint_hint": "PDF or photo. You can also add it later.",
 		"flow_field": "Field — no warehouse"
 	},
 	"docs_edit": {
@@ -451,7 +456,7 @@
 		"reassign_submit": "Reassign",
 		"reassign_current": "(current)",
 		"reassign_hint": "Allowed until the crew reports from the field. Every reassignment is written to the crew history.",
-		"reassign_shared_intro": "This job is shared by {{count}} crews (lead: {{lead}}).",
+		"reassign_shared_intro": "This job has {{count}} crews (lead: {{lead}}).",
 		"reassign_replace_warning": "Reassigning to {{target}} will remove {{removed}} and make {{target}} the only payee.",
 		"reassign_change_lead_hint": "Or keep all {{count}} crews and only make {{target}} the lead and payee.",
 		"reassign_change_lead": "Change lead",
@@ -1094,7 +1099,14 @@
 		"col_job": "Job",
 		"col_address": "Address",
 		"col_step": "Step",
-		"col_brigade": "Brigade"
+		"col_brigade": "Brigade",
+		"standby": "Stand-by",
+		"standby_confirm": "Put {{name}} on stand-by? It leaves your list and anyone can pick it up again.",
+		"errors": {
+			"not_yours": "You can only stand by your own brigades.",
+			"not_found": "That brigade was not found.",
+			"on_a_job": "This brigade is on a job in progress."
+		}
 	},
 	"comptroller_brigades": {
 		"title": "Brigades",
@@ -1196,6 +1208,7 @@
 		"requires_prefield": "Requires pre-field visit",
 		"requires_blueprint": "Requires blueprint",
 		"add_submit": "Add supervisor",
+		"works_with": "Works with these JAF supervisors",
 		"save": "Save",
 		"edit": "Edit",
 		"activate": "Activate",
@@ -1206,6 +1219,7 @@
 		"table": {
 			"name": "Name",
 			"email": "Email",
+			"works_with": "Works with",
 			"prefield": "Pre-field",
 			"blueprint": "Blueprint",
 			"active": "Active",

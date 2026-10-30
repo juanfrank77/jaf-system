@@ -68,6 +68,7 @@ export function makeTracker() {
 		payrollRun: [] as string[],
 		payrollRunAccount: [] as string[],
 		contractorAccount: [] as string[],
+		brigadeEvent: [] as string[],
 		brigade: [] as string[],
 	}
 	function track<M extends keyof typeof b, R extends { id: string }>(
@@ -107,6 +108,19 @@ export function makeTracker() {
 					OR: [{ id: { in: b.notification } }, { userId: { in: b.user } }],
 				},
 			})
+		// BrigadeEvent→Brigade and →User are RESTRICT, so the log goes before
+		// either. Cleared by tracked brigade/user too: activation writes events
+		// the test never sees (`assignBrigades`).
+		if (b.brigadeEvent.length || b.brigade.length || b.user.length)
+			await db.brigadeEvent.deleteMany({
+				where: {
+					OR: [
+						{ id: { in: b.brigadeEvent } },
+						{ brigadeId: { in: b.brigade } },
+						{ userId: { in: b.user } },
+					],
+				},
+			})
 		// AuditTrail→JafInvoice is FK'd, and JafInvoice→Warehouse/User are FK'd, so
 		// both must go before warehouse/user cleanup below.
 		if (b.auditTrail.length || b.jafInvoice.length)
@@ -142,9 +156,16 @@ export function makeTracker() {
 			await db.payrollRunAccount.deleteMany({
 				where: { id: { in: b.payrollRunAccount } },
 			})
-		if (b.contractorAccount.length)
+		// Also the accounts `syncContractorAccount` opened for tracked brigades
+		// (ContractorAccount→Brigade is FK'd, so they go before the brigades).
+		if (b.contractorAccount.length || b.brigade.length)
 			await db.contractorAccount.deleteMany({
-				where: { id: { in: b.contractorAccount } },
+				where: {
+					OR: [
+						{ id: { in: b.contractorAccount } },
+						{ brigadeId: { in: b.brigade } },
+					],
+				},
 			})
 		if (b.brigade.length)
 			await db.brigade.deleteMany({ where: { id: { in: b.brigade } } })
@@ -239,18 +260,29 @@ export async function seedMaterial(
 	})
 }
 
-/** Create an active Brigade with a unique code. */
+/** Create a Brigade (active, area METRO by default) with a unique code. */
 export async function seedBrigade(
-	overrides: { name?: string; code?: string; area?: string } = {},
+	overrides: {
+		name?: string
+		code?: string
+		area?: string | null
+		active?: boolean
+		supervisorId?: string | null
+		isEquipmentAccount?: boolean
+		terminatedAt?: Date | null
+	} = {},
 ) {
 	const code = overrides.code ?? runToken("BRI")
 	return db.brigade.create({
 		data: {
 			name: overrides.name ?? `Test Brigade ${code}`,
 			code,
-			area: overrides.area ?? "METRO",
+			area: overrides.area === undefined ? "METRO" : overrides.area,
 			memberIds: [],
-			active: true,
+			active: overrides.active ?? true,
+			supervisorId: overrides.supervisorId ?? null,
+			isEquipmentAccount: overrides.isEquipmentAccount ?? false,
+			terminatedAt: overrides.terminatedAt ?? null,
 		},
 	})
 }

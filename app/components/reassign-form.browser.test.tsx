@@ -85,7 +85,7 @@ describe("ReassignForm", () => {
 		await start()
 		const box = screen.getByTestId("reassign-confirm")
 		expect(box).toHaveTextContent(
-			"This job is shared by 2 crews (lead: JESUS MARTINEZ). Reassigning to DINO CASTILLO will remove JESUS MARTINEZ and ALEXIS DIAZ and make DINO CASTILLO the only payee.",
+			"This job has 2 crews (lead: JESUS MARTINEZ). Reassigning to DINO CASTILLO will remove JESUS MARTINEZ and ALEXIS DIAZ and make DINO CASTILLO the only payee.",
 		)
 		expect(box).not.toHaveTextContent("the other")
 		expect(screen.queryByRole("button", { name: "Change lead" })).toBeNull()

@@ -103,52 +103,46 @@ describe("isBrigadeInSupervisorScope", () => {
 })
 
 describe("assignableBrigadesWhere", () => {
-	it("scopes and bounds the picker for a SUPERVISOR", async () => {
+	const pickerSelect = {
+		active: true,
+		supervisorId: true,
+		isEquipmentAccount: true,
+		terminatedAt: true,
+		supervisor: { select: { name: true } },
+	}
+
+	it("lists every non-equipment, non-terminated brigade for a SUPERVISOR: no area filter, no cap", async () => {
 		const db = fakeDb(["CENTRAL", "METRO"])
 		expect(
 			await assignableBrigadesWhere(db, { id: "u-1", role: "SUPERVISOR" }),
 		).toEqual({
-			where: { active: true, area: { in: ["CENTRAL", "METRO"] } },
-			take: 100,
+			where: { isEquipmentAccount: false, terminatedAt: null },
+			take: undefined,
+			select: pickerSelect,
 		})
 	})
-	it("leaves the picker unscoped and unbounded for a non-SUPERVISOR (e.g. ADMIN)", async () => {
-		const db = fakeDb([])
-		expect(
-			await assignableBrigadesWhere(db, { id: "u-1", role: "ADMIN" }),
-		).toEqual({ where: { active: true }, take: undefined })
-	})
-	it("a SUPERVISOR with zero admin-assigned areas gets an empty (not unscoped) picker", async () => {
-		const db = fakeDb([])
-		expect(
-			await assignableBrigadesWhere(db, { id: "u-1", role: "SUPERVISOR" }),
-		).toEqual({ where: { active: true, area: { in: [] } }, take: 100 })
-	})
 
-	it("excludes inactive brigades from the picker (14.4 — no new work, not payment)", async () => {
-		const db = {
-			user: {
-				findUnique: async () => ({ supervisorAreas: ["CENTRAL"] }),
-			},
-			brigade: {
-				findMany: async (args: any) => {
-					const w = args?.where ?? {}
-					const rows = [
-						{ id: "b1", name: "Active", area: "CENTRAL", active: true },
-						{ id: "b2", name: "Inactive", area: "CENTRAL", active: false },
-					]
-					return rows
-						.filter((r) => (w.active === false ? !r.active : r.active))
-						.filter((r) => !w.area || w.area.in?.includes(r.area))
-				},
-			},
-		} as any
-		const { where } = await assignableBrigadesWhere(db, {
+	it("a SUPERVISOR with zero admin-assigned areas still sees the inactive pool", async () => {
+		const db = fakeDb([])
+		const args = await assignableBrigadesWhere(db, {
 			id: "u-1",
 			role: "SUPERVISOR",
 		})
-		const result = await db.brigade.findMany(where as any)
-		expect(result).toHaveLength(1)
-		expect(result[0].id).toBe("b1")
+		expect(args.where).toEqual({
+			isEquipmentAccount: false,
+			terminatedAt: null,
+		})
+		expect("active" in args.where).toBe(false)
+	})
+
+	it("leaves the picker unscoped and unbounded, active only, for a non-SUPERVISOR (e.g. ADMIN)", async () => {
+		const db = fakeDb([])
+		expect(
+			await assignableBrigadesWhere(db, { id: "u-1", role: "ADMIN" }),
+		).toEqual({
+			where: { active: true },
+			take: undefined,
+			select: pickerSelect,
+		})
 	})
 })

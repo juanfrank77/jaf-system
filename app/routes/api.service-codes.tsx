@@ -27,6 +27,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 			name: c.name,
 			accountCode: c.accountCode,
 			unit: c.unit,
+			equipment: c.equipment,
 			...(showPrices ? { unitPrice: toNumberPrice(c.unitPrice) } : {}),
 		})),
 	})

@@ -45,6 +45,8 @@ describe("/admin/claro-supervisors", () => {
 		form.set("name", " Ana Ruiz ")
 		form.set("email", "ana@claro.com")
 		form.set("requiresPrefield", "on")
+		form.append("jafSupervisorIds", "jaf-1")
+		form.append("jafSupervisorIds", "jaf-2")
 		const result = await run(form)
 		expect(result.status).toBe(302)
 		expect(db.claroSupervisor.create).toHaveBeenCalledWith({
@@ -53,6 +55,7 @@ describe("/admin/claro-supervisors", () => {
 				email: "ana@claro.com",
 				requiresPrefield: true,
 				requiresBlueprint: false,
+				jafSupervisors: { connect: [{ id: "jaf-1" }, { id: "jaf-2" }] },
 			},
 		})
 	})
@@ -76,6 +79,7 @@ describe("/admin/claro-supervisors", () => {
 		form.set("name", "Ana")
 		form.set("email", "new@claro.com")
 		form.set("requiresBlueprint", "on")
+		form.append("jafSupervisorIds", "jaf-1")
 		const result = await run(form)
 		expect(result.status).toBe(302)
 		expect(db.claroSupervisor.update).toHaveBeenCalledWith({
@@ -85,6 +89,7 @@ describe("/admin/claro-supervisors", () => {
 				email: "new@claro.com",
 				requiresPrefield: false,
 				requiresBlueprint: true,
+				jafSupervisors: { set: [{ id: "jaf-1" }] },
 			},
 		})
 	})

@@ -172,6 +172,7 @@ model User {
   closedReceivables         JafInvoice[]          @relation("ClosedReceivables")
   cancelledInvoices         JafInvoice[]          @relation("CancelledDocs")
   supervisedBrigades        Brigade[]             @relation("BrigadeSupervisor")
+  claroSupervisors          ClaroSupervisor[]     @relation("SupervisorClaroLinks")
   releasedToFinanceInvoices JafInvoice[]          @relation("ReleasedToFinanceDocs")
   installedVan              Van?                  @relation("VanInstaller")
   systemSettings            SystemSetting[]       @relation("SystemSettings")
@@ -494,8 +495,11 @@ model ClaroSupervisor {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  invoices    JafInvoice[]
-  packetSends PacketSend[]
+  invoices       JafInvoice[]
+  packetSends    PacketSend[]
+  // JAF supervisors who may pick this person on a new work order (many to
+  // many: a Claro supervisor can work with several of ours). Admin sees all.
+  jafSupervisors User[]       @relation("SupervisorClaroLinks")
 }
 
 model PacketSend {
@@ -588,6 +592,8 @@ model ServiceCode {
 
   serialized   Boolean @default(false)
   serialPrefix String?
+
+  equipment Boolean @default(false) // Digger / Truck lines: a service the job carries, tagged for Finance
 
   @@index([kind, active])
 }

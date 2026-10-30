@@ -34,6 +34,18 @@ vi.mock("~/lib/permissions.server", () => ({
 	requireRole: vi.fn(),
 }))
 
+// The guard's database half is covered against a real DB in
+// brigade-picker.server.test.ts.
+vi.mock("~/lib/brigade-picker.server", async (importOriginal) => ({
+	...(await importOriginal<typeof import("~/lib/brigade-picker.server")>()),
+	assignBrigadesOrThrow: vi.fn(),
+}))
+
+import {
+	assignBrigadesOrThrow,
+	BRIGADE_INVALID,
+	BrigadeAssignError,
+} from "~/lib/brigade-picker.server"
 import { db } from "~/lib/db.server"
 import { requireRole, requireSession } from "~/lib/permissions.server"
 import { action, loader, reassignToBrigade } from "./_app.docs.$id"
@@ -128,6 +140,70 @@ describe("GET /docs/:id", () => {
 			params: { id: "doc-1" },
 		} as any)
 		expect(res.correctorNames).toEqual({ "crew-2": "Ana Crew" })
+	})
+
+	describe("Reassign options (job page)", () => {
+		const row = (id: string, extra: Record<string, unknown>) => ({
+			id,
+			name: id,
+			area: "SUR",
+			code: null,
+			active: true,
+			supervisorId: null,
+			isEquipmentAccount: false,
+			terminatedAt: null,
+			...extra,
+		})
+		const rows = [
+			row("b-own", { supervisorId: "user-1" }),
+			row("b-free", {}),
+			row("b-idle", { active: false }),
+			row("b-other", { supervisorId: "sup-9", area: "NORTE" }),
+			row("b-on-job-idle", { active: false }),
+		]
+		async function optionsFor(role: string) {
+			vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
+				id: "user-1",
+				role,
+			} as any)
+			vi.mocked(db.user.findUnique).mockResolvedValue({
+				supervisorAreas: ["SUR"],
+			} as any)
+			vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+				baseDoc("SIGNED", {
+					supervisorId: "user-1",
+					brigadeId: "b-own",
+					crewAssignmentHistory: [
+						{ brigadeId: "b-own", brigadeIds: ["b-own", "b-on-job-idle"] },
+					],
+				}) as any,
+			)
+			vi.mocked(db.auditTrail.findMany).mockResolvedValue([])
+			vi.mocked(db.user.findMany).mockResolvedValue([])
+			vi.mocked(db.brigade.findMany).mockImplementation((async (args: any) =>
+				args?.where?.id?.in
+					? rows.filter((r) => args.where.id.in.includes(r.id))
+					: rows.filter(
+							(r) => args?.where?.active !== true || r.active,
+						)) as any)
+			const res = await loader({
+				request: new Request("http://localhost/docs/doc-1"),
+				params: { id: "doc-1" },
+			} as any)
+			return res.brigadeOptions.map((b: { id: string }) => b.id)
+		}
+
+		it("a supervisor gets only his own brigades (and those already on the job): no inactive, no other supervisor's", async () => {
+			expect(await optionsFor("SUPERVISOR")).toEqual([
+				"b-own",
+				"b-free",
+				"b-on-job-idle",
+			])
+		})
+
+		it("admin keeps every active brigade", async () => {
+			expect(await optionsFor("ADMIN")).toEqual(["b-own", "b-free", "b-other"])
+		})
 	})
 
 	describe("billing information by role", () => {
@@ -518,7 +594,45 @@ describe("POST /docs/:id (action) — supervisor scope", () => {
 		expect(db.jafInvoice.update).toHaveBeenCalled()
 	})
 
-	it("blocks a Supervisor from reassigning a doc to a brigade in a foreign area", async () => {
+	it.each([
+		["an equipment (D) account", { isEquipmentAccount: true }],
+		["a terminated brigade", { terminatedAt: new Date() }],
+	])("refuses reassigning to %s, for Admin too", async (_label, hidden) => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			baseDoc({ status: "SIGNED" }) as any,
+		)
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["SUR"],
+		} as any)
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
+			id: "brigade-d",
+			area: "SUR",
+			active: true,
+			memberIds: [],
+			...hidden,
+		} as any)
+		for (const role of ["SUPERVISOR", "ADMIN"]) {
+			vi.mocked(requireRole).mockResolvedValue({
+				user: { id: "user-1", role },
+			} as any)
+			const form = new FormData()
+			form.set("intent", "reassign")
+			form.set("brigadeId", "brigade-d")
+			const result = await action({
+				request: new Request("http://localhost/docs/doc-1", {
+					method: "POST",
+					body: form,
+				}),
+				params: { id: "doc-1" },
+			} as any)
+			expect(result).toEqual({
+				errorKey: "docs_view.errors.reassign_invalid",
+			})
+		}
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("refuses a Supervisor's crafted reassign to an inactive brigade: the job page never activates", async () => {
 		vi.mocked(requireRole).mockResolvedValue({
 			user: { id: "user-1", role: "SUPERVISOR" },
 		} as any)
@@ -529,15 +643,15 @@ describe("POST /docs/:id (action) — supervisor scope", () => {
 			supervisorAreas: ["SUR"],
 		} as any)
 		vi.mocked(db.brigade.findUnique).mockResolvedValue({
-			id: "brigade-metro",
-			area: "METRO",
-			memberIds: ["u-metro"],
+			id: "brigade-idle",
+			area: null,
+			active: false,
+			supervisorId: null,
+			memberIds: ["u-idle"],
 		} as any)
-
 		const form = new FormData()
 		form.set("intent", "reassign")
-		form.set("brigadeId", "brigade-metro")
-
+		form.set("brigadeId", "brigade-idle")
 		const result = await action({
 			request: new Request("http://localhost/docs/doc-1", {
 				method: "POST",
@@ -545,7 +659,75 @@ describe("POST /docs/:id (action) — supervisor scope", () => {
 			}),
 			params: { id: "doc-1" },
 		} as any)
+		expect(result).toEqual({ errorKey: "docs_view.errors.reassign_invalid" })
+		expect(assignBrigadesOrThrow).not.toHaveBeenCalled()
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
 
+	it("Admin reassigning to an inactive brigade still goes through the guard inside the reassign transaction", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "admin-1", role: "ADMIN" },
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			baseDoc({ status: "SIGNED" }) as any,
+		)
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
+			id: "brigade-idle",
+			area: null,
+			active: false,
+			supervisorId: null,
+			memberIds: ["u-idle"],
+		} as any)
+		const form = new FormData()
+		form.set("intent", "reassign")
+		form.set("brigadeId", "brigade-idle")
+		await expect(
+			action({
+				request: new Request("http://localhost/docs/doc-1", {
+					method: "POST",
+					body: form,
+				}),
+				params: { id: "doc-1" },
+			} as any),
+		).rejects.toMatchObject({ status: 302 })
+		expect(assignBrigadesOrThrow).toHaveBeenCalledWith(db, {
+			docId: "doc-1",
+			viewer: { id: "admin-1", role: "ADMIN", areas: [] },
+			brigadeIds: ["brigade-idle"],
+		})
+		expect(db.jafInvoice.update).toHaveBeenCalled()
+	})
+
+	it("reports a brigade another supervisor became unavailable mid-reassign, and saves nothing", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "user-1", role: "SUPERVISOR" },
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			baseDoc({ status: "SIGNED" }) as any,
+		)
+		vi.mocked(db.user.findUnique).mockResolvedValue({
+			supervisorAreas: ["SUR"],
+		} as any)
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
+			id: "brigade-idle",
+			area: null,
+			active: true,
+			supervisorId: null,
+			memberIds: ["u-idle"],
+		} as any)
+		vi.mocked(assignBrigadesOrThrow).mockRejectedValueOnce(
+			new BrigadeAssignError(BRIGADE_INVALID),
+		)
+		const form = new FormData()
+		form.set("intent", "reassign")
+		form.set("brigadeId", "brigade-idle")
+		const result = await action({
+			request: new Request("http://localhost/docs/doc-1", {
+				method: "POST",
+				body: form,
+			}),
+			params: { id: "doc-1" },
+		} as any)
 		expect(result).toEqual({ errorKey: "docs_view.errors.reassign_invalid" })
 		expect(db.jafInvoice.update).not.toHaveBeenCalled()
 	})
@@ -563,6 +745,7 @@ describe("POST /docs/:id (action) — supervisor scope", () => {
 		vi.mocked(db.brigade.findUnique).mockResolvedValue({
 			id: "brigade-sur",
 			area: "SUR",
+			active: true,
 			memberIds: ["u-sur"],
 		} as any)
 
@@ -617,9 +800,9 @@ describe("POST /docs/:id (action) — supervisor scope", () => {
 
 describe("POST /docs/:id (action) — change lead", () => {
 	const members: Record<string, any> = {
-		b1: { id: "b1", area: "SUR", memberIds: ["u1", "u2"] },
-		b2: { id: "b2", area: "SUR", memberIds: ["u2", "u3"] },
-		b3: { id: "b3", area: "SUR", memberIds: ["u4"] },
+		b1: { id: "b1", area: "SUR", active: true, memberIds: ["u1", "u2"] },
+		b2: { id: "b2", area: "SUR", active: true, memberIds: ["u2", "u3"] },
+		b3: { id: "b3", area: "SUR", active: true, memberIds: ["u4"] },
 	}
 	beforeEach(() => {
 		vi.clearAllMocks()
@@ -691,28 +874,14 @@ describe("POST /docs/:id (action) — change lead", () => {
 		expect(db.jafInvoice.update).not.toHaveBeenCalled()
 	})
 
-	it("blocks a Supervisor from promoting an on-job brigade outside their areas", async () => {
-		const outOfScope = { id: "b4", area: "METRO", memberIds: ["u5"] }
-		members.b4 = outOfScope
-		try {
-			vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
-				shared({
-					assignedCrewIds: ["u1", "u2", "u5"],
-					crewAssignmentHistory: [
-						{ brigadeId: "b1", brigadeIds: ["b1", "b4"] },
-					],
-				}) as any,
-			)
-			const res = await run("change_lead", "b4")
-			expect(res).toEqual({ errorKey: "docs_view.errors.reassign_invalid" })
-			expect(db.jafInvoice.update).not.toHaveBeenCalled()
-		} finally {
-			delete members.b4
-		}
-	})
-
 	it("lets an Admin promote a brigade in any area", async () => {
-		const outOfScope = { id: "b4", area: "METRO", memberIds: ["u5"] }
+		const outOfScope = {
+			id: "b4",
+			area: "METRO",
+			active: true,
+			supervisorId: "sup-9",
+			memberIds: ["u5"],
+		}
 		members.b4 = outOfScope
 		try {
 			vi.mocked(requireRole).mockResolvedValue({
@@ -734,6 +903,59 @@ describe("POST /docs/:id (action) — change lead", () => {
 		}
 	})
 
+	it("never promotes an equipment (D) account to payee, even for an Admin", async () => {
+		members.b4 = {
+			id: "b4",
+			area: "SUR",
+			active: true,
+			isEquipmentAccount: true,
+			memberIds: [],
+		}
+		try {
+			vi.mocked(requireRole).mockResolvedValue({
+				user: { id: "admin-1", role: "ADMIN" },
+			} as any)
+			vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+				shared({
+					crewAssignmentHistory: [
+						{ brigadeId: "b1", brigadeIds: ["b1", "b4"] },
+					],
+				}) as any,
+			)
+			const res = await run("change_lead", "b4")
+			expect(res).toEqual({ errorKey: "docs_view.errors.reassign_invalid" })
+			expect(db.jafInvoice.update).not.toHaveBeenCalled()
+		} finally {
+			delete members.b4
+		}
+	})
+
+	it("promoting an inactive on-job brigade does not activate it: no guard call, the lead moves", async () => {
+		members.b4 = {
+			id: "b4",
+			area: null,
+			active: false,
+			supervisorId: null,
+			memberIds: ["u5"],
+		}
+		try {
+			vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+				shared({
+					crewAssignmentHistory: [
+						{ brigadeId: "b1", brigadeIds: ["b1", "b4"] },
+					],
+				}) as any,
+			)
+			const res = await run("change_lead", "b4")
+			expect(res.status).toBe(302)
+			expect(assignBrigadesOrThrow).not.toHaveBeenCalled()
+			const { data } = vi.mocked(db.jafInvoice.update).mock.calls[0][0] as any
+			expect(data.brigadeId).toBe("b4")
+		} finally {
+			delete members.b4
+		}
+	})
+
 	it("refuses once the payee is fixed by the pre-cert signature", async () => {
 		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
 			shared({ contractorAccountCode: "206" }) as any,
@@ -741,6 +963,34 @@ describe("POST /docs/:id (action) — change lead", () => {
 		const res = await run("change_lead", "b2")
 		expect(res).toEqual({ errorKey: "docs_view.errors.lead_locked" })
 		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("reassign to a brigade not on the job goes through the guard with the save", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			shared() as any,
+		)
+		const res = await run("reassign", "b3")
+		expect(res.status).toBe(302)
+		expect(assignBrigadesOrThrow).toHaveBeenCalledWith(db, {
+			docId: "doc-1",
+			viewer: { id: "sup-1", role: "SUPERVISOR", areas: ["SUR"] },
+			brigadeIds: ["b3"],
+		})
+	})
+
+	it("reassign to a brigade already on the job passes it through: no guard, no activation", async () => {
+		const original = members.b2
+		members.b2 = { ...original, active: false, supervisorId: "sup-9" }
+		try {
+			vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+				shared() as any,
+			)
+			const res = await run("reassign", "b2")
+			expect(res.status).toBe(302)
+			expect(assignBrigadesOrThrow).not.toHaveBeenCalled()
+		} finally {
+			members.b2 = original
+		}
 	})
 
 	it("reassign keeps earlier history when it was stored in the legacy stringified form", async () => {

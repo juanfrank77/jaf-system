@@ -302,16 +302,24 @@
 		"body": "Los miembros de brigada ya no inician sesión en JAF Ops. Tu supervisor registra el trabajo de campo de tu brigada. Si crees que es un error, consulta con tu supervisor o con un administrador."
 	},
 	"crew_picker": {
-		"share": "+ Compartir con otra brigada",
-		"single": "Volver a una sola brigada",
-		"select_all": "Seleccionar todas las brigadas",
-		"clear": "Limpiar",
-		"selected_count_one": "{{count}} brigada seleccionada",
-		"selected_count_other": "{{count}} brigadas seleccionadas",
+		"search_placeholder": "Buscar por nombre o código",
+		"search_label": "Buscar brigadas",
+		"inactive": "Inactiva",
 		"lead": "Líder",
 		"make_lead": "Hacer líder",
+		"hint": "Toque una brigada o busque cualquiera.",
+		"assigned_count_one": "Brigada asignada · {{count}} brigada",
+		"assigned_count_other": "Brigadas asignadas · {{count}} brigadas",
+		"usually_with": "normalmente con {{name}}",
+		"active": "Activa",
+		"add": "Añadir",
+		"activate_add": "Activar y añadir",
+		"remove": "Quitar {{name}}",
+		"last_worked": "último trabajo {{date}}",
+		"never_worked": "sin trabajos aún",
+		"no_results": "Ninguna brigada coincide con la búsqueda.",
 		"payment_note_title": "El pago va solo a la brigada líder",
-		"payment_note_body": "{{lead}} es la líder. Solo la líder recibe pago a través del sistema. Finanzas divide manualmente los trabajos compartidos. Las otras brigadas pueden ver y trabajar la orden."
+		"payment_note_body": "{{lead}} es la líder y la única brigada que recibe pago a través del sistema. Cada brigada adicional trabaja por separado: al terminar el trabajo, cree un certificado aparte para cada brigada. Finanzas divide el pago manualmente."
 	},
 	"docs_new": {
 		"title": "Nueva orden de trabajo",
@@ -328,7 +336,7 @@
 		"work_order_auto": "Se asigna al crear",
 		"work_order_hint": "Se asigna automáticamente. No es la factura ni el número de Claro.",
 		"job_address_hint": "Escribe la dirección estimada si la tienes. Si solo tienes coordenadas, escribe latitud, longitud como las envió Claro. La brigada la corrige en sitio.",
-		"crew_hint": "Solo se listan las brigadas de su área.",
+		"crew_hint": "Se listan sus brigadas. Busque por nombre o código para encontrar cualquier brigada, incluso las inactivas.",
 		"flow_prefix": "Al enviar",
 		"flow_warehouse": "Almacén — preparar",
 		"estimated_materials_hint": "Materiales físicos que el almacén debe preparar para este trabajo — aparte de los códigos de servicio de arriba. Busque por nombre o código.",
@@ -341,16 +349,15 @@
 			"brigade_invalid": "Esa brigada no está disponible.",
 			"claro_supervisor_required": "Seleccione un supervisor de Claro activo.",
 			"address_required": "Dirección 1, Tipo, Tipo Planta y Grupo Plan son obligatorios.",
-			"blueprint_invalid": "El plano debe ser un PDF (hasta 30 MB) o una foto (JPEG, PNG, WebP o HEIC, hasta 10 MB).",
 			"materials_choice_required": "Regrese y elija si los materiales salen del almacén.",
 			"materials_reason_required": "Regrese y escriba de dónde salen los materiales.",
 			"prefield_choice_required": "Regrese y elija si se necesita Prefield."
 		},
 		"claro_supervisor_label": "Supervisor de Claro",
 		"claro_supervisor_placeholder": "Seleccione un supervisor de Claro",
+		"claro_supervisor_none": "No tiene supervisores de Claro asignados todavía. Pídale a su administrador que los añada.",
 		"claro_requires": "Este supervisor requiere:",
 		"requires_prefield_chip": "Prefield",
-		"requires_blueprint_chip": "Plano",
 		"address_heading": "Dirección",
 		"address_hint": "En el mismo orden que los documentos de Claro. Tipo, Tipo Planta y Grupo Plan son texto libre; las sugerencias vienen de trabajos anteriores.",
 		"sector_label": "Sector",
@@ -362,8 +369,6 @@
 		"ciudad_label": "Ciudad",
 		"tipo_planta_label": "Tipo Planta",
 		"grupo_plan_label": "Grupo Plan",
-		"blueprint_label": "Plano (opcional)",
-		"blueprint_hint": "PDF o foto. También puede añadirlo después.",
 		"flow_field": "Campo — sin almacén"
 	},
 	"docs_edit": {
@@ -451,7 +456,7 @@
 		"reassign_submit": "Reasignar",
 		"reassign_current": "(actual)",
 		"reassign_hint": "Permitido hasta que la brigada reporte desde el campo. Cada reasignación queda en el historial de la cuadrilla.",
-		"reassign_shared_intro": "Este trabajo está compartido por {{count}} brigadas (líder: {{lead}}).",
+		"reassign_shared_intro": "Este trabajo tiene {{count}} brigadas (líder: {{lead}}).",
 		"reassign_replace_warning": "Reasignar a {{target}} quitará a {{removed}} y dejará a {{target}} como único pagador.",
 		"reassign_change_lead_hint": "O mantenga las {{count}} brigadas y solo haga a {{target}} la líder y pagadora.",
 		"reassign_change_lead": "Cambiar líder",
@@ -1094,7 +1099,14 @@
 		"col_job": "Trabajo",
 		"col_address": "Dirección",
 		"col_step": "Paso",
-		"col_brigade": "Brigada"
+		"col_brigade": "Brigada",
+		"standby": "Stand-by",
+		"standby_confirm": "¿Poner a {{name}} en stand-by? Sale de tu lista y cualquier supervisor puede volver a asignarla.",
+		"errors": {
+			"not_yours": "Solo puedes poner en stand-by tus propias brigadas.",
+			"not_found": "No se encontró esa brigada.",
+			"on_a_job": "Esta brigada está en un trabajo en curso."
+		}
 	},
 	"comptroller_brigades": {
 		"title": "Brigadas",
@@ -1196,6 +1208,7 @@
 		"requires_prefield": "Requiere visita de prefield",
 		"requires_blueprint": "Requiere plano",
 		"add_submit": "Agregar supervisor",
+		"works_with": "Trabaja con estos supervisores de JAF",
 		"save": "Guardar",
 		"edit": "Editar",
 		"activate": "Activar",
@@ -1206,6 +1219,7 @@
 		"table": {
 			"name": "Nombre",
 			"email": "Correo",
+			"works_with": "Trabaja con",
 			"prefield": "Prefield",
 			"blueprint": "Plano",
 			"active": "Activo",

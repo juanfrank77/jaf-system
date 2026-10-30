@@ -17,6 +17,17 @@ import { Textarea } from "~/components/ui/textarea"
 import { hasAvisoPdf } from "~/lib/aviso-document"
 import { canSeeBilling, hideBilling } from "~/lib/billing-visibility"
 import {
+	assignRejection,
+	pickableBrigades,
+	pickerState,
+} from "~/lib/brigade-picker"
+import {
+	assignBrigadesOrThrow,
+	BRIGADE_INVALID,
+	BrigadeAssignError,
+	pickerViewer,
+} from "~/lib/brigade-picker.server"
+import {
 	assignedBrigadeIds,
 	buildCrewAssignment,
 	readHistory,
@@ -41,7 +52,6 @@ import type { ServiceLine } from "~/lib/service-lines"
 import {
 	assertDocInSupervisorScope,
 	assignableBrigadesWhere,
-	isBrigadeInSupervisorScope,
 } from "~/lib/supervisor-scope"
 import { deriveSupervisorStage } from "~/lib/supervisor-stage"
 import { saveUpload } from "~/lib/uploads.server"
@@ -145,12 +155,38 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		orderBy: { timestamp: "asc" },
 	})
 	const brigadeArgs = await assignableBrigadesWhere(db, user)
-	const brigadeOptions = await db.brigade.findMany({
-		where: brigadeArgs.where,
+	const viewer = await pickerViewer(db, user)
+	const onJob = assignedBrigadeIds(doc)
+	const pickerRows = await db.brigade.findMany({
+		where:
+			user.role === "SUPERVISOR"
+				? {
+						...brigadeArgs.where,
+						OR: [{ active: true }, { id: { in: onJob } }],
+					}
+				: brigadeArgs.where,
 		orderBy: [{ area: "asc" }, { name: "asc" }],
-		select: { id: true, name: true, area: true, code: true },
+		select: {
+			id: true,
+			name: true,
+			area: true,
+			code: true,
+			...brigadeArgs.select,
+		},
 		take: brigadeArgs.take,
 	})
+	// A supervisor reassigns here only to his own brigades (and to the ones
+	// already on the job, which pass through as they are). Activating an
+	// inactive brigade goes through the New/Edit pickers, which ask first;
+	// another supervisor's brigade is never offered. Admin is unscoped.
+	const brigadeOptions = pickableBrigades(pickerRows, viewer)
+		.filter(
+			(b) =>
+				viewer.role !== "SUPERVISOR" ||
+				pickerState(b, viewer) === "own" ||
+				onJob.includes(b.id),
+		)
+		.map(({ id, name, area, code }) => ({ id, name, area, code }))
 	const sheet = await db.preCertSheet.findFirst({
 		where: { docId: doc.id, supersededAt: null },
 		orderBy: { version: "desc" },
@@ -208,6 +244,27 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			: auditTrail.map((a) => ({ ...a, diffJson: null })),
 		stage: deriveSupervisorStage(doc, sheet),
 		openLabel: openJobLabel(doc, sheet),
+	}
+}
+
+/**
+ * Run a crew save in one transaction with its brigade guard; a guard refusal
+ * rolls the whole save back and comes back as this page's error.
+ */
+async function guardedSave(
+	save: (tx: Prisma.TransactionClient) => Promise<void>,
+): Promise<{ errorKey: string } | null> {
+	try {
+		await db.$transaction(save)
+		return null
+	} catch (e) {
+		if (!(e instanceof BrigadeAssignError)) throw e
+		return {
+			errorKey:
+				e.errorKey === BRIGADE_INVALID
+					? "docs_view.errors.reassign_invalid"
+					: e.errorKey,
+		}
 	}
 }
 
@@ -279,12 +336,22 @@ export async function action({ request, params }: Route.ActionArgs) {
 			where: { id: newBrigadeId },
 		})
 		if (!newBrigade) return { errorKey: "docs_view.errors.reassign_invalid" }
-		if (
-			user.role === "SUPERVISOR" &&
-			!(await isBrigadeInSupervisorScope(db, user.id, newBrigade))
-		) {
+		const viewer = await pickerViewer(db, user)
+		// A brigade already on the job passes through unchanged; only one this
+		// reassignment adds goes through the picker rules (Admin's guard may
+		// activate it; a supervisor's is refused below when inactive).
+		const adding = !assignedBrigadeIds(doc).includes(newBrigade.id)
+		const rejection = adding ? assignRejection(newBrigade, viewer) : null
+		if (rejection === "invalid")
 			return { errorKey: "docs_view.errors.reassign_invalid" }
-		}
+		// The job page never activates for a supervisor: an inactive brigade
+		// is activated only through the New/Edit pickers, which ask first.
+		if (
+			adding &&
+			viewer.role === "SUPERVISOR" &&
+			pickerState(newBrigade, viewer) === "inactive"
+		)
+			return { errorKey: "docs_view.errors.reassign_invalid" }
 		if (isTerminalStatus(doc.status)) throw redirect(`/docs/${params.id}`)
 		const { brigadeId, assignedCrewIds, crewAssignmentHistory } =
 			reassignToBrigade({
@@ -299,16 +366,23 @@ export async function action({ request, params }: Route.ActionArgs) {
 				newBrigade: { id: newBrigade.id, memberIds: newBrigade.memberIds },
 				byUserId: user.id,
 			})
-		await db.$transaction([
-			db.jafInvoice.update({
+		const failed = await guardedSave(async (tx) => {
+			// Activate & assign succeeds or fails with the reassignment.
+			if (adding)
+				await assignBrigadesOrThrow(tx, {
+					docId: doc.id,
+					viewer,
+					brigadeIds: [newBrigade.id],
+				})
+			await tx.jafInvoice.update({
 				where: { id: params.id },
 				data: {
 					brigadeId,
 					assignedCrewIds,
 					crewAssignmentHistory,
 				},
-			}),
-			db.auditTrail.create({
+			})
+			await tx.auditTrail.create({
 				data: {
 					docId: params.id,
 					userId: user.id,
@@ -321,9 +395,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 						to: { brigadeId, assignedCrewIds },
 					},
 				},
-			}),
+			})
 			// No notification: crews never log in (the supervisor tells them).
-		])
+		})
+		if (failed) return failed
 		throw redirect(`/docs/${params.id}`)
 	}
 
@@ -350,17 +425,17 @@ export async function action({ request, params }: Route.ActionArgs) {
 		)
 		if (ordered.length !== brigadeIds.length)
 			return { errorKey: "docs_view.errors.reassign_invalid" }
-		// The doc-level scope guard only covers the current lead; an Admin may
-		// have put out-of-area brigades on the job, so the incoming payee must
-		// be in scope too.
-		if (
-			user.role === "SUPERVISOR" &&
-			!(await isBrigadeInSupervisorScope(db, user.id, ordered[0]))
-		)
+		// The new lead is already on the job, so it is never activated and no
+		// event is written. The payee check stays: the doc-level scope guard
+		// only covers the current lead, and an Admin may have put another
+		// supervisor's (or an equipment) brigade on the job, which must not
+		// become a supervisor's payee.
+		const rejection = assignRejection(ordered[0], await pickerViewer(db, user))
+		if (rejection === "invalid")
 			return { errorKey: "docs_view.errors.reassign_invalid" }
 		const { brigadeId, assignedCrewIds } = buildCrewAssignment(ordered)
-		await db.$transaction([
-			db.jafInvoice.update({
+		await db.$transaction(async (tx) => {
+			await tx.jafInvoice.update({
 				where: { id: params.id },
 				data: {
 					brigadeId,
@@ -378,8 +453,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 						},
 					],
 				},
-			}),
-			db.auditTrail.create({
+			})
+			await tx.auditTrail.create({
 				data: {
 					docId: params.id,
 					userId: user.id,
@@ -389,8 +464,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 						to: { brigadeId, brigadeIds },
 					},
 				},
-			}),
-		])
+			})
+		})
 		throw redirect(`/docs/${params.id}`)
 	}
 

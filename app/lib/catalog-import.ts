@@ -15,7 +15,7 @@ type CatalogRow = {
 }
 
 /** Minimal CSV parser handling quoted fields with commas and escaped quotes. */
-const splitCsvLine = (line: string): string[] => {
+export const splitCsvLine = (line: string): string[] => {
 	const cells: string[] = []
 	let current = ""
 	let inQuotes = false

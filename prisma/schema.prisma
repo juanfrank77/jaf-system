@@ -176,6 +176,7 @@ model User {
   installedVan              Van?                  @relation("VanInstaller")
   systemSettings            SystemSetting[]       @relation("SystemSettings")
   auditTrail                AuditTrail[]
+  brigadeEvents             BrigadeEvent[]
   photos                    Photo[]
   notifications             Notification[]
   paymentRecords            PaymentRecord[]
@@ -191,11 +192,11 @@ model User {
   restockApprovals    RestockRequest[]    @relation("RestockApprovals")
 
   // Arm A (payroll) — Finance-Billing Arm A phase, back-relations
-  payablesClosedDocs   JafInvoice[] @relation("PayablesClosedDocs")
-  payrollRunGenerator  PayrollRun[] @relation("PayrollRunGenerator")
-  payrollRunPaidBy     PayrollRun[] @relation("PayrollRunPaidBy")
+  payablesClosedDocs     JafInvoice[]        @relation("PayablesClosedDocs")
+  payrollRunGenerator    PayrollRun[]        @relation("PayrollRunGenerator")
+  payrollRunPaidBy       PayrollRun[]        @relation("PayrollRunPaidBy")
   payrollRunAccountsPaid PayrollRunAccount[] @relation("PayrollRunAccountPaidBy")
-  payrollRunReversedBy PayrollRun[] @relation("PayrollRunReversedBy")
+  payrollRunReversedBy   PayrollRun[]        @relation("PayrollRunReversedBy")
 
   createdRepairBatches    RepairBatch[]   @relation("RepairBatchCreator")
   voidedRepairBatches     RepairBatch[]   @relation("RepairBatchVoider")
@@ -461,6 +462,7 @@ model JafInvoice {
 
   preCertSheets  PreCertSheet[]
   auditTrail     AuditTrail[]
+  brigadeEvents  BrigadeEvent[]
   photos         Photo[]
   poLinks        PoLink[]
   paymentRecords PaymentRecord[]
@@ -523,6 +525,22 @@ model AuditTrail {
   timestamp DateTime   @default(now())
 
   @@index([docId, timestamp])
+}
+
+model BrigadeEvent {
+  id        String      @id @default(cuid())
+  brigadeId String
+  brigade   Brigade     @relation(fields: [brigadeId], references: [id])
+  userId    String
+  user      User        @relation(fields: [userId], references: [id])
+  docId     String?
+  doc       JafInvoice? @relation(fields: [docId], references: [id])
+  action    String // e.g. "BRIGADE_ACTIVATED", "BRIGADE_STANDBY"
+  diffJson  Json
+  createdAt DateTime    @default(now())
+
+  @@index([brigadeId, createdAt])
+  @@index([docId])
 }
 
 model Photo {
@@ -675,8 +693,13 @@ model Brigade {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  isEquipmentAccount Boolean   @default(false)
+  baseCode           String?
+  terminatedAt       DateTime?
+
   invoices           JafInvoice[]
   contractorAccounts ContractorAccount[]
+  events             BrigadeEvent[]
 
   @@index([active])
   @@index([supervisorId])

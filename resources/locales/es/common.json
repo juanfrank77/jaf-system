@@ -1125,11 +1125,46 @@
 		},
 		"no_members": "Sin miembros",
 		"no_brigades": "Aún no hay brigadas.",
+		"import": {
+			"button": "Importar desde Excel",
+			"file_label": "Lista de brigadas (.csv o .xlsx)",
+			"file_hint": "No se guarda nada hasta que confirmes la vista previa. Las brigadas nuevas entran inactivas, sin área ni supervisor.",
+			"preview_submit": "Vista previa",
+			"preview_heading": "Vista previa",
+			"will_create": "Brigadas nuevas a crear: {{total}} (cuentas de equipo “D”: {{equipment}})",
+			"will_recode": "Brigadas existentes a recodificar: {{total}}",
+			"flagged_count": "Marcadas para Lissette: {{total}}",
+			"skipped_count": "Omitidas: {{total}}",
+			"inactive_note": "Las brigadas importadas empiezan inactivas. Actívalas y asígnales su área después.",
+			"flagged_heading": "Verificar con Lissette",
+			"numeric_code_warning": "código numérico, puede haber perdido ceros a la izquierda",
+			"match_heading": "Brigadas existentes sin coincidencia por código",
+			"match_hint": "Elige la fila del archivo de la que cada brigada tomará su código. Las sugerencias son nombres parecidos y nunca se aplican a menos que las elijas.",
+			"no_code": "sin código",
+			"leave_alone": "Dejar como está",
+			"suggested": "Sugerencias",
+			"confirm": "Confirmar importación",
+			"result": "Importación completada: {{created}} creadas, {{recoded}} recodificadas.",
+			"ignored_heading": "Estas selecciones no se pudieron aplicar:",
+			"kept_accounts_heading": "Estas cuentas siguen pagando a la brigada a la que pertenecían, así que no se pasaron a la brigada nueva con el mismo código. Revíselas con Finanzas:",
+			"ignored": {
+				"unknown_brigade": "esa brigada ya no existe",
+				"brigade_matched_by_code": "la brigada ya coincide con un código del archivo",
+				"code_not_in_file": "el código no está en el archivo",
+				"code_claimed": "otra brigada ya tiene ese código"
+			}
+		},
 		"errors": {
 			"invalid_fields": "Se requieren nombre de brigada válido, área y lista de miembros.",
 			"id_required": "Se requiere el id de la brigada.",
 			"unknown_intent": "Acción desconocida.",
-			"duplicate_code": "Ese código de contratista ya está en uso por otra brigada."
+			"duplicate_code": "Ese código de contratista ya está en uso por otra brigada.",
+			"import_missing_column": "El archivo necesita al menos las columnas “code” y “name”.",
+			"import_empty": "No se seleccionó ningún archivo, o el archivo está vacío.",
+			"import_too_large": "El archivo pesa más de 2 MB o tiene más de 2,000 filas.",
+			"import_unreadable": "No se pudo leer ese archivo. Usa un archivo .csv o .xlsx.",
+			"import_invalid": "Los datos de la importación no son válidos. Sube el archivo de nuevo.",
+			"import_stale": "Las brigadas cambiaron desde la vista previa. Sube el archivo de nuevo para verla."
 		}
 	},
 	"supervisor_variance": {

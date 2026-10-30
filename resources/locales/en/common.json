@@ -1125,11 +1125,46 @@
 		},
 		"no_members": "No members",
 		"no_brigades": "No brigades yet.",
+		"import": {
+			"button": "Import from Excel",
+			"file_label": "Brigade list (.csv or .xlsx)",
+			"file_hint": "Nothing is saved until you confirm the preview. New brigades come in inactive, with no area or supervisor.",
+			"preview_submit": "Preview",
+			"preview_heading": "Preview",
+			"will_create": "New brigades to create: {{total}} (of which equipment “D” accounts: {{equipment}})",
+			"will_recode": "Existing brigades to recode: {{total}}",
+			"flagged_count": "Flagged for Lissette: {{total}}",
+			"skipped_count": "Skipped: {{total}}",
+			"inactive_note": "Imported brigades start inactive. Activate them and set their area afterwards.",
+			"flagged_heading": "Check with Lissette",
+			"numeric_code_warning": "numeric code, leading zeros may have been lost",
+			"match_heading": "Existing brigades not matched by code",
+			"match_hint": "Pick the file row each brigade should take its code from. Suggestions are close names and are never applied unless you choose them.",
+			"no_code": "no code",
+			"leave_alone": "Leave alone",
+			"suggested": "Suggestions",
+			"confirm": "Confirm import",
+			"result": "Import complete: {{created}} created, {{recoded}} recoded.",
+			"ignored_heading": "These choices could not be applied:",
+			"kept_accounts_heading": "These account codes still pay the brigade they belonged to, so they were not moved to the new brigade with the same code. Check them with Finance:",
+			"ignored": {
+				"unknown_brigade": "that brigade no longer exists",
+				"brigade_matched_by_code": "the brigade already matches a code in the file",
+				"code_not_in_file": "the code is not in the file",
+				"code_claimed": "another brigade already has that code"
+			}
+		},
 		"errors": {
 			"invalid_fields": "Valid brigade name, area, and member list are required.",
 			"id_required": "Brigade id is required.",
 			"unknown_intent": "Unknown action.",
-			"duplicate_code": "That contractor code is already in use by another brigade."
+			"duplicate_code": "That contractor code is already in use by another brigade.",
+			"import_missing_column": "The file needs at least the columns “code” and “name”.",
+			"import_empty": "No file was selected, or the file is empty.",
+			"import_too_large": "The file is larger than 2 MB or has more than 2,000 rows.",
+			"import_unreadable": "That file could not be read. Use a .csv or .xlsx file.",
+			"import_invalid": "The import data is not valid. Upload the file again.",
+			"import_stale": "Brigades changed since the preview. Upload the file again to preview it."
 		}
 	},
 	"supervisor_variance": {

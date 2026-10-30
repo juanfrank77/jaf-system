@@ -70,4 +70,30 @@ describe("Arm A schema", () => {
 		expect(reloadedInvoice.payrollRun?.id).toBe(run.id)
 		expect(reloadedInvoice.netPayable?.toString()).toBe("90")
 	})
+
+	it("brigade import columns default safely and BrigadeEvent logs a change", async () => {
+		const user = t.track("user", await seedUser({ role: "ADMIN" }))
+		const brigade = t.track(
+			"brigade",
+			await db.brigade.create({ data: { name: runToken("Brigade") } }),
+		)
+		expect(brigade.isEquipmentAccount).toBe(false)
+		expect(brigade.baseCode).toBeNull()
+		expect(brigade.terminatedAt).toBeNull()
+
+		const event = await db.brigadeEvent.create({
+			data: {
+				brigadeId: brigade.id,
+				userId: user.id,
+				action: "BRIGADE_ACTIVATED",
+				diffJson: { field: "active", before: false, after: true },
+			},
+		})
+		try {
+			expect(event.docId).toBeNull()
+			expect(event.createdAt).toBeInstanceOf(Date)
+		} finally {
+			await db.brigadeEvent.delete({ where: { id: event.id } })
+		}
+	})
 })

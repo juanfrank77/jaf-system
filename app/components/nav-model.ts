@@ -41,6 +41,8 @@ export type NavLabelKey =
 	| "app_shell.nav.admin_claro_supervisors"
 	| "app_shell.nav.supervisor_brigades"
 	| "app_shell.nav.supervisor_variance"
+	| "app_shell.nav.supervisor_stock"
+	| "app_shell.nav.warehouse_brigade_stock"
 	| "app_shell.nav.admin_restock"
 	| "app_shell.nav.installer"
 	| "app_shell.nav.installer_supervisor"
@@ -214,6 +216,11 @@ const WAREHOUSE_WORKFLOW_ITEMS: NavItem[] = (
 			"app_shell.nav.warehouse_restock",
 			TruckDeliveryIcon,
 		],
+		[
+			"/warehouse/brigade-stock",
+			"app_shell.nav.warehouse_brigade_stock",
+			TruckDeliveryIcon,
+		],
 		["/warehouse/stock", "app_shell.nav.warehouse_stock", GridViewIcon],
 	] as [string, NavLabelKey, IconSvgElement][]
 ).map(([to, labelKey, icon]) => ({
@@ -268,6 +275,13 @@ const NAV_ITEMS: NavItem[] = [
 		to: "/supervisor/brigades",
 		labelKey: "app_shell.nav.supervisor_brigades",
 		icon: UserGroup03Icon,
+		group: "team",
+		roles: ["SUPERVISOR"],
+	},
+	{
+		to: "/supervisor/stock",
+		labelKey: "app_shell.nav.supervisor_stock",
+		icon: GridViewIcon,
 		group: "team",
 		roles: ["SUPERVISOR"],
 	},

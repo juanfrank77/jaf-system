@@ -5,6 +5,8 @@ vi.mock("~/lib/db.server", () => ({
 		user: { findUnique: vi.fn() },
 		jafInvoice: { count: vi.fn(), findMany: vi.fn(async () => []) },
 		restockRequest: { count: vi.fn() },
+		brigadeRestock: { count: vi.fn(async () => 0) },
+		brigadeStockReturn: { count: vi.fn(async () => 0) },
 		serialLocation: { count: vi.fn() },
 		payrollRunAccount: { count: vi.fn() },
 		payrollRun: { count: vi.fn() },
@@ -40,6 +42,7 @@ describe("loadNavCounts", () => {
 			"/dashboard?stage=precert": { value: 14, tone: "neutral" },
 			"/dashboard?stage=released": { value: 31, tone: "neutral" },
 			"/dashboard?stage=all": { value: 9, tone: "neutral" },
+			"/supervisor/stock": { value: 0, tone: "critical" },
 		})
 		// Review is hidden from the sidebar, so it is no longer counted.
 		expect(counts).not.toHaveProperty("/dashboard?stage=review")
@@ -127,6 +130,7 @@ describe("loadNavCounts", () => {
 			"/warehouse/repairs": { value: 6, tone: "neutral" },
 			"/warehouse/needs-review": { value: 2, tone: "neutral" },
 			"/warehouse/requests": { value: 1, tone: "neutral" },
+			"/warehouse/brigade-stock": { value: 0, tone: "neutral" },
 		})
 	})
 

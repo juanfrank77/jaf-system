@@ -33,6 +33,9 @@ vi.mock("~/lib/db.server", () => {
 	return { db }
 })
 
+vi.mock("~/lib/brigade-inventory.server", () => ({
+	syncUsedFromJob: vi.fn(async () => {}),
+}))
 vi.mock("~/lib/service-codes.server", async (importOriginal) => ({
 	...(await importOriginal<typeof import("~/lib/service-codes.server")>()),
 	getActiveMaterialCodes: vi.fn(),
@@ -49,6 +52,7 @@ vi.mock("~/lib/uploads.server", () => ({
 	photosThatLoad: vi.fn(async (_docId: string, photos: unknown[]) => photos),
 }))
 
+import { syncUsedFromJob } from "~/lib/brigade-inventory.server"
 import { db } from "~/lib/db.server"
 import { composeJobAddress } from "~/lib/intake-address"
 import { requireRole } from "~/lib/permissions.server"
@@ -256,6 +260,11 @@ describe("POST /docs/:id/field — save", () => {
 		const { data } = lastUpdate()
 		expect(data.materialsUsed).toEqual([{ serviceCodeId: "sc-1", qty: 6 }])
 		expect(data.fieldMaterials).toEqual(split)
+		// The truck-stock use is charged to the brigade's balance.
+		expect(syncUsedFromJob).toHaveBeenCalledWith(
+			expect.objectContaining({ fieldMaterials: split }),
+			expect.any(String),
+		)
 	})
 
 	it("a changed Dirección 1 updates the Aviso address columns, recomputes the job address and logs the correction", async () => {

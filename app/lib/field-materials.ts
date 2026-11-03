@@ -156,6 +156,35 @@ export function brigadeStockLines(fieldMaterials: unknown): MaterialLine[] {
 	return [...byCode].map(([serviceCodeId, qty]) => ({ serviceCodeId, qty }))
 }
 
+/**
+ * What each brigade used out of its own truck stock on the job, per code
+ * (used > 0). A row with no `brigadeId` belongs to the lead crew. This is what
+ * the brigade's balance is charged for the job.
+ */
+export function brigadeStockUse(
+	fieldMaterials: unknown,
+	leadBrigadeId: string | null,
+): { brigadeId: string; serviceCodeId: string; qty: number }[] {
+	const byKey = new Map<
+		string,
+		{ brigadeId: string; serviceCodeId: string; qty: number }
+	>()
+	for (const r of storedRows(fieldMaterials)) {
+		if (r.source !== "TRUCK_STOCK" || r.used <= 0) continue
+		const brigadeId = r.brigadeId ?? leadBrigadeId
+		if (!brigadeId) continue
+		const key = `${brigadeId}|${r.serviceCodeId}`
+		const row = byKey.get(key) ?? {
+			brigadeId,
+			serviceCodeId: r.serviceCodeId,
+			qty: 0,
+		}
+		row.qty += r.used
+		byKey.set(key, row)
+	}
+	return [...byKey.values()]
+}
+
 function warehouseUsed(rows: FieldMaterialRow[]): Map<string, number> {
 	const byCode = new Map<string, number>()
 	for (const r of rows) {

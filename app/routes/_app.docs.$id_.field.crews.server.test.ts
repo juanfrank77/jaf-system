@@ -20,6 +20,9 @@ vi.mock("~/lib/db.server", () => {
 	)
 	return { db }
 })
+vi.mock("~/lib/brigade-inventory.server", () => ({
+	syncUsedFromJob: vi.fn(async () => {}),
+}))
 vi.mock("~/lib/service-codes.server", async (importOriginal) => ({
 	...(await importOriginal<typeof import("~/lib/service-codes.server")>()),
 	getActiveMaterialCodes: vi.fn(),

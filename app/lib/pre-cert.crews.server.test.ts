@@ -4,7 +4,6 @@
  */
 import { readFile } from "node:fs/promises"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
-import { Prisma } from "../../generated/prisma/client"
 import { db } from "~/lib/db.server"
 import {
 	activeSheet,
@@ -14,6 +13,7 @@ import {
 } from "~/lib/pre-cert.server"
 import type { PreCertLine } from "~/lib/service-lines"
 import { makeTracker, runToken, seedBrigade, seedUser } from "~/test/helpers"
+import { Prisma } from "../../generated/prisma/client"
 
 const HOOK_TIMEOUT = 60_000
 const t = makeTracker()

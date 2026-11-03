@@ -192,6 +192,15 @@ model User {
   paidPaymentRequests PaymentRequest[]    @relation("PaidPaymentRequests")
   restockApprovals    RestockRequest[]    @relation("RestockApprovals")
 
+  // Brigade stock (supervisor restock + inventory)
+  brigadeStockMovements BrigadeStockMovement[] @relation("BrigadeStockBy")
+  brigadeRestocks       BrigadeRestock[]       @relation("BrigadeRestockRequester")
+  brigadeRestocksReady  BrigadeRestock[]       @relation("BrigadeRestockReady")
+  brigadeRestocksSigned BrigadeRestock[]       @relation("BrigadeRestockSupervisorSig")
+  brigadeRestocksHanded BrigadeRestock[]       @relation("BrigadeRestockWarehouseSig")
+  brigadeReturnsMade    BrigadeStockReturn[]   @relation("BrigadeReturnRequester")
+  brigadeReturnsOk      BrigadeStockReturn[]   @relation("BrigadeReturnConfirmer")
+
   // Arm A (payroll) — Finance-Billing Arm A phase, back-relations
   payablesClosedDocs     JafInvoice[]        @relation("PayablesClosedDocs")
   payrollRunGenerator    PayrollRun[]        @relation("PayrollRunGenerator")
@@ -710,6 +719,9 @@ model Brigade {
   invoices           JafInvoice[]
   contractorAccounts ContractorAccount[]
   events             BrigadeEvent[]
+  stockMovements     BrigadeStockMovement[]
+  restockLines       BrigadeRestockLine[]
+  stockReturns       BrigadeStockReturn[]
 
   @@index([active])
   @@index([supervisorId])
@@ -1053,4 +1065,103 @@ model BankSchedule {
   invoices JafInvoice[]
 
   @@index([generatedAt])
+}
+
+// ---- Brigade stock: the materials a brigade holds on its truck ----------------
+// A brigade's balance is the sum of its movements. Pickups add, field use and
+// confirmed returns subtract, a count replaces the balance by writing the
+// difference. No prices anywhere.
+
+enum BrigadeStockType {
+  OPENING // the first count of a material for a brigade
+  PICKUP // a signed restock pickup
+  USED // used on a job (field step)
+  RETURN // a return the warehouse confirmed
+  COUNT // a physical count after the first
+}
+
+model BrigadeStockMovement {
+  id            String           @id @default(cuid())
+  brigadeId     String
+  brigade       Brigade          @relation(fields: [brigadeId], references: [id], onDelete: Restrict)
+  serviceCodeId String
+  type          BrigadeStockType
+  qty           Int // signed change to the balance
+  expectedQty   Int? // COUNT/OPENING: the balance before the count
+  countedQty    Int? // COUNT/OPENING: what was physically counted
+  reason        String? // COUNT: required when the count differs from expected
+  refRestockId  String?
+  refReturnId   String?
+  refDocId      String?
+  byUserId      String
+  byUser        User             @relation("BrigadeStockBy", fields: [byUserId], references: [id])
+  at            DateTime         @default(now())
+
+  @@index([brigadeId, serviceCodeId])
+  @@index([refDocId])
+  @@index([refRestockId])
+  @@map("brigade_stock_movement")
+}
+
+enum BrigadeRestockStatus {
+  REQUESTED
+  READY
+  PICKED_UP
+  CANCELLED
+}
+
+model BrigadeRestock {
+  id                   String               @id @default(cuid())
+  requestedById        String
+  requestedBy          User                 @relation("BrigadeRestockRequester", fields: [requestedById], references: [id])
+  status               BrigadeRestockStatus @default(REQUESTED)
+  requestedAt          DateTime             @default(now())
+  readyAt              DateTime?
+  readyById            String?
+  readyBy              User?                @relation("BrigadeRestockReady", fields: [readyById], references: [id])
+  supervisorSignedAt   DateTime?
+  supervisorSignedById String?
+  supervisorSignedBy   User?                @relation("BrigadeRestockSupervisorSig", fields: [supervisorSignedById], references: [id])
+  warehouseSignedAt    DateTime?
+  warehouseSignedById  String?
+  warehouseSignedBy    User?                @relation("BrigadeRestockWarehouseSig", fields: [warehouseSignedById], references: [id])
+  pickedUpAt           DateTime?
+  lines                BrigadeRestockLine[]
+
+  @@index([status, requestedAt])
+  @@index([requestedById, requestedAt])
+  @@map("brigade_restock")
+}
+
+model BrigadeRestockLine {
+  id            String         @id @default(cuid())
+  restockId     String
+  restock       BrigadeRestock @relation(fields: [restockId], references: [id], onDelete: Cascade)
+  brigadeId     String
+  brigade       Brigade        @relation(fields: [brigadeId], references: [id], onDelete: Restrict)
+  serviceCodeId String
+  qty           Int
+
+  @@index([restockId])
+  @@map("brigade_restock_line")
+}
+
+// A return starts pending (the supervisor records it) and only subtracts from
+// the balance once the warehouse confirms it.
+model BrigadeStockReturn {
+  id            String    @id @default(cuid())
+  brigadeId     String
+  brigade       Brigade   @relation(fields: [brigadeId], references: [id], onDelete: Restrict)
+  serviceCodeId String
+  qty           Int
+  requestedById String
+  requestedBy   User      @relation("BrigadeReturnRequester", fields: [requestedById], references: [id])
+  requestedAt   DateTime  @default(now())
+  confirmedById String?
+  confirmedBy   User?     @relation("BrigadeReturnConfirmer", fields: [confirmedById], references: [id])
+  confirmedAt   DateTime?
+
+  @@index([confirmedAt])
+  @@index([brigadeId, serviceCodeId])
+  @@map("brigade_stock_return")
 }

@@ -1,4 +1,8 @@
 import type { NavCount } from "~/components/nav-model"
+import {
+	readyRestockCount,
+	warehouseBrigadeStockCount,
+} from "~/lib/brigade-inventory.server"
 import { countComptrollerRuns } from "~/lib/comptroller-runs.server"
 import { db } from "~/lib/db.server"
 import { carmenOpenSummary, countArmAStages } from "~/lib/finance-stages.server"
@@ -51,24 +55,30 @@ export async function loadNavCounts(
 				}),
 			),
 		)
-		return Object.fromEntries(
-			SUPERVISOR_QUEUE_ORDER.map((q, i) => [
-				supervisorQueueHref(q),
-				{
-					value: values[i],
-					tone: CRITICAL_QUEUES.includes(q) ? "critical" : "neutral",
-				},
-			]),
-		)
+		const readyRestocks = await readyRestockCount(user.id)
+		return {
+			...Object.fromEntries(
+				SUPERVISOR_QUEUE_ORDER.map((q, i) => [
+					supervisorQueueHref(q),
+					{
+						value: values[i],
+						tone: CRITICAL_QUEUES.includes(q) ? "critical" : "neutral",
+					},
+				]),
+			),
+			// A restock waiting at the warehouse.
+			"/supervisor/stock": { value: readyRestocks, tone: "critical" },
+		}
 	}
 	if (user.role === "WAREHOUSE") {
-		const [steps, requests, repairs, review] = await Promise.all([
+		const [steps, requests, repairs, review, brigadeStock] = await Promise.all([
 			countWarehouseQueues(),
 			db.restockRequest.count({
 				where: { status: { in: ["SUBMITTED", "APPROVED"] } },
 			}),
 			warehouseId ? repairPoolCount(warehouseId) : 0,
 			warehouseId ? needsReviewCount(warehouseId) : 0,
+			warehouseBrigadeStockCount(),
 		])
 		return {
 			...Object.fromEntries(
@@ -80,6 +90,7 @@ export async function loadNavCounts(
 			"/warehouse/repairs": { value: repairs, tone: "neutral" },
 			"/warehouse/needs-review": { value: review, tone: "neutral" },
 			"/warehouse/requests": { value: requests, tone: "neutral" },
+			"/warehouse/brigade-stock": { value: brigadeStock, tone: "neutral" },
 		}
 	}
 	if (user.role === "COMPTROLLER" || user.role === "ADMIN") {

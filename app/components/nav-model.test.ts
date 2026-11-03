@@ -21,7 +21,7 @@ describe("navGroupsFor", () => {
 					"/dashboard?stage=all",
 				],
 			],
-			["team", ["/supervisor/brigades"]],
+			["team", ["/supervisor/brigades", "/supervisor/stock"]],
 		])
 	})
 
@@ -56,7 +56,10 @@ describe("navGroupsFor", () => {
 					"/dashboard?stage=all",
 				],
 			],
-			["team", ["/supervisor/brigades", "/supervisor/variance"]],
+			[
+				"team",
+				["/supervisor/brigades", "/supervisor/stock", "/supervisor/variance"],
+			],
 		])
 	})
 
@@ -114,6 +117,7 @@ describe("navGroupsFor", () => {
 					"/warehouse/needs-review",
 					"/warehouse/repairs",
 					"/warehouse/restock",
+					"/warehouse/brigade-stock",
 					"/warehouse/stock",
 				],
 			],

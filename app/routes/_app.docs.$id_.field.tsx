@@ -30,6 +30,7 @@ import { Card, CardContent, CardHeader } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
+import { syncUsedFromJob } from "~/lib/brigade-inventory.server"
 import { assignedBrigadeIds } from "~/lib/crew-assignment"
 import {
 	crewLinesOf,
@@ -729,6 +730,12 @@ export async function action({ request, params }: Route.ActionArgs) {
 			}),
 		)
 	if (ops.length > 0) await db.$transaction(ops)
+	// Each crew's truck-stock use comes off that brigade's balance.
+	if (rows)
+		await syncUsedFromJob(
+			{ id: doc.id, brigadeId: doc.brigadeId, fieldMaterials: rows },
+			user.id,
+		)
 
 	if (intent === "continue") throw redirect(`/docs/${doc.id}/review`)
 	if (intent === "back") throw redirect(`/docs/${doc.id}`)

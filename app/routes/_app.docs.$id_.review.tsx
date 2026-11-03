@@ -74,6 +74,8 @@ import { canTransition, isTerminalStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import {
 	activeSheet,
+	activeSheetById,
+	activeSheets,
 	createPreCertSheet,
 	isSheetSigned,
 	preCertLinesFor,
@@ -316,7 +318,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		serviceCodes,
 		photos,
 		supervisor,
-		sheet,
+		sheets,
 		brigade,
 		people,
 		sends,
@@ -329,7 +331,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			where: { id: doc.supervisorId },
 			select: { name: true },
 		}),
-		activeSheet(params.id),
+		activeSheets(params.id),
 		doc.brigadeId
 			? db.brigade.findUnique({ where: { id: doc.brigadeId } })
 			: Promise.resolve(null),
@@ -377,12 +379,14 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 				}),
 	])
 	const correctorNames = Object.fromEntries(people.map((u) => [u.id, u.name]))
-	const stage = deriveSupervisorStage(doc, sheet)
+	// The lead crew's certificate; a job with several crews has one per crew.
+	const sheet = sheets[0] ?? null
+	const stage = deriveSupervisorStage(doc, sheets)
 	// Released and not sent back: Finance holds it, the steps are locked.
 	const withFinance = isWithFinance(doc)
 	// Sent back by Finance: the Aviso step reopens, signed Pre-cert or not.
 	const sentBack = isReturned(doc)
-	const preCertSigned = isPreCertSigned(sheet)
+	const preCertSigned = isPreCertSigned(sheets)
 	const { view, interactive } = resolveStepView(
 		stage,
 		isAvisoStarted(doc),
@@ -420,7 +424,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			!replaceUsed,
 	}
 	const loadingPhotos = await photosThatLoad(params.id, photos)
-	const gate = evaluateReleaseGate({ doc, sheet, photos: loadingPhotos })
+	const gate = evaluateReleaseGate({
+		doc,
+		sheet: sheets,
+		photos: loadingPhotos,
+	})
 	const lineTotal =
 		doc.jafInvoiceLineTotal != null
 			? toNumberPrice(doc.jafInvoiceLineTotal)
@@ -454,11 +462,20 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		jobType: doc.jobType,
 		address: doc.jobAddressActual ?? doc.jobAddressEstimated,
 		// The crew as the work order prints it: "NAME · contract number".
-		brigadeName: brigade
-			? brigade.code
-				? `${brigade.name} · ${brigade.code}`
-				: brigade.name
-			: null,
+		brigadeName:
+			sheets.length > 1
+				? sheets
+						.map((x) =>
+							x.brigadeCode
+								? `${x.brigadeName} · ${x.brigadeCode}`
+								: x.brigadeName,
+						)
+						.join(" + ")
+				: brigade
+					? brigade.code
+						? `${brigade.name} · ${brigade.code}`
+						: brigade.name
+					: null,
 		workDate: (doc.startedAt ?? doc.fieldSubmittedAt)?.toISOString() ?? null,
 	}
 	if (lineTotal != null && showPrices) {
@@ -556,25 +573,26 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		(isSentUnderOldFlow(doc) ||
 			(isSig(doc.completionSignature) && !doc.jafInvoiceGeneratedAt && !!claro))
 
+	// Supervisors never see money, on the certificates either.
+	const forViewer = <T extends (typeof sheets)[number] | null>(x: T): T =>
+		x && !showPrices
+			? ({
+					...(({ total: _total, ...rest }) => rest)(x),
+					lines: linesWithoutPrices(x.lines),
+				} as unknown as T)
+			: x
+
 	const { claroSupervisor: _claro, ...docData } = doc
 	return {
 		doc: showPrices ? docData : withoutPrices(docData),
 		user,
 		serviceCodes: serviceCodesForRole(user.role, serviceCodes),
 		supervisor,
-		sheet:
-			sheet && !showPrices
-				? (() => {
-						const { total: _total, ...rest } = sheet
-						return {
-							...rest,
-							lines: linesWithoutPrices(sheet.lines),
-						} as typeof sheet
-					})()
-				: sheet,
+		sheet: forViewer(sheet),
+		sheets: sheets.map(forViewer),
 		brigade,
 		stage,
-		openLabel: openJobLabel(doc, sheet),
+		openLabel: openJobLabel(doc, sheets),
 		view,
 		interactive,
 		gate,
@@ -596,6 +614,12 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			? (correctorNames[doc.completedById] ?? null)
 			: null,
 	}
+}
+
+/** The certificate a form targets: its `sheetId`, else the lead crew's. */
+function sheetFromForm(form: FormData, docId: string) {
+	const id = (form.get("sheetId") as string | null)?.trim()
+	return id ? activeSheetById(docId, id) : activeSheet(docId)
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
@@ -1040,10 +1064,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 		}
 
 		// A new file or number regenerates the sheet; a signed one is kept as is.
-		const sheet = await activeSheet(params.id)
+		const sheets = await activeSheets(params.id)
 		const changed = !!newFile || avisoNumber !== doc.avisoNumber
-		const keepSigned = !!sheet && changed && isSheetSigned(sheet)
-		const generate = !sheet || (changed && !keepSigned)
+		const keepSigned = sheets.length > 0 && changed && isSheetSigned(sheets)
+		const generate = sheets.length === 0 || (changed && !keepSigned)
 
 		// Everything validated: only now write the PDF to disk.
 		const avisoDocPath = newFile
@@ -1115,7 +1139,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 		// A signed Pre-cert locks the Aviso, unless Finance sent the packet back:
 		// then the replacement supersedes the signed sheet (below) and the
 		// supervisor re-signs a fresh one before the release gate passes again.
-		if (!isReturned(doc) && isPreCertSigned(await activeSheet(params.id)))
+		if (!isReturned(doc) && isPreCertSigned(await activeSheets(params.id)))
 			return { errorKey: "docs_review.errors.replace_locked" }
 		const used = await db.auditTrail.count({
 			where: { docId: params.id, action: "AVISO_REPLACED" },
@@ -1283,7 +1307,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	if (intent === "edit_precert_qty") {
-		const sheet = await activeSheet(params.id)
+		const sheet = await sheetFromForm(form, params.id)
 		if (!sheet) return { errorKey: "docs_review.errors.precert_required" }
 		if (sheet.sigSupervisorAt)
 			return { errorKey: "docs_review.errors.precert_locked" }
@@ -1329,7 +1353,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	if (intent === "sign_precert_supervisor") {
-		const sheet = await activeSheet(params.id)
+		const sheet = await sheetFromForm(form, params.id)
 		if (!sheet) return { errorKey: "docs_review.errors.precert_required" }
 		const signature = form.get("signature")
 		if (!isSig(signature))
@@ -1362,14 +1386,19 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	if (intent === "sign_precert_subcontractor") {
-		const sheet = await activeSheet(params.id)
+		const sheet = await sheetFromForm(form, params.id)
 		if (!sheet) return { errorKey: "docs_review.errors.precert_required" }
 		const signature = form.get("signature")
 		if (!isSig(signature))
 			return { errorKey: "docs_review.errors.signature_required" }
-		const brigade = doc.brigadeId
-			? await db.brigade.findUnique({ where: { id: doc.brigadeId } })
+		// The signing crew: the certificate's own on a multi-crew job.
+		const signingBrigadeId = sheet.brigadeId ?? doc.brigadeId
+		const brigade = signingBrigadeId
+			? await db.brigade.findUnique({ where: { id: signingBrigadeId } })
 			: null
+		// Only the lead crew's signature sets the payee; payroll stays lead-only
+		// until the pay lines are split per brigade.
+		const isLeadSheet = !sheet.brigadeId || sheet.brigadeId === doc.brigadeId
 		const typedCode =
 			(form.get("contractorCode") as string | null)?.trim() || null
 		const code = brigade?.code ?? typedCode
@@ -1397,10 +1426,14 @@ export async function action({ request, params }: Route.ActionArgs) {
 				where: { id: sheet.id },
 				data: { ...data, pdfPath },
 			}),
-			db.jafInvoice.update({
-				where: { id: params.id },
-				data: { contractorAccountCode: code },
-			}),
+			...(isLeadSheet
+				? [
+						db.jafInvoice.update({
+							where: { id: params.id },
+							data: { contractorAccountCode: code },
+						}),
+					]
+				: []),
 			db.auditTrail.create({
 				data: {
 					docId: params.id,
@@ -1419,7 +1452,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	if (intent === "sign_precert_claro") {
-		const sheet = await activeSheet(params.id)
+		const sheet = await sheetFromForm(form, params.id)
 		if (!sheet) return { errorKey: "docs_review.errors.precert_required" }
 		const signature = form.get("signature")
 		const scan = form.get("scan")
@@ -1477,8 +1510,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 		// would turn it Returned again with that stale note.
 		const latest = latestReturn(doc)
 		const answering = latest && !latest.resentAt ? latest : null
-		const [sheet, photos] = await Promise.all([
-			activeSheet(params.id),
+		const [sheets, photos] = await Promise.all([
+			activeSheets(params.id),
 			db.photo.findMany({
 				where: { docId: params.id },
 				select: { tag: true, localPath: true },
@@ -1486,7 +1519,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 		])
 		const gate = evaluateReleaseGate({
 			doc,
-			sheet,
+			sheet: sheets,
 			photos: await photosThatLoad(params.id, photos),
 		})
 		if (!gate.ok)
@@ -1498,7 +1531,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 			? await db.brigade.findUnique({ where: { id: doc.brigadeId } })
 			: null
 		const contractor =
-			sheet?.sigSubcontractorName ?? brigade?.leadName ?? brigade?.name ?? ""
+			sheets[0]?.sigSubcontractorName ??
+			brigade?.leadName ??
+			brigade?.name ??
+			""
 		// No amount in the message: supervisors can read their own notifications
 		// back, and they never see money.
 		const message = answering
@@ -1603,7 +1639,10 @@ function SignatureBlock({
 	readOnly = false,
 	fieldName = "signature",
 	submitLabelKey = "precert.sign",
+	sheetId,
 }: {
+	/** The certificate being signed, when the job has one per crew. */
+	sheetId?: string
 	intent: string
 	labelKey: ParseKeys
 	/** The form field the drawn signature is posted as. */
@@ -1668,6 +1707,7 @@ function SignatureBlock({
 			}}
 		>
 			<input type="hidden" name="intent" value={intent} />
+			{sheetId && <input type="hidden" name="sheetId" value={sheetId} />}
 			<input type="hidden" name={fieldName} />
 			{header}
 			{children}
@@ -1791,7 +1831,12 @@ function PreCertPanel({
 	error,
 	readOnly = false,
 	showPrices,
+	crewHeading,
+	sheetId,
 }: {
+	/** "Crew 2 · NAME · code", when the job has a certificate per crew. */
+	crewHeading?: string
+	sheetId?: string
 	readOnly?: boolean
 	showPrices: boolean
 	sheet: Route.ComponentProps["loaderData"]["sheet"]
@@ -1803,7 +1848,11 @@ function PreCertPanel({
 	const lines = (sheet?.lines as PreCertLine[] | null) ?? []
 	const locked = !!sheet?.sigSupervisorAt
 	return (
-		<div className="space-y-3">
+		<div
+			className="space-y-3"
+			data-testid={sheetId ? `precert-${sheetId}` : undefined}
+		>
+			{crewHeading && <h3 className="text-sm font-semibold">{crewHeading}</h3>}
 			<div className="flex flex-wrap items-center justify-between gap-2 text-sm">
 				<span className="font-medium">
 					{t("precert.version", { n: sheet?.version ?? 1 })}
@@ -1869,6 +1918,7 @@ function PreCertPanel({
 						className="flex flex-wrap items-center gap-2 text-xs"
 					>
 						<input type="hidden" name="intent" value="edit_precert_qty" />
+						{sheetId && <input type="hidden" name="sheetId" value={sheetId} />}
 						<input type="hidden" name="serviceCodeId" value={l.serviceCodeId} />
 						<span className="font-mono">{l.claroCode}</span>
 						<Input
@@ -1905,6 +1955,7 @@ function PreCertPanel({
 			<div className="flex flex-wrap gap-3">
 				<SignatureBlock
 					intent="sign_precert_supervisor"
+					sheetId={sheetId}
 					labelKey="precert.sig_supervisor"
 					readOnly={readOnly}
 					signed={
@@ -1929,6 +1980,7 @@ function PreCertPanel({
 				/>
 				<SignatureBlock
 					intent="sign_precert_subcontractor"
+					sheetId={sheetId}
 					labelKey="precert.sig_subcontractor"
 					readOnly={readOnly}
 					optional
@@ -1965,6 +2017,7 @@ function PreCertPanel({
 				</SignatureBlock>
 				<SignatureBlock
 					intent="sign_precert_claro"
+					sheetId={sheetId}
 					labelKey="precert.sig_claro"
 					encType="multipart/form-data"
 					optional
@@ -2050,6 +2103,7 @@ export default function ReviewDoc({
 		user,
 		supervisor,
 		sheet,
+		sheets,
 		brigade,
 		stage,
 		openLabel,
@@ -2329,23 +2383,42 @@ export default function ReviewDoc({
 							{t(error.noteKey as ParseKeys)}
 						</Pill>
 					)}
-					{!sheet ? (
-						interactive && (
-							<Form method="post">
-								<input type="hidden" name="intent" value="generate_precert" />
-								<Button type="submit">{t("precert.generate")}</Button>
-							</Form>
-						)
-					) : (
-						<PreCertPanel
-							sheet={sheet}
-							doc={doc}
-							brigade={brigade}
-							error={error ?? null}
-							readOnly={!interactive}
-							showPrices={showPrices}
-						/>
-					)}
+					{!sheet
+						? interactive && (
+								<Form method="post">
+									<input type="hidden" name="intent" value="generate_precert" />
+									<Button type="submit">{t("precert.generate")}</Button>
+								</Form>
+							)
+						: sheets.map((sh, i) => {
+								// One certificate per crew: each has its own signatures.
+								const perCrew = sheets.length > 1
+								const crewBrigade =
+									perCrew && sh.brigadeId && sh.brigadeId !== doc.brigadeId
+										? ({
+												leadName: null,
+												name: sh.brigadeName,
+												code: sh.brigadeCode,
+											} as unknown as typeof brigade)
+										: brigade
+								return (
+									<PreCertPanel
+										key={sh.id}
+										sheet={sh}
+										doc={doc}
+										brigade={crewBrigade}
+										error={error ?? null}
+										readOnly={!interactive}
+										showPrices={showPrices}
+										sheetId={perCrew ? sh.id : undefined}
+										crewHeading={
+											perCrew
+												? `${t("precert.crew_certificate", { n: i + 1, total: sheets.length })} · ${sh.brigadeName ?? ""}${sh.brigadeCode ? ` · ${sh.brigadeCode}` : ""}`
+												: undefined
+										}
+									/>
+								)
+							})}
 					{/* Back to step 6: Replace Aviso until a Pre-cert signature,
 					    view-only after it (`resolveStepView`). */}
 					{interactive && !withFinance && (
@@ -2382,6 +2455,7 @@ export default function ReviewDoc({
 								{r.key === "photos"
 									? ` · ${t("release.photos_added", { n: Number(r.detail ?? 0) })}`
 									: ""}
+								{r.key === "precert_signed" && r.detail ? ` · ${r.detail}` : ""}
 							</li>
 						))}
 					</ul>

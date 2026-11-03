@@ -20,7 +20,7 @@ type Result = { ok?: true; errorKey?: ParseKeys } | undefined
  * the Field route; the page reloads with the line in the table (Ordered 0,
  * "Added in field"). It sits inside the Field form: Enter adds, never saves.
  */
-export function AddFieldService() {
+export function AddFieldService({ brigadeId }: { brigadeId?: string } = {}) {
 	const { t } = useTranslation()
 	const fetcher = useFetcher<Result>()
 	const [open, setOpen] = useState(false)
@@ -44,6 +44,7 @@ export function AddFieldService() {
 				intent: "add_service",
 				serviceCodeId: picked.id,
 				qty: qty.trim(),
+				...(brigadeId ? { brigadeId } : {}),
 			},
 			{ method: "post" },
 		)
@@ -141,9 +142,11 @@ export function AddFieldService() {
 export function RemoveAddedService({
 	serviceCodeId,
 	claroCode,
+	brigadeId,
 }: {
 	serviceCodeId: string
 	claroCode: string
+	brigadeId?: string
 }) {
 	const { t } = useTranslation()
 	const fetcher = useFetcher<Result>()
@@ -155,7 +158,11 @@ export function RemoveAddedService({
 				disabled={busy}
 				onClick={() =>
 					fetcher.submit(
-						{ intent: "remove_added_service", serviceCodeId },
+						{
+							intent: "remove_added_service",
+							serviceCodeId,
+							...(brigadeId ? { brigadeId } : {}),
+						},
 						{ method: "post" },
 					)
 				}

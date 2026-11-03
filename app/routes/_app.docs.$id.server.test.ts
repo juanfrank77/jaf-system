@@ -15,7 +15,10 @@ vi.mock("~/lib/db.server", () => {
 		auditTrail: { findMany: vi.fn(), create: vi.fn() },
 		notification: { createMany: vi.fn(), create: vi.fn() },
 		jafInvoice: { findUniqueOrThrow: vi.fn(), update: vi.fn() },
-		preCertSheet: { findFirst: vi.fn(() => Promise.resolve(null)) },
+		preCertSheet: {
+			findFirst: vi.fn(() => Promise.resolve(null)),
+			findMany: vi.fn(() => Promise.resolve([])),
+		},
 	}
 	db.$transaction = vi.fn((ops: unknown) =>
 		typeof ops === "function"

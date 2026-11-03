@@ -38,6 +38,7 @@ function loaderData(doc: Record<string, unknown> = {}, interactive = true) {
 		serviceCodes: [],
 		supervisor: null,
 		sheet: null,
+		sheets: [],
 		brigade: null,
 		stage: "APPROVE",
 		openLabel: null,
@@ -619,6 +620,15 @@ describe("Packet → Claro step (render)", () => {
 })
 
 describe("Pre-cert step (render)", () => {
+	const precertSheet = {
+		id: "s1",
+		version: 1,
+		lines: [],
+		pdfPath: "/u/precert/doc-1-v1.pdf",
+		sigSupervisorAt: "2026-10-26T10:00:00.000Z",
+		sigSupervisorName: "Edgard Ocasio",
+		sigSupervisorImage: null,
+	}
 	const precert = (interactive: boolean, doc = {}) => ({
 		...loaderData(
 			{
@@ -634,15 +644,8 @@ describe("Pre-cert step (render)", () => {
 		stage: "RELEASE",
 		view: "PRECERT",
 		invoiceHeader: { address: "Calle Luna 1" },
-		sheet: {
-			id: "s1",
-			version: 1,
-			lines: [],
-			pdfPath: "/u/precert/doc-1-v1.pdf",
-			sigSupervisorAt: "2026-10-26T10:00:00.000Z",
-			sigSupervisorName: "Edgard Ocasio",
-			sigSupervisorImage: null,
-		},
+		sheet: precertSheet,
+		sheets: [precertSheet],
 	})
 
 	it("a completed (read-only) step offers no Continue or back-to-Aviso button, only the banner's way back", async () => {

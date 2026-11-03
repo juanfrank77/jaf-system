@@ -20,12 +20,20 @@ export function isPacketPath(path: string | null): boolean {
 	return (path as string).split(/[\\/]/).filter(Boolean).at(-2) === "packets"
 }
 
+type GateSheet = {
+	sigSupervisorAt: Date | null
+	sigSubcontractorAt: Date | null
+	/** The Aviso number the sheet was issued for. */
+	avisoNumber: string | null
+}
+
 /**
  * The release gate is exactly four documents: the JAF work order PDF, the
  * Aviso (number + file), the pre-cert sheet signed by the supervisor and before + after photos.
  * The signed sheet must be the one for the job's current Aviso: a sheet that
  * records another Aviso number (the Aviso was replaced and the new sheet was
- * never created or signed) does not count. Sheets with no number pass.
+ * never created or signed) does not count. Sheets with no number pass. A job
+ * with several crews has one certificate per crew, and every one must be signed.
  */
 export function evaluateReleaseGate(input: {
 	doc: {
@@ -33,15 +41,24 @@ export function evaluateReleaseGate(input: {
 		avisoNumber: string | null
 		avisoDocPath: string | null
 	}
-	sheet: {
-		sigSupervisorAt: Date | null
-		sigSubcontractorAt: Date | null
-		/** The Aviso number the sheet was issued for. */
-		avisoNumber: string | null
-	} | null
+	/** The job's certificates: one on a one-crew job, one per crew otherwise. */
+	sheet: GateSheet | GateSheet[] | null
 	photos: { tag: "BEFORE" | "DURING" | "AFTER" | null }[]
 }): { ok: boolean; rows: ReleaseRow[] } {
-	const { doc, sheet, photos } = input
+	const { doc, photos } = input
+	const sheets = Array.isArray(input.sheet)
+		? input.sheet
+		: input.sheet
+			? [input.sheet]
+			: []
+	const signed = sheets.filter(
+		(sheet) =>
+			!!sheet.sigSupervisorAt &&
+			// A missing Aviso number is the aviso row's failure, not this one.
+			(sheet.avisoNumber == null ||
+				!present(doc.avisoNumber) ||
+				sheet.avisoNumber === doc.avisoNumber),
+	)
 	const rows: ReleaseRow[] = [
 		{
 			key: "work_order_pdf",
@@ -55,13 +72,9 @@ export function evaluateReleaseGate(input: {
 		},
 		{
 			key: "precert_signed",
-			ok:
-				!!sheet?.sigSupervisorAt &&
-				// A missing Aviso number is the aviso row's failure, not this one.
-				(sheet.avisoNumber == null ||
-					!present(doc.avisoNumber) ||
-					sheet.avisoNumber === doc.avisoNumber),
-			detail: null,
+			ok: sheets.length > 0 && signed.length === sheets.length,
+			// "1/2" when there is a certificate per crew.
+			detail: sheets.length > 1 ? `${signed.length}/${sheets.length}` : null,
 		},
 		{
 			key: "photos",

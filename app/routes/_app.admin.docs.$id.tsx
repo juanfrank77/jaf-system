@@ -84,8 +84,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		where: { active: true },
 	})
 
-	const sheet = await db.preCertSheet.findFirst({
+	const sheet = await db.preCertSheet.findMany({
 		where: { docId: params.id, supersededAt: null },
+		orderBy: { version: "asc" },
 		select: { sigSupervisorAt: true, sigSubcontractorAt: true },
 	})
 

@@ -193,9 +193,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 				onJob.includes(b.id),
 		)
 		.map(({ id, name, area, code }) => ({ id, name, area, code }))
-	const sheet = await db.preCertSheet.findFirst({
+	const sheet = await db.preCertSheet.findMany({
 		where: { docId: doc.id, supersededAt: null },
-		orderBy: { version: "desc" },
+		orderBy: { version: "asc" },
 		select: { sigSupervisorAt: true, sigSubcontractorAt: true },
 	})
 	const brigadeIds = assignedBrigadeIds(doc)

@@ -197,6 +197,15 @@ afterEach(() => {
 	vi.unstubAllEnvs()
 })
 
+// The job's certificates come from `findMany`; most tests set the one sheet
+// through `findFirst`, so serve it as a list of one.
+beforeEach(() => {
+	vi.mocked(db.preCertSheet.findMany).mockImplementation((async () => {
+		const one = await db.preCertSheet.findFirst({} as any)
+		return one ? [one] : []
+	}) as any)
+})
+
 describe("supervisor scope guard", () => {
 	const outOfAreaDoc = {
 		...approvedDoc,
@@ -3362,5 +3371,165 @@ describe("review loader: step 4 work-order document", () => {
 		})
 		expect(data.canGeneratePdf).toBe(true)
 		expect(data.packet.packetHref).toBeNull()
+	})
+})
+
+describe("review: a certificate per crew", () => {
+	const sig = "data:image/png;base64,iVBORw0KGgo="
+	const doc = {
+		...approvedDoc,
+		status: "CLARO_UPLOADED",
+		avisoNumber: "10353961",
+		jafInvoiceGeneratedAt: new Date(),
+		jafInvoicePdfPath: "/var/jaf/uploads/packets/doc-1-packet-1.pdf",
+		avisoDocPath: "/x/aviso.pdf",
+		jafInvoiceLineTotal: 100,
+	}
+	const sheet = (id: string, brigadeId: string, extra = {}) => ({
+		id,
+		version: id === "s-lead" ? 1 : 2,
+		brigadeId,
+		brigadeName: brigadeId === "b1" ? "ANGEL" : "JESUS",
+		brigadeCode: brigadeId === "b1" ? "124" : "009",
+		avisoNumber: "10353961",
+		lines: [],
+		issuedOn: new Date(),
+		title: "T",
+		certifiedAddress: "A",
+		total: 1,
+		sigSupervisorAt: null,
+		sigSubcontractorAt: null,
+		sigClaroAt: null,
+		...extra,
+	})
+	const lead = sheet("s-lead", "b1")
+	const other = sheet("s-other", "b2")
+
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1", role: "SUPERVISOR", name: "Edgard Ocasio" },
+			session: {},
+		} as any)
+		vi.mocked(generatePreCertSheetPdf).mockResolvedValue(Buffer.from("pdf"))
+		vi.mocked(saveBuffer).mockResolvedValue("/uploads/precert/doc-1-v2.pdf")
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(doc as any)
+		vi.mocked(db.user.findMany).mockResolvedValue([{ id: "fin-1" }] as any)
+		vi.mocked(db.brigade.findUnique).mockImplementation((async (a: any) => ({
+			id: a.where.id,
+			name: a.where.id === "b1" ? "ANGEL" : "JESUS",
+			code: a.where.id === "b1" ? "124" : "009",
+			leadName: null,
+		})) as any)
+		vi.mocked(db.photo.findMany).mockResolvedValue([
+			{ tag: "BEFORE" },
+			{ tag: "AFTER" },
+		] as any)
+		vi.mocked(db.preCertSheet.findMany).mockResolvedValue([lead, other] as any)
+	})
+
+	it("signs the certificate the form names, not the lead's", async () => {
+		vi.mocked(db.preCertSheet.findFirst).mockResolvedValue(other as any)
+		await action({
+			request: post(
+				intent("sign_precert_supervisor", {
+					signature: sig,
+					sheetId: "s-other",
+				}),
+			),
+			params: { id: "doc-1" },
+		} as any).catch(() => {})
+		expect(db.preCertSheet.findFirst).toHaveBeenCalledWith({
+			where: { id: "s-other", docId: "doc-1", supersededAt: null },
+		})
+		expect(db.preCertSheet.update).toHaveBeenCalledWith({
+			where: { id: "s-other" },
+			data: expect.objectContaining({ sigSupervisorName: "Edgard Ocasio" }),
+		})
+	})
+
+	it("does not sign a certificate that is not this job's current one", async () => {
+		vi.mocked(db.preCertSheet.findFirst).mockResolvedValue(null)
+		const res = await action({
+			request: post(
+				intent("sign_precert_supervisor", { signature: sig, sheetId: "stale" }),
+			),
+			params: { id: "doc-1" },
+		} as any)
+		expect(res).toEqual({ errorKey: "docs_review.errors.precert_required" })
+		expect(db.preCertSheet.update).not.toHaveBeenCalled()
+	})
+
+	it("only the lead crew's subcontractor signature sets the payee", async () => {
+		vi.mocked(db.preCertSheet.findFirst).mockResolvedValue(other as any)
+		await action({
+			request: post(
+				intent("sign_precert_subcontractor", {
+					signature: sig,
+					signerName: "Jesús",
+					sheetId: "s-other",
+				}),
+			),
+			params: { id: "doc-1" },
+		} as any).catch(() => {})
+		// Signed with JESUS's own code, but the job's payee is untouched.
+		expect(db.preCertSheet.update).toHaveBeenCalledWith({
+			where: { id: "s-other" },
+			data: expect.objectContaining({ sigSubcontractorCode: "009" }),
+		})
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+
+		vi.mocked(db.preCertSheet.findFirst).mockResolvedValue(lead as any)
+		await action({
+			request: post(
+				intent("sign_precert_subcontractor", {
+					signature: sig,
+					signerName: "Angel",
+					sheetId: "s-lead",
+				}),
+			),
+			params: { id: "doc-1" },
+		} as any).catch(() => {})
+		expect(db.jafInvoice.update).toHaveBeenCalledWith({
+			where: { id: "doc-1" },
+			data: { contractorAccountCode: "124" },
+		})
+	})
+
+	it("release is blocked until every crew's certificate is signed", async () => {
+		vi.mocked(db.preCertSheet.findMany).mockResolvedValue([
+			{ ...lead, sigSupervisorAt: new Date() },
+			other,
+		] as any)
+		const blocked = await action({
+			request: post(intent("release_to_finance")),
+			params: { id: "doc-1" },
+		} as any)
+		expect(blocked).toMatchObject({
+			errorKey: "docs_review.errors.release_blocked",
+		})
+		expect(
+			(blocked as any).rows.find((r: any) => r.key === "precert_signed"),
+		).toMatchObject({ ok: false, detail: "1/2" })
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("releases once both certificates are signed", async () => {
+		vi.mocked(db.preCertSheet.findMany).mockResolvedValue([
+			{ ...lead, sigSupervisorAt: new Date() },
+			{ ...other, sigSupervisorAt: new Date() },
+		] as any)
+		const res = await action({
+			request: post(intent("release_to_finance")),
+			params: { id: "doc-1" },
+		} as any).catch((r) => r)
+		expect(res.status).toBe(302)
+		expect(db.jafInvoice.update).toHaveBeenCalledWith({
+			where: { id: "doc-1" },
+			data: {
+				releasedToFinanceAt: expect.any(Date),
+				releasedToFinanceById: "sup-1",
+			},
+		})
 	})
 })

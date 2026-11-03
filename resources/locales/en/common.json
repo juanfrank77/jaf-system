@@ -648,6 +648,8 @@
 		"status_pill": "Pickup"
 	},
 	"docs_field": {
+		"crew_window": "Crew {{n}}",
+		"crew_quantities": "quantities for {{name}}",
 		"title": "Field Update",
 		"offline_title": "Offline capable",
 		"offline_notice": "If you lose connection, your changes save locally and sync when you reconnect.",
@@ -682,6 +684,7 @@
 			"used_exceeds_took": "Warehouse-issued material can't exceed what was signed out at pickup. Enter any extra material under another Source.",
 			"completion_signature_required": "Completion signature is required.",
 			"invalid_service_lines": "Installed service quantities could not be read.",
+			"crew_lines_required": "Every crew needs its quantities before you continue.",
 			"photo_invalid": "Photos must be JPG, PNG or PDF, up to 10 MB (PDFs up to 30 MB).",
 			"blueprint_invalid": "The blueprint must be a JPG, PNG or PDF (PDFs up to 30 MB, images up to 10 MB).",
 			"address_required": "Dirección 1 is required.",
@@ -968,6 +971,7 @@
 		"row.photos": "Photos before + after"
 	},
 	"precert": {
+		"crew_certificate": "Certificate {{n}} of {{total}}",
 		"info": {
 			"address": "Address",
 			"aviso": "Aviso #",

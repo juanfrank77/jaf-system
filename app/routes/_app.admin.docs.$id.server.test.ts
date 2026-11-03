@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
 		jafInvoice: { findUniqueOrThrow: vi.fn() },
 		user: { findMany: vi.fn() },
 		serviceCode: { findMany: vi.fn() },
-		preCertSheet: { findFirst: vi.fn() },
+		preCertSheet: { findFirst: vi.fn(), findMany: vi.fn() },
 	},
 	requireRole: vi.fn(),
 }))
@@ -44,6 +44,7 @@ describe("Admin doc page loader: brigade's stock and the two PDFs", () => {
 		mocks.requireRole.mockResolvedValue({ user: { id: "a", role: "ADMIN" } })
 		mocks.db.user.findMany.mockResolvedValue([])
 		mocks.db.preCertSheet.findFirst.mockResolvedValue(null)
+		mocks.db.preCertSheet.findMany.mockResolvedValue([])
 		mocks.db.serviceCode.findMany.mockResolvedValue([
 			{
 				id: "m1",

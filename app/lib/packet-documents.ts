@@ -17,6 +17,16 @@ type PacketDocument = {
 
 const basename = (p: string) => p.split(/[\\/]/).filter(Boolean).at(-1) ?? ""
 
+type PacketSheet = {
+	pdfPath: string | null
+	sigSupervisorAt: Date | null
+	sigSubcontractorAt: Date | null
+	avisoNumber: string | null
+	/** Set on a job with a certificate per crew. */
+	brigadeName?: string | null
+	brigadeCode?: string | null
+}
+
 /**
  * The released packet's four documents as Finance opens them (Finance/Admin
  * only). A document links only when the release gate counts it as present.
@@ -28,19 +38,15 @@ export function packetDocuments(
 		avisoNumber: string | null
 		avisoDocPath: string | null
 	},
-	sheet: {
-		pdfPath: string | null
-		sigSupervisorAt: Date | null
-		sigSubcontractorAt: Date | null
-		avisoNumber: string | null
-	} | null,
+	sheet: PacketSheet | PacketSheet[] | null,
 	photos: {
 		localPath: string
 		tag: "BEFORE" | "DURING" | "AFTER" | null
 		takenAt: Date
 	}[],
 ): PacketDocument[] {
-	const gate = evaluateReleaseGate({ doc, sheet, photos })
+	const sheets = Array.isArray(sheet) ? sheet : sheet ? [sheet] : []
+	const gate = evaluateReleaseGate({ doc, sheet: sheets, photos })
 	const ok = (key: string) => gate.rows.find((r) => r.key === key)?.ok === true
 	const sorted = [...photos].sort(
 		(a, b) => a.takenAt.getTime() - b.takenAt.getTime(),
@@ -76,11 +82,34 @@ export function packetDocuments(
 			doc.avisoDocPath ? basename(doc.avisoDocPath) : "",
 			ok("aviso") && doc.avisoDocPath ? uploadHref(doc.avisoDocPath) : null,
 		),
-		row(
-			"precert",
-			"",
-			ok("precert_signed") && sheet?.pdfPath ? uploadHref(sheet.pdfPath) : null,
-		),
+		// One certificate per crew opens as a list; a single one as a link.
+		sheets.length > 1
+			? row(
+					"precert",
+					String(sheets.length),
+					ok("precert_signed") && sheets[0].pdfPath
+						? uploadHref(sheets[0].pdfPath)
+						: null,
+					ok("precert_signed")
+						? sheets.flatMap((s, i) =>
+								s.pdfPath
+									? [
+											{
+												name: `${i + 1}/${sheets.length} · ${s.brigadeName ?? ""}${s.brigadeCode ? ` · ${s.brigadeCode}` : ""}`,
+												href: uploadHref(s.pdfPath),
+											},
+										]
+									: [],
+							)
+						: [],
+				)
+			: row(
+					"precert",
+					"",
+					ok("precert_signed") && sheets[0]?.pdfPath
+						? uploadHref(sheets[0].pdfPath)
+						: null,
+				),
 		row(
 			"photos",
 			String(photos.length),

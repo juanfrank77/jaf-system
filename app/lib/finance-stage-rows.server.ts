@@ -89,9 +89,10 @@ export async function loadStageRows(opts: {
 				pbccRequestSentAt: true,
 				jafInvoiceLines: true,
 				contractorAccountCode: true,
+				// Every current certificate (one per crew), lead first.
 				preCertSheets: {
-					orderBy: { version: "desc" },
-					take: 1,
+					where: { supersededAt: null },
+					orderBy: { version: "asc" },
 					select: {
 						sigSubcontractorName: true,
 						sigSupervisorAt: true,
@@ -130,7 +131,7 @@ export async function loadStageRows(opts: {
 		// The packet's four documents, read the way the release gate reads them.
 		const gate = evaluateReleaseGate({
 			doc: d,
-			sheet: d.preCertSheets[0] ?? null,
+			sheet: d.preCertSheets,
 			photos: d.photos,
 		})
 		const has = (key: string) =>

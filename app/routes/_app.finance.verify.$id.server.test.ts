@@ -347,13 +347,13 @@ describe("Finance verify loader: brigade's stock and the two PDFs", () => {
 				"/files/photos/job-1/b.jpg",
 			],
 		)
-		// Only the latest live pre-cert sheet is read.
+		// Every live pre-cert sheet is read (one per crew), lead first.
 		expect(mocks.db.jafInvoice.findUniqueOrThrow).toHaveBeenCalledWith(
 			expect.objectContaining({
 				include: expect.objectContaining({
 					preCertSheets: expect.objectContaining({
 						where: { supersededAt: null },
-						take: 1,
+						orderBy: { version: "asc" },
 					}),
 				}),
 			}),

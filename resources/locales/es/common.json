@@ -648,6 +648,8 @@
 		"status_pill": "Recogida"
 	},
 	"docs_field": {
+		"crew_window": "Brigada {{n}}",
+		"crew_quantities": "cantidades de {{name}}",
 		"title": "Actualización de campo",
 		"offline_title": "Funciona sin conexión",
 		"offline_notice": "Si pierdes la conexión, tus cambios se guardan localmente y se sincronizan al reconectar.",
@@ -682,6 +684,7 @@
 			"used_exceeds_took": "El material entregado por el almacén no puede superar lo firmado en la recogida. Registra el material adicional con otra Fuente.",
 			"completion_signature_required": "Se requiere la firma de completado.",
 			"invalid_service_lines": "No se pudieron leer las cantidades de servicio instaladas.",
+			"crew_lines_required": "Cada brigada necesita sus cantidades antes de continuar.",
 			"photo_invalid": "Las fotos deben ser JPG, PNG o PDF, de hasta 10 MB (PDF hasta 30 MB).",
 			"blueprint_invalid": "El plano debe ser JPG, PNG o PDF (PDF hasta 30 MB, imágenes hasta 10 MB).",
 			"address_required": "La Dirección 1 es obligatoria.",
@@ -968,6 +971,7 @@
 		"row.photos": "Fotos antes + después"
 	},
 	"precert": {
+		"crew_certificate": "Certificado {{n}} de {{total}}",
 		"info": {
 			"address": "Dirección",
 			"aviso": "Aviso #",

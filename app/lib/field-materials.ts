@@ -23,6 +23,11 @@ export type FieldMaterialRow = {
 	used: number
 	returned: number
 	source: FieldMaterialSource
+	/**
+	 * The crew that used it, on a job with several. Absent on a one-crew job,
+	 * and a row without it belongs to the lead crew.
+	 */
+	brigadeId?: string
 }
 
 type MaterialLine = { serviceCodeId: string; qty: number }
@@ -39,7 +44,7 @@ function toRows(value: unknown): FieldMaterialRow[] {
 	const rows: FieldMaterialRow[] = []
 	for (const r of value) {
 		if (!r || typeof r !== "object") throw new Error("Invalid materials row")
-		const { serviceCodeId, used, returned, source } = r as Record<
+		const { serviceCodeId, used, returned, source, brigadeId } = r as Record<
 			string,
 			unknown
 		>
@@ -51,6 +56,7 @@ function toRows(value: unknown): FieldMaterialRow[] {
 			used: quantity(used),
 			returned: quantity(returned),
 			source: normaliseSource(source),
+			...(typeof brigadeId === "string" && brigadeId ? { brigadeId } : {}),
 		})
 	}
 	return rows

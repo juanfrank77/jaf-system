@@ -56,10 +56,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			paymentRecords: { select: { type: true } },
 			preCertSheets: {
 				where: { supersededAt: null },
-				orderBy: { version: "desc" },
-				take: 1,
+				orderBy: { version: "asc" },
 				select: {
 					pdfPath: true,
+					brigadeName: true,
+					brigadeCode: true,
 					sigSupervisorAt: true,
 					sigSubcontractorAt: true,
 					avisoNumber: true,
@@ -109,7 +110,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		avisoDiscrepancy: (doc.avisoDiscrepancy as AvisoDiscrepancy | null) ?? null,
 		sendBackNotes: (doc.financeSendBackNotes as SendBackNote[]) || [],
 		// The released packet's four documents, each opening its file.
-		packetDocs: packetDocuments(doc, doc.preCertSheets[0] ?? null, doc.photos),
+		packetDocs: packetDocuments(doc, doc.preCertSheets, doc.photos),
 		lineTotal:
 			doc.jafInvoiceLineTotal != null
 				? toNumberPrice(doc.jafInvoiceLineTotal)

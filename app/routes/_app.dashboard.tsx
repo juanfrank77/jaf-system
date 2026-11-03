@@ -219,7 +219,9 @@ async function withStages<
 		where: { docId: { in: docs.map((d) => d.id) }, supersededAt: null },
 		select: { docId: true, sigSupervisorAt: true, sigSubcontractorAt: true },
 	})
-	const byDoc = new Map(sheets.map((s) => [s.docId, s]))
+	// A job with a certificate per crew has several current sheets.
+	const byDoc = new Map<string, typeof sheets>()
+	for (const s of sheets) byDoc.set(s.docId, [...(byDoc.get(s.docId) ?? []), s])
 	return docs.map((d) => ({
 		...d,
 		stage: deriveSupervisorStage(d, byDoc.get(d.id) ?? null),

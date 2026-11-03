@@ -408,7 +408,8 @@ model JafInvoice {
   brigade               Brigade?  @relation(fields: [brigadeId], references: [id])
   jobDescription        String?
   serviceLines          Json? // [{ serviceCodeId, claroCode, accountCode, name, qty }] ordered at intake
-  installedServiceLines Json? // same shape, crew's installed qty
+  installedServiceLines Json? // same shape, crew's installed qty. On a multi-crew job: the sum over crews
+  crewServiceLines      Json? // [{ brigadeId, lines: ServiceLine[] }] what each crew installed; null on a one-crew job
   jafInvoiceGeneratedAt DateTime?
   jafInvoiceLines       Json? // [{ serviceCodeId, claroCode, accountCode, name, unit, qty, unitPrice, lineAmount }]
   jafInvoiceLineTotal   Decimal? // pre-IVU line sum
@@ -617,6 +618,9 @@ model PreCertSheet {
   doc                   JafInvoice @relation(fields: [docId], references: [id])
   version               Int
   supersededAt          DateTime? // null = active sheet
+  brigadeId             String? // the crew this certificate is for; null on a one-crew job
+  brigadeName           String?
+  brigadeCode           String?
   avisoNumber           String?
   certifiedAddress      String
   title                 String

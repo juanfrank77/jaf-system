@@ -1,5 +1,6 @@
 import { isAvisoSaved } from "~/lib/aviso-document"
 import { isReturned } from "~/lib/returned-packet"
+import { allSupervisorSigned } from "~/lib/supervisor-stage"
 import type { JafInvoice } from "../../generated/prisma/client"
 
 /**
@@ -51,16 +52,13 @@ export function openJobLabel(
 		| "pbccRequestSentAt"
 		| "materialsFromWarehouse"
 	> & { financeSendBackNotes?: unknown },
-	sheet: {
-		sigSupervisorAt: Date | null
-		sigSubcontractorAt: Date | null
-	} | null,
+	sheet: Parameters<typeof allSupervisorSigned>[0],
 ): OpenJobLabel {
 	// Finance sent the packet back: never "Release" or "Released to Finance".
 	if (isReturned(doc)) return "RETURNED"
 	if (doc.releasedToFinanceAt) return "RELEASED"
 	if (isAvisoSaved(doc)) {
-		return sheet?.sigSupervisorAt ? "RELEASE" : "PRECERT"
+		return allSupervisorSigned(sheet) ? "RELEASE" : "PRECERT"
 	}
 	if (doc.jafInvoiceGeneratedAt) return "SENT_WAITING_AVISO"
 	if (doc.supervisorApprovedAt) return "READY_TO_SEND"

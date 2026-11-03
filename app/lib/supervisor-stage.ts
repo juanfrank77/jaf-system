@@ -41,10 +41,22 @@ type StageDoc = Pick<
 	 * a returned packet reads as Released. */
 	financeSendBackNotes?: unknown
 }
-type StageSheet = {
-	sigSupervisorAt: Date | null
-	sigSubcontractorAt: Date | null
-} | null
+type StageSheet =
+	| {
+			sigSupervisorAt: Date | null
+			sigSubcontractorAt: Date | null
+	  }
+	| {
+			sigSupervisorAt: Date | null
+			sigSubcontractorAt: Date | null
+	  }[]
+	| null
+
+/** Every certificate on the job carries the supervisor's signature (none: false). */
+export function allSupervisorSigned(sheet: StageSheet): boolean {
+	const sheets = Array.isArray(sheet) ? sheet : sheet ? [sheet] : []
+	return sheets.length > 0 && sheets.every((s) => !!s.sigSupervisorAt)
+}
 
 export function deriveSupervisorStage(
 	doc: StageDoc,
@@ -54,7 +66,7 @@ export function deriveSupervisorStage(
 	// `releasedToFinanceAt` for Finance's queues.
 	if (doc.releasedToFinanceAt && !isReturned(doc)) return "RELEASED"
 	if (isAvisoSaved(doc)) {
-		return sheet?.sigSupervisorAt ? "RELEASE" : "PRECERT"
+		return allSupervisorSigned(sheet) ? "RELEASE" : "PRECERT"
 	}
 	if (doc.jafInvoiceGeneratedAt) return "AVISO"
 	if (doc.supervisorApprovedAt) return "INVOICE"
@@ -110,20 +122,22 @@ export function isAvisoStarted(doc: {
 
 const stageIndex = (s: SupervisorStage) => SUPERVISOR_STAGES.indexOf(s)
 
+type PreCertSigs = {
+	sigSupervisorAt: Date | null
+	sigSubcontractorAt: Date | null
+	sigClaroAt: Date | null
+}
+
 /**
  * Any Pre-cert signature (supervisor, sub-contractor or Claro): the sheet is
  * then never regenerated silently, and Replace Aviso is locked.
  */
 export function isPreCertSigned(
-	sheet: {
-		sigSupervisorAt: Date | null
-		sigSubcontractorAt: Date | null
-		sigClaroAt: Date | null
-	} | null,
+	sheet: PreCertSigs | PreCertSigs[] | null,
 ): boolean {
-	return !!(
-		sheet &&
-		(sheet.sigSupervisorAt || sheet.sigSubcontractorAt || sheet.sigClaroAt)
+	const sheets = Array.isArray(sheet) ? sheet : sheet ? [sheet] : []
+	return sheets.some(
+		(s) => !!(s.sigSupervisorAt || s.sigSubcontractorAt || s.sigClaroAt),
 	)
 }
 

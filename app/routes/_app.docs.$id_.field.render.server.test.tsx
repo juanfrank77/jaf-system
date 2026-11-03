@@ -68,6 +68,7 @@ function loaderData(overrides: Record<string, unknown> = {}) {
 			},
 		],
 		installedServiceLines: null,
+		crews: [],
 		services: {
 			rows: [
 				{
@@ -361,5 +362,77 @@ describe("Field screen (render)", () => {
 		)
 		expect(html).toContain("+ Add service")
 		expect(html).not.toContain('data-testid="field-services"')
+	})
+})
+
+describe("Field screen (render) — several crews", () => {
+	const row = (actual: number | null) => ({
+		serviceCodeId: "svc-1",
+		claroCode: "34006301",
+		name: "TRANSFER",
+		estimated: 2,
+		actual,
+		unit: "EA",
+	})
+	const crew = (
+		id: string,
+		name: string,
+		code: string,
+		lead: boolean,
+		actual: number | null,
+	) => ({
+		id,
+		name,
+		code,
+		lead,
+		installed: [],
+		rows: [row(actual)],
+	})
+	const two = () =>
+		loaderData({
+			crews: [
+				crew("b-angel", "ANGEL D JIMENEZ", "124", true, 1),
+				crew("b-jesus", "JESUS MARTINEZ", "009", false, null),
+			],
+			fieldMaterials: [
+				{
+					serviceCodeId: "sc-1",
+					used: 5,
+					returned: 0,
+					source: "WAREHOUSE_ISSUE",
+				},
+			],
+		})
+
+	it("gives each crew its own window with its name, code and quantity box", async () => {
+		const html = (await render(two())).replace(/<!-- -->/g, "")
+		expect(html).toContain('data-testid="crew-window-b-angel"')
+		expect(html).toContain('data-testid="crew-window-b-jesus"')
+		expect(html).toContain("Crew 1 · ANGEL D JIMENEZ · 124")
+		expect(html).toContain("Crew 2 · JESUS MARTINEZ · 009")
+		expect(html).toContain('id="actual-b-angel-svc-1"')
+		expect(html).toContain('id="actual-b-jesus-svc-1"')
+		// Only one Lead badge, on the first crew.
+		expect(html.match(/>Lead</g)).toHaveLength(1)
+	})
+
+	it("posts the per-crew lines, not the job-wide list", async () => {
+		const html = await render(two())
+		expect(inputs(html, /name="crewServiceLines"/)).toHaveLength(1)
+		expect(inputs(html, /name="installedServiceLines"/)).toHaveLength(0)
+		// One materials post, with every row naming its crew (lead's by default).
+		const [mat] = inputs(html, /name="fieldMaterials"/)
+		expect(mat).toContain("b-angel")
+	})
+
+	it("blocks Continue and names the crew that has no quantities yet", async () => {
+		const html = await render(two())
+		expect(html).toContain("quantities for JESUS MARTINEZ")
+	})
+
+	it("keeps one window, with no crew heading, on a one-crew job", async () => {
+		const html = await render(loaderData())
+		expect(html).not.toContain("crew-window-")
+		expect(inputs(html, /name="crewServiceLines"/)).toHaveLength(0)
 	})
 })

@@ -30,6 +30,16 @@ import { Card, CardContent, CardHeader } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
+import { assignedBrigadeIds } from "~/lib/crew-assignment"
+import {
+	crewLinesOf,
+	crewsOnJob,
+	everyCrewHasLines,
+	normalizeInstalled,
+	readCrewLines,
+	sumCrewLines,
+	withCrewLines,
+} from "~/lib/crew-field"
 import { db } from "~/lib/db.server"
 import {
 	billableUsed,
@@ -143,6 +153,9 @@ const FIELD_DOC_SELECT = {
 	fieldMaterials: true,
 	serviceLines: true,
 	installedServiceLines: true,
+	crewServiceLines: true,
+	brigadeId: true,
+	crewAssignmentHistory: true,
 	fieldNotes: true,
 	fieldStartedAt: true,
 	fieldSubmittedAt: true,
@@ -182,6 +195,35 @@ function lines(v: unknown): MaterialLine[] {
 	return Array.isArray(v) ? (v as MaterialLine[]) : []
 }
 
+/** The services table for one crew: the ordered lines, then those added in the field. */
+function serviceRows(
+	ordered: ServiceLine[],
+	installed: ServiceLine[] | null,
+	unitOf: Map<string, string | null>,
+) {
+	return [
+		...ordered.map((l) => ({
+			serviceCodeId: l.serviceCodeId,
+			claroCode: l.claroCode,
+			name: l.name,
+			estimated: l.qty,
+			actual:
+				installed?.find((i) => i.serviceCodeId === l.serviceCodeId)?.qty ??
+				null,
+			unit: unitOf.get(l.serviceCodeId) ?? null,
+		})),
+		...installedNotOrdered(ordered, installed).map((l) => ({
+			serviceCodeId: l.serviceCodeId,
+			claroCode: l.claroCode,
+			name: l.name,
+			estimated: 0,
+			actual: l.qty as number | null,
+			unit: unitOf.get(l.serviceCodeId) ?? null,
+			...(l.addedInField ? { addedInField: true as const } : {}),
+		})),
+	]
+}
+
 export async function loader({ request, params }: Route.LoaderArgs) {
 	const { user, doc } = await openFieldDoc(request, params.id)
 	const taken = lines(doc.materialsTaken)
@@ -193,18 +235,38 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const corrections =
 		(doc.addressCorrections as AddressCorrection[] | null) ?? []
 	const shared = doc.assignedCrewIds.length > 1
+	// Several brigades: each gets its own window (services, equipment, materials).
+	const crewIds = assignedBrigadeIds(doc)
+	const multiCrew = crewIds.length > 1
+	const crewLines = readCrewLines(doc.crewServiceLines)
+	const crewListed = multiCrew
+		? crewIds.flatMap((id) => [
+				...ordered,
+				...installedNotOrdered(ordered, crewLinesOf(crewLines, id)),
+			])
+		: []
 
-	const [codes, photoRows, serviceUnits] = await Promise.all([
+	const [codes, photoRows, serviceUnits, crewBrigades] = await Promise.all([
 		getActiveMaterialCodes(),
 		db.photo.findMany({
 			where: { docId: doc.id },
 			orderBy: { takenAt: "asc" },
 			select: { id: true, tag: true, localPath: true },
 		}),
-		listed.length > 0
+		listed.length + crewListed.length > 0
 			? db.serviceCode.findMany({
-					where: { id: { in: listed.map((l) => l.serviceCodeId) } },
+					where: {
+						id: {
+							in: [...listed, ...crewListed].map((l) => l.serviceCodeId),
+						},
+					},
 					select: { id: true, unit: true },
+				})
+			: Promise.resolve([]),
+		multiCrew
+			? db.brigade.findMany({
+					where: { id: { in: crewIds } },
+					select: { id: true, name: true, code: true },
 				})
 			: Promise.resolve([]),
 	])
@@ -270,28 +332,25 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		fieldMaterials: fieldMaterialsOrDefault(doc.fieldMaterials, taken),
 		serviceLines: ordered,
 		installedServiceLines: installed,
+		crews: multiCrew
+			? crewIds.flatMap((id) => {
+					const b = crewBrigades.find((x) => x.id === id)
+					if (!b) return []
+					const mine = crewLinesOf(crewLines, id)
+					return [
+						{
+							id,
+							name: b.name,
+							code: b.code,
+							lead: id === crewIds[0],
+							installed: mine,
+							rows: serviceRows(ordered, mine, unitOf),
+						},
+					]
+				})
+			: [],
 		services: {
-			rows: [
-				...ordered.map((l) => ({
-					serviceCodeId: l.serviceCodeId,
-					claroCode: l.claroCode,
-					name: l.name,
-					estimated: l.qty,
-					actual:
-						installed?.find((i) => i.serviceCodeId === l.serviceCodeId)?.qty ??
-						null,
-					unit: unitOf.get(l.serviceCodeId) ?? null,
-				})),
-				...extras.map((l) => ({
-					serviceCodeId: l.serviceCodeId,
-					claroCode: l.claroCode,
-					name: l.name,
-					estimated: 0,
-					actual: l.qty as number | null,
-					unit: unitOf.get(l.serviceCodeId) ?? null,
-					...(l.addedInField ? { addedInField: true as const } : {}),
-				})),
-			],
+			rows: serviceRows(ordered, installed, unitOf),
 			brigadeNames: shared
 				? doc.assignedCrewIds
 						.map((id) => nameOf.get(id))
@@ -319,20 +378,7 @@ function files(form: FormData, name: string): File[] {
 
 /** Zero is a legitimate installed quantity, so this does not use parseServiceLines. */
 function parseInstalled(raw: string): ServiceLine[] {
-	const parsed = JSON.parse(raw) as Record<string, unknown>[]
-	if (!Array.isArray(parsed)) throw new Error("Not a list")
-	return parsed
-		.filter(
-			(l) => l && typeof l.serviceCodeId === "string" && Number(l.qty) >= 0,
-		)
-		.map((l) => ({
-			serviceCodeId: String(l.serviceCodeId),
-			claroCode: String(l.claroCode ?? ""),
-			accountCode: l.accountCode ? String(l.accountCode) : null,
-			name: String(l.name ?? ""),
-			qty: Number(l.qty),
-			...(l.addedInField === true ? { addedInField: true as const } : {}),
-		}))
+	return normalizeInstalled(JSON.parse(raw))
 }
 
 /**
@@ -355,7 +401,16 @@ async function changeAddedService(
 	if (doc.supervisorApprovedAt)
 		return refusal("docs_field.errors.service_signed_off")
 	const ordered = (doc.serviceLines as ServiceLine[] | null) ?? []
-	const installed = (doc.installedServiceLines as ServiceLine[] | null) ?? []
+	// With several crews the line goes on the crew whose window it was added in.
+	const crewIds = assignedBrigadeIds(doc)
+	const multiCrew = crewIds.length > 1
+	const brigadeId = String(form.get("brigadeId") ?? "")
+	if (multiCrew && !crewIds.includes(brigadeId))
+		return refusal("docs_field.errors.invalid_service_lines")
+	const crews = multiCrew ? readCrewLines(doc.crewServiceLines) : []
+	const installed = multiCrew
+		? crewLinesOf(crews, brigadeId)
+		: ((doc.installedServiceLines as ServiceLine[] | null) ?? [])
 	const id = String(form.get("serviceCodeId") ?? "")
 
 	let next: ServiceLine[]
@@ -402,7 +457,19 @@ async function changeAddedService(
 				supervisorApprovedAt: null,
 			},
 			data: {
-				installedServiceLines: next as unknown as Prisma.InputJsonValue,
+				...(multiCrew
+					? (() => {
+							const updated = withCrewLines(crews, brigadeId, next)
+							return {
+								crewServiceLines: updated as unknown as Prisma.InputJsonValue,
+								installedServiceLines: sumCrewLines(
+									updated,
+								) as unknown as Prisma.InputJsonValue,
+							}
+						})()
+					: {
+							installedServiceLines: next as unknown as Prisma.InputJsonValue,
+						}),
 				...(doc.fieldStartedAt ? {} : { fieldStartedAt: new Date() }),
 			},
 		})
@@ -415,7 +482,11 @@ async function changeAddedService(
 					intent === "add_service"
 						? "SERVICE_ADDED_IN_FIELD"
 						: "SERVICE_REMOVED_IN_FIELD",
-				diffJson: { code: line.claroCode, qty: line.qty },
+				diffJson: {
+					code: line.claroCode,
+					qty: line.qty,
+					...(multiCrew ? { brigadeId } : {}),
+				},
 			},
 		})
 		return true
@@ -519,7 +590,40 @@ export async function action({ request, params }: Route.ActionArgs) {
 		}
 	}
 
-	if (form.has("installedServiceLines")) {
+	const crewIds = assignedBrigadeIds(doc)
+	const multiCrew = crewIds.length > 1
+	if (multiCrew && form.has("crewServiceLines")) {
+		// One window per crew: each crew's post is merged like a one-crew post,
+		// and the job total is their sum.
+		const ordered = (doc.serviceLines as ServiceLine[] | null) ?? []
+		const stored = readCrewLines(doc.crewServiceLines)
+		let posted: ReturnType<typeof crewsOnJob>
+		try {
+			const raw = JSON.parse(form.get("crewServiceLines") as string)
+			if (!Array.isArray(raw)) throw new Error("Not a list")
+			posted = crewsOnJob(
+				raw.map((c) => ({
+					brigadeId: String(c?.brigadeId ?? ""),
+					lines: normalizeInstalled(c?.lines),
+				})),
+				crewIds,
+			)
+		} catch {
+			return refusal("docs_field.errors.invalid_service_lines")
+		}
+		if (!posted) return refusal("docs_field.errors.invalid_service_lines")
+		let merged = stored
+		for (const c of posted)
+			merged = withCrewLines(
+				merged,
+				c.brigadeId,
+				mergeInstalledPost(c.lines, ordered, crewLinesOf(stored, c.brigadeId)),
+			)
+		update.crewServiceLines = merged as unknown as Prisma.InputJsonValue
+		update.installedServiceLines = sumCrewLines(
+			merged,
+		) as unknown as Prisma.InputJsonValue
+	} else if (!multiCrew && form.has("installedServiceLines")) {
 		try {
 			update.installedServiceLines = mergeInstalledPost(
 				parseInstalled(form.get("installedServiceLines") as string),
@@ -530,6 +634,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 			return refusal("docs_field.errors.invalid_service_lines")
 		}
 	}
+
+	// A materials row names a crew on the job, never one that is not.
+	if (rows?.some((r) => r.brigadeId && !crewIds.includes(r.brigadeId)))
+		return refusal("docs_field.errors.invalid_materials")
 
 	if (form.has("fieldNotes"))
 		update.fieldNotes = (form.get("fieldNotes") as string).trim() || null
@@ -553,6 +661,15 @@ export async function action({ request, params }: Route.ActionArgs) {
 			stored.some((p) => p.tag === tag) || photos.some((p) => p.tag === tag)
 		if (!has("BEFORE") || !has("AFTER"))
 			return refusal("docs_field.errors.photos_required")
+		// Every crew's window needs its quantities before the job moves on.
+		if (
+			multiCrew &&
+			!everyCrewHasLines(
+				readCrewLines(update.crewServiceLines ?? doc.crewServiceLines),
+				crewIds,
+			)
+		)
+			return refusal("docs_field.errors.crew_lines_required")
 		rows ??= fieldMaterialsOrDefault(doc.fieldMaterials, taken)
 		// Billable (WAREHOUSE_ISSUE) use cannot exceed what was issued; extra
 		// material is entered under another Source.
@@ -837,6 +954,7 @@ export default function FieldUpdate({
 		fieldMaterials,
 		serviceLines,
 		installedServiceLines,
+		crews,
 		services,
 		serviceCodes,
 		addServiceOpen,
@@ -870,29 +988,75 @@ export default function FieldUpdate({
 		</div>
 	)
 
+	// One window per crew when the job has several; otherwise a single window
+	// with no crew, exactly as before.
+	type CrewWindow = {
+		id: string | null
+		name: string | null
+		code: string | null
+		lead: boolean
+		rows: (typeof services.rows)[number][]
+	}
+	const windows: CrewWindow[] =
+		crews.length > 0
+			? crews.map((c) => ({
+					id: c.id,
+					name: c.name,
+					code: c.code,
+					lead: c.lead,
+					rows: c.rows,
+				}))
+			: [
+					{
+						id: null,
+						name: null,
+						code: null,
+						lead: true,
+						rows: services.rows,
+					},
+				]
+	const leadId = crews.find((c) => c.lead)?.id ?? null
+	const boxKey = (crewId: string | null, serviceCodeId: string) =>
+		crewId ? `${crewId}:${serviceCodeId}` : serviceCodeId
+	const actualId = (crewId: string | null, serviceCodeId: string) =>
+		crewId ? `actual-${crewId}-${serviceCodeId}` : `actual-${serviceCodeId}`
+
 	const [actuals, setActuals] = useState<Record<string, string>>(() =>
 		Object.fromEntries(
-			services.rows.map((r) => [
-				r.serviceCodeId,
-				r.actual == null ? "" : String(r.actual),
-			]),
+			windows.flatMap((w) =>
+				w.rows.map((r) => [
+					boxKey(w.id, r.serviceCodeId),
+					r.actual == null ? "" : String(r.actual),
+				]),
+			),
 		),
 	)
 	// A typed box wins; a line added after the page opened shows its saved qty.
-	const actualOf = (r: { serviceCodeId: string; actual: number | null }) =>
-		actuals[r.serviceCodeId] ?? (r.actual == null ? "" : String(r.actual))
-	// The ordered lines, then those added in the field (Ordered 0).
+	const actualOf = (
+		w: CrewWindow,
+		r: { serviceCodeId: string; actual: number | null },
+	) =>
+		actuals[boxKey(w.id, r.serviceCodeId)] ??
+		(r.actual == null ? "" : String(r.actual))
+	// The ordered lines, then those added in the field (Ordered 0), whichever crew added them.
 	const lineOf = new Map(
 		[
 			...serviceLines,
 			...installedNotOrdered(serviceLines, installedServiceLines),
+			...crews.flatMap((c) => c.installed),
 		].map((l) => [l.serviceCodeId, l]),
 	)
-	const installed = services.rows.flatMap((r) => {
-		const line = lineOf.get(r.serviceCodeId)
-		const value = actualOf(r)
-		return line && value !== "" ? [{ ...line, qty: Number(value) }] : []
-	})
+	const installedFor = (w: CrewWindow) =>
+		w.rows.flatMap((r) => {
+			const line = lineOf.get(r.serviceCodeId)
+			const value = actualOf(w, r)
+			return line && value !== "" ? [{ ...line, qty: Number(value) }] : []
+		})
+	const installed = installedFor(windows[0])
+	const crewInstalled = crews.map((c) => ({
+		brigadeId: c.id,
+		lines: installedFor(windows.find((w) => w.id === c.id) as CrewWindow),
+	}))
 	const shared = services.brigadeNames.length > 0
 
 	// The Field report is required; "N/A" is pre-filled so a job with nothing to
@@ -907,7 +1071,15 @@ export default function FieldUpdate({
 		new Map(list.map((m) => [m.serviceCodeId, m.qty]))
 	const signedQty = qtyOf(materialsTaken)
 	const estimatedQty = qtyOf(estimatedMaterials)
-	const tableRows: FieldMaterialsTableRow[] = rows.map((r) => {
+	// A row without a crew is the lead's; a post always names the crew.
+	const postedRows =
+		crews.length > 0
+			? rows.map((r) => ({
+					...r,
+					brigadeId: r.brigadeId ?? leadId ?? undefined,
+				}))
+			: rows
+	const tableRowOf = (r: FieldMaterialRow): FieldMaterialsTableRow => {
 		const code = codeOf.get(r.serviceCodeId)
 		return {
 			...r,
@@ -919,28 +1091,43 @@ export default function FieldUpdate({
 				? (signedQty.get(r.serviceCodeId) ?? 0)
 				: 0,
 		}
-	})
+	}
 
-	const actualId = (serviceCodeId: string) => `actual-${serviceCodeId}`
 	const targets = fieldTargets({
-		actuals: services.rows.map((r) => ({
-			id: actualId(r.serviceCodeId),
-			value: actualOf(r),
-		})),
+		actuals: windows.flatMap((w) =>
+			w.rows.map((r) => ({
+				id: actualId(w.id, r.serviceCodeId),
+				value: actualOf(w, r),
+			})),
+		),
 		notes,
 		beforePhotos: photos.BEFORE.length,
 		afterPhotos: photos.AFTER.length,
 	})
 	const next = nextEmpty(targets)
-	const missing = blockingMissing(targets)
+	// A crew window with no quantity at all blocks Continue, like a missing photo.
+	const crewMissing = windows.flatMap((w) =>
+		w.id && w.rows.length > 0 && installedFor(w).length === 0
+			? [
+					{
+						id: actualId(w.id, w.rows[0].serviceCodeId),
+						kind: "crew" as const,
+						name: w.name ?? "",
+					},
+				]
+			: [],
+	)
+	const missing = [...crewMissing, ...blockingMissing(targets)]
 	const missingLabels = missing.map((m) =>
-		t(
-			m.kind === "notes"
-				? "docs_field.field_notes_label"
-				: m.kind === "before"
-					? "docs_field.photos_before_label"
-					: "docs_field.photos_after_label",
-		),
+		m.kind === "crew"
+			? t("docs_field.crew_quantities", { name: m.name })
+			: t(
+					m.kind === "notes"
+						? "docs_field.field_notes_label"
+						: m.kind === "before"
+							? "docs_field.photos_before_label"
+							: "docs_field.photos_after_label",
+				),
 	)
 	const jumpTo = (id: string | undefined) => {
 		const el = id ? document.getElementById(id) : null
@@ -977,9 +1164,11 @@ export default function FieldUpdate({
 		const timer = setTimeout(() => {
 			const form = new FormData()
 			form.set("intent", "save")
-			if (installed.length > 0)
+			if (crews.length > 0)
+				form.set("crewServiceLines", JSON.stringify(crewInstalled))
+			else if (installed.length > 0)
 				form.set("installedServiceLines", JSON.stringify(installed))
-			form.set("fieldMaterials", JSON.stringify(rows))
+			form.set("fieldMaterials", JSON.stringify(postedRows))
 			form.set("fieldNotes", notes)
 			draft.submit(form, { method: "post" })
 		}, 1000)
@@ -1011,173 +1200,239 @@ export default function FieldUpdate({
 			)}
 
 			<Form ref={formRef} method="post" className="space-y-5">
-				{(services.rows.length > 0 || addServiceOpen) && (
-					<Card>
-						<CardHeader>{t("docs_field.services_performed_label")}</CardHeader>
-						<CardContent className="space-y-2">
-							{installed.length > 0 && (
-								<input
-									type="hidden"
-									name="installedServiceLines"
-									value={JSON.stringify(installed)}
-								/>
-							)}
-							{services.rows.length > 0 && (
-								<div className="overflow-x-auto">
-									<table
-										className="w-full text-sm"
-										data-testid="field-services"
-									>
-										<thead>
-											<tr className="border-b text-left text-xs text-muted-foreground">
-												<th className="py-1.5 pr-2">
-													{t("docs_field.services.code")}
-												</th>
-												<th className="py-1.5 pr-2">
-													{t("docs_field.services.name")}
-												</th>
-												<th className="py-1.5 pr-2 text-right">
-													{t("docs_field.services.estimated")}
-												</th>
-												<th className="py-1.5 pr-2">
-													{t("docs_field.services.actual")}
-												</th>
-												<th className="py-1.5 pr-2">
-													{t("docs_field.services.unit")}
-												</th>
-												{shared && (
-													<th className="py-1.5">
-														{t("docs_field.services.brigade")}
-													</th>
-												)}
-											</tr>
-										</thead>
-										<tbody className="tabular-nums">
-											{services.rows.map((r) => (
-												<tr
-													key={r.serviceCodeId}
-													className="border-b last:border-0"
+				{windows.map((w) => {
+					const crewRows = rows.flatMap((r, index) =>
+						(r.brigadeId ?? leadId) === w.id ? [{ r, index }] : [],
+					)
+					const inner = (
+						<>
+							{(w.rows.length > 0 || addServiceOpen) && (
+								<Card>
+									<CardHeader>
+										{t("docs_field.services_performed_label")}
+									</CardHeader>
+									<CardContent className="space-y-2">
+										{w.id === null && installed.length > 0 && (
+											<input
+												type="hidden"
+												name="installedServiceLines"
+												value={JSON.stringify(installed)}
+											/>
+										)}
+										{w.rows.length > 0 && (
+											<div className="overflow-x-auto">
+												<table
+													className="w-full text-sm"
+													data-testid="field-services"
 												>
-													<td className="py-1.5 pr-2 font-mono text-xs">
-														{r.claroCode}
-													</td>
-													<td className="py-1.5 pr-2">
-														{r.name}
-														{"addedInField" in r && r.addedInField === true && (
-															<div className="mt-1 flex flex-wrap items-center gap-2">
-																<AddedInFieldLabel />
-																{addServiceOpen && (
-																	<RemoveAddedService
-																		serviceCodeId={r.serviceCodeId}
-																		claroCode={r.claroCode}
-																	/>
-																)}
-															</div>
-														)}
-													</td>
-													<td className="py-1.5 pr-2 text-right">
-														{r.estimated}
-													</td>
-													<td className="py-1.5 pr-2">
-														<Input
-															type="number"
-															min={0}
-															inputMode="decimal"
-															id={actualId(r.serviceCodeId)}
-															className={cn(
-																"field-required w-20",
-																next?.id === actualId(r.serviceCodeId) &&
-																	"field-next",
+													<thead>
+														<tr className="border-b text-left text-xs text-muted-foreground">
+															<th className="py-1.5 pr-2">
+																{t("docs_field.services.code")}
+															</th>
+															<th className="py-1.5 pr-2">
+																{t("docs_field.services.name")}
+															</th>
+															<th className="py-1.5 pr-2 text-right">
+																{t("docs_field.services.estimated")}
+															</th>
+															<th className="py-1.5 pr-2">
+																{t("docs_field.services.actual")}
+															</th>
+															<th className="py-1.5 pr-2">
+																{t("docs_field.services.unit")}
+															</th>
+															{shared && w.id === null && (
+																<th className="py-1.5">
+																	{t("docs_field.services.brigade")}
+																</th>
 															)}
-															aria-label={`${t("docs_field.services.actual")} ${r.claroCode}`}
-															onKeyDown={(e) => {
-																// Enter moves on to the next empty box instead of
-																// submitting the form.
-																if (e.key !== "Enter") return
-																e.preventDefault()
-																jumpTo(
-																	nextEmpty(targets, actualId(r.serviceCodeId))
-																		?.id,
-																)
-															}}
-															value={actualOf(r)}
-															onChange={(e) =>
-																setActuals({
-																	...actuals,
-																	[r.serviceCodeId]: e.target.value,
-																})
-															}
-														/>
-													</td>
-													<td className="py-1.5 pr-2 text-xs">
-														{r.unit ?? "—"}
-													</td>
-													{shared && (
-														<td className="py-1.5 text-xs">
-															{services.brigadeNames.join(" + ")}
-														</td>
-													)}
-												</tr>
-											))}
-										</tbody>
-									</table>
-								</div>
+														</tr>
+													</thead>
+													<tbody className="tabular-nums">
+														{w.rows.map((r) => {
+															const boxId = actualId(w.id, r.serviceCodeId)
+															return (
+																<tr
+																	key={r.serviceCodeId}
+																	className="border-b last:border-0"
+																>
+																	<td className="py-1.5 pr-2 font-mono text-xs">
+																		{r.claroCode}
+																	</td>
+																	<td className="py-1.5 pr-2">
+																		{r.name}
+																		{"addedInField" in r &&
+																			r.addedInField === true && (
+																				<div className="mt-1 flex flex-wrap items-center gap-2">
+																					<AddedInFieldLabel />
+																					{addServiceOpen && (
+																						<RemoveAddedService
+																							serviceCodeId={r.serviceCodeId}
+																							claroCode={r.claroCode}
+																							brigadeId={w.id ?? undefined}
+																						/>
+																					)}
+																				</div>
+																			)}
+																	</td>
+																	<td className="py-1.5 pr-2 text-right">
+																		{r.estimated}
+																	</td>
+																	<td className="py-1.5 pr-2">
+																		<Input
+																			type="number"
+																			min={0}
+																			inputMode="decimal"
+																			id={boxId}
+																			className={cn(
+																				"field-required w-20",
+																				next?.id === boxId && "field-next",
+																			)}
+																			aria-label={`${t("docs_field.services.actual")} ${r.claroCode}`}
+																			onKeyDown={(e) => {
+																				// Enter moves on to the next empty box instead of
+																				// submitting the form.
+																				if (e.key !== "Enter") return
+																				e.preventDefault()
+																				jumpTo(nextEmpty(targets, boxId)?.id)
+																			}}
+																			value={actualOf(w, r)}
+																			onChange={(e) =>
+																				setActuals({
+																					...actuals,
+																					[boxKey(w.id, r.serviceCodeId)]:
+																						e.target.value,
+																				})
+																			}
+																		/>
+																	</td>
+																	<td className="py-1.5 pr-2 text-xs">
+																		{r.unit ?? "—"}
+																	</td>
+																	{shared && w.id === null && (
+																		<td className="py-1.5 text-xs">
+																			{services.brigadeNames.join(" + ")}
+																		</td>
+																	)}
+																</tr>
+															)
+														})}
+													</tbody>
+												</table>
+											</div>
+										)}
+										{addServiceOpen && (
+											<AddFieldService brigadeId={w.id ?? undefined} />
+										)}
+									</CardContent>
+								</Card>
 							)}
-							{addServiceOpen && <AddFieldService />}
-						</CardContent>
-					</Card>
-				)}
 
-				<Card>
-					<CardHeader>{t("docs_field.materials_used_label")}</CardHeader>
-					<CardContent className="space-y-3">
-						<input
-							type="hidden"
-							name="fieldMaterials"
-							value={JSON.stringify(rows)}
-						/>
-						{rows.length === 0 ? (
-							<p className="text-sm text-muted-foreground">
-								{t("docs_field.materials.empty")}
-							</p>
-						) : (
-							<FieldMaterialsTable
-								rows={tableRows}
-								onChange={(i, row) =>
-									setRows(rows.map((r, j) => (j === i ? row : r)))
-								}
-								onRemove={(i) => setRows(rows.filter((_, j) => j !== i))}
-							/>
-						)}
-						<p className="text-xs text-muted-foreground">
-							{t("docs_field.materials.hint")}
-						</p>
-						<select
-							aria-label={t("docs_field.materials.add")}
-							className="h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm"
-							value=""
-							onChange={(e) => {
-								if (!e.target.value) return
-								setRows([
-									...rows,
-									{
-										serviceCodeId: e.target.value,
-										used: 0,
-										returned: 0,
-										source: "TRUCK_STOCK",
-									},
-								])
-							}}
+							<Card>
+								<CardHeader>{t("docs_field.materials_used_label")}</CardHeader>
+								<CardContent className="space-y-3">
+									{w.id === null && (
+										<input
+											type="hidden"
+											name="fieldMaterials"
+											value={JSON.stringify(rows)}
+										/>
+									)}
+									{crewRows.length === 0 ? (
+										<p className="text-sm text-muted-foreground">
+											{t("docs_field.materials.empty")}
+										</p>
+									) : (
+										<FieldMaterialsTable
+											rows={crewRows.map(({ r }) => tableRowOf(r))}
+											onChange={(i, row) =>
+												setRows(
+													rows.map((r, j) =>
+														j === crewRows[i].index
+															? { ...row, brigadeId: r.brigadeId }
+															: r,
+													),
+												)
+											}
+											onRemove={(i) =>
+												setRows(rows.filter((_, j) => j !== crewRows[i].index))
+											}
+										/>
+									)}
+									<p className="text-xs text-muted-foreground">
+										{t("docs_field.materials.hint")}
+									</p>
+									<select
+										aria-label={t("docs_field.materials.add")}
+										className="h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm"
+										value=""
+										onChange={(e) => {
+											if (!e.target.value) return
+											setRows([
+												...rows,
+												{
+													serviceCodeId: e.target.value,
+													used: 0,
+													returned: 0,
+													source: "TRUCK_STOCK",
+													...(w.id ? { brigadeId: w.id } : {}),
+												},
+											])
+										}}
+									>
+										<option value="">{t("docs_field.materials.add")}</option>
+										{serviceCodes.map((c) => (
+											<option key={c.id} value={c.id}>
+												{c.claroCode} · {c.name}
+											</option>
+										))}
+									</select>
+								</CardContent>
+							</Card>
+						</>
+					)
+					if (w.id === null)
+						return (
+							<div key="job" className="space-y-5">
+								{inner}
+							</div>
+						)
+					const n = crews.findIndex((c) => c.id === w.id) + 1
+					return (
+						<section
+							key={w.id}
+							aria-label={`${t("docs_field.crew_window", { n })} ${w.name}`}
+							data-testid={`crew-window-${w.id}`}
+							className="space-y-5 rounded-xl border-2 border-primary/20 p-3"
 						>
-							<option value="">{t("docs_field.materials.add")}</option>
-							{serviceCodes.map((c) => (
-								<option key={c.id} value={c.id}>
-									{c.claroCode} · {c.name}
-								</option>
-							))}
-						</select>
-					</CardContent>
-				</Card>
+							<h2 className="text-base font-semibold">
+								{t("docs_field.crew_window", { n })} · {w.name}
+								{w.code ? ` · ${w.code}` : ""}
+								{w.lead && (
+									<span className="ml-2 rounded-md bg-primary px-1.5 py-0.5 text-xs font-semibold text-primary-foreground">
+										{t("crew_picker.lead")}
+									</span>
+								)}
+							</h2>
+							{inner}
+						</section>
+					)
+				})}
+				{crews.length > 0 && (
+					<input
+						type="hidden"
+						name="crewServiceLines"
+						value={JSON.stringify(crewInstalled)}
+					/>
+				)}
+				{crews.length > 0 && (
+					<input
+						type="hidden"
+						name="fieldMaterials"
+						value={JSON.stringify(postedRows)}
+					/>
+				)}
 
 				<Card>
 					<CardHeader>{t("docs_field.photos_label")}</CardHeader>

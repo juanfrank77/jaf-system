@@ -98,4 +98,45 @@ describe("evaluateReleaseGate", () => {
 		for (const k of ["approved", "invoice", "amount_match", "contractor_code"])
 			expect(keys).not.toContain(k)
 	})
+
+	describe("a certificate per crew", () => {
+		const signed = {
+			sigSupervisorAt: now as Date | null,
+			sigSubcontractorAt: null,
+			avisoNumber: "10353961" as string | null,
+		}
+		const unsigned = { ...signed, sigSupervisorAt: null }
+		const gate = (sheet: (typeof signed)[]) =>
+			evaluateReleaseGate({ ...good, sheet })
+		const row = (r: ReturnType<typeof gate>) =>
+			r.rows.find((x) => x.key === "precert_signed")
+
+		it("passes only when every crew's certificate is signed", () => {
+			expect(gate([signed, signed]).ok).toBe(true)
+			expect(gate([signed, unsigned]).ok).toBe(false)
+			expect(gate([unsigned, signed]).ok).toBe(false)
+		})
+
+		it("counts them for the release list: 1/2", () => {
+			expect(row(gate([signed, unsigned]))).toMatchObject({
+				ok: false,
+				detail: "1/2",
+			})
+			expect(row(gate([signed, signed]))).toMatchObject({
+				ok: true,
+				detail: "2/2",
+			})
+		})
+
+		it("refuses a certificate for another Aviso, even when its sibling is fine", () => {
+			expect(gate([signed, { ...signed, avisoNumber: "99999999" }]).ok).toBe(
+				false,
+			)
+		})
+
+		it("shows no count on a one-crew job, and an empty list is not signed", () => {
+			expect(row(gate([signed]))?.detail).toBeNull()
+			expect(row(gate([]))?.ok).toBe(false)
+		})
+	})
 })

@@ -240,6 +240,7 @@
 			"comptroller_ewit": "EWIT invoices",
 			"comptroller_pbcc_batches": "PBCC batches",
 			"comptroller_installer_pay": "Installer pay",
+			"comptroller_pbcc_wires": "PBCC wires",
 			"comptroller_log": "Ledger & reports",
 			"admin_reports": "Reports",
 			"comptroller_brigades": "Brigade list",
@@ -2912,6 +2913,33 @@
 			"billed_not_pod": "Billed, not PO'd",
 			"pod_not_invoiced": "PO'd, not invoiced",
 			"in_ariba_not_paid": "In Ariba, not paid"
+		}
+	},
+	"pbcc_wires": {
+		"title": "PBCC wires received",
+		"intro": "When PBCC wires the 80% advance for a batch, enter the date and the amount here. The app compares it with the advance less the $30 fee and flags any difference.",
+		"empty": "No batch has been sent to PBCC yet.",
+		"batch_label": "Batch #{{number}}",
+		"col": {
+			"batch": "Batch",
+			"sold": "Sold to PBCC (100%)",
+			"advance": "PBCC should advance (80%)",
+			"expected": "Expected wire (less $30 fee)",
+			"received": "Received (date · amount)",
+			"held": "Held by PBCC"
+		},
+		"date": "Date received",
+		"amount": "Amount",
+		"save": "Save",
+		"short": "short",
+		"over": "over",
+		"difference": "{{amount}} {{direction}} of the expected wire.",
+		"matches": "Matches the expected wire.",
+		"errors": {
+			"not_found": "That batch no longer exists.",
+			"not_sent": "This batch has not been sent to PBCC yet.",
+			"bad_amount": "Enter the amount that arrived, more than zero.",
+			"bad_date": "Enter a valid date that is not in the future."
 		}
 	},
 	"installers": {

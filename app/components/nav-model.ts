@@ -79,6 +79,7 @@ export type NavLabelKey =
 	| "app_shell.nav.comptroller_pbcc_batches"
 	| "app_shell.nav.comptroller_installer_pay"
 	| "app_shell.nav.comptroller_log"
+	| "app_shell.nav.comptroller_pbcc_wires"
 	| "app_shell.nav.admin_reports"
 
 export type NavCount = { value: number; tone: "critical" | "neutral" }
@@ -382,13 +383,20 @@ const NAV_ITEMS: NavItem[] = [
 		to: "/comptroller/to-pay",
 		labelKey: "app_shell.nav.comptroller_to_pay",
 		icon: Wallet01Icon,
-		group: "brigades",
+		group: "money",
 		roles: ["COMPTROLLER", "ADMIN"],
 	},
 	{
 		to: "/comptroller/brigades",
 		labelKey: "app_shell.nav.comptroller_brigades",
 		icon: UserGroup03Icon,
+		group: "brigades",
+		roles: ["COMPTROLLER", "ADMIN"],
+	},
+	{
+		to: "/comptroller/pbcc-wires",
+		labelKey: "app_shell.nav.comptroller_pbcc_wires",
+		icon: Invoice02Icon,
 		group: "brigades",
 		roles: ["COMPTROLLER", "ADMIN"],
 	},
@@ -425,7 +433,7 @@ const NAV_ITEMS: NavItem[] = [
 		to: "/comptroller/installers/pay",
 		labelKey: "app_shell.nav.comptroller_installer_pay",
 		icon: Wallet01Icon,
-		group: "installers",
+		group: "money",
 		roles: ["COMPTROLLER", "ADMIN"],
 	},
 

@@ -48,6 +48,9 @@ export function jobKind(jobType: string): JobKind {
 	return "MANTENIMIENTO"
 }
 
+/** What PBCC keeps from each advance wire. */
+export const PBCC_WIRE_FEE = 30
+
 export function scheduleTotals(
 	amounts: number[],
 	rate: number,

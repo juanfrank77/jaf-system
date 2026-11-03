@@ -240,6 +240,7 @@
 			"comptroller_ewit": "Facturas EWIT",
 			"comptroller_pbcc_batches": "Lotes PBCC",
 			"comptroller_installer_pay": "Pago a instaladores",
+			"comptroller_pbcc_wires": "Giros de PBCC",
 			"comptroller_log": "Registro e informes",
 			"admin_reports": "Informes",
 			"comptroller_brigades": "Lista de brigadas",
@@ -2912,6 +2913,33 @@
 			"billed_not_pod": "Facturado, sin PO",
 			"pod_not_invoiced": "Con PO, sin factura",
 			"in_ariba_not_paid": "En Ariba, sin pagar"
+		}
+	},
+	"pbcc_wires": {
+		"title": "Giros de PBCC recibidos",
+		"intro": "Cuando PBCC gire el adelanto del 80% de un lote, anote aquí la fecha y el monto. El sistema lo compara con el adelanto menos la cuota de $30 y avisa si hay diferencia.",
+		"empty": "Todavía no se ha enviado ningún lote a PBCC.",
+		"batch_label": "Lote #{{number}}",
+		"col": {
+			"batch": "Lote",
+			"sold": "Vendido a PBCC (100%)",
+			"advance": "PBCC debe adelantar (80%)",
+			"expected": "Giro esperado (menos cuota de $30)",
+			"received": "Recibido (fecha · monto)",
+			"held": "Retenido por PBCC"
+		},
+		"date": "Fecha recibida",
+		"amount": "Monto",
+		"save": "Guardar",
+		"short": "menos",
+		"over": "más",
+		"difference": "{{amount}} {{direction}} del giro esperado.",
+		"matches": "Coincide con el giro esperado.",
+		"errors": {
+			"not_found": "Ese lote ya no existe.",
+			"not_sent": "Este lote todavía no se ha enviado a PBCC.",
+			"bad_amount": "Anote el monto recibido, mayor que cero.",
+			"bad_date": "Anote una fecha válida que no sea futura."
 		}
 	},
 	"installers": {

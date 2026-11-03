@@ -142,6 +142,7 @@ describe("navGroupsFor", () => {
 			"work",
 			"arm_a",
 			"arm_b",
+			"money",
 			"brigades",
 			"installers",
 			"reports",
@@ -154,14 +155,14 @@ describe("navGroupsFor", () => {
 	it("gives COMPTROLLER its own dashboard, Brigade pay and list, Installers and Reports groups", () => {
 		expect(tos(navGroupsFor("COMPTROLLER"))).toEqual([
 			["overview", ["/comptroller"]],
-			["brigades", ["/comptroller/to-pay", "/comptroller/brigades"]],
+			["money", ["/comptroller/to-pay", "/comptroller/installers/pay"]],
+			["brigades", ["/comptroller/brigades", "/comptroller/pbcc-wires"]],
 			[
 				"installers",
 				[
 					"/comptroller/installers",
 					"/comptroller/installers/ewit",
 					"/comptroller/installers/batches",
-					"/comptroller/installers/pay",
 				],
 			],
 			["reports", ["/comptroller/log"]],

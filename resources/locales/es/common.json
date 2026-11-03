@@ -234,7 +234,7 @@
 			"warehouse_serials": "Registro de seriales",
 			"warehouse_movements": "Registro de movimientos",
 			"comptroller_lists": "Listas de Lissette",
-			"comptroller_to_pay": "Solicitudes de nómina",
+			"comptroller_to_pay": "Pago de brigadas",
 			"comptroller_paid": "Corridas pagadas",
 			"comptroller_warranty_docs": "Documentos de garantía",
 			"comptroller_ewit": "Facturas EWIT",
@@ -242,7 +242,7 @@
 			"comptroller_installer_pay": "Pago a instaladores",
 			"comptroller_log": "Registro e informes",
 			"admin_reports": "Informes",
-			"comptroller_brigades": "Brigadas",
+			"comptroller_brigades": "Lista de brigadas",
 			"finance_payment_advice": "Aviso de pago",
 			"finance_avisos": "Registros de Avisos",
 			"finance_ledger": "Libro y reportes",
@@ -286,6 +286,8 @@
 			"switch_to_light": "Cambiar a tema claro"
 		},
 		"group": {
+			"brigades": "Brigadas",
+			"reports": "Reportes",
 			"installers": "Instaladores",
 			"arm_a": "Brazo A · Pago a nuestra gente",
 			"arm_b": "Brazo B · Facturación a Claro",

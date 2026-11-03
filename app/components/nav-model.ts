@@ -91,7 +91,9 @@ export type NavGroupKey =
 	| "arm_a"
 	| "arm_b"
 	| "money"
+	| "brigades"
 	| "installers"
+	| "reports"
 	| "stock"
 	| "other"
 	| "field"
@@ -122,7 +124,9 @@ const GROUP_ORDER: NavGroupKey[] = [
 	"arm_a",
 	"arm_b",
 	"money",
+	"brigades",
 	"installers",
+	"reports",
 	"team",
 	"stock",
 	"other",
@@ -137,6 +141,8 @@ export const GROUP_LABEL_KEY: Record<NavGroupKey, GroupLabelKey | null> = {
 	arm_a: "app_shell.group.arm_a",
 	arm_b: "app_shell.group.arm_b",
 	money: "app_shell.group.money",
+	brigades: "app_shell.group.brigades",
+	reports: "app_shell.group.reports",
 	installers: "app_shell.group.installers",
 	stock: "app_shell.group.stock",
 	other: "app_shell.group.other",
@@ -376,21 +382,21 @@ const NAV_ITEMS: NavItem[] = [
 		to: "/comptroller/to-pay",
 		labelKey: "app_shell.nav.comptroller_to_pay",
 		icon: Wallet01Icon,
-		group: "money",
+		group: "brigades",
 		roles: ["COMPTROLLER", "ADMIN"],
 	},
 	{
 		to: "/comptroller/brigades",
 		labelKey: "app_shell.nav.comptroller_brigades",
 		icon: UserGroup03Icon,
-		group: "team",
+		group: "brigades",
 		roles: ["COMPTROLLER", "ADMIN"],
 	},
 	{
 		to: "/comptroller/log",
 		labelKey: "app_shell.nav.comptroller_log",
 		icon: Invoice02Icon,
-		group: "money",
+		group: "reports",
 		roles: ["COMPTROLLER", "ADMIN"],
 	},
 	{

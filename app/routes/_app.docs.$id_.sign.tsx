@@ -4,6 +4,7 @@ import type { ParseKeys } from "i18next"
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, redirect, useSubmit } from "react-router"
+import { CrewSignerSelect } from "~/components/crew-signer-select"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { JobStepRail } from "~/components/job-step-rail"
 import { MaterialLineItems } from "~/components/material-line-items"
@@ -27,7 +28,10 @@ import { pageTitle } from "~/lib/page-title"
 import { generateWarehouseReceiptPdf } from "~/lib/pdf/warehouse-receipt.server"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
-import { pickupSignerForDoc } from "~/lib/pickup-signer.server"
+import {
+	findPickupSigner,
+	pickupSignersForDoc,
+} from "~/lib/pickup-signer.server"
 import {
 	getActiveMaterialCodes,
 	getActiveServiceCodes,
@@ -61,19 +65,20 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		where: { role: "WAREHOUSE", active: true },
 		orderBy: { name: "asc" },
 	})
-	// The brigade assigned to the job picks the materials up; no CREW account on
-	// it is a screen error, not a crash.
-	const pickup = await pickupSignerForDoc(doc.brigadeId)
+	// Anyone on a brigade assigned to the job can pick the materials up; a job
+	// with no brigade is a screen error, not a crash.
+	const signerGroups = await pickupSignersForDoc(doc)
 	return {
 		doc,
 		user,
 		serviceCodes: serviceCodesForRole(user.role, serviceCodes),
 		warehouses,
 		warehouseUsers,
-		pickupSigner: pickup,
-		pickupErrorKey: pickup
-			? null
-			: ("docs_sign.errors.no_pickup_signer" as const),
+		signerGroups,
+		pickupErrorKey:
+			signerGroups.length > 0
+				? null
+				: ("docs_sign.errors.no_pickup_signer" as const),
 	}
 }
 
@@ -115,7 +120,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const crewSignature = form.get("crewSignature") as string
 	const warehouseId = form.get("warehouseId") as string
 	const releasedById = form.get("releasedById") as string
-	const signedById = form.get("signedById") as string
+	const crewSigner = form.get("crewSigner") as string
 	const materialsRaw = form.get("materials") as string
 
 	if (!warehouseId) {
@@ -124,11 +129,12 @@ export async function action({ request, params }: Route.ActionArgs) {
 	if (!releasedById) {
 		return { errorKey: "docs_sign.errors.release_signer_required" }
 	}
-	const pickup = await pickupSignerForDoc(doc.brigadeId)
-	if (!pickup) {
+	const signerGroups = await pickupSignersForDoc(doc)
+	if (signerGroups.length === 0) {
 		return { errorKey: "docs_sign.errors.no_pickup_signer" }
 	}
-	if (signedById !== pickup.id) {
+	const pickup = findPickupSigner(signerGroups, crewSigner)
+	if (!pickup) {
 		return { errorKey: "docs_sign.errors.crew_signer_invalid" }
 	}
 	if (!releaseSignature || releaseSignature === "data:,") {
@@ -217,7 +223,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 				releasedById,
 				releaseSignedAt: new Date(),
 				crewSignature,
-				signedById,
+				signedById: pickup.userId,
+				crewSignerName: pickup.name,
+				crewSignerBrigadeId: pickup.brigadeId,
 				signedAt: new Date(),
 				warehouseReceiptPath: receiptPath,
 			},
@@ -233,7 +241,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 					status: { before: doc.status, after: "SIGNED" },
 					warehouseId,
 					releasedById,
-					signedById,
+					signedById: pickup.userId,
+					crewSignerName: pickup.name,
+					crewSignerBrigadeId: pickup.brigadeId,
 					materialsTaken,
 				},
 			},
@@ -297,7 +307,7 @@ export default function SignDoc({
 		serviceCodes,
 		warehouses,
 		warehouseUsers,
-		pickupSigner,
+		signerGroups,
 		pickupErrorKey,
 		user,
 	} = loaderData
@@ -310,7 +320,11 @@ export default function SignDoc({
 	const [releasedById, setReleasedById] = useState(
 		user.role === "WAREHOUSE" ? user.id : "",
 	)
-	const signedById = pickupSigner?.id ?? ""
+	const signerOptions = signerGroups.flatMap((g) => g.signers)
+	// One name on the job needs no choosing; several must be picked on purpose.
+	const [crewSigner, setCrewSigner] = useState(
+		signerOptions.length === 1 ? signerOptions[0].key : "",
+	)
 	const [items] = useState(
 		(doc.estimatedMaterials as MaterialLine[] | null) ?? [],
 	)
@@ -343,8 +357,12 @@ export default function SignDoc({
 			fail("docs_sign.alerts.release_signer_required")
 			return
 		}
-		if (!signedById) {
+		if (signerGroups.length === 0) {
 			fail("docs_sign.errors.no_pickup_signer")
+			return
+		}
+		if (!crewSigner) {
+			fail("docs_sign.alerts.crew_signer_required")
 			return
 		}
 		if (releaseRef.current?.isEmpty()) {
@@ -366,7 +384,7 @@ export default function SignDoc({
 		// quantities the crew changed at the counter are the ones that get signed.
 		formData.set("warehouseId", warehouseId)
 		formData.set("releasedById", releasedById)
-		formData.set("signedById", signedById)
+		formData.set("crewSigner", crewSigner)
 		submit(formData, { method: "post" })
 	}
 
@@ -493,12 +511,11 @@ export default function SignDoc({
 							<Label className="text-xs text-muted-foreground">
 								{t("docs_sign.crew_signer_label")}
 							</Label>
-							<p
-								className="mt-1 flex h-11 items-center rounded-md border bg-muted/40 px-3 text-base"
-								data-testid="pickup-signer"
-							>
-								{pickupSigner?.name ?? "—"}
-							</p>
+							<CrewSignerSelect
+								groups={signerGroups}
+								value={crewSigner}
+								onChange={setCrewSigner}
+							/>
 						</div>
 						<SignaturePad
 							ref={crewRef}

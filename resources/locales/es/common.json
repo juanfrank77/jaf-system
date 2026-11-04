@@ -624,13 +624,15 @@
 		"crew_signature_heading": "2. Firma de recibo de la cuadrilla",
 		"crew_signature_subtext": "El miembro de la cuadrilla que recibe los materiales firma aquí",
 		"crew_signer_label": "Firmante de la cuadrilla",
+		"crew_signer_placeholder": "Selecciona el firmante de la cuadrilla...",
 		"clear": "Borrar",
 		"submit": "Firmar y bloquear materiales",
 		"alerts": {
 			"select_warehouse": "Por favor selecciona el almacén.",
 			"release_signer_required": "Por favor selecciona el firmante del almacén.",
 			"release_signature_required": "Se requiere la firma de liberación del almacén.",
-			"crew_signature_required": "Se requiere la firma de recibo de la cuadrilla."
+			"crew_signature_required": "Se requiere la firma de recibo de la cuadrilla.",
+			"crew_signer_required": "Selecciona el firmante de la cuadrilla."
 		},
 		"errors": {
 			"release_signature_required": "Se requiere la firma de liberación del almacén",
@@ -638,7 +640,7 @@
 			"warehouse_required": "Por favor selecciona el almacén",
 			"release_signer_required": "Por favor selecciona el firmante del almacén",
 			"release_signer_invalid": "El firmante del almacén seleccionado no es válido",
-			"no_pickup_signer": "La cuadrilla de este trabajo no tiene una cuenta de cuadrilla para firmar el retiro. Pide al supervisor que corrija la cuadrilla.",
+			"no_pickup_signer": "Este trabajo no tiene una cuadrilla asignada, así que nadie puede firmar el retiro. Pide al supervisor que agregue una.",
 			"crew_signer_invalid": "El firmante de la cuadrilla seleccionado no es válido",
 			"already_signed": "Los materiales ya están firmados y bloqueados",
 			"invalid_materials": "Datos de materiales inválidos"

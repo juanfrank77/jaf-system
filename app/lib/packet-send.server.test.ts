@@ -745,6 +745,21 @@ describe("buildPacketInput", { timeout: HOOK_TIMEOUT }, () => {
 		expect(JSON.stringify(input)).not.toMatch(/unitPrice|lineAmount|price/i)
 	})
 
+	it("a crew signer with no account prints under the name stored at pickup", async () => {
+		const claro = await seedClaro()
+		const doc = await seedDoc({
+			claroSupervisorId: claro.id,
+			crewSignature: "data:image/png;base64,iVBORw0KGgo=",
+			crewSignerName: "Carlos Rodríguez",
+			signedById: null,
+		})
+		const input = await buildPacketInput(doc.id)
+		expect(input.document.signatures.crew).toEqual({
+			name: "Carlos Rodríguez",
+			image: "data:image/png;base64,iVBORw0KGgo=",
+		})
+	})
+
 	it("a no-warehouse job prints its reason and no pickup signatures", async () => {
 		const claro = await seedClaro()
 		const doc = await seedDoc({

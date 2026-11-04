@@ -409,7 +409,7 @@ export async function loadWorkOrderDocument(
 		signers: {
 			supervisor: doc.completedBy?.name ?? null,
 			warehouse: doc.releasedBy?.name ?? null,
-			crew: doc.signedBy?.name ?? null,
+			crew: doc.crewSignerName ?? doc.signedBy?.name ?? null,
 		},
 	})
 }

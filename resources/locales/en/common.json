@@ -624,13 +624,15 @@
 		"crew_signature_heading": "2. Crew Receipt Signature",
 		"crew_signature_subtext": "Crew member receiving materials signs here",
 		"crew_signer_label": "Crew signer",
+		"crew_signer_placeholder": "Select crew signer...",
 		"clear": "Clear",
 		"submit": "Sign & Lock Materials",
 		"alerts": {
 			"select_warehouse": "Please select the warehouse.",
 			"release_signer_required": "Please select the warehouse signer.",
 			"release_signature_required": "Warehouse release signature is required.",
-			"crew_signature_required": "Crew receipt signature is required."
+			"crew_signature_required": "Crew receipt signature is required.",
+			"crew_signer_required": "Please select the crew signer."
 		},
 		"errors": {
 			"release_signature_required": "Warehouse release signature is required",
@@ -638,7 +640,7 @@
 			"warehouse_required": "Please select the warehouse",
 			"release_signer_required": "Please select the warehouse signer",
 			"release_signer_invalid": "Selected warehouse signer is not valid",
-			"no_pickup_signer": "This job's brigade has no crew account to sign for the pickup. Ask the supervisor to fix the brigade.",
+			"no_pickup_signer": "This job has no brigade assigned, so nobody can sign for the pickup. Ask the supervisor to add one.",
 			"crew_signer_invalid": "Selected crew signer is not valid",
 			"already_signed": "Materials are already signed and locked",
 			"invalid_materials": "Invalid materials data"

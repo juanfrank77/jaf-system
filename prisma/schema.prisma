@@ -329,17 +329,20 @@ model JafInvoice {
 
   // Dual signature at warehouse pickup (Step 3) — materialsTaken locked after this
   // warehouseId set here, not at prep — crew may pull from a different zone warehouse
-  warehouseId      String?
-  warehouse        Warehouse? @relation(fields: [warehouseId], references: [id])
-  materialsTaken   Json?
-  releaseSignature String? // base64 — warehouse person signs (gives)
-  releasedById     String?
-  releasedBy       User?      @relation("ReleasedDocs", fields: [releasedById], references: [id])
-  releaseSignedAt  DateTime?
-  crewSignature    String? // base64 — crew member signs (receives)
-  signedById       String?
-  signedBy         User?      @relation("SignedDocs", fields: [signedById], references: [id])
-  signedAt         DateTime?
+  warehouseId         String?
+  warehouse           Warehouse? @relation(fields: [warehouseId], references: [id])
+  materialsTaken      Json?
+  releaseSignature    String? // base64 — warehouse person signs (gives)
+  releasedById        String?
+  releasedBy          User?      @relation("ReleasedDocs", fields: [releasedById], references: [id])
+  releaseSignedAt     DateTime?
+  crewSignature       String? // base64 — crew member signs (receives)
+  signedById          String?
+  signedBy            User?      @relation("SignedDocs", fields: [signedById], references: [id])
+  // Crew have no login: signedById is null unless the signer has an account.
+  crewSignerName      String?
+  crewSignerBrigadeId String?
+  signedAt            DateTime?
 
   // Admin override
   overriddenById    String?

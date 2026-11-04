@@ -117,7 +117,8 @@ export function runPoChecks(
 
 	read.lines.forEach((l, i) => {
 		const expected = cents(l.amount * l.ivuRate) / 100
-		if (!same(expected, l.ivu))
+		// Claro rounds from unrounded quantities, so its printed IVU can be a cent off.
+		if (Math.abs(cents(expected) - cents(l.ivu)) > 1)
 			add(
 				"ivu_line",
 				"needs_look",

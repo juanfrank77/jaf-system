@@ -6,6 +6,7 @@ import { createCanvas, loadImage } from "@napi-rs/canvas"
 import { createWorker, PSM } from "tesseract.js"
 import { parseOcrPasses } from "~/lib/po-ocr-parse"
 import type { PoRead } from "~/lib/po-reading"
+import { isSoundPoRead, type PdfText, parsePoText } from "~/lib/po-text-parse"
 
 /** Reads one PO PDF. Injected so tests and a future mailbox feed share the screen. */
 export type PoReader = (pdf: Uint8Array) => Promise<PoRead>
@@ -128,10 +129,41 @@ export async function ocrPdfPasses(pdf: Uint8Array): Promise<string[]> {
 	}
 }
 
-const tesseractPoReader: PoReader = async (pdf) =>
-	parseOcrPasses(await ocrPdfPasses(pdf))
+/** The PDF's own text with its position: Claro's system prints POs as real text. */
+async function pdfText(pdf: Uint8Array): Promise<PdfText[]> {
+	const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs")
+	const base = pdfjsDir()
+	const doc = await pdfjs.getDocument({
+		data: new Uint8Array(pdf),
+		wasmUrl: `${path.join(base, "wasm")}/`,
+		standardFontDataUrl: `${path.join(base, "standard_fonts")}/`,
+	}).promise
+	const out: PdfText[] = []
+	try {
+		for (let n = 1; n <= Math.min(doc.numPages, MAX_PAGES); n++) {
+			const content = await (await doc.getPage(n)).getTextContent()
+			for (const item of content.items)
+				if ("str" in item && item.str.trim())
+					out.push({
+						page: n,
+						x: item.transform[4],
+						y: item.transform[5],
+						text: item.str,
+					})
+		}
+	} finally {
+		await doc.cleanup()
+	}
+	return out
+}
+
+/** Text layer first: exact and instant. A scan, or a bad embedded layer, goes to OCR. */
+const localPoReader: PoReader = async (pdf) => {
+	const read = parsePoText(await pdfText(pdf))
+	return isSoundPoRead(read) ? read : parseOcrPasses(await ocrPdfPasses(pdf))
+}
 
 /** The reader the inbox uses. Always available: nothing leaves the server. */
 export function getPoReader(): PoReader {
-	return tesseractPoReader
+	return localPoReader
 }

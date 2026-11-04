@@ -70,7 +70,7 @@ describe("runPoChecks", () => {
 		r.total = 900
 		expect(codes(r)).toContain("totals")
 	})
-	it("flags an IVU that is not exact to the cent as Needs a look", () => {
+	it("flags an IVU more than a cent off as Needs a look", () => {
 		const r = good()
 		r.lines[1].ivu = 68.2
 		r.ivu115 = 68.2

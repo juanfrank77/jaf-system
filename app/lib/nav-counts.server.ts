@@ -1,8 +1,12 @@
 import type { NavCount } from "~/components/nav-model"
+import {
+	readyRestockCount,
+	warehouseBrigadeStockCount,
+} from "~/lib/brigade-inventory.server"
 import { countComptrollerRuns } from "~/lib/comptroller-runs.server"
-import { CREW_QUEUES, crewQueueHref, crewQueueWhere } from "~/lib/crew-queues"
 import { db } from "~/lib/db.server"
 import { carmenOpenSummary, countArmAStages } from "~/lib/finance-stages.server"
+import { returnedDocIds } from "~/lib/returned-packet.server"
 import { needsReviewCount, repairPoolCount } from "~/lib/serial-stock"
 import {
 	SUPERVISOR_SIDEBAR_QUEUES,
@@ -15,9 +19,18 @@ import { WAREHOUSE_QUEUES, warehouseQueueHref } from "~/lib/warehouse-queues"
 import { countWarehouseQueues } from "~/lib/warehouse-queues.server"
 import type { Role } from "../../generated/prisma/client"
 
-/** Review and Aviso are the supervisor's own action points, so they go red. */
-const CRITICAL_QUEUES: SupervisorQueue[] = ["review", "aviso"]
+/** Ready for pickup, Returned and Aviso are the supervisor's own action
+ * points, so they go red. */
+const CRITICAL_QUEUES: SupervisorQueue[] = ["open", "returned", "aviso"]
 const SUPERVISOR_QUEUE_ORDER = SUPERVISOR_SIDEBAR_QUEUES
+
+/** "My open jobs" lists the jobs before the packet, but its badge counts only the
+ * jobs Ready for pickup (PREPPED): the ones waiting on the crew. */
+function supervisorCountWhere(queue: SupervisorQueue, returnedIds: string[]) {
+	return queue === "open"
+		? { status: "PREPPED" as const, releasedToFinanceAt: null }
+		: supervisorQueueWhere(queue, returnedIds)
+}
 
 /**
  * Per-role sidebar counts, keyed by nav `to`. Each department sub-project adds
@@ -34,44 +47,38 @@ export async function loadNavCounts(
 	if (user.role === "SUPERVISOR") {
 		const areas = await supervisorAreas(db, user.id)
 		const scope = ownedOrInArea(user.id, areas)
+		const returnedIds = await returnedDocIds(scope)
 		const values = await Promise.all(
 			SUPERVISOR_QUEUE_ORDER.map((q) =>
 				db.jafInvoice.count({
-					where: { AND: [scope, supervisorQueueWhere(q)] },
+					where: { AND: [scope, supervisorCountWhere(q, returnedIds)] },
 				}),
 			),
 		)
-		return Object.fromEntries(
-			SUPERVISOR_QUEUE_ORDER.map((q, i) => [
-				supervisorQueueHref(q),
-				{
-					value: values[i],
-					tone: CRITICAL_QUEUES.includes(q) ? "critical" : "neutral",
-				},
-			]),
-		)
-	}
-	if (user.role === "CREW") {
-		const values = await Promise.all(
-			CREW_QUEUES.map((q) =>
-				db.jafInvoice.count({ where: crewQueueWhere(q, user.id) }),
+		const readyRestocks = await readyRestockCount(user.id)
+		return {
+			...Object.fromEntries(
+				SUPERVISOR_QUEUE_ORDER.map((q, i) => [
+					supervisorQueueHref(q),
+					{
+						value: values[i],
+						tone: CRITICAL_QUEUES.includes(q) ? "critical" : "neutral",
+					},
+				]),
 			),
-		)
-		return Object.fromEntries(
-			CREW_QUEUES.map((q, i) => [
-				crewQueueHref(q),
-				{ value: values[i], tone: "neutral" },
-			]),
-		)
+			// A restock waiting at the warehouse.
+			"/supervisor/stock": { value: readyRestocks, tone: "critical" },
+		}
 	}
 	if (user.role === "WAREHOUSE") {
-		const [steps, requests, repairs, review] = await Promise.all([
+		const [steps, requests, repairs, review, brigadeStock] = await Promise.all([
 			countWarehouseQueues(),
 			db.restockRequest.count({
 				where: { status: { in: ["SUBMITTED", "APPROVED"] } },
 			}),
 			warehouseId ? repairPoolCount(warehouseId) : 0,
 			warehouseId ? needsReviewCount(warehouseId) : 0,
+			warehouseBrigadeStockCount(),
 		])
 		return {
 			...Object.fromEntries(
@@ -83,6 +90,7 @@ export async function loadNavCounts(
 			"/warehouse/repairs": { value: repairs, tone: "neutral" },
 			"/warehouse/needs-review": { value: review, tone: "neutral" },
 			"/warehouse/requests": { value: requests, tone: "neutral" },
+			"/warehouse/brigade-stock": { value: brigadeStock, tone: "neutral" },
 		}
 	}
 	if (user.role === "COMPTROLLER" || user.role === "ADMIN") {
@@ -103,6 +111,10 @@ export async function loadNavCounts(
 		])
 		return {
 			"/finance/queue": { value: stages.PACKETS, tone: "neutral" },
+			"/finance/queue?stage=returned": {
+				value: stages.RETURNED,
+				tone: stages.RETURNED > 0 ? "critical" : "neutral",
+			},
 			"/finance/lc-requests": { value: stages.LC_REQUEST, tone: "neutral" },
 			"/finance/lc-funded": { value: stages.LC_FUNDED, tone: "neutral" },
 			"/finance/payroll": { value: stages.LISTS, tone: "neutral" },

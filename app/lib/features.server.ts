@@ -22,3 +22,12 @@ export function isDashboardFiltersEnabled(): boolean {
 export function isPayrollFallbackEnabled(): boolean {
 	return process.env.PAYROLL_FALLBACK_ENABLED !== "false"
 }
+
+/**
+ * Step 5 emails the packet to the Claro supervisor only when
+ * PACKET_EMAIL_ENABLED=true. Off by default: the supervisor emails the PDF
+ * stored at step 4 and marks it sent.
+ */
+export function isPacketEmailEnabled(): boolean {
+	return process.env.PACKET_EMAIL_ENABLED === "true"
+}

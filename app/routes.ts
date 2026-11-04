@@ -7,7 +7,10 @@ import {
 
 export default [
 	index("routes/home.tsx"),
-	layout("routes/_auth.tsx", [route("login", "routes/_auth.login.tsx")]),
+	layout("routes/_auth.tsx", [
+		route("login", "routes/_auth.login.tsx"),
+		route("crew-notice", "routes/_auth.crew-notice.tsx"),
+	]),
 	layout("routes/_app.tsx", [
 		route("dashboard", "routes/_app.dashboard.tsx"),
 		route("admin/catalog", "routes/_app.admin.catalog.tsx"),
@@ -16,7 +19,9 @@ export default [
 		route("admin/users", "routes/_app.admin.users.tsx"),
 		route("admin/crews", "routes/_app.admin.crews.tsx"),
 		route("admin/vans", "routes/_app.admin.vans.tsx"),
+		route("admin/claro-supervisors", "routes/_app.admin.claro-supervisors.tsx"),
 		route("supervisor/brigades", "routes/_app.supervisor.brigades.tsx"),
+		route("supervisor/stock", "routes/_app.supervisor.stock.tsx"),
 		route("comptroller/brigades", "routes/_app.comptroller.brigades.tsx"),
 		route("supervisor/variance", "routes/_app.supervisor.variance.tsx"),
 		route("installer", "routes/_app.installer._index.tsx"),
@@ -32,6 +37,7 @@ export default [
 		),
 		route("warehouse/scan-in", "routes/_app.warehouse.scan-in.tsx"),
 		route("warehouse/restock", "routes/_app.warehouse.restock.tsx"),
+		route("warehouse/brigade-stock", "routes/_app.warehouse.brigade-stock.tsx"),
 		route("warehouse/prep", "routes/_app.warehouse.prep.tsx"),
 		route("warehouse/release", "routes/_app.warehouse.release.tsx"),
 		route("warehouse/returns", "routes/_app.warehouse.returns.tsx"),
@@ -58,6 +64,7 @@ export default [
 		route("docs/:id/sign", "routes/_app.docs.$id_.sign.tsx"),
 		route("docs/:id/field", "routes/_app.docs.$id_.field.tsx"),
 		route("docs/:id/review", "routes/_app.docs.$id_.review.tsx"),
+		route("docs/:id/package", "routes/_app.docs.$id_.package.tsx"),
 		route("docs/:id/lc", "routes/_app.docs.$id_.lc.tsx"),
 		route("docs/:id/audit-package", "routes/_app.docs.$id_.audit-package.tsx"),
 		route("docs/:id/returns", "routes/_app.docs.$id_.returns.tsx"),
@@ -67,6 +74,10 @@ export default [
 		route("finance/awaiting-carmen", "routes/_app.finance.awaiting-carmen.tsx"),
 		route("finance/receivables", "routes/_app.finance.receivables.tsx"),
 		route("finance/verify/:id", "routes/_app.finance.verify.$id.tsx"),
+		route(
+			"finance/verify/:id/invoice.pdf",
+			"routes/_app.finance.verify.$id.invoice.tsx",
+		),
 		route("finance/pbcc/:id", "routes/_app.finance.pbcc.$id.tsx"),
 		route(
 			"finance/pbcc/:id/invoice",

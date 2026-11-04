@@ -2,6 +2,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { db } from "~/lib/db.server"
 import { requireSession } from "~/lib/permissions.server"
+import { supervisorAreas } from "~/lib/supervisor-scope"
 import type { Route } from "./+types/files.$"
 
 const FINANCEABLE_STATUSES = [
@@ -17,9 +18,21 @@ const WAREHOUSE_STATUSES = [
 	"FIELD_UPDATED",
 ] as const
 
+/**
+ * Old priced JAF invoices (the retired generate_jaf_invoice step). They carry
+ * unit prices and totals, so only the finance-side roles may read them, on
+ * top of the usual per-job check. COMPTROLLER keeps the Finance-level access
+ * it already had here (financeable statuses only).
+ */
+const PRICED_FOLDER = "jaf-invoices/"
+const PRICED_ROLES = ["FINANCE", "ADMIN", "COMPTROLLER"]
+
+/** Upload folders kept per job: `<kind>/<docId>/<file>`. */
+const PER_DOC_FOLDERS = ["photos", "blueprints"]
+
 function extractDocId(relativePath: string): string | null {
 	const segments = relativePath.split("/")
-	if (segments.length >= 2 && segments[0] === "photos") {
+	if (segments.length >= 2 && PER_DOC_FOLDERS.includes(segments[0])) {
 		return segments[1] || null
 	}
 	const fileName = segments[segments.length - 1] || ""
@@ -27,18 +40,36 @@ function extractDocId(relativePath: string): string | null {
 	return docId
 }
 
-function canAccessDoc(
+/**
+ * The stored Prefield PDF and the job's blueprints are for the supervisor and
+ * the brigade, not Finance or the Comptroller.
+ */
+const PACKET_PREFIELD = /^packets\/[^/]*-prefield-[^/]*$/
+const FINANCE_SIDE_ROLES = ["FINANCE", "COMPTROLLER"]
+function isFinanceHiddenFile(normalized: string): boolean {
+	return (
+		normalized.startsWith("blueprints/") || PACKET_PREFIELD.test(normalized)
+	)
+}
+
+async function canAccessDoc(
 	doc: {
 		status: string
 		supervisorId: string
-		assignedCrewIds: string[]
+		brigade: { area: string | null } | null
 	},
 	userRole: string,
 	userId: string,
-): boolean {
+): Promise<boolean> {
 	if (userRole === "ADMIN") return true
-	if (userRole === "SUPERVISOR") return doc.supervisorId === userId
-	if (userRole === "CREW") return doc.assignedCrewIds.includes(userId)
+	// The same scope as every supervisor job screen: the job's own supervisor,
+	// or one whose admin-assigned areas cover the job's brigade.
+	if (userRole === "SUPERVISOR") {
+		if (doc.supervisorId === userId) return true
+		const area = doc.brigade?.area
+		return !!area && (await supervisorAreas(db, userId)).includes(area)
+	}
+	// CREW falls through to false: crew accounts no longer sign in.
 	if (userRole === "WAREHOUSE")
 		// biome-ignore lint/suspicious/noExplicitAny: status narrowed below
 		return WAREHOUSE_STATUSES.includes(doc.status as any)
@@ -190,6 +221,21 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		const allowed = await canAccessPayrollRunFile(relativePath, user)
 		if (!allowed) return new Response("Forbidden", { status: 403 })
 	} else {
+		// On the resolved path, so `packets/../jaf-invoices/…` cannot dodge it.
+		const normalized = path
+			.relative(resolvedUploadDir, filePath)
+			.split(path.sep)
+			.join("/")
+		if (
+			normalized.startsWith(PRICED_FOLDER) &&
+			!PRICED_ROLES.includes(user.role)
+		)
+			return new Response("Forbidden", { status: 403 })
+		if (
+			FINANCE_SIDE_ROLES.includes(user.role) &&
+			isFinanceHiddenFile(normalized)
+		)
+			return new Response("Forbidden", { status: 403 })
 		const docId = extractDocId(relativePath)
 		if (!docId) {
 			return new Response("Forbidden", { status: 403 })
@@ -200,11 +246,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			select: {
 				status: true,
 				supervisorId: true,
-				assignedCrewIds: true,
+				brigade: { select: { area: true } },
 			},
 		})
 
-		if (!doc || !canAccessDoc(doc, user.role, user.id)) {
+		if (!doc || !(await canAccessDoc(doc, user.role, user.id))) {
 			return new Response("Forbidden", { status: 403 })
 		}
 	}

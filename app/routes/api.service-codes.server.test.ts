@@ -48,7 +48,7 @@ describe("GET /api/service-codes", () => {
 			params: {},
 		} as any)
 		const body = await (res as Response).json()
-		expect(searchServiceCodes).toHaveBeenCalledWith("transfer", 25)
+		expect(searchServiceCodes).toHaveBeenCalledWith("transfer", 8)
 		expect(body.total).toBe(934)
 		expect(body.results).toEqual([
 			{
@@ -89,7 +89,18 @@ describe("GET /api/service-codes", () => {
 		unitPrice: "42.3430",
 	}
 
-	it.each(["CREW", "WAREHOUSE", "SUPERVISOR"])(
+	it("refuses a CREW session (crew accounts no longer sign in)", async () => {
+		vi.mocked(requireSession).mockResolvedValue({ user: { id: "u1" } } as any)
+		vi.mocked(db.user.findUnique).mockResolvedValue({ role: "CREW" } as any)
+		const res = await loader({
+			request: new Request("http://localhost/api/service-codes?q=t"),
+			params: {},
+		} as any)
+		expect((res as Response).status).toBe(403)
+		expect(searchServiceCodes).not.toHaveBeenCalled()
+	})
+
+	it.each(["WAREHOUSE", "SUPERVISOR"])(
 		"omits unitPrice for %s",
 		async (role) => {
 			vi.mocked(requireSession).mockResolvedValue({ user: { id: "u1" } } as any)

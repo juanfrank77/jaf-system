@@ -24,7 +24,7 @@ describe("DashboardView", () => {
 					path: "/",
 					Component: () => (
 						<DashboardView
-							stats={[{ labelKey: "dashboard.stat.open_documents", value: 3 }]}
+							stats={[{ labelKey: "dashboard.stat.total_documents", value: 3 }]}
 							alert={null}
 							explainer={null}
 							docs={[]}
@@ -33,7 +33,7 @@ describe("DashboardView", () => {
 				},
 			],
 		})
-		expect(screen.getByText("Open documents")).toBeInTheDocument()
+		expect(screen.getByText("Total documents")).toBeInTheDocument()
 		expect(screen.getByText("3")).toBeInTheDocument()
 	})
 
@@ -124,7 +124,7 @@ describe("DashboardView", () => {
 		})
 		const link = screen.getByRole("link", { name: /JAF-10493/ })
 		expect(link).toHaveAttribute("href", "/docs/abc")
-		expect(screen.getByText("JAF invoice")).toBeInTheDocument()
+		expect(screen.getByText("Packet → Claro")).toBeInTheDocument()
 	})
 
 	it("shows an empty state when there are no documents", async ({
@@ -299,45 +299,5 @@ describe("DashboardView", () => {
 			],
 		})
 		expect(screen.queryByText("Clear filters")).not.toBeInTheDocument()
-	})
-
-	it("renders crew My Jobs groupings", async ({ renderStub }) => {
-		await renderStub({
-			entries: [
-				{
-					path: "/",
-					Component: () => (
-						<DashboardView
-							stats={[]}
-							alert={null}
-							explainer={null}
-							docs={[]}
-							crewPreppedDocs={[doc({ id: "prepped", status: "PREPPED" })]}
-							crewInFieldDocs={[doc({ id: "field", status: "SIGNED" })]}
-							crewSentBackDocs={[
-								doc({
-									id: "sb",
-									status: "SIGNED",
-									sendBackHistory: [
-										{
-											fromStatus: "FIELD_UPDATED",
-											toStatus: "SIGNED",
-											note: "Retake photo",
-											byUserId: "sup1",
-											createdAt: "2026-08-13T10:00:00Z",
-										},
-									],
-								}),
-							]}
-							crewSubmittedDocs={[doc({ id: "sub", status: "FIELD_UPDATED" })]}
-						/>
-					),
-				},
-			],
-		})
-		expect(screen.getByText("Ready for Pickup (1)")).toBeInTheDocument()
-		expect(screen.getByText("In the Field (1)")).toBeInTheDocument()
-		expect(screen.getByText(/Retake photo/)).toBeInTheDocument()
-		expect(screen.getByText("Submitted (1)")).toBeInTheDocument()
 	})
 })

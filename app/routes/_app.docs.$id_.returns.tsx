@@ -2,6 +2,7 @@ import { redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { ReturnsForm } from "~/components/returns-form"
 import { db } from "~/lib/db.server"
+import { warehouseUsedLines } from "~/lib/field-materials"
 import { runOnce } from "~/lib/idempotency.server"
 import { pageTitle } from "~/lib/page-title"
 import { requireRole } from "~/lib/permissions.server"
@@ -56,7 +57,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
-	if (!["SIGNED", "FIELD_UPDATED"].includes(doc.status))
+	// A no-warehouse job never took material out: nothing comes back.
+	if (
+		!["SIGNED", "FIELD_UPDATED"].includes(doc.status) ||
+		!doc.materialsFromWarehouse
+	)
 		throw redirect(`/docs/${params.id}`)
 	const taken = (doc.materialsTaken as unknown as MaterialLine[]) || []
 	// A taken line whose material has since been deactivated must still resolve
@@ -76,9 +81,12 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		...activeCodes,
 		...takenCodes.filter((c) => !known.has(c.id)),
 	]
-	const materialsUsed =
-		(doc.materialsUsed as { serviceCodeId: string; qty: number }[] | null) ||
-		null
+	// Only what came out of the warehouse's stock is owed back: the brigade's
+	// own stock (in the Field table) never left the warehouse.
+	const materialsUsed = warehouseUsedLines(
+		doc.fieldMaterials,
+		doc.materialsUsed,
+	)
 	const lines = computeExpectedBackLines(taken, materialsUsed)
 	// Revisiting the page after a save must show what was actually SAVED, not a
 	// blank/full-expected form — otherwise a second "Save Returns" click posts a
@@ -103,7 +111,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
-	if (!["SIGNED", "FIELD_UPDATED"].includes(doc.status)) {
+	if (
+		!["SIGNED", "FIELD_UPDATED"].includes(doc.status) ||
+		!doc.materialsFromWarehouse
+	) {
 		throw redirect(`/docs/${params.id}`)
 	}
 
@@ -142,7 +153,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 	const returnWarehouseId = String(form.get("returnWarehouseId") ?? "").trim()
 	const idempotencyKey = String(form.get("idempotencyKey") ?? "").trim()
-	const discrepancyNote = String(form.get("discrepancyNote") ?? "").trim()
+	const returnNote = String(form.get("returnNote") ?? "").trim()
 
 	if (!returnWarehouseId) {
 		return { errorKey: "docs_returns.errors.warehouse_required" as const }
@@ -166,8 +177,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const takenMap = Object.fromEntries(
 		taken.map((t) => [t.serviceCodeId, t.qty]),
 	)
-	const materialsUsed =
-		(doc.materialsUsed as { serviceCodeId: string; qty: number }[] | null) || []
+	const materialsUsed = warehouseUsedLines(
+		doc.fieldMaterials,
+		doc.materialsUsed,
+	)
 
 	for (const line of lines) {
 		if (!line.serviceCodeId) {
@@ -208,23 +221,18 @@ export async function action({ request, params }: Route.ActionArgs) {
 		}
 	}
 
-	// The shortfall check runs against the AUTHORITATIVE expected-back set
-	// recomputed from the doc (taken − used), not against whatever subset of
-	// lines the client chose to submit: omitting a line entirely used to skip
-	// both its RETURN credit and its note requirement. A missing line counts as
-	// a full shortfall.
+	// Recorded against the AUTHORITATIVE expected-back set recomputed from the
+	// doc (taken − used). Coming back short is normal (crews need not return
+	// leftovers right away), so it is recorded, never warned about.
 	const receivedMap = new Map<string, number>()
 	for (const l of lines) receivedMap.set(l.serviceCodeId, l.received)
 	const expectedLines = computeExpectedBackLines(taken, materialsUsed)
-	const anyShort = expectedLines.some(
-		(e) => (receivedMap.get(e.serviceCodeId) ?? 0) < e.expectedBack,
-	)
 	// A LOST or DAMAGED serialized unit is real shrinkage (spec §7) — a
-	// reasonable auditor expects a recorded reason, so it requires a note too.
+	// reasonable auditor expects a recorded reason, so it requires a note.
 	const anySerialLoss = serialLines.some(
 		(s) => s.reason === "LOST" || s.reason === "DAMAGED",
 	)
-	if ((anyShort || anySerialLoss) && !discrepancyNote) {
+	if (anySerialLoss && !returnNote) {
 		return { errorKey: "returns.note_required" as const }
 	}
 
@@ -300,7 +308,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 						warehouseId: returnWarehouseId,
 						byUserId: user.id,
 						refDocId: params.id,
-						note: `LOST${discrepancyNote ? `: ${discrepancyNote}` : ""}`,
+						note: `LOST${returnNote ? `: ${returnNote}` : ""}`,
 					},
 				})
 			}
@@ -345,7 +353,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 					returnWarehouseId,
 					lines,
 					serialLines,
-					discrepancyNote: discrepancyNote || null,
+					returnNote: returnNote || null,
 				} as unknown as Prisma.InputJsonValue,
 			},
 		})

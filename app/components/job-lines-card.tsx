@@ -127,12 +127,8 @@ export function JobLinesCard({
 					<h3 className="text-xs font-medium text-muted-foreground">
 						{t("job_lines.services")}
 					</h3>
-					{ordered.length > 0 ? (
-						<ServiceLinesTable
-							lines={ordered}
-							installed={installed}
-							showDifference
-						/>
+					{ordered.length > 0 || installed.length > 0 ? (
+						<ServiceLinesTable lines={ordered} installed={installed} />
 					) : (
 						<p className="text-sm text-muted-foreground">
 							{t("job_lines.none")}

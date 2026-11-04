@@ -1,31 +1,16 @@
 const DB_NAME = "jaf-operations"
 const DB_VERSION = 1
-const JOBS_STORE = "jobs"
 const QUEUE_STORE = "queue"
 
 export type QueuedAction = {
 	id: string
 	docId?: string
-	action: "FIELD_UPDATE" | "INSTALLER_COMPLETION"
+	action: "INSTALLER_COMPLETION"
 	payload: Record<string, unknown>
 	createdAt: string
 	/** Set when the server refused the action on validation. It stays in the
-	 * queue but is never retried; the crew has to fix it and send again. */
+	 * queue but is never retried; the installer has to fix it and send again. */
 	rejection?: { errorKey?: string; message?: string; at: string }
-}
-
-export type CachedJob = {
-	id: string
-	controlNumber: string
-	status: string
-	jobType: string
-	jobAddressEstimated: string
-	jobAddressActual?: string | null
-	assignedCrewIds: string[]
-	materialsTaken?: unknown
-	sendBackHistory?: unknown
-	avisoNumber?: string | null
-	updatedAt: string
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null
@@ -46,9 +31,6 @@ function openDb(): Promise<IDBDatabase> {
 		request.onsuccess = () => resolve(request.result)
 		request.onupgradeneeded = () => {
 			const db = request.result
-			if (!db.objectStoreNames.contains(JOBS_STORE)) {
-				db.createObjectStore(JOBS_STORE, { keyPath: "id" })
-			}
 			if (!db.objectStoreNames.contains(QUEUE_STORE)) {
 				db.createObjectStore(QUEUE_STORE, { keyPath: "id" })
 			}
@@ -78,35 +60,6 @@ function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
 	})
 }
 
-export async function cacheJobs(jobs: CachedJob[]): Promise<void> {
-	try {
-		const store = await withStore(JOBS_STORE, "readwrite")
-		for (const job of jobs) {
-			await requestToPromise(store.put(job))
-		}
-	} catch {
-		// Ignore in environments without IndexedDB
-	}
-}
-
-export async function getCachedJob(id: string): Promise<CachedJob | undefined> {
-	try {
-		const store = await withStore(JOBS_STORE, "readonly")
-		return (await requestToPromise(store.get(id))) as CachedJob | undefined
-	} catch {
-		return undefined
-	}
-}
-
-export async function getCachedJobs(): Promise<CachedJob[]> {
-	try {
-		const store = await withStore(JOBS_STORE, "readonly")
-		return (await requestToPromise(store.getAll())) as CachedJob[]
-	} catch {
-		return []
-	}
-}
-
 export async function queueAction(
 	action: Omit<QueuedAction, "id" | "createdAt">,
 ): Promise<QueuedAction> {
@@ -130,7 +83,19 @@ export async function removeQueuedAction(id: string): Promise<void> {
 	await requestToPromise(store.delete(id))
 }
 
-export async function markActionRejected(
+/**
+ * Crews no longer submit the Field step (the supervisor enters it), so a
+ * crew FIELD_UPDATE a browser queued before that change is dropped, never
+ * replayed: it would only be refused by the supervisor-only route.
+ */
+export async function dropRetiredActions(): Promise<void> {
+	for (const action of await getQueuedActions()) {
+		if ((action.action as string) !== "INSTALLER_COMPLETION")
+			await removeQueuedAction(action.id)
+	}
+}
+
+async function markActionRejected(
 	id: string,
 	reason: { errorKey?: string; message?: string },
 ): Promise<void> {
@@ -175,7 +140,7 @@ export async function syncQueuedActions({
 	errors: string[]
 	rejected: number
 }> {
-	// A rejected action waits for the crew; retrying it would only be refused again.
+	// A rejected action waits for the installer; retrying it would only be refused again.
 	const actions = (await getQueuedActions()).filter((a) => !a.rejection)
 	const sorted = actions.sort(
 		(a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),

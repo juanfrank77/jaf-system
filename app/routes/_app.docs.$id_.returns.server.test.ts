@@ -24,7 +24,16 @@ type Line = { serviceCodeId: string; qty: number }
 /** Seed a FIELD_UPDATED doc with `materialsTaken`/`materialsUsed`, plus the
  * pickup warehouse and a ServiceCode row per referenced serviceCodeId (so the
  * action's active-service-code check passes for literal ids like "1005803"). */
-async function seedFieldUpdatedDoc(opts: { taken: Line[]; used: Line[] }) {
+async function seedFieldUpdatedDoc(opts: {
+	taken: Line[]
+	used: Line[]
+	fieldMaterials?: {
+		serviceCodeId: string
+		used: number
+		returned: number
+		source: "WAREHOUSE" | "BRIGADE_STOCK"
+	}[]
+}) {
 	const warehouse = t.track("warehouse", await seedWarehouse())
 	const supervisor = t.track("user", await seedUser({ role: "SUPERVISOR" }))
 	const user = t.track("user", await seedUser({ role: "WAREHOUSE" }))
@@ -62,6 +71,7 @@ async function seedFieldUpdatedDoc(opts: { taken: Line[]; used: Line[] }) {
 				warehouseId: warehouse.id,
 				materialsTaken: opts.taken,
 				materialsUsed: opts.used,
+				...(opts.fieldMaterials ? { fieldMaterials: opts.fieldMaterials } : {}),
 			},
 		}),
 	)
@@ -99,8 +109,7 @@ function formFor(body: Record<string, unknown>) {
 	form.set("returnWarehouseId", String(body.returnWarehouseId ?? ""))
 	form.set("lines", JSON.stringify(body.lines ?? []))
 	form.set("serialLines", JSON.stringify(body.serialLines ?? []))
-	if (body.discrepancyNote)
-		form.set("discrepancyNote", String(body.discrepancyNote))
+	if (body.returnNote) form.set("returnNote", String(body.returnNote))
 	return form
 }
 
@@ -156,27 +165,110 @@ describe("returns: pre-fill", () => {
 	})
 })
 
+describe("returns: brigade's own stock is not expected back", () => {
+	afterAll(() => vi.clearAllMocks())
+
+	// 10 signed out; the Field table says 6 used from that stock and 4 from the
+	// brigade's own. This row was saved before the brigade-stock ruling, so
+	// materialsUsed holds the total 10, but 4 of the warehouse's 10 are still
+	// owed back.
+	const split = {
+		taken: [{ serviceCodeId: "1005803", qty: 10 }],
+		used: [{ serviceCodeId: "1005803", qty: 10 }],
+		fieldMaterials: [
+			{
+				serviceCodeId: "1005803",
+				used: 6,
+				returned: 4,
+				source: "WAREHOUSE" as const,
+			},
+			{
+				serviceCodeId: "1005803",
+				used: 4,
+				returned: 0,
+				source: "BRIGADE_STOCK" as const,
+			},
+		],
+	}
+
+	it("expects 4 back, not 0", async () => {
+		mocks.requireRole.mockResolvedValue({
+			user: { id: "irrelevant", role: "WAREHOUSE" },
+		})
+		const { doc } = await seedFieldUpdatedDoc(split)
+		const data = await loader({
+			request: new Request(`http://x/docs/${doc.id}/returns`),
+			params: { id: doc.id },
+			context: {},
+		} as never)
+		expect(data.lines).toEqual([
+			{ serviceCodeId: "1005803", takenQty: 10, usedQty: 6, expectedBack: 4 },
+		])
+		expect(data.materialsUsed).toEqual([{ serviceCodeId: "1005803", qty: 6 }])
+	})
+
+	it("records fewer than those 4 coming back without a note", async () => {
+		const { doc, warehouse, user } = await seedFieldUpdatedDoc(split)
+		mocks.requireRole.mockResolvedValue({ user })
+		const res = await confirmReturns(doc, {
+			idempotencyKey: runToken("idem"),
+			returnWarehouseId: warehouse.id,
+			lines: [{ serviceCodeId: "1005803", received: 0 }],
+		})
+		expect(res.errorKey).toBeUndefined()
+		expect(res.redirectedTo).toBe(`/docs/${doc.id}`)
+	})
+
+	it("a Field save under the ruling (materialsUsed = 6) also expects 4 back", async () => {
+		mocks.requireRole.mockResolvedValue({
+			user: { id: "irrelevant", role: "WAREHOUSE" },
+		})
+		const { doc } = await seedFieldUpdatedDoc({
+			...split,
+			used: [{ serviceCodeId: "1005803", qty: 6 }],
+		})
+		const data = await loader({
+			request: new Request(`http://x/docs/${doc.id}/returns`),
+			params: { id: doc.id },
+			context: {},
+		} as never)
+		expect(data.lines).toEqual([
+			{ serviceCodeId: "1005803", takenQty: 10, usedQty: 6, expectedBack: 4 },
+		])
+	})
+
+	it("a legacy job with no Field table still uses materialsUsed", async () => {
+		mocks.requireRole.mockResolvedValue({
+			user: { id: "irrelevant", role: "WAREHOUSE" },
+		})
+		const { doc } = await seedFieldUpdatedDoc({
+			taken: [{ serviceCodeId: "1005803", qty: 10 }],
+			used: [{ serviceCodeId: "1005803", qty: 7 }],
+		})
+		const data = await loader({
+			request: new Request(`http://x/docs/${doc.id}/returns`),
+			params: { id: doc.id },
+			context: {},
+		} as never)
+		expect(
+			data.lines.find((l) => l.serviceCodeId === "1005803")?.expectedBack,
+		).toBe(3)
+	})
+})
+
 describe("returns: confirm action", () => {
 	afterAll(() => vi.clearAllMocks())
 
-	it("requires a note when received < expected and posts RETURN(+received)", async () => {
+	it("posts RETURN(+received) when received < expected, with no note required", async () => {
 		const { doc, warehouse, user } = await seedFieldUpdatedDoc({
 			taken: [{ serviceCodeId: "1005803", qty: 300 }],
 			used: [{ serviceCodeId: "1005803", qty: 260 }],
 		})
 		mocks.requireRole.mockResolvedValue({ user })
-		const noNote = await confirmReturns(doc, {
-			idempotencyKey: runToken("r1"),
-			returnWarehouseId: warehouse.id,
-			lines: [{ serviceCodeId: "1005803", received: 30 }],
-		})
-		expect(noNote.errorKey).toBe("returns.note_required")
-
 		const ok = await confirmReturns(doc, {
 			idempotencyKey: runToken("r2"),
 			returnWarehouseId: warehouse.id,
 			lines: [{ serviceCodeId: "1005803", received: 30 }],
-			discrepancyNote: "1 damaged on site",
 		})
 		expect(ok.redirectedTo).toBe(`/docs/${doc.id}`)
 		expect(await getBulkOnHand(db, warehouse.id, "1005803")).toBe(30)
@@ -218,7 +310,7 @@ describe("returns: confirm action", () => {
 				{ serial: "S-DMG", reason: "DAMAGED" },
 				{ serial: "S-LOST", reason: "LOST" },
 			],
-			discrepancyNote: "1 damaged, 1 never came back",
+			returnNote: "1 damaged, 1 never came back",
 		})
 		// dispositionSerial's compare-and-swap moves a FAILED-triaged serial from
 		// RETURNED -> AWAITING_REPAIR (repair.server.ts DISPO_TO_STATUS), not a
@@ -277,7 +369,7 @@ describe("returns: confirm action", () => {
 			returnWarehouseId: creditWh.id,
 			lines: [{ serviceCodeId: "1005803", received: 10 }],
 			serialLines: [{ serial, reason: "DAMAGED" }],
-			discrepancyNote: "damaged, credit routed to the other warehouse",
+			returnNote: "damaged, credit routed to the other warehouse",
 		})
 		// Used to escape as a raw 500 rather than redirect.
 		expect(res.redirectedTo).toBe(`/docs/${doc.id}`)
@@ -359,7 +451,7 @@ describe("returns: confirm action", () => {
 			idempotencyKey: runToken("r6"),
 			returnWarehouseId: warehouse.id,
 			lines: [{ serviceCodeId: "1005803", received: 6 }],
-			discrepancyNote: "4 short",
+			returnNote: "4 short",
 		})
 		const data = await loader({
 			request: new Request(`http://x/docs/${doc.id}/returns`),
@@ -403,13 +495,13 @@ describe("returns: action-level validation (review fixes)", () => {
 			idempotencyKey: runToken("r8"),
 			returnWarehouseId: warehouse.id,
 			lines: [{ serviceCodeId: "1005803", received: -5 }],
-			discrepancyNote: "nonsense",
+			returnNote: "nonsense",
 		})
 		expect(res.errorKey).toBe("docs_returns.errors.invalid_received_qty")
 		expect(await getBulkOnHand(db, warehouse.id, "1005803")).toBe(0)
 	})
 
-	it("treats an OMITTED expected line as a shortfall (note still required)", async () => {
+	it("records an OMITTED expected line as returned 0, without a note", async () => {
 		const { doc, warehouse, user } = await seedFieldUpdatedDoc({
 			taken: [
 				{ serviceCodeId: "1005803", qty: 10 },
@@ -419,15 +511,69 @@ describe("returns: action-level validation (review fixes)", () => {
 		})
 		mocks.requireRole.mockResolvedValue({ user })
 		// The client submits only the first line — the second (expected back 4)
-		// is silently dropped. That used to pass with no note and no movement.
+		// is recorded as returned 0 rather than vanishing.
 		const res = await confirmReturns(doc, {
 			idempotencyKey: runToken("r9"),
 			returnWarehouseId: warehouse.id,
 			lines: [{ serviceCodeId: "1005803", received: 10 }],
 		})
-		expect(res.errorKey).toBe("returns.note_required")
-		expect(await db.stockMovement.count({ where: { refDocId: doc.id } })).toBe(
-			0,
+		expect(res.errorKey).toBeUndefined()
+		const saved = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: doc.id },
+			select: { materialsReturned: true },
+		})
+		expect(saved.materialsReturned).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ serviceCodeId: "1005804", returnedQty: 0 }),
+			]),
 		)
+	})
+})
+
+describe("returns: a no-warehouse job has nothing to return", () => {
+	afterAll(() => vi.clearAllMocks())
+
+	async function seedNoWarehouseDoc() {
+		const seeded = await seedFieldUpdatedDoc({ taken: [], used: [] })
+		await db.jafInvoice.update({
+			where: { id: seeded.doc.id },
+			data: { materialsFromWarehouse: false },
+		})
+		return seeded
+	}
+
+	it("the loader redirects back to the job", async () => {
+		const { doc, user } = await seedNoWarehouseDoc()
+		mocks.requireRole.mockResolvedValue({ user })
+		const res = await loader({
+			request: new Request(`http://x/docs/${doc.id}/returns`),
+			params: { id: doc.id },
+			context: {},
+		} as never).then(
+			() => null,
+			(e) => (e instanceof Response ? e.headers.get("location") : e),
+		)
+		expect(res).toBe(`/docs/${doc.id}`)
+	})
+
+	it("the action refuses and writes nothing", async () => {
+		const { doc, warehouse, user } = await seedNoWarehouseDoc()
+		mocks.requireRole.mockResolvedValue({ user })
+		const res = await confirmReturns(doc, {
+			idempotencyKey: runToken("idem"),
+			returnWarehouseId: warehouse.id,
+			lines: [],
+		})
+		expect(res.redirectedTo).toBe(`/docs/${doc.id}`)
+		const after = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: doc.id },
+			select: { materialsReturned: true },
+		})
+		expect(after.materialsReturned).toBeNull()
+		expect(
+			await db.auditTrail.count({
+				where: { docId: doc.id, action: "RETURNS_LOGGED" },
+			}),
+		).toBe(0)
 	})
 })

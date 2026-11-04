@@ -1,61 +1,91 @@
-import fs from "node:fs/promises"
 import path from "node:path"
+import { File01Icon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 import type { ParseKeys } from "i18next"
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { data, Form, redirect, useNavigation, useSubmit } from "react-router"
-import { RouteErrorBoundary } from "~/components/error-boundary"
-import { JobStepRail } from "~/components/job-step-rail"
-import { MaterialLineItems } from "~/components/material-line-items"
-import { type CapturedPhoto, PhotoCapture } from "~/components/photo-capture"
-import { ServiceLinesTable } from "~/components/service-lines-table"
 import {
-	SignaturePad,
-	type SignaturePadHandle,
-} from "~/components/signature-pad"
-import { Badge } from "~/components/ui/badge"
+	data,
+	Form,
+	redirect,
+	useFetcher,
+	useNavigation,
+	useSubmit,
+} from "react-router"
+import {
+	AddFieldService,
+	RemoveAddedService,
+} from "~/components/add-field-service"
+import { RouteErrorBoundary } from "~/components/error-boundary"
+import {
+	FieldMaterialsTable,
+	type FieldMaterialsTableRow,
+} from "~/components/field-materials-table"
+import { AddedInFieldLabel } from "~/components/service-lines-table"
+import { StepActionBar } from "~/components/step-action-bar"
+import { SupervisorStepRail } from "~/components/supervisor-step-rail"
 import { Button } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
+import { Card, CardContent, CardHeader } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
-import { useOnline } from "~/hooks/use-online"
-import { isUnassignedCrew } from "~/lib/crew-scope"
+import { syncUsedFromJob } from "~/lib/brigade-inventory.server"
+import { assignedBrigadeIds } from "~/lib/crew-assignment"
+import {
+	crewLinesOf,
+	crewsOnJob,
+	everyCrewHasLines,
+	normalizeInstalled,
+	readCrewLines,
+	sumCrewLines,
+	withCrewLines,
+} from "~/lib/crew-field"
 import { db } from "~/lib/db.server"
-import { queueFieldUpdate } from "~/lib/field-sync"
+import {
+	billableUsed,
+	exceedsSigned,
+	type FieldMaterialRow,
+	fieldMaterialsOrDefault,
+	parseFieldMaterials,
+} from "~/lib/field-materials"
+import { blockingMissing, fieldTargets, nextEmpty } from "~/lib/field-progress"
 import {
 	type AddressCorrection,
 	buildAddressCorrection,
-	formatTimeOnSite,
 	mergeAddressCorrections,
-	parseGpsCoordinates,
 } from "~/lib/field-update-helpers"
-import { validateFile } from "~/lib/file-upload.server"
 import {
-	getQueuedActions,
-	type QueuedAction,
-	removeQueuedAction,
-} from "~/lib/offline-store"
-import { refuse } from "~/lib/offline-validation.server"
+	uploadFileName,
+	validateBlueprintFile,
+	validateOriginalUpload,
+} from "~/lib/file-upload.server"
+import { composeJobAddress } from "~/lib/intake-address"
+import { isBillableSource } from "~/lib/material-source"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import {
+	findPickableServiceCode,
 	getActiveMaterialCodes,
 	serviceCodesForRole,
 } from "~/lib/service-codes.server"
-import type { ServiceLine } from "~/lib/service-lines"
+import {
+	installedNotOrdered,
+	mergeInstalledPost,
+	type ServiceLine,
+} from "~/lib/service-lines"
+import { assertDocInSupervisorScope } from "~/lib/supervisor-scope"
+import {
+	deriveSupervisorStage,
+	SUPERVISOR_STAGES,
+} from "~/lib/supervisor-stage"
+import { photosThatLoad, saveUpload } from "~/lib/uploads.server"
+import { cn } from "~/lib/utils"
 import type { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id_.field"
 
 type MaterialLine = { serviceCodeId: string; qty: number }
-
-type SendBackEntry = {
-	createdAt: string
-	byUserId: string
-	fromStatus: string
-	toStatus: string
-	note: string
-}
+type PhotoTag = "BEFORE" | "DURING" | "AFTER"
 
 export const meta: Route.MetaFunction = ({ data }) => [
 	{
@@ -65,778 +95,1389 @@ export const meta: Route.MetaFunction = ({ data }) => [
 	},
 ]
 
-function buildQuantityDiscrepancies(
-	taken: MaterialLine[],
-	used: MaterialLine[],
-): { serviceCodeId: string; takenQty: number; usedQty: number }[] {
-	const takenMap = Object.fromEntries(
-		taken.map((t) => [t.serviceCodeId, t.qty]),
-	)
-	const usedMap = Object.fromEntries(used.map((u) => [u.serviceCodeId, u.qty]))
-	const allIds = Array.from(
-		new Set([...Object.keys(takenMap), ...Object.keys(usedMap)]),
-	)
-	return allIds
-		.map((serviceCodeId) => {
-			const takenQty = takenMap[serviceCodeId] ?? 0
-			const usedQty = usedMap[serviceCodeId] ?? 0
-			return { serviceCodeId, takenQty, usedQty }
-		})
-		.filter((d) => d.takenQty !== d.usedQty)
+/**
+ * Field is open from pickup until sign-off, which locks it for the
+ * supervisor. Only an Admin may still change it after sign-off (the existing
+ * override), and only until the job moves past SUPERVISOR_APPROVED.
+ */
+const FIELD_OPEN_STATUSES = ["SIGNED", "FIELD_UPDATED"]
+const ADMIN_FIELD_OPEN_STATUSES = [
+	...FIELD_OPEN_STATUSES,
+	"SUPERVISOR_APPROVED",
+]
+
+function fieldIsOpen(
+	doc: { status: string; supervisorApprovedAt: Date | null },
+	role: string,
+): boolean {
+	if (role === "ADMIN") return ADMIN_FIELD_OPEN_STATUSES.includes(doc.status)
+	return FIELD_OPEN_STATUSES.includes(doc.status) && !doc.supervisorApprovedAt
 }
 
-function exceedsTaken(taken: MaterialLine[], used: MaterialLine[]): boolean {
-	const takenMap = new Map(taken.map((t) => [t.serviceCodeId, t.qty]))
-	return used.some((u) => u.qty > (takenMap.get(u.serviceCodeId) ?? 0))
+const PHOTO_FIELDS: [string, PhotoTag][] = [
+	["photosBefore", "BEFORE"],
+	["photosDuring", "DURING"],
+	["photosAfter", "AFTER"],
+]
+
+/** Aviso-style location columns the address correction may change. */
+const ADDRESS_COLUMNS = [
+	"sector",
+	"direccion1",
+	"direccion2",
+	"latitud",
+	"longitud",
+	"ciudad",
+] as const
+type AddressColumn = (typeof ADDRESS_COLUMNS)[number]
+
+// Only what the Field step shows: no price, payable or invoice-line column
+// is fetched, so none can reach a price-blind supervisor.
+const FIELD_DOC_SELECT = {
+	id: true,
+	controlNumber: true,
+	status: true,
+	supervisorId: true,
+	brigade: { select: { area: true, name: true } },
+	assignedCrewIds: true,
+	sector: true,
+	direccion1: true,
+	direccion2: true,
+	latitud: true,
+	longitud: true,
+	ciudad: true,
+	jobAddressEstimated: true,
+	jobAddressActual: true,
+	addressCorrections: true,
+	materialsTaken: true,
+	estimatedMaterials: true,
+	fieldMaterials: true,
+	serviceLines: true,
+	installedServiceLines: true,
+	crewServiceLines: true,
+	brigadeId: true,
+	crewAssignmentHistory: true,
+	fieldNotes: true,
+	fieldStartedAt: true,
+	fieldSubmittedAt: true,
+	materialsFromWarehouse: true,
+	supervisorApprovedAt: true,
+	jafInvoiceGeneratedAt: true,
+	avisoNumber: true,
+	avisoDocPath: true,
+	releasedToFinanceAt: true,
+	// The rail's stage: a returned packet is back on the supervisor's steps.
+	financeSendBackNotes: true,
+	financeVerifiedAt: true,
+	pbccRequestSentAt: true,
+	blueprintPaths: true,
+	claroSupervisor: {
+		select: { name: true, requiresBlueprint: true },
+	},
+} satisfies Prisma.JafInvoiceSelect
+
+type FieldDoc = Prisma.JafInvoiceGetPayload<{
+	select: typeof FIELD_DOC_SELECT
+}>
+
+async function openFieldDoc(request: Request, id: string) {
+	const { user } = await requireRole(request, ["SUPERVISOR", "ADMIN"])
+	const doc = await db.jafInvoice.findUniqueOrThrow({
+		where: { id },
+		select: FIELD_DOC_SELECT,
+	})
+	if (user.role === "SUPERVISOR")
+		await assertDocInSupervisorScope(db, user.id, doc)
+	if (!fieldIsOpen(doc, user.role)) throw redirect(`/docs/${id}`)
+	return { user, doc }
+}
+
+function lines(v: unknown): MaterialLine[] {
+	return Array.isArray(v) ? (v as MaterialLine[]) : []
+}
+
+/** The services table for one crew: the ordered lines, then those added in the field. */
+function serviceRows(
+	ordered: ServiceLine[],
+	installed: ServiceLine[] | null,
+	unitOf: Map<string, string | null>,
+) {
+	return [
+		...ordered.map((l) => ({
+			serviceCodeId: l.serviceCodeId,
+			claroCode: l.claroCode,
+			name: l.name,
+			estimated: l.qty,
+			actual:
+				installed?.find((i) => i.serviceCodeId === l.serviceCodeId)?.qty ??
+				null,
+			unit: unitOf.get(l.serviceCodeId) ?? null,
+		})),
+		...installedNotOrdered(ordered, installed).map((l) => ({
+			serviceCodeId: l.serviceCodeId,
+			claroCode: l.claroCode,
+			name: l.name,
+			estimated: 0,
+			actual: l.qty as number | null,
+			unit: unitOf.get(l.serviceCodeId) ?? null,
+			...(l.addedInField ? { addedInField: true as const } : {}),
+		})),
+	]
 }
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-	const { user } = await requireRole(request, ["CREW", "ADMIN"])
-	const doc = await db.jafInvoice.findUniqueOrThrow({
-		where: { id: params.id },
-	})
-	if (!canTransition(doc.status, "FIELD_UPDATED", user.role))
-		throw redirect(`/docs/${params.id}`)
-	if (isUnassignedCrew(user, doc)) throw redirect(`/docs/${params.id}`)
-	const serviceCodes = await getActiveMaterialCodes()
-	const sendBackHistory =
-		(doc.sendBackHistory as unknown as SendBackEntry[] | null) ?? []
-	const latestSendBack =
-		sendBackHistory.length > 0
-			? sendBackHistory[sendBackHistory.length - 1]
-			: null
-	const sentBy = latestSendBack
-		? await db.user.findUnique({ where: { id: latestSendBack.byUserId } })
-		: null
-	// Names for whoever edited the address, so the history can say who.
-	const correctorIds = [
-		...new Set(
-			((doc.addressCorrections as AddressCorrection[] | null) ?? []).map(
-				(c) => c.correctedById,
-			),
-		),
+	const { user, doc } = await openFieldDoc(request, params.id)
+	const taken = lines(doc.materialsTaken)
+	const ordered = (doc.serviceLines as ServiceLine[] | null) ?? []
+	const installed = (doc.installedServiceLines as ServiceLine[] | null) ?? null
+	// Lines added in the field (Ordered 0) follow the ordered ones.
+	const extras = installedNotOrdered(ordered, installed)
+	const listed = [...ordered, ...extras]
+	const corrections =
+		(doc.addressCorrections as AddressCorrection[] | null) ?? []
+	const shared = doc.assignedCrewIds.length > 1
+	// Several brigades: each gets its own window (services, equipment, materials).
+	const crewIds = assignedBrigadeIds(doc)
+	const multiCrew = crewIds.length > 1
+	const crewLines = readCrewLines(doc.crewServiceLines)
+	const crewListed = multiCrew
+		? crewIds.flatMap((id) => [
+				...ordered,
+				...installedNotOrdered(ordered, crewLinesOf(crewLines, id)),
+			])
+		: []
+
+	const [codes, photoRows, serviceUnits, crewBrigades] = await Promise.all([
+		getActiveMaterialCodes(),
+		db.photo.findMany({
+			where: { docId: doc.id },
+			orderBy: { takenAt: "asc" },
+			select: { id: true, tag: true, localPath: true },
+		}),
+		listed.length + crewListed.length > 0
+			? db.serviceCode.findMany({
+					where: {
+						id: {
+							in: [...listed, ...crewListed].map((l) => l.serviceCodeId),
+						},
+					},
+					select: { id: true, unit: true },
+				})
+			: Promise.resolve([]),
+		multiCrew
+			? db.brigade.findMany({
+					where: { id: { in: crewIds } },
+					select: { id: true, name: true, code: true },
+				})
+			: Promise.resolve([]),
+	])
+	const unitOf = new Map(serviceUnits.map((c) => [c.id, c.unit]))
+	const photos: Record<PhotoTag, { id: string; src: string }[]> = {
+		BEFORE: [],
+		DURING: [],
+		AFTER: [],
+	}
+	for (const p of await photosThatLoad(doc.id, photoRows)) {
+		if (!p.tag) continue
+		photos[p.tag].push({
+			id: p.id,
+			src: `/files/photos/${doc.id}/${path.basename(p.localPath)}`,
+		})
+	}
+
+	// Names for whoever edited the address and, on a shared job, the brigades.
+	const nameIds = [
+		...new Set([
+			...corrections.map((c) => c.correctedById),
+			...(shared ? doc.assignedCrewIds : []),
+		]),
 	]
-	const correctors =
-		correctorIds.length > 0
+	const people =
+		nameIds.length > 0
 			? await db.user.findMany({
-					where: { id: { in: correctorIds } },
+					where: { id: { in: nameIds } },
 					select: { id: true, name: true },
 				})
 			: []
+	const nameOf = new Map(people.map((u) => [u.id, u.name]))
+
 	return {
-		doc,
-		user,
-		serviceCodes: serviceCodesForRole(user.role, serviceCodes),
-		correctorNames: Object.fromEntries(correctors.map((u) => [u.id, u.name])),
-		latestSendBack,
-		sentByName: sentBy?.name ?? null,
+		user: { id: user.id, role: user.role },
+		doc: {
+			id: doc.id,
+			controlNumber: doc.controlNumber,
+			status: doc.status,
+			sector: doc.sector,
+			direccion1: doc.direccion1,
+			direccion2: doc.direccion2,
+			latitud: doc.latitud,
+			longitud: doc.longitud,
+			ciudad: doc.ciudad,
+			jobAddressEstimated: doc.jobAddressEstimated,
+			jobAddressActual: doc.jobAddressActual,
+			fieldNotes: doc.fieldNotes,
+			fieldStartedAt: doc.fieldStartedAt,
+			fieldSubmittedAt: doc.fieldSubmittedAt,
+			materialsFromWarehouse: doc.materialsFromWarehouse,
+		},
+		addressCorrections: corrections,
+		correctorNames: Object.fromEntries(
+			corrections.map((c) => [c.correctedById, nameOf.get(c.correctedById)]),
+		),
+		photos,
+		blueprints: doc.blueprintPaths.map((p) => path.basename(p)),
+		blueprintRequired: doc.claroSupervisor?.requiresBlueprint ?? false,
+		stage: deriveSupervisorStage(doc, null),
+		materialsTaken: taken,
+		estimatedMaterials: lines(doc.estimatedMaterials),
+		fieldMaterials: fieldMaterialsOrDefault(doc.fieldMaterials, taken),
+		serviceLines: ordered,
+		installedServiceLines: installed,
+		crews: multiCrew
+			? crewIds.flatMap((id) => {
+					const b = crewBrigades.find((x) => x.id === id)
+					if (!b) return []
+					const mine = crewLinesOf(crewLines, id)
+					return [
+						{
+							id,
+							name: b.name,
+							code: b.code,
+							lead: id === crewIds[0],
+							installed: mine,
+							rows: serviceRows(ordered, mine, unitOf),
+						},
+					]
+				})
+			: [],
+		services: {
+			rows: serviceRows(ordered, installed, unitOf),
+			brigadeNames: shared
+				? doc.assignedCrewIds
+						.map((id) => nameOf.get(id))
+						.filter((n): n is string => !!n)
+				: [],
+		},
+		serviceCodes: serviceCodesForRole(user.role, codes),
+		// "Add service" and its remove (x) stay until the job is signed off
+		// (the Pre-cert and the packet are built from the lines from then on).
+		addServiceOpen: !doc.jafInvoiceGeneratedAt && !doc.supervisorApprovedAt,
 	}
 }
 
-export async function action({ request, params }: Route.ActionArgs) {
-	const { user } = await requireRole(request, ["CREW", "ADMIN"])
-	const doc = await db.jafInvoice.findUniqueOrThrow({
-		where: { id: params.id },
-	})
-	if (!canTransition(doc.status, "FIELD_UPDATED", user.role)) {
-		if (request.headers.get("X-Offline-Sync") === "true") {
-			return data(
-				{ conflict: doc.status === "CANCELLED" ? "CANCELLED" : "REASSIGNED" },
-				{ status: 409 },
+type Refusal = { errorKey: ParseKeys }
+
+function refusal(key: ParseKeys): Refusal {
+	return { errorKey: key }
+}
+
+function files(form: FormData, name: string): File[] {
+	return form
+		.getAll(name)
+		.filter((f): f is File => f instanceof File && f.size > 0)
+}
+
+/** Zero is a legitimate installed quantity, so this does not use parseServiceLines. */
+function parseInstalled(raw: string): ServiceLine[] {
+	return normalizeInstalled(JSON.parse(raw))
+}
+
+/**
+ * "Add service" / its remove (x): a service the order did not have, found by
+ * the crew on site, goes on the installed lines flagged `addedInField`
+ * (Ordered 0) and from there everywhere the installed lines go. Only until the
+ * packet goes to Claro (`jafInvoiceGeneratedAt`, set by the first delivered
+ * send, which also locks the invoice lines); the write re-checks it so a send
+ * in between wins. Each change is audited with who and when.
+ */
+async function changeAddedService(
+	intent: "add_service" | "remove_added_service",
+	form: FormData,
+	doc: FieldDoc,
+	userId: string,
+): Promise<Refusal | { ok: true }> {
+	if (doc.jafInvoiceGeneratedAt)
+		return refusal("docs_field.errors.service_packet_sent")
+	// Admin can still open Field after sign-off; the lines are fixed then.
+	if (doc.supervisorApprovedAt)
+		return refusal("docs_field.errors.service_signed_off")
+	const ordered = (doc.serviceLines as ServiceLine[] | null) ?? []
+	// With several crews the line goes on the crew whose window it was added in.
+	const crewIds = assignedBrigadeIds(doc)
+	const multiCrew = crewIds.length > 1
+	const brigadeId = String(form.get("brigadeId") ?? "")
+	if (multiCrew && !crewIds.includes(brigadeId))
+		return refusal("docs_field.errors.invalid_service_lines")
+	const crews = multiCrew ? readCrewLines(doc.crewServiceLines) : []
+	const installed = multiCrew
+		? crewLinesOf(crews, brigadeId)
+		: ((doc.installedServiceLines as ServiceLine[] | null) ?? [])
+	const id = String(form.get("serviceCodeId") ?? "")
+
+	let next: ServiceLine[]
+	let line: ServiceLine
+	if (intent === "add_service") {
+		if (!id) return refusal("docs_field.errors.service_not_found")
+		if (ordered.some((l) => l.serviceCodeId === id))
+			return refusal("docs_field.errors.service_on_order")
+		if (
+			installedNotOrdered(ordered, installed).some(
+				(l) => l.serviceCodeId === id,
 			)
-		}
-		throw redirect(`/docs/${params.id}`)
-	}
-	if (isUnassignedCrew(user, doc)) {
-		if (request.headers.get("X-Offline-Sync") === "true") {
-			return data({ conflict: "REASSIGNED" }, { status: 409 })
-		}
-		throw redirect(`/docs/${params.id}`)
-	}
-
-	const form = await request.formData()
-	// Signed quantities are immutable after pickup. Ignore any attempt to overwrite them.
-	form.delete("materialsTaken")
-	const jobAddressActual = (form.get("jobAddressActual") as string).trim()
-	const fieldNotes = (form.get("fieldNotes") as string | null)?.trim() || null
-	const discrepancyNote =
-		(form.get("discrepancyNote") as string | null)?.trim() || null
-	const materialsRaw = form.get("materialsUsed") as string
-	const completionSignature = form.get("completionSignature") as string
-	const startedAtRaw = form.get("startedAt") as string | null
-	const endedAtRaw = form.get("endedAt") as string | null
-	const gpsRaw = form.get("gpsCoordinates") as string | null
-
-	if (!completionSignature || completionSignature === "data:,") {
-		return refuse(request, {
-			errorKey: "docs_field.errors.completion_signature_required" as const,
-		})
-	}
-
-	let materialsUsed: MaterialLine[] = []
-	try {
-		materialsUsed = JSON.parse(materialsRaw).filter(
-			(i: MaterialLine) => i.serviceCodeId && i.qty > 0,
 		)
-	} catch {
-		return refuse(request, {
-			errorKey: "docs_field.errors.invalid_materials" as const,
-		})
-	}
-
-	// Zero is a legitimate installed quantity, so this does not use
-	// parseServiceLines, which drops zeros.
-	let installedServiceLines: ServiceLine[] | undefined
-	const installedRaw = form.get("installedServiceLines") as string | null
-	if (installedRaw !== null) {
-		try {
-			const parsed = JSON.parse(installedRaw) as {
-				serviceCodeId?: unknown
-				claroCode?: unknown
-				accountCode?: unknown
-				name?: unknown
-				qty?: unknown
-			}[]
-			installedServiceLines = parsed
-				.filter(
-					(l) => l && typeof l.serviceCodeId === "string" && Number(l.qty) >= 0,
-				)
-				.map((l) => ({
-					serviceCodeId: String(l.serviceCodeId),
-					claroCode: String(l.claroCode ?? ""),
-					accountCode: l.accountCode ? String(l.accountCode) : null,
-					name: String(l.name ?? ""),
-					qty: Number(l.qty),
-				}))
-		} catch {
-			return refuse(request, {
-				errorKey: "docs_field.errors.invalid_service_lines" as const,
-			})
+			return refusal("docs_field.errors.service_already_added")
+		const qty = Number(form.get("qty"))
+		if (!Number.isFinite(qty) || qty <= 0)
+			return refusal("docs_field.errors.service_qty_invalid")
+		const code = await findPickableServiceCode(id)
+		if (!code) return refusal("docs_field.errors.service_not_found")
+		line = {
+			serviceCodeId: code.id,
+			claroCode: code.claroCode,
+			accountCode: code.accountCode,
+			name: code.name,
+			qty,
+			addedInField: true,
 		}
+		next = [...installed, line]
+	} else {
+		// Never a line the order has (even one later put on the order).
+		const found = installedNotOrdered(ordered, installed).find(
+			(l) => l.serviceCodeId === id && l.addedInField === true,
+		)
+		if (!found) return refusal("docs_field.errors.service_not_added")
+		line = found
+		next = installed.filter((l) => l !== found)
 	}
 
-	const taken = (doc.materialsTaken as MaterialLine[] | null) ?? []
-
-	// A crew cannot use more of a code than it signed out at pickup.
-	if (exceedsTaken(taken, materialsUsed)) {
-		return refuse(request, {
-			errorKey: "docs_field.errors.used_exceeds_took" as const,
-		})
-	}
-
-	const quantityDiscrepancies = buildQuantityDiscrepancies(taken, materialsUsed)
-	const hasQuantityDiscrepancy = quantityDiscrepancies.length > 0
-	if (hasQuantityDiscrepancy && !discrepancyNote) {
-		return refuse(request, {
-			errorKey: "docs_field.errors.discrepancy_note_required" as const,
-		})
-	}
-
-	// Handle photo uploads
-	const photosBefore = form.getAll("photosBefore") as File[]
-	const photosAfter = form.getAll("photosAfter") as File[]
-	const uploadDir = process.env.UPLOAD_DIR || "/tmp/jaf/uploads"
-	const photoDir = path.join(uploadDir, "photos", params.id)
-
-	const allPhotos = [
-		...photosBefore.map((file) => ({ file, tag: "BEFORE" as const })),
-		...photosAfter.map((file) => ({ file, tag: "AFTER" as const })),
-	]
-
-	for (const { file } of allPhotos) {
-		if (file.size === 0) continue
-		const validation = validateFile(file, "photo")
-		if (!validation.valid)
-			return refuse(request, { errorMessage: validation.error })
-	}
-
-	const photoPaths: { path: string; tag: "BEFORE" | "AFTER" }[] = []
-	if (allPhotos.some((p) => p.file.size > 0)) {
-		await fs.mkdir(photoDir, { recursive: true })
-		for (const { file, tag } of allPhotos) {
-			if (file.size === 0) continue
-			const filename = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`
-			const localPath = path.join(photoDir, filename)
-			await fs.writeFile(localPath, Buffer.from(await file.arrayBuffer()))
-			photoPaths.push({ path: localPath, tag })
-		}
-	}
-
-	// Address correction history
-	const previousActual = doc.jobAddressActual || doc.jobAddressEstimated
-	const addressCorrections = mergeAddressCorrections({
-		existing: doc.addressCorrections as AddressCorrection[] | null,
-		correction: buildAddressCorrection({
-			original: previousActual,
-			corrected: jobAddressActual,
-			correctedById: user.id,
-			gps: parseGpsCoordinates(gpsRaw),
-		}),
-	})
-
-	const startedAt = startedAtRaw ? new Date(startedAtRaw) : undefined
-	const endedAt = endedAtRaw ? new Date(endedAtRaw) : undefined
-
-	const ops: Prisma.PrismaPromise<unknown>[] = [
-		...photoPaths.map(({ path, tag }) =>
-			db.photo.create({
-				data: { docId: params.id, uploadedById: user.id, localPath: path, tag },
-			}),
-		),
-		db.jafInvoice.update({
-			where: { id: params.id },
-			data: {
-				status: "FIELD_UPDATED",
-				jobAddressActual,
-				addressCorrections,
-				gpsCoordinates: parseGpsCoordinates(gpsRaw),
-				materialsUsed,
-				installedServiceLines,
-				fieldNotes,
-				startedAt,
-				endedAt,
-				completionSignature,
-				completedById: user.id,
-				completionSignedAt: new Date(),
-				completedAt: new Date(),
-				fieldSubmittedAt: new Date(),
+	const written = await db.$transaction(async (tx) => {
+		const res = await tx.jafInvoice.updateMany({
+			where: {
+				id: doc.id,
+				jafInvoiceGeneratedAt: null,
+				supervisorApprovedAt: null,
 			},
-		}),
-		db.auditTrail.create({
 			data: {
-				docId: params.id,
-				userId: user.id,
-				action: "STATUS_CHANGED",
+				...(multiCrew
+					? (() => {
+							const updated = withCrewLines(crews, brigadeId, next)
+							return {
+								crewServiceLines: updated as unknown as Prisma.InputJsonValue,
+								installedServiceLines: sumCrewLines(
+									updated,
+								) as unknown as Prisma.InputJsonValue,
+							}
+						})()
+					: {
+							installedServiceLines: next as unknown as Prisma.InputJsonValue,
+						}),
+				...(doc.fieldStartedAt ? {} : { fieldStartedAt: new Date() }),
+			},
+		})
+		if (res.count === 0) return false
+		await tx.auditTrail.create({
+			data: {
+				docId: doc.id,
+				userId,
+				action:
+					intent === "add_service"
+						? "SERVICE_ADDED_IN_FIELD"
+						: "SERVICE_REMOVED_IN_FIELD",
 				diffJson: {
-					status: { before: doc.status, after: "FIELD_UPDATED" },
-					jobAddressActual,
-					materialsUsed,
-					installedServiceLines,
-					startedAt: startedAtRaw,
-					endedAt: endedAtRaw,
+					code: line.claroCode,
+					qty: line.qty,
+					...(multiCrew ? { brigadeId } : {}),
 				},
 			},
-		}),
-		db.notification.create({
-			data: {
-				userId: doc.supervisorId,
-				docId: params.id,
-				message: `Job ${doc.controlNumber} marked complete by crew. Ready for your review.`,
-			},
-		}),
-	]
+		})
+		return true
+	})
+	// Signed off (or sent, which comes after) between the read and the write.
+	if (!written) return refusal("docs_field.errors.service_signed_off")
+	return { ok: true }
+}
 
-	if (hasQuantityDiscrepancy) {
+/**
+ * The address correction: Dirección 1 (or, from an older form,
+ * `jobAddressActual`) and the other Aviso location columns. Fields the post
+ * leaves out keep their stored value. Returns the columns to write, or
+ * nothing when the post carries no address.
+ */
+function addressUpdate(
+	form: FormData,
+	doc: FieldDoc,
+	userId: string,
+): Refusal | Prisma.JafInvoiceUpdateInput | null {
+	if (!form.has("direccion1") && !form.has("jobAddressActual")) return null
+	const text = (k: string) => {
+		const v = form.get(k)
+		return typeof v === "string" ? v.replace(/\s+/g, " ").trim() : ""
+	}
+	const direccion1 = form.has("direccion1")
+		? text("direccion1")
+		: text("jobAddressActual")
+	if (!direccion1) return refusal("docs_field.errors.address_required")
+
+	const next: Record<AddressColumn, string | null> = {
+		sector: doc.sector,
+		direccion1,
+		direccion2: doc.direccion2,
+		latitud: doc.latitud,
+		longitud: doc.longitud,
+		ciudad: doc.ciudad,
+	}
+	for (const k of ADDRESS_COLUMNS) {
+		if (k !== "direccion1" && form.has(k)) next[k] = text(k) || null
+	}
+	const out: Prisma.JafInvoiceUpdateInput = {}
+	for (const k of ADDRESS_COLUMNS) {
+		if (next[k] !== doc[k]) out[k] = next[k]
+	}
+	if (Object.keys(out).length === 0) return out
+
+	const composed = composeJobAddress({ direccion1, sector: next.sector })
+	if (composed !== doc.jobAddressEstimated) out.jobAddressEstimated = composed
+	const previous = doc.jobAddressActual || doc.jobAddressEstimated
+	if (composed !== previous) {
+		out.jobAddressActual = composed
+		out.addressCorrections = mergeAddressCorrections({
+			existing: doc.addressCorrections as AddressCorrection[] | null,
+			correction: buildAddressCorrection({
+				original: previous,
+				corrected: composed,
+				correctedById: userId,
+			}),
+		}) as unknown as Prisma.InputJsonValue
+	}
+	return out
+}
+
+/**
+ * Three intents. `back` is `save` that then leaves for the job page, where
+ * the earlier steps (Warehouse, Intake) are shown, so going back keeps the
+ * draft. `save` writes whatever the post carries (partial, idempotent,
+ * never changes status; the first one stamps `fieldStartedAt`). `continue`
+ * does the same, then checks the materials table and moves SIGNED →
+ * FIELD_UPDATED. No signature here (that is Sign off) and no crew
+ * notification. The Claro supervisor's blueprint rule is enforced at send
+ * time, not here.
+ */
+export async function action({ request, params }: Route.ActionArgs) {
+	const { user, doc } = await openFieldDoc(request, params.id)
+	const form = await request.formData()
+	const intent = form.get("intent")
+	if (intent === "add_service" || intent === "remove_added_service")
+		return changeAddedService(intent, form, doc, user.id)
+	if (intent !== "save" && intent !== "continue" && intent !== "back")
+		throw data({ error: "Unknown intent" }, { status: 400 })
+
+	const photos = PHOTO_FIELDS.flatMap(([name, tag]) =>
+		files(form, name).map((file) => ({ file, tag })),
+	)
+	if (photos.some(({ file }) => !validateOriginalUpload(file).valid))
+		return refusal("docs_field.errors.photo_invalid")
+	const blueprints = files(form, "blueprint")
+	if (blueprints.some((file) => !validateBlueprintFile(file).valid))
+		return refusal("docs_field.errors.blueprint_invalid")
+
+	const update: Prisma.JafInvoiceUpdateInput = {}
+
+	let rows: FieldMaterialRow[] | null = null
+	if (form.has("fieldMaterials")) {
+		try {
+			rows = parseFieldMaterials(form.get("fieldMaterials") as string)
+		} catch {
+			return refusal("docs_field.errors.invalid_materials")
+		}
+	}
+
+	const crewIds = assignedBrigadeIds(doc)
+	const multiCrew = crewIds.length > 1
+	if (multiCrew && form.has("crewServiceLines")) {
+		// One window per crew: each crew's post is merged like a one-crew post,
+		// and the job total is their sum.
+		const ordered = (doc.serviceLines as ServiceLine[] | null) ?? []
+		const stored = readCrewLines(doc.crewServiceLines)
+		let posted: ReturnType<typeof crewsOnJob>
+		try {
+			const raw = JSON.parse(form.get("crewServiceLines") as string)
+			if (!Array.isArray(raw)) throw new Error("Not a list")
+			posted = crewsOnJob(
+				raw.map((c) => ({
+					brigadeId: String(c?.brigadeId ?? ""),
+					lines: normalizeInstalled(c?.lines),
+				})),
+				crewIds,
+			)
+		} catch {
+			return refusal("docs_field.errors.invalid_service_lines")
+		}
+		if (!posted) return refusal("docs_field.errors.invalid_service_lines")
+		let merged = stored
+		for (const c of posted)
+			merged = withCrewLines(
+				merged,
+				c.brigadeId,
+				mergeInstalledPost(c.lines, ordered, crewLinesOf(stored, c.brigadeId)),
+			)
+		update.crewServiceLines = merged as unknown as Prisma.InputJsonValue
+		update.installedServiceLines = sumCrewLines(
+			merged,
+		) as unknown as Prisma.InputJsonValue
+	} else if (!multiCrew && form.has("installedServiceLines")) {
+		try {
+			update.installedServiceLines = mergeInstalledPost(
+				parseInstalled(form.get("installedServiceLines") as string),
+				(doc.serviceLines as ServiceLine[] | null) ?? [],
+				(doc.installedServiceLines as ServiceLine[] | null) ?? null,
+			)
+		} catch {
+			return refusal("docs_field.errors.invalid_service_lines")
+		}
+	}
+
+	// A materials row names a crew on the job, never one that is not.
+	if (rows?.some((r) => r.brigadeId && !crewIds.includes(r.brigadeId)))
+		return refusal("docs_field.errors.invalid_materials")
+
+	if (form.has("fieldNotes"))
+		update.fieldNotes = (form.get("fieldNotes") as string).trim() || null
+
+	const address = addressUpdate(form, doc, user.id)
+	if (address && "errorKey" in address) return address
+	if (address) Object.assign(update, address)
+
+	const taken = lines(doc.materialsTaken)
+	if (intent === "continue") {
+		// "N/A" counts: the report just can't be blank.
+		const report = form.has("fieldNotes")
+			? (form.get("fieldNotes") as string).trim()
+			: (doc.fieldNotes ?? "")
+		if (!report) return refusal("docs_field.errors.field_report_required")
+		const stored = await db.photo.findMany({
+			where: { docId: doc.id },
+			select: { tag: true },
+		})
+		const has = (tag: PhotoTag) =>
+			stored.some((p) => p.tag === tag) || photos.some((p) => p.tag === tag)
+		if (!has("BEFORE") || !has("AFTER"))
+			return refusal("docs_field.errors.photos_required")
+		// Every crew's window needs its quantities before the job moves on.
+		if (
+			multiCrew &&
+			!everyCrewHasLines(
+				readCrewLines(update.crewServiceLines ?? doc.crewServiceLines),
+				crewIds,
+			)
+		)
+			return refusal("docs_field.errors.crew_lines_required")
+		rows ??= fieldMaterialsOrDefault(doc.fieldMaterials, taken)
+		// Billable (WAREHOUSE_ISSUE) use cannot exceed what was issued; extra
+		// material is entered under another Source.
+		if (exceedsSigned(taken, rows))
+			return refusal("docs_field.errors.used_exceeds_took")
+	}
+	if (rows) {
+		// Brigade's stock stays in fieldMaterials (tracked), off the billable
+		// lines until Finance rules on it.
+		update.fieldMaterials = rows
+		update.materialsUsed = billableUsed(rows)
+	}
+
+	// Everything is valid: only now write files.
+	const photoPaths: { path: string; tag: PhotoTag }[] = []
+	for (const [i, { file, tag }] of photos.entries())
+		photoPaths.push({
+			path: await saveUpload(`photos/${doc.id}`, uploadFileName(file, i), file),
+			tag,
+		})
+	const blueprintPaths: string[] = []
+	for (const [i, file] of blueprints.entries())
+		blueprintPaths.push(
+			await saveUpload(`blueprints/${doc.id}`, uploadFileName(file, i), file),
+		)
+	if (blueprintPaths.length > 0)
+		update.blueprintPaths = [...doc.blueprintPaths, ...blueprintPaths]
+
+	const now = new Date()
+	if (!doc.fieldStartedAt) update.fieldStartedAt = now
+	const advances =
+		intent === "continue" &&
+		doc.status === "SIGNED" &&
+		canTransition(doc.status, "FIELD_UPDATED", user.role)
+	if (intent === "continue") update.fieldSubmittedAt = now
+	if (advances) update.status = "FIELD_UPDATED"
+
+	const ops: Prisma.PrismaPromise<unknown>[] = photoPaths.map(({ path, tag }) =>
+		db.photo.create({
+			data: { docId: doc.id, uploadedById: user.id, localPath: path, tag },
+		}),
+	)
+	if (Object.keys(update).length > 0)
+		ops.push(db.jafInvoice.update({ where: { id: doc.id }, data: update }))
+	if (advances)
 		ops.push(
 			db.auditTrail.create({
 				data: {
-					docId: params.id,
+					docId: doc.id,
 					userId: user.id,
-					action: "QUANTITY_DISCREPANCY",
+					action: "STATUS_CHANGED",
 					diffJson: {
-						discrepancies: quantityDiscrepancies,
-						note: discrepancyNote,
-						blocksFinance: false,
-					},
+						status: { before: doc.status, after: "FIELD_UPDATED" },
+						materialsUsed: update.materialsUsed ?? null,
+					} as Prisma.InputJsonValue,
 				},
 			}),
 		)
-	}
+	if (ops.length > 0) await db.$transaction(ops)
+	// Each crew's truck-stock use comes off that brigade's balance.
+	if (rows)
+		await syncUsedFromJob(
+			{ id: doc.id, brigadeId: doc.brigadeId, fieldMaterials: rows },
+			user.id,
+		)
 
-	await db.$transaction(ops)
-
-	throw redirect(`/docs/${params.id}`)
+	if (intent === "continue") throw redirect(`/docs/${doc.id}/review`)
+	if (intent === "back") throw redirect(`/docs/${doc.id}`)
+	return { ok: true as const }
 }
 
+/** Each photo box holds this many; the upload hides once a box is full. */
+const MAX_PHOTOS_PER_BOX = 4
+
+const PHOTO_BOXES: [PhotoTag, string, ParseKeys][] = [
+	["BEFORE", "photosBefore", "docs_field.photos_before_label"],
+	["DURING", "photosDuring", "docs_field.photos_during_label"],
+	["AFTER", "photosAfter", "docs_field.photos_after_label"],
+]
+
+const SIGN_OFF_STEP = SUPERVISOR_STAGES.indexOf("APPROVE") + 1
+
+type ActionResult = { errorKey?: ParseKeys; ok?: true } | undefined
+
+/** The Field `save` intent, posted on its own as soon as files are picked. */
+function useFileAutosave() {
+	const fetcher = useFetcher<ActionResult>()
+	const send = (name: string, files: File[]) => {
+		if (files.length === 0) return
+		const form = new FormData()
+		form.set("intent", "save")
+		for (const f of files) form.append(name, f)
+		fetcher.submit(form, { method: "post", encType: "multipart/form-data" })
+	}
+	return {
+		send,
+		busy: fetcher.state !== "idle",
+		errorKey: fetcher.data?.errorKey,
+	}
+}
+
+function PhotoBox({
+	name,
+	labelKey,
+	photos,
+	boxId,
+	next = false,
+}: {
+	name: string
+	labelKey: ParseKeys
+	photos: { id: string; src: string }[]
+	/** Anchor for "jump to the missing box". */
+	boxId?: string
+	/** This is the box to fill next. */
+	next?: boolean
+}) {
+	const { t } = useTranslation()
+	const upload = useFileAutosave()
+	const room = Math.max(0, MAX_PHOTOS_PER_BOX - photos.length)
+	return (
+		<div
+			id={boxId}
+			className={cn("space-y-2", next && "field-next rounded-lg p-1")}
+		>
+			<div className="flex items-baseline justify-between gap-2">
+				<Label htmlFor={room > 0 ? name : undefined}>{t(labelKey)}</Label>
+				<span className="text-xs text-muted-foreground">
+					{upload.busy
+						? t("docs_field.photo_uploading")
+						: t("docs_field.photo_count", {
+								count: photos.length,
+								max: MAX_PHOTOS_PER_BOX,
+							})}
+				</span>
+			</div>
+			<div className="grid max-w-md grid-cols-4 gap-2">
+				{photos.map((p) => (
+					<a
+						key={p.id}
+						href={p.src}
+						target="_blank"
+						rel="noreferrer"
+						className="block aspect-square overflow-hidden rounded-lg border"
+					>
+						{/\.pdf$/i.test(p.src) ? (
+							<span
+								data-testid="photo-pdf"
+								className="flex h-full w-full flex-col items-center justify-center gap-1 bg-muted text-xs text-muted-foreground"
+							>
+								<HugeiconsIcon
+									icon={File01Icon}
+									className="size-6"
+									aria-hidden="true"
+								/>
+								PDF
+							</span>
+						) : (
+							<img src={p.src} alt="" className="h-full w-full object-cover" />
+						)}
+					</a>
+				))}
+				{Array.from({ length: room }, (_, i) => (
+					<label
+						// biome-ignore lint/suspicious/noArrayIndexKey: empty slots have no identity
+						key={i}
+						htmlFor={name}
+						data-testid="photo-slot-empty"
+						className="flex aspect-square cursor-pointer items-center justify-center rounded-lg border border-dashed text-center text-xs text-muted-foreground hover:bg-muted"
+					>
+						{i === 0 ? t("docs_field.photo_add") : null}
+					</label>
+				))}
+			</div>
+			{room > 0 && (
+				<input
+					id={name}
+					name={name}
+					type="file"
+					accept="image/jpeg,image/png,application/pdf"
+					multiple
+					className="sr-only"
+					disabled={upload.busy}
+					onChange={(e) => {
+						// The box takes four: anything picked beyond the room left is dropped.
+						upload.send(name, [...(e.target.files ?? [])].slice(0, room))
+						e.target.value = ""
+					}}
+				/>
+			)}
+			{upload.errorKey && (
+				<p role="alert" className="text-xs text-status-danger">
+					{t(upload.errorKey)}
+				</p>
+			)}
+		</div>
+	)
+}
+
+function BlueprintBox({
+	docId,
+	files,
+	required,
+}: {
+	docId: string
+	files: string[]
+	required: boolean
+}) {
+	const { t } = useTranslation()
+	const upload = useFileAutosave()
+	return (
+		<div className="space-y-2">
+			<Label htmlFor="blueprint">{t("docs_field.blueprint_label")}</Label>
+			{required && (
+				<p className="text-xs text-status-warn">
+					{t("docs_field.blueprint_required_hint")}
+				</p>
+			)}
+			<div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+				{files.map((f) => (
+					<a
+						key={f}
+						href={`/files/blueprints/${docId}/${f}`}
+						target="_blank"
+						rel="noreferrer"
+						className="flex min-h-16 items-center justify-center break-all rounded-lg border p-2 text-center text-xs text-accent-text underline"
+					>
+						{f.replace(/^\d+-\d+-/, "")}
+					</a>
+				))}
+				<label
+					htmlFor="blueprint"
+					className="flex min-h-16 cursor-pointer items-center justify-center rounded-lg border border-dashed p-2 text-center text-xs text-muted-foreground hover:bg-muted"
+				>
+					{upload.busy
+						? t("docs_field.photo_uploading")
+						: t("docs_field.blueprint_add")}
+				</label>
+			</div>
+			{files.length === 0 && (
+				<p className="text-xs text-muted-foreground">
+					{t("docs_field.blueprint_empty")}
+				</p>
+			)}
+			<input
+				id="blueprint"
+				name="blueprint"
+				type="file"
+				accept="image/jpeg,image/png,application/pdf"
+				multiple
+				className="sr-only"
+				disabled={upload.busy}
+				onChange={(e) => {
+					upload.send("blueprint", [...(e.target.files ?? [])])
+					e.target.value = ""
+				}}
+			/>
+			{upload.errorKey && (
+				<p role="alert" className="text-xs text-status-danger">
+					{t(upload.errorKey)}
+				</p>
+			)}
+		</div>
+	)
+}
+
+/**
+ * Step 3 · Field, filled by the supervisor from what the crew sends on
+ * WhatsApp (mockup 4): Before / During / After photos, blueprints, the address
+ * correction with its history, the actual services (no prices) and the one
+ * materials table. Photos and blueprints save the moment they are picked;
+ * "Save progress" posts every other field; "Continue" goes on to Sign off.
+ */
 export default function FieldUpdate({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
 	const {
 		doc,
-		serviceCodes,
 		user,
-		latestSendBack,
-		sentByName,
+		addressCorrections,
 		correctorNames,
+		photos,
+		blueprints,
+		blueprintRequired,
+		stage,
+		materialsTaken,
+		estimatedMaterials,
+		fieldMaterials,
+		serviceLines,
+		installedServiceLines,
+		crews,
+		services,
+		serviceCodes,
+		addServiceOpen,
 	} = loaderData
-	const taken = (doc.materialsTaken as MaterialLine[] | null) ?? []
-	const used = (doc.materialsUsed as MaterialLine[] | null) ?? []
-	const estimated = (doc.estimatedMaterials as MaterialLine[] | null) ?? []
-	const ordered = (doc.serviceLines as ServiceLine[] | null) ?? []
-	const corrections =
-		(doc.addressCorrections as AddressCorrection[] | null) || []
 	const { t } = useTranslation()
-	const error = actionData as
-		| {
-				errorKey?: ParseKeys
-				errorParams?: Record<string, string>
-				errorMessage?: string
-		  }
-		| undefined
-	const online = useOnline()
-	const submit = useSubmit()
 	const navigation = useNavigation()
+	const submit = useSubmit()
+	const formRef = useRef<HTMLFormElement>(null)
 	const busy = navigation.state !== "idle"
-	const [queued, setQueued] = useState(false)
-	// An offline update for this job that the server refused on validation.
-	const [rejected, setRejected] = useState<QueuedAction[]>([])
-	useEffect(() => {
-		getQueuedActions()
-			.then((all) =>
-				setRejected(all.filter((a) => a.docId === doc.id && a.rejection)),
-			)
-			.catch(() => {})
-	}, [doc.id])
-	// Client-side check shown inline (an alert() is a modal OS dialog in the
-	// installed app and the message is gone as soon as it is dismissed).
-	const [clientErrorKey, setClientErrorKey] = useState<ParseKeys | null>(null)
-	const errorRef = useRef<HTMLDivElement>(null)
+	const result = actionData as ActionResult
 
-	const signatureRef = useRef<SignaturePadHandle>(null)
-	const [startedAt, setStartedAt] = useState<string | null>(
-		(doc.startedAt ? new Date(doc.startedAt).toISOString() : null) ??
-			new Date().toISOString(),
-	)
-	const [endedAt, setEndedAt] = useState<string | null>(
-		doc.endedAt ? new Date(doc.endedAt).toISOString() : null,
-	)
-	const [gpsCoordinates, setGpsCoordinates] = useState<string | null>(
-		doc.gpsCoordinates ? JSON.stringify(doc.gpsCoordinates) : null,
-	)
-	const [gpsError, setGpsError] = useState<string | null>(null)
-	const [photosBefore, setPhotosBefore] = useState<CapturedPhoto[]>([])
-	const [photosAfter, setPhotosAfter] = useState<CapturedPhoto[]>([])
-	const [usedItems, setUsedItems] = useState<MaterialLine[]>(
-		used.length > 0 ? used : taken,
+	// Address fields are only posted once edited, so saving a job that has no
+	// Dirección 1 yet (created before the Aviso-style address) never trips the
+	// "Dirección 1 is required" check.
+	const [addressDirty, setAddressDirty] = useState(false)
+	const addressInput = (
+		key: AddressColumn,
+		labelKey: ParseKeys,
+		extra: { placeholder?: string; required?: boolean } = {},
+	) => (
+		<div className="space-y-1">
+			<Label htmlFor={key}>{t(labelKey)}</Label>
+			<Input
+				id={key}
+				name={addressDirty ? key : undefined}
+				defaultValue={doc[key] ?? ""}
+				placeholder={extra.placeholder}
+				required={addressDirty && extra.required}
+				onChange={() => setAddressDirty(true)}
+			/>
+		</div>
 	)
 
-	// The address the server will diff against on submit (see the action).
-	const baselineAddress = doc.jobAddressActual || doc.jobAddressEstimated
-	const [address, setAddress] = useState(baselineAddress)
-	const addressChanged = address.trim() !== baselineAddress.trim()
-
-	const shownErrorKey = clientErrorKey ?? error?.errorKey
-	const shownErrorMessage = clientErrorKey ? undefined : error?.errorMessage
-	const hasError = Boolean(shownErrorKey || shownErrorMessage)
-	// biome-ignore lint/correctness/useExhaustiveDependencies: scroll only when an error appears or changes
-	useEffect(() => {
-		if (hasError)
-			errorRef.current?.scrollIntoView({ block: "center", behavior: "smooth" })
-	}, [hasError, shownErrorKey, shownErrorMessage, error])
-
-	function handleCaptureGps() {
-		setGpsError(null)
-		if (!navigator.geolocation) {
-			setGpsError(t("docs_field.gps_not_supported"))
-			return
-		}
-		navigator.geolocation.getCurrentPosition(
-			(position) => {
-				setGpsCoordinates(
-					JSON.stringify({
-						lat: position.coords.latitude,
-						lng: position.coords.longitude,
-						accuracy: position.coords.accuracy,
-						capturedAt: new Date().toISOString(),
-					}),
-				)
-			},
-			(err) => {
-				setGpsError(t("docs_field.gps_error", { code: err.code }))
-			},
-		)
+	// One window per crew when the job has several; otherwise a single window
+	// with no crew, exactly as before.
+	type CrewWindow = {
+		id: string | null
+		name: string | null
+		code: string | null
+		lead: boolean
+		rows: (typeof services.rows)[number][]
 	}
+	const windows: CrewWindow[] =
+		crews.length > 0
+			? crews.map((c) => ({
+					id: c.id,
+					name: c.name,
+					code: c.code,
+					lead: c.lead,
+					rows: c.rows,
+				}))
+			: [
+					{
+						id: null,
+						name: null,
+						code: null,
+						lead: true,
+						rows: services.rows,
+					},
+				]
+	const leadId = crews.find((c) => c.lead)?.id ?? null
+	const boxKey = (crewId: string | null, serviceCodeId: string) =>
+		crewId ? `${crewId}:${serviceCodeId}` : serviceCodeId
+	const actualId = (crewId: string | null, serviceCodeId: string) =>
+		crewId ? `actual-${crewId}-${serviceCodeId}` : `actual-${serviceCodeId}`
 
-	function handleStart() {
-		setStartedAt(new Date().toISOString())
-	}
-
-	function handleStop() {
-		setEndedAt(new Date().toISOString())
-	}
-
-	const timeOnSite = formatTimeOnSite(startedAt, endedAt)
-
-	// What the crew still has to bring back: signed out minus used.
-	const usedById = new Map(usedItems.map((i) => [i.serviceCodeId, i.qty]))
-	const bringBack = taken
-		.map((line) => {
-			const code = serviceCodes.find((c) => c.id === line.serviceCodeId)
-			return {
-				id: line.serviceCodeId,
-				qty: line.qty - (usedById.get(line.serviceCodeId) ?? 0),
-				name: code?.name ?? "",
-				unit: code?.unit ?? "",
-			}
+	const [actuals, setActuals] = useState<Record<string, string>>(() =>
+		Object.fromEntries(
+			windows.flatMap((w) =>
+				w.rows.map((r) => [
+					boxKey(w.id, r.serviceCodeId),
+					r.actual == null ? "" : String(r.actual),
+				]),
+			),
+		),
+	)
+	// A typed box wins; a line added after the page opened shows its saved qty.
+	const actualOf = (
+		w: CrewWindow,
+		r: { serviceCodeId: string; actual: number | null },
+	) =>
+		actuals[boxKey(w.id, r.serviceCodeId)] ??
+		(r.actual == null ? "" : String(r.actual))
+	// The ordered lines, then those added in the field (Ordered 0), whichever crew added them.
+	const lineOf = new Map(
+		[
+			...serviceLines,
+			...installedNotOrdered(serviceLines, installedServiceLines),
+			...crews.flatMap((c) => c.installed),
+		].map((l) => [l.serviceCodeId, l]),
+	)
+	const installedFor = (w: CrewWindow) =>
+		w.rows.flatMap((r) => {
+			const line = lineOf.get(r.serviceCodeId)
+			const value = actualOf(w, r)
+			return line && value !== "" ? [{ ...line, qty: Number(value) }] : []
 		})
-		.filter((line) => line.qty > 0)
+	const installed = installedFor(windows[0])
+	const crewInstalled = crews.map((c) => ({
+		brigadeId: c.id,
+		lines: installedFor(windows.find((w) => w.id === c.id) as CrewWindow),
+	}))
+	const shared = services.brigadeNames.length > 0
 
-	async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-		e.preventDefault()
-		const form = e.currentTarget
-		const signature = signatureRef.current?.toDataURL()
-		if (!signature || signatureRef.current?.isEmpty()) {
-			setClientErrorKey("docs_field.errors.completion_signature_required")
-			return
-		}
-		setClientErrorKey(null)
-		// Sending again replaces the refused offline update.
-		if (rejected.length > 0) {
-			await Promise.all(
-				rejected.map((r) => removeQueuedAction(r.id).catch(() => {})),
-			)
-			setRejected([])
-		}
+	// The Field report is required; "N/A" is pre-filled so a job with nothing to
+	// report does not get stuck on it.
+	const [notes, setNotes] = useState(
+		doc.fieldNotes?.trim() ? doc.fieldNotes : "N/A",
+	)
 
-		const formData = new FormData(form)
-		formData.set("completionSignature", signature)
-		// The photos live in component state (thumbnails, remove), not in a file input.
-		formData.delete("photosBefore")
-		formData.delete("photosAfter")
-		for (const p of photosBefore)
-			formData.append("photosBefore", p.file, p.file.name)
-		for (const p of photosAfter)
-			formData.append("photosAfter", p.file, p.file.name)
-
-		if (online) {
-			submit(formData, { method: "post", encType: "multipart/form-data" })
-			return
+	const [rows, setRows] = useState<FieldMaterialRow[]>(fieldMaterials)
+	const codeOf = new Map(serviceCodes.map((c) => [c.id, c]))
+	const qtyOf = (list: MaterialLine[]) =>
+		new Map(list.map((m) => [m.serviceCodeId, m.qty]))
+	const signedQty = qtyOf(materialsTaken)
+	const estimatedQty = qtyOf(estimatedMaterials)
+	// A row without a crew is the lead's; a post always names the crew.
+	const postedRows =
+		crews.length > 0
+			? rows.map((r) => ({
+					...r,
+					brigadeId: r.brigadeId ?? leadId ?? undefined,
+				}))
+			: rows
+	const tableRowOf = (r: FieldMaterialRow): FieldMaterialsTableRow => {
+		const code = codeOf.get(r.serviceCodeId)
+		return {
+			...r,
+			claroCode: code?.claroCode ?? "—",
+			name: code?.name ?? r.serviceCodeId,
+			unit: code?.unit ?? null,
+			estimated: estimatedQty.get(r.serviceCodeId) ?? 0,
+			signed: isBillableSource(r.source)
+				? (signedQty.get(r.serviceCodeId) ?? 0)
+				: 0,
 		}
-
-		// Offline: queue the field update.
-		const queuedBefore: { name: string; base64: string; type: string }[] = []
-		const queuedAfter: { name: string; base64: string; type: string }[] = []
-		for (const file of formData.getAll("photosBefore") as File[]) {
-			if (file.size === 0) continue
-			queuedBefore.push({
-				name: file.name,
-				type: file.type,
-				base64: await fileToBase64(file),
-			})
-		}
-		for (const file of formData.getAll("photosAfter") as File[]) {
-			if (file.size === 0) continue
-			queuedAfter.push({
-				name: file.name,
-				type: file.type,
-				base64: await fileToBase64(file),
-			})
-		}
-
-		await queueFieldUpdate(doc.id, {
-			jobAddressActual: (formData.get("jobAddressActual") as string).trim(),
-			fieldNotes: (formData.get("fieldNotes") as string | null)?.trim() || null,
-			discrepancyNote:
-				(formData.get("discrepancyNote") as string | null)?.trim() || null,
-			materialsUsed: formData.get("materialsUsed") as string,
-			installedServiceLines:
-				(formData.get("installedServiceLines") as string) || null,
-			completionSignature: signature,
-			startedAt: (formData.get("startedAt") as string) || null,
-			endedAt: (formData.get("endedAt") as string) || null,
-			gpsCoordinates: (formData.get("gpsCoordinates") as string) || null,
-			photosBefore: queuedBefore,
-			photosAfter: queuedAfter,
-		})
-		setQueued(true)
 	}
+
+	const targets = fieldTargets({
+		actuals: windows.flatMap((w) =>
+			w.rows.map((r) => ({
+				id: actualId(w.id, r.serviceCodeId),
+				value: actualOf(w, r),
+			})),
+		),
+		notes,
+		beforePhotos: photos.BEFORE.length,
+		afterPhotos: photos.AFTER.length,
+	})
+	const next = nextEmpty(targets)
+	// A crew window with no quantity at all blocks Continue, like a missing photo.
+	const crewMissing = windows.flatMap((w) =>
+		w.id && w.rows.length > 0 && installedFor(w).length === 0
+			? [
+					{
+						id: actualId(w.id, w.rows[0].serviceCodeId),
+						kind: "crew" as const,
+						name: w.name ?? "",
+					},
+				]
+			: [],
+	)
+	const missing = [...crewMissing, ...blockingMissing(targets)]
+	const missingLabels = missing.map((m) =>
+		m.kind === "crew"
+			? t("docs_field.crew_quantities", { name: m.name })
+			: t(
+					m.kind === "notes"
+						? "docs_field.field_notes_label"
+						: m.kind === "before"
+							? "docs_field.photos_before_label"
+							: "docs_field.photos_after_label",
+				),
+	)
+	const jumpTo = (id: string | undefined) => {
+		const el = id ? document.getElementById(id) : null
+		if (!el) return
+		el.scrollIntoView({ block: "center", behavior: "smooth" })
+		const box = el.matches("input, textarea")
+			? el
+			: el.querySelector<HTMLElement>("input, textarea")
+		box?.focus({ preventScroll: true })
+	}
+
+	// On a computer the cursor starts in the first empty box. Not on a phone:
+	// that would open the keyboard and scroll the page under the supervisor.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: only when the page opens
+	useEffect(() => {
+		if (!window.matchMedia("(pointer: fine)").matches) return
+		const first = nextEmpty(targets)
+		if (first && (first.kind === "actual" || first.kind === "notes"))
+			jumpTo(first.id)
+	}, [])
+
+	// Auto-save the draft a moment after any box changes. Address fields stay out
+	// of it: each change to them is logged as a correction with the user's name.
+	const draft = useFetcher<ActionResult>()
+	const [savedAt, setSavedAt] = useState<Date | null>(null)
+	const mounted = useRef(false)
+	// biome-ignore lint/correctness/useExhaustiveDependencies: re-run only when the boxes change
+	useEffect(() => {
+		if (!mounted.current) {
+			mounted.current = true
+			return
+		}
+		if (busy) return
+		const timer = setTimeout(() => {
+			const form = new FormData()
+			form.set("intent", "save")
+			if (crews.length > 0)
+				form.set("crewServiceLines", JSON.stringify(crewInstalled))
+			else if (installed.length > 0)
+				form.set("installedServiceLines", JSON.stringify(installed))
+			form.set("fieldMaterials", JSON.stringify(postedRows))
+			form.set("fieldNotes", notes)
+			draft.submit(form, { method: "post" })
+		}, 1000)
+		return () => clearTimeout(timer)
+	}, [actuals, rows, notes])
+	useEffect(() => {
+		if (draft.state === "idle" && draft.data?.ok) setSavedAt(new Date())
+	}, [draft.state, draft.data])
 
 	return (
 		<div className="space-y-5">
-			<div className="flex items-start justify-between gap-2">
-				<div>
-					<h1 className="text-xl font-semibold">{t("docs_field.title")}</h1>
-					<p className="text-sm font-mono text-muted-foreground">
-						{doc.controlNumber}
-					</p>
-				</div>
-				<Badge variant="info" className="shrink-0">
-					{t("docs_field.status_pill")}
-				</Badge>
+			<div>
+				<h1 className="text-xl font-semibold">{t("docs_field.title")}</h1>
+				<p className="text-sm font-mono text-muted-foreground">
+					{doc.controlNumber}
+				</p>
 			</div>
+			<SupervisorStepRail
+				stage={stage}
+				view="FIELD"
+				docId={doc.id}
+				warehouseSkipped={!doc.materialsFromWarehouse}
+			/>
 
-			{latestSendBack && (
-				<Callout
-					tone="danger"
-					title={t("docs_field.sent_back_by", {
-						name: sentByName ?? t("docs_field.sent_back_by_unknown"),
-					})}
-				>
-					{latestSendBack.note}{" "}
-					<span className="text-xs opacity-80">
-						{new Date(latestSendBack.createdAt).toLocaleString()}
-					</span>
+			{doc.status === "SUPERVISOR_APPROVED" && (
+				<Callout tone="warn" title={t("docs_field.admin_override")}>
+					{null}
 				</Callout>
 			)}
 
-			<JobStepRail docId={doc.id} current="FIELD" role={user.role} />
-			<Callout title={t("job_flow.callout.field_title")}>
-				{t("job_flow.callout.field_body")}
-			</Callout>
+			<Form ref={formRef} method="post" className="space-y-5">
+				{windows.map((w) => {
+					const crewRows = rows.flatMap((r, index) =>
+						(r.brigadeId ?? leadId) === w.id ? [{ r, index }] : [],
+					)
+					const inner = (
+						<>
+							{(w.rows.length > 0 || addServiceOpen) && (
+								<Card>
+									<CardHeader>
+										{t("docs_field.services_performed_label")}
+									</CardHeader>
+									<CardContent className="space-y-2">
+										{w.id === null && installed.length > 0 && (
+											<input
+												type="hidden"
+												name="installedServiceLines"
+												value={JSON.stringify(installed)}
+											/>
+										)}
+										{w.rows.length > 0 && (
+											<div className="overflow-x-auto">
+												<table
+													className="w-full text-sm"
+													data-testid="field-services"
+												>
+													<thead>
+														<tr className="border-b text-left text-xs text-muted-foreground">
+															<th className="py-1.5 pr-2">
+																{t("docs_field.services.code")}
+															</th>
+															<th className="py-1.5 pr-2">
+																{t("docs_field.services.name")}
+															</th>
+															<th className="py-1.5 pr-2 text-right">
+																{t("docs_field.services.estimated")}
+															</th>
+															<th className="py-1.5 pr-2">
+																{t("docs_field.services.actual")}
+															</th>
+															<th className="py-1.5 pr-2">
+																{t("docs_field.services.unit")}
+															</th>
+															{shared && w.id === null && (
+																<th className="py-1.5">
+																	{t("docs_field.services.brigade")}
+																</th>
+															)}
+														</tr>
+													</thead>
+													<tbody className="tabular-nums">
+														{w.rows.map((r) => {
+															const boxId = actualId(w.id, r.serviceCodeId)
+															return (
+																<tr
+																	key={r.serviceCodeId}
+																	className="border-b last:border-0"
+																>
+																	<td className="py-1.5 pr-2 font-mono text-xs">
+																		{r.claroCode}
+																	</td>
+																	<td className="py-1.5 pr-2">
+																		{r.name}
+																		{"addedInField" in r &&
+																			r.addedInField === true && (
+																				<div className="mt-1 flex flex-wrap items-center gap-2">
+																					<AddedInFieldLabel />
+																					{addServiceOpen && (
+																						<RemoveAddedService
+																							serviceCodeId={r.serviceCodeId}
+																							claroCode={r.claroCode}
+																							brigadeId={w.id ?? undefined}
+																						/>
+																					)}
+																				</div>
+																			)}
+																	</td>
+																	<td className="py-1.5 pr-2 text-right">
+																		{r.estimated}
+																	</td>
+																	<td className="py-1.5 pr-2">
+																		<Input
+																			type="number"
+																			min={0}
+																			inputMode="decimal"
+																			id={boxId}
+																			className={cn(
+																				"field-required w-20",
+																				next?.id === boxId && "field-next",
+																			)}
+																			aria-label={`${t("docs_field.services.actual")} ${r.claroCode}`}
+																			onKeyDown={(e) => {
+																				// Enter moves on to the next empty box instead of
+																				// submitting the form.
+																				if (e.key !== "Enter") return
+																				e.preventDefault()
+																				jumpTo(nextEmpty(targets, boxId)?.id)
+																			}}
+																			value={actualOf(w, r)}
+																			onChange={(e) =>
+																				setActuals({
+																					...actuals,
+																					[boxKey(w.id, r.serviceCodeId)]:
+																						e.target.value,
+																				})
+																			}
+																		/>
+																	</td>
+																	<td className="py-1.5 pr-2 text-xs">
+																		{r.unit ?? "—"}
+																	</td>
+																	{shared && w.id === null && (
+																		<td className="py-1.5 text-xs">
+																			{services.brigadeNames.join(" + ")}
+																		</td>
+																	)}
+																</tr>
+															)
+														})}
+													</tbody>
+												</table>
+											</div>
+										)}
+										{addServiceOpen && (
+											<AddFieldService brigadeId={w.id ?? undefined} />
+										)}
+									</CardContent>
+								</Card>
+							)}
 
-			{rejected.length > 0 && (
-				<Callout tone="danger" title={t("docs_field.rejected_offline_title")}>
-					<ul className="list-disc pl-4">
-						{rejected.map((r) => (
-							<li key={r.id}>
-								{r.rejection?.errorKey
-									? t(r.rejection.errorKey as ParseKeys)
-									: r.rejection?.message}
-							</li>
-						))}
-					</ul>
-					{t("docs_field.rejected_offline_hint")}
-				</Callout>
-			)}
-
-			{queued && (
-				<Callout tone="ok" title={t("docs_field.queued_title")}>
-					{t("docs_field.queued_message")}
-				</Callout>
-			)}
-
-			{!online && !queued && (
-				<Callout tone="warn" title={t("docs_field.offline_submit_title")}>
-					{t("docs_field.offline_submit_notice")}
-				</Callout>
-			)}
-
-			<Form
-				method="post"
-				encType="multipart/form-data"
-				className="space-y-4"
-				onSubmit={handleSubmit}
-			>
-				<div className="border rounded-lg p-3 space-y-3">
-					<div className="space-y-1">
-						<Label htmlFor="jobAddressActual">
-							{t("docs_field.actual_address_label")}
-						</Label>
-						<Input
-							id="jobAddressActual"
-							name="jobAddressActual"
-							value={address}
-							onChange={(e) => setAddress(e.target.value)}
-							className="h-11 text-base"
-							required
-						/>
-					</div>
-
-					{addressChanged && (
-						<div
-							data-testid="address-diff"
-							className="rounded-lg bg-status-info-soft p-2.5 text-sm"
-						>
-							<p className="break-words">
-								<span className="text-muted-foreground line-through">
-									{baselineAddress}
-								</span>
-								{" → "}
-								<b>{address.trim()}</b>
-							</p>
-							<p className="mt-1 text-xs text-muted-foreground">
-								{t("docs_field.address_diff_hint")}
-							</p>
-						</div>
-					)}
-
-					{corrections.length > 0 && (
-						<div className="space-y-1">
-							<p className="text-xs font-medium text-foreground">
-								{t("docs_field.address_history_heading")}
-							</p>
-							<ul className="space-y-1.5">
-								{corrections.map((c) => (
-									<li
-										key={`${c.original}-${c.corrected}-${c.correctedAt}`}
-										className="rounded-lg bg-muted p-2 text-xs"
-									>
-										<p className="break-words">
-											<span className="text-muted-foreground line-through">
-												{c.original}
-											</span>
-											{" → "}
-											<span className="font-medium">{c.corrected}</span>
+							<Card>
+								<CardHeader>{t("docs_field.materials_used_label")}</CardHeader>
+								<CardContent className="space-y-3">
+									{w.id === null && (
+										<input
+											type="hidden"
+											name="fieldMaterials"
+											value={JSON.stringify(rows)}
+										/>
+									)}
+									{crewRows.length === 0 ? (
+										<p className="text-sm text-muted-foreground">
+											{t("docs_field.materials.empty")}
 										</p>
-										<p className="mt-0.5 text-muted-foreground">
-											{t(
-												c.correctedById === user.id
-													? "docs_field.address_edited_by_you"
-													: correctorNames[c.correctedById]
-														? "docs_field.address_edited_by_name"
-														: "docs_field.address_edited_by_other",
+									) : (
+										<FieldMaterialsTable
+											rows={crewRows.map(({ r }) => tableRowOf(r))}
+											onChange={(i, row) =>
+												setRows(
+													rows.map((r, j) =>
+														j === crewRows[i].index
+															? { ...row, brigadeId: r.brigadeId }
+															: r,
+													),
+												)
+											}
+											onRemove={(i) =>
+												setRows(rows.filter((_, j) => j !== crewRows[i].index))
+											}
+										/>
+									)}
+									<p className="text-xs text-muted-foreground">
+										{t("docs_field.materials.hint")}
+									</p>
+									<select
+										aria-label={t("docs_field.materials.add")}
+										className="h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm"
+										value=""
+										onChange={(e) => {
+											if (!e.target.value) return
+											setRows([
+												...rows,
 												{
-													name: correctorNames[c.correctedById],
-													when: new Date(c.correctedAt).toLocaleString([], {
-														dateStyle: "short",
-														timeStyle: "short",
-													}),
+													serviceCodeId: e.target.value,
+													used: 0,
+													returned: 0,
+													source: "TRUCK_STOCK",
+													...(w.id ? { brigadeId: w.id } : {}),
 												},
-											)}
-											{c.gps &&
-												` · ${t("docs_field.address_gps", {
-													lat: c.gps.lat.toFixed(4),
-													lng: c.gps.lng.toFixed(4),
-												})}`}
-										</p>
-									</li>
-								))}
-							</ul>
-						</div>
-					)}
-
-					<div>
-						<Button
-							type="button"
-							variant="outline"
-							size="lg"
-							className="h-11 text-base"
-							onClick={handleCaptureGps}
-							disabled={!!gpsCoordinates}
+											])
+										}}
+									>
+										<option value="">{t("docs_field.materials.add")}</option>
+										{serviceCodes.map((c) => (
+											<option key={c.id} value={c.id}>
+												{c.claroCode} · {c.name}
+											</option>
+										))}
+									</select>
+								</CardContent>
+							</Card>
+						</>
+					)
+					if (w.id === null)
+						return (
+							<div key="job" className="space-y-5">
+								{inner}
+							</div>
+						)
+					const n = crews.findIndex((c) => c.id === w.id) + 1
+					return (
+						<section
+							key={w.id}
+							aria-label={`${t("docs_field.crew_window", { n })} ${w.name}`}
+							data-testid={`crew-window-${w.id}`}
+							className="space-y-5 rounded-xl border-2 border-primary/20 p-3"
 						>
-							{gpsCoordinates
-								? t("docs_field.gps_captured")
-								: t("docs_field.gps_capture")}
-						</Button>
-						{gpsError && (
-							<p className="text-xs text-status-danger mt-1">{gpsError}</p>
-						)}
-						{gpsCoordinates && (
-							<p className="text-xs text-muted-foreground mt-1">
-								{t("docs_field.gps_saved")}
-							</p>
-						)}
-						<input
-							type="hidden"
-							name="gpsCoordinates"
-							value={gpsCoordinates ?? ""}
-						/>
-					</div>
-				</div>
-
-				<div className="border rounded-lg p-3 space-y-2">
-					<Label>{t("docs_field.time_on_site_label")}</Label>
-					<div className="flex flex-wrap items-center gap-2">
-						<input type="hidden" name="startedAt" value={startedAt ?? ""} />
-						<input type="hidden" name="endedAt" value={endedAt ?? ""} />
-						<Button
-							type="button"
-							variant="outline"
-							size="lg"
-							className="h-11 text-base"
-							onClick={handleStart}
-							disabled={!!startedAt}
-						>
-							{t("docs_field.start_timer")}
-						</Button>
-						<Button
-							type="button"
-							variant="outline"
-							size="lg"
-							className="h-11 text-base"
-							onClick={handleStop}
-							disabled={!startedAt || !!endedAt}
-						>
-							{t("docs_field.stop_timer")}
-						</Button>
-						{timeOnSite && (
-							<span className="text-sm font-medium text-foreground">
-								{t("docs_field.time_on_site_value", { duration: timeOnSite })}
-							</span>
-						)}
-					</div>
-				</div>
-
-				<div className="border rounded-lg p-3 space-y-2">
-					<Label>{t("docs_field.photos_before_label")}</Label>
-					<p className="text-xs text-muted-foreground">
-						{t("docs_field.photos_before_hint")}
-					</p>
-					<PhotoCapture
-						photos={photosBefore}
-						onChange={setPhotosBefore}
-						tag={t("docs_field.photo_tag_before")}
+							<h2 className="text-base font-semibold">
+								{t("docs_field.crew_window", { n })} · {w.name}
+								{w.code ? ` · ${w.code}` : ""}
+								{w.lead && (
+									<span className="ml-2 rounded-md bg-primary px-1.5 py-0.5 text-xs font-semibold text-primary-foreground">
+										{t("crew_picker.lead")}
+									</span>
+								)}
+							</h2>
+							{inner}
+						</section>
+					)
+				})}
+				{crews.length > 0 && (
+					<input
+						type="hidden"
+						name="crewServiceLines"
+						value={JSON.stringify(crewInstalled)}
 					/>
-				</div>
-				<div className="border rounded-lg p-3 space-y-2">
-					<Label>{t("docs_field.photos_after_label")}</Label>
-					<p className="text-xs text-muted-foreground">
-						{t("docs_field.photos_after_hint")}
-					</p>
-					<PhotoCapture
-						photos={photosAfter}
-						onChange={setPhotosAfter}
-						tag={t("docs_field.photo_tag_after")}
+				)}
+				{crews.length > 0 && (
+					<input
+						type="hidden"
+						name="fieldMaterials"
+						value={JSON.stringify(postedRows)}
 					/>
-				</div>
-
-				{ordered.length > 0 && (
-					<div className="border rounded-lg p-3 space-y-2">
-						<Label>{t("docs_field.services_performed_label")}</Label>
-						<p className="text-xs text-muted-foreground">
-							{t("docs_field.services_performed_hint")}
-						</p>
-						<ServiceLinesTable
-							lines={ordered}
-							installed={
-								(doc.installedServiceLines as ServiceLine[] | null) ?? undefined
-							}
-							editableName="installedServiceLines"
-						/>
-					</div>
 				)}
 
-				<div className="border rounded-lg p-3 space-y-3">
-					<Label>{t("docs_field.materials_used_label")}</Label>
-					<p className="text-xs text-muted-foreground">
-						{t("docs_field.materials_used_hint")}
-					</p>
-					<MaterialLineItems
-						serviceCodes={serviceCodes}
-						initialItems={used.length > 0 ? used : taken}
-						name="materialsUsed"
-						touch
-						estimatedItems={taken.length > 0 ? taken : undefined}
-						listedLabel={t("docs_field.took_label")}
-						tags={false}
-						capToListed={taken.length > 0}
-						onItemsChange={setUsedItems}
-					/>
-					{taken.length > 0 && bringBack.length > 0 && (
-						<Callout tone="warn" title={t("docs_field.bring_back_title")}>
-							{bringBack
-								.map((l) => `${l.qty}${l.unit ? ` ${l.unit}` : ""} ${l.name}`)
-								.join(" · ")}
-							<span className="mt-0.5 block text-xs text-muted-foreground">
-								{t("docs_field.bring_back_hint")}
-							</span>
-						</Callout>
-					)}
-					{estimated.length > 0 && (
+				<Card>
+					<CardHeader>{t("docs_field.photos_label")}</CardHeader>
+					<CardContent className="space-y-4">
 						<p className="text-xs text-muted-foreground">
-							{t("docs_field.ordered_vs_installed_hint")}
+							{t("docs_field.photos_saved_hint")}
 						</p>
-					)}
-				</div>
+						{PHOTO_BOXES.map(([tag, name, labelKey]) => (
+							<PhotoBox
+								key={tag}
+								name={name}
+								labelKey={labelKey}
+								photos={photos[tag]}
+								boxId={
+									tag === "BEFORE"
+										? "photo-box-before"
+										: tag === "AFTER"
+											? "photo-box-after"
+											: undefined
+								}
+								next={
+									tag === "BEFORE"
+										? next?.id === "photo-box-before"
+										: tag === "AFTER"
+											? next?.id === "photo-box-after"
+											: false
+								}
+							/>
+						))}
+						<BlueprintBox
+							docId={doc.id}
+							files={blueprints}
+							required={blueprintRequired}
+						/>
+					</CardContent>
+				</Card>
 
-				<div>
-					<Label htmlFor="discrepancyNote">
-						{t("docs_field.discrepancy_note_label")}
-					</Label>
-					<p className="text-xs text-muted-foreground mb-1">
-						{t("docs_field.discrepancy_note_hint")}
-					</p>
-					<Textarea
-						id="discrepancyNote"
-						name="discrepancyNote"
-						rows={2}
-						placeholder={t("docs_field.discrepancy_note_placeholder")}
-						defaultValue=""
-					/>
-				</div>
-
-				<div>
+				<div className="space-y-1">
 					<Label htmlFor="fieldNotes">
 						{t("docs_field.field_notes_label")}
 					</Label>
@@ -844,71 +1485,178 @@ export default function FieldUpdate({
 						id="fieldNotes"
 						name="fieldNotes"
 						rows={3}
+						className={cn(
+							"field-required",
+							next?.id === "fieldNotes" && "field-next",
+						)}
 						placeholder={t("docs_field.field_notes_placeholder")}
-						defaultValue={doc.fieldNotes ?? ""}
-					/>
-				</div>
-
-				<div className="border rounded-lg p-3 space-y-2">
-					<Label>{t("docs_field.completion_signature_label")}</Label>
-					<p className="text-xs text-muted-foreground">
-						{t("docs_field.completion_signature_hint")}
-					</p>
-					<SignaturePad
-						ref={signatureRef}
-						height={160}
-						onChange={(isEmpty) => {
-							if (!isEmpty) setClientErrorKey(null)
+						value={notes}
+						onChange={(e) => setNotes(e.target.value)}
+						onFocus={(e) => {
+							// Typing over the pre-filled N/A replaces it.
+							if (e.target.value === "N/A") e.target.select()
 						}}
 					/>
-					<Button
-						type="button"
-						variant="ghost"
-						size="lg"
-						className="h-11 text-base"
-						onClick={() => signatureRef.current?.clear()}
-					>
-						{t("docs_field.clear_signature")}
-					</Button>
 				</div>
 
-				{hasError && (
-					<div ref={errorRef} role="alert">
+				<Card>
+					<CardHeader>{t("docs_field.address_heading")}</CardHeader>
+					<CardContent className="space-y-3">
+						<p className="text-sm">
+							{t("docs_field.address_on_file", {
+								address: doc.jobAddressActual || doc.jobAddressEstimated,
+							})}
+						</p>
+						<div className="grid gap-3 sm:grid-cols-2">
+							{addressInput("direccion1", "docs_new.direccion1_label", {
+								placeholder: doc.jobAddressEstimated,
+								required: true,
+							})}
+							{addressInput("direccion2", "docs_new.direccion2_label")}
+							{addressInput("sector", "docs_new.sector_label")}
+							{addressInput("ciudad", "docs_new.ciudad_label")}
+							{addressInput("latitud", "docs_new.latitud_label")}
+							{addressInput("longitud", "docs_new.longitud_label")}
+						</div>
+						<p className="text-xs text-muted-foreground">
+							{t("docs_field.address_diff_hint")}
+						</p>
+						{addressCorrections.length > 0 && (
+							<div className="space-y-1.5">
+								<p className="text-xs font-medium">
+									{t("docs_field.address_history_heading")}
+								</p>
+								<ul className="space-y-1.5">
+									{addressCorrections.map((c) => (
+										<li
+											key={`${c.original}-${c.corrected}-${c.correctedAt}`}
+											className="rounded-lg bg-muted p-2 text-xs"
+										>
+											<span className="text-muted-foreground line-through">
+												{c.original}
+											</span>
+											{" → "}
+											<span className="font-medium">{c.corrected}</span>
+											<span className="block text-muted-foreground">
+												{t(
+													c.correctedById === user.id
+														? "docs_field.address_edited_by_you"
+														: correctorNames[c.correctedById]
+															? "docs_field.address_edited_by_name"
+															: "docs_field.address_edited_by_other",
+													{
+														name: correctorNames[c.correctedById],
+														when: new Date(c.correctedAt).toLocaleString(),
+													},
+												)}
+											</span>
+										</li>
+									))}
+								</ul>
+							</div>
+						)}
+					</CardContent>
+				</Card>
+
+				{result?.errorKey && (
+					<div role="alert">
 						<Callout tone="danger" title={t("docs_field.error_title")}>
-							{shownErrorKey
-								? t(shownErrorKey, error?.errorParams)
-								: shownErrorMessage}
+							{t(result.errorKey)}
 						</Callout>
 					</div>
 				)}
+				{result?.ok && !busy && (
+					<Callout tone="ok" title={t("docs_field.saved")}>
+						{null}
+					</Callout>
+				)}
 
-				<Button
-					type="submit"
-					size="lg"
-					className="h-12 w-full text-base"
-					disabled={busy}
-				>
-					{busy
-						? t("docs_field.submitting")
-						: online
-							? t("docs_field.submit")
-							: t("docs_field.save_offline")}
-				</Button>
-				<p className="text-center text-xs text-muted-foreground">
-					{t("docs_field.offline_footnote")}
-				</p>
+				<StepActionBar
+					status={
+						<>
+							{missing.length > 0 && (
+								<button
+									type="button"
+									onClick={() => jumpTo(missing[0].id)}
+									className="text-left text-xs text-muted-foreground underline-offset-4 hover:underline md:text-sm"
+								>
+									{t("docs_field.boxes_left", {
+										count: missing.length,
+										items: missingLabels.join(", "),
+									})}
+								</button>
+							)}
+							<p
+								className="text-xs text-muted-foreground"
+								aria-live="polite"
+								data-testid="draft-status"
+							>
+								{draft.state !== "idle"
+									? t("docs_field.draft_saving")
+									: draft.data?.errorKey
+										? t(draft.data.errorKey)
+										: savedAt
+											? t("docs_field.draft_saved", {
+													time: savedAt.toLocaleTimeString([], {
+														hour: "2-digit",
+														minute: "2-digit",
+													}),
+												})
+											: null}
+							</p>
+						</>
+					}
+					left={
+						<Button
+							type="button"
+							variant="ghost"
+							disabled={busy}
+							onClick={() => {
+								// Save the draft, then the server sends us to the job page.
+								const form = new FormData(formRef.current ?? undefined)
+								form.set("intent", "back")
+								submit(form, {
+									method: "post",
+									encType: "multipart/form-data",
+								})
+							}}
+						>
+							{t("navigation.back")}
+						</Button>
+					}
+					center={
+						<Button
+							type="submit"
+							name="intent"
+							value="save"
+							variant="outline"
+							disabled={busy}
+						>
+							{t("docs_field.save_progress")}
+						</Button>
+					}
+					right={
+						<Button
+							type="submit"
+							name="intent"
+							value="continue"
+							disabled={busy}
+							aria-disabled={missing.length > 0 || undefined}
+							className={cn("h-10", missing.length > 0 && "opacity-50")}
+							onClick={(e) => {
+								// Not ready: go to the first missing box instead.
+								if (missing.length === 0) return
+								e.preventDefault()
+								jumpTo(missing[0].id)
+							}}
+						>
+							{t("docs_field.continue_to_signoff", { n: SIGN_OFF_STEP })}
+						</Button>
+					}
+				/>
 			</Form>
 		</div>
 	)
-}
-
-function fileToBase64(file: File): Promise<string> {
-	return new Promise((resolve, reject) => {
-		const reader = new FileReader()
-		reader.onload = () => resolve(String(reader.result))
-		reader.onerror = reject
-		reader.readAsDataURL(file)
-	})
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {

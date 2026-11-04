@@ -8,6 +8,7 @@ import { RouteErrorBoundary } from "~/components/error-boundary"
 import { JobLinesCard, preppedAsLines } from "~/components/job-lines-card"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { ReassignForm } from "~/components/reassign-form"
+import { ReturnedBanner } from "~/components/returned-banner"
 import { SupervisorStepRail } from "~/components/supervisor-step-rail"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
@@ -17,32 +18,54 @@ import { Textarea } from "~/components/ui/textarea"
 import { hasAvisoPdf } from "~/lib/aviso-document"
 import { canSeeBilling, hideBilling } from "~/lib/billing-visibility"
 import {
+	assignRejection,
+	pickableBrigades,
+	pickerState,
+} from "~/lib/brigade-picker"
+import {
+	assignBrigadesOrThrow,
+	BRIGADE_INVALID,
+	BrigadeAssignError,
+	pickerViewer,
+} from "~/lib/brigade-picker.server"
+import {
 	assignedBrigadeIds,
 	buildCrewAssignment,
 	readHistory,
 } from "~/lib/crew-assignment"
-import { isUnassignedCrew, notAssignedResponse } from "~/lib/crew-scope"
+import { refuseCrew } from "~/lib/crew-notice.server"
 import { db } from "~/lib/db.server"
+import { nextActionHref } from "~/lib/doc-next-action"
 import {
 	type AddressCorrection,
 	formatTimeOnSite,
 } from "~/lib/field-update-helpers"
 import { validateFile } from "~/lib/file-upload.server"
+import { openJobLabel } from "~/lib/open-job-label"
 import {
 	isEditableStatus,
 	isReassignableStatus,
 	isTerminalStatus,
 } from "~/lib/permissions"
 import { requireRole, requireSession } from "~/lib/permissions.server"
+import { returnedInfo } from "~/lib/returned-packet.server"
 import { serviceCodesForRole } from "~/lib/service-codes.server"
 import type { ServiceLine } from "~/lib/service-lines"
 import {
 	assertDocInSupervisorScope,
 	assignableBrigadesWhere,
-	isBrigadeInSupervisorScope,
 } from "~/lib/supervisor-scope"
-import { deriveSupervisorStage } from "~/lib/supervisor-stage"
+import {
+	deriveSupervisorStage,
+	fixStepFor,
+	supervisorStepHref,
+} from "~/lib/supervisor-stage"
 import { saveUpload } from "~/lib/uploads.server"
+import {
+	countWorkOrderEdits,
+	MAX_SUPERVISOR_EDITS,
+	supervisorEditsLeft,
+} from "~/lib/work-order-edits"
 import { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id"
 
@@ -111,6 +134,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const user = await db.user.findUniqueOrThrow({
 		where: { id: session.user.id },
 	})
+	refuseCrew(user.role)
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 		include: { brigade: { select: { area: true } } },
@@ -121,7 +145,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	) {
 		throw new Response("Not Found", { status: 404 })
 	}
-	if (isUnassignedCrew(user, doc)) throw notAssignedResponse()
 	if (user.role === "SUPERVISOR") {
 		await assertDocInSupervisorScope(db, user.id, doc)
 	}
@@ -138,15 +161,41 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		orderBy: { timestamp: "asc" },
 	})
 	const brigadeArgs = await assignableBrigadesWhere(db, user)
-	const brigadeOptions = await db.brigade.findMany({
-		where: brigadeArgs.where,
+	const viewer = await pickerViewer(db, user)
+	const onJob = assignedBrigadeIds(doc)
+	const pickerRows = await db.brigade.findMany({
+		where:
+			user.role === "SUPERVISOR"
+				? {
+						...brigadeArgs.where,
+						OR: [{ active: true }, { id: { in: onJob } }],
+					}
+				: brigadeArgs.where,
 		orderBy: [{ area: "asc" }, { name: "asc" }],
-		select: { id: true, name: true, area: true, code: true },
+		select: {
+			id: true,
+			name: true,
+			area: true,
+			code: true,
+			...brigadeArgs.select,
+		},
 		take: brigadeArgs.take,
 	})
-	const sheet = await db.preCertSheet.findFirst({
+	// A supervisor reassigns here only to his own brigades (and to the ones
+	// already on the job, which pass through as they are). Activating an
+	// inactive brigade goes through the New/Edit pickers, which ask first;
+	// another supervisor's brigade is never offered. Admin is unscoped.
+	const brigadeOptions = pickableBrigades(pickerRows, viewer)
+		.filter(
+			(b) =>
+				viewer.role !== "SUPERVISOR" ||
+				pickerState(b, viewer) === "own" ||
+				onJob.includes(b.id),
+		)
+		.map(({ id, name, area, code }) => ({ id, name, area, code }))
+	const sheet = await db.preCertSheet.findMany({
 		where: { docId: doc.id, supersededAt: null },
-		orderBy: { version: "desc" },
+		orderBy: { version: "asc" },
 		select: { sigSupervisorAt: true, sigSubcontractorAt: true },
 	})
 	const brigadeIds = assignedBrigadeIds(doc)
@@ -200,6 +249,33 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			? auditTrail
 			: auditTrail.map((a) => ({ ...a, diffJson: null })),
 		stage: deriveSupervisorStage(doc, sheet),
+		openLabel: openJobLabel(doc, sheet),
+		// Finance sent the packet back: the supervisor (or an admin) fixes it.
+		returned:
+			user.role === "SUPERVISOR" || user.role === "ADMIN"
+				? await returnedInfo(doc)
+				: null,
+	}
+}
+
+/**
+ * Run a crew save in one transaction with its brigade guard; a guard refusal
+ * rolls the whole save back and comes back as this page's error.
+ */
+async function guardedSave(
+	save: (tx: Prisma.TransactionClient) => Promise<void>,
+): Promise<{ errorKey: string } | null> {
+	try {
+		await db.$transaction(save)
+		return null
+	} catch (e) {
+		if (!(e instanceof BrigadeAssignError)) throw e
+		return {
+			errorKey:
+				e.errorKey === BRIGADE_INVALID
+					? "docs_view.errors.reassign_invalid"
+					: e.errorKey,
+		}
 	}
 }
 
@@ -271,12 +347,22 @@ export async function action({ request, params }: Route.ActionArgs) {
 			where: { id: newBrigadeId },
 		})
 		if (!newBrigade) return { errorKey: "docs_view.errors.reassign_invalid" }
-		if (
-			user.role === "SUPERVISOR" &&
-			!(await isBrigadeInSupervisorScope(db, user.id, newBrigade))
-		) {
+		const viewer = await pickerViewer(db, user)
+		// A brigade already on the job passes through unchanged; only one this
+		// reassignment adds goes through the picker rules (Admin's guard may
+		// activate it; a supervisor's is refused below when inactive).
+		const adding = !assignedBrigadeIds(doc).includes(newBrigade.id)
+		const rejection = adding ? assignRejection(newBrigade, viewer) : null
+		if (rejection === "invalid")
 			return { errorKey: "docs_view.errors.reassign_invalid" }
-		}
+		// The job page never activates for a supervisor: an inactive brigade
+		// is activated only through the New/Edit pickers, which ask first.
+		if (
+			adding &&
+			viewer.role === "SUPERVISOR" &&
+			pickerState(newBrigade, viewer) === "inactive"
+		)
+			return { errorKey: "docs_view.errors.reassign_invalid" }
 		if (isTerminalStatus(doc.status)) throw redirect(`/docs/${params.id}`)
 		const { brigadeId, assignedCrewIds, crewAssignmentHistory } =
 			reassignToBrigade({
@@ -291,16 +377,23 @@ export async function action({ request, params }: Route.ActionArgs) {
 				newBrigade: { id: newBrigade.id, memberIds: newBrigade.memberIds },
 				byUserId: user.id,
 			})
-		await db.$transaction([
-			db.jafInvoice.update({
+		const failed = await guardedSave(async (tx) => {
+			// Activate & assign succeeds or fails with the reassignment.
+			if (adding)
+				await assignBrigadesOrThrow(tx, {
+					docId: doc.id,
+					viewer,
+					brigadeIds: [newBrigade.id],
+				})
+			await tx.jafInvoice.update({
 				where: { id: params.id },
 				data: {
 					brigadeId,
 					assignedCrewIds,
 					crewAssignmentHistory,
 				},
-			}),
-			db.auditTrail.create({
+			})
+			await tx.auditTrail.create({
 				data: {
 					docId: params.id,
 					userId: user.id,
@@ -313,15 +406,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 						to: { brigadeId, assignedCrewIds },
 					},
 				},
-			}),
-			db.notification.createMany({
-				data: assignedCrewIds.map((memberId) => ({
-					userId: memberId,
-					docId: params.id,
-					message: `You have been reassigned to job ${doc.controlNumber}.`,
-				})),
-			}),
-		])
+			})
+			// No notification: crews never log in (the supervisor tells them).
+		})
+		if (failed) return failed
 		throw redirect(`/docs/${params.id}`)
 	}
 
@@ -348,17 +436,17 @@ export async function action({ request, params }: Route.ActionArgs) {
 		)
 		if (ordered.length !== brigadeIds.length)
 			return { errorKey: "docs_view.errors.reassign_invalid" }
-		// The doc-level scope guard only covers the current lead; an Admin may
-		// have put out-of-area brigades on the job, so the incoming payee must
-		// be in scope too.
-		if (
-			user.role === "SUPERVISOR" &&
-			!(await isBrigadeInSupervisorScope(db, user.id, ordered[0]))
-		)
+		// The new lead is already on the job, so it is never activated and no
+		// event is written. The payee check stays: the doc-level scope guard
+		// only covers the current lead, and an Admin may have put another
+		// supervisor's (or an equipment) brigade on the job, which must not
+		// become a supervisor's payee.
+		const rejection = assignRejection(ordered[0], await pickerViewer(db, user))
+		if (rejection === "invalid")
 			return { errorKey: "docs_view.errors.reassign_invalid" }
 		const { brigadeId, assignedCrewIds } = buildCrewAssignment(ordered)
-		await db.$transaction([
-			db.jafInvoice.update({
+		await db.$transaction(async (tx) => {
+			await tx.jafInvoice.update({
 				where: { id: params.id },
 				data: {
 					brigadeId,
@@ -376,8 +464,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 						},
 					],
 				},
-			}),
-			db.auditTrail.create({
+			})
+			await tx.auditTrail.create({
 				data: {
 					docId: params.id,
 					userId: user.id,
@@ -387,8 +475,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 						to: { brigadeId, brigadeIds },
 					},
 				},
-			}),
-		])
+			})
+		})
 		throw redirect(`/docs/${params.id}`)
 	}
 
@@ -450,41 +538,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	throw redirect(`/docs/${params.id}`)
-}
-
-function nextActionHref(
-	doc: Route.ComponentProps["loaderData"]["doc"],
-	userRole: string,
-	userId: string,
-): string | null {
-	if (doc.status === "CREATED" && userRole === "WAREHOUSE")
-		return `/docs/${doc.id}/prep`
-	if (
-		doc.status === "PREPPED" &&
-		(userRole === "WAREHOUSE" ||
-			userRole === "CREW" ||
-			doc.assignedCrewIds?.includes(userId))
-	)
-		return `/docs/${doc.id}/sign`
-	if (doc.status === "SIGNED" && doc.assignedCrewIds?.includes(userId))
-		return `/docs/${doc.id}/field`
-	if (
-		doc.status === "FIELD_UPDATED" &&
-		(userRole === "SUPERVISOR" || userRole === "ADMIN")
-	)
-		return `/docs/${doc.id}/review`
-	if (
-		(doc.status === "SUPERVISOR_APPROVED" || doc.status === "CLARO_UPLOADED") &&
-		(userRole === "SUPERVISOR" || userRole === "ADMIN") &&
-		!doc.releasedToFinanceAt
-	)
-		return `/docs/${doc.id}/review`
-	if (
-		(doc.status === "SUPERVISOR_APPROVED" || doc.status === "CLARO_UPLOADED") &&
-		(userRole === "FINANCE" || userRole === "ADMIN")
-	)
-		return `/finance/verify/${doc.id}`
-	return null
 }
 
 type NextActionLabelKey =
@@ -591,15 +644,21 @@ export default function DocView({
 		brigadeOptions,
 		auditTrail,
 		stage,
+		openLabel,
 		latestSendBack,
 		sentByName,
 		correctorNames,
+		returned,
 	} = loaderData
+	const editsLeft =
+		user.role === "SUPERVISOR"
+			? supervisorEditsLeft(countWorkOrderEdits(auditTrail))
+			: null
 	const error = actionData as
 		| { errorKey?: string; errorMessage?: string }
 		| undefined
 	const { t } = useTranslation()
-	const nextHref = nextActionHref(doc, user.role, user.id)
+	const nextHref = nextActionHref(doc, user.role)
 	const estimated = (doc.estimatedMaterials as unknown as MaterialLine[]) || []
 	const taken = (doc.materialsTaken as unknown as MaterialLine[]) || []
 	const used = (doc.materialsUsed as unknown as MaterialLine[]) || []
@@ -630,15 +689,31 @@ export default function DocView({
 	return (
 		<div className="space-y-5">
 			{(user.role === "SUPERVISOR" || user.role === "ADMIN") && (
-				<SupervisorStepRail stage={stage} docId={doc.id} page="job" />
+				<SupervisorStepRail
+					stage={stage}
+					docId={doc.id}
+					page="job"
+					warehouseSkipped={!doc.materialsFromWarehouse}
+				/>
 			)}
 			<div className="flex items-center justify-between">
 				<div>
 					<h1 className="font-mono font-bold text-lg">{doc.controlNumber}</h1>
 					<p className="text-sm text-muted-foreground">{doc.jobType}</p>
 				</div>
-				<DocStageBadge stage={stage} cancelled={doc.status === "CANCELLED"} />
+				<DocStageBadge
+					stage={stage}
+					openLabel={openLabel}
+					cancelled={doc.status === "CANCELLED"}
+				/>
 			</div>
+
+			{returned && doc.status !== "CANCELLED" && (
+				<ReturnedBanner
+					returned={returned}
+					fixHref={supervisorStepHref(doc.id, fixStepFor(stage, true))}
+				/>
+			)}
 
 			{latestSendBack && (
 				<Callout
@@ -653,26 +728,6 @@ export default function DocView({
 					</span>
 				</Callout>
 			)}
-
-			{user.role === "CREW" &&
-				doc.status === "FIELD_UPDATED" &&
-				doc.fieldSubmittedAt && (
-					<Callout
-						tone="ok"
-						icon="✓"
-						title={t("docs_view.submitted_title", {
-							control: doc.controlNumber,
-							time: new Date(doc.fieldSubmittedAt).toLocaleString([], {
-								dateStyle: "short",
-								timeStyle: "short",
-							}),
-						})}
-					>
-						{t("docs_view.submitted_body", {
-							name: supervisor?.name ?? t("docs_field.sent_back_by_unknown"),
-						})}
-					</Callout>
-				)}
 
 			{missingAvisoPdf && (
 				<div className="bg-status-warn-soft border border-status-warn/30 rounded-lg p-4 space-y-2">
@@ -872,7 +927,12 @@ export default function DocView({
 			)}
 
 			{(user.role === "SUPERVISOR" || user.role === "ADMIN") &&
-				isEditableStatus(doc.status) && (
+				isEditableStatus(doc.status, doc) &&
+				(editsLeft === 0 ? (
+					<p className="text-sm text-muted-foreground">
+						{t("docs_edit.limit_reached", { max: MAX_SUPERVISOR_EDITS })}
+					</p>
+				) : (
 					<Link
 						to={`/docs/${doc.id}/edit`}
 						className={buttonVariants({
@@ -881,8 +941,10 @@ export default function DocView({
 						})}
 					>
 						{t("docs_view.edit_work_order")}
+						{editsLeft !== null &&
+							` · ${t("docs_edit.edits_left_short", { left: editsLeft, max: MAX_SUPERVISOR_EDITS })}`}
 					</Link>
-				)}
+				))}
 
 			{(user.role === "SUPERVISOR" || user.role === "ADMIN") &&
 				doc.status === "CREATED" &&
@@ -945,6 +1007,7 @@ export default function DocView({
 
 			{(user.role === "WAREHOUSE" || user.role === "ADMIN") &&
 				(doc.status === "SIGNED" || doc.status === "FIELD_UPDATED") &&
+				doc.materialsFromWarehouse &&
 				!doc.materialsReturned && (
 					<Link
 						to={`/docs/${doc.id}/returns`}

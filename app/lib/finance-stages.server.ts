@@ -1,5 +1,6 @@
 import { db } from "~/lib/db.server"
 import { armAOpenWhere } from "~/lib/payroll-run.server"
+import { sendBackIds } from "~/lib/returned-packet.server"
 import type { Prisma } from "../../generated/prisma/client"
 
 /** The four Arm A list stages. Step 5 (Carmen's payment) is a run/account
@@ -19,11 +20,21 @@ export const RUN_OVERDUE_DAYS = 14
  * `pbccRequestSentAt` is tested first so a packet sent by hand without
  * being accepted still lands in exactly one stage.
  */
-export function stageWhere(stage: ArmAListStage): Prisma.JafInvoiceWhereInput {
+export function stageWhere(
+	stage: ArmAListStage,
+	returnedIds: string[] = [],
+): Prisma.JafInvoiceWhereInput {
 	const base = armAOpenWhere()
 	switch (stage) {
 		case "PACKETS":
-			return { ...base, pbccRequestSentAt: null, financeVerifiedAt: null }
+			// A packet sent back leaves "Packets in" until the supervisor resends
+			// it (S4); it lives under Returned meanwhile.
+			return {
+				...base,
+				pbccRequestSentAt: null,
+				financeVerifiedAt: null,
+				...(returnedIds.length > 0 && { id: { notIn: returnedIds } }),
+			}
 		case "LC_REQUEST":
 			return {
 				...base,
@@ -45,16 +56,22 @@ export function stageWhere(stage: ArmAListStage): Prisma.JafInvoiceWhereInput {
 	}
 }
 
+/** Finance's open returns and resends (jobs inside her open Arm A scope). */
+export function financeSendBackIds() {
+	return sendBackIds(armAOpenWhere())
+}
+
 export async function countArmAStages(): Promise<
-	Record<ArmAListStage, number>
+	Record<ArmAListStage, number> & { RETURNED: number }
 > {
+	const { returned } = await financeSendBackIds()
 	const [PACKETS, LC_REQUEST, LC_FUNDED, LISTS] = await Promise.all([
-		db.jafInvoice.count({ where: stageWhere("PACKETS") }),
+		db.jafInvoice.count({ where: stageWhere("PACKETS", returned) }),
 		db.jafInvoice.count({ where: stageWhere("LC_REQUEST") }),
 		db.jafInvoice.count({ where: stageWhere("LC_FUNDED") }),
 		db.jafInvoice.count({ where: stageWhere("LISTS") }),
 	])
-	return { PACKETS, LC_REQUEST, LC_FUNDED, LISTS }
+	return { PACKETS, LC_REQUEST, LC_FUNDED, LISTS, RETURNED: returned.length }
 }
 
 /** Step 5 summary: accounts still unpaid on open runs, and how many open

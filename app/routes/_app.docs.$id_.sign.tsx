@@ -4,6 +4,7 @@ import type { ParseKeys } from "i18next"
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, redirect, useSubmit } from "react-router"
+import { CrewSignerSelect } from "~/components/crew-signer-select"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { JobStepRail } from "~/components/job-step-rail"
 import { MaterialLineItems } from "~/components/material-line-items"
@@ -22,12 +23,15 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "~/components/ui/select"
-import { isUnassignedCrew, notAssignedResponse } from "~/lib/crew-scope"
 import { db } from "~/lib/db.server"
 import { pageTitle } from "~/lib/page-title"
 import { generateWarehouseReceiptPdf } from "~/lib/pdf/warehouse-receipt.server"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
+import {
+	findPickupSigner,
+	pickupSignersForDoc,
+} from "~/lib/pickup-signer.server"
 import {
 	getActiveMaterialCodes,
 	getActiveServiceCodes,
@@ -47,11 +51,12 @@ export const meta: Route.MetaFunction = ({ data, matches }) => [
 ]
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-	const { user } = await requireRole(request, ["CREW", "WAREHOUSE", "ADMIN"])
+	// The warehouse (or an admin) runs the counter: crew accounts no longer
+	// sign in, so the brigade member signs on this screen, picked from the list.
+	const { user } = await requireRole(request, ["WAREHOUSE", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
-	if (isUnassignedCrew(user, doc)) throw notAssignedResponse()
 	if (!canTransition(doc.status, "SIGNED", user.role))
 		throw redirect(`/docs/${params.id}`)
 	const serviceCodes = await getActiveMaterialCodes()
@@ -60,17 +65,20 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		where: { role: "WAREHOUSE", active: true },
 		orderBy: { name: "asc" },
 	})
-	const crewUsers = await db.user.findMany({
-		where: { role: "CREW", active: true },
-		orderBy: { name: "asc" },
-	})
+	// Anyone on a brigade assigned to the job can pick the materials up; a job
+	// with no brigade is a screen error, not a crash.
+	const signerGroups = await pickupSignersForDoc(doc)
 	return {
 		doc,
 		user,
 		serviceCodes: serviceCodesForRole(user.role, serviceCodes),
 		warehouses,
 		warehouseUsers,
-		crewUsers,
+		signerGroups,
+		pickupErrorKey:
+			signerGroups.length > 0
+				? null
+				: ("docs_sign.errors.no_pickup_signer" as const),
 	}
 }
 
@@ -100,11 +108,10 @@ function buildOverages(
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-	const { user } = await requireRole(request, ["CREW", "WAREHOUSE", "ADMIN"])
+	const { user } = await requireRole(request, ["WAREHOUSE", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
 	})
-	if (isUnassignedCrew(user, doc)) throw notAssignedResponse()
 	if (!canTransition(doc.status, "SIGNED", user.role))
 		throw redirect(`/docs/${params.id}`)
 
@@ -113,7 +120,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const crewSignature = form.get("crewSignature") as string
 	const warehouseId = form.get("warehouseId") as string
 	const releasedById = form.get("releasedById") as string
-	const signedById = form.get("signedById") as string
+	const crewSigner = form.get("crewSigner") as string
 	const materialsRaw = form.get("materials") as string
 
 	if (!warehouseId) {
@@ -122,8 +129,13 @@ export async function action({ request, params }: Route.ActionArgs) {
 	if (!releasedById) {
 		return { errorKey: "docs_sign.errors.release_signer_required" }
 	}
-	if (!signedById) {
-		return { errorKey: "docs_sign.errors.crew_signer_required" }
+	const signerGroups = await pickupSignersForDoc(doc)
+	if (signerGroups.length === 0) {
+		return { errorKey: "docs_sign.errors.no_pickup_signer" }
+	}
+	const pickup = findPickupSigner(signerGroups, crewSigner)
+	if (!pickup) {
+		return { errorKey: "docs_sign.errors.crew_signer_invalid" }
 	}
 	if (!releaseSignature || releaseSignature === "data:,") {
 		return { errorKey: "docs_sign.errors.release_signature_required" }
@@ -142,20 +154,14 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	// Signer identity validation
-	const [releaseSigner, crewSigner, warehouse] = await Promise.all([
+	const [releaseSigner, warehouse] = await Promise.all([
 		db.user.findFirst({
 			where: { id: releasedById, role: "WAREHOUSE", active: true },
-		}),
-		db.user.findFirst({
-			where: { id: signedById, role: "CREW", active: true },
 		}),
 		db.warehouse.findUnique({ where: { id: warehouseId } }),
 	])
 	if (!releaseSigner) {
 		return { errorKey: "docs_sign.errors.release_signer_invalid" }
-	}
-	if (!crewSigner) {
-		return { errorKey: "docs_sign.errors.crew_signer_invalid" }
 	}
 
 	// Permanently lock: refuse to overwrite an existing signed materials record.
@@ -172,7 +178,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 			releaseSignature,
 			crewSignature,
 			releaseSignerName: releaseSigner.name,
-			crewSignerName: crewSigner.name,
+			crewSignerName: pickup.name,
 		},
 		serviceCodes.map((c) => ({
 			id: c.id,
@@ -217,7 +223,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 				releasedById,
 				releaseSignedAt: new Date(),
 				crewSignature,
-				signedById,
+				signedById: pickup.userId,
+				crewSignerName: pickup.name,
+				crewSignerBrigadeId: pickup.brigadeId,
 				signedAt: new Date(),
 				warehouseReceiptPath: receiptPath,
 			},
@@ -233,7 +241,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 					status: { before: doc.status, after: "SIGNED" },
 					warehouseId,
 					releasedById,
-					signedById,
+					signedById: pickup.userId,
+					crewSignerName: pickup.name,
+					crewSignerBrigadeId: pickup.brigadeId,
 					materialsTaken,
 				},
 			},
@@ -292,8 +302,15 @@ export default function SignDoc({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { doc, serviceCodes, warehouses, warehouseUsers, crewUsers, user } =
-		loaderData
+	const {
+		doc,
+		serviceCodes,
+		warehouses,
+		warehouseUsers,
+		signerGroups,
+		pickupErrorKey,
+		user,
+	} = loaderData
 	const error = actionData as { errorKey?: ParseKeys } | undefined
 	const releaseRef = useRef<SignaturePadHandle>(null)
 	const crewRef = useRef<SignaturePadHandle>(null)
@@ -303,8 +320,10 @@ export default function SignDoc({
 	const [releasedById, setReleasedById] = useState(
 		user.role === "WAREHOUSE" ? user.id : "",
 	)
-	const [signedById, setSignedById] = useState(
-		user.role === "CREW" ? user.id : "",
+	const signerOptions = signerGroups.flatMap((g) => g.signers)
+	// One name on the job needs no choosing; several must be picked on purpose.
+	const [crewSigner, setCrewSigner] = useState(
+		signerOptions.length === 1 ? signerOptions[0].key : "",
 	)
 	const [items] = useState(
 		(doc.estimatedMaterials as MaterialLine[] | null) ?? [],
@@ -316,7 +335,8 @@ export default function SignDoc({
 	const [releaseSigned, setReleaseSigned] = useState(false)
 	const [crewSigned, setCrewSigned] = useState(false)
 	const errorRef = useRef<HTMLDivElement>(null)
-	const shownErrorKey = clientErrorKey ?? error?.errorKey
+	const shownErrorKey =
+		clientErrorKey ?? error?.errorKey ?? pickupErrorKey ?? undefined
 	// biome-ignore lint/correctness/useExhaustiveDependencies: scroll only when an error appears or changes
 	useEffect(() => {
 		if (shownErrorKey)
@@ -337,7 +357,11 @@ export default function SignDoc({
 			fail("docs_sign.alerts.release_signer_required")
 			return
 		}
-		if (!signedById) {
+		if (signerGroups.length === 0) {
+			fail("docs_sign.errors.no_pickup_signer")
+			return
+		}
+		if (!crewSigner) {
 			fail("docs_sign.alerts.crew_signer_required")
 			return
 		}
@@ -360,7 +384,7 @@ export default function SignDoc({
 		// quantities the crew changed at the counter are the ones that get signed.
 		formData.set("warehouseId", warehouseId)
 		formData.set("releasedById", releasedById)
-		formData.set("signedById", signedById)
+		formData.set("crewSigner", crewSigner)
 		submit(formData, { method: "post" })
 	}
 
@@ -379,13 +403,7 @@ export default function SignDoc({
 			</div>
 
 			<JobStepRail docId={doc.id} current="RELEASE" role={user.role} />
-			<Callout
-				title={t(
-					user.role === "CREW"
-						? "job_flow.callout.sign_title_crew"
-						: "job_flow.callout.sign_title",
-				)}
-			>
+			<Callout title={t("job_flow.callout.sign_title")}>
 				{t("job_flow.callout.sign_body")}
 			</Callout>
 
@@ -493,24 +511,11 @@ export default function SignDoc({
 							<Label className="text-xs text-muted-foreground">
 								{t("docs_sign.crew_signer_label")}
 							</Label>
-							<Select
-								items={crewUsers.map((u) => ({ value: u.id, label: u.name }))}
-								value={signedById}
-								onValueChange={(v) => setSignedById(v ?? "")}
-							>
-								<SelectTrigger className="mt-1 h-11 w-full text-base">
-									<SelectValue
-										placeholder={t("docs_sign.crew_signer_placeholder")}
-									/>
-								</SelectTrigger>
-								<SelectContent>
-									{crewUsers.map((u) => (
-										<SelectItem key={u.id} value={u.id}>
-											{u.name}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
+							<CrewSignerSelect
+								groups={signerGroups}
+								value={crewSigner}
+								onChange={setCrewSigner}
+							/>
 						</div>
 						<SignaturePad
 							ref={crewRef}

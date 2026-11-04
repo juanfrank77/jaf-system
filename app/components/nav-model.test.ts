@@ -12,7 +12,8 @@ describe("navGroupsFor", () => {
 				"work",
 				[
 					"/docs/new",
-					"/dashboard?stage=review",
+					"/dashboard?stage=open",
+					"/dashboard?stage=returned",
 					"/dashboard?stage=invoice",
 					"/dashboard?stage=aviso",
 					"/dashboard?stage=precert",
@@ -20,8 +21,23 @@ describe("navGroupsFor", () => {
 					"/dashboard?stage=all",
 				],
 			],
-			["team", ["/supervisor/brigades"]],
+			["team", ["/supervisor/brigades", "/supervisor/stock"]],
 		])
+	})
+
+	it("hides the Review queue from SUPERVISOR but keeps open jobs and packets", () => {
+		const items = navGroupsFor("SUPERVISOR").flatMap((g) =>
+			g.items.map((i) => i.to),
+		)
+		expect(items).toContain("/dashboard?stage=open")
+		expect(items).toContain("/dashboard?stage=invoice")
+		expect(items).not.toContain("/dashboard?stage=review")
+		const labels = navGroupsFor("SUPERVISOR").flatMap((g) =>
+			g.items.map((i) => i.labelKey),
+		)
+		expect(labels).toContain("app_shell.nav.supervisor_open")
+		expect(labels).toContain("app_shell.nav.supervisor_returned")
+		expect(labels).toContain("app_shell.nav.supervisor_invoice")
 	})
 
 	it("shows Variance to SUPERVISOR only when ENABLE_VARIANCE is on", () => {
@@ -31,7 +47,8 @@ describe("navGroupsFor", () => {
 				"work",
 				[
 					"/docs/new",
-					"/dashboard?stage=review",
+					"/dashboard?stage=open",
+					"/dashboard?stage=returned",
 					"/dashboard?stage=invoice",
 					"/dashboard?stage=aviso",
 					"/dashboard?stage=precert",
@@ -39,7 +56,10 @@ describe("navGroupsFor", () => {
 					"/dashboard?stage=all",
 				],
 			],
-			["team", ["/supervisor/brigades", "/supervisor/variance"]],
+			[
+				"team",
+				["/supervisor/brigades", "/supervisor/stock", "/supervisor/variance"],
+			],
 		])
 	})
 
@@ -47,18 +67,8 @@ describe("navGroupsFor", () => {
 		expect(tos(navGroupsFor("INSTALLER"))).toEqual([["field", ["/installer"]]])
 	})
 
-	it("gives CREW the dashboard and its three steps, in rail order", () => {
-		expect(tos(navGroupsFor("CREW"))).toEqual([
-			["overview", ["/dashboard"]],
-			[
-				"work",
-				[
-					"/dashboard?stage=pickup",
-					"/dashboard?stage=field",
-					"/dashboard?stage=submitted",
-				],
-			],
-		])
+	it("gives CREW nothing: crew accounts no longer sign in", () => {
+		expect(navGroupsFor("CREW")).toEqual([])
 	})
 
 	it("groups FINANCE items into Arm A and Arm B, in process order", () => {
@@ -68,6 +78,7 @@ describe("navGroupsFor", () => {
 				"arm_a",
 				[
 					"/finance/queue",
+					"/finance/queue?stage=returned",
 					"/finance/lc-requests",
 					"/finance/lc-funded",
 					"/finance/payroll",
@@ -106,6 +117,7 @@ describe("navGroupsFor", () => {
 					"/warehouse/needs-review",
 					"/warehouse/repairs",
 					"/warehouse/restock",
+					"/warehouse/brigade-stock",
 					"/warehouse/stock",
 				],
 			],
@@ -211,13 +223,8 @@ describe("tabBarItemsFor", () => {
 		expect(tabBarItemsFor("ADMIN")).toEqual([])
 	})
 
-	it("gives CREW the dashboard and its steps as tabs", () => {
-		expect(tabBarItemsFor("CREW").map((i) => i.to)).toEqual([
-			"/dashboard",
-			"/dashboard?stage=pickup",
-			"/dashboard?stage=field",
-			"/dashboard?stage=submitted",
-		])
+	it("gives CREW no tab bar", () => {
+		expect(tabBarItemsFor("CREW")).toEqual([])
 	})
 
 	it("gives INSTALLER Home, New job and My van", () => {

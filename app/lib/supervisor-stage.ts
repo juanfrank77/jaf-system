@@ -1,11 +1,6 @@
-import { hasAvisoPdf } from "~/lib/aviso-document"
+import { isAvisoSaved } from "~/lib/aviso-document"
+import { isReturned } from "~/lib/returned-packet"
 import type { JafInvoice } from "../../generated/prisma/client"
-import {
-	type AvisoLine,
-	type InvoiceLine,
-	round2,
-	sumLines,
-} from "./service-lines"
 
 export type SupervisorStage =
 	| "INTAKE"
@@ -35,23 +30,43 @@ type StageDoc = Pick<
 	| "status"
 	| "supervisorApprovedAt"
 	| "jafInvoiceGeneratedAt"
-	| "avisoMatchedAt"
+	| "avisoNumber"
+	| "avisoDocPath"
 	| "releasedToFinanceAt"
->
-type StageSheet = {
-	sigSupervisorAt: Date | null
-	sigSubcontractorAt: Date | null
-} | null
+	| "financeVerifiedAt"
+	| "pbccRequestSentAt"
+> & {
+	/** Finance's returns (`returned-packet`). Select it (with the Finance
+	 * timestamps above) wherever the stage is shown to a supervisor: without it
+	 * a returned packet reads as Released. */
+	financeSendBackNotes?: unknown
+}
+type StageSheet =
+	| {
+			sigSupervisorAt: Date | null
+			sigSubcontractorAt: Date | null
+	  }
+	| {
+			sigSupervisorAt: Date | null
+			sigSubcontractorAt: Date | null
+	  }[]
+	| null
+
+/** Every certificate on the job carries the supervisor's signature (none: false). */
+export function allSupervisorSigned(sheet: StageSheet): boolean {
+	const sheets = Array.isArray(sheet) ? sheet : sheet ? [sheet] : []
+	return sheets.length > 0 && sheets.every((s) => !!s.sigSupervisorAt)
+}
 
 export function deriveSupervisorStage(
 	doc: StageDoc,
 	sheet: StageSheet,
 ): SupervisorStage {
-	if (doc.releasedToFinanceAt) return "RELEASED"
-	if (doc.avisoMatchedAt) {
-		return sheet?.sigSupervisorAt && sheet?.sigSubcontractorAt
-			? "RELEASE"
-			: "PRECERT"
+	// A returned packet is back on the supervisor's own steps, though it keeps
+	// `releasedToFinanceAt` for Finance's queues.
+	if (doc.releasedToFinanceAt && !isReturned(doc)) return "RELEASED"
+	if (isAvisoSaved(doc)) {
+		return allSupervisorSigned(sheet) ? "RELEASE" : "PRECERT"
 	}
 	if (doc.jafInvoiceGeneratedAt) return "AVISO"
 	if (doc.supervisorApprovedAt) return "INVOICE"
@@ -73,8 +88,10 @@ export function deriveSupervisorStage(
 export type WaitingOn = "warehouse" | "crew" | "you" | "finance"
 export const WAITING_ON: Record<SupervisorStage, WaitingOn> = {
 	INTAKE: "warehouse",
+	// Prepped: the brigade still has to pick the material up.
 	WAREHOUSE: "crew",
-	FIELD: "crew",
+	// Crews never log in: the supervisor fills Field from what they send.
+	FIELD: "you",
 	APPROVE: "you",
 	INVOICE: "you",
 	AVISO: "you",
@@ -86,16 +103,15 @@ export const WAITING_ON: Record<SupervisorStage, WaitingOn> = {
 /** The screen a supervisor is looking at, and whether it accepts actions. */
 export type StepView = {
 	view: SupervisorStage
-	/** Only the current step (and the invoice until the Aviso is started) can
+	/** Only the current step (and step 5 while the job waits at step 6) can
 	 * be acted on; every earlier step is a read-only look back. */
 	interactive: boolean
 }
 
 /**
- * The Aviso step has started once the supervisor has saved Aviso lines.
- * `save_aviso` writes the number and lines together, so the number alone only
- * means one was typed at intake (the optional field on the new-job form) and
- * must not hide the "Generate JAF invoice" button.
+ * Legacy only: Aviso lines were saved by the pre-F2 line match. `save_aviso`
+ * no longer writes lines, so this is false for every new job; an Aviso number
+ * alone never counts (it may have been typed at intake, on the new-job form).
  */
 export function isAvisoStarted(doc: {
 	avisoNumber: string | null
@@ -106,16 +122,43 @@ export function isAvisoStarted(doc: {
 
 const stageIndex = (s: SupervisorStage) => SUPERVISOR_STAGES.indexOf(s)
 
+type PreCertSigs = {
+	sigSupervisorAt: Date | null
+	sigSubcontractorAt: Date | null
+	sigClaroAt: Date | null
+}
+
+/**
+ * Any Pre-cert signature (supervisor, sub-contractor or Claro): the sheet is
+ * then never regenerated silently, and Replace Aviso is locked.
+ */
+export function isPreCertSigned(
+	sheet: PreCertSigs | PreCertSigs[] | null,
+): boolean {
+	const sheets = Array.isArray(sheet) ? sheet : sheet ? [sheet] : []
+	return sheets.some(
+		(s) => !!(s.sigSupervisorAt || s.sigSubcontractorAt || s.sigClaroAt),
+	)
+}
+
 /**
  * Which step's screen to show. Defaults to the derived stage, except that a
- * generated invoice keeps its own screen ("Continue to Aviso") until an Aviso
- * number or lines are saved. `requested` (from `?step=`) may only point at a
- * supervisor step (APPROVE onward) that has already been reached.
+ * job sent to Claro (stage AVISO) opens on step 5 ("Continue to Aviso"),
+ * which stays interactive; only a legacy job whose Aviso lines were saved
+ * (`isAvisoStarted`) opens on step 6. Once the Aviso is saved the stage moves
+ * on. `requested` (from `?step=`) may only point at a supervisor step
+ * (APPROVE onward) that has already been reached. From Pre-cert, the Aviso
+ * screen stays interactive (for Replace Aviso) until the Pre-cert sheet has a
+ * signature (`preCertSigned`); after that it is view-only.
  */
 export function resolveStepView(
 	stage: SupervisorStage,
 	avisoStarted: boolean,
 	requested: string | null,
+	preCertSigned: boolean,
+	/** Finance sent the packet back (`isReturned`): the Aviso and Pre-cert
+	 * steps reopen so the supervisor can replace the Aviso and re-sign. */
+	returned = false,
 ): StepView {
 	const fallback: SupervisorStage =
 		stage === "AVISO" && !avisoStarted ? "INVOICE" : stage
@@ -128,8 +171,24 @@ export function resolveStepView(
 	const view = reachable ? asked : fallback
 	return {
 		view,
-		interactive: view === stage || (view === "INVOICE" && stage === "AVISO"),
+		interactive:
+			view === stage ||
+			(view === "INVOICE" && stage === "AVISO") ||
+			(view === "AVISO" && stage === "PRECERT" && !preCertSigned) ||
+			(returned && (view === "AVISO" || view === "PRECERT")),
 	}
+}
+
+/**
+ * The step that fixes a job: a packet Finance returned reopens its Aviso step
+ * (replace the Aviso, then re-sign the Pre-cert); anything else, or a return
+ * that came before any Aviso was saved, is fixed on its own step.
+ */
+export function fixStepFor(
+	stage: SupervisorStage,
+	returned: boolean,
+): SupervisorStage {
+	return returned && stageIndex(stage) > stageIndex("AVISO") ? "AVISO" : stage
 }
 
 /** Which panel renders for a step: everything up to Approve shares the
@@ -150,105 +209,15 @@ export function panelForStep(
 	}
 }
 
-type AvisoMatchResult = {
-	amountOk: boolean
-	difference: number
-	invoiceTotal: number
-	avisoTotal: number
-	lineMismatches: {
-		serviceCodeId: string
-		claroCode: string
-		installedQty: number
-		chargedQty: number
-	}[]
-}
-
-export function checkAvisoMatch(
-	invoiceLines: InvoiceLine[],
-	avisoLines: AvisoLine[],
-	tolerance: number,
-): AvisoMatchResult {
-	const invoiceTotal = sumLines(invoiceLines)
-	const avisoTotal = sumLines(avisoLines)
-	const difference = round2(Math.abs(invoiceTotal - avisoTotal))
-	const byId = new Map<
-		string,
-		{ claroCode: string; installedQty: number; chargedQty: number }
-	>()
-	for (const l of invoiceLines)
-		byId.set(l.serviceCodeId, {
-			claroCode: l.claroCode,
-			installedQty: l.qty,
-			chargedQty: 0,
-		})
-	for (const l of avisoLines) {
-		const e = byId.get(l.serviceCodeId)
-		if (e) e.chargedQty = l.qty
-		else
-			byId.set(l.serviceCodeId, {
-				claroCode: l.claroCode,
-				installedQty: 0,
-				chargedQty: l.qty,
-			})
-	}
-	const lineMismatches = [...byId.entries()]
-		.filter(([, v]) => v.installedQty !== v.chargedQty)
-		.map(([serviceCodeId, v]) => ({ serviceCodeId, ...v }))
-	return {
-		amountOk: difference <= tolerance,
-		difference,
-		invoiceTotal,
-		avisoTotal,
-		lineMismatches,
-	}
-}
-
-type ReleaseConditionKey =
-	| "approved"
-	| "invoice"
-	| "aviso"
-	| "amount_match"
-	| "photos"
-	| "precert_signed"
-	| "contractor_code"
-
-type ReleaseGateDoc = Pick<
-	JafInvoice,
-	| "supervisorApprovedAt"
-	| "jafInvoiceGeneratedAt"
-	| "avisoNumber"
-	| "avisoDocPath"
-	| "avisoLines"
-	| "avisoMatchedAt"
-	| "contractorAccountCode"
->
-
-export function evaluateReleaseGate(
-	doc: ReleaseGateDoc,
-	sheet: StageSheet,
-	photos: { tag: "BEFORE" | "AFTER" | null }[],
-): { ok: boolean; conditions: { key: ReleaseConditionKey; ok: boolean }[] } {
-	const avisoLines = Array.isArray(doc.avisoLines) ? doc.avisoLines : []
-	const conditions: { key: ReleaseConditionKey; ok: boolean }[] = [
-		{ key: "approved", ok: !!doc.supervisorApprovedAt },
-		{ key: "invoice", ok: !!doc.jafInvoiceGeneratedAt },
-		{
-			key: "aviso",
-			ok:
-				!!doc.avisoNumber?.trim() && hasAvisoPdf(doc) && avisoLines.length > 0,
-		},
-		{ key: "amount_match", ok: !!doc.avisoMatchedAt },
-		{
-			key: "photos",
-			ok:
-				photos.some((p) => p.tag === "BEFORE") &&
-				photos.some((p) => p.tag === "AFTER"),
-		},
-		{
-			key: "precert_signed",
-			ok: !!sheet?.sigSupervisorAt && !!sheet?.sigSubcontractorAt,
-		},
-		{ key: "contractor_code", ok: !!doc.contractorAccountCode },
-	]
-	return { ok: conditions.every((c) => c.ok), conditions }
+/**
+ * Where a supervisor's list row opens: the screen of the step the job is on,
+ * so the rail there highlights that step. Intake and Warehouse are the
+ * warehouse's steps and have no supervisor screen, so they open the job page.
+ * The step is always named, so a job sent to Claro (stage AVISO) opens on
+ * Step 6 rather than on Step 5's "Continue to Aviso".
+ */
+export function supervisorStepHref(docId: string, stage: SupervisorStage) {
+	if (stage === "INTAKE" || stage === "WAREHOUSE") return `/docs/${docId}`
+	if (stage === "FIELD") return `/docs/${docId}/field`
+	return `/docs/${docId}/review?step=${stage}`
 }

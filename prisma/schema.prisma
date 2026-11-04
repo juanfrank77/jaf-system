@@ -45,6 +45,14 @@ enum PaymentType {
 enum PhotoTag {
   BEFORE
   AFTER
+  DURING
+}
+
+enum PacketSendOutcome {
+  SENT
+  FAILED
+  UNCONFIGURED
+  MANUAL
 }
 
 enum CatalogKind {
@@ -164,10 +172,12 @@ model User {
   closedReceivables         JafInvoice[]          @relation("ClosedReceivables")
   cancelledInvoices         JafInvoice[]          @relation("CancelledDocs")
   supervisedBrigades        Brigade[]             @relation("BrigadeSupervisor")
+  claroSupervisors          ClaroSupervisor[]     @relation("SupervisorClaroLinks")
   releasedToFinanceInvoices JafInvoice[]          @relation("ReleasedToFinanceDocs")
   installedVan              Van?                  @relation("VanInstaller")
   systemSettings            SystemSetting[]       @relation("SystemSettings")
   auditTrail                AuditTrail[]
+  brigadeEvents             BrigadeEvent[]
   photos                    Photo[]
   notifications             Notification[]
   paymentRecords            PaymentRecord[]
@@ -182,12 +192,21 @@ model User {
   paidPaymentRequests PaymentRequest[]    @relation("PaidPaymentRequests")
   restockApprovals    RestockRequest[]    @relation("RestockApprovals")
 
+  // Brigade stock (supervisor restock + inventory)
+  brigadeStockMovements BrigadeStockMovement[] @relation("BrigadeStockBy")
+  brigadeRestocks       BrigadeRestock[]       @relation("BrigadeRestockRequester")
+  brigadeRestocksReady  BrigadeRestock[]       @relation("BrigadeRestockReady")
+  brigadeRestocksSigned BrigadeRestock[]       @relation("BrigadeRestockSupervisorSig")
+  brigadeRestocksHanded BrigadeRestock[]       @relation("BrigadeRestockWarehouseSig")
+  brigadeReturnsMade    BrigadeStockReturn[]   @relation("BrigadeReturnRequester")
+  brigadeReturnsOk      BrigadeStockReturn[]   @relation("BrigadeReturnConfirmer")
+
   // Arm A (payroll) — Finance-Billing Arm A phase, back-relations
-  payablesClosedDocs   JafInvoice[] @relation("PayablesClosedDocs")
-  payrollRunGenerator  PayrollRun[] @relation("PayrollRunGenerator")
-  payrollRunPaidBy     PayrollRun[] @relation("PayrollRunPaidBy")
+  payablesClosedDocs     JafInvoice[]        @relation("PayablesClosedDocs")
+  payrollRunGenerator    PayrollRun[]        @relation("PayrollRunGenerator")
+  payrollRunPaidBy       PayrollRun[]        @relation("PayrollRunPaidBy")
   payrollRunAccountsPaid PayrollRunAccount[] @relation("PayrollRunAccountPaidBy")
-  payrollRunReversedBy PayrollRun[] @relation("PayrollRunReversedBy")
+  payrollRunReversedBy   PayrollRun[]        @relation("PayrollRunReversedBy")
 
   createdRepairBatches    RepairBatch[]   @relation("RepairBatchCreator")
   voidedRepairBatches     RepairBatch[]   @relation("RepairBatchVoider")
@@ -197,6 +216,8 @@ model User {
 
   bankSchedulesGenerated BankSchedule[] @relation("BankScheduleGenerator")
   bankSchedulesSent      BankSchedule[] @relation("BankScheduleSender")
+
+  packetSends PacketSend[] @relation("PacketSendSender")
 
   @@index([role, active])
 }
@@ -308,17 +329,20 @@ model JafInvoice {
 
   // Dual signature at warehouse pickup (Step 3) — materialsTaken locked after this
   // warehouseId set here, not at prep — crew may pull from a different zone warehouse
-  warehouseId      String?
-  warehouse        Warehouse? @relation(fields: [warehouseId], references: [id])
-  materialsTaken   Json?
-  releaseSignature String? // base64 — warehouse person signs (gives)
-  releasedById     String?
-  releasedBy       User?      @relation("ReleasedDocs", fields: [releasedById], references: [id])
-  releaseSignedAt  DateTime?
-  crewSignature    String? // base64 — crew member signs (receives)
-  signedById       String?
-  signedBy         User?      @relation("SignedDocs", fields: [signedById], references: [id])
-  signedAt         DateTime?
+  warehouseId         String?
+  warehouse           Warehouse? @relation(fields: [warehouseId], references: [id])
+  materialsTaken      Json?
+  releaseSignature    String? // base64 — warehouse person signs (gives)
+  releasedById        String?
+  releasedBy          User?      @relation("ReleasedDocs", fields: [releasedById], references: [id])
+  releaseSignedAt     DateTime?
+  crewSignature       String? // base64 — crew member signs (receives)
+  signedById          String?
+  signedBy            User?      @relation("SignedDocs", fields: [signedById], references: [id])
+  // Crew have no login: signedById is null unless the signer has an account.
+  crewSignerName      String?
+  crewSignerBrigadeId String?
+  signedAt            DateTime?
 
   // Admin override
   overriddenById    String?
@@ -367,7 +391,7 @@ model JafInvoice {
   // Finance pipeline (Phase 2)
   financeVerifiedAt    DateTime?
   financeVerifiedById  String?
-  financeVerifiedBy    User?     @relation("FinanceVerifiedDocs", fields: [financeVerifiedById], references: [id])
+  financeVerifiedBy    User?         @relation("FinanceVerifiedDocs", fields: [financeVerifiedById], references: [id])
   financeSendBackNotes Json? // [{ note, byUserId, createdAt }] — Finance→Supervisor Aviso issues
   pbccRequestPdfPath   String?
   bankInvoicePdfPath   String?
@@ -396,7 +420,8 @@ model JafInvoice {
   brigade               Brigade?  @relation(fields: [brigadeId], references: [id])
   jobDescription        String?
   serviceLines          Json? // [{ serviceCodeId, claroCode, accountCode, name, qty }] ordered at intake
-  installedServiceLines Json? // same shape, crew's installed qty
+  installedServiceLines Json? // same shape, crew's installed qty. On a multi-crew job: the sum over crews
+  crewServiceLines      Json? // [{ brigadeId, lines: ServiceLine[] }] what each crew installed; null on a one-crew job
   jafInvoiceGeneratedAt DateTime?
   jafInvoiceLines       Json? // [{ serviceCodeId, claroCode, accountCode, name, unit, qty, unitPrice, lineAmount }]
   jafInvoiceLineTotal   Decimal? // pre-IVU line sum
@@ -422,12 +447,42 @@ model JafInvoice {
   payrollRunId         String?
   payrollRun           PayrollRun?        @relation(fields: [payrollRunId], references: [id])
 
+  // Supervisor workflow redesign
+  claroSupervisorId      String?
+  claroSupervisor        ClaroSupervisor? @relation(fields: [claroSupervisorId], references: [id])
+  sector                 String?
+  direccion1             String?
+  direccion2             String?
+  latitud                String?
+  longitud               String?
+  tipo                   String?
+  ciudad                 String?
+  tipoPlanta             String?
+  grupoPlan              String?
+  ordenNumber            String?
+  pedido                 String?
+  smr                    String?
+  titulo                 String?
+  blueprintPaths         String[]         @default([])
+  materialsFromWarehouse Boolean          @default(true)
+  materialsReason        String?
+  prefieldNeeded         Boolean          @default(false)
+  prefieldPdfPath        String?
+  packetStale            Boolean          @default(false)
+  avisoDiscrepancy       Json?
+  avisoHistory           Json?
+  fieldStartedAt         DateTime?
+  fieldMaterials         Json?
+
   preCertSheets  PreCertSheet[]
   auditTrail     AuditTrail[]
+  brigadeEvents  BrigadeEvent[]
   photos         Photo[]
   poLinks        PoLink[]
   paymentRecords PaymentRecord[]
+  packetSends    PacketSend[]
 
+  @@index([claroSupervisorId])
   @@index([status, lcGeneratedAt])
   @@index([status, financeVerifiedAt, pbccRequestSentAt, advanceReceivedAt])
   @@index([status, createdAt])
@@ -443,6 +498,39 @@ model JafInvoice {
   @@map("jaf_invoice")
 }
 
+model ClaroSupervisor {
+  id                String   @id @default(cuid())
+  name              String
+  email             String
+  active            Boolean  @default(true)
+  requiresPrefield  Boolean  @default(false)
+  requiresBlueprint Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  invoices       JafInvoice[]
+  packetSends    PacketSend[]
+  // JAF supervisors who may pick this person on a new work order (many to
+  // many: a Claro supervisor can work with several of ours). Admin sees all.
+  jafSupervisors User[]       @relation("SupervisorClaroLinks")
+}
+
+model PacketSend {
+  id                String            @id @default(cuid())
+  docId             String
+  doc               JafInvoice        @relation(fields: [docId], references: [id])
+  sentAt            DateTime          @default(now())
+  sentById          String
+  sentBy            User              @relation("PacketSendSender", fields: [sentById], references: [id])
+  recipientEmail    String
+  claroSupervisorId String?
+  claroSupervisor   ClaroSupervisor?  @relation(fields: [claroSupervisorId], references: [id])
+  outcome           PacketSendOutcome
+  error             String?
+
+  @@index([docId, sentAt])
+}
+
 model AuditTrail {
   id        String     @id @default(cuid())
   docId     String
@@ -454,6 +542,22 @@ model AuditTrail {
   timestamp DateTime   @default(now())
 
   @@index([docId, timestamp])
+}
+
+model BrigadeEvent {
+  id        String      @id @default(cuid())
+  brigadeId String
+  brigade   Brigade     @relation(fields: [brigadeId], references: [id])
+  userId    String
+  user      User        @relation(fields: [userId], references: [id])
+  docId     String?
+  doc       JafInvoice? @relation(fields: [docId], references: [id])
+  action    String // e.g. "BRIGADE_ACTIVATED", "BRIGADE_STANDBY"
+  diffJson  Json
+  createdAt DateTime    @default(now())
+
+  @@index([brigadeId, createdAt])
+  @@index([docId])
 }
 
 model Photo {
@@ -502,6 +606,8 @@ model ServiceCode {
   serialized   Boolean @default(false)
   serialPrefix String?
 
+  equipment Boolean @default(false) // Digger / Truck lines: a service the job carries, tagged for Finance
+
   @@index([kind, active])
 }
 
@@ -524,6 +630,9 @@ model PreCertSheet {
   doc                   JafInvoice @relation(fields: [docId], references: [id])
   version               Int
   supersededAt          DateTime? // null = active sheet
+  brigadeId             String? // the crew this certificate is for; null on a one-crew job
+  brigadeName           String?
+  brigadeCode           String?
   avisoNumber           String?
   certifiedAddress      String
   title                 String
@@ -606,8 +715,16 @@ model Brigade {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  isEquipmentAccount Boolean   @default(false)
+  baseCode           String?
+  terminatedAt       DateTime?
+
   invoices           JafInvoice[]
   contractorAccounts ContractorAccount[]
+  events             BrigadeEvent[]
+  stockMovements     BrigadeStockMovement[]
+  restockLines       BrigadeRestockLine[]
+  stockReturns       BrigadeStockReturn[]
 
   @@index([active])
   @@index([supervisorId])
@@ -951,4 +1068,103 @@ model BankSchedule {
   invoices JafInvoice[]
 
   @@index([generatedAt])
+}
+
+// ---- Brigade stock: the materials a brigade holds on its truck ----------------
+// A brigade's balance is the sum of its movements. Pickups add, field use and
+// confirmed returns subtract, a count replaces the balance by writing the
+// difference. No prices anywhere.
+
+enum BrigadeStockType {
+  OPENING // the first count of a material for a brigade
+  PICKUP // a signed restock pickup
+  USED // used on a job (field step)
+  RETURN // a return the warehouse confirmed
+  COUNT // a physical count after the first
+}
+
+model BrigadeStockMovement {
+  id            String           @id @default(cuid())
+  brigadeId     String
+  brigade       Brigade          @relation(fields: [brigadeId], references: [id], onDelete: Restrict)
+  serviceCodeId String
+  type          BrigadeStockType
+  qty           Int // signed change to the balance
+  expectedQty   Int? // COUNT/OPENING: the balance before the count
+  countedQty    Int? // COUNT/OPENING: what was physically counted
+  reason        String? // COUNT: required when the count differs from expected
+  refRestockId  String?
+  refReturnId   String?
+  refDocId      String?
+  byUserId      String
+  byUser        User             @relation("BrigadeStockBy", fields: [byUserId], references: [id])
+  at            DateTime         @default(now())
+
+  @@index([brigadeId, serviceCodeId])
+  @@index([refDocId])
+  @@index([refRestockId])
+  @@map("brigade_stock_movement")
+}
+
+enum BrigadeRestockStatus {
+  REQUESTED
+  READY
+  PICKED_UP
+  CANCELLED
+}
+
+model BrigadeRestock {
+  id                   String               @id @default(cuid())
+  requestedById        String
+  requestedBy          User                 @relation("BrigadeRestockRequester", fields: [requestedById], references: [id])
+  status               BrigadeRestockStatus @default(REQUESTED)
+  requestedAt          DateTime             @default(now())
+  readyAt              DateTime?
+  readyById            String?
+  readyBy              User?                @relation("BrigadeRestockReady", fields: [readyById], references: [id])
+  supervisorSignedAt   DateTime?
+  supervisorSignedById String?
+  supervisorSignedBy   User?                @relation("BrigadeRestockSupervisorSig", fields: [supervisorSignedById], references: [id])
+  warehouseSignedAt    DateTime?
+  warehouseSignedById  String?
+  warehouseSignedBy    User?                @relation("BrigadeRestockWarehouseSig", fields: [warehouseSignedById], references: [id])
+  pickedUpAt           DateTime?
+  lines                BrigadeRestockLine[]
+
+  @@index([status, requestedAt])
+  @@index([requestedById, requestedAt])
+  @@map("brigade_restock")
+}
+
+model BrigadeRestockLine {
+  id            String         @id @default(cuid())
+  restockId     String
+  restock       BrigadeRestock @relation(fields: [restockId], references: [id], onDelete: Cascade)
+  brigadeId     String
+  brigade       Brigade        @relation(fields: [brigadeId], references: [id], onDelete: Restrict)
+  serviceCodeId String
+  qty           Int
+
+  @@index([restockId])
+  @@map("brigade_restock_line")
+}
+
+// A return starts pending (the supervisor records it) and only subtracts from
+// the balance once the warehouse confirms it.
+model BrigadeStockReturn {
+  id            String    @id @default(cuid())
+  brigadeId     String
+  brigade       Brigade   @relation(fields: [brigadeId], references: [id], onDelete: Restrict)
+  serviceCodeId String
+  qty           Int
+  requestedById String
+  requestedBy   User      @relation("BrigadeReturnRequester", fields: [requestedById], references: [id])
+  requestedAt   DateTime  @default(now())
+  confirmedById String?
+  confirmedBy   User?     @relation("BrigadeReturnConfirmer", fields: [confirmedById], references: [id])
+  confirmedAt   DateTime?
+
+  @@index([confirmedAt])
+  @@index([brigadeId, serviceCodeId])
+  @@map("brigade_stock_return")
 }

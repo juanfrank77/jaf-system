@@ -6,9 +6,11 @@ vi.mock("~/lib/db.server", () => ({
 		jafInvoice: { findMany: vi.fn() },
 	},
 }))
+vi.mock("~/lib/brigade-standby.server", () => ({ standByBrigade: vi.fn() }))
 vi.mock("~/lib/permissions.server", () => ({ requireRole: vi.fn() }))
 vi.mock("~/lib/supervisor-scope", () => ({ supervisorAreas: vi.fn() }))
 
+import { standByBrigade } from "~/lib/brigade-standby.server"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
 import { supervisorAreas } from "~/lib/supervisor-scope"
@@ -30,7 +32,8 @@ const job = (o: Record<string, unknown>) => ({
 	crewAssignmentHistory: null,
 	supervisorApprovedAt: null,
 	jafInvoiceGeneratedAt: null,
-	avisoMatchedAt: null,
+	avisoNumber: null,
+	avisoDocPath: null,
 	releasedToFinanceAt: null,
 	...o,
 })
@@ -45,15 +48,17 @@ describe("GET /supervisor/brigades (read-only)", () => {
 		vi.mocked(supervisorAreas).mockResolvedValue(["CENTRAL"])
 	})
 
-	it("offers no way to change a brigade", () => {
-		expect("action" in route).toBe(false)
-	})
-
-	it("lists only active brigades in the supervisor's own areas", async () => {
+	it("lists active, non-equipment, non-terminated brigades in my areas or under me", async () => {
 		vi.mocked(db.brigade.findMany).mockResolvedValue([])
 		await load()
 		expect(db.brigade.findMany).toHaveBeenCalledWith({
-			where: { active: true, area: { in: ["CENTRAL"] } },
+			where: {
+				active: true,
+				isEquipmentAccount: false,
+				terminatedAt: null,
+				// An activated imported brigade has no area: it is mine by owner.
+				OR: [{ supervisorId: "sup-1" }, { area: { in: ["CENTRAL"] } }],
+			},
 			orderBy: { name: "asc" },
 		})
 		expect(db.jafInvoice.findMany).not.toHaveBeenCalled()
@@ -135,5 +140,63 @@ describe("GET /supervisor/brigades (read-only)", () => {
 				}),
 			}),
 		)
+	})
+})
+
+describe("POST /supervisor/brigades (stand-by)", () => {
+	const post = (fields: Record<string, string>) =>
+		route.action({
+			request: new Request("http://localhost/supervisor/brigades", {
+				method: "POST",
+				body: new URLSearchParams(fields),
+			}),
+			params: {},
+		} as any) as Promise<any>
+
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "sup-1" },
+			session: {},
+		} as any)
+	})
+
+	it("requires the SUPERVISOR role", async () => {
+		vi.mocked(requireRole).mockRejectedValue(
+			new Response(null, { status: 302 }),
+		)
+		await expect(
+			post({ intent: "standby", brigadeId: "b1" }),
+		).rejects.toBeInstanceOf(Response)
+		expect(requireRole).toHaveBeenCalledWith(expect.anything(), ["SUPERVISOR"])
+		expect(standByBrigade).not.toHaveBeenCalled()
+	})
+
+	it("stands the brigade by for the signed-in supervisor", async () => {
+		vi.mocked(standByBrigade).mockResolvedValue({ ok: true })
+		expect(await post({ intent: "standby", brigadeId: "b1" })).toEqual({
+			ok: true,
+		})
+		expect(standByBrigade).toHaveBeenCalledWith(db, {
+			brigadeId: "b1",
+			viewerId: "sup-1",
+		})
+	})
+
+	it("returns the refusal key", async () => {
+		vi.mocked(standByBrigade).mockResolvedValue({
+			ok: false,
+			errorKey: "supervisor_brigades.errors.on_a_job",
+		})
+		expect(await post({ intent: "standby", brigadeId: "b1" })).toEqual({
+			errorKey: "supervisor_brigades.errors.on_a_job",
+		})
+	})
+
+	it("ignores an unknown intent", async () => {
+		expect(await post({ intent: "nope", brigadeId: "b1" })).toEqual({
+			errorKey: "supervisor_brigades.errors.not_found",
+		})
+		expect(standByBrigade).not.toHaveBeenCalled()
 	})
 })

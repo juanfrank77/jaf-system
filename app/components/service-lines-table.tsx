@@ -1,29 +1,46 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { QtyStepper } from "~/components/ui/qty-stepper"
-import type { ServiceLine } from "~/lib/service-lines"
+import { installedNotOrdered, type ServiceLine } from "~/lib/service-lines"
+
+/** The small "Added in field" tag on a line the order did not have. */
+export function AddedInFieldLabel() {
+	const { t } = useTranslation()
+	return (
+		<span className="ml-1.5 inline-block rounded-md bg-status-info-soft px-1.5 py-0.5 align-middle text-xs font-medium text-status-info">
+			{t("service_picker.added_in_field")}
+		</span>
+	)
+}
 
 /**
  * Read-only ordered/installed table. When `editableName` is given, the
  * Installed column becomes inputs and a hidden field carries the JSON.
+ *
+ * Installed lines the order does not have (added in the field) follow the
+ * ordered ones with Ordered 0, so none is dropped by the join on the order.
  */
 export function ServiceLinesTable({
 	lines,
 	installed,
 	editableName,
-	showDifference,
 }: {
 	lines: ServiceLine[]
 	installed?: ServiceLine[]
 	editableName?: string
-	showDifference?: boolean
 }) {
 	const { t } = useTranslation()
-	const initial = lines.map((l) => ({
-		...l,
-		qty:
-			installed?.find((i) => i.serviceCodeId === l.serviceCodeId)?.qty ?? l.qty,
-	}))
+	const extras = installedNotOrdered(lines, installed)
+	const orderedQty = new Map(lines.map((l) => [l.serviceCodeId, l.qty]))
+	const initial = [
+		...lines.map((l) => ({
+			...l,
+			qty:
+				installed?.find((i) => i.serviceCodeId === l.serviceCodeId)?.qty ??
+				l.qty,
+		})),
+		...extras,
+	]
 	const [rows, setRows] = useState<ServiceLine[]>(initial)
 
 	function updateQty(index: number, qty: number) {
@@ -31,9 +48,8 @@ export function ServiceLinesTable({
 	}
 
 	if (editableName) {
-		// Phone layout: one row per service, code under the name, a thumb-sized
-		// stepper for the installed quantity and an amber "+N / -N" when it
-		// differs from what was ordered. No horizontal scroll.
+		// Phone layout: one row per service, code under the name and a
+		// thumb-sized stepper for the installed quantity. No horizontal scroll.
 		return (
 			<div>
 				<input type="hidden" name={editableName} value={JSON.stringify(rows)} />
@@ -42,32 +58,29 @@ export function ServiceLinesTable({
 					<span>{t("service_picker.col_installed")}</span>
 				</div>
 				<ul>
-					{lines.map((l, i) => {
-						const diff = rows[i].qty - l.qty
+					{rows.map((l, i) => {
 						return (
 							<li
 								key={l.serviceCodeId}
 								className="flex items-center justify-between gap-3 border-b py-2 last:border-0"
 							>
 								<div className="min-w-0">
-									<p className="text-sm font-medium leading-snug">{l.name}</p>
+									<p className="text-sm font-medium leading-snug">
+										{l.name}
+										{l.addedInField && <AddedInFieldLabel />}
+									</p>
 									<p className="font-mono text-xs text-muted-foreground">
 										{l.claroCode}
 									</p>
 									<p className="text-xs text-muted-foreground">
-										{t("service_picker.col_ordered")}: {l.qty}
-										{diff !== 0 && (
-											<span className="ml-2 rounded bg-status-warn-soft px-1.5 py-0.5 font-medium text-status-warn">
-												{diff > 0 ? `+${diff}` : diff}
-											</span>
-										)}
+										{t("service_picker.col_ordered")}:{" "}
+										{orderedQty.get(l.serviceCodeId) ?? 0}
 									</p>
 								</div>
 								<QtyStepper
-									value={rows[i].qty}
+									value={l.qty}
 									onChange={(qty) => updateQty(i, qty)}
 									label={l.name}
-									invalid={diff !== 0}
 								/>
 							</li>
 						)
@@ -90,11 +103,6 @@ export function ServiceLinesTable({
 						<th className="py-1 text-right">
 							{t("service_picker.col_installed")}
 						</th>
-						{showDifference && (
-							<th className="py-1 text-right">
-								{t("service_picker.col_difference")}
-							</th>
-						)}
 					</tr>
 				</thead>
 				<tbody>
@@ -102,27 +110,26 @@ export function ServiceLinesTable({
 						const installedQty = installed?.find(
 							(x) => x.serviceCodeId === l.serviceCodeId,
 						)?.qty
-						const diff = installedQty === undefined ? 0 : installedQty - l.qty
 						return (
 							<tr key={l.serviceCodeId} className="border-b last:border-0">
 								<td className="py-1 font-mono text-xs">{l.claroCode}</td>
 								<td className="py-1">{l.name}</td>
 								<td className="py-1 text-right">{l.qty}</td>
 								<td className="py-1 text-right">{installedQty ?? "—"}</td>
-								{showDifference && (
-									<td
-										className={
-											diff === 0
-												? "py-1 text-right text-status-ok"
-												: "py-1 text-right font-medium text-status-warn"
-										}
-									>
-										{diff === 0 ? "—" : diff > 0 ? `+${diff}` : diff}
-									</td>
-								)}
 							</tr>
 						)
 					})}
+					{extras.map((l) => (
+						<tr key={l.serviceCodeId} className="border-b last:border-0">
+							<td className="py-1 font-mono text-xs">{l.claroCode}</td>
+							<td className="py-1">
+								{l.name}
+								{l.addedInField && <AddedInFieldLabel />}
+							</td>
+							<td className="py-1 text-right">0</td>
+							<td className="py-1 text-right">{l.qty}</td>
+						</tr>
+					))}
 				</tbody>
 			</table>
 		</div>

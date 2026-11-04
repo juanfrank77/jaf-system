@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest"
-import { computeAwaitingPickup, computeDashboardStats } from "./dashboard-stats"
+import {
+	computeAwaitingPickup,
+	computeDashboardStats,
+	computeMaterialSignals,
+} from "./dashboard-stats"
 
 const doc = (
 	status: string,
@@ -16,7 +20,7 @@ const dayAgo = (days: number) =>
 	new Date(Date.now() - days * 24 * 60 * 60 * 1000)
 
 describe("computeDashboardStats", () => {
-	it("SUPERVISOR: counts open docs and docs awaiting warehouse/crew", () => {
+	it("SUPERVISOR: counts docs awaiting warehouse/crew", () => {
 		const docs = [
 			doc("CREATED"),
 			doc("PREPPED"),
@@ -25,7 +29,6 @@ describe("computeDashboardStats", () => {
 		]
 		const { stats } = computeDashboardStats("SUPERVISOR", docs)
 		expect(stats).toEqual([
-			{ labelKey: "dashboard.stat.open_documents", value: 3 },
 			{ labelKey: "dashboard.stat.awaiting_warehouse", value: 1 },
 			{ labelKey: "dashboard.stat.awaiting_crew", value: 2 },
 			{ labelKey: "dashboard.stat.pending_review", value: 0 },
@@ -33,7 +36,6 @@ describe("computeDashboardStats", () => {
 			{ labelKey: "dashboard.stat.stage_awaiting_crew", value: 2 },
 			{ labelKey: "dashboard.stat.stage_pending_review", value: 0 },
 			{ labelKey: "dashboard.stat.stage_in_finance", value: 0 },
-			{ labelKey: "dashboard.stat.discrepancy_count", value: 0 },
 			{ labelKey: "dashboard.stat.shortage_count", value: 0 },
 			{ labelKey: "dashboard.stat.overage_count", value: 0 },
 			{ labelKey: "dashboard.stat.aging_oldest_days", value: 0 },
@@ -42,7 +44,7 @@ describe("computeDashboardStats", () => {
 		])
 	})
 
-	it("SUPERVISOR: counts pending review and excludes cancelled docs from open", () => {
+	it("SUPERVISOR: counts pending review", () => {
 		const docs = [
 			doc("CREATED"),
 			doc("FIELD_UPDATED"),
@@ -51,7 +53,6 @@ describe("computeDashboardStats", () => {
 		]
 		const { stats, alert } = computeDashboardStats("SUPERVISOR", docs)
 		expect(stats).toEqual([
-			{ labelKey: "dashboard.stat.open_documents", value: 3 },
 			{ labelKey: "dashboard.stat.awaiting_warehouse", value: 1 },
 			{ labelKey: "dashboard.stat.awaiting_crew", value: 0 },
 			{ labelKey: "dashboard.stat.pending_review", value: 2 },
@@ -59,7 +60,6 @@ describe("computeDashboardStats", () => {
 			{ labelKey: "dashboard.stat.stage_awaiting_crew", value: 0 },
 			{ labelKey: "dashboard.stat.stage_pending_review", value: 2 },
 			{ labelKey: "dashboard.stat.stage_in_finance", value: 0 },
-			{ labelKey: "dashboard.stat.discrepancy_count", value: 0 },
 			{ labelKey: "dashboard.stat.shortage_count", value: 0 },
 			{ labelKey: "dashboard.stat.overage_count", value: 0 },
 			{ labelKey: "dashboard.stat.aging_oldest_days", value: 0 },
@@ -105,63 +105,28 @@ describe("computeDashboardStats", () => {
 		})
 	})
 
+	it("WAREHOUSE: a no-warehouse job is not a return to log (count == list)", () => {
+		const { stats } = computeDashboardStats("WAREHOUSE", [
+			doc("SIGNED", null, { materialsReturned: null }),
+			doc("FIELD_UPDATED", null, {
+				materialsReturned: null,
+				materialsFromWarehouse: false,
+			}),
+			doc("SIGNED", null, {
+				materialsReturned: null,
+				materialsFromWarehouse: false,
+			}),
+		])
+		expect(
+			stats.find((s) => s.labelKey === "dashboard.stat.returns_to_log")?.value,
+		).toBe(1)
+	})
+
 	it("WAREHOUSE: no alert when nothing is pending", () => {
 		const { alert } = computeDashboardStats("WAREHOUSE", [
 			doc("SIGNED", null, { materialsReturned: {} }),
 		])
 		expect(alert).toBeNull()
-	})
-
-	it("CREW: counts open jobs and grouped My Jobs states", () => {
-		const docs = [
-			doc("PREPPED"),
-			doc("SIGNED"),
-			doc("SIGNED", null, { sendBackHistory: [{ note: "fix photo" }] }),
-			doc("FIELD_UPDATED"),
-			doc("LC_REQUEST_GENERATED"),
-			doc("CANCELLED"),
-		]
-		const { stats, alert } = computeDashboardStats("CREW", docs)
-		expect(stats).toEqual([
-			{ labelKey: "dashboard.stat.open_jobs", value: 4 },
-			{ labelKey: "dashboard.stat.ready_for_pickup", value: 1 },
-			{ labelKey: "dashboard.stat.in_the_field", value: 1 },
-			{ labelKey: "dashboard.stat.sent_back", value: 1 },
-			{ labelKey: "dashboard.stat.submitted", value: 1 },
-			{ labelKey: "dashboard.stat.stage_awaiting_warehouse", value: 0 },
-			{ labelKey: "dashboard.stat.stage_awaiting_crew", value: 1 },
-			{ labelKey: "dashboard.stat.stage_pending_review", value: 0 },
-			{ labelKey: "dashboard.stat.stage_in_finance", value: 0 },
-			{ labelKey: "dashboard.stat.discrepancy_count", value: 0 },
-			{ labelKey: "dashboard.stat.shortage_count", value: 0 },
-			{ labelKey: "dashboard.stat.overage_count", value: 0 },
-		])
-		expect(alert).toEqual({
-			variant: "warn",
-			key: "dashboard.alert.sent_back",
-			count: 1,
-		})
-	})
-
-	it("CREW: alerts submitted jobs when no send-backs", () => {
-		const { alert } = computeDashboardStats("CREW", [
-			doc("FIELD_UPDATED"),
-			doc("SIGNED"),
-		])
-		expect(alert).toEqual({
-			variant: "info",
-			key: "dashboard.alert.submitted",
-			count: 1,
-		})
-	})
-
-	it("CREW: alerts ready for pickup when no active field jobs", () => {
-		const { alert } = computeDashboardStats("CREW", [doc("PREPPED")])
-		expect(alert).toEqual({
-			variant: "info",
-			key: "dashboard.alert.ready_for_pickup",
-			count: 1,
-		})
 	})
 
 	it("FINANCE: counts total docs, open receivables, awaiting Claro upload", () => {
@@ -180,7 +145,6 @@ describe("computeDashboardStats", () => {
 			{ labelKey: "dashboard.stat.stage_awaiting_crew", value: 0 },
 			{ labelKey: "dashboard.stat.stage_pending_review", value: 0 },
 			{ labelKey: "dashboard.stat.stage_in_finance", value: 3 },
-			{ labelKey: "dashboard.stat.discrepancy_count", value: 0 },
 			{ labelKey: "dashboard.stat.shortage_count", value: 0 },
 			{ labelKey: "dashboard.stat.overage_count", value: 0 },
 			{ labelKey: "dashboard.stat.aging_oldest_days", value: 0 },
@@ -194,11 +158,57 @@ describe("computeDashboardStats", () => {
 		})
 	})
 
+	it("pins today's behaviour: a signed-off packet not yet sent to Claro already counts as Finance-side", () => {
+		// SUPERVISOR_APPROVED covers both "Ready to send" and "Sent, waiting
+		// Aviso"; these tile counts filter on status alone, so they include
+		// jobs whose JAF invoice has not been generated. Narrowing them is a
+		// separate decision (see the supervisor-workflow-redesign spec).
+		const unsent = doc("SUPERVISOR_APPROVED", null, {
+			supervisorApprovedAt: new Date(),
+			jafInvoiceGeneratedAt: null,
+		})
+		const { stats } = computeDashboardStats("FINANCE", [unsent])
+		const v = (k: string) => stats.find((x) => x.labelKey === k)?.value
+		expect(v("dashboard.stat.open_receivables")).toBe(1)
+		expect(v("dashboard.stat.awaiting_claro_upload")).toBe(1)
+		expect(v("dashboard.stat.stage_in_finance")).toBe(1)
+	})
+
 	it("ADMIN: uses the same computation as FINANCE", () => {
 		const docs = [doc("CLARO_UPLOADED")]
 		expect(computeDashboardStats("ADMIN", docs)).toEqual(
 			computeDashboardStats("FINANCE", docs),
 		)
+	})
+
+	it("ADMIN: alerts on jobs whose Aviso discrepancy is stale (3+ days), any release state", () => {
+		const disc = (days: number) => ({
+			detectedAt: dayAgo(days).toISOString(),
+			differences: [],
+			note: "noted",
+			noteAt: null,
+			noteById: null,
+		})
+		const docs = [doc("CLARO_UPLOADED")]
+		const { alert } = computeDashboardStats("ADMIN", docs, {
+			avisoDiscrepancies: [disc(3), disc(10), disc(1), null],
+		})
+		expect(alert).toEqual({
+			variant: "warn",
+			key: "dashboard.alert.stale_aviso_discrepancy",
+			count: 2,
+		})
+		// Nothing stale: the usual receivables alert.
+		expect(
+			computeDashboardStats("ADMIN", docs, { avisoDiscrepancies: [disc(1)] })
+				.alert?.key,
+		).toBe("dashboard.alert.receivables_open")
+		// Finance's view is unchanged.
+		expect(
+			computeDashboardStats("FINANCE", docs, {
+				avisoDiscrepancies: [disc(10)],
+			}).alert?.key,
+		).toBe("dashboard.alert.receivables_open")
 	})
 
 	it("returns no alert when the doc list is empty", () => {
@@ -273,5 +283,28 @@ describe("computeAwaitingPickup", () => {
 		expect(rows.find((r) => r.id === "d2")!.aged).toBe(false) // 1 day <= 3
 		expect(rows.find((r) => r.id === "d3")!.aged).toBe(false) // 3 days = 3, not > 3
 		expect(rows.find((r) => r.id === "d4")!.aged).toBe(true) // 4 days > 3
+	})
+})
+
+describe("computeMaterialSignals: no used-vs-issued comparison", () => {
+	const taken = [{ serviceCodeId: "m1", qty: 10 }]
+
+	it("returns only shortage and overage", () => {
+		const split = {
+			materialsTaken: taken,
+			materialsUsed: [{ serviceCodeId: "m1", qty: 6 }],
+			fieldMaterials: [
+				{ serviceCodeId: "m1", used: 6, returned: 4, source: "WAREHOUSE" },
+			],
+		}
+		expect(computeMaterialSignals([split])).toEqual({ shortage: 0, overage: 0 })
+	})
+
+	it("a used quantity that differs from the issued one raises no signal", () => {
+		const doc = {
+			materialsTaken: taken,
+			materialsUsed: [{ serviceCodeId: "m1", qty: 3 }],
+		}
+		expect(computeMaterialSignals([doc])).toEqual({ shortage: 0, overage: 0 })
 	})
 })

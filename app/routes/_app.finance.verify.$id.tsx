@@ -2,25 +2,29 @@ import type { ParseKeys } from "i18next"
 import type { ComponentProps } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, redirect } from "react-router"
+import { BrigadeStockTracked } from "~/components/brigade-stock-tracked"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { Button } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
-import { Input } from "~/components/ui/input"
-import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
+import type { AvisoDiscrepancy } from "~/lib/aviso-discrepancy"
+import { brigadeStockFor } from "~/lib/brigade-stock.server"
 import { db } from "~/lib/db.server"
 import { sendInternalEmail } from "~/lib/email.server"
 import {
-	checkAmountTolerance,
+	billableMaterials,
 	computeFinanceStage,
 	FINANCEABLE_STATUSES,
 	fetchInvoiceTotalContext,
 	invoiceTotalUsed,
 } from "~/lib/finance-pipeline.server"
+import { packetDocuments } from "~/lib/packet-documents"
 import { isTerminalStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
+import { isResent, isReturned, latestReturn } from "~/lib/returned-packet"
+import { storedPdfLinks } from "~/lib/upload-href"
 import { cn, formatMoney, toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.finance.verify.$id"
 
@@ -50,38 +54,77 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			supervisor: true,
 			poLinks: true,
 			paymentRecords: { select: { type: true } },
+			preCertSheets: {
+				where: { supersededAt: null },
+				orderBy: { version: "asc" },
+				select: {
+					pdfPath: true,
+					brigadeName: true,
+					brigadeCode: true,
+					sigSupervisorAt: true,
+					sigSubcontractorAt: true,
+					avisoNumber: true,
+				},
+			},
+			photos: { select: { localPath: true, tag: true, takenAt: true } },
 		},
 	})
 	if (!FINANCEABLE_STATUSES.includes(doc.status)) {
 		throw redirect(`/docs/${params.id}`)
 	}
 
-	const { serviceCodes, codeMap, ivuRate, tolerance } =
-		await fetchInvoiceTotalContext()
+	const { serviceCodes, codeMap, ivuRate } = await fetchInvoiceTotalContext()
 	const stage = computeFinanceStage(
 		doc,
 		doc.poLinks.length > 0,
 		doc.paymentRecords,
 	)
 	const amount = invoiceTotalUsed(doc, codeMap, ivuRate)
+	// Same guards as the action: only a released packet is hers to act on, and
+	// one the supervisor has not resent cannot be verified (S4).
+	const returned = isReturned(doc)
+	const latest = latestReturn(doc)
+	const notReleased = !doc.releasedToFinanceAt
 
 	return {
 		doc,
 		user,
+		notReleased,
+		canVerify: !notReleased && !returned,
+		canSendBack: !notReleased,
+		returnState: {
+			returned,
+			// The latest return was answered (history), whatever happened since.
+			resent: !!latest?.resentAt,
+			// "Look at it first" only until Finance has verified the resent packet.
+			resentPending: isResent(doc),
+			note: latest?.note ?? null,
+			createdAt: latest?.createdAt ?? null,
+			resentAt: latest?.resentAt ?? null,
+		},
 		serviceCodes,
 		stage,
 		amount,
 		ivuRate,
-		tolerance,
+		// The supervisor's Aviso-vs-work-order flag, shown read-only.
+		avisoDiscrepancy: (doc.avisoDiscrepancy as AvisoDiscrepancy | null) ?? null,
 		sendBackNotes: (doc.financeSendBackNotes as SendBackNote[]) || [],
-		prefilledAvisoAmount:
-			doc.avisoMatchedAt && doc.avisoLineTotal != null
-				? toNumberPrice(doc.avisoLineTotal)
-				: null,
+		// The released packet's four documents, each opening its file.
+		packetDocs: packetDocuments(doc, doc.preCertSheets, doc.photos),
 		lineTotal:
 			doc.jafInvoiceLineTotal != null
 				? toNumberPrice(doc.jafInvoiceLineTotal)
 				: null,
+		// The stored file is the price-free Claro packet; the priced JAF invoice
+		// is rendered on demand (Finance/Admin only) once the packet was sent.
+		...storedPdfLinks(doc.jafInvoicePdfPath),
+		pricedInvoiceHref: doc.jafInvoiceGeneratedAt
+			? `/finance/verify/${doc.id}/invoice.pdf`
+			: null,
+		// Tracked, not billed (provisional ruling): never added to any total.
+		brigadeStock: await brigadeStockFor(doc.fieldMaterials),
+		// The material lines Finance bills, listed exactly as billed.
+		materials: billableMaterials(doc),
 	}
 }
 
@@ -109,68 +152,13 @@ export async function action({ request, params }: Route.ActionArgs) {
 	)
 	if (stage !== "TO_VERIFY")
 		return { errorKey: "finance_verify.errors.invalid_stage" }
+	// Only a packet the supervisor released is Finance's to act on, and one
+	// sent back is his until he resends it (S4): no verifying it meanwhile.
+	if (!doc.releasedToFinanceAt || (intent === "verify" && isReturned(doc)))
+		return { errorKey: "finance_verify.errors.invalid_stage" }
 
 	if (intent === "verify") {
-		if (
-			doc.avisoMatchedAt &&
-			doc.avisoLineTotal != null &&
-			doc.jafInvoiceLineTotal != null
-		) {
-			const avisoAmount = toNumberPrice(doc.avisoLineTotal)
-			const invoiceTotal = toNumberPrice(doc.jafInvoiceLineTotal)
-			const note = (form.get("note") as string | null)?.trim() || null
-			await db.$transaction([
-				db.jafInvoice.update({
-					where: { id: params.id },
-					data: {
-						financeVerifiedAt: new Date(),
-						financeVerifiedById: user.id,
-					},
-				}),
-				db.auditTrail.create({
-					data: {
-						docId: params.id,
-						userId: user.id,
-						action: "FINANCE_VERIFIED",
-						diffJson: {
-							note,
-							avisoAmount,
-							invoiceTotal,
-							difference: Math.abs(avisoAmount - invoiceTotal),
-							withinTolerance: true,
-							source: "SUPERVISOR_CAPTURE",
-						},
-					},
-				}),
-			])
-			throw redirect("/finance/queue")
-		}
-		const avisoAmountRaw = (form.get("avisoAmount") as string | null)?.trim()
-		const avisoAmount = avisoAmountRaw ? Number(avisoAmountRaw) : NaN
-		if (
-			!avisoAmountRaw ||
-			Number.isNaN(avisoAmount) ||
-			!Number.isFinite(avisoAmount) ||
-			avisoAmount < 0
-		) {
-			return { errorKey: "finance_verify.errors.invalid_aviso_amount" }
-		}
-		const { codeMap, ivuRate, tolerance } = await fetchInvoiceTotalContext()
-		const invoiceTotal = invoiceTotalUsed(doc, codeMap, ivuRate)
-		const { withinTolerance, difference } = checkAmountTolerance(
-			invoiceTotal,
-			avisoAmount,
-			tolerance,
-		)
-		if (!withinTolerance) {
-			return {
-				errorKey: "finance_verify.errors.amount_mismatch",
-				avisoAmount: avisoAmountRaw,
-				invoiceTotal,
-				difference,
-				tolerance,
-			}
-		}
+		// No Aviso-amount check (F2): verifying never asks for or compares one.
 		const note = (form.get("note") as string | null)?.trim() || null
 		await db.$transaction([
 			db.jafInvoice.update({
@@ -185,17 +173,11 @@ export async function action({ request, params }: Route.ActionArgs) {
 					docId: params.id,
 					userId: user.id,
 					action: "FINANCE_VERIFIED",
-					diffJson: {
-						note,
-						avisoAmount,
-						invoiceTotal,
-						difference,
-						withinTolerance: true,
-					},
+					diffJson: { note },
 				},
 			}),
 		])
-		throw redirect(`/finance/receivables`)
+		throw redirect("/finance/queue")
 	}
 
 	if (intent === "send_back") {
@@ -258,29 +240,22 @@ export default function FinanceVerify({
 		stage,
 		amount,
 		ivuRate,
-		tolerance,
 		sendBackNotes,
-		prefilledAvisoAmount,
+		returnState,
+		notReleased,
+		canVerify,
+		canSendBack,
+		packetDocs,
+		avisoDiscrepancy,
 		lineTotal,
+		packetHref,
+		legacyPricedHref,
+		pricedInvoiceHref,
+		brigadeStock,
+		materials,
 	} = loaderData
 	const { t } = useTranslation()
-	const error = actionData as
-		| {
-				errorKey?: string
-				avisoAmount?: string
-				invoiceTotal?: number
-				difference?: number
-				tolerance?: number
-		  }
-		| undefined
-	const used =
-		(doc.materialsUsed as { serviceCodeId: string; qty: number }[]) || []
-	const taken =
-		(doc.materialsTaken as { serviceCodeId: string; qty: number }[]) || []
-	const source = used.length > 0 ? used : taken
-	const jafInvoiceUrl = doc.jafInvoicePdfPath
-		? `/files/jaf-invoices/${doc.id}-jaf-invoice.pdf`
-		: null
+	const error = actionData as { errorKey?: string } | undefined
 
 	const cannotVerify =
 		stage !== "TO_VERIFY" || doc.status === "LC_REQUEST_GENERATED"
@@ -327,43 +302,127 @@ export default function FinanceVerify({
 				<p>
 					{t("finance_verify.ivu_rate", { rate: (ivuRate * 100).toFixed(1) })}
 				</p>
-				<p className="text-xs text-muted-foreground">
-					{t("finance_verify.tolerance", { tolerance: formatMoney(tolerance) })}
-				</p>
 			</div>
 
-			{error?.errorKey === "finance_verify.errors.amount_mismatch" && (
-				<div className="bg-status-danger-soft border border-status-danger-line rounded-lg p-4">
-					<p className="font-medium text-status-danger">
-						{t("finance_verify.amount_mismatch", {
-							difference: formatMoney(error.difference ?? 0),
-							tolerance: formatMoney(error.tolerance ?? 0),
-						})}
-					</p>
-					<p className="text-sm text-status-danger mt-1">
-						{t("finance_verify.amount_mismatch_detail", {
-							avisoAmount: formatMoney(Number(error.avisoAmount ?? 0)),
-							invoiceTotal: formatMoney(error.invoiceTotal ?? 0),
-						})}
-					</p>
-				</div>
+			<div className="bg-card border rounded-lg p-4 space-y-2">
+				<h2 className="text-sm font-medium">
+					{t("finance_verify.packet.heading")}
+				</h2>
+				<ul className="divide-y text-sm">
+					{packetDocs.map((d) => (
+						<li
+							key={d.key}
+							className="flex flex-wrap items-center justify-between gap-2 py-2"
+						>
+							<div>
+								<p className="font-medium">
+									{t(d.label as ParseKeys, {
+										number: doc.avisoNumber ?? "—",
+									})}
+								</p>
+								<p className="text-xs text-muted-foreground">
+									{d.href
+										? t(`finance_verify.packet.${d.key}_detail` as ParseKeys, {
+												file: d.detail,
+												count: Number(d.detail) || 0,
+											})
+										: t("finance_verify.packet.missing")}
+								</p>
+							</div>
+							{d.files.length > 0 ? (
+								<ul className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+									{d.files.map((f) => (
+										<li key={f.href}>
+											<a
+												href={f.href}
+												target="_blank"
+												rel="noreferrer"
+												className="text-accent-text underline"
+											>
+												{f.name}
+											</a>
+										</li>
+									))}
+								</ul>
+							) : (
+								d.href && (
+									<a
+										href={d.href}
+										target="_blank"
+										rel="noreferrer"
+										className="text-accent-text underline"
+									>
+										{t("finance_verify.packet.open")}
+									</a>
+								)
+							)}
+						</li>
+					))}
+				</ul>
+			</div>
+
+			{avisoDiscrepancy && (
+				<Callout title={t("finance_verify.aviso_discrepancy_title")}>
+					<ul className="list-disc pl-5">
+						{avisoDiscrepancy.differences.map((d) => (
+							<li key={d.claroCode}>
+								{t("docs_review.aviso_difference", {
+									workOrder: d.workOrder,
+									aviso: d.aviso,
+									name: d.name,
+								})}
+							</li>
+						))}
+					</ul>
+					{avisoDiscrepancy.note && (
+						<p className="mt-1">
+							{t("docs_review.aviso_discrepancy_note", {
+								note: avisoDiscrepancy.note,
+							})}
+						</p>
+					)}
+				</Callout>
 			)}
 
 			<div className="grid grid-cols-1 gap-4">
 				<div className="bg-card border rounded-lg p-4 space-y-3">
 					<h2 className="text-sm font-medium">
 						{t("finance_verify.jaf_invoice")}
-						{jafInvoiceUrl && (
-							<a
-								href={jafInvoiceUrl}
-								target="_blank"
-								rel="noreferrer"
-								className="ml-2 text-accent-text underline"
-							>
-								{t("finance_verify.download")}
-							</a>
-						)}
 					</h2>
+					{(pricedInvoiceHref || packetHref || legacyPricedHref) && (
+						<div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+							{pricedInvoiceHref && (
+								<a
+									href={pricedInvoiceHref}
+									target="_blank"
+									rel="noreferrer"
+									className="text-accent-text underline"
+								>
+									{t("finance_verify.priced_invoice")}
+								</a>
+							)}
+							{packetHref && (
+								<a
+									href={packetHref}
+									target="_blank"
+									rel="noreferrer"
+									className="text-accent-text underline"
+								>
+									{t("finance_verify.claro_packet")}
+								</a>
+							)}
+							{legacyPricedHref && (
+								<a
+									href={legacyPricedHref}
+									target="_blank"
+									rel="noreferrer"
+									className="text-accent-text underline"
+								>
+									{t("finance_verify.priced_invoice_legacy")}
+								</a>
+							)}
+						</div>
+					)}
 					<div className="text-sm space-y-1">
 						<p>
 							<span className="text-muted-foreground">
@@ -392,11 +451,41 @@ export default function FinanceVerify({
 					</div>
 					<MaterialLineItems
 						serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
-						initialItems={source}
+						initialItems={materials}
 						readOnly
 					/>
 				</div>
+				<BrigadeStockTracked lines={brigadeStock} />
 			</div>
+
+			{returnState.returned && returnState.createdAt && (
+				<Callout
+					tone="danger"
+					title={t("returned_packet.finance.verify_returned")}
+				>
+					<span className="block whitespace-pre-line">{returnState.note}</span>
+					<span className="block text-xs">
+						{new Date(returnState.createdAt).toLocaleString()}
+					</span>
+				</Callout>
+			)}
+			{returnState.resentPending && returnState.resentAt && (
+				<Callout tone="info" title={t("returned_packet.resent")}>
+					{t("returned_packet.finance.resent_on", {
+						date: new Date(returnState.resentAt).toLocaleString(),
+					})}
+					{returnState.note && (
+						<span className="block whitespace-pre-line">
+							{returnState.note}
+						</span>
+					)}
+				</Callout>
+			)}
+			{notReleased && (
+				<Callout tone="warn" title={t("returned_packet.finance.not_released")}>
+					{t("returned_packet.finance.not_released_body")}
+				</Callout>
+			)}
 
 			{sendBackNotes.length > 0 && (
 				<div className="bg-status-warn-soft border border-status-warn/30 rounded-lg p-4 space-y-2">
@@ -416,75 +505,51 @@ export default function FinanceVerify({
 
 			{stage === "TO_VERIFY" && doc.status !== "LC_REQUEST_GENERATED" && (
 				<div className="flex flex-wrap items-start gap-4">
-					<Form method="post" className="space-y-3">
-						<input type="hidden" name="intent" value="verify" />
-						{prefilledAvisoAmount != null ? (
-							<div>
-								<Label htmlFor="avisoAmountPrefilled">
-									{t("finance_verify.aviso_amount_label")}
-								</Label>
-								<p
-									id="avisoAmountPrefilled"
-									className="mt-1 text-sm font-medium text-status-ok bg-status-ok-soft border border-status-ok/30 rounded px-2 py-1"
-								>
-									{t("finance_verify.aviso_amount_prefilled", {
-										amount: formatMoney(prefilledAvisoAmount),
-									})}
+					{canVerify ? (
+						<Form method="post" className="space-y-3">
+							<input type="hidden" name="intent" value="verify" />
+							<Textarea
+								name="note"
+								rows={2}
+								placeholder={t("finance_verify.verify_note_placeholder")}
+							/>
+							<Button type="submit" disabled={cannotVerify}>
+								{t("finance_verify.mark_verified")}
+							</Button>
+							{cannotVerify && (
+								<p className="text-sm text-status-warn">
+									{t("finance_verify.cannot_verify_hint")}
 								</p>
-							</div>
-						) : (
-							<div>
-								<Label htmlFor="avisoAmount">
-									{t("finance_verify.aviso_amount_label")}
-								</Label>
-								<Input
-									id="avisoAmount"
-									name="avisoAmount"
-									type="number"
-									step="0.01"
-									min="0"
-									defaultValue={actionData?.avisoAmount ?? ""}
-									placeholder={t("finance_verify.aviso_amount_placeholder")}
-									className="mt-1"
-									required
-								/>
-								<p className="text-xs text-muted-foreground mt-1">
-									{t("finance_verify.aviso_amount_hint")}
-								</p>
-							</div>
-						)}
-						<Textarea
-							name="note"
-							rows={2}
-							placeholder={t("finance_verify.verify_note_placeholder")}
-						/>
-						<Button type="submit" disabled={cannotVerify}>
-							{t("finance_verify.mark_verified")}
-						</Button>
-						{cannotVerify && (
-							<p className="text-sm text-status-warn">
-								{t("finance_verify.cannot_verify_hint")}
-							</p>
-						)}
-					</Form>
-					<Form method="post" className="space-y-3">
-						<input type="hidden" name="intent" value="send_back" />
-						<Textarea
-							name="note"
-							rows={2}
-							required
-							placeholder={t("finance_verify.send_back_placeholder")}
-						/>
-						<Button type="submit" variant="outline">
-							{t("finance_verify.send_back")}
-						</Button>
-						{error?.errorKey &&
-							error.errorKey !== "finance_verify.errors.amount_mismatch" && (
+							)}
+						</Form>
+					) : (
+						<p className="text-sm text-muted-foreground">
+							{t(
+								returnState.returned
+									? "returned_packet.finance.cannot_verify_returned"
+									: "returned_packet.finance.cannot_act_unreleased",
+							)}
+						</p>
+					)}
+					{canSendBack && (
+						<Form method="post" className="space-y-3">
+							<input type="hidden" name="intent" value="send_back" />
+							<Textarea
+								name="note"
+								rows={2}
+								required
+								placeholder={t("finance_verify.send_back_placeholder")}
+							/>
+							<Button type="submit" variant="outline">
+								{t("finance_verify.send_back")}
+							</Button>
+							{error?.errorKey && (
 								<p className="text-sm text-status-danger">
 									{t(error.errorKey as ParseKeys)}
 								</p>
 							)}
-					</Form>
+						</Form>
+					)}
 				</div>
 			)}
 			{stage !== "TO_VERIFY" && (

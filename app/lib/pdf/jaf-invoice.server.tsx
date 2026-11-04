@@ -1,3 +1,10 @@
+/**
+ * The PRICED JAF invoice (unit prices, amounts, IVU, total). Finance/Admin
+ * only: rendered on demand by `finance/verify/:id/invoice.pdf` from the lines
+ * locked at the first packet send. Never import it from a route a price-blind
+ * role (SUPERVISOR, CREW, WAREHOUSE) can reach; Claro gets the price-free
+ * packet (claro-packet.server.tsx).
+ */
 import {
 	Document,
 	Page,

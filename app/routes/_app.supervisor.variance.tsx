@@ -26,6 +26,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 			estimatedMaterials: true,
 			materialsTaken: true,
 			materialsUsed: true,
+			fieldMaterials: true,
 			materialsReturned: true,
 			brigade: { select: { name: true } },
 		},
@@ -42,7 +43,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 				{
 					estimatedMaterials: doc.estimatedMaterials,
 					materialsTaken: doc.materialsTaken,
-					materialsUsed: doc.materialsUsed,
 					materialsReturned: doc.materialsReturned,
 				},
 			]),

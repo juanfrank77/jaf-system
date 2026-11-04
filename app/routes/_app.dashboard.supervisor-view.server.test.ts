@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 import { db } from "~/lib/db.server"
+import { Prisma } from "../../generated/prisma/client"
 
 // Integration test against the real (test) Postgres DB. The supervisor
 // dashboard now renders the same stat tiles / filters / list as the other
@@ -132,9 +133,8 @@ describe("dashboard supervisor view data (integration)", () => {
 
 	it("returns real stat tiles and the approval alert for a supervisor", async () => {
 		const data = await runLoaderAs(supervisorId)
-		expect(data.stats).toHaveLength(14)
-		expect(data.stats.slice(0, 4).map((s) => s.labelKey)).toEqual([
-			"dashboard.stat.open_documents",
+		expect(data.stats).toHaveLength(12)
+		expect(data.stats.slice(0, 3).map((s) => s.labelKey)).toEqual([
 			"dashboard.stat.awaiting_warehouse",
 			"dashboard.stat.awaiting_crew",
 			"dashboard.stat.pending_review",
@@ -162,24 +162,22 @@ describe("dashboard supervisor view data (integration)", () => {
 		})
 	})
 
-	it("flags a quantity discrepancy and carries the submitted time on pending-review rows", async () => {
+	it("carries the submitted time on pending-review rows and never tags a used-vs-issued difference", async () => {
 		const data = await runLoaderAs(supervisorId)
 		const rows = data.supervisorQueues?.pendingReview ?? []
 		const disc = rows.find((r) => r.id === discrepancyDocId)
 		const clean = rows.find((r) => r.id === cleanDocId)
-		expect(disc?.qtyDiscrepancy).toBe(true)
-		expect(clean?.qtyDiscrepancy).toBe(false)
+		expect(disc).toBeDefined()
+		expect(clean).toBeDefined()
+		expect(disc).not.toHaveProperty("qtyDiscrepancy")
+		expect(clean).not.toHaveProperty("qtyDiscrepancy")
 		expect(new Date(disc?.since as Date).toISOString()).toBe(
 			submittedAt.toISOString(),
 		)
 	})
 
-	it("carries the send-back time and approval time on the other queues", async () => {
+	it("carries the approval time on the missing-Aviso queue", async () => {
 		const data = await runLoaderAs(supervisorId)
-		const sent = data.supervisorQueues?.sentBack.find(
-			(r) => r.id === sentBackDocId,
-		)
-		expect(new Date(sent?.since as Date).toISOString()).toBe(returnedAt)
 		const missing = data.supervisorQueues?.missingAviso.find(
 			(r) => r.id === approvedDocId,
 		)
@@ -212,5 +210,180 @@ describe("dashboard supervisor view data (integration)", () => {
 		const data = await runLoaderAs(supervisorId, "stage=bogus")
 		expect(data.stageQueue).toBeNull()
 		expect(data.docs).toHaveLength(4)
+	})
+})
+
+describe("Packets to Claro queue (integration)", () => {
+	const tag = `pk${Date.now()}`
+	let supId: string
+	let unsentId: string
+	let sentId: string
+	let attemptedId: string
+
+	beforeAll(async () => {
+		supId = (
+			await db.user.create({
+				data: {
+					email: `dash-pk-${tag}@x.com`,
+					name: "PkSup",
+					role: "SUPERVISOR",
+					supervisorAreas: [],
+				},
+			})
+		).id
+		const make = (name: string, data: Record<string, unknown>) =>
+			db.jafInvoice
+				.create({
+					data: {
+						...baseInvoice,
+						controlNumber: `DASH-PK-${name}-${tag}`,
+						supervisorId: supId,
+						status: "SUPERVISOR_APPROVED",
+						supervisorApprovedAt: new Date("2026-10-18T10:00:00Z"),
+						...data,
+					},
+				})
+				.then((d) => d.id)
+		unsentId = await make("unsent", {})
+		// An UNCONFIGURED attempt stores the PDF but is not a send.
+		attemptedId = await make("attempted", {
+			jafInvoicePdfPath: "/uploads/packets/x-packet-1.pdf",
+		})
+		sentId = await make("sent", {
+			jafInvoiceGeneratedAt: new Date("2026-10-18T12:00:00Z"),
+			jafInvoicePdfPath: "/uploads/packets/y-packet-2.pdf",
+		})
+	})
+
+	afterAll(async () => {
+		await db.jafInvoice.deleteMany({
+			where: { controlNumber: { endsWith: tag } },
+		})
+		await db.user.delete({ where: { id: supId } })
+	})
+
+	it("lists sent and not-sent jobs, with sent derived from jafInvoiceGeneratedAt only", async () => {
+		const data = await runLoaderAs(supId, "stage=invoice")
+		const byId = new Map(data.docs.map((d) => [d.id, d]))
+		expect([...byId.keys()].sort()).toEqual(
+			[unsentId, attemptedId, sentId].sort(),
+		)
+		expect(byId.get(sentId)?.jafInvoiceGeneratedAt).toBeInstanceOf(Date)
+		expect(byId.get(unsentId)?.jafInvoiceGeneratedAt).toBeNull()
+		expect(byId.get(attemptedId)?.jafInvoiceGeneratedAt).toBeNull()
+		expect(byId.get(sentId)?.openLabel).toBe("SENT_WAITING_AVISO")
+		expect(byId.get(attemptedId)?.openLabel).toBe("READY_TO_SEND")
+	})
+})
+
+describe("Aviso discrepancy: Action needed card and the admin alert (integration)", () => {
+	const tag = `ad${Date.now()}`
+	const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000)
+	const discrepancy = (days: number, note: string | null) => ({
+		detectedAt: daysAgo(days).toISOString(),
+		differences: [
+			{ claroCode: "4003587", name: "POSTE", workOrder: 3, aviso: 2 },
+		],
+		note,
+		noteAt: note ? daysAgo(days).toISOString() : null,
+		noteById: null,
+	})
+	let supId: string
+	let adminId: string
+	let notedId: string
+	let freshId: string
+	let cleanId: string
+	let releasedId: string
+	let baselineStale = 0
+
+	const staleCount = (data: Awaited<ReturnType<typeof runLoaderAs>>) =>
+		data.alert?.key === "dashboard.alert.stale_aviso_discrepancy"
+			? data.alert.count
+			: 0
+
+	beforeAll(async () => {
+		adminId = (
+			await db.user.create({
+				data: {
+					email: `dash-ad-admin-${tag}@x.com`,
+					name: "AdAdmin",
+					role: "ADMIN",
+				},
+			})
+		).id
+		baselineStale = staleCount(await runLoaderAs(adminId))
+		supId = (
+			await db.user.create({
+				data: {
+					email: `dash-ad-${tag}@x.com`,
+					name: "AdSup",
+					role: "SUPERVISOR",
+					supervisorAreas: [],
+				},
+			})
+		).id
+		const make = (name: string, data: Record<string, unknown>) =>
+			db.jafInvoice
+				.create({
+					data: {
+						...baseInvoice,
+						controlNumber: `DASH-AD-${name}-${tag}`,
+						supervisorId: supId,
+						status: "CLARO_UPLOADED",
+						supervisorApprovedAt: daysAgo(10),
+						jafInvoiceGeneratedAt: daysAgo(9),
+						avisoNumber: "10354739",
+						avisoDocPath: "/uploads/aviso-docs/x-aviso.pdf",
+						...data,
+					},
+				})
+				.then((d) => d.id)
+		// Continued with a note: the card stays until a clean Aviso.
+		notedId = await make("noted", { avisoDiscrepancy: discrepancy(4, "noted") })
+		freshId = await make("fresh", { avisoDiscrepancy: discrepancy(1, null) })
+		cleanId = await make("clean", {})
+		releasedId = await make("released", {
+			avisoDiscrepancy: discrepancy(5, "noted"),
+			releasedToFinanceAt: daysAgo(1),
+		})
+		await make("cancelled", {
+			avisoDiscrepancy: discrepancy(6, "noted"),
+			status: "CANCELLED",
+		})
+	})
+
+	afterAll(async () => {
+		await db.jafInvoice.deleteMany({
+			where: { controlNumber: { endsWith: tag } },
+		})
+		await db.user.deleteMany({ where: { id: { in: [supId, adminId] } } })
+	})
+
+	it("lists the supervisor's unreleased jobs with a discrepancy, with days open", async () => {
+		const data = await runLoaderAs(supId)
+		const rows = data.supervisorQueues?.actionNeeded ?? []
+		const byId = new Map(rows.map((r) => [r.id, r]))
+		expect([...byId.keys()].sort()).toEqual([notedId, freshId].sort())
+		expect(byId.get(notedId)?.daysOpen).toBe(4)
+		expect(byId.get(freshId)?.daysOpen).toBe(1)
+		expect(byId.has(cleanId)).toBe(false)
+		expect(byId.has(releasedId)).toBe(false)
+	})
+
+	it("alerts the admin on stale discrepancies of unreleased, live jobs only", async () => {
+		const data = await runLoaderAs(adminId)
+		// noted (4 days); fresh (1 day) is not stale; released (5 days) and
+		// cancelled (6 days) are out of the open flow, like the supervisor card.
+		expect(staleCount(data)).toBe(baselineStale + 1)
+	})
+
+	it("clears the admin alert once the open job's discrepancy clears", async () => {
+		await db.jafInvoice.update({
+			where: { id: notedId },
+			data: { avisoDiscrepancy: Prisma.DbNull },
+		})
+		// Released and cancelled stale ones remain, yet no longer hold the
+		// single alert slot (which would hide receivables_open forever).
+		expect(staleCount(await runLoaderAs(adminId))).toBe(baselineStale)
 	})
 })

@@ -63,3 +63,48 @@ export function validateFile(
 
 	return { valid: true }
 }
+
+/** A unique, filesystem-safe name for the `i`-th file of one upload. */
+export function uploadFileName(file: File, i: number): string {
+	return `${Date.now()}-${i}-${file.name.replace(/[^\w.-]+/g, "_")}`
+}
+
+/**
+ * Field photos and blueprints are stored as the original file, never
+ * converted: only JPEG, PNG and PDF are accepted (images up to 10 MB, PDFs up
+ * to 30 MB). The blocked-extension rule still applies.
+ */
+export function validateOriginalUpload(
+	file: File,
+): { valid: true } | { valid: false; error: string } {
+	const ext = file.name.toLowerCase().match(/\.[^.]+$/)?.[0] || ""
+	if (BLOCKED_EXTENSIONS.some((b) => ext === b)) {
+		return { valid: false, error: `File type "${ext}" is not allowed` }
+	}
+	if (file.type === "application/pdf") {
+		if (file.size > PDF_MAX_SIZE) {
+			return {
+				valid: false,
+				error: `PDF exceeds ${PDF_MAX_SIZE / 1024 / 1024}MB limit`,
+			}
+		}
+		return { valid: true }
+	}
+	if (file.type === "image/jpeg" || file.type === "image/png") {
+		if (file.size > PHOTO_MAX_SIZE) {
+			return {
+				valid: false,
+				error: `Photo exceeds ${PHOTO_MAX_SIZE / 1024 / 1024}MB limit`,
+			}
+		}
+		return { valid: true }
+	}
+	return { valid: false, error: "File must be a JPG, PNG or PDF" }
+}
+
+/** A blueprint is a PDF or a JPG/PNG photo (intake and the Field step accept the same). */
+export function validateBlueprintFile(
+	file: File,
+): { valid: true } | { valid: false; error: string } {
+	return validateOriginalUpload(file)
+}

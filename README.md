@@ -1,6 +1,6 @@
 # JAF Operations
 
-Operations management system for JAF maintenance jobs: supervisor intake → warehouse pickup (dual signature) → crew field update → supervisor review / Claro submission → finance LC request → receivables tracking. Server-rendered React Router 7 app backed by PostgreSQL (Prisma), with better-auth sessions and an installable PWA for crew field updates.
+Operations management system for JAF maintenance jobs: supervisor intake → warehouse pickup (dual signature) → field update (entered by the supervisor; crew accounts no longer sign in) → supervisor review / Claro submission → finance LC request → receivables tracking. Server-rendered React Router 7 app backed by PostgreSQL (Prisma), with better-auth sessions and an installable PWA (offline queue for installer completions).
 
 If you're an AI coding agent working in this repo, start with [AGENTS.md](AGENTS.md) for orientation before making changes.
 

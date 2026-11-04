@@ -1,20 +1,24 @@
-import { useEffect } from "react"
 import { redirect } from "react-router"
 import { RoleDashboard } from "~/components/dashboards/role-dashboard"
 import { RouteErrorBoundary } from "~/components/error-boundary"
-import { parseCrewQueue } from "~/lib/crew-queues"
 import {
-	computeAwaitingPickup,
+	type AvisoDiscrepancy,
+	discrepancyAgeDays,
+} from "~/lib/aviso-discrepancy"
+import { isAvisoSaved } from "~/lib/aviso-document"
+import { refuseCrew } from "~/lib/crew-notice.server"
+import {
 	computeDashboardStats,
-	computeMaterialSignals,
 	type DashboardExplainer,
 } from "~/lib/dashboard-stats"
 import { db } from "~/lib/db.server"
 import { isDashboardFiltersEnabled } from "~/lib/features.server"
-import { isMissingAvisoPdf } from "~/lib/finance-pipeline.server"
-import { cacheJobs } from "~/lib/offline-store"
+import { type OpenJobLabel, openJobLabel } from "~/lib/open-job-label"
 import { pageTitle } from "~/lib/page-title"
 import { requireSession } from "~/lib/permissions.server"
+import { latestReturn } from "~/lib/returned-packet"
+import { returnedDocIds } from "~/lib/returned-packet.server"
+import { isPriceBlind } from "~/lib/service-codes.server"
 import {
 	parseSupervisorQueue,
 	supervisorQueueWhere,
@@ -26,27 +30,80 @@ import {
 	WAITING_ON,
 	type WaitingOn,
 } from "~/lib/supervisor-stage"
-import { getAvisoAmountTolerance } from "~/lib/system-settings.server"
-import { toNumberPrice } from "~/lib/utils"
 import { NO_WAREHOUSE_COUNTS } from "~/lib/warehouse-queues"
 import { countWarehouseQueues } from "~/lib/warehouse-queues.server"
 import { resolveWarehouseScope } from "~/lib/warehouse-scope.server"
-import type { DocStatus, Role } from "../../generated/prisma/client"
+import {
+	type DocStatus,
+	Prisma,
+	type Role,
+} from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.dashboard"
 
 export const meta: Route.MetaFunction = ({ matches }) => [
 	{ title: pageTitle(matches, "page_title.dashboard") },
 ]
 
-type SendBackHistoryRow = {
-	id: string
-	controlNumber: string
-	status: DocStatus
-	jobType: string
-	jobAddressEstimated: string
-	createdAt: Date
-	sendBackHistory: unknown
+/**
+ * The columns the dashboard lists and tiles read (`DashboardDocList`, the
+ * stage chips, `computeDashboardStats`). A price-blind role gets only these,
+ * so no invoice line, total, payable or signature reaches its payload.
+ */
+const PRICE_FREE_DOC_SELECT = {
+	id: true,
+	controlNumber: true,
+	status: true,
+	jobType: true,
+	jobAddressEstimated: true,
+	createdAt: true,
+	avisoNumber: true,
+	assignedCrewIds: true,
+	sendBackHistory: true,
+	estimatedMaterials: true,
+	materialsTaken: true,
+	materialsUsed: true,
+	materialsReturned: true,
+	materialsFromWarehouse: true,
+	fieldMaterials: true,
+	prepChangedSincePrep: true,
+	preppedAt: true,
+	fieldStartedAt: true,
+	supervisorApprovedAt: true,
+	jafInvoiceGeneratedAt: true,
+	claroUploadedAt: true,
+	avisoDocPath: true,
+	releasedToFinanceAt: true,
+	// Finance's returns: a returned packet's chip reads "Returned".
+	financeSendBackNotes: true,
+	financeVerifiedAt: true,
+	pbccRequestSentAt: true,
+	lcGeneratedAt: true,
+	advanceReceivedAt: true,
+	finalPaymentReceivedAt: true,
+	receivableClosedAt: true,
+} satisfies Prisma.JafInvoiceSelect
+
+type DashboardListDoc = Prisma.JafInvoiceGetPayload<{
+	select: typeof PRICE_FREE_DOC_SELECT
+}>
+
+/** The whole row for Finance / Admin; only the list columns for everyone else. */
+function findDashboardDocs(
+	role: Role,
+	args: {
+		where: Prisma.JafInvoiceWhereInput
+		orderBy: Prisma.JafInvoiceOrderByWithRelationInput
+		take: number
+	},
+): Promise<DashboardListDoc[]> {
+	return isPriceBlind(role)
+		? db.jafInvoice.findMany({ ...args, select: PRICE_FREE_DOC_SELECT })
+		: db.jafInvoice.findMany(args)
 }
+
+/** "My open jobs" lists every job before the packet; the other lists stay short. */
+const OPEN_JOBS_LIMIT = 200
+const LIST_LIMIT = 50
 
 async function buildBaseWhere(
 	role: Role,
@@ -56,7 +113,6 @@ async function buildBaseWhere(
 		const areas = await supervisorAreas(db, userId)
 		return ownedOrInArea(userId, areas)
 	}
-	if (role === "CREW") return { assignedCrewIds: { has: userId } }
 	// Finance only sees work orders the supervisor released to Finance;
 	// supervisor-stage docs never reach them. Composes by key with the status /
 	// crew / job-type filters and the search `OR`, so the gate survives all of them.
@@ -74,11 +130,13 @@ type QueueRow = {
 	note?: string | null
 	/** When the job entered this queue (submitted / returned / approved). */
 	since: Date | null
-	qtyDiscrepancy: boolean
-	/** Why a job sits in the Blocked queue. */
-	blockReason?: "aviso_mismatch" | "billing_aviso_pdf"
 	/** Open work orders list: who the job is waiting on. */
 	waitingOn?: WaitingOn
+}
+
+/** Has a recorded Aviso materials discrepancy (cleared only by a clean Aviso). */
+function hasAvisoDiscrepancy(): Prisma.JafInvoiceWhereInput {
+	return { avisoDiscrepancy: { not: Prisma.DbNull } }
 }
 
 const queueSelect = {
@@ -89,20 +147,24 @@ const queueSelect = {
 	jobAddressEstimated: true,
 	jobAddressActual: true,
 	createdAt: true,
+	fieldStartedAt: true,
 	supervisorApprovedAt: true,
 	jafInvoiceGeneratedAt: true,
-	jafInvoiceLineTotal: true,
-	avisoLineTotal: true,
-	avisoMatchedAt: true,
-	releasedToFinanceAt: true,
-	sendBackHistory: true,
-	fieldSubmittedAt: true,
+	avisoNumber: true,
 	avisoDocPath: true,
+	releasedToFinanceAt: true,
+	// A return is live only before Finance verifies (`isReturned`).
+	financeSendBackNotes: true,
+	financeVerifiedAt: true,
+	pbccRequestSentAt: true,
+	fieldSubmittedAt: true,
 	claroPdfPath: true,
 	estimatedMaterials: true,
 	materialsTaken: true,
 	materialsUsed: true,
 	materialsReturned: true,
+	materialsFromWarehouse: true,
+	fieldMaterials: true,
 	brigade: { select: { name: true } },
 } as const
 
@@ -112,7 +174,6 @@ function toRow(
 		controlNumber: string
 		jobAddressEstimated: string
 		jobAddressActual?: string | null
-		jafInvoiceLineTotal?: unknown
 		estimatedMaterials?: unknown
 		materialsTaken?: unknown
 		materialsUsed?: unknown
@@ -132,7 +193,6 @@ function toRow(
 		stage,
 		note,
 		since,
-		qtyDiscrepancy: computeMaterialSignals([d as never]).discrepancy > 0,
 	}
 }
 
@@ -141,154 +201,142 @@ async function withStages<
 	T extends {
 		id: string
 		status: DocStatus
+		fieldStartedAt: Date | null
 		supervisorApprovedAt: Date | null
 		jafInvoiceGeneratedAt: Date | null
-		avisoMatchedAt: Date | null
+		avisoNumber: string | null
+		avisoDocPath: string | null
 		releasedToFinanceAt: Date | null
+		financeVerifiedAt: Date | null
+		pbccRequestSentAt: Date | null
+		materialsFromWarehouse: boolean
+		financeSendBackNotes?: unknown
 	},
->(docs: T[]): Promise<(T & { stage: SupervisorStage })[]> {
+>(
+	docs: T[],
+): Promise<(T & { stage: SupervisorStage; openLabel: OpenJobLabel })[]> {
 	const sheets = await db.preCertSheet.findMany({
 		where: { docId: { in: docs.map((d) => d.id) }, supersededAt: null },
 		select: { docId: true, sigSupervisorAt: true, sigSubcontractorAt: true },
 	})
-	const byDoc = new Map(sheets.map((s) => [s.docId, s]))
+	// A job with a certificate per crew has several current sheets.
+	const byDoc = new Map<string, typeof sheets>()
+	for (const s of sheets) byDoc.set(s.docId, [...(byDoc.get(s.docId) ?? []), s])
 	return docs.map((d) => ({
 		...d,
 		stage: deriveSupervisorStage(d, byDoc.get(d.id) ?? null),
+		openLabel: openJobLabel(d, byDoc.get(d.id) ?? null),
 	}))
 }
 
-type SendBackHistoryEntry = { note?: string; createdAt?: string }
-
-async function loadSupervisorQueues(userId: string) {
-	const tolerance = await getAvisoAmountTolerance()
+async function loadSupervisorQueues(userId: string, returnedIds: string[]) {
 	const areas = await supervisorAreas(db, userId)
 	const scope = ownedOrInArea(userId, areas)
-	const [
-		intakeRaw,
-		pending,
-		sentBackRaw,
-		approved,
-		billingBlockedRaw,
-		openRaw,
-	] = await Promise.all([
-		db.jafInvoice.findMany({
-			where: { ...scope, status: "CREATED" },
-			select: queueSelect,
-			orderBy: { createdAt: "desc" },
-			take: 50,
-		}),
-		db.jafInvoice.findMany({
-			where: { ...scope, status: "FIELD_UPDATED" },
-			select: queueSelect,
-			orderBy: { fieldSubmittedAt: "desc" },
-			take: 50,
-		}),
-		db.$queryRaw`
-			SELECT ji.id, ji."controlNumber", ji."jobAddressEstimated", ji."jobAddressActual", ji."sendBackHistory"
-			FROM jaf_invoice ji
-			LEFT JOIN "Brigade" b ON b.id = ji."brigadeId"
-			WHERE (ji."supervisorId" = ${userId} OR b.area = ANY(${areas}))
-				AND ji.status = 'SIGNED' AND jsonb_array_length(ji."sendBackHistory") > 0
-			ORDER BY ji."createdAt" DESC LIMIT 50` as Promise<
-			{
-				id: string
-				controlNumber: string
-				jobAddressEstimated: string
-				jobAddressActual: string | null
-				sendBackHistory: unknown
-			}[]
-		>,
-		db.jafInvoice.findMany({
-			where: {
-				...scope,
-				supervisorApprovedAt: { not: null },
-				releasedToFinanceAt: null,
-				status: { not: "CANCELLED" },
-			},
-			select: queueSelect,
-			orderBy: { supervisorApprovedAt: "asc" },
-			take: 100,
-		}),
-		// Released to Finance without an Aviso PDF on file: billing cannot start.
-		db.jafInvoice.findMany({
-			where: {
-				...scope,
-				releasedToFinanceAt: { not: null },
-				status: { not: "CANCELLED" },
-				avisoDocPath: null,
-				claroPdfPath: null,
-				payablesClosedAt: null,
-			},
-			select: queueSelect,
-			orderBy: { releasedToFinanceAt: "asc" },
-			take: 50,
-		}),
-		// Everything the supervisor owns, from creation until it is paid.
-		db.jafInvoice.findMany({
-			where: { ...scope, status: { not: "CANCELLED" }, payablesClosedAt: null },
-			select: queueSelect,
-			orderBy: { createdAt: "desc" },
-			take: 100,
-		}),
-	])
+	const [intakeRaw, pending, approved, openRaw, discrepancyRaw, returnedRaw] =
+		await Promise.all([
+			db.jafInvoice.findMany({
+				where: { ...scope, status: "CREATED" },
+				select: queueSelect,
+				orderBy: { createdAt: "desc" },
+				take: 50,
+			}),
+			db.jafInvoice.findMany({
+				where: { ...scope, status: "FIELD_UPDATED" },
+				select: queueSelect,
+				orderBy: { fieldSubmittedAt: "desc" },
+				take: 50,
+			}),
+			db.jafInvoice.findMany({
+				where: {
+					...scope,
+					supervisorApprovedAt: { not: null },
+					releasedToFinanceAt: null,
+					status: { not: "CANCELLED" },
+					// A returned packet sits in its own box at the top.
+					id: { notIn: returnedIds },
+				},
+				select: queueSelect,
+				orderBy: { supervisorApprovedAt: "asc" },
+				take: 100,
+			}),
+			// The steps before the packet, same as the sidebar's My open jobs.
+			db.jafInvoice.findMany({
+				where: { AND: [scope, supervisorQueueWhere("open")] },
+				select: queueSelect,
+				orderBy: { createdAt: "desc" },
+				take: 100,
+			}),
+			// "Action needed": the Aviso differs from the work order. A note does
+			// not clear it; only a clean (replacement) Aviso does. Until release.
+			db.jafInvoice.findMany({
+				where: {
+					...scope,
+					...hasAvisoDiscrepancy(),
+					releasedToFinanceAt: null,
+					status: { not: "CANCELLED" },
+				},
+				select: { ...queueSelect, avisoDiscrepancy: true },
+				orderBy: { supervisorApprovedAt: "asc" },
+				take: 100,
+			}),
+			// "Returned (n)": packets Finance sent back, not yet resent.
+			db.jafInvoice.findMany({
+				where: { AND: [scope, supervisorQueueWhere("returned", returnedIds)] },
+				select: queueSelect,
+				take: 100,
+			}),
+		])
 	const intake = intakeRaw.map((d) => toRow(d, "INTAKE", d.createdAt))
 	const myOpen = (await withStages(openRaw)).map((d) => ({
 		...toRow(d, d.stage, d.createdAt),
+		openLabel: d.openLabel,
 		waitingOn: WAITING_ON[d.stage],
 	}))
 	const pendingReview = pending.map((d) =>
 		toRow(d, "APPROVE", d.fieldSubmittedAt),
 	)
-	const sentBack = sentBackRaw.map((d) => {
-		const h = Array.isArray(d.sendBackHistory)
-			? (d.sendBackHistory as SendBackHistoryEntry[])
-			: []
-		const returnedAt = h.at(-1)?.createdAt
-		return toRow(
-			d,
-			"FIELD",
-			returnedAt ? new Date(returnedAt) : null,
-			h.at(-1)?.note ?? null,
-		)
-	})
 	const approvedRows: QueueRow[] = []
 	const missingAviso: QueueRow[] = []
-	const blocked: QueueRow[] = []
 	for (const d of approved) {
 		const stage = deriveSupervisorStage(d, null)
-		if (d.avisoMatchedAt) {
+		// No job is ever blocked on amounts (F2): only a saved Aviso matters.
+		if (isAvisoSaved(d)) {
 			approvedRows.push(toRow(d, stage, d.supervisorApprovedAt))
-		} else if (d.avisoLineTotal == null) {
-			missingAviso.push(toRow(d, stage, d.supervisorApprovedAt))
-		} else if (
-			Math.abs(
-				toNumberPrice(d.avisoLineTotal) - toNumberPrice(d.jafInvoiceLineTotal),
-			) > tolerance
-		) {
-			blocked.push({
-				...toRow(d, "AVISO", d.supervisorApprovedAt),
-				blockReason: "aviso_mismatch",
-			})
 		} else {
-			approvedRows.push(toRow(d, stage, d.supervisorApprovedAt))
+			missingAviso.push(toRow(d, stage, d.supervisorApprovedAt))
 		}
 	}
-	for (const d of billingBlockedRaw) {
-		if (!isMissingAvisoPdf(d)) continue
-		blocked.push({
-			...toRow(d, "RELEASED", d.releasedToFinanceAt),
-			blockReason: "billing_aviso_pdf",
+	const now = new Date()
+	const actionNeeded = (await withStages(discrepancyRaw)).map((d) => {
+		const discrepancy = d.avisoDiscrepancy as AvisoDiscrepancy
+		return {
+			...toRow(d, d.stage, new Date(discrepancy.detectedAt)),
+			daysOpen: discrepancyAgeDays(discrepancy, now),
+		}
+	})
+	// Oldest return first: the one waiting longest on the supervisor.
+	const returned = (await withStages(returnedRaw))
+		.map((d) => {
+			const latest = latestReturn(d)
+			return {
+				...toRow(
+					d,
+					d.stage,
+					latest ? new Date(latest.createdAt) : null,
+					latest?.note ?? null,
+				),
+				openLabel: d.openLabel,
+			}
 		})
-	}
+		.sort((a, b) => (a.since?.getTime() ?? 0) - (b.since?.getTime() ?? 0))
 	return {
 		intake,
 		myOpen,
 		pendingReview,
-		sentBack,
 		approved: approvedRows,
 		missingAviso,
-		blocked,
+		actionNeeded,
+		returned,
 	}
 }
 
@@ -305,6 +353,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const user = await db.user.findUniqueOrThrow({
 		where: { id: session.user.id },
 	})
+	refuseCrew(user.role)
 
 	// An installer's home is /installer. Only an installer with no profile
 	// stays here, because /installer would send them straight back.
@@ -331,10 +380,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 		user.role === "SUPERVISOR"
 			? parseSupervisorQueue(url.searchParams.get("stage"))
 			: null
-
-	// A crew member's sidebar queue (`?stage=`): one step of their own work.
-	const crewQueue =
-		user.role === "CREW" ? parseCrewQueue(url.searchParams.get("stage")) : null
 
 	const selectedStatus = statusFilter ? (statusFilter as DocStatus) : null
 	const selectedCrew = crewFilter || null
@@ -381,17 +426,38 @@ export async function loader({ request }: Route.LoaderArgs) {
 		}
 	}
 
+	// The supervisor's returned packets: their own queue and box, and left
+	// out of every step queue (Released to Finance included).
+	const returnedIds =
+		user.role === "SUPERVISOR"
+			? await returnedDocIds(baseWhere as Prisma.JafInvoiceWhereInput)
+			: []
+
+	// Lissette's list leaves a packet she sent back until the supervisor
+	// resends it; it is counted and listed under Returned on Packets in.
+	if (user.role === "FINANCE") {
+		const financeReturned = await returnedDocIds(
+			baseWhere as Prisma.JafInvoiceWhereInput,
+		)
+		// An AND entry, so it can never overwrite an id condition set elsewhere.
+		if (financeReturned.length > 0)
+			where.AND = [
+				...(Array.isArray(where.AND) ? where.AND : []),
+				{ id: { notIn: financeReturned } },
+			]
+	}
+
 	if (stageQueue) {
 		where.AND = [
 			...(Array.isArray(where.AND) ? where.AND : []),
-			supervisorQueueWhere(stageQueue),
+			supervisorQueueWhere(stageQueue, returnedIds),
 		]
 	}
 
-	const docs = await db.jafInvoice.findMany({
+	const docs = await findDashboardDocs(user.role, {
 		where,
 		orderBy: { createdAt: "desc" },
-		take: 50,
+		take: stageQueue === "open" ? OPEN_JOBS_LIMIT : LIST_LIMIT,
 	})
 
 	// LC_REQUEST_GENERATED is Finance/Admin-only in all projections.
@@ -411,20 +477,39 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const statsDocs =
 		user.role === "SUPERVISOR" && hasFilters
 			? (
-					await db.jafInvoice.findMany({
+					await findDashboardDocs(user.role, {
 						where: baseWhere,
 						orderBy: { createdAt: "desc" },
-						take: 50,
+						take: LIST_LIMIT,
 					})
 				).filter((d) => d.status !== "LC_REQUEST_GENERATED")
 			: visibleDocs
+	// The admin's "needs attention": the open Aviso discrepancies of live,
+	// unreleased jobs, as on the supervisor's card (only the stale ones raise
+	// the alert). Released or cancelled jobs would hold the alert forever.
+	const avisoDiscrepancies =
+		user.role === "ADMIN"
+			? (
+					await db.jafInvoice.findMany({
+						where: {
+							...hasAvisoDiscrepancy(),
+							releasedToFinanceAt: null,
+							status: { not: "CANCELLED" },
+						},
+						select: { avisoDiscrepancy: true },
+					})
+				).map((d) => d.avisoDiscrepancy as AvisoDiscrepancy)
+			: []
 	const { stats, alert, explainer } = computeDashboardStats(
 		user.role,
 		statsDocs,
+		{ avisoDiscrepancies },
 	)
 
 	const supervisorQueues =
-		user.role === "SUPERVISOR" ? await loadSupervisorQueues(user.id) : null
+		user.role === "SUPERVISOR"
+			? await loadSupervisorQueues(user.id, returnedIds)
+			: null
 	const supervisorScope =
 		user.role === "SUPERVISOR" ? await loadSupervisorScope(user.id) : null
 
@@ -436,13 +521,13 @@ export async function loader({ request }: Route.LoaderArgs) {
 			: NO_WAREHOUSE_COUNTS
 	const warehouseToPrepDocs =
 		user.role === "WAREHOUSE"
-			? await db.jafInvoice.findMany({
+			? await findDashboardDocs(user.role, {
 					where: {
 						...(await buildBaseWhere(user.role, user.id)),
 						status: "CREATED",
 					},
 					orderBy: { createdAt: "desc" },
-					take: 50,
+					take: LIST_LIMIT,
 				})
 			: []
 
@@ -456,57 +541,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 			where: { status: "RETURNED", currentRef: selectedId },
 		})
 	})()
-
-	const crewPreppedDocs = computeAwaitingPickup(
-		user.role === "CREW"
-			? await db.jafInvoice.findMany({
-					where: {
-						...(await buildBaseWhere(user.role, user.id)),
-						status: "PREPPED",
-					},
-					orderBy: { createdAt: "desc" },
-					take: 50,
-				})
-			: [],
-	)
-
-	const crewInFieldDocs =
-		user.role === "CREW"
-			? ((await db.$queryRaw`
-				SELECT id, "controlNumber", status, "jobType", "jobAddressEstimated", "createdAt", "sendBackHistory"
-				FROM jaf_invoice
-				WHERE "assignedCrewIds" @> ARRAY[${user.id}]::text[]
-					AND status = 'SIGNED'
-					AND ("sendBackHistory" IS NULL OR jsonb_array_length("sendBackHistory") = 0)
-			ORDER BY "createdAt" DESC
-			LIMIT 50
-		`) as SendBackHistoryRow[])
-			: []
-
-	const crewSentBackDocs =
-		user.role === "CREW"
-			? ((await db.$queryRaw`
-				SELECT id, "controlNumber", status, "jobType", "jobAddressEstimated", "createdAt", "sendBackHistory"
-				FROM jaf_invoice
-				WHERE "assignedCrewIds" @> ARRAY[${user.id}]::text[]
-					AND status = 'SIGNED'
-					AND jsonb_array_length("sendBackHistory") > 0
-			ORDER BY "createdAt" DESC
-			LIMIT 50
-		`) as SendBackHistoryRow[])
-			: []
-
-	const crewSubmittedDocs =
-		user.role === "CREW"
-			? await db.jafInvoice.findMany({
-					where: {
-						...(await buildBaseWhere(user.role, user.id)),
-						status: "FIELD_UPDATED",
-					},
-					orderBy: { createdAt: "desc" },
-					take: 50,
-				})
-			: []
 
 	return {
 		role: user.role,
@@ -531,11 +565,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 		warehouseToPrepDocs,
 		warehouseCounts,
 		warehouseTriageCount,
-		crewPreppedDocs,
-		crewInFieldDocs,
-		crewSentBackDocs,
-		crewSubmittedDocs,
-		crewQueue,
 	}
 }
 
@@ -560,44 +589,9 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 		warehouseToPrepDocs,
 		warehouseCounts,
 		warehouseTriageCount,
-		crewPreppedDocs,
-		crewInFieldDocs,
-		crewSentBackDocs,
-		crewSubmittedDocs,
-		crewQueue,
 	} = loaderData
 	const explainer = (loaderData as { explainer?: DashboardExplainer })
 		.explainer as DashboardExplainer
-
-	useEffect(() => {
-		if (typeof window === "undefined") return
-		const allDocs = [
-			...docs,
-			...crewPreppedDocs,
-			...crewInFieldDocs,
-			...crewSentBackDocs,
-			...crewSubmittedDocs,
-		]
-		cacheJobs(
-			allDocs.map((d) => ({
-				id: d.id,
-				controlNumber: d.controlNumber,
-				status: d.status,
-				jobType: d.jobType,
-				jobAddressEstimated: d.jobAddressEstimated,
-				assignedCrewIds: "assignedCrewIds" in d ? d.assignedCrewIds : [],
-				sendBackHistory: "sendBackHistory" in d ? d.sendBackHistory : undefined,
-				avisoNumber: "avisoNumber" in d ? d.avisoNumber : null,
-				updatedAt: new Date().toISOString(),
-			})),
-		).catch(() => {})
-	}, [
-		docs,
-		crewPreppedDocs,
-		crewInFieldDocs,
-		crewSentBackDocs,
-		crewSubmittedDocs,
-	])
 
 	return (
 		<RoleDashboard
@@ -605,7 +599,6 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 			supervisorQueues={supervisorQueues}
 			supervisorScope={supervisorScope}
 			stageQueue={stageQueue}
-			crewQueue={crewQueue}
 			stats={stats}
 			alert={alert}
 			explainer={explainer}
@@ -622,10 +615,6 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 			warehouseToPrepDocs={warehouseToPrepDocs}
 			warehouseCounts={warehouseCounts}
 			warehouseTriageCount={warehouseTriageCount}
-			crewPreppedDocs={crewPreppedDocs}
-			crewInFieldDocs={crewInFieldDocs}
-			crewSentBackDocs={crewSentBackDocs}
-			crewSubmittedDocs={crewSubmittedDocs}
 		/>
 	)
 }

@@ -8,9 +8,7 @@ const emptyQueues = {
 	intake: [],
 	pendingReview: [],
 	approved: [],
-	sentBack: [],
 	missingAviso: [],
-	blocked: [],
 }
 
 // Spread so biome's a11y rule does not mistake the `role` prop for an ARIA role.
@@ -26,7 +24,6 @@ const mount = (renderStub: any, ui: React.ReactElement) =>
 
 describe("RoleDashboard", () => {
 	for (const role of [
-		"CREW",
 		"WAREHOUSE",
 		"FINANCE",
 		"ADMIN",
@@ -42,22 +39,23 @@ describe("RoleDashboard", () => {
 			expect(
 				screen.getByRole("heading", {
 					level: 1,
-					name: role === "CREW" ? "My jobs" : "Dashboard",
+					name: "Dashboard",
 				}),
 			).toBeInTheDocument()
 		})
 	}
 
-	it("renders the seven supervisor queues and the work-order list for SUPERVISOR", async ({
+	it("renders the six supervisor queues and the work-order list for SUPERVISOR", async ({
 		renderStub,
 	}) => {
 		await mount(renderStub, <RoleDashboard {...supervisor} {...base} />)
 		expect(
 			screen.getByRole("heading", { level: 1, name: "Dashboard" }),
 		).toBeInTheDocument()
-		// seven queue cards (My open work orders last); dashboard no longer has an "All work orders" section
+		// five queue cards (My open work orders last); dashboard no longer has an "All work orders" section
 		const headings = screen.getAllByRole("heading", { level: 2 })
-		expect(headings).toHaveLength(7)
+		expect(headings).toHaveLength(5)
+		expect(screen.queryByText("Sent back to crew")).not.toBeInTheDocument()
 		expect(headings.at(-1)).toHaveTextContent("My open work orders")
 	})
 
@@ -69,7 +67,6 @@ describe("RoleDashboard", () => {
 			within(screen.getByTestId("supervisor-tiles"))
 				.getByText(label)
 				.closest('[data-slot="stat"]') as HTMLElement
-		expect(tone("Blocked")).toHaveAttribute("data-tone", "flag")
 		expect(tone("Missing Aviso")).toHaveAttribute("data-tone", "warn")
 	})
 
@@ -83,28 +80,22 @@ describe("RoleDashboard", () => {
 		avisoNumber: "12345678",
 	}
 
-	for (const role of ["WAREHOUSE", "CREW"] as const) {
-		it(`hides the Aviso number from the ${role} dashboard`, async ({
+	it("hides the Aviso number from the WAREHOUSE dashboard", async ({
+		renderStub,
+	}) => {
+		await mount(
 			renderStub,
-		}) => {
-			await mount(
-				renderStub,
-				<RoleDashboard
-					role={role}
-					supervisorQueues={null}
-					{...base}
-					docs={[billedDoc]}
-				/>,
-			)
-			// Warehouse works from its four queues only (mockup v3): no all-docs list.
-			if (role === "WAREHOUSE") {
-				expect(screen.queryByText("JAF-1")).not.toBeInTheDocument()
-			} else {
-				expect(screen.getByText("JAF-1")).toBeInTheDocument()
-			}
-			expect(screen.queryByText(/12345678/)).not.toBeInTheDocument()
-		})
-	}
+			<RoleDashboard
+				{...{ role: "WAREHOUSE" }}
+				supervisorQueues={null}
+				{...base}
+				docs={[billedDoc]}
+			/>,
+		)
+		// Warehouse works from its four queues only (mockup v3): no all-docs list.
+		expect(screen.queryByText("JAF-1")).not.toBeInTheDocument()
+		expect(screen.queryByText(/12345678/)).not.toBeInTheDocument()
+	})
 
 	it("keeps the Aviso number on the FINANCE document list", async ({
 		renderStub,
@@ -149,12 +140,12 @@ describe("RoleDashboard", () => {
 				{...{ role: "WAREHOUSE" }}
 				supervisorQueues={null}
 				{...base}
-				stats={[{ labelKey: "dashboard.stat.open_documents", value: 9 }]}
+				stats={[{ labelKey: "dashboard.stat.total_documents", value: 9 }]}
 				warehouseCounts={{ prep: 3, release: 2, returns: 4 }}
 			/>,
 		)
 		expect(screen.getAllByText("Awaiting pickup")).toHaveLength(1)
-		expect(screen.queryByText("Open documents")).not.toBeInTheDocument()
+		expect(screen.queryByText("Total documents")).not.toBeInTheDocument()
 	})
 
 	it("keeps the incoming to-prep orders on the warehouse dashboard but not the other step lists", async ({
@@ -182,7 +173,6 @@ describe("RoleDashboard", () => {
 })
 
 const statKeys = [
-	"open_documents",
 	"awaiting_warehouse",
 	"awaiting_crew",
 	"pending_review",
@@ -190,14 +180,13 @@ const statKeys = [
 	"stage_awaiting_crew",
 	"stage_pending_review",
 	"stage_in_finance",
-	"discrepancy_count",
 	"shortage_count",
 	"overage_count",
 	"aging_oldest_days",
 	"aging_po_wait_count",
 	"aging_claro_wait_count",
 ] as const
-const fourteenStats = statKeys.map((k, i) => ({
+const twelveStats = statKeys.map((k, i) => ({
 	labelKey: `dashboard.stat.${k}` as const,
 	value: i,
 }))
@@ -211,7 +200,6 @@ const queueRow = (o: Record<string, unknown> = {}) => ({
 	stage: "APPROVE" as const,
 	note: null,
 	since: null,
-	qtyDiscrepancy: false,
 	...o,
 })
 
@@ -225,33 +213,122 @@ describe("SupervisorDashboard", () => {
 			<RoleDashboard
 				{...supervisor}
 				{...base}
-				stats={fourteenStats}
+				stats={twelveStats}
 				supervisorScope={{ areas: ["CENTRAL"], brigadeCount: 4 }}
 				{...props}
 			/>,
 		)
 
-	it("shows seven working tiles and folds the ten accounting metrics", async ({
+	it("shows an Action needed card with days open for each Aviso discrepancy", async ({
 		renderStub,
 	}) => {
 		await mountSupervisor(renderStub, {
 			supervisorQueues: {
 				...emptyQueues,
-				sentBack: [queueRow({ id: "s" })],
-				blocked: [queueRow({ id: "b" }), queueRow({ id: "b2" })],
+				actionNeeded: [
+					{
+						...queueRow({
+							id: "d9",
+							controlNumber: "JAF-DISC",
+							stage: "PRECERT",
+						}),
+						daysOpen: 4,
+					},
+				],
+			},
+		})
+		const card = screen
+			.getByRole("heading", { level: 2, name: /Action needed/ })
+			.closest("section") as HTMLElement
+		expect(
+			within(card).getByText(
+				"Aviso differs from your work order. Reconcile with your Claro supervisor.",
+			),
+		).toBeVisible()
+		expect(
+			within(card).getByRole("link", { name: "JAF-DISC" }),
+		).toHaveAttribute("href", "/docs/d9/review?step=AVISO")
+		expect(within(card).getByText("Open 4 days")).toBeVisible()
+	})
+
+	it("puts a red Returned (n) box at the top with her note word for word and the way to the fix", async ({
+		renderStub,
+	}) => {
+		await mountSupervisor(renderStub, {
+			supervisorQueues: {
+				...emptyQueues,
+				returned: [
+					queueRow({
+						id: "back1",
+						controlNumber: "MAINT261026004",
+						stage: "RELEASE",
+						openLabel: "RETURNED",
+						note: "Aviso 10359868 lists 3 poles; the work order says 2.",
+						since: new Date(),
+					}),
+				],
+			},
+		})
+		const heading = screen.getByRole("heading", { level: 2, name: "Returned" })
+		const card = heading.closest("section") as HTMLElement
+		expect(within(card).getByText("1")).toBeVisible()
+		expect(
+			within(card).getByText(
+				"Aviso 10359868 lists 3 poles; the work order says 2.",
+			),
+		).toBeVisible()
+		expect(
+			within(card).getByRole("link", { name: "MAINT261026004" }),
+		).toHaveAttribute("href", "/docs/back1/review?step=AVISO")
+		const chip = within(card).getByText("Returned", { selector: "span" })
+		expect(chip).toHaveAttribute("data-variant", "danger")
+		// At the top: before the tiles.
+		const tiles = screen.getByTestId("supervisor-tiles")
+		expect(
+			card.compareDocumentPosition(tiles) & Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy()
+	})
+
+	it("has no Returned box when nothing was sent back", async ({
+		renderStub,
+	}) => {
+		await mountSupervisor(renderStub, {
+			supervisorQueues: { ...emptyQueues, returned: [] },
+		})
+		expect(
+			screen.queryByRole("heading", { level: 2, name: "Returned" }),
+		).toBeNull()
+	})
+
+	it("has no Action needed card when no job has a discrepancy", async ({
+		renderStub,
+	}) => {
+		await mountSupervisor(renderStub, {
+			supervisorQueues: { ...emptyQueues, actionNeeded: [] },
+		})
+		expect(
+			screen.queryByRole("heading", { level: 2, name: /Action needed/ }),
+		).toBeNull()
+	})
+
+	it("shows four working tiles and folds the nine accounting metrics", async ({
+		renderStub,
+	}) => {
+		await mountSupervisor(renderStub, {
+			supervisorQueues: {
+				...emptyQueues,
+				missingAviso: [queueRow({ id: "b" }), queueRow({ id: "b2" })],
 			},
 		})
 		const tiles = screen.getByTestId("supervisor-tiles")
-		expect(tiles.querySelectorAll('[data-slot="stat"]')).toHaveLength(7)
-		// the three queue tiles carry the queue counts
-		expect(within(tiles).getByText("Sent back").nextSibling).toHaveTextContent(
-			"1",
-		)
-		expect(within(tiles).getByText("Blocked").nextSibling).toHaveTextContent(
-			"2",
-		)
+		expect(tiles.querySelectorAll('[data-slot="stat"]')).toHaveLength(4)
+		// the queue tiles carry the queue counts; nothing is "sent back" to a crew
+		expect(within(tiles).queryByText("Sent back")).not.toBeInTheDocument()
+		expect(
+			within(tiles).getByText("Missing Aviso").nextSibling,
+		).toHaveTextContent("2")
 		const fold = screen.getByTestId("more-metrics")
-		expect(fold.querySelectorAll('[data-slot="stat"]')).toHaveLength(10)
+		expect(fold.querySelectorAll('[data-slot="stat"]')).toHaveLength(9)
 		expect(fold.tagName).toBe("DETAILS")
 		expect(fold).not.toHaveAttribute("open")
 		expect(within(fold).getByText("Oldest open (days)")).toBeInTheDocument()
@@ -263,7 +340,9 @@ describe("SupervisorDashboard", () => {
 		await mountSupervisor(renderStub, {
 			supervisorQueues: {
 				...emptyQueues,
-				intake: [queueRow({ id: "new1", controlNumber: "JAF-NEW" })],
+				intake: [
+					queueRow({ id: "new1", controlNumber: "JAF-NEW", stage: "INTAKE" }),
+				],
 			},
 		})
 		expect(
@@ -278,7 +357,6 @@ describe("SupervisorDashboard", () => {
 	it("opens the list behind each count tile", async ({ renderStub }) => {
 		await mountSupervisor(renderStub, {
 			stats: [
-				{ labelKey: "dashboard.stat.open_documents", value: 5 },
 				{ labelKey: "dashboard.stat.awaiting_warehouse", value: 1 },
 				{ labelKey: "dashboard.stat.awaiting_crew", value: 2 },
 				{ labelKey: "dashboard.stat.pending_review", value: 3 },
@@ -287,13 +365,10 @@ describe("SupervisorDashboard", () => {
 		const tiles = screen.getByTestId("supervisor-tiles")
 		const hrefOf = (label: string) =>
 			within(tiles).getByText(label).closest("a")?.getAttribute("href")
-		expect(hrefOf("Open documents")).toBe("/dashboard?stage=all")
 		expect(hrefOf("Awaiting warehouse")).toBe("/dashboard?stage=intake")
-		expect(hrefOf("Awaiting crew")).toBe("/dashboard?stage=field")
+		expect(hrefOf("Field work in progress")).toBe("/dashboard?stage=field")
 		expect(hrefOf("Pending review")).toBe("/dashboard?stage=review")
-		expect(hrefOf("Sent back")).toMatch(/#sent-back$/)
 		expect(hrefOf("Missing Aviso")).toMatch(/#missing-aviso$/)
-		expect(hrefOf("Blocked")).toMatch(/#blocked$/)
 	})
 
 	it("lists the supervisor's open work orders with their step and who they wait on", async ({
@@ -319,20 +394,6 @@ describe("SupervisorDashboard", () => {
 			within(card).getByRole("link", { name: "JAF-OPEN" }),
 		).toHaveAttribute("href", "/docs/o1")
 		expect(card).toHaveTextContent("Waiting on: crew")
-	})
-
-	it("says why a job is blocked", async ({ renderStub }) => {
-		await mountSupervisor(renderStub, {
-			supervisorQueues: {
-				...emptyQueues,
-				blocked: [
-					queueRow({ id: "b1", blockReason: "billing_aviso_pdf" }),
-					queueRow({ id: "b2", blockReason: "aviso_mismatch" }),
-				],
-			},
-		})
-		expect(screen.getByText("Billing: missing Aviso PDF")).toBeInTheDocument()
-		expect(screen.getByText("Aviso ≠ invoice")).toBeInTheDocument()
 	})
 
 	it("shows the supervisor's area and crew count under the title", async ({
@@ -395,7 +456,7 @@ describe("SupervisorDashboard", () => {
 		expect(screen.queryByRole("searchbox")).not.toBeInTheDocument()
 	})
 
-	it("shows how long a row has been waiting and flags quantity discrepancies", async ({
+	it("shows how long a row has been waiting and never flags quantity differences", async ({
 		renderStub,
 	}) => {
 		const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000)
@@ -403,20 +464,12 @@ describe("SupervisorDashboard", () => {
 		await mountSupervisor(renderStub, {
 			supervisorQueues: {
 				...emptyQueues,
-				pendingReview: [queueRow({ since: twoHoursAgo, qtyDiscrepancy: true })],
-				sentBack: [
-					queueRow({
-						id: "s",
-						stage: "FIELD",
-						since: oneDayAgo,
-						note: "retake photos",
-					}),
-				],
+				pendingReview: [queueRow({ since: twoHoursAgo })],
+				approved: [queueRow({ id: "a", stage: "INVOICE", since: oneDayAgo })],
 			},
 		})
 		expect(screen.getByText("Submitted 2h ago")).toBeInTheDocument()
-		expect(screen.getByText("Returned 1d ago")).toBeInTheDocument()
-		expect(screen.getByText("retake photos")).toBeInTheDocument()
-		expect(screen.getByText("Qty discrepancy")).toBeInTheDocument()
+		expect(screen.getByText("Signed off 1d ago")).toBeInTheDocument()
+		expect(screen.queryByText("Qty discrepancy")).not.toBeInTheDocument()
 	})
 })

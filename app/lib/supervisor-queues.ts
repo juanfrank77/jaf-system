@@ -1,3 +1,4 @@
+import { avisoSavedWhere } from "~/lib/aviso-document"
 import type { Prisma } from "../../generated/prisma/client"
 
 // The supervisor's sidebar queues: Intake (orders just created, before the
@@ -5,7 +6,14 @@ import type { Prisma } from "../../generated/prisma/client"
 // Approve onward. Each is a `?stage=` view of the dashboard, and the same
 // `where` drives both the sidebar count and the filtered list, so the pill
 // can never disagree with what the link opens.
+// Complement of `avisoSavedWhere`: the Aviso number or its PDF is still missing.
+const avisoNotSavedWhere = {
+	OR: [{ avisoNumber: null }, { avisoDocPath: null }],
+} satisfies Prisma.JafInvoiceWhereInput
+
 export type SupervisorQueue =
+	| "open"
+	| "returned"
 	| "intake"
 	| "field"
 	| "review"
@@ -16,6 +24,8 @@ export type SupervisorQueue =
 	| "all"
 
 export const SUPERVISOR_QUEUES: SupervisorQueue[] = [
+	"open",
+	"returned",
 	"intake",
 	"field",
 	"review",
@@ -26,13 +36,13 @@ export const SUPERVISOR_QUEUES: SupervisorQueue[] = [
 	"all",
 ]
 
-// The sidebar queues, in display order: one per step of the work-order rail
-// from Approve onward. Intake and Field have no sidebar links (intake opens
-// from the "Awaiting warehouse" tile; field shows on the dashboard cards), so
-// they are excluded here. Deriving this from SUPERVISOR_QUEUES keeps the
-// sidebar order and the count set in sync if a queue is added or removed.
+// The sidebar queues, in display order. Intake and Field have no sidebar links
+// (intake opens from the "Awaiting warehouse" tile; field shows on the dashboard
+// cards), and Review stays a queue (and a route) but is hidden from the sidebar.
+// nav-counts reads this list, so the sidebar order and the count set stay in sync.
 export const SUPERVISOR_SIDEBAR_QUEUES: SupervisorQueue[] = [
-	"review",
+	"open",
+	"returned",
 	"invoice",
 	"aviso",
 	"precert",
@@ -55,12 +65,40 @@ export function supervisorQueueHref(queue: SupervisorQueue): string {
  * Mirrors `deriveSupervisorStage`: a job is in the first stage whose
  * milestone it has reached, checked from the end of the process backwards.
  * `precert` covers both Pre-cert and Release (the sheet is still being
- * signed). The list is disjoint, so the five stage queues never overlap.
+ * signed). `open` (My open jobs) is the steps before the packet (Intake to
+ * Sign off), so it is disjoint from the packet-onward queues. `invoice`
+ * (Packets to Claro) spans sent and not yet sent, so it overlaps `aviso`;
+ * `field` and `review` sit inside `open`; the rest are disjoint.
  */
 export function supervisorQueueWhere(
 	queue: SupervisorQueue,
+	/** The supervisor's returned packets (`returnedDocIds`): their own queue,
+	 * and left out of every step queue. "Returned" lives in the JSON history,
+	 * so it is resolved to ids first rather than filtered in SQL. */
+	returnedIds: string[] = [],
+): Prisma.JafInvoiceWhereInput {
+	if (queue === "returned")
+		return { id: { in: returnedIds }, status: { not: "CANCELLED" } }
+	const where = stepQueueWhere(queue)
+	return queue === "all" || returnedIds.length === 0
+		? where
+		: { ...where, id: { notIn: returnedIds } }
+}
+
+function stepQueueWhere(
+	queue: Exclude<SupervisorQueue, "returned">,
 ): Prisma.JafInvoiceWhereInput {
 	switch (queue) {
+		// The steps before the packet exists: Intake, Warehouse, Field and Sign
+		// off. From the packet onward a job lives in its own sidebar queue.
+		case "open":
+			return {
+				releasedToFinanceAt: null,
+				...avisoNotSavedWhere,
+				supervisorApprovedAt: null,
+				jafInvoiceGeneratedAt: null,
+				status: { in: ["CREATED", "PREPPED", "SIGNED", "FIELD_UPDATED"] },
+			}
 		case "intake":
 			return { status: "CREATED" }
 		// Prepped and waiting for the crew, or out in the field: the dashboard's
@@ -75,28 +113,27 @@ export function supervisorQueueWhere(
 		case "precert":
 			return {
 				releasedToFinanceAt: null,
-				avisoMatchedAt: { not: null },
+				...avisoSavedWhere,
 				status: { not: "CANCELLED" },
 			}
 		case "aviso":
 			return {
 				releasedToFinanceAt: null,
-				avisoMatchedAt: null,
+				...avisoNotSavedWhere,
 				jafInvoiceGeneratedAt: { not: null },
 				status: { not: "CANCELLED" },
 			}
 		case "invoice":
 			return {
 				releasedToFinanceAt: null,
-				avisoMatchedAt: null,
-				jafInvoiceGeneratedAt: null,
+				...avisoNotSavedWhere,
 				supervisorApprovedAt: { not: null },
 				status: { not: "CANCELLED" },
 			}
 		case "review":
 			return {
 				releasedToFinanceAt: null,
-				avisoMatchedAt: null,
+				...avisoNotSavedWhere,
 				jafInvoiceGeneratedAt: null,
 				supervisorApprovedAt: null,
 				status: "FIELD_UPDATED",

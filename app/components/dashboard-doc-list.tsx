@@ -7,9 +7,13 @@ import { Badge } from "~/components/ui/badge"
 import { Card, CardContent } from "~/components/ui/card"
 import { EmptyState } from "~/components/ui/empty-state"
 import { armAStepOf, FINANCE_STEP_LABEL_KEY } from "~/lib/finance-steps"
+import type { OpenJobLabel } from "~/lib/open-job-label"
+import { isResent, isReturned } from "~/lib/returned-packet"
 import {
 	deriveSupervisorStage,
+	fixStepFor,
 	type SupervisorStage,
+	supervisorStepHref,
 } from "~/lib/supervisor-stage"
 import type { DocStatus } from "../../generated/prisma/client"
 
@@ -34,21 +38,6 @@ function hasOverage(doc: DashboardDocRow): boolean {
 	return taken.some((t) => t.qty > (estimatedMap[t.serviceCodeId] ?? 0))
 }
 
-function hasQuantityDiscrepancy(doc: DashboardDocRow): boolean {
-	const taken = toLines(doc.materialsTaken)
-	const used = toLines(doc.materialsUsed)
-	if (taken.length === 0 || used.length === 0) return false
-	const takenMap = Object.fromEntries(
-		taken.map((t) => [t.serviceCodeId, t.qty]),
-	)
-	const usedMap = Object.fromEntries(used.map((u) => [u.serviceCodeId, u.qty]))
-	const allIds = new Set([...Object.keys(takenMap), ...Object.keys(usedMap)])
-	for (const id of allIds) {
-		if ((takenMap[id] ?? 0) !== (usedMap[id] ?? 0)) return true
-	}
-	return false
-}
-
 function hasShortage(doc: DashboardDocRow): boolean {
 	const returned = Array.isArray(doc.materialsReturned)
 		? doc.materialsReturned
@@ -66,6 +55,17 @@ function hasShortage(doc: DashboardDocRow): boolean {
 
 type MaterialLine = { serviceCodeId: string; qty: number }
 
+/** The fields `isReturned` / `isResent` read. Every loader that sends
+ * `financeSendBackNotes` also sends the Finance timestamps. */
+function returnState(doc: DashboardDocRow) {
+	return {
+		financeSendBackNotes: doc.financeSendBackNotes,
+		releasedToFinanceAt: doc.releasedToFinanceAt ?? null,
+		financeVerifiedAt: doc.financeVerifiedAt ?? null,
+		pbccRequestSentAt: doc.pbccRequestSentAt ?? null,
+	}
+}
+
 export type DashboardDocRow = {
 	id: string
 	controlNumber: string
@@ -73,19 +73,24 @@ export type DashboardDocRow = {
 	jobType: string
 	jobAddressEstimated: string
 	createdAt: Date
-	avisoNumber?: string | null
 	assignedCrewIds?: string[]
 	sendBackHistory?: unknown
 	estimatedMaterials?: unknown
 	materialsTaken?: unknown
 	materialsUsed?: unknown
+	fieldMaterials?: unknown
 	materialsReturned?: unknown
 	/** Current step, derived server-side (needs the pre-cert signatures). */
 	stage?: SupervisorStage
+	/** The supervisor-facing chip label, derived server-side with `stage`. */
+	openLabel?: OpenJobLabel
 	supervisorApprovedAt?: Date | null
 	jafInvoiceGeneratedAt?: Date | null
-	avisoMatchedAt?: Date | null
+	avisoNumber?: string | null
+	avisoDocPath?: string | null
 	releasedToFinanceAt?: Date | null
+	/** Finance's returns: a returned packet is back on the supervisor's steps. */
+	financeSendBackNotes?: unknown
 	financeVerifiedAt?: Date | null
 	pbccRequestSentAt?: Date | null
 	advanceReceivedAt?: Date | null
@@ -97,6 +102,8 @@ export function DashboardDocList({
 	docs,
 	showBilling = true,
 	financeSteps = false,
+	packetStatus = false,
+	stepLinks = false,
 }: {
 	docs: DashboardDocRow[]
 	/** Billing detail (raw status enum, Aviso number) is for supervisor and
@@ -106,6 +113,11 @@ export function DashboardDocList({
 	 * on (Packets in, LC request, ...) instead of the supervisor's one "In
 	 * Finance" chip, so the dashboard matches the sidebar. */
 	financeSteps?: boolean
+	/** Packets to Claro: flag each row sent / not sent. Sent is the first
+	 * delivered send (`jafInvoiceGeneratedAt`), never just a stored PDF. */
+	packetStatus?: boolean
+	/** Supervisor: a row opens the screen of the step the job is on. */
+	stepLinks?: boolean
 }) {
 	const { t } = useTranslation()
 	return (
@@ -116,12 +128,37 @@ export function DashboardDocList({
 				)}
 				{docs.map((doc) => {
 					const overage = hasOverage(doc)
-					const discrepancy = hasQuantityDiscrepancy(doc)
 					const shortage = hasShortage(doc)
+					const returned =
+						doc.openLabel === "RETURNED" || isReturned(returnState(doc))
+					const stage =
+						doc.stage ??
+						deriveSupervisorStage(
+							{
+								status: doc.status,
+								supervisorApprovedAt: doc.supervisorApprovedAt ?? null,
+								jafInvoiceGeneratedAt: doc.jafInvoiceGeneratedAt ?? null,
+								avisoNumber: doc.avisoNumber ?? null,
+								avisoDocPath: doc.avisoDocPath ?? null,
+								releasedToFinanceAt: doc.releasedToFinanceAt ?? null,
+								financeVerifiedAt: doc.financeVerifiedAt ?? null,
+								pbccRequestSentAt: doc.pbccRequestSentAt ?? null,
+								financeSendBackNotes: doc.financeSendBackNotes,
+							},
+							null,
+						)
 					return (
 						<Link
 							key={doc.id}
-							to={`/docs/${doc.id}`}
+							to={
+								stepLinks
+									? supervisorStepHref(
+											doc.id,
+											// A returned packet opens the step that fixes it.
+											fixStepFor(stage, returned),
+										)
+									: `/docs/${doc.id}`
+							}
 							className="block rounded-lg border border-transparent p-3 transition-colors hover:border-border hover:bg-muted/40"
 						>
 							<div className="flex items-center justify-between gap-2">
@@ -131,39 +168,47 @@ export function DashboardDocList({
 								<div className="flex items-center gap-2">
 									{financeSteps &&
 									doc.releasedToFinanceAt &&
-									doc.status !== "CANCELLED" ? (
-										<Badge variant="ok">
-											{t(
-												FINANCE_STEP_LABEL_KEY[
-													armAStepOf({
-														financeVerifiedAt: doc.financeVerifiedAt ?? null,
-														pbccRequestSentAt: doc.pbccRequestSentAt ?? null,
-														advanceReceivedAt: doc.advanceReceivedAt ?? null,
-													})
-												],
+									doc.status !== "CANCELLED" &&
+									// A returned packet is the supervisor's again: the red
+									// Returned chip below, never a Finance step.
+									!returned ? (
+										<>
+											{isResent(returnState(doc)) && (
+												<Badge variant="info">
+													{t("returned_packet.resent")}
+												</Badge>
 											)}
-										</Badge>
+											<Badge variant="ok">
+												{t(
+													FINANCE_STEP_LABEL_KEY[
+														armAStepOf({
+															financeVerifiedAt: doc.financeVerifiedAt ?? null,
+															pbccRequestSentAt: doc.pbccRequestSentAt ?? null,
+															advanceReceivedAt: doc.advanceReceivedAt ?? null,
+														})
+													],
+												)}
+											</Badge>
+										</>
 									) : (
 										<DocStageBadge
-											stage={
-												doc.stage ??
-												deriveSupervisorStage(
-													{
-														status: doc.status,
-														supervisorApprovedAt:
-															doc.supervisorApprovedAt ?? null,
-														jafInvoiceGeneratedAt:
-															doc.jafInvoiceGeneratedAt ?? null,
-														avisoMatchedAt: doc.avisoMatchedAt ?? null,
-														releasedToFinanceAt:
-															doc.releasedToFinanceAt ?? null,
-													},
-													null,
-												)
-											}
+											openLabel={returned ? "RETURNED" : doc.openLabel}
+											stage={stage}
 											cancelled={doc.status === "CANCELLED"}
 										/>
 									)}
+									{packetStatus &&
+										(doc.jafInvoiceGeneratedAt ? (
+											<Badge variant="ok" suppressHydrationWarning>
+												{t("packet.queue.sent", {
+													date: new Date(
+														doc.jafInvoiceGeneratedAt,
+													).toLocaleDateString(),
+												})}
+											</Badge>
+										) : (
+											<Badge variant="warn">{t("packet.queue.not_sent")}</Badge>
+										))}
 									<HugeiconsIcon
 										icon={ChevronRightIcon}
 										strokeWidth={2}
@@ -174,16 +219,11 @@ export function DashboardDocList({
 							<p className="mt-1 text-sm text-muted-foreground">
 								{doc.jobType} — {doc.jobAddressEstimated}
 							</p>
-							{(overage || discrepancy || shortage) && (
+							{(overage || shortage) && (
 								<div className="mt-2 flex flex-wrap items-center gap-1">
 									{overage && (
 										<Badge variant="danger" className="text-xs">
 											{t("dashboard.signal.overage")}
-										</Badge>
-									)}
-									{discrepancy && (
-										<Badge variant="warn" className="text-xs">
-											{t("dashboard.signal.discrepancy")}
 										</Badge>
 									)}
 									{shortage && (

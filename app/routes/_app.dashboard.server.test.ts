@@ -27,6 +27,7 @@ vi.mock("~/lib/features.server", () => ({
 import { db } from "~/lib/db.server"
 import { isDashboardFiltersEnabled } from "~/lib/features.server"
 import { requireSession } from "~/lib/permissions.server"
+import { getAvisoAmountTolerance } from "~/lib/system-settings.server"
 import { loader } from "./_app.dashboard"
 
 const sup = { id: "sup-1", role: "SUPERVISOR" }
@@ -42,7 +43,8 @@ const row = (o: Record<string, unknown>) => ({
 	jafInvoiceGeneratedAt: null,
 	jafInvoiceLineTotal: null,
 	avisoLineTotal: null,
-	avisoMatchedAt: null,
+	avisoNumber: null,
+	avisoDocPath: null,
 	releasedToFinanceAt: null,
 	brigade: { name: "JESUS MARTINEZ" },
 	sendBackHistory: null,
@@ -70,6 +72,7 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 	it("returns the four queues alongside the stat tiles", async () => {
 		vi.mocked(db.jafInvoice.findMany)
 			.mockResolvedValueOnce([]) // jobTypeOptions
+			.mockResolvedValueOnce([]) // returned packet ids
 			.mockResolvedValueOnce([]) // docs list
 			.mockResolvedValueOnce([
 				row({ id: "n", status: "CREATED", createdAt: new Date() }),
@@ -81,22 +84,18 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 				row({ id: "m", jafInvoiceGeneratedAt: new Date() }),
 			] as any) // approved candidates
 			.mockResolvedValueOnce([
-				row({ id: "bb", releasedToFinanceAt: new Date() }),
-			] as any) // released without an Aviso PDF
-			.mockResolvedValueOnce([
 				row({ id: "p", status: "FIELD_UPDATED", supervisorApprovedAt: null }),
 				row({ id: "m", jafInvoiceGeneratedAt: new Date() }),
 			] as any) // my open work orders
+			.mockResolvedValueOnce([]) // action needed
+			.mockResolvedValueOnce([]) // returned
 		const data = await loader({
 			request: new Request("http://localhost/dashboard"),
 			params: {},
 		} as any)
-		expect(data.stats).toHaveLength(14)
+		expect(data.stats).toHaveLength(12)
 		expect(data.showFilters).toBe(false)
 		expect(data.supervisorQueues!.intake.map((r) => r.id)).toEqual(["n"])
-		expect(data.supervisorQueues!.blocked).toEqual([
-			expect.objectContaining({ id: "bb", blockReason: "billing_aviso_pdf" }),
-		])
 		expect(data.supervisorQueues!.myOpen).toEqual([
 			expect.objectContaining({ id: "p", stage: "APPROVE", waitingOn: "you" }),
 			expect.objectContaining({ id: "m", stage: "AVISO", waitingOn: "you" }),
@@ -110,9 +109,10 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 		})
 	})
 
-	it("puts a job with a stored mismatch into the blocked queue, not the missing-aviso queue", async () => {
+	it("never blocks a job on amounts: a legacy stored Aviso total is ignored", async () => {
 		vi.mocked(db.jafInvoice.findMany)
 			.mockResolvedValueOnce([] as any)
+			.mockResolvedValueOnce([] as any) // returned packet ids
 			.mockResolvedValueOnce([] as any)
 			.mockResolvedValueOnce([] as any) // intake
 			.mockResolvedValueOnce([] as any)
@@ -128,20 +128,20 @@ describe("GET /dashboard (SUPERVISOR)", () => {
 					jafInvoiceGeneratedAt: new Date(),
 					jafInvoiceLineTotal: 586.37,
 					avisoLineTotal: 586.37,
-					avisoMatchedAt: new Date(),
+					avisoNumber: "10353961",
+					avisoDocPath: "aviso-docs/ok-aviso.pdf",
 				}),
 			] as any)
-			.mockResolvedValueOnce([] as any) // released without an Aviso PDF
 			.mockResolvedValueOnce([] as any) // my open work orders
+			.mockResolvedValueOnce([] as any) // action needed
+			.mockResolvedValueOnce([] as any) // returned
 		const data = await loader({
 			request: new Request("http://localhost/dashboard"),
 			params: {},
 		} as any)
-		expect(data.supervisorQueues!.blocked.map((r) => r.id)).toEqual(["b"])
-		expect(data.supervisorQueues!.blocked[0]).toMatchObject({
-			blockReason: "aviso_mismatch",
-		})
-		expect(data.supervisorQueues!.missingAviso).toEqual([])
+		expect(data.supervisorQueues!.missingAviso.map((r) => r.id)).toEqual(["b"])
+		expect(data.supervisorQueues!.approved.map((r) => r.id)).toEqual(["ok"])
+		expect(getAvisoAmountTolerance).not.toHaveBeenCalled()
 	})
 
 	it("exposes showFilters when the flag is on", async () => {
@@ -228,7 +228,7 @@ describe("GET /dashboard (WAREHOUSE) — count cards", () => {
 			expect(res instanceof Response).toBe(false)
 		})
 
-		it.each(["CREW", "SUPERVISOR"])(
+		it.each(["SUPERVISOR"])(
 			"never redirects %s to /installer",
 			async (role) => {
 				vi.mocked(requireSession).mockResolvedValue({
@@ -268,5 +268,27 @@ describe("GET /dashboard (COMPTROLLER)", () => {
 		)
 		expect(thrown).toBeInstanceOf(Response)
 		expect((thrown as Response).headers.get("Location")).toBe("/comptroller")
+	})
+})
+
+describe("GET /dashboard (CREW)", () => {
+	it("sends the crew member to the crew notice and loads no jobs", async () => {
+		vi.clearAllMocks()
+		vi.mocked(requireSession).mockResolvedValue({ user: { id: "c1" } } as any)
+		vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
+			id: "c1",
+			role: "CREW",
+		} as any)
+		const thrown = await loader({
+			request: new Request("http://localhost/dashboard?stage=field"),
+			params: {},
+		} as any).then(
+			() => null,
+			(e: unknown) => e,
+		)
+		expect(thrown).toBeInstanceOf(Response)
+		expect((thrown as Response).headers.get("Location")).toBe("/crew-notice")
+		expect(db.jafInvoice.findMany).not.toHaveBeenCalled()
+		expect(db.$queryRaw).not.toHaveBeenCalled()
 	})
 })

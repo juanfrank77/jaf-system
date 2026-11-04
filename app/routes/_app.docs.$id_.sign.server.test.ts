@@ -1,3 +1,4 @@
+import { redirect } from "react-router"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("~/lib/db.server", () => {
@@ -28,6 +29,10 @@ vi.mock("~/lib/db.server", () => {
 		},
 		warehouse: {
 			findUnique: vi.fn(),
+			findMany: vi.fn(() => Promise.resolve([])),
+		},
+		brigade: {
+			findMany: vi.fn(),
 		},
 		auditTrail: {
 			create: mockAuditTrailCreate,
@@ -80,6 +85,36 @@ import { generateWarehouseReceiptPdf } from "~/lib/pdf/warehouse-receipt.server"
 import { requireRole } from "~/lib/permissions.server"
 import { action, loader } from "./_app.docs.$id_.sign"
 
+// Signers come from the brigades on the job; CREW users supply ids. findMany also
+// serves the warehouse list and the overage notify list, so branch on the role.
+const crewUsers = [
+	{ id: "crew-1", name: "Jesus Martinez" },
+	{ id: "crew-2", name: "Maria Lopez" },
+]
+function mockUserLists(notify: unknown[] = []) {
+	;(db.user.findMany as any).mockImplementation((args: any) =>
+		Promise.resolve(
+			args.where?.role === "CREW"
+				? crewUsers
+				: args.where?.role === "WAREHOUSE"
+					? []
+					: notify,
+		),
+	)
+}
+function mockBrigade(
+	brigade: { leadName: string | null; memberIds: string[] } | null = {
+		leadName: "Jesus Martinez",
+		memberIds: ["crew-2"],
+	},
+) {
+	vi.mocked(db.brigade.findMany).mockResolvedValue(
+		(brigade
+			? [{ id: "b-1", name: "JESUS MARTINEZ", code: "009", ...brigade }]
+			: []) as any,
+	)
+}
+
 function formRequest(form: FormData, id = "doc-1") {
 	return new Request(`http://localhost/docs/${id}/sign`, {
 		method: "POST",
@@ -88,7 +123,11 @@ function formRequest(form: FormData, id = "doc-1") {
 }
 
 describe("POST /docs/:id/sign", () => {
-	beforeEach(() => vi.clearAllMocks())
+	beforeEach(() => {
+		vi.clearAllMocks()
+		mockBrigade()
+		mockUserLists()
+	})
 
 	function baseDoc() {
 		return {
@@ -96,6 +135,7 @@ describe("POST /docs/:id/sign", () => {
 			controlNumber: "JAF-1001",
 			status: "PREPPED",
 			supervisorId: "sup-1",
+			brigadeId: "b-1",
 			estimatedMaterials: [{ serviceCodeId: "sc-1", qty: 2 }],
 			materialsTaken: null,
 		}
@@ -105,7 +145,7 @@ describe("POST /docs/:id/sign", () => {
 		const form = new FormData()
 		form.set("warehouseId", "wh-1")
 		form.set("releasedById", "warehouse-1")
-		form.set("signedById", "crew-1")
+		form.set("crewSigner", "b-1:crew-1")
 		form.set("releaseSignature", "data:image/png;base64,release")
 		form.set("crewSignature", "data:image/png;base64,crew")
 		form.set("materials", JSON.stringify([{ serviceCodeId: "sc-1", qty: 2 }]))
@@ -151,7 +191,7 @@ describe("POST /docs/:id/sign", () => {
 			id: "wh-1",
 			name: "Main",
 		} as any)
-		vi.mocked(db.user.findMany).mockResolvedValue([])
+		mockUserLists()
 
 		// Override the transaction mock to properly execute the callback
 		vi.mocked(db.$transaction).mockImplementation(async (callback: any) => {
@@ -200,10 +240,7 @@ describe("POST /docs/:id/sign", () => {
 			id: "wh-1",
 			name: "Main",
 		} as any)
-		vi.mocked(db.user.findMany).mockResolvedValue([
-			{ id: "sup-1" },
-			{ id: "admin-1" },
-		] as any)
+		mockUserLists([{ id: "sup-1" }, { id: "admin-1" }] as any)
 
 		// Override the transaction mock to properly execute the callback
 		vi.mocked(db.$transaction).mockImplementation(async (callback: any) => {
@@ -253,7 +290,7 @@ describe("POST /docs/:id/sign", () => {
 				id: "wh-1",
 				name: "Main",
 			} as any)
-			vi.mocked(db.user.findMany).mockResolvedValue([{ id: "sup-1" }] as any)
+			mockUserLists([{ id: "sup-1" }] as any)
 			vi.mocked(db.$transaction).mockImplementation(async (callback: any) => {
 				if (typeof callback === "function") {
 					return await callback({
@@ -359,7 +396,7 @@ describe("POST /docs/:id/sign", () => {
 				return Promise.resolve({ id: "warehouse-1", name: "Iidalia" })
 			return Promise.resolve({ id: "crew-1", name: "Crew A" })
 		})
-		vi.mocked(db.user.findMany).mockResolvedValue([])
+		mockUserLists()
 		vi.mocked(db.warehouse.findUnique).mockResolvedValue({
 			id: "wh-1",
 			name: "Main",
@@ -429,7 +466,7 @@ describe("POST /docs/:id/sign", () => {
 				return Promise.resolve({ id: "warehouse-1", name: "Iidalia" })
 			return Promise.resolve({ id: "crew-1", name: "Crew A" })
 		})
-		vi.mocked(db.user.findMany).mockResolvedValue([])
+		mockUserLists()
 		vi.mocked(db.warehouse.findUnique).mockResolvedValue({
 			id: "wh-1",
 			name: "Main",
@@ -475,38 +512,278 @@ describe("POST /docs/:id/sign", () => {
 	})
 })
 
-describe("crew assignment scope on /docs/:id/sign", () => {
-	beforeEach(() => vi.clearAllMocks())
+describe("who signs on /docs/:id/sign (crew accounts no longer sign in)", () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+		mockBrigade()
+		mockUserLists()
+	})
 
-	function unassignedCrewSetup() {
-		vi.mocked(requireRole).mockResolvedValue({
-			user: { id: "crew-9", role: "CREW" },
-		} as any)
-		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
-			id: "doc-1",
-			status: "PREPPED",
-			assignedCrewIds: ["crew-1"],
-		} as any)
+	/** requireRole as the real one behaves: off-list roles go to /dashboard. */
+	function as(role: string, id: string) {
+		vi.mocked(requireRole).mockImplementation(async (_req, roles) => {
+			if (!(roles as string[]).includes(role)) throw redirect("/dashboard")
+			return { user: { id, role }, session: {} } as any
+		})
 	}
 
-	it("404s the loader for a crew member not assigned to the job", async () => {
-		unassignedCrewSetup()
-		const thrown = await loader({
+	function signable() {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			id: "doc-1",
+			controlNumber: "JAF-1001",
+			status: "PREPPED",
+			supervisorId: "sup-1",
+			brigadeId: "b-1",
+			assignedCrewIds: ["crew-1", "crew-2"],
+			estimatedMaterials: [{ serviceCodeId: "sc-1", qty: 2 }],
+			materialsTaken: null,
+		} as any)
+		;(db.user.findFirst as any).mockImplementation((args: any) =>
+			Promise.resolve(
+				args.where.role === "WAREHOUSE"
+					? { id: args.where.id, name: "Iidalia" }
+					: { id: args.where.id, name: `Member ${args.where.id}` },
+			),
+		)
+		vi.mocked(db.warehouse.findUnique).mockResolvedValue({
+			id: "wh-1",
+			name: "Main",
+		} as any)
+		mockUserLists()
+	}
+
+	function signForm() {
+		const form = new FormData()
+		form.set("warehouseId", "wh-1")
+		form.set("releasedById", "warehouse-1")
+		form.set("crewSigner", "b-1:crew-1")
+		form.set("releaseSignature", "data:image/png;base64,release")
+		form.set("crewSignature", "data:image/png;base64,crew")
+		form.set("materials", JSON.stringify([{ serviceCodeId: "sc-1", qty: 2 }]))
+		return form
+	}
+
+	it("refuses a CREW session on the loader and the action, writing nothing", async () => {
+		as("CREW", "crew-1")
+		signable()
+		const l = await loader({
 			request: new Request("http://localhost/docs/doc-1/sign"),
 			params: { id: "doc-1" },
 		} as any).catch((e: unknown) => e)
-		expect((thrown as Response).status).toBe(404)
-		expect(await (thrown as Response).text()).toBe("NOT_ASSIGNED")
+		const a = await action({
+			request: formRequest(signForm()),
+			params: { id: "doc-1" },
+		} as any).catch((e: unknown) => e)
+		for (const res of [l, a]) {
+			expect((res as Response).status).toBe(302)
+			expect((res as Response).headers.get("Location")).toBe("/dashboard")
+		}
+		expect(requireRole).toHaveBeenCalledWith(expect.anything(), [
+			"WAREHOUSE",
+			"ADMIN",
+		])
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
 	})
 
-	it("404s the action and writes nothing for an unassigned crew member", async () => {
-		unassignedCrewSetup()
-		await expect(
-			action({
-				request: formRequest(new FormData()),
-				params: { id: "doc-1" },
-			} as any),
-		).rejects.toMatchObject({ status: 404 })
+	it.each([
+		["WAREHOUSE", "warehouse-1"],
+		["ADMIN", "admin-1"],
+	])("lets %s complete the dual signature", async (role, id) => {
+		as(role, id)
+		signable()
+		const res = await action({
+			request: formRequest(signForm()),
+			params: { id: "doc-1" },
+		} as any).catch((r: unknown) => r)
+		expect((res as Response).status).toBe(302)
+		const data = vi.mocked(db.jafInvoice.update).mock.calls[0][0].data as any
+		expect(data.status).toBe("SIGNED")
+		expect(data.releasedById).toBe("warehouse-1")
+		expect(data.releaseSignature).toBe("data:image/png;base64,release")
+		expect(data.signedById).toBe("crew-1")
+		expect(data.crewSignature).toBe("data:image/png;base64,crew")
+	})
+
+	it("records one brigade member on the crew side, even when several are sent (multi-member signing is a follow-up)", async () => {
+		as("WAREHOUSE", "warehouse-1")
+		signable()
+		const form = signForm()
+		form.append("crewSigner", "b-1:crew-2")
+		await action({
+			request: formRequest(form),
+			params: { id: "doc-1" },
+		} as any).catch((r: unknown) => r)
+		const data = vi.mocked(db.jafInvoice.update).mock.calls[0][0].data as any
+		expect(data.signedById).toBe("crew-1")
+		expect(generateWarehouseReceiptPdf).toHaveBeenCalledWith(
+			expect.objectContaining({ crewSignerName: "Jesus Martinez" }),
+			expect.anything(),
+			"Main",
+		)
+	})
+})
+
+describe("pickup signer is the assigned brigade", () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "warehouse-1", role: "WAREHOUSE" },
+			session: {},
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			id: "doc-1",
+			controlNumber: "JAF-1001",
+			status: "PREPPED",
+			supervisorId: "sup-1",
+			brigadeId: "b-1",
+			estimatedMaterials: [{ serviceCodeId: "sc-1", qty: 2 }],
+			materialsTaken: null,
+		} as any)
+		;(db.user.findFirst as any).mockResolvedValue({
+			id: "warehouse-1",
+			name: "Iidalia",
+		})
+		vi.mocked(db.warehouse.findUnique).mockResolvedValue({
+			id: "wh-1",
+			name: "Main",
+		} as any)
+		mockUserLists()
+	})
+
+	function loaderReq() {
+		return loader({
+			request: new Request("http://localhost/docs/doc-1/sign"),
+			params: { id: "doc-1" },
+		} as any) as Promise<any>
+	}
+
+	function form(crewSigner: string) {
+		const f = new FormData()
+		f.set("warehouseId", "wh-1")
+		f.set("releasedById", "warehouse-1")
+		f.set("crewSigner", crewSigner)
+		f.set("releaseSignature", "data:image/png;base64,release")
+		f.set("crewSignature", "data:image/png;base64,crew")
+		f.set("materials", JSON.stringify([{ serviceCodeId: "sc-1", qty: 2 }]))
+		return f
+	}
+
+	function runInTransaction() {
+		vi.mocked(db.$transaction).mockImplementation(async (cb: any) =>
+			cb({
+				jafInvoice: { update: vi.mocked(db.jafInvoice.update) },
+				auditTrail: { create: vi.mocked(db.auditTrail.create) },
+				notification: { create: vi.mocked(db.notification.create) },
+				stockMovement: { create: vi.mocked(db.stockMovement.create) },
+			}),
+		)
+	}
+
+	it("the loader lists the brigade's people, lead first", async () => {
+		mockBrigade({ leadName: "Jesus Martinez", memberIds: ["crew-2"] })
+		const data = await loaderReq()
+		expect(data.signerGroups).toEqual([
+			{
+				brigadeId: "b-1",
+				brigadeName: "JESUS MARTINEZ",
+				brigadeCode: "009",
+				signers: [
+					{ key: "b-1:crew-1", name: "Jesus Martinez", userId: "crew-1" },
+					{ key: "b-1:crew-2", name: "Maria Lopez", userId: "crew-2" },
+				],
+			},
+		])
+		expect(data.pickupErrorKey).toBeNull()
+	})
+
+	it("a reactivated brigade with no crew account can still sign, by name", async () => {
+		mockBrigade({ leadName: "Carlos Rodríguez", memberIds: [] })
+		const data = await loaderReq()
+		expect(data.signerGroups[0].signers).toEqual([
+			{ key: "b-1:name", name: "Carlos Rodríguez", userId: null },
+		])
+		expect(data.pickupErrorKey).toBeNull()
+	})
+
+	it("the loader lists every brigade on the job, not only the lead", async () => {
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue({
+			id: "doc-1",
+			status: "PREPPED",
+			brigadeId: "b-1",
+			crewAssignmentHistory: [{ brigadeIds: ["b-2", "b-1"] }],
+		} as any)
+		vi.mocked(db.brigade.findMany).mockResolvedValue([
+			{ id: "b-1", name: "A", code: "1", leadName: "Ana", memberIds: [] },
+			{ id: "b-2", name: "B", code: "2", leadName: "Beto", memberIds: [] },
+		] as any)
+		const data = await loaderReq()
+		expect(db.brigade.findMany).toHaveBeenCalledWith(
+			expect.objectContaining({ where: { id: { in: ["b-2", "b-1"] } } }),
+		)
+		expect(data.signerGroups.map((g: any) => g.brigadeId)).toEqual([
+			"b-2",
+			"b-1",
+		])
+	})
+
+	it("the loader reports no_pickup_signer, without throwing, when the job has no brigade", async () => {
+		mockBrigade(null)
+		const data = await loaderReq()
+		expect(data.signerGroups).toEqual([])
+		expect(data.pickupErrorKey).toBe("docs_sign.errors.no_pickup_signer")
+	})
+
+	it("the action rejects a signer who is not on this job", async () => {
+		mockBrigade({ leadName: "Jesus Martinez", memberIds: [] })
+		const result = await action({
+			request: formRequest(form("b-9:crew-2")),
+			params: { id: "doc-1" },
+		} as any)
+		expect(result).toEqual({ errorKey: "docs_sign.errors.crew_signer_invalid" })
 		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("the action returns no_pickup_signer when the job has no brigade", async () => {
+		mockBrigade(null)
+		const result = await action({
+			request: formRequest(form("b-1:crew-1")),
+			params: { id: "doc-1" },
+		} as any)
+		expect(result).toEqual({ errorKey: "docs_sign.errors.no_pickup_signer" })
+		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("stores the signer's account, name and brigade", async () => {
+		mockBrigade({ leadName: "Jesus Martinez", memberIds: ["crew-2"] })
+		runInTransaction()
+		const res = await action({
+			request: formRequest(form("b-1:crew-1")),
+			params: { id: "doc-1" },
+		} as any).catch((r: unknown) => r)
+		expect((res as Response).status).toBe(302)
+		const data = vi.mocked(db.jafInvoice.update).mock.calls[0][0].data as any
+		expect(data.signedById).toBe("crew-1")
+		expect(data.crewSignerName).toBe("Jesus Martinez")
+		expect(data.crewSignerBrigadeId).toBe("b-1")
+		expect(generateWarehouseReceiptPdf).toHaveBeenCalledWith(
+			expect.objectContaining({ crewSignerName: "Jesus Martinez" }),
+			expect.anything(),
+			"Main",
+		)
+	})
+
+	it("signs with no account: the name and brigade are stored, the job moves on", async () => {
+		mockBrigade({ leadName: "Carlos Rodríguez", memberIds: [] })
+		runInTransaction()
+		const res = await action({
+			request: formRequest(form("b-1:name")),
+			params: { id: "doc-1" },
+		} as any).catch((r: unknown) => r)
+		expect((res as Response).status).toBe(302)
+		const data = vi.mocked(db.jafInvoice.update).mock.calls[0][0].data as any
+		expect(data.status).toBe("SIGNED")
+		expect(data.signedById).toBeNull()
+		expect(data.crewSignerName).toBe("Carlos Rodríguez")
+		expect(data.crewSignerBrigadeId).toBe("b-1")
 	})
 })

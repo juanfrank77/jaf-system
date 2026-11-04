@@ -6,18 +6,15 @@ export type ServiceLine = {
 	accountCode: string | null
 	name: string
 	qty: number
+	/**
+	 * Set only on an installed line the supervisor added at the Field step
+	 * ("Add service"): the order never had it, so its ordered quantity is 0.
+	 */
+	addedInField?: true
 }
 
 export type InvoiceLine = ServiceLine & {
 	unit: string | null
-	unitPrice: number
-	lineAmount: number
-}
-
-export type AvisoLine = {
-	serviceCodeId: string
-	claroCode: string
-	qty: number
 	unitPrice: number
 	lineAmount: number
 }
@@ -69,7 +66,48 @@ export function parseServiceLines(
 			accountCode: l.accountCode ? String(l.accountCode) : null,
 			name: String(l.name ?? ""),
 			qty: Number(l.qty),
+			...(l.addedInField === true ? { addedInField: true as const } : {}),
 		}))
+}
+
+/**
+ * The installed lines a Field save writes. Lines on the order take the posted
+ * quantity. A line the order does not have only enters (and leaves) through
+ * "Add service", which is audited: the post may change its quantity (above 0)
+ * but never adds or drops one, so a draft saved before an add or a remove
+ * cannot undo it. What such a line is (code, name, flag) stays as stored.
+ */
+export function mergeInstalledPost(
+	posted: ServiceLine[],
+	ordered: ServiceLine[],
+	stored: ServiceLine[] | null,
+): ServiceLine[] {
+	const onOrder = new Set(ordered.map((l) => l.serviceCodeId))
+	const postedQty = new Map(posted.map((l) => [l.serviceCodeId, l.qty]))
+	const fromOrder = posted
+		.filter((l) => onOrder.has(l.serviceCodeId))
+		.map(({ addedInField: _, ...l }) => l)
+	const extras = (stored ?? [])
+		.filter((l) => !onOrder.has(l.serviceCodeId))
+		.map((l) => {
+			const qty = postedQty.get(l.serviceCodeId)
+			return qty !== undefined && qty > 0 ? { ...l, qty } : l
+		})
+	return [...fromOrder, ...extras]
+}
+
+/**
+ * Installed lines the order does not have (the ones added in the field, and
+ * any older extra), in stored order. Every screen that lists the order next
+ * to what was installed appends these with Ordered 0, so no installed line is
+ * ever dropped by a join on the order.
+ */
+export function installedNotOrdered(
+	ordered: ServiceLine[],
+	installed: ServiceLine[] | null | undefined,
+): ServiceLine[] {
+	const onOrder = new Set(ordered.map((l) => l.serviceCodeId))
+	return (installed ?? []).filter((l) => !onOrder.has(l.serviceCodeId))
 }
 
 export function buildInvoiceLines(
@@ -114,27 +152,6 @@ export function buildPreCertLines(
 		unitPrice: l.unitPrice,
 		lineAmount: l.lineAmount,
 	}))
-}
-
-export function parseAvisoLines(raw: string | null | undefined): AvisoLine[] {
-	if (!raw) return []
-	const parsed = JSON.parse(raw)
-	if (!Array.isArray(parsed)) return []
-	return parsed
-		.filter(
-			(l) => l && typeof l.serviceCodeId === "string" && Number(l.qty) > 0,
-		)
-		.map((l) => {
-			const qty = Number(l.qty)
-			const unitPrice = Number(l.unitPrice) || 0
-			return {
-				serviceCodeId: String(l.serviceCodeId),
-				claroCode: String(l.claroCode ?? ""),
-				qty,
-				unitPrice,
-				lineAmount: round2(qty * unitPrice),
-			}
-		})
 }
 
 /**

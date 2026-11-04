@@ -20,7 +20,60 @@ describe("supervisorQueueHref", () => {
 	})
 })
 
+describe("supervisorQueueWhere: returned packets", () => {
+	it("Returned lists exactly the returned jobs, and every step queue leaves them out", () => {
+		const ids = ["r1", "r2"]
+		expect(supervisorQueueWhere("returned", ids)).toEqual({
+			id: { in: ids },
+			status: { not: "CANCELLED" },
+		})
+		// No returned jobs: nothing matches, rather than everything.
+		expect(supervisorQueueWhere("returned")).toEqual({
+			id: { in: [] },
+			status: { not: "CANCELLED" },
+		})
+		for (const q of [
+			"open",
+			"invoice",
+			"aviso",
+			"precert",
+			"released",
+		] as const)
+			expect(supervisorQueueWhere(q, ids), q).toMatchObject({
+				id: { notIn: ids },
+			})
+		expect(supervisorQueueWhere("all", ids)).toEqual(
+			supervisorQueueWhere("all"),
+		)
+	})
+
+	it("Returned sits in the sidebar right after My open jobs", () => {
+		expect(SUPERVISOR_QUEUES.slice(0, 2)).toEqual(["open", "returned"])
+		expect(supervisorQueueHref("returned")).toBe("/dashboard?stage=returned")
+	})
+})
+
 describe("supervisorQueueWhere", () => {
+	it("keeps Open to the steps before the packet, so Packet, Aviso and Pre-cert jobs sit only in their own queues", () => {
+		expect(supervisorQueueWhere("open")).toEqual({
+			releasedToFinanceAt: null,
+			OR: [{ avisoNumber: null }, { avisoDocPath: null }],
+			supervisorApprovedAt: null,
+			jafInvoiceGeneratedAt: null,
+			status: { in: ["CREATED", "PREPPED", "SIGNED", "FIELD_UPDATED"] },
+		})
+	})
+
+	it("keeps Packets to Claro to signed-off jobs still waiting on the Aviso, sent or not", () => {
+		const where = supervisorQueueWhere("invoice")
+		expect(where).toMatchObject({
+			releasedToFinanceAt: null,
+			OR: [{ avisoNumber: null }, { avisoDocPath: null }],
+			supervisorApprovedAt: { not: null },
+		})
+		expect(where).not.toHaveProperty("jafInvoiceGeneratedAt")
+	})
+
 	it("keeps Field to jobs prepped or out with the crew", () => {
 		expect(supervisorQueueWhere("field")).toEqual({
 			status: { in: ["PREPPED", "SIGNED"] },
@@ -41,14 +94,15 @@ describe("supervisorQueueWhere", () => {
 	it("walks the milestones from Approve to Finance", () => {
 		expect(supervisorQueueWhere("invoice")).toMatchObject({
 			supervisorApprovedAt: { not: null },
-			jafInvoiceGeneratedAt: null,
+			OR: [{ avisoNumber: null }, { avisoDocPath: null }],
 		})
 		expect(supervisorQueueWhere("aviso")).toMatchObject({
 			jafInvoiceGeneratedAt: { not: null },
-			avisoMatchedAt: null,
+			OR: [{ avisoNumber: null }, { avisoDocPath: null }],
 		})
 		expect(supervisorQueueWhere("precert")).toMatchObject({
-			avisoMatchedAt: { not: null },
+			avisoNumber: { not: null },
+			avisoDocPath: { not: null },
 			releasedToFinanceAt: null,
 		})
 		expect(supervisorQueueWhere("released")).toMatchObject({

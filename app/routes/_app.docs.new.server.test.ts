@@ -1,14 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const tx = {
-	jafInvoice: { create: vi.fn() },
+	jafInvoice: { create: vi.fn(), update: vi.fn() },
 	auditTrail: { create: vi.fn() },
 	notification: { createMany: vi.fn() },
 }
 vi.mock("~/lib/db.server", () => ({
 	db: {
 		brigade: { findUnique: vi.fn(), findMany: vi.fn() },
+		jafInvoice: { groupBy: vi.fn(() => Promise.resolve([])) },
 		user: { findMany: vi.fn(), findUnique: vi.fn() },
+		claroSupervisor: { findFirst: vi.fn(), findMany: vi.fn() },
 		$transaction: vi.fn(async (fn: any) => fn(tx)),
 	},
 }))
@@ -21,10 +23,35 @@ vi.mock("~/lib/service-codes.server", async (importOriginal) => ({
 	getActiveMaterialCodes: vi.fn(),
 }))
 
+vi.mock("~/lib/address-suggestions.server", () => ({
+	canonicalizeAddress: vi.fn(async (a: any) => ({
+		...a,
+		tipo: a.tipo === "calle" ? "CALLE" : a.tipo,
+	})),
+	loadAddressSuggestions: vi.fn(async () => ({
+		tipo: [],
+		tipoPlanta: [],
+		grupoPlan: [],
+	})),
+}))
+vi.mock("~/lib/uploads.server", () => ({ saveUpload: vi.fn() }))
+// The guard's database half is covered against a real DB in
+// brigade-picker.server.test.ts and _app.docs.new.brigade-guard.server.test.ts.
+vi.mock("~/lib/brigade-picker.server", async (importOriginal) => ({
+	...(await importOriginal<typeof import("~/lib/brigade-picker.server")>()),
+	assignBrigadesOrThrow: vi.fn(),
+}))
+
+import {
+	assignBrigadesOrThrow,
+	BRIGADE_INVALID,
+	BrigadeAssignError,
+} from "~/lib/brigade-picker.server"
 import { generateControlNumber } from "~/lib/control-number.server"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
 import { getActiveMaterialCodes } from "~/lib/service-codes.server"
+import { saveUpload } from "~/lib/uploads.server"
 import { action, loader } from "./_app.docs.new"
 
 function post(form: FormData) {
@@ -50,15 +77,36 @@ describe("POST /docs/new", () => {
 			id: "b1",
 			name: "JESUS MARTINEZ",
 			area: "CENTRAL",
+			active: true,
+			supervisorId: null,
 			memberIds: ["crew-1", "crew-2"],
 		} as any)
 		tx.jafInvoice.create.mockResolvedValue({ id: "doc-1" })
+		vi.mocked(db.claroSupervisor.findFirst).mockResolvedValue({
+			id: "cs-1",
+			active: true,
+			requiresPrefield: false,
+			requiresBlueprint: false,
+		} as any)
 	})
+
+	function addr(form: FormData) {
+		form.set("claroSupervisorId", "cs-1")
+		form.set("direccion1", "119")
+		form.set("sector", "Sector Palomar")
+		form.set("tipo", "calle")
+		form.set("tipoPlanta", "Aerea")
+		form.set("grupoPlan", "G1")
+		if (!form.has("materialsFromWarehouse"))
+			form.set("materialsFromWarehouse", "yes")
+		if (!form.has("prefieldNeeded")) form.set("prefieldNeeded", "not_needed")
+		return form
+	}
 
 	it("stores description, service lines and the brigade, and fills assignedCrewIds from the brigade", async () => {
 		const form = new FormData()
 		form.set("jobType", "Mantenimiento")
-		form.set("jobAddressEstimated", "CAM 906 Yabucoa")
+		addr(form)
 		form.set("jobDescription", "Transferencia de attachments")
 		form.set("brigadeId", "b1")
 		form.set("materials", "[]")
@@ -96,32 +144,244 @@ describe("POST /docs/new", () => {
 		})
 	})
 
-	function validForm(aviso?: string) {
+	function validForm() {
 		const form = new FormData()
 		form.set("jobType", "Mantenimiento")
-		form.set("jobAddressEstimated", "CAM 906 Yabucoa")
+		addr(form)
 		form.set("brigadeId", "b1")
 		form.set("materials", "[]")
 		form.set("serviceLines", "[]")
-		if (aviso !== undefined) form.set("avisoNumber", aviso)
 		return form
 	}
 
-	it("never stores an Aviso number at intake, even if one is posted", async () => {
-		const res = await action({
-			request: post(validForm("10353961")),
-			params: {},
-		} as any).catch((r) => r)
+	it("no longer stores Aviso # or the Prefield fields from the form", async () => {
+		const form = validForm()
+		form.set("avisoNumber", "10353961")
+		for (const k of ["ordenNumber", "pedido", "smr", "titulo"]) form.set(k, "X")
+		await action({ request: post(form), params: {} } as any).catch((r) => r)
+		const { data } = tx.jafInvoice.create.mock.calls[0][0]
+		for (const k of ["avisoNumber", "ordenNumber", "pedido", "smr", "titulo"])
+			expect(data).not.toHaveProperty(k)
+	})
+
+	describe("intake answers", () => {
+		it.each([
+			["materialsFromWarehouse", "docs_new.errors.materials_choice_required"],
+			["prefieldNeeded", "docs_new.errors.prefield_choice_required"],
+		])("blocks Create without %s", async (field, errorKey) => {
+			const form = validForm()
+			form.delete(field)
+			expect(await action({ request: post(form), params: {} } as any)).toEqual({
+				errorKey,
+			})
+			expect(tx.jafInvoice.create).not.toHaveBeenCalled()
+			expect(tx.notification.createMany).not.toHaveBeenCalled()
+		})
+
+		it("blocks Create on No without a reason", async () => {
+			const form = validForm()
+			form.set("materialsFromWarehouse", "no")
+			form.set("materialsReason", "  ")
+			expect(await action({ request: post(form), params: {} } as any)).toEqual({
+				errorKey: "docs_new.errors.materials_reason_required",
+			})
+			expect(tx.jafInvoice.create).not.toHaveBeenCalled()
+		})
+
+		it("No skips the warehouse: SIGNED, reason stored, no materials, no warehouse notice", async () => {
+			const form = validForm()
+			form.set("materialsFromWarehouse", "no")
+			form.set("materialsReason", " own truck ")
+			form.set("materials", JSON.stringify([{ serviceCodeId: "m1", qty: 3 }]))
+			const res = await action({
+				request: post(form),
+				params: {},
+			} as any).catch((r) => r)
+			expect(res.status).toBe(302)
+			const { data } = tx.jafInvoice.create.mock.calls[0][0]
+			expect(data).toEqual(
+				expect.objectContaining({
+					status: "SIGNED",
+					materialsFromWarehouse: false,
+					materialsReason: "own truck",
+					estimatedMaterials: [],
+				}),
+			)
+			expect(tx.notification.createMany).not.toHaveBeenCalled()
+			expect(tx.auditTrail.create).toHaveBeenCalledWith({
+				data: expect.objectContaining({
+					diffJson: expect.objectContaining({
+						status: { before: null, after: "SIGNED" },
+						materialsFromWarehouse: false,
+						materialsReason: "own truck",
+						prefieldNeeded: false,
+					}),
+				}),
+			})
+		})
+
+		it("Yes keeps the warehouse path: CREATED, materials kept, warehouse notified", async () => {
+			const form = validForm()
+			form.set("materials", JSON.stringify([{ serviceCodeId: "m1", qty: 3 }]))
+			await action({ request: post(form), params: {} } as any).catch((r) => r)
+			const { data } = tx.jafInvoice.create.mock.calls[0][0]
+			expect(data).toEqual(
+				expect.objectContaining({
+					status: "CREATED",
+					materialsFromWarehouse: true,
+					materialsReason: null,
+					estimatedMaterials: [{ serviceCodeId: "m1", qty: 3 }],
+				}),
+			)
+			expect(tx.notification.createMany).toHaveBeenCalledTimes(1)
+		})
+
+		it("stores the posted Prefield answer, not the Claro supervisor's tag", async () => {
+			vi.mocked(db.claroSupervisor.findFirst).mockResolvedValue({
+				id: "cs-1",
+				active: true,
+				requiresPrefield: true,
+				requiresBlueprint: false,
+			} as any)
+			const form = validForm()
+			form.set("prefieldNeeded", "not_needed")
+			await action({ request: post(form), params: {} } as any).catch((r) => r)
+			expect(tx.jafInvoice.create.mock.calls[0][0].data.prefieldNeeded).toBe(
+				false,
+			)
+			tx.jafInvoice.create.mockClear()
+			vi.mocked(db.claroSupervisor.findFirst).mockResolvedValue({
+				id: "cs-1",
+				active: true,
+				requiresPrefield: false,
+				requiresBlueprint: false,
+			} as any)
+			const needed = validForm()
+			needed.set("prefieldNeeded", "needed")
+			await action({ request: post(needed), params: {} } as any).catch((r) => r)
+			expect(tx.jafInvoice.create.mock.calls[0][0].data.prefieldNeeded).toBe(
+				true,
+			)
+		})
+	})
+
+	it("requires a job type", async () => {
+		const form = validForm()
+		form.delete("jobType")
+		expect(await action({ request: post(form), params: {} } as any)).toEqual({
+			errorKey: "docs_new.errors.missing_fields",
+		})
+	})
+
+	it("stores the canonicalised address, supervisor and composed jobAddressEstimated", async () => {
+		const form = addr(validForm())
+		const res = await action({ request: post(form), params: {} } as any).catch(
+			(r) => r,
+		)
 		expect(res.status).toBe(302)
 		const { data } = tx.jafInvoice.create.mock.calls[0][0]
-		expect(data).not.toHaveProperty("avisoNumber")
+		expect(data).toEqual(
+			expect.objectContaining({
+				claroSupervisorId: "cs-1",
+				direccion1: "119",
+				sector: "Sector Palomar",
+				tipo: "CALLE",
+				tipoPlanta: "Aerea",
+				grupoPlan: "G1",
+				jobAddressEstimated: "119, Sector Palomar",
+			}),
+		)
+	})
+
+	it("requires an active Claro supervisor", async () => {
+		const noSup = addr(validForm())
+		noSup.delete("claroSupervisorId")
+		expect(await action({ request: post(noSup), params: {} } as any)).toEqual({
+			errorKey: "docs_new.errors.claro_supervisor_required",
+		})
+		vi.mocked(db.claroSupervisor.findFirst).mockResolvedValue({
+			id: "cs-1",
+			active: false,
+		} as any)
+		expect(
+			await action({ request: post(addr(validForm())), params: {} } as any),
+		).toEqual({ errorKey: "docs_new.errors.claro_supervisor_required" })
+		expect(tx.jafInvoice.create).not.toHaveBeenCalled()
+	})
+
+	it("rejects a missing Dirección 1", async () => {
+		const form = addr(validForm())
+		form.delete("direccion1")
+		expect(await action({ request: post(form), params: {} } as any)).toEqual({
+			errorKey: "docs_new.errors.address_required",
+		})
+	})
+
+	it("notifies warehouse users only", async () => {
+		await action({ request: post(addr(validForm())), params: {} } as any).catch(
+			(r) => r,
+		)
+		expect(db.user.findMany).toHaveBeenCalledWith({
+			where: { role: "WAREHOUSE", active: true },
+		})
+		const { data } = tx.notification.createMany.mock.calls[0][0]
+		expect(data.map((n: any) => n.userId)).toEqual(["wh-1"])
+	})
+
+	it("takes no blueprint on this screen: it is uploaded on the field update", async () => {
+		const form = addr(validForm())
+		form.append(
+			"blueprint",
+			new File(["x"], "plan.pdf", { type: "application/pdf" }),
+		)
+		await action({ request: post(form), params: {} } as any).catch((r) => r)
+		expect(saveUpload).not.toHaveBeenCalled()
+		expect(tx.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("only accepts a Claro supervisor linked to the supervisor, any for Admin", async () => {
+		await action({ request: post(addr(validForm())), params: {} } as any).catch(
+			(r) => r,
+		)
+		expect(db.claroSupervisor.findFirst).toHaveBeenLastCalledWith({
+			where: { id: "cs-1", jafSupervisors: { some: { id: "sup-1" } } },
+		})
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "adm-1", role: "ADMIN" },
+			session: {},
+		} as any)
+		await action({ request: post(addr(validForm())), params: {} } as any).catch(
+			(r) => r,
+		)
+		expect(db.claroSupervisor.findFirst).toHaveBeenLastCalledWith({
+			where: { id: "cs-1" },
+		})
 	})
 
 	describe("several brigades", () => {
 		const brigades: Record<string, any> = {
-			b1: { id: "b1", name: "A", area: "CENTRAL", memberIds: ["u1", "u2"] },
-			b2: { id: "b2", name: "B", area: "CENTRAL", memberIds: ["u2", "u3"] },
-			bx: { id: "bx", name: "X", area: "METRO", memberIds: ["u9"] },
+			b1: {
+				id: "b1",
+				name: "A",
+				area: "CENTRAL",
+				active: true,
+				memberIds: ["u1", "u2"],
+			},
+			b2: {
+				id: "b2",
+				name: "B",
+				area: "CENTRAL",
+				active: true,
+				memberIds: ["u2", "u3"],
+			},
+			bx: {
+				id: "bx",
+				name: "X",
+				area: "METRO",
+				active: true,
+				supervisorId: "sup-9",
+				memberIds: ["u9"],
+			},
 		}
 		function multiForm(ids: string[]) {
 			const form = validForm()
@@ -159,15 +419,6 @@ describe("POST /docs/new", () => {
 			})
 		})
 
-		it("rejects the whole assignment if any brigade is outside the supervisor's areas", async () => {
-			const res = await action({
-				request: post(multiForm(["b1", "bx"])),
-				params: {},
-			} as any)
-			expect(res).toEqual({ errorKey: "docs_new.errors.brigade_invalid" })
-			expect(tx.jafInvoice.create).not.toHaveBeenCalled()
-		})
-
 		it("rejects an unknown brigade id", async () => {
 			const res = await action({
 				request: post(multiForm(["b1", "nope"])),
@@ -180,36 +431,103 @@ describe("POST /docs/new", () => {
 	it("rejects a missing brigade", async () => {
 		const form = new FormData()
 		form.set("jobType", "Mantenimiento")
-		form.set("jobAddressEstimated", "X")
+		addr(form)
 		form.set("materials", "[]")
 		form.set("serviceLines", "[]")
 		const res = await action({ request: post(form), params: {} } as any)
 		expect(res).toEqual({ errorKey: "docs_new.errors.missing_fields" })
 	})
 
-	it("rejects assigning a brigade outside the supervisor's admin-assigned areas", async () => {
+	it("lets a supervisor add another supervisor's active brigade outside the supervisor's areas", async () => {
 		vi.mocked(db.brigade.findUnique).mockResolvedValue({
 			id: "b-metro",
 			name: "OTHER CREW",
 			area: "METRO",
+			active: true,
+			supervisorId: "sup-9",
 			memberIds: ["crew-metro"],
 		} as any)
 
 		const form = new FormData()
 		form.set("jobType", "Mantenimiento")
-		form.set("jobAddressEstimated", "X")
+		addr(form)
 		form.set("brigadeId", "b-metro")
 		form.set("materials", "[]")
 		form.set("serviceLines", "[]")
-		const res = await action({ request: post(form), params: {} } as any)
+		const res = await action({ request: post(form), params: {} } as any).catch(
+			(r) => r,
+		)
+		expect(res.status).toBe(302)
+		expect(tx.jafInvoice.create).toHaveBeenCalled()
+	})
+
+	it.each([
+		["an equipment (D) account", { isEquipmentAccount: true }],
+		["a terminated brigade", { terminatedAt: new Date() }],
+	])(
+		"refuses %s posted by hand, for Admin too, before creating anything",
+		async (_label, hidden) => {
+			vi.mocked(db.brigade.findUnique).mockResolvedValue({
+				id: "b-d",
+				name: "D ACCOUNT",
+				area: "CENTRAL",
+				active: true,
+				supervisorId: "sup-1",
+				memberIds: [],
+				...hidden,
+			} as any)
+			for (const role of ["SUPERVISOR", "ADMIN"]) {
+				vi.mocked(requireRole).mockResolvedValue({
+					user: { id: "sup-1", role },
+					session: {},
+				} as any)
+				const res = await action({
+					request: post(addr(validForm())),
+					params: {},
+				} as any)
+				expect(res).toEqual({ errorKey: "docs_new.errors.brigade_invalid" })
+			}
+			expect(db.$transaction).not.toHaveBeenCalled()
+		},
+	)
+
+	it("an inactive brigade passes the check: it is activated inside the job transaction", async () => {
+		vi.mocked(db.brigade.findUnique).mockResolvedValue({
+			id: "b-idle",
+			name: "IDLE",
+			area: null,
+			active: false,
+			supervisorId: null,
+			memberIds: ["crew-9"],
+		} as any)
+		const form = addr(validForm())
+		form.set("brigadeId", "b-idle")
+		const res = await action({ request: post(form), params: {} } as any).catch(
+			(r) => r,
+		)
+		expect(res.status).toBe(302)
+		expect(assignBrigadesOrThrow).toHaveBeenCalledWith(tx, {
+			docId: "doc-1",
+			viewer: { id: "sup-1", role: "SUPERVISOR", areas: ["CENTRAL"] },
+			brigadeIds: ["b-idle"],
+		})
+	})
+
+	it("reports a brigade that became unavailable mid-save", async () => {
+		vi.mocked(assignBrigadesOrThrow).mockRejectedValueOnce(
+			new BrigadeAssignError(BRIGADE_INVALID),
+		)
+		const res = await action({
+			request: post(addr(validForm())),
+			params: {},
+		} as any)
 		expect(res).toEqual({ errorKey: "docs_new.errors.brigade_invalid" })
-		expect(tx.jafInvoice.create).not.toHaveBeenCalled()
 	})
 
 	it("rejects malformed service lines", async () => {
 		const form = new FormData()
 		form.set("jobType", "M")
-		form.set("jobAddressEstimated", "X")
+		addr(form)
 		form.set("brigadeId", "b1")
 		form.set("materials", "[]")
 		form.set("serviceLines", "{nope")
@@ -223,9 +541,10 @@ describe("GET /docs/new", () => {
 		vi.clearAllMocks()
 		vi.mocked(getActiveMaterialCodes).mockResolvedValue([])
 		vi.mocked(db.brigade.findMany).mockResolvedValue([])
+		vi.mocked(db.claroSupervisor.findMany).mockResolvedValue([])
 	})
 
-	it("bounds the SUPERVISOR brigade picker to take: 100", async () => {
+	it("gives a SUPERVISOR's picker own, inactive and with-other brigades with their state and supervisor name", async () => {
 		vi.mocked(requireRole).mockResolvedValue({
 			user: { id: "sup-1", role: "SUPERVISOR" },
 			session: {},
@@ -233,15 +552,45 @@ describe("GET /docs/new", () => {
 		vi.mocked(db.user.findUnique).mockResolvedValue({
 			supervisorAreas: ["CENTRAL"],
 		} as any)
+		const row = (id: string, extra: Record<string, unknown>) => ({
+			id,
+			name: id,
+			area: "METRO",
+			code: null,
+			leadName: null,
+			active: true,
+			supervisorId: null,
+			isEquipmentAccount: false,
+			terminatedAt: null,
+			supervisor: null,
+			...extra,
+		})
+		vi.mocked(db.brigade.findMany).mockResolvedValue([
+			row("mine", { supervisorId: "sup-1" }),
+			row("in-area", { area: "CENTRAL" }),
+			row("idle", { active: false }),
+			row("other", { supervisorId: "sup-2", supervisor: { name: "Ana" } }),
+		] as any)
 
-		await loader({
+		const data = await loader({
 			request: new Request("http://localhost/docs/new"),
 			params: {},
 		} as any)
 
 		expect(db.brigade.findMany).toHaveBeenCalledWith(
-			expect.objectContaining({ take: 100 }),
+			expect.objectContaining({
+				where: { isEquipmentAccount: false, terminatedAt: null },
+				take: undefined,
+			}),
 		)
+		const pick = (id: string, state: string, supervisorName: string | null) =>
+			expect.objectContaining({ id, state, supervisorName })
+		expect(data.brigades).toEqual([
+			pick("mine", "own", null),
+			pick("in-area", "own", null),
+			pick("idle", "inactive", null),
+			pick("other", "with_other", "Ana"),
+		])
 	})
 
 	it("sends a supervisor the material catalog without any price, and Admin with it", async () => {

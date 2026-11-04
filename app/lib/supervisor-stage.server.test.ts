@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest"
 import {
-	checkAvisoMatch,
 	deriveSupervisorStage,
-	evaluateReleaseGate,
+	fixStepFor,
 	isAvisoStarted,
+	isPreCertSigned,
 	panelForStep,
 	resolveStepView,
+	SUPERVISOR_STAGES,
+	supervisorStepHref,
+	WAITING_ON,
 } from "./supervisor-stage"
 
 const now = new Date()
@@ -13,11 +16,59 @@ const base = {
 	status: "FIELD_UPDATED" as const,
 	supervisorApprovedAt: null,
 	jafInvoiceGeneratedAt: null,
-	avisoMatchedAt: null,
+	avisoNumber: null,
+	avisoDocPath: null,
 	releasedToFinanceAt: null,
+	financeVerifiedAt: null,
+	pbccRequestSentAt: null,
 }
 
+describe("WAITING_ON", () => {
+	it("a job in Field waits on the supervisor, who fills it in for the brigade", () => {
+		expect(WAITING_ON.FIELD).toBe("you")
+		expect(WAITING_ON.INTAKE).toBe("warehouse")
+		expect(WAITING_ON.RELEASED).toBe("finance")
+	})
+})
+
 describe("deriveSupervisorStage", () => {
+	it("sends a returned packet back to the supervisor's Release step until he resends it", () => {
+		const released = {
+			...base,
+			status: "SUPERVISOR_APPROVED" as const,
+			supervisorApprovedAt: now,
+			jafInvoiceGeneratedAt: now,
+			avisoNumber: "10359868",
+			avisoDocPath: "/x/aviso-docs/a.pdf",
+			releasedToFinanceAt: now,
+		}
+		const sheet = { sigSupervisorAt: now, sigSubcontractorAt: null }
+		const entry = { note: "Fix", byUserId: "fin", createdAt: "2026-10-26" }
+		expect(
+			deriveSupervisorStage(
+				{ ...released, financeSendBackNotes: [entry] },
+				sheet,
+			),
+		).toBe("RELEASE")
+		expect(
+			deriveSupervisorStage(
+				{
+					...released,
+					financeSendBackNotes: [{ ...entry, resentAt: "2026-10-27" }],
+				},
+				sheet,
+			),
+		).toBe("RELEASED")
+		expect(deriveSupervisorStage(released, sheet)).toBe("RELEASED")
+		// A master-era return (no resentAt) on a packet Finance verified.
+		expect(
+			deriveSupervisorStage(
+				{ ...released, financeVerifiedAt: now, financeSendBackNotes: [entry] },
+				sheet,
+			),
+		).toBe("RELEASED")
+	})
+
 	it("follows status before approval", () => {
 		expect(deriveSupervisorStage({ ...base, status: "CREATED" }, null)).toBe(
 			"INTAKE",
@@ -32,6 +83,18 @@ describe("deriveSupervisorStage", () => {
 			deriveSupervisorStage({ ...base, status: "FIELD_UPDATED" }, null),
 		).toBe("APPROVE")
 	})
+	it("a legacy avisoMatchedAt without a saved Aviso PDF stays at AVISO, not PRECERT", () => {
+		const legacy = {
+			...base,
+			status: "SUPERVISOR_APPROVED" as const,
+			supervisorApprovedAt: now,
+			jafInvoiceGeneratedAt: now,
+			avisoNumber: "10353961",
+			avisoDocPath: null,
+			avisoMatchedAt: now,
+		}
+		expect(deriveSupervisorStage(legacy, null)).toBe("AVISO")
+	})
 	it("follows timestamps after approval", () => {
 		const approved = {
 			...base,
@@ -45,15 +108,22 @@ describe("deriveSupervisorStage", () => {
 		const matched = {
 			...approved,
 			jafInvoiceGeneratedAt: now,
-			avisoMatchedAt: now,
+			avisoNumber: "10353961",
+			avisoDocPath: "/x/aviso-docs/a.pdf",
 		}
 		expect(deriveSupervisorStage(matched, null)).toBe("PRECERT")
+		expect(
+			deriveSupervisorStage(matched, {
+				sigSupervisorAt: null,
+				sigSubcontractorAt: now,
+			}),
+		).toBe("PRECERT")
 		expect(
 			deriveSupervisorStage(matched, {
 				sigSupervisorAt: now,
 				sigSubcontractorAt: null,
 			}),
-		).toBe("PRECERT")
+		).toBe("RELEASE")
 		expect(
 			deriveSupervisorStage(matched, {
 				sigSupervisorAt: now,
@@ -66,126 +136,6 @@ describe("deriveSupervisorStage", () => {
 				{ sigSupervisorAt: now, sigSubcontractorAt: now },
 			),
 		).toBe("RELEASED")
-	})
-})
-
-const inv = (id: string, code: string, qty: number, unitPrice: number) => ({
-	serviceCodeId: id,
-	claroCode: code,
-	accountCode: null,
-	name: code,
-	unit: "EA",
-	qty,
-	unitPrice,
-	lineAmount: Math.round(qty * unitPrice * 100) / 100,
-})
-const av = (id: string, code: string, qty: number, unitPrice: number) => ({
-	serviceCodeId: id,
-	claroCode: code,
-	qty,
-	unitPrice,
-	lineAmount: Math.round(qty * unitPrice * 100) / 100,
-})
-
-describe("checkAvisoMatch", () => {
-	it("passes when totals agree within tolerance", () => {
-		const r = checkAvisoMatch(
-			[inv("a", "1", 5, 42.343)],
-			[av("a", "1", 5, 42.343)],
-			0.01,
-		)
-		expect(r.amountOk).toBe(true)
-		expect(r.lineMismatches).toEqual([])
-		expect(r.invoiceTotal).toBe(211.72)
-		expect(r.avisoTotal).toBe(211.72)
-	})
-	it("fails on a one-cent-over difference", () => {
-		const r = checkAvisoMatch(
-			[inv("a", "1", 1, 10)],
-			[av("a", "1", 1, 10.02)],
-			0.01,
-		)
-		expect(r.amountOk).toBe(false)
-		expect(r.difference).toBe(0.02)
-	})
-	it("passes at exactly the tolerance", () => {
-		expect(
-			checkAvisoMatch([inv("a", "1", 1, 10)], [av("a", "1", 1, 10.01)], 0.01)
-				.amountOk,
-		).toBe(true)
-	})
-	it("reports per-line quantity mismatches including missing lines", () => {
-		const r = checkAvisoMatch(
-			[inv("a", "1", 2, 10), inv("b", "2", 1, 5)],
-			[av("a", "1", 1, 10), av("c", "3", 1, 15)],
-			0.01,
-		)
-		expect(r.lineMismatches).toEqual([
-			{ serviceCodeId: "a", claroCode: "1", installedQty: 2, chargedQty: 1 },
-			{ serviceCodeId: "b", claroCode: "2", installedQty: 1, chargedQty: 0 },
-			{ serviceCodeId: "c", claroCode: "3", installedQty: 0, chargedQty: 1 },
-		])
-	})
-})
-
-describe("evaluateReleaseGate", () => {
-	const good = {
-		supervisorApprovedAt: now,
-		jafInvoiceGeneratedAt: now,
-		avisoNumber: "10353961",
-		avisoDocPath: "/x/aviso.pdf",
-		avisoLines: [
-			{
-				serviceCodeId: "a",
-				claroCode: "1",
-				qty: 1,
-				unitPrice: 1,
-				lineAmount: 1,
-			},
-		],
-		avisoMatchedAt: now,
-		contractorAccountCode: "204",
-	}
-	const sheet = { sigSupervisorAt: now, sigSubcontractorAt: now }
-	const photos = [{ tag: "BEFORE" as const }, { tag: "AFTER" as const }]
-
-	it("passes when all seven hold", () => {
-		const r = evaluateReleaseGate(good, sheet, photos)
-		expect(r.ok).toBe(true)
-		expect(r.conditions.map((c) => c.key)).toEqual([
-			"approved",
-			"invoice",
-			"aviso",
-			"amount_match",
-			"photos",
-			"precert_signed",
-			"contractor_code",
-		])
-	})
-	it.each([
-		["approved", { supervisorApprovedAt: null }],
-		["invoice", { jafInvoiceGeneratedAt: null }],
-		["aviso", { avisoDocPath: null }],
-		["aviso", { avisoLines: [] }],
-		["amount_match", { avisoMatchedAt: null }],
-		["contractor_code", { contractorAccountCode: null }],
-	])("fails %s", (key, patch) => {
-		const r = evaluateReleaseGate({ ...good, ...patch }, sheet, photos)
-		expect(r.ok).toBe(false)
-		expect(r.conditions.find((c) => c.key === key)?.ok).toBe(false)
-	})
-	it("fails photos when an AFTER photo is missing", () => {
-		const r = evaluateReleaseGate(good, sheet, [{ tag: "BEFORE" }])
-		expect(r.conditions.find((c) => c.key === "photos")?.ok).toBe(false)
-	})
-	it("fails precert_signed without the sub-contractor signature", () => {
-		const r = evaluateReleaseGate(
-			good,
-			{ sigSupervisorAt: now, sigSubcontractorAt: null },
-			photos,
-		)
-		expect(r.conditions.find((c) => c.key === "precert_signed")?.ok).toBe(false)
-		expect(evaluateReleaseGate(good, null, photos).ok).toBe(false)
 	})
 })
 
@@ -205,43 +155,98 @@ describe("isAvisoStarted", () => {
 	})
 })
 
+describe("resolveStepView: a returned packet reopens the Aviso", () => {
+	it("makes Aviso and Pre-cert interactive for a returned packet on Release, even with a signed Pre-cert", () => {
+		for (const step of ["AVISO", "PRECERT", "RELEASE"] as const)
+			expect(resolveStepView("RELEASE", true, step, true, true), step).toEqual({
+				view: step,
+				interactive: true,
+			})
+		// Not returned: unchanged, the earlier steps stay a read-only look back.
+		expect(resolveStepView("RELEASE", true, "AVISO", true, false)).toEqual({
+			view: "AVISO",
+			interactive: false,
+		})
+		expect(resolveStepView("RELEASED", true, "AVISO", true)).toEqual({
+			view: "AVISO",
+			interactive: false,
+		})
+	})
+	it("still opens the Release step by default for a returned packet", () => {
+		expect(resolveStepView("RELEASE", true, null, true, true)).toEqual({
+			view: "RELEASE",
+			interactive: true,
+		})
+	})
+})
+
+describe("fixStepFor", () => {
+	it("sends a returned packet to the Aviso step and anything else to its own step", () => {
+		expect(fixStepFor("RELEASE", true)).toBe("AVISO")
+		expect(fixStepFor("PRECERT", true)).toBe("AVISO")
+		expect(fixStepFor("RELEASE", false)).toBe("RELEASE")
+		// Returned before an Aviso was ever saved: there is no Aviso to reopen.
+		expect(fixStepFor("INVOICE", true)).toBe("INVOICE")
+		expect(supervisorStepHref("d1", fixStepFor("RELEASE", true))).toBe(
+			"/docs/d1/review?step=AVISO",
+		)
+	})
+})
+
 describe("resolveStepView", () => {
 	it("defaults to the derived stage and is interactive there", () => {
-		expect(resolveStepView("PRECERT", true, null)).toEqual({
+		expect(resolveStepView("PRECERT", true, null, false)).toEqual({
 			view: "PRECERT",
 			interactive: true,
 		})
 	})
 	it("keeps the invoice screen until an Aviso is started", () => {
-		expect(resolveStepView("AVISO", false, null)).toEqual({
+		expect(resolveStepView("AVISO", false, null, false)).toEqual({
 			view: "INVOICE",
 			interactive: true,
 		})
-		expect(resolveStepView("AVISO", true, null)).toEqual({
+		expect(resolveStepView("AVISO", true, null, false)).toEqual({
 			view: "AVISO",
 			interactive: true,
 		})
 	})
 	it("lets the invoice screen continue forward to the current stage", () => {
-		expect(resolveStepView("AVISO", false, "AVISO")).toEqual({
+		expect(resolveStepView("AVISO", false, "AVISO", false)).toEqual({
 			view: "AVISO",
 			interactive: true,
 		})
 	})
 	it("makes earlier reached steps read-only", () => {
-		expect(resolveStepView("RELEASE", true, "AVISO")).toEqual({
+		expect(resolveStepView("RELEASE", true, "AVISO", false)).toEqual({
 			view: "AVISO",
 			interactive: false,
 		})
-		expect(resolveStepView("RELEASE", true, "APPROVE")).toEqual({
+		expect(resolveStepView("RELEASE", true, "APPROVE", false)).toEqual({
 			view: "APPROVE",
 			interactive: false,
 		})
 	})
+	it("keeps the Aviso screen interactive from Pre-cert until a Pre-cert signature", () => {
+		expect(resolveStepView("PRECERT", false, "AVISO", false)).toEqual({
+			view: "AVISO",
+			interactive: true,
+		})
+		expect(resolveStepView("PRECERT", false, "AVISO", true)).toEqual({
+			view: "AVISO",
+			interactive: false,
+		})
+		// Pre-cert itself and earlier steps are unaffected.
+		expect(
+			resolveStepView("PRECERT", false, "INVOICE", false).interactive,
+		).toBe(false)
+		expect(resolveStepView("PRECERT", false, null, true).interactive).toBe(true)
+	})
 	it("ignores steps not yet reached, pre-approval steps and junk", () => {
-		expect(resolveStepView("AVISO", true, "RELEASE").view).toBe("AVISO")
-		expect(resolveStepView("RELEASE", true, "FIELD").view).toBe("RELEASE")
-		expect(resolveStepView("PRECERT", true, "NOPE").view).toBe("PRECERT")
+		expect(resolveStepView("AVISO", true, "RELEASE", false).view).toBe("AVISO")
+		expect(resolveStepView("RELEASE", true, "FIELD", false).view).toBe(
+			"RELEASE",
+		)
+		expect(resolveStepView("PRECERT", true, "NOPE", false).view).toBe("PRECERT")
 	})
 })
 
@@ -252,5 +257,56 @@ describe("panelForStep", () => {
 		expect(panelForStep("APPROVE")).toBe("APPROVE")
 		expect(panelForStep("INVOICE")).toBe("INVOICE")
 		expect(panelForStep("RELEASED")).toBe("RELEASE")
+	})
+})
+
+describe("supervisorStepHref", () => {
+	it("sends Intake and Warehouse to the job page and Field to the Field screen", () => {
+		expect(supervisorStepHref("d1", "INTAKE")).toBe("/docs/d1")
+		expect(supervisorStepHref("d1", "WAREHOUSE")).toBe("/docs/d1")
+		expect(supervisorStepHref("d1", "FIELD")).toBe("/docs/d1/field")
+	})
+
+	it("opens Sign off onward on the review screen at the job's own step", () => {
+		expect(supervisorStepHref("d1", "AVISO")).toBe("/docs/d1/review?step=AVISO")
+	})
+
+	it("a job waiting on the Aviso opens on Step 6, not Step 5", () => {
+		const url = new URL(supervisorStepHref("d1", "AVISO"), "http://x")
+		const step = url.searchParams.get("step")
+		// No legacy Aviso lines saved: the default view would be Step 5.
+		expect(resolveStepView("AVISO", false, null, false).view).toBe("INVOICE")
+		expect(resolveStepView("AVISO", false, step, false)).toEqual({
+			view: "AVISO",
+			interactive: true,
+		})
+	})
+
+	it("every review-screen step lands on its own step in the rail", () => {
+		for (const stage of SUPERVISOR_STAGES.slice(3)) {
+			const step = new URL(
+				supervisorStepHref("d1", stage),
+				"http://x",
+			).searchParams.get("step")
+			expect(resolveStepView(stage, false, step, false).view).toBe(stage)
+		}
+	})
+})
+
+describe("isPreCertSigned", () => {
+	it("is true with any Pre-cert signature: supervisor, sub-contractor or Claro", () => {
+		const none = {
+			sigSupervisorAt: null,
+			sigSubcontractorAt: null,
+			sigClaroAt: null,
+		}
+		expect(isPreCertSigned(null)).toBe(false)
+		expect(isPreCertSigned(none)).toBe(false)
+		expect(isPreCertSigned({ ...none, sigSupervisorAt: new Date() })).toBe(true)
+		expect(isPreCertSigned({ ...none, sigSubcontractorAt: new Date() })).toBe(
+			true,
+		)
+		// A Claro-only signature counts too: nothing downstream may be signed.
+		expect(isPreCertSigned({ ...none, sigClaroAt: new Date() })).toBe(true)
 	})
 })

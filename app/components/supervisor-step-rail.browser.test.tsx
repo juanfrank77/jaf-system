@@ -1,11 +1,30 @@
 import { screen } from "@testing-library/react"
-import { describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it } from "vitest"
+import { page } from "vitest/browser"
 import { SupervisorStepRail } from "./supervisor-step-rail"
 
 const mount = (renderStub: any, ui: React.ReactElement) =>
 	renderStub({ entries: [{ path: "/", Component: () => ui }] })
 
 describe("SupervisorStepRail", () => {
+	// The full row of steps shows from `md`; below it a summary replaces it.
+	beforeEach(async () => {
+		await page.viewport(1024, 768)
+	})
+
+	it("shows 'Step N of 9' with a progress bar on a phone", async ({
+		renderStub,
+	}) => {
+		await page.viewport(390, 800)
+		await mount(renderStub, <SupervisorStepRail stage="INTAKE" />)
+		expect(screen.getByText("Step 1 of 9 · Intake")).toBeVisible()
+		expect(screen.getByRole("progressbar")).toHaveAttribute(
+			"aria-valuenow",
+			"1",
+		)
+		expect(screen.getByText("1. Intake")).not.toBeVisible()
+	})
+
 	it("keeps the nine supervisor steps and their labels", async ({
 		renderStub,
 	}) => {
@@ -30,15 +49,38 @@ describe("SupervisorStepRail", () => {
 					page={page}
 				/>,
 			)
-			expect(screen.getByRole("link", { name: "4. Approve" })).toHaveAttribute(
+			expect(screen.getByRole("link", { name: "4. Sign off" })).toHaveAttribute(
 				"href",
 				"/docs/d1/review?step=APPROVE",
 			)
-			expect(
-				screen.getByRole("link", { name: "6. Aviso & match" }),
-			).toHaveAttribute("href", "/docs/d1/review?step=AVISO")
+			expect(screen.getByRole("link", { name: "6. Aviso" })).toHaveAttribute(
+				"href",
+				"/docs/d1/review?step=AVISO",
+			)
 		},
 	)
+
+	it("shows Warehouse as Not required, unlinked, on a no-warehouse job", async ({
+		renderStub,
+	}) => {
+		await mount(
+			renderStub,
+			<SupervisorStepRail
+				stage="FIELD"
+				view="FIELD"
+				docId="d1"
+				warehouseSkipped
+			/>,
+		)
+		expect(screen.getByText("2. Warehouse · Not required")).toBeInTheDocument()
+		expect(
+			screen.queryByRole("link", { name: "2. Warehouse · Not required" }),
+		).toBeNull()
+		expect(screen.getByRole("link", { name: "1. Intake" })).toHaveAttribute(
+			"href",
+			"/docs/d1",
+		)
+	})
 
 	it("sends Intake, Warehouse and Field back to the job page, except on the job page itself", async ({
 		renderStub,

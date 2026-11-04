@@ -8,7 +8,7 @@ describe("collectVariance", () => {
 				id: "d1",
 				claroOrderNo: "JAF-1",
 				brigade: "Dino",
-				signals: { overage: 1, shortage: 1, discrepancy: 0 },
+				signals: { overage: 1, shortage: 1 },
 				lines: [],
 			},
 		])
@@ -23,28 +23,28 @@ describe("collectVariance", () => {
 				id: "d2",
 				claroOrderNo: "JAF-2",
 				brigade: "Alexis",
-				signals: { overage: 0, shortage: 0, discrepancy: 0 },
+				signals: { overage: 0, shortage: 0 },
 				lines: [],
 			},
 		])
 		expect(rows).toEqual([])
 	})
 
-	it("includes all three kinds when all signals fire", () => {
+	it("includes both kinds when both signals fire", () => {
 		const rows = collectVariance([
 			{
 				id: "d3",
 				claroOrderNo: "JAF-3",
 				brigade: "Nino",
-				signals: { overage: 1, shortage: 1, discrepancy: 1 },
+				signals: { overage: 1, shortage: 1 },
 				lines: [{ code: "svc-1", ordered: 2, installed: 3, delta: 1 }],
 			},
 		])
 		expect(rows).toHaveLength(1)
 		expect(rows[0].kinds).toEqual(
-			expect.arrayContaining(["overage", "discrepancy", "shortage"]),
+			expect.arrayContaining(["overage", "shortage"]),
 		)
-		expect(rows[0].kinds).toHaveLength(3)
+		expect(rows[0].kinds).toHaveLength(2)
 		expect(rows[0].lines).toEqual([
 			{ code: "svc-1", ordered: 2, installed: 3, delta: 1 },
 		])
@@ -60,6 +60,27 @@ describe("buildVarianceLines", () => {
 		})
 		expect(lines).toEqual([
 			{ code: "svc-1", ordered: 2, installed: 1, delta: -1 },
+		])
+	})
+
+	it("counts brigade's stock as installed (tracked) though it is not billed", () => {
+		// Field save under the ruling: materialsUsed = 6 (warehouse only).
+		const lines = buildVarianceLines({
+			estimatedMaterials: [{ serviceCodeId: "svc-1", qty: 10 }],
+			materialsTaken: [{ serviceCodeId: "svc-1", qty: 10 }],
+			materialsUsed: [{ serviceCodeId: "svc-1", qty: 6 }],
+			fieldMaterials: [
+				{ serviceCodeId: "svc-1", used: 6, returned: 4, source: "WAREHOUSE" },
+				{
+					serviceCodeId: "svc-1",
+					used: 4,
+					returned: 0,
+					source: "BRIGADE_STOCK",
+				},
+			],
+		})
+		expect(lines).toEqual([
+			{ code: "svc-1", ordered: 10, installed: 10, delta: 0 },
 		])
 	})
 

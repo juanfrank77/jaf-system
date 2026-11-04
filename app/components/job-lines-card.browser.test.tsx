@@ -56,6 +56,15 @@ describe("JobLinesCard", () => {
 		expect(clamp).toHaveTextContent("—")
 	})
 
+	it("renders no Difference column, even when installed differs from ordered", async ({
+		renderStub,
+	}) => {
+		await mount(renderStub, <JobLinesCard {...props} />)
+		const card = screen.getByTestId("job-lines")
+		expect(within(card).queryByText("Difference")).not.toBeInTheDocument()
+		expect(within(card).getByText("Installed")).toBeInTheDocument()
+	})
+
 	it("shows no money anywhere", async ({ renderStub }) => {
 		await mount(renderStub, <JobLinesCard {...props} />)
 		expect(screen.getByTestId("job-lines").textContent).not.toContain("$")
@@ -78,6 +87,49 @@ describe("JobLinesCard", () => {
 			screen.getByText("No service items on this work order."),
 		).toBeInTheDocument()
 		expect(screen.getByTestId("job-lines-materials")).toBeInTheDocument()
+	})
+
+	const retensar = {
+		serviceCodeId: "s9",
+		claroCode: "34006300",
+		accountCode: "610",
+		name: "RETENSAR MENSAJERO MO",
+		qty: 1,
+		addedInField: true as const,
+	}
+
+	it("lists a service added in the field: Ordered 0, its installed qty, labelled", async ({
+		renderStub,
+	}) => {
+		await mount(
+			renderStub,
+			<JobLinesCard
+				{...props}
+				installed={[{ ...ordered[0], qty: 2 }, retensar]}
+			/>,
+		)
+		const row = screen.getByText("34006300").closest("tr") as HTMLElement
+		const cells = within(row).getAllByRole("cell")
+		expect(cells[1]).toHaveTextContent("RETENSAR MENSAJERO MO")
+		expect(cells[1]).toHaveTextContent("Added in field")
+		expect(cells[2]).toHaveTextContent(/^0$/)
+		expect(cells[3]).toHaveTextContent(/^1$/)
+		// The ordered row is not labelled.
+		const transfer = screen.getByText("34006301").closest("tr") as HTMLElement
+		expect(transfer).not.toHaveTextContent("Added in field")
+	})
+
+	it("shows a service added in the field even when nothing was ordered", async ({
+		renderStub,
+	}) => {
+		await mount(
+			renderStub,
+			<JobLinesCard {...props} ordered={[]} installed={[retensar]} />,
+		)
+		expect(
+			screen.queryByText("No service items on this work order."),
+		).not.toBeInTheDocument()
+		expect(screen.getByText("34006300")).toBeInTheDocument()
 	})
 })
 

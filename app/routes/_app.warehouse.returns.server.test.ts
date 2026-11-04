@@ -31,12 +31,13 @@ describe("GET /warehouse/returns", () => {
 		])
 	})
 
-	it("lists SIGNED and FIELD_UPDATED work with no returned materials", async () => {
+	it("lists SIGNED and FIELD_UPDATED warehouse work with no returned materials", async () => {
 		await call()
 		expect(mocks.db.jafInvoice.findMany).toHaveBeenCalledWith(
 			expect.objectContaining({
 				where: {
 					status: { in: ["SIGNED", "FIELD_UPDATED"] },
+					materialsFromWarehouse: true,
 					materialsReturned: { equals: Prisma.DbNull },
 				},
 			}),

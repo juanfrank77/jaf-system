@@ -1,4 +1,5 @@
 import type { DocStatus, Role } from "../../generated/prisma/client"
+import { type AvisoDiscrepancy, isDiscrepancyStale } from "./aviso-discrepancy"
 
 type MaterialLine = { serviceCodeId: string; qty: number }
 
@@ -8,10 +9,12 @@ type DashboardDoc = {
 	receivableClosedAt: Date | null
 	prepChangedSincePrep?: boolean
 	materialsReturned?: unknown
+	materialsFromWarehouse?: boolean
 	sendBackHistory?: unknown
 	estimatedMaterials?: unknown
 	materialsTaken?: unknown
 	materialsUsed?: unknown
+	fieldMaterials?: unknown
 	avisoNumber?: string | null
 	claroUploadedAt?: Date | null
 	pbccRequestSentAt?: Date | null
@@ -21,7 +24,6 @@ type DashboardDoc = {
 }
 
 export type DashboardStatLabelKey =
-	| "dashboard.stat.open_documents"
 	| "dashboard.stat.awaiting_warehouse"
 	| "dashboard.stat.awaiting_crew"
 	| "dashboard.stat.pending_review"
@@ -33,19 +35,14 @@ export type DashboardStatLabelKey =
 	| "dashboard.stat.open_jobs"
 	| "dashboard.stat.awaiting_close"
 	| "dashboard.stat.ready_for_pickup"
-	| "dashboard.stat.in_the_field"
-	| "dashboard.stat.sent_back"
-	| "dashboard.stat.submitted"
 	| "dashboard.stat.total_documents"
 	| "dashboard.stat.open_receivables"
 	| "dashboard.stat.awaiting_claro_upload"
 	| "dashboard.stat.missing_aviso"
-	| "dashboard.stat.blocked"
 	| "dashboard.stat.stage_awaiting_warehouse"
 	| "dashboard.stat.stage_awaiting_crew"
 	| "dashboard.stat.stage_pending_review"
 	| "dashboard.stat.stage_in_finance"
-	| "dashboard.stat.discrepancy_count"
 	| "dashboard.stat.shortage_count"
 	| "dashboard.stat.overage_count"
 	| "dashboard.stat.aging_oldest_days"
@@ -59,10 +56,8 @@ export type DashboardAlertKey =
 	| "dashboard.alert.missing_materials"
 	| "dashboard.alert.ready_to_close"
 	| "dashboard.alert.ready_for_pickup"
-	| "dashboard.alert.jobs_in_field"
-	| "dashboard.alert.sent_back"
-	| "dashboard.alert.submitted"
 	| "dashboard.alert.receivables_open"
+	| "dashboard.alert.stale_aviso_discrepancy"
 
 export type DashboardStat = { labelKey: DashboardStatLabelKey; value: number }
 
@@ -79,11 +74,6 @@ export type DashboardExplainerKey =
 	| "dashboard.explainer.warehouse_needs_prep"
 	| "dashboard.explainer.warehouse_missing_materials"
 	| "dashboard.explainer.warehouse_no_actions"
-	| "dashboard.explainer.crew_sent_back"
-	| "dashboard.explainer.crew_awaiting_review"
-	| "dashboard.explainer.crew_ready_for_pickup"
-	| "dashboard.explainer.crew_in_field"
-	| "dashboard.explainer.crew_no_actions"
 	| "dashboard.explainer.finance_open_receivables"
 	| "dashboard.explainer.finance_awaiting_claro"
 	| "dashboard.explainer.finance_no_actions"
@@ -189,19 +179,14 @@ function computeAgingBuckets(docs: DashboardDoc[]): AgingBucket {
 export function computeMaterialSignals(
 	docs: Pick<
 		DashboardDoc,
-		| "estimatedMaterials"
-		| "materialsTaken"
-		| "materialsUsed"
-		| "materialsReturned"
+		"estimatedMaterials" | "materialsTaken" | "materialsReturned"
 	>[],
 ) {
-	let discrepancy = 0
 	let shortage = 0
 	let overage = 0
 	for (const doc of docs) {
 		const estimated = toLines(doc.estimatedMaterials)
 		const taken = toLines(doc.materialsTaken)
-		const used = toLines(doc.materialsUsed)
 		const returned = Array.isArray(doc.materialsReturned)
 			? (doc.materialsReturned as Record<string, unknown>[])
 			: []
@@ -212,24 +197,6 @@ export function computeMaterialSignals(
 			)
 			if (taken.some((t) => t.qty > (estimatedMap[t.serviceCodeId] ?? 0))) {
 				overage++
-			}
-		}
-		if (taken.length && used.length) {
-			const takenMap = Object.fromEntries(
-				taken.map((t) => [t.serviceCodeId, t.qty]),
-			)
-			const usedMap = Object.fromEntries(
-				used.map((u) => [u.serviceCodeId, u.qty]),
-			)
-			const allIds = new Set([
-				...Object.keys(takenMap),
-				...Object.keys(usedMap),
-			])
-			for (const id of allIds) {
-				if ((takenMap[id] ?? 0) !== (usedMap[id] ?? 0)) {
-					discrepancy++
-					break
-				}
 			}
 		}
 		for (const line of returned) {
@@ -244,29 +211,30 @@ export function computeMaterialSignals(
 			}
 		}
 	}
-	return { discrepancy, shortage, overage }
+	return { shortage, overage }
 }
 
 export function computeDashboardStats(
 	role: Role,
 	docs: DashboardDoc[],
+	/**
+	 * The `avisoDiscrepancy` of every live (not cancelled), unreleased job, for
+	 * the admin's "needs attention" alert on stale ones.
+	 */
+	extra: { avisoDiscrepancies?: (AvisoDiscrepancy | null)[]; now?: Date } = {},
 ): {
 	stats: DashboardStat[]
 	alert: DashboardAlert
 	explainer: DashboardExplainer
 } {
 	if (role === "SUPERVISOR") {
-		const open = count(
-			docs,
-			(d) => d.status !== "LC_REQUEST_GENERATED" && d.status !== "CANCELLED",
-		)
 		const awaitingWarehouse = count(docs, (d) => d.status === "CREATED")
 		const awaitingCrew = count(
 			docs,
 			(d) => d.status === "PREPPED" || d.status === "SIGNED",
 		)
 		const pendingReview = count(docs, (d) => d.status === "FIELD_UPDATED")
-		const { discrepancy, shortage, overage } = computeMaterialSignals(docs)
+		const { shortage, overage } = computeMaterialSignals(docs)
 		const aging = computeAgingBuckets(docs)
 		const oldestOpenDays = docs.reduce(
 			(max, d) => Math.max(max, computeAgingDays(d.createdAt)),
@@ -274,7 +242,6 @@ export function computeDashboardStats(
 		)
 		return {
 			stats: [
-				{ labelKey: "dashboard.stat.open_documents", value: open },
 				{
 					labelKey: "dashboard.stat.awaiting_warehouse",
 					value: awaitingWarehouse,
@@ -291,7 +258,6 @@ export function computeDashboardStats(
 					value: pendingReview,
 				},
 				{ labelKey: "dashboard.stat.stage_in_finance", value: 0 },
-				{ labelKey: "dashboard.stat.discrepancy_count", value: discrepancy },
 				{ labelKey: "dashboard.stat.shortage_count", value: shortage },
 				{ labelKey: "dashboard.stat.overage_count", value: overage },
 				{ labelKey: "dashboard.stat.aging_oldest_days", value: oldestOpenDays },
@@ -331,10 +297,13 @@ export function computeDashboardStats(
 			docs,
 			(d) => d.status === "CREATED" && !!d.prepChangedSincePrep,
 		)
+		// Same filter as the warehouse "returns" queue: a no-warehouse job took
+		// nothing out, so nothing comes back.
 		const returnsToLog = count(
 			docs,
 			(d) =>
 				(d.status === "SIGNED" || d.status === "FIELD_UPDATED") &&
+				d.materialsFromWarehouse !== false &&
 				d.materialsReturned === null,
 		)
 		return {
@@ -374,85 +343,6 @@ export function computeDashboardStats(
 		}
 	}
 
-	if (role === "CREW") {
-		const openJobs = count(
-			docs,
-			(d) => d.status !== "LC_REQUEST_GENERATED" && d.status !== "CANCELLED",
-		)
-		const readyForPickup = count(docs, (d) => d.status === "PREPPED")
-		const inTheField = count(
-			docs,
-			(d) =>
-				d.status === "SIGNED" &&
-				(!Array.isArray(d.sendBackHistory) ||
-					(Array.isArray(d.sendBackHistory) && d.sendBackHistory.length === 0)),
-		)
-		const sendBackHistory = (d: DashboardDoc): unknown[] =>
-			Array.isArray(d.sendBackHistory) ? d.sendBackHistory : []
-		const sentBack = count(
-			docs,
-			(d) => d.status === "SIGNED" && sendBackHistory(d).length > 0,
-		)
-		const submitted = count(docs, (d) => d.status === "FIELD_UPDATED")
-		const { discrepancy, shortage, overage } = computeMaterialSignals(docs)
-		const alert =
-			sentBack > 0
-				? {
-						variant: "warn" as const,
-						key: "dashboard.alert.sent_back" as const,
-						count: sentBack,
-					}
-				: submitted > 0
-					? {
-							variant: "info" as const,
-							key: "dashboard.alert.submitted" as const,
-							count: submitted,
-						}
-					: readyForPickup > 0
-						? {
-								variant: "info" as const,
-								key: "dashboard.alert.ready_for_pickup" as const,
-								count: readyForPickup,
-							}
-						: inTheField > 0
-							? {
-									variant: "warn" as const,
-									key: "dashboard.alert.jobs_in_field" as const,
-									count: inTheField,
-								}
-							: null
-		return {
-			stats: [
-				{ labelKey: "dashboard.stat.open_jobs", value: openJobs },
-				{ labelKey: "dashboard.stat.ready_for_pickup", value: readyForPickup },
-				{ labelKey: "dashboard.stat.in_the_field", value: inTheField },
-				{ labelKey: "dashboard.stat.sent_back", value: sentBack },
-				{ labelKey: "dashboard.stat.submitted", value: submitted },
-				{ labelKey: "dashboard.stat.stage_awaiting_warehouse", value: 0 },
-				{
-					labelKey: "dashboard.stat.stage_awaiting_crew",
-					value: readyForPickup,
-				},
-				{ labelKey: "dashboard.stat.stage_pending_review", value: 0 },
-				{ labelKey: "dashboard.stat.stage_in_finance", value: 0 },
-				{ labelKey: "dashboard.stat.discrepancy_count", value: discrepancy },
-				{ labelKey: "dashboard.stat.shortage_count", value: shortage },
-				{ labelKey: "dashboard.stat.overage_count", value: overage },
-			],
-			alert,
-			explainer:
-				sentBack > 0
-					? { labelKey: "dashboard.explainer.crew_sent_back" }
-					: submitted > 0
-						? { labelKey: "dashboard.explainer.crew_awaiting_review" }
-						: readyForPickup > 0
-							? { labelKey: "dashboard.explainer.crew_ready_for_pickup" }
-							: inTheField > 0
-								? { labelKey: "dashboard.explainer.crew_in_field" }
-								: { labelKey: "dashboard.explainer.crew_no_actions" },
-		}
-	}
-
 	if (role === "INSTALLER") {
 		// Installers don't drive brigade workflow statuses; the only statuses
 		// that ever appear on their dashboard are those that belong to a job
@@ -471,7 +361,6 @@ export function computeDashboardStats(
 				{ labelKey: "dashboard.stat.stage_awaiting_crew", value: 0 },
 				{ labelKey: "dashboard.stat.stage_pending_review", value: 0 },
 				{ labelKey: "dashboard.stat.stage_in_finance", value: 0 },
-				{ labelKey: "dashboard.stat.discrepancy_count", value: 0 },
 				{ labelKey: "dashboard.stat.shortage_count", value: 0 },
 				{ labelKey: "dashboard.stat.overage_count", value: 0 },
 			],
@@ -515,8 +404,15 @@ export function computeDashboardStats(
 			d.status === "CLARO_UPLOADED" ||
 			d.status === "LC_REQUEST_GENERATED",
 	)
-	const { discrepancy, shortage, overage } = computeMaterialSignals(docs)
+	const { shortage, overage } = computeMaterialSignals(docs)
 	const aging = computeAgingBuckets(docs)
+	const now = extra.now ?? new Date()
+	const staleDiscrepancies =
+		role === "ADMIN"
+			? (extra.avisoDiscrepancies ?? []).filter((d) =>
+					isDiscrepancyStale(d, now),
+				).length
+			: 0
 	return {
 		stats: [
 			{ labelKey: "dashboard.stat.total_documents", value: totalDocs },
@@ -541,7 +437,6 @@ export function computeDashboardStats(
 				value: stagePendingReview,
 			},
 			{ labelKey: "dashboard.stat.stage_in_finance", value: stageInFinance },
-			{ labelKey: "dashboard.stat.discrepancy_count", value: discrepancy },
 			{ labelKey: "dashboard.stat.shortage_count", value: shortage },
 			{ labelKey: "dashboard.stat.overage_count", value: overage },
 			{ labelKey: "dashboard.stat.aging_oldest_days", value: aging.oldestDays },
@@ -555,13 +450,19 @@ export function computeDashboardStats(
 			},
 		],
 		alert:
-			openReceivables > 0
+			staleDiscrepancies > 0
 				? {
-						variant: "info",
-						key: "dashboard.alert.receivables_open",
-						count: openReceivables,
+						variant: "warn",
+						key: "dashboard.alert.stale_aviso_discrepancy",
+						count: staleDiscrepancies,
 					}
-				: null,
+				: openReceivables > 0
+					? {
+							variant: "info",
+							key: "dashboard.alert.receivables_open",
+							count: openReceivables,
+						}
+					: null,
 		explainer: aging.anyThresholdBreached
 			? { labelKey: "dashboard.explainer.finance_aging_alert" }
 			: openReceivables > 0

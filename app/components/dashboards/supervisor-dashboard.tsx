@@ -12,8 +12,14 @@ import { PageHeader } from "~/components/ui/page-header"
 import { Pill } from "~/components/ui/pill"
 import { QueueCard } from "~/components/ui/queue-card"
 import { Stat } from "~/components/ui/stat"
+import { OPEN_JOB_LABEL_KEYS, type OpenJobLabel } from "~/lib/open-job-label"
 import type { SupervisorQueue } from "~/lib/supervisor-queues"
-import type { SupervisorStage, WaitingOn } from "~/lib/supervisor-stage"
+import {
+	fixStepFor,
+	type SupervisorStage,
+	supervisorStepHref,
+	type WaitingOn,
+} from "~/lib/supervisor-stage"
 import type { DashboardViewProps } from "./types"
 
 type QueueRow = {
@@ -26,19 +32,21 @@ type QueueRow = {
 	note?: string | null
 	/** When the job entered this queue (submitted / returned / approved). */
 	since: Date | string | null
-	qtyDiscrepancy: boolean
-	blockReason?: "aviso_mismatch" | "billing_aviso_pdf"
 	waitingOn?: WaitingOn
+	/** The finer chip label (`openJobLabel`); falls back to the stage label. */
+	openLabel?: OpenJobLabel
 }
 export type SupervisorScope = { areas: string[]; brigadeCount: number }
 export type SupervisorQueues = {
 	myOpen: QueueRow[]
 	intake: QueueRow[]
 	pendingReview: QueueRow[]
-	sentBack: QueueRow[]
 	approved: QueueRow[]
 	missingAviso: QueueRow[]
-	blocked: QueueRow[]
+	/** Unreleased jobs whose Aviso differs from the work order. */
+	actionNeeded?: (QueueRow & { daysOpen: number })[]
+	/** Packets Finance sent back, oldest return first; `note` is hers. */
+	returned?: QueueRow[]
 }
 
 export const STAGE_KEY: Record<SupervisorStage, ParseKeys> = {
@@ -56,33 +64,28 @@ export const STAGE_KEY: Record<SupervisorStage, ParseKeys> = {
 // Each count tile opens the list of jobs behind it: a sidebar-style stage queue,
 // or the section further down this page when the list is already there.
 const TILE_HREF: Partial<Record<string, string>> = {
-	"dashboard.stat.open_documents": "/dashboard?stage=all",
 	"dashboard.stat.awaiting_warehouse": "/dashboard?stage=intake",
 	"dashboard.stat.awaiting_crew": "/dashboard?stage=field",
 	"dashboard.stat.pending_review": "/dashboard?stage=review",
 }
 
 // Tile colors follow the queue card each count belongs to (Approved green,
-// Missing aviso amber, Blocked red); the rest are blue unless they are a flag.
+// Missing aviso amber); the rest are blue unless they are a flag.
 type StatTone = "neutral" | "ok" | "info" | "warn" | "flag"
 const TILE_TONE: Partial<Record<string, StatTone>> = {
-	"dashboard.stat.open_documents": "info",
 	"dashboard.stat.awaiting_warehouse": "info",
 	"dashboard.stat.awaiting_crew": "info",
 	"dashboard.stat.pending_review": "warn",
-	"dashboard.stat.sent_back": "info",
 	"dashboard.stat.missing_aviso": "warn",
-	"dashboard.stat.blocked": "flag",
 	"dashboard.stat.stage_awaiting_warehouse": "info",
 	"dashboard.stat.stage_awaiting_crew": "info",
 	"dashboard.stat.stage_pending_review": "warn",
 	"dashboard.stat.stage_in_finance": "ok",
-	"dashboard.stat.discrepancy_count": "warn",
 	"dashboard.stat.shortage_count": "flag",
 	"dashboard.stat.overage_count": "warn",
 }
 
-type SinceKind = "created" | "submitted" | "returned" | "approved"
+type SinceKind = "created" | "submitted" | "approved"
 
 function ago(t: TFunction, since: Date | string, now = Date.now()) {
 	const minutes = Math.max(
@@ -147,26 +150,20 @@ function Queue({
 							</td>
 							<td className="py-1.5">{r.brigadeName ?? "—"}</td>
 							<td className="py-1.5">
-								{t(STAGE_KEY[r.stage])}
+								{t(
+									r.openLabel
+										? OPEN_JOB_LABEL_KEYS[r.openLabel]
+										: STAGE_KEY[r.stage],
+								)}
 								{r.since ? (
 									<span className="block text-xs text-muted-foreground">
 										{t(`dashboard.since.${since}`, { ago: ago(t, r.since) })}
 									</span>
 								) : null}
-								{r.qtyDiscrepancy ? (
-									<Badge variant="warn" className="mt-1 text-xs">
-										{t("dashboard.signal.discrepancy")}
-									</Badge>
-								) : null}
 								{r.waitingOn ? (
 									<span className="block text-xs text-muted-foreground">
 										{t(`dashboard.waiting_on.${r.waitingOn}`)}
 									</span>
-								) : null}
-								{r.blockReason ? (
-									<Badge variant="danger" className="mt-1 text-xs">
-										{t(`dashboard.block.${r.blockReason}`)}
-									</Badge>
 								) : null}
 								{r.note ? (
 									<span className="block text-xs text-status-warn">
@@ -178,6 +175,97 @@ function Queue({
 					))}
 				</tbody>
 			</table>
+		</QueueCard>
+	)
+}
+
+/**
+ * "Returned (n)": packets Finance sent back, at the top of the dashboard. Each
+ * row opens the step that fixes it and shows her note word for word.
+ */
+function ReturnedBox({ rows }: { rows: QueueRow[] }) {
+	const { t } = useTranslation()
+	if (rows.length === 0) return null
+	return (
+		<QueueCard
+			id="returned"
+			title={t("dashboard.queue.returned")}
+			count={rows.length}
+			variant="danger"
+			className="border-status-danger"
+		>
+			<p className="text-sm">{t("returned_packet.box_body")}</p>
+			<ul className="divide-y text-sm">
+				{rows.map((r) => (
+					<li key={r.id} className="space-y-1 py-2">
+						<div className="flex flex-wrap items-baseline justify-between gap-2">
+							<Link
+								to={supervisorStepHref(r.id, fixStepFor(r.stage, true))}
+								className="font-mono underline"
+							>
+								{r.controlNumber}
+							</Link>
+							<Badge variant="danger">{t("open_job.returned")}</Badge>
+						</div>
+						<p className="truncate text-muted-foreground">
+							{r.jobAddressActual ?? r.jobAddressEstimated}
+						</p>
+						{r.note && (
+							<p className="whitespace-pre-line text-status-danger">{r.note}</p>
+						)}
+						{r.since && (
+							<p className="text-xs text-muted-foreground">
+								{t("dashboard.since.returned", { ago: ago(t, r.since) })}
+							</p>
+						)}
+					</li>
+				))}
+			</ul>
+		</QueueCard>
+	)
+}
+
+/**
+ * "Action needed": the Aviso differs from the work order. Shown only while a
+ * job has a recorded discrepancy; a note does not clear it, a clean Aviso does.
+ */
+function ActionNeeded({
+	rows,
+}: {
+	rows: NonNullable<SupervisorQueues["actionNeeded"]>
+}) {
+	const { t } = useTranslation()
+	if (rows.length === 0) return null
+	return (
+		<QueueCard
+			id="action-needed"
+			title={t("dashboard.action_needed.title")}
+			count={rows.length}
+			variant="danger"
+			className="border-status-danger"
+		>
+			<p className="text-sm">{t("dashboard.action_needed.body")}</p>
+			<ul className="divide-y text-sm">
+				{rows.map((r) => (
+					<li
+						key={r.id}
+						className="flex flex-wrap items-baseline justify-between gap-2 py-1.5"
+					>
+						<Link
+							to={`/docs/${r.id}/review?step=AVISO`}
+							className="font-mono underline"
+						>
+							{r.controlNumber}
+						</Link>
+						<span className="min-w-0 flex-1 truncate">
+							{r.jobAddressActual ?? r.jobAddressEstimated}
+						</span>
+						<span className="text-xs text-status-danger">
+							{t("dashboard.action_needed.days_open", { count: r.daysOpen })}
+						</span>
+					</li>
+				))}
+			</ul>
 		</QueueCard>
 	)
 }
@@ -235,12 +323,16 @@ export function SupervisorDashboard({
 						searchFilter={searchFilter}
 					/>
 				)}
-				<DashboardDocList docs={docs} />
+				<DashboardDocList
+					docs={docs}
+					packetStatus={stageQueue === "invoice"}
+					stepLinks
+				/>
 			</div>
 		)
 	}
-	const workingStats = stats.slice(0, 4)
-	const accountingStats = stats.slice(4)
+	const workingStats = stats.slice(0, 3)
+	const accountingStats = stats.slice(3)
 	return (
 		<div className="space-y-4">
 			<PageHeader
@@ -255,6 +347,8 @@ export function SupervisorDashboard({
 				}
 			/>
 
+			<ReturnedBox rows={queues.returned ?? []} />
+
 			{alert && (
 				<Pill
 					variant={alert.variant}
@@ -263,6 +357,8 @@ export function SupervisorDashboard({
 					{t(alert.key, { count: alert.count })}
 				</Pill>
 			)}
+
+			<ActionNeeded rows={queues.actionNeeded ?? []} />
 
 			<div
 				data-testid="supervisor-tiles"
@@ -278,22 +374,10 @@ export function SupervisorDashboard({
 					/>
 				))}
 				<Stat
-					label={t("dashboard.stat.sent_back")}
-					tone={TILE_TONE["dashboard.stat.sent_back"]}
-					value={queues.sentBack.length}
-					href="#sent-back"
-				/>
-				<Stat
 					label={t("dashboard.stat.missing_aviso")}
 					tone={TILE_TONE["dashboard.stat.missing_aviso"]}
 					value={queues.missingAviso.length}
 					href="#missing-aviso"
-				/>
-				<Stat
-					label={t("dashboard.stat.blocked")}
-					tone={TILE_TONE["dashboard.stat.blocked"]}
-					value={queues.blocked.length}
-					href="#blocked"
 				/>
 			</div>
 
@@ -319,29 +403,21 @@ export function SupervisorDashboard({
 				titleKey="dashboard.queue.intake"
 				rows={queues.intake}
 				variant="info"
-				href={(r) => `/docs/${r.id}`}
+				href={(r) => supervisorStepHref(r.id, r.stage)}
 				since="created"
 			/>
 			<Queue
 				titleKey="dashboard.queue.pending_review"
 				rows={queues.pendingReview}
 				variant="warn"
-				href={(r) => `/docs/${r.id}/review`}
+				href={(r) => supervisorStepHref(r.id, r.stage)}
 				since="submitted"
-			/>
-			<Queue
-				id="sent-back"
-				titleKey="dashboard.queue.sent_back"
-				rows={queues.sentBack}
-				variant="info"
-				href={(r) => `/docs/${r.id}`}
-				since="returned"
 			/>
 			<Queue
 				titleKey="dashboard.queue.approved"
 				rows={queues.approved}
 				variant="ok"
-				href={(r) => `/docs/${r.id}`}
+				href={(r) => supervisorStepHref(r.id, r.stage)}
 				since="approved"
 			/>
 			<Queue
@@ -349,15 +425,7 @@ export function SupervisorDashboard({
 				titleKey="dashboard.queue.missing_aviso"
 				rows={queues.missingAviso}
 				variant="warn"
-				href={(r) => `/docs/${r.id}/review`}
-				since="approved"
-			/>
-			<Queue
-				id="blocked"
-				titleKey="dashboard.queue.blocked"
-				rows={queues.blocked}
-				variant="danger"
-				href={(r) => `/docs/${r.id}/review`}
+				href={(r) => supervisorStepHref(r.id, r.stage)}
 				since="approved"
 			/>
 			<Queue
@@ -365,7 +433,7 @@ export function SupervisorDashboard({
 				titleKey="dashboard.queue.my_open"
 				rows={queues.myOpen}
 				variant="info"
-				href={(r) => `/docs/${r.id}`}
+				href={(r) => supervisorStepHref(r.id, r.stage)}
 				since="created"
 			/>
 		</div>

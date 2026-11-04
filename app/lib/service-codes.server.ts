@@ -18,7 +18,6 @@ type Cache = { data: ServiceCode[]; ts: number }
 const TTL = 60_000
 let allCache: Cache | null = null
 let materialCache: Cache | null = null
-let priceCache: Cache | null = null
 
 export async function getActiveServiceCodes(): Promise<ServiceCode[]> {
 	const now = Date.now()
@@ -27,24 +26,6 @@ export async function getActiveServiceCodes(): Promise<ServiceCode[]> {
 		where: { active: true, ...NOT_PENDING_CODE },
 	})
 	allCache = { data: codes, ts: now }
-	return codes
-}
-
-/** Only the columns the Aviso PDF path needs (id, claroCode, unitPrice). */
-export async function getActiveServiceCodePrices(): Promise<
-	Pick<ServiceCode, "id" | "claroCode" | "unitPrice">[]
-> {
-	const now = Date.now()
-	if (priceCache && now - priceCache.ts < TTL)
-		return priceCache.data as Pick<
-			ServiceCode,
-			"id" | "claroCode" | "unitPrice"
-		>[]
-	const codes = await db.serviceCode.findMany({
-		where: { active: true, ...NOT_PENDING_CODE },
-		select: { id: true, claroCode: true, unitPrice: true },
-	})
-	priceCache = { data: codes as unknown as ServiceCode[], ts: now }
 	return codes
 }
 
@@ -66,25 +47,48 @@ export async function getSerializedCodes(): Promise<ServiceCode[]> {
 	})
 }
 
-/** Picker search over the SERVICE catalog. Never auto-selects; the caller shows every hit. */
+/** Most hits the picker shows: enough to choose from, short enough to need no scrolling. */
+export const SERVICE_SEARCH_LIMIT = 8
+
+/**
+ * Picker search over the SERVICE catalog. Never auto-selects; the caller shows
+ * every hit. Ranked: exact code, then code prefix, then description matches.
+ */
 export async function searchServiceCodes(
 	q: string,
-	limit = 25,
+	limit = SERVICE_SEARCH_LIMIT,
 ): Promise<ServiceCode[]> {
 	const term = q.trim()
 	if (!term) return []
-	return db.serviceCode.findMany({
-		where: {
-			active: true,
-			kind: "SERVICE",
-			...NOT_PENDING_CODE,
-			OR: [
-				{ claroCode: { startsWith: term } },
-				{ name: { contains: term, mode: "insensitive" } },
-			],
-		},
-		orderBy: { claroCode: "asc" },
-		take: limit,
+	const base = { active: true, kind: "SERVICE" as const, ...NOT_PENDING_CODE }
+	const [exact, prefix, byName] = await Promise.all([
+		db.serviceCode.findMany({ where: { ...base, claroCode: term } }),
+		db.serviceCode.findMany({
+			where: { ...base, claroCode: { startsWith: term } },
+			orderBy: { claroCode: "asc" },
+			take: limit,
+		}),
+		db.serviceCode.findMany({
+			where: { ...base, name: { contains: term, mode: "insensitive" } },
+			orderBy: { claroCode: "asc" },
+			take: limit,
+		}),
+	])
+	const seen = new Set<string>()
+	return [...exact, ...prefix, ...byName]
+		.filter((r) => !seen.has(r.id) && seen.add(r.id))
+		.slice(0, limit)
+}
+
+/**
+ * One SERVICE code by id under the picker's catalog rules (active, never a
+ * placeholder), or null. Only what a service line stores is read: no price
+ * column, so the result is safe to copy onto a price-blind role's job.
+ */
+export function findPickableServiceCode(id: string) {
+	return db.serviceCode.findFirst({
+		where: { id, active: true, kind: "SERVICE", ...NOT_PENDING_CODE },
+		select: { id: true, claroCode: true, accountCode: true, name: true },
 	})
 }
 

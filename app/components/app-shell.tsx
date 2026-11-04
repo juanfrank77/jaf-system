@@ -274,9 +274,7 @@ function AppShell({
 	const groups = navGroupsFor(user.role, {
 		varianceEnabled,
 	})
-	const tabItems = tabBarItemsFor(user.role, {
-		varianceEnabled,
-	})
+	const tabItems = tabBarItemsFor(user.role)
 
 	return (
 		<Dialog.Root open={drawerOpen} onOpenChange={setDrawerOpen}>

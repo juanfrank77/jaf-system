@@ -5,19 +5,19 @@ import { PrismaPg } from "@prisma/adapter-pg"
 import { hashPassword } from "better-auth/crypto"
 import {
 	BRIGADE_SEED,
-	LEGACY_DEMO_CODES,
+	importCatalogRows,
 	LIMIT_TABLE_PLACEHOLDER_CODES,
 	LIMIT_TABLE_SEED,
 	parseCatalogCsv,
 	parseInstallerRosterCsv,
 	SERIALIZED_PREFIXES,
 	SUPERVISOR_SEED,
-	toServiceCodeData,
 	WAREHOUSE_BACKUP_SEED,
 	WAREHOUSE_SEED,
 	WAREHOUSE_STAFF_SEED,
 } from "../app/lib/catalog-import"
 import { PrismaClient } from "../generated/prisma/client"
+import { CLARO_SUPERVISOR_LINKS } from "./claro-supervisor-links"
 import { seedContractorAccounts } from "./seed-contractor-accounts"
 import { seedWarehouseStartingBalances } from "./seed-warehouse-stock"
 
@@ -29,7 +29,6 @@ const CSV_PATH = path.resolve(
 	process.cwd(),
 	"docs/JAF_Service_Catalog_seed.csv",
 )
-const BATCH = 100
 if (!process.env.SEED_TEMP_PASSWORD) {
 	throw new Error(
 		"SEED_TEMP_PASSWORD is required — no default credential password is shipped for seeded accounts.",
@@ -39,22 +38,10 @@ const TEMP_PASSWORD = process.env.SEED_TEMP_PASSWORD
 
 async function seedCatalog() {
 	const rows = parseCatalogCsv(await fs.readFile(CSV_PATH, "utf8"))
-	const data = rows.map(toServiceCodeData)
-	let inserted = 0
-	for (let i = 0; i < data.length; i += BATCH) {
-		const res = await db.serviceCode.createMany({
-			data: data.slice(i, i + BATCH),
-			skipDuplicates: true,
-		})
-		inserted += res.count
-	}
-	const deactivated = await db.serviceCode.updateMany({
-		where: { claroCode: { in: LEGACY_DEMO_CODES } },
-		data: { active: false },
-	})
+	const { inserted, refreshed } = await importCatalogRows(db, rows)
 	// biome-ignore lint/suspicious/noConsole: CLI seed output
 	console.log(
-		`catalog: ${rows.length} rows read, ${inserted} inserted, ${deactivated.count} legacy demo codes deactivated`,
+		`catalog: ${rows.length} rows read, ${inserted} inserted, ${refreshed} pre-existing demo codes refreshed`,
 	)
 }
 
@@ -494,6 +481,78 @@ async function seedDemoSerials() {
 	console.log(`demo serials: ${demo.length} upserted at Guaynabo (SEED_DEMO=1)`)
 }
 
+// Demo Claro supervisors (invented people, unroutable `.invalid` addresses),
+// one per rule combination, so a demo can walk the packet gates. Guarded by
+// SEED_DEMO=1 like the demo serials: the intake dropdown lists every active
+// entry, and a real deployment's directory is entered on Admin → Claro
+// supervisors. Idempotent: upsert on a stable id; an admin's edits survive.
+const DEMO_CLARO_SUPERVISORS = [
+	{
+		id: "demo-claro-prefield-blueprint",
+		name: "Marisol Quiñones (demo)",
+		email: "marisol.quinones@claro-demo.invalid",
+		requiresPrefield: true,
+		requiresBlueprint: true,
+	},
+	{
+		id: "demo-claro-prefield",
+		name: "Héctor Villanueva (demo)",
+		email: "hector.villanueva@claro-demo.invalid",
+		requiresPrefield: true,
+		requiresBlueprint: false,
+	},
+	{
+		id: "demo-claro-plain",
+		name: "Lucía Ortega (demo)",
+		email: "lucia.ortega@claro-demo.invalid",
+		requiresPrefield: false,
+		requiresBlueprint: false,
+	},
+]
+
+async function seedDemoClaroSupervisors() {
+	if (process.env.SEED_DEMO !== "1") return
+	for (const c of DEMO_CLARO_SUPERVISORS)
+		await db.claroSupervisor.upsert({
+			where: { id: c.id },
+			update: {},
+			create: c,
+		})
+	// biome-ignore lint/suspicious/noConsole: CLI seed output
+	console.log(
+		`demo Claro supervisors: ${DEMO_CLARO_SUPERVISORS.length} upserted (SEED_DEMO=1)`,
+	)
+}
+
+// Links each JAF supervisor to the Claro supervisors they work with (the
+// client's sheet, in claro-supervisor-links.ts). A Claro supervisor is found by
+// email and created if missing; links are only ever added, so an admin's later
+// edits on Admin → Claro supervisors survive a re-seed.
+async function seedClaroSupervisorLinks() {
+	let linked = 0
+	for (const { jafEmail, claro } of CLARO_SUPERVISOR_LINKS) {
+		const jaf = await db.user.findUnique({ where: { email: jafEmail } })
+		if (!jaf) {
+			// biome-ignore lint/suspicious/noConsole: CLI seed output
+			console.warn(`claro links: no user ${jafEmail}, skipped`)
+			continue
+		}
+		for (const c of claro) {
+			const found = await db.claroSupervisor.findFirst({
+				where: { email: c.email },
+			})
+			const id = found?.id ?? (await db.claroSupervisor.create({ data: c })).id
+			await db.user.update({
+				where: { id: jaf.id },
+				data: { claroSupervisors: { connect: { id } } },
+			})
+			linked++
+		}
+	}
+	// biome-ignore lint/suspicious/noConsole: CLI seed output
+	console.log(`claro supervisor links: ${linked} ensured`)
+}
+
 async function main() {
 	// Fail before any write, not after 9 other steps have already committed:
 	// the roster CSV is an out-of-band transfer (gitignored, real PII), and a
@@ -504,6 +563,7 @@ async function main() {
 	await seedCatalog()
 	await seedSupervisors()
 	await seedBrigades()
+	await seedClaroSupervisorLinks()
 	await seedContractorAccounts(db)
 	await seedWarehouses()
 	await seedWarehouseStaff()
@@ -515,6 +575,7 @@ async function main() {
 	await seedVansAndStock()
 	await seedLimitTable()
 	await seedDemoSerials()
+	await seedDemoClaroSupervisors()
 	await seedWarehouseStartingBalances(db)
 }
 

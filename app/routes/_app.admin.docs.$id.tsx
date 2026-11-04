@@ -1,13 +1,18 @@
 import type { ComponentProps } from "react"
 import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
+import { BrigadeStockTracked } from "~/components/brigade-stock-tracked"
 import { DocStageBadge } from "~/components/doc-stage-badge"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { buttonVariants } from "~/components/ui/button"
+import { brigadeStockFor } from "~/lib/brigade-stock.server"
 import { db } from "~/lib/db.server"
+import { openJobLabel } from "~/lib/open-job-label"
+import { packetSentSummary } from "~/lib/packet-audit"
 import { requireRole } from "~/lib/permissions.server"
 import { deriveSupervisorStage } from "~/lib/supervisor-stage"
+import { storedPdfLinks } from "~/lib/upload-href"
 import { formatMoney, toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.admin.docs.$id"
 
@@ -79,20 +84,30 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		where: { active: true },
 	})
 
-	const sheet = await db.preCertSheet.findFirst({
+	const sheet = await db.preCertSheet.findMany({
 		where: { docId: params.id, supersededAt: null },
+		orderBy: { version: "asc" },
 		select: { sigSupervisorAt: true, sigSubcontractorAt: true },
 	})
 
 	return {
 		doc,
 		stage: deriveSupervisorStage(doc, sheet),
+		openLabel: openJobLabel(doc, sheet),
 		sendBack,
 		peopleMap: Object.fromEntries(peopleMap) as Record<string, UserInfo>,
 		serviceCodes: serviceCodes.map((c) => ({
 			...c,
 			unitPrice: toNumberPrice(c.unitPrice),
 		})),
+		// The stored file is the price-free Claro packet; the priced JAF invoice
+		// is rendered on demand once the packet was sent.
+		...storedPdfLinks(doc.jafInvoicePdfPath),
+		pricedInvoiceHref: doc.jafInvoiceGeneratedAt
+			? `/finance/verify/${doc.id}/invoice.pdf`
+			: null,
+		// Tracked, not billed (provisional ruling).
+		brigadeStock: await brigadeStockFor(doc.fieldMaterials),
 	}
 }
 
@@ -112,7 +127,18 @@ function actionSummary(action: string, diffJson: AuditDiff): string {
 }
 
 export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
-	const { doc, stage, sendBack, peopleMap, serviceCodes } = loaderData
+	const {
+		doc,
+		stage,
+		openLabel,
+		sendBack,
+		peopleMap,
+		serviceCodes,
+		packetHref,
+		legacyPricedHref,
+		pricedInvoiceHref,
+		brigadeStock,
+	} = loaderData
 	const t = useTranslation().t
 	const name = (id?: string | null) => (id ? (peopleMap[id]?.name ?? id) : "—")
 	const estimated = (doc.estimatedMaterials as unknown as MaterialLine[]) || []
@@ -126,7 +152,11 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 					<h1 className="font-mono font-bold text-lg">{doc.controlNumber}</h1>
 					<p className="text-sm text-muted-foreground">{doc.jobType}</p>
 				</div>
-				<DocStageBadge stage={stage} cancelled={doc.status === "CANCELLED"} />
+				<DocStageBadge
+					stage={stage}
+					openLabel={openLabel}
+					cancelled={doc.status === "CANCELLED"}
+				/>
 			</div>
 
 			<section className="grid grid-cols-2 gap-3 text-sm">
@@ -198,7 +228,14 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 							{a.action !== "STATUS_CHANGED" && (
 								<span className="text-sm text-foreground">
 									{" — "}
-									{actionSummary(a.action, a.diffJson as AuditDiff)}
+									{a.action === "PACKET_SENT"
+										? packetSentSummary(
+												(a.diffJson ?? {}) as Parameters<
+													typeof packetSentSummary
+												>[0],
+												t,
+											)
+										: actionSummary(a.action, a.diffJson as AuditDiff)}
 								</span>
 							)}
 						</li>
@@ -341,6 +378,8 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 				</section>
 			)}
 
+			<BrigadeStockTracked lines={brigadeStock} />
+
 			<section className="bg-card border rounded-lg p-4">
 				<h2 className="text-sm font-semibold text-foreground mb-2">
 					{t("admin_history.documents_heading")}
@@ -356,13 +395,27 @@ export default function AdminDocHistory({ loaderData }: Route.ComponentProps) {
 							</a>
 						</li>
 					)}
-					{doc.jafInvoicePdfPath && (
+					{pricedInvoiceHref && (
 						<li>
 							<a
-								href={`/files/jaf-invoices/${doc.id}-jaf-invoice.pdf`}
+								href={pricedInvoiceHref}
 								className="text-accent-text underline"
 							>
-								{t("admin_history.jaf_invoice")}
+								{t("admin_history.jaf_invoice_priced")}
+							</a>
+						</li>
+					)}
+					{packetHref && (
+						<li>
+							<a href={packetHref} className="text-accent-text underline">
+								{t("admin_history.claro_packet")}
+							</a>
+						</li>
+					)}
+					{legacyPricedHref && (
+						<li>
+							<a href={legacyPricedHref} className="text-accent-text underline">
+								{t("admin_history.jaf_invoice_priced_legacy")}
 							</a>
 						</li>
 					)}

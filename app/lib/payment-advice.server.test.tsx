@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -12,6 +13,7 @@ import {
 	applyAdvice,
 	ingestAdvice,
 	linkLine,
+	listOtherJaf,
 } from "~/lib/payment-advice.server"
 import {
 	makeTracker,
@@ -131,6 +133,26 @@ describe("Payment Advice", () => {
 		})
 		expect(doc.receivableClosedAt).not.toBeNull()
 		expect((await adviceCounts()).unmatched).toBeGreaterThanOrEqual(1)
+	}, 60000)
+
+	it("keeps JA- rows as their own group, not as unmatched errors", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const a = await invoiceFor(u.id)
+		const before = await adviceCounts()
+		const beforeJa = await listOtherJaf()
+		const bytes = await advicePdf([
+			...head(ref()),
+			row(a.seq, 5920050318, a.total),
+			"JA-1616276 5920042289 03.06.2026 1,399.06 (0.00) 0.00 1,399.06",
+			`Total $${(a.total + 1399.06).toFixed(2)}`,
+		])
+		const { id } = await ingestAdvice({ name: "ja.pdf", bytes }, u.id)
+		expect((await adviceCounts()).unmatched).toBe(before.unmatched)
+		const ja = await listOtherJaf()
+		expect(ja.lines.length).toBe(beforeJa.lines.length + 1)
+		expect(ja.total).toBeCloseTo(beforeJa.total + 1399.06, 2)
+		expect(ja.lines.some((l) => l.invoiceRef === "JA-1616276")).toBe(true)
+		await applyAdvice(id, u.id)
 	}, 60000)
 
 	it("refuses the same advice twice, even saved as another file", async () => {
@@ -284,4 +306,25 @@ describe("Payment Advice", () => {
 			),
 		).rejects.toMatchObject({ code: "not_pdf" })
 	})
+})
+
+const REAL_ADVICE =
+	"docs/JAF_Package/07 All of JAF Forms/Monica Claro Payment received Sample.pdf"
+
+describe.skipIf(!existsSync(REAL_ADVICE))("a real Claro advice", () => {
+	it("is kept whole: every row, the printed total, none of ours matched", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const bytes = new Uint8Array(readFileSync(REAL_ADVICE))
+		const { id } = await ingestAdvice({ name: "real.pdf", bytes }, u.id)
+		const advice = await db.paymentAdvice.findUniqueOrThrow({ where: { id } })
+		expect(advice.adviceDate.toISOString().slice(0, 10)).toBe("2026-08-28")
+		expect(Number(advice.total)).toBe(107863.5)
+		// The rows add up to the printed total, so it can be applied.
+		expect(Number(advice.rowsTotal)).toBe(107863.5)
+		expect(
+			await db.adviceLine.count({ where: { adviceId: id } }),
+		).toBeGreaterThan(166)
+		await db.adviceLine.deleteMany({ where: { adviceId: id } })
+		await db.paymentAdvice.delete({ where: { id } })
+	}, 120000)
 })

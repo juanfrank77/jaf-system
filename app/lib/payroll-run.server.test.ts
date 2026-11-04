@@ -2,6 +2,7 @@ import { afterAll, describe, expect, it, vi } from "vitest"
 import { db } from "~/lib/db.server"
 import {
 	armAOpenWhere,
+	blockedSentJobs,
 	buildJournalBlocks,
 	closePayrollRunAccount,
 	discardDraftRun,
@@ -16,6 +17,7 @@ import {
 import {
 	makeTracker,
 	runToken,
+	seedBrigade,
 	seedContractorAccount,
 	seedFinanceableInvoice,
 	seedUser,
@@ -203,6 +205,63 @@ describe("generateRun", () => {
 			where: { id: doc.id },
 		})
 		expect(reloaded.payrollRunId).toBeNull()
+	})
+
+	it("sweeps a job with no pre-cert code through its lead brigade, linked by id", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		const brigade = t.track("brigade", await seedBrigade())
+		const account = t.track(
+			"contractorAccount",
+			await seedContractorAccount({
+				code: brigade.code as string,
+				brigadeId: brigade.id,
+			}),
+		)
+		const doc = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				funded: true,
+				contractorAccountId: null,
+				contractorAccountCode: null,
+			}),
+		)
+		await db.jafInvoice.update({
+			where: { id: doc.id },
+			data: { brigadeId: brigade.id },
+		})
+		expect(await blockedSentJobs()).not.toContainEqual(
+			expect.objectContaining({ id: doc.id }),
+		)
+
+		const { run } = await generateRun({
+			generatedById: finance.id,
+			label: "R-brigade-link",
+		})
+		t.track("payrollRun", run as { id: string })
+		const reloaded = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: doc.id },
+		})
+		expect(reloaded.payrollRunId).toBe(run.id)
+		expect(reloaded.contractorAccountId).toBe(account.id)
+	})
+
+	it("keeps a job blocked when neither its code nor its brigade has an account", async () => {
+		const brigade = t.track("brigade", await seedBrigade())
+		const doc = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				funded: true,
+				contractorAccountId: null,
+				contractorAccountCode: null,
+			}),
+		)
+		await db.jafInvoice.update({
+			where: { id: doc.id },
+			data: { brigadeId: brigade.id },
+		})
+		expect(await blockedSentJobs()).toContainEqual(
+			expect.objectContaining({ id: doc.id }),
+		)
 	})
 
 	it("still sweeps a job whose brigade account is inactive (q&a 14.4: deactivation blocks new work, not payment)", async () => {
@@ -1037,5 +1096,55 @@ describe("payroll request lifecycle", () => {
 		expect(line.retention).toBe(6.5)
 		expect(line.toPay).toBe(58.5)
 		expect(Object.keys(line)).not.toContain("gross")
+	})
+})
+
+describe("payrollSheetLines", () => {
+	const job = (
+		id: string,
+		code: string,
+		lines: Array<{ gross: number; sharePercent?: number }>,
+	) => ({
+		id,
+		controlNumber: id,
+		avisoNumber: id,
+		contractorAccount: { id: code, code, label: `BRIGADE ${code}` },
+		contractorShareLines: lines.map((l) => ({
+			gross: l.gross,
+			sharePercent: l.sharePercent ?? 0.65,
+		})),
+	})
+
+	it("figures the brigade row from the brigade's gross, truncated", () => {
+		// Brigade 009, gross 10,679.00: pay 6,247.21 (Net − Ret would say .22).
+		const [row] = payrollSheetLines(
+			buildJournalBlocks([job("j1", "009", [{ gross: 10679 }])]),
+		)
+		expect(row.net).toBe(6941.35)
+		expect(row.retention).toBe(694.13)
+		expect(row.toPay).toBe(6247.21)
+	})
+
+	it("pays the brigade total even when the jobs do not add up to it", () => {
+		const blocks = buildJournalBlocks([
+			job("j1", "009", [{ gross: 5339.5 }]),
+			job("j2", "009", [{ gross: 5339.5 }]),
+		])
+		// Each job: floor(5339.50 × 0.585) = 3123.60; together 6247.20.
+		expect(blocks[0].jobs.map((j) => j.adjNet)).toEqual([3123.6, 3123.6])
+		expect(blocks[0].totalSC).toBe(6247.21)
+		expect(payrollSheetLines(blocks)[0].toPay).toBe(6247.21)
+	})
+
+	it("prints D lines at 80% under the brigade's D account, marked unverified", () => {
+		const rows = payrollSheetLines(
+			buildJournalBlocks([
+				job("j1", "009", [{ gross: 1000 }, { gross: 1000, sharePercent: 0.8 }]),
+			]),
+		)
+		expect(rows.map((r) => r.brigadeCode)).toEqual(["009", "009D"])
+		expect(rows.map((r) => r.accountCode)).toEqual(["009", "009"])
+		expect(rows.map((r) => r.toPay)).toEqual([585, 720])
+		expect(rows.map((r) => r.unverified)).toEqual([false, true])
 	})
 })

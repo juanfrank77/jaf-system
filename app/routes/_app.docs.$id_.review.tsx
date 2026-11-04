@@ -48,6 +48,7 @@ import {
 	CONTRACTOR_SHARE_PERCENT,
 	RETENTION_RATE,
 } from "~/lib/contractor-payment.server"
+import { BASE_SHARE_PERCENT, shareFigures } from "~/lib/contractor-share"
 import { db } from "~/lib/db.server"
 import { isPacketEmailEnabled } from "~/lib/features.server"
 import { fieldMaterialsOrDefault } from "~/lib/field-materials"
@@ -481,7 +482,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	}
 	if (lineTotal != null && showPrices) {
 		const ivuRate = await getIvuRate()
-		const contractor = round2(lineTotal * CONTRACTOR_SHARE_PERCENT)
+		const contractorFigures = shareFigures(lineTotal, BASE_SHARE_PERCENT)
+		const contractor = contractorFigures.net
 		// Per-line IVU from the stored invoice lines; a total with no lines
 		// behind it counts as one line.
 		const storedLines = Array.isArray(doc.jafInvoiceLines)
@@ -500,7 +502,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			sharePercent: CONTRACTOR_SHARE_PERCENT,
 			contractor,
 			retentionPercent: RETENTION_RATE,
-			contractorNet: round2(contractor - round2(contractor * RETENTION_RATE)),
+			contractorNet: contractorFigures.adjNet,
 		}
 	}
 	// Step 5 · Packet → Claro. "Sent" is the first SENT/MANUAL send

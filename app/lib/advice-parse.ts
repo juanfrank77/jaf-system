@@ -21,30 +21,43 @@ export type AdviceRead = {
 
 const MONTHS: Record<string, string> = {
 	jan: "01",
+	ene: "01",
 	feb: "02",
 	mar: "03",
 	apr: "04",
+	abr: "04",
 	may: "05",
 	jun: "06",
 	jul: "07",
 	aug: "08",
+	ago: "08",
 	sep: "09",
 	oct: "10",
 	nov: "11",
 	dec: "12",
+	dic: "12",
 }
+
+/** A JA- row is JAF's own second series: not one of the Claro invoices we track yet. */
+export const isOtherJafRef = (ref: string) => /^JA-/i.test(ref)
 
 const money = (s: string) => Number(s.replace(/[,$\s]/g, ""))
 const MONEY_RE = /\$?\s*(?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2}/g
 // With a dash any run of digits is a number; without one it needs 3+ ("M193423").
-const INVOICE_RE = /\bM\s?19\s?(?:[-–]\s?(\d{1,5})|(\d{3,5}))\b/gi
+// "JA-1616276" is a second series Claro pays on the same advice: it is kept as a
+// row (it will not match one of our invoices) so the rows add up to the printed total.
+const INVOICE_RE =
+	/\b(?:M\s?19\s?(?:[-–]\s?(\d{1,5})|(\d{3,5}))|JA\s?-\s?(\d{5,8}))\b/gi
 
-/** "Oct. 01, 2026" or "01.10.2026" -> "2026-10-01". */
-function readAdviceDate(head: string): string | null {
-	const named = head.match(
-		/\b([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(20\d{2})\b/,
-	)
-	if (named) {
+/**
+ * "Oct. 01, 2026" or "Agosto 28, 2026" -> "2026-10-01". The date is printed
+ * where the page breaks fall, so it is looked for in the whole text; a dotted
+ * "01.10.2026" is only trusted before the first row (the rows carry their own).
+ */
+function readAdviceDate(head: string, text: string): string | null {
+	for (const named of text.matchAll(
+		/\b([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(20\d{2})\b/g,
+	)) {
 		const m = MONTHS[named[1].toLowerCase()]
 		if (m) return `${named[3]}-${m}-${named[2].padStart(2, "0")}`
 	}
@@ -87,7 +100,7 @@ export function parseAdvice(text: string): AdviceRead {
 					? [amounts[0], 0, 0, amounts[0]]
 					: [amounts[0], 0, 0, amounts[amounts.length - 1]]
 		rows.push({
-			invoiceRef: `M19-${h[1] ?? h[2]}`,
+			invoiceRef: h[3] ? `JA-${h[3]}` : `M19-${h[1] ?? h[2]}`,
 			voucher,
 			invoiceDate: dateTok ? parseClaroDate(dateTok) : null,
 			amount,
@@ -100,15 +113,20 @@ export function parseAdvice(text: string): AdviceRead {
 	const totalHit = /\bTotal\b/i.test(totalText)
 		? totalText.match(MONEY_RE)?.[0]
 		: undefined
-	const bank = head.match(
-		/\b(Banco\s+[A-Za-zÁÉÍÓÚáéíóúñ ]+?(?:\s+PR)?)(?=\s*[\n·,\d]|$)/,
-	)?.[1]
+	// "Bank: BANCO SANTANDER PUERTO\nRICO\nBank ID: ..." as Claro prints it, else
+	// a bare "Banco ..." line.
+	const flat = text.replace(/\s+/g, " ")
+	const bank =
+		flat.match(/\bBank:\s*(.+?)\s+(?:Bank\s*ID|Reference|Ref\b)/i)?.[1] ??
+		text.match(
+			/\b(Banco\s+[A-Za-zÁÉÍÓÚáéíóúñ ]+?(?:\s+PR)?)(?=\s*[\n·,\d]|$)/i,
+		)?.[1]
 	const reference =
-		head.match(/(?:Referenc\w*|Reference|Ref\.?)\D{0,12}(\d{8,12})/i)?.[1] ??
+		text.match(/(?:Referenc\w*|Reference|Ref\.?)\D{0,12}(\d{8,12})/i)?.[1] ??
 		head.match(/\b(\d{10})\b/)?.[1] ??
 		null
 	return {
-		adviceDate: readAdviceDate(head),
+		adviceDate: readAdviceDate(head, text),
 		bank: bank?.trim() ?? null,
 		reference,
 		total: totalHit ? money(totalHit) : null,

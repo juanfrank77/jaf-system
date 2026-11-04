@@ -1,9 +1,8 @@
 import type { StageRow } from "~/components/finance-stage-table"
 import { isAvisoSaved } from "~/lib/aviso-document"
 import {
-	computeContractorPayment,
+	payeeCode,
 	resolveContractorAccounts,
-	toContractorPaymentLines,
 } from "~/lib/contractor-payment.server"
 import { db } from "~/lib/db.server"
 import {
@@ -11,9 +10,8 @@ import {
 	financeSendBackIds,
 	stageWhere,
 } from "~/lib/finance-stages.server"
-import { computeInvoiceTotals } from "~/lib/invoice-totals"
+import { rowAmounts } from "~/lib/pbcc-batch.server"
 import { evaluateReleaseGate } from "~/lib/release-gate"
-import type { InvoiceLine } from "~/lib/service-lines"
 import type { Prisma } from "../../generated/prisma/client"
 
 /** Whole days elapsed since `from` (0 when unset). */
@@ -104,6 +102,7 @@ export async function loadStageRows(opts: {
 				financeVerifiedAt: true,
 				pbccRequestSentAt: true,
 				jafInvoiceLines: true,
+				jafInvoiceLineTotal: true,
 				contractorAccountCode: true,
 				// Every current certificate (one per crew), lead first.
 				preCertSheets: {
@@ -118,7 +117,7 @@ export async function loadStageRows(opts: {
 					},
 				},
 				photos: { select: { tag: true } },
-				brigade: { select: { leadName: true, name: true } },
+				brigade: { select: { leadName: true, name: true, code: true } },
 				supervisor: { select: { name: true } },
 			},
 		}),
@@ -131,16 +130,18 @@ export async function loadStageRows(opts: {
 	if (opts.withAccounts) {
 		const all = await db.jafInvoice.findMany({
 			where,
-			select: { id: true, contractorAccountCode: true },
+			select: {
+				id: true,
+				contractorAccountCode: true,
+				brigade: { select: { code: true } },
+			},
 		})
-		resolved = await resolveContractorAccounts(
-			all.map((d) => d.contractorAccountCode),
-		)
+		resolved = await resolveContractorAccounts(all.map(payeeCode))
 		sweepableIds = all
-			.filter(
-				(d) =>
-					d.contractorAccountCode && resolved?.has(d.contractorAccountCode),
-			)
+			.filter((d) => {
+				const code = payeeCode(d)
+				return code && resolved?.has(code)
+			})
 			.map((d) => d.id)
 	}
 	const now = new Date()
@@ -173,25 +174,19 @@ export async function loadStageRows(opts: {
 				photos: has("photos"),
 			},
 			supervisorName: d.supervisor?.name ?? null,
-			// The packet-side lists show the invoice record's total; only the
-			// payroll list is the brigade's labor share.
+			// Every list shows what the invoice bills: the same figures the PBCC
+			// batch row carries, read from one place (`rowAmounts`). Packets show the
+			// total with IVU; the payroll list shows the pre-IVU subtotal the batch
+			// row bills.
 			amount:
-				opts.stage === "LISTS"
-					? computeContractorPayment(
-							toContractorPaymentLines(d.jafInvoiceLines),
-						).grossPayable
-					: computeInvoiceTotals(
-							Array.isArray(d.jafInvoiceLines)
-								? (d.jafInvoiceLines as InvoiceLine[])
-								: [],
-						).total,
+				opts.stage === "LISTS" ? rowAmounts(d).subtotal : rowAmounts(d).total,
 			...(packets && {
 				resent: sent.resent.includes(d.id) && !d.financeVerifiedAt,
 				returned: returnedView,
 			}),
 			...(resolved && {
-				accountResolved: d.contractorAccountCode
-					? resolved.has(d.contractorAccountCode)
+				accountResolved: payeeCode(d)
+					? resolved.has(payeeCode(d) as string)
 					: false,
 			}),
 		}

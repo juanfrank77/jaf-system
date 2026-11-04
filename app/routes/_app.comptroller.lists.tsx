@@ -22,10 +22,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 			label: run.label,
 			generatedAt: run.generatedAt,
 			invoiceCount: run.invoices.length,
-			total: run.invoices.reduce(
-				(sum, i) => sum + Number(i.netPayable ?? 0),
-				0,
-			),
+			total: run.toPayTotal,
 			...listProgress(run, run.accounts),
 		})),
 	}

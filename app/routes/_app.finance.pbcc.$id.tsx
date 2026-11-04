@@ -12,6 +12,8 @@ import {
 	type ContractorPayment,
 	type ContractorShareLine,
 	computeContractorPayment,
+	loadLineShares,
+	payeeCode,
 	resolveContractorAccount,
 	toContractorPaymentLines,
 } from "~/lib/contractor-payment.server"
@@ -55,6 +57,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		where: { id: params.id, ...armAOpenWhere({ packetView: true }) },
 		include: {
 			supervisor: true,
+			brigade: { select: { code: true } },
 			poLinks: true,
 			paymentRecords: { select: { type: true, note: true } },
 			payrollRun: { select: { paidAt: true } },
@@ -80,7 +83,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	// A job already swept into a run (grossPayable set) has its payment
 	// frozen — show that, never live-recompute it, so a later catalog price
 	// change can't appear to move an already-generated run's figures.
-	const account = await resolveContractorAccount(doc.contractorAccountCode)
+	const account = await resolveContractorAccount(payeeCode(doc))
 	const frozen = doc.grossPayable != null
 	const payment: ContractorPayment = frozen
 		? {
@@ -90,13 +93,19 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 				retentionAmount: toNumberPrice(doc.retentionAmount),
 				netPayable: toNumberPrice(doc.netPayable),
 			}
-		: computeContractorPayment(toContractorPaymentLines(doc.jafInvoiceLines))
+		: computeContractorPayment(
+				toContractorPaymentLines(
+					doc.jafInvoiceLines,
+					await loadLineShares([doc.jafInvoiceLines]),
+				),
+			)
 
 	return {
 		doc,
 		user,
 		serviceCodes,
 		amount,
+		invoiceSubtotal: rowAmounts(doc).subtotal,
 		lcPbccAdvanceRate,
 		payment,
 		frozen,
@@ -112,10 +121,12 @@ function onUnsentSchedule(doc: {
 	return doc.bankSchedule != null && doc.bankSchedule.sentAt === null
 }
 
-function onScheduleError(doc: { bankSchedule: { number: number } | null }) {
+function onScheduleError(doc: {
+	bankSchedule: { number: number | null } | null
+}) {
 	return {
 		errorKey: "finance_pbcc.errors.on_schedule",
-		list: `#${doc.bankSchedule?.number}`,
+		list: doc.bankSchedule?.number ? `#${doc.bankSchedule.number}` : "(open)",
 	}
 }
 
@@ -274,6 +285,7 @@ export default function PbccRequest({
 		contractorAccountResolved,
 		bankSchedule,
 		hasBankInvoice,
+		invoiceSubtotal,
 	} = loaderData
 	const { t } = useTranslation()
 
@@ -365,7 +377,7 @@ export default function PbccRequest({
 								{t("finance_pbcc.gross")}
 							</td>
 							<td className="text-right font-mono">
-								{formatMoney(payment.grossPayable)}
+								{formatMoney(invoiceSubtotal)}
 							</td>
 						</tr>
 						<tr>
@@ -395,7 +407,9 @@ export default function PbccRequest({
 							to={`/finance/schedules/${bankSchedule.id}`}
 							className="text-accent-text underline"
 						>
-							{t("finance_pbcc.on_schedule", { number: bankSchedule.number })}
+							{bankSchedule.number
+								? t("finance_pbcc.on_schedule", { number: bankSchedule.number })
+								: t("finance_pbcc.on_open_batch")}
 						</Link>
 					)}
 					{hasBankInvoice && (

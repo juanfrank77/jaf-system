@@ -12,10 +12,14 @@ const request = (
 	sentAt: "2026-10-24T13:12:00Z",
 	paidAt: null,
 	ageDays: 2,
+	pastPayDay: false,
+	dueToday: false,
 	avisoCount: 3,
 	lines: [
 		{
 			brigadeCode: "025",
+			accountCode: "025",
+			unverified: false,
 			brigadeLabel: "Alexis Díaz",
 			avisoNumbers: ["30077820"],
 			net: 131.52,
@@ -27,6 +31,8 @@ const request = (
 		},
 		{
 			brigadeCode: "009",
+			accountCode: "009",
+			unverified: false,
 			brigadeLabel: "Jesús Martínez",
 			avisoNumbers: ["10356113", "10356247"],
 			net: 76.99,
@@ -103,12 +109,9 @@ describe("PayrollRequestCard", () => {
 		expect(screen.queryByText(/sent to Carmen/)).toBeNull()
 	})
 
-	it("flags a waiting request past the overdue days, and a paid one as paid", async ({
-		renderStub,
-	}) => {
+	it("flags a waiting request past its pay day", async ({ renderStub }) => {
 		await mount(renderStub, {
-			request: request({ ageDays: 20 }),
-			overdueDays: 14,
+			request: request({ ageDays: 20, pastPayDay: true }),
 		})
 		expect(await screen.findByText("20d, overdue")).toBeInTheDocument()
 	})

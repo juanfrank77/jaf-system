@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { formatMoney, toNumberPrice } from "./utils"
+import { formatMoney, formatUnitPrice, toNumberPrice } from "./utils"
 
 // Mirrors the shape of a Prisma Decimal (which exposes toNumber() and valueOf()).
 class FakeDecimal {
@@ -61,5 +61,14 @@ describe("formatMoney", () => {
 		expect(formatMoney(null)).toBe("$0.00")
 		expect(formatMoney(undefined)).toBe("$0.00")
 		expect(formatMoney("garbage")).toBe("$0.00")
+	})
+})
+
+describe("formatUnitPrice", () => {
+	it("keeps up to three decimals so Qty x Price matches the line", () => {
+		expect(formatUnitPrice(1.518)).toBe("$1.518")
+		expect(formatUnitPrice(0.391)).toBe("$0.391")
+		expect(formatUnitPrice(1.52)).toBe("$1.52")
+		expect(formatUnitPrice(5)).toBe("$5.00")
 	})
 })

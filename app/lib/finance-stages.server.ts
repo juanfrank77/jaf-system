@@ -1,14 +1,13 @@
 import { db } from "~/lib/db.server"
+import { pastPayDayCutoff } from "~/lib/pay-day"
 import { armAOpenWhere } from "~/lib/payroll-run.server"
 import { sendBackIds } from "~/lib/returned-packet.server"
+import { getPayDayWeekday } from "~/lib/system-settings.server"
 import type { Prisma } from "../../generated/prisma/client"
 
 /** The three Arm A list stages. Carmen's payment is a request/brigade view, not
  * a job list, so it has no entry here. */
 export type ArmAListStage = "PACKETS" | "LC_REQUEST" | "LISTS"
-
-/** A run older than one payroll cycle with no `paidAt` is overdue. */
-export const RUN_OVERDUE_DAYS = 14
 
 /**
  * Where an open Arm A job sits, by its milestone timestamps. The three stages
@@ -69,9 +68,8 @@ export async function countArmAStages(): Promise<
 export async function carmenOpenSummary(
 	now: Date = new Date(),
 ): Promise<{ openAccounts: number; overdueRuns: number }> {
-	// Same rule as the pages: floor(age in days) > RUN_OVERDUE_DAYS, i.e. at
-	// least RUN_OVERDUE_DAYS + 1 whole days old.
-	const cutoff = new Date(now.getTime() - (RUN_OVERDUE_DAYS + 1) * 86_400_000)
+	// Same rule as the pages: the pay day the request was sent for has passed.
+	const cutoff = pastPayDayCutoff(now, await getPayDayWeekday())
 	const [openAccounts, overdueRuns] = await Promise.all([
 		db.payrollRunAccount.count({
 			where: {
@@ -83,7 +81,7 @@ export async function carmenOpenSummary(
 			where: {
 				paidAt: null,
 				reversedAt: null,
-				sentAt: { not: null, lte: cutoff },
+				sentAt: { not: null, lt: cutoff },
 			},
 		}),
 	])

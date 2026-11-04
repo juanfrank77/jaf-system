@@ -16,9 +16,14 @@ import { StepRail } from "./step-rail"
 // is the current step, the others link to their own screen. Packets, batches
 // and payroll move at different speeds across different jobs, so steps after
 // the current one stay navigable rather than locked.
-export function FinanceStepRail({ current }: { current: FinanceStep }) {
+export function FinanceStepRail({
+	current,
+}: {
+	current: FinanceStep | "CLOSED"
+}) {
 	const { t } = useTranslation()
-	const index = FINANCE_STEPS.indexOf(current)
+	const index =
+		current === "CLOSED" ? FINANCE_STEPS.length : FINANCE_STEPS.indexOf(current)
 	return (
 		<StepRail
 			ariaLabel={t("finance_flow.aria")}
@@ -30,8 +35,13 @@ export function FinanceStepRail({ current }: { current: FinanceStep }) {
 					label: t(FINANCE_STEP_LABEL_KEY[step]),
 					mine: true,
 				})),
-				// Where Arm A ends once Carmen has paid: a marker, never a screen.
-				{ key: "CLOSED", label: t("finance_flow.step.closed"), locked: true },
+				// Where Arm A ends once Carmen has paid: the finished Avisos.
+				{
+					key: "CLOSED",
+					href: current === "CLOSED" ? undefined : "/finance/closed",
+					label: t("finance_flow.step.closed"),
+					mine: true,
+				},
 			]}
 		/>
 	)

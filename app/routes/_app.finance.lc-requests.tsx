@@ -34,14 +34,14 @@ export async function loader({ request }: Route.LoaderArgs) {
 			tab,
 			batch: null,
 			batches: await listBatches(),
-			openBatch: { id: open.id, number: open.number },
+			openBatch: { id: open.id },
 		}
 	return {
 		user,
 		tab,
 		batch: await loadBatchView(open.id),
 		batches: [],
-		openBatch: { id: open.id, number: open.number },
+		openBatch: { id: open.id },
 	}
 }
 

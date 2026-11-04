@@ -98,35 +98,24 @@ describe("carmenOpenSummary overdue cutoff", () => {
 		expect(after.overdueRuns).toBe(before.overdueRuns)
 	})
 
-	it("matches the pages: overdue once floor(age in days) > 14", async () => {
-		const now = new Date()
-		const day = 86_400_000
+	it("is overdue once the Thursday the request was sent for has passed", async () => {
+		// Fri 23 Oct 2026, noon in Puerto Rico.
+		const now = new Date("2026-10-23T16:00:00Z")
 		const fin = t.track("user", await seedUser({ role: "FINANCE" }))
 		const before = await carmenOpenSummary(now)
-		t.track(
-			"payrollRun",
-			await db.payrollRun.create({
-				data: {
-					label: "age 14.5d",
-					generatedById: fin.id,
-					generatedAt: new Date(now.getTime() - 14.5 * day),
-					sentAt: new Date(now.getTime() - 14.5 * day),
-				},
-			}),
-		)
+		const sentRun = async (label: string, sentAt: Date) =>
+			t.track(
+				"payrollRun",
+				await db.payrollRun.create({
+					data: { label, generatedById: fin.id, generatedAt: sentAt, sentAt },
+				}),
+			)
+		// Sent Thu 22: its pay day is Thu 29, so it is not overdue.
+		await sentRun("sent thursday", new Date("2026-10-22T16:00:00Z"))
 		const mid = await carmenOpenSummary(now)
 		expect(mid.overdueRuns - before.overdueRuns).toBe(0)
-		t.track(
-			"payrollRun",
-			await db.payrollRun.create({
-				data: {
-					label: "age 15.5d",
-					generatedById: fin.id,
-					generatedAt: new Date(now.getTime() - 15.5 * day),
-					sentAt: new Date(now.getTime() - 15.5 * day),
-				},
-			}),
-		)
+		// Sent Wed 21: its pay day was Thu 22, which has passed.
+		await sentRun("sent wednesday", new Date("2026-10-21T16:00:00Z"))
 		const after = await carmenOpenSummary(now)
 		expect(after.overdueRuns - mid.overdueRuns).toBe(1)
 	})

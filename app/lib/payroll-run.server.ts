@@ -1,9 +1,18 @@
 import {
 	computeContractorPayment,
+	loadLineShares,
+	payeeCode,
 	resolveContractorAccounts,
 	toContractorPaymentLines,
 } from "~/lib/contractor-payment.server"
+import {
+	BASE_SHARE_PERCENT,
+	isDPercent,
+	percentOf,
+	shareFigures,
+} from "~/lib/contractor-share"
 import { db } from "~/lib/db.server"
+import { round2 } from "~/lib/service-lines"
 import { toNumberPrice } from "~/lib/utils"
 import { Prisma } from "../../generated/prisma/client"
 
@@ -164,15 +173,24 @@ function sweepableWhere(): Prisma.JafInvoiceWhereInput {
 export async function blockedSentJobs() {
 	const docs = await db.jafInvoice.findMany({
 		where: sweepableWhere(),
-		select: { id: true, controlNumber: true, contractorAccountCode: true },
+		select: {
+			id: true,
+			controlNumber: true,
+			contractorAccountCode: true,
+			brigade: { select: { code: true, name: true } },
+			preCertSheets: {
+				orderBy: { version: "desc" },
+				take: 1,
+				select: { sigSubcontractorName: true },
+			},
+		},
 		orderBy: { controlNumber: "asc" },
 	})
-	const resolved = await resolveContractorAccounts(
-		docs.map((d) => d.contractorAccountCode),
-	)
-	return docs.filter(
-		(d) => !d.contractorAccountCode || !resolved.has(d.contractorAccountCode),
-	)
+	const resolved = await resolveContractorAccounts(docs.map(payeeCode))
+	return docs.filter((d) => {
+		const code = payeeCode(d)
+		return !code || !resolved.has(code)
+	})
 }
 
 /** Thrown (before anything is written) when a run would contain no jobs. */
@@ -204,7 +222,12 @@ export async function generateRun(opts: {
 			...sweepableWhere(),
 			...(excludeIds.length ? { id: { notIn: [...excludeIds] } } : {}),
 		},
-		select: { id: true, jafInvoiceLines: true, contractorAccountCode: true },
+		select: {
+			id: true,
+			jafInvoiceLines: true,
+			contractorAccountCode: true,
+			brigade: { select: { code: true } },
+		},
 	})
 
 	// Resolve accounts before opening the transaction — a job whose code
@@ -213,24 +236,23 @@ export async function generateRun(opts: {
 	// One query for the whole batch, not one per candidate: the candidate set
 	// is unbounded (see the deploy guide's §7 note), so this loop is the
 	// widest in the feature.
-	const resolved = await resolveContractorAccounts(
-		candidates.map((c) => c.contractorAccountCode),
-	)
+	const resolved = await resolveContractorAccounts(candidates.map(payeeCode))
+	const shares = await loadLineShares(candidates.map((c) => c.jafInvoiceLines))
 	const toSweep: Array<{
 		id: string
 		payment: ReturnType<typeof computeContractorPayment>
 		accountId: string
 	}> = []
 	for (const doc of candidates) {
-		if (!doc.contractorAccountCode) continue
-		const account = resolved.get(doc.contractorAccountCode)
+		const code = payeeCode(doc)
+		const account = code ? resolved.get(code) : undefined
 		if (!account) continue
 		toSweep.push({
 			id: doc.id,
 			// Computed here, outside the transaction, so the transaction only
 			// holds the writes.
 			payment: computeContractorPayment(
-				toContractorPaymentLines(doc.jafInvoiceLines),
+				toContractorPaymentLines(doc.jafInvoiceLines, shares),
 			),
 			accountId: account.id,
 		})
@@ -466,6 +488,8 @@ export async function closePayrollRunAccount(opts: {
 }
 
 type JournalLine = {
+	/** Whole percent the line was swept at: 65, or 80 on a D line. */
+	percent: number
 	claroCode: string
 	description: string
 	qty: number
@@ -491,12 +515,19 @@ type JournalJob = {
 }
 
 type JournalBlock = {
+	/** The brigade's account code, "009D" for its D lines. */
 	brigadeCode: string
+	/** The brigade's real account (no D), what a payment is ticked against. */
+	accountCode: string
 	brigadeLabel: string
+	/** 65, or 80 for a D block. */
+	percent: number
+	/** D-line retention is not confirmed with Lissette yet. */
+	unverified: boolean
 	gross: number
 	net: number
 	retention: number
-	/** Final running adj. net for this brigade (= Total SC line). */
+	/** The brigade total: Adj. Net figured on the block's gross. What Carmen pays. */
 	totalSC: number
 	jobs: JournalJob[]
 }
@@ -537,41 +568,44 @@ export function buildJournalBlocks(
 	for (const doc of invoices) {
 		if (!doc.contractorAccount) continue
 		const acc = doc.contractorAccount
-		let block = byBrigade.get(acc.code)
-		if (!block) {
-			block = {
-				brigadeCode: acc.code,
-				brigadeLabel: acc.label,
-				gross: 0,
-				net: 0,
-				retention: 0,
-				totalSC: 0,
-				jobs: [],
+		const all: JournalLine[] = parseShareLines(doc.contractorShareLines)
+		// A D line prints under the brigade's D account ("009D"), at its own rate.
+		for (const percent of [...new Set(all.map((l) => l.percent))]) {
+			const lines = all.filter((l) => l.percent === percent)
+			const isD = isDPercent(percent)
+			const key = isD ? `${acc.code}D` : acc.code
+			let block = byBrigade.get(key)
+			if (!block) {
+				block = {
+					brigadeCode: key,
+					accountCode: acc.code,
+					brigadeLabel: acc.label,
+					percent,
+					unverified: isD,
+					gross: 0,
+					net: 0,
+					retention: 0,
+					totalSC: 0,
+					jobs: [],
+				}
+				byBrigade.set(key, block)
 			}
-			byBrigade.set(acc.code, block)
+			// The job's figures come from the job's gross, not from its lines.
+			const gross = round2(lines.reduce((s, l) => s + l.gross, 0))
+			const f = shareFigures(gross, percent)
+			block.gross = round2(block.gross + gross)
+			block.jobs.push({
+				invoiceId: doc.id,
+				controlNumber: doc.controlNumber,
+				avisoNumber: doc.avisoNumber,
+				lines,
+				gross,
+				net: f.net,
+				retention: f.retention,
+				adjNet: f.adjNet,
+				adjNetRunning: 0,
+			})
 		}
-
-		const lines: JournalLine[] = parseShareLines(doc.contractorShareLines)
-		const gross = lines.reduce((s, l) => s + l.gross, 0)
-		const net = lines.reduce((s, l) => s + l.net, 0)
-		const retention = lines.reduce((s, l) => s + l.retention, 0)
-		const adjNet = lines.reduce((s, l) => s + l.adjNet, 0)
-
-		block.gross += gross
-		block.net += net
-		block.retention += retention
-
-		block.jobs.push({
-			invoiceId: doc.id,
-			controlNumber: doc.controlNumber,
-			avisoNumber: doc.avisoNumber,
-			lines,
-			gross,
-			net,
-			retention,
-			adjNet,
-			adjNetRunning: 0,
-		})
 	}
 
 	const blocks = [...byBrigade.values()].sort((a, b) =>
@@ -582,10 +616,16 @@ export function buildJournalBlocks(
 		// Running adj. net restarts at each brigade (PDF Part 1 § "Brigade total").
 		let running = 0
 		for (const job of block.jobs) {
-			running += job.adjNet
+			running = round2(running + job.adjNet)
 			job.adjNetRunning = running
 		}
-		block.totalSC = running
+		// The brigade's figures come from the brigade's gross. The running
+		// column and the jobs may differ from it by a few cents; this is what
+		// gets paid.
+		const f = shareFigures(block.gross, block.percent)
+		block.net = f.net
+		block.retention = f.retention
+		block.totalSC = f.adjNet
 	}
 	return blocks
 }
@@ -597,6 +637,11 @@ function parseShareLines(value: unknown): JournalLine[] {
 	return value.map((raw) => {
 		const line = (raw ?? {}) as Record<string, unknown>
 		return {
+			percent: percentOf(
+				line.sharePercent == null
+					? BASE_SHARE_PERCENT / 100
+					: toNumberPrice(line.sharePercent),
+			),
 			claroCode: String(line.claroCode ?? ""),
 			description: String(line.name ?? ""),
 			qty: toNumberPrice(line.qty),
@@ -613,25 +658,33 @@ function parseShareLines(value: unknown): JournalLine[] {
 
 /** One line of the payroll request sheet: a brigade, the Avisos it covers, what it is paid. */
 export type PayrollSheetLine = {
+	/** "009", or "009D" for the brigade's D lines. */
 	brigadeCode: string
+	/** The brigade's real account, what a payment is ticked against. */
+	accountCode: string
 	brigadeLabel: string
 	avisoNumbers: string[]
-	/** 65% of the pre-IVU labor. */
+	/** 65% of the pre-IVU labor (80% on a D row). */
 	net: number
-	/** 10% of net, held back. */
+	/** 10% of the row's gross share, held back. */
 	retention: number
-	/** Net less retention: the amount Carmen pays. */
+	/** The amount Carmen pays: the brigade total, figured on the brigade's gross. */
 	toPay: number
+	/** D-line retention is not confirmed with Lissette yet. */
+	unverified: boolean
 }
 
 /**
  * The request as Carmen and Lissette read it. Gross is the JAF price and is
  * deliberately not carried: this is the only shape of a request that leaves
  * Lissette's desk, so nothing downstream can print what it does not have.
+ * Every figure is truncated from the brigade's own gross (see `shareFigures`),
+ * so To pay is not always Net − Retention to the cent.
  */
 export function payrollSheetLines(blocks: JournalBlock[]): PayrollSheetLine[] {
 	return blocks.map((b) => ({
 		brigadeCode: b.brigadeCode,
+		accountCode: b.accountCode,
 		brigadeLabel: b.brigadeLabel,
 		avisoNumbers: [
 			...new Set(
@@ -641,5 +694,6 @@ export function payrollSheetLines(blocks: JournalBlock[]): PayrollSheetLine[] {
 		net: b.net,
 		retention: b.retention,
 		toPay: b.totalSC,
+		unverified: b.unverified,
 	}))
 }

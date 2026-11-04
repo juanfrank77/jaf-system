@@ -81,10 +81,12 @@ export function PbccBatchDetailView({
 			<h2 className="text-sm font-semibold">
 				{sent && batch.sentAt
 					? t("pbcc_batch.detail.heading_sent", {
-							number: batch.number,
+							number: batch.number ?? "",
 							date: date(batch.sentAt),
 						})
-					: t("pbcc_batch.detail.heading_closed", { number: batch.number })}
+					: t("pbcc_batch.detail.heading_closed", {
+							number: batch.number ?? "",
+						})}
 			</h2>
 			<p className="text-sm">
 				{t("pbcc_batch.summary", {

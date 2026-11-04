@@ -50,7 +50,7 @@ export function PbccBatchOpenView({
 		<div className="space-y-3">
 			<div className="flex flex-wrap items-center justify-between gap-2">
 				<h2 className="text-sm font-semibold">
-					{t("pbcc_batch.open_heading", { number: batch.number })}
+					{t("pbcc_batch.open_heading")}
 				</h2>
 				<Form method="post">
 					<input type="hidden" name="intent" value="close_batch" />
@@ -159,7 +159,7 @@ export function PbccBatchListView({
 	openBatch,
 }: {
 	batches: BatchSummary[]
-	openBatch: { id: string; number: number }
+	openBatch: { id: string }
 }) {
 	const { t, i18n } = useTranslation()
 	const date = (iso: string) =>
@@ -170,7 +170,7 @@ export function PbccBatchListView({
 		<div className="space-y-2">
 			<p className="text-sm">
 				<Link to="?tab=open" className="underline">
-					{t("pbcc_batch.open_batch")} #{openBatch.number}
+					{t("pbcc_batch.open_batch")}
 				</Link>
 			</p>
 			{batches.length === 0 ? (

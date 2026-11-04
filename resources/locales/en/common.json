@@ -1050,14 +1050,27 @@
 			"invalid_tolerance": "Tolerance must be a non-negative number.",
 			"unknown_intent": "Unknown action.",
 			"invalid_lc_pbcc_rate": "Enter a rate greater than 0 and no greater than 1.",
-			"invalid_bank_prefix": "Use 1–8 letters or digits."
+			"invalid_bank_prefix": "Use 1–8 letters or digits.",
+			"invalid_pay_day": "Choose a day of the week."
 		},
 		"lc_pbcc_heading": "LC/PBCC advance rate",
 		"lc_pbcc_description": "PBCC advance is currently {current}% of the verified invoice total. Keep IVU separate.",
 		"lc_pbcc_label": "Advance rate (decimal)",
 		"bank_prefix_heading": "Bank invoice prefix",
 		"bank_prefix_description": "Contract prefix on bank invoice numbers, e.g. M17 gives M17-10354739. Current: {{current}}.",
-		"bank_prefix_label": "Prefix"
+		"bank_prefix_label": "Prefix",
+		"pay_day_heading": "Pay day",
+		"pay_day_description": "The weekday brigades are paid. A payroll request is due on the first one after it is sent: yellow that day, red from the day after.",
+		"pay_day_label": "Pay day",
+		"weekday": {
+			"0": "Sunday",
+			"1": "Monday",
+			"2": "Tuesday",
+			"3": "Wednesday",
+			"4": "Thursday",
+			"5": "Friday",
+			"6": "Saturday"
+		}
 	},
 	"admin_catalog": {
 		"title": "Service Catalog",
@@ -1392,6 +1405,7 @@
 		"filter": "Filter",
 		"start_reviewing": "Start reviewing",
 		"empty": "No packets waiting.",
+		"brigade_not_linked": "Brigade not linked",
 		"account_unmapped": "Contractor account not mapped",
 		"missing_claro_pdf": "Missing Claro PDF",
 		"pagination": {
@@ -1482,6 +1496,7 @@
 		"advance": "PBCC advance ({{rate}}%)",
 		"ivu_rate": "IVU rate: {{rate}}%",
 		"hint": "Generating this PDF saves the request, marks it sent, and sends a copy to the Comptroller.",
+		"on_open_batch": "On the open PBCC batch",
 		"on_schedule": "On bank schedule #{{number}}",
 		"invoice_pdf": "Invoice PDF",
 		"errors": {
@@ -1515,6 +1530,7 @@
 		"empty": "No materials yet. Add the physical materials the warehouse should prep for this job."
 	},
 	"material_line_items": {
+		"claro_supplied": "Claro-supplied",
 		"select_placeholder": "Select material...",
 		"add_material": "+ Add material",
 		"remove": "Remove material",
@@ -2071,6 +2087,18 @@
 			"success": "Returned successfully."
 		}
 	},
+	"finance_closed": {
+		"title": "Closed",
+		"callout_title": "Stage 4 · Closed",
+		"callout_body": "Every Aviso that is sold to PBCC and paid to its brigade. Search by work order or Aviso number; this is the backup you can print any time.",
+		"empty": "Nothing is closed yet.",
+		"col": {
+			"sold": "Sold to PBCC",
+			"request_sent": "Request sent",
+			"paid": "Brigade paid",
+			"days": "Days sold to paid"
+		}
+	},
 	"finance_home": {
 		"arm_a": "Paying our people",
 		"arm_b": "Claro paying JAF",
@@ -2084,7 +2112,14 @@
 			"invoices_to_load": "Invoices to load in Ariba",
 			"claro_past_due": "Claro past 60 days"
 		},
+		"blocked": "Blocked: brigade not linked, {{count}} sold to PBCC but cannot be requested",
+		"note": {
+			"blocked": "Blocked: brigade not linked",
+			"overdue": "Past pay day"
+		},
 		"sub": {
+			"overdue_one": "past pay day",
+			"overdue_other": "past pay day",
 			"oldest_one": "oldest {{count}} day",
 			"oldest_other": "oldest {{count}} days",
 			"batch": "{{count}} / {{max}}",
@@ -2103,7 +2138,7 @@
 			"open": "Open",
 			"sent": "Sent"
 		},
-		"open_heading": "PBCC batch #{{number}} · open",
+		"open_heading": "PBCC batch · open",
 		"summary": "{{count}} of {{max}} packets · Subtotal {{subtotal}} · {{percent}}% advance {{advance}}",
 		"summary_note": "The advance is figured on the subtotal, before IVU.",
 		"close": "Close batch",
@@ -2127,7 +2162,8 @@
 			"closed": "Ready to send",
 			"sent": "Sent {{date}}"
 		},
-		"packets": "{{count}} packets",
+		"packets_one": "{{count}} packet",
+		"packets_other": "{{count}} packets",
 		"none_sent": "No closed batches yet.",
 		"open_batch": "Open batch",
 		"detail": {
@@ -2274,6 +2310,7 @@
 		"include_row": "Include {{number}} in the request",
 		"reversed": "Reversed",
 		"blocked_title": "Sold but blocked",
+		"none_selected_blocked": "0 selected. All {{count}} are blocked: Carmen needs to link the brigade.",
 		"blocked_reason": "No contractor account for this brigade",
 		"overdue": "{{days}}d, overdue",
 		"request_title": "Payroll request · {{label}}",
@@ -2307,7 +2344,10 @@
 			"future_date": "The paid date cannot be in the future.",
 			"empty_run": "No payroll request could be made — every sold Aviso is held back or has no contractor account mapped.",
 			"already_sent": "This request has already been sent to Carmen."
-		}
+		},
+		"due_today": "Pay day today",
+		"d_unverified": "D line · retention not confirmed yet",
+		"d_note": "D rows are machinery / truck lines paid at 80%. Their retention is not confirmed with Lissette yet."
 	},
 	"qty_stepper": {
 		"decrease": "Decrease",
@@ -2657,7 +2697,8 @@
 			"matched": "Match → closes PO",
 			"short": "Short paid {{diff}}",
 			"already_paid": "Already paid",
-			"unmatched": "Not in system"
+			"unmatched": "Not in system",
+			"other_jaf": "Other JAF invoice"
 		},
 		"errors": {
 			"no_file": "Choose the advice PDF.",
@@ -2672,7 +2713,10 @@
 			"reason_required": "A reason is required to accept a short pay.",
 			"invoice_not_found": "No invoice with that number.",
 			"line_not_unmatched": "This row is already matched."
-		}
+		},
+		"other_jaf_title": "Other JAF invoices (JA-) - not tracked yet",
+		"other_jaf_body": "{{count}} rows in Claro's second invoice series. They are kept with the advice and counted in its total, but are not matched against our invoices yet.",
+		"other_jaf_summary": "Other JAF (JA-) {{count}} · {{total}}"
 	},
 	"aviso_record": {
 		"source": {

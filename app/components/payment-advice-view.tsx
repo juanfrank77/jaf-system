@@ -17,6 +17,7 @@ type AdviceLineView = {
 	net: number
 	ourTotal: number | null
 	result: "MATCHED" | "SHORT" | "UNMATCHED" | "ALREADY_PAID"
+	otherJaf: boolean
 	invoiceId: string | null
 	needsAccept: boolean
 }
@@ -41,6 +42,8 @@ type UnmatchedView = {
 	adviceDate: string
 	reference: string | null
 }
+
+type OtherJafView = { total: number; lines: UnmatchedView[] }
 
 type AdviceCounts = { pending: number; applied: number; unmatched: number }
 
@@ -74,6 +77,8 @@ function ResultBadge({ line }: { line: AdviceLineView }) {
 		return (
 			<Badge variant="warn">{t("payment_advice.result.already_paid")}</Badge>
 		)
+	if (line.otherJaf)
+		return <Badge>{t("payment_advice.result.other_jaf")}</Badge>
 	return <Badge variant="danger">{t("payment_advice.result.unmatched")}</Badge>
 }
 
@@ -101,7 +106,10 @@ function AdviceCard({ a }: { a: AdviceCardView }) {
 	const { t } = useTranslation()
 	const matched = a.lines.filter((l) => l.result === "MATCHED").length
 	const short = a.lines.filter((l) => l.result === "SHORT").length
-	const unmatched = a.lines.filter((l) => l.result === "UNMATCHED").length
+	const unmatched = a.lines.filter(
+		(l) => l.result === "UNMATCHED" && !l.otherJaf,
+	).length
+	const otherJaf = a.lines.filter((l) => l.otherJaf)
 	const already = a.lines.filter((l) => l.result === "ALREADY_PAID").length
 	return (
 		<section className="space-y-2 rounded-lg border bg-card p-3">
@@ -132,6 +140,11 @@ function AdviceCard({ a }: { a: AdviceCardView }) {
 			</div>
 			<p className="text-sm text-muted-foreground">
 				{t("payment_advice.summary", { matched, short, unmatched, already })}
+				{otherJaf.length > 0 &&
+					` · ${t("payment_advice.other_jaf_summary", {
+						count: otherJaf.length,
+						total: formatMoney(otherJaf.reduce((s, l) => s + l.net, 0)),
+					})}`}
 			</p>
 			<div className="overflow-x-auto">
 				<table className="w-full text-sm">
@@ -164,7 +177,9 @@ function AdviceCard({ a }: { a: AdviceCardView }) {
 									<ResultBadge line={l} />
 								</td>
 								<td className="p-2">
-									{l.result === "UNMATCHED" && <LinkForm lineId={l.id} />}
+									{l.result === "UNMATCHED" && !l.otherJaf && (
+										<LinkForm lineId={l.id} />
+									)}
 									{l.needsAccept && l.invoiceId && (
 										<Form method="post" className="flex items-center gap-1">
 											<input type="hidden" name="intent" value="accept_short" />
@@ -222,12 +237,14 @@ export function PaymentAdviceView({
 	tab,
 	advices,
 	unmatched,
+	otherJaf,
 	errorKey,
 }: {
 	counts: AdviceCounts
 	tab: AdviceTabKey
 	advices: AdviceCardView[]
 	unmatched: UnmatchedView[]
+	otherJaf: OtherJafView
 	errorKey?: AdviceErrorKey
 }) {
 	const { t } = useTranslation()
@@ -275,6 +292,37 @@ export function PaymentAdviceView({
 					/>
 					<Button type="submit">{t("payment_advice.upload")}</Button>
 				</Form>
+			)}
+			{tab === "unmatched" && otherJaf.lines.length > 0 && (
+				<section className="space-y-2 rounded-lg border bg-card p-3">
+					<h3 className="text-sm font-semibold">
+						{t("payment_advice.other_jaf_title")} ·{" "}
+						{formatMoney(otherJaf.total)}
+					</h3>
+					<p className="text-sm text-muted-foreground">
+						{t("payment_advice.other_jaf_body", {
+							count: otherJaf.lines.length,
+						})}
+					</p>
+					<div className="overflow-x-auto">
+						<table className="w-full text-sm">
+							<tbody>
+								{otherJaf.lines.map((u) => (
+									<tr key={u.id} className="border-b last:border-0">
+										<td className="p-2 font-mono">{u.invoiceRef}</td>
+										<td className="p-2 font-mono">{u.voucher ?? "—"}</td>
+										<td className="p-2 text-right font-mono">
+											{formatMoney(u.net)}
+										</td>
+										<td className="p-2">
+											{usDate(u.adviceDate)} · {u.reference ?? "—"}
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				</section>
 			)}
 			{tab === "unmatched" ? (
 				unmatched.length === 0 ? (

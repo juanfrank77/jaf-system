@@ -11,11 +11,13 @@ import {
 	getBankInvoicePrefix,
 	getIvuRate,
 	getLcPbccAdvanceRate,
+	getPayDayWeekday,
 	setAgingAlertDays,
 	setAvisoAmountTolerance,
 	setBankInvoicePrefix,
 	setIvuRate,
 	setLcPbccAdvanceRate,
+	setPayDayWeekday,
 } from "~/lib/system-settings.server"
 import { formatMoney } from "~/lib/utils"
 import type { Route } from "./+types/_app.admin.settings"
@@ -32,12 +34,14 @@ export async function loader({ request }: Route.LoaderArgs) {
 		avisoAmountTolerance,
 		lcPbccAdvanceRate,
 		bankInvoicePrefix,
+		payDayWeekday,
 	] = await Promise.all([
 		getIvuRate(),
 		getAgingAlertDays(),
 		getAvisoAmountTolerance(),
 		getLcPbccAdvanceRate(),
 		getBankInvoicePrefix(),
+		getPayDayWeekday(),
 	])
 	return {
 		ivuRate,
@@ -45,6 +49,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		avisoAmountTolerance,
 		lcPbccAdvanceRate,
 		bankInvoicePrefix,
+		payDayWeekday,
 	}
 }
 
@@ -122,6 +127,15 @@ export async function action({ request }: Route.ActionArgs) {
 		return { successBankPrefix: true }
 	}
 
+	if (intent === "pay_day") {
+		const day = Number.parseInt(String(form.get("pay_day_weekday")), 10)
+		if (!Number.isInteger(day) || day < 0 || day > 6) {
+			return { errorKey: "admin_settings.errors.invalid_pay_day" }
+		}
+		await setPayDayWeekday(day, user.id)
+		return { successPayDay: true }
+	}
+
 	return { errorKey: "admin_settings.errors.unknown_intent" }
 }
 
@@ -135,6 +149,7 @@ export default function AdminSettings({
 		avisoAmountTolerance,
 		lcPbccAdvanceRate,
 		bankInvoicePrefix,
+		payDayWeekday,
 	} = loaderData
 	const { t } = useTranslation()
 	const error =
@@ -150,6 +165,10 @@ export default function AdminSettings({
 	const successBankPrefix =
 		actionData && "successBankPrefix" in actionData
 			? actionData.successBankPrefix
+			: null
+	const successPayDay =
+		actionData && "successPayDay" in actionData
+			? actionData.successPayDay
 			: null
 	const successTolerance =
 		actionData && "successTolerance" in actionData
@@ -306,6 +325,46 @@ export default function AdminSettings({
 						<p className="text-sm text-status-danger">{t(error as never)}</p>
 					)}
 					{successTolerance && (
+						<p className="text-sm text-status-ok">
+							{t("admin_settings.saved")}
+						</p>
+					)}
+					<Button type="submit" size="sm">
+						{t("admin_settings.save")}
+					</Button>
+				</Form>
+			</div>
+
+			<div className="bg-card border rounded-lg p-4 space-y-3">
+				<h2 className="font-medium text-sm">
+					{t("admin_settings.pay_day_heading")}
+				</h2>
+				<p className="text-xs text-muted-foreground">
+					{t("admin_settings.pay_day_description")}
+				</p>
+				<Form method="post" className="space-y-3">
+					<input type="hidden" name="intent" value="pay_day" />
+					<div>
+						<Label htmlFor="pay_day_weekday">
+							{t("admin_settings.pay_day_label")}
+						</Label>
+						<select
+							id="pay_day_weekday"
+							name="pay_day_weekday"
+							defaultValue={payDayWeekday}
+							className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+						>
+							{[0, 1, 2, 3, 4, 5, 6].map((d) => (
+								<option key={d} value={d}>
+									{t(`admin_settings.weekday.${d}` as never)}
+								</option>
+							))}
+						</select>
+					</div>
+					{error && (
+						<p className="text-sm text-status-danger">{t(error as never)}</p>
+					)}
+					{successPayDay && (
 						<p className="text-sm text-status-ok">
 							{t("admin_settings.saved")}
 						</p>

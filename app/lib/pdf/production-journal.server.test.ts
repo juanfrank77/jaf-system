@@ -8,6 +8,8 @@ describe("generateProductionJournalPdf", () => {
 			[
 				{
 					brigadeCode: "025",
+					accountCode: "025",
+					unverified: false,
 					brigadeLabel: "ALEXIS DIAZ",
 					avisoNumbers: ["30077820"],
 					net: 131.52,
@@ -16,6 +18,8 @@ describe("generateProductionJournalPdf", () => {
 				},
 				{
 					brigadeCode: "009",
+					accountCode: "009",
+					unverified: false,
 					brigadeLabel: "JESUS MARTINEZ",
 					avisoNumbers: ["10356113", "10356247"],
 					net: 76.99,

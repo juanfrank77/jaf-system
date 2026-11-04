@@ -17,7 +17,8 @@ export type BatchRowView = {
 
 export type BatchView = {
 	id: string
-	number: number
+	/** Null while the batch is open: it is numbered when it is closed. */
+	number: number | null
 	status: BatchStatus
 	closedAt: string | null
 	sentAt: string | null

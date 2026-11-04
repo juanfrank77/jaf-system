@@ -1,11 +1,16 @@
 import { db } from "~/lib/db.server"
 import { ageDays } from "~/lib/finance-stage-rows.server"
-import type { PayrollRequestView } from "~/lib/payroll-request-view"
+import { isPastPayDay, isPayDayToday } from "~/lib/pay-day"
+import {
+	displayRequestLabel,
+	type PayrollRequestView,
+} from "~/lib/payroll-request-view"
 import {
 	buildJournalBlocks,
 	payrollSheetLines,
 	RUN_INVOICES,
 } from "~/lib/payroll-run.server"
+import { getPayDayWeekday } from "~/lib/system-settings.server"
 import type { Prisma } from "../../generated/prisma/client"
 
 /**
@@ -17,6 +22,7 @@ export async function loadPayrollRequests(
 	opts: { take?: number; now?: Date } = {},
 ): Promise<PayrollRequestView[]> {
 	const now = opts.now ?? new Date()
+	const payDay = await getPayDayWeekday()
 	const runs = await db.payrollRun.findMany({
 		where: { reversedAt: null, ...where },
 		orderBy: [{ generatedAt: "desc" }],
@@ -35,7 +41,7 @@ export async function loadPayrollRequests(
 		const lines = payrollSheetLines(buildJournalBlocks(run.invoices)).map(
 			(line) => {
 				const account = run.accounts.find(
-					(a) => a.contractorAccount.code === line.brigadeCode,
+					(a) => a.contractorAccount.code === line.accountCode,
 				)
 				return {
 					...line,
@@ -45,13 +51,22 @@ export async function loadPayrollRequests(
 				}
 			},
 		)
+		const status = run.paidAt ? "paid" : run.sentAt ? "waiting" : "draft"
 		return {
 			id: run.id,
-			label: run.label,
-			status: run.paidAt ? "paid" : run.sentAt ? "waiting" : "draft",
+			label: displayRequestLabel(run.label),
+			status,
 			sentAt: run.sentAt?.toISOString() ?? null,
 			paidAt: run.paidAt?.toISOString() ?? null,
 			ageDays: ageDays(run.sentAt ?? run.generatedAt, now),
+			pastPayDay:
+				status === "waiting" && run.sentAt
+					? isPastPayDay(run.sentAt, now, payDay)
+					: false,
+			dueToday:
+				status === "waiting" && run.sentAt
+					? isPayDayToday(run.sentAt, now, payDay)
+					: false,
 			avisoCount: run.invoices.length,
 			lines,
 		}

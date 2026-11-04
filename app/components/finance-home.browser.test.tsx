@@ -4,6 +4,7 @@ import type { FinanceHome } from "~/lib/finance-home"
 import { FinanceHomeView } from "./finance-home"
 
 const home: FinanceHome = {
+	blockedCount: 0,
 	armA: [
 		{ key: "inbox", count: 3, href: "/finance/queue", oldestDays: 1 },
 		{
@@ -36,9 +37,9 @@ const home: FinanceHome = {
 	],
 }
 
-const mount = (renderStub: any) =>
+const mount = (renderStub: any, view: FinanceHome = home) =>
 	renderStub({
-		entries: [{ path: "/", Component: () => <FinanceHomeView home={home} /> }],
+		entries: [{ path: "/", Component: () => <FinanceHomeView home={view} /> }],
 	})
 
 describe("FinanceHomeView", () => {
@@ -79,5 +80,50 @@ describe("FinanceHomeView", () => {
 		const row = screen.getByRole("link", { name: /MAINT261022001/ })
 		expect(row).toHaveAttribute("href", "/finance/verify/j1")
 		expect(row).toHaveTextContent("Inbox · 4 days")
+	})
+
+	it("flags a request past its pay day and says what is blocked", async ({
+		renderStub,
+	}) => {
+		await mount(renderStub, {
+			...home,
+			blockedCount: 4,
+			armA: home.armA.map((tile) =>
+				tile.key === "waiting_carmen"
+					? { ...tile, count: 1, oldestDays: 11, overdue: 1 }
+					: tile,
+			),
+			nextUp: [
+				{
+					id: "r1",
+					controlNumber: "10/12/2026 – 10/25/2026",
+					avisoNumber: null,
+					step: "LISTS",
+					waitingDays: 11,
+					href: "/finance/payroll?tab=waiting",
+					note: "overdue",
+				},
+				{
+					id: "j2",
+					controlNumber: "MAINT261023001",
+					avisoNumber: "10358032",
+					step: "LISTS",
+					waitingDays: 0,
+					href: "/finance/payroll",
+					note: "blocked",
+				},
+			],
+		})
+		const carmen = screen.getByRole("link", { name: /Waiting on Carmen/ })
+		expect(carmen).toHaveAttribute("data-tone", "flag")
+		expect(carmen).toHaveTextContent("past pay day")
+		expect(
+			screen.getByText(/Blocked: brigade not linked, 4 sold/),
+		).toBeInTheDocument()
+		const blocked = screen.getByRole("link", { name: /MAINT261023001/ })
+		expect(blocked).toHaveTextContent("Blocked: brigade not linked")
+		expect(
+			screen.getByRole("link", { name: /10\/12\/2026/ }),
+		).toHaveTextContent("Past pay day")
 	})
 })

@@ -9,12 +9,11 @@ import {
 import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
 import { PayrollRequestCard } from "~/components/payroll-request-card"
 import { Badge } from "~/components/ui/badge"
-import { Button } from "~/components/ui/button"
+import { Button, buttonVariants } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
 import { db } from "~/lib/db.server"
 import { PAGE_SIZE } from "~/lib/finance-stage-paging"
 import { loadStageRows } from "~/lib/finance-stage-rows.server"
-import { RUN_OVERDUE_DAYS } from "~/lib/finance-stages.server"
 import { FINANCE_STEPS } from "~/lib/finance-steps"
 import {
 	defaultPeriodLabel,
@@ -56,7 +55,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 		tab,
 		waitingCount,
 		paidCount,
-		overdueDays: RUN_OVERDUE_DAYS,
 		defaultLabel: defaultPeriodLabel(),
 	}
 	if (tab === "waiting") {
@@ -195,7 +193,6 @@ export default function FinancePayrollList({
 		drafts,
 		blocked,
 		pagination,
-		overdueDays,
 		defaultLabel,
 		waitingCount,
 		paidCount,
@@ -259,12 +256,27 @@ export default function FinancePayrollList({
 									key={d.id}
 									request={d}
 									actions={
-										<Link
-											to={`/finance/payroll/${d.id}`}
-											className="text-sm underline"
-										>
-											{t("finance_payroll.review")}
-										</Link>
+										<>
+											<Link
+												to={`/finance/payroll/${d.id}`}
+												className="text-sm underline"
+											>
+												{t("finance_payroll.open_request")}
+											</Link>
+											<a
+												href={`/finance/payroll/${d.id}/journal`}
+												download
+												className={buttonVariants({ variant: "secondary" })}
+											>
+												{t("finance_payroll.download_journal_pdf")}
+											</a>
+											<Form method="post" action={`/finance/payroll/${d.id}`}>
+												<input type="hidden" name="intent" value="send_run" />
+												<Button type="submit" disabled={d.lines.length === 0}>
+													{t("finance_payroll.send")}
+												</Button>
+											</Form>
+										</>
 									}
 								/>
 							))}
@@ -313,7 +325,7 @@ export default function FinancePayrollList({
 											/>
 											{!r.accountResolved && (
 												<Badge variant="warn">
-													{t("finance_queue.account_unmapped")}
+													{t("finance_queue.brigade_not_linked")}
 												</Badge>
 											)}
 										</div>
@@ -341,26 +353,15 @@ export default function FinancePayrollList({
 							<Button type="submit" disabled={listCount === 0}>
 								{t("finance_payroll.create_request", { count: listCount })}
 							</Button>
+							{listCount === 0 && blocked.length > 0 && (
+								<span className="text-sm text-muted-foreground">
+									{t("finance_payroll.none_selected_blocked", {
+										count: blocked.length,
+									})}
+								</span>
+							)}
 						</Form>
 					</section>
-
-					{blocked.length > 0 && (
-						<div className="bg-card border rounded-lg p-4 space-y-1">
-							<h2 className="font-semibold text-sm">
-								{t("finance_payroll.blocked_title")}
-							</h2>
-							<ul className="text-sm space-y-1">
-								{blocked.map((job) => (
-									<li key={job.id}>
-										<span className="font-mono">{job.controlNumber}</span>{" "}
-										<span className="text-muted-foreground">
-											{t("finance_payroll.blocked_reason")}
-										</span>
-									</li>
-								))}
-							</ul>
-						</div>
-					)}
 				</>
 			)}
 
@@ -377,7 +378,6 @@ export default function FinancePayrollList({
 							<PayrollRequestCard
 								key={r.id}
 								request={r}
-								overdueDays={overdueDays}
 								actions={
 									<Link
 										to={`/finance/payroll/${r.id}`}

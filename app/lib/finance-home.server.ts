@@ -1,6 +1,10 @@
 import { claroPastDue } from "~/lib/aviso-ledger.server"
 import { db } from "~/lib/db.server"
-import { type FinanceHome, NEXT_UP_LIMIT } from "~/lib/finance-home"
+import {
+	type FinanceHome,
+	NEXT_UP_LIMIT,
+	type NextUpItem,
+} from "~/lib/finance-home"
 import { ageDays } from "~/lib/finance-stage-rows.server"
 import {
 	type ArmAListStage,
@@ -12,7 +16,10 @@ import {
 	FINANCE_STEP_HREF,
 	type FinanceStep,
 } from "~/lib/finance-steps"
+import { pastPayDayCutoff } from "~/lib/pay-day"
+import { blockedSentJobs } from "~/lib/payroll-run.server"
 import { rowAmounts } from "~/lib/pbcc-batch.server"
+import { getPayDayWeekday } from "~/lib/system-settings.server"
 
 const NEXT_UP_STAGES: { stage: ArmAListStage; step: FinanceStep }[] = [
 	{ stage: "PACKETS", step: "PACKETS" },
@@ -28,6 +35,7 @@ function itemHref(step: FinanceStep, id: string): string {
 export async function loadFinanceHome(
 	now: Date = new Date(),
 ): Promise<FinanceHome> {
+	const payDay = await getPayDayWeekday()
 	const [
 		inboxCount,
 		inboxOldest,
@@ -38,6 +46,8 @@ export async function loadFinanceHome(
 		posWaiting,
 		notLoaded,
 		pastDue,
+		overdueRuns,
+		blocked,
 	] = await Promise.all([
 		db.jafInvoice.count({ where: stageWhere("PACKETS") }),
 		db.jafInvoice.findFirst({
@@ -90,7 +100,19 @@ export async function loadFinanceHome(
 			_min: { madeAt: true },
 		}),
 		claroPastDue(now),
+		// Sent and unpaid, and the Thursday they were sent for has gone by.
+		db.payrollRun.findMany({
+			where: {
+				paidAt: null,
+				reversedAt: null,
+				sentAt: { not: null, lt: pastPayDayCutoff(now, payDay) },
+			},
+			orderBy: { sentAt: "asc" },
+			select: { id: true, label: true, sentAt: true },
+		}),
+		blockedSentJobs(),
 	])
+	const blockedIds = new Set(blocked.map((b) => b.id))
 	const posToConfirm = {
 		count: posWaiting._count,
 		oldest: posWaiting._min.receivedAt
@@ -111,18 +133,32 @@ export async function loadFinanceHome(
 		? Number(openBatch.total)
 		: waiting.reduce((sum, job) => sum + rowAmounts(job).subtotal, 0)
 
-	const nextUp = nextUpRows
-		.flat()
-		.map((row) => ({
-			id: row.id,
-			controlNumber: row.controlNumber,
-			avisoNumber: row.avisoNumber,
-			step: row.step,
-			waitingDays: ageDays(row.releasedToFinanceAt, now),
-			href: itemHref(row.step, row.id),
-		}))
-		.sort((a, b) => b.waitingDays - a.waitingDays)
-		.slice(0, NEXT_UP_LIMIT)
+	const overdueItems: NextUpItem[] = overdueRuns.map((run) => ({
+		id: run.id,
+		controlNumber: run.label,
+		avisoNumber: null,
+		step: "LISTS",
+		waitingDays: ageDays(run.sentAt, now),
+		href: `${FINANCE_STEP_HREF.LISTS}?tab=waiting`,
+		note: "overdue",
+	}))
+	const nextUp = [
+		...overdueItems,
+		...nextUpRows
+			.flat()
+			.map(
+				(row): NextUpItem => ({
+					id: row.id,
+					controlNumber: row.controlNumber,
+					avisoNumber: row.avisoNumber,
+					step: row.step,
+					waitingDays: ageDays(row.releasedToFinanceAt, now),
+					href: itemHref(row.step, row.id),
+					...(blockedIds.has(row.id) && { note: "blocked" as const }),
+				}),
+			)
+			.sort((a, b) => b.waitingDays - a.waitingDays),
+	].slice(0, NEXT_UP_LIMIT)
 
 	return {
 		armA: [
@@ -146,6 +182,7 @@ export async function loadFinanceHome(
 				count: carmen.openAccounts,
 				href: FINANCE_STEP_HREF.LISTS,
 				oldestDays: oldestRun ? ageDays(oldestRun.sentAt, now) : null,
+				overdue: overdueRuns.length,
 			},
 		],
 		// The other Arm B boxes go live with their steps.
@@ -173,6 +210,7 @@ export async function loadFinanceHome(
 				oldestDays: pastDue.count > 0 ? pastDue.oldestDays : null,
 			},
 		],
+		blockedCount: blocked.length,
 		nextUp,
 	}
 }

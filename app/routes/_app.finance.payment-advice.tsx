@@ -15,6 +15,7 @@ import {
 	ingestAdvice,
 	linkLine,
 	listAdvices,
+	listOtherJaf,
 	listUnmatched,
 } from "~/lib/payment-advice.server"
 import { requireRole } from "~/lib/permissions.server"
@@ -32,6 +33,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 		tab,
 		advices: tab === "unmatched" ? [] : await listAdvices(tab === "applied"),
 		unmatched: tab === "unmatched" ? await listUnmatched() : [],
+		otherJaf:
+			tab === "unmatched" ? await listOtherJaf() : { total: 0, lines: [] },
 	}
 }
 

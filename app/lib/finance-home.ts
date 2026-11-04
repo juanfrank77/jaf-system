@@ -25,6 +25,8 @@ export type FinanceHomeTile = {
 	oldestDays?: number | null
 	/** Money in the box (pbcc_batch): the subtotal the advance is figured on. */
 	amount?: number | null
+	/** waiting_carmen: requests past the pay day they were sent for. */
+	overdue?: number
 }
 
 export type NextUpItem = {
@@ -34,10 +36,14 @@ export type NextUpItem = {
 	step: FinanceStep
 	waitingDays: number
 	href: string
+	/** Why it needs her now, when waiting its turn is not the whole story. */
+	note?: "blocked" | "overdue"
 }
 
 export type FinanceHome = {
 	armA: FinanceHomeTile[]
 	armB: FinanceHomeTile[]
+	/** Sold to PBCC but stuck: the brigade is not linked, so Carmen cannot be asked to pay it. */
+	blockedCount: number
 	nextUp: NextUpItem[]
 }

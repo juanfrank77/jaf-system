@@ -15,13 +15,10 @@ import { formatMoney } from "~/lib/utils"
 export function PayrollRequestCard({
 	request,
 	actions,
-	overdueDays,
 }: {
 	request: PayrollRequestView
 	/** Draft buttons (send / discard) and downloads, owned by the screen. */
 	actions?: ReactNode
-	/** A sent request this many days old with brigades unpaid is flagged. */
-	overdueDays?: number
 }) {
 	const { t } = useTranslation()
 	const totals = request.lines.reduce(
@@ -33,14 +30,19 @@ export function PayrollRequestCard({
 		{ net: 0, retention: 0, toPay: 0 },
 	)
 	const paid = request.lines.filter((l) => l.paidAt).length
-	const overdue =
-		request.status === "waiting" &&
-		overdueDays !== undefined &&
-		request.ageDays > overdueDays
+	const overdue = request.status === "waiting" && request.pastPayDay
+	const dueToday = request.status === "waiting" && request.dueToday
+	const hasD = request.lines.some((l) => l.unverified)
 	return (
 		<section
 			aria-label={request.label}
-			className="space-y-2 rounded-lg border bg-card p-4"
+			className={
+				overdue
+					? "space-y-2 rounded-lg border border-status-danger/40 bg-status-danger-soft p-4"
+					: dueToday
+						? "space-y-2 rounded-lg border border-status-warn/40 bg-status-warn-soft p-4"
+						: "space-y-2 rounded-lg border bg-card p-4"
+			}
 		>
 			<div className="flex flex-wrap items-center justify-between gap-2">
 				<h3 className="text-sm font-semibold">
@@ -69,6 +71,9 @@ export function PayrollRequestCard({
 						<Badge variant="warn">
 							{t("finance_payroll.overdue", { days: request.ageDays })}
 						</Badge>
+					)}
+					{dueToday && (
+						<Badge variant="warn">{t("finance_payroll.due_today")}</Badge>
 					)}
 					{request.status === "paid" && request.paidAt && (
 						<Badge variant="ok">
@@ -104,6 +109,11 @@ export function PayrollRequestCard({
 									<span className="text-muted-foreground">
 										{l.brigadeLabel}
 									</span>
+									{l.unverified && (
+										<Badge variant="warn" className="ml-2">
+											{t("finance_payroll.d_unverified")}
+										</Badge>
+									)}
 								</td>
 								<td className="p-2 font-mono">
 									{l.avisoNumbers.length > 0 ? l.avisoNumbers.join(" · ") : "—"}
@@ -156,6 +166,11 @@ export function PayrollRequestCard({
 			<p className="text-xs text-muted-foreground">
 				{t("finance_payroll.net_note")}
 			</p>
+			{hasD && (
+				<p className="text-xs text-muted-foreground">
+					{t("finance_payroll.d_note")}
+				</p>
+			)}
 		</section>
 	)
 }

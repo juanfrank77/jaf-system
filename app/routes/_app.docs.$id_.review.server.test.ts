@@ -3460,40 +3460,28 @@ describe("review: a certificate per crew", () => {
 		expect(db.preCertSheet.update).not.toHaveBeenCalled()
 	})
 
-	it("only the lead crew's subcontractor signature sets the payee", async () => {
-		vi.mocked(db.preCertSheet.findFirst).mockResolvedValue(other as any)
-		await action({
-			request: post(
-				intent("sign_precert_subcontractor", {
-					signature: sig,
-					signerName: "Jesús",
-					sheetId: "s-other",
-				}),
-			),
-			params: { id: "doc-1" },
-		} as any).catch(() => {})
-		// Signed with JESUS's own code, but the job's payee is untouched.
-		expect(db.preCertSheet.update).toHaveBeenCalledWith({
-			where: { id: "s-other" },
-			data: expect.objectContaining({ sigSubcontractorCode: "009" }),
-		})
+	it("a crew's subcontractor signature fixes no single payee: each is paid from its own lines", async () => {
+		for (const [sheetRow, sheetId, signerName, code] of [
+			[other, "s-other", "Jesús", "009"],
+			[lead, "s-lead", "Angel", "124"],
+		] as const) {
+			vi.mocked(db.preCertSheet.findFirst).mockResolvedValue(sheetRow as any)
+			await action({
+				request: post(
+					intent("sign_precert_subcontractor", {
+						signature: sig,
+						signerName,
+						sheetId,
+					}),
+				),
+				params: { id: "doc-1" },
+			} as any).catch(() => {})
+			expect(db.preCertSheet.update).toHaveBeenCalledWith({
+				where: { id: sheetId },
+				data: expect.objectContaining({ sigSubcontractorCode: code }),
+			})
+		}
 		expect(db.jafInvoice.update).not.toHaveBeenCalled()
-
-		vi.mocked(db.preCertSheet.findFirst).mockResolvedValue(lead as any)
-		await action({
-			request: post(
-				intent("sign_precert_subcontractor", {
-					signature: sig,
-					signerName: "Angel",
-					sheetId: "s-lead",
-				}),
-			),
-			params: { id: "doc-1" },
-		} as any).catch(() => {})
-		expect(db.jafInvoice.update).toHaveBeenCalledWith({
-			where: { id: "doc-1" },
-			data: { contractorAccountCode: "124" },
-		})
 	})
 
 	it("release is blocked until every crew's certificate is signed", async () => {

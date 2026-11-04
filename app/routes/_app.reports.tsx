@@ -47,7 +47,9 @@ export default function Reports({ loaderData }: Route.ComponentProps) {
 				<iframe
 					title={t("reports.viewer")}
 					src={`/files/reports/${open}.pdf`}
-					className="h-[70vh] w-full rounded-lg border bg-white"
+					className="h-[70vh] w-full rounded-lg border"
+					// A PDF page is paper: white in dark mode too.
+					style={{ background: "white" }}
 				/>
 			) : null}
 			<Card>

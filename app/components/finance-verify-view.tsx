@@ -821,10 +821,15 @@ function VerifyPacket({ loaderData, actionData }: ViewProps) {
 										key={viewerSrc}
 										src={viewerSrc}
 										title={viewing.label}
-										className="h-[75vh] w-full rounded-md border bg-white min-[1100px]:h-[calc(100vh-9rem)]"
+										className="h-[75vh] w-full rounded-md border min-[1100px]:h-[calc(100vh-9rem)]"
+										// A PDF page is paper: white in dark mode too.
+										style={{ background: "white" }}
 									/>
 								) : (
-									<div className="flex h-[75vh] items-center justify-center rounded-md border bg-white min-[1100px]:h-[calc(100vh-9rem)]">
+									<div
+										style={{ background: "white" }}
+										className="flex h-[75vh] items-center justify-center rounded-md border min-[1100px]:h-[calc(100vh-9rem)]"
+									>
 										<img
 											src={viewing.href}
 											alt={viewing.label}

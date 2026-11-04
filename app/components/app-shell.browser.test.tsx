@@ -201,7 +201,7 @@ describe("AppShell", () => {
 		).toBeInTheDocument()
 	})
 
-	it("renders PO inbox as a disabled, non-link placeholder for FINANCE", async ({
+	it("links PO inbox for FINANCE, now that it is built", async ({
 		renderStub,
 	}) => {
 		await renderStub({
@@ -220,10 +220,8 @@ describe("AppShell", () => {
 			],
 		})
 		expect(
-			screen.queryByRole("link", { name: /PO inbox/, hidden: true }),
-		).toBeNull()
-		expect(screen.getAllByText(/PO inbox/).length).toBeGreaterThan(0)
-		expect(screen.getAllByText("Soon").length).toBeGreaterThan(0)
+			screen.getAllByRole("link", { name: /PO inbox/, hidden: true }).length,
+		).toBeGreaterThan(0)
 	})
 
 	it("shows every nav item for ADMIN", async ({ renderStub }) => {

@@ -2129,7 +2129,10 @@
 		}
 	},
 	"pbcc_batch": {
-		"tab": { "open": "Open", "sent": "Sent" },
+		"tab": {
+			"open": "Open",
+			"sent": "Sent"
+		},
 		"open_heading": "PBCC batch #{{number}} · open",
 		"summary": "{{count}} of {{max}} packets · Subtotal {{subtotal}} · {{percent}}% advance {{advance}}",
 		"summary_note": "The advance is figured on the subtotal, before IVU.",
@@ -2538,6 +2541,86 @@
 		"code": "Code",
 		"name": "Material",
 		"qty": "Qty"
+	},
+	"po_inbox": {
+		"uploaded_today": "{{count}} POs uploaded today",
+		"choose_files": "Choose PO PDFs",
+		"upload": "Upload POs",
+		"confirm_all_green": "Confirm all green ({{count}})",
+		"reading": "Reading {{count}} POs…",
+		"confirmed_summary": "Confirmed {{confirmed}} POs; {{skipped}} left for a look.",
+		"tab": {
+			"ready": "Ready",
+			"needs_look": "Needs a look",
+			"blocked": "Blocked",
+			"unmatched": "Unmatched",
+			"confirmed": "Confirmed"
+		},
+		"empty": "No POs here.",
+		"col": {
+			"po": "PO #",
+			"date": "PO date",
+			"aviso": "Aviso",
+			"total": "Total",
+			"checks": "Checks"
+		},
+		"missing": "Missing",
+		"no_aviso": "No Aviso",
+		"all_passed": "All checks passed",
+		"open": "Open",
+		"fix": "Fix",
+		"link_aviso": "Link Aviso",
+		"confirm": "Confirm",
+		"image": "Purchase order",
+		"open_file": "Open the PO PDF",
+		"pages": "{{have}} of {{of}} pages in the file",
+		"po_title": "PO {{number}}",
+		"n_checks": "{{count}} to check",
+		"read_failed": "The PO could not be read automatically. Type the fields from the PO on the left, or read it again.",
+		"field": {
+			"po": "PO #",
+			"date": "PO date",
+			"aviso": "Aviso #",
+			"terms": "Payment terms (days)",
+			"subtotal": "Subtotal",
+			"ivu4": "IVU 4%",
+			"ivu115": "IVU 11.5%",
+			"total": "Total"
+		},
+		"line": {
+			"item": "Item",
+			"amount": "Amount",
+			"rate": "IVU rate",
+			"ivu": "IVU"
+		},
+		"save_fix": "Save fields",
+		"aviso_money": "This Aviso: JAF billed {{billed}} · already PO'd {{already}} · this PO {{thisPo}}",
+		"confirm_po": "Confirm PO",
+		"reread": "Read again",
+		"back": "← PO inbox",
+		"check": {
+			"lines_sum": "The lines do not add up to the subtotal ({{detail}}).",
+			"totals": "Subtotal plus IVU does not equal the total.",
+			"ivu_line": "IVU is not exact to the cent on {{detail}}.",
+			"po_number_format": "The PO number is not 10 digits.",
+			"duplicate": "This PO is already in the system.",
+			"pages_missing": "Pages are missing ({{detail}}).",
+			"pages_unknown": "The page count could not be read.",
+			"po_date_missing": "The PO date is missing.",
+			"terms_missing": "The payment terms are missing.",
+			"over_billed": "POs on this Aviso add to more than JAF billed ({{detail}}).",
+			"unreadable": "The PO could not be read automatically."
+		},
+		"errors": {
+			"not_pdf": "Only PDF files can be uploaded.",
+			"no_files": "Choose at least one PDF.",
+			"not_confirmable": "This PO cannot be confirmed yet. Fix the checks first.",
+			"incomplete": "The PO needs its number, date and Aviso before it can be confirmed.",
+			"duplicate": "A PO with this number is already confirmed.",
+			"aviso_not_found": "No Aviso with that number.",
+			"already_confirmed": "This PO is already confirmed.",
+			"unknown": "Something went wrong."
+		}
 	},
 	"brigade_stock": {
 		"title": "Restock & Brigade inventory",

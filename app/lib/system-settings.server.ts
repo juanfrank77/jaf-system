@@ -1,3 +1,4 @@
+import { contractLabel } from "~/lib/bank-schedule"
 import { DEFAULT_PAY_DAY } from "~/lib/pay-day"
 import { db } from "./db.server"
 
@@ -113,6 +114,94 @@ export async function setBankInvoicePrefix(
 		where: { key: "bank_invoice_prefix" },
 		update: { value: prefix.trim(), updatedById },
 		create: { key: "bank_invoice_prefix", value: prefix.trim(), updatedById },
+	})
+}
+
+/**
+ * JAF's contract number with PBCC, printed as "Contrato Núm." on every bank
+ * invoice. Unset until Lissette provides it; the invoice then carries the
+ * prefix's placeholder ("17-xxx"), which is the one thing to fix before go-live.
+ */
+export async function getBankContractNumber(prefix: string): Promise<string> {
+	const setting = await db.systemSetting.findUnique({
+		where: { key: "bank_contract_number" },
+	})
+	const value = setting?.value?.trim()
+	return value ? value : contractLabel(prefix)
+}
+
+/** An empty value clears the setting, back to the placeholder. */
+export async function setBankContractNumber(
+	contract: string,
+	updatedById: string,
+): Promise<void> {
+	await db.systemSetting.upsert({
+		where: { key: "bank_contract_number" },
+		update: { value: contract.trim(), updatedById },
+		create: {
+			key: "bank_contract_number",
+			value: contract.trim(),
+			updatedById,
+		},
+	})
+}
+
+const DEFAULT_INVOICE_DEPT = "012"
+const DEFAULT_INVOICE_COST_CENTER = "641"
+
+/**
+ * DEPT. and CENTRO CODIGO COSTO printed on every maintenance invoice line.
+ * They are the same for all maintenance work, so they are settings, not
+ * per-service data; A/C is left blank on purpose.
+ */
+export async function getInvoiceCodes(): Promise<{
+	dept: string
+	costCenter: string
+}> {
+	const rows = await db.systemSetting.findMany({
+		where: { key: { in: ["bank_invoice_dept", "bank_invoice_cost_center"] } },
+	})
+	const get = (key: string, fallback: string) =>
+		rows.find((r) => r.key === key)?.value?.trim() || fallback
+	return {
+		dept: get("bank_invoice_dept", DEFAULT_INVOICE_DEPT),
+		costCenter: get("bank_invoice_cost_center", DEFAULT_INVOICE_COST_CENTER),
+	}
+}
+
+export async function setInvoiceCodes(
+	codes: { dept: string; costCenter: string },
+	updatedById: string,
+): Promise<void> {
+	for (const [key, value] of [
+		["bank_invoice_dept", codes.dept.trim()],
+		["bank_invoice_cost_center", codes.costCenter.trim()],
+	] as const) {
+		await db.systemSetting.upsert({
+			where: { key },
+			update: { value, updatedById },
+			create: { key, value, updatedById },
+		})
+	}
+}
+
+/** The job number the series starts at until the first one is assigned. */
+export async function getJobNumberFirst(): Promise<number> {
+	const s = await db.systemSetting.findUnique({
+		where: { key: "job_number_first" },
+	})
+	const n = s ? Number(s.value) : NaN
+	return Number.isInteger(n) && n > 0 ? n : 1
+}
+
+export async function setJobNumberFirst(
+	first: number,
+	updatedById: string,
+): Promise<void> {
+	await db.systemSetting.upsert({
+		where: { key: "job_number_first" },
+		update: { value: String(first), updatedById },
+		create: { key: "job_number_first", value: String(first), updatedById },
 	})
 }
 

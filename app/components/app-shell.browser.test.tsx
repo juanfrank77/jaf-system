@@ -197,7 +197,7 @@ describe("AppShell", () => {
 			],
 		})
 		expect(
-			screen.getByRole("link", { name: /Runs to pay/, hidden: true }),
+			screen.getByRole("link", { name: /Payroll requests/, hidden: true }),
 		).toBeInTheDocument()
 	})
 

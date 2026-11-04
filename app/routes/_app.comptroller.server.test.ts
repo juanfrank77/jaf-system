@@ -3,6 +3,7 @@ import { db } from "~/lib/db.server"
 import {
 	buildJournalBlocks,
 	payrollSheetLines,
+	puertoRicoToday,
 	RUN_INVOICES,
 } from "~/lib/payroll-run.server"
 import {
@@ -79,11 +80,14 @@ const load = (runId: string) =>
 		context: {},
 	} as never)
 
-function post(runId: string, fields: Record<string, string>) {
+function post(runId: string, fields: Record<string, string | string[]>) {
+	const body = new URLSearchParams()
+	for (const [k, v] of Object.entries(fields))
+		for (const one of Array.isArray(v) ? v : [v]) body.append(k, one)
 	return action({
 		request: new Request(`http://localhost/comptroller/runs/${runId}`, {
 			method: "POST",
-			body: new URLSearchParams(fields),
+			body,
 		}),
 		params: { runId },
 		context: {},
@@ -248,7 +252,9 @@ describe("pay_account", () => {
 			accountId: accounts[0].id,
 			paidDate: "2026-09-12",
 		}
-		expect(await post(run.id, fields)).toMatchObject({ ok: true })
+		const receipt = (await post(run.id, fields)) as Response
+		expect(receipt.status).toBe(302)
+		expect(receipt.headers.get("Location")).toContain("receipt=paid")
 		const row = await db.payrollRunAccount.findFirstOrThrow({
 			where: { payrollRunId: run.id, contractorAccountId: accounts[0].id },
 		})
@@ -260,7 +266,141 @@ describe("pay_account", () => {
 		])
 
 		// A replay (double-click, stale tab) is treated as success, not an error.
-		expect(await post(run.id, fields)).toMatchObject({ ok: true })
+		expect(((await post(run.id, fields)) as Response).status).toBe(302)
+	})
+
+	it("pays several brigades at once with one date, skipping any already paid", async () => {
+		const { accounts, run } = await seedRun(2)
+		await post(run.id, {
+			intent: "pay_account",
+			accountId: accounts[0].id,
+			paidDate: puertoRicoToday(),
+		})
+		const result = (await post(run.id, {
+			intent: "pay_accounts",
+			accountId: accounts.map((a) => a.id),
+			paidDate: puertoRicoToday(),
+		})) as Response
+		expect(result.status).toBe(302)
+		const rows = await db.payrollRunAccount.findMany({
+			where: { payrollRunId: run.id },
+		})
+		expect(rows.every((r) => r.paidAt)).toBe(true)
+	})
+
+	it("holds a line with a reason: it cannot be ticked until released, and Lissette is told", async () => {
+		const { accounts, run } = await seedRun(1)
+		const pay = {
+			intent: "pay_account",
+			accountId: accounts[0].id,
+			paidDate: puertoRicoToday(),
+		}
+		expect(
+			await post(run.id, { intent: "hold", accountId: accounts[0].id }),
+		).toMatchObject({ errorKey: "finance_payroll.errors.note_required" })
+		await post(run.id, {
+			intent: "hold",
+			accountId: accounts[0].id,
+			text: "paid a different amount in WinPay",
+		})
+		const held = await db.payrollRunAccount.findFirstOrThrow({
+			where: { payrollRunId: run.id },
+		})
+		expect(held.holdReason).toBe("paid a different amount in WinPay")
+		expect(await post(run.id, pay)).toMatchObject({
+			errorKey: "finance_payroll.errors.on_hold",
+		})
+		await post(run.id, { intent: "release", accountId: accounts[0].id })
+		expect(((await post(run.id, pay)) as Response).status).toBe(302)
+		const after = await db.payrollRunAccount.findFirstOrThrow({
+			where: { payrollRunId: run.id },
+		})
+		expect(after.holdReason).toBeNull()
+		expect(after.paidAt).not.toBeNull()
+		const notes = await db.notification.findMany({
+			where: { message: { contains: "paid a different amount in WinPay" } },
+		})
+		expect(notes.length).toBeGreaterThan(0)
+		await db.notification.deleteMany({
+			where: { id: { in: notes.map((n) => n.id) } },
+		})
+	})
+
+	it("keeps a note on a line for Lissette without changing its state", async () => {
+		const { accounts, run } = await seedRun(1)
+		await post(run.id, {
+			intent: "ask",
+			accountId: accounts[0].id,
+			text: "is the 009D share 80%?",
+		})
+		const row = await db.payrollRunAccount.findFirstOrThrow({
+			where: { payrollRunId: run.id },
+		})
+		expect(row.askNote).toBe("is the 009D share 80%?")
+		expect(row.paidAt).toBeNull()
+		expect(row.holdReason).toBeNull()
+		await db.notification.deleteMany({
+			where: { message: { contains: "is the 009D share 80%?" } },
+		})
+	})
+
+	it("undoes a tick made today with a reason, and reopens the brigade", async () => {
+		const { accounts, run } = await seedRun(1)
+		const fields = {
+			intent: "pay_account",
+			accountId: accounts[0].id,
+			paidDate: puertoRicoToday(),
+		}
+		await post(run.id, fields)
+		expect(
+			await post(run.id, { intent: "undo_paid", accountId: accounts[0].id }),
+		).toMatchObject({ errorKey: "finance_payroll.errors.undo_reason" })
+		expect(
+			await post(run.id, {
+				intent: "undo_paid",
+				accountId: accounts[0].id,
+				reason: "wrong brigade",
+			}),
+		).toMatchObject({ ok: true })
+		const row = await db.payrollRunAccount.findFirstOrThrow({
+			where: { payrollRunId: run.id, contractorAccountId: accounts[0].id },
+		})
+		expect(row.paidAt).toBeNull()
+		expect(row.paidById).toBeNull()
+		const audit = await db.auditTrail.findMany({
+			where: {
+				action: "PAYROLL_PAID_UNDONE",
+				diffJson: { path: ["reason"], equals: "wrong brigade" },
+			},
+		})
+		expect(audit.length).toBeGreaterThan(0)
+		await db.auditTrail.deleteMany({
+			where: { id: { in: audit.map((a) => a.id) } },
+		})
+	})
+
+	it("refuses to undo a tick stamped on an earlier day", async () => {
+		const { accounts, run } = await seedRun(1)
+		await post(run.id, {
+			intent: "pay_account",
+			accountId: accounts[0].id,
+			paidDate: puertoRicoToday(),
+		})
+		await db.jafInvoice.updateMany({
+			where: { payrollRunId: run.id },
+			data: { payablesClosedAt: new Date(Date.now() - 2 * 86_400_000) },
+		})
+		expect(
+			await post(run.id, {
+				intent: "undo_paid",
+				accountId: accounts[0].id,
+				reason: "late",
+			}),
+		).toMatchObject({ errorKey: "finance_payroll.errors.undo_expired" })
+		const row = await db.payrollRunAccount.findFirstOrThrow({
+			where: { payrollRunId: run.id, contractorAccountId: accounts[0].id },
+		})
+		expect(row.paidAt).not.toBeNull()
 	})
 
 	it("404s for an account from another run", async () => {

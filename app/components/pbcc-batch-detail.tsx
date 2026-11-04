@@ -3,6 +3,7 @@ import { Form } from "react-router"
 import { Badge } from "~/components/ui/badge"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
+import { formatPackageSize, formatShortDate } from "~/lib/payroll-request-view"
 import type { BatchView } from "~/lib/pbcc-batch-view"
 import { formatMoney } from "~/lib/utils"
 
@@ -69,13 +70,10 @@ export function PbccBatchDetailView({
 	action?: ActionResult
 	submitting?: boolean
 }) {
-	const { t, i18n } = useTranslation()
+	const { t } = useTranslation()
 	const sent = batch.status === "sent"
 	const green = sent || check?.passed === true
-	const date = (iso: string) =>
-		new Date(iso).toLocaleDateString(i18n.language, {
-			timeZone: "America/Puerto_Rico",
-		})
+	const date = (iso: string) => formatShortDate(iso)
 	return (
 		<div className="space-y-4">
 			<h2 className="text-sm font-semibold">
@@ -183,7 +181,7 @@ export function PbccBatchDetailView({
 										from: String(p.rowFrom).padStart(3, "0"),
 										to: String(p.rowTo).padStart(3, "0"),
 									})}{" "}
-									· {p.megabytes.toFixed(1)} MB
+									· {formatPackageSize(p.megabytes)}
 								</p>
 								<label
 									htmlFor={`subject-${p.part}`}

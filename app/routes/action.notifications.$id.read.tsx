@@ -22,5 +22,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 		data: { read: true },
 	})
 
-	throw redirect(redirectTo)
+	// A notification that names its own page (a report) goes there, not back.
+	const href = notification.href
+	throw redirect(
+		href?.startsWith("/") && !href.startsWith("//") ? href : redirectTo,
+	)
 }

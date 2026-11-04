@@ -6,6 +6,7 @@ import {
 	StagePagination,
 } from "~/components/finance-stage-table"
 import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
+import { ReceiptBanner } from "~/components/receipt-banner"
 import { Badge } from "~/components/ui/badge"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
@@ -94,6 +95,7 @@ export default function FinancePackets({ loaderData }: Route.ComponentProps) {
 				</h1>
 				<StageChip arm="A" step={1} total={FINANCE_STEPS.length} />
 			</div>
+			<ReceiptBanner />
 			<FinanceStepRail current="PACKETS" />
 			<div className="flex flex-wrap gap-2">
 				<Link
@@ -154,6 +156,7 @@ export default function FinancePackets({ loaderData }: Route.ComponentProps) {
 						{t("finance_queue.filter")}
 					</Button>
 				</Form>
+				{/* A returned packet waits on the supervisor: nothing to review. */}
 				{view === "all" && startId && (
 					<Link
 						to={`/finance/verify/${startId}`}

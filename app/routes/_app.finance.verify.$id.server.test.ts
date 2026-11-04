@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
 		jafInvoice: { findUniqueOrThrow: vi.fn(), update: vi.fn() },
 		user: { findUniqueOrThrow: vi.fn() },
 		serviceCode: { findMany: vi.fn(async (): Promise<unknown[]> => []) },
-		auditTrail: { create: vi.fn() },
+		auditTrail: { create: vi.fn(), count: vi.fn(async () => 7) },
 		notification: { create: vi.fn() },
 		$transaction: vi.fn(),
 	},
@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
 	sendInternalEmail: vi.fn(),
 	inboxNeighbors: vi.fn(),
 	addToOpenBatch: vi.fn(),
+	undoAccept: vi.fn(),
 }))
 
 vi.mock("~/lib/db.server", () => ({ db: mocks.db }))
@@ -37,6 +38,13 @@ vi.mock("~/lib/finance-pipeline.server", async (importOriginal) => ({
 }))
 vi.mock("~/lib/pbcc-batch.server", () => ({
 	addToOpenBatch: mocks.addToOpenBatch,
+	undoAccept: mocks.undoAccept,
+	BatchError: class BatchError extends Error {},
+}))
+vi.mock("~/lib/pbcc-batch-view.server", () => ({
+	loadBatchView: async () => ({
+		rows: [{ id: "job-1", row: 3, invoiceNumber: "M1730077820" }],
+	}),
 }))
 vi.mock("~/lib/finance-inbox.server", () => ({
 	inboxNeighbors: mocks.inboxNeighbors,
@@ -75,6 +83,8 @@ const completeDoc = () => ({
 	...baseDoc(),
 	jafInvoiceGeneratedAt: new Date("2026-10-01T12:00:00Z"),
 	jafInvoicePdfPath: "/uploads/packets/job-1-packet-1.pdf",
+	startedAt: new Date("2026-10-14T14:00:00Z"),
+	endedAt: new Date("2026-10-14T20:00:00Z"),
 	avisoNumber: "10353961",
 	avisoDocPath: "/uploads/aviso-docs/job-1-aviso.pdf",
 	preCertSheets: [
@@ -192,11 +202,11 @@ describe("Finance verify action guards", () => {
 			createdAt: "x",
 		}
 		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue({
-			...baseDoc(),
+			...completeDoc(),
 			financeSendBackNotes: [{ ...note, resentAt: "y" }],
 		})
 		const verified = await action({
-			request: requestWith({ intent: "verify" }),
+			request: requestWith({ intent: "verify", ...ALL_CHECKS }),
 			params: { id: "job-1" },
 		} as any).catch((r: any) => r)
 		expect(verified.status).toBe(302)
@@ -209,7 +219,7 @@ describe("Finance verify action guards", () => {
 			params: { id: "job-1" },
 		} as any).catch((r: any) => r)
 		expect(sentBack.status).toBe(302)
-		expect(sentBack.headers.get("Location")).toBe("/finance/receivables")
+		expect(sentBack.headers.get("Location")).toBe("/finance/queue")
 	})
 
 	it.each(["verify", "send_back"])(
@@ -233,13 +243,25 @@ describe("Finance verify action guards", () => {
 
 	it("verifies without an Aviso amount and records no amount check", async () => {
 		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue(completeDoc())
+		mocks.addToOpenBatch.mockResolvedValueOnce({
+			batchId: "b1",
+			closedBatchIds: [],
+		})
 		const result = await action({
 			request: requestWith({ intent: "verify", note: "ok", ...ALL_CHECKS }),
 			params: { id: "job-1" },
 		} as any).catch((r: any) => r)
 		expect(result.status).toBe(302)
-		// Accept & next: straight to the next packet in the Inbox.
-		expect(result.headers.get("Location")).toBe("/finance/verify/job-2")
+		// Accept & next: straight to the next packet, with a receipt and an Undo.
+		const to = new URL(result.headers.get("Location"), "http://x")
+		expect(to.pathname).toBe("/finance/verify/job-2")
+		expect(Object.fromEntries(to.searchParams)).toMatchObject({
+			receipt: "accepted",
+			b: "3",
+			c: "M1730077820",
+			undo: "job-1",
+			reviewed: "7",
+		})
 		expect(mocks.db.jafInvoice.update).toHaveBeenCalledWith(
 			expect.objectContaining({
 				data: expect.objectContaining({ financeVerifiedAt: expect.any(Date) }),
@@ -331,6 +353,33 @@ describe("Finance verify action: the accept gate and send back", () => {
 		expect(mocks.db.jafInvoice.update).not.toHaveBeenCalled()
 	})
 
+	it("accepts a job whose start and end times were never recorded", async () => {
+		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue({
+			...completeDoc(),
+			startedAt: null,
+			endedAt: null,
+		})
+		mocks.addToOpenBatch.mockResolvedValueOnce({
+			batchId: "b1",
+			closedBatchIds: [],
+		})
+		const result = await run({ intent: "verify", ...ALL_CHECKS }).catch(
+			(r: any) => r,
+		)
+		expect(result.status).toBe(302)
+		expect(mocks.db.jafInvoice.update).toHaveBeenCalled()
+	})
+
+	it("undo_accept hands the packet back to the Inbox, even though it is no longer to verify", async () => {
+		mocks.computeFinanceStage.mockReturnValue("PBCC_REQUEST_PENDING")
+		const result = await run({ intent: "undo_accept" }).catch((r: any) => r)
+		expect(mocks.undoAccept).toHaveBeenCalledWith({
+			docId: "job-1",
+			userId: "finance-1",
+		})
+		expect(result.headers.get("Location")).toBe("/finance/verify/job-1")
+	})
+
 	it("puts an accepted packet in the open PBCC batch, and the accept stands if batching fails", async () => {
 		mocks.addToOpenBatch.mockResolvedValueOnce({
 			batchId: "b1",
@@ -360,21 +409,26 @@ describe("Finance verify action: the accept gate and send back", () => {
 		const result = await run({ intent: "verify", ...ALL_CHECKS }).catch(
 			(r: any) => r,
 		)
-		expect(result.headers.get("Location")).toBe("/finance/queue")
+		expect(result.headers.get("Location")).toMatch(
+			/^\/finance\/queue\?receipt=accepted&/,
+		)
 	})
 
-	it("sends back to the supervisor: releases nothing, keeps the reason, lands on the Inbox", async () => {
+	it("sends back to the supervisor: keeps the reason and the release (S4 Returned), lands on the Inbox", async () => {
 		const result = await run({
 			intent: "send_back",
 			note: "wrong Aviso",
 		}).catch((r: any) => r)
 		expect(result.status).toBe(302)
 		expect(result.headers.get("Location")).toBe("/finance/queue")
+		// The release stays: the open return makes it Returned (out of the
+		// Inbox, back in the supervisor's hands) until he resends it.
+		const data = (mocks.db.jafInvoice.update.mock.calls[0][0] as any).data
+		expect(data).not.toHaveProperty("releasedToFinanceAt")
+		expect(data).not.toHaveProperty("releasedToFinanceById")
 		expect(mocks.db.jafInvoice.update).toHaveBeenCalledWith(
 			expect.objectContaining({
 				data: expect.objectContaining({
-					releasedToFinanceAt: null,
-					releasedToFinanceById: null,
 					financeVerifiedAt: null,
 					financeSendBackNotes: [
 						expect.objectContaining({

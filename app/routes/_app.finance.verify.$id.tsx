@@ -1,6 +1,7 @@
 import { redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { FinanceVerifyView } from "~/components/finance-verify-view"
+import { ReceiptBanner, receiptUrl } from "~/components/receipt-banner"
 import type { AvisoDiscrepancy } from "~/lib/aviso-discrepancy"
 import { brigadeStockFor } from "~/lib/brigade-stock.server"
 import { db } from "~/lib/db.server"
@@ -15,7 +16,9 @@ import {
 import { VERIFY_CHECKS as CHECKS } from "~/lib/finance-verify-checks"
 import { computeInvoiceTotals } from "~/lib/invoice-totals"
 import { packetDocuments } from "~/lib/packet-documents"
-import { addToOpenBatch } from "~/lib/pbcc-batch.server"
+import { puertoRicoToday } from "~/lib/payroll-run.server"
+import { addToOpenBatch, BatchError, undoAccept } from "~/lib/pbcc-batch.server"
+import { loadBatchView } from "~/lib/pbcc-batch-view.server"
 import { isTerminalStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import { isResent, isReturned, latestReturn } from "~/lib/returned-packet"
@@ -145,6 +148,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 					pdfPath: true,
 					sigSupervisorAt: true,
 					sigSubcontractorAt: true,
+					// The gate counts a signed sheet only for the current Aviso.
+					avisoNumber: true,
 				},
 			},
 			photos: { select: { localPath: true, tag: true, takenAt: true } },
@@ -155,6 +160,16 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 	const form = await request.formData()
 	const intent = form.get("intent") as string
+	if (intent === "undo_accept") {
+		try {
+			await undoAccept({ docId: params.id, userId: user.id })
+		} catch (e) {
+			if (e instanceof BatchError)
+				return { errorKey: "finance_verify.errors.undo_closed" }
+			throw e
+		}
+		throw redirect(`/finance/verify/${params.id}`)
+	}
 	if (intent !== "verify" && intent !== "send_back")
 		return { errorKey: "finance_verify.errors.unknown_intent" }
 	const stage = computeFinanceStage(
@@ -180,7 +195,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 		)
 		if (present.some((d) => !d.href))
 			return { errorKey: "finance_verify.errors.documents_missing" }
-		const { nextId } = await inboxNeighbors(params.id)
+		const { nextId, total } = await inboxNeighbors(params.id)
 		// No Aviso-amount check (F2): verifying never asks for or compares one.
 		const note = (form.get("note") as string | null)?.trim() || null
 		await db.$transaction([
@@ -203,14 +218,43 @@ export async function action({ request, params }: Route.ActionArgs) {
 		// The packet becomes the next row of the open PBCC batch, its invoice PDF
 		// made on the spot. The accept stands even if this fails: the next batch
 		// takes in any accepted packet that is not in one yet.
+		// "Reviewed 12 · 28 left": this user's accepts today, and what is still waiting.
+		const dayStart = new Date(`${puertoRicoToday()}T00:00:00-04:00`)
+		const reviewed = await db.auditTrail.count({
+			where: {
+				userId: user.id,
+				action: "FINANCE_VERIFIED",
+				timestamp: { gte: dayStart },
+			},
+		})
+		let receipt: Record<string, string> = {}
 		try {
-			await addToOpenBatch({ docId: params.id, userId: user.id })
+			const { batchId } = await addToOpenBatch({
+				docId: params.id,
+				userId: user.id,
+			})
+			const row = (await loadBatchView(batchId))?.rows.find(
+				(r) => r.id === params.id,
+			)
+			if (row) receipt = { b: String(row.row), c: row.invoiceNumber }
 		} catch (error) {
 			// biome-ignore lint/suspicious/noConsole: the accept already committed; batching is retried
 			console.error(`PBCC batch: could not add ${params.id}`, error)
 		}
 		// Accept & next: straight on to the next packet, no trip back to the list.
-		throw redirect(nextId ? `/finance/verify/${nextId}` : "/finance/queue")
+		throw redirect(
+			receiptUrl(
+				nextId ? `/finance/verify/${nextId}` : "/finance/queue",
+				"accepted",
+				{
+					a: doc.avisoNumber || doc.controlNumber,
+					...receipt,
+					undo: params.id,
+					reviewed,
+					left: Math.max(total - 1, 0),
+				},
+			),
+		)
 	}
 
 	if (intent === "send_back") {
@@ -232,10 +276,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 					financeVerifiedAt: null,
 					financeVerifiedById: null,
 					financeSendBackNotes: history,
-					// Back on the supervisor's desk: no longer released, so it leaves
-					// the Inbox and the supervisor can fix it and release it again.
-					releasedToFinanceAt: null,
-					releasedToFinanceById: null,
+					// Back on the supervisor's desk (S4): `releasedToFinanceAt` stays
+					// set and the open return in the notes makes it "Returned". It
+					// leaves the Inbox ("All") for Returned on Packets in, and the
+					// supervisor fixes it and resends it (`isWithFinance`).
 				},
 			}),
 			db.auditTrail.create({
@@ -271,7 +315,12 @@ export default function FinanceVerify({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	return <FinanceVerifyView loaderData={loaderData} actionData={actionData} />
+	return (
+		<div className="space-y-3">
+			<ReceiptBanner />
+			<FinanceVerifyView loaderData={loaderData} actionData={actionData} />
+		</div>
+	)
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {

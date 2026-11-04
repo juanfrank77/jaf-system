@@ -1,12 +1,16 @@
 import { useTranslation } from "react-i18next"
+import { redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
 import {
+	type BatchTab,
 	PbccBatchListView,
 	PbccBatchOpenView,
 	PbccBatchTabs,
 } from "~/components/pbcc-batch-open"
+import { ReceiptBanner, receiptUrl } from "~/components/receipt-banner"
 import { Callout } from "~/components/ui/callout"
+import { db } from "~/lib/db.server"
 import { FINANCE_STEPS } from "~/lib/finance-steps"
 import {
 	BatchError,
@@ -24,24 +28,25 @@ export const meta: Route.MetaFunction = () => [
 
 export async function loader({ request }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])
-	const tab: "open" | "sent" =
-		new URL(request.url).searchParams.get("tab") === "sent" ? "sent" : "open"
+	const raw = new URL(request.url).searchParams.get("tab")
+	const tab: BatchTab = raw === "sent" || raw === "ready" ? raw : "open"
 	// There is always one open batch; this is where it is first made.
 	const open = await getOpenBatch(user.id)
-	if (tab === "sent")
+	const readyCount = (await listBatches(["closed"])).length
+	if (tab !== "open")
 		return {
 			user,
 			tab,
 			batch: null,
-			batches: await listBatches(),
-			openBatch: { id: open.id },
+			batches: await listBatches([tab === "ready" ? "closed" : "sent"]),
+			readyCount,
 		}
 	return {
 		user,
 		tab,
 		batch: await loadBatchView(open.id),
 		batches: [],
-		openBatch: { id: open.id },
+		readyCount,
 	}
 }
 
@@ -51,11 +56,19 @@ export async function action({ request }: Route.ActionArgs) {
 	const intent = form.get("intent")
 	try {
 		if (intent === "close_batch") {
-			await closeOpenBatch({
-				batchId: String(form.get("batchId") ?? ""),
-				userId: user.id,
+			// Land on the batch just closed, with its check and Download / Mark sent.
+			const batchId = String(form.get("batchId") ?? "")
+			await closeOpenBatch({ batchId, userId: user.id })
+			const closed = await db.bankSchedule.findUniqueOrThrow({
+				where: { id: batchId },
+				select: { number: true, _count: { select: { invoices: true } } },
 			})
-			return { ok: true as const }
+			return redirect(
+				receiptUrl(`/finance/schedules/${batchId}`, "closed", {
+					a: closed.number,
+					n: closed._count.invoices,
+				}),
+			)
 		}
 		if (intent === "take_out") {
 			await takeOutRow({
@@ -84,7 +97,7 @@ export default function FinancePbccBatch({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { tab, batch, batches, openBatch } = loaderData
+	const { tab, batch, batches, readyCount } = loaderData
 	const { t } = useTranslation()
 	return (
 		<div className="space-y-4">
@@ -95,14 +108,20 @@ export default function FinancePbccBatch({
 				<StageChip arm="A" step={2} total={FINANCE_STEPS.length} />
 			</div>
 			<FinanceStepRail current="LC_REQUEST" />
+			<ReceiptBanner />
 			<Callout title={t("finance_flow.callout.lc_request_title")}>
 				{t("finance_flow.callout.lc_request_body")}
 			</Callout>
-			<PbccBatchTabs tab={tab} />
+			<PbccBatchTabs tab={tab} readyCount={readyCount} />
 			{tab === "open" && batch ? (
 				<PbccBatchOpenView batch={batch} action={actionData} />
 			) : (
-				<PbccBatchListView batches={batches} openBatch={openBatch} />
+				<PbccBatchListView
+					batches={batches}
+					empty={t(
+						tab === "ready" ? "pbcc_batch.none_ready" : "pbcc_batch.none_sent",
+					)}
+				/>
 			)}
 		</div>
 	)

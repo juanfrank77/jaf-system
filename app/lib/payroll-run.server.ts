@@ -12,6 +12,12 @@ import {
 	shareFigures,
 } from "~/lib/contractor-share"
 import { db } from "~/lib/db.server"
+import {
+	displayRequestLabel,
+	highestRequestNumber,
+	payPeriodLabel,
+	requestNumberLabel,
+} from "~/lib/payroll-request-view"
 import { round2 } from "~/lib/service-lines"
 import { toNumberPrice } from "~/lib/utils"
 import { Prisma } from "../../generated/prisma/client"
@@ -19,13 +25,17 @@ import { Prisma } from "../../generated/prisma/client"
 const INVOICE_SELECT = {
 	id: true,
 	controlNumber: true,
+	jobSeq: true,
 	avisoNumber: true,
 	contractorShareLines: true,
+	payablesClosedAt: true,
 	contractorAccount: {
 		select: {
 			id: true,
 			code: true,
 			label: true,
+			// Carmen's Acct # for the brigade, printed as Acct. ID on the journal.
+			brigade: { select: { code: true } },
 		},
 	},
 } as const
@@ -50,6 +60,16 @@ export const RUN_INVOICES = {
 } as const satisfies Prisma.PayrollRun$invoicesArgs
 
 /** Today's calendar date (YYYY-MM-DD) in Puerto Rico, whatever the server TZ. */
+/** "PR0004 · 10/19/2026 – 11/01/2026": what a new request is called unless Lissette retitles it. */
+export async function defaultRequestLabel(now: Date = new Date()) {
+	const labels = await db.payrollRun.findMany({ select: { label: true } })
+	const next = highestRequestNumber(labels.map((l) => l.label)) + 1
+	return `${requestNumberLabel(next)} · ${payPeriodLabel(now)}`
+}
+
+export const puertoRicoDay = (d: Date) =>
+	d.toLocaleDateString("en-CA", { timeZone: "America/Puerto_Rico" })
+
 export function puertoRicoToday(): string {
 	return new Date().toLocaleDateString("en-CA", {
 		timeZone: "America/Puerto_Rico",
@@ -72,16 +92,19 @@ export function parsePaidDate(raw: string | null | undefined):
 	  } {
 	const value = raw?.trim()
 	if (!value) return { errorKey: "finance_payroll.errors.missing_fields" }
-	if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+	// Typed as MM/DD/YYYY, as the whole app writes dates; a picker's YYYY-MM-DD still works.
+	const us = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value)
+	const iso = us ? `${us[3]}-${us[1]}-${us[2]}` : value
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
 		return { errorKey: "finance_payroll.errors.invalid_date" }
 	}
-	const date = new Date(`${value}T12:00:00`)
+	const date = new Date(`${iso}T12:00:00`)
 	if (Number.isNaN(date.getTime())) {
 		return { errorKey: "finance_payroll.errors.invalid_date" }
 	}
 	// Compare calendar days (YYYY-MM-DD sorts lexically), not instants: "today"
 	// is valid at any hour. Today is the Puerto Rico calendar day.
-	if (value > puertoRicoToday()) {
+	if (iso > puertoRicoToday()) {
 		return { errorKey: "finance_payroll.errors.future_date" }
 	}
 	return { date }
@@ -432,6 +455,15 @@ export async function closePayrollRunAccount(opts: {
 				status: 409,
 			})
 		}
+		// A line on hold is not paid until it is released.
+		const held = await tx.payrollRunAccount.count({
+			where: {
+				payrollRunId: opts.runId,
+				contractorAccountId: opts.accountId,
+				heldAt: { not: null },
+			},
+		})
+		if (held > 0) throw new Response("Line is on hold", { status: 423 })
 		// Conditional claim: same double-submit guard as the old whole-run close.
 		const claimed = await tx.payrollRunAccount.updateMany({
 			where: {
@@ -487,7 +519,167 @@ export async function closePayrollRunAccount(opts: {
 	})
 }
 
-type JournalLine = {
+const lineKey = (runId: string, accountId: string) => ({
+	payrollRunId_contractorAccountId: {
+		payrollRunId: runId,
+		contractorAccountId: accountId,
+	},
+})
+
+async function tellFinance(message: string) {
+	const users = await db.user.findMany({
+		where: { role: "FINANCE", active: true },
+		select: { id: true },
+	})
+	if (users.length > 0)
+		await db.notification.createMany({
+			data: users.map((u) => ({ userId: u.id, message })),
+		})
+}
+
+async function openLine(runId: string, accountId: string) {
+	const line = await db.payrollRunAccount.findUnique({
+		where: lineKey(runId, accountId),
+		select: {
+			paidAt: true,
+			contractorAccount: { select: { code: true } },
+			payrollRun: { select: { label: true, sentAt: true, reversedAt: true } },
+		},
+	})
+	if (!line || !line.payrollRun.sentAt || line.payrollRun.reversedAt)
+		throw new Response("Not Found", { status: 404 })
+	return line
+}
+
+/**
+ * Carmen's Hold: the line cannot be ticked paid until she releases it.
+ * Lissette sees it in red with the reason and corrects or confirms.
+ */
+export async function holdPayrollRunAccount(opts: {
+	runId: string
+	accountId: string
+	userId: string
+	reason: string
+}): Promise<void> {
+	const reason = opts.reason.trim()
+	if (!reason) throw new Response("A reason is required", { status: 400 })
+	const line = await openLine(opts.runId, opts.accountId)
+	if (line.paidAt) throw new Response("Already paid", { status: 409 })
+	await db.payrollRunAccount.update({
+		where: lineKey(opts.runId, opts.accountId),
+		data: { heldAt: new Date(), heldById: opts.userId, holdReason: reason },
+	})
+	await tellFinance(
+		`Carmen put ${line.contractorAccount.code} on hold (${displayRequestLabel(line.payrollRun.label)}): ${reason}`,
+	)
+}
+
+export async function releasePayrollRunAccount(opts: {
+	runId: string
+	accountId: string
+}): Promise<void> {
+	await openLine(opts.runId, opts.accountId)
+	await db.payrollRunAccount.update({
+		where: lineKey(opts.runId, opts.accountId),
+		data: { heldAt: null, heldById: null, holdReason: null },
+	})
+}
+
+/** Carmen's Ask: a note on the line for Lissette. It changes nothing else. */
+export async function askAboutPayrollRunAccount(opts: {
+	runId: string
+	accountId: string
+	userId: string
+	note: string
+}): Promise<void> {
+	const note = opts.note.trim()
+	if (!note) throw new Response("A note is required", { status: 400 })
+	const line = await openLine(opts.runId, opts.accountId)
+	await db.payrollRunAccount.update({
+		where: lineKey(opts.runId, opts.accountId),
+		data: { askNote: note, askAt: new Date(), askById: opts.userId },
+	})
+	await tellFinance(
+		`Carmen asks about ${line.contractorAccount.code} (${displayRequestLabel(line.payrollRun.label)}): ${note}`,
+	)
+}
+
+/**
+ * Undo a Paid tick (rule R6): the same day it was made, with a reason that is
+ * logged on each of the brigade's Avisos. The Avisos reopen, and the request
+ * reopens if that tick had closed it. The tick's day is when the system
+ * stamped it (`payablesClosedAt`), not the pay date Carmen typed.
+ */
+export async function undoPayrollRunAccount(opts: {
+	runId: string
+	accountId: string
+	userId: string
+	reason: string
+	now?: Date
+}): Promise<void> {
+	const reason = opts.reason.trim()
+	if (!reason) throw new Response("A reason is required", { status: 400 })
+	await db.$transaction(async (tx) => {
+		await tx.$queryRaw`SELECT "id" FROM "PayrollRun" WHERE "id" = ${opts.runId} FOR UPDATE`
+		const run = await tx.payrollRun.findUniqueOrThrow({
+			where: { id: opts.runId },
+			select: { reversedAt: true },
+		})
+		if (run.reversedAt) throw new Response("Run is reversed", { status: 409 })
+		const account = await tx.payrollRunAccount.findUnique({
+			where: {
+				payrollRunId_contractorAccountId: {
+					payrollRunId: opts.runId,
+					contractorAccountId: opts.accountId,
+				},
+			},
+			select: { paidAt: true },
+		})
+		if (!account) throw new Response("Account not in this run", { status: 404 })
+		if (!account.paidAt) throw new Response("Not paid", { status: 409 })
+		const invoices = await tx.jafInvoice.findMany({
+			where: { payrollRunId: opts.runId, contractorAccountId: opts.accountId },
+			select: { id: true, payablesClosedAt: true },
+		})
+		const today = puertoRicoDay(opts.now ?? new Date())
+		if (
+			invoices.some(
+				(i) =>
+					!i.payablesClosedAt || puertoRicoDay(i.payablesClosedAt) !== today,
+			)
+		)
+			throw new Response("Only a tick made today can be undone", {
+				status: 409,
+			})
+		await tx.payrollRunAccount.update({
+			where: {
+				payrollRunId_contractorAccountId: {
+					payrollRunId: opts.runId,
+					contractorAccountId: opts.accountId,
+				},
+			},
+			data: { paidAt: null, paidById: null },
+		})
+		await tx.jafInvoice.updateMany({
+			where: { payrollRunId: opts.runId, contractorAccountId: opts.accountId },
+			data: { payablesClosedAt: null, payablesClosedById: null },
+		})
+		await tx.payrollRun.updateMany({
+			where: { id: opts.runId, paidAt: { not: null } },
+			data: { paidAt: null, paidById: null },
+		})
+		await tx.auditTrail.createMany({
+			data: invoices.map((i) => ({
+				docId: i.id,
+				userId: opts.userId,
+				action: "PAYROLL_PAID_UNDONE",
+				diffJson: { reason, source: "STAMPED" },
+			})),
+		})
+	})
+}
+
+export type JournalLine = {
 	/** Whole percent the line was swept at: 65, or 80 on a D line. */
 	percent: number
 	claroCode: string
@@ -501,9 +693,11 @@ type JournalLine = {
 	adjNet: number
 }
 
-type JournalJob = {
+export type JournalJob = {
 	invoiceId: string
 	controlNumber: string
+	/** JAF's M-number, the ASSOC column; null on a job accepted before job numbers. */
+	jobSeq: number | null
 	avisoNumber: string | null
 	lines: JournalLine[]
 	gross: number
@@ -514,12 +708,14 @@ type JournalJob = {
 	adjNetRunning: number
 }
 
-type JournalBlock = {
+export type JournalBlock = {
 	/** The brigade's account code, "009D" for its D lines. */
 	brigadeCode: string
 	/** The brigade's real account (no D), what a payment is ticked against. */
 	accountCode: string
 	brigadeLabel: string
+	/** Carmen's Acct # for the brigade (its record's code), null if not set yet. */
+	acctId: string | null
 	/** 65, or 80 for a D block. */
 	percent: number
 	/** D-line retention is not confirmed with Lissette yet. */
@@ -540,10 +736,12 @@ type JournalBlock = {
  * Rules from docs/JAF_Finance_answer_Journey.pdf Part 1 § "How the report is built":
  *  - Columns: ASSOC/code · DESCRIPTION · QTY · UNIT PRICE · GROSS · NET ·
  *    Pct. RET. (always 0.00) · 10% RET. · ADJ. NET
- *  - Net = Gross × 0.65; Retention = Net × 0.10; Adj. Net = Gross × 0.585
- *    (all truncated to cents per line — see computeContractorPayment)
- *  - Sub Total: Gross, Net, Ret summed per job; Adj. Net = running total
- *    within the brigade
+ *  - Net = Gross × 0.65 and Retention = Net-rate × 0.10, each truncated to
+ *    the cent from the LINE's gross; Adj. Net = Net − Retention. Round once
+ *    per line: every Sub Total, Total SC and grand total only adds the
+ *    printed lines, so a column always equals its calculator sum
+ *  - Sub Total: Gross, Net, Ret, Adj. Net summed per job; the Adj. Net column
+ *    on it is the running total within the brigade
  *  - Total SC: ends each brigade; running restarts at the next brigade
  *  - Order: brigades by number, jobs by M-number (controlNumber) inside
  *
@@ -555,11 +753,13 @@ export function buildJournalBlocks(
 	invoices: Array<{
 		id: string
 		controlNumber: string
+		jobSeq?: number | null
 		avisoNumber: string | null
 		contractorAccount: {
 			id: string
 			code: string
 			label: string
+			brigade?: { code: string | null } | null
 		} | null
 		contractorShareLines: unknown
 	}>,
@@ -571,7 +771,19 @@ export function buildJournalBlocks(
 		const all: JournalLine[] = parseShareLines(doc.contractorShareLines)
 		// A D line prints under the brigade's D account ("009D"), at its own rate.
 		for (const percent of [...new Set(all.map((l) => l.percent))]) {
-			const lines = all.filter((l) => l.percent === percent)
+			// Round once, per line: net and retention are truncated from the line's
+			// gross, Adj. Net is their difference. Everything above only adds.
+			const lines = all
+				.filter((l) => l.percent === percent)
+				.map((l) => {
+					const f = shareFigures(l.gross, percent)
+					return {
+						...l,
+						net: f.net,
+						retention: f.retention,
+						adjNet: cents(f.net - f.retention),
+					}
+				})
 			const isD = isDPercent(percent)
 			const key = isD ? `${acc.code}D` : acc.code
 			let block = byBrigade.get(key)
@@ -580,6 +792,7 @@ export function buildJournalBlocks(
 					brigadeCode: key,
 					accountCode: acc.code,
 					brigadeLabel: acc.label,
+					acctId: acc.brigade?.code ?? null,
 					percent,
 					unverified: isD,
 					gross: 0,
@@ -590,19 +803,18 @@ export function buildJournalBlocks(
 				}
 				byBrigade.set(key, block)
 			}
-			// The job's figures come from the job's gross, not from its lines.
 			const gross = round2(lines.reduce((s, l) => s + l.gross, 0))
-			const f = shareFigures(gross, percent)
 			block.gross = round2(block.gross + gross)
 			block.jobs.push({
 				invoiceId: doc.id,
 				controlNumber: doc.controlNumber,
+				jobSeq: doc.jobSeq ?? null,
 				avisoNumber: doc.avisoNumber,
 				lines,
 				gross,
-				net: f.net,
-				retention: f.retention,
-				adjNet: f.adjNet,
+				net: sumCents(lines, (l) => l.net),
+				retention: sumCents(lines, (l) => l.retention),
+				adjNet: sumCents(lines, (l) => l.adjNet),
 				adjNetRunning: 0,
 			})
 		}
@@ -612,25 +824,33 @@ export function buildJournalBlocks(
 		a.brigadeCode.localeCompare(b.brigadeCode),
 	)
 	for (const block of blocks) {
-		block.jobs.sort((a, b) => a.controlNumber.localeCompare(b.controlNumber))
-		// Running adj. net restarts at each brigade (PDF Part 1 § "Brigade total").
+		// Ascending job #; a job with no M-number yet sorts after, by work order.
+		block.jobs.sort(
+			(a, b) =>
+				(a.jobSeq ?? Number.MAX_SAFE_INTEGER) -
+					(b.jobSeq ?? Number.MAX_SAFE_INTEGER) ||
+				a.controlNumber.localeCompare(b.controlNumber),
+		)
+		// Running adj. net restarts at each brigade and is a plain running sum of
+		// the jobs above it, so the last one is the brigade's Total SC.
 		let running = 0
 		for (const job of block.jobs) {
-			running = round2(running + job.adjNet)
+			running = cents(running + job.adjNet)
 			job.adjNetRunning = running
 		}
-		// The brigade's figures come from the brigade's gross. The running
-		// column and the jobs may differ from it by a few cents; this is what
-		// gets paid.
-		const f = shareFigures(block.gross, block.percent)
-		block.net = f.net
-		block.retention = f.retention
-		block.totalSC = f.adjNet
+		block.net = sumCents(block.jobs, (j) => j.net)
+		block.retention = sumCents(block.jobs, (j) => j.retention)
+		block.totalSC = running
 	}
 	return blocks
 }
 
 const PCT_RET_DEFAULT = 0
+
+/** A money figure rounded to whole cents, so sums of cents never drift. */
+const cents = (n: number) => Math.round(n * 100) / 100
+const sumCents = <T>(items: T[], pick: (item: T) => number) =>
+	items.reduce((s, i) => s + Math.round(pick(i) * 100), 0) / 100
 
 function parseShareLines(value: unknown): JournalLine[] {
 	if (!Array.isArray(value)) return []

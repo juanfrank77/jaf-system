@@ -125,10 +125,50 @@ export default [
 			"finance/payroll/:runId/journal",
 			"routes/_app.finance.payroll.$runId.journal.tsx",
 		),
+		route(
+			"finance/payroll/:runId/journal/outline",
+			"routes/_app.finance.payroll.$runId.journal.outline.tsx",
+		),
 		route("comptroller", "routes/_app.comptroller.tsx"),
 		route("comptroller/lists", "routes/_app.comptroller.lists.tsx"),
 		route("comptroller/to-pay", "routes/_app.comptroller.to-pay.tsx"),
 		route("comptroller/paid", "routes/_app.comptroller.paid.tsx"),
+		route("comptroller/log", "routes/_app.comptroller.log.tsx"),
+		route("comptroller/log/pdf", "routes/_app.comptroller.log.pdf.tsx"),
+		route("comptroller/log/xlsx", "routes/_app.comptroller.log.xlsx.tsx"),
+		route("reports", "routes/_app.reports.tsx"),
+		route(
+			"comptroller/installers",
+			"routes/_app.comptroller.installers._index.tsx",
+		),
+		route(
+			"comptroller/installers/ewit",
+			"routes/_app.comptroller.installers.ewit.tsx",
+		),
+		route(
+			"comptroller/installers/ewit/new",
+			"routes/_app.comptroller.installers.ewit.new.tsx",
+		),
+		route(
+			"comptroller/installers/pay",
+			"routes/_app.comptroller.installers.pay.tsx",
+		),
+		route(
+			"comptroller/installers/batches",
+			"routes/_app.comptroller.installers.batches.tsx",
+		),
+		route(
+			"comptroller/installers/batches/:id",
+			"routes/_app.comptroller.installers.batches.$id.tsx",
+		),
+		route(
+			"comptroller/installers/batches/:id/package",
+			"routes/_app.comptroller.installers.batches.$id.package.tsx",
+		),
+		route(
+			"comptroller/installers/batches/:id/xlsx",
+			"routes/_app.comptroller.installers.batches.$id.xlsx.tsx",
+		),
 		route("comptroller/runs/:runId", "routes/_app.comptroller.runs.$runId.tsx"),
 	]),
 	route("files/*", "routes/files.$.tsx"),

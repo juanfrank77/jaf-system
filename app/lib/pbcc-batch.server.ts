@@ -4,7 +4,6 @@ import {
 	areaLetter,
 	bankInvoiceNumber,
 	barrioFromAddress,
-	contractLabel,
 	jobKind,
 	localityFromAddress,
 	scheduleTotals,
@@ -17,16 +16,20 @@ import { db } from "~/lib/db.server"
 import { PBCC_BATCH_CAPACITY } from "~/lib/finance-home"
 import { stageWhere } from "~/lib/finance-stages.server"
 import { computeInvoiceTotals } from "~/lib/invoice-totals"
+import { ensureJobNumber, jobNumberOf } from "~/lib/job-number.server"
 import {
 	type BankInvoiceLine,
 	generateBankInvoicePdf,
 } from "~/lib/pdf/bank-invoice.server"
 import type { InvoiceLine } from "~/lib/service-lines"
 import {
+	getBankContractNumber,
 	getBankInvoicePrefix,
+	getInvoiceCodes,
 	getLcPbccAdvanceRate,
 } from "~/lib/system-settings.server"
 import { saveBuffer } from "~/lib/uploads.server"
+import { workDatesOf } from "~/lib/work-dates"
 import type { Prisma } from "../../generated/prisma/client"
 
 type BatchErrorCode =
@@ -269,6 +272,49 @@ export async function takeOutRow(opts: {
 	})
 }
 
+/**
+ * Undo an Accept (rule R6): the packet leaves the open batch and goes back to
+ * the Inbox, unverified. Only while its batch is still open; once a batch is
+ * closed it has its number and package, and "Take out" is no longer possible.
+ */
+export async function undoAccept(opts: {
+	docId: string
+	userId: string
+}): Promise<void> {
+	await db.$transaction(async (tx) => {
+		const doc = await tx.jafInvoice.findUnique({
+			where: { id: opts.docId },
+			select: {
+				financeVerifiedAt: true,
+				bankScheduleId: true,
+				bankInvoicePdfPath: true,
+				bankSchedule: { select: { number: true, closedAt: true } },
+			},
+		})
+		if (!doc?.financeVerifiedAt) throw new BatchError("not_in_batch")
+		if (doc.bankSchedule?.closedAt) throw new BatchError("not_open")
+		await tx.jafInvoice.update({
+			where: { id: opts.docId },
+			data: {
+				bankScheduleId: null,
+				financeVerifiedAt: null,
+				financeVerifiedById: null,
+				// Made again on the next accept, with that day's date.
+				bankInvoicePdfPath: null,
+			},
+		})
+		if (doc.bankScheduleId) await refreshTotals(tx, doc.bankScheduleId)
+		await tx.auditTrail.create({
+			data: {
+				docId: opts.docId,
+				userId: opts.userId,
+				action: "FINANCE_ACCEPT_UNDONE",
+				diffJson: { source: "STAMPED" },
+			},
+		})
+	})
+}
+
 /** Close the open batch early, at any count. The next batch opens by itself. */
 export async function closeOpenBatch(opts: {
 	batchId: string
@@ -315,14 +361,12 @@ function invoiceLinesOf(
 	byId: Map<
 		string,
 		{
-			accountCode: string | null
 			subAct: string | null
-			dept: string | null
 			profitCenter: string | null
 			act: string | null
-			costCenterCode: string | null
 		}
 	>,
+	codes: { dept: string; costCenter: string },
 ): BankInvoiceLine[] {
 	return ((doc.jafInvoiceLines as InvoiceLine[] | null) ?? []).map((l) => {
 		const c = byId.get(l.serviceCodeId)
@@ -333,12 +377,15 @@ function invoiceLinesOf(
 			unit: l.unit ?? "EA",
 			unitPrice: l.unitPrice,
 			amount: l.lineAmount,
-			accountCode: c?.accountCode ?? l.accountCode ?? "",
+			// A/C is blank on the real invoice (the catalog's 615 is the Aviso's
+			// activity code, not an account). DEPT. and CENTRO are the same for
+			// all maintenance work, so they come from settings.
+			accountCode: "",
 			subAct: c?.subAct ?? "",
-			dept: c?.dept ?? "",
+			dept: codes.dept,
 			profitCenter: c?.profitCenter ?? "",
 			act: c?.act ?? "",
-			costCenter: c?.costCenterCode ?? "",
+			costCenter: codes.costCenter,
 		}
 	})
 }
@@ -353,31 +400,38 @@ async function ensureInvoicePdfs(batchId: string): Promise<void> {
 		(d) => !d.bankInvoicePdfPath,
 	)
 	if (docs.length === 0) return
-	const [prefix, catalog] = await Promise.all([
+	const [prefix, catalog, codes, batch] = await Promise.all([
 		getBankInvoicePrefix(),
 		db.serviceCode.findMany(),
+		getInvoiceCodes(),
+		db.bankSchedule.findUniqueOrThrow({ where: { id: batchId } }),
 	])
+	const contract = await getBankContractNumber(prefix)
 	const byId = new Map(catalog.map((c) => [c.id, c]))
 	for (const doc of docs) {
 		const aviso = doc.avisoNumber || doc.controlNumber
-		const from = doc.startedAt ?? doc.fieldSubmittedAt ?? doc.createdAt
-		const to = doc.endedAt ?? from
+		// Work order created → Field / Sign off, from what the system logged.
+		const { from, to } = workDatesOf(doc)
 		const address = doc.jobAddressActual ?? doc.jobAddressEstimated
 		const pdf = await generateBankInvoicePdf({
 			supplierNumber: SUPPLIER_NUMBER,
-			// The PDF's NUMERO DE FACTURA is the plain aviso, as on JAF's sample;
-			// the prefixed form stays on the Excel schedule.
-			avisoNumber: aviso,
+			// NUMERO DE FACTURA is the prefixed number, as on the Excel schedule and
+			// the file names: that is how PBCC knows it is a JAF file.
+			avisoNumber: bankInvoiceNumber(prefix, aviso),
 			org: ORG,
-			invoiceDate: bankDateLabel(doc.financeVerifiedAt ?? new Date()),
-			contractLabel: contractLabel(prefix),
+			// The invoice date, the same day the Excel schedule's Inv. Date shows.
+			invoiceDate: bankDateLabel(doc.financeVerifiedAt ?? batch.generatedAt),
+			// JAF's own M-number, one per Aviso; assigned here for any packet that has none.
+			jobNumber:
+				jobNumberOf(doc.jobSeq ?? (await ensureJobNumber(doc.id))) ?? undefined,
+			contractLabel: contract,
 			workFrom: bankDateLabel(from),
 			workTo: bankDateLabel(to),
 			description: doc.jobDescription ?? doc.jobType,
 			barrio: barrioFromAddress(address),
 			locality: localityFromAddress(address),
 			kind: jobKind(doc.jobType),
-			lines: invoiceLinesOf(doc, byId),
+			lines: invoiceLinesOf(doc, byId, codes),
 			total: rowAmounts(doc).subtotal,
 		})
 		const pdfPath = await saveBuffer(

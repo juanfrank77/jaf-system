@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next"
+import { ComptrollerRequestTabs } from "~/components/comptroller-request-tabs"
 import { ComptrollerRunsTable } from "~/components/comptroller-runs-table"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Card, CardContent } from "~/components/ui/card"
@@ -21,8 +22,9 @@ export default function ComptrollerToPay({ loaderData }: Route.ComponentProps) {
 	return (
 		<div className="p-6 space-y-4">
 			<h1 className="text-2xl font-bold">
-				{t("comptroller_payroll.runs_to_pay")}
+				{t("app_shell.nav.comptroller_to_pay")}
 			</h1>
+			<ComptrollerRequestTabs tab="to-pay" />
 			<Card>
 				<CardContent className="p-0">
 					<ComptrollerRunsTable runs={loaderData.runs} />

@@ -10,6 +10,8 @@ vi.mock("~/lib/db.server", () => ({
 		serialLocation: { count: vi.fn() },
 		payrollRunAccount: { count: vi.fn() },
 		payrollRun: { count: vi.fn() },
+		// The pay day setting (Carmen's overdue cutoff): unset, Thursday.
+		systemSetting: { findUnique: vi.fn(async () => null) },
 	},
 }))
 

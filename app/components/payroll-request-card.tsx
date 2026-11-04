@@ -135,6 +135,12 @@ export function PayrollRequestCard({
 												name: l.paidByName ?? "—",
 											})}
 										</Badge>
+									) : l.holdReason ? (
+										<Badge variant="danger">
+											{t("finance_payroll.status.held", {
+												reason: l.holdReason,
+											})}
+										</Badge>
 									) : request.status === "draft" ? (
 										<span className="text-muted-foreground">—</span>
 									) : (
@@ -142,6 +148,11 @@ export function PayrollRequestCard({
 											{t("finance_payroll.status.waiting")}
 										</Badge>
 									)}
+									{l.askNote ? (
+										<p className="mt-1 text-xs text-muted-foreground">
+											{t("finance_payroll.asked", { note: l.askNote })}
+										</p>
+									) : null}
 								</td>
 							</tr>
 						))}

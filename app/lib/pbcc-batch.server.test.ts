@@ -1,6 +1,7 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import ExcelJS from "exceljs"
+import { extractText, getDocumentProxy } from "unpdf"
 import {
 	afterAll,
 	afterEach,
@@ -40,12 +41,21 @@ import {
 	getOpenBatch,
 	markBatchSent,
 	takeOutRow,
+	undoAccept,
 } from "./pbcc-batch.server"
 import { planPackage } from "./pbcc-package.server"
 
 const t = makeTracker()
 const docIds: string[] = []
 const userIds: string[] = []
+
+const pdfText = async (file: string) =>
+	(
+		await extractText(
+			await getDocumentProxy(new Uint8Array(await fs.readFile(file))),
+			{ mergePages: true },
+		)
+	).text
 
 const uploadDir = () => process.env.UPLOAD_DIR || "/tmp/jaf/uploads"
 const exists = (p: string) =>
@@ -189,6 +199,72 @@ describe("accepting fills the open batch", { timeout: 60_000 }, () => {
 		}
 	})
 
+	it("prints the M17- number, the invoice date, the contract and the work order's created → Field dates on the invoice", async () => {
+		const u = await user()
+		const a = await accepted({ aviso: "10359519" })
+		await db.jafInvoice.update({
+			where: { id: a.id },
+			data: {
+				// the invoice dates come from the audit trail: created → Field submit,
+				// not from the crew's on-site start/end times
+				createdAt: new Date("2026-10-14T14:00:00Z"),
+				fieldSubmittedAt: new Date("2026-10-16T20:00:00Z"),
+				startedAt: new Date("2026-09-02T14:00:00Z"),
+				endedAt: new Date("2026-09-03T14:00:00Z"),
+				financeVerifiedAt: new Date("2026-10-27T15:00:00Z"),
+			},
+		})
+		await db.systemSetting.deleteMany({
+			where: { key: "bank_contract_number" },
+		})
+		await addToOpenBatch({ docId: a.id, userId: u.id })
+		const doc = await db.jafInvoice.findUniqueOrThrow({ where: { id: a.id } })
+		const text = await pdfText(doc.bankInvoicePdfPath as string)
+		expect(text).toContain("M17-10359519")
+		expect(text).toContain("10/27/26")
+		expect(text).toContain("10/14/26")
+		expect(text).toContain("10/16/26")
+		expect(text).not.toContain("09/02/26")
+		// no contract number set yet: the placeholder, until Lissette gives it
+		expect(text).toContain("17-xxx")
+	})
+
+	it("prints the contract number setting, and fills the work dates from the audit trail without any start/end times", async () => {
+		const u = await user()
+		const a = await accepted({ aviso: "10359520" })
+		await db.jafInvoice.update({
+			where: { id: a.id },
+			data: {
+				createdAt: new Date("2026-09-01T14:00:00Z"),
+				fieldSubmittedAt: new Date("2026-09-02T14:00:00Z"),
+				startedAt: null,
+				endedAt: null,
+			},
+		})
+		await db.systemSetting.upsert({
+			where: { key: "bank_contract_number" },
+			update: { value: "17-0456", updatedById: u.id },
+			create: {
+				key: "bank_contract_number",
+				value: "17-0456",
+				updatedById: u.id,
+			},
+		})
+		try {
+			await addToOpenBatch({ docId: a.id, userId: u.id })
+		} finally {
+			await db.systemSetting.deleteMany({
+				where: { key: "bank_contract_number" },
+			})
+		}
+		const doc = await db.jafInvoice.findUniqueOrThrow({ where: { id: a.id } })
+		const text = await pdfText(doc.bankInvoicePdfPath as string)
+		expect(text).toContain("Contrato Núm. 17-0456")
+		expect(text).not.toContain("17-xxx")
+		expect(text).toContain("09/01/26")
+		expect(text).toContain("09/02/26")
+	})
+
 	it("is safe to call again for a packet that is already in a batch", async () => {
 		const u = await user()
 		const a = await accepted()
@@ -274,6 +350,35 @@ describe("taking a row out", { timeout: 60_000 }, () => {
 			where: { closedAt: null },
 		})
 		expect((await rowsOf(next.id)).map((r) => r.id)).toEqual([b.id])
+	})
+
+	it("undoes an Accept while the batch is open, and not once it is closed", async () => {
+		const u = await user()
+		const a = await accepted()
+		const { batchId } = await addToOpenBatch({ docId: a.id, userId: u.id })
+		await undoAccept({ docId: a.id, userId: u.id })
+		const back = await db.jafInvoice.findUniqueOrThrow({ where: { id: a.id } })
+		expect(back.financeVerifiedAt).toBeNull()
+		expect(back.bankScheduleId).toBeNull()
+		expect(back.bankInvoicePdfPath).toBeNull()
+		expect(
+			await db.auditTrail.count({
+				where: { docId: a.id, action: "FINANCE_ACCEPT_UNDONE" },
+			}),
+		).toBe(1)
+		// A second undo has nothing left to undo.
+		await expect(
+			undoAccept({ docId: a.id, userId: u.id }),
+		).rejects.toMatchObject({ code: "not_in_batch" })
+
+		// Once the batch is closed it can no longer be undone.
+		const b = await accepted()
+		const placed = await addToOpenBatch({ docId: b.id, userId: u.id })
+		await closeOpenBatch({ batchId: placed.batchId, userId: u.id })
+		await expect(
+			undoAccept({ docId: b.id, userId: u.id }),
+		).rejects.toMatchObject({ code: "not_open" })
+		expect(batchId).toBeTruthy()
 	})
 
 	it("refuses a closed or sent batch, and a packet that is in no batch", async () => {

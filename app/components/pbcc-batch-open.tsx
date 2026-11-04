@@ -3,12 +3,15 @@ import { Form, Link } from "react-router"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
+import { formatShortDate } from "~/lib/payroll-request-view"
 import type { BatchSummary, BatchView } from "~/lib/pbcc-batch-view"
 import { formatMoney } from "~/lib/utils"
 
 type ActionResult = { errorKey?: string; list?: string } | undefined
 
-function Tabs({ tab }: { tab: "open" | "sent" }) {
+export type BatchTab = "open" | "ready" | "sent"
+
+function Tabs({ tab, readyCount = 0 }: { tab: BatchTab; readyCount?: number }) {
 	const { t } = useTranslation()
 	const cls = (active: boolean) =>
 		active
@@ -19,6 +22,14 @@ function Tabs({ tab }: { tab: "open" | "sent" }) {
 			<Link to="?tab=open" className={cls(tab === "open")}>
 				{t("pbcc_batch.tab.open")}
 			</Link>
+			<Link to="?tab=ready" className={cls(tab === "ready")}>
+				{t("pbcc_batch.tab.ready")}
+				{readyCount > 0 ? (
+					<Badge variant="warn" className="ml-1.5">
+						{readyCount}
+					</Badge>
+				) : null}
+			</Link>
 			<Link to="?tab=sent" className={cls(tab === "sent")}>
 				{t("pbcc_batch.tab.sent")}
 			</Link>
@@ -26,11 +37,18 @@ function Tabs({ tab }: { tab: "open" | "sent" }) {
 	)
 }
 
-function Mark({ ok }: { ok: boolean }) {
-	return ok ? (
-		<span className="text-status-ok" role="img" aria-label="ok">
+/** A ✓ that opens the PDF it stands for, so she can look before she closes. */
+function Mark({ href, label }: { href: string | null; label: string }) {
+	return href ? (
+		<a
+			href={href}
+			target="_blank"
+			rel="noreferrer"
+			className="text-status-ok underline"
+			aria-label={label}
+		>
 			✓
-		</span>
+		</a>
 	) : (
 		<Badge variant="warn">—</Badge>
 	)
@@ -119,10 +137,16 @@ export function PbccBatchOpenView({
 										{formatMoney(r.total)}
 									</td>
 									<td className="p-2">
-										<Mark ok={r.hasAvisoPdf} />
+										<Mark
+											href={r.avisoHref}
+											label={`${t("pbcc_batch.col.aviso_pdf")} ${r.controlNumber}`}
+										/>
 									</td>
 									<td className="p-2">
-										<Mark ok={r.hasInvoicePdf} />
+										<Mark
+											href={r.invoiceHref}
+											label={`${t("pbcc_batch.col.invoice_pdf")} ${r.controlNumber}`}
+										/>
 									</td>
 									<td className="p-2">
 										<Form method="post" className="flex items-center gap-1">
@@ -156,27 +180,17 @@ export function PbccBatchOpenView({
 /** The Sent tab: closed batches waiting to be sent, then the ones already sent. */
 export function PbccBatchListView({
 	batches,
-	openBatch,
+	empty,
 }: {
 	batches: BatchSummary[]
-	openBatch: { id: string }
+	empty: string
 }) {
-	const { t, i18n } = useTranslation()
-	const date = (iso: string) =>
-		new Date(iso).toLocaleDateString(i18n.language, {
-			timeZone: "America/Puerto_Rico",
-		})
+	const { t } = useTranslation()
+	const date = (iso: string) => formatShortDate(iso)
 	return (
 		<div className="space-y-2">
-			<p className="text-sm">
-				<Link to="?tab=open" className="underline">
-					{t("pbcc_batch.open_batch")}
-				</Link>
-			</p>
 			{batches.length === 0 ? (
-				<p className="text-sm text-muted-foreground">
-					{t("pbcc_batch.none_sent")}
-				</p>
+				<p className="text-sm text-muted-foreground">{empty}</p>
 			) : (
 				<ul className="divide-y rounded-lg border bg-card text-sm">
 					{batches.map((b) => (

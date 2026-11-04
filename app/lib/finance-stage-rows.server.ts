@@ -158,6 +158,7 @@ export async function loadStageRows(opts: {
 			id: d.id,
 			controlNumber: d.controlNumber,
 			avisoNumber: d.avisoNumber,
+			brigadeCode: d.brigade?.code ?? null,
 			contractorLabel:
 				d.preCertSheets[0]?.sigSubcontractorName ??
 				d.brigade?.leadName ??

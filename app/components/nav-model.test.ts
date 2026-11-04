@@ -143,6 +143,7 @@ describe("navGroupsFor", () => {
 			"arm_a",
 			"arm_b",
 			"money",
+			"installers",
 			"team",
 			"stock",
 			"field",
@@ -150,19 +151,21 @@ describe("navGroupsFor", () => {
 		])
 	})
 
-	it("gives COMPTROLLER its own dashboard, then Lists, Runs to pay, Paid runs, and a Team group with Brigades and a Soon Installers", () => {
+	it("gives COMPTROLLER its own dashboard, one Payroll requests item, the log and an Installers group", () => {
 		expect(tos(navGroupsFor("COMPTROLLER"))).toEqual([
 			["overview", ["/comptroller"]],
+			["money", ["/comptroller/to-pay", "/comptroller/log"]],
 			[
-				"money",
-				["/comptroller/lists", "/comptroller/to-pay", "/comptroller/paid"],
+				"installers",
+				[
+					"/comptroller/installers",
+					"/comptroller/installers/ewit",
+					"/comptroller/installers/batches",
+					"/comptroller/installers/pay",
+				],
 			],
-			["team", ["/comptroller/brigades", "/comptroller/installers"]],
+			["team", ["/comptroller/brigades"]],
 		])
-		const installers = navGroupsFor("COMPTROLLER")
-			.flatMap((g) => g.items)
-			.find((i) => i.to === "/comptroller/installers")
-		expect(installers?.disabled).toBe(true)
 	})
 
 	it("keeps finance screens away from COMPTROLLER and the payroll queues open to ADMIN", () => {
@@ -210,6 +213,18 @@ describe("isNavItemActive", () => {
 
 	it("never matches a different path", () => {
 		expect(isNavItemActive("/comptroller/paid", at("/comptroller/lists"))).toBe(
+			false,
+		)
+	})
+
+	it("keeps Payroll requests lit on the Paid tab and on a request page", () => {
+		expect(
+			isNavItemActive("/comptroller/to-pay", at("/comptroller/paid")),
+		).toBe(true)
+		expect(
+			isNavItemActive("/comptroller/to-pay", at("/comptroller/runs/abc")),
+		).toBe(true)
+		expect(isNavItemActive("/comptroller/to-pay", at("/comptroller"))).toBe(
 			false,
 		)
 	})

@@ -610,13 +610,15 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		gate,
 		invoiceSummary,
 		// Finance sent the packet back: the latest reason, until it is released again.
+		// A return on a job that is not released (sent back before S4 kept the
+		// release): the latest unanswered reason. A released returned packet
+		// shows the Returned banner instead.
 		financeReturn: doc.releasedToFinanceAt
 			? null
-			: ((
-					(doc.financeSendBackNotes as
-						| { note: string; createdAt: string }[]
-						| null) ?? []
-				).at(-1) ?? null),
+			: (() => {
+					const latest = latestReturn(doc)
+					return latest && !latest.resentAt ? latest : null
+				})(),
 		invoicePreview: showPrices ? preview : linesWithoutPrices(preview),
 		invoiceHeader,
 		showPrices,

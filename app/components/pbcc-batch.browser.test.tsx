@@ -9,13 +9,13 @@ const row = (n: number, over: Partial<BatchView["rows"][number]> = {}) => ({
 	row: n,
 	controlNumber: `MAINT-26102${n}-00${n}`,
 	avisoNumber: `1035611${n}`,
-	brigade: "Alexis Díaz",
+	brigade: "025 ALEXIS DIAZ",
 	invoiceNumber: `M17-1035611${n}`,
 	subtotal: 100,
 	ivu: 11.5,
 	total: 111.5,
-	hasAvisoPdf: true,
-	hasInvoicePdf: true,
+	avisoHref: `/files/aviso-docs/j${n}-aviso.pdf`,
+	invoiceHref: `/files/bank-invoices/j${n}-bank-invoice.pdf`,
 	...over,
 })
 
@@ -31,7 +31,7 @@ const batch = (over: Partial<BatchView> = {}): BatchView => ({
 	advanceRate: 0.8,
 	advance: 160,
 	hasExcel: false,
-	rows: [row(1), row(2, { hasInvoicePdf: false })],
+	rows: [row(1), row(2, { invoiceHref: null })],
 	...over,
 })
 
@@ -138,7 +138,7 @@ describe("Sent tab", () => {
 		await mount(
 			renderStub,
 			<PbccBatchListView
-				openBatch={{ id: "b7" }}
+				empty="none"
 				batches={[
 					{
 						id: "b6",
@@ -166,7 +166,6 @@ describe("Sent tab", () => {
 		expect(screen.getByText("Ready to send")).toBeInTheDocument()
 		expect(screen.getByText(/^Sent /)).toBeInTheDocument()
 		expect(screen.getByText("47 packets · $18442.10")).toBeInTheDocument()
-		expect(screen.getByRole("link", { name: "Open batch" })).toBeInTheDocument()
 	})
 })
 

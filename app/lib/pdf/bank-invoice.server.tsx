@@ -124,13 +124,16 @@ export type BankInvoiceLine = {
 
 export type BankInvoiceInput = {
 	supplierNumber: string
-	/** Printed in NUMERO DE FACTURA: the plain aviso number, as on the sample. */
+	/** Printed in NUMERO DE FACTURA: the bank invoice number, "M17-" + the aviso #. */
 	avisoNumber: string
+	/** JAF's own job # (M-3545 style). JAF OS has none yet, so it prints blank. */
+	jobNumber?: string
 	/** ORG. cell (PWOR). */
 	org: string
-	/** FECHA: the request-creation date, MM/DD/YY in the Puerto Rico calendar. */
+	/** FECHA: the invoice date, MM/DD/YY in the Puerto Rico calendar. */
 	invoiceDate: string
 	contractLabel: string
+	/** The job's own start and finish, MM/DD/YY; blank when the job has none. */
 	workFrom: string
 	workTo: string
 	/** DESCRIPCION DEL TRABAJO: the job description, then an optional barrio. */
@@ -421,7 +424,7 @@ function MainBox({ input }: { input: BankInvoiceInput }) {
 			<SignRow label="Aprobado por:" top={98} />
 			<SignRow label="Aprobado por:" top={124} />
 			<At left={668} top={150} style={{ fontSize: 6.5 }}>
-				M-3545
+				{input.jobNumber ?? ""}
 			</At>
 			<At left={X_SIGN + 2} top={167}>
 				ORDEN TRABAJO PLANTA:

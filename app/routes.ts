@@ -75,6 +75,10 @@ export default [
 		route("finance/receivables", "routes/_app.finance.receivables.tsx"),
 		route("finance/verify/:id", "routes/_app.finance.verify.$id.tsx"),
 		route(
+			"finance/verify/:id/packet.zip",
+			"routes/_app.finance.verify.$id.packet.zip.tsx",
+		),
+		route(
 			"finance/verify/:id/invoice.pdf",
 			"routes/_app.finance.verify.$id.invoice.tsx",
 		),

@@ -770,6 +770,8 @@
 		"admin_override": "Ya está firmado. Lo está editando como Admin."
 	},
 	"docs_review": {
+		"finance_return_title": "Devuelto por Finanzas.",
+		"finance_return_body": "{{date}}: {{note}} Corrígelo y vuelve a liberar el paquete.",
 		"readonly_title": "Paso completado.",
 		"readonly_body": "Esta es una vista de solo lectura; aquí no se puede cambiar nada.",
 		"readonly_back": "Volver al paso actual",
@@ -1383,6 +1385,11 @@
 		}
 	},
 	"finance_queue": {
+		"search_placeholder": "Buscar orden de trabajo o Aviso #",
+		"supervisor_filter": "Supervisor",
+		"all_supervisors": "Todos los supervisores",
+		"filter": "Filtrar",
+		"start_reviewing": "Empezar a revisar",
 		"empty": "No hay paquetes en espera.",
 		"account_unmapped": "Cuenta de contratista no asignada",
 		"missing_claro_pdf": "Falta PDF de Claro",
@@ -1394,6 +1401,31 @@
 		}
 	},
 	"finance_verify": {
+		"subtotal": "Subtotal",
+		"ivu_4": "IVU 4%",
+		"ivu_115": "IVU 11.5%",
+		"total": "Total",
+		"preview": {
+			"heading": "Vista previa de la factura PBCC",
+			"code": "Código",
+			"service": "Servicio",
+			"qty": "Cant.",
+			"price": "Precio",
+			"ivu": "IVU",
+			"amount": "Importe",
+			"empty": "Esta factura no tiene líneas de servicio."
+		},
+		"checks": {
+			"invoice": "Factura correcta",
+			"aviso": "El # de Aviso coincide con el PDF del Aviso",
+			"photos": "Las fotos son de este trabajo",
+			"precert": "Precertificación firmada"
+		},
+		"accept_next": "Aceptar y siguiente",
+		"position": "{{position}} de {{total}}",
+		"prev": "Anterior",
+		"next": "Siguiente",
+		"sent_back_to_supervisor": "Devuelto al supervisor.",
 		"line_sum_pre_ivu": "Suma de líneas (antes de IVU)",
 		"title": "Verificar paquete",
 		"amount": "Monto de factura",
@@ -1412,6 +1444,8 @@
 		"send_back_placeholder": "Explica el problema del Aviso al supervisor…",
 		"send_back": "Devolver al supervisor",
 		"errors": {
+			"checks_required": "Marca las cuatro verificaciones antes de aceptar.",
+			"documents_missing": "Falta un documento en el paquete. Devuélvelo en su lugar.",
 			"unknown_intent": "Acción desconocida.",
 			"note_required": "Se requiere una nota de devolución.",
 			"invalid_stage": "Este trabajo no está en la etapa de verificación.",
@@ -1422,6 +1456,8 @@
 		"priced_invoice_legacy": "Factura JAF (con precios, anterior)",
 		"aviso_discrepancy_title": "El Aviso difiere de la orden de trabajo del supervisor",
 		"packet": {
+			"download_all": "Descargar todo",
+			"open_new_tab": "Abrir en una pestaña nueva",
 			"heading": "Documentos del paquete",
 			"work_order_pdf": "PDF de orden de trabajo JAF",
 			"work_order_pdf_detail": "Enviado a Claro",
@@ -2297,6 +2333,7 @@
 			"work_order": "Orden de trabajo",
 			"aviso": "Aviso",
 			"contractor": "Contratista",
+			"supervisor": "Supervisor",
 			"amount": "Monto",
 			"docs": "Documentos"
 		},
@@ -2304,8 +2341,7 @@
 			"jaf_invoice": "Factura JAF",
 			"aviso": "Aviso",
 			"precert": "Pre-cert firmada",
-			"photos": "Fotos",
-			"account": "Cuenta del contratista"
+			"photos": "Fotos"
 		},
 		"accept": "Revisar y aceptar",
 		"review": "Revisar",

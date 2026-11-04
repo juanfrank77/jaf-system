@@ -607,6 +607,14 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		interactive,
 		gate,
 		invoiceSummary,
+		// Finance sent the packet back: the latest reason, until it is released again.
+		financeReturn: doc.releasedToFinanceAt
+			? null
+			: ((
+					(doc.financeSendBackNotes as
+						| { note: string; createdAt: string }[]
+						| null) ?? []
+				).at(-1) ?? null),
 		invoicePreview: showPrices ? preview : linesWithoutPrices(preview),
 		invoiceHeader,
 		showPrices,
@@ -2122,6 +2130,7 @@ export default function ReviewDoc({
 		gate,
 		invoiceHeader,
 		showPrices,
+		financeReturn,
 		packet,
 		aviso,
 		workOrder,
@@ -2192,6 +2201,15 @@ export default function ReviewDoc({
 				docId={doc.id}
 				warehouseSkipped={!doc.materialsFromWarehouse}
 			/>
+			{financeReturn && (
+				<Pill variant="warn" icon="↩">
+					<b>{t("docs_review.finance_return_title")}</b>{" "}
+					{t("docs_review.finance_return_body", {
+						note: financeReturn.note,
+						date: new Date(financeReturn.createdAt).toLocaleDateString(),
+					})}
+				</Pill>
+			)}
 			{returned && doc.status !== "CANCELLED" && (
 				<ReturnedBanner
 					returned={returned}

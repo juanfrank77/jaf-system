@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
 	checkAmountTolerance: vi.fn(),
 	isMissingAvisoPdf: vi.fn(),
 	sendInternalEmail: vi.fn(),
+	inboxNeighbors: vi.fn(),
 }))
 
 vi.mock("~/lib/db.server", () => ({ db: mocks.db }))
@@ -34,6 +35,9 @@ vi.mock("~/lib/finance-pipeline.server", async (importOriginal) => ({
 	checkAmountTolerance: mocks.checkAmountTolerance,
 	isMissingAvisoPdf: mocks.isMissingAvisoPdf,
 	FINANCEABLE_STATUSES: ["SUPERVISOR_APPROVED", "CLARO_UPLOADED"],
+}))
+vi.mock("~/lib/finance-inbox.server", () => ({
+	inboxNeighbors: mocks.inboxNeighbors,
 }))
 vi.mock("~/lib/email.server", () => ({
 	sendInternalEmail: mocks.sendInternalEmail,
@@ -64,6 +68,40 @@ const baseDoc = () => ({
 	photos: [],
 })
 
+// A packet with all four documents, and the four checks ticked.
+const completeDoc = () => ({
+	...baseDoc(),
+	jafInvoiceGeneratedAt: new Date("2026-10-01T12:00:00Z"),
+	jafInvoicePdfPath: "/uploads/packets/job-1-packet-1.pdf",
+	avisoNumber: "10353961",
+	avisoDocPath: "/uploads/aviso-docs/job-1-aviso.pdf",
+	preCertSheets: [
+		{
+			pdfPath: "/uploads/precert/job-1-v1.pdf",
+			sigSupervisorAt: new Date(),
+			sigSubcontractorAt: new Date(),
+		},
+	],
+	photos: [
+		{
+			localPath: "/uploads/photos/job-1/b.jpg",
+			tag: "BEFORE",
+			takenAt: new Date("2026-10-01"),
+		},
+		{
+			localPath: "/uploads/photos/job-1/a.jpg",
+			tag: "AFTER",
+			takenAt: new Date("2026-10-02"),
+		},
+	],
+})
+const ALL_CHECKS = {
+	check_invoice: "on",
+	check_aviso: "on",
+	check_photos: "on",
+	check_precert: "on",
+}
+
 describe("Finance verify action guards", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
@@ -86,6 +124,12 @@ describe("Finance verify action guards", () => {
 		})
 		mocks.isMissingAvisoPdf.mockReturnValue(false)
 		mocks.db.$transaction.mockResolvedValue(undefined)
+		mocks.inboxNeighbors.mockResolvedValue({
+			total: 2,
+			position: 1,
+			prevId: null,
+			nextId: "job-2",
+		})
 	})
 
 	it("rejects terminal LC jobs in the action", async () => {
@@ -187,12 +231,14 @@ describe("Finance verify action guards", () => {
 	)
 
 	it("verifies without an Aviso amount and records no amount check", async () => {
+		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue(completeDoc())
 		const result = await action({
-			request: requestWith({ intent: "verify", note: "ok" }),
+			request: requestWith({ intent: "verify", note: "ok", ...ALL_CHECKS }),
 			params: { id: "job-1" },
 		} as any).catch((r: any) => r)
 		expect(result.status).toBe(302)
-		expect(result.headers.get("Location")).toBe("/finance/queue")
+		// Accept & next: straight to the next packet in the Inbox.
+		expect(result.headers.get("Location")).toBe("/finance/verify/job-2")
 		expect(mocks.db.jafInvoice.update).toHaveBeenCalledWith(
 			expect.objectContaining({
 				data: expect.objectContaining({ financeVerifiedAt: expect.any(Date) }),
@@ -203,7 +249,7 @@ describe("Finance verify action guards", () => {
 				docId: "job-1",
 				userId: "finance-1",
 				action: "FINANCE_VERIFIED",
-				diffJson: { note: "ok" },
+				diffJson: { note: "ok", source: "STAMPED" },
 			},
 		})
 		expect(mocks.checkAmountTolerance).not.toHaveBeenCalled()
@@ -211,9 +257,7 @@ describe("Finance verify action guards", () => {
 
 	it("never blocks on an Aviso amount, even a legacy stored mismatch", async () => {
 		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue({
-			...baseDoc(),
-			avisoNumber: "10353961",
-			avisoDocPath: "aviso-docs/job-1-aviso.pdf",
+			...completeDoc(),
 			avisoLineTotal: "11623.28",
 			jafInvoiceLineTotal: "586.37",
 		})
@@ -222,7 +266,10 @@ describe("Finance verify action guards", () => {
 			difference: 11036.91,
 		})
 		for (const avisoAmount of [undefined, "abc", "-5", "999999"]) {
-			const entries: Record<string, string> = { intent: "verify" }
+			const entries: Record<string, string> = {
+				intent: "verify",
+				...ALL_CHECKS,
+			}
 			if (avisoAmount !== undefined) entries.avisoAmount = avisoAmount
 			const result = await action({
 				request: requestWith(entries),
@@ -240,6 +287,173 @@ describe("Finance verify action guards", () => {
 	})
 })
 
+describe("Finance verify action: the accept gate and send back", () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+		mocks.isTerminalStatus.mockReturnValue(false)
+		mocks.requireRole.mockResolvedValue({
+			user: { id: "finance-1", role: "FINANCE" },
+		})
+		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue(completeDoc())
+		mocks.computeFinanceStage.mockReturnValue("TO_VERIFY")
+		mocks.db.$transaction.mockResolvedValue(undefined)
+		mocks.inboxNeighbors.mockResolvedValue({
+			total: 1,
+			position: 1,
+			prevId: null,
+			nextId: null,
+		})
+	})
+
+	const run = (entries: Record<string, string>) =>
+		action({ request: requestWith(entries), params: { id: "job-1" } } as any)
+
+	it("refuses to accept unless all four checks are ticked", async () => {
+		for (const missing of Object.keys(ALL_CHECKS)) {
+			const { [missing as keyof typeof ALL_CHECKS]: _drop, ...rest } =
+				ALL_CHECKS
+			expect(await run({ intent: "verify", ...rest })).toEqual({
+				errorKey: "finance_verify.errors.checks_required",
+			})
+		}
+		expect(mocks.db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("refuses to accept a packet that is missing a document", async () => {
+		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue({
+			...completeDoc(),
+			preCertSheets: [],
+		})
+		expect(await run({ intent: "verify", ...ALL_CHECKS })).toEqual({
+			errorKey: "finance_verify.errors.documents_missing",
+		})
+		expect(mocks.db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("goes back to the Inbox after the last packet", async () => {
+		const result = await run({ intent: "verify", ...ALL_CHECKS }).catch(
+			(r: any) => r,
+		)
+		expect(result.headers.get("Location")).toBe("/finance/queue")
+	})
+
+	it("sends back to the supervisor: releases nothing, keeps the reason, lands on the Inbox", async () => {
+		const result = await run({
+			intent: "send_back",
+			note: "wrong Aviso",
+		}).catch((r: any) => r)
+		expect(result.status).toBe(302)
+		expect(result.headers.get("Location")).toBe("/finance/queue")
+		expect(mocks.db.jafInvoice.update).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({
+					releasedToFinanceAt: null,
+					releasedToFinanceById: null,
+					financeVerifiedAt: null,
+					financeSendBackNotes: [
+						expect.objectContaining({
+							note: "wrong Aviso",
+							byUserId: "finance-1",
+						}),
+					],
+				}),
+			}),
+		)
+		expect(mocks.db.auditTrail.create).toHaveBeenCalledWith({
+			data: expect.objectContaining({
+				action: "FINANCE_SEND_BACK",
+				diffJson: { note: "wrong Aviso", source: "STAMPED" },
+			}),
+		})
+		expect(mocks.db.notification.create).toHaveBeenCalledWith({
+			data: expect.objectContaining({
+				userId: "sup-1",
+				message: expect.stringContaining("wrong Aviso"),
+			}),
+		})
+	})
+
+	it("requires a reason to send back", async () => {
+		expect(await run({ intent: "send_back", note: "  " })).toEqual({
+			errorKey: "finance_verify.errors.note_required",
+		})
+		expect(mocks.db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+})
+
+describe("Finance verify loader: the invoice record's totals", () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+		mocks.requireRole.mockResolvedValue({
+			user: { id: "finance-1", role: "FINANCE" },
+		})
+		mocks.computeFinanceStage.mockReturnValue("TO_VERIFY")
+		mocks.fetchInvoiceTotalContext.mockResolvedValue({
+			serviceCodes: [],
+			codeMap: {},
+			ivuRate: 0.115,
+			tolerance: 0.01,
+		})
+		mocks.inboxNeighbors.mockResolvedValue({
+			total: 3,
+			position: 2,
+			prevId: "job-0",
+			nextId: "job-2",
+		})
+	})
+
+	it("shows subtotal, IVU and total from the service lines, and the Inbox neighbours", async () => {
+		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue({
+			...baseDoc(),
+			jafInvoiceLines: [
+				{
+					serviceCodeId: "s1",
+					claroCode: "600X",
+					name: "Remoción",
+					unit: "EA",
+					qty: 2,
+					unitPrice: 100,
+					lineAmount: 200,
+				},
+				{
+					serviceCodeId: "s2",
+					claroCode: "610M",
+					name: "Transfer",
+					unit: "EA",
+					qty: 1,
+					unitPrice: 50,
+					lineAmount: 50,
+				},
+			],
+		})
+		const data = await loader({
+			request: new Request("http://localhost/finance/verify/job-1"),
+			params: { id: "job-1" },
+		} as any)
+		expect(data.totals).toEqual({
+			subtotal: 250,
+			ivu4: 0,
+			ivu115: 28.75,
+			total: 278.75,
+		})
+		expect(
+			data.invoiceLines.map((l: { ivuRate: number }) => l.ivuRate),
+		).toEqual([0.115, 0.115])
+		expect(data.neighbors).toMatchObject({ prevId: "job-0", nextId: "job-2" })
+		expect(data).not.toHaveProperty("amount")
+	})
+
+	it("has empty totals for an invoice with no service lines", async () => {
+		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue(baseDoc())
+		const data = await loader({
+			request: new Request("http://localhost/finance/verify/job-1"),
+			params: { id: "job-1" },
+		} as any)
+		expect(data.invoiceLines).toEqual([])
+		expect(data.totals.total).toBe(0)
+	})
+})
+
 describe("Finance verify loader: brigade's stock and the two PDFs", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
@@ -247,7 +461,12 @@ describe("Finance verify loader: brigade's stock and the two PDFs", () => {
 			user: { id: "finance-1", role: "FINANCE" },
 		})
 		mocks.computeFinanceStage.mockReturnValue("TO_VERIFY")
-		mocks.invoiceTotalUsed.mockReturnValue(100)
+		mocks.inboxNeighbors.mockResolvedValue({
+			total: 1,
+			position: 1,
+			prevId: null,
+			nextId: null,
+		})
 		mocks.fetchInvoiceTotalContext.mockResolvedValue({
 			serviceCodes: [
 				{ id: "m1", claroCode: "1005803", name: "Drop cable", unit: "FT" },
@@ -383,7 +602,12 @@ describe("Finance verify loader: the listed materials are the billed ones", () =
 			user: { id: "finance-1", role: "FINANCE" },
 		})
 		mocks.computeFinanceStage.mockReturnValue("TO_VERIFY")
-		mocks.invoiceTotalUsed.mockReturnValue(100)
+		mocks.inboxNeighbors.mockResolvedValue({
+			total: 1,
+			position: 1,
+			prevId: null,
+			nextId: null,
+		})
 		mocks.fetchInvoiceTotalContext.mockResolvedValue({
 			serviceCodes: [],
 			codeMap: {},
@@ -442,7 +666,12 @@ describe("Finance verify loader: the Aviso discrepancy flag", () => {
 			user: { id: "finance-1", role: "FINANCE" },
 		})
 		mocks.computeFinanceStage.mockReturnValue("TO_VERIFY")
-		mocks.invoiceTotalUsed.mockReturnValue(100)
+		mocks.inboxNeighbors.mockResolvedValue({
+			total: 1,
+			position: 1,
+			prevId: null,
+			nextId: null,
+		})
 		mocks.fetchInvoiceTotalContext.mockResolvedValue({
 			serviceCodes: [],
 			codeMap: {},

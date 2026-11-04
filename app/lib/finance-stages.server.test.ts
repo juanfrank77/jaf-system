@@ -31,7 +31,7 @@ async function job(data: {
 
 async function stagesOf(id: string) {
 	const out: string[] = []
-	for (const s of ["PACKETS", "LC_REQUEST", "LC_FUNDED", "LISTS"] as const) {
+	for (const s of ["PACKETS", "LC_REQUEST", "LISTS"] as const) {
 		const n = await db.jafInvoice.count({
 			where: { AND: [{ id }, stageWhere(s)] },
 		})
@@ -44,17 +44,22 @@ describe("stageWhere", () => {
 	it("puts every Arm A job in exactly one stage", async () => {
 		const packets = await job({})
 		const request = await job({ verified: true })
-		const funded = await job({ sent: true, verified: true })
-		const lists = await job({ sent: true, verified: true, funded: true })
+		const sold = await job({ sent: true, verified: true })
+		const soldAndFunded = await job({
+			sent: true,
+			verified: true,
+			funded: true,
+		})
 		expect(await stagesOf(packets)).toEqual(["PACKETS"])
 		expect(await stagesOf(request)).toEqual(["LC_REQUEST"])
-		expect(await stagesOf(funded)).toEqual(["LC_FUNDED"])
-		expect(await stagesOf(lists)).toEqual(["LISTS"])
+		// The bank's wire is not a stage: sold is ready for Carmen either way.
+		expect(await stagesOf(sold)).toEqual(["LISTS"])
+		expect(await stagesOf(soldAndFunded)).toEqual(["LISTS"])
 	})
 
-	it("treats a packet sent by hand without verification as LC_FUNDED, never two stages", async () => {
+	it("treats a packet sent by hand without verification as LISTS, never two stages", async () => {
 		const id = await job({ sent: true })
-		expect(await stagesOf(id)).toEqual(["LC_FUNDED"])
+		expect(await stagesOf(id)).toEqual(["LISTS"])
 	})
 
 	it("drops a job already on a payroll run from every list stage", async () => {
@@ -75,6 +80,24 @@ describe("stageWhere", () => {
 })
 
 describe("carmenOpenSummary overdue cutoff", () => {
+	it("does not count a draft request: it is not with Carmen yet", async () => {
+		const now = new Date()
+		const fin = t.track("user", await seedUser({ role: "FINANCE" }))
+		const before = await carmenOpenSummary(now)
+		t.track(
+			"payrollRun",
+			await db.payrollRun.create({
+				data: {
+					label: "old draft",
+					generatedById: fin.id,
+					generatedAt: new Date(now.getTime() - 40 * 86_400_000),
+				},
+			}),
+		)
+		const after = await carmenOpenSummary(now)
+		expect(after.overdueRuns).toBe(before.overdueRuns)
+	})
+
 	it("matches the pages: overdue once floor(age in days) > 14", async () => {
 		const now = new Date()
 		const day = 86_400_000
@@ -87,6 +110,7 @@ describe("carmenOpenSummary overdue cutoff", () => {
 					label: "age 14.5d",
 					generatedById: fin.id,
 					generatedAt: new Date(now.getTime() - 14.5 * day),
+					sentAt: new Date(now.getTime() - 14.5 * day),
 				},
 			}),
 		)
@@ -99,6 +123,7 @@ describe("carmenOpenSummary overdue cutoff", () => {
 					label: "age 15.5d",
 					generatedById: fin.id,
 					generatedAt: new Date(now.getTime() - 15.5 * day),
+					sentAt: new Date(now.getTime() - 15.5 * day),
 				},
 			}),
 		)

@@ -1,14 +1,17 @@
-import { afterAll, afterEach, describe, expect, it, vi } from "vitest"
+import { afterAll, describe, expect, it, vi } from "vitest"
 import { db } from "~/lib/db.server"
 import {
 	armAOpenWhere,
 	buildJournalBlocks,
-	closePayrollRun,
 	closePayrollRunAccount,
+	discardDraftRun,
 	EmptyRunError,
 	generateRun,
 	parsePaidDate,
+	payrollSheetLines,
 	puertoRicoToday,
+	RUN_INVOICES,
+	sendPayrollRun,
 } from "~/lib/payroll-run.server"
 import {
 	makeTracker,
@@ -366,7 +369,7 @@ describe("generateRun", () => {
 		expect(reloaded.payrollRunId).toBe(run.id)
 	})
 
-	it("sweeps only bank-funded packets: unsent and sent-unfunded stay open", async () => {
+	it("sweeps every packet sold to PBCC, funded or not; only the unsent stay open", async () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		const account = t.track("contractorAccount", await seedContractorAccount())
 		const unsent = t.track(
@@ -403,7 +406,8 @@ describe("generateRun", () => {
 		})
 		const byId = Object.fromEntries(rows.map((r) => [r.id, r.payrollRunId]))
 		expect(byId[funded.id]).toBe(run.id)
-		expect(byId[sentUnfunded.id]).toBeNull()
+		// Payroll does not wait for the bank's wire.
+		expect(byId[sentUnfunded.id]).toBe(run.id)
 		expect(byId[unsent.id]).toBeNull()
 	})
 
@@ -497,7 +501,7 @@ describe("generateRun", () => {
 		expect(reloaded.payrollRunId).toBeNull()
 	})
 
-	it("notifies every active COMPTROLLER when a run is generated", async () => {
+	it("keeps a new request a draft: Carmen is told only when it is sent", async () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		const comptroller = t.track("user", await seedUser({ role: "COMPTROLLER" }))
 		const account = t.track("contractorAccount", await seedContractorAccount())
@@ -514,148 +518,31 @@ describe("generateRun", () => {
 			label: "notify-1",
 		})
 		t.track("payrollRun", run)
+		const draft = await db.payrollRun.findUniqueOrThrow({
+			where: { id: run.id },
+		})
+		expect(draft.sentAt).toBeNull()
+		const before = await db.notification.count({
+			where: { userId: comptroller.id, message: { contains: "notify-1" } },
+		})
+		expect(before).toBe(0)
+
+		await sendPayrollRun({ runId: run.id, sentById: finance.id })
+		const sent = await db.payrollRun.findUniqueOrThrow({
+			where: { id: run.id },
+		})
+		expect(sent.sentAt).not.toBeNull()
+		expect(sent.sentById).toBe(finance.id)
 		const notes = await db.notification.findMany({
 			where: { userId: comptroller.id },
 		})
 		for (const n of notes) t.track("notification", n)
 		expect(notes.some((n) => n.message.includes("notify-1"))).toBe(true)
-	})
-})
 
-describe("closePayrollRun", () => {
-	it("stamps payablesClosedAt on every member invoice and marks the run paid", async () => {
-		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
-		const account = t.track("contractorAccount", await seedContractorAccount())
-		t.track(
-			"jafInvoice",
-			await seedFinanceableInvoice({
-				contractorAccountCode: account.code,
-				funded: true,
-			}),
-		)
-		const { run } = await generateRun({
-			generatedById: finance.id,
-			label: "R-close",
-		})
-		t.track("payrollRun", run as { id: string })
-
-		const { closedCount } = await closePayrollRun({
-			runId: run.id,
-			paidById: finance.id,
-			paidDate: new Date("2026-09-12"),
-			confirmedByFallback: true,
-		})
-		expect(closedCount).toBe(1)
-
-		const reloadedRun = await db.payrollRun.findUniqueOrThrow({
-			where: { id: run.id },
-		})
-		expect(reloadedRun.paidAt).not.toBeNull()
-		expect(reloadedRun.confirmedByFallback).toBe(true)
-
-		const members = await db.jafInvoice.findMany({
-			where: { payrollRunId: run.id },
-		})
-		expect(members.every((m) => m.payablesClosedAt !== null)).toBe(true)
-	})
-
-	it("notifies every FINANCE user when a run is closed", async () => {
-		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
-		const account = t.track("contractorAccount", await seedContractorAccount())
-		t.track(
-			"jafInvoice",
-			await seedFinanceableInvoice({
-				contractorAccountCode: account.code,
-				funded: true,
-			}),
-		)
-		const { run } = await generateRun({
-			generatedById: finance.id,
-			label: "R-notify",
-		})
-		t.track("payrollRun", run as { id: string })
-
-		await closePayrollRun({
-			runId: run.id,
-			paidById: finance.id,
-			paidDate: new Date(),
-			confirmedByFallback: true,
-		})
-
-		const notifications = await db.notification.findMany({
-			where: { userId: finance.id },
-		})
-		for (const n of notifications) t.track("notification", n)
-		expect(notifications.some((n) => n.message.includes(run.label))).toBe(true)
-	})
-
-	it("rejects a replayed close instead of re-stamping and re-notifying (Review Focus)", async () => {
-		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
-		const account = t.track("contractorAccount", await seedContractorAccount())
-		const invoice = t.track(
-			"jafInvoice",
-			await seedFinanceableInvoice({
-				contractorAccountCode: account.code,
-				funded: true,
-			}),
-		)
-		const { run } = await generateRun({
-			generatedById: finance.id,
-			label: "R-replay",
-		})
-		t.track("payrollRun", run as { id: string })
-
-		await closePayrollRun({
-			runId: run.id,
-			paidById: finance.id,
-			paidDate: new Date("2026-09-12"),
-			evidencePath: "/uploads/payroll-runs/first.pdf",
-			confirmedByFallback: true,
-		})
-		const afterFirst = await db.payrollRun.findUniqueOrThrow({
-			where: { id: run.id },
-		})
-		const firstPaidAt = afterFirst.paidAt
-		const firstMember = await db.jafInvoice.findUniqueOrThrow({
-			where: { id: invoice.id },
-		})
-		const firstNotifs = await db.notification.findMany({
-			where: { userId: finance.id },
-		})
-		for (const n of firstNotifs) t.track("notification", n)
-
-		// The replay carries different values — a stale tab resubmitting after
-		// someone else already closed the run.
+		// Once only.
 		await expect(
-			closePayrollRun({
-				runId: run.id,
-				paidById: finance.id,
-				paidDate: new Date("2026-10-30"),
-				evidencePath: "/uploads/payroll-runs/second.pdf",
-				confirmedByFallback: true,
-			}),
+			sendPayrollRun({ runId: run.id, sentById: finance.id }),
 		).rejects.toMatchObject({ status: 409 })
-
-		const afterReplay = await db.payrollRun.findUniqueOrThrow({
-			where: { id: run.id },
-		})
-		expect(afterReplay.paidAt).toEqual(firstPaidAt)
-		expect(afterReplay.evidencePath).toBe("/uploads/payroll-runs/first.pdf")
-
-		const afterReplayMember = await db.jafInvoice.findUniqueOrThrow({
-			where: { id: invoice.id },
-		})
-		expect(afterReplayMember.payablesClosedAt).toEqual(
-			firstMember.payablesClosedAt,
-		)
-		expect(afterReplayMember.payablesClosedById).toBe(
-			firstMember.payablesClosedById,
-		)
-
-		const afterReplayNotifs = await db.notification.findMany({
-			where: { userId: finance.id },
-		})
-		expect(afterReplayNotifs.length).toBe(firstNotifs.length)
 	})
 })
 
@@ -695,6 +582,7 @@ describe("closePayrollRunAccount", () => {
 			label: `acct-${Date.now()}`,
 		})
 		t.track("payrollRun", run)
+		await sendPayrollRun({ runId: run.id, sentById: finance.id })
 		return { finance, comptroller, a, b, docs, run }
 	}
 
@@ -705,7 +593,6 @@ describe("closePayrollRunAccount", () => {
 			accountId: a.id,
 			paidById: comptroller.id,
 			paidDate: new Date(),
-			confirmedByFallback: false,
 		})
 		expect(res.runClosed).toBe(false)
 		const [d0, d1] = await Promise.all(
@@ -724,7 +611,6 @@ describe("closePayrollRunAccount", () => {
 			runId: run.id,
 			paidById: comptroller.id,
 			paidDate: new Date(),
-			confirmedByFallback: false,
 		}
 		await closePayrollRunAccount({ ...base, accountId: a.id })
 		const last = await closePayrollRunAccount({ ...base, accountId: b.id })
@@ -745,7 +631,6 @@ describe("closePayrollRunAccount", () => {
 			accountId: a.id,
 			paidById: comptroller.id,
 			paidDate: new Date(),
-			confirmedByFallback: false,
 		}
 		await closePayrollRunAccount(base)
 		const before = await db.jafInvoice.findUniqueOrThrow({
@@ -772,7 +657,6 @@ describe("closePayrollRunAccount", () => {
 				accountId: a.id,
 				paidById: comptroller.id,
 				paidDate: new Date(),
-				confirmedByFallback: false,
 			}),
 		).rejects.toMatchObject({ status: 409 })
 		const row = await db.payrollRunAccount.findFirstOrThrow({
@@ -787,7 +671,6 @@ describe("closePayrollRunAccount", () => {
 			runId: run.id,
 			paidById: comptroller.id,
 			paidDate: new Date(),
-			confirmedByFallback: false,
 		}
 		const results = await Promise.all([
 			closePayrollRunAccount({ ...base, accountId: a.id }),
@@ -810,102 +693,8 @@ describe("closePayrollRunAccount", () => {
 				accountId: other.id,
 				paidById: comptroller.id,
 				paidDate: new Date(),
-				confirmedByFallback: false,
 			}),
 		).rejects.toMatchObject({ status: 404 })
-	})
-
-	describe("fallback switch (PAYROLL_FALLBACK_ENABLED)", () => {
-		const original = process.env.PAYROLL_FALLBACK_ENABLED
-		afterEach(() => {
-			if (original === undefined) delete process.env.PAYROLL_FALLBACK_ENABLED
-			else process.env.PAYROLL_FALLBACK_ENABLED = original
-		})
-
-		it("refuses a fallback tick with 403 when switched off; the comptroller tick still works (Review Focus 6)", async () => {
-			const { finance, comptroller, a, b, run } = await twoAccountRun()
-			process.env.PAYROLL_FALLBACK_ENABLED = "false"
-			const base = { runId: run.id, paidDate: new Date() }
-			await expect(
-				closePayrollRunAccount({
-					...base,
-					accountId: a.id,
-					paidById: finance.id,
-					confirmedByFallback: true,
-				}),
-			).rejects.toMatchObject({ status: 403 })
-			await expect(
-				closePayrollRun({
-					...base,
-					paidById: finance.id,
-					confirmedByFallback: true,
-				}),
-			).rejects.toMatchObject({ status: 403 })
-			const untouched = await db.payrollRunAccount.count({
-				where: { payrollRunId: run.id, paidAt: null },
-			})
-			expect(untouched).toBe(2)
-			await closePayrollRunAccount({
-				...base,
-				accountId: b.id,
-				paidById: comptroller.id,
-				confirmedByFallback: false,
-			})
-			const row = await db.payrollRunAccount.findFirstOrThrow({
-				where: { payrollRunId: run.id, contractorAccountId: b.id },
-			})
-			expect(row.paidAt).not.toBeNull()
-		})
-
-		it("allows and tags a fallback tick when on (default when unset), and flags the run", async () => {
-			delete process.env.PAYROLL_FALLBACK_ENABLED
-			const { finance, comptroller, a, b, run } = await twoAccountRun()
-			const base = { runId: run.id, paidDate: new Date() }
-			await closePayrollRunAccount({
-				...base,
-				accountId: b.id,
-				paidById: finance.id,
-				confirmedByFallback: true,
-			})
-			await closePayrollRunAccount({
-				...base,
-				accountId: a.id,
-				paidById: comptroller.id,
-				confirmedByFallback: false,
-			})
-			const tagged = await db.payrollRunAccount.findMany({
-				where: { payrollRunId: run.id, confirmedByFallback: true },
-			})
-			expect(tagged).toHaveLength(1)
-			const r = await db.payrollRun.findUniqueOrThrow({ where: { id: run.id } })
-			expect(r.paidAt).not.toBeNull()
-			// the LAST tick was Carmen's (not fallback), but the run is still flagged
-			expect(r.confirmedByFallback).toBe(true)
-		})
-	})
-
-	it("closePayrollRun (whole-run confirm) ticks every remaining account as fallback", async () => {
-		const { finance, a, run } = await twoAccountRun()
-		await closePayrollRunAccount({
-			runId: run.id,
-			accountId: a.id,
-			paidById: finance.id,
-			paidDate: new Date(),
-			confirmedByFallback: false,
-		})
-		await closePayrollRun({
-			runId: run.id,
-			paidById: finance.id,
-			paidDate: new Date(),
-			confirmedByFallback: true,
-		})
-		const rows = await db.payrollRunAccount.findMany({
-			where: { payrollRunId: run.id },
-		})
-		expect(rows.every((r) => r.paidAt !== null)).toBe(true)
-		expect(rows.filter((r) => r.confirmedByFallback)).toHaveLength(1)
-		const r = await db.payrollRun.findUniqueOrThrow({ where: { id: run.id } })
-		expect(r.paidAt).not.toBeNull()
 	})
 })
 
@@ -1000,11 +789,7 @@ describe("L3 generate_run action", () => {
 				funded: true,
 			}),
 		)
-		// Only bank-funded packets may go on a list for Carmen.
-		await db.jafInvoice.update({
-			where: { id: inv.id },
-			data: { advanceReceivedAt: new Date(), advanceAmount: 10 },
-		})
+		expect(inv.pbccRequestSentAt).not.toBeNull()
 
 		const form = new URLSearchParams({ intent: "generate_run", label: "Run B" })
 		let redirected: string | null = null
@@ -1028,30 +813,28 @@ describe("L3 generate_run action", () => {
 	})
 })
 
-describe("L3 generate_run action holds unfunded packets back", () => {
+describe("L3 generate_run action holds unsold packets back", () => {
 	// Lives in this file (not its own) because the real generateRun sweeps the
 	// whole shared candidate pool; tests in one file run sequentially.
-	it("never sweeps a sent-but-unfunded packet, even when the form excludes nothing", async () => {
+	it("sweeps a sold packet whether or not the bank has funded it, and never an unsold one", async () => {
 		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 		mocks.requireRole.mockResolvedValue({ user: finance })
 		const account = t.track("contractorAccount", await seedContractorAccount())
-		const mk = async (funded: boolean) => {
-			const inv = t.track(
+		const mk = async (pbccRequestSentAt: Date | null) =>
+			t.track(
 				"jafInvoice",
 				await seedFinanceableInvoice({
-					funded,
 					contractorAccountCode: account.code,
 					jafInvoiceLines: ONE_LINE_100,
+					pbccRequestSentAt,
 				}),
 			)
-			return inv
-		}
-		const fundedJob = await mk(true)
-		const unfundedJob = await mk(false)
+		const soldJob = await mk(new Date())
+		const unsoldJob = await mk(null)
 
 		const form = new FormData()
 		form.set("intent", "generate_run")
-		form.set("label", "unfunded guard")
+		form.set("label", "unsold guard")
 		let status: number | null = null
 		try {
 			await generateRunAction({
@@ -1066,16 +849,16 @@ describe("L3 generate_run action holds unfunded packets back", () => {
 			if (response instanceof Response) status = response.status
 		}
 		expect(status).toBe(302)
-		const funded = await db.jafInvoice.findUniqueOrThrow({
-			where: { id: fundedJob.id },
+		const sold = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: soldJob.id },
 		})
-		const unfunded = await db.jafInvoice.findUniqueOrThrow({
-			where: { id: unfundedJob.id },
+		const unsold = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: unsoldJob.id },
 		})
-		expect(funded.payrollRunId).not.toBeNull()
-		expect(unfunded.payrollRunId).toBeNull()
+		expect(sold.payrollRunId).not.toBeNull()
+		expect(unsold.payrollRunId).toBeNull()
 		const created = await db.payrollRun.findFirst({
-			where: { label: "unfunded guard" },
+			where: { label: "unsold guard" },
 		})
 		if (created) t.track("payrollRun", created)
 	})
@@ -1157,5 +940,102 @@ describe("armAOpenWhere consumers (kept here so they cannot race the sweep)", ()
 		expect(result.payment.grossPayable).toBeCloseTo(100, 2)
 		expect(result.payment.netPayable).toBeCloseTo(100 * 0.65 * 0.9, 2)
 		expect(result.frozen).toBe(false)
+	})
+})
+
+describe("payroll request lifecycle", () => {
+	async function draftRun() {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		const account = t.track("contractorAccount", await seedContractorAccount())
+		const doc = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				contractorAccountCode: account.code,
+				jafInvoiceLines: ONE_LINE_100,
+				avisoNumber: "30077820",
+			}),
+		)
+		const { run } = await generateRun({
+			generatedById: finance.id,
+			label: `draft-${Date.now()}`,
+		})
+		t.track("payrollRun", run)
+		return { finance, account, doc, run }
+	}
+
+	it("nobody can tick a brigade on a draft: it is not sent to Carmen yet", async () => {
+		const { finance, account, run } = await draftRun()
+		await expect(
+			closePayrollRunAccount({
+				runId: run.id,
+				accountId: account.id,
+				paidById: finance.id,
+				paidDate: new Date(),
+			}),
+		).rejects.toMatchObject({ status: 409 })
+		const row = await db.payrollRunAccount.findFirstOrThrow({
+			where: { payrollRunId: run.id },
+		})
+		expect(row.paidAt).toBeNull()
+	})
+
+	it("discarding a draft puts its jobs back on the Ready list with nothing frozen", async () => {
+		const { doc, run } = await draftRun()
+		await discardDraftRun(run.id)
+		const reloaded = await db.jafInvoice.findUniqueOrThrow({
+			where: { id: doc.id },
+		})
+		expect(reloaded.payrollRunId).toBeNull()
+		expect(reloaded.contractorAccountId).toBeNull()
+		expect(reloaded.netPayable).toBeNull()
+		expect(await db.payrollRun.findUnique({ where: { id: run.id } })).toBeNull()
+		expect(
+			await db.payrollRunAccount.count({ where: { payrollRunId: run.id } }),
+		).toBe(0)
+	})
+
+	it("a request that has been sent can no longer be discarded or sent again", async () => {
+		const { finance, run } = await draftRun()
+		await sendPayrollRun({ runId: run.id, sentById: finance.id })
+		await expect(discardDraftRun(run.id)).rejects.toMatchObject({
+			status: 409,
+		})
+		await expect(
+			sendPayrollRun({ runId: run.id, sentById: finance.id }),
+		).rejects.toMatchObject({ status: 409 })
+	})
+
+	it("refuses to send a request that has no jobs", async () => {
+		const finance = t.track("user", await seedUser({ role: "FINANCE" }))
+		const run = t.track(
+			"payrollRun",
+			await db.payrollRun.create({
+				data: { label: "empty", generatedById: finance.id },
+			}),
+		)
+		await expect(
+			sendPayrollRun({ runId: run.id, sentById: finance.id }),
+		).rejects.toBeInstanceOf(EmptyRunError)
+		const reloaded = await db.payrollRun.findUniqueOrThrow({
+			where: { id: run.id },
+		})
+		expect(reloaded.sentAt).toBeNull()
+	})
+
+	it("the sheet has a line per brigade with its Aviso numbers, net, retention and what to pay, and no gross", async () => {
+		const { run } = await draftRun()
+		const full = await db.payrollRun.findUniqueOrThrow({
+			where: { id: run.id },
+			include: { invoices: RUN_INVOICES },
+		})
+		const lines = payrollSheetLines(buildJournalBlocks(full.invoices))
+		expect(lines).toHaveLength(1)
+		const [line] = lines
+		expect(line.avisoNumbers).toEqual(["30077820"])
+		// 100 gross -> 65.00 net -> 6.50 retention -> 58.50 to pay
+		expect(line.net).toBe(65)
+		expect(line.retention).toBe(6.5)
+		expect(line.toPay).toBe(58.5)
+		expect(Object.keys(line)).not.toContain("gross")
 	})
 })

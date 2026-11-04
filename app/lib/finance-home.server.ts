@@ -12,7 +12,6 @@ import { rowAmounts } from "~/lib/pbcc-batch.server"
 const NEXT_UP_STAGES: { stage: ArmAListStage; step: FinanceStep }[] = [
 	{ stage: "PACKETS", step: "PACKETS" },
 	{ stage: "LC_REQUEST", step: "LC_REQUEST" },
-	{ stage: "LC_FUNDED", step: "LC_FUNDED" },
 	{ stage: "LISTS", step: "LISTS" },
 ]
 
@@ -41,9 +40,9 @@ export async function loadFinanceHome(
 			}),
 			carmenOpenSummary(now),
 			db.payrollRun.findFirst({
-				where: { paidAt: null, reversedAt: null },
-				orderBy: { generatedAt: "asc" },
-				select: { generatedAt: true },
+				where: { paidAt: null, reversedAt: null, sentAt: { not: null } },
+				orderBy: { sentAt: "asc" },
+				select: { sentAt: true },
 			}),
 			Promise.all(
 				NEXT_UP_STAGES.map(({ stage, step }) =>
@@ -110,8 +109,8 @@ export async function loadFinanceHome(
 			{
 				key: "waiting_carmen",
 				count: carmen.openAccounts,
-				href: FINANCE_STEP_HREF.CARMEN,
-				oldestDays: oldestRun ? ageDays(oldestRun.generatedAt, now) : null,
+				href: FINANCE_STEP_HREF.LISTS,
+				oldestDays: oldestRun ? ageDays(oldestRun.sentAt, now) : null,
 			},
 		],
 		// Arm B screens arrive in later steps; until then their boxes are not live.

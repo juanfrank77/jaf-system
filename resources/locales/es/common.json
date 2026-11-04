@@ -197,9 +197,7 @@
 			"receivables": "Cuentas por cobrar",
 			"finance_packets": "Bandeja de entrada",
 			"finance_lc_request": "Lote PBCC",
-			"finance_lc_funded": "LC fondeada",
 			"finance_lists": "Nómina a Carmen",
-			"finance_carmen": "Pago de Carmen",
 			"finance_awaiting_po": "Bandeja de POs",
 			"finance_awaiting_ariba": "Facturas Claro",
 			"soon": "Pronto",
@@ -1486,15 +1484,7 @@
 		"errors": {
 			"on_schedule": "Este paquete está en el cronograma bancario {{list}}. Envíe o descarte el cronograma en lugar de enviarlo a mano.",
 			"unknown_intent": "Acción desconocida.",
-			"terminal_status": "Este trabajo ya no es editable.",
-			"not_sent": "Primero envíe la solicitud al banco.",
-			"already_funded": "Este paquete ya está marcado como fondeado.",
-			"future_date": "La fecha de fondeo no puede ser futura.",
-			"invalid_date": "Ingrese una fecha válida.",
-			"invalid_amount": "Ingrese el monto pagado por PBCC (mayor que 0).",
-			"reason_required": "Indique el motivo de la corrección.",
-			"not_funded": "Este paquete no tiene fondeo que corregir.",
-			"locked_in_paid_run": "Este paquete ya está en una corrida pagada y no se puede corregir."
+			"terminal_status": "Este trabajo ya no es editable."
 		},
 		"contractor_payment": "Pago al contratista (Brazo A)",
 		"frozen": "Congelado en la corrida",
@@ -1509,15 +1499,7 @@
 		"precert_title": "Hoja de pre-certificación",
 		"precert_download": "Descargar hoja de pre-certificación",
 		"precert_signers": "Firmado por: {{supervisor}}, {{contractor}}, {{claro}}",
-		"precert_missing": "Falta hoja de pre-certificación",
-		"mark_funded": "Marcar fondeado",
-		"funded_on": "Fondeado {{date}}",
-		"funded_date": "Fecha de fondeo",
-		"funded_amount": "Monto pagado por PBCC",
-		"funded_ref": "Referencia del banco (opcional)",
-		"correct_funding": "Corregir fondeo",
-		"correction_reason": "Motivo de la corrección",
-		"save_correction": "Guardar corrección"
+		"precert_missing": "Falta hoja de pre-certificación"
 	},
 	"finance_po": {
 		"title": "PO de Claro y documento final",
@@ -2179,7 +2161,10 @@
 		}
 	},
 	"pbcc_batch": {
-		"tab": { "open": "Abierto", "sent": "Enviados" },
+		"tab": {
+			"open": "Abierto",
+			"sent": "Enviados"
+		},
 		"open_heading": "Lote PBCC #{{number}} · abierto",
 		"summary": "{{count}} de {{max}} paquetes · Subtotal {{subtotal}} · {{percent}}% de adelanto {{advance}}",
 		"summary_note": "El adelanto se calcula sobre el subtotal, antes del IVU.",
@@ -2265,21 +2250,16 @@
 		"step": {
 			"packets": "Bandeja de entrada",
 			"lc_request": "Lote PBCC",
-			"lc_funded": "LC fondeada",
 			"lists": "Nómina a Carmen",
-			"carmen": "Pago de Carmen"
+			"closed": "Cerrado"
 		},
 		"callout": {
-			"packets_title": "Etapa 1 de 5 · Bandeja de entrada",
+			"packets_title": "Etapa 1 de 3 · Bandeja de entrada",
 			"packets_body": "Paquetes que los supervisores han liberado, con los documentos que han llegado de cada uno. Cuando estén todos los documentos, revisa el paquete y acéptalo. Los paquetes aceptados pasan al lote PBCC.",
-			"lc_request_title": "Etapa 2 de 5 · Lote PBCC",
-			"lc_request_body": "Cada paquete que aceptas entra a este lote como su siguiente fila; su PDF de factura y su fila del Excel se hacen solos. Cierra el lote (o deja que el paquete 100 lo cierre), verifícalo, envía el paquete a PBCC y márcalo enviado. Los paquetes esperan luego en LC fondeada.",
-			"lc_funded_title": "Etapa 3 de 5 · LC financiada",
-			"lc_funded_body": "Paquetes cuya solicitud está en el banco y aún no han sido financiados. Cuando el banco financia uno, márcalo aquí con la fecha y el monto. Pasa a Listas para Carmen e inicia el reloj del Brazo B.",
-			"lists_title": "Etapa 4 de 5 · Nómina a Carmen",
-			"lists_body": "Paquetes financiados listos para ir en un Production Journal, y las listas que ya se enviaron. Crea una lista con los paquetes financiados y envíala a Carmen. Carmen luego paga cada cuenta.",
-			"carmen_title": "Etapa 5 de 5 · Pago de Carmen",
-			"carmen_body": "Cada lista enviada a Carmen, con las cuentas que ya pagó y las que siguen abiertas. Espere a Carmen o, si ha estado ausente, confirme una cuenta desde la copia en papel. Cuando todas las cuentas estén pagadas, el Brazo A queda cerrado para esa lista.",
+			"lc_request_title": "Etapa 2 de 3 · Lote PBCC",
+			"lc_request_body": "Cada paquete que aceptas entra a este lote como su siguiente fila; su PDF de factura y su fila del Excel se hacen solos. Cierra el lote (o deja que el paquete 100 lo cierre), verifícalo, envía el paquete a PBCC y márcalo enviado. Los paquetes quedan entonces Vendidos a PBCC y listos para Nómina a Carmen.",
+			"lists_title": "Etapa 3 de 3 · Nómina a Carmen",
+			"lists_body": "Avisos vendidos a PBCC que aún no están en una solicitud, y las solicitudes ya hechas. Crea una solicitud con ellos, revísala y envíala a Carmen. Carmen paga cada brigada en WinPay y la marca; cuando todas las brigadas de un Aviso están pagadas, el Brazo A queda cerrado para ese Aviso. La nómina no espera la transferencia del banco.",
 			"arm_b_receivables_title": "Brazo B · Cuentas por cobrar",
 			"arm_b_receivables_body": "Claro le paga a JAF. Registre los pagos conforme lleguen y luego cierre el trabajo cuando existan ambos. Un trabajo medio cerrado es normal aquí, no un error: el trabajo se cierra definitivamente cuando entra el pago de Claro.",
 			"arm_b_po_title": "Brazo B · Bandeja de POs",
@@ -2305,53 +2285,58 @@
 		}
 	},
 	"finance_payroll": {
-		"ready_title": "Listos para enviar a Carmen",
-		"sent_title": "Listas ya enviadas a Carmen",
-		"none_ready": "No hay paquetes financiados esperando una lista.",
-		"no_sent_lists": "Aún no se ha enviado ninguna lista a Carmen.",
-		"create_list": "Crear lista para Carmen ({{count}})",
-		"see_carmen": "Ver el pago de Carmen",
+		"tab": {
+			"ready": "Listos",
+			"waiting": "Esperando a Carmen",
+			"paid": "Pagados"
+		},
+		"ready_title": "Vendidos a PBCC, listos para Carmen",
+		"drafts_title": "Solicitudes en borrador — revisa y envía a Carmen",
+		"none_ready": "No hay Avisos vendidos esperando una solicitud de nómina.",
+		"none_waiting": "No hay nada esperando a Carmen.",
+		"none_paid": "Aún no se ha pagado ninguna solicitud de nómina.",
+		"create_request": "Crear solicitud de nómina ({{count}})",
+		"period_label": "Período de pago",
+		"review": "Revisar y enviar",
+		"open_request": "Abrir",
 		"select_all": "Incluir todos en esta página",
-		"include_row": "Incluir {{number}} en la lista",
+		"include_row": "Incluir {{number}} en la solicitud",
 		"reversed": "Revertida",
-		"run_label_placeholder": "Etiqueta de la corrida (ej. 9/10)",
-		"blocked_title": "Enviados pero bloqueados",
-		"fallback_count": "{{count}} cuentas confirmadas del papel",
+		"blocked_title": "Vendidos pero bloqueados",
 		"blocked_reason": "Sin cuenta de contratista para esta brigada",
-		"paid_by": "Pagado {{date}} por {{name}}",
-		"from_paper": "confirmado del papel",
-		"awaiting_comptroller": "Esperando al contralor",
-		"confirm_account": "Confirmar del papel",
 		"overdue": "{{days}}d, atrasada",
+		"request_title": "Solicitud de nómina · {{label}}",
+		"sent_on": "enviada a Carmen {{date}}",
+		"draft": "Borrador — no enviada",
+		"draft_body": "Revisa las brigadas y los números de Aviso y luego envía la solicitud a Carmen. Mientras no la envíes, Carmen no la ve.",
+		"progress": "{{paid}} de {{total}} brigadas pagadas",
+		"paid_on": "Pagada {{date}}",
+		"send": "Enviar a Carmen",
+		"discard": "Descartar borrador",
+		"total": "Total",
+		"net_note": "El neto es sobre la mano de obra antes del IVU.",
+		"back": "← Nómina a Carmen",
+		"download_journal_pdf": "⬇ Hoja de solicitud (PDF)",
+		"status": {
+			"waiting": "Esperando a Carmen",
+			"paid": "Pagado {{date}} por {{name}}"
+		},
+		"col": {
+			"brigade": "Brigada",
+			"avisos": "Avisos",
+			"net": "Neto 65%",
+			"retention": "Ret. 10%",
+			"to_pay": "A pagar",
+			"status": "Estado"
+		},
 		"errors": {
 			"unknown_intent": "Acción desconocida.",
 			"missing_fields": "Se requiere la fecha de pago.",
 			"invalid_date": "No se pudo interpretar esa fecha.",
 			"future_date": "La fecha de pago no puede estar en el futuro.",
-			"empty_run": "No se pudo agregar ningún trabajo a la corrida: todos los trabajos listos están retenidos o no tienen cuenta de contratista asignada.",
-			"invalid_evidence": "La evidencia debe ser un PDF o una imagen."
-		},
-		"back": "← Listas para Carmen",
-		"open": "Abierta — aún no pagada",
-		"paid_on": "Pagada el {{date}}",
-		"download_journal_pdf": "⬇ Journal en PDF",
-		"col": {
-			"list": "Lista",
-			"date": "Enviada",
-			"age": "Días",
-			"brigade": "Brigada",
-			"gross": "Bruto",
-			"net": "Neto",
-			"retention": "Ret. 10%",
-			"status": "Estado",
-			"jobs": "Trabajos",
-			"total_sc": "Total SC"
-		},
-		"grand_total": "Gran total",
-		"batch_confirm": "Confirmación en lote desde papel",
-		"batch_confirm_submit": "Cerrar corrida desde papel",
-		"paid_date": "Fecha de pago",
-		"evidence": "Subir evidencia (PDF o imagen)"
+			"empty_run": "No se pudo hacer ninguna solicitud de nómina: todos los Avisos vendidos están retenidos o no tienen cuenta de contratista asignada.",
+			"already_sent": "Esta solicitud ya fue enviada a Carmen."
+		}
 	},
 	"qty_stepper": {
 		"decrease": "Disminuir",
@@ -2362,42 +2347,39 @@
 		"remove": "Quitar foto"
 	},
 	"comptroller_lists": {
-		"title": "Listas de Lissette",
-		"callout_body": "Todas las listas de nómina que Finanzas ha enviado. Abra una lista para pagar sus cuentas en Corridas por pagar.",
+		"title": "Solicitudes de Lissette",
+		"callout_body": "Todas las solicitudes de nómina que Finanzas le ha enviado. Abra una para pagar sus brigadas.",
 		"status_unpaid": "{{unpaid}} de {{total}} sin pagar",
 		"status_paid": "Pagada",
 		"open": "Abrir",
 		"view": "Ver",
 		"col": {
-			"list": "Lista",
+			"list": "Solicitud",
 			"sent": "Enviada",
 			"work_orders": "Órdenes de trabajo",
-			"total": "Total",
+			"total": "A pagar",
 			"status": "Estado"
 		}
 	},
 	"comptroller_payroll": {
 		"title": "Brigadas · nómina",
 		"callout_title": "Su paso",
-		"callout_body": "Abra una corrida, pague cada cuenta en WinPay y márquela aquí. Finanzas ve quién ha sido pagado.",
-		"runs_to_pay": "Corridas por pagar",
-		"paid_runs": "Corridas pagadas",
-		"accounts_progress": "{{paid}} de {{total}} cuentas",
+		"callout_body": "Abra una solicitud, pague cada brigada en WinPay y márquela aquí. La fecha de pago empieza en hoy; cámbiela si pagó otro día. Finanzas ve cada marca al instante.",
 		"paid_button": "Pagado",
 		"paid_by": "Pagado {{date}} por {{name}}",
-		"from_paper": "confirmado del papel por finanzas",
-		"empty": "Aún no hay corridas.",
-		"back": "Volver a corridas",
-		"download_pdf": "Descargar PDF del diario",
+		"pay_date": "Fecha de pago",
+		"empty": "Aún no hay solicitudes.",
+		"back": "Volver a solicitudes",
+		"download_pdf": "Descargar hoja de solicitud (PDF)",
+		"request_title": "Solicitud de nómina · {{label}}",
+		"accounts_progress": "{{paid}} de {{total}} brigadas",
+		"runs_to_pay": "Solicitudes por pagar",
+		"paid_runs": "Solicitudes pagadas",
 		"col": {
-			"account": "Cta.",
-			"contractor": "Contratista",
-			"jobs": "Trabajos",
-			"gross": "Bruto",
-			"net": "Neto",
-			"retention": "10% Ret.",
-			"adj_net_running": "Neto ajust. acumulado",
-			"status": "Estado"
+			"brigade": "Brigada",
+			"avisos": "Avisos",
+			"to_pay": "A pagar",
+			"status": "Pagado en WinPay"
 		}
 	},
 	"finance_stage": {
@@ -2421,25 +2403,7 @@
 		"age": {
 			"packets": "Días en espera",
 			"sent": "Días desde el envío"
-		},
-		"funded": {
-			"mark": "Marcar financiada",
-			"date": "Financiada el",
-			"amount": "Monto",
-			"ref": "Referencia bancaria"
 		}
-	},
-	"finance_carmen": {
-		"title": "Pago de Carmen",
-		"none": "No hay listas esperando a Carmen.",
-		"paid_of": "{{paid}} de {{total}} cuentas pagadas",
-		"age": "{{days}} días",
-		"overdue": "Vencida",
-		"waiting": "Esperando a Carmen",
-		"confirm": "Confirmar del papel",
-		"confirm_prompt": "¿Marcar esta cuenta como pagada desde la copia en papel? Esto cierra el Brazo A para la cuenta.",
-		"fallback_off": "La confirmación desde el papel está desactivada. Carmen marca las cuentas como pagadas.",
-		"open_list": "Abrir lista"
 	},
 	"work_order_doc": {
 		"title": "Orden de trabajo JAF",

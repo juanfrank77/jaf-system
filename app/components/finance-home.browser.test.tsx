@@ -15,7 +15,7 @@ const home: FinanceHome = {
 		{
 			key: "waiting_carmen",
 			count: 0,
-			href: "/finance/awaiting-carmen",
+			href: "/finance/payroll",
 			oldestDays: null,
 		},
 	],

@@ -72,9 +72,7 @@ it("has en and es copy for the Finance sidebar", () => {
 	for (const k of [
 		"app_shell.nav.finance_packets",
 		"app_shell.nav.finance_lc_request",
-		"app_shell.nav.finance_lc_funded",
 		"app_shell.nav.finance_lists",
-		"app_shell.nav.finance_carmen",
 		"app_shell.nav.finance_awaiting_po",
 		"app_shell.nav.finance_awaiting_ariba",
 		"app_shell.nav.soon",

@@ -1,7 +1,7 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { useTranslation } from "react-i18next"
-import { data, Form, Link, redirect } from "react-router"
+import { Form, Link, redirect } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
 import { Badge } from "~/components/ui/badge"
@@ -22,12 +22,7 @@ import {
 	financeLineItems,
 	invoiceTotalUsed,
 } from "~/lib/finance-pipeline.server"
-import { pbccStep, stepNumber } from "~/lib/finance-steps"
-import { parseFunding } from "~/lib/funding-form"
-import {
-	correctReceivablePayment,
-	recordReceivablePayment,
-} from "~/lib/payment-records.server"
+import { FINANCE_STEPS, pbccStep, stepNumber } from "~/lib/finance-steps"
 import { armAOpenWhere } from "~/lib/payroll-run.server"
 import { generatePbccRequestPdf } from "~/lib/pdf/pbcc-request.server"
 import { isTerminalStatus } from "~/lib/permissions"
@@ -140,52 +135,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 	const form = await request.formData()
 	const intent = form.get("intent")
-
-	if (intent === "mark_funded") {
-		if (!doc.pbccRequestSentAt)
-			return { errorKey: "finance_pbcc.errors.not_sent" }
-		const parsed = parseFunding(form)
-		if ("errorKey" in parsed) return parsed
-		const result = await recordReceivablePayment({
-			jobId: params.id,
-			type: "PBCC_ADVANCE",
-			amount: parsed.amount,
-			date: parsed.date,
-			note: parsed.note,
-			actorId: user.id,
-		})
-		if (result.duplicate) {
-			return data(
-				{ errorKey: "finance_pbcc.errors.already_funded" },
-				{ status: 409 },
-			)
-		}
-		return { ok: true }
-	}
-
-	if (intent === "correct_funding") {
-		// FINANCE + ADMIN: the screen's requireRole already limits to those roles.
-		const reason = (form.get("reason") as string | null)?.trim() ?? ""
-		if (!reason) return { errorKey: "finance_pbcc.errors.reason_required" }
-		const parsed = parseFunding(form)
-		if ("errorKey" in parsed) return parsed
-		const result = await correctReceivablePayment({
-			jobId: params.id,
-			...parsed,
-			reason,
-			actorId: user.id,
-			actorRole: user.role,
-		})
-		if (!result.ok) {
-			return {
-				errorKey:
-					result.error === "locked"
-						? "finance_pbcc.errors.locked_in_paid_run"
-						: "finance_pbcc.errors.not_funded",
-			}
-		}
-		return { ok: true }
-	}
 
 	// Escape hatch: Lissette sends the PBCC packet by hand (outside the system)
 	// because the bank-format invoice/schedule generators don't exist yet. This
@@ -328,13 +277,11 @@ export default function PbccRequest({
 	} = loaderData
 	const { t } = useTranslation()
 
-	const today = new Date().toLocaleDateString("en-CA")
 	const errorKey =
 		actionData && "errorKey" in actionData ? actionData.errorKey : null
 	const errorList =
 		actionData && "list" in actionData ? String(actionData.list) : ""
 	const onUnsent = bankSchedule != null && bankSchedule.sentAt === null
-	const sent = Boolean(doc.pbccRequestSentAt)
 	const step = pbccStep(doc)
 	let calloutTitle: string
 	let calloutBody: string
@@ -343,23 +290,10 @@ export default function PbccRequest({
 			calloutTitle = t("finance_flow.callout.lc_request_title")
 			calloutBody = t("finance_flow.callout.lc_request_body")
 			break
-		case "LC_FUNDED":
-			calloutTitle = t("finance_flow.callout.lc_funded_title")
-			calloutBody = t("finance_flow.callout.lc_funded_body")
-			break
 		default:
 			calloutTitle = t("finance_flow.callout.lists_title")
 			calloutBody = t("finance_flow.callout.lists_body")
 	}
-	const funded = doc.advanceReceivedAt
-		? {
-				date: new Date(doc.advanceReceivedAt),
-				amount: Number(doc.advanceAmount ?? 0),
-				ref:
-					doc.paymentRecords.find((r) => r.type === "PBCC_ADVANCE")?.note ?? "",
-			}
-		: null
-
 	const preCertSheet = doc.preCertSheets?.[0]
 	const supervName = preCertSheet?.sigSupervisorName ?? "—"
 	const subconName = preCertSheet?.sigSubcontractorName ?? "—"
@@ -369,7 +303,11 @@ export default function PbccRequest({
 		<div className="space-y-5">
 			<div className="flex items-center gap-3">
 				<h1 className="text-xl font-semibold">{t("finance_pbcc.title")}</h1>
-				<StageChip arm="A" step={stepNumber(step)} total={5} />
+				<StageChip
+					arm="A"
+					step={stepNumber(step)}
+					total={FINANCE_STEPS.length}
+				/>
 			</div>
 			<p className="font-mono text-sm text-muted-foreground">
 				{doc.controlNumber}
@@ -510,129 +448,6 @@ export default function PbccRequest({
 				<p role="alert" className="text-sm text-destructive">
 					{t(errorKey as never, { list: errorList })}
 				</p>
-			)}
-
-			{sent && !funded && (
-				<Form
-					method="post"
-					className="bg-card border rounded-lg p-4 space-y-3 text-sm"
-				>
-					<input type="hidden" name="intent" value="mark_funded" />
-					<div className="flex flex-wrap items-end gap-3">
-						<label className="space-y-1">
-							<span className="block text-muted-foreground">
-								{t("finance_pbcc.funded_date")}
-							</span>
-							<input
-								type="date"
-								name="fundedDate"
-								required
-								max={today}
-								className="border rounded px-2 py-1"
-							/>
-						</label>
-						<label className="space-y-1">
-							<span className="block text-muted-foreground">
-								{t("finance_pbcc.funded_amount")}
-							</span>
-							<input
-								type="number"
-								step="0.01"
-								min="0.01"
-								name="fundedAmount"
-								required
-								className="border rounded px-2 py-1"
-							/>
-						</label>
-						<label className="space-y-1">
-							<span className="block text-muted-foreground">
-								{t("finance_pbcc.funded_ref")}
-							</span>
-							<input
-								type="text"
-								name="fundedRef"
-								className="border rounded px-2 py-1"
-							/>
-						</label>
-						<Button type="submit">{t("finance_pbcc.mark_funded")}</Button>
-					</div>
-				</Form>
-			)}
-
-			{funded && (
-				<div className="bg-card border rounded-lg p-4 space-y-3 text-sm">
-					<Badge variant="ok">
-						{t("finance_pbcc.funded_on", {
-							date: funded.date.toLocaleDateString("en-CA"),
-						})}{" "}
-						· {formatMoney(funded.amount)}
-						{funded.ref ? ` · ${funded.ref}` : ""}
-					</Badge>
-					{!doc.payrollRun?.paidAt && (
-						<details>
-							<summary className="cursor-pointer text-accent-text underline">
-								{t("finance_pbcc.correct_funding")}
-							</summary>
-							<Form method="post" className="mt-3 space-y-3">
-								<input type="hidden" name="intent" value="correct_funding" />
-								<div className="flex flex-wrap items-end gap-3">
-									<label className="space-y-1">
-										<span className="block text-muted-foreground">
-											{t("finance_pbcc.funded_date")}
-										</span>
-										<input
-											type="date"
-											name="fundedDate"
-											required
-											max={today}
-											defaultValue={funded.date.toLocaleDateString("en-CA")}
-											className="border rounded px-2 py-1"
-										/>
-									</label>
-									<label className="space-y-1">
-										<span className="block text-muted-foreground">
-											{t("finance_pbcc.funded_amount")}
-										</span>
-										<input
-											type="number"
-											step="0.01"
-											min="0.01"
-											name="fundedAmount"
-											required
-											defaultValue={funded.amount}
-											className="border rounded px-2 py-1"
-										/>
-									</label>
-									<label className="space-y-1">
-										<span className="block text-muted-foreground">
-											{t("finance_pbcc.funded_ref")}
-										</span>
-										<input
-											type="text"
-											name="fundedRef"
-											defaultValue={funded.ref}
-											className="border rounded px-2 py-1"
-										/>
-									</label>
-								</div>
-								<label className="block space-y-1">
-									<span className="block text-muted-foreground">
-										{t("finance_pbcc.correction_reason")}
-									</span>
-									<textarea
-										name="reason"
-										required
-										rows={2}
-										className="border rounded px-2 py-1 w-full"
-									/>
-								</label>
-								<Button type="submit" variant="secondary">
-									{t("finance_pbcc.save_correction")}
-								</Button>
-							</Form>
-						</details>
-					)}
-				</div>
 			)}
 
 			<div className="flex flex-wrap items-center gap-2">

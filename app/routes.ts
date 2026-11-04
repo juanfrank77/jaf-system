@@ -134,6 +134,7 @@ export default [
 		route("comptroller/to-pay", "routes/_app.comptroller.to-pay.tsx"),
 		route("comptroller/paid", "routes/_app.comptroller.paid.tsx"),
 		route("comptroller/log", "routes/_app.comptroller.log.tsx"),
+		route("comptroller/pbcc-wires", "routes/_app.comptroller.pbcc-wires.tsx"),
 		route("comptroller/log/pdf", "routes/_app.comptroller.log.pdf.tsx"),
 		route("comptroller/log/xlsx", "routes/_app.comptroller.log.xlsx.tsx"),
 		route("reports", "routes/_app.reports.tsx"),
@@ -152,6 +153,14 @@ export default [
 		route(
 			"comptroller/installers/pay",
 			"routes/_app.comptroller.installers.pay.tsx",
+		),
+		route(
+			"comptroller/installers/claro",
+			"routes/_app.comptroller.installers.claro.tsx",
+		),
+		route(
+			"comptroller/installers/claro/invoices",
+			"routes/_app.comptroller.installers.claro.invoices.tsx",
 		),
 		route(
 			"comptroller/installers/batches",

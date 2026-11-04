@@ -234,18 +234,20 @@
 			"warehouse_serials": "Registro de seriales",
 			"warehouse_movements": "Registro de movimientos",
 			"comptroller_lists": "Listas de Lissette",
-			"comptroller_to_pay": "Solicitudes de nómina",
+			"comptroller_to_pay": "Pago de brigadas",
 			"comptroller_paid": "Corridas pagadas",
 			"comptroller_warranty_docs": "Documentos de garantía",
 			"comptroller_ewit": "Facturas EWIT",
 			"comptroller_pbcc_batches": "Lotes PBCC",
 			"comptroller_installer_pay": "Pago a instaladores",
+			"comptroller_pbcc_wires": "Giros de PBCC",
 			"comptroller_log": "Registro e informes",
 			"admin_reports": "Informes",
-			"comptroller_brigades": "Brigadas",
+			"comptroller_brigades": "Lista de brigadas",
 			"finance_payment_advice": "Aviso de pago",
 			"finance_avisos": "Registros de Avisos",
 			"finance_ledger": "Libro y reportes",
+			"comptroller_home": "Inicio",
 			"finance_returned": "Devueltos",
 			"supervisor_stock": "Reabastecimiento e inventario",
 			"warehouse_brigade_stock": "Material de brigadas"
@@ -285,6 +287,8 @@
 			"switch_to_light": "Cambiar a tema claro"
 		},
 		"group": {
+			"brigades": "Brigadas",
+			"reports": "Reportes",
 			"installers": "Instaladores",
 			"arm_a": "Brazo A · Pago a nuestra gente",
 			"arm_b": "Brazo B · Facturación a Claro",
@@ -1131,6 +1135,7 @@
 		"add_submit": "Crear usuario",
 		"update_role": "Actualizar rol",
 		"save_areas": "Guardar áreas",
+		"save_ewit_no": "Guardar # EWIT",
 		"deactivate": "Desactivar",
 		"activate": "Activar",
 		"reset_password": "Restablecer contraseña",
@@ -1144,6 +1149,7 @@
 			"email": "Correo electrónico",
 			"role": "Rol",
 			"areas": "Áreas",
+			"ewit_no": "# EWIT",
 			"active": "Activo",
 			"actions": "Acciones"
 		},
@@ -1165,6 +1171,8 @@
 			"cannot_deactivate_self": "No puedes desactivar tu propia cuenta.",
 			"cannot_change_own_role": "No puedes cambiar tu propio rol.",
 			"update_invalid": "Se requieren id de usuario y rol válidos.",
+			"ewit_no_invalid": "El # de instalador EWIT debe tener exactamente 5 dígitos (p. ej. 01821).",
+			"ewit_no_taken": "Ese # de instalador EWIT ya pertenece a otro instalador.",
 			"areas_require_supervisor": "Solo se pueden asignar áreas a supervisores.",
 			"unknown_intent": "Acción desconocida."
 		}
@@ -2455,7 +2463,6 @@
 		"you_asked": "Preguntaste: {{note}}",
 		"tab_to_pay": "Por pagar",
 		"tab_paid": "Pagadas",
-		"title": "Brigadas · nómina",
 		"callout_title": "Su paso",
 		"callout_body": "Abra una solicitud, pague cada brigada en WinPay y márquela aquí. La fecha de pago empieza en hoy; cámbiela si pagó otro día. Finanzas ve cada marca al instante.",
 		"paid_button": "Pagado",
@@ -2470,8 +2477,6 @@
 		"download_pdf": "Descargar hoja de solicitud (PDF)",
 		"request_title": "Solicitud de nómina · {{label}}",
 		"accounts_progress": "{{paid}} de {{total}} brigadas",
-		"runs_to_pay": "Solicitudes por pagar",
-		"paid_runs": "Solicitudes pagadas",
 		"col": {
 			"brigade": "Brigada",
 			"avisos": "Avisos",
@@ -2760,6 +2765,7 @@
 		"empty_applied": "Aún no se ha aplicado ningún aviso de pago.",
 		"empty_unmatched": "No hay filas sin coincidencia.",
 		"card_title": "Aviso de pago · {{date}} · Ref {{ref}} · {{count}} filas · {{total}}",
+		"card_other_desk": "{{count}} filas en el otro escritorio · {{total}}",
 		"total_ok": "Las filas suman el total",
 		"total_off": "Las filas suman {{rows}}, no el total",
 		"summary": "Con coincidencia {{matched}} · Pago parcial {{short}} · Sin coincidencia {{unmatched}} · Ya pagadas {{already}}",
@@ -2769,6 +2775,8 @@
 		"invoice_number": "Número de factura",
 		"link": "Enlazar",
 		"reason": "Motivo",
+		"ja_check_hint": "No hay factura de instalador con este número (o está anulada o retenida). Necesita que una persona lo revise.",
+		"ja_check_no_po": "La factura de instalador existe pero aún no tiene PO. Añada su PO y esta fila queda conciliada.",
 		"accept_short": "Aceptar pago parcial",
 		"col": {
 			"invoice": "Factura #",
@@ -2784,7 +2792,7 @@
 			"short": "Pago parcial {{diff}}",
 			"already_paid": "Ya pagada",
 			"unmatched": "No está en el sistema",
-			"other_jaf": "Otra factura JAF"
+			"ja_check": "Necesita que una persona lo revise"
 		},
 		"errors": {
 			"no_file": "Elija el PDF del aviso de pago.",
@@ -2798,11 +2806,9 @@
 			"not_short": "Esta factura no tiene pago parcial.",
 			"reason_required": "Se requiere un motivo para aceptar un pago parcial.",
 			"invoice_not_found": "No hay una factura con ese número.",
-			"line_not_unmatched": "Esta fila ya tiene coincidencia."
-		},
-		"other_jaf_title": "Otras facturas JAF (JA-) - aún sin seguimiento",
-		"other_jaf_body": "{{count}} filas de la segunda serie de facturas de Claro. Se guardan con el aviso de pago y cuentan en su total, pero aún no se cotejan con nuestras facturas.",
-		"other_jaf_summary": "Otras JAF (JA-) {{count}} · {{total}}"
+			"line_not_unmatched": "Esta fila ya tiene coincidencia.",
+			"not_ja_line": "Esta fila no es una factura de instalador (JA)."
+		}
 	},
 	"aviso_record": {
 		"source": {
@@ -2909,13 +2915,46 @@
 			"in_ariba_not_paid": "En Ariba, sin pagar"
 		}
 	},
+	"pbcc_wires": {
+		"title": "Giros de PBCC recibidos",
+		"intro": "Cuando PBCC gire el adelanto del 80% de un lote, anote aquí la fecha y el monto. El sistema lo compara con el adelanto menos la cuota de $30 y avisa si hay diferencia.",
+		"empty": "Todavía no se ha enviado ningún lote a PBCC.",
+		"batch_label": "Lote #{{number}}",
+		"col": {
+			"batch": "Lote",
+			"sold": "Vendido a PBCC (100%)",
+			"advance": "PBCC debe adelantar (80%)",
+			"expected": "Giro esperado (menos cuota de $30)",
+			"received": "Recibido (fecha · monto)",
+			"held": "Retenido por PBCC"
+		},
+		"date": "Fecha recibida",
+		"amount": "Monto",
+		"save": "Guardar",
+		"short": "menos",
+		"over": "más",
+		"difference": "{{amount}} {{direction}} del giro esperado.",
+		"matches": "Coincide con el giro esperado.",
+		"errors": {
+			"not_found": "Ese lote ya no existe.",
+			"not_sent": "Este lote todavía no se ha enviado a PBCC.",
+			"bad_amount": "Anote el monto recibido, mayor que cero.",
+			"bad_date": "Anote una fecha válida que no sea futura."
+		}
+	},
 	"installers": {
 		"stepper": {
 			"warranty": "Documentos de garantía",
 			"ewit": "Facturas EWIT",
 			"batch": "Lote PBCC",
 			"received": "PBCC recibido",
-			"pay": "Pagar y marcar"
+			"pay": "Pagar y marcar",
+			"po": "PO + IVU",
+			"ariba": "Ariba",
+			"claro": "Claro pagó"
+		},
+		"claro": {
+			"title": "Pagos de Claro"
 		},
 		"warranty": {
 			"title": "Documentos de garantía",
@@ -2926,6 +2965,7 @@
 			"col_order": "# de orden",
 			"col_installer": "Instalador",
 			"col_emp": "# Emp.",
+			"col_ewit_no": "# EWIT",
 			"col_installed": "Instalado",
 			"col_modem": "Módem",
 			"col_photo": "Foto",
@@ -2978,6 +3018,10 @@
 			"save": "Guardar factura",
 			"cancel": "Cancelar",
 			"pdf_preview": "Vista previa del PDF",
+			"reading": "Leyendo el PDF…",
+			"read_ok": "Llenado desde el PDF. Revise antes de guardar.",
+			"read_none": "No se pudo leer este PDF. Escriba el número, la fecha y el total.",
+			"read_mismatch": "Llenado desde el PDF, pero sus filas suman {{lines}}, no el total impreso. Revise el total.",
 			"ticked": "{{count}} órdenes marcadas"
 		},
 		"batches": {
@@ -3026,6 +3070,7 @@
 			"hint": "Pague en WinPay y luego marque aquí. Solo se listan las órdenes que PBCC ya pagó.",
 			"col_installer": "Instalador",
 			"col_emp": "# Emp.",
+			"col_ewit_no": "# EWIT",
 			"col_jobs": "Trabajos",
 			"col_orders": "Órdenes",
 			"col_amount": "Monto pagado",
@@ -3059,10 +3104,63 @@
 			"check_failed": "La verificación del lote aún no está en verde.",
 			"no_reason": "Escriba el motivo primero.",
 			"nothing_to_pay": "No hay nada que pagar con esa selección. Recargue la página.",
+			"claro_started": "Esta factura ya tiene PO, se envió a Ariba o Claro la pagó, así que no se puede retirar.",
 			"bad_amount": "Escriba el monto pagado, mayor que 0.",
 			"undo_expired": "Solo se puede deshacer un pago marcado hoy.",
 			"invalid_date": "Use una fecha como 10/28/2026.",
 			"pick_installer": "Marque al menos un instalador."
+		},
+		"claro_invoices": {
+			"title": "Facturas de Claro",
+			"none": "Ninguna",
+			"col_number": "Factura EWIT #",
+			"col_date": "Fecha de factura",
+			"col_amount": "Monto",
+			"col_with_ivu": "Monto + IVU",
+			"col_status": "Estado",
+			"stage": {
+				"no_po": "Sin PO todavía",
+				"ready_for_ariba": "Lista para Ariba",
+				"sent": "Enviada a Ariba",
+				"short": "Pagada incompleta",
+				"paid": "Pagada"
+			},
+			"days_waiting_one": "{{count}} día esperando",
+			"days_waiting_other": "{{count}} días esperando",
+			"add_po": "Agregar PO",
+			"po_number": "PO #",
+			"po_date": "Fecha del PO",
+			"reprint_pdf": "Factura EWIT reimpresa (PDF)",
+			"reprint_total": "Total reimpreso (con IVU)",
+			"save_po": "Guardar PO",
+			"sent_on": "Enviada el",
+			"mark_sent": "Marcar enviada en Ariba",
+			"sent_on_date": "Enviada {{date}}",
+			"overdue": "Enviada {{date}} - más de 60 días, dar seguimiento",
+			"short_by": "Faltan {{amount}}",
+			"errors": {
+				"bad_input": "Complete el número de PO, la fecha del PO y el total reimpreso.",
+				"no_file": "Adjunte el PDF de la factura EWIT reimpresa.",
+				"not_pdf": "La reimpresión debe ser un PDF.",
+				"none_selected": "Seleccione al menos una factura.",
+				"po_total_mismatch": "El total reimpreso no coincide: se esperaba {{expected}} con {{rate}}% de IVU.",
+				"not_found": "Factura no encontrada.",
+				"voided": "Esa factura está anulada o retenida.",
+				"already_sent": "Ya enviada a Ariba o pagada.",
+				"no_po": "Agregue el PO primero.",
+				"ineligible": "Esa factura no está disponible: debe estar enviada a PBCC y no anulada ni retenida."
+			},
+			"ivu_rate": "Tasa de IVU % (vacío = 4)",
+			"filter_chip": "filtro {{filter}} · quitar",
+			"filter": {
+				"no_po": "Esperando PO",
+				"ready_for_ariba": "Lista para Ariba",
+				"sent": "Enviada a Ariba",
+				"paid": "Pagada",
+				"short": "Corto o faltante",
+				"exposure": "Exposición PBCC",
+				"ariba_open": "Ariba, sin pagar"
+			}
 		}
 	},
 	"log": {
@@ -3093,7 +3191,14 @@
 			"batch": "Lote PBCC",
 			"pbcc_paid": "PBCC pagó",
 			"installer_paid": "Instalador pagado",
-			"amount": "Pagado $"
+			"amount": "Pagado $",
+			"po": "PO #",
+			"with_ivu": "Monto + IVU",
+			"ariba_sent": "Enviado a Ariba",
+			"claro_paid": "Pagado por Claro",
+			"claro_amount": "Claro $",
+			"short": "Faltante $",
+			"days_pbcc_claro": "Días PBCC a Claro"
 		},
 		"date_by": "Columna de fecha",
 		"from": "Desde",
@@ -3136,6 +3241,57 @@
 		"from": "De {{name}} · {{date}}",
 		"open": "Abrir",
 		"download": "Descargar"
+	},
+	"comptroller_home": {
+		"title": "Inicio",
+		"greeting": "Hola, {{name}}",
+		"brigades": "Pago a brigadas",
+		"installers": "Instaladores y Claro",
+		"not_live": "Aún no disponible",
+		"all_clear": "Todo al día",
+		"all_requests": "Todas las solicitudes de nómina",
+		"week": {
+			"title": "Esta semana",
+			"day": {
+				"mon": "Lunes",
+				"tue": "Martes",
+				"wed": "Miércoles",
+				"thu": "Jueves"
+			},
+			"items": {
+				"ewit": "Facturas EWIT",
+				"pbcc": "Lote PBCC",
+				"received": "Estado de cuenta de PBCC recibido",
+				"installer_pay": "Pagar instaladores",
+				"brigade_pay": "Pagar brigadas"
+			}
+		},
+		"tile": {
+			"payroll_to_pay": "Solicitudes de nómina por pagar",
+			"installer_week": "Semana de instaladores",
+			"ja_waiting_po": "Facturas JA esperando PO",
+			"ready_or_sent_not_paid": "Listas para Ariba / enviadas, sin pagar",
+			"short_or_missing": "Pagos cortos o faltantes",
+			"pbcc_exposure": "Exposición PBCC",
+			"retention_year": "Retención del 10% este año"
+		},
+		"part": {
+			"waiting_ewit": "{{count}} órdenes esperando EWIT",
+			"not_batched": "{{count}} facturas sin lote",
+			"batch_sent_this_week": {
+				"yes": "lote enviado esta semana",
+				"no": "lote aún sin enviar"
+			},
+			"installers_to_tick": "{{count}} instaladores por marcar"
+		},
+		"sub": {
+			"oldest": "más antigua {{count}} d",
+			"average": "promedio {{count}} d",
+			"short": "{{amount}} corto",
+			"missing": "{{count}} faltantes (60+ d)",
+			"ariba": "Ariba más antigua {{date}}",
+			"retention": "corridas de nómina enviadas · este año"
+		}
 	},
 	"brigade_stock": {
 		"title": "Reabastecimiento e inventario de brigadas",

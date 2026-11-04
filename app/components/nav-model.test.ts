@@ -143,28 +143,29 @@ describe("navGroupsFor", () => {
 			"arm_a",
 			"arm_b",
 			"money",
+			"brigades",
 			"installers",
-			"team",
+			"reports",
 			"stock",
 			"field",
 			"admin",
 		])
 	})
 
-	it("gives COMPTROLLER its own dashboard, one Payroll requests item, the log and an Installers group", () => {
+	it("gives COMPTROLLER its own dashboard, Brigade pay and list, Installers and Reports groups", () => {
 		expect(tos(navGroupsFor("COMPTROLLER"))).toEqual([
 			["overview", ["/comptroller"]],
-			["money", ["/comptroller/to-pay", "/comptroller/log"]],
+			["money", ["/comptroller/to-pay", "/comptroller/installers/pay"]],
+			["brigades", ["/comptroller/brigades", "/comptroller/pbcc-wires"]],
 			[
 				"installers",
 				[
 					"/comptroller/installers",
 					"/comptroller/installers/ewit",
 					"/comptroller/installers/batches",
-					"/comptroller/installers/pay",
 				],
 			],
-			["team", ["/comptroller/brigades"]],
+			["reports", ["/comptroller/log"]],
 		])
 	})
 
@@ -217,7 +218,7 @@ describe("isNavItemActive", () => {
 		)
 	})
 
-	it("keeps Payroll requests lit on the Paid tab and on a request page", () => {
+	it("keeps Brigade pay lit on the Paid tab and on a request page", () => {
 		expect(
 			isNavItemActive("/comptroller/to-pay", at("/comptroller/paid")),
 		).toBe(true)

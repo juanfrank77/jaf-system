@@ -105,13 +105,17 @@ async function status(r: unknown) {
 }
 
 describe("comptroller index loader", () => {
-	it("lists an open run (0/2) apart from a paid run", async () => {
-		const open = await seedRun(2)
-		const paid = await seedRun(1)
-		await db.payrollRunAccount.updateMany({
-			where: { payrollRunId: paid.run.id },
-			data: { paidAt: new Date(), paidById: paid.comptroller.id },
+	it("is Home: the to-pay tile counts an open run and links to its list", async () => {
+		mocks.requireRole.mockResolvedValue({
+			user: t.track("user", await seedUser({ role: "COMPTROLLER" })),
 		})
+		const before = await indexLoader({
+			request: new Request("http://localhost/comptroller"),
+			params: {},
+			context: {},
+		} as never)
+		await seedRun(2)
+		const paid = await seedRun(1)
 		await db.payrollRun.update({
 			where: { id: paid.run.id },
 			data: { paidAt: new Date(), paidById: paid.comptroller.id },
@@ -123,13 +127,12 @@ describe("comptroller index loader", () => {
 			context: {},
 		} as never)
 
-		const openRow = result.toPay.find((r) => r.id === open.run.id)
-		expect(openRow?.accounts.filter((a) => a.paidAt)).toHaveLength(0)
-		expect(openRow?.accounts).toHaveLength(2)
-		expect(result.paid.some((r) => r.id === open.run.id)).toBe(false)
-		const paidRow = result.paid.find((r) => r.id === paid.run.id)
-		expect(paidRow).toBeDefined()
-		expect(result.toPay.some((r) => r.id === paid.run.id)).toBe(false)
+		const tileOf = (r: typeof result) =>
+			r.home.tiles.find((x) => x.key === "payroll_to_pay")
+		// One open run added; the paid run is not counted.
+		expect((tileOf(result)?.count ?? 0) - (tileOf(before)?.count ?? 0)).toBe(1)
+		expect(tileOf(result)?.href).toBe("/comptroller/to-pay")
+		expect(result.home.week).toHaveLength(4)
 		expect(mocks.requireRole).toHaveBeenCalledWith(expect.anything(), [
 			"COMPTROLLER",
 			"ADMIN",

@@ -1,3 +1,4 @@
+import { claroStage } from "~/lib/claro-installer.server"
 import { db } from "~/lib/db.server"
 import {
 	chainDates,
@@ -132,6 +133,51 @@ export const INSTALLER_COLUMNS: LogColumn[] = [
 		type: "money",
 		total: true,
 	},
+	{
+		key: "po",
+		label: "PO #",
+		labelKey: "log.col.po",
+		type: "text",
+	},
+	{
+		key: "withIvu",
+		label: "Amount + IVU",
+		labelKey: "log.col.with_ivu",
+		type: "money",
+		total: true,
+	},
+	{
+		key: "aribaSent",
+		label: "Ariba sent",
+		labelKey: "log.col.ariba_sent",
+		type: "date",
+	},
+	{
+		key: "claroPaid",
+		label: "Claro paid",
+		labelKey: "log.col.claro_paid",
+		type: "date",
+	},
+	{
+		key: "claroAmount",
+		label: "Claro $",
+		labelKey: "log.col.claro_amount",
+		type: "money",
+		total: true,
+	},
+	{
+		key: "short",
+		label: "Short $",
+		labelKey: "log.col.short",
+		type: "money",
+		total: true,
+	},
+	{
+		key: "daysPbccClaro",
+		label: "Days PBCC→Claro",
+		labelKey: "log.col.days_pbcc_claro",
+		type: "number",
+	},
 	{ key: "status", label: "Status", labelKey: "log.col.status", type: "text" },
 ]
 
@@ -209,6 +255,23 @@ async function brigadeRows(): Promise<LogRow[]> {
 	return out
 }
 
+const cents = (v: { toString(): string } | number) =>
+	Math.round(Number(v) * 100)
+
+const CLARO_STATUS = {
+	no_po: "No PO",
+	ready_for_ariba: "Ready for Ariba",
+	sent: "Sent to Ariba",
+	paid: "Claro paid",
+	short: "Claro short",
+} as const
+
+/** Whole days between two `YYYY-MM-DD` Puerto Rico days; blank until both exist. */
+function daysBetween(from: string | null, to: string | null): number | null {
+	if (!from || !to) return null
+	return Math.round((Date.parse(to) - Date.parse(from)) / 86400000)
+}
+
 async function installerRows(): Promise<LogRow[]> {
 	const docs = await db.installCompletion.findMany({
 		where: { status: "SUBMITTED" },
@@ -220,6 +283,31 @@ async function installerRows(): Promise<LogRow[]> {
 			installerPayment: true,
 		},
 	})
+	// An invoice (and an installer payment) covers many orders: its money shows
+	// on one order row only, chosen over the whole set (earliest installed, then
+	// order #, then id) so it never depends on the view. A filter that hides that
+	// row omits the money.
+	const when = (c: (typeof docs)[number]) =>
+		(c.installedAt ?? c.submittedAt ?? c.createdAt).getTime()
+	const firstRowBy = (key: (c: (typeof docs)[number]) => string | null) => {
+		const first = new Map<string, (typeof docs)[number]>()
+		for (const c of docs) {
+			const k = key(c)
+			if (!k) continue
+			const cur = first.get(k)
+			if (
+				!cur ||
+				when(c) < when(cur) ||
+				(when(c) === when(cur) &&
+					(c.claroOrderNo < cur.claroOrderNo ||
+						(c.claroOrderNo === cur.claroOrderNo && c.id < cur.id)))
+			)
+				first.set(k, c)
+		}
+		return first
+	}
+	const moneyRow = firstRowBy((c) => c.ewitInvoiceId)
+	const paymentRow = firstRowBy((c) => c.installerPaymentId)
 	return docs.map((c) => {
 		const batch = c.ewitInvoice?.batch ?? null
 		const payment =
@@ -232,6 +320,20 @@ async function installerRows(): Promise<LogRow[]> {
 			day(c.ewitInvoice?.receivedAt),
 			day(payment?.paidAt),
 		])
+		const inv = c.ewitInvoice
+		const stage = inv ? claroStage(inv) : null
+		const claroPaid = day(inv?.claroPaidAt)
+		const showMoney =
+			!!c.ewitInvoiceId && moneyRow.get(c.ewitInvoiceId)?.id === c.id
+		const withCents = inv?.claroTotal == null ? null : cents(inv.claroTotal)
+		const paidCents = inv?.claroPaidNet == null ? null : cents(inv.claroPaidNet)
+		const shortCents =
+			claroPaid &&
+			withCents != null &&
+			paidCents != null &&
+			paidCents < withCents
+				? withCents - paidCents
+				: null
 		const installed = day(c.installedAt ?? c.submittedAt ?? c.createdAt)
 		const status: string = payment
 			? "Closed"
@@ -242,6 +344,11 @@ async function installerRows(): Promise<LogRow[]> {
 					: c.ewitInvoice
 						? "Waiting for PBCC"
 						: "Waiting for EWIT"
+		const pbccDone = !!(payment || inv?.receivedAt)
+		const claroText =
+			stage && pbccDone && !inv?.heldAt
+				? `${CLARO_STATUS[stage]}${shortCents != null && inv?.shortAcceptedAt ? " (short accepted)" : ""}`
+				: null
 		return {
 			id: c.id,
 			order: c.claroOrderNo,
@@ -254,8 +361,19 @@ async function installerRows(): Promise<LogRow[]> {
 			sold,
 			received,
 			paid,
-			amount: payment ? Number(payment.amount) : null,
-			status,
+			// One payment pays several orders: its amount counts once.
+			amount:
+				payment && paymentRow.get(payment.id)?.id === c.id
+					? Number(payment.amount)
+					: null,
+			po: inv?.poNumber ?? null,
+			withIvu: !showMoney || withCents == null ? null : withCents / 100,
+			aribaSent: day(inv?.aribaSentAt),
+			claroPaid,
+			claroAmount: !showMoney || paidCents == null ? null : paidCents / 100,
+			short: !showMoney || shortCents == null ? null : shortCents / 100,
+			daysPbccClaro: daysBetween(sold, claroPaid),
+			status: claroText ? `${status} · ${claroText}` : status,
 		} satisfies Record<string, LogCell> & { id: string }
 	})
 }

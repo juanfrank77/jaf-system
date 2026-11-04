@@ -1,4 +1,5 @@
 import fs from "node:fs/promises"
+import { extractText } from "unpdf"
 import { scheduleTotals } from "~/lib/bank-schedule"
 import {
 	generateScheduleXlsx,
@@ -6,6 +7,7 @@ import {
 } from "~/lib/bank-schedule-xlsx.server"
 import { db } from "~/lib/db.server"
 import { EWIT_INVOICE_LIMIT } from "~/lib/ewit-limits"
+import { type EwitRead, parseEwitLiquidation } from "~/lib/ewit-parse"
 import { zipPackage } from "~/lib/package-zip.server"
 import { puertoRicoDay } from "~/lib/payroll-run.server"
 import { getLcPbccAdvanceRate } from "~/lib/system-settings.server"
@@ -38,6 +40,7 @@ export type EwitErrorCode =
 	| "check_failed"
 	| "no_reason"
 	| "nothing_to_pay"
+	| "claro_started"
 	| "bad_amount"
 	| "undo_expired"
 
@@ -66,6 +69,8 @@ export type WarrantyDocRow = {
 	installerId: string
 	installerName: string
 	empNo: string | null
+	/** Claro's 5-digit installer # on EWIT invoices; null until Admin sets it. */
+	ewitInstallerNo: string | null
 	installedAt: Date
 	modem: string | null
 	/** The form photo, as a `/files` path; null when the installer saved none. */
@@ -104,6 +109,7 @@ export async function loadWarrantyDocs(
 			installerId: r.installer.id,
 			installerName: r.installer.name,
 			empNo: r.installer.installerProfile?.jafNumber ?? null,
+			ewitInstallerNo: r.installer.installerProfile?.ewitInstallerNo ?? null,
 			installedAt,
 			modem: r.serialInstalled,
 			photoPath: r.formPhotoPath,
@@ -116,7 +122,11 @@ export async function loadWarrantyDocs(
 
 // ── B2 · EWIT invoice ──────────────────────────────────────────────────
 
-const normNumber = (s: string) => s.trim().replace(/\s+/g, "")
+/** JA numbers are canonical "JA1616328" (the form a Payment Advice row normalises to). */
+const normNumber = (s: string) => {
+	const t = s.trim().replace(/\s+/g, "")
+	return /^JA-?\d/i.test(t) ? t.replace(/[^a-z0-9]/gi, "").toUpperCase() : t
+}
 
 /** The one open installer batch, created when there is none. */
 async function openBatchIn(tx: Tx, userId: string) {
@@ -130,6 +140,24 @@ async function openBatchIn(tx: Tx, userId: string) {
 
 export async function getOpenEwitBatch(userId: string) {
 	return db.$transaction((tx) => openBatchIn(tx, userId))
+}
+
+/**
+ * Pre-fill for the New EWIT invoice form: what the attached Liquidación
+ * Detallada says. A PDF that cannot be read gives all-null, so Carmen types it.
+ */
+export async function readEwitPdf(file: File): Promise<EwitRead> {
+	try {
+		const { text } = await extractText(
+			new Uint8Array(await file.arrayBuffer()),
+			{
+				mergePages: true,
+			},
+		)
+		return parseEwitLiquidation(text)
+	} catch {
+		return parseEwitLiquidation("")
+	}
 }
 
 export async function createEwitInvoice(opts: {
@@ -224,7 +252,8 @@ export async function createEwitInvoice(opts: {
 /**
  * Take an EWIT invoice back. Before its batch is closed it is removed and its
  * row leaves the batch; once the batch is sent it is held with a reason. Either
- * way the orders return to the warranty list and nothing is deleted.
+ * way the orders return to the warranty list and nothing is deleted. Refused
+ * once the invoice has a PO, went to Ariba or was paid by Claro.
  */
 export async function removeEwitInvoice(opts: {
 	invoiceId: string
@@ -238,6 +267,10 @@ export async function removeEwitInvoice(opts: {
 			include: { batch: true },
 		})
 		if (!inv || inv.voidedAt || inv.heldAt) throw new EwitError("not_found")
+		// Once Claro's side has started (PO, Ariba or Claro's payment) taking it
+		// back would hide that money from every Claro view and the Log.
+		if (inv.poNumber || inv.aribaSentAt || inv.claroPaidAt)
+			throw new EwitError("claro_started")
 		const sent = Boolean(inv.batch?.sentAt)
 		if (inv.batch?.closedAt && !sent) throw new EwitError("batch_closed")
 		if (sent && !reason) throw new EwitError("no_reason")
@@ -491,6 +524,7 @@ export type InstallerPayRow = {
 	installerId: string
 	installerName: string
 	empNo: string | null
+	ewitInstallerNo: string | null
 	jobs: number
 	orders: string[]
 }
@@ -517,6 +551,7 @@ export async function loadInstallerPayList(): Promise<InstallerPayRow[]> {
 			installerId: j.installerId,
 			installerName: j.installer.name,
 			empNo: j.installer.installerProfile?.jafNumber ?? null,
+			ewitInstallerNo: j.installer.installerProfile?.ewitInstallerNo ?? null,
 			jobs: 0,
 			orders: [],
 		}

@@ -1,0 +1,306 @@
+import fs from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
+import { db } from "~/lib/db.server"
+import { makeTracker, runToken, seedUser } from "~/test/helpers"
+
+const mocks = vi.hoisted(() => ({ requireRole: vi.fn() }))
+vi.mock("~/lib/permissions.server", () => ({ requireRole: mocks.requireRole }))
+
+import { action, loader } from "./_app.comptroller.installers.claro.invoices"
+
+const t = makeTracker()
+let dir: string
+let carmen: Awaited<ReturnType<typeof seedUser>>
+const prev = process.env.UPLOAD_DIR
+beforeAll(async () => {
+	dir = await fs.mkdtemp(path.join(os.tmpdir(), "claro-inv-route-"))
+	process.env.UPLOAD_DIR = dir
+	carmen = t.track("user", await seedUser({ role: "COMPTROLLER" }))
+	mocks.requireRole.mockResolvedValue({ user: carmen })
+})
+afterAll(async () => {
+	await t.cleanup()
+	if (prev === undefined) delete process.env.UPLOAD_DIR
+	else process.env.UPLOAD_DIR = prev
+	await fs.rm(dir, { recursive: true, force: true })
+})
+
+const mk = async (over: Record<string, unknown> = {}, sent = true) => {
+	const batch = sent
+		? await db.ewitBatch.create({
+				data: { createdById: carmen.id, sentAt: new Date() },
+			})
+		: null
+	if (batch) t.track("ewitBatch", { id: batch.id })
+	const inv = await db.ewitInvoice.create({
+		data: {
+			number: runToken("JA").replace(/[^A-Z0-9]/g, ""),
+			invoiceDate: new Date(),
+			total: 4871.55,
+			filePath: "/files/x.pdf",
+			createdById: carmen.id,
+			batchId: batch?.id ?? null,
+			...over,
+		} as never,
+	})
+	t.track("ewitInvoice", { id: inv.id })
+	return inv
+}
+
+const post = (fields: Record<string, string | string[] | File>) => {
+	const fd = new FormData()
+	for (const [k, v] of Object.entries(fields))
+		for (const x of Array.isArray(v) ? v : [v]) fd.append(k, x)
+	return action({
+		request: new Request("http://x/comptroller/installers/claro/invoices", {
+			method: "POST",
+			body: fd,
+		}),
+		params: {},
+		context: {},
+	} as never)
+}
+const pdfFile = () =>
+	new File([new TextEncoder().encode("%PDF-1.4 x")], "re.pdf", {
+		type: "application/pdf",
+	})
+const poFields = (id: string, total: string) => ({
+	intent: "add_po",
+	invoiceId: id,
+	poNumber: "4500123456",
+	poDate: "2026-10-20",
+	reprintTotal: total,
+	poFile: pdfFile(),
+})
+
+describe("Claro invoices page", () => {
+	it("refuses a non-comptroller role", async () => {
+		mocks.requireRole.mockRejectedValueOnce(new Response("no", { status: 403 }))
+		await expect(post({ intent: "mark_sent" })).rejects.toBeInstanceOf(Response)
+		mocks.requireRole.mockRejectedValueOnce(new Response("no", { status: 403 }))
+		await expect(
+			loader({
+				request: new Request("http://x/"),
+				params: {},
+				context: {},
+			} as never),
+		).rejects.toBeInstanceOf(Response)
+	})
+
+	it("adds a PO with the right total and re-matches waiting JA advice rows", async () => {
+		const inv = await mk()
+		const advice = await db.paymentAdvice.create({
+			data: {
+				adviceDate: new Date(),
+				total: 5066.41,
+				rowsTotal: 5066.41,
+				fileName: "a.pdf",
+				filePath: "/x",
+				fileHash: runToken("h"),
+				uploadedById: carmen.id,
+				lines: {
+					create: [
+						{
+							position: 0,
+							invoiceRef: inv.number,
+							amount: 5066.41,
+							withholding: 0,
+							discount: 0,
+							net: 5066.41,
+							result: "UNMATCHED",
+						},
+					],
+				},
+			},
+			include: { lines: true },
+		})
+		const res = (await post(poFields(inv.id, "5066.41"))) as {
+			errorKey?: string
+		}
+		expect(res.errorKey).toBeUndefined()
+		const after = await db.ewitInvoice.findUniqueOrThrow({
+			where: { id: inv.id },
+		})
+		expect(after.poNumber).toBe("4500123456")
+		expect(Number(after.claroTotal)).toBe(5066.41)
+		const line = await db.adviceLine.findUniqueOrThrow({
+			where: { id: advice.lines[0].id },
+		})
+		expect(line.result).toBe("MATCHED")
+		expect(line.ewitInvoiceId).toBe(inv.id)
+	})
+
+	it("a wrong total says what was expected and writes nothing", async () => {
+		const inv = await mk()
+		const res = (await post(poFields(inv.id, "4871.55"))) as {
+			errorKey?: string
+			expected?: string
+		}
+		expect(res.errorKey).toBe(
+			"installers.claro_invoices.errors.po_total_mismatch",
+		)
+		expect(res.expected).toBe("5,066.41")
+		const after = await db.ewitInvoice.findUniqueOrThrow({
+			where: { id: inv.id },
+		})
+		expect(after.poNumber).toBeNull()
+		expect(after.claroTotal).toBeNull()
+	})
+
+	it("marks several invoices sent in Ariba on the chosen date", async () => {
+		const a = await mk({ poNumber: "P1", claroTotal: 5066.41 })
+		const b = await mk({ poNumber: "P2", claroTotal: 5066.41 })
+		const res = (await post({
+			intent: "mark_sent",
+			invoiceIds: [a.id, b.id],
+			sentOn: "2026-10-25",
+		})) as { errorKey?: string }
+		expect(res.errorKey).toBeUndefined()
+		for (const id of [a.id, b.id]) {
+			const r = await db.ewitInvoice.findUniqueOrThrow({ where: { id } })
+			expect(r.aribaSentAt?.toISOString().slice(0, 10)).toBe("2026-10-25")
+			expect(r.aribaSentById).toBe(carmen.id)
+		}
+	})
+
+	it("reports nothing selected and a missing PO", async () => {
+		const none = (await post({
+			intent: "mark_sent",
+			sentOn: "2026-10-25",
+		})) as {
+			errorKey?: string
+		}
+		expect(none.errorKey).toBe("installers.claro_invoices.errors.none_selected")
+		const noPo = await mk()
+		const r = (await post({
+			intent: "mark_sent",
+			invoiceIds: [noPo.id],
+			sentOn: "2026-10-25",
+		})) as { errorKey?: string }
+		expect(r.errorKey).toBe("installers.claro_invoices.errors.no_po")
+	})
+
+	it("rejects bad input and writes nothing", async () => {
+		const inv = await mk()
+		const bad = async (over: Record<string, unknown>) => {
+			const res = (await post({
+				...poFields(inv.id, "5066.41"),
+				...over,
+			} as never)) as { errorKey?: string }
+			expect(res.errorKey).toBeDefined()
+			return res.errorKey
+		}
+		expect(await bad({ poDate: "2026-02-31" })).toMatch(/bad_input$/)
+		expect(await bad({ reprintTotal: "-5" })).toMatch(/bad_input$/)
+		expect(await bad({ reprintTotal: "0" })).toMatch(/bad_input$/)
+		expect(await bad({ reprintTotal: "abc" })).toMatch(/bad_input$/)
+		expect(await bad({ invoiceId: "" })).toMatch(/bad_input$/)
+		expect(await bad({ ivuRate: "-1" })).toMatch(/bad_input$/)
+		expect(await bad({ ivuRate: "25" })).toMatch(/bad_input$/)
+		expect(await bad({ ivuRate: "x" })).toMatch(/bad_input$/)
+		expect(
+			await bad({
+				poFile: new File(["not a pdf"], "x.pdf", { type: "text/plain" }),
+			}),
+		).toMatch(/not_pdf$/)
+		const after = await db.ewitInvoice.findUniqueOrThrow({
+			where: { id: inv.id },
+		})
+		expect(after.poNumber).toBeNull()
+	})
+
+	it("refuses forged or ineligible invoices", async () => {
+		const unsent = await mk({}, false)
+		const held = await mk({ heldAt: new Date() })
+		const voided = await mk({ voidedAt: new Date() })
+		for (const id of [unsent.id, held.id, voided.id, "nope"]) {
+			const r = (await post(poFields(id, "5066.41"))) as { errorKey?: string }
+			expect(r.errorKey).toMatch(/ineligible$/)
+			const s = (await post({
+				intent: "mark_sent",
+				invoiceIds: [id],
+				sentOn: "2026-10-25",
+			})) as { errorKey?: string }
+			expect(s.errorKey).toMatch(/ineligible$/)
+		}
+		const after = await db.ewitInvoice.findUniqueOrThrow({
+			where: { id: unsent.id },
+		})
+		expect(after.poNumber).toBeNull()
+		expect(after.aribaSentAt).toBeNull()
+	})
+
+	it("uses the PO's own IVU rate and says which rate it expected", async () => {
+		const inv = await mk()
+		const ok = (await post({
+			...poFields(inv.id, "5115.13"),
+			ivuRate: "5",
+		})) as { errorKey?: string }
+		expect(ok.errorKey).toBeUndefined()
+		const after = await db.ewitInvoice.findUniqueOrThrow({
+			where: { id: inv.id },
+		})
+		expect(Number(after.ivuRate)).toBe(0.05)
+		const other = await mk()
+		const bad = (await post({
+			...poFields(other.id, "5066.41"),
+			ivuRate: "5",
+		})) as { expected?: string; rate?: string }
+		expect(bad).toMatchObject({ expected: "5,115.13", rate: "5" })
+	})
+
+	it("loader lists only eligible invoices", async () => {
+		const live = await mk()
+		const unsent = await mk({}, false)
+		const res = (await loader({
+			request: new Request("http://x/"),
+			params: {},
+			context: {},
+		} as never)) as { rows: { id: string }[] }
+		const ids = res.rows.map((r) => r.id)
+		expect(ids).toContain(live.id)
+		expect(ids).not.toContain(unsent.id)
+	})
+})
+
+describe("?stage filter (from Carmen's Home)", () => {
+	it("short returns only short or overdue-unpaid rows; unknown value is no filter", async () => {
+		const short = await mk({
+			poNumber: "PO-S",
+			claroTotal: 5097.08,
+			aribaSentAt: new Date(),
+			claroPaidAt: new Date(),
+			claroPaidNet: 5059.63,
+		})
+		const missing = await mk({
+			poNumber: "PO-M",
+			claroTotal: 100,
+			aribaSentAt: new Date(Date.now() - 70 * 86_400_000),
+		})
+		const noPo = await mk()
+		const call = async (q: string) =>
+			(await loader({
+				request: new Request(
+					`http://x/comptroller/installers/claro/invoices${q}`,
+				),
+				params: {},
+				context: {},
+			} as never)) as { rows: { id: string; stage: string }[] }
+		const ids = async (q: string) => (await call(q)).rows.map((r) => r.id)
+
+		const shortIds = await ids("?stage=short")
+		expect(shortIds).toContain(short.id)
+		expect(shortIds).toContain(missing.id)
+		expect(shortIds).not.toContain(noPo.id)
+
+		const noPoIds = await ids("?stage=no_po")
+		expect(noPoIds).toContain(noPo.id)
+		expect(noPoIds).not.toContain(short.id)
+
+		expect(await ids("?stage=nonsense")).toEqual(
+			expect.arrayContaining([short.id, noPo.id]),
+		)
+	})
+})

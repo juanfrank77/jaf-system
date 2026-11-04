@@ -93,11 +93,24 @@ Total 1,540.54 (0.00 ) 0.00 1,540.54`
 			"M19-2949",
 			"M19-2902",
 			"M19-2950",
-			"JA-1616276",
+			"JA1616276",
 		])
 		expect(r.rows[3].net).toBe(1399.06)
 		expect(r.rows.reduce((s, x) => s + x.net, 0)).toBeCloseTo(1540.54, 2)
 		// A split date ("Junio 03,") has no year to read: the row keeps its amount.
 		expect(r.rows[2]).toMatchObject({ invoiceDate: null, net: 106.42 })
 	})
+})
+
+describe("parseAdvice JA refs", () => {
+	it.each(["JA1616328", "JA-1616328", "JA 1616328", "ja-1616328"])(
+		"reads %s as JA1616328",
+		(ref) => {
+			const r = parseAdvice(
+				`Oct. 09, 2026\n${ref} 5920042289 03.06.2026 5,066.41 (0.00) 0.00 5,066.41\nTotal 5,066.41`,
+			)
+			expect(r.rows).toHaveLength(1)
+			expect(r.rows[0]).toMatchObject({ invoiceRef: "JA1616328", net: 5066.41 })
+		},
+	)
 })

@@ -7,9 +7,12 @@ const STEPS = [
 	{ key: "batch", to: "/comptroller/installers/batches" },
 	{ key: "received", to: "/comptroller/installers/batches" },
 	{ key: "pay", to: "/comptroller/installers/pay" },
+	{ key: "po", to: "/comptroller/installers/claro/invoices" },
+	{ key: "ariba", to: "/comptroller/installers/claro/invoices" },
+	{ key: "claro", to: "/comptroller/installers/claro" },
 ] as const
 
-/** The five steps of Carmen's installer week; every installer screen carries it. */
+/** The eight steps of Carmen's installer week; every installer screen carries it. */
 export function InstallerStepper({
 	current,
 }: {
@@ -22,6 +25,9 @@ export function InstallerStepper({
 		batch: t("installers.stepper.batch"),
 		received: t("installers.stepper.received"),
 		pay: t("installers.stepper.pay"),
+		po: t("installers.stepper.po"),
+		ariba: t("installers.stepper.ariba"),
+		claro: t("installers.stepper.claro"),
 	}
 	return (
 		<ol className="flex flex-wrap gap-2 text-sm">

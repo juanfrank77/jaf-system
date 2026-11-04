@@ -80,7 +80,8 @@ export async function action({ request }: Route.ActionArgs) {
 			const key = {
 				no_reason: "installers.errors.no_reason",
 				batch_closed: "installers.errors.batch_closed",
-			}[e.code as "no_reason" | "batch_closed"]
+				claro_started: "installers.errors.claro_started",
+			}[e.code as "no_reason" | "batch_closed" | "claro_started"]
 			return data({ errorKey: key ?? "installers.errors.not_found" }, 400)
 		}
 		throw e

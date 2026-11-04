@@ -30,6 +30,9 @@ const pdf = (name = "invoice.pdf") =>
 	})
 const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000)
 
+// 5 digits with a leading zero, unique per run.
+const EWIT_NO = `0${String(Math.floor(Math.random() * 9000) + 1000)}`
+
 let carmen: Awaited<ReturnType<typeof seedUser>>
 let installer: Awaited<ReturnType<typeof seedInstaller>>
 let uploadDir: string
@@ -39,7 +42,11 @@ beforeAll(async () => {
 	uploadDir = await fs.mkdtemp("/tmp/ewit-test-")
 	process.env.UPLOAD_DIR = uploadDir
 	carmen = t.track("user", await seedUser({ role: "COMPTROLLER" }))
-	installer = await seedInstaller({ name: "A. Rosario", jafNumber: "1820" })
+	installer = await seedInstaller({
+		name: "A. Rosario",
+		jafNumber: "1820",
+		ewitInstallerNo: EWIT_NO,
+	})
 	t.track("user", installer.user)
 	t.track("van", installer.van)
 })
@@ -96,6 +103,7 @@ describe("warranty docs", () => {
 		expect(f).toMatchObject({
 			installerName: "A. Rosario",
 			empNo: "1820",
+			ewitInstallerNo: EWIT_NO,
 			stale: false,
 			duplicate: false,
 		})
@@ -191,6 +199,54 @@ describe("EWIT invoice", () => {
 				}),
 			),
 		).toBe("not_found")
+	})
+
+	it("refuses to take back an invoice once it has a PO, went to Ariba or was paid by Claro, and writes nothing", async () => {
+		for (const claro of [
+			{ poNumber: "4500123456" },
+			{ aribaSentAt: new Date() },
+			{ claroPaidAt: new Date() },
+		]) {
+			const a = await doc()
+			const made = await track(invoice({ completionIds: [a.id] }))
+			// Out of the shared open batch at once (other files close it), into a
+			// sent batch of its own, where a PO can exist.
+			const own = await db.ewitBatch.create({
+				data: {
+					createdById: carmen.id,
+					closedAt: new Date(),
+					sentAt: new Date(),
+				},
+			})
+			t.track("ewitBatch", { id: own.id })
+			await db.ewitInvoice.update({
+				where: { id: made.id },
+				data: { ...claro, batchId: own.id },
+			})
+			expect(
+				await code(
+					removeEwitInvoice({
+						invoiceId: made.id,
+						userId: carmen.id,
+						reason: "typed by mistake",
+					}),
+				),
+			).toBe("claro_started")
+			// Nothing written: not held, not voided, orders still on it.
+			expect(
+				await db.ewitInvoice.findUniqueOrThrow({ where: { id: made.id } }),
+			).toMatchObject({
+				voidedAt: null,
+				voidedById: null,
+				voidReason: null,
+				heldAt: null,
+				holdReason: null,
+			})
+			expect(
+				(await db.installCompletion.findUniqueOrThrow({ where: { id: a.id } }))
+					.ewitInvoiceId,
+			).toBe(made.id)
+		}
 	})
 })
 
@@ -288,7 +344,11 @@ describe("installer batch, statement and pay", () => {
 		const row = (await loadInstallerPayList()).find(
 			(r) => r.installerId === installer.user.id,
 		)
-		expect(row).toMatchObject({ jobs: 1, empNo: "1820" })
+		expect(row).toMatchObject({
+			jobs: 1,
+			empNo: "1820",
+			ewitInstallerNo: EWIT_NO,
+		})
 		expect(row?.orders).toEqual([jobs[0].claroOrderNo])
 
 		await payInstallers({

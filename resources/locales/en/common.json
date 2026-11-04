@@ -234,18 +234,20 @@
 			"warehouse_serials": "Serial register",
 			"warehouse_movements": "Movement log",
 			"comptroller_lists": "Lists from Lissette",
-			"comptroller_to_pay": "Payroll requests",
+			"comptroller_to_pay": "Brigade pay",
 			"comptroller_paid": "Paid runs",
 			"comptroller_warranty_docs": "Warranty docs",
 			"comptroller_ewit": "EWIT invoices",
 			"comptroller_pbcc_batches": "PBCC batches",
 			"comptroller_installer_pay": "Installer pay",
+			"comptroller_pbcc_wires": "PBCC wires",
 			"comptroller_log": "Ledger & reports",
 			"admin_reports": "Reports",
-			"comptroller_brigades": "Brigades",
+			"comptroller_brigades": "Brigade list",
 			"finance_payment_advice": "Payment Advice",
 			"finance_avisos": "Aviso records",
 			"finance_ledger": "Ledger & reports",
+			"comptroller_home": "Home",
 			"finance_returned": "Returned",
 			"supervisor_stock": "Restock & Brigade inventory",
 			"warehouse_brigade_stock": "Brigade restock"
@@ -285,6 +287,8 @@
 			"switch_to_light": "Switch to light theme"
 		},
 		"group": {
+			"brigades": "Brigades",
+			"reports": "Reports",
 			"installers": "Installers",
 			"arm_a": "Arm A · Paying our people",
 			"arm_b": "Arm B · Claro billing",
@@ -1131,6 +1135,7 @@
 		"add_submit": "Create User",
 		"update_role": "Update Role",
 		"save_areas": "Save Areas",
+		"save_ewit_no": "Save EWIT #",
 		"deactivate": "Deactivate",
 		"activate": "Activate",
 		"reset_password": "Reset Password",
@@ -1144,6 +1149,7 @@
 			"email": "Email",
 			"role": "Role",
 			"areas": "Areas",
+			"ewit_no": "EWIT #",
 			"active": "Active",
 			"actions": "Actions"
 		},
@@ -1165,6 +1171,8 @@
 			"cannot_deactivate_self": "You cannot deactivate your own account.",
 			"cannot_change_own_role": "You cannot change your own role.",
 			"update_invalid": "Valid user id and role are required.",
+			"ewit_no_invalid": "The EWIT installer # must be exactly 5 digits (e.g. 01821).",
+			"ewit_no_taken": "That EWIT installer # already belongs to another installer.",
 			"areas_require_supervisor": "Only supervisors can be assigned areas.",
 			"unknown_intent": "Unknown action."
 		}
@@ -2455,7 +2463,6 @@
 		"you_asked": "You asked: {{note}}",
 		"tab_to_pay": "To pay",
 		"tab_paid": "Paid",
-		"title": "Brigades · payroll",
 		"callout_title": "Your step",
 		"callout_body": "Open a request, pay each brigade in WinPay, then tick it here. The pay date starts as today; change it if you paid on another day. Finance sees each tick right away.",
 		"paid_button": "Paid",
@@ -2470,8 +2477,6 @@
 		"download_pdf": "Download request sheet (PDF)",
 		"request_title": "Payroll request · {{label}}",
 		"accounts_progress": "{{paid}} of {{total}} brigades",
-		"runs_to_pay": "Requests to pay",
-		"paid_runs": "Paid requests",
 		"col": {
 			"brigade": "Brigade",
 			"avisos": "Avisos",
@@ -2760,6 +2765,7 @@
 		"empty_applied": "No advice has been applied yet.",
 		"empty_unmatched": "No unmatched rows.",
 		"card_title": "Payment Advice · {{date}} · Ref {{ref}} · {{count}} rows · {{total}}",
+		"card_other_desk": "{{count}} rows on the other desk · {{total}}",
 		"total_ok": "Rows add up to the total",
 		"total_off": "Rows add to {{rows}}, not the total",
 		"summary": "Matched {{matched}} · Short paid {{short}} · Unmatched {{unmatched}} · Already paid {{already}}",
@@ -2769,6 +2775,8 @@
 		"invoice_number": "Invoice number",
 		"link": "Link",
 		"reason": "Reason",
+		"ja_check_hint": "No installer invoice with this number (or it is voided or on hold). Needs a person to check.",
+		"ja_check_no_po": "The installer invoice exists but has no PO yet. Add its PO and this row is matched.",
 		"accept_short": "Accept short pay",
 		"col": {
 			"invoice": "Invoice #",
@@ -2784,7 +2792,7 @@
 			"short": "Short paid {{diff}}",
 			"already_paid": "Already paid",
 			"unmatched": "Not in system",
-			"other_jaf": "Other JAF invoice"
+			"ja_check": "Needs a person to check"
 		},
 		"errors": {
 			"no_file": "Choose the advice PDF.",
@@ -2798,11 +2806,9 @@
 			"not_short": "This invoice is not short paid.",
 			"reason_required": "A reason is required to accept a short pay.",
 			"invoice_not_found": "No invoice with that number.",
-			"line_not_unmatched": "This row is already matched."
-		},
-		"other_jaf_title": "Other JAF invoices (JA-) - not tracked yet",
-		"other_jaf_body": "{{count}} rows in Claro's second invoice series. They are kept with the advice and counted in its total, but are not matched against our invoices yet.",
-		"other_jaf_summary": "Other JAF (JA-) {{count}} · {{total}}"
+			"line_not_unmatched": "This row is already matched.",
+			"not_ja_line": "This row is not an installer (JA) invoice."
+		}
 	},
 	"aviso_record": {
 		"source": {
@@ -2909,13 +2915,46 @@
 			"in_ariba_not_paid": "In Ariba, not paid"
 		}
 	},
+	"pbcc_wires": {
+		"title": "PBCC wires received",
+		"intro": "When PBCC wires the 80% advance for a batch, enter the date and the amount here. The app compares it with the advance less the $30 fee and flags any difference.",
+		"empty": "No batch has been sent to PBCC yet.",
+		"batch_label": "Batch #{{number}}",
+		"col": {
+			"batch": "Batch",
+			"sold": "Sold to PBCC (100%)",
+			"advance": "PBCC should advance (80%)",
+			"expected": "Expected wire (less $30 fee)",
+			"received": "Received (date · amount)",
+			"held": "Held by PBCC"
+		},
+		"date": "Date received",
+		"amount": "Amount",
+		"save": "Save",
+		"short": "short",
+		"over": "over",
+		"difference": "{{amount}} {{direction}} of the expected wire.",
+		"matches": "Matches the expected wire.",
+		"errors": {
+			"not_found": "That batch no longer exists.",
+			"not_sent": "This batch has not been sent to PBCC yet.",
+			"bad_amount": "Enter the amount that arrived, more than zero.",
+			"bad_date": "Enter a valid date that is not in the future."
+		}
+	},
 	"installers": {
 		"stepper": {
 			"warranty": "Warranty docs",
 			"ewit": "EWIT invoices",
 			"batch": "PBCC batch",
 			"received": "PBCC received",
-			"pay": "Pay & tick"
+			"pay": "Pay & tick",
+			"po": "PO + IVU",
+			"ariba": "Ariba",
+			"claro": "Claro paid"
+		},
+		"claro": {
+			"title": "Claro payments"
 		},
 		"warranty": {
 			"title": "Warranty docs",
@@ -2926,6 +2965,7 @@
 			"col_order": "Order #",
 			"col_installer": "Installer",
 			"col_emp": "Emp #",
+			"col_ewit_no": "EWIT #",
 			"col_installed": "Installed",
 			"col_modem": "Modem",
 			"col_photo": "Photo",
@@ -2978,6 +3018,10 @@
 			"save": "Save invoice",
 			"cancel": "Cancel",
 			"pdf_preview": "PDF preview",
+			"reading": "Reading the PDF…",
+			"read_ok": "Filled from the PDF. Check before saving.",
+			"read_none": "Could not read this PDF. Type the number, date and total.",
+			"read_mismatch": "Filled from the PDF, but its rows add up to {{lines}}, not the printed total. Check the total.",
 			"ticked": "{{count}} orders ticked"
 		},
 		"batches": {
@@ -3026,6 +3070,7 @@
 			"hint": "Pay in WinPay, then tick here. Only orders PBCC has paid for are listed.",
 			"col_installer": "Installer",
 			"col_emp": "Emp #",
+			"col_ewit_no": "EWIT #",
 			"col_jobs": "Jobs",
 			"col_orders": "Orders",
 			"col_amount": "Amount paid",
@@ -3059,10 +3104,63 @@
 			"check_failed": "The batch check is not green yet.",
 			"no_reason": "Write the reason first.",
 			"nothing_to_pay": "Nothing to pay for that selection. Reload the page.",
+			"claro_started": "This invoice already has a PO, went to Ariba or was paid by Claro, so it can't be taken back.",
 			"bad_amount": "Type the amount paid, more than 0.",
 			"undo_expired": "Only a payment ticked today can be undone.",
 			"invalid_date": "Use a date like 10/28/2026.",
 			"pick_installer": "Tick at least one installer."
+		},
+		"claro_invoices": {
+			"title": "Claro invoices",
+			"none": "None",
+			"col_number": "EWIT invoice #",
+			"col_date": "Invoice date",
+			"col_amount": "Amount",
+			"col_with_ivu": "Amount + IVU",
+			"col_status": "Status",
+			"stage": {
+				"no_po": "No PO yet",
+				"ready_for_ariba": "Ready for Ariba",
+				"sent": "Sent to Ariba",
+				"short": "Paid short",
+				"paid": "Paid"
+			},
+			"days_waiting_one": "{{count}} day waiting",
+			"days_waiting_other": "{{count}} days waiting",
+			"add_po": "Add PO",
+			"po_number": "PO #",
+			"po_date": "PO date",
+			"reprint_pdf": "Reprinted EWIT invoice (PDF)",
+			"reprint_total": "Reprinted total (with IVU)",
+			"save_po": "Save PO",
+			"sent_on": "Sent on",
+			"mark_sent": "Mark sent in Ariba",
+			"sent_on_date": "Sent {{date}}",
+			"overdue": "Sent {{date}} - over 60 days, follow up",
+			"short_by": "Short by {{amount}}",
+			"errors": {
+				"bad_input": "Fill in the PO number, PO date and reprinted total.",
+				"no_file": "Attach the reprinted EWIT invoice PDF.",
+				"not_pdf": "The reprint must be a PDF.",
+				"none_selected": "Select at least one invoice.",
+				"po_total_mismatch": "The reprinted total does not match: expected {{expected}} at {{rate}}% IVU.",
+				"not_found": "Invoice not found.",
+				"voided": "That invoice is voided or on hold.",
+				"already_sent": "Already sent to Ariba or paid.",
+				"no_po": "Add the PO first.",
+				"ineligible": "That invoice is not available: it must be sent to PBCC and not voided or on hold."
+			},
+			"ivu_rate": "IVU rate % (blank = 4)",
+			"filter_chip": "{{filter}} filter · clear",
+			"filter": {
+				"no_po": "Waiting for a PO",
+				"ready_for_ariba": "Ready for Ariba",
+				"sent": "Sent to Ariba",
+				"paid": "Paid",
+				"short": "Short or missing",
+				"exposure": "PBCC exposure",
+				"ariba_open": "Ariba, not paid"
+			}
 		}
 	},
 	"log": {
@@ -3093,7 +3191,14 @@
 			"batch": "PBCC batch",
 			"pbcc_paid": "PBCC paid",
 			"installer_paid": "Installer paid",
-			"amount": "Paid $"
+			"amount": "Paid $",
+			"po": "PO #",
+			"with_ivu": "Amount + IVU",
+			"ariba_sent": "Ariba sent",
+			"claro_paid": "Claro paid",
+			"claro_amount": "Claro $",
+			"short": "Short $",
+			"days_pbcc_claro": "Days PBCC to Claro"
 		},
 		"date_by": "Date column",
 		"from": "From",
@@ -3136,6 +3241,57 @@
 		"from": "From {{name}} · {{date}}",
 		"open": "Open",
 		"download": "Download"
+	},
+	"comptroller_home": {
+		"title": "Home",
+		"greeting": "Hello, {{name}}",
+		"brigades": "Paying our brigades",
+		"installers": "Installers and Claro",
+		"not_live": "Not live yet",
+		"all_clear": "All clear",
+		"all_requests": "All payroll requests",
+		"week": {
+			"title": "This week",
+			"day": {
+				"mon": "Monday",
+				"tue": "Tuesday",
+				"wed": "Wednesday",
+				"thu": "Thursday"
+			},
+			"items": {
+				"ewit": "EWIT invoices",
+				"pbcc": "PBCC batch",
+				"received": "PBCC statement received",
+				"installer_pay": "Pay installers",
+				"brigade_pay": "Pay brigades"
+			}
+		},
+		"tile": {
+			"payroll_to_pay": "Payroll requests to pay",
+			"installer_week": "Installer week",
+			"ja_waiting_po": "JA invoices waiting for a PO",
+			"ready_or_sent_not_paid": "Ready for Ariba / sent, not paid",
+			"short_or_missing": "Short or missing payments",
+			"pbcc_exposure": "PBCC exposure",
+			"retention_year": "10% retention this year"
+		},
+		"part": {
+			"waiting_ewit": "{{count}} orders waiting for EWIT",
+			"not_batched": "{{count}} invoices not batched",
+			"batch_sent_this_week": {
+				"yes": "batch sent this week",
+				"no": "batch not sent yet"
+			},
+			"installers_to_tick": "{{count}} installers to tick"
+		},
+		"sub": {
+			"oldest": "oldest {{count}} d",
+			"average": "average {{count}} d",
+			"short": "{{amount}} short",
+			"missing": "{{count}} missing (60+ d)",
+			"ariba": "oldest Ariba {{date}}",
+			"retention": "sent payroll runs · this year"
+		}
 	},
 	"brigade_stock": {
 		"title": "Restock & Brigade inventory",

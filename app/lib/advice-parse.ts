@@ -8,7 +8,7 @@ export type AdviceRead = {
 	/** The total printed on the advice. */
 	total: number | null
 	rows: {
-		/** Normalised "M19-3423". */
+		/** Normalised "M19-3423" or "JA1616328". */
 		invoiceRef: string
 		voucher: string | null
 		invoiceDate: string | null
@@ -38,16 +38,17 @@ const MONTHS: Record<string, string> = {
 	dic: "12",
 }
 
-/** A JA- row is JAF's own second series: not one of the Claro invoices we track yet. */
-export const isOtherJafRef = (ref: string) => /^JA-/i.test(ref)
+/** A JA row is JAF's installer series ("JA1616328"), not an M19 invoice. */
+export const isOtherJafRef = (ref: string) => /^JA[-\s]?\d/i.test(ref)
 
 const money = (s: string) => Number(s.replace(/[,$\s]/g, ""))
 const MONEY_RE = /\$?\s*(?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2}/g
 // With a dash any run of digits is a number; without one it needs 3+ ("M193423").
-// "JA-1616276" is a second series Claro pays on the same advice: it is kept as a
-// row (it will not match one of our invoices) so the rows add up to the printed total.
+// "JA1616328" is Carmen's installer series Claro pays on the same advice: it may
+// be printed with a dash or space, and is normalised to "JA" + digits (the way
+// EwitInvoice.number is stored). A dashless ref needs the full 7 digits.
 const INVOICE_RE =
-	/\b(?:M\s?19\s?(?:[-–]\s?(\d{1,5})|(\d{3,5}))|JA\s?-\s?(\d{5,8}))\b/gi
+	/\b(?:M\s?19\s?(?:[-–]\s?(\d{1,5})|(\d{3,5}))|JA\s?(?:-\s?(\d{5,8})|(\d{7})))\b/gi
 
 /**
  * "Oct. 01, 2026" or "Agosto 28, 2026" -> "2026-10-01". The date is printed
@@ -100,7 +101,7 @@ export function parseAdvice(text: string): AdviceRead {
 					? [amounts[0], 0, 0, amounts[0]]
 					: [amounts[0], 0, 0, amounts[amounts.length - 1]]
 		rows.push({
-			invoiceRef: h[3] ? `JA-${h[3]}` : `M19-${h[1] ?? h[2]}`,
+			invoiceRef: h[3] || h[4] ? `JA${h[3] ?? h[4]}` : `M19-${h[1] ?? h[2]}`,
 			voucher,
 			invoiceDate: dateTok ? parseClaroDate(dateTok) : null,
 			amount,

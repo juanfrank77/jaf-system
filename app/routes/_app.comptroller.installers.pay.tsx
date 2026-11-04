@@ -161,6 +161,7 @@ export default function InstallerPay({
 										<th className="p-2" />
 										<th className="p-2">{t("installers.pay.col_installer")}</th>
 										<th className="p-2">{t("installers.pay.col_emp")}</th>
+										<th className="p-2">{t("installers.pay.col_ewit_no")}</th>
 										<th className="p-2 text-right">
 											{t("installers.pay.col_jobs")}
 										</th>
@@ -189,6 +190,9 @@ export default function InstallerPay({
 											</td>
 											<td className="p-2">{r.installerName}</td>
 											<td className="p-2 font-mono">{r.empNo ?? "—"}</td>
+											<td className="p-2 font-mono">
+												{r.ewitInstallerNo ?? "—"}
+											</td>
 											<td className="p-2 text-right">{r.jobs}</td>
 											<td className="p-2 font-mono text-xs">
 												{r.orders.join(" · ")}

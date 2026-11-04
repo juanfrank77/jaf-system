@@ -2,6 +2,7 @@ import fs from "node:fs/promises"
 import { getDocumentProxy } from "unpdf"
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 import { db } from "~/lib/db.server"
+import { formatLogCell } from "~/lib/log-view"
 import {
 	makeTracker,
 	runToken,
@@ -173,5 +174,210 @@ describe("Carmen's Log", () => {
 			args(req("", { method: "POST", body: form })),
 		)) as { data: { errorKey: string } }
 		expect(res.data.errorKey).toBe("log.errors.empty")
+	})
+
+	it("shows the Claro columns: PO, Ariba, Claro paid, short, days, and sums the money", async () => {
+		as(carmen)
+		const tok = `CL${runToken("c").replace(/\D/g, "").slice(-6)}`
+		const noon = (d: string) => new Date(`${d}T16:00:00Z`)
+		const batch = await db.ewitBatch.create({
+			data: { createdById: carmen.id, sentAt: noon("2026-07-07") },
+		})
+		t.track("ewitBatch", { id: batch.id })
+		const mk = async (
+			suffix: string,
+			over: Record<string, unknown>,
+		): Promise<void> => {
+			const inv = await db.ewitInvoice.create({
+				data: {
+					number: `${tok}${suffix}`,
+					invoiceDate: noon("2026-07-01"),
+					total: 4600,
+					filePath: "/files/x.pdf",
+					createdById: carmen.id,
+					batchId: batch.id,
+					receivedAt: noon("2026-07-10"),
+					poNumber: "4500518065",
+					aribaSentAt: noon("2026-07-27"),
+					claroPaidAt: noon("2026-10-09"),
+					...over,
+				} as never,
+			})
+			t.track("ewitInvoice", { id: inv.id })
+			t.track(
+				"installCompletion",
+				await db.installCompletion.create({
+					data: {
+						idempotencyKey: runToken("IDK"),
+						claroOrderNo: `${tok}${suffix}`,
+						installerId: installer.user.id,
+						vanId: installer.van.id,
+						status: "SUBMITTED",
+						address: "x",
+						installedAt: noon("2026-07-01"),
+						submittedAt: noon("2026-07-01"),
+						ewitInvoiceId: inv.id,
+					},
+				}),
+			)
+		}
+		await mk("A", { claroTotal: 5066.41, claroPaidNet: 5066.41 })
+		await mk("B", { claroTotal: 5097.08, claroPaidNet: 5059.63 })
+		const res = await logLoader(args(req(`tab=installers&q=${tok}`)))
+		const rows = res.groups.flatMap((g) => g.rows)
+		const a = rows.find((r) => r.order === `${tok}A`)
+		const b = rows.find((r) => r.order === `${tok}B`)
+		expect(a).toMatchObject({
+			sold: "2026-07-07",
+			po: "4500518065",
+			aribaSent: "2026-07-27",
+			claroPaid: "2026-10-09",
+			daysPbccClaro: 94,
+			claroAmount: 5066.41,
+			withIvu: 5066.41,
+			short: null,
+		})
+		expect(b).toMatchObject({
+			claroAmount: 5059.63,
+			withIvu: 5097.08,
+			short: 37.45,
+		})
+		expect(b?.status).toContain("Claro short")
+		expect(res.totals.withIvu).toBeCloseTo(10163.49, 2)
+		expect(res.totals.claroAmount).toBeCloseTo(10126.04, 2)
+		expect(res.totals.short).toBeCloseTo(37.45, 2)
+		const keys = res.columns.map((c) => c.key)
+		const from = keys.indexOf("amount") + 1
+		expect(keys.slice(from, from + 7)).toEqual([
+			"po",
+			"withIvu",
+			"aribaSent",
+			"claroPaid",
+			"claroAmount",
+			"short",
+			"daysPbccClaro",
+		])
+	})
+
+	it("counts an invoice's money once when it covers several orders, and keeps blanks blank", async () => {
+		as(carmen)
+		const tok = `MO${runToken("m").replace(/\D/g, "").slice(-6)}`
+		const noon = (d: string) => new Date(`${d}T16:00:00Z`)
+		const batch = await db.ewitBatch.create({
+			data: { createdById: carmen.id, sentAt: noon("2026-07-07") },
+		})
+		t.track("ewitBatch", { id: batch.id })
+		const inv = await db.ewitInvoice.create({
+			data: {
+				number: `${tok}I`,
+				invoiceDate: noon("2026-07-01"),
+				total: 4600,
+				filePath: "/files/x.pdf",
+				createdById: carmen.id,
+				batchId: batch.id,
+				receivedAt: noon("2026-07-10"),
+				poNumber: "4500518065",
+				aribaSentAt: noon("2026-07-27"),
+				claroPaidAt: noon("2026-10-09"),
+				claroTotal: 5097.08,
+				claroPaidNet: 5059.63,
+			} as never,
+		})
+		t.track("ewitInvoice", { id: inv.id })
+		const comp = async (suffix: string, day: string, ewit: string | null) =>
+			t.track(
+				"installCompletion",
+				await db.installCompletion.create({
+					data: {
+						idempotencyKey: runToken("IDK"),
+						claroOrderNo: `${tok}${suffix}`,
+						installerId: installer.user.id,
+						vanId: installer.van.id,
+						status: "SUBMITTED",
+						address: "x",
+						installedAt: noon(day),
+						submittedAt: noon(day),
+						ewitInvoiceId: ewit,
+					},
+				}),
+			)
+		await comp("B", "2026-07-03", inv.id)
+		await comp("A", "2026-07-02", inv.id)
+		await comp("Z", "2026-07-04", null)
+		const res = await logLoader(args(req(`tab=installers&q=${tok}`)))
+		const rows = res.groups.flatMap((g) => g.rows)
+		const money = ["withIvu", "claroAmount", "short"]
+		const shown = rows.filter((r) => money.some((k) => r[k] != null))
+		expect(shown.map((r) => r.order)).toEqual([`${tok}A`])
+		expect(shown[0]).toMatchObject({
+			withIvu: 5097.08,
+			claroAmount: 5059.63,
+			short: 37.45,
+		})
+		const b = rows.find((r) => r.order === `${tok}B`)
+		expect(b).toMatchObject({ po: "4500518065", daysPbccClaro: 94 })
+		expect(res.totals.withIvu).toBeCloseTo(5097.08, 2)
+		expect(res.totals.claroAmount).toBeCloseTo(5059.63, 2)
+		expect(res.totals.short).toBeCloseTo(37.45, 2)
+
+		const blank = rows.find((r) => r.order === `${tok}Z`)
+		const blankKeys = [
+			"po",
+			"withIvu",
+			"aribaSent",
+			"claroPaid",
+			"claroAmount",
+			"short",
+			"daysPbccClaro",
+		]
+		for (const k of blankKeys) {
+			expect(blank?.[k]).toBeNull()
+			const col = res.columns.find((c) => c.key === k)
+			if (!col) throw new Error(k)
+			expect(formatLogCell(col, blank?.[k] ?? null)).toBe("—")
+		}
+	})
+
+	it("counts an installer payment once when it pays several orders", async () => {
+		as(carmen)
+		const tok = `PP${runToken("p").replace(/\D/g, "").slice(-6)}`
+		const noon = (d: string) => new Date(`${d}T16:00:00Z`)
+		const payment = await db.installerPayment.create({
+			data: {
+				installerId: installer.user.id,
+				paidAt: noon("2026-07-20"),
+				amount: 850,
+				paidById: carmen.id,
+			},
+		})
+		t.track("installerPayment", { id: payment.id })
+		const comp = async (suffix: string, day: string) =>
+			t.track(
+				"installCompletion",
+				await db.installCompletion.create({
+					data: {
+						idempotencyKey: runToken("IDK"),
+						claroOrderNo: `${tok}${suffix}`,
+						installerId: installer.user.id,
+						vanId: installer.van.id,
+						status: "SUBMITTED",
+						address: "x",
+						installedAt: noon(day),
+						submittedAt: noon(day),
+						installerPaymentId: payment.id,
+					},
+				}),
+			)
+		await comp("B", "2026-07-03")
+		await comp("A", "2026-07-02")
+		const res = await logLoader(args(req(`tab=installers&q=${tok}`)))
+		const rows = res.groups.flatMap((g) => g.rows)
+		expect(rows).toHaveLength(2)
+		// Both orders show they were paid; the amount sits on the earliest one.
+		expect(rows.every((r) => r.paid === "2026-07-20")).toBe(true)
+		const withAmount = rows.filter((r) => r.amount != null)
+		expect(withAmount.map((r) => r.order)).toEqual([`${tok}A`])
+		expect(withAmount[0].amount).toBe(850)
+		expect(res.totals.amount).toBeCloseTo(850, 2)
 	})
 })

@@ -225,20 +225,23 @@ model User {
   bankSchedulesGenerated BankSchedule[] @relation("BankScheduleGenerator")
   bankSchedulesSent      BankSchedule[] @relation("BankScheduleSender")
   bankSchedulesClosed    BankSchedule[] @relation("BankScheduleCloser")
+  bankSchedulesWired     BankSchedule[] @relation("BankScheduleWire")
 
   packetSends PacketSend[] @relation("PacketSendSender")
 
   // Carmen's installer money loop and her reports
-  ewitInvoicesCreated   EwitInvoice[]      @relation("EwitInvoiceCreator")
-  ewitInvoicesVoided    EwitInvoice[]      @relation("EwitInvoiceVoider")
-  ewitBatchesCreated    EwitBatch[]        @relation("EwitBatchCreator")
-  ewitBatchesClosed     EwitBatch[]        @relation("EwitBatchCloser")
-  ewitBatchesSent       EwitBatch[]        @relation("EwitBatchSender")
-  ewitBatchesReceived   EwitBatch[]        @relation("EwitBatchReceiver")
-  installerPaymentsOwed InstallerPayment[] @relation("InstallerPaid")
-  installerPaymentsMade InstallerPayment[] @relation("InstallerPaymentMaker")
-  reportsSent           SentReport[]       @relation("ReportSender")
-  reportsReceived       SentReport[]       @relation("ReportReceiver")
+  ewitInvoicesCreated       EwitInvoice[]      @relation("EwitInvoiceCreator")
+  ewitInvoicesVoided        EwitInvoice[]      @relation("EwitInvoiceVoider")
+  ewitInvoicesAribaSent     EwitInvoice[]      @relation("EwitInvoiceAribaSender")
+  ewitInvoicesShortAccepted EwitInvoice[]      @relation("EwitInvoiceShortAcceptor")
+  ewitBatchesCreated        EwitBatch[]        @relation("EwitBatchCreator")
+  ewitBatchesClosed         EwitBatch[]        @relation("EwitBatchCloser")
+  ewitBatchesSent           EwitBatch[]        @relation("EwitBatchSender")
+  ewitBatchesReceived       EwitBatch[]        @relation("EwitBatchReceiver")
+  installerPaymentsOwed     InstallerPayment[] @relation("InstallerPaid")
+  installerPaymentsMade     InstallerPayment[] @relation("InstallerPaymentMaker")
+  reportsSent               SentReport[]       @relation("ReportSender")
+  reportsReceived           SentReport[]       @relation("ReportReceiver")
 
   @@index([role, active])
 }
@@ -767,24 +770,27 @@ model PaymentAdvice {
 }
 
 model AdviceLine {
-  id          String        @id @default(cuid())
-  adviceId    String
-  advice      PaymentAdvice @relation(fields: [adviceId], references: [id], onDelete: Cascade)
-  position    Int
-  invoiceRef  String // as read, e.g. "M19-3423"
-  voucher     String?
-  invoiceDate DateTime?
-  amount      Decimal
-  withholding Decimal
-  discount    Decimal
-  net         Decimal
-  result      AdviceResult
-  invoiceId   String?
-  invoice     ClaroInvoice? @relation(fields: [invoiceId], references: [id])
-  appliedAt   DateTime?
+  id            String        @id @default(cuid())
+  adviceId      String
+  advice        PaymentAdvice @relation(fields: [adviceId], references: [id], onDelete: Cascade)
+  position      Int
+  invoiceRef    String // as read, e.g. "M19-3423"
+  voucher       String?
+  invoiceDate   DateTime?
+  amount        Decimal
+  withholding   Decimal
+  discount      Decimal
+  net           Decimal
+  result        AdviceResult
+  invoiceId     String?
+  invoice       ClaroInvoice? @relation(fields: [invoiceId], references: [id])
+  ewitInvoiceId String?
+  ewitInvoice   EwitInvoice?  @relation(fields: [ewitInvoiceId], references: [id])
+  appliedAt     DateTime?
 
   @@index([adviceId])
   @@index([invoiceId])
+  @@index([ewitInvoiceId])
 }
 
 model PreCertSheet {
@@ -988,13 +994,15 @@ model Van {
 }
 
 model InstallerProfile {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  user      User     @relation("InstallerProfile", fields: [userId], references: [id], onDelete: Cascade)
-  jafNumber String
-  toaNumber String   @unique
-  region    String?
-  createdAt DateTime @default(now())
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation("InstallerProfile", fields: [userId], references: [id], onDelete: Cascade)
+  jafNumber       String
+  // Claro's 5-digit installer number on EWIT invoices (e.g. 01821); format checked in app code.
+  ewitInstallerNo String?  @unique
+  toaNumber       String   @unique
+  region          String?
+  createdAt       DateTime @default(now())
 
   @@map("installer_profile")
 }
@@ -1242,25 +1250,31 @@ model RestockRequest {
 }
 
 model BankSchedule {
-  id            String    @id @default(cuid())
+  id               String    @id @default(cuid())
   // Given when the batch is closed (1, 2, 3 with no gaps), never when an empty
   // one is opened: null while the batch is open.
-  number        Int?      @unique
-  generatedAt   DateTime  @default(now())
-  generatedById String
-  generatedBy   User      @relation("BankScheduleGenerator", fields: [generatedById], references: [id])
-  advanceRate   Decimal
-  total         Decimal
-  advanceAmount Decimal
-  xlsxPath      String?
+  number           Int?      @unique
+  generatedAt      DateTime  @default(now())
+  generatedById    String
+  generatedBy      User      @relation("BankScheduleGenerator", fields: [generatedById], references: [id])
+  advanceRate      Decimal
+  total            Decimal
+  advanceAmount    Decimal
+  xlsxPath         String?
   // The PBCC batch: open until closed (by Lissette, or on its 100th packet),
   // closed until sent. `closedAt` null = the one open batch.
-  closedAt      DateTime?
-  closedById    String?
-  closedBy      User?     @relation("BankScheduleCloser", fields: [closedById], references: [id])
-  sentAt        DateTime?
-  sentById      String?
-  sentBy        User?     @relation("BankScheduleSender", fields: [sentById], references: [id])
+  closedAt         DateTime?
+  closedById       String?
+  closedBy         User?     @relation("BankScheduleCloser", fields: [closedById], references: [id])
+  sentAt           DateTime?
+  sentById         String?
+  sentBy           User?     @relation("BankScheduleSender", fields: [sentById], references: [id])
+  // What PBCC actually wired, typed by Carmen against the sent batch. The app
+  // compares it with advanceAmount less the wire fee and flags a difference.
+  wireReceivedAt   DateTime?
+  wireAmount       Decimal?
+  wireRecordedById String?
+  wireRecordedBy   User?     @relation("BankScheduleWire", fields: [wireRecordedById], references: [id])
 
   invoices JafInvoice[]
 
@@ -1394,7 +1408,27 @@ model EwitInvoice {
   // Order #s Carmen typed that have no warranty photo yet (saved, flagged).
   unmatchedOrderNos String[]   @default([])
 
+  // Claro half: the PO, IVU, Ariba submission and Claro's payment.
+  poNumber            String?
+  poDate              DateTime?
+  poFilePath          String?
+  ivuRate             Decimal?
+  ivuAmount           Decimal?
+  claroTotal          Decimal? // amount + IVU
+  aribaSentAt         DateTime?
+  aribaSentById       String?
+  aribaSentBy         User?     @relation("EwitInvoiceAribaSender", fields: [aribaSentById], references: [id])
+  claroPaidAt         DateTime?
+  claroPaidNet        Decimal?
+  claroBankRef        String?
+  shortAcceptedAt     DateTime?
+  // Why Carmen accepted a short Claro payment (required), and who.
+  shortAcceptedReason String?
+  shortAcceptedById   String?
+  shortAcceptedBy     User?     @relation("EwitInvoiceShortAcceptor", fields: [shortAcceptedById], references: [id])
+
   completions InstallCompletion[]
+  adviceLines AdviceLine[]
 
   @@index([batchId])
 }

@@ -70,6 +70,7 @@ export type NavLabelKey =
 	| "app_shell.nav.warehouse_serials"
 	| "app_shell.nav.warehouse_movements"
 	| "app_shell.nav.comptroller_lists"
+	| "app_shell.nav.comptroller_home"
 	| "app_shell.nav.comptroller_to_pay"
 	| "app_shell.nav.comptroller_paid"
 	| "app_shell.nav.comptroller_brigades"
@@ -78,6 +79,7 @@ export type NavLabelKey =
 	| "app_shell.nav.comptroller_pbcc_batches"
 	| "app_shell.nav.comptroller_installer_pay"
 	| "app_shell.nav.comptroller_log"
+	| "app_shell.nav.comptroller_pbcc_wires"
 	| "app_shell.nav.admin_reports"
 
 export type NavCount = { value: number; tone: "critical" | "neutral" }
@@ -90,7 +92,9 @@ export type NavGroupKey =
 	| "arm_a"
 	| "arm_b"
 	| "money"
+	| "brigades"
 	| "installers"
+	| "reports"
 	| "stock"
 	| "other"
 	| "field"
@@ -121,7 +125,9 @@ const GROUP_ORDER: NavGroupKey[] = [
 	"arm_a",
 	"arm_b",
 	"money",
+	"brigades",
 	"installers",
+	"reports",
 	"team",
 	"stock",
 	"other",
@@ -136,6 +142,8 @@ export const GROUP_LABEL_KEY: Record<NavGroupKey, GroupLabelKey | null> = {
 	arm_a: "app_shell.group.arm_a",
 	arm_b: "app_shell.group.arm_b",
 	money: "app_shell.group.money",
+	brigades: "app_shell.group.brigades",
+	reports: "app_shell.group.reports",
 	installers: "app_shell.group.installers",
 	stock: "app_shell.group.stock",
 	other: "app_shell.group.other",
@@ -267,7 +275,7 @@ const NAV_ITEMS: NavItem[] = [
 	},
 	{
 		to: "/comptroller",
-		labelKey: "app_shell.nav.dashboard",
+		labelKey: "app_shell.nav.comptroller_home",
 		icon: DashboardSquare01Icon,
 		group: "overview",
 		roles: ["COMPTROLLER"],
@@ -382,14 +390,21 @@ const NAV_ITEMS: NavItem[] = [
 		to: "/comptroller/brigades",
 		labelKey: "app_shell.nav.comptroller_brigades",
 		icon: UserGroup03Icon,
-		group: "team",
+		group: "brigades",
+		roles: ["COMPTROLLER", "ADMIN"],
+	},
+	{
+		to: "/comptroller/pbcc-wires",
+		labelKey: "app_shell.nav.comptroller_pbcc_wires",
+		icon: Invoice02Icon,
+		group: "brigades",
 		roles: ["COMPTROLLER", "ADMIN"],
 	},
 	{
 		to: "/comptroller/log",
 		labelKey: "app_shell.nav.comptroller_log",
 		icon: Invoice02Icon,
-		group: "money",
+		group: "reports",
 		roles: ["COMPTROLLER", "ADMIN"],
 	},
 	{
@@ -418,7 +433,7 @@ const NAV_ITEMS: NavItem[] = [
 		to: "/comptroller/installers/pay",
 		labelKey: "app_shell.nav.comptroller_installer_pay",
 		icon: Wallet01Icon,
-		group: "installers",
+		group: "money",
 		roles: ["COMPTROLLER", "ADMIN"],
 	},
 

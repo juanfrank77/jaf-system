@@ -142,32 +142,33 @@ describe("Finance review screen", () => {
 		expect(acceptButton()).toBeDisabled()
 	})
 
-	it("shows the service lines with their IVU rate and the split totals", async ({
+	it("shows the service lines and the subtotal only: PBCC has no tax", async ({
 		renderStub,
 	}) => {
 		await mount(renderStub, data())
 		const row = screen.getByRole("row", { name: /600X/ })
-		expect(within(row).getByText("4%")).toBeInTheDocument()
 		expect(within(row).getByText("$200.00")).toBeInTheDocument()
-		expect(screen.getByText("IVU 4%").nextSibling).toHaveTextContent("$8.00")
-		expect(screen.getByText("IVU 11.5%").nextSibling).toHaveTextContent("$5.75")
-		expect(screen.getByText("Total").nextSibling).toHaveTextContent("$263.75")
+		expect(screen.getByText("Subtotal").nextSibling).toHaveTextContent(
+			"$250.00",
+		)
+		expect(screen.queryByText(/IVU/)).not.toBeInTheDocument()
+		expect(screen.queryByText("Total")).not.toBeInTheDocument()
 	})
 
 	it("opens a document on the page, shows photo thumbnails, and offers Download all", async ({
 		renderStub,
 	}) => {
 		await mount(renderStub, data())
-		// The JAF invoice is already in the viewer.
+		// The viewer opens on the Aviso, not the first document in the list.
 		expect(document.querySelector("iframe")).toHaveAttribute(
 			"src",
-			"/files/packets/j1.pdf",
+			"/files/aviso-docs/aviso.pdf#page=1&zoom=100",
 		)
 		const openButtons = screen.getAllByRole("button", { name: "Open" })
-		await userEvent.click(openButtons[1])
+		await userEvent.click(openButtons[0])
 		expect(document.querySelector("iframe")).toHaveAttribute(
 			"src",
-			"/files/aviso-docs/aviso.pdf",
+			"/files/packets/j1.pdf#page=1&zoom=100",
 		)
 		await userEvent.click(screen.getByRole("button", { name: "a.jpg" }))
 		expect(document.querySelector("iframe")).toBeNull()

@@ -167,10 +167,7 @@ export function PbccBatchDetailView({
 				)}
 				<ul className="divide-y text-sm">
 					{parts.map((p) => (
-						<li
-							key={p.part}
-							className="flex flex-wrap items-center justify-between gap-2 py-2"
-						>
+						<li key={p.part} className="space-y-2 py-3">
 							<div>
 								<p className="font-medium">
 									{t("pbcc_batch.detail.part", { part: p.part, of: p.of })}
@@ -201,7 +198,7 @@ export function PbccBatchDetailView({
 								<a
 									href={`/finance/schedules/${batch.id}/package/${p.part}`}
 									download
-									className={buttonVariants({ variant: "outline", size: "sm" })}
+									className={buttonVariants({ size: "sm" })}
 								>
 									{t("pbcc_batch.detail.download")}
 								</a>
@@ -217,7 +214,7 @@ export function PbccBatchDetailView({
 					<a
 						href={`/finance/schedules/${batch.id}/xlsx`}
 						download
-						className="text-sm underline"
+						className={buttonVariants({ variant: "outline", size: "sm" })}
 					>
 						{t("pbcc_batch.detail.download_excel")}
 					</a>
@@ -255,8 +252,6 @@ export function PbccBatchDetailView({
 							<th className="p-2">{t("pbcc_batch.col.brigade")}</th>
 							<th className="p-2">{t("pbcc_batch.col.invoice")}</th>
 							<th className="p-2 text-right">{t("pbcc_batch.col.subtotal")}</th>
-							<th className="p-2 text-right">{t("pbcc_batch.col.ivu")}</th>
-							<th className="p-2 text-right">{t("pbcc_batch.col.total")}</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -271,12 +266,6 @@ export function PbccBatchDetailView({
 								<td className="p-2 font-mono">{r.invoiceNumber}</td>
 								<td className="p-2 text-right font-mono">
 									{formatMoney(r.subtotal)}
-								</td>
-								<td className="p-2 text-right font-mono">
-									{formatMoney(r.ivu)}
-								</td>
-								<td className="p-2 text-right font-mono">
-									{formatMoney(r.total)}
 								</td>
 							</tr>
 						))}

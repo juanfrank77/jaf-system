@@ -96,6 +96,11 @@ export default function FinancePayrollRequest({
 			</div>
 			<FinanceStepRail current="LISTS" />
 			<ReceiptBanner />
+			{req.status === "draft" && (
+				<Callout tone="warn" title={t("finance_payroll.draft_banner_title")}>
+					{t("finance_payroll.draft_banner_body")}
+				</Callout>
+			)}
 			<Callout title={t("finance_flow.callout.lists_title")}>
 				{req.status === "draft"
 					? t("finance_payroll.draft_body")

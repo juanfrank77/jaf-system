@@ -1,6 +1,8 @@
+import { Pdf01Icon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 import type { ParseKeys } from "i18next"
 import type { ComponentProps } from "react"
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, Link } from "react-router"
 import { BrigadeStockTracked } from "~/components/brigade-stock-tracked"
@@ -70,23 +72,79 @@ function VerifyPacket({ loaderData, actionData }: ViewProps) {
 		photos: false,
 		precert: false,
 	})
-	// The document open in the viewer on this page: first present PDF to start.
+	// The document open in the viewer, opening on the Aviso. `page` and `zoom`
+	// ride on the PDF URL fragment, which the browser's own viewer honours.
+	const docLabel = (d: (typeof packetDocs)[number]) =>
+		t(d.label as ParseKeys, { number: doc.avisoNumber ?? "—" })
 	const [viewing, setViewing] = useState<{
 		href: string
 		kind: "pdf" | "image"
 		label: string
+		tab: string
 	} | null>(() => {
-		const first = packetDocs.find((d) => d.href && d.key !== "photos")
+		// The Aviso is what Lissette checks the lines against: open on it.
+		const first =
+			packetDocs.find((d) => d.key === "aviso" && d.href) ??
+			packetDocs.find((d) => d.href && d.key !== "photos")
 		return first?.href
 			? {
 					href: first.href,
 					kind: "pdf",
-					label: t(first.label as ParseKeys, {
-						number: doc.avisoNumber ?? "—",
-					}),
+					label: docLabel(first),
+					tab: first.key,
 				}
 			: null
 	})
+	const [page, setPage] = useState(1)
+	const [zoom, setZoom] = useState(100)
+	const [ticked, setTicked] = useState<Set<string>>(new Set())
+	const [leftPct, setLeftPct] = useState(45)
+	const splitRef = useRef<HTMLDivElement>(null)
+	const openDoc = (v: NonNullable<typeof viewing>) => {
+		setViewing(v)
+		setPage(1)
+	}
+	const openFile = (f: { href: string; name: string }, tab: string) =>
+		openDoc({
+			href: f.href,
+			kind: /\.pdf$/i.test(f.name) ? "pdf" : "image",
+			label: f.name,
+			tab,
+		})
+	// Services and materials share a page of the Claro Aviso: send the viewer
+	// back to the Aviso and to that page.
+	const jumpToAviso = (toPage: number) => {
+		const aviso = packetDocs.find((d) => d.key === "aviso" && d.href)
+		if (aviso?.href)
+			setViewing({
+				href: aviso.href,
+				kind: "pdf",
+				label: docLabel(aviso),
+				tab: "aviso",
+			})
+		setPage(toPage)
+	}
+	const toggleTick = (key: string) =>
+		setTicked((prev) => {
+			const next = new Set(prev)
+			if (!next.delete(key)) next.add(key)
+			return next
+		})
+	const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+		e.currentTarget.setPointerCapture(e.pointerId)
+	}
+	const onDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+		if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
+		const r = splitRef.current?.getBoundingClientRect()
+		if (!r) return
+		setLeftPct(
+			Math.min(70, Math.max(30, ((e.clientX - r.left) / r.width) * 100)),
+		)
+	}
+	const viewerSrc =
+		viewing?.kind === "pdf"
+			? `${viewing.href}#page=${page}&zoom=${zoom}`
+			: viewing?.href
 	// Accept stays grey until all four are ticked and no document is missing.
 	const readyToAccept =
 		CHECKS.every((c) => checks[c]) && packetDocs.every((d) => d.href)
@@ -137,437 +195,620 @@ function VerifyPacket({ loaderData, actionData }: ViewProps) {
 				{t("finance_flow.callout.packets_body")}
 			</Callout>
 
-			<div className="bg-card border rounded-lg p-4 space-y-3">
-				<h2 className="text-sm font-medium">
-					{t("finance_verify.preview.heading")}
-				</h2>
-				{invoiceLines.length === 0 ? (
-					<p className="text-sm text-muted-foreground">
-						{t("finance_verify.preview.empty")}
-					</p>
-				) : (
-					<div className="overflow-x-auto">
-						<table className="w-full text-sm">
-							<thead>
-								<tr className="border-b text-left text-xs text-muted-foreground">
-									<th className="p-2">{t("finance_verify.preview.code")}</th>
-									<th className="p-2">{t("finance_verify.preview.service")}</th>
-									<th className="p-2 text-right">
-										{t("finance_verify.preview.qty")}
-									</th>
-									<th className="p-2 text-right">
-										{t("finance_verify.preview.price")}
-									</th>
-									<th className="p-2 text-right">
-										{t("finance_verify.preview.ivu")}
-									</th>
-									<th className="p-2 text-right">
-										{t("finance_verify.preview.amount")}
-									</th>
-								</tr>
-							</thead>
-							<tbody>
-								{invoiceLines.map((l) => (
-									<tr key={l.serviceCodeId} className="border-b last:border-0">
-										<td className="p-2 font-mono">{l.claroCode}</td>
-										<td className="p-2">{l.name}</td>
-										<td className="p-2 text-right font-mono">{l.qty}</td>
-										<td className="p-2 text-right font-mono">
-											{formatUnitPrice(l.unitPrice)}
-										</td>
-										<td className="p-2 text-right font-mono">
-											{`${+(l.ivuRate * 100).toFixed(2)}%`}
-										</td>
-										<td className="p-2 text-right font-mono">
-											{formatMoney(l.lineAmount)}
-										</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
+			<div
+				ref={splitRef}
+				className="grid grid-cols-1 items-start gap-4 min-[1100px]:[grid-template-columns:var(--cols)]"
+				style={
+					{
+						"--cols": `${leftPct}fr 8px ${100 - leftPct}fr`,
+					} as React.CSSProperties
+				}
+			>
+				<div className="min-w-0 space-y-4">
+					<div className="bg-card border rounded-lg p-4 space-y-3">
+						<h2 className="text-sm font-medium">
+							{t("finance_verify.preview.heading")}
+						</h2>
+						{invoiceLines.length === 0 ? (
+							<p className="text-sm text-muted-foreground">
+								{t("finance_verify.preview.empty")}
+							</p>
+						) : (
+							<div className="overflow-x-auto">
+								<table className="w-full text-sm">
+									<thead>
+										<tr className="border-b text-left text-xs text-muted-foreground">
+											<th className="w-8 p-2" />
+											<th className="p-2">
+												{t("finance_verify.preview.code")}
+											</th>
+											<th className="p-2">
+												{t("finance_verify.preview.service")}
+											</th>
+											<th className="p-2 text-right">
+												{t("finance_verify.preview.qty")}
+											</th>
+											<th className="p-2 text-right">
+												{t("finance_verify.preview.price")}
+											</th>
+											<th className="p-2 text-right">
+												{t("finance_verify.preview.amount")}
+											</th>
+										</tr>
+									</thead>
+									<tbody>
+										{invoiceLines.map((l) => (
+											<tr
+												key={l.serviceCodeId}
+												className={`cursor-pointer border-b last:border-0 hover:bg-muted/50 ${ticked.has(`s:${l.serviceCodeId}`) ? "opacity-60" : ""}`}
+												onClick={() => jumpToAviso(2)}
+											>
+												<td
+													className="p-2"
+													onClick={(e) => e.stopPropagation()}
+													onKeyDown={(e) => e.stopPropagation()}
+												>
+													<Checkbox
+														checked={ticked.has(`s:${l.serviceCodeId}`)}
+														onCheckedChange={() =>
+															toggleTick(`s:${l.serviceCodeId}`)
+														}
+														aria-label={l.claroCode}
+													/>
+												</td>
+												<td className="p-2 font-mono">{l.claroCode}</td>
+												<td className="p-2">{l.name}</td>
+												<td className="p-2 text-right font-mono">{l.qty}</td>
+												<td className="p-2 text-right font-mono">
+													{formatUnitPrice(l.unitPrice)}
+												</td>
+												<td className="p-2 text-right font-mono">
+													{formatMoney(l.lineAmount)}
+												</td>
+											</tr>
+										))}
+									</tbody>
+								</table>
+							</div>
+						)}
+						<dl className="ml-auto grid w-full max-w-xs grid-cols-2 gap-x-4 text-sm">
+							<dt className="text-muted-foreground">
+								{t("finance_verify.subtotal")}
+							</dt>
+							<dd className="text-right font-mono">
+								{formatMoney(totals.subtotal)}
+							</dd>
+						</dl>
 					</div>
-				)}
-				<dl className="ml-auto grid w-full max-w-xs grid-cols-2 gap-x-4 text-sm">
-					<dt className="text-muted-foreground">
-						{t("finance_verify.subtotal")}
-					</dt>
-					<dd className="text-right font-mono">
-						{formatMoney(totals.subtotal)}
-					</dd>
-					<dt className="text-muted-foreground">{t("finance_verify.ivu_4")}</dt>
-					<dd className="text-right font-mono">{formatMoney(totals.ivu4)}</dd>
-					<dt className="text-muted-foreground">
-						{t("finance_verify.ivu_115")}
-					</dt>
-					<dd className="text-right font-mono">{formatMoney(totals.ivu115)}</dd>
-					<dt className="font-medium">{t("finance_verify.total")}</dt>
-					<dd className="text-right font-mono font-medium">
-						{formatMoney(totals.total)}
-					</dd>
-				</dl>
-			</div>
 
-			<div className="bg-card border rounded-lg p-4 space-y-2">
-				<div className="flex items-center justify-between gap-2">
-					<h2 className="text-sm font-medium">
-						{t("finance_verify.packet.heading")}
-					</h2>
-					<a
-						href={`/finance/verify/${doc.id}/packet.zip`}
-						className={buttonVariants({ variant: "outline", size: "sm" })}
-					>
-						{t("finance_verify.packet.download_all")}
-					</a>
-				</div>
-				<ul className="divide-y text-sm">
-					{packetDocs.map((d) => (
-						<li
-							key={d.key}
-							className="flex flex-wrap items-center justify-between gap-2 py-2"
-						>
-							<div>
-								<p className="font-medium">
-									{t(d.label as ParseKeys, {
-										number: doc.avisoNumber ?? "—",
+					<div className="bg-card border rounded-lg p-4 space-y-2">
+						<h2 className="text-sm font-medium">
+							{t("finance_verify.materials_heading")}
+						</h2>
+						{/* biome-ignore lint/a11y/useKeyWithClickEvents lint/a11y/noStaticElementInteractions: a pointer shortcut; the Jump-to buttons in the viewer do the same by keyboard */}
+						<div className="cursor-pointer" onClick={() => jumpToAviso(2)}>
+							<MaterialLineItems
+								serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
+								initialItems={materials}
+								readOnly
+							/>
+						</div>
+					</div>
+
+					<div className="bg-card border rounded-lg p-4 space-y-2">
+						<div className="flex items-center justify-between gap-2">
+							<h2 className="text-sm font-medium">
+								{t("finance_verify.packet.heading")}
+							</h2>
+							<a
+								href={`/finance/verify/${doc.id}/packet.zip`}
+								className={buttonVariants({
+									variant: "outline",
+									size: "sm",
+									className:
+										"border-status-warn/40 bg-status-warn-soft text-status-warn hover:bg-status-warn-soft/70",
+								})}
+							>
+								{t("finance_verify.packet.download_all")}
+							</a>
+						</div>
+						<ul className="divide-y text-sm">
+							{packetDocs.map((d) => (
+								<li
+									key={d.key}
+									className="flex flex-wrap items-center justify-between gap-2 py-2"
+								>
+									<div>
+										<p className="font-medium">
+											{t(d.label as ParseKeys, {
+												number: doc.avisoNumber ?? "—",
+											})}
+										</p>
+										{d.href ? (
+											<p className="text-xs text-muted-foreground">
+												{t(
+													`finance_verify.packet.${d.key}_detail` as ParseKeys,
+													{
+														file: d.detail,
+														count: Number(d.detail) || 0,
+													},
+												)}
+											</p>
+										) : (
+											<Badge variant="warn">
+												{t("finance_verify.packet.missing")}
+											</Badge>
+										)}
+									</div>
+									{d.files.length === 0 && d.href && (
+										<Button
+											type="button"
+											variant="outline"
+											size="sm"
+											onClick={() =>
+												openDoc({
+													href: d.href as string,
+													kind: "pdf",
+													label: docLabel(d),
+													tab: d.key,
+												})
+											}
+										>
+											{t("finance_verify.packet.open")}
+										</Button>
+									)}
+									{d.files.length > 0 && (
+										<ul className="flex w-full flex-wrap gap-2">
+											{d.files.map((f) => (
+												<li key={f.href}>
+													<button
+														type="button"
+														onClick={() => openFile(f, "photos")}
+														className="block overflow-hidden rounded-md border hover:border-primary"
+														aria-label={f.name}
+													>
+														{/\.pdf$/i.test(f.name) ? (
+															<span className="flex size-20 flex-col items-center justify-center gap-1 bg-muted p-1 text-muted-foreground">
+																<HugeiconsIcon
+																	icon={Pdf01Icon}
+																	className="size-7"
+																	aria-hidden="true"
+																/>
+																<span className="w-full truncate text-center text-[10px]">
+																	{f.name}
+																</span>
+															</span>
+														) : (
+															<img
+																src={f.href}
+																alt={f.name}
+																loading="lazy"
+																className="size-20 object-cover"
+															/>
+														)}
+													</button>
+												</li>
+											))}
+										</ul>
+									)}
+								</li>
+							))}
+						</ul>
+					</div>
+
+					{avisoDiscrepancy && (
+						<Callout title={t("finance_verify.aviso_discrepancy_title")}>
+							<ul className="list-disc pl-5">
+								{avisoDiscrepancy.differences.map((d) => (
+									<li key={d.claroCode}>
+										{t("docs_review.aviso_difference", {
+											workOrder: d.workOrder,
+											aviso: d.aviso,
+											name: d.name,
+										})}
+									</li>
+								))}
+							</ul>
+							{avisoDiscrepancy.note && (
+								<p className="mt-1">
+									{t("docs_review.aviso_discrepancy_note", {
+										note: avisoDiscrepancy.note,
 									})}
 								</p>
-								{d.href ? (
-									<p className="text-xs text-muted-foreground">
-										{t(`finance_verify.packet.${d.key}_detail` as ParseKeys, {
-											file: d.detail,
-											count: Number(d.detail) || 0,
-										})}
-									</p>
-								) : (
-									<Badge variant="warn">
-										{t("finance_verify.packet.missing")}
-									</Badge>
-								)}
+							)}
+						</Callout>
+					)}
+
+					<div className="grid grid-cols-1 gap-4">
+						<div className="bg-card border rounded-lg p-4 space-y-3">
+							<h2 className="text-sm font-medium">
+								{t("finance_verify.jaf_invoice")}
+							</h2>
+							{(pricedInvoiceHref || packetHref || legacyPricedHref) && (
+								<div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+									{pricedInvoiceHref && (
+										<a
+											href={pricedInvoiceHref}
+											target="_blank"
+											rel="noreferrer"
+											className="text-accent-text underline"
+										>
+											{t("finance_verify.priced_invoice")}
+										</a>
+									)}
+									{packetHref && (
+										<a
+											href={packetHref}
+											target="_blank"
+											rel="noreferrer"
+											className="text-accent-text underline"
+										>
+											{t("finance_verify.claro_packet")}
+										</a>
+									)}
+									{legacyPricedHref && (
+										<a
+											href={legacyPricedHref}
+											target="_blank"
+											rel="noreferrer"
+											className="text-accent-text underline"
+										>
+											{t("finance_verify.priced_invoice_legacy")}
+										</a>
+									)}
+								</div>
+							)}
+							<div className="text-sm space-y-1">
+								<p>
+									<span className="text-muted-foreground">
+										{t("finance_verify.job_type")}:
+									</span>{" "}
+									{doc.jobType}
+								</p>
+								<p>
+									<span className="text-muted-foreground">
+										{t("finance_verify.address")}:
+									</span>{" "}
+									{doc.jobAddressActual || doc.jobAddressEstimated}
+								</p>
+								<p>
+									<span className="text-muted-foreground">
+										{t("finance_verify.aviso_number")}:
+									</span>{" "}
+									{doc.avisoNumber || "—"}
+								</p>
+								<p>
+									<span className="text-muted-foreground">
+										{t("finance_verify.work_dates")}:
+									</span>{" "}
+									{`${formatShortDate(workDates.from)} – ${formatShortDate(workDates.to)}`}
+								</p>
+								<p>
+									<span className="text-muted-foreground">
+										{t("finance_verify.supervisor")}:
+									</span>{" "}
+									{loaderData.doc.supervisor?.name}
+								</p>
 							</div>
-							{d.files.length === 0 && d.href && (
-								<Button
-									type="button"
-									variant="outline"
-									size="sm"
-									onClick={() =>
-										setViewing({
-											href: d.href as string,
-											kind: "pdf",
-											label: t(d.label as ParseKeys, {
-												number: doc.avisoNumber ?? "—",
-											}),
-										})
-									}
-								>
-									{t("finance_verify.packet.open")}
-								</Button>
-							)}
-							{d.files.length > 0 && (
-								<ul className="flex w-full flex-wrap gap-2">
-									{d.files.map((f) => (
-										<li key={f.href}>
-											<button
-												type="button"
-												onClick={() =>
-													setViewing({
-														href: f.href,
-														kind: "image",
-														label: f.name,
-													})
-												}
-												className="block overflow-hidden rounded-md border hover:border-primary"
-												aria-label={f.name}
-											>
-												<img
-													src={f.href}
-													alt={f.name}
-													loading="lazy"
-													className="size-20 object-cover"
-												/>
-											</button>
-										</li>
-									))}
-								</ul>
-							)}
-						</li>
-					))}
-				</ul>
-			</div>
-
-			{viewing && (
-				<div className="bg-card border rounded-lg p-4 space-y-2">
-					<div className="flex items-center justify-between gap-2">
-						<h2 className="text-sm font-medium">{viewing.label}</h2>
-						<a
-							href={viewing.href}
-							target="_blank"
-							rel="noreferrer"
-							className="text-xs text-accent-text underline"
-						>
-							{t("finance_verify.packet.open_new_tab")}
-						</a>
+						</div>
+						<BrigadeStockTracked lines={brigadeStock} />
 					</div>
-					{viewing.kind === "pdf" ? (
-						<iframe
-							key={viewing.href}
-							src={viewing.href}
-							title={viewing.label}
-							className="h-[70vh] w-full rounded-md border"
-						/>
-					) : (
-						<img
-							src={viewing.href}
-							alt={viewing.label}
-							className="mx-auto max-h-[70vh] rounded-md"
-						/>
-					)}
-				</div>
-			)}
 
-			{avisoDiscrepancy && (
-				<Callout title={t("finance_verify.aviso_discrepancy_title")}>
-					<ul className="list-disc pl-5">
-						{avisoDiscrepancy.differences.map((d) => (
-							<li key={d.claroCode}>
-								{t("docs_review.aviso_difference", {
-									workOrder: d.workOrder,
-									aviso: d.aviso,
-									name: d.name,
-								})}
-							</li>
-						))}
-					</ul>
-					{avisoDiscrepancy.note && (
-						<p className="mt-1">
-							{t("docs_review.aviso_discrepancy_note", {
-								note: avisoDiscrepancy.note,
+					{returnState.returned && returnState.createdAt && (
+						<Callout
+							tone="danger"
+							title={t("returned_packet.finance.verify_returned")}
+						>
+							<span className="block whitespace-pre-line">
+								{returnState.note}
+							</span>
+							<span className="block text-xs">
+								{new Date(returnState.createdAt).toLocaleString()}
+							</span>
+						</Callout>
+					)}
+					{returnState.resentPending && returnState.resentAt && (
+						<Callout tone="info" title={t("returned_packet.resent")}>
+							{t("returned_packet.finance.resent_on", {
+								date: new Date(returnState.resentAt).toLocaleString(),
 							})}
-						</p>
+							{returnState.note && (
+								<span className="block whitespace-pre-line">
+									{returnState.note}
+								</span>
+							)}
+						</Callout>
 					)}
-				</Callout>
-			)}
+					{notReleased && (
+						<Callout
+							tone="warn"
+							title={t("returned_packet.finance.not_released")}
+						>
+							{t("returned_packet.finance.not_released_body")}
+						</Callout>
+					)}
 
-			<div className="grid grid-cols-1 gap-4">
-				<div className="bg-card border rounded-lg p-4 space-y-3">
-					<h2 className="text-sm font-medium">
-						{t("finance_verify.jaf_invoice")}
-					</h2>
-					{(pricedInvoiceHref || packetHref || legacyPricedHref) && (
-						<div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-							{pricedInvoiceHref && (
-								<a
-									href={pricedInvoiceHref}
-									target="_blank"
-									rel="noreferrer"
-									className="text-accent-text underline"
+					{sendBackNotes.length > 0 && (
+						<div className="bg-status-warn-soft border border-status-warn/30 rounded-lg p-4 space-y-2">
+							<h3 className="text-sm font-medium text-status-warn">
+								{t("finance_verify.previous_send_backs")}
+							</h3>
+							{sendBackNotes.map((note) => (
+								<p
+									key={`${note.createdAt}-${note.note}`}
+									className="text-sm text-status-warn"
 								>
-									{t("finance_verify.priced_invoice")}
-								</a>
+									{new Date(note.createdAt).toLocaleString()} — {note.note}
+								</p>
+							))}
+						</div>
+					)}
+
+					{stage === "TO_VERIFY" && doc.status !== "LC_REQUEST_GENERATED" && (
+						<div className="sticky bottom-0 z-10 -mx-1 border-t bg-card p-2 shadow-card">
+							<div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+								{canVerify ? (
+									<>
+										<Form
+											method="post"
+											className="flex flex-wrap items-center gap-x-4 gap-y-2"
+										>
+											<input type="hidden" name="intent" value="verify" />
+											{CHECKS.map((c) => (
+												<label
+													key={c}
+													htmlFor={`check_${c}`}
+													className="flex items-center gap-1.5 text-sm"
+												>
+													<Checkbox
+														id={`check_${c}`}
+														name={`check_${c}`}
+														checked={checks[c]}
+														onCheckedChange={(v) =>
+															setChecks((prev) => ({
+																...prev,
+																[c]: v === true,
+															}))
+														}
+													/>
+													{t(`finance_verify.checks.${c}`)}
+												</label>
+											))}
+											{noteOpen && (
+												<Input
+													name="note"
+													className="h-8 w-56"
+													placeholder={t(
+														"finance_verify.verify_note_placeholder",
+													)}
+												/>
+											)}
+											<Button
+												type="submit"
+												size="sm"
+												disabled={cannotVerify || !readyToAccept}
+											>
+												{t("finance_verify.accept_next")}
+											</Button>
+										</Form>
+										<button
+											type="button"
+											className="text-sm text-muted-foreground underline"
+											onClick={() => setNoteOpen((v) => !v)}
+										>
+											{t("finance_verify.add_note")}
+										</button>
+									</>
+								) : (
+									<p className="text-sm text-muted-foreground">
+										{t(
+											returnState.returned
+												? "returned_packet.finance.cannot_verify_returned"
+												: "returned_packet.finance.cannot_act_unreleased",
+										)}
+									</p>
+								)}
+								{canSendBack &&
+									(sendBackOpen ? (
+										<Form method="post" className="flex items-center gap-2">
+											<input type="hidden" name="intent" value="send_back" />
+											<Input
+												name="note"
+												required
+												className="h-8 w-64"
+												placeholder={t("finance_verify.send_back_placeholder")}
+											/>
+											<Button
+												type="submit"
+												size="sm"
+												variant="outline"
+												className="border-2 border-status-warn bg-status-warn-soft font-medium text-status-warn hover:bg-status-warn-soft/70"
+											>
+												{t("finance_verify.send_back")}
+											</Button>
+										</Form>
+									) : (
+										<Button
+											type="button"
+											size="sm"
+											variant="outline"
+											className="border-2 border-status-warn bg-status-warn-soft font-medium text-status-warn hover:bg-status-warn-soft/70"
+											onClick={() => setSendBackOpen(true)}
+										>
+											{t("finance_verify.send_back")}
+										</Button>
+									))}
+							</div>
+							{cannotVerify && (
+								<p className="mt-1 text-sm text-status-warn">
+									{t("finance_verify.cannot_verify_hint")}
+								</p>
 							)}
-							{packetHref && (
-								<a
-									href={packetHref}
-									target="_blank"
-									rel="noreferrer"
-									className="text-accent-text underline"
-								>
-									{t("finance_verify.claro_packet")}
-								</a>
-							)}
-							{legacyPricedHref && (
-								<a
-									href={legacyPricedHref}
-									target="_blank"
-									rel="noreferrer"
-									className="text-accent-text underline"
-								>
-									{t("finance_verify.priced_invoice_legacy")}
-								</a>
+							{error?.errorKey && (
+								<p className="mt-1 text-sm text-status-danger">
+									{t(error.errorKey as ParseKeys)}
+								</p>
 							)}
 						</div>
 					)}
-					<div className="text-sm space-y-1">
-						<p>
-							<span className="text-muted-foreground">
-								{t("finance_verify.job_type")}:
-							</span>{" "}
-							{doc.jobType}
-						</p>
-						<p>
-							<span className="text-muted-foreground">
-								{t("finance_verify.address")}:
-							</span>{" "}
-							{doc.jobAddressActual || doc.jobAddressEstimated}
-						</p>
-						<p>
-							<span className="text-muted-foreground">
-								{t("finance_verify.aviso_number")}:
-							</span>{" "}
-							{doc.avisoNumber || "—"}
-						</p>
-						<p>
-							<span className="text-muted-foreground">
-								{t("finance_verify.work_dates")}:
-							</span>{" "}
-							{`${formatShortDate(workDates.from)} – ${formatShortDate(workDates.to)}`}
-						</p>
-						<p>
-							<span className="text-muted-foreground">
-								{t("finance_verify.supervisor")}:
-							</span>{" "}
-							{loaderData.doc.supervisor?.name}
-						</p>
-					</div>
-					<MaterialLineItems
-						serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
-						initialItems={materials}
-						readOnly
-					/>
 				</div>
-				<BrigadeStockTracked lines={brigadeStock} />
-			</div>
-
-			{returnState.returned && returnState.createdAt && (
-				<Callout
-					tone="danger"
-					title={t("returned_packet.finance.verify_returned")}
-				>
-					<span className="block whitespace-pre-line">{returnState.note}</span>
-					<span className="block text-xs">
-						{new Date(returnState.createdAt).toLocaleString()}
-					</span>
-				</Callout>
-			)}
-			{returnState.resentPending && returnState.resentAt && (
-				<Callout tone="info" title={t("returned_packet.resent")}>
-					{t("returned_packet.finance.resent_on", {
-						date: new Date(returnState.resentAt).toLocaleString(),
-					})}
-					{returnState.note && (
-						<span className="block whitespace-pre-line">
-							{returnState.note}
-						</span>
-					)}
-				</Callout>
-			)}
-			{notReleased && (
-				<Callout tone="warn" title={t("returned_packet.finance.not_released")}>
-					{t("returned_packet.finance.not_released_body")}
-				</Callout>
-			)}
-
-			{sendBackNotes.length > 0 && (
-				<div className="bg-status-warn-soft border border-status-warn/30 rounded-lg p-4 space-y-2">
-					<h3 className="text-sm font-medium text-status-warn">
-						{t("finance_verify.previous_send_backs")}
-					</h3>
-					{sendBackNotes.map((note) => (
-						<p
-							key={`${note.createdAt}-${note.note}`}
-							className="text-sm text-status-warn"
-						>
-							{new Date(note.createdAt).toLocaleString()} — {note.note}
-						</p>
-					))}
-				</div>
-			)}
-
-			{stage === "TO_VERIFY" && doc.status !== "LC_REQUEST_GENERATED" && (
-				<div className="sticky bottom-0 z-10 -mx-1 border-t bg-card p-2 shadow-card">
-					<div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-						{canVerify ? (
-							<>
-								<Form
-									method="post"
-									className="flex flex-wrap items-center gap-x-4 gap-y-2"
-								>
-									<input type="hidden" name="intent" value="verify" />
-									{CHECKS.map((c) => (
-										<label
-											key={c}
-											htmlFor={`check_${c}`}
-											className="flex items-center gap-1.5 text-sm"
-										>
-											<Checkbox
-												id={`check_${c}`}
-												name={`check_${c}`}
-												checked={checks[c]}
-												onCheckedChange={(v) =>
-													setChecks((prev) => ({ ...prev, [c]: v === true }))
-												}
-											/>
-											{t(`finance_verify.checks.${c}`)}
-										</label>
-									))}
-									{noteOpen && (
-										<Input
-											name="note"
-											className="h-8 w-56"
-											placeholder={t("finance_verify.verify_note_placeholder")}
-										/>
-									)}
+				{/* biome-ignore lint/a11y/useSemanticElements: a draggable, focusable splitter; <hr> cannot take focus or a value */}
+				<div
+					role="separator"
+					tabIndex={0}
+					aria-valuenow={Math.round(leftPct)}
+					aria-valuemin={30}
+					aria-valuemax={70}
+					onKeyDown={(e) => {
+						if (e.key === "ArrowLeft") setLeftPct((p) => Math.max(30, p - 5))
+						if (e.key === "ArrowRight") setLeftPct((p) => Math.min(70, p + 5))
+					}}
+					aria-orientation="vertical"
+					aria-label={t("finance_verify.viewer.divider")}
+					onPointerDown={startDrag}
+					onPointerMove={onDrag}
+					className="hidden h-full min-h-40 cursor-col-resize rounded bg-border hover:bg-primary min-[1100px]:block"
+				/>
+				<div className="min-w-0 min-[1100px]:sticky min-[1100px]:top-2">
+					<div className="space-y-2 rounded-lg border bg-card p-3">
+						<div className="flex flex-wrap items-center gap-1" role="tablist">
+							{packetDocs.map((d) => {
+								const first = d.files[0]
+								const target = first?.href ?? d.href
+								return (
 									<Button
-										type="submit"
+										key={d.key}
+										type="button"
+										role="tab"
+										aria-selected={viewing?.tab === d.key}
+										variant={viewing?.tab === d.key ? "default" : "outline"}
 										size="sm"
-										disabled={cannotVerify || !readyToAccept}
+										disabled={!target}
+										onClick={() =>
+											first
+												? openFile(first, d.key)
+												: openDoc({
+														href: d.href as string,
+														kind: "pdf",
+														label: docLabel(d),
+														tab: d.key,
+													})
+										}
 									>
-										{t("finance_verify.accept_next")}
+										{t(`finance_verify.viewer.tab_${d.key}` as ParseKeys)}
 									</Button>
-								</Form>
-								<button
-									type="button"
-									className="text-sm text-muted-foreground underline"
-									onClick={() => setNoteOpen((v) => !v)}
-								>
-									{t("finance_verify.add_note")}
-								</button>
+								)
+							})}
+						</div>
+						{viewing ? (
+							<>
+								<div className="flex flex-wrap items-center gap-2 text-xs">
+									<span className="font-medium">{viewing.label}</span>
+									{viewing.tab === "aviso" && (
+										<>
+											<span className="text-muted-foreground">
+												{t("finance_verify.viewer.jump_to")}
+											</span>
+											<Button
+												type="button"
+												variant="outline"
+												size="xs"
+												onClick={() => jumpToAviso(2)}
+											>
+												{t("finance_verify.viewer.services")}
+											</Button>
+											<Button
+												type="button"
+												variant="outline"
+												size="xs"
+												onClick={() => jumpToAviso(2)}
+											>
+												{t("finance_verify.viewer.materials")}
+											</Button>
+										</>
+									)}
+									{viewing.kind === "pdf" && (
+										<span className="ml-auto flex items-center gap-1">
+											<Button
+												type="button"
+												variant="outline"
+												size="xs"
+												aria-label={t("finance_verify.viewer.zoom_out")}
+												onClick={() => setZoom((z) => Math.max(50, z - 25))}
+											>
+												−
+											</Button>
+											<span className="w-10 text-center font-mono">
+												{zoom}%
+											</span>
+											<Button
+												type="button"
+												variant="outline"
+												size="xs"
+												aria-label={t("finance_verify.viewer.zoom_in")}
+												onClick={() => setZoom((z) => Math.min(300, z + 25))}
+											>
+												+
+											</Button>
+											<Button
+												type="button"
+												variant="outline"
+												size="xs"
+												aria-label={t("finance_verify.viewer.prev_page")}
+												disabled={page <= 1}
+												onClick={() => setPage((p) => Math.max(1, p - 1))}
+											>
+												‹
+											</Button>
+											<span className="font-mono">
+												{t("finance_verify.viewer.page", { page })}
+											</span>
+											<Button
+												type="button"
+												variant="outline"
+												size="xs"
+												aria-label={t("finance_verify.viewer.next_page")}
+												onClick={() => setPage((p) => p + 1)}
+											>
+												›
+											</Button>
+										</span>
+									)}
+									<a
+										href={viewing.href}
+										target="_blank"
+										rel="noreferrer"
+										className={`${viewing.kind === "pdf" ? "" : "ml-auto "}text-accent-text underline`}
+									>
+										{t("finance_verify.packet.open_new_tab")}
+									</a>
+								</div>
+								{/* The document stays white in dark mode: it is a paper form. */}
+								{viewing.kind === "pdf" ? (
+									<iframe
+										key={viewerSrc}
+										src={viewerSrc}
+										title={viewing.label}
+										className="h-[75vh] w-full rounded-md border bg-white min-[1100px]:h-[calc(100vh-9rem)]"
+									/>
+								) : (
+									<div className="flex h-[75vh] items-center justify-center rounded-md border bg-white min-[1100px]:h-[calc(100vh-9rem)]">
+										<img
+											src={viewing.href}
+											alt={viewing.label}
+											className="max-h-full max-w-full object-contain"
+										/>
+									</div>
+								)}
 							</>
 						) : (
-							<p className="text-sm text-muted-foreground">
-								{t(
-									returnState.returned
-										? "returned_packet.finance.cannot_verify_returned"
-										: "returned_packet.finance.cannot_act_unreleased",
-								)}
+							<p className="p-6 text-center text-sm text-muted-foreground">
+								{t("finance_verify.viewer.empty")}
 							</p>
 						)}
-						{canSendBack &&
-							(sendBackOpen ? (
-								<Form method="post" className="flex items-center gap-2">
-									<input type="hidden" name="intent" value="send_back" />
-									<Input
-										name="note"
-										required
-										className="h-8 w-64"
-										placeholder={t("finance_verify.send_back_placeholder")}
-									/>
-									<Button type="submit" size="sm" variant="outline">
-										{t("finance_verify.send_back")}
-									</Button>
-								</Form>
-							) : (
-								<Button
-									type="button"
-									size="sm"
-									variant="outline"
-									onClick={() => setSendBackOpen(true)}
-								>
-									{t("finance_verify.send_back")}
-								</Button>
-							))}
 					</div>
-					{cannotVerify && (
-						<p className="mt-1 text-sm text-status-warn">
-							{t("finance_verify.cannot_verify_hint")}
-						</p>
-					)}
-					{error?.errorKey && (
-						<p className="mt-1 text-sm text-status-danger">
-							{t(error.errorKey as ParseKeys)}
-						</p>
-					)}
 				</div>
-			)}
+			</div>
 			{stage !== "TO_VERIFY" && (
 				<p className="text-sm text-muted-foreground">
 					{t("finance_verify.errors.invalid_stage")}

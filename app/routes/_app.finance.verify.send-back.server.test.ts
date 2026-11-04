@@ -16,7 +16,14 @@ vi.mock("~/lib/uploads.server", async (importOriginal) => ({
 	...(await importOriginal<typeof import("~/lib/uploads.server")>()),
 	photosThatLoad: vi.fn(async (_docId: string, photos: unknown[]) => photos),
 }))
+// An accept adds the packet to the open PBCC batch: keep the shared batch out
+// of this file (the accept stands either way).
+vi.mock("~/lib/pbcc-batch.server", async (importOriginal) => ({
+	...(await importOriginal<typeof import("~/lib/pbcc-batch.server")>()),
+	addToOpenBatch: vi.fn(async () => ({ batchId: "none", closedBatchIds: [] })),
+}))
 
+import { VERIFY_CHECKS } from "~/lib/finance-verify-checks"
 import { loadNavCounts } from "~/lib/nav-counts.server"
 import { openJobLabel } from "~/lib/open-job-label"
 import { requireRole, requireSession } from "~/lib/permissions.server"
@@ -107,7 +114,7 @@ describe("Finance send_back: what the supervisor sees (characterisation)", () =>
 			where: { docId: doc.id, action: "FINANCE_SEND_BACK" },
 		})
 		expect(audit.map((a) => a.diffJson)).toEqual([
-			{ note: "Aviso 10359868 lists the wrong pole" },
+			{ note: "Aviso 10359868 lists the wrong pole", source: "STAMPED" },
 		])
 		// The bell notification carries the note word for word.
 		const bell = await db.notification.findMany({
@@ -317,11 +324,15 @@ describe("Returned packet round trip (S4)", () => {
 			orderBy: { timestamp: "asc" },
 		})
 		expect(trail.map((a) => [a.action, a.userId, a.diffJson])).toEqual([
-			["FINANCE_SEND_BACK", financeId, { note: "First: Aviso PDF is blurry" }],
 			[
 				"FINANCE_SEND_BACK",
 				financeId,
-				{ note: "Second: crew signature missing" },
+				{ note: "First: Aviso PDF is blurry", source: "STAMPED" },
+			],
+			[
+				"FINANCE_SEND_BACK",
+				financeId,
+				{ note: "Second: crew signature missing", source: "STAMPED" },
 			],
 			[
 				"FINANCE_RESEND",
@@ -445,12 +456,22 @@ describe("Returned packet round trip (S4)", () => {
 			],
 		])
 
-		// Finance can verify it straight away.
+		// Finance can verify it straight away (the accept gate wants all four
+		// documents on file: give the Aviso and the Pre-cert their files).
+		await db.jafInvoice.update({
+			where: { id: doc.id },
+			data: { avisoDocPath: `/var/jaf/uploads/aviso-docs/${doc.id}-aviso.pdf` },
+		})
+		await db.preCertSheet.updateMany({
+			where: { docId: doc.id },
+			data: { pdfPath: `/var/jaf/uploads/precert/${doc.id}-v1.pdf` },
+		})
 		vi.mocked(requireRole).mockResolvedValue({
 			user: { id: financeId, role: "FINANCE" },
 		} as never)
 		const form = new FormData()
 		form.set("intent", "verify")
+		for (const c of VERIFY_CHECKS) form.set(`check_${c}`, "on")
 		const res = await action({
 			request: new Request(`http://localhost/finance/verify/${doc.id}`, {
 				method: "POST",

@@ -14,24 +14,7 @@ vi.mock("~/lib/permissions.server", async (importOriginal) => ({
 	requireRole: vi.fn(),
 }))
 
-/** Captures the PBCC invoice input; the real generator still renders it. */
-const bankPdf = vi.hoisted(() => ({ calls: [] as unknown[] }))
-vi.mock("~/lib/pdf/bank-invoice.server", async (importOriginal) => {
-	const actual =
-		await importOriginal<typeof import("~/lib/pdf/bank-invoice.server")>()
-	return {
-		...actual,
-		generateBankInvoicePdf: async (
-			input: Parameters<typeof actual.generateBankInvoicePdf>[0],
-		) => {
-			bankPdf.calls.push(input)
-			return actual.generateBankInvoicePdf(input)
-		},
-	}
-})
-
 import { readFile } from "node:fs/promises"
-import { buildBankSchedule } from "~/lib/bank-schedule.server"
 import {
 	computeContractorPayment,
 	toContractorPaymentLines,
@@ -39,7 +22,7 @@ import {
 import { db } from "~/lib/db.server"
 import { type MailTransport, setMailTransport } from "~/lib/packet-mail.server"
 import { buildPacketInput, sendPacket } from "~/lib/packet-send.server"
-import type { BankInvoiceInput } from "~/lib/pdf/bank-invoice.server"
+import { rowAmounts } from "~/lib/pbcc-batch.server"
 import { generateClaroPacketPdf } from "~/lib/pdf/claro-packet.server"
 import { requireRole } from "~/lib/permissions.server"
 import { createPreCertSheet } from "~/lib/pre-cert.server"
@@ -298,8 +281,13 @@ describe("a service added in the Field step", { timeout: HOOK_TIMEOUT }, () => {
 		const page = (await verifyLoader({
 			request: new Request(`http://localhost/finance/verify/${docId}`),
 			params: { id: docId },
-		} as never)) as { lineTotal: number | null; pricedInvoiceHref: string }
-		expect(page.lineTotal).toBe(28.75)
+		} as never)) as {
+			totals: { subtotal: number }
+			invoiceLines: { claroCode: string }[]
+			pricedInvoiceHref: string
+		}
+		expect(page.totals.subtotal).toBe(28.75)
+		expect(page.invoiceLines.map((l) => l.claroCode)).toContain(added.claroCode)
 		expect(page.pricedInvoiceHref).toBe(`/finance/verify/${docId}/invoice.pdf`)
 
 		const res = (await invoiceLoader({
@@ -329,25 +317,19 @@ describe("a service added in the Field step", { timeout: HOOK_TIMEOUT }, () => {
 		})
 	})
 
-	it("PBCC (bank) invoice: lists it at the catalog price", async () => {
-		await db.jafInvoice.update({
-			where: { id: docId },
-			data: { financeVerifiedAt: new Date(), pbccRequestSentAt: null },
-		})
-		const { scheduleId } = await buildBankSchedule({
-			packetIds: [docId],
-			generatedById: sup.id,
-		})
-		t.track("bankSchedule", { id: scheduleId })
-		const input = bankPdf.calls.at(-1) as BankInvoiceInput
-		expect(input.lines).toEqual([
-			expect.objectContaining({ claroCode: ordered.claroCode, amount: 21 }),
+	it("PBCC (bank) invoice: its row and lines carry it at the catalog price", async () => {
+		// The PBCC batch row bills `rowAmounts`, and the PBCC invoice PDF lists
+		// the invoice record's lines one for one (`pbcc-batch.server`).
+		const doc = await reload()
+		expect(rowAmounts(doc).subtotal).toBe(28.75)
+		expect(doc.jafInvoiceLines as InvoiceLine[]).toEqual([
+			expect.objectContaining({ claroCode: ordered.claroCode, lineAmount: 21 }),
 			expect.objectContaining({
 				claroCode: added.claroCode,
-				description: "RETENSAR MENSAJERO MO",
+				name: "RETENSAR MENSAJERO MO",
 				qty: 1,
 				unitPrice: 7.75,
-				amount: 7.75,
+				lineAmount: 7.75,
 			}),
 		])
 	})

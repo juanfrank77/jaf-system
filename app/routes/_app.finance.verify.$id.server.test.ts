@@ -202,11 +202,11 @@ describe("Finance verify action guards", () => {
 			createdAt: "x",
 		}
 		mocks.db.jafInvoice.findUniqueOrThrow.mockResolvedValue({
-			...baseDoc(),
+			...completeDoc(),
 			financeSendBackNotes: [{ ...note, resentAt: "y" }],
 		})
 		const verified = await action({
-			request: requestWith({ intent: "verify" }),
+			request: requestWith({ intent: "verify", ...ALL_CHECKS }),
 			params: { id: "job-1" },
 		} as any).catch((r: any) => r)
 		expect(verified.status).toBe(302)
@@ -219,7 +219,7 @@ describe("Finance verify action guards", () => {
 			params: { id: "job-1" },
 		} as any).catch((r: any) => r)
 		expect(sentBack.status).toBe(302)
-		expect(sentBack.headers.get("Location")).toBe("/finance/receivables")
+		expect(sentBack.headers.get("Location")).toBe("/finance/queue")
 	})
 
 	it.each(["verify", "send_back"])(
@@ -408,18 +408,21 @@ describe("Finance verify action: the accept gate and send back", () => {
 		)
 	})
 
-	it("sends back to the supervisor: releases nothing, keeps the reason, lands on the Inbox", async () => {
+	it("sends back to the supervisor: keeps the reason and the release (S4 Returned), lands on the Inbox", async () => {
 		const result = await run({
 			intent: "send_back",
 			note: "wrong Aviso",
 		}).catch((r: any) => r)
 		expect(result.status).toBe(302)
 		expect(result.headers.get("Location")).toBe("/finance/queue")
+		// The release stays: the open return makes it Returned (out of the
+		// Inbox, back in the supervisor's hands) until he resends it.
+		const data = (mocks.db.jafInvoice.update.mock.calls[0][0] as any).data
+		expect(data).not.toHaveProperty("releasedToFinanceAt")
+		expect(data).not.toHaveProperty("releasedToFinanceById")
 		expect(mocks.db.jafInvoice.update).toHaveBeenCalledWith(
 			expect.objectContaining({
 				data: expect.objectContaining({
-					releasedToFinanceAt: null,
-					releasedToFinanceById: null,
 					financeVerifiedAt: null,
 					financeSendBackNotes: [
 						expect.objectContaining({

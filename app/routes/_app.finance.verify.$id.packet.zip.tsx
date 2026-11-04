@@ -26,6 +26,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 					pdfPath: true,
 					sigSupervisorAt: true,
 					sigSubcontractorAt: true,
+					// The gate counts a signed sheet only for the current Aviso.
+					avisoNumber: true,
 				},
 			},
 			photos: { select: { localPath: true, tag: true, takenAt: true } },

@@ -9,6 +9,7 @@ import { ageDays } from "~/lib/finance-stage-rows.server"
 import {
 	type ArmAListStage,
 	carmenOpenSummary,
+	financeSendBackIds,
 	stageWhere,
 } from "~/lib/finance-stages.server"
 import {
@@ -37,6 +38,9 @@ export async function loadFinanceHome(
 	now: Date = new Date(),
 ): Promise<FinanceHome> {
 	const payDay = await getPayDayWeekday()
+	// A packet sent back waits on the supervisor (S4): not in the Inbox count,
+	// its age or Next up until he resends it.
+	const { returned } = await financeSendBackIds()
 	const [
 		inboxCount,
 		inboxOldest,
@@ -51,9 +55,9 @@ export async function loadFinanceHome(
 		blocked,
 		draftRuns,
 	] = await Promise.all([
-		db.jafInvoice.count({ where: stageWhere("PACKETS") }),
+		db.jafInvoice.count({ where: stageWhere("PACKETS", returned) }),
 		db.jafInvoice.findFirst({
-			where: stageWhere("PACKETS"),
+			where: stageWhere("PACKETS", returned),
 			orderBy: { releasedToFinanceAt: "asc" },
 			select: { releasedToFinanceAt: true },
 		}),
@@ -74,7 +78,7 @@ export async function loadFinanceHome(
 			NEXT_UP_STAGES.map(({ stage, step }) =>
 				db.jafInvoice
 					.findMany({
-						where: stageWhere(stage),
+						where: stageWhere(stage, returned),
 						orderBy: [{ releasedToFinanceAt: "asc" }, { id: "asc" }],
 						take: NEXT_UP_LIMIT,
 						select: {

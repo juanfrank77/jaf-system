@@ -76,6 +76,17 @@ const data = (over: Record<string, unknown> = {}) =>
 		neighbors: { total: 3, position: 2, prevId: "j0", nextId: "j2" },
 		avisoDiscrepancy: null,
 		sendBackNotes: [],
+		notReleased: false,
+		canVerify: true,
+		canSendBack: true,
+		returnState: {
+			returned: false,
+			resent: false,
+			resentPending: false,
+			note: null,
+			createdAt: null,
+			resentAt: null,
+		},
 		packetDocs: packetDocs(),
 		packetHref: null,
 		legacyPricedHref: null,
@@ -183,5 +194,45 @@ describe("Finance review screen", () => {
 			"href",
 			"/finance/verify/j2",
 		)
+	})
+	it("a returned packet shows her note and cannot be accepted; it can be sent back again", async ({
+		renderStub,
+	}) => {
+		await mount(
+			renderStub,
+			data({
+				canVerify: false,
+				returnState: {
+					returned: true,
+					resent: false,
+					resentPending: false,
+					note: "Wrong pole on the Aviso",
+					createdAt: "2026-10-28T14:00:00.000Z",
+					resentAt: null,
+				},
+			}),
+		)
+		expect(screen.getByText("Wrong pole on the Aviso")).toBeInTheDocument()
+		expect(
+			screen.queryByRole("button", { name: "Accept & next" }),
+		).not.toBeInTheDocument()
+		expect(
+			screen.getByRole("button", { name: "Send Back to Supervisor" }),
+		).toBeInTheDocument()
+	})
+
+	it("an unreleased job offers neither Accept nor Send back", async ({
+		renderStub,
+	}) => {
+		await mount(
+			renderStub,
+			data({ notReleased: true, canVerify: false, canSendBack: false }),
+		)
+		expect(
+			screen.queryByRole("button", { name: "Accept & next" }),
+		).not.toBeInTheDocument()
+		expect(
+			screen.queryByRole("button", { name: "Send Back to Supervisor" }),
+		).not.toBeInTheDocument()
 	})
 })

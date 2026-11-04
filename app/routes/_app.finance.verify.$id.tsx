@@ -148,6 +148,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 					pdfPath: true,
 					sigSupervisorAt: true,
 					sigSubcontractorAt: true,
+					// The gate counts a signed sheet only for the current Aviso.
+					avisoNumber: true,
 				},
 			},
 			photos: { select: { localPath: true, tag: true, takenAt: true } },
@@ -278,10 +280,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 					financeVerifiedAt: null,
 					financeVerifiedById: null,
 					financeSendBackNotes: history,
-					// Back on the supervisor's desk: no longer released, so it leaves
-					// the Inbox and the supervisor can fix it and release it again.
-					releasedToFinanceAt: null,
-					releasedToFinanceById: null,
+					// Back on the supervisor's desk (S4): `releasedToFinanceAt` stays
+					// set and the open return in the notes makes it "Returned". It
+					// leaves the Inbox ("All") for Returned on Packets in, and the
+					// supervisor fixes it and resends it (`isWithFinance`).
 				},
 			}),
 			db.auditTrail.create({

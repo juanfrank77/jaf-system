@@ -321,8 +321,6 @@
 		"search_placeholder": "Search by name or code",
 		"search_label": "Search brigades",
 		"inactive": "Inactive",
-		"lead": "Lead",
-		"make_lead": "Make lead",
 		"hint": "Tap a chip, or search any brigade.",
 		"assigned_count_one": "Assigned crew · {{count}} crew",
 		"assigned_count_other": "Assigned crew · {{count}} crews",
@@ -334,8 +332,7 @@
 		"last_worked": "last worked {{date}}",
 		"never_worked": "no jobs yet",
 		"no_results": "No brigade matches that search.",
-		"payment_note_title": "Payment goes to the lead brigade only",
-		"payment_note_body": "{{lead}} is the lead and the only crew paid through the system. Each extra crew works separately: when the job is done, create a separate certificate for each crew. Finance splits the payment by hand."
+		"payment_note": "Each crew is paid separately. In the field step, record which services each crew did."
 	},
 	"docs_new": {
 		"title": "New Work Order",
@@ -472,18 +469,14 @@
 		"reassign_submit": "Reassign",
 		"reassign_current": "(current)",
 		"reassign_hint": "Allowed until the crew reports from the field. Every reassignment is written to the crew history.",
-		"reassign_shared_intro": "This job has {{count}} crews (lead: {{lead}}).",
-		"reassign_replace_warning": "Reassigning to {{target}} will remove {{removed}} and make {{target}} the only payee.",
-		"reassign_change_lead_hint": "Or keep all {{count}} crews and only make {{target}} the lead and payee.",
-		"reassign_change_lead": "Change lead",
-		"reassign_replace_all": "Replace all crews",
+		"reassign_shared_intro": "This job has {{count}} crews.",
+		"reassign_replace_warning": "Reassigning to {{target}} will remove {{removed}} and make {{target}} the only crew on this job.",
 		"reassign_confirm_submit": "Reassign",
 		"reassign_cancel": "Cancel",
 		"errors": {
 			"cancel_reason_required": "Please provide a reason for cancellation.",
 			"reassign_required": "Please select a crew.",
 			"reassign_invalid": "Selected crew is invalid.",
-			"lead_locked": "The lead can't be changed: the payee was fixed when the pre-cert sheet was signed.",
 			"resolution_note_required": "Please provide a resolution note."
 		},
 		"next_action": {
@@ -653,14 +646,19 @@
 			"release_signer_invalid": "Selected warehouse signer is not valid",
 			"no_pickup_signer": "This job has no brigade assigned, so nobody can sign for the pickup. Ask the supervisor to add one.",
 			"crew_signer_invalid": "Selected crew signer is not valid",
-			"already_signed": "Materials are already signed and locked",
-			"invalid_materials": "Invalid materials data"
+			"invalid_materials": "Invalid materials data",
+			"no_release": "Sign a release before completing the pickup."
 		},
 		"more_is_normal": "Taking more than listed is normal.",
 		"sig_prompt": "Sign here with your finger",
 		"signed": "Signed",
 		"error_title": "Can't sign yet",
-		"status_pill": "Pickup"
+		"status_pill": "Pickup",
+		"releases_title": "Releases on this work order",
+		"release_row": "Release {{n}}",
+		"release_row_people": "Warehouse: {{warehouse}} · Crew: {{crew}}",
+		"add_release": "+ Add another release",
+		"release_complete": "Release complete → go to Step 4 · Work"
 	},
 	"docs_field": {
 		"crew_window": "Crew {{n}}",
@@ -711,7 +709,10 @@
 			"service_qty_invalid": "Enter an installed quantity greater than 0.",
 			"service_on_order": "That service is already on the order. Enter its installed quantity in the table.",
 			"service_already_added": "That service was already added. Change its quantity in the table.",
-			"service_not_added": "Only services added in the field can be removed."
+			"service_not_added": "Only services added in the field can be removed.",
+			"line_two_crews": "A service line belongs to one crew. Untick it in the other crew first.",
+			"line_unassigned": "Every service line needs a crew. Tick it in the card of the crew that did it.",
+			"service_other_crew": "Another crew on this job already has this service."
 		},
 		"address_diff_hint": "This change is logged with your name and the time when you submit.",
 		"address_edited_by_you": "Edited by you · {{when}}",
@@ -776,9 +777,15 @@
 			"add_confirm": "Add",
 			"add_cancel": "Cancel",
 			"added_in_field": "Added in field",
-			"remove_added": "Remove {{code}}"
+			"remove_added": "Remove {{code}}",
+			"done": "Done",
+			"done_aria": "Done by this brigade: {{code}}",
+			"other_crew": "done by another crew"
 		},
-		"admin_override": "Signed off. You are editing it as Admin."
+		"admin_override": "Signed off. You are editing it as Admin.",
+		"services_done_by": "Services done by {{name}}",
+		"services_done_by_code": "Services done by {{name}} ({{code}})",
+		"tick_line": "Line {{code}}: tick the crew that did it"
 	},
 	"docs_review": {
 		"finance_return_title": "Returned by Finance.",
@@ -882,7 +889,12 @@
 		"aviso_replace_reason_label": "Reason for replacing",
 		"aviso_replace_submit": "Replace Aviso",
 		"aviso_replace_used": "This job's one Aviso replacement has been used.",
-		"aviso_continue_precert": "Continue to Pre-cert →"
+		"aviso_continue_precert": "Continue to Pre-cert →",
+		"crew_certificates_title_one": "{{count}} certificado, one per crew",
+		"crew_certificates_title_other": "{{count}} certificados, one per crew",
+		"returned_open_hint": "Nothing is locked while it is back with you:",
+		"returned_open_field": "change the field work and the crew cards",
+		"returned_open_edit": "change the crews or the order"
 	},
 	"open_job": {
 		"material_requested": "Material requested",

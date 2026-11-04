@@ -1,5 +1,6 @@
-import { afterAll, describe, expect, it, vi } from "vitest"
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 import { db } from "~/lib/db.server"
+import { loadPayrollRequests } from "~/lib/payroll-request-view.server"
 import {
 	armAOpenWhere,
 	blockedSentJobs,
@@ -13,6 +14,7 @@ import {
 	puertoRicoToday,
 	RUN_INVOICES,
 	sendPayrollRun,
+	undoPayrollRunAccount,
 } from "~/lib/payroll-run.server"
 import {
 	makeTracker,
@@ -1161,5 +1163,154 @@ describe("payrollSheetLines", () => {
 		expect(rows.map((r) => r.accountCode)).toEqual(["009", "009"])
 		expect(rows.map((r) => r.toPay)).toEqual([585, 720])
 		expect(rows.map((r) => r.unverified)).toEqual([false, true])
+	})
+})
+
+const svc = (serviceCodeId: string, qty = 1) => ({
+	serviceCodeId,
+	claroCode: serviceCodeId,
+	accountCode: null,
+	name: serviceCodeId,
+	qty,
+})
+
+describe("a job with two brigades", { timeout: 60_000 }, () => {
+	let runId: string
+	let docId: string
+	let accountA: string
+	let accountB: string
+	let userId: string
+
+	beforeAll(async () => {
+		const tag = runToken("RUN")
+		const sup = t.track("user", await seedUser({ role: "SUPERVISOR" }))
+		userId = sup.id
+		const brigade = async () => {
+			const a = t.track("contractorAccount", await seedContractorAccount())
+			const b = t.track(
+				"brigade",
+				await seedBrigade({ code: a.code, name: `CREW ${a.code}` }),
+			)
+			return { b, a }
+		}
+		const one = await brigade()
+		const two = await brigade()
+		accountA = one.a.id
+		accountB = two.a.id
+		const doc = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				supervisorId: sup.id,
+				pbccRequestSentAt: new Date(),
+				jafInvoiceLines: [
+					{
+						serviceCodeId: "svc-a",
+						claroCode: "A",
+						name: "A",
+						unit: "EA",
+						qty: 1,
+						unitPrice: 100,
+						lineAmount: 100,
+					},
+					{
+						serviceCodeId: "svc-b",
+						claroCode: "B",
+						name: "B",
+						unit: "EA",
+						qty: 2,
+						unitPrice: 25,
+						lineAmount: 50,
+					},
+				],
+			}),
+		)
+		docId = doc.id
+		await db.jafInvoice.update({
+			where: { id: doc.id },
+			data: {
+				brigadeId: one.b.id,
+				crewServiceLines: [
+					{ brigadeId: one.b.id, lines: [svc("svc-a")] },
+					{ brigadeId: two.b.id, lines: [svc("svc-b", 2)] },
+				],
+			},
+		})
+		// Only this job: anything else open on the shadow DB stays out of the request.
+		const others = await db.jafInvoice.findMany({
+			where: { id: { not: doc.id }, payrollRunId: null },
+			select: { id: true },
+		})
+		const { run } = await generateRun({
+			generatedById: sup.id,
+			label: tag,
+			excludeIds: others.map((o) => o.id),
+		})
+		t.track("payrollRun", run)
+		runId = run.id
+		await sendPayrollRun({ runId, sentById: sup.id })
+	})
+
+	it("Lissette sees two payroll lines, one per brigade; the job is one Aviso", async () => {
+		const run = await db.payrollRun.findUniqueOrThrow({
+			where: { id: runId },
+			include: { invoices: RUN_INVOICES },
+		})
+		expect(run.invoices).toHaveLength(1)
+		expect(payrollSheetLines(buildJournalBlocks(run.invoices))).toHaveLength(2)
+		const gross = buildJournalBlocks(run.invoices).map((b) => b.gross)
+		expect(gross.sort((a, b) => a - b)).toEqual([50, 100])
+		expect(
+			await db.payrollRunAccount.count({ where: { payrollRunId: runId } }),
+		).toBe(2)
+		const [view] = await loadPayrollRequests({ id: runId })
+		expect(view.lines.map((l) => l.accountId).sort()).toEqual(
+			[accountA, accountB].sort(),
+		)
+	})
+
+	it("the job closes only when both brigades are paid; an undo reopens it", async () => {
+		const closedAt = async () =>
+			(
+				await db.jafInvoice.findUniqueOrThrow({
+					where: { id: docId },
+					select: { payablesClosedAt: true },
+				})
+			).payablesClosedAt
+		const paidDate = new Date()
+		const first = await closePayrollRunAccount({
+			runId,
+			accountId: accountA,
+			paidById: userId,
+			paidDate,
+		})
+		expect(first.runClosed).toBe(false)
+		expect(await closedAt()).toBeNull()
+
+		const last = await closePayrollRunAccount({
+			runId,
+			accountId: accountB,
+			paidById: userId,
+			paidDate,
+		})
+		expect(last.runClosed).toBe(true)
+		expect(await closedAt()).not.toBeNull()
+
+		await undoPayrollRunAccount({
+			runId,
+			accountId: accountB,
+			userId,
+			reason: "wrong day",
+		})
+		expect(await closedAt()).toBeNull()
+		const lines = await db.payrollRunAccount.findMany({
+			where: { payrollRunId: runId },
+			select: { contractorAccountId: true, paidAt: true },
+		})
+		expect(
+			lines.find((l) => l.contractorAccountId === accountA)?.paidAt,
+		).not.toBeNull()
+		expect(
+			lines.find((l) => l.contractorAccountId === accountB)?.paidAt,
+		).toBeNull()
 	})
 })

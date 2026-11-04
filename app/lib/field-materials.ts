@@ -25,7 +25,7 @@ export type FieldMaterialRow = {
 	source: FieldMaterialSource
 	/**
 	 * The crew that used it, on a job with several. Absent on a one-crew job,
-	 * and a row without it belongs to the lead crew.
+	 * and a row without it belongs to the first crew.
 	 */
 	brigadeId?: string
 }
@@ -158,12 +158,12 @@ export function brigadeStockLines(fieldMaterials: unknown): MaterialLine[] {
 
 /**
  * What each brigade used out of its own truck stock on the job, per code
- * (used > 0). A row with no `brigadeId` belongs to the lead crew. This is what
+ * (used > 0). A row with no `brigadeId` belongs to the first crew. This is what
  * the brigade's balance is charged for the job.
  */
 export function brigadeStockUse(
 	fieldMaterials: unknown,
-	leadBrigadeId: string | null,
+	firstBrigadeId: string | null,
 ): { brigadeId: string; serviceCodeId: string; qty: number }[] {
 	const byKey = new Map<
 		string,
@@ -171,7 +171,7 @@ export function brigadeStockUse(
 	>()
 	for (const r of storedRows(fieldMaterials)) {
 		if (r.source !== "TRUCK_STOCK" || r.used <= 0) continue
-		const brigadeId = r.brigadeId ?? leadBrigadeId
+		const brigadeId = r.brigadeId ?? firstBrigadeId
 		if (!brigadeId) continue
 		const key = `${brigadeId}|${r.serviceCodeId}`
 		const row = byKey.get(key) ?? {

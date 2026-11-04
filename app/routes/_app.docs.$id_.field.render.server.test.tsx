@@ -378,21 +378,30 @@ describe("Field screen (render) — several crews", () => {
 		id: string,
 		name: string,
 		code: string,
-		lead: boolean,
 		actual: number | null,
 	) => ({
 		id,
 		name,
 		code,
-		lead,
-		installed: [],
+		installed:
+			actual === null
+				? []
+				: [
+						{
+							serviceCodeId: "svc-1",
+							claroCode: "C1",
+							accountCode: null,
+							name: "TRANSFER",
+							qty: actual,
+						},
+					],
 		rows: [row(actual)],
 	})
 	const two = () =>
 		loaderData({
 			crews: [
-				crew("b-angel", "ANGEL D JIMENEZ", "124", true, 1),
-				crew("b-jesus", "JESUS MARTINEZ", "009", false, null),
+				crew("b-angel", "ANGEL D JIMENEZ", "124", 1),
+				crew("b-jesus", "JESUS MARTINEZ", "009", null),
 			],
 			fieldMaterials: [
 				{
@@ -410,17 +419,25 @@ describe("Field screen (render) — several crews", () => {
 		expect(html).toContain('data-testid="crew-window-b-jesus"')
 		expect(html).toContain("Crew 1 · ANGEL D JIMENEZ · 124")
 		expect(html).toContain("Crew 2 · JESUS MARTINEZ · 009")
+		expect(html).toContain("Services done by ANGEL D JIMENEZ (124)")
+		expect(html).toContain("Services done by JESUS MARTINEZ (009)")
 		expect(html).toContain('id="actual-b-angel-svc-1"')
-		expect(html).toContain('id="actual-b-jesus-svc-1"')
-		// Only one Lead badge, on the first crew.
-		expect(html.match(/>Lead</g)).toHaveLength(1)
+		expect(html).not.toContain(">Lead<")
+	})
+
+	it("a line ticked in one card shows as done by another crew in the other", async () => {
+		const html = await render(two())
+		expect(html).toContain('id="tick-b-angel-svc-1"')
+		expect(html).toContain('id="tick-b-jesus-svc-1"')
+		expect(html).not.toContain('id="actual-b-jesus-svc-1"')
+		expect(html).toContain("done by another crew")
 	})
 
 	it("posts the per-crew lines, not the job-wide list", async () => {
 		const html = await render(two())
 		expect(inputs(html, /name="crewServiceLines"/)).toHaveLength(1)
 		expect(inputs(html, /name="installedServiceLines"/)).toHaveLength(0)
-		// One materials post, with every row naming its crew (lead's by default).
+		// One materials post, with every row naming its crew (the first crew's by default).
 		const [mat] = inputs(html, /name="fieldMaterials"/)
 		expect(mat).toContain("b-angel")
 	})

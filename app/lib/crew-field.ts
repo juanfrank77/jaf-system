@@ -93,6 +93,35 @@ export function crewsOnJob(
 	return jobBrigadeIds.flatMap((id) => posted.filter((c) => c.brigadeId === id))
 }
 
+/** Which brigade holds each service line: the first one that has it. */
+export function lineOwners(crews: CrewLines[]): Map<string, string> {
+	const owners = new Map<string, string>()
+	for (const { brigadeId, lines } of crews)
+		for (const l of lines)
+			if (!owners.has(l.serviceCodeId)) owners.set(l.serviceCodeId, brigadeId)
+	return owners
+}
+
+/** A service line belongs to one brigade: true when two crews hold the same one. */
+export function hasSplitLine(crews: CrewLines[]): boolean {
+	const seen = new Set<string>()
+	for (const { lines } of crews)
+		for (const l of lines) {
+			if (seen.has(l.serviceCodeId)) return true
+			seen.add(l.serviceCodeId)
+		}
+	return false
+}
+
+/** The ordered lines no brigade has ticked yet. */
+export function unassignedLines(
+	ordered: ServiceLine[],
+	crews: CrewLines[],
+): ServiceLine[] {
+	const owners = lineOwners(crews)
+	return ordered.filter((l) => !owners.has(l.serviceCodeId))
+}
+
 /** Whether every brigade on the job has at least one installed line. */
 export function everyCrewHasLines(
 	crews: CrewLines[],

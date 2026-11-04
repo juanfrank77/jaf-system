@@ -8,19 +8,19 @@ describe("describeBrigades", () => {
 	it("lists nothing when no brigade is recorded", () => {
 		expect(describeBrigades([])).toEqual({ lines: [], note: null })
 	})
-	it("lists a single brigade without a lead tag or payment note", () => {
+	it("lists a single brigade without a payment note", () => {
 		expect(
-			describeBrigades([{ name: "JESUS MARTINEZ", code: "009", lead: true }]),
+			describeBrigades([{ name: "JESUS MARTINEZ", code: "009" }]),
 		).toEqual({ lines: ["JESUS MARTINEZ · 009"], note: null })
 	})
-	it("tags the lead and adds the payment note when several brigades worked it", () => {
+	it("lists every brigade and says each is paid separately", () => {
 		const out = describeBrigades([
-			{ name: "JESUS MARTINEZ", code: "009", lead: true },
-			{ name: "ALEXIS DIAZ", code: null, lead: false },
+			{ name: "JESUS MARTINEZ", code: "009" },
+			{ name: "ALEXIS DIAZ", code: null },
 		])
-		expect(out.lines).toEqual(["JESUS MARTINEZ · 009 (Lead)", "ALEXIS DIAZ"])
+		expect(out.lines).toEqual(["JESUS MARTINEZ · 009", "ALEXIS DIAZ"])
 		expect(out.note).toBe(
-			"Payment goes to the lead brigade only (JESUS MARTINEZ · 009). Finance splits shared jobs manually.",
+			"Each brigade has its own certificado and is paid separately for its own work.",
 		)
 	})
 })
@@ -34,8 +34,8 @@ describe("generateAuditPackagePdf", () => {
 				jobAddressEstimated: "CAM 906",
 				createdAt: new Date("2026-10-04T12:00:00Z"),
 				brigades: [
-					{ name: "JESUS MARTINEZ", code: "009", lead: true },
-					{ name: "ALEXIS DIAZ", code: "025", lead: false },
+					{ name: "JESUS MARTINEZ", code: "009" },
+					{ name: "ALEXIS DIAZ", code: "025" },
 				],
 				materialsTaken: [],
 				materialsUsed: [],

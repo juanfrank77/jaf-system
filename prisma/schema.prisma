@@ -502,6 +502,7 @@ model JafInvoice {
   fieldMaterials         Json?
 
   preCertSheets  PreCertSheet[]
+  pickupReleases PickupRelease[]
   auditTrail     AuditTrail[]
   brigadeEvents  BrigadeEvent[]
   photos         Photo[]
@@ -1499,4 +1500,30 @@ model SentReport {
   openedAt DateTime?
 
   @@index([toId, sentAt])
+}
+
+// One pickup against the job's material request. A job has one or several; each
+// keeps its own signatures and quantities, and JafInvoice.materialsTaken is their
+// total. Names are copied so the record stays what was signed.
+model PickupRelease {
+  id                    String     @id @default(cuid())
+  docId                 String
+  doc                   JafInvoice @relation(fields: [docId], references: [id], onDelete: Cascade)
+  number                Int
+  warehouseId           String
+  releasedById          String
+  releasedByName        String
+  signedById            String? // the crew signer's account; crew usually have none
+  crewSignerName        String
+  crewSignerBrigadeId   String?
+  crewSignerBrigadeName String?
+  crewSignerBrigadeCode String?
+  releaseSignature      String
+  crewSignature         String
+  materials             Json // [{ serviceCodeId, qty }] taken on this release
+  receiptPath           String?
+  createdAt             DateTime   @default(now())
+
+  @@unique([docId, number])
+  @@map("pickup_release")
 }

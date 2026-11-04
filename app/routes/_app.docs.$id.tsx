@@ -206,9 +206,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 					select: { id: true, name: true, code: true },
 				})
 			: []
-	const assignedBrigades = brigadeIds.flatMap((id, i) => {
+	const assignedBrigades = brigadeIds.flatMap((id) => {
 		const b = brigadeRows.find((r) => r.id === id)
-		return b ? [{ id: b.id, name: b.name, code: b.code, lead: i === 0 }] : []
+		return b ? [{ id: b.id, name: b.name, code: b.code }] : []
 	})
 	// Only a job that is still waiting on the fix (back at SIGNED) carries an
 	// active send-back; once it is resubmitted the banner goes away.
@@ -410,73 +410,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 			// No notification: crews never log in (the supervisor tells them).
 		})
 		if (failed) return failed
-		throw redirect(`/docs/${params.id}`)
-	}
-
-	if (intent === "change_lead") {
-		if (!isReassignableStatus(doc.status)) throw redirect(`/docs/${params.id}`)
-		const newLeadId = (form.get("brigadeId") as string | null)?.trim() || ""
-		if (!newLeadId) return { errorKey: "docs_view.errors.reassign_required" }
-		const current = assignedBrigadeIds(doc)
-		// Only a brigade already on the job can take over as lead; this keeps
-		// every crew and moves only the payee.
-		if (!current.includes(newLeadId))
-			return { errorKey: "docs_view.errors.reassign_invalid" }
-		if (isTerminalStatus(doc.status)) throw redirect(`/docs/${params.id}`)
-		// The payee is copied into contractorAccountCode at the pre-cert
-		// signature; moving the lead afterwards would not move the payment.
-		if (doc.contractorAccountCode)
-			return { errorKey: "docs_view.errors.lead_locked" }
-		const brigadeIds = [newLeadId, ...current.filter((id) => id !== newLeadId)]
-		const rows = await db.brigade.findMany({
-			where: { id: { in: brigadeIds } },
-		})
-		const ordered = brigadeIds.flatMap(
-			(id) => rows.find((r) => r.id === id) ?? [],
-		)
-		if (ordered.length !== brigadeIds.length)
-			return { errorKey: "docs_view.errors.reassign_invalid" }
-		// The new lead is already on the job, so it is never activated and no
-		// event is written. The payee check stays: the doc-level scope guard
-		// only covers the current lead, and an Admin may have put another
-		// supervisor's (or an equipment) brigade on the job, which must not
-		// become a supervisor's payee.
-		const rejection = assignRejection(ordered[0], await pickerViewer(db, user))
-		if (rejection === "invalid")
-			return { errorKey: "docs_view.errors.reassign_invalid" }
-		const { brigadeId, assignedCrewIds } = buildCrewAssignment(ordered)
-		await db.$transaction(async (tx) => {
-			await tx.jafInvoice.update({
-				where: { id: params.id },
-				data: {
-					brigadeId,
-					assignedCrewIds,
-					crewAssignmentHistory: [
-						...(readHistory(
-							doc.crewAssignmentHistory,
-						) as Prisma.InputJsonObject[]),
-						{
-							userIds: assignedCrewIds,
-							brigadeId,
-							brigadeIds,
-							assignedById: user.id,
-							assignedAt: new Date().toISOString(),
-						},
-					],
-				},
-			})
-			await tx.auditTrail.create({
-				data: {
-					docId: params.id,
-					userId: user.id,
-					action: "CREW_LEAD_CHANGED",
-					diffJson: {
-						from: { brigadeId: doc.brigadeId, brigadeIds: current },
-						to: { brigadeId, brigadeIds },
-					},
-				},
-			})
-		})
 		throw redirect(`/docs/${params.id}`)
 	}
 
@@ -1037,7 +970,6 @@ export default function DocView({
 					<div className="space-y-3 pt-2 border-t">
 						{isReassignableStatus(doc.status) && (
 							<ReassignForm
-								leadLocked={!!doc.contractorAccountCode}
 								brigadeOptions={brigadeOptions}
 								assignedBrigades={assignedBrigades}
 							/>

@@ -10,6 +10,7 @@ import {
 	activeSheetById,
 	activeSheets,
 	createPreCertSheet,
+	issueFieldCertificates,
 } from "~/lib/pre-cert.server"
 import type { PreCertLine } from "~/lib/service-lines"
 import { makeTracker, runToken, seedBrigade, seedUser } from "~/test/helpers"
@@ -185,5 +186,71 @@ describe("createPreCertSheet — one certificate per crew", {
 		const [only] = await activeSheets(docId)
 		expect(only.brigadeId).toBeNull()
 		expect(only.title).toBe("Mantenimiento")
+	})
+})
+
+describe("issueFieldCertificates: the field step writes the certificados", () => {
+	const crewLines = (fiberQty: number) => [
+		{ brigadeId: angel.id, lines: [line(fiber, fiberQty)] },
+		{ brigadeId: jesus.id, lines: [line(digger, 1)] },
+	]
+	const prepare = async (fiberQty: number, extra = {}) => {
+		await db.jafInvoice.update({
+			where: { id: docId },
+			data: {
+				crewAssignmentHistory: [{ brigadeIds: [angel.id, jesus.id] }],
+				crewServiceLines: crewLines(fiberQty),
+				installedServiceLines: [line(fiber, fiberQty), line(digger, 1)],
+				jafInvoiceLines: Prisma.DbNull,
+				avisoNumber: null,
+				...extra,
+			},
+		})
+	}
+
+	it("issues one per brigade, before the Aviso, with only that brigade's lines", async () => {
+		await prepare(600)
+		await issueFieldCertificates({ docId, actor: actor(), returned: false })
+		const sheets = await activeSheets(docId)
+		expect(sheets.map((s) => s.brigadeId)).toEqual([angel.id, jesus.id])
+		expect(sheets[0].avisoNumber).toBeNull()
+		expect(
+			(sheets[0].lines as PreCertLine[]).map((l) => l.serviceCodeId),
+		).toEqual([fiber.id])
+		expect(
+			(sheets[1].lines as PreCertLine[]).map((l) => l.serviceCodeId),
+		).toEqual([digger.id])
+	})
+
+	it("leaves a signed set alone unless Finance sent it back with new lines", async () => {
+		await prepare(600)
+		await issueFieldCertificates({ docId, actor: actor(), returned: false })
+		const [first] = await activeSheets(docId)
+		await db.preCertSheet.update({
+			where: { id: first.id },
+			data: { sigSupervisorAt: new Date() },
+		})
+		await issueFieldCertificates({ docId, actor: actor(), returned: false })
+		expect((await activeSheets(docId))[0].id).toBe(first.id)
+
+		await db.jafInvoice.update({
+			where: { id: docId },
+			data: {
+				crewServiceLines: crewLines(750),
+				installedServiceLines: [line(fiber, 750), line(digger, 1)],
+			},
+		})
+		await issueFieldCertificates({ docId, actor: actor(), returned: true })
+		const sheets = await activeSheets(docId)
+		expect(sheets[0].id).not.toBe(first.id)
+		expect(sheets[0].sigSupervisorAt).toBeNull()
+		expect((sheets[0].lines as PreCertLine[])[0].installedQty).toBe(750)
+		// The invoice follows the corrected lines: one invoice, still.
+		const doc = await db.jafInvoice.findUniqueOrThrow({ where: { id: docId } })
+		expect(
+			(doc.jafInvoiceLines as { serviceCodeId: string; qty: number }[]).find(
+				(l) => l.serviceCodeId === fiber.id,
+			)?.qty,
+		).toBe(750)
 	})
 })

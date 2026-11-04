@@ -32,31 +32,16 @@ export function matchesBrigadeQuery(
 	return normalize(b.name).includes(n) || (b.code ?? "").startsWith(q.trim())
 }
 
-/** Always-visible (not a tooltip) so Carmen and Lissette see it too. */
-export function LeadPaymentNote({
-	leadName,
-	className,
-}: {
-	leadName: string
-	className?: string
-}) {
+/** Every crew on a job is equal: each is paid separately, for its own work. */
+export function CrewPaymentNote({ className }: { className?: string }) {
 	const { t } = useTranslation()
 	return (
-		<div
-			role="note"
-			data-testid="lead-payment-note"
-			className={cn(
-				"rounded-lg border border-status-warn/30 bg-status-warn-soft px-3 py-2 text-sm",
-				className,
-			)}
+		<p
+			data-testid="crew-payment-note"
+			className={cn("text-xs text-muted-foreground", className)}
 		>
-			<p className="font-semibold text-status-warn">
-				{t("crew_picker.payment_note_title")}
-			</p>
-			<p className="mt-0.5 text-foreground">
-				{t("crew_picker.payment_note_body", { lead: leadName })}
-			</p>
-		</div>
+			{t("crew_picker.payment_note")}
+		</p>
 	)
 }
 
@@ -74,8 +59,7 @@ function formatDay(iso: string, lng: string) {
  * with its Active / Inactive tag, who it usually works with and when it last
  * worked. Picking an inactive one is a single "Activate and add" tap (the
  * server activates and logs it on save). Selected crews sit on top with a
- * count and an ×. The first brigade picked is the lead (stored as `brigadeId`,
- * and paid), so the hidden inputs are emitted in that order.
+ * count and an ×. All selected crews are equal.
  */
 export function CrewPicker({
 	brigades,
@@ -109,10 +93,6 @@ export function CrewPicker({
 		setSelected((cur) => cur.filter((x) => x !== id))
 	}
 
-	function makeLead(id: string) {
-		setSelected((cur) => [id, ...cur.filter((x) => x !== id)])
-	}
-
 	return (
 		<div className="space-y-3">
 			{selected.map((id) => (
@@ -129,7 +109,7 @@ export function CrewPicker({
 				</p>
 				{chosen.length > 0 && (
 					<ul className="flex flex-wrap gap-2">
-						{chosen.map((b, i) => (
+						{chosen.map((b) => (
 							<li
 								key={b.id}
 								className="flex items-center gap-2 rounded-lg border border-primary bg-primary/5 px-3 py-1.5 text-sm"
@@ -144,20 +124,6 @@ export function CrewPicker({
 									<span className="text-xs text-muted-foreground">
 										{t("crew_picker.usually_with", { name: b.supervisorName })}
 									</span>
-								)}
-								{i === 0 && chosen.length > 1 && (
-									<span className="rounded-md bg-primary px-1.5 py-0.5 text-xs font-semibold text-primary-foreground">
-										{t("crew_picker.lead")}
-									</span>
-								)}
-								{i > 0 && (
-									<button
-										type="button"
-										onClick={() => makeLead(b.id)}
-										className="rounded-md border border-border bg-card px-1.5 py-0.5 text-xs font-medium hover:bg-muted"
-									>
-										{t("crew_picker.make_lead")}
-									</button>
 								)}
 								<button
 									type="button"
@@ -261,9 +227,7 @@ export function CrewPicker({
 					))}
 				</ul>
 			)}
-			{selected.length > 1 && (
-				<LeadPaymentNote leadName={chosen[0]?.name ?? ""} />
-			)}
+			{selected.length > 1 && <CrewPaymentNote />}
 		</div>
 	)
 }

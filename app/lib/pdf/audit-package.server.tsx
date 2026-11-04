@@ -64,20 +64,16 @@ interface AuditDoc {
 	photos: { localPath: string }[]
 }
 
-export type AuditBrigade = { name: string; code: string | null; lead: boolean }
+export type AuditBrigade = { name: string; code: string | null }
 
 /** Text for the Brigades section; the payment note only applies to shared jobs. */
 export function describeBrigades(brigades: AuditBrigade[]) {
 	const label = (b: AuditBrigade) => (b.code ? `${b.name} · ${b.code}` : b.name)
-	const shared = brigades.length > 1
-	const lead = brigades.find((b) => b.lead)
 	return {
-		lines: brigades.map((b) =>
-			shared && b.lead ? `${label(b)} (Lead)` : label(b),
-		),
+		lines: brigades.map(label),
 		note:
-			shared && lead
-				? `Payment goes to the lead brigade only (${label(lead)}). Finance splits shared jobs manually.`
+			brigades.length > 1
+				? "Each brigade has its own certificado and is paid separately for its own work."
 				: null,
 	}
 }

@@ -10,16 +10,16 @@ const options = [
 	{ id: "b4", name: "ZARIEL SIERRA", area: "CENTRAL", code: "274" },
 ]
 const shared = [
-	{ id: "b3", name: "JESUS MARTINEZ", lead: true },
-	{ id: "b1", name: "ALEXIS DIAZ", lead: false },
+	{ id: "b3", name: "JESUS MARTINEZ" },
+	{ id: "b1", name: "ALEXIS DIAZ" },
 ]
 const four = [
-	{ id: "b1", name: "ALEXIS DIAZ", lead: true },
-	{ id: "b2", name: "DINO CASTILLO", lead: false },
-	{ id: "b3", name: "JESUS MARTINEZ", lead: false },
-	{ id: "b4", name: "ZARIEL SIERRA", lead: false },
+	{ id: "b1", name: "ALEXIS DIAZ" },
+	{ id: "b2", name: "DINO CASTILLO" },
+	{ id: "b3", name: "JESUS MARTINEZ" },
+	{ id: "b4", name: "ZARIEL SIERRA" },
 ]
-const single = [{ id: "b1", name: "ALEXIS DIAZ", lead: true }]
+const single = [{ id: "b1", name: "ALEXIS DIAZ" }]
 
 type Posted = { intent: string | null; brigadeId: string | null }
 
@@ -28,18 +28,13 @@ const mount = (
 	renderStub: any,
 	assigned: typeof shared,
 	posts: Posted[] = [],
-	leadLocked = false,
 ) =>
 	renderStub({
 		entries: [
 			{
 				path: "/",
 				Component: () => (
-					<ReassignForm
-						brigadeOptions={options}
-						assignedBrigades={assigned}
-						leadLocked={leadLocked}
-					/>
+					<ReassignForm brigadeOptions={options} assignedBrigades={assigned} />
 				),
 				action: async ({ request }: { request: Request }) => {
 					const f = await request.formData()
@@ -76,7 +71,7 @@ describe("ReassignForm", () => {
 		)
 	})
 
-	it("a brigade not on the job can only replace, with the reworded warning", async ({
+	it("a shared job warns that the brigade replaces every crew", async ({
 		renderStub,
 	}) => {
 		const posts: Posted[] = []
@@ -85,10 +80,9 @@ describe("ReassignForm", () => {
 		await start()
 		const box = screen.getByTestId("reassign-confirm")
 		expect(box).toHaveTextContent(
-			"This job has 2 crews (lead: JESUS MARTINEZ). Reassigning to DINO CASTILLO will remove JESUS MARTINEZ and ALEXIS DIAZ and make DINO CASTILLO the only payee.",
+			"This job has 2 crews. Reassigning to DINO CASTILLO will remove JESUS MARTINEZ and ALEXIS DIAZ and make DINO CASTILLO the only crew on this job.",
 		)
 		expect(box).not.toHaveTextContent("the other")
-		expect(screen.queryByRole("button", { name: "Change lead" })).toBeNull()
 		expect(posts).toEqual([])
 		await userEvent.click(screen.getByRole("button", { name: "Reassign" }))
 		await waitFor(() =>
@@ -96,45 +90,17 @@ describe("ReassignForm", () => {
 		)
 	})
 
-	it("a brigade already on the job offers Change lead (keeps every crew) and Replace all crews", async ({
+	it("a brigade already on the job replaces the others too", async ({
 		renderStub,
 	}) => {
 		const posts: Posted[] = []
 		await mount(renderStub, four, posts)
 		await choose("DINO CASTILLO")
 		await start()
-		const box = screen.getByTestId("reassign-confirm")
-		expect(box).toHaveTextContent(
-			"will remove ALEXIS DIAZ, JESUS MARTINEZ, and ZARIEL SIERRA and make DINO CASTILLO the only payee",
-		)
-		expect(box).toHaveTextContent(
-			"keep all 4 crews and only make DINO CASTILLO the lead and payee",
-		)
-		await userEvent.click(screen.getByRole("button", { name: "Change lead" }))
-		await waitFor(() =>
-			expect(posts).toEqual([{ intent: "change_lead", brigadeId: "b2" }]),
-		)
-	})
-
-	it("Replace all crews posts the replace intent", async ({ renderStub }) => {
-		const posts: Posted[] = []
-		await mount(renderStub, four, posts)
-		await choose("DINO CASTILLO")
-		await start()
-		await userEvent.click(
-			screen.getByRole("button", { name: "Replace all crews" }),
-		)
+		await userEvent.click(screen.getByRole("button", { name: "Reassign" }))
 		await waitFor(() =>
 			expect(posts).toEqual([{ intent: "reassign", brigadeId: "b2" }]),
 		)
-	})
-
-	it("hides Change lead once the payee is fixed", async ({ renderStub }) => {
-		await mount(renderStub, four, [], true)
-		await choose("DINO CASTILLO")
-		await start()
-		expect(screen.queryByRole("button", { name: "Change lead" })).toBeNull()
-		expect(screen.getByRole("button", { name: "Reassign" })).toBeInTheDocument()
 	})
 
 	it("Cancel closes the confirmation without submitting", async ({

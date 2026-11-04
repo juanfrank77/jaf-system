@@ -4,6 +4,7 @@ import {
 	percentOf,
 	shareFigures,
 } from "~/lib/contractor-share"
+import { readCrewLines } from "~/lib/crew-field"
 import { db } from "~/lib/db.server"
 import { toNumberPrice } from "~/lib/utils"
 import { Prisma } from "../../generated/prisma/client"
@@ -162,8 +163,8 @@ export async function loadLineShares(
 }
 
 /**
- * The code a job's payee resolves by: the one copied at the pre-cert
- * signature, else the lead brigade's own code. The brigade is linked by id on
+ * The code a one-brigade job's payee resolves by: the one copied at the pre-cert
+ * signature, else the job's brigade's own code. The brigade is linked by id on
  * the job, so a packet released without the subcontractor code still reaches
  * its brigade; no names are matched.
  */
@@ -172,6 +173,49 @@ export function payeeCode(doc: {
 	brigade?: { code: string | null } | null
 }): string | null {
 	return doc.contractorAccountCode ?? doc.brigade?.code ?? null
+}
+
+/** Enough of a job to tell who is paid for it. */
+export type PayeeDoc = {
+	contractorAccountCode: string | null
+	brigade?: { code: string | null } | null
+	crewServiceLines: unknown
+}
+
+/** The brigades that recorded work on a job with several crews, in job order. */
+export function crewsWithWork(doc: Pick<PayeeDoc, "crewServiceLines">) {
+	return readCrewLines(doc.crewServiceLines).filter((c) => c.lines.length > 0)
+}
+
+export type CrewPayeeInfo = { code: string | null; name: string }
+
+/** Code and name of every brigade with work on these jobs, in ONE query. */
+export async function loadCrewPayees(
+	docs: ReadonlyArray<Pick<PayeeDoc, "crewServiceLines">>,
+): Promise<Map<string, CrewPayeeInfo>> {
+	const ids = [
+		...new Set(docs.flatMap((d) => crewsWithWork(d).map((c) => c.brigadeId))),
+	]
+	if (ids.length === 0) return new Map()
+	const rows = await db.brigade.findMany({
+		where: { id: { in: ids } },
+		select: { id: true, code: true, name: true },
+	})
+	return new Map(rows.map((b) => [b.id, { code: b.code, name: b.name }]))
+}
+
+/**
+ * Who a job pays: each brigade with work on it is paid for its own lines, so a
+ * job with several crews has one code per crew (null when one has no code yet,
+ * which holds the whole job back). A job with one crew pays through `payeeCode`.
+ */
+export function payeeCodesOf(
+	doc: PayeeDoc,
+	crews: ReadonlyMap<string, CrewPayeeInfo>,
+): (string | null)[] {
+	const withWork = crewsWithWork(doc)
+	if (withWork.length < 2) return [payeeCode(doc)]
+	return withWork.map((c) => crews.get(c.brigadeId)?.code ?? null)
 }
 
 export async function resolveContractorAccount(
@@ -186,7 +230,12 @@ export async function resolveContractorAccount(
 	return { id: account.id }
 }
 
-type ResolvedContractorAccount = { id: string }
+type ResolvedContractorAccount = {
+	id: string
+	code: string
+	label: string
+	brigadeCode: string | null
+}
 
 /**
  * Resolve a batch of `contractorAccountCode`s in ONE query, keyed by code.
@@ -214,7 +263,22 @@ export async function resolveContractorAccounts(
 	if (distinct.length === 0) return new Map()
 	const accounts = await db.contractorAccount.findMany({
 		where: { code: { in: distinct } },
-		select: { id: true, code: true },
+		select: {
+			id: true,
+			code: true,
+			label: true,
+			brigade: { select: { code: true } },
+		},
 	})
-	return new Map(accounts.map((a) => [a.code, { id: a.id }]))
+	return new Map(
+		accounts.map((a) => [
+			a.code,
+			{
+				id: a.id,
+				code: a.code,
+				label: a.label,
+				brigadeCode: a.brigade?.code ?? null,
+			},
+		]),
+	)
 }

@@ -34,6 +34,11 @@ vi.mock("~/lib/db.server", () => {
 		brigade: {
 			findMany: vi.fn(),
 		},
+		pickupRelease: {
+			create: vi.fn(),
+			findMany: vi.fn(async () => []),
+			count: vi.fn(async () => 0),
+		},
 		auditTrail: {
 			create: mockAuditTrailCreate,
 		},
@@ -49,6 +54,7 @@ vi.mock("~/lib/db.server", () => {
 				// Create a transaction object that uses the mocked methods
 				const txObject = {
 					jafInvoice: { update: mockJafInvoiceUpdate },
+					pickupRelease: { create: vi.fn() },
 					auditTrail: { create: mockAuditTrailCreate },
 					notification: { create: mockNotificationCreate },
 					stockMovement: { create: mockStockMovementCreate },
@@ -59,6 +65,7 @@ vi.mock("~/lib/db.server", () => {
 					if (typeof op === "function") {
 						const txObject = {
 							jafInvoice: { update: mockJafInvoiceUpdate },
+							pickupRelease: { create: vi.fn() },
 							auditTrail: { create: mockAuditTrailCreate },
 							notification: { create: mockNotificationCreate },
 							stockMovement: { create: mockStockMovementCreate },
@@ -127,6 +134,8 @@ describe("POST /docs/:id/sign", () => {
 		vi.clearAllMocks()
 		mockBrigade()
 		mockUserLists()
+		vi.mocked(db.pickupRelease.count).mockResolvedValue(0)
+		vi.mocked(db.pickupRelease.findMany).mockResolvedValue([])
 	})
 
 	function baseDoc() {
@@ -174,7 +183,7 @@ describe("POST /docs/:id/sign", () => {
 		expect(db.jafInvoice.update).not.toHaveBeenCalled()
 	})
 
-	it("transitions to SIGNED and records both signers", async () => {
+	it("records the release and both signers; the job waits for Release complete", async () => {
 		vi.mocked(requireRole).mockResolvedValue({
 			user: { id: "warehouse-1", role: "WAREHOUSE" },
 			session: {},
@@ -198,6 +207,7 @@ describe("POST /docs/:id/sign", () => {
 			if (typeof callback === "function") {
 				const txObject = {
 					jafInvoice: { update: vi.mocked(db.jafInvoice.update) },
+					pickupRelease: { create: vi.mocked(db.pickupRelease.create) },
 					auditTrail: { create: vi.mocked(db.auditTrail.create) },
 					notification: { create: vi.mocked(db.notification.create) },
 					stockMovement: { create: vi.mocked(db.stockMovement.create) },
@@ -214,7 +224,7 @@ describe("POST /docs/:id/sign", () => {
 		expect(result.status).toBe(302)
 		expect(db.jafInvoice.update).toHaveBeenCalled()
 		const updateCall = vi.mocked(db.jafInvoice.update).mock.calls[0][0]
-		expect(updateCall.data.status).toBe("SIGNED")
+		expect(updateCall.data.status).toBeUndefined()
 		expect(updateCall.data.releasedById).toBe("warehouse-1")
 		expect(updateCall.data.signedById).toBe("crew-1")
 		expect(updateCall.data.materialsTaken).toEqual([
@@ -247,6 +257,7 @@ describe("POST /docs/:id/sign", () => {
 			if (typeof callback === "function") {
 				const txObject = {
 					jafInvoice: { update: vi.mocked(db.jafInvoice.update) },
+					pickupRelease: { create: vi.mocked(db.pickupRelease.create) },
 					auditTrail: { create: vi.mocked(db.auditTrail.create) },
 					notification: { create: vi.mocked(db.notification.create) },
 					stockMovement: { create: vi.mocked(db.stockMovement.create) },
@@ -295,6 +306,7 @@ describe("POST /docs/:id/sign", () => {
 				if (typeof callback === "function") {
 					return await callback({
 						jafInvoice: { update: vi.mocked(db.jafInvoice.update) },
+						pickupRelease: { create: vi.mocked(db.pickupRelease.create) },
 						auditTrail: { create: vi.mocked(db.auditTrail.create) },
 						notification: { create: vi.mocked(db.notification.create) },
 						stockMovement: { create: vi.mocked(db.stockMovement.create) },
@@ -364,7 +376,7 @@ describe("POST /docs/:id/sign", () => {
 		})
 	})
 
-	it("rejects when materials are already signed", async () => {
+	it("a second release adds to Taken and keeps the first release's signatures", async () => {
 		vi.mocked(requireRole).mockResolvedValue({
 			user: { id: "warehouse-1", role: "WAREHOUSE" },
 			session: {},
@@ -373,14 +385,72 @@ describe("POST /docs/:id/sign", () => {
 			...baseDoc(),
 			materialsTaken: [{ serviceCodeId: "sc-1", qty: 2 }],
 		} as any)
+		vi.mocked(db.pickupRelease.count).mockResolvedValue(1)
+		;(db.user.findFirst as any).mockResolvedValue({
+			id: "warehouse-1",
+			name: "Iidalia",
+		})
+		vi.mocked(db.warehouse.findUnique).mockResolvedValue({
+			id: "wh-1",
+			name: "Main",
+		} as any)
+		mockUserLists()
+		vi.mocked(db.$transaction).mockImplementation(async (callback: any) =>
+			callback({
+				jafInvoice: { update: vi.mocked(db.jafInvoice.update) },
+				pickupRelease: { create: vi.mocked(db.pickupRelease.create) },
+				auditTrail: { create: vi.mocked(db.auditTrail.create) },
+				notification: { create: vi.mocked(db.notification.create) },
+				stockMovement: { create: vi.mocked(db.stockMovement.create) },
+			}),
+		)
 
 		const result = await action({
 			request: formRequest(validForm()),
 			params: { id: "doc-1" },
-		} as any)
+		} as any).catch((r: any) => r)
 
-		expect(result).toEqual({ errorKey: "docs_sign.errors.already_signed" })
+		expect(result.status).toBe(302)
+		expect(result.headers.get("Location")).toBe("/docs/doc-1/sign")
+		const data = vi.mocked(db.jafInvoice.update).mock.calls[0][0].data as any
+		expect(data.materialsTaken).toEqual([{ serviceCodeId: "sc-1", qty: 4 }])
+		expect(data.releaseSignature).toBeUndefined()
+		const release = vi.mocked(db.pickupRelease.create).mock.calls[0][0]
+			.data as any
+		expect(release.number).toBe(2)
+		expect(release.materials).toEqual([{ serviceCodeId: "sc-1", qty: 2 }])
+		expect(release.crewSignerBrigadeId).toBe("b-1")
+	})
+
+	it("Release complete needs a signed release, then moves the job on", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "warehouse-1", role: "WAREHOUSE" },
+			session: {},
+		} as any)
+		vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
+			baseDoc() as any,
+		)
+		const complete = () => {
+			const form = new FormData()
+			form.set("intent", "complete")
+			return action({
+				request: formRequest(form),
+				params: { id: "doc-1" },
+			} as any).catch((r: any) => r)
+		}
+		vi.mocked(db.pickupRelease.count).mockResolvedValue(0)
+		expect(await complete()).toEqual({
+			errorKey: "docs_sign.errors.no_release",
+		})
 		expect(db.jafInvoice.update).not.toHaveBeenCalled()
+
+		vi.mocked(db.pickupRelease.count).mockResolvedValue(2)
+		vi.mocked(db.$transaction).mockResolvedValue([] as never)
+		const done = await complete()
+		expect(done.headers.get("Location")).toBe("/docs/doc-1")
+		expect(vi.mocked(db.jafInvoice.update).mock.calls[0][0].data).toEqual({
+			status: "SIGNED",
+		})
 	})
 
 	it("appends RELEASE(-taken) bulk movements in the sign transaction", async () => {
@@ -417,6 +487,7 @@ describe("POST /docs/:id/sign", () => {
 			if (typeof callback === "function") {
 				const txObject = {
 					jafInvoice: { update: vi.mocked(db.jafInvoice.update) },
+					pickupRelease: { create: vi.mocked(db.pickupRelease.create) },
 					auditTrail: { create: vi.mocked(db.auditTrail.create) },
 					notification: { create: vi.mocked(db.notification.create) },
 					stockMovement: { create: vi.mocked(db.stockMovement.create) },
@@ -484,6 +555,7 @@ describe("POST /docs/:id/sign", () => {
 			if (typeof callback === "function") {
 				const txObject = {
 					jafInvoice: { update: vi.mocked(db.jafInvoice.update) },
+					pickupRelease: { create: vi.mocked(db.pickupRelease.create) },
 					auditTrail: { create: vi.mocked(db.auditTrail.create) },
 					notification: { create: vi.mocked(db.notification.create) },
 					stockMovement: { create: vi.mocked(db.stockMovement.create) },
@@ -517,6 +589,8 @@ describe("who signs on /docs/:id/sign (crew accounts no longer sign in)", () => 
 		vi.clearAllMocks()
 		mockBrigade()
 		mockUserLists()
+		vi.mocked(db.pickupRelease.count).mockResolvedValue(0)
+		vi.mocked(db.pickupRelease.findMany).mockResolvedValue([])
 	})
 
 	/** requireRole as the real one behaves: off-list roles go to /dashboard. */
@@ -597,7 +671,7 @@ describe("who signs on /docs/:id/sign (crew accounts no longer sign in)", () => 
 		} as any).catch((r: unknown) => r)
 		expect((res as Response).status).toBe(302)
 		const data = vi.mocked(db.jafInvoice.update).mock.calls[0][0].data as any
-		expect(data.status).toBe("SIGNED")
+		expect(data.status).toBeUndefined()
 		expect(data.releasedById).toBe("warehouse-1")
 		expect(data.releaseSignature).toBe("data:image/png;base64,release")
 		expect(data.signedById).toBe("crew-1")
@@ -626,6 +700,8 @@ describe("who signs on /docs/:id/sign (crew accounts no longer sign in)", () => 
 describe("pickup signer is the assigned brigade", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
+		vi.mocked(db.pickupRelease.count).mockResolvedValue(0)
+		vi.mocked(db.pickupRelease.findMany).mockResolvedValue([])
 		vi.mocked(requireRole).mockResolvedValue({
 			user: { id: "warehouse-1", role: "WAREHOUSE" },
 			session: {},
@@ -672,6 +748,7 @@ describe("pickup signer is the assigned brigade", () => {
 		vi.mocked(db.$transaction).mockImplementation(async (cb: any) =>
 			cb({
 				jafInvoice: { update: vi.mocked(db.jafInvoice.update) },
+				pickupRelease: { create: vi.mocked(db.pickupRelease.create) },
 				auditTrail: { create: vi.mocked(db.auditTrail.create) },
 				notification: { create: vi.mocked(db.notification.create) },
 				stockMovement: { create: vi.mocked(db.stockMovement.create) },
@@ -772,7 +849,7 @@ describe("pickup signer is the assigned brigade", () => {
 		)
 	})
 
-	it("signs with no account: the name and brigade are stored, the job moves on", async () => {
+	it("signs with no account: the name and brigade are stored", async () => {
 		mockBrigade({ leadName: "Carlos Rodríguez", memberIds: [] })
 		runInTransaction()
 		const res = await action({
@@ -781,7 +858,6 @@ describe("pickup signer is the assigned brigade", () => {
 		} as any).catch((r: unknown) => r)
 		expect((res as Response).status).toBe(302)
 		const data = vi.mocked(db.jafInvoice.update).mock.calls[0][0].data as any
-		expect(data.status).toBe("SIGNED")
 		expect(data.signedById).toBeNull()
 		expect(data.crewSignerName).toBe("Carlos Rodríguez")
 		expect(data.crewSignerBrigadeId).toBe("b-1")

@@ -1,4 +1,3 @@
-import { redirect } from "react-router"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("~/lib/db.server", () => {
@@ -28,6 +27,10 @@ vi.mock("~/lib/service-codes.server", async (importOriginal) => ({
 	getActiveMaterialCodes: vi.fn(),
 }))
 vi.mock("~/lib/permissions.server", () => ({ requireRole: vi.fn() }))
+vi.mock("~/lib/pre-cert.server", () => ({
+	issueFieldCertificates: vi.fn(),
+}))
+
 vi.mock("~/lib/uploads.server", () => ({
 	saveUpload: vi.fn(async (k: string, f: string) => `/uploads/${k}/${f}`),
 	photosThatLoad: vi.fn(async (_d: string, photos: unknown[]) => photos),
@@ -35,6 +38,7 @@ vi.mock("~/lib/uploads.server", () => ({
 
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
+import { issueFieldCertificates } from "~/lib/pre-cert.server"
 import { getActiveMaterialCodes } from "~/lib/service-codes.server"
 import { action, loader } from "./_app.docs.$id_.field"
 
@@ -148,11 +152,9 @@ describe("field step — one window per crew", () => {
 				request: new Request("http://localhost/docs/doc-1/field"),
 				params: { id: "doc-1" },
 			} as any)
-			expect(
-				data.crews.map((c: any) => [c.id, c.name, c.code, c.lead]),
-			).toEqual([
-				["b-angel", "ANGEL D JIMENEZ", "124", true],
-				["b-jesus", "JESUS MARTINEZ", "009", false],
+			expect(data.crews.map((c: any) => [c.id, c.name, c.code])).toEqual([
+				["b-angel", "ANGEL D JIMENEZ", "124"],
+				["b-jesus", "JESUS MARTINEZ", "009"],
 			])
 			const [angel, jesus] = data.crews
 			expect(
@@ -185,13 +187,13 @@ describe("field step — one window per crew", () => {
 		}
 
 		it("stores each crew's lines and the job total as their sum", async () => {
-			withDoc()
+			withDoc({ serviceLines: [FIBER, line("pole", 2)] })
 			await run(
 				crewForm([
-					{ brigadeId: "b-jesus", lines: [line("fiber", 400)] },
+					{ brigadeId: "b-jesus", lines: [line("pole", 2)] },
 					{
 						brigadeId: "b-angel",
-						lines: [line("fiber", 600)],
+						lines: [line("fiber", 1000)],
 					},
 				]),
 			)
@@ -202,7 +204,41 @@ describe("field step — one window per crew", () => {
 			])
 			expect(
 				data.installedServiceLines.map((l: any) => [l.serviceCodeId, l.qty]),
-			).toEqual([["fiber", 1000]])
+			).toEqual([
+				["fiber", 1000],
+				["pole", 2],
+			])
+		})
+
+		it("refuses a service line held by two crews: a line is never split", async () => {
+			withDoc()
+			const res = await run(
+				crewForm([
+					{ brigadeId: "b-angel", lines: [line("fiber", 600)] },
+					{ brigadeId: "b-jesus", lines: [line("fiber", 400)] },
+				]),
+			)
+			expect(res).toEqual({ errorKey: "docs_field.errors.line_two_crews" })
+			expect(db.jafInvoice.update).not.toHaveBeenCalled()
+		})
+
+		it("unticking a line takes it off the crew", async () => {
+			withDoc({
+				serviceLines: [FIBER, line("pole", 2)],
+				crewServiceLines: [
+					{
+						brigadeId: "b-angel",
+						lines: [line("fiber", 900), line("pole", 2)],
+					},
+				],
+			})
+			await run(
+				crewForm([{ brigadeId: "b-angel", lines: [line("fiber", 900)] }]),
+			)
+			const angel = lastUpdate().data.crewServiceLines.find(
+				(c: any) => c.brigadeId === "b-angel",
+			)
+			expect(angel.lines.map((l: any) => l.serviceCodeId)).toEqual(["fiber"])
 		})
 
 		it("keeps a crew's field-added service when its post leaves it out of the order", async () => {
@@ -310,17 +346,34 @@ describe("field step — one window per crew", () => {
 			expect(db.jafInvoice.update).not.toHaveBeenCalled()
 		})
 
-		it("moves on when every crew has its quantities", async () => {
-			withDoc()
+		it("stays put until every service line is ticked by a crew", async () => {
+			withDoc({ serviceLines: [FIBER, line("pole", 2), line("span", 3)] })
 			const res = await run(
 				cont([
 					{ brigadeId: "b-angel", lines: [line("fiber", 600)] },
-					{ brigadeId: "b-jesus", lines: [line("fiber", 400)] },
+					{ brigadeId: "b-jesus", lines: [line("pole", 2)] },
+				]),
+			)
+			expect(res).toEqual({ errorKey: "docs_field.errors.line_unassigned" })
+			expect(db.jafInvoice.update).not.toHaveBeenCalled()
+		})
+
+		it("moves on when every line has its crew, and issues a certificado per crew", async () => {
+			withDoc({ serviceLines: [FIBER, line("pole", 2)] })
+			const res = await run(
+				cont([
+					{ brigadeId: "b-angel", lines: [line("fiber", 1000)] },
+					{ brigadeId: "b-jesus", lines: [line("pole", 2)] },
 				]),
 			)
 			expect(res).toBeInstanceOf(Response)
 			expect((res as Response).status).toBe(302)
 			expect(lastUpdate().data.fieldSubmittedAt).toBeInstanceOf(Date)
+			expect(issueFieldCertificates).toHaveBeenCalledWith({
+				docId: "doc-1",
+				actor: { id: "sup-1", role: "SUPERVISOR" },
+				returned: false,
+			})
 		})
 	})
 
@@ -367,7 +420,7 @@ describe("field step — one window per crew", () => {
 			])
 		})
 
-		it("lets the second crew add the same service the first one added", async () => {
+		it("refuses a service another crew on the job already has", async () => {
 			withDoc({
 				crewServiceLines: [
 					{
@@ -376,12 +429,10 @@ describe("field step — one window per crew", () => {
 					},
 				],
 			})
-			expect(await run(addForm("b-jesus"))).toEqual({ ok: true })
-			const { data } = vi.mocked(db.jafInvoice.updateMany).mock
-				.calls[0][0] as any
-			expect(data.installedServiceLines).toEqual([
-				expect.objectContaining({ serviceCodeId: "digger", qty: 2 }),
-			])
+			expect(await run(addForm("b-jesus"))).toEqual({
+				errorKey: "docs_field.errors.service_other_crew",
+			})
+			expect(db.jafInvoice.updateMany).not.toHaveBeenCalled()
 		})
 
 		it("refuses a brigade that is not on the job", async () => {

@@ -42,7 +42,7 @@ export async function standByBrigade(
 		where: { status: { in: [...WORK_STATUSES] } },
 		select: { brigadeId: true, crewAssignmentHistory: true },
 	})
-	// The lead is a column but the rest live in the assignment history (JSON),
+	// The first brigade is a column but the rest live in the assignment history (JSON),
 	// so match in code via assignedBrigadeIds.
 	if (jobs.some((j) => assignedBrigadeIds(j).includes(brigadeId)))
 		return { ok: false, errorKey: STANDBY_ON_A_JOB }

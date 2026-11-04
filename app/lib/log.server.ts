@@ -205,7 +205,7 @@ async function brigadeRows(): Promise<LogRow[]> {
 					bankSchedule: { select: { sentAt: true } },
 				},
 			},
-			accounts: true,
+			accounts: { include: { contractorAccount: { select: { code: true } } } },
 		},
 	})
 	const out: LogRow[] = []
@@ -218,9 +218,9 @@ async function brigadeRows(): Promise<LogRow[]> {
 		)
 		const byInvoice = new Map(run.invoices.map((i) => [i.id, i]))
 		for (const block of buildJournalBlocks(run.invoices)) {
-			const accountId = run.invoices.find(
-				(i) => i.contractorAccount?.code === block.accountCode,
-			)?.contractorAccount?.id
+			const accountId = run.accounts.find(
+				(a) => a.contractorAccount.code === block.accountCode,
+			)?.contractorAccountId
 			const paid = accountId ? (paidAt.get(accountId) ?? null) : null
 			for (const job of block.jobs) {
 				const pbccSent =

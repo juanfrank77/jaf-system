@@ -27,6 +27,7 @@ import { SupervisorStepRail } from "~/components/supervisor-step-rail"
 import { Button } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
 import { Card, CardContent, CardHeader } from "~/components/ui/card"
+import { Checkbox } from "~/components/ui/checkbox"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
@@ -36,9 +37,12 @@ import {
 	crewLinesOf,
 	crewsOnJob,
 	everyCrewHasLines,
+	hasSplitLine,
+	lineOwners,
 	normalizeInstalled,
 	readCrewLines,
 	sumCrewLines,
+	unassignedLines,
 	withCrewLines,
 } from "~/lib/crew-field"
 import { db } from "~/lib/db.server"
@@ -64,6 +68,8 @@ import { composeJobAddress } from "~/lib/intake-address"
 import { isBillableSource } from "~/lib/material-source"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
+import { issueFieldCertificates } from "~/lib/pre-cert.server"
+import { isReturned, type ReturnStateDoc } from "~/lib/returned-packet"
 import {
 	findPickableServiceCode,
 	getActiveMaterialCodes,
@@ -107,9 +113,11 @@ const ADMIN_FIELD_OPEN_STATUSES = [
 ]
 
 function fieldIsOpen(
-	doc: { status: string; supervisorApprovedAt: Date | null },
+	doc: ReturnStateDoc & { status: string; supervisorApprovedAt: Date | null },
 	role: string,
 ): boolean {
+	// Finance sent it back: nothing stays locked, the supervisor can change anything.
+	if (isReturned(doc)) return true
 	if (role === "ADMIN") return ADMIN_FIELD_OPEN_STATUSES.includes(doc.status)
 	return FIELD_OPEN_STATUSES.includes(doc.status) && !doc.supervisorApprovedAt
 }
@@ -343,7 +351,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 							id,
 							name: b.name,
 							code: b.code,
-							lead: id === crewIds[0],
 							installed: mine,
 							rows: serviceRows(ordered, mine, unitOf),
 						},
@@ -361,7 +368,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		serviceCodes: serviceCodesForRole(user.role, codes),
 		// "Add service" and its remove (x) stay until the job is signed off
 		// (the Pre-cert and the packet are built from the lines from then on).
-		addServiceOpen: !doc.jafInvoiceGeneratedAt && !doc.supervisorApprovedAt,
+		addServiceOpen:
+			isReturned(doc) ||
+			(!doc.jafInvoiceGeneratedAt && !doc.supervisorApprovedAt),
 	}
 }
 
@@ -396,10 +405,11 @@ async function changeAddedService(
 	doc: FieldDoc,
 	userId: string,
 ): Promise<Refusal | { ok: true }> {
-	if (doc.jafInvoiceGeneratedAt)
+	const returned = isReturned(doc)
+	if (doc.jafInvoiceGeneratedAt && !returned)
 		return refusal("docs_field.errors.service_packet_sent")
 	// Admin can still open Field after sign-off; the lines are fixed then.
-	if (doc.supervisorApprovedAt)
+	if (doc.supervisorApprovedAt && !returned)
 		return refusal("docs_field.errors.service_signed_off")
 	const ordered = (doc.serviceLines as ServiceLine[] | null) ?? []
 	// With several crews the line goes on the crew whose window it was added in.
@@ -426,6 +436,9 @@ async function changeAddedService(
 			)
 		)
 			return refusal("docs_field.errors.service_already_added")
+		// A line is never split between crews.
+		if (multiCrew && lineOwners(crews).has(id))
+			return refusal("docs_field.errors.service_other_crew")
 		const qty = Number(form.get("qty"))
 		if (!Number.isFinite(qty) || qty <= 0)
 			return refusal("docs_field.errors.service_qty_invalid")
@@ -454,8 +467,9 @@ async function changeAddedService(
 		const res = await tx.jafInvoice.updateMany({
 			where: {
 				id: doc.id,
-				jafInvoiceGeneratedAt: null,
-				supervisorApprovedAt: null,
+				...(returned
+					? {}
+					: { jafInvoiceGeneratedAt: null, supervisorApprovedAt: null }),
 			},
 			data: {
 				...(multiCrew
@@ -620,6 +634,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 				c.brigadeId,
 				mergeInstalledPost(c.lines, ordered, crewLinesOf(stored, c.brigadeId)),
 			)
+		// A service line belongs to one brigade; Actual is that brigade's quantity.
+		if (hasSplitLine(merged)) return refusal("docs_field.errors.line_two_crews")
 		update.crewServiceLines = merged as unknown as Prisma.InputJsonValue
 		update.installedServiceLines = sumCrewLines(
 			merged,
@@ -671,6 +687,14 @@ export async function action({ request, params }: Route.ActionArgs) {
 			)
 		)
 			return refusal("docs_field.errors.crew_lines_required")
+		if (
+			multiCrew &&
+			unassignedLines(
+				(doc.serviceLines as ServiceLine[] | null) ?? [],
+				readCrewLines(update.crewServiceLines ?? doc.crewServiceLines),
+			).length > 0
+		)
+			return refusal("docs_field.errors.line_unassigned")
 		rows ??= fieldMaterialsOrDefault(doc.fieldMaterials, taken)
 		// Billable (WAREHOUSE_ISSUE) use cannot exceed what was issued; extra
 		// material is entered under another Source.
@@ -737,6 +761,14 @@ export async function action({ request, params }: Route.ActionArgs) {
 			user.id,
 		)
 
+	// Saving the field step writes one certificado per brigade from its card. The
+	// Aviso save issues them again with the Aviso number.
+	if (intent === "continue")
+		await issueFieldCertificates({
+			docId: doc.id,
+			actor: { id: user.id, role: user.role },
+			returned: isReturned(doc),
+		})
 	if (intent === "continue") throw redirect(`/docs/${doc.id}/review`)
 	if (intent === "back") throw redirect(`/docs/${doc.id}`)
 	return { ok: true as const }
@@ -1001,7 +1033,6 @@ export default function FieldUpdate({
 		id: string | null
 		name: string | null
 		code: string | null
-		lead: boolean
 		rows: (typeof services.rows)[number][]
 	}
 	const windows: CrewWindow[] =
@@ -1010,7 +1041,6 @@ export default function FieldUpdate({
 					id: c.id,
 					name: c.name,
 					code: c.code,
-					lead: c.lead,
 					rows: c.rows,
 				}))
 			: [
@@ -1018,11 +1048,32 @@ export default function FieldUpdate({
 						id: null,
 						name: null,
 						code: null,
-						lead: true,
 						rows: services.rows,
 					},
 				]
-	const leadId = crews.find((c) => c.lead)?.id ?? null
+	// A materials row with no crew goes under the first brigade on the job.
+	const firstCrewId = crews[0]?.id ?? null
+	// Several crews: which crew did each service line (never two).
+	const [ticks, setTicks] = useState<Record<string, string>>(() =>
+		Object.fromEntries(
+			lineOwners(crews.map((c) => ({ brigadeId: c.id, lines: c.installed }))),
+		),
+	)
+	const toggleTick = (crewId: string, serviceCodeId: string, on: boolean) =>
+		setTicks((cur) => {
+			const next = { ...cur }
+			if (on) next[serviceCodeId] = crewId
+			else delete next[serviceCodeId]
+			return next
+		})
+	const tickId = (crewId: string, serviceCodeId: string) =>
+		`tick-${crewId}-${serviceCodeId}`
+	// With one crew there is no tick: every line is that crew's.
+	// A line added in a card is that crew's.
+	const isMine = (
+		w: { id: string | null },
+		r: { serviceCodeId: string; addedInField?: true },
+	) => w.id === null || ticks[r.serviceCodeId] === w.id || !!r.addedInField
 	const boxKey = (crewId: string | null, serviceCodeId: string) =>
 		crewId ? `${crewId}:${serviceCodeId}` : serviceCodeId
 	const actualId = (crewId: string | null, serviceCodeId: string) =>
@@ -1057,7 +1108,9 @@ export default function FieldUpdate({
 		w.rows.flatMap((r) => {
 			const line = lineOf.get(r.serviceCodeId)
 			const value = actualOf(w, r)
-			return line && value !== "" ? [{ ...line, qty: Number(value) }] : []
+			return line && value !== "" && isMine(w, r)
+				? [{ ...line, qty: Number(value) }]
+				: []
 		})
 	const installed = installedFor(windows[0])
 	const crewInstalled = crews.map((c) => ({
@@ -1078,12 +1131,12 @@ export default function FieldUpdate({
 		new Map(list.map((m) => [m.serviceCodeId, m.qty]))
 	const signedQty = qtyOf(materialsTaken)
 	const estimatedQty = qtyOf(estimatedMaterials)
-	// A row without a crew is the lead's; a post always names the crew.
+	// A post always names the crew.
 	const postedRows =
 		crews.length > 0
 			? rows.map((r) => ({
 					...r,
-					brigadeId: r.brigadeId ?? leadId ?? undefined,
+					brigadeId: r.brigadeId ?? firstCrewId ?? undefined,
 				}))
 			: rows
 	const tableRowOf = (r: FieldMaterialRow): FieldMaterialsTableRow => {
@@ -1102,39 +1155,59 @@ export default function FieldUpdate({
 
 	const targets = fieldTargets({
 		actuals: windows.flatMap((w) =>
-			w.rows.map((r) => ({
-				id: actualId(w.id, r.serviceCodeId),
-				value: actualOf(w, r),
-			})),
+			w.rows
+				.filter((r) => isMine(w, r))
+				.map((r) => ({
+					id: actualId(w.id, r.serviceCodeId),
+					value: actualOf(w, r),
+				})),
+		),
+		ticks: crews.flatMap((c, i) =>
+			i === 0
+				? serviceLines
+						.filter((l) => !ticks[l.serviceCodeId])
+						.map((l) => ({ id: tickId(c.id, l.serviceCodeId) }))
+				: [],
 		),
 		notes,
 		beforePhotos: photos.BEFORE.length,
 		afterPhotos: photos.AFTER.length,
 	})
 	const next = nextEmpty(targets)
-	// A crew window with no quantity at all blocks Continue, like a missing photo.
-	const crewMissing = windows.flatMap((w) =>
-		w.id && w.rows.length > 0 && installedFor(w).length === 0
-			? [
-					{
-						id: actualId(w.id, w.rows[0].serviceCodeId),
-						kind: "crew" as const,
-						name: w.name ?? "",
-					},
-				]
-			: [],
-	)
+	// A crew with no quantity at all, or a ticked line with its box empty, blocks
+	// Continue like a missing photo.
+	const crewMissing = windows.flatMap((w) => {
+		if (!w.id || w.rows.length === 0) return []
+		const mine = w.rows.filter((r) => isMine(w, r))
+		const empty = mine.find((r) => actualOf(w, r) === "")
+		if (mine.length > 0 && !empty) return []
+		return [
+			{
+				id: empty
+					? actualId(w.id, empty.serviceCodeId)
+					: tickId(w.id, w.rows[0].serviceCodeId),
+				kind: "crew" as const,
+				name: w.name ?? "",
+			},
+		]
+	})
 	const missing = [...crewMissing, ...blockingMissing(targets)]
 	const missingLabels = missing.map((m) =>
 		m.kind === "crew"
 			? t("docs_field.crew_quantities", { name: m.name })
-			: t(
-					m.kind === "notes"
-						? "docs_field.field_notes_label"
-						: m.kind === "before"
-							? "docs_field.photos_before_label"
-							: "docs_field.photos_after_label",
-				),
+			: m.kind === "tick"
+				? t("docs_field.tick_line", {
+						code:
+							serviceLines.find((l) => m.id.endsWith(`-${l.serviceCodeId}`))
+								?.claroCode ?? "",
+					})
+				: t(
+						m.kind === "notes"
+							? "docs_field.field_notes_label"
+							: m.kind === "before"
+								? "docs_field.photos_before_label"
+								: "docs_field.photos_after_label",
+					),
 	)
 	const jumpTo = (id: string | undefined) => {
 		const el = id ? document.getElementById(id) : null
@@ -1209,14 +1282,21 @@ export default function FieldUpdate({
 			<Form ref={formRef} method="post" className="space-y-5">
 				{windows.map((w) => {
 					const crewRows = rows.flatMap((r, index) =>
-						(r.brigadeId ?? leadId) === w.id ? [{ r, index }] : [],
+						(r.brigadeId ?? firstCrewId) === w.id ? [{ r, index }] : [],
 					)
 					const inner = (
 						<>
 							{(w.rows.length > 0 || addServiceOpen) && (
 								<Card>
 									<CardHeader>
-										{t("docs_field.services_performed_label")}
+										{w.id === null
+											? t("docs_field.services_performed_label")
+											: w.code
+												? t("docs_field.services_done_by_code", {
+														name: w.name,
+														code: w.code,
+													})
+												: t("docs_field.services_done_by", { name: w.name })}
 									</CardHeader>
 									<CardContent className="space-y-2">
 										{w.id === null && installed.length > 0 && (
@@ -1234,6 +1314,11 @@ export default function FieldUpdate({
 												>
 													<thead>
 														<tr className="border-b text-left text-xs text-muted-foreground">
+															{w.id && (
+																<th className="py-1.5 pr-2">
+																	{t("docs_field.services.done")}
+																</th>
+															)}
 															<th className="py-1.5 pr-2">
 																{t("docs_field.services.code")}
 															</th>
@@ -1259,11 +1344,37 @@ export default function FieldUpdate({
 													<tbody className="tabular-nums">
 														{w.rows.map((r) => {
 															const boxId = actualId(w.id, r.serviceCodeId)
+															const owner = ticks[r.serviceCodeId]
+															const otherCrew =
+																w.id !== null && !!owner && owner !== w.id
+															// A line added in a card belongs to that crew.
+															const addedHere =
+																"addedInField" in r && r.addedInField === true
 															return (
 																<tr
 																	key={r.serviceCodeId}
 																	className="border-b last:border-0"
 																>
+																	{w.id && (
+																		<td className="py-1.5 pr-2">
+																			<Checkbox
+																				id={tickId(w.id, r.serviceCodeId)}
+																				checked={addedHere || owner === w.id}
+																				disabled={addedHere || otherCrew}
+																				aria-label={t(
+																					"docs_field.services.done_aria",
+																					{ code: r.claroCode },
+																				)}
+																				onCheckedChange={(v) =>
+																					toggleTick(
+																						w.id as string,
+																						r.serviceCodeId,
+																						v === true,
+																					)
+																				}
+																			/>
+																		</td>
+																	)}
 																	<td className="py-1.5 pr-2 font-mono text-xs">
 																		{r.claroCode}
 																	</td>
@@ -1287,32 +1398,39 @@ export default function FieldUpdate({
 																		{r.estimated}
 																	</td>
 																	<td className="py-1.5 pr-2">
-																		<Input
-																			type="number"
-																			min={0}
-																			inputMode="decimal"
-																			id={boxId}
-																			className={cn(
-																				"field-required w-20",
-																				next?.id === boxId && "field-next",
-																			)}
-																			aria-label={`${t("docs_field.services.actual")} ${r.claroCode}`}
-																			onKeyDown={(e) => {
-																				// Enter moves on to the next empty box instead of
-																				// submitting the form.
-																				if (e.key !== "Enter") return
-																				e.preventDefault()
-																				jumpTo(nextEmpty(targets, boxId)?.id)
-																			}}
-																			value={actualOf(w, r)}
-																			onChange={(e) =>
-																				setActuals({
-																					...actuals,
-																					[boxKey(w.id, r.serviceCodeId)]:
-																						e.target.value,
-																				})
-																			}
-																		/>
+																		{otherCrew ? (
+																			<span className="text-xs text-muted-foreground">
+																				{t("docs_field.services.other_crew")}
+																			</span>
+																		) : (
+																			<Input
+																				disabled={!addedHere && !isMine(w, r)}
+																				type="number"
+																				min={0}
+																				inputMode="decimal"
+																				id={boxId}
+																				className={cn(
+																					"field-required w-20",
+																					next?.id === boxId && "field-next",
+																				)}
+																				aria-label={`${t("docs_field.services.actual")} ${r.claroCode}`}
+																				onKeyDown={(e) => {
+																					// Enter moves on to the next empty box instead of
+																					// submitting the form.
+																					if (e.key !== "Enter") return
+																					e.preventDefault()
+																					jumpTo(nextEmpty(targets, boxId)?.id)
+																				}}
+																				value={actualOf(w, r)}
+																				onChange={(e) =>
+																					setActuals({
+																						...actuals,
+																						[boxKey(w.id, r.serviceCodeId)]:
+																							e.target.value,
+																					})
+																				}
+																			/>
+																		)}
 																	</td>
 																	<td className="py-1.5 pr-2 text-xs">
 																		{r.unit ?? "—"}
@@ -1416,11 +1534,6 @@ export default function FieldUpdate({
 							<h2 className="text-base font-semibold">
 								{t("docs_field.crew_window", { n })} · {w.name}
 								{w.code ? ` · ${w.code}` : ""}
-								{w.lead && (
-									<span className="ml-2 rounded-md bg-primary px-1.5 py-0.5 text-xs font-semibold text-primary-foreground">
-										{t("crew_picker.lead")}
-									</span>
-								)}
 							</h2>
 							{inner}
 						</section>

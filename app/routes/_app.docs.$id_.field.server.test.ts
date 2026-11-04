@@ -45,6 +45,10 @@ vi.mock("~/lib/permissions.server", () => ({
 	requireRole: vi.fn(),
 }))
 
+vi.mock("~/lib/pre-cert.server", () => ({
+	issueFieldCertificates: vi.fn(),
+}))
+
 vi.mock("~/lib/uploads.server", () => ({
 	saveUpload: vi.fn(
 		async (kind: string, filename: string) => `/uploads/${kind}/${filename}`,

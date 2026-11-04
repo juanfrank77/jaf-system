@@ -337,36 +337,6 @@ describe("several brigades on a work order", () => {
 		expect(data.brigadeId).toBe("b1")
 		expect(data).not.toHaveProperty("crewAssignmentHistory")
 	})
-
-	it.each([
-		[
-			"terminated",
-			{ active: true, terminatedAt: new Date() },
-			"docs_edit.errors.brigade_invalid",
-		],
-	])(
-		"refuses making a kept brigade %s the lead (payee), as change_lead does",
-		async (_label, extra, errorKey) => {
-			brigades.bk = { id: "bk", area: "SUR", memberIds: ["u7"], ...extra }
-			try {
-				vi.mocked(db.jafInvoice.findUniqueOrThrow).mockResolvedValue(
-					baseDoc({
-						crewAssignmentHistory: [
-							{ brigadeId: "b1", brigadeIds: ["b1", "bk"] },
-						],
-					}) as any,
-				)
-				// Kept as a second crew: passes through unchanged.
-				expect((await run(["b1", "bk"])).status).toBe(302)
-				vi.clearAllMocks()
-				// Promoted to lead: the payee check applies.
-				expect(await run(["bk", "b1"])).toEqual({ errorKey })
-				expect(tx.jafInvoice.update).not.toHaveBeenCalled()
-			} finally {
-				delete brigades.bk
-			}
-		},
-	)
 })
 
 describe("edit form data", () => {

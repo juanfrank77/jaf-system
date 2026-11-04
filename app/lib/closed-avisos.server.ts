@@ -1,6 +1,7 @@
 import { db } from "~/lib/db.server"
 import { PAGE_SIZE } from "~/lib/finance-stage-paging"
 import { ageDays } from "~/lib/finance-stage-rows.server"
+import { accountIdsOf, type ShareAccount } from "~/lib/payroll-run.server"
 
 export type ClosedAvisoRow = {
 	id: string
@@ -47,6 +48,7 @@ export async function loadClosedAvisos(opts: {
 				avisoNumber: true,
 				pbccRequestSentAt: true,
 				contractorAccountId: true,
+				contractorShareLines: true,
 				contractorAccount: { select: { code: true, label: true } },
 				payrollRun: {
 					select: {
@@ -59,17 +61,33 @@ export async function loadClosedAvisos(opts: {
 		}),
 	])
 	const rows = docs.map((d): ClosedAvisoRow => {
+		// A job with several crews closed when the last one was paid.
+		const ids = accountIdsOf(d)
 		const paidAt =
-			d.payrollRun?.accounts.find(
-				(a) => a.contractorAccountId === d.contractorAccountId,
-			)?.paidAt ?? null
+			d.payrollRun?.accounts
+				.filter((a) => ids.includes(a.contractorAccountId))
+				.flatMap((a) => (a.paidAt ? [a.paidAt] : []))
+				.sort((a, b) => b.getTime() - a.getTime())[0] ?? null
+		const crews = [
+			...new Map(
+				(Array.isArray(d.contractorShareLines)
+					? (d.contractorShareLines as { account?: ShareAccount }[])
+					: []
+				).flatMap((l) =>
+					l?.account ? [[l.account.id, l.account] as const] : [],
+				),
+			).values(),
+		]
 		return {
 			id: d.id,
 			controlNumber: d.controlNumber,
 			avisoNumber: d.avisoNumber,
-			brigade: d.contractorAccount
-				? `${d.contractorAccount.code} ${d.contractorAccount.label}`
-				: "",
+			brigade:
+				crews.length > 0
+					? crews.map((a) => `${a.code} ${a.label}`).join(" + ")
+					: d.contractorAccount
+						? `${d.contractorAccount.code} ${d.contractorAccount.label}`
+						: "",
 			soldToPbccAt: d.pbccRequestSentAt?.toISOString() ?? null,
 			requestSentAt: d.payrollRun?.sentAt?.toISOString() ?? null,
 			brigadePaidAt: paidAt?.toISOString() ?? null,

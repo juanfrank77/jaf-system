@@ -3,9 +3,12 @@ import {
 	crewLinesOf,
 	crewsOnJob,
 	everyCrewHasLines,
+	hasSplitLine,
+	lineOwners,
 	normalizeInstalled,
 	readCrewLines,
 	sumCrewLines,
+	unassignedLines,
 	withCrewLines,
 } from "./crew-field"
 
@@ -16,6 +19,41 @@ const line = (id: string, qty: number, extra = {}) => ({
 	name: id,
 	qty,
 	...extra,
+})
+
+const svc = (serviceCodeId: string, qty = 1) => ({
+	serviceCodeId,
+	claroCode: serviceCodeId,
+	accountCode: null,
+	name: serviceCodeId,
+	qty,
+})
+
+describe("a service line belongs to one brigade", () => {
+	const crews = [
+		{ brigadeId: "b1", lines: [svc("a"), svc("b")] },
+		{ brigadeId: "b2", lines: [svc("c")] },
+	]
+	it("names the brigade holding each line", () => {
+		expect([...lineOwners(crews)]).toEqual([
+			["a", "b1"],
+			["b", "b1"],
+			["c", "b2"],
+		])
+	})
+	it("spots a line two brigades hold", () => {
+		expect(hasSplitLine(crews)).toBe(false)
+		expect(
+			hasSplitLine([...crews, { brigadeId: "b3", lines: [svc("a")] }]),
+		).toBe(true)
+	})
+	it("lists the ordered lines nobody ticked", () => {
+		expect(
+			unassignedLines([svc("a"), svc("c"), svc("d")], crews).map(
+				(l) => l.serviceCodeId,
+			),
+		).toEqual(["d"])
+	})
 })
 
 describe("sumCrewLines", () => {

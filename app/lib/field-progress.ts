@@ -3,7 +3,7 @@
 // the Field report and the Before / After photos do (the same rules the
 // server checks on `continue`).
 
-export type FieldTargetKind = "actual" | "notes" | "before" | "after"
+export type FieldTargetKind = "actual" | "tick" | "notes" | "before" | "after"
 
 export type FieldTarget = {
 	/** The DOM id to scroll to and focus. */
@@ -14,11 +14,14 @@ export type FieldTarget = {
 
 export function fieldTargets({
 	actuals,
+	ticks = [],
 	notes,
 	beforePhotos,
 	afterPhotos,
 }: {
 	actuals: { id: string; value: string }[]
+	/** Several crews: one box per service line no crew has ticked yet. */
+	ticks?: { id: string }[]
 	notes: string
 	beforePhotos: number
 	afterPhotos: number
@@ -31,6 +34,7 @@ export function fieldTargets({
 				empty: a.value.trim() === "",
 			}),
 		),
+		...ticks.map((t): FieldTarget => ({ id: t.id, kind: "tick", empty: true })),
 		{ id: "fieldNotes", kind: "notes", empty: notes.trim() === "" },
 		{ id: "photo-box-before", kind: "before", empty: beforePhotos === 0 },
 		{ id: "photo-box-after", kind: "after", empty: afterPhotos === 0 },

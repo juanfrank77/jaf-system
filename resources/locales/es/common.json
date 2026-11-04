@@ -321,8 +321,6 @@
 		"search_placeholder": "Buscar por nombre o código",
 		"search_label": "Buscar brigadas",
 		"inactive": "Inactiva",
-		"lead": "Líder",
-		"make_lead": "Hacer líder",
 		"hint": "Toque una brigada o busque cualquiera.",
 		"assigned_count_one": "Brigada asignada · {{count}} brigada",
 		"assigned_count_other": "Brigadas asignadas · {{count}} brigadas",
@@ -334,8 +332,7 @@
 		"last_worked": "último trabajo {{date}}",
 		"never_worked": "sin trabajos aún",
 		"no_results": "Ninguna brigada coincide con la búsqueda.",
-		"payment_note_title": "El pago va solo a la brigada líder",
-		"payment_note_body": "{{lead}} es la líder y la única brigada que recibe pago a través del sistema. Cada brigada adicional trabaja por separado: al terminar el trabajo, cree un certificado aparte para cada brigada. Finanzas divide el pago manualmente."
+		"payment_note": "Cada cuadrilla cobra por separado. En el paso de campo, anota qué servicios hizo cada cuadrilla."
 	},
 	"docs_new": {
 		"title": "Nueva orden de trabajo",
@@ -472,18 +469,14 @@
 		"reassign_submit": "Reasignar",
 		"reassign_current": "(actual)",
 		"reassign_hint": "Permitido hasta que la brigada reporte desde el campo. Cada reasignación queda en el historial de la cuadrilla.",
-		"reassign_shared_intro": "Este trabajo tiene {{count}} brigadas (líder: {{lead}}).",
-		"reassign_replace_warning": "Reasignar a {{target}} quitará a {{removed}} y dejará a {{target}} como único pagador.",
-		"reassign_change_lead_hint": "O mantenga las {{count}} brigadas y solo haga a {{target}} la líder y pagadora.",
-		"reassign_change_lead": "Cambiar líder",
-		"reassign_replace_all": "Reemplazar todas las brigadas",
+		"reassign_shared_intro": "Este trabajo tiene {{count}} cuadrillas.",
+		"reassign_replace_warning": "Reasignar a {{target}} quitará a {{removed}} y dejará a {{target}} como única cuadrilla de este trabajo.",
 		"reassign_confirm_submit": "Reasignar",
 		"reassign_cancel": "Cancelar",
 		"errors": {
 			"cancel_reason_required": "Proporcione una razón para la cancelación.",
 			"reassign_required": "Seleccione una brigada.",
 			"reassign_invalid": "La brigada seleccionada no es válida.",
-			"lead_locked": "Ya no se puede cambiar la líder: el pagador quedó fijado al firmar la hoja de pre-certificación.",
 			"resolution_note_required": "Proporcione una nota de resolución."
 		},
 		"next_action": {
@@ -653,14 +646,19 @@
 			"release_signer_invalid": "El firmante del almacén seleccionado no es válido",
 			"no_pickup_signer": "Este trabajo no tiene una cuadrilla asignada, así que nadie puede firmar el retiro. Pide al supervisor que agregue una.",
 			"crew_signer_invalid": "El firmante de la cuadrilla seleccionado no es válido",
-			"already_signed": "Los materiales ya están firmados y bloqueados",
-			"invalid_materials": "Datos de materiales inválidos"
+			"invalid_materials": "Datos de materiales inválidos",
+			"no_release": "Firma una entrega antes de completar el retiro."
 		},
 		"more_is_normal": "Llevar más de lo listado es normal.",
 		"sig_prompt": "Firma aquí con el dedo",
 		"signed": "Firmado",
 		"error_title": "Aún no se puede firmar",
-		"status_pill": "Recogida"
+		"status_pill": "Recogida",
+		"releases_title": "Entregas de esta orden de trabajo",
+		"release_row": "Entrega {{n}}",
+		"release_row_people": "Almacén: {{warehouse}} · Cuadrilla: {{crew}}",
+		"add_release": "+ Agregar otra entrega",
+		"release_complete": "Entrega completa → ir al paso 4 · Trabajo"
 	},
 	"docs_field": {
 		"crew_window": "Brigada {{n}}",
@@ -711,7 +709,10 @@
 			"service_qty_invalid": "Entra una cantidad instalada mayor que 0.",
 			"service_on_order": "Ese servicio ya está en la orden. Entra su cantidad instalada en la tabla.",
 			"service_already_added": "Ese servicio ya se añadió. Cambia su cantidad en la tabla.",
-			"service_not_added": "Solo se pueden quitar los servicios añadidos en el campo."
+			"service_not_added": "Solo se pueden quitar los servicios añadidos en el campo.",
+			"line_two_crews": "Una línea de servicio pertenece a una sola cuadrilla. Desmárcala primero en la otra cuadrilla.",
+			"line_unassigned": "Cada línea de servicio necesita una cuadrilla. Márcala en la tarjeta de la cuadrilla que la hizo.",
+			"service_other_crew": "Otra cuadrilla de este trabajo ya tiene este servicio."
 		},
 		"address_diff_hint": "Este cambio se registra con tu nombre y la hora al enviar.",
 		"address_edited_by_you": "Editado por ti · {{when}}",
@@ -776,9 +777,15 @@
 			"add_confirm": "Añadir",
 			"add_cancel": "Cancelar",
 			"added_in_field": "Añadido en el campo",
-			"remove_added": "Quitar {{code}}"
+			"remove_added": "Quitar {{code}}",
+			"done": "Hecho",
+			"done_aria": "Hecho por esta brigada: {{code}}",
+			"other_crew": "hecho por otra cuadrilla"
 		},
-		"admin_override": "Ya está firmado. Lo está editando como Admin."
+		"admin_override": "Ya está firmado. Lo está editando como Admin.",
+		"services_done_by": "Servicios hechos por {{name}}",
+		"services_done_by_code": "Servicios hechos por {{name}} ({{code}})",
+		"tick_line": "Línea {{code}}: marca la cuadrilla que la hizo"
 	},
 	"docs_review": {
 		"finance_return_title": "Devuelto por Finanzas.",
@@ -882,7 +889,12 @@
 		"aviso_replace_reason_label": "Razón del reemplazo",
 		"aviso_replace_submit": "Reemplazar Aviso",
 		"aviso_replace_used": "Ya se usó el único reemplazo de Aviso de este trabajo.",
-		"aviso_continue_precert": "Continuar a Pre-certificación →"
+		"aviso_continue_precert": "Continuar a Pre-certificación →",
+		"crew_certificates_title_one": "{{count}} certificado, uno por cuadrilla",
+		"crew_certificates_title_other": "{{count}} certificados, uno por cuadrilla",
+		"returned_open_hint": "Nada está bloqueado mientras esté de vuelta contigo:",
+		"returned_open_field": "cambia el trabajo de campo y las tarjetas de cuadrilla",
+		"returned_open_edit": "cambia las cuadrillas o la orden"
 	},
 	"open_job": {
 		"material_requested": "Material solicitado",

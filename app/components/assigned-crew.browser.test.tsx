@@ -2,11 +2,10 @@ import { screen } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
 import { AssignedCrew } from "./assigned-crew"
 
-const b = (id: string, name: string, lead = false) => ({
+const b = (id: string, name: string) => ({
 	id,
 	name,
 	code: id === "b1" ? "206" : null,
-	lead,
 })
 
 // Same loose typing the other component tests use for the stub fixture.
@@ -23,30 +22,28 @@ describe("AssignedCrew", () => {
 		expect(screen.queryByText("Crew:")).toBeNull()
 	})
 
-	it("shows one Crew row for a shared job: brigades, lead badge and the payment note", async ({
+	it("shows one Crew row for a shared job: brigades and the payment line", async ({
 		renderStub,
 	}) => {
 		await mount(renderStub, {
-			brigades: [b("b2", "JESUS MARTINEZ", true), b("b1", "ALEXIS DIAZ")],
+			brigades: [b("b2", "JESUS MARTINEZ"), b("b1", "ALEXIS DIAZ")],
 			memberNames: [],
 		})
 		expect(screen.getAllByText("Crew:")).toHaveLength(1)
 		expect(screen.queryByText("Brigades:")).toBeNull()
-		expect(screen.getByText("Lead").closest("p")).toHaveTextContent(
-			"JESUS MARTINEZ",
-		)
-		expect(screen.getByTestId("lead-payment-note")).toBeInTheDocument()
+		expect(screen.queryByText("Lead")).toBeNull()
+		expect(screen.getByText(/JESUS MARTINEZ/)).toBeInTheDocument()
+		expect(screen.getByTestId("crew-payment-note")).toBeInTheDocument()
 	})
 
-	it("a single brigade has no lead badge or note, and members trail in muted text", async ({
+	it("a single brigade has no payment line, and members trail in muted text", async ({
 		renderStub,
 	}) => {
 		await mount(renderStub, {
-			brigades: [b("b1", "ALEXIS DIAZ", true)],
+			brigades: [b("b1", "ALEXIS DIAZ")],
 			memberNames: ["Ana", "Luis"],
 		})
-		expect(screen.queryByText("Lead")).toBeNull()
-		expect(screen.queryByTestId("lead-payment-note")).toBeNull()
+		expect(screen.queryByTestId("crew-payment-note")).toBeNull()
 		expect(screen.getByText(/Ana, Luis/)).toBeInTheDocument()
 	})
 

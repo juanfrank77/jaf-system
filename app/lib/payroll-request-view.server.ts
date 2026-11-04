@@ -6,6 +6,7 @@ import {
 	type PayrollRequestView,
 } from "~/lib/payroll-request-view"
 import {
+	accountIdsOf,
 	buildJournalBlocks,
 	payrollSheetLines,
 	puertoRicoDay,
@@ -55,10 +56,13 @@ export async function loadPayrollRequests(
 						!!account?.paidAt &&
 						!run.reversedAt &&
 						run.invoices
-							.filter((i) => i.contractorAccount?.code === line.accountCode)
+							.filter((i) =>
+								accountIdsOf(i).includes(account.contractorAccountId),
+							)
+							// A job with several crews stays open until all are paid.
 							.every(
 								(i) =>
-									i.payablesClosedAt &&
+									!i.payablesClosedAt ||
 									puertoRicoDay(i.payablesClosedAt) === puertoRicoDay(now),
 							),
 				}

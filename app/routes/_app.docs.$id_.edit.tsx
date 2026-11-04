@@ -30,6 +30,7 @@ import {
 	parseBrigadeIds,
 	readHistory,
 } from "~/lib/crew-assignment"
+import { readCrewLines, sumCrewLines } from "~/lib/crew-field"
 import { db } from "~/lib/db.server"
 import {
 	type MaterialsChoice,
@@ -38,6 +39,7 @@ import {
 } from "~/lib/intake-answers"
 import { isEditableStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
+import { isReturned } from "~/lib/returned-packet"
 import {
 	getActiveMaterialCodes,
 	isPriceBlind,
@@ -83,7 +85,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	if (user.role === "SUPERVISOR") {
 		await assertDocInSupervisorScope(db, user.id, doc)
 	}
-	if (!isEditableStatus(doc.status, doc)) throw redirect(`/docs/${params.id}`)
+	// Sent back by Finance: nothing stays locked, the supervisor can change anything.
+	if (!isEditableStatus(doc.status, doc) && !isReturned(doc))
+		throw redirect(`/docs/${params.id}`)
 
 	const brigadeArgs = await assignableBrigadesWhere(db, user)
 	const viewer = await pickerViewer(db, user)
@@ -178,7 +182,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 	if (user.role === "SUPERVISOR") {
 		await assertDocInSupervisorScope(db, user.id, doc)
 	}
-	if (!isEditableStatus(doc.status, doc)) {
+	const returned = isReturned(doc)
+	if (!isEditableStatus(doc.status, doc) && !returned) {
 		// A no-warehouse job stops being editable once Field starts.
 		if (doc.status === "SIGNED" && !doc.materialsFromWarehouse)
 			return { errorKey: "docs_edit.errors.field_started" }
@@ -186,7 +191,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	}
 
 	const editsUsed = await supervisorEditsUsed(user.role, doc.id)
-	if (editsUsed !== null && supervisorEditsLeft(editsUsed) === 0)
+	if (!returned && editsUsed !== null && supervisorEditsLeft(editsUsed) === 0)
 		return { errorKey: "docs_edit.errors.limit_reached" }
 
 	const form = await request.formData()
@@ -226,14 +231,20 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const toWarehouse = !doc.materialsFromWarehouse && materialsFromWarehouse
 	// Once the warehouse has prepped, the materials are already staged for
 	// this job; switching away would strand them.
-	if (toNoWarehouse && doc.status !== "CREATED")
+	if (!returned && toNoWarehouse && doc.status !== "CREATED")
 		return { errorKey: "docs_edit.errors.warehouse_started" }
 	// isEditableStatus already refuses a no-warehouse job once Field started.
 	if (toWarehouse && doc.fieldStartedAt)
 		return { errorKey: "docs_edit.errors.field_started" }
 	// No warehouse: straight to Field with no materials baseline. Back to the
 	// warehouse: the job waits for prep again.
-	const status = toNoWarehouse ? "SIGNED" : toWarehouse ? "CREATED" : doc.status
+	const status = returned
+		? doc.status
+		: toNoWarehouse
+			? "SIGNED"
+			: toWarehouse
+				? "CREATED"
+				: doc.status
 	if (!materialsFromWarehouse) estimatedMaterials = []
 	const answersChanged =
 		materialsFromWarehouse !== doc.materialsFromWarehouse ||
@@ -259,15 +270,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 		if (!brigade) return { errorKey: "docs_edit.errors.brigade_invalid" }
 		if (!addedIds.includes(brigade.id)) continue
 		const rejection = assignRejection(brigade, viewer)
-		if (rejection === "invalid")
-			return { errorKey: "docs_edit.errors.brigade_invalid" }
-	}
-	// A kept brigade moved up to lead becomes the payee: the same check as
-	// change_lead (never an equipment, terminated or another supervisor's
-	// brigade), though it is still neither activated nor evented.
-	const lead = brigades[0]
-	if (lead && lead.id !== doc.brigadeId && !addedIds.includes(lead.id)) {
-		const rejection = assignRejection(lead, viewer)
 		if (rejection === "invalid")
 			return { errorKey: "docs_edit.errors.brigade_invalid" }
 	}
@@ -304,8 +306,22 @@ export async function action({ request, params }: Route.ActionArgs) {
 					serviceLines,
 					brigadeId,
 					assignedCrewIds,
-					// Only record a new assignment when the brigades (or the lead)
-					// actually changed; a plain re-save leaves the history alone.
+					// A crew taken off the job takes its card with it.
+					...(crewChanged &&
+						readCrewLines(doc.crewServiceLines).length > 0 &&
+						(() => {
+							const remaining = readCrewLines(doc.crewServiceLines).filter(
+								(c) => brigadeIds.includes(c.brigadeId),
+							)
+							return {
+								crewServiceLines: remaining as unknown as Prisma.InputJsonValue,
+								installedServiceLines: sumCrewLines(
+									remaining,
+								) as unknown as Prisma.InputJsonValue,
+							}
+						})()),
+					// Only record a new assignment when the brigades actually
+					// changed; a plain re-save leaves the history alone.
 					...(crewChanged && {
 						crewAssignmentHistory: [
 							...(readHistory(

@@ -16,7 +16,7 @@ type BrigadeOption = {
 	area: string | null
 	code: string | null
 }
-type AssignedBrigade = { id: string; name: string; lead: boolean }
+type AssignedBrigade = { id: string; name: string }
 
 function label(b: BrigadeOption, current: string) {
 	return `${b.name}${b.code ? ` · ${b.code}` : ""}${b.area ? ` (${b.area})` : ""}${current}`
@@ -24,19 +24,14 @@ function label(b: BrigadeOption, current: string) {
 
 /**
  * Reassign a work order. A single-crew job reassigns in one click. A shared
- * job (2+ crews) asks first. If the chosen brigade is already on the job there
- * are two choices: make it the lead (keeps every crew, moves only the payee)
- * or replace all crews with it. Any other brigade can only replace.
+ * job (2+ crews) asks first, because the chosen brigade replaces all of them.
  */
 export function ReassignForm({
 	brigadeOptions,
 	assignedBrigades,
-	leadLocked = false,
 }: {
 	brigadeOptions: BrigadeOption[]
 	assignedBrigades: AssignedBrigade[]
-	/** The payee is already fixed (pre-cert signed), so the lead can't move. */
-	leadLocked?: boolean
 }) {
 	const { t, i18n } = useTranslation()
 	const [target, setTarget] = useState("")
@@ -44,11 +39,10 @@ export function ReassignForm({
 	const shared = assignedBrigades.length > 1
 	const targetBrigade = brigadeOptions.find((b) => b.id === target)
 	const removed = assignedBrigades.filter((b) => b.id !== target)
-	const lead = assignedBrigades.find((b) => b.lead)
 	const currentMark = (b: BrigadeOption) =>
-		lead?.id === b.id ? ` ${t("docs_view.reassign_current")}` : ""
-	const canChangeLead =
-		!leadLocked && assignedBrigades.some((b) => b.id === target)
+		assignedBrigades.some((a) => a.id === b.id)
+			? ` ${t("docs_view.reassign_current")}`
+			: ""
 	const names = new Intl.ListFormat(i18n.language, {
 		style: "long",
 		type: "conjunction",
@@ -110,42 +104,20 @@ export function ReassignForm({
 						<p>
 							{t("docs_view.reassign_shared_intro", {
 								count: assignedBrigades.length,
-								lead: lead?.name ?? "",
 							})}{" "}
 							{t("docs_view.reassign_replace_warning", {
 								target: targetBrigade.name,
 								removed: names,
 							})}
 						</p>
-						{canChangeLead && (
-							<p>
-								{t("docs_view.reassign_change_lead_hint", {
-									count: assignedBrigades.length,
-									target: targetBrigade.name,
-								})}
-							</p>
-						)}
 						<div className="flex flex-wrap gap-2">
-							{canChangeLead && (
-								<Button
-									type="submit"
-									name="intent"
-									value="change_lead"
-									className="h-10 px-4"
-								>
-									{t("docs_view.reassign_change_lead")}
-								</Button>
-							)}
 							<Button
 								type="submit"
 								name="intent"
 								value="reassign"
 								className="h-10 px-4"
-								variant={canChangeLead ? "outline" : "default"}
 							>
-								{canChangeLead
-									? t("docs_view.reassign_replace_all")
-									: t("docs_view.reassign_confirm_submit")}
+								{t("docs_view.reassign_confirm_submit")}
 							</Button>
 							<Button
 								type="button"

@@ -1,16 +1,14 @@
 import { useTranslation } from "react-i18next"
-import { LeadPaymentNote } from "~/components/crew-picker"
+import { CrewPaymentNote } from "~/components/crew-picker"
 
 type AssignedBrigade = {
 	id: string
 	name: string
 	code: string | null
-	lead: boolean
 }
 
 /**
- * The work order's crew as one row: the brigades (lead badged when the job is
- * shared) with individual members in muted text when there are any. Hidden
+ * The work order's crew as one row: the brigades, with individual members in muted text when there are any. Hidden
  * when nothing is assigned, so there is never an empty "Crew:" line.
  */
 export function AssignedCrew({
@@ -32,11 +30,6 @@ export function AssignedCrew({
 						{i > 0 && ", "}
 						{b.name}
 						{b.code ? ` · ${b.code}` : ""}
-						{shared && b.lead && (
-							<span className="ml-1 rounded-md bg-primary px-1.5 py-0.5 text-xs font-semibold text-primary-foreground">
-								{t("crew_picker.lead")}
-							</span>
-						)}
 					</span>
 				))}
 				{memberNames.length > 0 && (
@@ -46,7 +39,7 @@ export function AssignedCrew({
 					</span>
 				)}
 			</p>
-			{shared && <LeadPaymentNote leadName={brigades[0].name} />}
+			{shared && <CrewPaymentNote />}
 		</div>
 	)
 }

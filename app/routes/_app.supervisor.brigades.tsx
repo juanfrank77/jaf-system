@@ -64,9 +64,9 @@ export async function loader({ request }: Route.LoaderArgs) {
 			: await db.jafInvoice.findMany({
 					where: {
 						status: { in: [...BRIGADE_WORK_STATUSES] },
-						// A job can be shared by several brigades; the lead is
-						// `brigadeId`, the rest only appear in the assignment
-						// history, so match on the crew as well.
+						// A job can have several brigades; the first is `brigadeId`,
+						// the rest only appear in the assignment history, so match
+						// on the crew as well.
 						OR: [
 							{ brigadeId: { in: brigadeIds } },
 							{ assignedCrewIds: { hasSome: memberIds } },

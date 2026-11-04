@@ -86,7 +86,7 @@ export type WorkOrderSourceDoc = {
 export type WorkOrderContext = {
 	claroSupervisor: { name: string } | null
 	jafSupervisor: string
-	/** Every brigade on the job, lead first. */
+	/** Every brigade on the job. */
 	crews: { name: string; code: string | null }[]
 	materialCodes: { id: string; name: string; unit: string | null }[]
 	signers: {

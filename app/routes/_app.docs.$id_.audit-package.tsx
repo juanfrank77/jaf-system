@@ -22,9 +22,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 					select: { id: true, name: true, code: true },
 				})
 			: []
-	const brigades = brigadeIds.flatMap((id, i) => {
+	const brigades = brigadeIds.flatMap((id) => {
 		const b = brigadeRows.find((r) => r.id === id)
-		return b ? [{ name: b.name, code: b.code, lead: i === 0 }] : []
+		return b ? [{ name: b.name, code: b.code }] : []
 	})
 	const serviceCodes = await db.serviceCode.findMany()
 	const codeMap = Object.fromEntries(

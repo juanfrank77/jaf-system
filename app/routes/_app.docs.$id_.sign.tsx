@@ -29,6 +29,12 @@ import { generateWarehouseReceiptPdf } from "~/lib/pdf/warehouse-receipt.server"
 import { canTransition } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import {
+	addTaken,
+	type MaterialLine,
+	releaseOverages,
+	remainingToTake,
+} from "~/lib/pickup-release"
+import {
 	findPickupSigner,
 	pickupSignersForDoc,
 } from "~/lib/pickup-signer.server"
@@ -39,8 +45,6 @@ import {
 } from "~/lib/service-codes.server"
 import { toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.docs.$id_.sign"
-
-type MaterialLine = { serviceCodeId: string; qty: number }
 
 export const meta: Route.MetaFunction = ({ data, matches }) => [
 	{
@@ -68,9 +72,29 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	// Anyone on a brigade assigned to the job can pick the materials up; a job
 	// with no brigade is a screen error, not a crash.
 	const signerGroups = await pickupSignersForDoc(doc)
+	const releases = await db.pickupRelease.findMany({
+		where: { docId: doc.id },
+		orderBy: { number: "asc" },
+		select: {
+			id: true,
+			number: true,
+			releasedByName: true,
+			crewSignerName: true,
+			crewSignerBrigadeName: true,
+			crewSignerBrigadeCode: true,
+			materials: true,
+			createdAt: true,
+		},
+	})
 	return {
 		doc,
 		user,
+		releases,
+		// "Listed" is what is still left after earlier releases.
+		listed: remainingToTake(
+			(doc.estimatedMaterials as MaterialLine[] | null) ?? [],
+			(doc.materialsTaken as MaterialLine[] | null) ?? [],
+		),
 		serviceCodes: serviceCodesForRole(user.role, serviceCodes),
 		warehouses,
 		warehouseUsers,
@@ -82,31 +106,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	}
 }
 
-function buildOverages(
-	materialsTaken: MaterialLine[],
-	estimatedMaterials: MaterialLine[],
-): { serviceCodeId: string; estimatedQty: number; takenQty: number }[] {
-	const estimatedMap = Object.fromEntries(
-		estimatedMaterials.map((e) => [e.serviceCodeId, e.qty]),
-	)
-	const overages: {
-		serviceCodeId: string
-		estimatedQty: number
-		takenQty: number
-	}[] = []
-	for (const taken of materialsTaken) {
-		const estimatedQty = estimatedMap[taken.serviceCodeId] ?? 0
-		if (taken.qty > estimatedQty) {
-			overages.push({
-				serviceCodeId: taken.serviceCodeId,
-				estimatedQty,
-				takenQty: taken.qty,
-			})
-		}
-	}
-	return overages
-}
-
 export async function action({ request, params }: Route.ActionArgs) {
 	const { user } = await requireRole(request, ["WAREHOUSE", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
@@ -116,6 +115,29 @@ export async function action({ request, params }: Route.ActionArgs) {
 		throw redirect(`/docs/${params.id}`)
 
 	const form = await request.formData()
+	// Orlando closes the pickup: the job moves on once a release is signed.
+	if (form.get("intent") === "complete") {
+		const count = await db.pickupRelease.count({ where: { docId: doc.id } })
+		if (count === 0) return { errorKey: "docs_sign.errors.no_release" }
+		await db.$transaction([
+			db.jafInvoice.update({
+				where: { id: params.id },
+				data: { status: "SIGNED" },
+			}),
+			db.auditTrail.create({
+				data: {
+					docId: params.id,
+					userId: user.id,
+					action: "STATUS_CHANGED",
+					diffJson: {
+						status: { before: doc.status, after: "SIGNED" },
+						releases: count,
+					},
+				},
+			}),
+		])
+		throw redirect(`/docs/${params.id}`)
+	}
 	const releaseSignature = form.get("releaseSignature") as string
 	const crewSignature = form.get("crewSignature") as string
 	const warehouseId = form.get("warehouseId") as string
@@ -137,6 +159,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 	if (!pickup) {
 		return { errorKey: "docs_sign.errors.crew_signer_invalid" }
 	}
+	const signerBrigade = signerGroups.find(
+		(g) => g.brigadeId === pickup.brigadeId,
+	)
 	if (!releaseSignature || releaseSignature === "data:,") {
 		return { errorKey: "docs_sign.errors.release_signature_required" }
 	}
@@ -164,11 +189,14 @@ export async function action({ request, params }: Route.ActionArgs) {
 		return { errorKey: "docs_sign.errors.release_signer_invalid" }
 	}
 
-	// Permanently lock: refuse to overwrite an existing signed materials record.
+	// Each release locks its own quantities; the job's Taken is their total.
 	const existingTaken = (doc.materialsTaken as MaterialLine[] | null) ?? []
-	if (existingTaken.length > 0) {
-		return { errorKey: "docs_sign.errors.already_signed" }
-	}
+	const number =
+		(await db.pickupRelease.count({ where: { docId: params.id } })) + 1
+	// A later release has to take something; the first keeps today's behaviour.
+	if (number > 1 && materialsTaken.length === 0)
+		return { errorKey: "docs_sign.errors.invalid_materials" }
+	const totalTaken = addTaken(existingTaken, materialsTaken)
 
 	const serviceCodes = await getActiveServiceCodes()
 	const pdfBytes = await generateWarehouseReceiptPdf(
@@ -192,12 +220,21 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const uploadDir = process.env.UPLOAD_DIR || "/tmp/jaf/uploads"
 	const receiptDir = path.join(uploadDir, "receipts")
 	await fs.mkdir(receiptDir, { recursive: true })
-	const receiptPath = path.join(receiptDir, `${params.id}-receipt.pdf`)
+	const receiptPath = path.join(
+		receiptDir,
+		number === 1
+			? `${params.id}-receipt.pdf`
+			: `${params.id}-receipt-${number}.pdf`,
+	)
 	await fs.writeFile(receiptPath, pdfBytes)
 
 	const estimatedMaterials =
 		(doc.estimatedMaterials as MaterialLine[] | null) ?? []
-	const overages = buildOverages(materialsTaken, estimatedMaterials)
+	const overages = releaseOverages(
+		materialsTaken,
+		totalTaken,
+		estimatedMaterials,
+	)
 	const hasOverage = overages.length > 0
 
 	// Fetch notify users before transaction (can't query in callback)
@@ -212,33 +249,53 @@ export async function action({ request, params }: Route.ActionArgs) {
 		: []
 
 	await db.$transaction(async (tx) => {
-		// Update invoice to SIGNED status
-		await tx.jafInvoice.update({
-			where: { id: params.id },
+		await tx.pickupRelease.create({
 			data: {
-				status: "SIGNED",
+				docId: params.id,
+				number,
 				warehouseId,
-				materialsTaken,
-				releaseSignature,
 				releasedById,
-				releaseSignedAt: new Date(),
-				crewSignature,
+				releasedByName: releaseSigner.name,
 				signedById: pickup.userId,
 				crewSignerName: pickup.name,
 				crewSignerBrigadeId: pickup.brigadeId,
-				signedAt: new Date(),
-				warehouseReceiptPath: receiptPath,
+				crewSignerBrigadeName: signerBrigade?.brigadeName ?? null,
+				crewSignerBrigadeCode: signerBrigade?.brigadeCode ?? null,
+				releaseSignature,
+				crewSignature,
+				materials: materialsTaken,
+				receiptPath,
+			},
+		})
+		// The job keeps the running total, and the first release's signatures for
+		// the documents that print one pair.
+		await tx.jafInvoice.update({
+			where: { id: params.id },
+			data: {
+				materialsTaken: totalTaken,
+				...(number === 1 && {
+					warehouseId,
+					releaseSignature,
+					releasedById,
+					releaseSignedAt: new Date(),
+					crewSignature,
+					signedById: pickup.userId,
+					crewSignerName: pickup.name,
+					crewSignerBrigadeId: pickup.brigadeId,
+					signedAt: new Date(),
+					warehouseReceiptPath: receiptPath,
+				}),
 			},
 		})
 
-		// Record status change audit
+		// One audit row per release
 		await tx.auditTrail.create({
 			data: {
 				docId: params.id,
 				userId: user.id,
-				action: "STATUS_CHANGED",
+				action: "PICKUP_RELEASE_SIGNED",
 				diffJson: {
-					status: { before: doc.status, after: "SIGNED" },
+					release: number,
 					warehouseId,
 					releasedById,
 					signedById: pickup.userId,
@@ -259,7 +316,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 					diffJson: {
 						overages,
 						estimatedMaterials,
-						materialsTaken,
+						materialsTaken: totalTaken,
 						threshold: 0,
 					},
 				},
@@ -295,7 +352,8 @@ export async function action({ request, params }: Route.ActionArgs) {
 		}
 	})
 
-	throw redirect(`/docs/${params.id}`)
+	// Back to this page: another release, or Release complete.
+	throw redirect(`/docs/${params.id}/sign`)
 }
 
 export default function SignDoc({
@@ -310,6 +368,8 @@ export default function SignDoc({
 		signerGroups,
 		pickupErrorKey,
 		user,
+		releases,
+		listed,
 	} = loaderData
 	const error = actionData as { errorKey?: ParseKeys } | undefined
 	const releaseRef = useRef<SignaturePadHandle>(null)
@@ -325,15 +385,24 @@ export default function SignDoc({
 	const [crewSigner, setCrewSigner] = useState(
 		signerOptions.length === 1 ? signerOptions[0].key : "",
 	)
-	const [items] = useState(
-		(doc.estimatedMaterials as MaterialLine[] | null) ?? [],
-	)
+	// A signed release shows the list and the two next steps; the form is back
+	// for "+ Add another release".
+	const [adding, setAdding] = useState(false)
+	const showForm = releases.length === 0 || adding
 	const submit = useSubmit()
+	const codeLabel = new Map(serviceCodes.map((c) => [c.id, c.claroCode]))
 	const { t } = useTranslation()
 	// Inline, not alert(): a modal OS dialog in the installed app, gone once dismissed.
 	const [clientErrorKey, setClientErrorKey] = useState<ParseKeys | null>(null)
 	const [releaseSigned, setReleaseSigned] = useState(false)
 	const [crewSigned, setCrewSigned] = useState(false)
+	// biome-ignore lint/correctness/useExhaustiveDependencies: only when a release lands
+	useEffect(() => {
+		setAdding(false)
+		setClientErrorKey(null)
+		setReleaseSigned(false)
+		setCrewSigned(false)
+	}, [releases.length])
 	const errorRef = useRef<HTMLDivElement>(null)
 	const shownErrorKey =
 		clientErrorKey ?? error?.errorKey ?? pickupErrorKey ?? undefined
@@ -407,156 +476,234 @@ export default function SignDoc({
 				{t("job_flow.callout.sign_body")}
 			</Callout>
 
-			<Form method="post" onSubmit={handleSubmit} className="space-y-5">
-				<div>
-					<Label>{t("docs_sign.warehouse_label")}</Label>
-					<Select
-						items={warehouses.map((w) => ({ value: w.id, label: w.name }))}
-						value={warehouseId}
-						onValueChange={(v) => setWarehouseId(v ?? "")}
-					>
-						<SelectTrigger className="mt-1 h-11 w-full text-base">
-							<SelectValue placeholder={t("docs_sign.warehouse_placeholder")} />
-						</SelectTrigger>
-						<SelectContent>
-							{warehouses.map((w) => (
-								<SelectItem key={w.id} value={w.id}>
-									{w.name} — {w.zone}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
-				</div>
-
-				<div>
-					<Label>{t("docs_sign.materials_taken_label")}</Label>
-					<div className="mt-1">
-						<MaterialLineItems
-							serviceCodes={serviceCodes}
-							initialItems={items}
-							estimatedItems={items}
-							readOnly={false}
-							name="materials"
-							touch
-						/>
-					</div>
-					<p className="mt-2 text-xs text-muted-foreground">
-						{t("docs_sign.more_is_normal")}
-					</p>
-				</div>
-
-				<div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-					<div className="border rounded-lg p-3 space-y-3">
-						<div>
-							<p className="text-sm font-medium mb-1">
-								{t("docs_sign.release_signature_heading")}
-							</p>
-							<p className="text-xs text-muted-foreground mb-2">
-								{t("docs_sign.release_signature_subtext")}
-							</p>
-							<Label className="text-xs text-muted-foreground">
-								{t("docs_sign.release_signer_label")}
-							</Label>
-							<Select
-								items={warehouseUsers.map((u) => ({
-									value: u.id,
-									label: u.name,
-								}))}
-								value={releasedById}
-								onValueChange={(v) => setReleasedById(v ?? "")}
-							>
-								<SelectTrigger className="mt-1 h-11 w-full text-base">
-									<SelectValue
-										placeholder={t("docs_sign.release_signer_placeholder")}
-									/>
-								</SelectTrigger>
-								<SelectContent>
-									{warehouseUsers.map((u) => (
-										<SelectItem key={u.id} value={u.id}>
-											{u.name}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-						</div>
-						<SignaturePad
-							ref={releaseRef}
-							height={140}
-							onChange={(empty) => setReleaseSigned(!empty)}
-						/>
-						<p className="text-xs text-muted-foreground">
-							{releaseSigned
-								? t("docs_sign.signed")
-								: t("docs_sign.sig_prompt")}
-						</p>
-						<Button
-							type="button"
-							variant="ghost"
-							size="lg"
-							className="h-11 text-base"
-							onClick={() => releaseRef.current?.clear()}
-						>
-							{t("docs_sign.clear")}
-						</Button>
-					</div>
-
-					<div className="border rounded-lg p-3 space-y-3">
-						<div>
-							<p className="text-sm font-medium mb-1">
-								{t("docs_sign.crew_signature_heading")}
-							</p>
-							<p className="text-xs text-muted-foreground mb-2">
-								{t("docs_sign.crew_signature_subtext")}
-							</p>
-							<Label className="text-xs text-muted-foreground">
-								{t("docs_sign.crew_signer_label")}
-							</Label>
-							<CrewSignerSelect
-								groups={signerGroups}
-								value={crewSigner}
-								onChange={setCrewSigner}
-							/>
-						</div>
-						<SignaturePad
-							ref={crewRef}
-							height={140}
-							onChange={(empty) => setCrewSigned(!empty)}
-						/>
-						<p className="text-xs text-muted-foreground">
-							{crewSigned ? t("docs_sign.signed") : t("docs_sign.sig_prompt")}
-						</p>
-						<Button
-							type="button"
-							variant="ghost"
-							size="lg"
-							className="h-11 text-base"
-							onClick={() => crewRef.current?.clear()}
-						>
-							{t("docs_sign.clear")}
-						</Button>
-					</div>
-				</div>
-
-				<Callout
-					tone="info"
-					icon={<span aria-hidden="true">🔒</span>}
-					title={t("docs_sign.lock_banner_title")}
+			{releases.length > 0 && (
+				<section
+					className="space-y-2 rounded-lg border p-3"
+					data-testid="pickup-releases"
 				>
-					{t("docs_sign.lock_banner_body")}
-				</Callout>
+					<h2 className="text-sm font-medium">
+						{t("docs_sign.releases_title")}
+					</h2>
+					<ul className="divide-y text-sm">
+						{releases.map((r) => (
+							<li key={r.id} className="space-y-0.5 py-2">
+								<p className="font-medium">
+									{t("docs_sign.release_row", { n: r.number })}
+								</p>
+								<p className="text-muted-foreground">
+									{t("docs_sign.release_row_people", {
+										warehouse: r.releasedByName,
+										crew: r.crewSignerName,
+									})}
+									{r.crewSignerBrigadeName
+										? ` · ${r.crewSignerBrigadeName}${r.crewSignerBrigadeCode ? ` (${r.crewSignerBrigadeCode})` : ""}`
+										: ""}
+								</p>
+								<p className="text-xs text-muted-foreground">
+									{(r.materials as MaterialLine[])
+										.map(
+											(m) =>
+												`${codeLabel.get(m.serviceCodeId) ?? m.serviceCodeId} × ${m.qty}`,
+										)
+										.join(" · ")}
+								</p>
+								<p
+									className="text-xs text-muted-foreground"
+									suppressHydrationWarning
+								>
+									{new Date(r.createdAt).toLocaleString()}
+								</p>
+							</li>
+						))}
+					</ul>
+				</section>
+			)}
 
-				{shownErrorKey && (
-					<div ref={errorRef} role="alert">
+			{!showForm && (
+				<div className="space-y-2">
+					{shownErrorKey && (
 						<Callout tone="danger" title={t("docs_sign.error_title")}>
 							{t(shownErrorKey)}
 						</Callout>
+					)}
+					<div className="flex flex-wrap gap-2">
+						<Button
+							type="button"
+							variant="outline"
+							size="lg"
+							onClick={() => setAdding(true)}
+						>
+							{t("docs_sign.add_release")}
+						</Button>
+						<Form method="post">
+							<input type="hidden" name="intent" value="complete" />
+							<Button type="submit" size="lg">
+								{t("docs_sign.release_complete")}
+							</Button>
+						</Form>
 					</div>
-				)}
+				</div>
+			)}
 
-				<Button type="submit" size="lg" className="h-12 w-full text-base">
-					{t("docs_sign.submit")}
-				</Button>
-			</Form>
+			{showForm && (
+				<Form
+					key={releases.length}
+					method="post"
+					onSubmit={handleSubmit}
+					className="space-y-5"
+				>
+					<div>
+						<Label>{t("docs_sign.warehouse_label")}</Label>
+						<Select
+							items={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+							value={warehouseId}
+							onValueChange={(v) => setWarehouseId(v ?? "")}
+						>
+							<SelectTrigger className="mt-1 h-11 w-full text-base">
+								<SelectValue
+									placeholder={t("docs_sign.warehouse_placeholder")}
+								/>
+							</SelectTrigger>
+							<SelectContent>
+								{warehouses.map((w) => (
+									<SelectItem key={w.id} value={w.id}>
+										{w.name} — {w.zone}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</div>
+
+					<div>
+						<Label>{t("docs_sign.materials_taken_label")}</Label>
+						<div className="mt-1">
+							<MaterialLineItems
+								serviceCodes={serviceCodes}
+								initialItems={listed}
+								estimatedItems={listed}
+								readOnly={false}
+								name="materials"
+								touch
+							/>
+						</div>
+						<p className="mt-2 text-xs text-muted-foreground">
+							{t("docs_sign.more_is_normal")}
+						</p>
+					</div>
+
+					<div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+						<div className="border rounded-lg p-3 space-y-3">
+							<div>
+								<p className="text-sm font-medium mb-1">
+									{t("docs_sign.release_signature_heading")}
+								</p>
+								<p className="text-xs text-muted-foreground mb-2">
+									{t("docs_sign.release_signature_subtext")}
+								</p>
+								<Label className="text-xs text-muted-foreground">
+									{t("docs_sign.release_signer_label")}
+								</Label>
+								<Select
+									items={warehouseUsers.map((u) => ({
+										value: u.id,
+										label: u.name,
+									}))}
+									value={releasedById}
+									onValueChange={(v) => setReleasedById(v ?? "")}
+								>
+									<SelectTrigger className="mt-1 h-11 w-full text-base">
+										<SelectValue
+											placeholder={t("docs_sign.release_signer_placeholder")}
+										/>
+									</SelectTrigger>
+									<SelectContent>
+										{warehouseUsers.map((u) => (
+											<SelectItem key={u.id} value={u.id}>
+												{u.name}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</div>
+							<SignaturePad
+								ref={releaseRef}
+								height={140}
+								onChange={(empty) => setReleaseSigned(!empty)}
+							/>
+							<p className="text-xs text-muted-foreground">
+								{releaseSigned
+									? t("docs_sign.signed")
+									: t("docs_sign.sig_prompt")}
+							</p>
+							<Button
+								type="button"
+								variant="ghost"
+								size="lg"
+								className="h-11 text-base"
+								onClick={() => releaseRef.current?.clear()}
+							>
+								{t("docs_sign.clear")}
+							</Button>
+						</div>
+
+						<div className="border rounded-lg p-3 space-y-3">
+							<div>
+								<p className="text-sm font-medium mb-1">
+									{t("docs_sign.crew_signature_heading")}
+								</p>
+								<p className="text-xs text-muted-foreground mb-2">
+									{t("docs_sign.crew_signature_subtext")}
+								</p>
+								<Label className="text-xs text-muted-foreground">
+									{t("docs_sign.crew_signer_label")}
+								</Label>
+								<CrewSignerSelect
+									groups={signerGroups}
+									value={crewSigner}
+									onChange={setCrewSigner}
+								/>
+							</div>
+							<SignaturePad
+								ref={crewRef}
+								height={140}
+								onChange={(empty) => setCrewSigned(!empty)}
+							/>
+							<p className="text-xs text-muted-foreground">
+								{crewSigned ? t("docs_sign.signed") : t("docs_sign.sig_prompt")}
+							</p>
+							<Button
+								type="button"
+								variant="ghost"
+								size="lg"
+								className="h-11 text-base"
+								onClick={() => crewRef.current?.clear()}
+							>
+								{t("docs_sign.clear")}
+							</Button>
+						</div>
+					</div>
+
+					<Callout
+						tone="info"
+						icon={<span aria-hidden="true">🔒</span>}
+						title={t("docs_sign.lock_banner_title")}
+					>
+						{t("docs_sign.lock_banner_body")}
+					</Callout>
+
+					{shownErrorKey && (
+						<div ref={errorRef} role="alert">
+							<Callout tone="danger" title={t("docs_sign.error_title")}>
+								{t(shownErrorKey)}
+							</Callout>
+						</div>
+					)}
+
+					<Button type="submit" size="lg" className="h-12 w-full text-base">
+						{t("docs_sign.submit")}
+					</Button>
+				</Form>
+			)}
 		</div>
 	)
 }

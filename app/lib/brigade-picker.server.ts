@@ -21,7 +21,7 @@ export async function pickerViewer(
 	}
 }
 
-/** When each brigade last had a job (as lead), for the picker's "last worked". */
+/** When each brigade last had a job (as first crew), for the picker's "last worked". */
 export async function lastWorkedByBrigade(
 	db: PrismaClient,
 ): Promise<Map<string, Date>> {
@@ -43,7 +43,7 @@ type Tx = Pick<
 
 /**
  * The server-side brigade guard for every path that puts brigades on a job
- * (create, edit, reassign, change lead). Run it inside the job's own
+ * (create, edit, reassign). Run it inside the job's own
  * transaction: the activation and the job save succeed or fail together.
  *
  * Rejects unknown, equipment and terminated brigades (`BRIGADE_INVALID`, every

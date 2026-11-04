@@ -1,7 +1,9 @@
 import type { StageRow } from "~/components/finance-stage-table"
 import { isAvisoSaved } from "~/lib/aviso-document"
 import {
-	payeeCode,
+	crewsWithWork,
+	loadCrewPayees,
+	payeeCodesOf,
 	resolveContractorAccounts,
 } from "~/lib/contractor-payment.server"
 import { db } from "~/lib/db.server"
@@ -104,7 +106,8 @@ export async function loadStageRows(opts: {
 				jafInvoiceLines: true,
 				jafInvoiceLineTotal: true,
 				contractorAccountCode: true,
-				// Every current certificate (one per crew), lead first.
+				crewServiceLines: true,
+				// Every current certificate (one per crew), in job order.
 				preCertSheets: {
 					where: { supersededAt: null },
 					orderBy: { version: "asc" },
@@ -125,6 +128,11 @@ export async function loadStageRows(opts: {
 	const docs = pageIds
 		? pageIds.flatMap((id) => found.filter((d) => d.id === id))
 		: found
+	const pageCrews = await loadCrewPayees(docs)
+	const crewsOf = (d: (typeof docs)[number]) => {
+		const withWork = crewsWithWork(d)
+		return withWork.flatMap((c) => pageCrews.get(c.brigadeId) ?? [])
+	}
 	let resolved: Map<string, unknown> | null = null
 	let sweepableIds: string[] = []
 	if (opts.withAccounts) {
@@ -133,15 +141,18 @@ export async function loadStageRows(opts: {
 			select: {
 				id: true,
 				contractorAccountCode: true,
+				crewServiceLines: true,
 				brigade: { select: { code: true } },
 			},
 		})
-		resolved = await resolveContractorAccounts(all.map(payeeCode))
+		const allCrews = await loadCrewPayees(all)
+		resolved = await resolveContractorAccounts(
+			all.flatMap((d) => payeeCodesOf(d, allCrews)),
+		)
 		sweepableIds = all
-			.filter((d) => {
-				const code = payeeCode(d)
-				return code && resolved?.has(code)
-			})
+			.filter((d) =>
+				payeeCodesOf(d, allCrews).every((code) => code && resolved?.has(code)),
+			)
 			.map((d) => d.id)
 	}
 	const now = new Date()
@@ -158,12 +169,22 @@ export async function loadStageRows(opts: {
 			id: d.id,
 			controlNumber: d.controlNumber,
 			avisoNumber: d.avisoNumber,
-			brigadeCode: d.brigade?.code ?? null,
+			// A job with several crews names them all: each is paid for its own lines.
+			brigadeCode:
+				crewsOf(d).length > 1
+					? crewsOf(d)
+							.map((c) => c.code)
+							.join(" + ")
+					: (d.brigade?.code ?? null),
 			contractorLabel:
-				d.preCertSheets[0]?.sigSubcontractorName ??
-				d.brigade?.leadName ??
-				d.brigade?.name ??
-				null,
+				crewsOf(d).length > 1
+					? crewsOf(d)
+							.map((c) => c.name)
+							.join(" + ")
+					: (d.preCertSheets[0]?.sigSubcontractorName ??
+						d.brigade?.leadName ??
+						d.brigade?.name ??
+						null),
 			ageDays: ageDays(
 				opts.ageFrom === "sent" ? d.pbccRequestSentAt : d.releasedToFinanceAt,
 				now,
@@ -186,9 +207,9 @@ export async function loadStageRows(opts: {
 				returned: returnedView,
 			}),
 			...(resolved && {
-				accountResolved: payeeCode(d)
-					? resolved.has(payeeCode(d) as string)
-					: false,
+				accountResolved: payeeCodesOf(d, pageCrews).every(
+					(code) => code && resolved?.has(code),
+				),
 			}),
 		}
 	})

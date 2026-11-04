@@ -379,6 +379,10 @@ export async function loadWorkOrderDocument(
 			completedBy: { select: { name: true } },
 			releasedBy: { select: { name: true } },
 			signedBy: { select: { name: true } },
+			pickupReleases: {
+				orderBy: { number: "asc" },
+				select: { crewSignerName: true },
+			},
 		},
 	})
 	const brigadeIds = assignedBrigadeIds(doc)
@@ -409,7 +413,14 @@ export async function loadWorkOrderDocument(
 		signers: {
 			supervisor: doc.completedBy?.name ?? null,
 			warehouse: doc.releasedBy?.name ?? null,
-			crew: doc.crewSignerName ?? doc.signedBy?.name ?? null,
+			// Everyone who signed for the materials, once each.
+			crew:
+				[...new Set(doc.pickupReleases.map((r) => r.crewSignerName))].join(
+					" · ",
+				) ||
+				doc.crewSignerName ||
+				doc.signedBy?.name ||
+				null,
 		},
 	})
 }

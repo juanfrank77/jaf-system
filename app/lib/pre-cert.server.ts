@@ -4,7 +4,9 @@ import { db } from "~/lib/db.server"
 import { generatePreCertSheetPdf } from "~/lib/pdf/pre-cert-sheet.server"
 import { getActiveServiceCodes } from "~/lib/service-codes.server"
 import {
+	buildInvoiceLines,
 	buildPreCertLines,
+	type InvoiceLine,
 	type PreCertLine,
 	type ServiceLine,
 	sumLines,
@@ -51,9 +53,8 @@ export async function renderPreCert(
 }
 
 /**
- * The job's current (not superseded) certificates, lead crew first. A job with
- * several crews has one per crew, issued together, so the lead's has the lowest
- * version.
+ * The job's current (not superseded) certificates, in job order. A job with
+ * several crews has one per crew, issued together.
  */
 export const activeSheets = (docId: string) =>
 	db.preCertSheet.findMany({
@@ -61,7 +62,7 @@ export const activeSheets = (docId: string) =>
 		orderBy: { version: "asc" },
 	})
 
-/** The lead crew's current certificate: the only one on a one-crew job. */
+/** The first current certificate: the only one on a one-crew job. */
 export const activeSheet = (docId: string) =>
 	db.preCertSheet.findFirst({
 		where: { docId, supersededAt: null },
@@ -93,10 +94,66 @@ export async function preCertLinesFor(installed: ServiceLine[]) {
 }
 
 /**
+ * The field step was saved: issue one certificado per brigade from its card, so
+ * the supervisor fills nothing by hand. A signed set stays as it is unless
+ * Finance sent the packet back and the lines changed; the invoice lines follow
+ * then too, so the invoice and the certificados agree. Never blocks the step: a
+ * failed render is logged and the Aviso save issues them again.
+ */
+export async function issueFieldCertificates(args: {
+	docId: string
+	actor: { id: string; role: Role }
+	returned: boolean
+}): Promise<void> {
+	const { docId, actor, returned } = args
+	const doc = await db.jafInvoice.findUniqueOrThrow({
+		where: { id: docId },
+		select: { installedServiceLines: true, jafInvoiceLines: true },
+	})
+	const installed = (doc.installedServiceLines as ServiceLine[] | null) ?? []
+	const invoiced = (doc.jafInvoiceLines as InvoiceLine[] | null) ?? []
+	const qtyKey = (l: { serviceCodeId: string; qty: number }) =>
+		`${l.serviceCodeId}:${Number(l.qty)}`
+	const installedKeys = installed
+		.filter((l) => l.qty > 0)
+		.map(qtyKey)
+		.sort()
+	const invoicedKeys = invoiced
+		.filter((l) => l.qty > 0)
+		.map(qtyKey)
+		.sort()
+	const linesChanged = returned && installedKeys.join() !== invoicedKeys.join()
+	const sheets = await activeSheets(docId)
+	if (isSheetSigned(sheets) && !linesChanged) return
+	const { lines } = await preCertLinesFor(installed)
+	if (lines.length === 0) return
+	if (linesChanged) {
+		const catalog = await getActiveServiceCodes()
+		const next = buildInvoiceLines(
+			installed,
+			Object.fromEntries(catalog.map((c) => [c.id, c])),
+		)
+		await db.jafInvoice.update({
+			where: { id: docId },
+			data: {
+				jafInvoiceLines: next as unknown as Prisma.InputJsonValue,
+				jafInvoiceLineTotal: sumLines(next),
+			},
+		})
+	}
+	try {
+		await createPreCertSheet({ docId, actor })
+	} catch (error) {
+		// biome-ignore lint/suspicious/noConsole: a failed render must show in the logs; the Aviso save retries
+		console.error("[pre-cert] field certificates not issued", docId, error)
+	}
+}
+
+/**
  * Creates the next pre-cert sheet version for the job, superseding the active
  * ones, with a `PRECERT_GENERATED` audit row each. Called when the Aviso is
- * saved (step 6). A job with several crews gets one certificate per crew, built
- * from that crew's own installed lines (lead first, each with the job's Aviso);
+ * saved (step 6) and when the field step is saved. A job with several crews gets one certificate per crew, built
+ * from that crew's own installed lines (each with the job's Aviso);
  * a crew with no lines has nothing to certify and gets none. Throws if nothing
  * was installed: callers check `preCertLinesFor` first so they can refuse
  * before writing anything.

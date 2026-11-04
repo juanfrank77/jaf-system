@@ -1,7 +1,11 @@
 import {
+	type ContractorPayment,
+	type ContractorPaymentLine,
 	computeContractorPayment,
+	crewsWithWork,
+	loadCrewPayees,
 	loadLineShares,
-	payeeCode,
+	payeeCodesOf,
 	resolveContractorAccounts,
 	toContractorPaymentLines,
 } from "~/lib/contractor-payment.server"
@@ -11,6 +15,7 @@ import {
 	percentOf,
 	shareFigures,
 } from "~/lib/contractor-share"
+import { type CrewLines, lineOwners } from "~/lib/crew-field"
 import { db } from "~/lib/db.server"
 import {
 	displayRequestLabel,
@@ -200,6 +205,7 @@ export async function blockedSentJobs() {
 			id: true,
 			controlNumber: true,
 			contractorAccountCode: true,
+			crewServiceLines: true,
 			brigade: { select: { code: true, name: true } },
 			preCertSheets: {
 				orderBy: { version: "desc" },
@@ -209,11 +215,75 @@ export async function blockedSentJobs() {
 		},
 		orderBy: { controlNumber: "asc" },
 	})
-	const resolved = await resolveContractorAccounts(docs.map(payeeCode))
-	return docs.filter((d) => {
-		const code = payeeCode(d)
-		return !code || !resolved.has(code)
-	})
+	const crews = await loadCrewPayees(docs)
+	const resolved = await resolveContractorAccounts(
+		docs.flatMap((d) => payeeCodesOf(d, crews)),
+	)
+	return docs.filter((d) =>
+		payeeCodesOf(d, crews).some((code) => !code || !resolved.has(code)),
+	)
+}
+
+/** The account a share line is paid to, frozen on the line when a job has several crews. */
+export type ShareAccount = {
+	id: string
+	code: string
+	label: string
+	brigadeCode: string | null
+}
+
+/**
+ * A job with several crews: each brigade is paid for its own lines, so each gets
+ * its own figures, truncated at its own level like any other brigade. A line no
+ * card holds (Finance corrected it to the Aviso) goes to the first crew. Every
+ * share line names its account; the job's totals are the crews' sums.
+ */
+export function splitCrewPayment(
+	lines: ContractorPaymentLine[],
+	crews: (CrewLines & { account: ShareAccount })[],
+): ContractorPayment {
+	const owners = lineOwners(crews)
+	const parts = crews.map((crew, i) =>
+		computeContractorPayment(
+			lines.filter((l) =>
+				owners.has(l.serviceCodeId)
+					? owners.get(l.serviceCodeId) === crew.brigadeId
+					: i === 0,
+			),
+		),
+	)
+	const sum = (pick: (p: ContractorPayment) => number) =>
+		Math.round(parts.reduce((s, p) => s + pick(p) * 100, 0)) / 100
+	return {
+		contractorShareLines: parts.flatMap((p, i) =>
+			p.contractorShareLines.map((l) => ({
+				...l,
+				account: crews[i].account,
+			})),
+		),
+		grossPayable: sum((p) => p.grossPayable),
+		retentionAmount: sum((p) => p.retentionAmount),
+		netPayable: sum((p) => p.netPayable),
+	}
+}
+
+/** Every account a swept job pays: one, or one per crew with its share lines. */
+export function accountIdsOf(doc: {
+	contractorAccountId?: string | null
+	contractorAccount?: object | null
+	contractorShareLines: unknown
+}): string[] {
+	const lines = Array.isArray(doc.contractorShareLines)
+		? (doc.contractorShareLines as { account?: ShareAccount }[])
+		: []
+	const ids = [
+		...new Set(lines.flatMap((l) => (l?.account ? [l.account.id] : []))),
+	]
+	if (ids.length > 0) return ids
+	const own =
+		doc.contractorAccountId ??
+		(doc.contractorAccount as { id?: string } | null | undefined)?.id
+	return own ? [own] : []
 }
 
 /** Thrown (before anything is written) when a run would contain no jobs. */
@@ -249,6 +319,7 @@ export async function generateRun(opts: {
 			id: true,
 			jafInvoiceLines: true,
 			contractorAccountCode: true,
+			crewServiceLines: true,
 			brigade: { select: { code: true } },
 		},
 	})
@@ -259,25 +330,40 @@ export async function generateRun(opts: {
 	// One query for the whole batch, not one per candidate: the candidate set
 	// is unbounded (see the deploy guide's §7 note), so this loop is the
 	// widest in the feature.
-	const resolved = await resolveContractorAccounts(candidates.map(payeeCode))
+	const crewPayees = await loadCrewPayees(candidates)
+	const resolved = await resolveContractorAccounts(
+		candidates.flatMap((c) => payeeCodesOf(c, crewPayees)),
+	)
 	const shares = await loadLineShares(candidates.map((c) => c.jafInvoiceLines))
 	const toSweep: Array<{
 		id: string
-		payment: ReturnType<typeof computeContractorPayment>
-		accountId: string
+		payment: ContractorPayment
+		accountIds: string[]
 	}> = []
 	for (const doc of candidates) {
-		const code = payeeCode(doc)
-		const account = code ? resolved.get(code) : undefined
-		if (!account) continue
+		const accounts = payeeCodesOf(doc, crewPayees).map((code) =>
+			code ? resolved.get(code) : undefined,
+		)
+		// One brigade with no account holds the whole job back: it stays open and
+		// visible, and nobody is paid part of a job.
+		if (accounts.length === 0 || accounts.some((a) => !a)) continue
+		const known = accounts as NonNullable<(typeof accounts)[number]>[]
+		const lines = toContractorPaymentLines(doc.jafInvoiceLines, shares)
 		toSweep.push({
 			id: doc.id,
 			// Computed here, outside the transaction, so the transaction only
 			// holds the writes.
-			payment: computeContractorPayment(
-				toContractorPaymentLines(doc.jafInvoiceLines, shares),
-			),
-			accountId: account.id,
+			payment:
+				known.length > 1
+					? splitCrewPayment(
+							lines,
+							crewsWithWork(doc).map((c, i) => ({
+								...c,
+								account: known[i],
+							})),
+						)
+					: computeContractorPayment(lines),
+			accountIds: known.map((a) => a.id),
 		})
 	}
 	if (toSweep.length === 0) throw new EmptyRunError()
@@ -303,14 +389,16 @@ export async function generateRun(opts: {
 					where: { id: doc.id, payrollRunId: null },
 					data: {
 						payrollRunId: created.id,
-						contractorAccountId: doc.accountId,
+						// The first account; `contractorShareLines` names each crew's.
+						contractorAccountId: doc.accountIds[0],
 						contractorShareLines: payment.contractorShareLines as never,
 						grossPayable: payment.grossPayable,
 						retentionAmount: payment.retentionAmount,
 						netPayable: payment.netPayable,
 					},
 				})
-				if (result.count > 0) claimedAccountIds.add(doc.accountId)
+				if (result.count > 0)
+					for (const id of doc.accountIds) claimedAccountIds.add(id)
 				swept += result.count
 			}
 			// Every candidate was claimed by a concurrent run: roll back rather than
@@ -476,8 +564,35 @@ export async function closePayrollRunAccount(opts: {
 		if (claimed.count === 0) {
 			throw new Response("Account already paid", { status: 409 })
 		}
+		// A job closes when every brigade on it is paid.
+		const [runDocs, paidLines] = await Promise.all([
+			tx.jafInvoice.findMany({
+				where: { payrollRunId: opts.runId },
+				select: {
+					id: true,
+					contractorAccountId: true,
+					contractorShareLines: true,
+				},
+			}),
+			tx.payrollRunAccount.findMany({
+				where: { payrollRunId: opts.runId, paidAt: { not: null } },
+				select: { contractorAccountId: true },
+			}),
+		])
+		const paid = new Set(paidLines.map((l) => l.contractorAccountId))
 		await tx.jafInvoice.updateMany({
-			where: { payrollRunId: opts.runId, contractorAccountId: opts.accountId },
+			where: {
+				id: {
+					in: runDocs
+						.filter((d) => {
+							const ids = accountIdsOf(d)
+							return (
+								ids.includes(opts.accountId) && ids.every((id) => paid.has(id))
+							)
+						})
+						.map((d) => d.id),
+				},
+			},
 			data: {
 				// When the system closed the job, not the user-typed pay date.
 				payablesClosedAt: new Date(),
@@ -637,15 +752,24 @@ export async function undoPayrollRunAccount(opts: {
 		})
 		if (!account) throw new Response("Account not in this run", { status: 404 })
 		if (!account.paidAt) throw new Response("Not paid", { status: 409 })
-		const invoices = await tx.jafInvoice.findMany({
-			where: { payrollRunId: opts.runId, contractorAccountId: opts.accountId },
-			select: { id: true, payablesClosedAt: true },
-		})
+		const invoices = (
+			await tx.jafInvoice.findMany({
+				where: { payrollRunId: opts.runId },
+				select: {
+					id: true,
+					payablesClosedAt: true,
+					contractorAccountId: true,
+					contractorShareLines: true,
+				},
+			})
+		).filter((i) => accountIdsOf(i).includes(opts.accountId))
 		const today = puertoRicoDay(opts.now ?? new Date())
+		// A job with several crews stays open until the last one is paid, so an
+		// open one is no reason to refuse; a job closed on another day is.
 		if (
 			invoices.some(
 				(i) =>
-					!i.payablesClosedAt || puertoRicoDay(i.payablesClosedAt) !== today,
+					i.payablesClosedAt && puertoRicoDay(i.payablesClosedAt) !== today,
 			)
 		)
 			throw new Response("Only a tick made today can be undone", {
@@ -661,7 +785,7 @@ export async function undoPayrollRunAccount(opts: {
 			data: { paidAt: null, paidById: null },
 		})
 		await tx.jafInvoice.updateMany({
-			where: { payrollRunId: opts.runId, contractorAccountId: opts.accountId },
+			where: { id: { in: invoices.map((i) => i.id) } },
 			data: { payablesClosedAt: null, payablesClosedById: null },
 		})
 		await tx.payrollRun.updateMany({
@@ -691,6 +815,8 @@ export type JournalLine = {
 	pctRet: number
 	retention: number
 	adjNet: number
+	/** The crew's account on a job with several crews. */
+	account?: ShareAccount
 }
 
 export type JournalJob = {
@@ -766,57 +892,73 @@ export function buildJournalBlocks(
 ): JournalBlock[] {
 	const byBrigade = new Map<string, JournalBlock>()
 	for (const doc of invoices) {
-		if (!doc.contractorAccount) continue
-		const acc = doc.contractorAccount
 		const all: JournalLine[] = parseShareLines(doc.contractorShareLines)
-		// A D line prints under the brigade's D account ("009D"), at its own rate.
-		for (const percent of [...new Set(all.map((l) => l.percent))]) {
-			// Round once, per line: net and retention are truncated from the line's
-			// gross, Adj. Net is their difference. Everything above only adds.
-			const lines = all
-				.filter((l) => l.percent === percent)
-				.map((l) => {
-					const f = shareFigures(l.gross, percent)
-					return {
-						...l,
-						net: f.net,
-						retention: f.retention,
-						adjNet: cents(f.net - f.retention),
-					}
-				})
-			const isD = isDPercent(percent)
-			const key = isD ? `${acc.code}D` : acc.code
-			let block = byBrigade.get(key)
-			if (!block) {
-				block = {
-					brigadeCode: key,
-					accountCode: acc.code,
-					brigadeLabel: acc.label,
-					acctId: acc.brigade?.code ?? null,
-					percent,
-					unverified: isD,
-					gross: 0,
-					net: 0,
-					retention: 0,
-					totalSC: 0,
-					jobs: [],
+		// Each brigade on the job gets its own block, for its own lines.
+		const own = doc.contractorAccount
+			? {
+					id: doc.contractorAccount.id,
+					code: doc.contractorAccount.code,
+					label: doc.contractorAccount.label,
+					brigadeCode: doc.contractorAccount.brigade?.code ?? null,
 				}
-				byBrigade.set(key, block)
+			: null
+		const accountOf = (l: JournalLine) => l.account ?? own
+		for (const acc of new Map(
+			all.flatMap((l) => {
+				const a = accountOf(l)
+				return a ? [[a.id, a] as const] : []
+			}),
+		).values()) {
+			const mine = all.filter((l) => accountOf(l)?.id === acc.id)
+			// A D line prints under the brigade's D account ("009D"), at its own rate.
+			for (const percent of [...new Set(mine.map((l) => l.percent))]) {
+				// Round once, per line: net and retention are truncated from the line's
+				// gross, Adj. Net is their difference. Everything above only adds.
+				const lines = mine
+					.filter((l) => l.percent === percent)
+					.map((l) => {
+						const f = shareFigures(l.gross, percent)
+						return {
+							...l,
+							net: f.net,
+							retention: f.retention,
+							adjNet: cents(f.net - f.retention),
+						}
+					})
+				const isD = isDPercent(percent)
+				const key = isD ? `${acc.code}D` : acc.code
+				let block = byBrigade.get(key)
+				if (!block) {
+					block = {
+						brigadeCode: key,
+						accountCode: acc.code,
+						brigadeLabel: acc.label,
+						acctId: acc.brigadeCode,
+						percent,
+						unverified: isD,
+						gross: 0,
+						net: 0,
+						retention: 0,
+						totalSC: 0,
+						jobs: [],
+					}
+					byBrigade.set(key, block)
+				}
+				const gross = round2(lines.reduce((s, l) => s + l.gross, 0))
+				block.gross = round2(block.gross + gross)
+				block.jobs.push({
+					invoiceId: doc.id,
+					controlNumber: doc.controlNumber,
+					jobSeq: doc.jobSeq ?? null,
+					avisoNumber: doc.avisoNumber,
+					lines,
+					gross,
+					net: sumCents(lines, (l) => l.net),
+					retention: sumCents(lines, (l) => l.retention),
+					adjNet: sumCents(lines, (l) => l.adjNet),
+					adjNetRunning: 0,
+				})
 			}
-			const gross = round2(lines.reduce((s, l) => s + l.gross, 0))
-			block.gross = round2(block.gross + gross)
-			block.jobs.push({
-				invoiceId: doc.id,
-				controlNumber: doc.controlNumber,
-				jobSeq: doc.jobSeq ?? null,
-				avisoNumber: doc.avisoNumber,
-				lines,
-				gross,
-				net: sumCents(lines, (l) => l.net),
-				retention: sumCents(lines, (l) => l.retention),
-				adjNet: sumCents(lines, (l) => l.adjNet),
-				adjNetRunning: 0,
-			})
 		}
 	}
 
@@ -872,6 +1014,7 @@ function parseShareLines(value: unknown): JournalLine[] {
 				toNumberPrice(line.pctRet ?? line.pctRetention ?? 0) || PCT_RET_DEFAULT,
 			retention: toNumberPrice(line.retention),
 			adjNet: toNumberPrice(line.adjNet),
+			...(line.account ? { account: line.account as ShareAccount } : {}),
 		}
 	})
 }

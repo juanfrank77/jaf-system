@@ -1,9 +1,9 @@
 /**
- * A work order can be assigned to several brigades. The first one is the
- * "lead": it stays in `JafInvoice.brigadeId`, and its code is what the
- * pre-cert signature copies into `contractorAccountCode` (the payee). Every
- * brigade's members land in `assignedCrewIds`; the full brigade list is
- * recorded on the latest `crewAssignmentHistory` entry as `brigadeIds`.
+ * A work order can be assigned to several brigades, all equal: each is paid for
+ * its own lines. The first one stays in `JafInvoice.brigadeId` (scope checks and
+ * lists read it; it means nothing for pay). Every brigade's members land in
+ * `assignedCrewIds`; the full brigade list is recorded on the latest
+ * `crewAssignmentHistory` entry as `brigadeIds`.
  */
 
 export function parseBrigadeIds(form: FormData): string[] {
@@ -41,7 +41,7 @@ export function readHistory(raw: unknown): Record<string, unknown>[] {
 	return []
 }
 
-/** The brigades currently assigned, lead first. Older docs have no list. */
+/** The brigades currently assigned. Older docs have no list. */
 export function assignedBrigadeIds(doc: {
 	brigadeId: string | null
 	crewAssignmentHistory: unknown

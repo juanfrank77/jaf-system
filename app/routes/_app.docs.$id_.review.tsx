@@ -381,7 +381,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 				}),
 	])
 	const correctorNames = Object.fromEntries(people.map((u) => [u.id, u.name]))
-	// The lead crew's certificate; a job with several crews has one per crew.
+	// The first certificate; a job with several crews has one per crew.
 	const sheet = sheets[0] ?? null
 	const stage = deriveSupervisorStage(doc, sheets)
 	// Released and not sent back: Finance holds it, the steps are locked.
@@ -638,7 +638,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	}
 }
 
-/** The certificate a form targets: its `sheetId`, else the lead crew's. */
+/** The certificate a form targets: its `sheetId`, else the first. */
 function sheetFromForm(form: FormData, docId: string) {
 	const id = (form.get("sheetId") as string | null)?.trim()
 	return id ? activeSheetById(docId, id) : activeSheet(docId)
@@ -1418,9 +1418,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 		const brigade = signingBrigadeId
 			? await db.brigade.findUnique({ where: { id: signingBrigadeId } })
 			: null
-		// Only the lead crew's signature sets the payee; payroll stays lead-only
-		// until the pay lines are split per brigade.
-		const isLeadSheet = !sheet.brigadeId || sheet.brigadeId === doc.brigadeId
+		// A one-crew job's payee. With several crews each is paid from its own
+		// lines at the sweep, so the signature fixes no single payee.
+		const oneCrew = !sheet.brigadeId
 		const typedCode =
 			(form.get("contractorCode") as string | null)?.trim() || null
 		const code = brigade?.code ?? typedCode
@@ -1448,7 +1448,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 				where: { id: sheet.id },
 				data: { ...data, pdfPath },
 			}),
-			...(isLeadSheet
+			...(oneCrew
 				? [
 						db.jafInvoice.update({
 							where: { id: params.id },
@@ -2215,6 +2215,18 @@ export default function ReviewDoc({
 				</Pill>
 			)}
 			{returned && doc.status !== "CANCELLED" && (
+				<p className="text-sm">
+					{t("docs_review.returned_open_hint")}{" "}
+					<Link to={`/docs/${doc.id}/field`} className="underline">
+						{t("docs_review.returned_open_field")}
+					</Link>
+					{" · "}
+					<Link to={`/docs/${doc.id}/edit`} className="underline">
+						{t("docs_review.returned_open_edit")}
+					</Link>
+				</p>
+			)}
+			{returned && doc.status !== "CANCELLED" && (
 				<ReturnedBanner
 					returned={returned}
 					// Already on the step that fixes it: no link to itself.
@@ -2264,6 +2276,33 @@ export default function ReviewDoc({
 							document={workOrder}
 							issuedOn={workOrderIssuedOn}
 						/>
+					)}
+					{sheets.length > 1 && (
+						<section
+							className="space-y-2 rounded-lg border p-3"
+							data-testid="crew-certificates"
+						>
+							<h2 className="text-sm font-medium">
+								{t("docs_review.crew_certificates_title", {
+									count: sheets.length,
+								})}
+							</h2>
+							<ul className="divide-y text-sm">
+								{sheets.map((sh) => (
+									<li key={sh.id} className="py-2">
+										<p className="font-medium">
+											{sh.brigadeName}
+											{sh.brigadeCode ? ` (${sh.brigadeCode})` : ""}
+										</p>
+										<p className="text-xs text-muted-foreground">
+											{(sh.lines as PreCertLine[])
+												.map((l) => `${l.claroCode} × ${l.certifiedQty}`)
+												.join(" · ")}
+										</p>
+									</li>
+								))}
+							</ul>
+						</section>
 					)}
 					<SignOffCard
 						doc={doc}

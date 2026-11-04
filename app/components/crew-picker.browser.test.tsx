@@ -97,17 +97,17 @@ describe("CrewPicker", () => {
 		expect(screen.queryByText("ANGEL BLAZQUEZ")).toBeNull()
 	})
 
-	it("a chip adds a crew and the count follows; the first picked is the lead", async ({
+	it("a chip adds a crew and the count follows; no crew is singled out", async ({
 		renderStub,
 	}) => {
 		await mount(renderStub)
 		await userEvent.click(screen.getByText("DINO CASTILLO"))
 		expect(screen.getByText("Assigned crew · 1 crew")).toBeTruthy()
-		expect(screen.queryByText("Lead")).toBeNull()
 		await userEvent.click(screen.getByText("ALEXIS DIAZ"))
 		expect(submitted()).toEqual(["b2", "b1"])
 		expect(screen.getByText("Assigned crew · 2 crews")).toBeTruthy()
-		expect(screen.getAllByText("Lead")).toHaveLength(1)
+		expect(screen.queryByText("Lead")).toBeNull()
+		expect(screen.queryByRole("button", { name: "Make lead" })).toBeNull()
 	})
 
 	it("× removes a crew, and the chip comes back", async ({ renderStub }) => {
@@ -119,22 +119,16 @@ describe("CrewPicker", () => {
 		expect(screen.getByText("ALEXIS DIAZ")).toBeTruthy()
 	})
 
-	it("shows the payment note only once two or more crews are selected, naming the lead", async ({
+	it("shows the neutral payment line only once two or more crews are selected", async ({
 		renderStub,
 	}) => {
 		await mount(renderStub)
 		await userEvent.click(screen.getByText("DINO CASTILLO"))
-		expect(screen.queryByTestId("lead-payment-note")).toBeNull()
+		expect(screen.queryByTestId("crew-payment-note")).toBeNull()
 		await userEvent.click(screen.getByText("ALEXIS DIAZ"))
-		expect(screen.getByTestId("lead-payment-note").textContent).toContain(
-			"DINO CASTILLO",
+		expect(screen.getByTestId("crew-payment-note").textContent).toBe(
+			"Each crew is paid separately. In the field step, record which services each crew did.",
 		)
-	})
-
-	it("changes the lead without re-picking", async ({ renderStub }) => {
-		await mount(renderStub, { initialSelected: ["b1", "b2"] })
-		await userEvent.click(screen.getByRole("button", { name: "Make lead" }))
-		expect(submitted()).toEqual(["b2", "b1"])
 	})
 
 	it("reloads a saved crew in order", async ({ renderStub }) => {

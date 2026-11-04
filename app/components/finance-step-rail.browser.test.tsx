@@ -30,7 +30,7 @@ describe("finance step rails", () => {
 		expect(hrefs).toContain("/finance/payroll")
 	})
 
-	it("links the other two Arm B steps from the current one", async ({
+	it("links the other three Arm B steps from the current one", async ({
 		renderStub,
 	}) => {
 		await renderStub({
@@ -39,10 +39,14 @@ describe("finance step rails", () => {
 			],
 		})
 		const items = await screen.findAllByRole("listitem")
-		expect(items).toHaveLength(3)
+		expect(items).toHaveLength(4)
 		expect(
 			screen.getAllByRole("link").map((a) => a.getAttribute("href")),
-		).toEqual(["/finance/awaiting-po", "/finance/awaiting-ariba"])
+		).toEqual([
+			"/finance/awaiting-po",
+			"/finance/awaiting-ariba",
+			"/finance/payment-advice",
+		])
 		expect(items.filter((li) => li.dataset.state === "locked")).toHaveLength(0)
 	})
 
@@ -55,14 +59,18 @@ describe("finance step rails", () => {
 			],
 		})
 		const items = await screen.findAllByRole("listitem")
-		expect(items).toHaveLength(3)
+		expect(items).toHaveLength(4)
 		expect(items[0].dataset.state).toBe("current")
 		expect(items[0].getAttribute("aria-current")).toBe("step")
 		expect(items[1].dataset.state).not.toBe("locked")
 		expect(items[2].dataset.state).not.toBe("locked")
 		expect(
 			screen.getAllByRole("link").map((a) => a.getAttribute("href")),
-		).toEqual(["/finance/awaiting-ariba", "/finance/receivables"])
+		).toEqual([
+			"/finance/awaiting-ariba",
+			"/finance/payment-advice",
+			"/finance/receivables",
+		])
 	})
 
 	it("renders the stage chips", async ({ renderStub }) => {

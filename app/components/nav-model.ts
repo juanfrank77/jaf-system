@@ -28,6 +28,7 @@ export type NavLabelKey =
 	| "app_shell.nav.receivables"
 	| "app_shell.nav.finance_packets"
 	| "app_shell.nav.finance_returned"
+	| "app_shell.nav.finance_payment_advice"
 	| "app_shell.nav.finance_lc_request"
 	| "app_shell.nav.finance_lists"
 	| "app_shell.nav.finance_awaiting_po"
@@ -328,6 +329,13 @@ const NAV_ITEMS: NavItem[] = [
 	{
 		to: "/finance/awaiting-ariba",
 		labelKey: "app_shell.nav.finance_awaiting_ariba",
+		icon: Invoice02Icon,
+		group: "arm_b",
+		roles: ["FINANCE", "ADMIN"],
+	},
+	{
+		to: "/finance/payment-advice",
+		labelKey: "app_shell.nav.finance_payment_advice",
 		icon: Invoice02Icon,
 		group: "arm_b",
 		roles: ["FINANCE", "ADMIN"],

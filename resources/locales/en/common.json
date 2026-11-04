@@ -238,6 +238,7 @@
 			"comptroller_paid": "Paid runs",
 			"comptroller_brigades": "Brigades",
 			"comptroller_installers": "Installers",
+			"finance_payment_advice": "Payment Advice",
 			"finance_returned": "Returned",
 			"supervisor_stock": "Restock & Brigade inventory",
 			"warehouse_brigade_stock": "Brigade restock"
@@ -2212,7 +2213,8 @@
 			"step": {
 				"awaiting_po": "PO inbox",
 				"awaiting_ariba": "Claro invoices",
-				"receivables": "Receivables"
+				"receivables": "Receivables",
+				"payment_advice": "Payment Advice"
 			}
 		},
 		"step": {
@@ -2649,6 +2651,58 @@
 		"marked_summary": "Marked {{count}} invoices as loaded in Ariba.",
 		"errors": {
 			"none_selected": "Select at least one row."
+		}
+	},
+	"payment_advice": {
+		"tab": {
+			"upload": "Upload",
+			"applied": "Applied",
+			"unmatched": "Unmatched"
+		},
+		"choose_file": "Choose the Payment Advice PDF",
+		"upload": "Upload advice",
+		"empty_upload": "No advice is waiting to be applied.",
+		"empty_applied": "No advice has been applied yet.",
+		"empty_unmatched": "No unmatched rows.",
+		"card_title": "Payment Advice · {{date}} · Ref {{ref}} · {{count}} rows · {{total}}",
+		"total_ok": "Rows add up to the total",
+		"total_off": "Rows add to {{rows}}, not the total",
+		"summary": "Matched {{matched}} · Short paid {{short}} · Unmatched {{unmatched}} · Already paid {{already}}",
+		"open_pdf": "Open the advice PDF",
+		"apply": "Apply payments",
+		"unmatched_kept": "Unmatched rows are kept and never dropped.",
+		"invoice_number": "Invoice number",
+		"link": "Link",
+		"reason": "Reason",
+		"accept_short": "Accept short pay",
+		"col": {
+			"invoice": "Invoice #",
+			"voucher": "Voucher",
+			"invoice_date": "Invoice date",
+			"net": "Net paid",
+			"ours": "Our invoice",
+			"result": "Result",
+			"advice": "Advice"
+		},
+		"result": {
+			"matched": "Match → closes PO",
+			"short": "Short paid {{diff}}",
+			"already_paid": "Already paid",
+			"unmatched": "Not in system"
+		},
+		"errors": {
+			"no_file": "Choose the advice PDF.",
+			"not_pdf": "Only a PDF can be uploaded.",
+			"unreadable": "No invoice rows could be read from this advice.",
+			"date_missing": "The advice date could not be read.",
+			"duplicate": "This advice was already uploaded.",
+			"total_mismatch": "The rows do not add up to the advice total, so it cannot be applied.",
+			"already_applied": "This advice was already applied.",
+			"not_found": "Not found.",
+			"not_short": "This invoice is not short paid.",
+			"reason_required": "A reason is required to accept a short pay.",
+			"invoice_not_found": "No invoice with that number.",
+			"line_not_unmatched": "This row is already matched."
 		}
 	},
 	"brigade_stock": {

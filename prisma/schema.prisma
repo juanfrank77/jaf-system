@@ -202,16 +202,19 @@ model User {
   brigadeReturnsOk      BrigadeStockReturn[]   @relation("BrigadeReturnConfirmer")
 
   // Arm A (payroll) — Finance-Billing Arm A phase, back-relations
-  payablesClosedDocs     JafInvoice[]        @relation("PayablesClosedDocs")
-  payrollRunGenerator    PayrollRun[]        @relation("PayrollRunGenerator")
-  payrollRunSender       PayrollRun[]        @relation("PayrollRunSender")
-  claroPosUploaded       ClaroPo[]           @relation("ClaroPoUploader")
-  claroPosConfirmed      ClaroPo[]           @relation("ClaroPoConfirmer")
-  claroInvoicesMade      ClaroInvoice[]      @relation("ClaroInvoiceMaker")
-  claroInvoicesLoaded    ClaroInvoice[]      @relation("ClaroInvoiceLoader")
-  payrollRunPaidBy       PayrollRun[]        @relation("PayrollRunPaidBy")
-  payrollRunAccountsPaid PayrollRunAccount[] @relation("PayrollRunAccountPaidBy")
-  payrollRunReversedBy   PayrollRun[]        @relation("PayrollRunReversedBy")
+  payablesClosedDocs         JafInvoice[]        @relation("PayablesClosedDocs")
+  payrollRunGenerator        PayrollRun[]        @relation("PayrollRunGenerator")
+  payrollRunSender           PayrollRun[]        @relation("PayrollRunSender")
+  claroPosUploaded           ClaroPo[]           @relation("ClaroPoUploader")
+  claroPosConfirmed          ClaroPo[]           @relation("ClaroPoConfirmer")
+  claroInvoicesMade          ClaroInvoice[]      @relation("ClaroInvoiceMaker")
+  claroInvoicesLoaded        ClaroInvoice[]      @relation("ClaroInvoiceLoader")
+  claroInvoicesShortAccepted ClaroInvoice[]      @relation("ClaroInvoiceShortAcceptor")
+  paymentAdvices             PaymentAdvice[]     @relation("AdviceUploader")
+  paymentAdvicesApplied      PaymentAdvice[]     @relation("AdviceApplier")
+  payrollRunPaidBy           PayrollRun[]        @relation("PayrollRunPaidBy")
+  payrollRunAccountsPaid     PayrollRunAccount[] @relation("PayrollRunAccountPaidBy")
+  payrollRunReversedBy       PayrollRun[]        @relation("PayrollRunReversedBy")
 
   createdRepairBatches    RepairBatch[]   @relation("RepairBatchCreator")
   voidedRepairBatches     RepairBatch[]   @relation("RepairBatchVoider")
@@ -685,28 +688,88 @@ model ClaroPo {
 // by hand. One PO per invoice. `seq` is the M19 series number: unique, so two
 // invoices can never share one.
 model ClaroInvoice {
-  id         String     @id @default(cuid())
-  seq        Int        @unique
-  claroPoId  String     @unique
-  claroPo    ClaroPo    @relation(fields: [claroPoId], references: [id])
-  docId      String
-  doc        JafInvoice @relation(fields: [docId], references: [id])
-  workMonth  String // "2026-05"
-  subtotal   Decimal
-  ivu4       Decimal
-  ivu115     Decimal
-  total      Decimal
-  filePath   String
-  madeAt     DateTime   @default(now())
-  madeById   String
-  madeBy     User       @relation("ClaroInvoiceMaker", fields: [madeById], references: [id])
-  loadedAt   DateTime?
-  loadedById String?
-  loadedBy   User?      @relation("ClaroInvoiceLoader", fields: [loadedById], references: [id])
-  dueDate    DateTime?
+  id                String       @id @default(cuid())
+  seq               Int          @unique
+  claroPoId         String       @unique
+  claroPo           ClaroPo      @relation(fields: [claroPoId], references: [id])
+  docId             String
+  doc               JafInvoice   @relation(fields: [docId], references: [id])
+  workMonth         String // "2026-05"
+  subtotal          Decimal
+  ivu4              Decimal
+  ivu115            Decimal
+  total             Decimal
+  filePath          String
+  madeAt            DateTime     @default(now())
+  madeById          String
+  madeBy            User         @relation("ClaroInvoiceMaker", fields: [madeById], references: [id])
+  loadedAt          DateTime?
+  loadedById        String?
+  loadedBy          User?        @relation("ClaroInvoiceLoader", fields: [loadedById], references: [id])
+  dueDate           DateTime?
+  paidAt            DateTime?
+  paidNet           Decimal?
+  voucherId         String?
+  bankReference     String?
+  shortReason       String?
+  shortAcceptedAt   DateTime?
+  shortAcceptedById String?
+  shortAcceptedBy   User?        @relation("ClaroInvoiceShortAcceptor", fields: [shortAcceptedById], references: [id])
+  adviceLines       AdviceLine[]
 
   @@index([docId])
   @@index([loadedAt])
+}
+
+enum AdviceResult {
+  MATCHED
+  SHORT
+  UNMATCHED
+  ALREADY_PAID
+}
+
+// Claro's Payment Advice: what it paid and when. Rows are kept exactly as read,
+// matched or not; nothing is dropped.
+model PaymentAdvice {
+  id           String       @id @default(cuid())
+  adviceDate   DateTime
+  bank         String?
+  reference    String?
+  total        Decimal // as printed on the advice
+  rowsTotal    Decimal // sum of the rows read
+  fileName     String
+  filePath     String
+  fileHash     String       @unique
+  uploadedAt   DateTime     @default(now())
+  uploadedById String
+  uploadedBy   User         @relation("AdviceUploader", fields: [uploadedById], references: [id])
+  appliedAt    DateTime?
+  appliedById  String?
+  appliedBy    User?        @relation("AdviceApplier", fields: [appliedById], references: [id])
+  lines        AdviceLine[]
+
+  @@index([adviceDate])
+}
+
+model AdviceLine {
+  id          String        @id @default(cuid())
+  adviceId    String
+  advice      PaymentAdvice @relation(fields: [adviceId], references: [id], onDelete: Cascade)
+  position    Int
+  invoiceRef  String // as read, e.g. "M19-3423"
+  voucher     String?
+  invoiceDate DateTime?
+  amount      Decimal
+  withholding Decimal
+  discount    Decimal
+  net         Decimal
+  result      AdviceResult
+  invoiceId   String?
+  invoice     ClaroInvoice? @relation(fields: [invoiceId], references: [id])
+  appliedAt   DateTime?
+
+  @@index([adviceId])
+  @@index([invoiceId])
 }
 
 model PreCertSheet {

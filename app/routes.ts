@@ -73,6 +73,11 @@ export default [
 		route("finance/receivables", "routes/_app.finance.receivables.tsx"),
 		route("finance/awaiting-po", "routes/_app.finance.awaiting-po.tsx"),
 		route("finance/awaiting-ariba", "routes/_app.finance.awaiting-ariba.tsx"),
+		route("finance/payment-advice", "routes/_app.finance.payment-advice.tsx"),
+		route(
+			"finance/payment-advice/:id/file",
+			"routes/_app.finance.payment-advice.$id.file.tsx",
+		),
 		route(
 			"finance/awaiting-ariba/zip",
 			"routes/_app.finance.awaiting-ariba.zip.tsx",

@@ -7,6 +7,7 @@ import type {
 import { db } from "./db.server"
 import { hasFieldTable, warehouseUsedLines } from "./field-materials"
 import type { FinanceStage } from "./finance-pipeline"
+import { computeInvoiceTotals } from "./invoice-totals"
 import { getAvisoAmountTolerance, getIvuRate } from "./system-settings.server"
 import { toNumberPrice } from "./utils"
 
@@ -175,12 +176,13 @@ export function invoiceTotalUsed(
 	codeMap: Record<string, { unitPrice: number }>,
 	ivuRate: number,
 ): number {
-	const source = billableMaterials(invoice)
-	const subtotal = source.reduce((sum, item) => {
-		const price = toNumberPrice(codeMap[item.serviceCodeId]?.unitPrice)
-		return sum + Number(item.qty || 0) * price
-	}, 0)
-	return subtotal + subtotal * ivuRate
+	return computeInvoiceTotals(
+		billableMaterials(invoice).map((item) => ({
+			qty: Number(item.qty || 0),
+			unitPrice: toNumberPrice(codeMap[item.serviceCodeId]?.unitPrice),
+		})),
+		ivuRate,
+	).total
 }
 
 export function isMissingAvisoPdf(

@@ -195,13 +195,13 @@
 			"dashboard": "Dashboard",
 			"new_document": "+ Work Order",
 			"receivables": "Receivables",
-			"finance_packets": "Packets in",
-			"finance_lc_request": "LC request",
+			"finance_packets": "Inbox",
+			"finance_lc_request": "PBCC batch",
 			"finance_lc_funded": "LC funded",
-			"finance_lists": "Lists to Carmen",
+			"finance_lists": "Payroll to Carmen",
 			"finance_carmen": "Carmen's payment",
-			"finance_awaiting_po": "Awaiting PO",
-			"finance_awaiting_ariba": "Awaiting Ariba",
+			"finance_awaiting_po": "PO inbox",
+			"finance_awaiting_ariba": "Claro invoices",
 			"soon": "Soon",
 			"admin_settings": "Admin Settings",
 			"catalog": "Catalog",
@@ -415,7 +415,7 @@
 		"documents_heading": "Documents",
 		"warehouse_receipt": "Warehouse receipt (PDF)",
 		"claro_work_order": "Claro work order (PDF)",
-		"lc_request": "LC request",
+		"lc_request": "PBCC batch",
 		"materials_heading": "Materials",
 		"back_to_work_order": "Back to work order",
 		"packet_first_send": "first send",
@@ -2083,6 +2083,33 @@
 			"success": "Returned successfully."
 		}
 	},
+	"finance_home": {
+		"arm_a": "Paying our people",
+		"arm_b": "Claro paying JAF",
+		"all_clear": "All clear",
+		"not_live": "Not live yet",
+		"tile": {
+			"inbox": "Inbox to review",
+			"pbcc_batch": "Open PBCC batch",
+			"waiting_carmen": "Waiting on Carmen",
+			"pos_to_confirm": "POs to confirm",
+			"invoices_to_load": "Invoices to load in Ariba",
+			"claro_past_due": "Claro past 60 days"
+		},
+		"sub": {
+			"oldest_one": "oldest {{count}} day",
+			"oldest_other": "oldest {{count}} days",
+			"batch": "{{count}} / {{max}}",
+			"sent_one": "sent {{count}} day ago",
+			"sent_other": "sent {{count}} days ago"
+		},
+		"next_up": {
+			"title": "Next up",
+			"empty": "Nothing is waiting on you.",
+			"days_one": "{{count}} day",
+			"days_other": "{{count}} days"
+		}
+	},
 	"finance_flow": {
 		"aria": "Finance Arm A work loop",
 		"chip_a": "Arm A · Stage {{step}} of {{total}}",
@@ -2090,32 +2117,32 @@
 		"arm_b": {
 			"aria": "Finance Arm B work loop",
 			"step": {
-				"awaiting_po": "Awaiting PO",
-				"awaiting_ariba": "Awaiting Ariba",
+				"awaiting_po": "PO inbox",
+				"awaiting_ariba": "Claro invoices",
 				"receivables": "Receivables"
 			}
 		},
 		"step": {
-			"packets": "Packets in",
-			"lc_request": "LC request",
+			"packets": "Inbox",
+			"lc_request": "PBCC batch",
 			"lc_funded": "LC funded",
-			"lists": "Lists to Carmen",
+			"lists": "Payroll to Carmen",
 			"carmen": "Carmen's payment"
 		},
 		"callout": {
-			"packets_title": "Stage 1 of 5 · Packets in",
-			"packets_body": "Packets the supervisors have released, with the documents that have arrived for each one. When every document is in, check the packet and accept it. Accepted packets move to LC request.",
-			"lc_request_title": "Stage 2 of 5 · LC request",
+			"packets_title": "Stage 1 of 5 · Inbox",
+			"packets_body": "Packets the supervisors have released, with the documents that have arrived for each one. When every document is in, check the packet and accept it. Accepted packets move to the PBCC batch.",
+			"lc_request_title": "Stage 2 of 5 · PBCC batch",
 			"lc_request_body": "Accepted packets that can have an LC request. Select the packets, build a bank schedule (the Excel schedule plus one invoice PDF per packet), review it, then mark it sent to the bank. The packets then wait in LC funded.",
 			"lc_funded_title": "Stage 3 of 5 · LC funded",
 			"lc_funded_body": "Packets whose request is with the bank and not funded yet. When the bank funds one, mark it funded here with the date and amount. That moves it to Lists to Carmen and starts the Arm B clock.",
-			"lists_title": "Stage 4 of 5 · Lists to Carmen",
+			"lists_title": "Stage 4 of 5 · Payroll to Carmen",
 			"lists_body": "Funded packets ready to go on a Production Journal, and the lists already sent. Create a list from the funded packets and send it to Carmen. Carmen then pays each account.",
 			"carmen_title": "Stage 5 of 5 · Carmen's payment",
 			"carmen_body": "Each list sent to Carmen, with the accounts she has paid and the ones still open. Wait for Carmen, or — if she has been out — confirm an account from the paper copy. When every account is paid, Arm A is closed for that list.",
 			"arm_b_receivables_title": "Arm B · Receivables",
 			"arm_b_receivables_body": "Claro paying JAF. Record payments as they land, then close the job once both exist. A half-closed job is normal here, not an error — the job closes for good when Claro's payment is in.",
-			"arm_b_po_title": "Arm B · Awaiting PO",
+			"arm_b_po_title": "Arm B · PO inbox",
 			"arm_b_po_body": "Record the Claro PO against the Aviso, then generate the final Claro document. Several POs per Aviso, and the Awaiting PO and Awaiting Ariba lists, arrive in the next Arm B phase."
 		}
 	},

@@ -13,6 +13,7 @@ import {
 	Text,
 	View,
 } from "@react-pdf/renderer"
+import { computeInvoiceTotals } from "~/lib/invoice-totals"
 
 const styles = StyleSheet.create({
 	page: { padding: 40, fontFamily: "Helvetica", fontSize: 9 },
@@ -84,14 +85,12 @@ interface JafInvoiceParams {
 export async function generateJafInvoicePdf(
 	params: JafInvoiceParams,
 ): Promise<Buffer> {
-	let subtotal = 0
-	const items = params.lineItems.map((item) => {
-		const amount = Number(item.qty) * Number(item.unitPrice)
-		subtotal += amount
-		return { ...item, amount }
-	})
-	const ivu = subtotal * params.ivuRate
-	const total = subtotal + ivu
+	const totals = computeInvoiceTotals(params.lineItems, params.ivuRate)
+	const items = params.lineItems.map((item, i) => ({
+		...item,
+		amount: totals.lines[i].lineAmount,
+	}))
+	const { subtotal, ivu, total } = totals
 
 	const element = (
 		<Document>

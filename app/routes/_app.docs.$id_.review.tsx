@@ -59,6 +59,7 @@ import {
 } from "~/lib/file-upload.server"
 import { fixModeFor } from "~/lib/fix-mode"
 import { invoiceNumberFor } from "~/lib/invoice-number"
+import { computeInvoiceTotals } from "~/lib/invoice-totals"
 import { openJobLabel } from "~/lib/open-job-label"
 import { packageFiles } from "~/lib/package-files"
 import { packetBlockers } from "~/lib/packet-blockers"
@@ -481,12 +482,21 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	if (lineTotal != null && showPrices) {
 		const ivuRate = await getIvuRate()
 		const contractor = round2(lineTotal * CONTRACTOR_SHARE_PERCENT)
+		// Per-line IVU from the stored invoice lines; a total with no lines
+		// behind it counts as one line.
+		const storedLines = Array.isArray(doc.jafInvoiceLines)
+			? (doc.jafInvoiceLines as InvoiceLine[])
+			: []
+		const totals = computeInvoiceTotals(
+			storedLines.length > 0 ? storedLines : [{ qty: 1, unitPrice: lineTotal }],
+			ivuRate,
+		)
 		invoiceSummary = {
 			number: invoiceNumberFor(doc),
 			lineTotal,
 			ivuRate,
-			ivu: round2(lineTotal * ivuRate),
-			total: round2(lineTotal + round2(lineTotal * ivuRate)),
+			ivu: totals.ivu,
+			total: round2(lineTotal + totals.ivu),
 			sharePercent: CONTRACTOR_SHARE_PERCENT,
 			contractor,
 			retentionPercent: RETENTION_RATE,

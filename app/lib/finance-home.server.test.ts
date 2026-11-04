@@ -96,7 +96,7 @@ describe("loadFinanceHome (integration)", () => {
 		expect(PBCC_BATCH_CAPACITY).toBe(100)
 	})
 
-	it("makes POs to confirm and Invoices to load live, and leaves Claro past due not live", () => {
+	it("makes all three Arm B boxes live", () => {
 		expect(tile(after, "pos_to_confirm")).toMatchObject({
 			href: "/finance/awaiting-po",
 		})
@@ -106,9 +106,9 @@ describe("loadFinanceHome (integration)", () => {
 		})
 		expect(typeof tile(after, "invoices_to_load")?.count).toBe("number")
 		expect(tile(after, "claro_past_due")).toMatchObject({
-			count: null,
-			href: null,
+			href: "/finance/ledger?report=aging",
 		})
+		expect(typeof tile(after, "claro_past_due")?.count).toBe("number")
 	})
 
 	it("lists the oldest waiting items first, at most five, each opening its screen", () => {

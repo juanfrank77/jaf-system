@@ -171,20 +171,6 @@ export function billableMaterials(invoice: MaterialsSource): MaterialItem[] {
 		: (invoice.materialsTaken as MaterialItem[]) || []
 }
 
-export function invoiceTotalUsed(
-	invoice: MaterialsSource,
-	codeMap: Record<string, { unitPrice: number }>,
-	ivuRate: number,
-): number {
-	return computeInvoiceTotals(
-		billableMaterials(invoice).map((item) => ({
-			qty: Number(item.qty || 0),
-			unitPrice: toNumberPrice(codeMap[item.serviceCodeId]?.unitPrice),
-		})),
-		ivuRate,
-	).total
-}
-
 export function isMissingAvisoPdf(
 	invoice: Pick<JafInvoice, "avisoDocPath" | "claroPdfPath">,
 ): boolean {

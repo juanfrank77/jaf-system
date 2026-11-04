@@ -11,7 +11,6 @@ import {
 	daysInStage,
 	FINANCEABLE_STATUSES,
 	financeLineItems,
-	invoiceTotalUsed,
 } from "./finance-pipeline.server"
 
 const invoice = (overrides: Record<string, unknown> = {}) => ({
@@ -108,7 +107,6 @@ describe("finance material lines: brigade's own stock is tracked, not billed", (
 			fieldMaterials: split,
 		}
 		expect(financeLineItems(doc, codeMap).map((l) => l.qty)).toEqual([6])
-		expect(invoiceTotalUsed(doc, codeMap, 0)).toBe(12)
 	})
 
 	it("a row saved before the ruling (materialsUsed = 10) still bills 6", () => {
@@ -130,7 +128,6 @@ describe("finance material lines: brigade's own stock is tracked, not billed", (
 			],
 		}
 		expect(financeLineItems(doc, codeMap)).toEqual([])
-		expect(invoiceTotalUsed(doc, codeMap, 0.115)).toBe(0)
 	})
 
 	it("a legacy job without the Field table is unchanged", () => {
@@ -151,6 +148,5 @@ describe("finance material lines: brigade's own stock is tracked, not billed", (
 		// Nothing reported used yet: Finance reads the pickup, as before.
 		const none = { materialsTaken: taken, materialsUsed: null }
 		expect(financeLineItems(none, codeMap).map((l) => l.qty)).toEqual([10])
-		expect(invoiceTotalUsed(none, codeMap, 0)).toBe(20)
 	})
 })

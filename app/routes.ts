@@ -72,6 +72,10 @@ export default [
 		route("finance/lc-requests", "routes/_app.finance.lc-requests.tsx"),
 		route("finance/receivables", "routes/_app.finance.receivables.tsx"),
 		route("finance/awaiting-po", "routes/_app.finance.awaiting-po.tsx"),
+		route("finance/avisos", "routes/_app.finance.avisos.tsx"),
+		route("finance/avisos/:id", "routes/_app.finance.avisos.$id.tsx"),
+		route("finance/ledger", "routes/_app.finance.ledger.tsx"),
+		route("finance/ledger/export", "routes/_app.finance.ledger.export.tsx"),
 		route("finance/awaiting-ariba", "routes/_app.finance.awaiting-ariba.tsx"),
 		route("finance/payment-advice", "routes/_app.finance.payment-advice.tsx"),
 		route(
@@ -120,7 +124,6 @@ export default [
 			"finance/payroll/:runId/journal",
 			"routes/_app.finance.payroll.$runId.journal.tsx",
 		),
-		route("finance/po/:id", "routes/_app.finance.po.$id.tsx"),
 		route("comptroller", "routes/_app.comptroller.tsx"),
 		route("comptroller/lists", "routes/_app.comptroller.lists.tsx"),
 		route("comptroller/to-pay", "routes/_app.comptroller.to-pay.tsx"),

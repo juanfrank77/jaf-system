@@ -238,7 +238,8 @@ describe("loadComptrollerHome", () => {
 			data: { sentAt: NOW, reversedAt: NOW },
 		})
 		const after = tile(await loadComptrollerHome(NOW), "retention_year")
-		expect((after.amount ?? 0) - (before.amount ?? 0)).toBeCloseTo(37.5, 2)
+		// The journal's figure, rounded per line: 10% of 65% of $1,000.
+		expect((after.amount ?? 0) - (before.amount ?? 0)).toBeCloseTo(65, 2)
 		expect((after.count ?? 0) - (before.count ?? 0)).toBe(1)
 	})
 })

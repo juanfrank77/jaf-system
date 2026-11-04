@@ -14,6 +14,12 @@ import {
 	fetchInvoiceTotalContext,
 } from "~/lib/finance-pipeline.server"
 import { VERIFY_CHECKS as CHECKS } from "~/lib/finance-verify-checks"
+import {
+	type CorrectionChange,
+	CorrectionError,
+	correctToAviso,
+	type InvoiceOriginal,
+} from "~/lib/invoice-correction.server"
 import { computeInvoiceTotals } from "~/lib/invoice-totals"
 import { packetDocuments } from "~/lib/packet-documents"
 import { puertoRicoToday } from "~/lib/payroll-run.server"
@@ -129,7 +135,39 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		brigadeStock: await brigadeStockFor(doc.fieldMaterials),
 		// The material lines Finance bills, listed exactly as billed.
 		materials: billableMaterials(doc),
+		// Lissette corrected it to the Aviso: v1 and her changes.
+		correction:
+			doc.invoiceVersion > 1 && doc.invoiceOriginal
+				? {
+						version: doc.invoiceVersion,
+						original: doc.invoiceOriginal as unknown as InvoiceOriginal,
+						log: await correctionLog(doc.id),
+					}
+				: null,
 	}
+}
+
+async function correctionLog(docId: string) {
+	const rows = await db.auditTrail.findMany({
+		where: { docId, action: "FINANCE_CORRECTED" },
+		orderBy: { timestamp: "asc" },
+		include: { user: { select: { name: true } } },
+	})
+	return rows.map((r) => {
+		const diff = r.diffJson as unknown as {
+			version: number
+			changes: CorrectionChange[]
+			note: string | null
+		}
+		return {
+			id: r.id,
+			version: diff.version,
+			at: r.timestamp.toISOString(),
+			by: r.user.name,
+			note: diff.note,
+			changes: diff.changes,
+		}
+	})
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
@@ -170,7 +208,11 @@ export async function action({ request, params }: Route.ActionArgs) {
 		}
 		throw redirect(`/finance/verify/${params.id}`)
 	}
-	if (intent !== "verify" && intent !== "send_back")
+	if (
+		intent !== "verify" &&
+		intent !== "send_back" &&
+		intent !== "correct_to_aviso"
+	)
 		return { errorKey: "finance_verify.errors.unknown_intent" }
 	const stage = computeFinanceStage(
 		doc,
@@ -183,6 +225,28 @@ export async function action({ request, params }: Route.ActionArgs) {
 	// sent back is his until he resends it (S4): no verifying it meanwhile.
 	if (!doc.releasedToFinanceAt || (intent === "verify" && isReturned(doc)))
 		return { errorKey: "finance_verify.errors.invalid_stage" }
+
+	if (intent === "correct_to_aviso") {
+		// Sent back, the packet is the supervisor's until he resends it.
+		if (isReturned(doc))
+			return { errorKey: "finance_verify.errors.invalid_stage" }
+		try {
+			await correctToAviso({
+				docId: params.id,
+				userId: user.id,
+				services: JSON.parse(String(form.get("services") ?? "[]")),
+				materials: JSON.parse(String(form.get("materials") ?? "[]")),
+				note: form.get("note") as string | null,
+			})
+		} catch (e) {
+			if (e instanceof CorrectionError)
+				return { errorKey: `finance_verify.correct.errors.${e.code}` }
+			if (e instanceof SyntaxError)
+				return { errorKey: "finance_verify.correct.errors.invalid_line" }
+			throw e
+		}
+		return { correctedAt: Date.now() }
+	}
 
 	if (intent === "verify") {
 		// All four checks, and all four documents, before a packet is accepted.

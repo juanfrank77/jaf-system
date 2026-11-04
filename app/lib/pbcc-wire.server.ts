@@ -97,3 +97,46 @@ export async function listWireBatches(): Promise<WireBatchRow[]> {
 		}
 	})
 }
+
+export type BatchMoneyRow = {
+	id: string
+	number: number | null
+	status: "open" | "closed" | "sent"
+	sold: number
+	advance: number
+	held: number
+	/** The wire fee: only once PBCC has the batch. */
+	fee: number | null
+	receivedOn: string | null
+	received: number | null
+}
+
+/**
+ * 100% sold against 80% received, per batch: what JAF sold to PBCC, what PBCC
+ * should advance, what it really wired and what it holds. Newest first.
+ */
+export async function listBatchMoney(): Promise<BatchMoneyRow[]> {
+	const rows = await db.bankSchedule.findMany({
+		orderBy: { generatedAt: "desc" },
+		take: 100,
+	})
+	return rows
+		.filter((b) => Number(b.total) > 0)
+		.map((b) => {
+			const sold = Number(b.total)
+			const advance = Number(b.advanceAmount)
+			return {
+				id: b.id,
+				number: b.number,
+				status: b.sentAt ? "sent" : b.closedAt ? "closed" : "open",
+				sold,
+				advance,
+				held: round2(sold - advance),
+				fee: b.sentAt ? PBCC_WIRE_FEE : null,
+				receivedOn: b.wireReceivedAt
+					? b.wireReceivedAt.toISOString().slice(0, 10)
+					: null,
+				received: b.wireAmount === null ? null : Number(b.wireAmount),
+			}
+		})
+}

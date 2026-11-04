@@ -69,14 +69,14 @@ const mount = (renderStub: any, ui: React.ReactElement) =>
 	renderStub({ entries: [{ path: "/", Component: () => ui }] })
 
 describe("open PBCC batch", () => {
-	it("shows rows out of 100, the subtotal and the 80% advance", async ({
+	it("shows rows out of 100, sold at 100% and the 80% advance", async ({
 		renderStub,
 	}) => {
 		await mount(renderStub, <PbccBatchOpenView batch={batch()} />)
 		expect(screen.getByText("PBCC batch · open")).toBeInTheDocument()
 		expect(
 			screen.getByText(
-				"2 of 100 packets · Subtotal $200.00 · 80% advance $160.00",
+				"2 of 100 packets · Sold to PBCC $200.00 (100%) · PBCC will advance 80% = $160.00",
 			),
 		).toBeInTheDocument()
 		const r1 = screen.getByRole("row", { name: /MAINT-261021-001/ })

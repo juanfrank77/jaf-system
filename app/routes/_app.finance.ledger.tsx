@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next"
+import { BatchMoneyTable } from "~/components/batch-money-table"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import {
 	LEDGER_REPORTS,
@@ -13,6 +14,7 @@ import {
 	openMoney,
 	waitingForPo,
 } from "~/lib/ledger-reports"
+import { listBatchMoney } from "~/lib/pbcc-wire.server"
 import { requireRole } from "~/lib/permissions.server"
 import type { Route } from "./+types/_app.finance.ledger"
 
@@ -25,11 +27,15 @@ export async function loader({ request }: Route.LoaderArgs) {
 	)
 	const report: LedgerReportKey =
 		LEDGER_REPORTS.find((r) => r === url.searchParams.get("report")) ?? "ledger"
-	const rows = await ledgerSummaries(fromDate, toDate)
+	const [rows, batchMoney] = await Promise.all([
+		ledgerSummaries(fromDate, toDate),
+		listBatchMoney(),
+	])
 	return {
 		from,
 		to,
 		report,
+		batchMoney,
 		data: {
 			rows,
 			armA: armAClock(rows),
@@ -42,10 +48,12 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 export default function Ledger({ loaderData }: Route.ComponentProps) {
 	const { t } = useTranslation()
+	const { batchMoney, ...view } = loaderData
 	return (
 		<div className="space-y-4">
 			<h1 className="text-xl font-semibold">{t("ledger.title")}</h1>
-			<LedgerView {...loaderData} />
+			<BatchMoneyTable rows={batchMoney} />
+			<LedgerView {...view} />
 		</div>
 	)
 }

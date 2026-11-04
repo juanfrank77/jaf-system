@@ -2,10 +2,14 @@ import { Pdf01Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 import type { ParseKeys } from "i18next"
 import type { ComponentProps } from "react"
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Form, Link } from "react-router"
+import { Form, Link, useNavigation } from "react-router"
 import { BrigadeStockTracked } from "~/components/brigade-stock-tracked"
+import {
+	CorrectionHistory,
+	CorrectToAvisoForm,
+} from "~/components/correct-to-aviso"
 import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
 import { MaterialLineItems } from "~/components/material-line-items"
 import { Badge } from "~/components/ui/badge"
@@ -52,7 +56,16 @@ function VerifyPacket({ loaderData, actionData }: ViewProps) {
 		pricedInvoiceHref,
 		brigadeStock,
 		materials,
+		correction,
 	} = loaderData
+	const [correcting, setCorrecting] = useState(false)
+	const navigation = useNavigation()
+	const corrected = (actionData as { correctedAt?: number } | undefined)
+		?.correctedAt
+	// A saved correction closes the form; the new lines are on the page.
+	useEffect(() => {
+		if (corrected) setCorrecting(false)
+	}, [corrected])
 	const { t } = useTranslation()
 	const error = actionData as { errorKey?: string } | undefined
 	const asDate = (v: string | Date | null) => (v ? new Date(v) : null)
@@ -205,6 +218,16 @@ function VerifyPacket({ loaderData, actionData }: ViewProps) {
 				}
 			>
 				<div className="min-w-0 space-y-4">
+					{correcting && (
+						<CorrectToAvisoForm
+							lines={invoiceLines}
+							materials={materials}
+							serviceCodes={serviceCodes as unknown as MaterialServiceCode[]}
+							onCancel={() => setCorrecting(false)}
+							submitting={navigation.state === "submitting"}
+						/>
+					)}
+					{correction && <CorrectionHistory correction={correction} />}
 					<div className="bg-card border rounded-lg p-4 space-y-3">
 						<h2 className="text-sm font-medium">
 							{t("finance_verify.preview.heading")}
@@ -607,6 +630,15 @@ function VerifyPacket({ loaderData, actionData }: ViewProps) {
 												: "returned_packet.finance.cannot_act_unreleased",
 										)}
 									</p>
+								)}
+								{canVerify && !correcting && (
+									<Button
+										type="button"
+										size="sm"
+										onClick={() => setCorrecting(true)}
+									>
+										{t("finance_verify.correct.button")}
+									</Button>
 								)}
 								{canSendBack &&
 									(sendBackOpen ? (

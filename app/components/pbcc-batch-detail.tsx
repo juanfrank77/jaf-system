@@ -61,12 +61,23 @@ export function PbccBatchDetailView({
 	batch,
 	check,
 	parts,
+	pbccEmail = null,
+	emailLog = [],
 	action,
 	submitting = false,
 }: {
 	batch: BatchView
 	check: BatchCheckView | null
 	parts: PackagePartView[]
+	/** Where Send to PBCC goes; null until it is set in Admin. */
+	pbccEmail?: string | null
+	emailLog?: {
+		part: number
+		of: number
+		to: string
+		outcome: string
+		at: string
+	}[]
 	action?: ActionResult
 	submitting?: boolean
 }) {
@@ -232,14 +243,43 @@ export function PbccBatchDetailView({
 				</p>
 			) : (
 				<Form method="post" className="space-y-1">
+					<input type="hidden" name="intent" value="send_pbcc" />
+					<Button type="submit" disabled={!green || submitting || !pbccEmail}>
+						{t("pbcc_batch.detail.send_pbcc")}
+					</Button>
+					<p className="text-xs text-muted-foreground">
+						{pbccEmail
+							? t("pbcc_batch.detail.send_pbcc_note", { email: pbccEmail })
+							: t("pbcc_batch.detail.send_pbcc_no_email")}
+					</p>
+				</Form>
+			)}
+			{batch.status === "closed" && (
+				<Form method="post" className="space-y-1">
 					<input type="hidden" name="intent" value="mark_sent" />
-					<Button type="submit" disabled={!green || submitting}>
+					<Button
+						type="submit"
+						variant="outline"
+						disabled={!green || submitting}
+					>
 						{t("pbcc_batch.detail.mark_sent")}
 					</Button>
 					<p className="text-xs text-muted-foreground">
 						{t("pbcc_batch.detail.mark_sent_note")}
 					</p>
 				</Form>
+			)}
+
+			{emailLog.length > 0 && (
+				<ul className="space-y-0.5 text-xs text-muted-foreground">
+					{emailLog.map((e) => (
+						<li key={`${e.at}-${e.part}`} suppressHydrationWarning>
+							{new Date(e.at).toLocaleString()} ·{" "}
+							{t("pbcc_batch.detail.part", { part: e.part, of: e.of })} · {e.to}{" "}
+							· {e.outcome}
+						</li>
+					))}
+				</ul>
 			)}
 
 			<div className="overflow-x-auto rounded-lg border bg-card">

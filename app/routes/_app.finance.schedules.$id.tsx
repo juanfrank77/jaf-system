@@ -9,7 +9,9 @@ import { FINANCE_STEPS } from "~/lib/finance-steps"
 import { BatchError, checkBatch, markBatchSent } from "~/lib/pbcc-batch.server"
 import { loadBatchView } from "~/lib/pbcc-batch-view.server"
 import { planPackage } from "~/lib/pbcc-package.server"
+import { type PbccEmailEntry, sendBatchToPbcc } from "~/lib/pbcc-send.server"
 import { requireRole } from "~/lib/permissions.server"
+import { getPbccEmail } from "~/lib/system-settings.server"
 import type { Route } from "./+types/_app.finance.schedules.$id"
 
 export const meta: Route.MetaFunction = () => [
@@ -23,9 +25,17 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	// The open batch has its own screen.
 	if (batch.status === "open") throw redirect("/finance/lc-requests")
 	const plan = batch.hasExcel ? await planPackage(batch.id) : []
+	const { emailLog } = await db.bankSchedule.findUniqueOrThrow({
+		where: { id: batch.id },
+		select: { emailLog: true },
+	})
 	return {
 		user,
 		batch,
+		pbccEmail: await getPbccEmail(),
+		emailLog: Array.isArray(emailLog)
+			? (emailLog as unknown as PbccEmailEntry[])
+			: [],
 		// A sent batch is not re-checked: it can no longer change.
 		check: batch.status === "closed" ? await checkBatch(batch.id) : null,
 		parts: plan.map((p) => ({
@@ -43,6 +53,24 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 export async function action({ request, params }: Route.ActionArgs) {
 	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])
 	const form = await request.formData()
+	if (form.get("intent") === "send_pbcc") {
+		const sent = await sendBatchToPbcc({
+			batchId: params.id,
+			sentById: user.id,
+		})
+		if (!sent.ok)
+			return { ok: false as const, errorKey: sent.errorKey, list: "" }
+		const done = await db.bankSchedule.findUniqueOrThrow({
+			where: { id: params.id },
+			select: { number: true, _count: { select: { invoices: true } } },
+		})
+		return redirect(
+			receiptUrl(`/finance/schedules/${params.id}`, "sent", {
+				a: done.number,
+				n: done._count.invoices,
+			}),
+		)
+	}
 	if (form.get("intent") !== "mark_sent")
 		return {
 			ok: false as const,
@@ -80,7 +108,7 @@ export default function PbccBatchPage({
 	loaderData,
 	actionData,
 }: Route.ComponentProps) {
-	const { batch, check, parts } = loaderData
+	const { batch, check, parts, pbccEmail, emailLog } = loaderData
 	const { t } = useTranslation()
 	const navigation = useNavigation()
 	return (
@@ -97,6 +125,8 @@ export default function PbccBatchPage({
 				batch={batch}
 				check={check}
 				parts={parts}
+				pbccEmail={pbccEmail}
+				emailLog={emailLog}
 				action={actionData}
 				submitting={navigation.state === "submitting"}
 			/>

@@ -196,12 +196,9 @@ export async function loadStageRows(opts: {
 				photos: has("photos"),
 			},
 			supervisorName: d.supervisor?.name ?? null,
-			// Every list shows what the invoice bills: the same figures the PBCC
-			// batch row carries, read from one place (`rowAmounts`). Packets show the
-			// total with IVU; the payroll list shows the pre-IVU subtotal the batch
-			// row bills.
-			amount:
-				opts.stage === "LISTS" ? rowAmounts(d).subtotal : rowAmounts(d).total,
+			// Every list shows what goes to PBCC: the pre-IVU subtotal, the same figure
+			// the batch row bills, read from one place (`rowAmounts`).
+			amount: rowAmounts(d).subtotal,
 			...(packets && {
 				resent: sent.resent.includes(d.id) && !d.financeVerifiedAt,
 				returned: returnedView,

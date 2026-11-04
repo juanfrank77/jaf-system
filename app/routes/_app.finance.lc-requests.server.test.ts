@@ -164,8 +164,6 @@ describe("PBCC batch screen", { timeout: 60_000 }, () => {
 					row: number
 					invoiceNumber: string
 					subtotal: number
-					ivu: number
-					total: number
 					avisoHref: string | null
 				}[]
 			}
@@ -181,8 +179,8 @@ describe("PBCC batch screen", { timeout: 60_000 }, () => {
 		)
 		expect(result.batch.rows.map((r) => r.row)).toEqual([1, 2])
 		const row = result.batch.rows.find((r) => r.id === a.id)
-		// 100.00 + 11.5% IVU
-		expect(row).toMatchObject({ subtotal: 100, ivu: 11.5, total: 111.5 })
+		// PBCC carries no IVU: the row bills the subtotal.
+		expect(row).toMatchObject({ subtotal: 100 })
 		expect(row?.invoiceNumber).toMatch(new RegExp(`-${a.aviso}$`))
 		expect(row?.avisoHref).toMatch(/^\/files\/aviso-docs\//)
 		// Loading twice never makes a second open batch.

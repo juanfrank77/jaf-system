@@ -163,6 +163,9 @@ type MaterialsSource = Pick<JafInvoice, "materialsUsed" | "materialsTaken"> &
  * reads `materialsUsed`, or the pickup when nothing was reported used.
  */
 export function billableMaterials(invoice: MaterialsSource): MaterialItem[] {
+	// Finance corrected the packet to the Aviso: her lines are what is billed.
+	if (((invoice as { invoiceVersion?: number }).invoiceVersion ?? 1) > 1)
+		return (invoice.materialsUsed as MaterialItem[]) || []
 	if (hasFieldTable(invoice.fieldMaterials))
 		return warehouseUsedLines(invoice.fieldMaterials, invoice.materialsUsed)
 	const used = (invoice.materialsUsed as MaterialItem[]) || []

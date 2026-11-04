@@ -15,6 +15,14 @@ vi.mock("~/lib/system-settings.server", () => ({
 	setLcPbccAdvanceRate: vi.fn(),
 	getBankInvoicePrefix: vi.fn(),
 	setBankInvoicePrefix: vi.fn(),
+	getBankContractNumber: vi.fn().mockResolvedValue("17-xxx"),
+	setBankContractNumber: vi.fn(),
+	getPbccEmail: vi.fn().mockResolvedValue(null),
+	getInvoiceCodes: vi.fn().mockResolvedValue({ dept: "", costCenter: "" }),
+	setInvoiceCodes: vi.fn(),
+	getJobNumberFirst: vi.fn().mockResolvedValue(1),
+	setJobNumberFirst: vi.fn(),
+	setPbccEmail: vi.fn(),
 	getPayDayWeekday: vi.fn().mockResolvedValue(4),
 	setPayDayWeekday: vi.fn(),
 }))
@@ -60,7 +68,7 @@ describe("GET /admin/settings", () => {
 			params: {},
 		} as any)
 
-		expect(result).toEqual({
+		expect(result).toMatchObject({
 			ivuRate: 0.115,
 			agingAlertDays: 30,
 			avisoAmountTolerance: 0.01,

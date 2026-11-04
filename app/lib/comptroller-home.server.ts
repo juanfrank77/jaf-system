@@ -13,6 +13,7 @@ import { loadComptrollerRuns } from "~/lib/comptroller-runs.server"
 import { db } from "~/lib/db.server"
 import { loadInstallerPayList, loadWarrantyDocs } from "~/lib/ewit.server"
 import { ageDays } from "~/lib/finance-stage-rows.server"
+import { buildJournalBlocks, RUN_INVOICES } from "~/lib/payroll-run.server"
 
 const toCents = (v: { toString(): string } | null | undefined) =>
 	v == null ? 0 : Math.round(Number(v) * 100)
@@ -158,7 +159,7 @@ export async function loadComptrollerHome(now: Date): Promise<ComptrollerHome> {
 		batchesSentThisWeek,
 		toTick,
 		eligible,
-		retention,
+		retentionRuns,
 	] = await Promise.all([
 		loadComptrollerRuns(),
 		loadWarrantyDocs(now),
@@ -174,17 +175,25 @@ export async function loadComptrollerHome(now: Date): Promise<ComptrollerHome> {
 		// One read feeds every Claro box. Invoices paid in full (or short but
 		// accepted) are in no box, so they are not loaded.
 		db.ewitInvoice.findMany({ where: CLARO_OPEN, select: CLARO_HOME_SELECT }),
-		// The 10% already worked out per job when the payroll request was made.
-		db.jafInvoice.aggregate({
-			where: {
-				retentionAmount: { gt: 0 },
-				payrollRun: { reversedAt: null, sentAt: { gte: yearStart(now) } },
-			},
-			_sum: { retentionAmount: true },
-			_count: true,
+		// The 10% as the Production Journal prints it (rounded per line), so this
+		// box matches the paper to the cent. Summing the per-job figures runs high.
+		db.payrollRun.findMany({
+			where: { reversedAt: null, sentAt: { gte: yearStart(now) } },
+			select: { invoices: RUN_INVOICES },
 		}),
 	])
 
+	const retentionBlocks = retentionRuns.flatMap((r) =>
+		buildJournalBlocks(r.invoices),
+	)
+	const retentionTotal =
+		Math.round(retentionBlocks.reduce((sum, b) => sum + b.retention * 100, 0)) /
+		100
+	const retentionJobs = new Set(
+		retentionBlocks.flatMap((b) =>
+			b.retention > 0 ? b.jobs.map((j) => j.invoiceId) : [],
+		),
+	).size
 	const toPay = runs.toPay
 	const payrollTile: ComptrollerHomeTile = {
 		key: "payroll_to_pay",
@@ -234,9 +243,9 @@ export async function loadComptrollerHome(now: Date): Promise<ComptrollerHome> {
 			...claroHomeTiles(eligible, now),
 			{
 				key: "retention_year",
-				count: retention._count,
+				count: retentionJobs,
 				href: "/comptroller/log",
-				amount: dollars(toCents(retention._sum.retentionAmount)),
+				amount: retentionTotal,
 			},
 		],
 	}

@@ -1080,7 +1080,8 @@
 			"invalid_lc_pbcc_rate": "Ingrese una tasa mayor que 0 y no mayor que 1.",
 			"invalid_bank_prefix": "Use de 1 a 8 letras o dígitos.",
 			"invalid_invoice_codes": "Use letras, dígitos o guiones en los códigos, y un número entero desde 1 para el trabajo.",
-			"invalid_pay_day": "Elige un día de la semana."
+			"invalid_pay_day": "Elige un día de la semana.",
+			"invalid_pbcc_email": "Escribe un correo válido."
 		},
 		"lc_pbcc_heading": "Tasa de anticipo LC/PBCC",
 		"lc_pbcc_description": "El anticipo de PBCC es actualmente {current}% del total de factura verificado. IVU se mantiene separado.",
@@ -1101,7 +1102,9 @@
 			"4": "Jueves",
 			"5": "Viernes",
 			"6": "Sábado"
-		}
+		},
+		"pbcc_email_label": "Correo de PBCC",
+		"pbcc_email_description": "A dónde va Enviar a PBCC."
 	},
 	"admin_catalog": {
 		"title": "Catálogo de servicios",
@@ -1542,6 +1545,24 @@
 			"photos_detail_other": "{{count}} fotos",
 			"missing": "Falta",
 			"open": "Abrir"
+		},
+		"correct": {
+			"button": "Corregir al Aviso",
+			"heading": "Corregir al Aviso",
+			"hint": "Iguala las líneas al Aviso de la derecha. Los precios vienen del catálogo. Un cambio de brigada vuelve al supervisor.",
+			"note": "Nota (opcional)",
+			"save": "Guardar corrección",
+			"cancel": "Cancelar",
+			"history": "Corregido al Aviso: esta es la versión {{version}}",
+			"v1": "Versión 1, del supervisor · {{total}}",
+			"vn": "Versión {{version}} por {{by}}",
+			"none": "ninguno",
+			"removed": "eliminado",
+			"errors": {
+				"no_changes": "No cambió nada, así que no se creó una versión nueva.",
+				"invalid_line": "Una línea no tiene código o cantidad válida.",
+				"no_lines": "La factura necesita al menos una línea de servicio."
+			}
 		}
 	},
 	"finance_pbcc": {
@@ -2254,7 +2275,7 @@
 			"sent": "Enviados"
 		},
 		"open_heading": "Lote PBCC · abierto",
-		"summary": "{{count}} de {{max}} paquetes · Subtotal {{subtotal}} · {{percent}}% de adelanto {{advance}}",
+		"summary": "{{count}} de {{max}} paquetes · Vendido a PBCC {{subtotal}} (100%) · PBCC adelantará {{percent}}% = {{advance}}",
 		"summary_note": "El adelanto se calcula sobre el subtotal, antes del IVU.",
 		"close": "Cerrar lote",
 		"empty": "Aún no hay paquetes. Cada paquete aceptado entra a este lote como su siguiente fila.",
@@ -2309,7 +2330,10 @@
 			"mark_sent": "Marcar enviado a PBCC",
 			"mark_sent_note": "Marca “Vendido a PBCC” en cada Aviso del lote y lo bloquea.",
 			"locked": "Este lote ya se envió y no puede cambiar.",
-			"download_blocked": "Las descargas se abren cuando todas las verificaciones estén en verde."
+			"download_blocked": "Las descargas se abren cuando todas las verificaciones estén en verde.",
+			"send_pbcc": "Enviar a PBCC",
+			"send_pbcc_note": "Envía las facturas, los Avisos y el Excel a {{email}}, lo registra y marca el lote como enviado.",
+			"send_pbcc_no_email": "Agrega la dirección de PBCC en Admin › Ajustes para enviar desde aquí. Descargar y Marcar enviado siguen funcionando."
 		},
 		"errors": {
 			"not_found": "Ese lote ya no existe.",
@@ -2322,7 +2346,10 @@
 			"not_in_batch": "Ese paquete no está en un lote.",
 			"check_failed": "La verificación del lote aún no está en verde.",
 			"not_eligible": "Estos paquetes no se pueden enviar: {{list}}",
-			"unknown_intent": "Acción desconocida."
+			"unknown_intent": "Acción desconocida.",
+			"no_pbcc_email": "Primero agrega el correo de PBCC en Admin › Ajustes.",
+			"email_not_set_up": "El correo aún no está configurado en este servidor. Usa Descargar y Marcar enviado.",
+			"email_failed": "El correo no salió. El lote no se marcó como enviado; intenta de nuevo o usa Descargar."
 		}
 	},
 	"finance_flow": {
@@ -3391,6 +3418,20 @@
 			"return_exceeds_balance": "La devolución es mayor que lo que tiene la brigada.",
 			"already_confirmed": "Ya confirmada.",
 			"bad_intent": "Acción desconocida."
+		}
+	},
+	"batch_money": {
+		"title": "Vendido a PBCC vs recibido",
+		"batch": "Lote #{{number}}",
+		"open": "Lote abierto",
+		"batch_received": "Recibido por el lote #{{number}}",
+		"col": {
+			"batch": "Lote",
+			"sold": "Vendido a PBCC (100%, sin IVU)",
+			"advance": "PBCC debe adelantar (80%)",
+			"received": "Recibido de PBCC",
+			"held": "Retenido por PBCC (20%)",
+			"fee": "Cargo de transferencia"
 		}
 	}
 }

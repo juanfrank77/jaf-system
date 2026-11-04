@@ -58,10 +58,19 @@ export function AvisoRecordView({
 	aviso,
 	documents,
 	history,
+	pbccMoney,
 }: {
 	aviso: AvisoSummary
 	documents: RecordDoc[]
 	history: RecordEvent[]
+	pbccMoney?: {
+		batchNumber: number | null
+		sold: number
+		advance: number
+		held: number
+		batchReceived: number | null
+		batchReceivedOn: string | null
+	} | null
 }) {
 	const { t } = useTranslation()
 	const a = aviso.armA
@@ -106,6 +115,34 @@ export function AvisoRecordView({
 					value={aviso.money.outstanding}
 				/>
 			</div>
+
+			{pbccMoney && (
+				<div
+					className="grid grid-cols-2 gap-3 md:grid-cols-4"
+					data-testid="aviso-pbcc-money"
+				>
+					<Stat label={t("batch_money.col.sold")} value={pbccMoney.sold} />
+					<Stat
+						label={t("batch_money.col.advance")}
+						value={pbccMoney.advance}
+					/>
+					<Stat label={t("batch_money.col.held")} value={pbccMoney.held} />
+					<div className="rounded-lg border bg-card p-3 text-sm">
+						<p className="text-xs text-muted-foreground">
+							{pbccMoney.batchNumber
+								? t("batch_money.batch_received", {
+										number: pbccMoney.batchNumber,
+									})
+								: t("batch_money.col.received")}
+						</p>
+						<p className="font-mono">
+							{pbccMoney.batchReceived === null
+								? "—"
+								: `${pbccMoney.batchReceivedOn} · ${formatMoney(pbccMoney.batchReceived)}`}
+						</p>
+					</div>
+				</div>
+			)}
 
 			<section className="space-y-2">
 				<h2 className="font-semibold">{t("aviso_record.arm_a")}</h2>

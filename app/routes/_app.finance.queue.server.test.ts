@@ -109,7 +109,7 @@ describe("step 1 packets in", () => {
 			lineAmount: qty * unitPrice,
 		})
 
-		it("shows the invoice total, IVU included, not the brigade's share", async () => {
+		it("shows the subtotal, with no IVU, the same number that goes to PBCC", async () => {
 			const finance = t.track("user", await seedUser({ role: "FINANCE" }))
 			mocks.requireRole.mockResolvedValue({ user: finance })
 			const tag = `AVAMT${Date.now()}`
@@ -124,8 +124,8 @@ describe("step 1 packets in", () => {
 			)
 			const result = await call(`?search=${tag}`)
 			expect(result.jobs.map((j: { id: string }) => j.id)).toEqual([packet.id])
-			// 250.00 + 11.5% IVU = 278.75
-			expect(result.jobs[0].amount).toBe(278.75)
+			// The subtotal that goes to PBCC, no IVU (L2).
+			expect(result.jobs[0].amount).toBe(250)
 			expect(result.jobs[0].docs).not.toHaveProperty("account")
 		})
 

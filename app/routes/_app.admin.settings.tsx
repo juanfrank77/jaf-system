@@ -15,6 +15,7 @@ import {
 	getJobNumberFirst,
 	getLcPbccAdvanceRate,
 	getPayDayWeekday,
+	getPbccEmail,
 	setAgingAlertDays,
 	setAvisoAmountTolerance,
 	setBankContractNumber,
@@ -24,6 +25,7 @@ import {
 	setJobNumberFirst,
 	setLcPbccAdvanceRate,
 	setPayDayWeekday,
+	setPbccEmail,
 } from "~/lib/system-settings.server"
 import { formatMoney } from "~/lib/utils"
 import type { Route } from "./+types/_app.admin.settings"
@@ -44,6 +46,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		payDayWeekday,
 		invoiceCodes,
 		jobNumberFirst,
+		pbccEmail,
 	] = await Promise.all([
 		getIvuRate(),
 		getAgingAlertDays(),
@@ -54,6 +57,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		getPayDayWeekday(),
 		getInvoiceCodes(),
 		getJobNumberFirst(),
+		getPbccEmail(),
 	])
 	return {
 		ivuRate,
@@ -62,6 +66,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		lcPbccAdvanceRate,
 		bankInvoicePrefix,
 		bankContractNumber,
+		pbccEmail,
 		payDayWeekday,
 		invoiceCodes,
 		jobNumberFirst,
@@ -144,6 +149,10 @@ export async function action({ request }: Route.ActionArgs) {
 		}
 		await setBankInvoicePrefix(raw.toUpperCase(), user.id)
 		await setBankContractNumber(contract, user.id)
+		const pbccEmail = String(form.get("pbcc_email") ?? "").trim()
+		if (pbccEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pbccEmail))
+			return { errorKey: "admin_settings.errors.invalid_pbcc_email" }
+		await setPbccEmail(pbccEmail, user.id)
 		return { successBankPrefix: true }
 	}
 
@@ -187,6 +196,7 @@ export default function AdminSettings({
 		lcPbccAdvanceRate,
 		bankInvoicePrefix,
 		bankContractNumber,
+		pbccEmail,
 		payDayWeekday,
 		invoiceCodes,
 		jobNumberFirst,
@@ -456,6 +466,20 @@ export default function AdminSettings({
 						/>
 						<p className="mt-1 text-xs text-muted-foreground">
 							{t("admin_settings.bank_contract_description")}
+						</p>
+					</div>
+					<div>
+						<Label htmlFor="pbcc_email">
+							{t("admin_settings.pbcc_email_label")}
+						</Label>
+						<Input
+							id="pbcc_email"
+							name="pbcc_email"
+							type="email"
+							defaultValue={pbccEmail ?? ""}
+						/>
+						<p className="mt-1 text-xs text-muted-foreground">
+							{t("admin_settings.pbcc_email_description")}
 						</p>
 					</div>
 					{error && (

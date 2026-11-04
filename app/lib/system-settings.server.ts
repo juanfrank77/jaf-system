@@ -226,3 +226,19 @@ export async function setPayDayWeekday(
 		create: { key: "pay_day_weekday", value: String(weekday), updatedById },
 	})
 }
+
+/** Where "Send to PBCC" goes. Unset until JAF gives the address. */
+export async function getPbccEmail(): Promise<string | null> {
+	const setting = await db.systemSetting.findUnique({
+		where: { key: "pbcc_email" },
+	})
+	return setting?.value?.trim() || null
+}
+
+export async function setPbccEmail(email: string, updatedById: string) {
+	await db.systemSetting.upsert({
+		where: { key: "pbcc_email" },
+		update: { value: email.trim(), updatedById },
+		create: { key: "pbcc_email", value: email.trim(), updatedById },
+	})
+}

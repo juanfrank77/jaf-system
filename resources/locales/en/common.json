@@ -1080,7 +1080,8 @@
 			"invalid_lc_pbcc_rate": "Enter a rate greater than 0 and no greater than 1.",
 			"invalid_bank_prefix": "Use 1–8 letters or digits.",
 			"invalid_invoice_codes": "Use letters, digits or dashes for the codes, and a whole number from 1 for the job number.",
-			"invalid_pay_day": "Choose a day of the week."
+			"invalid_pay_day": "Choose a day of the week.",
+			"invalid_pbcc_email": "Enter a valid email address."
 		},
 		"lc_pbcc_heading": "LC/PBCC advance rate",
 		"lc_pbcc_description": "PBCC advance is currently {current}% of the verified invoice total. Keep IVU separate.",
@@ -1101,7 +1102,9 @@
 			"4": "Thursday",
 			"5": "Friday",
 			"6": "Saturday"
-		}
+		},
+		"pbcc_email_label": "PBCC email address",
+		"pbcc_email_description": "Where Send to PBCC goes."
 	},
 	"admin_catalog": {
 		"title": "Service Catalog",
@@ -1542,6 +1545,24 @@
 			"photos_detail_other": "{{count}} photos",
 			"missing": "Missing",
 			"open": "Open"
+		},
+		"correct": {
+			"button": "Correct to Aviso",
+			"heading": "Correct to Aviso",
+			"hint": "Match the lines to the Aviso on the right. Prices come from the catalog. A brigade change goes back to the supervisor.",
+			"note": "Note (optional)",
+			"save": "Save correction",
+			"cancel": "Cancel",
+			"history": "Corrected to the Aviso: this is version {{version}}",
+			"v1": "Version 1, from the supervisor · {{total}}",
+			"vn": "Version {{version}} by {{by}}",
+			"none": "none",
+			"removed": "removed",
+			"errors": {
+				"no_changes": "Nothing changed, so no new version was made.",
+				"invalid_line": "A line has no valid code or quantity.",
+				"no_lines": "The invoice needs at least one service line."
+			}
 		}
 	},
 	"finance_pbcc": {
@@ -2222,7 +2243,7 @@
 			"sent": "Sent"
 		},
 		"open_heading": "PBCC batch · open",
-		"summary": "{{count}} of {{max}} packets · Subtotal {{subtotal}} · {{percent}}% advance {{advance}}",
+		"summary": "{{count}} of {{max}} packets · Sold to PBCC {{subtotal}} (100%) · PBCC will advance {{percent}}% = {{advance}}",
 		"summary_note": "The advance is figured on the subtotal, before IVU.",
 		"close": "Close batch",
 		"empty": "No packets yet. Each accepted packet joins this batch as its next row.",
@@ -2277,7 +2298,10 @@
 			"mark_sent": "Mark sent to PBCC",
 			"mark_sent_note": "Stamps “Sold to PBCC” on every Aviso in the batch and locks it.",
 			"locked": "This batch is sent and can no longer change.",
-			"download_blocked": "Downloads open once every check is green."
+			"download_blocked": "Downloads open once every check is green.",
+			"send_pbcc": "Send to PBCC",
+			"send_pbcc_note": "Emails the invoices, Avisos and Excel to {{email}}, logs it and marks the batch Sent.",
+			"send_pbcc_no_email": "Add PBCC's address in Admin › Settings to send from here. Download and Mark sent still work."
 		},
 		"errors": {
 			"not_found": "That batch no longer exists.",
@@ -2290,7 +2314,10 @@
 			"not_in_batch": "That packet is not in a batch.",
 			"check_failed": "The batch check is not green yet.",
 			"not_eligible": "These packets cannot be sent: {{list}}",
-			"unknown_intent": "Unknown action."
+			"unknown_intent": "Unknown action.",
+			"no_pbcc_email": "Add PBCC's email address in Admin › Settings first.",
+			"email_not_set_up": "Email is not set up on this server yet. Use Download and Mark sent.",
+			"email_failed": "The email did not go out. The batch is not marked Sent; try again or use Download."
 		}
 	},
 	"finance_flow": {
@@ -3391,6 +3418,20 @@
 			"return_exceeds_balance": "The return is more than the brigade holds.",
 			"already_confirmed": "Already confirmed.",
 			"bad_intent": "Unknown action."
+		}
+	},
+	"batch_money": {
+		"title": "Sold to PBCC vs received",
+		"batch": "Batch #{{number}}",
+		"open": "Open batch",
+		"batch_received": "Received for batch #{{number}}",
+		"col": {
+			"batch": "Batch",
+			"sold": "Sold to PBCC (100%, no IVU)",
+			"advance": "PBCC should advance (80%)",
+			"received": "Received from PBCC",
+			"held": "Held by PBCC (20%)",
+			"fee": "Wire fee"
 		}
 	}
 }

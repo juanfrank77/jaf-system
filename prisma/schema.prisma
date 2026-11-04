@@ -452,6 +452,10 @@ model JafInvoice {
   jafInvoiceGeneratedAt DateTime?
   jafInvoiceLines       Json? // [{ serviceCodeId, claroCode, accountCode, name, unit, qty, unitPrice, lineAmount }]
   jafInvoiceLineTotal   Decimal? // pre-IVU line sum
+  // Lissette's "Correct to Aviso": the lines above become v2, v3...; the
+  // supervisor's v1 is kept here, the first time it changes.
+  invoiceVersion        Int       @default(1)
+  invoiceOriginal       Json? // { lines, materials, lineTotal }
   avisoDocPath          String? // uploaded Aviso PDF (distinct from claroPdfPath)
   avisoLines            Json? // [{ serviceCodeId, claroCode, qty, unitPrice, lineAmount }]
   avisoLineTotal        Decimal?
@@ -1276,6 +1280,8 @@ model BankSchedule {
   wireAmount       Decimal?
   wireRecordedById String?
   wireRecordedBy   User?     @relation("BankScheduleWire", fields: [wireRecordedById], references: [id])
+  // Each "Send to PBCC" attempt: [{ part, of, to, outcome, error, at, byId }].
+  emailLog         Json?
 
   invoices JafInvoice[]
 

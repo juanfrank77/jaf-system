@@ -34,7 +34,6 @@ import { isTerminalStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import {
 	getBankInvoicePrefix,
-	getIvuRate,
 	getLcPbccAdvanceRate,
 } from "~/lib/system-settings.server"
 import { formatMoney, toNumberPrice } from "~/lib/utils"
@@ -79,11 +78,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			{ ...c, unitPrice: toNumberPrice(c.unitPrice) },
 		]),
 	)
-	const [ivuRate, lcPbccAdvanceRate] = await Promise.all([
-		getIvuRate(),
-		getLcPbccAdvanceRate(),
-	])
-	const amount = invoiceTotalUsed(doc, codeMap, ivuRate)
+	const lcPbccAdvanceRate = await getLcPbccAdvanceRate()
+	// PBCC documents carry no IVU (Lissette, 2026-11-03): subtotal only.
+	const amount = invoiceTotalUsed(doc, codeMap, 0)
 
 	// A job already swept into a run (grossPayable set) has its payment
 	// frozen — show that, never live-recompute it, so a later catalog price
@@ -105,7 +102,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		user,
 		serviceCodes,
 		amount,
-		ivuRate,
 		lcPbccAdvanceRate,
 		payment,
 		frozen,
@@ -239,10 +235,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 	const serviceCodes = await db.serviceCode.findMany()
 	const codeMap = Object.fromEntries(serviceCodes.map((c) => [c.id, c]))
-	const [ivuRate, lcPbccAdvanceRate] = await Promise.all([
-		getIvuRate(),
-		getLcPbccAdvanceRate(),
-	])
+	const lcPbccAdvanceRate = await getLcPbccAdvanceRate()
 	const lineItems = financeLineItems(doc, codeMap)
 
 	const uploadDir = process.env.UPLOAD_DIR || "/tmp/jaf/uploads"
@@ -264,7 +257,6 @@ export async function action({ request, params }: Route.ActionArgs) {
 		invoiceDate: today,
 		debtor: "PRT/CLARO",
 		lineItems,
-		ivuRate,
 		supervisorName: doc.supervisor?.name ?? "",
 		requestDate: today,
 		lcPbccAdvanceRate,

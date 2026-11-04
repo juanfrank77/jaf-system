@@ -7,8 +7,7 @@ import {
 	stageWhere,
 } from "~/lib/finance-stages.server"
 import { FINANCE_STEP_HREF, type FinanceStep } from "~/lib/finance-steps"
-import { computeInvoiceTotals } from "~/lib/invoice-totals"
-import type { InvoiceLine } from "~/lib/service-lines"
+import { rowAmounts } from "~/lib/pbcc-batch.server"
 
 const NEXT_UP_STAGES: { stage: ArmAListStage; step: FinanceStep }[] = [
 	{ stage: "PACKETS", step: "PACKETS" },
@@ -25,7 +24,7 @@ function itemHref(step: FinanceStep, id: string): string {
 export async function loadFinanceHome(
 	now: Date = new Date(),
 ): Promise<FinanceHome> {
-	const [inboxCount, inboxOldest, batchJobs, carmen, oldestRun, nextUpRows] =
+	const [inboxCount, inboxOldest, openBatch, carmen, oldestRun, nextUpRows] =
 		await Promise.all([
 			db.jafInvoice.count({ where: stageWhere("PACKETS") }),
 			db.jafInvoice.findFirst({
@@ -33,9 +32,12 @@ export async function loadFinanceHome(
 				orderBy: { releasedToFinanceAt: "asc" },
 				select: { releasedToFinanceAt: true },
 			}),
-			db.jafInvoice.findMany({
-				where: stageWhere("LC_REQUEST"),
-				select: { jafInvoiceLines: true },
+			// The open PBCC batch (rows and subtotal); until one exists, the
+			// accepted packets waiting for it.
+			db.bankSchedule.findFirst({
+				where: { closedAt: null },
+				orderBy: { generatedAt: "desc" },
+				select: { total: true, _count: { select: { invoices: true } } },
 			}),
 			carmenOpenSummary(now),
 			db.payrollRun.findFirst({
@@ -62,12 +64,18 @@ export async function loadFinanceHome(
 			),
 		])
 
-	const batchAmount = batchJobs.reduce((sum, job) => {
-		const lines = Array.isArray(job.jafInvoiceLines)
-			? (job.jafInvoiceLines as InvoiceLine[])
-			: []
-		return sum + computeInvoiceTotals(lines).total
-	}, 0)
+	// Nothing is batched until the first accept after batches arrived: show the
+	// packets waiting to be taken in, so the box is never a false "all clear".
+	const waiting = openBatch
+		? []
+		: await db.jafInvoice.findMany({
+				where: { AND: [stageWhere("LC_REQUEST"), { bankScheduleId: null }] },
+				select: { jafInvoiceLines: true, jafInvoiceLineTotal: true },
+			})
+	const batchCount = openBatch ? openBatch._count.invoices : waiting.length
+	const batchAmount = openBatch
+		? Number(openBatch.total)
+		: waiting.reduce((sum, job) => sum + rowAmounts(job).subtotal, 0)
 
 	const nextUp = nextUpRows
 		.flat()
@@ -95,7 +103,7 @@ export async function loadFinanceHome(
 			},
 			{
 				key: "pbcc_batch",
-				count: batchJobs.length,
+				count: batchCount,
 				href: FINANCE_STEP_HREF.LC_REQUEST,
 				amount: batchAmount,
 			},

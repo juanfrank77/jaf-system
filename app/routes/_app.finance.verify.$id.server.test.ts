@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
 	isMissingAvisoPdf: vi.fn(),
 	sendInternalEmail: vi.fn(),
 	inboxNeighbors: vi.fn(),
+	addToOpenBatch: vi.fn(),
 }))
 
 vi.mock("~/lib/db.server", () => ({ db: mocks.db }))
@@ -35,6 +36,9 @@ vi.mock("~/lib/finance-pipeline.server", async (importOriginal) => ({
 	checkAmountTolerance: mocks.checkAmountTolerance,
 	isMissingAvisoPdf: mocks.isMissingAvisoPdf,
 	FINANCEABLE_STATUSES: ["SUPERVISOR_APPROVED", "CLARO_UPLOADED"],
+}))
+vi.mock("~/lib/pbcc-batch.server", () => ({
+	addToOpenBatch: mocks.addToOpenBatch,
 }))
 vi.mock("~/lib/finance-inbox.server", () => ({
 	inboxNeighbors: mocks.inboxNeighbors,
@@ -328,6 +332,31 @@ describe("Finance verify action: the accept gate and send back", () => {
 			errorKey: "finance_verify.errors.documents_missing",
 		})
 		expect(mocks.db.jafInvoice.update).not.toHaveBeenCalled()
+	})
+
+	it("puts an accepted packet in the open PBCC batch, and the accept stands if batching fails", async () => {
+		mocks.addToOpenBatch.mockResolvedValueOnce({
+			batchId: "b1",
+			closedBatchIds: [],
+		})
+		await run({ intent: "verify", ...ALL_CHECKS }).catch((r: any) => r)
+		expect(mocks.addToOpenBatch).toHaveBeenCalledWith({
+			docId: "job-1",
+			userId: "finance-1",
+		})
+
+		mocks.addToOpenBatch.mockRejectedValueOnce(new Error("pdf failed"))
+		const quiet = vi.spyOn(console, "error").mockImplementation(() => {})
+		const result = await run({ intent: "verify", ...ALL_CHECKS }).catch(
+			(r: any) => r,
+		)
+		expect(result.status).toBe(302)
+		quiet.mockRestore()
+	})
+
+	it("sends back without touching any batch", async () => {
+		await run({ intent: "send_back", note: "wrong Aviso" }).catch((r: any) => r)
+		expect(mocks.addToOpenBatch).not.toHaveBeenCalled()
 	})
 
 	it("goes back to the Inbox after the last packet", async () => {

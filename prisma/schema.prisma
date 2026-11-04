@@ -216,6 +216,7 @@ model User {
 
   bankSchedulesGenerated BankSchedule[] @relation("BankScheduleGenerator")
   bankSchedulesSent      BankSchedule[] @relation("BankScheduleSender")
+  bankSchedulesClosed    BankSchedule[] @relation("BankScheduleCloser")
 
   packetSends PacketSend[] @relation("PacketSendSender")
 
@@ -1061,6 +1062,11 @@ model BankSchedule {
   total         Decimal
   advanceAmount Decimal
   xlsxPath      String?
+  // The PBCC batch: open until closed (by Lissette, or on its 100th packet),
+  // closed until sent. `closedAt` null = the one open batch.
+  closedAt      DateTime?
+  closedById    String?
+  closedBy      User?     @relation("BankScheduleCloser", fields: [closedById], references: [id])
   sentAt        DateTime?
   sentById      String?
   sentBy        User?     @relation("BankScheduleSender", fields: [sentById], references: [id])

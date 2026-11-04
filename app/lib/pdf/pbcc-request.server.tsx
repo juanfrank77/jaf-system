@@ -68,7 +68,6 @@ interface PbccRequestParams {
 	invoiceDate: string
 	debtor: string
 	lineItems: LineItem[]
-	ivuRate: number
 	supervisorName: string
 	requestDate: string
 	lcPbccAdvanceRate: number
@@ -77,12 +76,14 @@ interface PbccRequestParams {
 export async function generatePbccRequestPdf(
 	params: PbccRequestParams,
 ): Promise<Buffer> {
-	const totals = computeInvoiceTotals(params.lineItems, params.ivuRate)
+	const totals = computeInvoiceTotals(params.lineItems)
 	const items = params.lineItems.map((item, i) => ({
 		...item,
 		amount: totals.lines[i].lineAmount,
 	}))
-	const { subtotal, ivu, total } = totals
+	// PBCC documents carry no IVU: the request is for the subtotal.
+	const { subtotal } = totals
+	const total = subtotal
 
 	const element = (
 		<Document>
@@ -165,11 +166,6 @@ export async function generatePbccRequestPdf(
 					<View style={styles.totals}>
 						<View style={styles.totalRow}>
 							<Text>Subtotal: ${subtotal.toFixed(2)}</Text>
-						</View>
-						<View style={styles.totalRow}>
-							<Text>
-								IVU ({(params.ivuRate * 100).toFixed(1)}%): ${ivu.toFixed(2)}
-							</Text>
 						</View>
 						<View style={styles.totalRow}>
 							<Text style={styles.bold}>

@@ -15,6 +15,7 @@ import {
 import { VERIFY_CHECKS as CHECKS } from "~/lib/finance-verify-checks"
 import { computeInvoiceTotals } from "~/lib/invoice-totals"
 import { packetDocuments } from "~/lib/packet-documents"
+import { addToOpenBatch } from "~/lib/pbcc-batch.server"
 import { isTerminalStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
 import { isResent, isReturned, latestReturn } from "~/lib/returned-packet"
@@ -199,6 +200,15 @@ export async function action({ request, params }: Route.ActionArgs) {
 				},
 			}),
 		])
+		// The packet becomes the next row of the open PBCC batch, its invoice PDF
+		// made on the spot. The accept stands even if this fails: the next batch
+		// takes in any accepted packet that is not in one yet.
+		try {
+			await addToOpenBatch({ docId: params.id, userId: user.id })
+		} catch (error) {
+			// biome-ignore lint/suspicious/noConsole: the accept already committed; batching is retried
+			console.error(`PBCC batch: could not add ${params.id}`, error)
+		}
 		// Accept & next: straight on to the next packet, no trip back to the list.
 		throw redirect(nextId ? `/finance/verify/${nextId}` : "/finance/queue")
 	}

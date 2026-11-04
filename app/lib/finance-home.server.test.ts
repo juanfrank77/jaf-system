@@ -3,6 +3,7 @@ import { db } from "~/lib/db.server"
 import { makeTracker, seedFinanceableInvoice, seedUser } from "~/test/helpers"
 import { NEXT_UP_LIMIT, PBCC_BATCH_CAPACITY } from "./finance-home"
 import { loadFinanceHome } from "./finance-home.server"
+import { addToOpenBatch } from "./pbcc-batch.server"
 
 // Integration test against the shadow Postgres DB. The shadow DB may hold
 // other rows, so every count is asserted as a delta from a "before" read.
@@ -24,12 +25,15 @@ const tile = (home: Awaited<ReturnType<typeof loadFinanceHome>>, key: string) =>
 	[...home.armA, ...home.armB].find((t) => t.key === key)
 
 describe("loadFinanceHome (integration)", () => {
+	const mine: string[] = []
+	let supervisorId = ""
 	let before: Awaited<ReturnType<typeof loadFinanceHome>>
 	let after: Awaited<ReturnType<typeof loadFinanceHome>>
 
 	beforeAll(async () => {
 		before = await loadFinanceHome()
 		const supervisor = track("user", await seedUser({ role: "SUPERVISOR" }))
+		supervisorId = supervisor.id
 		const now = Date.now()
 		// Two packets nobody has accepted, one 400 days old so it is the oldest.
 		for (const age of [400, 1]) {
@@ -57,9 +61,20 @@ describe("loadFinanceHome (integration)", () => {
 			where: { id: accepted.id },
 			data: { financeVerifiedAt: new Date() },
 		})
+		// Accept puts it in the open PBCC batch.
+		mine.push(accepted.id)
+		await addToOpenBatch({ docId: accepted.id, userId: supervisor.id })
 		after = await loadFinanceHome()
 	})
-	afterAll(cleanup)
+	afterAll(async () => {
+		// Batches this file opened hold the user that is deleted next.
+		await db.jafInvoice.updateMany({
+			where: { id: { in: mine } },
+			data: { bankScheduleId: null },
+		})
+		await db.bankSchedule.deleteMany({ where: { generatedById: supervisorId } })
+		await cleanup()
+	})
 
 	it("counts packets in the Inbox and finds the oldest", () => {
 		expect(tile(after, "inbox")?.count).toBe(
@@ -69,14 +84,15 @@ describe("loadFinanceHome (integration)", () => {
 		expect(tile(after, "inbox")?.href).toBe("/finance/queue")
 	})
 
-	it("counts accepted packets in the PBCC batch with their IVU-inclusive total", () => {
+	it("counts the open PBCC batch's rows and its subtotal, the amount the advance is figured on", () => {
 		expect(tile(after, "pbcc_batch")?.count).toBe(
 			(tile(before, "pbcc_batch")?.count ?? 0) + 1,
 		)
 		const gained =
 			(tile(after, "pbcc_batch")?.amount ?? 0) -
 			(tile(before, "pbcc_batch")?.amount ?? 0)
-		expect(gained).toBeCloseTo(223, 2)
+		// 2 x $100, before IVU
+		expect(gained).toBeCloseTo(200, 2)
 		expect(PBCC_BATCH_CAPACITY).toBe(100)
 	})
 

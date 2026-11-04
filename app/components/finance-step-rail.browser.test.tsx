@@ -30,7 +30,7 @@ describe("finance step rails", () => {
 		expect(hrefs).toContain("/finance/payroll")
 	})
 
-	it("opens the PO inbox and keeps Claro invoices locked on the Arm B rail", async ({
+	it("links the other two Arm B steps from the current one", async ({
 		renderStub,
 	}) => {
 		await renderStub({
@@ -42,11 +42,11 @@ describe("finance step rails", () => {
 		expect(items).toHaveLength(3)
 		expect(
 			screen.getAllByRole("link").map((a) => a.getAttribute("href")),
-		).toEqual(["/finance/awaiting-po"])
-		expect(items.filter((li) => li.dataset.state === "locked")).toHaveLength(1)
+		).toEqual(["/finance/awaiting-po", "/finance/awaiting-ariba"])
+		expect(items.filter((li) => li.dataset.state === "locked")).toHaveLength(0)
 	})
 
-	it("marks the current Arm B step as current even when it is unavailable", async ({
+	it("marks the current Arm B step as current and links the rest", async ({
 		renderStub,
 	}) => {
 		await renderStub({
@@ -58,12 +58,11 @@ describe("finance step rails", () => {
 		expect(items).toHaveLength(3)
 		expect(items[0].dataset.state).toBe("current")
 		expect(items[0].getAttribute("aria-current")).toBe("step")
-		expect(items[1].dataset.state).toBe("locked")
+		expect(items[1].dataset.state).not.toBe("locked")
 		expect(items[2].dataset.state).not.toBe("locked")
-		expect(screen.getAllByRole("link")).toHaveLength(1)
-		expect(screen.getByRole("link").getAttribute("href")).toBe(
-			"/finance/receivables",
-		)
+		expect(
+			screen.getAllByRole("link").map((a) => a.getAttribute("href")),
+		).toEqual(["/finance/awaiting-ariba", "/finance/receivables"])
 	})
 
 	it("renders the stage chips", async ({ renderStub }) => {

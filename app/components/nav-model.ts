@@ -331,7 +331,6 @@ const NAV_ITEMS: NavItem[] = [
 		icon: Invoice02Icon,
 		group: "arm_b",
 		roles: ["FINANCE", "ADMIN"],
-		disabled: true,
 	},
 	{
 		to: "/finance/receivables",

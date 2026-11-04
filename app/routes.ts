@@ -72,6 +72,15 @@ export default [
 		route("finance/lc-requests", "routes/_app.finance.lc-requests.tsx"),
 		route("finance/receivables", "routes/_app.finance.receivables.tsx"),
 		route("finance/awaiting-po", "routes/_app.finance.awaiting-po.tsx"),
+		route("finance/awaiting-ariba", "routes/_app.finance.awaiting-ariba.tsx"),
+		route(
+			"finance/awaiting-ariba/zip",
+			"routes/_app.finance.awaiting-ariba.zip.tsx",
+		),
+		route(
+			"finance/awaiting-ariba/:id/file",
+			"routes/_app.finance.awaiting-ariba.$id.file.tsx",
+		),
 		route("finance/awaiting-po/:id", "routes/_app.finance.awaiting-po.$id.tsx"),
 		route(
 			"finance/awaiting-po/:id/file",

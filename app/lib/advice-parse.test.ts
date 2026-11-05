@@ -44,6 +44,17 @@ Total $1,905.11`
 		expect(r.total).toBe(1905.11)
 	})
 
+	it("reads the new M20 series, with or without the dash", () => {
+		const r = parseAdvice(
+			"01.10.2026\nM20-001 5920050318 03.07.2026 $100.00 $0.00 $0.00 $100.00\nM20002 5920050319 03.07.2026 $50.00 $0.00 $0.00 $50.00\nM19-3423 5920050320 03.07.2026 $25.00 $0.00 $0.00 $25.00\nTotal $175.00",
+		)
+		expect(r.rows.map((x) => x.invoiceRef)).toEqual([
+			"M20-001",
+			"M20-002",
+			"M19-3423",
+		])
+	})
+
 	it("takes net as the last of four amounts and handles M193423 without a dash", () => {
 		const r = parseAdvice(
 			"01.10.2026\nM193423 5920050318 03.07.2026 $100.00 $10.00 $0.00 $90.00\nTotal $90.00",

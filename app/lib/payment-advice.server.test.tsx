@@ -3,8 +3,8 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { Document, Page, renderToBuffer, Text } from "@react-pdf/renderer"
-import { afterAll, beforeAll, describe, expect, it } from "vitest"
-import { makeInvoice } from "~/lib/claro-invoice.server"
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
+import { addOldInvoice, makeInvoice } from "~/lib/claro-invoice.server"
 import { db } from "~/lib/db.server"
 import { createEwitInvoice } from "~/lib/ewit.server"
 import {
@@ -25,6 +25,12 @@ import {
 	seedFinanceableInvoice,
 	seedUser,
 } from "~/test/helpers"
+
+vi.mock("~/lib/system-settings.server", async (original) => ({
+	...(await original<typeof import("~/lib/system-settings.server")>()),
+	getInvoiceSignature: async () =>
+		"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+}))
 
 const t = makeTracker()
 let dir: string
@@ -98,7 +104,7 @@ async function invoiceFor(userId: string, over: { poSubtotal?: number } = {}) {
 }
 
 const row = (seq: number, voucher: number, net: number) =>
-	`M19-${seq} ${voucher} 03.07.2026 $${net.toFixed(2)} $0.00 $0.00 $${net.toFixed(2)}`
+	`M20-${seq} ${voucher} 03.07.2026 $${net.toFixed(2)} $0.00 $0.00 $${net.toFixed(2)}`
 const head = (ref: string) => [
 	"Banco Santander PR",
 	"Oct. 01, 2026",
@@ -154,7 +160,7 @@ describe("Payment Advice", () => {
 			unmatched: expect.any(Number),
 		})
 		const m19 = (await listAdvices(false, "m19")).find((x) => x.id === id)
-		expect(m19?.lines.map((l) => l.invoiceRef)).toEqual([`M19-${a.seq}`])
+		expect(m19?.lines.map((l) => l.invoiceRef)).toEqual([`M20-${a.seq}`])
 		const ja = (await listAdvices(false, "ja")).find((x) => x.id === id)
 		expect(ja?.lines.map((l) => l.invoiceRef)).toEqual(["JA1616276"])
 		expect(
@@ -279,10 +285,70 @@ describe("Payment Advice", () => {
 		await expect(linkLine(line.id, "99999999", u.id)).rejects.toBeInstanceOf(
 			AdviceError,
 		)
-		await linkLine(line.id, `M19-${a.seq}`, u.id)
+		await linkLine(line.id, `M20-${a.seq}`, u.id)
 		expect(
 			(await db.claroInvoice.findUniqueOrThrow({ where: { id: a.id } })).paidAt,
 		).not.toBeNull()
+	}, 60000)
+
+	it("an M19 row never pays an M20 invoice with the same number", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const a = await invoiceFor(u.id)
+		const { id } = await ingestAdvice(
+			{
+				name: "s.pdf",
+				bytes: await advicePdf([
+					...head(ref()),
+					`M19-${a.seq} 5920050341 03.07.2026 $${a.total.toFixed(2)} $0.00 $0.00 $${a.total.toFixed(2)}`,
+					`Total $${a.total.toFixed(2)}`,
+				]),
+			},
+			u.id,
+		)
+		const line = await db.adviceLine.findFirstOrThrow({
+			where: { adviceId: id },
+		})
+		expect(line.result).toBe("UNMATCHED")
+		expect(line.invoiceId).toBeNull()
+	}, 60000)
+
+	it("adding the old M19 a waiting row refers to matches the row, and pays it when the advice is already applied", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const seq = 90_000 + Math.floor(Math.random() * 9_999)
+		const { id } = await ingestAdvice(
+			{
+				name: "o.pdf",
+				bytes: await advicePdf([
+					...head(ref()),
+					`M19-${seq} 5920050342 03.07.2026 $200.00 $0.00 $0.00 $200.00`,
+					"Total $200.00",
+				]),
+			},
+			u.id,
+		)
+		await applyAdvice(id, u.id)
+		const old = await addOldInvoice({
+			number: `M19-${seq}`,
+			total: 200,
+			poNumber: null,
+			loadedAt: null,
+			userId: u.id,
+		})
+		const line = await db.adviceLine.findFirstOrThrow({
+			where: { adviceId: id },
+		})
+		expect(line.result).toBe("MATCHED")
+		expect(line.invoiceId).toBe(old.id)
+		const inv = await db.claroInvoice.findUniqueOrThrow({
+			where: { id: old.id },
+		})
+		expect(inv.paidAt).not.toBeNull()
+		expect(Number(inv.paidNet)).toBe(200)
+		await db.adviceLine.update({
+			where: { id: line.id },
+			data: { invoiceId: null },
+		})
+		await db.claroInvoice.delete({ where: { id: old.id } })
 	}, 60000)
 
 	it("a second payment for an invoice already paid is flagged, not applied", async () => {
@@ -543,7 +609,7 @@ describe("Payment Advice: JA rows against Carmen's installer invoices", () => {
 		const a = await invoiceFor(u.id)
 		const { lines } = await ingest(u.id, [[jaNo(), 100]])
 		await expect(
-			linkLine(lines[0].id, `M19-${a.seq}`, u.id),
+			linkLine(lines[0].id, `M20-${a.seq}`, u.id),
 		).rejects.toMatchObject({ code: "line_not_unmatched" })
 	}, 60000)
 	it("shows the real shortfall for a short JA row: ourTotal is what Claro owes", async () => {

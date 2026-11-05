@@ -4,13 +4,14 @@ import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
+import { parsePbccEmails } from "~/lib/bank-schedule"
 import { requireRole } from "~/lib/permissions.server"
 import {
 	getAgingAlertDays,
 	getAvisoAmountTolerance,
 	getBankContractNumber,
-	getBankInvoicePrefix,
 	getInvoiceCodes,
+	getInvoiceSignature,
 	getIvuRate,
 	getJobNumberFirst,
 	getLcPbccAdvanceRate,
@@ -19,8 +20,8 @@ import {
 	setAgingAlertDays,
 	setAvisoAmountTolerance,
 	setBankContractNumber,
-	setBankInvoicePrefix,
 	setInvoiceCodes,
+	setInvoiceSignature,
 	setIvuRate,
 	setJobNumberFirst,
 	setLcPbccAdvanceRate,
@@ -41,35 +42,35 @@ export async function loader({ request }: Route.LoaderArgs) {
 		agingAlertDays,
 		avisoAmountTolerance,
 		lcPbccAdvanceRate,
-		bankInvoicePrefix,
 		bankContractNumber,
 		payDayWeekday,
 		invoiceCodes,
 		jobNumberFirst,
 		pbccEmail,
+		invoiceSignature,
 	] = await Promise.all([
 		getIvuRate(),
 		getAgingAlertDays(),
 		getAvisoAmountTolerance(),
 		getLcPbccAdvanceRate(),
-		getBankInvoicePrefix(),
-		getBankInvoicePrefix().then(getBankContractNumber),
+		getBankContractNumber(),
 		getPayDayWeekday(),
 		getInvoiceCodes(),
 		getJobNumberFirst(),
 		getPbccEmail(),
+		getInvoiceSignature(),
 	])
 	return {
 		ivuRate,
 		agingAlertDays,
 		avisoAmountTolerance,
 		lcPbccAdvanceRate,
-		bankInvoicePrefix,
 		bankContractNumber,
 		pbccEmail,
 		payDayWeekday,
 		invoiceCodes,
 		jobNumberFirst,
+		invoiceSignature,
 	}
 }
 
@@ -137,23 +138,36 @@ export async function action({ request }: Route.ActionArgs) {
 	}
 
 	if (intent === "bank_prefix") {
-		const raw = (
-			(form.get("bank_invoice_prefix") as string | null) ?? ""
-		).trim()
-		if (!/^[A-Za-z0-9]{1,8}$/.test(raw)) {
-			return { errorKey: "admin_settings.errors.invalid_bank_prefix" }
-		}
 		const contract = String(form.get("bank_contract_number") ?? "").trim()
 		if (!/^[A-Za-z0-9-]{0,20}$/.test(contract)) {
 			return { errorKey: "admin_settings.errors.invalid_bank_prefix" }
 		}
-		await setBankInvoicePrefix(raw.toUpperCase(), user.id)
-		await setBankContractNumber(contract, user.id)
-		const pbccEmail = String(form.get("pbcc_email") ?? "").trim()
-		if (pbccEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pbccEmail))
+		const pbccEmails = parsePbccEmails(String(form.get("pbcc_email") ?? ""))
+		if (!pbccEmails)
 			return { errorKey: "admin_settings.errors.invalid_pbcc_email" }
-		await setPbccEmail(pbccEmail, user.id)
+		await setBankContractNumber(contract, user.id)
+		await setPbccEmail(pbccEmails.join(", "), user.id)
 		return { successBankPrefix: true }
+	}
+
+	if (intent === "signature") {
+		const file = form.get("signature")
+		if (!(file instanceof File) || file.size === 0)
+			return { errorKey: "admin_settings.errors.signature_not_image" }
+		try {
+			await setInvoiceSignature(
+				new Uint8Array(await file.arrayBuffer()),
+				user.id,
+			)
+		} catch (e) {
+			return {
+				errorKey:
+					e instanceof Error && e.message === "signature_too_big"
+						? "admin_settings.errors.signature_too_big"
+						: "admin_settings.errors.signature_not_image",
+			}
+		}
+		return { successSignature: true }
 	}
 
 	if (intent === "invoice_codes") {
@@ -194,12 +208,12 @@ export default function AdminSettings({
 		agingAlertDays,
 		avisoAmountTolerance,
 		lcPbccAdvanceRate,
-		bankInvoicePrefix,
 		bankContractNumber,
 		pbccEmail,
 		payDayWeekday,
 		invoiceCodes,
 		jobNumberFirst,
+		invoiceSignature,
 	} = loaderData
 	const { t } = useTranslation()
 	const error =
@@ -434,25 +448,10 @@ export default function AdminSettings({
 					{t("admin_settings.bank_prefix_heading")}
 				</h2>
 				<p className="text-xs text-muted-foreground">
-					{t("admin_settings.bank_prefix_description", {
-						current: bankInvoicePrefix,
-					})}
+					{t("admin_settings.bank_prefix_description")}
 				</p>
 				<Form method="post" className="space-y-3">
 					<input type="hidden" name="intent" value="bank_prefix" />
-					<div>
-						<Label htmlFor="bank_invoice_prefix">
-							{t("admin_settings.bank_prefix_label")}
-						</Label>
-						<Input
-							id="bank_invoice_prefix"
-							name="bank_invoice_prefix"
-							type="text"
-							maxLength={8}
-							defaultValue={bankInvoicePrefix}
-							required
-						/>
-					</div>
 					<div>
 						<Label htmlFor="bank_contract_number">
 							{t("admin_settings.bank_contract_label")}
@@ -475,7 +474,7 @@ export default function AdminSettings({
 						<Input
 							id="pbcc_email"
 							name="pbcc_email"
-							type="email"
+							type="text"
 							defaultValue={pbccEmail ?? ""}
 						/>
 						<p className="mt-1 text-xs text-muted-foreground">
@@ -486,6 +485,49 @@ export default function AdminSettings({
 						<p className="text-sm text-status-danger">{t(error as never)}</p>
 					)}
 					{successBankPrefix && (
+						<p className="text-sm text-status-ok">
+							{t("admin_settings.saved")}
+						</p>
+					)}
+					<Button type="submit" size="sm">
+						{t("admin_settings.save")}
+					</Button>
+				</Form>
+			</div>
+
+			<div className="bg-card border rounded-lg p-4 space-y-3">
+				<h2 className="font-medium text-sm">
+					{t("admin_settings.signature_heading")}
+				</h2>
+				<p className="text-xs text-muted-foreground">
+					{t("admin_settings.signature_description")}
+				</p>
+				{invoiceSignature ? (
+					<img
+						src={invoiceSignature}
+						alt={t("admin_settings.signature_heading")}
+						className="h-16 rounded border bg-white p-1"
+					/>
+				) : (
+					<p className="text-sm text-status-danger">
+						{t("admin_settings.signature_missing")}
+					</p>
+				)}
+				<Form method="post" encType="multipart/form-data" className="space-y-3">
+					<input type="hidden" name="intent" value="signature" />
+					<div>
+						<Label htmlFor="signature">
+							{t("admin_settings.signature_label")}
+						</Label>
+						<Input
+							id="signature"
+							name="signature"
+							type="file"
+							accept="image/png,image/jpeg"
+							required
+						/>
+					</div>
+					{actionData && "successSignature" in actionData && (
 						<p className="text-sm text-status-ok">
 							{t("admin_settings.saved")}
 						</p>

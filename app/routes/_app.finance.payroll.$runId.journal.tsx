@@ -1,3 +1,4 @@
+import { BANK_INVOICE_PREFIX } from "~/lib/bank-schedule"
 import { db } from "~/lib/db.server"
 import { payDayFor } from "~/lib/pay-day"
 import { buildJournalBlocks, RUN_INVOICES } from "~/lib/payroll-run.server"
@@ -7,10 +8,7 @@ import {
 	journalOutline,
 } from "~/lib/pdf/production-journal.server"
 import { requireRole } from "~/lib/permissions.server"
-import {
-	getBankInvoicePrefix,
-	getPayDayWeekday,
-} from "~/lib/system-settings.server"
+import { getPayDayWeekday } from "~/lib/system-settings.server"
 import type { Route } from "./+types/_app.finance.payroll.$runId.journal"
 
 /**
@@ -43,7 +41,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const opts = {
 		// Carmen's copy goes to the brigades, so JAF's prices stay off it (D1).
 		showPrices: !forCarmen,
-		invoicePrefix: await getBankInvoicePrefix(),
+		invoicePrefix: BANK_INVOICE_PREFIX,
 		// The first pay day after the request is sent (today's, for a draft).
 		payDate: new Date(
 			`${payDayFor(run.sentAt ?? new Date(), await getPayDayWeekday())}T12:00:00-04:00`,

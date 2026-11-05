@@ -708,21 +708,24 @@ model ClaroPo {
 }
 
 // The "Factura de Pago - Claro" JAF makes from a confirmed PO and loads in Ariba
-// by hand. One PO per invoice. `seq` is the M19 series number: unique, so two
-// invoices can never share one.
+// by hand. One PO per invoice. New invoices are series M20, numbered by the system;
+// an old M19 is added by hand when a PO or a payment refers to it, so it may have no
+// PO, no Aviso and no PDF. Series + `seq` is unique, so two invoices can never share
+// a number.
 model ClaroInvoice {
   id                String       @id @default(cuid())
-  seq               Int          @unique
-  claroPoId         String       @unique
-  claroPo           ClaroPo      @relation(fields: [claroPoId], references: [id])
-  docId             String
-  doc               JafInvoice   @relation(fields: [docId], references: [id])
+  series            String       @default("M20")
+  seq               Int
+  claroPoId         String?      @unique
+  claroPo           ClaroPo?     @relation(fields: [claroPoId], references: [id])
+  docId             String?
+  doc               JafInvoice?  @relation(fields: [docId], references: [id])
   workMonth         String // "2026-05"
   subtotal          Decimal
   ivu4              Decimal
   ivu115            Decimal
   total             Decimal
-  filePath          String
+  filePath          String?
   madeAt            DateTime     @default(now())
   madeById          String
   madeBy            User         @relation("ClaroInvoiceMaker", fields: [madeById], references: [id])
@@ -740,6 +743,7 @@ model ClaroInvoice {
   shortAcceptedBy   User?        @relation("ClaroInvoiceShortAcceptor", fields: [shortAcceptedById], references: [id])
   adviceLines       AdviceLine[]
 
+  @@unique([series, seq])
   @@index([docId])
   @@index([loadedAt])
 }

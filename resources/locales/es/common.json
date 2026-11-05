@@ -1078,17 +1078,18 @@
 			"invalid_tolerance": "La tolerancia debe ser un número no negativo.",
 			"unknown_intent": "Acción desconocida.",
 			"invalid_lc_pbcc_rate": "Ingrese una tasa mayor que 0 y no mayor que 1.",
-			"invalid_bank_prefix": "Use de 1 a 8 letras o dígitos.",
+			"invalid_bank_prefix": "Usa solo letras, dígitos y guiones.",
 			"invalid_invoice_codes": "Use letras, dígitos o guiones en los códigos, y un número entero desde 1 para el trabajo.",
 			"invalid_pay_day": "Elige un día de la semana.",
-			"invalid_pbcc_email": "Escribe un correo válido."
+			"invalid_pbcc_email": "Escribe correos válidos, separados por comas.",
+			"signature_not_image": "La firma debe ser una imagen PNG o JPEG.",
+			"signature_too_big": "El archivo de la firma debe pesar menos de 1 MB."
 		},
 		"lc_pbcc_heading": "Tasa de anticipo LC/PBCC",
 		"lc_pbcc_description": "El anticipo de PBCC es actualmente {current}% del total de factura verificado. IVU se mantiene separado.",
 		"lc_pbcc_label": "Tasa de anticipo (decimal)",
-		"bank_prefix_heading": "Prefijo de factura al banco",
-		"bank_prefix_description": "Prefijo de contrato en los números de factura al banco, p. ej. M17 da M17-10354739. Actual: {{current}}.",
-		"bank_prefix_label": "Prefijo",
+		"bank_prefix_heading": "Facturas a PBCC",
+		"bank_prefix_description": "Las facturas M17 siempre se numeran M17- más el Aviso, p. ej. M17-10354739.",
 		"bank_contract_label": "Número de contrato",
 		"bank_contract_description": "Número de contrato de JAF con PBCC, impreso como Contrato Núm. en cada factura. Déjalo vacío para imprimir el marcador.",
 		"pay_day_heading": "Día de pago",
@@ -1103,8 +1104,12 @@
 			"5": "Viernes",
 			"6": "Sábado"
 		},
-		"pbcc_email_label": "Correo de PBCC",
-		"pbcc_email_description": "A dónde va Enviar a PBCC."
+		"pbcc_email_label": "Correos de PBCC",
+		"pbcc_email_description": "A dónde va Enviar a PBCC. Uno o varios, separados por comas.",
+		"signature_heading": "Firma en las facturas a Claro",
+		"signature_description": "La firma de Lissette. Se estampa en cada factura a Claro al hacerla, junto a Certificado por y en Firma, y en nada más. Nunca va en una M17.",
+		"signature_missing": "Aún no hay firma: no se pueden hacer facturas a Claro hasta añadirla.",
+		"signature_label": "Imagen de la firma (PNG o JPEG)"
 	},
 	"admin_catalog": {
 		"title": "Catálogo de servicios",
@@ -2804,7 +2809,23 @@
 		"made_summary": "{{made}} facturas hechas; {{failed}} no se pudieron hacer.",
 		"marked_summary": "{{count}} facturas marcadas como cargadas en Ariba.",
 		"errors": {
-			"none_selected": "Seleccione al menos una fila."
+			"none_selected": "Seleccione al menos una fila.",
+			"no_signature": "La firma de Lissette aún no está en Admin › Ajustes, así que no se hizo nada. Las facturas nunca salen sin firma.",
+			"not_old_number": "Escriba un número viejo, como M19-3440.",
+			"number_taken": "Ese número M19 ya está en el sistema.",
+			"po_not_available": "Ese PO no es un PO confirmado en espera de factura.",
+			"bad_total": "Escriba el monto de la factura."
+		},
+		"old": {
+			"heading": "Añadir una M19 vieja",
+			"description": "Para una factura hecha antes del sistema, cuando un PO o un Payment Advice se refiere a una que no tiene. El PO es opcional. No lleva PDF ni firma.",
+			"number": "Número viejo",
+			"amount": "Total de la factura",
+			"po": "PO # (opcional)",
+			"loaded_on": "Cargada en Ariba el (opcional)",
+			"add": "Añadir M19 vieja",
+			"added": "{{number}} añadida. Las filas de Payment Advice que la nombran quedaron enlazadas.",
+			"link": "Tiene una M19 vieja"
 		}
 	},
 	"payment_advice": {
@@ -2827,6 +2848,7 @@
 		"apply": "Aplicar pagos",
 		"unmatched_kept": "Las filas sin coincidencia se conservan; nunca se descartan.",
 		"invoice_number": "Número de factura",
+		"add_old": "Añadir M19 vieja",
 		"link": "Enlazar",
 		"reason": "Motivo",
 		"ja_check_hint": "No hay factura de instalador con este número (o está anulada o retenida). Necesita que una persona lo revise.",

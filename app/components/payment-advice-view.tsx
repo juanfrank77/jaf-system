@@ -88,6 +88,20 @@ function ResultBadge({ line }: { line: AdviceLineView }) {
 	return <Badge variant="danger">{t("payment_advice.result.unmatched")}</Badge>
 }
 
+/** An old M19 row the system has no invoice for: add it, and the row finds it. */
+function AddOldLink({ invoiceRef, net }: { invoiceRef: string; net: number }) {
+	const { t } = useTranslation()
+	if (!invoiceRef.toUpperCase().startsWith("M19")) return null
+	return (
+		<a
+			href={`/finance/awaiting-ariba?old=${encodeURIComponent(invoiceRef)}&amount=${net.toFixed(2)}`}
+			className="ml-2 text-xs underline"
+		>
+			{t("payment_advice.add_old")}
+		</a>
+	)
+}
+
 function LinkForm({ lineId }: { lineId: string }) {
 	const { t } = useTranslation()
 	return (
@@ -97,7 +111,7 @@ function LinkForm({ lineId }: { lineId: string }) {
 			<Input
 				name="invoice"
 				required
-				placeholder="M19-0000"
+				placeholder="M20-000"
 				aria-label={t("payment_advice.invoice_number")}
 				className="h-7 w-28"
 			/>
@@ -192,7 +206,10 @@ function AdviceCard({
 								</td>
 								<td className="p-2">
 									{l.result === "UNMATCHED" && kind === "m19" && (
-										<LinkForm lineId={l.id} />
+										<>
+											<LinkForm lineId={l.id} />
+											<AddOldLink invoiceRef={l.invoiceRef} net={l.net} />
+										</>
 									)}
 									{l.result === "UNMATCHED" && kind === "ja" && (
 										<span className="text-xs text-status-danger">
@@ -361,7 +378,10 @@ export function PaymentAdviceView({
 										</td>
 										<td className="p-2">
 											{kind === "m19" ? (
-												<LinkForm lineId={u.id} />
+												<>
+													<LinkForm lineId={u.id} />
+													<AddOldLink invoiceRef={u.invoiceRef} net={u.net} />
+												</>
 											) : (
 												<span className="text-xs text-status-danger">
 													{t(

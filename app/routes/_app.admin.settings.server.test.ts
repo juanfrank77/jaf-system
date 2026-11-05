@@ -13,8 +13,8 @@ vi.mock("~/lib/system-settings.server", () => ({
 	setAvisoAmountTolerance: vi.fn(),
 	getLcPbccAdvanceRate: vi.fn(),
 	setLcPbccAdvanceRate: vi.fn(),
-	getBankInvoicePrefix: vi.fn(),
-	setBankInvoicePrefix: vi.fn(),
+	getInvoiceSignature: vi.fn(),
+	setInvoiceSignature: vi.fn(),
 	getBankContractNumber: vi.fn().mockResolvedValue("17-xxx"),
 	setBankContractNumber: vi.fn(),
 	getPbccEmail: vi.fn().mockResolvedValue(null),
@@ -31,14 +31,14 @@ import { requireRole } from "~/lib/permissions.server"
 import {
 	getAgingAlertDays,
 	getAvisoAmountTolerance,
-	getBankInvoicePrefix,
 	getIvuRate,
 	getLcPbccAdvanceRate,
 	setAgingAlertDays,
 	setAvisoAmountTolerance,
-	setBankInvoicePrefix,
+	setInvoiceSignature,
 	setIvuRate,
 	setLcPbccAdvanceRate,
+	setPbccEmail,
 } from "~/lib/system-settings.server"
 import { action, loader } from "./_app.admin.settings"
 
@@ -61,7 +61,6 @@ describe("GET /admin/settings", () => {
 		vi.mocked(getAgingAlertDays).mockResolvedValue(30)
 		vi.mocked(getAvisoAmountTolerance).mockResolvedValue(0.01)
 		vi.mocked(getLcPbccAdvanceRate).mockResolvedValue(0.8)
-		vi.mocked(getBankInvoicePrefix).mockResolvedValue("M17")
 
 		const result = await loader({
 			request: new Request("http://localhost/admin/settings"),
@@ -73,7 +72,6 @@ describe("GET /admin/settings", () => {
 			agingAlertDays: 30,
 			avisoAmountTolerance: 0.01,
 			lcPbccAdvanceRate: 0.8,
-			bankInvoicePrefix: "M17",
 			payDayWeekday: 4,
 		})
 	})
@@ -233,37 +231,85 @@ describe("POST /admin/settings", () => {
 		expect(setLcPbccAdvanceRate).not.toHaveBeenCalled()
 	})
 
-	it("stores the bank invoice prefix upper-cased", async () => {
+	it("saves all four PBCC addresses, comma separated", async () => {
 		vi.mocked(requireRole).mockResolvedValue({
 			user: { id: "admin-1" },
 			session: {},
 		} as any)
 		const form = new FormData()
 		form.set("intent", "bank_prefix")
-		form.set("bank_invoice_prefix", "m18")
+		form.set("pbcc_email", "hs@x.com; lh@x.com, ah@x.com dd@x.com")
 		const result = await action({
 			request: formRequest(form),
 			params: {},
 		} as any)
-		expect(setBankInvoicePrefix).toHaveBeenCalledWith("M18", "admin-1")
+		expect(setPbccEmail).toHaveBeenCalledWith(
+			"hs@x.com, lh@x.com, ah@x.com, dd@x.com",
+			"admin-1",
+		)
 		expect(result).toEqual({ successBankPrefix: true })
 	})
 
-	it("rejects an invalid bank invoice prefix", async () => {
+	it("refuses the addresses when any one of them is not an email", async () => {
 		vi.mocked(requireRole).mockResolvedValue({
 			user: { id: "admin-1" },
 			session: {},
 		} as any)
+		vi.mocked(setPbccEmail).mockClear()
 		const form = new FormData()
 		form.set("intent", "bank_prefix")
-		form.set("bank_invoice_prefix", "bad prefix!")
+		form.set("pbcc_email", "hs@x.com, nope")
 		const result = await action({
 			request: formRequest(form),
 			params: {},
 		} as any)
 		expect(result).toEqual({
-			errorKey: "admin_settings.errors.invalid_bank_prefix",
+			errorKey: "admin_settings.errors.invalid_pbcc_email",
 		})
-		expect(setBankInvoicePrefix).not.toHaveBeenCalled()
+		expect(setPbccEmail).not.toHaveBeenCalled()
+	})
+
+	it("stores an uploaded signature image", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "admin-1" },
+			session: {},
+		} as any)
+		const form = new FormData()
+		form.set("intent", "signature")
+		form.set(
+			"signature",
+			new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "s.png", {
+				type: "image/png",
+			}),
+		)
+		const result = await action({
+			request: formRequest(form),
+			params: {},
+		} as any)
+		expect(setInvoiceSignature).toHaveBeenCalledWith(
+			new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
+			"admin-1",
+		)
+		expect(result).toEqual({ successSignature: true })
+	})
+
+	it("says so when the signature file is not an image", async () => {
+		vi.mocked(requireRole).mockResolvedValue({
+			user: { id: "admin-1" },
+			session: {},
+		} as any)
+		vi.mocked(setInvoiceSignature).mockRejectedValueOnce(
+			new Error("signature_not_image"),
+		)
+		const form = new FormData()
+		form.set("intent", "signature")
+		form.set("signature", new File(["x"], "s.txt"))
+		const result = await action({
+			request: formRequest(form),
+			params: {},
+		} as any)
+		expect(result).toEqual({
+			errorKey: "admin_settings.errors.signature_not_image",
+		})
 	})
 })

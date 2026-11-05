@@ -12,6 +12,7 @@ type CatalogRow = {
 	contractor_factor: string
 	price_list_revision: string
 	effective_from: string
+	act: string
 }
 
 /** Minimal CSV parser handling quoted fields with commas and escaped quotes. */
@@ -92,6 +93,7 @@ export function toServiceCodeData(
 		priceListRevision: orNull(row.price_list_revision),
 		effectiveFrom: parseDate(row.effective_from),
 		accountCode: orNull(row.account_code),
+		act: orNull(row.act),
 		active: true,
 	}
 }

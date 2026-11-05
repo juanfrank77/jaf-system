@@ -7,7 +7,7 @@ import { FinanceStepRail, StageChip } from "~/components/finance-step-rail"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Callout } from "~/components/ui/callout"
-import { bankInvoiceNumber } from "~/lib/bank-schedule"
+import { BANK_INVOICE_PREFIX, bankInvoiceNumber } from "~/lib/bank-schedule"
 import {
 	type ContractorPayment,
 	type ContractorShareLine,
@@ -29,10 +29,7 @@ import { rowAmounts } from "~/lib/pbcc-batch.server"
 import { generatePbccRequestPdf } from "~/lib/pdf/pbcc-request.server"
 import { isTerminalStatus } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
-import {
-	getBankInvoicePrefix,
-	getLcPbccAdvanceRate,
-} from "~/lib/system-settings.server"
+import { getLcPbccAdvanceRate } from "~/lib/system-settings.server"
 import { formatMoney, toNumberPrice } from "~/lib/utils"
 import type { Route } from "./+types/_app.finance.pbcc.$id"
 
@@ -204,7 +201,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 	const today = new Date().toLocaleDateString("en-US")
 	const invoiceNumber = bankInvoiceNumber(
-		await getBankInvoicePrefix(),
+		BANK_INVOICE_PREFIX,
 		doc.avisoNumber || doc.controlNumber,
 	)
 

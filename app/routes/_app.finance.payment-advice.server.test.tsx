@@ -12,6 +12,12 @@ import {
 	seedUser,
 } from "~/test/helpers"
 
+vi.mock("~/lib/system-settings.server", async (original) => ({
+	...(await original<typeof import("~/lib/system-settings.server")>()),
+	getInvoiceSignature: async () =>
+		"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+}))
+
 const mocks = vi.hoisted(() => ({ requireRole: vi.fn() }))
 vi.mock("~/lib/permissions.server", () => ({ requireRole: mocks.requireRole }))
 
@@ -75,7 +81,7 @@ describe("Payment Advice route", () => {
 					{[
 						"Oct. 01, 2026",
 						`Referencia ${ref}`,
-						`M19-${inv.seq} 5920050399 03.07.2026 $111.50 $0.00 $0.00 $111.50`,
+						`M20-${inv.seq} 5920050399 03.07.2026 $111.50 $0.00 $0.00 $111.50`,
 						"Total $111.50",
 					].map((l) => (
 						<Text key={l}>{l}</Text>

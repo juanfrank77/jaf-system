@@ -6,6 +6,9 @@ export function areaLetter(area: string | null | undefined): string | null {
 	return a ? a[0].toUpperCase() : null
 }
 
+/** Always M17: it is what marks an invoice as going to PBCC. */
+export const BANK_INVOICE_PREFIX = "M17"
+
 export function bankInvoiceNumber(prefix: string, avisoNumber: string): string {
 	return `${prefix}-${avisoNumber}`
 }
@@ -40,12 +43,29 @@ export function barrioFromAddress(address: string): string {
 	return segments.length > 1 ? segments[0] : ""
 }
 
-export type JobKind = "INSTALACION" | "CONSTRUCCION" | "MANTENIMIENTO"
+/** A/C on the invoice: the catalog's "610" or "6102" (the 4th digit is the ACT). */
+export function acOf(accountCode: string | null | undefined): string {
+	return accountCode?.trim().slice(0, 3) ?? ""
+}
 
-export function jobKind(jobType: string): JobKind {
-	if (jobType === "INSTALL") return "INSTALACION"
-	if (jobType === "CONSTRUCTION") return "CONSTRUCCION"
-	return "MANTENIMIENTO"
+/** The Resumen: one row per A/C and ACT, "610- - -X", with that group's total. */
+export function resumenGroups(
+	lines: { accountCode: string; act: string; amount: number }[],
+): { label: string; total: number }[] {
+	const groups = new Map<string, number>()
+	for (const l of lines) {
+		const label = `${l.accountCode}- - -${l.act}`
+		groups.set(label, (groups.get(label) ?? 0) + l.amount)
+	}
+	return [...groups]
+		.sort(([a], [b]) => (a < b ? -1 : 1))
+		.map(([label, total]) => ({ label, total: round2(total) }))
+}
+
+/** One or several addresses, separated by commas, semicolons or spaces; null if any is bad. */
+export function parsePbccEmails(raw: string): string[] | null {
+	const list = raw.split(/[,;\s]+/).filter(Boolean)
+	return list.every((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) ? list : null
 }
 
 /** What PBCC keeps from each advance wire. */

@@ -1,10 +1,11 @@
 import fs from "node:fs/promises"
 import { normaliseAvisoNumber, readAvisoNumber } from "~/lib/aviso-pdf.server"
 import {
+	acOf,
 	areaLetter,
+	BANK_INVOICE_PREFIX,
 	bankInvoiceNumber,
 	barrioFromAddress,
-	jobKind,
 	localityFromAddress,
 	scheduleTotals,
 } from "~/lib/bank-schedule"
@@ -24,7 +25,6 @@ import {
 import type { InvoiceLine } from "~/lib/service-lines"
 import {
 	getBankContractNumber,
-	getBankInvoicePrefix,
 	getInvoiceCodes,
 	getLcPbccAdvanceRate,
 } from "~/lib/system-settings.server"
@@ -361,6 +361,7 @@ function invoiceLinesOf(
 	byId: Map<
 		string,
 		{
+			accountCode: string | null
 			subAct: string | null
 			profitCenter: string | null
 			act: string | null
@@ -374,16 +375,14 @@ function invoiceLinesOf(
 			claroCode: l.claroCode,
 			description: l.name,
 			qty: l.qty,
-			unit: l.unit ?? "EA",
 			unitPrice: l.unitPrice,
 			amount: l.lineAmount,
-			// A/C is blank on the real invoice (the catalog's 615 is the Aviso's
-			// activity code, not an account). DEPT. and CENTRO are the same for
-			// all maintenance work, so they come from settings.
-			accountCode: "",
+			accountCode: acOf(c?.accountCode),
 			subAct: c?.subAct ?? "",
+			// DEPT. and CENTRO are the same for all maintenance work, so they come
+			// from settings.
 			dept: codes.dept,
-			profitCenter: c?.profitCenter ?? "",
+			profitCenter: c?.profitCenter || "-",
 			act: c?.act ?? "",
 			costCenter: codes.costCenter,
 		}
@@ -400,13 +399,12 @@ async function ensureInvoicePdfs(batchId: string): Promise<void> {
 		(d) => !d.bankInvoicePdfPath,
 	)
 	if (docs.length === 0) return
-	const [prefix, catalog, codes, batch] = await Promise.all([
-		getBankInvoicePrefix(),
+	const [catalog, codes, batch] = await Promise.all([
 		db.serviceCode.findMany(),
 		getInvoiceCodes(),
 		db.bankSchedule.findUniqueOrThrow({ where: { id: batchId } }),
 	])
-	const contract = await getBankContractNumber(prefix)
+	const contract = await getBankContractNumber()
 	const byId = new Map(catalog.map((c) => [c.id, c]))
 	for (const doc of docs) {
 		const aviso = doc.avisoNumber || doc.controlNumber
@@ -417,7 +415,8 @@ async function ensureInvoicePdfs(batchId: string): Promise<void> {
 			supplierNumber: SUPPLIER_NUMBER,
 			// NUMERO DE FACTURA is the prefixed number, as on the Excel schedule and
 			// the file names: that is how PBCC knows it is a JAF file.
-			avisoNumber: bankInvoiceNumber(prefix, aviso),
+			avisoNumber: bankInvoiceNumber(BANK_INVOICE_PREFIX, aviso),
+			workOrderNumber: aviso,
 			org: ORG,
 			// The invoice date, the same day the Excel schedule's Inv. Date shows.
 			invoiceDate: bankDateLabel(doc.financeVerifiedAt ?? batch.generatedAt),
@@ -430,7 +429,6 @@ async function ensureInvoicePdfs(batchId: string): Promise<void> {
 			description: doc.jobDescription ?? doc.jobType,
 			barrio: barrioFromAddress(address),
 			locality: localityFromAddress(address),
-			kind: jobKind(doc.jobType),
 			lines: invoiceLinesOf(doc, byId, codes),
 			total: rowAmounts(doc).subtotal,
 		})
@@ -449,15 +447,14 @@ async function ensureInvoicePdfs(batchId: string): Promise<void> {
 /** Everything a closed batch needs to be checked and packaged: invoices, then the Excel. */
 export async function finalizeBatch(batchId: string): Promise<void> {
 	await ensureInvoicePdfs(batchId)
-	const [batch, docs, prefix] = await Promise.all([
+	const [batch, docs] = await Promise.all([
 		db.bankSchedule.findUniqueOrThrow({ where: { id: batchId } }),
 		loadBatchDocs(batchId),
-		getBankInvoicePrefix(),
 	])
 	const rows: ScheduleRow[] = docs.map((doc) => ({
 		invoiceDate: doc.financeVerifiedAt ?? batch.generatedAt,
 		invoiceNumber: bankInvoiceNumber(
-			prefix,
+			BANK_INVOICE_PREFIX,
 			doc.avisoNumber || doc.controlNumber,
 		),
 		area: areaLetter(doc.brigade?.area) ?? "",

@@ -1,4 +1,4 @@
-import { contractLabel } from "~/lib/bank-schedule"
+import { BANK_INVOICE_PREFIX, contractLabel } from "~/lib/bank-schedule"
 import { DEFAULT_PAY_DAY } from "~/lib/pay-day"
 import { db } from "./db.server"
 
@@ -95,39 +95,17 @@ export async function setLcPbccAdvanceRate(
 	})
 }
 
-const DEFAULT_BANK_INVOICE_PREFIX = "M17"
-
-/** Contract prefix on bank invoice numbers (`<prefix>-<aviso>`). */
-export async function getBankInvoicePrefix(): Promise<string> {
-	const setting = await db.systemSetting.findUnique({
-		where: { key: "bank_invoice_prefix" },
-	})
-	const value = setting?.value?.trim()
-	return value ? value : DEFAULT_BANK_INVOICE_PREFIX
-}
-
-export async function setBankInvoicePrefix(
-	prefix: string,
-	updatedById: string,
-): Promise<void> {
-	await db.systemSetting.upsert({
-		where: { key: "bank_invoice_prefix" },
-		update: { value: prefix.trim(), updatedById },
-		create: { key: "bank_invoice_prefix", value: prefix.trim(), updatedById },
-	})
-}
-
 /**
  * JAF's contract number with PBCC, printed as "Contrato Núm." on every bank
  * invoice. Unset until Lissette provides it; the invoice then carries the
- * prefix's placeholder ("17-xxx"), which is the one thing to fix before go-live.
+ * placeholder ("17-xxx"), which is the one thing to fix before go-live.
  */
-export async function getBankContractNumber(prefix: string): Promise<string> {
+export async function getBankContractNumber(): Promise<string> {
 	const setting = await db.systemSetting.findUnique({
 		where: { key: "bank_contract_number" },
 	})
 	const value = setting?.value?.trim()
-	return value ? value : contractLabel(prefix)
+	return value ? value : contractLabel(BANK_INVOICE_PREFIX)
 }
 
 /** An empty value clears the setting, back to the placeholder. */
@@ -152,7 +130,7 @@ const DEFAULT_INVOICE_COST_CENTER = "641"
 /**
  * DEPT. and CENTRO CODIGO COSTO printed on every maintenance invoice line.
  * They are the same for all maintenance work, so they are settings, not
- * per-service data; A/C is left blank on purpose.
+ * per-service data.
  */
 export async function getInvoiceCodes(): Promise<{
 	dept: string
@@ -227,7 +205,7 @@ export async function setPayDayWeekday(
 	})
 }
 
-/** Where "Send to PBCC" goes. Unset until JAF gives the address. */
+/** Where "Send to PBCC" goes, one address or several, comma separated. Unset until JAF gives them. */
 export async function getPbccEmail(): Promise<string | null> {
 	const setting = await db.systemSetting.findUnique({
 		where: { key: "pbcc_email" },
@@ -240,5 +218,41 @@ export async function setPbccEmail(email: string, updatedById: string) {
 		where: { key: "pbcc_email" },
 		update: { value: email.trim(), updatedById },
 		create: { key: "pbcc_email", value: email.trim(), updatedById },
+	})
+}
+
+const MAX_SIGNATURE_BYTES = 1024 * 1024
+
+function signatureMime(b: Uint8Array): string | null {
+	if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47)
+		return "image/png"
+	if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg"
+	return null
+}
+
+/**
+ * Lissette's signature, stamped on a Claro invoice when it is made. It lives here
+ * rather than in the uploads, so no file route can ever serve it; the invoice
+ * service and the Admin settings page are its only readers.
+ */
+export async function getInvoiceSignature(): Promise<string | null> {
+	const setting = await db.systemSetting.findUnique({
+		where: { key: "invoice_signature" },
+	})
+	return setting?.value || null
+}
+
+export async function setInvoiceSignature(
+	bytes: Uint8Array,
+	updatedById: string,
+): Promise<void> {
+	const mime = signatureMime(bytes)
+	if (!mime) throw new Error("signature_not_image")
+	if (bytes.length > MAX_SIGNATURE_BYTES) throw new Error("signature_too_big")
+	const value = `data:${mime};base64,${Buffer.from(bytes).toString("base64")}`
+	await db.systemSetting.upsert({
+		where: { key: "invoice_signature" },
+		update: { value, updatedById },
+		create: { key: "invoice_signature", value, updatedById },
 	})
 }

@@ -1,9 +1,8 @@
 import fs from "node:fs/promises"
-import { bankInvoiceNumber } from "~/lib/bank-schedule"
+import { BANK_INVOICE_PREFIX, bankInvoiceNumber } from "~/lib/bank-schedule"
 import { db } from "~/lib/db.server"
 import { zipPackage } from "~/lib/package-zip.server"
 import { BATCH_ROW_ORDER, BatchError } from "~/lib/pbcc-batch.server"
-import { getBankInvoicePrefix } from "~/lib/system-settings.server"
 
 /** No emailed part goes over this (zip headers and the email itself included). */
 const PACKAGE_PART_LIMIT = 20 * 1024 * 1024
@@ -41,7 +40,7 @@ export async function planPackage(
 	batchId: string,
 	limit: number = PACKAGE_PART_LIMIT,
 ): Promise<PackagePartPlan[]> {
-	const [batch, docs, prefix] = await Promise.all([
+	const [batch, docs] = await Promise.all([
 		db.bankSchedule.findUnique({ where: { id: batchId } }),
 		db.jafInvoice.findMany({
 			where: { bankScheduleId: batchId },
@@ -53,7 +52,6 @@ export async function planPackage(
 				bankInvoicePdfPath: true,
 			},
 		}),
-		getBankInvoicePrefix(),
 	])
 	if (!batch) throw new BatchError("not_found")
 	if (!batch.closedAt || !batch.xlsxPath) throw new BatchError("not_closed")
@@ -76,7 +74,7 @@ export async function planPackage(
 			})
 		if (doc.bankInvoicePdfPath)
 			files.push({
-				name: `${rowLabel(n)}_Inv_${bankInvoiceNumber(prefix, aviso)}.pdf`,
+				name: `${rowLabel(n)}_Inv_${bankInvoiceNumber(BANK_INVOICE_PREFIX, aviso)}.pdf`,
 				path: doc.bankInvoicePdfPath,
 				bytes: await sizeOf(doc.bankInvoicePdfPath),
 			})

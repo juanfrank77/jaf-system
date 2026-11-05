@@ -3,6 +3,7 @@ import {
 	type AvisoSummary,
 	summarizeAviso,
 } from "~/lib/aviso-summary"
+import { invoiceNumber } from "~/lib/claro-invoice"
 import { db } from "~/lib/db.server"
 import type { Prisma } from "../../generated/prisma/client"
 
@@ -61,6 +62,7 @@ function toRaw(d: DocWith): AvisoRaw {
 			invoice: p.invoice
 				? {
 						id: p.invoice.id,
+						series: p.invoice.series,
 						seq: p.invoice.seq,
 						total: Number(p.invoice.total),
 						madeAt: p.invoice.madeAt,
@@ -135,7 +137,9 @@ export async function avisoDocuments(docId: string) {
 				select: {
 					id: true,
 					poNumber: true,
-					invoice: { select: { id: true, seq: true } },
+					invoice: {
+						select: { id: true, series: true, seq: true, filePath: true },
+					},
 				},
 			},
 		},
@@ -166,11 +170,11 @@ export async function avisoDocuments(docId: string) {
 			href: `/finance/awaiting-po/${p.id}/file`,
 		})),
 		...doc.claroPos.flatMap((p) =>
-			p.invoice
+			p.invoice?.filePath
 				? [
 						{
 							kind: "claro_invoice" as const,
-							label: `Invoice M19-${p.invoice.seq}`,
+							label: `Invoice ${invoiceNumber(p.invoice)}`,
 							href: `/finance/awaiting-ariba/${p.invoice.id}/file`,
 						},
 					]
@@ -246,7 +250,7 @@ export async function claroPastDue(now = new Date()) {
 			((r.paidAt ?? now).getTime() - (r.loadedAt as Date).getTime()) /
 				86_400_000,
 		)
-		const late = days - (r.claroPo.termsDays ?? 60)
+		const late = days - (r.claroPo?.termsDays ?? 60)
 		if (late > 0) {
 			count++
 			oldestDays = Math.max(oldestDays, late)

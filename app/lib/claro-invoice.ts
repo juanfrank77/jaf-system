@@ -1,23 +1,56 @@
 /** Pure rules for the "Factura de Pago - Claro" JAF makes from a PO. */
 
+/** Spanish, as on JAF's real invoices: "MANT-JAF-ABR-2026". */
 const MONTHS = [
-	"JAN",
+	"ENE",
 	"FEB",
 	"MAR",
-	"APR",
+	"ABR",
 	"MAY",
 	"JUN",
 	"JUL",
-	"AUG",
+	"AGO",
 	"SEP",
 	"OCT",
 	"NOV",
-	"DEC",
+	"DIC",
 ]
 
-/** The M19 series: 4320 -> "M19-4320". */
-export function invoiceNumber(seq: number): string {
-	return `M19-${seq}`
+/** New invoices. Lissette's old files already use M19-001 onward, so M19 would repeat. */
+export const NEW_SERIES = "M20"
+export const OLD_SERIES = "M19"
+
+/** { "M20", 1 } -> "M20-001", then on past 999 to "M20-1000". */
+export function invoiceNumber(inv: { series: string; seq: number }): string {
+	return `${inv.series}-${String(inv.seq).padStart(3, "0")}`
+}
+
+/** The series starts at 1 and never resets. */
+export function nextSeq(max: number | null): number {
+	return max === null ? 1 : max + 1
+}
+
+/**
+ * "M19-3423", "M193423", "M20-001" or a bare "3423" (series null). A dashless M20
+ * is read the same way, since the digits after the series are the number.
+ */
+export function parseInvoiceRef(
+	ref: string,
+): { series: string | null; seq: number } | null {
+	const t = ref.trim()
+	const m = /^M\s?(19|20)\s?[-–]?\s?(\d+)$/i.exec(t)
+	if (m) return { series: `M${m[1]}`, seq: Number(m[2]) }
+	return /^\d+$/.test(t) ? { series: null, seq: Number(t) } : null
+}
+
+/** FECHA on the form: MM/DD/YY on the Puerto Rico calendar. */
+export function formDate(d: Date): string {
+	return d.toLocaleDateString("en-US", {
+		month: "2-digit",
+		day: "2-digit",
+		year: "2-digit",
+		timeZone: "America/Puerto_Rico",
+	})
 }
 
 export function isWorkMonth(v: string): boolean {

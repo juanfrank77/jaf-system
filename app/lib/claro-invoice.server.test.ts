@@ -2,10 +2,13 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { extractText } from "unpdf"
-import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 import {
+	addOldInvoice,
 	ClaroInvoiceError,
 	claroInvoiceCounts,
+	invoiceFile,
+	listInvoices,
 	makeInvoice,
 	makeInvoices,
 	markLoaded,
@@ -19,12 +22,21 @@ import {
 	seedUser,
 } from "~/test/helpers"
 
+const PNG =
+	"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+const mocks = vi.hoisted(() => ({ signature: vi.fn() }))
+vi.mock("~/lib/system-settings.server", async (original) => ({
+	...(await original<typeof import("~/lib/system-settings.server")>()),
+	getInvoiceSignature: mocks.signature,
+}))
+
 const t = makeTracker()
 let dir: string
 const prev = process.env.UPLOAD_DIR
 beforeAll(async () => {
 	dir = await fs.mkdtemp(path.join(os.tmpdir(), "claro-inv-"))
 	process.env.UPLOAD_DIR = dir
+	mocks.signature.mockResolvedValue(PNG)
 })
 afterAll(async () => {
 	await t.cleanup()
@@ -79,10 +91,10 @@ describe("Claro invoices", () => {
 			where: { id: made.id },
 		})
 		expect(Number(inv.total)).toBe(894.03)
-		const bytes = new Uint8Array(await fs.readFile(inv.filePath))
+		const bytes = new Uint8Array(await fs.readFile(inv.filePath as string))
 		const { text } = await extractText(bytes, { mergePages: true })
 		for (const piece of [
-			`M19-${made.seq}`,
+			`M20-${String(made.seq).padStart(3, "0")}`,
 			"PWOR",
 			"MANT-JAF-MAY-2026",
 			"05/01/2026",
@@ -92,13 +104,149 @@ describe("Claro invoices", () => {
 			"$816.89",
 			"$68.17",
 			"$8.97",
-			"$894.03",
+			"894.03",
 		])
 			expect(text).toContain(piece)
 		const trail = await db.auditTrail.findFirst({
 			where: { docId: po.docId as string, action: "CLARO_INVOICE_MADE" },
 		})
-		expect((trail?.diffJson as { source: string }).source).toBe("STAMPED")
+		expect(trail?.diffJson).toMatchObject({
+			source: "STAMPED",
+			signedBy: "Lissette Cintron",
+		})
+	})
+
+	it("makes nothing unsigned: without a stored signature no number is taken", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const po = await confirmedPo(u.id)
+		mocks.signature.mockResolvedValueOnce(null)
+		await expect(
+			makeInvoice({ poId: po.id, workMonth: "2026-05", madeById: u.id }),
+		).rejects.toMatchObject({ code: "no_signature" })
+		expect(await db.claroInvoice.count({ where: { claroPoId: po.id } })).toBe(0)
+	})
+
+	it("new numbers follow their own series, whatever the old M19 numbers are", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const high = 8_000_000 + Math.floor(Math.random() * 900_000)
+		const old = await addOldInvoice({
+			number: `M19-${high}`,
+			total: 10,
+			poNumber: null,
+			loadedAt: null,
+			userId: u.id,
+		})
+		const po = await confirmedPo(u.id)
+		const made = await makeInvoice({
+			poId: po.id,
+			workMonth: "2026-05",
+			madeById: u.id,
+		})
+		expect(made.seq).toBeLessThan(high)
+		await db.claroInvoice.delete({ where: { id: old.id } })
+	})
+
+	it("an old M19 and a new M20 can share a number", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const po = await confirmedPo(u.id)
+		const made = await makeInvoice({
+			poId: po.id,
+			workMonth: "2026-05",
+			madeById: u.id,
+		})
+		const old = await addOldInvoice({
+			number: `M19-${made.seq}`,
+			total: 10,
+			poNumber: null,
+			loadedAt: null,
+			userId: u.id,
+		})
+		expect(old.id).not.toBe(made.id)
+		await db.claroInvoice.delete({ where: { id: old.id } })
+	})
+
+	it("adds an old M19 from a PO: it leaves To make, keeps the typed total and has no PDF", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const po = await confirmedPo(u.id, { termsDays: 30 })
+		const seq = 8_100_000 + Math.floor(Math.random() * 900_000)
+		const old = await addOldInvoice({
+			number: `M19-${seq}`,
+			total: 221.62,
+			poNumber: po.poNumber,
+			loadedAt: new Date("2026-09-01T12:00:00Z"),
+			userId: u.id,
+		})
+		const inv = await db.claroInvoice.findUniqueOrThrow({
+			where: { id: old.id },
+		})
+		expect(inv).toMatchObject({
+			series: "M19",
+			seq,
+			claroPoId: po.id,
+			docId: po.docId,
+			filePath: null,
+		})
+		expect(Number(inv.total)).toBe(221.62)
+		expect(inv.dueDate?.toISOString().slice(0, 10)).toBe("2026-10-01")
+		expect(await invoiceFile(old.id)).toBeNull()
+		const listed = (await listInvoices("in_ariba")).find((r) => r.id === old.id)
+		expect(listed).toMatchObject({
+			number: `M19-${seq}`,
+			poNumber: po.poNumber,
+			hasFile: false,
+		})
+		const trail = await db.auditTrail.findFirst({
+			where: { docId: po.docId as string, action: "CLARO_INVOICE_ADDED_OLD" },
+		})
+		expect(trail?.diffJson).toMatchObject({
+			source: "ENTERED",
+			invoice: `M19-${seq}`,
+		})
+		// A second invoice for that PO cannot be made.
+		await expect(
+			makeInvoice({ poId: po.id, workMonth: "2026-05", madeById: u.id }),
+		).rejects.toMatchObject({ code: "already_made" })
+	})
+
+	it("an old M19 needs no PO or Aviso when a payment is all that refers to it", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const seq = 8_200_000 + Math.floor(Math.random() * 900_000)
+		const old = await addOldInvoice({
+			number: `M19-${seq}`,
+			total: 50,
+			poNumber: null,
+			loadedAt: null,
+			userId: u.id,
+		})
+		const zip = await zipInvoices([old.id])
+		expect(zip.toString("latin1")).not.toContain(`M19-${seq}.pdf`)
+		const marked = await markLoaded(
+			[old.id],
+			u.id,
+			new Date("2026-09-01T12:00:00Z"),
+		)
+		expect(marked).toEqual({ marked: 1 })
+		await db.claroInvoice.delete({ where: { id: old.id } })
+	})
+
+	it("refuses an old number that is not M19, is taken, or names a PO it cannot use", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const add = (number: string, poNumber: string | null = null, total = 10) =>
+			addOldInvoice({ number, total, poNumber, loadedAt: null, userId: u.id })
+		await expect(add("M20-5")).rejects.toMatchObject({ code: "not_old_number" })
+		await expect(add("3440")).rejects.toMatchObject({ code: "not_old_number" })
+		const seq = 8_300_000 + Math.floor(Math.random() * 900_000)
+		const old = await add(`M19-${seq}`)
+		await expect(add(`M19-${seq}`)).rejects.toMatchObject({
+			code: "number_taken",
+		})
+		await expect(add(`M19-${seq + 1}`, "0000000000")).rejects.toMatchObject({
+			code: "po_not_available",
+		})
+		await expect(add(`M19-${seq + 1}`, null, 0)).rejects.toMatchObject({
+			code: "bad_total",
+		})
+		await db.claroInvoice.delete({ where: { id: old.id } })
 	})
 
 	it("numbers never repeat and never skip, even when made at the same time", async () => {
@@ -188,6 +336,8 @@ describe("Claro invoices", () => {
 		})
 		const zip = await zipInvoices([made.id])
 		expect(zip.subarray(0, 2).toString()).toBe("PK")
-		expect(zip.toString("latin1")).toContain(`M19-${made.seq}.pdf`)
+		expect(zip.toString("latin1")).toContain(
+			`M20-${String(made.seq).padStart(3, "0")}.pdf`,
+		)
 	})
 })

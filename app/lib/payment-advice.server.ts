@@ -1,6 +1,10 @@
 import { createHash, randomUUID } from "node:crypto"
 import { extractText } from "unpdf"
 import { type AdviceRead, isOtherJafRef, parseAdvice } from "~/lib/advice-parse"
+import {
+	invoiceNumber as formatNumber,
+	parseInvoiceRef,
+} from "~/lib/claro-invoice"
 import { db } from "~/lib/db.server"
 import { computeInvoiceTotals } from "~/lib/invoice-totals"
 import { ocrPdfPasses } from "~/lib/po-reader.server"
@@ -31,9 +35,21 @@ export class AdviceError extends Error {
 const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
 const num = (d: { toString(): string } | null | undefined) =>
 	d === null || d === undefined ? null : Number(d.toString())
-/** "M19-3423", "M193423" or a bare "3423" -> 3423. */
-const seqOf = (ref: string) =>
-	Number(/M\s?19\s?-?\s?(\d+)/i.exec(ref)?.[1] ?? ref.replace(/\D/g, ""))
+/**
+ * The invoice a row or a typed number names. The series counts: M19-5 and M20-5 are
+ * different invoices. A bare number is taken only when it can mean just one.
+ */
+async function findInvoice(ref: string) {
+	const parsed = parseInvoiceRef(ref)
+	if (!parsed) return null
+	const { series, seq } = parsed
+	if (series)
+		return db.claroInvoice.findUnique({
+			where: { series_seq: { series, seq } },
+		})
+	const found = await db.claroInvoice.findMany({ where: { seq }, take: 2 })
+	return found.length === 1 ? found[0] : null
+}
 
 /** Text layer first; a scan is read with OCR and the pass that found the most rows wins. */
 async function readAdvice(bytes: Uint8Array): Promise<AdviceRead> {
@@ -109,10 +125,7 @@ async function matchJaRow(ref: string, net: number): Promise<Match> {
 
 async function matchRow(ref: string, net: number): Promise<Match> {
 	if (isOtherJafRef(ref)) return matchJaRow(ref, net)
-	const seq = seqOf(ref)
-	const inv = Number.isInteger(seq)
-		? await db.claroInvoice.findUnique({ where: { seq } })
-		: null
+	const inv = await findInvoice(ref)
 	if (!inv) return { result: "UNMATCHED", invoiceId: null, ewitInvoiceId: null }
 	if (inv.paidAt)
 		return { result: "ALREADY_PAID", invoiceId: inv.id, ewitInvoiceId: null }
@@ -247,7 +260,7 @@ async function applyLine(
 	userId: string,
 ) {
 	if (isOtherJafRef(line.invoiceRef)) {
-		// A JA row only ever pays Carmen's installer invoice, never an M19 one.
+		// A JA row only ever pays Carmen's installer invoice, never a Claro one.
 		if (!line.ewitInvoiceId) return
 		const ewitInvoiceId = line.ewitInvoiceId
 		// Carmen's installer invoice: no ClaroInvoice, no Aviso, no M19 audit entry.
@@ -301,26 +314,27 @@ async function applyLine(
 				bankReference: advice.reference,
 			},
 		})
-		await tx.auditTrail.create({
-			data: {
-				docId: paid.docId,
-				userId,
-				action: "CLARO_PAID",
-				diffJson: {
-					// The paid date is read off the advice, not typed (Rule 4).
-					source: "FROM_DOCUMENT",
-					invoice: `M19-${paid.seq}`,
-					paidAt: advice.adviceDate.toISOString().slice(0, 10),
-					net: num(line.net as never),
-					voucher: line.voucher,
-					reference: advice.reference,
+		// An old M19 added with no Aviso has no history to write to.
+		if (paid.docId)
+			await tx.auditTrail.create({
+				data: {
+					docId: paid.docId,
+					userId,
+					action: "CLARO_PAID",
+					diffJson: {
+						// The paid date is read off the advice, not typed (Rule 4).
+						source: "FROM_DOCUMENT",
+						invoice: formatNumber(paid),
+						paidAt: advice.adviceDate.toISOString().slice(0, 10),
+						net: num(line.net as never),
+						voucher: line.voucher,
+						reference: advice.reference,
+					},
 				},
-			},
-		})
+			})
 		return paid
 	})
-	if (!inv) return
-	await tryCloseAviso(inv.docId, userId)
+	if (inv?.docId) await tryCloseAviso(inv.docId, userId)
 }
 
 /**
@@ -444,18 +458,33 @@ export async function linkLine(
 	// A JA row is Carmen's installer invoice: never link it to an M19 invoice.
 	if (isOtherJafRef(line.invoiceRef))
 		throw new AdviceError("line_not_unmatched")
-	const seq = seqOf(invoiceNumber)
-	const inv = Number.isInteger(seq)
-		? await db.claroInvoice.findUnique({ where: { seq } })
-		: null
+	const inv = await findInvoice(invoiceNumber)
 	if (!inv) throw new AdviceError("invoice_not_found")
-	const m = await matchRow(`M19-${inv.seq}`, Number(line.net))
+	const m = await matchRow(formatNumber(inv), Number(line.net))
 	await db.adviceLine.update({
 		where: { id: lineId },
 		data: { result: m.result, invoiceId: inv.id },
 	})
-	// The M19 desk is done with this advice when it is applied, or when its own
-	// rows were paid while the JA rows still wait for Carmen.
+	await payIfDeskDone({ ...line, invoiceId: inv.id }, m, userId)
+}
+
+/**
+ * The Claro desk is done with an advice when it is applied, or when its own rows
+ * were paid while the JA rows still wait for Carmen: a row matched after that is
+ * paid at once, never waiting for another Apply click.
+ */
+async function payIfDeskDone(
+	line: Parameters<typeof applyLine>[0] & {
+		adviceId: string
+		advice: {
+			adviceDate: Date
+			reference: string | null
+			appliedAt: Date | null
+		}
+	},
+	m: Match,
+	userId: string,
+) {
 	const deskDone =
 		line.advice.appliedAt !== null ||
 		(await db.adviceLine.count({
@@ -466,7 +495,29 @@ export async function linkLine(
 			},
 		})) > 0
 	if (deskDone && (m.result === "MATCHED" || m.result === "SHORT"))
-		await applyLine({ ...line, invoiceId: inv.id }, line.advice, userId)
+		await applyLine(line, line.advice, userId)
+}
+
+/** Rows already read that name this invoice find it, once it exists. */
+export async function matchWaitingLines(
+	inv: { series: string; seq: number },
+	userId: string,
+) {
+	const lines = await db.adviceLine.findMany({
+		where: { result: "UNMATCHED", invoiceId: null, NOT: JA_LINE },
+		include: { advice: true },
+	})
+	for (const line of lines) {
+		const parsed = parseInvoiceRef(line.invoiceRef)
+		if (parsed?.series !== inv.series || parsed.seq !== inv.seq) continue
+		const m = await matchRow(line.invoiceRef, Number(line.net))
+		if (!m.invoiceId) continue
+		await db.adviceLine.update({
+			where: { id: line.id },
+			data: { result: m.result, invoiceId: m.invoiceId },
+		})
+		await payIfDeskDone({ ...line, invoiceId: m.invoiceId }, m, userId)
+	}
 }
 
 /** Lissette accepts a short pay, with a reason, and that closes the invoice. */
@@ -490,6 +541,7 @@ export async function acceptShort(
 			shortAcceptedById: userId,
 		},
 	})
+	if (!inv.docId) return
 	await db.auditTrail.create({
 		data: {
 			docId: inv.docId,
@@ -497,7 +549,7 @@ export async function acceptShort(
 			action: "SHORT_PAY_ACCEPTED",
 			diffJson: {
 				source: "ENTERED",
-				invoice: `M19-${inv.seq}`,
+				invoice: formatNumber(inv),
 				difference: r2(Number(inv.total) - (num(inv.paidNet) ?? 0)),
 				reason: why,
 			},
@@ -547,7 +599,7 @@ export async function adviceFile(id: string) {
 	})
 }
 
-/** Which desk is looking: Lissette's M19 invoices, or Carmen's JA installer invoices. */
+/** Which desk is looking: Lissette's Claro invoices (M19 and M20), or Carmen's JA installer invoices. */
 export type AdviceKind = "m19" | "ja"
 
 const JA_LINE = {
@@ -686,7 +738,7 @@ export async function listAdvices(applied: boolean, kind: AdviceKind = "m19") {
 				voucher: l.voucher,
 				invoiceDate: l.invoiceDate?.toISOString() ?? null,
 				net: Number(l.net),
-				// What Claro owes: the M19 total, or the installer invoice + IVU.
+				// What Claro owes: the Claro invoice total, or the installer invoice + IVU.
 				ourTotal: e
 					? num(e.claroTotal)
 					: l.invoice

@@ -57,6 +57,7 @@ describe("ClaroInvoicesView", () => {
 									number: "M19-4320",
 									poNumber: "4500526054",
 									avisoNumber: "10343504",
+									hasFile: true,
 									total: 894.03,
 									madeAt: "2026-09-23T15:00:00.000Z",
 									loadedAt: null,

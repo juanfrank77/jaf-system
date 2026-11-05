@@ -1,10 +1,20 @@
 import { useTranslation } from "react-i18next"
 import { Form, Link } from "react-router"
 import { Button } from "~/components/ui/button"
+import { Input } from "~/components/ui/input"
+import { Label } from "~/components/ui/label"
 import { usDate } from "~/lib/claro-invoice"
 import { formatMoney } from "~/lib/utils"
 
 export type InvoiceTabKey = "to_make" | "not_loaded" | "in_ariba"
+
+export type InvoiceErrorKey =
+	| "claro_invoices.errors.none_selected"
+	| "claro_invoices.errors.no_signature"
+	| "claro_invoices.errors.not_old_number"
+	| "claro_invoices.errors.number_taken"
+	| "claro_invoices.errors.po_not_available"
+	| "claro_invoices.errors.bad_total"
 
 type ToMakeRow = {
 	poId: string
@@ -19,6 +29,8 @@ type InvoiceRow = {
 	number: string
 	poNumber: string
 	avisoNumber: string | null
+	/** An old M19 added by hand has no PDF. */
+	hasFile: boolean
 	total: number
 	madeAt: string
 	loadedAt: string | null
@@ -31,7 +43,13 @@ type InvoiceCounts = {
 	inAriba: number
 }
 
-type Result = { made: number; failed: number } | { marked: number } | undefined
+type Result =
+	| { made: number; failed: number }
+	| { marked: number }
+	| { addedOld: string }
+	| undefined
+
+type OldPrefill = { number: string; amount: string; po: string } | null
 
 const TABS: InvoiceTabKey[] = ["to_make", "not_loaded", "in_ariba"]
 
@@ -44,12 +62,82 @@ function TabLabel({ tab }: { tab: InvoiceTabKey }) {
 			: t("claro_invoices.tab.in_ariba")
 }
 
+/** An old M19 the system doesn't have, because a PO or a payment refers to it. */
+function OldInvoiceForm({ prefill }: { prefill: OldPrefill }) {
+	const { t } = useTranslation()
+	return (
+		<details open={prefill !== null} className="rounded-lg border bg-card p-3">
+			<summary className="cursor-pointer text-sm font-medium">
+				{t("claro_invoices.old.heading")}
+			</summary>
+			<p className="mt-2 text-xs text-muted-foreground">
+				{t("claro_invoices.old.description")}
+			</p>
+			<Form method="post" className="mt-3 flex flex-wrap items-end gap-3">
+				<input type="hidden" name="intent" value="add_old" />
+				<div>
+					<Label htmlFor="old-number" className="text-xs">
+						{t("claro_invoices.old.number")}
+					</Label>
+					<Input
+						id="old-number"
+						name="number"
+						required
+						placeholder="M19-0000"
+						defaultValue={prefill?.number ?? ""}
+						className="h-8 w-32"
+					/>
+				</div>
+				<div>
+					<Label htmlFor="old-total" className="text-xs">
+						{t("claro_invoices.old.amount")}
+					</Label>
+					<Input
+						id="old-total"
+						name="total"
+						required
+						inputMode="decimal"
+						defaultValue={prefill?.amount ?? ""}
+						className="h-8 w-28"
+					/>
+				</div>
+				<div>
+					<Label htmlFor="old-po" className="text-xs">
+						{t("claro_invoices.old.po")}
+					</Label>
+					<Input
+						id="old-po"
+						name="po"
+						defaultValue={prefill?.po ?? ""}
+						className="h-8 w-32"
+					/>
+				</div>
+				<div>
+					<Label htmlFor="old-loadedOn" className="text-xs">
+						{t("claro_invoices.old.loaded_on")}
+					</Label>
+					<Input
+						id="old-loadedOn"
+						name="loadedOn"
+						type="date"
+						className="h-8 w-36"
+					/>
+				</div>
+				<Button type="submit" size="sm" variant="outline">
+					{t("claro_invoices.old.add")}
+				</Button>
+			</Form>
+		</details>
+	)
+}
+
 /** W6: invoices are made from confirmed POs, loaded in Ariba by hand, then ticked here. */
 export function ClaroInvoicesView({
 	counts,
 	tab,
 	toMake,
 	invoices,
+	oldPrefill = null,
 	result,
 	errorKey,
 }: {
@@ -57,8 +145,9 @@ export function ClaroInvoicesView({
 	tab: InvoiceTabKey
 	toMake: ToMakeRow[]
 	invoices: InvoiceRow[]
+	oldPrefill?: OldPrefill
 	result?: Result
-	errorKey?: "claro_invoices.errors.none_selected"
+	errorKey?: InvoiceErrorKey
 }) {
 	const { t } = useTranslation()
 	const count: Record<InvoiceTabKey, number> = {
@@ -101,6 +190,11 @@ export function ClaroInvoicesView({
 					{t("claro_invoices.marked_summary", { count: result.marked })}
 				</p>
 			)}
+			{result && "addedOld" in result && (
+				<p role="status" className="text-sm">
+					{t("claro_invoices.old.added", { number: result.addedOld })}
+				</p>
+			)}
 			{tab === "to_make" ? (
 				toMake.length === 0 ? (
 					<p className="text-sm text-muted-foreground">
@@ -122,6 +216,7 @@ export function ClaroInvoicesView({
 										<th className="p-2">
 											{t("claro_invoices.col.work_month")}
 										</th>
+										<th className="p-2" />
 									</tr>
 								</thead>
 								<tbody>
@@ -152,6 +247,14 @@ export function ClaroInvoicesView({
 													aria-label={t("claro_invoices.col.work_month")}
 													className="rounded border px-1"
 												/>
+											</td>
+											<td className="p-2 text-xs">
+												<Link
+													to={`?old=&po=${encodeURIComponent(r.poNumber)}`}
+													className="underline"
+												>
+													{t("claro_invoices.old.link")}
+												</Link>
 											</td>
 										</tr>
 									))}
@@ -201,12 +304,16 @@ export function ClaroInvoicesView({
 											</td>
 										)}
 										<td className="p-2 font-mono">
-											<a
-												href={`/finance/awaiting-ariba/${r.id}/file`}
-												className="underline"
-											>
-												{r.number}
-											</a>
+											{r.hasFile ? (
+												<a
+													href={`/finance/awaiting-ariba/${r.id}/file`}
+													className="underline"
+												>
+													{r.number}
+												</a>
+											) : (
+												r.number
+											)}
 										</td>
 										<td className="p-2 font-mono">{r.poNumber}</td>
 										<td className="p-2 font-mono">{r.avisoNumber ?? "—"}</td>
@@ -254,6 +361,7 @@ export function ClaroInvoicesView({
 					)}
 				</Form>
 			)}
+			<OldInvoiceForm prefill={oldPrefill} />
 		</div>
 	)
 }

@@ -40,15 +40,44 @@ describe("parseCatalogCsv", () => {
 			priceListRevision: "REV 2023-04-21",
 			effectiveFrom: new Date("2023-04-21T00:00:00.000Z"),
 			accountCode: "610",
+			act: "M",
 			active: true,
 		})
+	})
+
+	it("carries A/C and ACT for every line of sample M17-10353721", () => {
+		const sample: Record<string, [string, string]> = {
+			"34007030": ["610", "2"],
+			"34006293": ["600", "X"],
+			"34007048": ["630", "2"],
+			"34007032": ["610", "2"],
+			"34006425": ["610", "X"],
+			"34006427": ["610", "X"],
+			"34006291": ["600", "X"],
+			"34005457": ["600", "C"],
+			"34006301": ["610", "M"],
+			"34006428": ["610", "X"],
+			"34005497": ["610", "C"],
+		}
+		for (const [code, [ac, act]] of Object.entries(sample)) {
+			const data = toServiceCodeData(rows.find((r) => r.service_code === code)!)
+			expect(data.accountCode?.slice(0, 3)).toBe(ac)
+			expect(data.act).toBe(act)
+		}
+	})
+
+	it("every code has an A/C and an ACT, including the 12 whose price-list text has a prefix", () => {
+		for (const r of rows) {
+			expect(r.account_code, r.service_code).toMatch(/^6\d{2,3}$/)
+			expect(r.act, r.service_code).toMatch(/^[0-9A-Z]$/)
+		}
 	})
 
 	it("turns blank account and uplift into null; blank unit becomes empty string (unit is NOT NULL in production)", () => {
 		const blankUnit = rows.find((r) => r.unit === "")
 		expect(toServiceCodeData(blankUnit!).unit).toBe("")
-		const blankAccount = rows.find((r) => r.account_code === "")
-		expect(toServiceCodeData(blankAccount!).accountCode).toBeNull()
+		const blankAccount = { ...rows[0], account_code: "" }
+		expect(toServiceCodeData(blankAccount).accountCode).toBeNull()
 		const blankUplift = rows.find((r) => r.uplift_factor === "")
 		expect(toServiceCodeData(blankUplift!).upliftFactor).toBeNull()
 	})

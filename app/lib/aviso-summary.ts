@@ -1,3 +1,4 @@
+import { invoiceNumber } from "~/lib/claro-invoice"
 import { computeInvoiceTotals } from "~/lib/invoice-totals"
 
 /**
@@ -37,6 +38,7 @@ export type AvisoRaw = {
 		termsDays: number | null
 		invoice: {
 			id: string
+			series: string
 			seq: number
 			total: number
 			madeAt: Date
@@ -140,7 +142,7 @@ export function summarizeAviso(raw: AvisoRaw, now: Date): AvisoSummary {
 			poAmount: p.poTotal,
 			poDate: dated(p.poDate, "DOCUMENT"),
 			invoiceId: inv?.id ?? null,
-			invoiceNumber: inv ? `M19-${inv.seq}` : null,
+			invoiceNumber: inv ? invoiceNumber(inv) : null,
 			invoiceTotal: inv?.total ?? null,
 			made: dated(inv?.madeAt, "STAMPED"),
 			loaded: dated(inv?.loadedAt, "STAMPED"),

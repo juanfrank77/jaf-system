@@ -3,10 +3,16 @@ import {
 	dueDateOf,
 	invoiceNumber,
 	isWorkMonth,
+	NEW_SERIES,
+	nextSeq,
+	OLD_SERIES,
+	parseInvoiceRef,
 } from "~/lib/claro-invoice"
 import { db } from "~/lib/db.server"
 import { zipPackage } from "~/lib/package-zip.server"
+import { matchWaitingLines } from "~/lib/payment-advice.server"
 import { generateFacturaDePagoPdf } from "~/lib/pdf/factura-de-pago.server"
+import { getInvoiceSignature } from "~/lib/system-settings.server"
 import { saveBuffer } from "~/lib/uploads.server"
 import { Prisma } from "../../generated/prisma/client"
 
@@ -18,6 +24,11 @@ type ClaroInvoiceErrorCode =
 	| "not_found"
 	| "already_loaded"
 	| "not_loaded_yet"
+	| "no_signature"
+	| "not_old_number"
+	| "number_taken"
+	| "po_not_available"
+	| "bad_total"
 
 export class ClaroInvoiceError extends Error {
 	constructor(readonly code: ClaroInvoiceErrorCode) {
@@ -45,20 +56,16 @@ export async function listToMake() {
 	}))
 }
 
-/** The first number of the series, used only until the first invoice exists. */
-async function firstNumber(): Promise<number> {
-	const s = await db.systemSetting.findUnique({
-		where: { key: "claro_invoice_first_number" },
-	})
-	const n = s ? Number(s.value) : NaN
-	return Number.isInteger(n) && n > 0 ? n : 1
-}
+/** Whose signature the invoice carries, for the audit trail. */
+const SIGNER = "Lissette Cintron"
 
 /**
- * Make the invoice for one confirmed PO. The number is max + 1 inside a
- * serializable transaction, and `seq` is unique, so numbers never repeat; a
- * failed make rolls back the number, so they never skip either. The PDF is
- * written after the row exists and its path saved with it.
+ * Make the invoice for one confirmed PO, signed. This is the one place the stored
+ * signature is stamped, so it cannot appear on anything but an invoice made from a
+ * confirmed PO, and every stamp is in the audit trail. The number is max + 1 of the
+ * series inside a serializable transaction, and series + `seq` is unique, so
+ * numbers never repeat; a failed make rolls back the number, so they never skip
+ * either. The PDF is written after the row exists and its path saved with it.
  */
 export async function makeInvoice(args: {
 	poId: string
@@ -85,17 +92,22 @@ export async function makeInvoice(args: {
 	// The invoice must equal the PO to the cent.
 	if (round2(subtotal + ivu4 + ivu115) !== round2(total))
 		throw new ClaroInvoiceError("total_mismatch")
+	const signature = await getInvoiceSignature()
+	if (!signature) throw new ClaroInvoiceError("no_signature")
 
-	const first = await firstNumber()
 	for (let attempt = 0; ; attempt++) {
 		try {
 			const made = await db.$transaction(
 				async (tx) => {
-					const last = await tx.claroInvoice.aggregate({ _max: { seq: true } })
-					const seq = last._max.seq === null ? first : last._max.seq + 1
+					const last = await tx.claroInvoice.aggregate({
+						where: { series: NEW_SERIES },
+						_max: { seq: true },
+					})
+					const seq = nextSeq(last._max.seq)
+					const number = invoiceNumber({ series: NEW_SERIES, seq })
 					const madeAt = new Date()
 					const pdf = await generateFacturaDePagoPdf({
-						seq,
+						number,
 						madeAt,
 						workMonth,
 						poNumber: po.poNumber ?? "",
@@ -103,14 +115,16 @@ export async function makeInvoice(args: {
 						ivu4,
 						ivu115,
 						total,
+						signature,
 					})
 					const filePath = await saveBuffer(
 						"claro-invoices",
-						`${invoiceNumber(seq)}.pdf`,
+						`${number}.pdf`,
 						pdf,
 					)
 					const row = await tx.claroInvoice.create({
 						data: {
+							series: NEW_SERIES,
 							seq,
 							claroPoId: po.id,
 							docId: po.docId as string,
@@ -126,14 +140,15 @@ export async function makeInvoice(args: {
 					})
 					await tx.auditTrail.create({
 						data: {
-							docId: row.docId,
+							docId: po.docId as string,
 							userId: args.madeById,
 							action: "CLARO_INVOICE_MADE",
 							diffJson: {
 								source: "STAMPED",
-								invoice: invoiceNumber(seq),
+								invoice: number,
 								poNumber: po.poNumber,
 								total,
+								signedBy: SIGNER,
 							},
 						},
 					})
@@ -155,6 +170,78 @@ export async function makeInvoice(args: {
 			throw e
 		}
 	}
+}
+
+/**
+ * An old M19 the system doesn't have, added by hand because a PO or a payment
+ * refers to it. It keeps the amount typed, which may differ from the PO's, and has
+ * no PDF. Rows already read that name it find it now.
+ */
+export async function addOldInvoice(args: {
+	number: string
+	total: number
+	poNumber: string | null
+	loadedAt: Date | null
+	userId: string
+}): Promise<{ id: string }> {
+	const ref = parseInvoiceRef(args.number)
+	if (ref?.series !== OLD_SERIES) throw new ClaroInvoiceError("not_old_number")
+	if (!Number.isFinite(args.total) || args.total <= 0)
+		throw new ClaroInvoiceError("bad_total")
+	const taken = await db.claroInvoice.findUnique({
+		where: { series_seq: { series: OLD_SERIES, seq: ref.seq } },
+		select: { id: true },
+	})
+	if (taken) throw new ClaroInvoiceError("number_taken")
+	const po = args.poNumber
+		? await db.claroPo.findFirst({
+				where: {
+					poNumber: args.poNumber,
+					status: "CONFIRMED",
+					invoice: null,
+				},
+			})
+		: null
+	if (args.poNumber && !po) throw new ClaroInvoiceError("po_not_available")
+	const total = round2(args.total)
+	// The PO's split only when it is the same amount; a total alone otherwise.
+	const samePo = po && round2(num(po.total) ?? 0) === total
+	const number = invoiceNumber({ series: OLD_SERIES, seq: ref.seq })
+	const row = await db.claroInvoice.create({
+		data: {
+			series: OLD_SERIES,
+			seq: ref.seq,
+			claroPoId: po?.id ?? null,
+			docId: po?.docId ?? null,
+			workMonth: "",
+			subtotal: samePo ? (num(po.subtotal) ?? total) : total,
+			ivu4: samePo ? (num(po.ivu4) ?? 0) : 0,
+			ivu115: samePo ? (num(po.ivu115) ?? 0) : 0,
+			total,
+			madeById: args.userId,
+			loadedAt: args.loadedAt,
+			loadedById: args.loadedAt ? args.userId : null,
+			dueDate: args.loadedAt
+				? dueDateOf(args.loadedAt, po?.termsDays ?? 60)
+				: null,
+		},
+	})
+	if (row.docId)
+		await db.auditTrail.create({
+			data: {
+				docId: row.docId,
+				userId: args.userId,
+				action: "CLARO_INVOICE_ADDED_OLD",
+				diffJson: {
+					source: "ENTERED",
+					invoice: number,
+					poNumber: args.poNumber,
+					total,
+				},
+			},
+		})
+	await matchWaitingLines({ series: OLD_SERIES, seq: ref.seq }, args.userId)
+	return { id: row.id }
 }
 
 export async function makeInvoices(
@@ -188,27 +275,28 @@ export async function markLoaded(
 			include: { claroPo: { select: { termsDays: true } } },
 		})
 		if (!inv || inv.loadedAt) continue
-		const terms = inv.claroPo.termsDays ?? 60
+		const terms = inv.claroPo?.termsDays ?? 60
 		const due = dueDateOf(loadedAt, terms)
 		const r = await db.claroInvoice.updateMany({
 			where: { id, loadedAt: null },
 			data: { loadedAt, loadedById: userId, dueDate: due },
 		})
 		if (r.count === 0) continue
-		await db.auditTrail.create({
-			data: {
-				docId: inv.docId,
-				userId,
-				action: "CLARO_INVOICE_LOADED",
-				diffJson: {
-					source: "STAMPED",
-					invoice: invoiceNumber(inv.seq),
-					loadedAt: loadedAt.toISOString(),
-					dueDate: due.toISOString().slice(0, 10),
-					termsDays: terms,
+		if (inv.docId)
+			await db.auditTrail.create({
+				data: {
+					docId: inv.docId,
+					userId,
+					action: "CLARO_INVOICE_LOADED",
+					diffJson: {
+						source: "STAMPED",
+						invoice: invoiceNumber(inv),
+						loadedAt: loadedAt.toISOString(),
+						dueDate: due.toISOString().slice(0, 10),
+						termsDays: terms,
+					},
 				},
-			},
-		})
+			})
 		marked++
 	}
 	return { marked }
@@ -229,7 +317,7 @@ export async function claroInvoiceCounts() {
 export async function listInvoices(tab: "not_loaded" | "in_ariba", take = 300) {
 	const rows = await db.claroInvoice.findMany({
 		where: { loadedAt: tab === "in_ariba" ? { not: null } : null },
-		orderBy: [{ seq: "asc" }],
+		orderBy: [{ series: "asc" }, { seq: "asc" }],
 		take,
 		include: {
 			claroPo: { select: { poNumber: true } },
@@ -238,9 +326,10 @@ export async function listInvoices(tab: "not_loaded" | "in_ariba", take = 300) {
 	})
 	return rows.map((r) => ({
 		id: r.id,
-		number: invoiceNumber(r.seq),
-		poNumber: r.claroPo.poNumber ?? "",
-		avisoNumber: r.doc.avisoNumber,
+		number: invoiceNumber(r),
+		poNumber: r.claroPo?.poNumber ?? "",
+		avisoNumber: r.doc?.avisoNumber ?? null,
+		hasFile: r.filePath !== null,
 		total: Number(r.total),
 		madeAt: r.madeAt.toISOString(),
 		loadedAt: r.loadedAt?.toISOString() ?? null,
@@ -252,20 +341,21 @@ export async function listInvoices(tab: "not_loaded" | "in_ariba", take = 300) {
 export async function zipInvoices(ids: string[]): Promise<Buffer> {
 	const rows = await db.claroInvoice.findMany({
 		where: { id: { in: ids } },
-		orderBy: { seq: "asc" },
+		orderBy: [{ series: "asc" }, { seq: "asc" }],
 	})
 	return zipPackage(
-		rows.map((r) => ({
-			name: `${invoiceNumber(r.seq)}.pdf`,
-			path: r.filePath,
-		})),
+		rows.flatMap((r) =>
+			r.filePath ? [{ name: `${invoiceNumber(r)}.pdf`, path: r.filePath }] : [],
+		),
 	)
 }
 
 export async function invoiceFile(id: string) {
 	const r = await db.claroInvoice.findUnique({
 		where: { id },
-		select: { filePath: true, seq: true },
+		select: { filePath: true, series: true, seq: true },
 	})
-	return r ? { path: r.filePath, name: `${invoiceNumber(r.seq)}.pdf` } : null
+	return r?.filePath
+		? { path: r.filePath, name: `${invoiceNumber(r)}.pdf` }
+		: null
 }

@@ -43,6 +43,7 @@ const po = (n: string, total: number, poDate: string, inv: object | null) => ({
 })
 const invoice = (seq: number, total: number, over: object = {}) => ({
 	id: `i${seq}`,
+	series: "M19",
 	seq,
 	total,
 	madeAt: d("2026-06-24"),
@@ -181,10 +182,10 @@ describe("reports", () => {
 
 	it("Claro aging: 90 days loaded -> paid is 30 days past a 60-day term", () => {
 		const r = claroAging(rows)
-		const paid = r.items.find((i) => i.invoiceNumber === "M19-1")
+		const paid = r.items.find((i) => i.invoiceNumber === "M19-001")
 		expect(paid).toMatchObject({ days: 90, daysLate: 30, open: false })
 		// The other is still open and long past due.
-		expect(r.items.find((i) => i.invoiceNumber === "M19-2")).toMatchObject({
+		expect(r.items.find((i) => i.invoiceNumber === "M19-002")).toMatchObject({
 			open: true,
 			pastDue: true,
 		})

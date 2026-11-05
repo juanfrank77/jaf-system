@@ -12,11 +12,11 @@ vi.mock("./db.server", () => ({
 import { db } from "./db.server"
 import {
 	getAgingAlertDays,
-	getBankInvoicePrefix,
+	getInvoiceSignature,
 	getIvuRate,
 	getLcPbccAdvanceRate,
 	setAgingAlertDays,
-	setBankInvoicePrefix,
+	setInvoiceSignature,
 	setIvuRate,
 	setLcPbccAdvanceRate,
 } from "./system-settings.server"
@@ -105,39 +105,39 @@ describe("system settings", () => {
 		})
 	})
 
-	it("getBankInvoicePrefix defaults to M17 when unset", async () => {
+	it("getInvoiceSignature is null until a signature is stored", async () => {
 		vi.mocked(db.systemSetting.findUnique).mockResolvedValue(null)
-		await expect(getBankInvoicePrefix()).resolves.toBe("M17")
-	})
-
-	it("getBankInvoicePrefix returns the stored value", async () => {
-		vi.mocked(db.systemSetting.findUnique).mockResolvedValue({
-			value: "M18",
-		} as any)
-		await expect(getBankInvoicePrefix()).resolves.toBe("M18")
+		await expect(getInvoiceSignature()).resolves.toBeNull()
 		expect(db.systemSetting.findUnique).toHaveBeenCalledWith({
-			where: { key: "bank_invoice_prefix" },
+			where: { key: "invoice_signature" },
 		})
 	})
 
-	it("getBankInvoicePrefix falls back to M17 when the stored value is blank", async () => {
-		vi.mocked(db.systemSetting.findUnique).mockResolvedValue({
-			value: "   ",
-		} as any)
-		await expect(getBankInvoicePrefix()).resolves.toBe("M17")
-	})
-
-	it("setBankInvoicePrefix upserts the trimmed prefix", async () => {
+	it("setInvoiceSignature keeps a PNG as a data URI in the settings, not in the uploads", async () => {
 		vi.mocked(db.systemSetting.upsert).mockResolvedValue({} as any)
-		await setBankInvoicePrefix(" M18 ", "admin-1")
+		const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+		await setInvoiceSignature(png, "admin-1")
+		const value = `data:image/png;base64,${Buffer.from(png).toString("base64")}`
 		expect(db.systemSetting.upsert).toHaveBeenCalledWith({
-			where: { key: "bank_invoice_prefix" },
-			update: { value: "M18", updatedById: "admin-1" },
-			create: {
-				key: "bank_invoice_prefix",
-				value: "M18",
-				updatedById: "admin-1",
-			},
+			where: { key: "invoice_signature" },
+			update: { value, updatedById: "admin-1" },
+			create: { key: "invoice_signature", value, updatedById: "admin-1" },
 		})
+	})
+
+	it("setInvoiceSignature refuses anything but a PNG or JPEG", async () => {
+		vi.mocked(db.systemSetting.upsert).mockClear()
+		await expect(
+			setInvoiceSignature(new TextEncoder().encode("<svg></svg>"), "admin-1"),
+		).rejects.toThrow("signature_not_image")
+		expect(db.systemSetting.upsert).not.toHaveBeenCalled()
+	})
+
+	it("setInvoiceSignature refuses a file over 1 MB", async () => {
+		const big = new Uint8Array(1024 * 1024 + 1)
+		big.set([0xff, 0xd8, 0xff])
+		await expect(setInvoiceSignature(big, "admin-1")).rejects.toThrow(
+			"signature_too_big",
+		)
 	})
 })

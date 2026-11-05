@@ -7,7 +7,7 @@ import {
 	View,
 } from "@react-pdf/renderer"
 import type { ComponentProps, ReactNode } from "react"
-import type { JobKind } from "~/lib/bank-schedule"
+import { resumenGroups } from "~/lib/bank-schedule"
 
 type Style = Exclude<
 	NonNullable<ComponentProps<typeof View>["style"]>,
@@ -111,7 +111,6 @@ export type BankInvoiceLine = {
 	claroCode: string
 	description: string
 	qty: number
-	unit: string
 	unitPrice: number
 	amount: number
 	accountCode: string
@@ -126,6 +125,8 @@ export type BankInvoiceInput = {
 	supplierNumber: string
 	/** Printed in NUMERO DE FACTURA: the bank invoice number, "M17-" + the aviso #. */
 	avisoNumber: string
+	/** ORDEN TRABAJO PLANTA: the same aviso #, without the "M17-". */
+	workOrderNumber: string
 	/** JAF's own job # (M-3545 style). JAF OS has none yet, so it prints blank. */
 	jobNumber?: string
 	/** ORG. cell (PWOR). */
@@ -140,12 +141,15 @@ export type BankInvoiceInput = {
 	description: string
 	barrio?: string
 	locality: string
-	kind: JobKind
 	lines: BankInvoiceLine[]
 	total: number
 }
 
-const money = (n: number) => n.toFixed(2)
+const money = (n: number) =>
+	n.toLocaleString("en-US", {
+		minimumFractionDigits: 2,
+		maximumFractionDigits: 2,
+	})
 const unitPriceText = (n: number) =>
 	n.toFixed(3).endsWith("0") ? n.toFixed(2) : n.toFixed(3)
 
@@ -400,17 +404,9 @@ function MainBox({ input }: { input: BankInvoiceInput }) {
 			<At left={253} top={142}>
 				$
 			</At>
-			<Check on={input.kind === "INSTALACION"} label="INSTALACION" top={107} />
-			<Check
-				on={input.kind === "CONSTRUCCION"}
-				label="CONSTRUCCION"
-				top={123}
-			/>
-			<Check
-				on={input.kind === "MANTENIMIENTO"}
-				label="MANTENIMIENTO"
-				top={142}
-			/>
+			<Check on={false} label="INSTALACION" top={107} />
+			<Check on={false} label="CONSTRUCCION" top={123} />
+			<Check on label="MANTENIMIENTO" top={142} />
 			<At left={mid} top={168} style={{ fontSize: 7.5 }}>
 				TOTAL A PAGAR $
 			</At>
@@ -428,6 +424,9 @@ function MainBox({ input }: { input: BankInvoiceInput }) {
 			</At>
 			<At left={X_SIGN + 2} top={167}>
 				ORDEN TRABAJO PLANTA:
+			</At>
+			<At left={X_SIGN + 110} top={167} style={styles.bold}>
+				{input.workOrderNumber}
 			</At>
 		</View>
 	)
@@ -456,7 +455,13 @@ function cell(i: number, extra?: Style): Style {
 	return { width: c.w, textAlign: c.align, ...pad, ...extra }
 }
 
+/** Height of a Resumen row; the Total keeps its place while the rows fit above it. */
+const RESUMEN_ROW_H = 9.5
+/** Height of a service line in the table. */
+const LINE_ROW_H = 10.8
+
 function BankInvoice({ input }: { input: BankInvoiceInput }) {
+	const resumen = resumenGroups(input.lines)
 	return (
 		<Document>
 			<Page size="LETTER" orientation="landscape" style={styles.page}>
@@ -504,7 +509,7 @@ function BankInvoice({ input }: { input: BankInvoiceInput }) {
 						<Text style={cell(0)}>{l.claroCode}</Text>
 						<Text style={cell(1, { fontSize: 7 })}>{l.description}</Text>
 						<Text style={cell(2)}>{l.qty.toFixed(2)}</Text>
-						<Text style={cell(3)}>{l.unit}</Text>
+						<Text style={cell(3)}>SR</Text>
 						<Text style={cell(4)}>{unitPriceText(l.unitPrice)}</Text>
 						<Text style={cell(5)}>{money(l.amount)}</Text>
 						<Text style={cell(6)}>{l.accountCode}</Text>
@@ -529,23 +534,55 @@ function BankInvoice({ input }: { input: BankInvoiceInput }) {
 					<Text style={cell(5)}>$ {money(input.total)}</Text>
 				</View>
 				<View wrap={false}>
-					<View style={{ flexDirection: "row", marginTop: 13, fontSize: 8 }}>
-						<Text style={[styles.bold, { width: 88, paddingLeft: 14 }]}>
-							Resumen:
-						</Text>
-						<Text style={{ width: 80 }}>${money(input.total)}</Text>
-						<Text>- - -</Text>
-					</View>
+					{resumen.map((g, i) => (
+						<View
+							key={g.label}
+							style={{
+								flexDirection: "row",
+								marginTop: i === 0 ? 13 : 0,
+								fontSize: 8,
+								height: RESUMEN_ROW_H,
+							}}
+						>
+							<Text style={[styles.bold, { width: 88, paddingLeft: 14 }]}>
+								{i === 0 ? "Resumen:" : ""}
+							</Text>
+							<Text style={{ width: 80 }}>${money(g.total)}</Text>
+							<Text>{g.label}</Text>
+						</View>
+					))}
 					<View
 						style={[
 							styles.bold,
-							{ flexDirection: "row", marginTop: 77, fontSize: 8 },
+							{
+								flexDirection: "row",
+								marginTop: Math.max(
+									6,
+									77 - RESUMEN_ROW_H * Math.max(resumen.length - 1, 0),
+								),
+								fontSize: 8,
+							},
 						]}
 					>
 						<Text style={{ width: 96, paddingLeft: 42 }}>Total</Text>
 						<Text>$ {money(input.total)}</Text>
 					</View>
-					<Text style={[styles.bold, { marginTop: 133, paddingLeft: 176 }]}>
+					<Text
+						style={[
+							styles.bold,
+							{
+								// Firma keeps its place low on the page; a longer job takes up
+								// the room above it, so the form still fits on one page.
+								marginTop: Math.max(
+									10,
+									133 -
+										RESUMEN_ROW_H * Math.max(resumen.length - 1, 0) -
+										LINE_ROW_H * Math.max(input.lines.length - 2, 0),
+								),
+								paddingLeft: 176,
+							},
+						]}
+					>
 						Firma: _______________________
 					</Text>
 				</View>

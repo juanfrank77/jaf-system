@@ -111,6 +111,7 @@ const TABLE_HEADER = [
 const input: BankInvoiceInput = {
 	supplierNumber: "V0000000006",
 	avisoNumber: "10354739",
+	workOrderNumber: "10354739",
 	org: "PWOR",
 	invoiceDate: "08/20/26",
 	contractLabel: "17-xxx",
@@ -119,35 +120,32 @@ const input: BankInvoiceInput = {
 	description: "INST DE LINEA BAJANTE",
 	barrio: "BO TIERRAS NUEVAS",
 	locality: "MANATI",
-	kind: "MANTENIMIENTO",
 	total: 118.45,
 	lines: [
 		{
 			claroCode: "34012039",
 			description: "REMOCION BAJANTE GPON",
 			qty: 1,
-			unit: "EA",
 			unitPrice: 23,
 			amount: 23,
-			accountCode: "",
+			accountCode: "610",
 			subAct: "",
 			dept: "012",
 			profitCenter: "-",
-			act: "",
+			act: "X",
 			costCenter: "641",
 		},
 		{
 			claroCode: "34012040",
 			description: "REEMPLAZO DE BAJANTE FRONTAL",
 			qty: 1,
-			unit: "EA",
 			unitPrice: 95.45,
 			amount: 95.45,
-			accountCode: "",
+			accountCode: "630",
 			subAct: "",
 			dept: "012",
 			profitCenter: "-",
-			act: "",
+			act: "2",
 			costCenter: "641",
 		},
 	],
@@ -200,37 +198,55 @@ describe("generateBankInvoicePdf", () => {
 		expect(pageCount(bytes)).toBe(1)
 	})
 
-	it("X mark appears exactly once adjacent to checked job kind label", async () => {
-		const kinds: Array<BankInvoiceInput["kind"]> = [
-			"INSTALACION",
-			"CONSTRUCCION",
-			"MANTENIMIENTO",
-		]
+	it("MANTENIMIENTO is always the box checked (box 11)", async () => {
+		const bytes = await generateBankInvoicePdf({
+			...input,
+			lines: input.lines.map((l) => ({ ...l, act: "" })),
+		})
+		const tokens = extractTextTokensInOrder(bytes)
+		expect(tokens.filter((t) => t === "X")).toHaveLength(1)
+		// react-pdf writes the X right before its own label.
+		const after = tokens.slice(tokens.indexOf("X") + 1).join("")
+		expect(after.startsWith("MANTENIMIENTO")).toBe(true)
+	})
 
-		for (const kind of kinds) {
-			const bytes = await generateBankInvoicePdf({ ...input, kind })
-			const tokens = extractTextTokensInOrder(bytes)
+	it("prints the Aviso again as ORDEN TRABAJO PLANTA (box 13)", async () => {
+		const text = fullText(
+			await generateBankInvoicePdf({
+				...input,
+				avisoNumber: "M17-10354739",
+			}),
+		)
+		expect(text).toContain("M17-10354739")
+		expect(text).toContain("ORDEN TRABAJO PLANTA:10354739")
+	})
 
-			// X should appear exactly once
-			const xCount = tokens.filter((t) => t === "X").length
-			expect(xCount).toBe(1)
+	it("prints A/C and ACT per line, and U/M as SR like JAF's real invoices", async () => {
+		const text = fullText(await generateBankInvoicePdf(input))
+		expect(text).toContain("1.00SR23.0023.00610012-X641")
+		expect(text).toContain("1.00SR95.4595.45630012-2641")
+	})
 
-			// react-pdf fragments text in reading order with the X immediately
-			// BEFORE its own label, so join the tokens that follow the X. Every
-			// token holds at least one character, so kind.length tokens always
-			// cover the whole label however finely it is fragmented.
-			const xIndex = tokens.indexOf("X")
-			expect(xIndex).toBeGreaterThanOrEqual(0)
-			const after = tokens.slice(xIndex + 1, xIndex + 1 + kind.length).join("")
-			expect(after.length).toBeGreaterThan(0)
+	it("Resumen lists every A/C and ACT group with its total, then the Total (boxes 19, 20)", async () => {
+		const text = fullText(await generateBankInvoicePdf(input))
+		expect(text).toContain("Resumen:$23.00610- - -X")
+		expect(text).toContain("$95.45630- - -2")
+	})
 
-			// The text right after the single X is the rendered kind's label...
-			expect(after.startsWith(kind)).toBe(true)
-			// ...and not either of the other two labels.
-			for (const otherKind of kinds.filter((k) => k !== kind)) {
-				expect(after.startsWith(otherKind)).toBe(false)
-			}
-		}
+	it("an eleven-line job with seven Resumen groups stays on one page, like the sample", async () => {
+		const acts = ["2", "X", "C", "M", "R", "1", "3"]
+		const lines = Array.from({ length: 11 }, (_, i) => ({
+			...input.lines[0],
+			claroCode: String(34000000 + i),
+			act: acts[i % acts.length],
+		}))
+		expect(pageCount(await generateBankInvoicePdf({ ...input, lines }))).toBe(1)
+	})
+
+	it("carries no signature: boxes 21 and 22 stay blank", async () => {
+		const bytes = await generateBankInvoicePdf(input)
+		expect(bytes.toString("latin1")).not.toContain("/Subtype /Image")
+		expect(fullText(bytes)).toContain("Firma: ____")
 	})
 
 	it("prints the plain aviso as the invoice number, and the total", async () => {
@@ -286,11 +302,9 @@ describe("generateBankInvoicePdf", () => {
 		const text = fullText(await generateBankInvoicePdf(input))
 		expect(text).toContain(TABLE_HEADER)
 		expect(text).toContain(
-			"34012039REMOCION BAJANTE GPON1.00EA23.0023.00012-641",
+			"34012039REMOCION BAJANTE GPON1.00SR23.0023.00610012-X641",
 		)
-		expect(text).toContain(
-			"Total$ 118.45Resumen:$118.45- - -Total$ 118.45Firma: ",
-		)
+		expect(text).toContain("Total$ 118.45")
 	})
 
 	it("handles duplicate claroCode without React key warnings", async () => {

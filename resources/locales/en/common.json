@@ -1078,17 +1078,18 @@
 			"invalid_tolerance": "Tolerance must be a non-negative number.",
 			"unknown_intent": "Unknown action.",
 			"invalid_lc_pbcc_rate": "Enter a rate greater than 0 and no greater than 1.",
-			"invalid_bank_prefix": "Use 1–8 letters or digits.",
+			"invalid_bank_prefix": "Use only letters, digits and dashes.",
 			"invalid_invoice_codes": "Use letters, digits or dashes for the codes, and a whole number from 1 for the job number.",
 			"invalid_pay_day": "Choose a day of the week.",
-			"invalid_pbcc_email": "Enter a valid email address."
+			"invalid_pbcc_email": "Enter valid email addresses, separated by commas.",
+			"signature_not_image": "The signature must be a PNG or JPEG image.",
+			"signature_too_big": "The signature file must be under 1 MB."
 		},
 		"lc_pbcc_heading": "LC/PBCC advance rate",
 		"lc_pbcc_description": "PBCC advance is currently {current}% of the verified invoice total. Keep IVU separate.",
 		"lc_pbcc_label": "Advance rate (decimal)",
-		"bank_prefix_heading": "Bank invoice prefix",
-		"bank_prefix_description": "Contract prefix on bank invoice numbers, e.g. M17 gives M17-10354739. Current: {{current}}.",
-		"bank_prefix_label": "Prefix",
+		"bank_prefix_heading": "PBCC invoices",
+		"bank_prefix_description": "M17 invoices are always numbered M17- plus the Aviso, e.g. M17-10354739.",
 		"bank_contract_label": "Contract number",
 		"bank_contract_description": "Lissette's contract number with PBCC, printed as Contrato Núm. on every invoice. Leave blank to print the placeholder.",
 		"pay_day_heading": "Pay day",
@@ -1103,8 +1104,12 @@
 			"5": "Friday",
 			"6": "Saturday"
 		},
-		"pbcc_email_label": "PBCC email address",
-		"pbcc_email_description": "Where Send to PBCC goes."
+		"pbcc_email_label": "PBCC email addresses",
+		"pbcc_email_description": "Where Send to PBCC goes. One or several, separated by commas.",
+		"signature_heading": "Signature on Claro invoices",
+		"signature_description": "Lissette's signature. It is stamped on each Claro invoice when the invoice is made, beside Certificado por and on Firma, and on nothing else. It never goes on an M17.",
+		"signature_missing": "No signature yet: Claro invoices cannot be made until one is added.",
+		"signature_label": "Signature image (PNG or JPEG)"
 	},
 	"admin_catalog": {
 		"title": "Service Catalog",
@@ -2804,7 +2809,23 @@
 		"made_summary": "Made {{made}} invoices; {{failed}} could not be made.",
 		"marked_summary": "Marked {{count}} invoices as loaded in Ariba.",
 		"errors": {
-			"none_selected": "Select at least one row."
+			"none_selected": "Select at least one row.",
+			"no_signature": "Lissette's signature is not in Admin › Settings yet, so nothing was made. Invoices never go out unsigned.",
+			"not_old_number": "Enter an old number, like M19-3440.",
+			"number_taken": "That M19 number is already in the system.",
+			"po_not_available": "That PO is not a confirmed PO waiting for an invoice.",
+			"bad_total": "Enter the invoice's amount."
+		},
+		"old": {
+			"heading": "Add an old M19",
+			"description": "For an invoice made before the system, when a PO or a Payment Advice refers to one it doesn't have. The PO is optional. It gets no PDF and no signature.",
+			"number": "Old number",
+			"amount": "Invoice total",
+			"po": "PO # (optional)",
+			"loaded_on": "Loaded in Ariba on (optional)",
+			"add": "Add old M19",
+			"added": "Added {{number}}. Any Payment Advice row that names it was matched.",
+			"link": "Has an old M19"
 		}
 	},
 	"payment_advice": {
@@ -2827,6 +2848,7 @@
 		"apply": "Apply payments",
 		"unmatched_kept": "Unmatched rows are kept and never dropped.",
 		"invoice_number": "Invoice number",
+		"add_old": "Add old M19",
 		"link": "Link",
 		"reason": "Reason",
 		"ja_check_hint": "No installer invoice with this number (or it is voided or on hold). Needs a person to check.",

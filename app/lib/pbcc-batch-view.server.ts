@@ -1,4 +1,4 @@
-import { bankInvoiceNumber } from "~/lib/bank-schedule"
+import { BANK_INVOICE_PREFIX, bankInvoiceNumber } from "~/lib/bank-schedule"
 import { db } from "~/lib/db.server"
 import { PBCC_BATCH_CAPACITY } from "~/lib/finance-home"
 import { BATCH_ROW_ORDER, rowAmounts } from "~/lib/pbcc-batch.server"
@@ -8,7 +8,6 @@ import {
 	type BatchView,
 	batchStatus,
 } from "~/lib/pbcc-batch-view"
-import { getBankInvoicePrefix } from "~/lib/system-settings.server"
 import { uploadHref } from "~/lib/upload-href"
 
 /** "025 ALEXIS DIAZ": the brigade # the Aviso is paid through, then its name. */
@@ -24,7 +23,7 @@ function brigadeText(
 export async function loadBatchView(
 	batchId: string,
 ): Promise<BatchView | null> {
-	const [batch, docs, prefix] = await Promise.all([
+	const [batch, docs] = await Promise.all([
 		db.bankSchedule.findUnique({ where: { id: batchId } }),
 		db.jafInvoice.findMany({
 			where: { bankScheduleId: batchId },
@@ -33,7 +32,6 @@ export async function loadBatchView(
 				brigade: { select: { code: true, name: true, leadName: true } },
 			},
 		}),
-		getBankInvoicePrefix(),
 	])
 	if (!batch) return null
 	return {
@@ -57,7 +55,7 @@ export async function loadBatchView(
 				avisoNumber: doc.avisoNumber,
 				brigade: brigadeText(doc.brigade),
 				invoiceNumber: bankInvoiceNumber(
-					prefix,
+					BANK_INVOICE_PREFIX,
 					doc.avisoNumber || doc.controlNumber,
 				),
 				subtotal: amounts.subtotal,

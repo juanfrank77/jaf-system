@@ -93,3 +93,21 @@ it("the pre-cert callout makes the sub-contractor's signature optional", () => {
 		/firma del subcontratista es opcional/,
 	)
 })
+
+describe("placeholders", () => {
+	// i18next only fills {{name}}: a single-brace {name} reaches the screen as is.
+	const SINGLE_BRACE = /(?<!\{)\{[a-zA-Z_]+\}(?!\})/
+
+	function singleBraceKeys(obj: unknown, prefix = ""): string[] {
+		if (typeof obj === "string") return SINGLE_BRACE.test(obj) ? [prefix] : []
+		if (typeof obj !== "object" || obj === null) return []
+		return Object.entries(obj).flatMap(([k, v]) =>
+			singleBraceKeys(v, prefix ? `${prefix}.${k}` : k),
+		)
+	}
+
+	it("no string uses a single-brace placeholder", () => {
+		expect(singleBraceKeys(en)).toEqual([])
+		expect(singleBraceKeys(es)).toEqual([])
+	})
+})

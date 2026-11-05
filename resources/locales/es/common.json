@@ -1086,7 +1086,7 @@
 			"signature_too_big": "El archivo de la firma debe pesar menos de 1 MB."
 		},
 		"lc_pbcc_heading": "Tasa de anticipo LC/PBCC",
-		"lc_pbcc_description": "El anticipo de PBCC es actualmente {current}% del total de factura verificado. IVU se mantiene separado.",
+		"lc_pbcc_description": "El anticipo de PBCC es actualmente {{current}}% del total de factura verificado. IVU se mantiene separado.",
 		"lc_pbcc_label": "Tasa de anticipo (decimal)",
 		"bank_prefix_heading": "Facturas a PBCC",
 		"bank_prefix_description": "Las facturas M17 siempre se numeran M17- más el Aviso, p. ej. M17-10354739.",

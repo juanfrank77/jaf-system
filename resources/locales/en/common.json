@@ -1086,7 +1086,7 @@
 			"signature_too_big": "The signature file must be under 1 MB."
 		},
 		"lc_pbcc_heading": "LC/PBCC advance rate",
-		"lc_pbcc_description": "PBCC advance is currently {current}% of the verified invoice total. Keep IVU separate.",
+		"lc_pbcc_description": "PBCC advance is currently {{current}}% of the verified invoice total. Keep IVU separate.",
 		"lc_pbcc_label": "Advance rate (decimal)",
 		"bank_prefix_heading": "PBCC invoices",
 		"bank_prefix_description": "M17 invoices are always numbered M17- plus the Aviso, e.g. M17-10354739.",

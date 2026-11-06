@@ -719,6 +719,137 @@ describe("PO inbox", () => {
 		).toBe(1)
 	})
 
+	it("two copies of one PO read in parallel end with one superseded and one reviewable", async () => {
+		const { user, avisoNumber } = await setup()
+		const number = String(4930000000 + Math.floor(Math.random() * 99999999))
+		const r = read({
+			avisoCandidates: [avisoNumber],
+			poNumber: number,
+			statedPages: 2,
+		})
+		const tagS = runToken("race-short")
+		const tagF = runToken("race-full")
+		const [s, f] = await ingestPoFiles(
+			[
+				{ name: "s.pdf", bytes: pdf(tagS, 1) },
+				{ name: "f.pdf", bytes: pdf(tagF, 2) },
+			],
+			user.id,
+		)
+		t.track("claroPo", { id: s })
+		t.track("claroPo", { id: f })
+		// Both reads finish together, so each copy is checked while the other is
+		// still being read.
+		let arrived = 0
+		let release: () => void = () => {}
+		const both = new Promise<void>((res) => {
+			release = res
+		})
+		const reader: PoReader = async () => {
+			if (++arrived === 2) release()
+			await both
+			return r
+		}
+		await processPending(reader, 2)
+		const rows = await db.claroPo.findMany({ where: { id: { in: [s, f] } } })
+		const short = rows.find((x) => x.id === s)
+		const full = rows.find((x) => x.id === f)
+		expect(short?.status).toBe("SUPERSEDED")
+		expect(short?.supersededById).toBe(f)
+		expect(full?.status).toBe("READY")
+	})
+
+	it("the same file again re-checks the live row it reuses", async () => {
+		const { user, avisoNumber, doc } = await setup()
+		const number = String(4940000000 + Math.floor(Math.random() * 99999999))
+		// An earlier copy stopped only on missing pages no longer counts as the original.
+		const short = await db.claroPo.create({
+			data: {
+				poNumber: number,
+				statedPages: 2,
+				filePages: 1,
+				filePath: "x",
+				fileName: "x.pdf",
+				fileHash: runToken("h"),
+				status: "BLOCKED",
+				checks: [{ code: "pages_missing", severity: "blocked" }],
+				docId: doc.id,
+				uploadedById: user.id,
+				receivedAt: new Date(Date.now() - 60_000),
+			},
+		})
+		t.track("claroPo", short)
+		const tag = runToken("reuse")
+		const f = { name: "b.pdf", bytes: pdf(tag, 2) }
+		const [b] = await ingestPoFiles([f], user.id)
+		t.track("claroPo", { id: b })
+		await processPending(
+			readerOf({
+				[tag]: read({
+					avisoCandidates: [avisoNumber],
+					poNumber: number,
+					statedPages: 2,
+				}),
+			}),
+			1,
+		)
+		// Stored under the older rule: a duplicate of the short copy.
+		await db.claroPo.update({
+			where: { id: short.id },
+			data: { status: "BLOCKED", supersededById: null },
+		})
+		await db.claroPo.update({
+			where: { id: b },
+			data: {
+				status: "BLOCKED",
+				checks: [{ code: "duplicate", severity: "blocked", detail: number }],
+			},
+		})
+		const [again] = await ingestPoFiles([f], user.id)
+		expect(again).toBe(b)
+		const row = await db.claroPo.findUniqueOrThrow({ where: { id: b } })
+		expect((row.checks as { code: string }[]).map((c) => c.code)).not.toContain(
+			"duplicate",
+		)
+		expect(row.status).toBe("READY")
+		expect(
+			(await db.claroPo.findUniqueOrThrow({ where: { id: short.id } })).status,
+		).toBe("SUPERSEDED")
+	})
+
+	it("a short copy of a confirmed PO can be discarded though its pages are missing too", async () => {
+		const { user, avisoNumber } = await setup()
+		const number = String(4950000000 + Math.floor(Math.random() * 99999999))
+		const tagA = runToken("conf-full")
+		const [a] = await ingestPoFiles(
+			[{ name: "a.pdf", bytes: pdf(tagA, 2) }],
+			user.id,
+		)
+		t.track("claroPo", { id: a })
+		const r = read({
+			avisoCandidates: [avisoNumber],
+			poNumber: number,
+			statedPages: 2,
+		})
+		await processPending(readerOf({ [tagA]: r }), 1)
+		await confirmPo(a, user.id)
+		const tagB = runToken("conf-short")
+		const [b] = await ingestPoFiles(
+			[{ name: "b.pdf", bytes: pdf(tagB, 1) }],
+			user.id,
+		)
+		t.track("claroPo", { id: b })
+		await processPending(readerOf({ [tagB]: r }), 1)
+		const before = await db.claroPo.findUniqueOrThrow({ where: { id: b } })
+		const codes = (before.checks as { code: string }[]).map((c) => c.code)
+		expect(codes).toContain("pages_missing")
+		expect(codes).toContain("duplicate")
+		expect(await discardPo(b, user.id)).toBe(a)
+		const row = await db.claroPo.findUniqueOrThrow({ where: { id: b } })
+		expect(row.status).toBe("SUPERSEDED")
+		expect(row.supersededById).toBe(a)
+	})
+
 	it("discardPo refuses a PO that is not a duplicate", async () => {
 		const { user, avisoNumber } = await setup()
 		const tag = runToken("lone")

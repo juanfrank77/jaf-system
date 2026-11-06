@@ -27,6 +27,7 @@ import {
 	ingestPoFiles,
 	kickProcessing,
 	PoError,
+	recheckPo,
 	rereadPo,
 } from "~/lib/po-inbox.server"
 import { HARD_STOPS } from "~/lib/po-reading"
@@ -39,6 +40,9 @@ const VIEWS: View[] = ["review", "generate", "submit"]
 
 export async function loader({ request, params }: Route.LoaderArgs) {
 	await requireRole(request, ["FINANCE", "ADMIN"])
+	// Checked again on opening: a PO checked under an older rule, or beside a
+	// copy still being read, may be stuck on a verdict that no longer holds.
+	await recheckPo(params.id)
 	const po = await loadClaroPo(params.id)
 	if (!po) throw new Response("Not Found", { status: 404 })
 	const self = `/finance/claro/${po.id}`
@@ -46,7 +50,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	if (po.status === "SUPERSEDED" && po.supersededById)
 		throw redirect(`/finance/claro/${po.supersededById}`)
 	const { step } = po
-	if (step === 1) return { view: "reading" as const, step, po }
+	if (step === 1) {
+		// A read left behind by a restart is only taken up again by a drain.
+		kickProcessing()
+		return { view: "reading" as const, step, po }
+	}
 	const raw = new URL(request.url).searchParams.get("step")
 	if (raw === "close") throw redirect("/finance/claro/close")
 	const asked = VIEWS.find((v) => v === raw)

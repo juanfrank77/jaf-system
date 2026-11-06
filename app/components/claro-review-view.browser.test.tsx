@@ -188,5 +188,34 @@ describe("ClaroReviewView", () => {
 		expect(
 			screen.queryByRole("button", { name: "Discard this copy" }),
 		).toBeNull()
+		// The way forward the message names: read it again.
+		expect(
+			screen.getByRole("button", { name: "Read again" }),
+		).toBeInTheDocument()
+	})
+
+	it("a short copy of a PO already loaded offers the discard beside the upload", async ({
+		renderStub,
+	}) => {
+		await render(renderStub, {
+			...base,
+			status: "BLOCKED",
+			statedPages: 2,
+			checks: [
+				{ code: "duplicate", severity: "blocked", detail: "4500526054" },
+				{ code: "pages_missing", severity: "blocked", detail: "1 of 2" },
+			],
+			original: { id: "po0", poNumber: "4500526054" },
+		})
+		await screen.findByTestId("check-duplicate")
+		expect(
+			screen.getByRole("button", { name: "Discard this copy" }),
+		).toBeInTheDocument()
+		expect(
+			screen.getByRole("link", { name: "Open the existing PO" }),
+		).toHaveAttribute("href", "/finance/claro/po0")
+		expect(
+			screen.getByRole("button", { name: "Upload complete file" }),
+		).toBeInTheDocument()
 	})
 })

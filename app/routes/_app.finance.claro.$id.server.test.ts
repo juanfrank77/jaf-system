@@ -28,6 +28,7 @@ import { db } from "~/lib/db.server"
 import {
 	evaluatePo,
 	ingestPoFiles,
+	kickProcessing,
 	processPending,
 } from "~/lib/po-inbox.server"
 import type { PoReader } from "~/lib/po-reader.server"
@@ -499,6 +500,42 @@ describe("/finance/claro/:id Review", () => {
 		const page = (await load(copy.id)) as { po: { original: unknown } }
 		expect(page.po.original).toBeNull()
 	})
+	it("a copy stored as a duplicate of a short twin is checked again on opening, and can go on", async () => {
+		const number = poNumber()
+		const short = await reviewPo({
+			poNumber: number,
+			extra: {
+				status: "BLOCKED",
+				statedPages: 2,
+				checks: [{ code: "pages_missing", severity: "blocked" }],
+				receivedAt: new Date(Date.now() - 60_000),
+			},
+		})
+		// Written under the older rule, when any earlier copy counted.
+		const copy = await reviewPo({
+			poNumber: number,
+			extra: {
+				status: "BLOCKED",
+				checks: [{ code: "duplicate", severity: "blocked", detail: number }],
+			},
+		})
+		const page = (await load(copy.id)) as {
+			view: string
+			po: { status: string; checks: { code: string }[] }
+		}
+		expect(page.view).toBe("review")
+		expect(codes(page.po.checks)).not.toContain("duplicate")
+		expect(page.po.status).toBe("READY")
+		const old = await db.claroPo.findUniqueOrThrow({ where: { id: short.id } })
+		expect(old.status).toBe("SUPERSEDED")
+		expect(old.supersededById).toBe(copy.id)
+		const res = await post(copy.id, {
+			intent: "generate",
+			workMonth: "2026-08",
+		})
+		expect(location(res)).toBe(`/finance/claro/${copy.id}?step=generate`)
+	})
+
 	it("a rate already on the PO's lines is kept on save; a new odd rate is not", async () => {
 		const odd = await reviewPo({
 			extra: {
@@ -653,10 +690,17 @@ describe("/finance/claro/:id step guard", () => {
 				},
 			}),
 		)
+		vi.mocked(kickProcessing).mockClear()
 		expect(await load(po.id, "?step=review")).toMatchObject({
 			view: "reading",
 			step: 1,
 		})
+		// A read left behind by a restart is picked up again from here.
+		expect(kickProcessing).toHaveBeenCalled()
+		vi.mocked(kickProcessing).mockClear()
+		const done = await reviewPo()
+		await load(done.id)
+		expect(kickProcessing).not.toHaveBeenCalled()
 	})
 })
 

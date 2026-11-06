@@ -39,6 +39,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 		fileName: p.fileName,
 		step: claroStepOf(p),
 	}))
+	// A read left behind by a restart is only taken up again by a drain.
+	if (queue.some((r) => r.step === 1)) kickProcessing()
 	// Back from Submit: the invoice just filed and its Claro clock.
 	const submittedId = new URL(request.url).searchParams.get("submitted")
 	const inv = submittedId

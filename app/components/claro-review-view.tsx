@@ -18,7 +18,6 @@ import {
 	checkRows,
 	fieldsToFix,
 	hasCheck,
-	onlyDuplicateStops,
 	type ReviewField,
 } from "~/lib/claro-po-view"
 import { HARD_STOPS } from "~/lib/po-reading"
@@ -122,8 +121,11 @@ export function ClaroReviewView({
 	if (noAviso) toFix.add("avisoNumber")
 	const hardStop = po.checks.some((c) => HARD_STOPS.has(c.code))
 	const pagesMissing = hasCheck(po.checks, "pages_missing")
-	const duplicate = onlyDuplicateStops(po.checks)
+	// Beside missing pages too: a short copy of a PO already loaded is discarded.
+	const duplicate = hasCheck(po.checks, "duplicate")
 	const unreadable = !!po.readError || hasCheck(po.checks, "unreadable")
+	// A duplicate whose original cannot be found is read again.
+	const canReread = unreadable || (duplicate && !po.original)
 	const canGenerate = !hardStop && !po.invoice && !noAviso
 	const askReasons = canGenerate && !readOnly
 	// The money header is what the PO printed (a header edit states it); what
@@ -335,7 +337,7 @@ export function ClaroReviewView({
 						</Callout>
 					)}
 
-					{unreadable && !readOnly && (
+					{canReread && !readOnly && (
 						<Form method="post">
 							<input type="hidden" name="intent" value="reread" />
 							<Button type="submit" variant="outline" disabled={busy}>

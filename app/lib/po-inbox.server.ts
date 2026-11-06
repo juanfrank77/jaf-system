@@ -61,6 +61,8 @@ export async function ingestPoFiles(
 			select: { id: true },
 		})
 		if (existing) {
+			// Checked again: it may have been checked under an older rule.
+			await recheckPo(existing.id)
 			ids.push(existing.id)
 			continue
 		}
@@ -441,12 +443,14 @@ export async function processPending(
 	reader: PoReader = getPoReader(),
 	size = POOL_SIZE,
 ): Promise<void> {
+	const read: string[] = []
 	const worker = async () => {
 		for (;;) {
 			const id = await claimNext()
 			if (!id) return
 			try {
 				await readPo(id, reader)
+				read.push(id)
 			} catch {
 				await db.claroPo
 					.update({
@@ -458,6 +462,9 @@ export async function processPending(
 		}
 	}
 	await Promise.all(Array.from({ length: size }, worker))
+	// Two copies of one PO read side by side each saw the other still being
+	// read; now that both are read, look at them again.
+	for (const id of read) await recheckPo(id).catch(() => {})
 }
 
 let draining: Promise<void> | null = null
@@ -586,6 +593,25 @@ export async function fixPo(
 export type PoOverride = { check: PoCheckCode; reason: string }
 
 const REVIEWABLE = ["READY", "NEEDS_LOOK", "BLOCKED", "UNMATCHED"] as const
+
+/**
+ * Run the checks again on a PO under review, as a read does (a complete copy
+ * replaces the short ones). A row checked under an older rule, or beside a
+ * twin still being read, is put right this way. A row the reader failed on
+ * keeps its verdict until it is read again or saved.
+ */
+export async function recheckPo(id: string): Promise<void> {
+	const row = await db.claroPo.findUnique({
+		where: { id },
+		select: { status: true, readError: true },
+	})
+	if (
+		row &&
+		!row.readError &&
+		(REVIEWABLE as readonly string[]).includes(row.status)
+	)
+		await evaluatePo(id, { supersede: true })
+}
 
 /** Run the checks again on a PO under review; an edit can leave them stale. */
 async function refreshChecks(id: string) {
@@ -770,20 +796,16 @@ export async function findOriginal(row: {
 }
 
 /**
- * Retire a copy stopped only as a duplicate: it is kept, marked Superseded
- * and linked to the original, and leaves the queue. Who and when are kept on
- * the row and in the audit trail. Returns the original's id.
+ * Retire a copy stopped as a duplicate, whatever else stops it (a short copy
+ * of a PO already confirmed has missing pages too): it is kept, marked
+ * Superseded and linked to the original, and leaves the queue. Who and when
+ * are kept on the row and in the audit trail. Returns the original's id.
  */
 export async function discardPo(id: string, userId: string): Promise<string> {
 	await refreshChecks(id)
 	const row = await db.claroPo.findUniqueOrThrow({ where: { id } })
-	const hard = checksOf(row.checks).filter((c) => HARD_STOPS.has(c.code))
 	const reviewable = (REVIEWABLE as readonly string[]).includes(row.status)
-	if (
-		!reviewable ||
-		hard.length === 0 ||
-		hard.some((c) => c.code !== "duplicate")
-	)
+	if (!reviewable || !checksOf(row.checks).some((c) => c.code === "duplicate"))
 		throw new PoError("not_discardable")
 	const original = await findOriginal(row)
 	if (!original) throw new PoError("not_discardable")

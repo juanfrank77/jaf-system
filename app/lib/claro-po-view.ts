@@ -196,12 +196,6 @@ export function fieldsToFix(checks: PoCheck[]): Set<ReviewField> {
 export const hasCheck = (checks: PoCheck[], code: PoCheckCode) =>
 	checks.some((c) => c.code === code)
 
-/** Only a duplicate stops it, so the copy can be discarded. */
-export function onlyDuplicateStops(checks: PoCheck[]): boolean {
-	const hard = checks.filter((c) => HARD_STOPS.has(c.code))
-	return hard.length > 0 && hard.every((c) => c.code === "duplicate")
-}
-
 export type ClaroDetailError =
 	| "claro.errors.bad_number"
 	| "claro.errors.bad_lines"

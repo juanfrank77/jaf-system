@@ -90,10 +90,13 @@ describe("/finance/claro loader", () => {
 		await seedInvoice(paid.id, true, true)
 		const loaded = await seedPo("CONFIRMED", "loaded")
 		await seedInvoice(loaded.id, false, true)
+		vi.mocked(kickProcessing).mockClear()
 		const { queue } = await loader({
 			request: new Request("http://localhost/finance/claro"),
 			params: {},
 		} as any)
+		// A PO at step 1 gets its read started again (a restart can leave it).
+		expect(kickProcessing).toHaveBeenCalled()
 		const step = (id: string) => queue.find((r) => r.id === id)?.step
 		expect(step(fresh.id)).toBe(1)
 		expect(step(ready.id)).toBe(2)

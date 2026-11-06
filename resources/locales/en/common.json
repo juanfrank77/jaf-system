@@ -3595,7 +3595,8 @@
 				"short": "Short {{diff}}",
 				"already_paid": "Already paid",
 				"unmatched": "Unmatched"
-			}
+			},
+			"mark_reviewed": "Mark statement as reviewed"
 		}
 	}
 }

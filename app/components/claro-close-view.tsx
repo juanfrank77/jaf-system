@@ -165,8 +165,10 @@ function StatementCard({ a, fresh }: { a: Advice; fresh: boolean }) {
 			<Form method="post" className="flex flex-wrap items-center gap-2">
 				<input type="hidden" name="intent" value="apply" />
 				<input type="hidden" name="adviceId" value={a.id} />
-				<Button type="submit" disabled={!a.totalOk || closing === 0}>
-					{t("claro.close.apply")}
+				<Button type="submit" disabled={!a.totalOk}>
+					{closing === 0
+						? t("claro.close.mark_reviewed")
+						: t("claro.close.apply")}
 				</Button>
 				<span className="text-xs text-muted-foreground">
 					{t("claro.close.apply_hint")}

@@ -3595,7 +3595,8 @@
 				"short": "Corto {{diff}}",
 				"already_paid": "Ya pagado",
 				"unmatched": "Sin coincidencia"
-			}
+			},
+			"mark_reviewed": "Marcar estado como revisado"
 		}
 	}
 }

@@ -236,6 +236,122 @@ describe("Claro Close step", () => {
 		expect((await find(adviceId))?.lines[0].result).toBe("MATCHED")
 	}, 90000)
 
+	it("a statement with only an already-paid line, or only an unmatched line, can be marked reviewed", async () => {
+		const a = await m20Invoice()
+		const first = await upload(
+			await pdf([
+				...head(),
+				row(`M20-${a.seq}`, 5920050405, a.total),
+				money(a.total),
+			]),
+		)
+		const apply = (id: string) => {
+			const f = new FormData()
+			f.set("intent", "apply")
+			f.set("adviceId", id)
+			return post(f)
+		}
+		await apply(first.adviceId as string)
+		// The same invoice again on a new statement: already paid.
+		const again = await upload(
+			await pdf([
+				...head(),
+				row(`M20-${a.seq}`, 5920050406, a.total),
+				money(a.total),
+			]),
+		)
+		const againId = again.adviceId as string
+		expect((await find(againId))?.lines[0].result).toBe("ALREADY_PAID")
+		expect(await apply(againId)).toEqual({})
+		expect(await find(againId)).toBeUndefined()
+		// Only an unmatched line.
+		const ref = `M20-${a.seq + 60000}`
+		const un = await upload(
+			await pdf([...head(), row(ref, 5920050407, 55), money(55)]),
+		)
+		const unId = un.adviceId as string
+		const unLine = (await find(unId))?.lines[0]
+		expect(unLine?.result).toBe("UNMATCHED")
+		expect(await apply(unId)).toEqual({})
+		const page = await get()
+		expect(page.advices.some((x) => x.id === unId)).toBe(false)
+		expect(page.unmatched.some((u) => u.id === unLine?.id)).toBe(true)
+	}, 90000)
+
+	it("accept_short needs a reason; a double apply pays nothing twice", async () => {
+		const a = await m20Invoice()
+		const paid = a.total - 10
+		const res = await upload(
+			await pdf([
+				...head(),
+				row(`M20-${a.seq}`, 5920050408, paid),
+				money(paid),
+			]),
+		)
+		const id = res.adviceId as string
+		const apply = new FormData()
+		apply.set("intent", "apply")
+		apply.set("adviceId", id)
+		expect(await post(apply)).toEqual({})
+		const before = await db.claroInvoice.findUniqueOrThrow({
+			where: { id: a.id },
+		})
+		expect(await post(apply)).toMatchObject({
+			errorKey: "payment_advice.errors.already_applied",
+		})
+		const after = await db.claroInvoice.findUniqueOrThrow({
+			where: { id: a.id },
+		})
+		expect(after.paidAt).toEqual(before.paidAt)
+		expect(Number(after.paidNet)).toBe(Number(before.paidNet))
+		const acc = new FormData()
+		acc.set("intent", "accept_short")
+		acc.set("invoiceId", a.id)
+		acc.set("reason", "  ")
+		expect(await post(acc)).toMatchObject({
+			errorKey: "payment_advice.errors.reason_required",
+		})
+		expect(
+			(await db.claroInvoice.findUniqueOrThrow({ where: { id: a.id } }))
+				.shortAcceptedAt,
+		).toBeNull()
+	}, 90000)
+
+	it("a statement with a JA row leaves this screen once the M19 rows are paid", async () => {
+		const a = await m20Invoice()
+		const res = await upload(
+			await pdf([
+				...head(),
+				row(`M20-${a.seq}`, 5920050409, a.total),
+				"JA-1616278 5920042291 03.06.2026 1,399.06 (0.00) 0.00 1,399.06",
+				money(a.total + 1399.06),
+			]),
+		)
+		const id = res.adviceId as string
+		expect(await find(id)).toBeDefined()
+		const apply = new FormData()
+		apply.set("intent", "apply")
+		apply.set("adviceId", id)
+		expect(await post(apply)).toEqual({})
+		expect(
+			(await db.claroInvoice.findUniqueOrThrow({ where: { id: a.id } })).paidAt,
+		).not.toBeNull()
+		// An unmatched JA row is not payable, so it does not hold the statement
+		// open; a matched one would, and listAdvices' desk-done filter still
+		// drops the statement from this screen once the M19 rows are paid.
+		expect(await find(id)).toBeUndefined()
+	}, 90000)
+
+	it("refuses a non-FINANCE role on the action", async () => {
+		vi.mocked(requireRole).mockRejectedValueOnce(
+			new Response("no", { status: 403 }),
+		)
+		const f = new FormData()
+		f.set("intent", "apply")
+		f.set("adviceId", "x")
+		await expect(post(f)).rejects.toMatchObject({ status: 403 })
+	})
+
 	it("refuses a non-FINANCE role", async () => {
 		vi.mocked(requireRole).mockRejectedValueOnce(
 			new Response("no", { status: 403 }),

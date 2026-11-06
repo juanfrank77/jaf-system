@@ -8,7 +8,6 @@ vi.mock("./system-settings.server", () => ({
 
 import {
 	computeFinanceStage,
-	daysInStage,
 	FINANCEABLE_STATUSES,
 	financeLineItems,
 } from "./finance-pipeline.server"
@@ -64,18 +63,6 @@ describe("finance pipeline stages", () => {
 				[{ type: "PBCC_ADVANCE" }],
 			),
 		).not.toBe("CLOSED")
-	})
-
-	it("uses payment dates for payment-stage aging", () => {
-		const date = new Date(Date.now() - 3 * 86400000)
-		const stage = computeFinanceStage(invoice(), false, [
-			{ type: "PBCC_ADVANCE", date },
-		])
-		expect(stage).toBe("WAITING_CLARO_PO")
-		if (!stage) throw new Error("Expected a finance stage")
-		expect(
-			daysInStage(invoice(), stage, null, [{ type: "PBCC_ADVANCE", date }]),
-		).toBeGreaterThanOrEqual(3)
 	})
 })
 

@@ -119,11 +119,11 @@ describe("loadFinanceHome (integration)", () => {
 
 	it("makes all three Arm B boxes live", () => {
 		expect(tile(after, "pos_to_confirm")).toMatchObject({
-			href: "/finance/awaiting-po",
+			href: "/finance/claro",
 		})
 		expect(typeof tile(after, "pos_to_confirm")?.count).toBe("number")
 		expect(tile(after, "invoices_to_load")).toMatchObject({
-			href: "/finance/awaiting-ariba?tab=not_loaded",
+			href: "/finance/claro",
 		})
 		expect(typeof tile(after, "invoices_to_load")?.count).toBe("number")
 		expect(tile(after, "claro_past_due")).toMatchObject({

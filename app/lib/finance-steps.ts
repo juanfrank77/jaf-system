@@ -1,8 +1,9 @@
-// Finance's two arms, one rail each. Arm A is JAF paying its people: a packet
-// arrives in the Inbox and is accepted into the PBCC batch, the batch is sold
-// to PBCC, and the sold Avisos go to Carmen as a payroll request that she pays.
-// The bank's wire is not a step: payroll is paid on schedule regardless. Arm B
-// is Claro paying JAF. Every Finance screen is exactly one step of one arm.
+// Finance's two arms. Arm A is JAF paying its people: a packet arrives in the
+// Inbox and is accepted into the PBCC batch, the batch is sold to PBCC, and the
+// sold Avisos go to Carmen as a payroll request that she pays. The bank's wire
+// is not a step: payroll is paid on schedule regardless. Arm B is Claro paying
+// JAF: its five steps live in claro-steps.ts. Every Arm A screen is exactly
+// one step on this rail.
 export type FinanceStep = "PACKETS" | "LC_REQUEST" | "LISTS"
 
 export const FINANCE_STEPS: FinanceStep[] = ["PACKETS", "LC_REQUEST", "LISTS"]
@@ -18,40 +19,6 @@ export const FINANCE_STEP_LABEL_KEY = {
 	PACKETS: "finance_flow.step.packets",
 	LC_REQUEST: "finance_flow.step.lc_request",
 	LISTS: "finance_flow.step.lists",
-} as const
-
-export type ArmBStep =
-	| "AWAITING_PO"
-	| "AWAITING_ARIBA"
-	| "PAYMENT_ADVICE"
-	| "RECEIVABLES"
-
-export const ARM_B_STEPS: ArmBStep[] = [
-	"AWAITING_PO",
-	"AWAITING_ARIBA",
-	"PAYMENT_ADVICE",
-	"RECEIVABLES",
-]
-
-export const ARM_B_STEP_HREF: Record<ArmBStep, string> = {
-	AWAITING_PO: "/finance/awaiting-po",
-	AWAITING_ARIBA: "/finance/awaiting-ariba",
-	PAYMENT_ADVICE: "/finance/payment-advice",
-	RECEIVABLES: "/finance/receivables",
-}
-
-export const ARM_B_STEP_AVAILABLE: Record<ArmBStep, boolean> = {
-	AWAITING_PO: true,
-	AWAITING_ARIBA: true,
-	PAYMENT_ADVICE: true,
-	RECEIVABLES: true,
-}
-
-export const ARM_B_STEP_LABEL_KEY = {
-	AWAITING_PO: "finance_flow.arm_b.step.awaiting_po",
-	AWAITING_ARIBA: "finance_flow.arm_b.step.awaiting_ariba",
-	PAYMENT_ADVICE: "finance_flow.arm_b.step.payment_advice",
-	RECEIVABLES: "finance_flow.arm_b.step.receivables",
 } as const
 
 /** Which Arm A step a packet's request screen belongs to: sold, or still in the batch. */

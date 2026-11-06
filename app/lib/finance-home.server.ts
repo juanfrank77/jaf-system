@@ -12,11 +12,7 @@ import {
 	financeSendBackIds,
 	stageWhere,
 } from "~/lib/finance-stages.server"
-import {
-	ARM_B_STEP_HREF,
-	FINANCE_STEP_HREF,
-	type FinanceStep,
-} from "~/lib/finance-steps"
+import { FINANCE_STEP_HREF, type FinanceStep } from "~/lib/finance-steps"
 import { pastPayDayCutoff } from "~/lib/pay-day"
 import { displayRequestLabel } from "~/lib/payroll-request-view"
 import { blockedSentJobs } from "~/lib/payroll-run.server"
@@ -207,12 +203,12 @@ export async function loadFinanceHome(
 				overdue: overdueRuns.length,
 			},
 		],
-		// The other Arm B boxes go live with their steps.
+		// Arm B: POs and invoices are worked on the five-step Claro queue.
 		armB: [
 			{
 				key: "pos_to_confirm",
 				count: posToConfirm.count,
-				href: ARM_B_STEP_HREF.AWAITING_PO,
+				href: "/finance/claro",
 				oldestDays: posToConfirm.oldest
 					? ageDays(posToConfirm.oldest.receivedAt, now)
 					: null,
@@ -220,7 +216,7 @@ export async function loadFinanceHome(
 			{
 				key: "invoices_to_load",
 				count: notLoaded._count,
-				href: `${ARM_B_STEP_HREF.AWAITING_ARIBA}?tab=not_loaded`,
+				href: "/finance/claro",
 				oldestDays: notLoaded._min.madeAt
 					? ageDays(notLoaded._min.madeAt, now)
 					: null,

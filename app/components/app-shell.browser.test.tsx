@@ -201,7 +201,7 @@ describe("AppShell", () => {
 		).toBeInTheDocument()
 	})
 
-	it("links PO inbox for FINANCE, now that it is built", async ({
+	it("links Claro invoices for FINANCE, in place of the old Arm B screens", async ({
 		renderStub,
 	}) => {
 		await renderStub({
@@ -219,9 +219,17 @@ describe("AppShell", () => {
 				},
 			],
 		})
-		expect(
-			screen.getAllByRole("link", { name: /PO inbox/, hidden: true }).length,
-		).toBeGreaterThan(0)
+		const claro = screen.getAllByRole("link", {
+			name: "Claro invoices",
+			hidden: true,
+		})
+		expect(claro.length).toBeGreaterThan(0)
+		for (const link of claro)
+			expect(link.getAttribute("href")).toBe("/finance/claro")
+		for (const old of [/PO inbox/, /Payment Advice/, /Receivables/])
+			expect(
+				screen.queryAllByRole("link", { name: old, hidden: true }),
+			).toHaveLength(0)
 	})
 
 	it("shows every nav item for ADMIN", async ({ renderStub }) => {
@@ -247,7 +255,7 @@ describe("AppShell", () => {
 			screen.getByRole("link", { name: "+ Work Order", hidden: true }),
 		).toBeInTheDocument()
 		expect(
-			screen.getByRole("link", { name: "Receivables", hidden: true }),
+			screen.getByRole("link", { name: "Claro invoices", hidden: true }),
 		).toBeInTheDocument()
 		expect(
 			screen.getByRole("link", { name: "Admin Settings", hidden: true }),

@@ -22,7 +22,6 @@ import { deriveSupervisorStage } from "~/lib/supervisor-stage"
 import { loader as dashboardLoader } from "./_app.dashboard"
 import { action as reviewAction } from "./_app.docs.$id_.review"
 import { loader as queueLoader } from "./_app.finance.queue"
-import { loader as receivablesLoader } from "./_app.finance.receivables"
 
 const tracker = makeTracker()
 const docIds: string[] = []
@@ -156,7 +155,7 @@ describe("legacy send-back entries (no resentAt)", () => {
 			(await dashboard("?stage=released")).docs.map((d) => [d.id, d.openLabel]),
 		).toEqual([[doc.id, "RELEASED"]])
 
-		// Finance: not in Returned, not hidden from receivables.
+		// Finance: not in Returned, still on the Finance dashboard.
 		const sent = await financeSendBackIds()
 		expect(sent.returned).not.toContain(doc.id)
 		expect(sent.resent).not.toContain(doc.id)
@@ -170,11 +169,6 @@ describe("legacy send-back entries (no resentAt)", () => {
 			params: {},
 		} as never)
 		expect(queue.jobs.map((j) => j.id)).not.toContain(doc.id)
-		const receivables = (await receivablesLoader({
-			request: new Request("http://localhost/finance/receivables"),
-			params: {},
-		} as never)) as { rows: { id: string }[] }
-		expect(receivables.rows.map((r) => r.id)).toContain(doc.id)
 		const financeDash = await dashboard()
 		expect(financeDash.docs.map((d) => d.id)).toContain(doc.id)
 
@@ -221,10 +215,5 @@ describe("legacy send-back entries (no resentAt)", () => {
 			params: {},
 		} as never)
 		expect(queue.jobs.map((j) => j.id)).toContain(doc.id)
-		const receivables = (await receivablesLoader({
-			request: new Request("http://localhost/finance/receivables"),
-			params: {},
-		} as never)) as { rows: { id: string }[] }
-		expect(receivables.rows.map((r) => r.id)).not.toContain(doc.id)
 	})
 })

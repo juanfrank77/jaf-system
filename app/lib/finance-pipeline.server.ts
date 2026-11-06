@@ -28,20 +28,6 @@ export async function fetchInvoiceTotalContext(): Promise<{
 	return { serviceCodes, codeMap, ivuRate, tolerance }
 }
 
-export const financeStageAlertDays = (
-	stage: FinanceStage,
-	agingAlertDays: number,
-): number | null => {
-	switch (stage) {
-		case "WAITING_CLARO_PO":
-			return agingAlertDays
-		case "IN_CLARO_QUEUE":
-			return agingAlertDays
-		default:
-			return null
-	}
-}
-
 type FinancePayment = {
 	type: string
 	date?: Date | null
@@ -92,67 +78,6 @@ export function computeFinanceStage(
 	return "TO_VERIFY"
 }
 
-function stageAnchorDate(
-	invoice: Pick<
-		JafInvoice,
-		| "supervisorApprovedAt"
-		| "financeVerifiedAt"
-		| "pbccRequestSentAt"
-		| "advanceReceivedAt"
-		| "finalClaroUploadedAt"
-		| "finalPaymentReceivedAt"
-		| "receivableClosedAt"
-	>,
-	stage: FinanceStage,
-	poDate: Date | null | undefined,
-	paymentRecords: readonly FinancePayment[] = [],
-): Date | null {
-	switch (stage) {
-		case "TO_VERIFY":
-			return invoice.supervisorApprovedAt
-		case "PBCC_REQUEST_PENDING":
-			return invoice.financeVerifiedAt
-		case "WAITING_PBCC_FUNDING":
-			return invoice.pbccRequestSentAt
-		case "WAITING_CLARO_PO":
-			return (
-				paymentRecords.find((payment) => payment.type === "PBCC_ADVANCE")
-					?.date ?? invoice.advanceReceivedAt
-			)
-		case "PO_RECEIVED_UPLOAD":
-			return poDate ?? null
-		case "IN_CLARO_QUEUE":
-			return invoice.finalClaroUploadedAt
-		case "READY_TO_CLOSE":
-			return (
-				paymentRecords.find((payment) => payment.type === "CLARO_FINAL")
-					?.date ?? invoice.finalPaymentReceivedAt
-			)
-		case "CLOSED":
-			return invoice.receivableClosedAt
-	}
-}
-
-export function daysInStage(
-	invoice: Pick<
-		JafInvoice,
-		| "supervisorApprovedAt"
-		| "financeVerifiedAt"
-		| "pbccRequestSentAt"
-		| "advanceReceivedAt"
-		| "finalClaroUploadedAt"
-		| "finalPaymentReceivedAt"
-		| "receivableClosedAt"
-	>,
-	stage: FinanceStage,
-	poDate: Date | null | undefined,
-	paymentRecords: readonly FinancePayment[] = [],
-): number {
-	const anchor = stageAnchorDate(invoice, stage, poDate, paymentRecords)
-	if (!anchor) return 0
-	return Math.floor((Date.now() - new Date(anchor).getTime()) / 86400000)
-}
-
 type MaterialsSource = Pick<JafInvoice, "materialsUsed" | "materialsTaken"> &
 	Partial<Pick<JafInvoice, "fieldMaterials">>
 
@@ -190,25 +115,6 @@ export function checkAmountTolerance(
 		withinTolerance: difference <= tolerance,
 		difference,
 	}
-}
-
-export type FinancePipelineRow = {
-	id: string
-	status: DocStatus
-	controlNumber: string
-	avisoNumber: string | null
-	supervisorName: string
-	jobType: string
-	stage: FinanceStage
-	ageDays: number
-	alertDays: number | null
-	isAlert: boolean
-	amount: number
-	missingAvisoPdf: boolean
-	advanceAmount: number | null
-	finalPaymentAmount: number | null
-	poMismatch: boolean
-	poAmount: number | null
 }
 
 export const FINANCEABLE_STATUSES: DocStatus[] = [

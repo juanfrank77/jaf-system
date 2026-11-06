@@ -194,12 +194,10 @@
 		"nav": {
 			"dashboard": "Dashboard",
 			"new_document": "+ Work Order",
-			"receivables": "Receivables",
 			"finance_packets": "Inbox",
 			"finance_lc_request": "PBCC batch",
 			"finance_lists": "Payroll to Carmen",
-			"finance_awaiting_po": "PO inbox",
-			"finance_awaiting_ariba": "Claro invoices",
+			"claro": "Claro invoices",
 			"soon": "Soon",
 			"admin_settings": "Admin Settings",
 			"catalog": "Catalog",
@@ -244,7 +242,6 @@
 			"comptroller_log": "Ledger & reports",
 			"admin_reports": "Reports",
 			"comptroller_brigades": "Brigade list",
-			"finance_payment_advice": "Payment Advice",
 			"finance_avisos": "Aviso records",
 			"finance_ledger": "Ledger & reports",
 			"comptroller_home": "Home",
@@ -1401,52 +1398,6 @@
 			"unknown_intent": "Unknown action."
 		}
 	},
-	"finance_receivables": {
-		"title": "Finance Pipeline",
-		"total_open_one": "{{count}} job",
-		"total_open_other": "{{count}} jobs",
-		"aviso": "Aviso {{number}}",
-		"age_days": "{{count}}d",
-		"amount_label": "Amount",
-		"po_mismatch": "PO mismatch: {{poAmount}}",
-		"missing_aviso_pdf": "Missing Aviso PDF",
-		"verify": "Verify",
-		"generate_pbcc": "Generate PBCC Request",
-		"upload_final_doc": "Upload Final Doc",
-		"record_po": "Record PO",
-		"record_advance": "Record advance",
-		"advance_placeholder": "Advance amount",
-		"payment_date": "Payment date",
-		"payment_note": "Payment note",
-		"record_final": "Record final",
-		"final_placeholder": "Final amount",
-		"close": "Close",
-		"errors": {
-			"invalid_amount": "Invalid amount",
-			"record_both_first": "Record both payments before closing",
-			"payment_role_required": "Only an authorized Finance or Comptroller user can record payments.",
-			"invalid_stage": "This action is not available at the current finance stage.",
-			"invalid_payment": "Enter a valid positive amount and payment date.",
-			"advance_already_recorded": "The PBCC advance is already recorded.",
-			"final_already_recorded": "The final payment is already recorded.",
-			"already_closed": "This receivable is already closed.",
-			"missing_aviso_pdf": "Attach the Aviso PDF before closing.",
-			"unknown_intent": "Unknown action."
-		},
-		"waiting_for_payment": "Waiting for comptroller entry"
-	},
-	"finance": {
-		"stage": {
-			"to_verify": "To Verify",
-			"pbcc_request_pending": "PBCC Request Pending",
-			"waiting_pbcc_funding": "Waiting PBCC Funding",
-			"waiting_claro_po": "Waiting Claro PO",
-			"po_received_upload": "PO Received / Upload",
-			"in_claro_queue": "In Claro Queue",
-			"ready_to_close": "Ready to Close",
-			"closed": "Closed"
-		}
-	},
 	"finance_queue": {
 		"search_placeholder": "Search work order or Aviso #",
 		"supervisor_filter": "Supervisor",
@@ -2328,16 +2279,6 @@
 	"finance_flow": {
 		"aria": "Finance Arm A work loop",
 		"chip_a": "Arm A · Stage {{step}} of {{total}}",
-		"chip_b": "Arm B · {{name}}",
-		"arm_b": {
-			"aria": "Finance Arm B work loop",
-			"step": {
-				"awaiting_po": "PO inbox",
-				"awaiting_ariba": "Claro invoices",
-				"receivables": "Receivables",
-				"payment_advice": "Payment Advice"
-			}
-		},
 		"step": {
 			"packets": "Inbox",
 			"lc_request": "PBCC batch",
@@ -2350,11 +2291,7 @@
 			"lc_request_title": "Stage 2 of 3 · PBCC batch",
 			"lc_request_body": "Every packet you accept joins this batch as its next row; its invoice PDF and Excel row are made for you. Close the batch (or let the 100th packet close it), check it, send the package to PBCC and mark it sent. The packets are then Sold to PBCC and ready for Payroll to Carmen.",
 			"lists_title": "Stage 3 of 3 · Payroll to Carmen",
-			"lists_body": "Avisos sold to PBCC that are not on a request yet, and the requests already made. Create a request from them, check it and send it to Carmen. Carmen pays each brigade in WinPay and ticks it; when every brigade on an Aviso is paid, Arm A is closed for that Aviso. Payroll does not wait for the bank's wire.",
-			"arm_b_receivables_title": "Arm B · Receivables",
-			"arm_b_receivables_body": "Claro paying JAF. Record payments as they land, then close the job once both exist. A half-closed job is normal here, not an error — the job closes for good when Claro's payment is in.",
-			"arm_b_po_title": "Arm B · PO inbox",
-			"arm_b_po_body": "Record the Claro PO against the Aviso, then generate the final Claro document. Several POs per Aviso, and the Awaiting PO and Awaiting Ariba lists, arrive in the next Arm B phase."
+			"lists_body": "Avisos sold to PBCC that are not on a request yet, and the requests already made. Create a request from them, check it and send it to Carmen. Carmen pays each brigade in WinPay and ticks it; when every brigade on an Aviso is paid, Arm A is closed for that Aviso. Payroll does not wait for the bank's wire."
 		}
 	},
 	"warehouse_queue": {
@@ -2704,39 +2641,11 @@
 		"qty": "Qty"
 	},
 	"po_inbox": {
-		"uploaded_today": "{{count}} POs uploaded today",
 		"choose_files": "Choose PO PDFs",
-		"upload": "Upload POs",
-		"confirm_all_green": "Confirm all green ({{count}})",
-		"reading": "Reading {{count}} POs…",
-		"confirmed_summary": "Confirmed {{confirmed}} POs; {{skipped}} left for a look.",
-		"tab": {
-			"ready": "Ready",
-			"needs_look": "Needs a look",
-			"blocked": "Blocked",
-			"unmatched": "Unmatched",
-			"confirmed": "Confirmed"
-		},
-		"empty": "No POs here.",
-		"col": {
-			"po": "PO #",
-			"date": "PO date",
-			"aviso": "Aviso",
-			"total": "Total",
-			"checks": "Checks"
-		},
-		"missing": "Missing",
 		"no_aviso": "No Aviso",
-		"all_passed": "All checks passed",
-		"open": "Open",
-		"fix": "Fix",
-		"link_aviso": "Link Aviso",
-		"confirm": "Confirm",
 		"image": "Purchase order",
 		"open_file": "Open the PO PDF",
-		"pages": "{{have}} of {{of}} pages in the file",
 		"po_title": "PO {{number}}",
-		"n_checks": "{{count}} to check",
 		"read_failed": "The PO could not be read automatically. Type the fields from the PO on the left, or read it again.",
 		"field": {
 			"po": "PO #",
@@ -2754,11 +2663,8 @@
 			"rate": "IVU rate",
 			"ivu": "IVU"
 		},
-		"save_fix": "Save fields",
 		"aviso_money": "This Aviso: JAF billed {{billed}} · already PO'd {{already}} · this PO {{thisPo}}",
-		"confirm_po": "Confirm PO",
 		"reread": "Read again",
-		"back": "← PO inbox",
 		"check": {
 			"lines_sum": "The lines do not add up to the subtotal ({{detail}}).",
 			"totals": "Subtotal plus IVU does not equal the total.",
@@ -2775,7 +2681,6 @@
 		"errors": {
 			"not_pdf": "Only PDF files can be uploaded.",
 			"no_files": "Choose at least one PDF.",
-			"not_confirmable": "This PO cannot be confirmed yet. Fix the checks first.",
 			"incomplete": "The PO needs its number, date and Aviso before it can be confirmed.",
 			"duplicate": "A PO with this number is already confirmed.",
 			"aviso_not_found": "No Aviso with that number.",
@@ -2784,48 +2689,12 @@
 		}
 	},
 	"claro_invoices": {
-		"tab": {
-			"to_make": "To make",
-			"not_loaded": "Not loaded",
-			"in_ariba": "In Ariba"
-		},
 		"col": {
-			"po": "PO #",
-			"aviso": "Aviso",
-			"total": "Total",
 			"work_month": "Work month",
-			"invoice": "Invoice #",
-			"made": "Made",
-			"loaded": "Loaded in Ariba",
-			"due": "Due"
+			"made": "Made"
 		},
-		"empty_to_make": "No confirmed POs are waiting for an invoice.",
-		"empty_not_loaded": "Every invoice made has been loaded in Ariba.",
-		"empty_in_ariba": "No invoice has been loaded in Ariba yet.",
-		"select_row": "Select {{number}}",
-		"make": "Make invoices",
-		"download": "Download selected (zip)",
-		"mark_loaded": "Mark loaded in Ariba",
-		"made_summary": "Made {{made}} invoices; {{failed}} could not be made.",
-		"marked_summary": "Marked {{count}} invoices as loaded in Ariba.",
 		"errors": {
-			"none_selected": "Select at least one row.",
-			"no_signature": "Lissette's signature is not in Admin › Settings yet, so nothing was made. Invoices never go out unsigned.",
-			"not_old_number": "Enter an old number, like M19-3440.",
-			"number_taken": "That M19 number is already in the system.",
-			"po_not_available": "That PO is not a confirmed PO waiting for an invoice.",
-			"bad_total": "Enter the invoice's amount."
-		},
-		"old": {
-			"heading": "Add an old M19",
-			"description": "For an invoice made before the system, when a PO or a Payment Advice refers to one it doesn't have. The PO is optional. It gets no PDF and no signature.",
-			"number": "Old number",
-			"amount": "Invoice total",
-			"po": "PO # (optional)",
-			"loaded_on": "Loaded in Ariba on (optional)",
-			"add": "Add old M19",
-			"added": "Added {{number}}. Any Payment Advice row that names it was matched.",
-			"link": "Has an old M19"
+			"no_signature": "Lissette's signature is not in Admin › Settings yet, so nothing was made. Invoices never go out unsigned."
 		}
 	},
 	"payment_advice": {

@@ -23,7 +23,12 @@ import {
 	computeFinanceStage,
 	financeLineItems,
 } from "~/lib/finance-pipeline.server"
-import { FINANCE_STEPS, pbccStep, stepNumber } from "~/lib/finance-steps"
+import {
+	FINANCE_STEP_HREF,
+	FINANCE_STEPS,
+	pbccStep,
+	stepNumber,
+} from "~/lib/finance-steps"
 import { armAOpenWhere } from "~/lib/payroll-run.server"
 import { rowAmounts } from "~/lib/pbcc-batch.server"
 import { generatePbccRequestPdf } from "~/lib/pdf/pbcc-request.server"
@@ -186,8 +191,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 		doc.poLinks.length > 0,
 		doc.paymentRecords,
 	)
+	// Not ready for a PBCC request: back to the Arm A list the job is on.
 	if (stage !== "PBCC_REQUEST_PENDING") {
-		throw redirect(`/finance/receivables`)
+		throw redirect(FINANCE_STEP_HREF[pbccStep(doc)])
 	}
 
 	const serviceCodes = await db.serviceCode.findMany()

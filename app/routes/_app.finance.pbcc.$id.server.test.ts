@@ -348,6 +348,10 @@ describe("L2 Packet", () => {
 			context: {},
 		} as never).catch((r: unknown) => r)
 		expect(result).toMatchObject({ status: 302 })
+		// Back to its Arm A list (already sold, so Lists), not into Arm B.
+		expect((result as Response).headers.get("Location")).toBe(
+			"/finance/payroll",
+		)
 	})
 
 	it("keeps a swept job's frozen figures when its catalog price and lines change (Review Focus)", async () => {

@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next"
-import { useCheckText } from "~/components/po-inbox-view"
+import { useCheckText } from "~/components/po-check-text"
 import { Badge } from "~/components/ui/badge"
 import { Input } from "~/components/ui/input"
 import type { CheckRow, CheckRowKey, ReviewField } from "~/lib/claro-po-view"

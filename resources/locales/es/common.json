@@ -194,12 +194,10 @@
 		"nav": {
 			"dashboard": "Panel",
 			"new_document": "+ Orden de trabajo",
-			"receivables": "Cuentas por cobrar",
 			"finance_packets": "Bandeja de entrada",
 			"finance_lc_request": "Lote PBCC",
 			"finance_lists": "Nómina a Carmen",
-			"finance_awaiting_po": "Bandeja de POs",
-			"finance_awaiting_ariba": "Facturas Claro",
+			"claro": "Facturas Claro",
 			"soon": "Pronto",
 			"admin_settings": "Configuración de administrador",
 			"catalog": "Catálogo",
@@ -244,7 +242,6 @@
 			"comptroller_log": "Registro e informes",
 			"admin_reports": "Informes",
 			"comptroller_brigades": "Lista de brigadas",
-			"finance_payment_advice": "Aviso de pago",
 			"finance_avisos": "Registros de Avisos",
 			"finance_ledger": "Libro y reportes",
 			"comptroller_home": "Inicio",
@@ -1401,52 +1398,6 @@
 			"unknown_intent": "Acción desconocida."
 		}
 	},
-	"finance_receivables": {
-		"title": "Pipeline de Finanzas",
-		"total_open_one": "{{count}} trabajo",
-		"total_open_other": "{{count}} trabajos",
-		"aviso": "Aviso {{number}}",
-		"age_days": "{{count}}d",
-		"amount_label": "Monto",
-		"po_mismatch": "Discrepancia PO: {{poAmount}}",
-		"missing_aviso_pdf": "Falta PDF del Aviso",
-		"verify": "Verificar",
-		"generate_pbcc": "Generar solicitud PBCC",
-		"upload_final_doc": "Cargar documento final",
-		"record_po": "Registrar PO",
-		"record_advance": "Registrar anticipo",
-		"advance_placeholder": "Monto del anticipo",
-		"payment_date": "Fecha del pago",
-		"payment_note": "Nota del pago",
-		"record_final": "Registrar final",
-		"final_placeholder": "Monto final",
-		"close": "Cerrar",
-		"errors": {
-			"invalid_amount": "Cantidad inválida",
-			"record_both_first": "Registra ambos pagos antes de cerrar",
-			"payment_role_required": "Solo Finanzas, Contraloría o Administración pueden registrar pagos.",
-			"invalid_stage": "Esta acción no está disponible en la etapa financiera actual.",
-			"invalid_payment": "Ingrese un monto positivo y una fecha de pago válidos.",
-			"advance_already_recorded": "El anticipo PBCC ya está registrado.",
-			"final_already_recorded": "El pago final ya está registrado.",
-			"already_closed": "Esta cuenta por cobrar ya está cerrada.",
-			"missing_aviso_pdf": "Adjunte el PDF del Aviso antes de cerrar.",
-			"unknown_intent": "Acción desconocida."
-		},
-		"waiting_for_payment": "Esperando registro de contraloría"
-	},
-	"finance": {
-		"stage": {
-			"to_verify": "Por verificar",
-			"pbcc_request_pending": "Solicitud PBCC pendiente",
-			"waiting_pbcc_funding": "Esperando fondos PBCC",
-			"waiting_claro_po": "Esperando PO de Claro",
-			"po_received_upload": "PO recibido / cargar",
-			"in_claro_queue": "En cola de Claro",
-			"ready_to_close": "Listo para cerrar",
-			"closed": "Cerrado"
-		}
-	},
 	"finance_queue": {
 		"search_placeholder": "Buscar orden de trabajo o Aviso #",
 		"supervisor_filter": "Supervisor",
@@ -2360,16 +2311,6 @@
 	"finance_flow": {
 		"aria": "Ciclo de trabajo de finanzas, Brazo A",
 		"chip_a": "Brazo A · Etapa {{step}} de {{total}}",
-		"chip_b": "Brazo B · {{name}}",
-		"arm_b": {
-			"aria": "Ciclo de trabajo de finanzas, Brazo B",
-			"step": {
-				"awaiting_po": "Bandeja de POs",
-				"awaiting_ariba": "Facturas Claro",
-				"receivables": "Cuentas por cobrar",
-				"payment_advice": "Aviso de pago"
-			}
-		},
 		"step": {
 			"packets": "Bandeja de entrada",
 			"lc_request": "Lote PBCC",
@@ -2382,11 +2323,7 @@
 			"lc_request_title": "Etapa 2 de 3 · Lote PBCC",
 			"lc_request_body": "Cada paquete que aceptas entra a este lote como su siguiente fila; su PDF de factura y su fila del Excel se hacen solos. Cierra el lote (o deja que el paquete 100 lo cierre), verifícalo, envía el paquete a PBCC y márcalo enviado. Los paquetes quedan entonces Vendidos a PBCC y listos para Nómina a Carmen.",
 			"lists_title": "Etapa 3 de 3 · Nómina a Carmen",
-			"lists_body": "Avisos vendidos a PBCC que aún no están en una solicitud, y las solicitudes ya hechas. Crea una solicitud con ellos, revísala y envíala a Carmen. Carmen paga cada brigada en WinPay y la marca; cuando todas las brigadas de un Aviso están pagadas, el Brazo A queda cerrado para ese Aviso. La nómina no espera la transferencia del banco.",
-			"arm_b_receivables_title": "Brazo B · Cuentas por cobrar",
-			"arm_b_receivables_body": "Claro le paga a JAF. Registre los pagos conforme lleguen y luego cierre el trabajo cuando existan ambos. Un trabajo medio cerrado es normal aquí, no un error: el trabajo se cierra definitivamente cuando entra el pago de Claro.",
-			"arm_b_po_title": "Brazo B · Bandeja de POs",
-			"arm_b_po_body": "Registre la PO de Claro contra el Aviso y luego genere el documento final de Claro. Varias PO por Aviso, y las listas de Esperando PO y Esperando Ariba, llegan en la próxima fase del Brazo B."
+			"lists_body": "Avisos vendidos a PBCC que aún no están en una solicitud, y las solicitudes ya hechas. Crea una solicitud con ellos, revísala y envíala a Carmen. Carmen paga cada brigada en WinPay y la marca; cuando todas las brigadas de un Aviso están pagadas, el Brazo A queda cerrado para ese Aviso. La nómina no espera la transferencia del banco."
 		}
 	},
 	"job_flow": {
@@ -2704,39 +2641,11 @@
 		"qty": "Cant."
 	},
 	"po_inbox": {
-		"uploaded_today": "{{count}} POs subidos hoy",
 		"choose_files": "Elegir PDFs de PO",
-		"upload": "Subir POs",
-		"confirm_all_green": "Confirmar todos los verdes ({{count}})",
-		"reading": "Leyendo {{count}} POs…",
-		"confirmed_summary": "{{confirmed}} POs confirmados; {{skipped}} quedan para revisar.",
-		"tab": {
-			"ready": "Listos",
-			"needs_look": "Por revisar",
-			"blocked": "Bloqueados",
-			"unmatched": "Sin Aviso",
-			"confirmed": "Confirmados"
-		},
-		"empty": "No hay POs aquí.",
-		"col": {
-			"po": "PO #",
-			"date": "Fecha del PO",
-			"aviso": "Aviso",
-			"total": "Total",
-			"checks": "Verificaciones"
-		},
-		"missing": "Falta",
 		"no_aviso": "Sin Aviso",
-		"all_passed": "Todo en orden",
-		"open": "Abrir",
-		"fix": "Corregir",
-		"link_aviso": "Enlazar Aviso",
-		"confirm": "Confirmar",
 		"image": "Orden de compra",
 		"open_file": "Abrir el PDF del PO",
-		"pages": "{{have}} de {{of}} páginas en el archivo",
 		"po_title": "PO {{number}}",
-		"n_checks": "{{count}} por revisar",
 		"read_failed": "No se pudo leer el PO automáticamente. Escriba los campos del PO a la izquierda, o léalo de nuevo.",
 		"field": {
 			"po": "PO #",
@@ -2754,11 +2663,8 @@
 			"rate": "Tasa de IVU",
 			"ivu": "IVU"
 		},
-		"save_fix": "Guardar campos",
 		"aviso_money": "Este Aviso: JAF facturó {{billed}} · ya con PO {{already}} · este PO {{thisPo}}",
-		"confirm_po": "Confirmar PO",
 		"reread": "Leer de nuevo",
-		"back": "← Buzón de POs",
 		"check": {
 			"lines_sum": "Las líneas no suman el subtotal ({{detail}}).",
 			"totals": "El subtotal más el IVU no es igual al total.",
@@ -2775,7 +2681,6 @@
 		"errors": {
 			"not_pdf": "Solo se pueden subir archivos PDF.",
 			"no_files": "Elija al menos un PDF.",
-			"not_confirmable": "Este PO aún no se puede confirmar. Corrija las verificaciones primero.",
 			"incomplete": "El PO necesita su número, fecha y Aviso antes de confirmarse.",
 			"duplicate": "Ya hay un PO confirmado con este número.",
 			"aviso_not_found": "No hay un Aviso con ese número.",
@@ -2784,48 +2689,12 @@
 		}
 	},
 	"claro_invoices": {
-		"tab": {
-			"to_make": "Por hacer",
-			"not_loaded": "Sin cargar",
-			"in_ariba": "En Ariba"
-		},
 		"col": {
-			"po": "PO #",
-			"aviso": "Aviso",
-			"total": "Total",
 			"work_month": "Mes del trabajo",
-			"invoice": "Factura #",
-			"made": "Hecha",
-			"loaded": "Cargada en Ariba",
-			"due": "Vence"
+			"made": "Hecha"
 		},
-		"empty_to_make": "No hay POs confirmados esperando factura.",
-		"empty_not_loaded": "Todas las facturas hechas ya se cargaron en Ariba.",
-		"empty_in_ariba": "Aún no se ha cargado ninguna factura en Ariba.",
-		"select_row": "Seleccionar {{number}}",
-		"make": "Hacer facturas",
-		"download": "Descargar seleccionadas (zip)",
-		"mark_loaded": "Marcar cargadas en Ariba",
-		"made_summary": "{{made}} facturas hechas; {{failed}} no se pudieron hacer.",
-		"marked_summary": "{{count}} facturas marcadas como cargadas en Ariba.",
 		"errors": {
-			"none_selected": "Seleccione al menos una fila.",
-			"no_signature": "La firma de Lissette aún no está en Admin › Ajustes, así que no se hizo nada. Las facturas nunca salen sin firma.",
-			"not_old_number": "Escriba un número viejo, como M19-3440.",
-			"number_taken": "Ese número M19 ya está en el sistema.",
-			"po_not_available": "Ese PO no es un PO confirmado en espera de factura.",
-			"bad_total": "Escriba el monto de la factura."
-		},
-		"old": {
-			"heading": "Añadir una M19 vieja",
-			"description": "Para una factura hecha antes del sistema, cuando un PO o un Payment Advice se refiere a una que no tiene. El PO es opcional. No lleva PDF ni firma.",
-			"number": "Número viejo",
-			"amount": "Total de la factura",
-			"po": "PO # (opcional)",
-			"loaded_on": "Cargada en Ariba el (opcional)",
-			"add": "Añadir M19 vieja",
-			"added": "{{number}} añadida. Las filas de Payment Advice que la nombran quedaron enlazadas.",
-			"link": "Tiene una M19 vieja"
+			"no_signature": "La firma de Lissette aún no está en Admin › Ajustes, así que no se hizo nada. Las facturas nunca salen sin firma."
 		}
 	},
 	"payment_advice": {

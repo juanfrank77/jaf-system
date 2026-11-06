@@ -167,7 +167,7 @@ export async function avisoDocuments(docId: string) {
 		...doc.claroPos.map((p) => ({
 			kind: "po" as const,
 			label: `PO ${p.poNumber}`,
-			href: `/finance/awaiting-po/${p.id}/file`,
+			href: `/finance/claro/${p.id}/file`,
 		})),
 		...doc.claroPos.flatMap((p) =>
 			p.invoice?.filePath
@@ -175,7 +175,7 @@ export async function avisoDocuments(docId: string) {
 						{
 							kind: "claro_invoice" as const,
 							label: `Invoice ${invoiceNumber(p.invoice)}`,
-							href: `/finance/awaiting-ariba/${p.invoice.id}/file`,
+							href: `/finance/claro/${p.id}/invoice`,
 						},
 					]
 				: [],

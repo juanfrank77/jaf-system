@@ -83,18 +83,26 @@ describe("navGroupsFor", () => {
 					"/finance/payroll",
 				],
 			],
-			[
-				"arm_b",
-				[
-					"/finance/awaiting-po",
-					"/finance/awaiting-ariba",
-					"/finance/payment-advice",
-					"/finance/receivables",
-					"/finance/avisos",
-					"/finance/ledger",
-				],
-			],
+			["arm_b", ["/finance/claro", "/finance/avisos", "/finance/ledger"]],
 		])
+	})
+
+	it("gives Arm B one Claro entry in place of the four old screens", () => {
+		for (const role of ["FINANCE", "ADMIN"] as const) {
+			const armB = navGroupsFor(role).find((g) => g.key === "arm_b")
+			const claro = armB?.items.filter((i) => i.to.startsWith("/finance/claro"))
+			expect(claro?.map((i) => [i.to, i.labelKey])).toEqual([
+				["/finance/claro", "app_shell.nav.claro"],
+			])
+			const tos = armB?.items.map((i) => i.to) ?? []
+			for (const old of [
+				"/finance/awaiting-po",
+				"/finance/awaiting-ariba",
+				"/finance/payment-advice",
+				"/finance/receivables",
+			])
+				expect(tos, `${role} ${old}`).not.toContain(old)
+		}
 	})
 
 	it("has no disabled placeholder left on the FINANCE menu", () => {
@@ -216,6 +224,25 @@ describe("isNavItemActive", () => {
 		expect(isNavItemActive("/comptroller/paid", at("/comptroller/lists"))).toBe(
 			false,
 		)
+	})
+
+	it("keeps Claro invoices lit on every step of the path", () => {
+		for (const p of [
+			"/finance/claro",
+			"/finance/claro/close",
+			"/finance/claro/po1",
+		])
+			expect(isNavItemActive("/finance/claro", at(p)), p).toBe(true)
+		expect(
+			isNavItemActive(
+				"/finance/claro",
+				at("/finance/claro/po1", "?step=review"),
+			),
+		).toBe(true)
+		expect(isNavItemActive("/finance/claro", at("/finance/avisos"))).toBe(false)
+		expect(
+			isNavItemActive("/finance/claro", at("/comptroller/installers/claro")),
+		).toBe(false)
 	})
 
 	it("keeps Brigade pay lit on the Paid tab and on a request page", () => {

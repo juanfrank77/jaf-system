@@ -70,7 +70,6 @@ export default [
 		route("docs/:id/returns", "routes/_app.docs.$id_.returns.tsx"),
 		route("finance/queue", "routes/_app.finance.queue.tsx"),
 		route("finance/lc-requests", "routes/_app.finance.lc-requests.tsx"),
-		route("finance/receivables", "routes/_app.finance.receivables.tsx"),
 		route("finance/claro", "routes/_app.finance.claro.tsx"),
 		route("finance/claro/close", "routes/_app.finance.claro.close.tsx"),
 		route("finance/claro/:id", "routes/_app.finance.claro.$id.tsx"),
@@ -79,30 +78,21 @@ export default [
 			"finance/claro/:id/invoice",
 			"routes/_app.finance.claro.$id.invoice.tsx",
 		),
-		route("finance/awaiting-po", "routes/_app.finance.awaiting-po.tsx"),
 		route("finance/avisos", "routes/_app.finance.avisos.tsx"),
 		route("finance/avisos/:id", "routes/_app.finance.avisos.$id.tsx"),
 		route("finance/ledger", "routes/_app.finance.ledger.tsx"),
 		route("finance/ledger/export", "routes/_app.finance.ledger.export.tsx"),
-		route("finance/awaiting-ariba", "routes/_app.finance.awaiting-ariba.tsx"),
-		route("finance/payment-advice", "routes/_app.finance.payment-advice.tsx"),
+		// The Payment Advice PDF itself; Close links to it.
 		route(
 			"finance/payment-advice/:id/file",
 			"routes/_app.finance.payment-advice.$id.file.tsx",
 		),
-		route(
-			"finance/awaiting-ariba/zip",
-			"routes/_app.finance.awaiting-ariba.zip.tsx",
-		),
-		route(
-			"finance/awaiting-ariba/:id/file",
-			"routes/_app.finance.awaiting-ariba.$id.file.tsx",
-		),
+		// Old Arm B screens, now redirects into the five-step Claro path.
+		route("finance/receivables", "routes/_app.finance.receivables.tsx"),
+		route("finance/awaiting-po", "routes/_app.finance.awaiting-po.tsx"),
 		route("finance/awaiting-po/:id", "routes/_app.finance.awaiting-po.$id.tsx"),
-		route(
-			"finance/awaiting-po/:id/file",
-			"routes/_app.finance.awaiting-po.$id.file.tsx",
-		),
+		route("finance/awaiting-ariba", "routes/_app.finance.awaiting-ariba.tsx"),
+		route("finance/payment-advice", "routes/_app.finance.payment-advice.tsx"),
 		route("finance/verify/:id", "routes/_app.finance.verify.$id.tsx"),
 		route(
 			"finance/verify/:id/packet.zip",

@@ -25,16 +25,13 @@ import type { Role } from "../../generated/prisma/client"
 export type NavLabelKey =
 	| "app_shell.nav.dashboard"
 	| "app_shell.nav.new_document"
-	| "app_shell.nav.receivables"
 	| "app_shell.nav.finance_packets"
 	| "app_shell.nav.finance_returned"
 	| "app_shell.nav.finance_avisos"
 	| "app_shell.nav.finance_ledger"
-	| "app_shell.nav.finance_payment_advice"
 	| "app_shell.nav.finance_lc_request"
 	| "app_shell.nav.finance_lists"
-	| "app_shell.nav.finance_awaiting_po"
-	| "app_shell.nav.finance_awaiting_ariba"
+	| "app_shell.nav.claro"
 	| "app_shell.nav.admin_settings"
 	| "app_shell.nav.catalog"
 	| "app_shell.nav.admin_users"
@@ -338,29 +335,9 @@ const NAV_ITEMS: NavItem[] = [
 		roles: ["FINANCE", "ADMIN"],
 	},
 	{
-		to: "/finance/awaiting-po",
-		labelKey: "app_shell.nav.finance_awaiting_po",
-		icon: Invoice02Icon,
-		group: "arm_b",
-		roles: ["FINANCE", "ADMIN"],
-	},
-	{
-		to: "/finance/awaiting-ariba",
-		labelKey: "app_shell.nav.finance_awaiting_ariba",
-		icon: Invoice02Icon,
-		group: "arm_b",
-		roles: ["FINANCE", "ADMIN"],
-	},
-	{
-		to: "/finance/payment-advice",
-		labelKey: "app_shell.nav.finance_payment_advice",
-		icon: Invoice02Icon,
-		group: "arm_b",
-		roles: ["FINANCE", "ADMIN"],
-	},
-	{
-		to: "/finance/receivables",
-		labelKey: "app_shell.nav.receivables",
+		// The five-step Claro path: Load, Review, Generate, Submit, Close.
+		to: "/finance/claro",
+		labelKey: "app_shell.nav.claro",
 		icon: Invoice02Icon,
 		group: "arm_b",
 		roles: ["FINANCE", "ADMIN"],
@@ -511,10 +488,13 @@ export function isNavItemActive(
 	const [rest, hash = ""] = to.split("#")
 	const [path, search = ""] = rest.split("?")
 	// Payroll requests is one menu item: its Paid tab and each request page keep it lit.
+	// Claro invoices is one menu item for all five steps: a PO and Close keep it lit.
 	const here =
-		path === "/comptroller/to-pay" &&
-		(location.pathname === "/comptroller/paid" ||
-			location.pathname.startsWith("/comptroller/runs/"))
+		(path === "/comptroller/to-pay" &&
+			(location.pathname === "/comptroller/paid" ||
+				location.pathname.startsWith("/comptroller/runs/"))) ||
+		(path === "/finance/claro" &&
+			location.pathname.startsWith("/finance/claro/"))
 	if (location.pathname !== path && !here) return false
 	if (search) {
 		return (

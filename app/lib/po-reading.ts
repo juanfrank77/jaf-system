@@ -103,7 +103,7 @@ export function runPoChecks(
 
 	const lineSum = read.lines.reduce((s, l) => s + l.amount, 0)
 	if (read.subtotal === null || !same(lineSum, read.subtotal))
-		add("lines_sum", "blocked", `${lineSum.toFixed(2)} vs ${read.subtotal}`)
+		add("lines_sum", "needs_look", `${lineSum.toFixed(2)} vs ${read.subtotal}`)
 
 	const ivuTotal = (read.ivu4 ?? 0) + (read.ivu115 ?? 0)
 	const lineIvu = read.lines.reduce((s, l) => s + l.ivu, 0)
@@ -113,7 +113,7 @@ export function runPoChecks(
 		!same(read.subtotal + ivuTotal, read.total) ||
 		!same(lineIvu, ivuTotal)
 	)
-		add("totals", "blocked")
+		add("totals", "needs_look")
 
 	read.lines.forEach((l, i) => {
 		const expected = cents(l.amount * l.ivuRate) / 100
@@ -139,12 +139,46 @@ export function runPoChecks(
 	return out
 }
 
+/** Only these stop a PO for good; everything else Lissette can fix or override. */
+export const HARD_STOPS: ReadonlySet<PoCheckCode> = new Set<PoCheckCode>([
+	"pages_missing",
+	"duplicate",
+])
+
+export function isOverridable(c: PoCheck): boolean {
+	return !HARD_STOPS.has(c.code)
+}
+
+/** Subtotal, IVU split and total rebuilt from the lines, cent-exact. */
+export function recomputeFromLines(lines: PoLine[]): {
+	subtotal: number
+	ivu4: number
+	ivu115: number
+	total: number
+} {
+	const sum = (pick: (l: PoLine) => number, rate?: number) =>
+		cents(
+			lines
+				.filter((l) => rate === undefined || l.ivuRate === rate)
+				.reduce((s, l) => s + pick(l), 0),
+		) / 100
+	const subtotal = sum((l) => l.amount)
+	const ivu4 = sum((l) => l.ivu, 0.04)
+	const ivu115 = sum((l) => l.ivu, 0.115)
+	return {
+		subtotal,
+		ivu4,
+		ivu115,
+		total: cents(subtotal + ivu4 + ivu115) / 100,
+	}
+}
+
 /** Blocked beats Unmatched beats Needs a look beats Ready. */
 export function statusFromChecks(
 	checks: PoCheck[],
 	avisoFound: boolean,
 ): PoStatusResult {
-	if (checks.some((c) => c.severity === "blocked")) return "BLOCKED"
+	if (checks.some((c) => HARD_STOPS.has(c.code))) return "BLOCKED"
 	if (!avisoFound) return "UNMATCHED"
 	if (checks.length > 0) return "NEEDS_LOOK"
 	return "READY"

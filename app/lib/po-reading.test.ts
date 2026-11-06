@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
 import {
 	coercePoRead,
+	isOverridable,
+	recomputeFromLines,
 	type PoRead,
 	parseClaroDate,
 	runPoChecks,
@@ -59,16 +61,53 @@ describe("runPoChecks", () => {
 		expect(codes(good())).toEqual([])
 		expect(statusFromChecks([], true)).toBe("READY")
 	})
-	it("blocks when the lines do not add to the subtotal", () => {
+	it("asks for a look when the lines do not add to the subtotal", () => {
 		const r = good()
 		r.subtotal = 800
 		expect(codes(r)).toContain("lines_sum")
-		expect(statusFromChecks(runPoChecks(r, ctx), true)).toBe("BLOCKED")
+		expect(statusFromChecks(runPoChecks(r, ctx), true)).toBe("NEEDS_LOOK")
 	})
-	it("blocks when subtotal + IVU is not the total", () => {
+	it("asks for a look when subtotal + IVU is not the total", () => {
 		const r = good()
 		r.total = 900
-		expect(codes(r)).toContain("totals")
+		const checks = runPoChecks(r, ctx)
+		expect(checks.map((c) => c.code)).toContain("totals")
+		expect(statusFromChecks(checks, true)).toBe("NEEDS_LOOK")
+	})
+	it("still blocks missing pages", () => {
+		const checks = runPoChecks(good(), { ...ctx, filePages: 3 })
+		expect(statusFromChecks(checks, true)).toBe("BLOCKED")
+	})
+	it("only pages_missing and duplicate are not overridable", () => {
+		const codesAll = [
+			"lines_sum",
+			"totals",
+			"ivu_line",
+			"po_number_format",
+			"pages_unknown",
+			"po_date_missing",
+			"terms_missing",
+			"over_billed",
+			"unreadable",
+		] as const
+		for (const code of codesAll)
+			expect(isOverridable({ code, severity: "needs_look" })).toBe(true)
+		for (const code of ["pages_missing", "duplicate"] as const)
+			expect(isOverridable({ code, severity: "blocked" })).toBe(false)
+	})
+	it("recomputes totals from the lines", () => {
+		expect(recomputeFromLines([])).toEqual({
+			subtotal: 0,
+			ivu4: 0,
+			ivu115: 0,
+			total: 0,
+		})
+		expect(recomputeFromLines(good().lines)).toEqual({
+			subtotal: 817.03,
+			ivu4: 8.97,
+			ivu115: 68.17,
+			total: 894.17,
+		})
 	})
 	it("flags an IVU more than a cent off as Needs a look", () => {
 		const r = good()

@@ -139,7 +139,7 @@ describe("PO inbox", () => {
 		const by = (i: number) => rows.find((r) => r.id === ids[i])
 		expect(by(0)?.status).toBe("READY")
 		expect(by(0)?.docId).toBe(doc.id)
-		expect(by(1)?.status).toBe("BLOCKED")
+		expect(by(1)?.status).toBe("NEEDS_LOOK")
 		expect(by(2)?.status).toBe("UNMATCHED")
 		expect(by(0)?.filePages).toBe(1)
 	})
@@ -247,7 +247,7 @@ describe("PO inbox", () => {
 		).toBe("CONFIRMED")
 		expect(
 			(await db.claroPo.findUniqueOrThrow({ where: { id: r } })).status,
-		).toBe("BLOCKED")
+		).toBe("NEEDS_LOOK")
 	})
 
 	it("fixing a field re-runs the checks and remembers who entered it", async () => {

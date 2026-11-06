@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { REAL_POS } from "./__fixtures__/po/real-pos"
 import { parseOcrPasses } from "./po-ocr-parse"
 import { runPoChecks } from "./po-reading"
 
@@ -101,5 +102,63 @@ Total USD 894.17`
 		expect(r.lines.map((l) => l.ivuRate)).toEqual([0.04, 0.115])
 		expect(r.ivu4).toBe(8.97)
 		expect(r.ivu115).toBe(68.17)
+	})
+})
+
+describe("parseOcrPasses on real Tesseract output of Claro POs", () => {
+	for (const want of REAL_POS)
+		it(`reads every line and page of PO ${want.po}`, () => {
+			const r = parseOcrPasses(want.ocr)
+			expect(r).toMatchObject({
+				poNumber: want.po,
+				poDate: want.poDate,
+				statedPages: 4,
+				subtotal: want.subtotal,
+				ivu4: want.ivu4,
+				ivu115: want.ivu115,
+				total: want.total,
+			})
+			expect(r.lines).toMatchObject(want.lines)
+			expect(
+				runPoChecks(r, {
+					filePages: 4,
+					duplicate: false,
+					billedPreIvu: null,
+					alreadyPod: 0,
+				}),
+			).toEqual([])
+		})
+})
+
+describe("parseOcrPasses on a service item row", () => {
+	it("takes the item's amount from its own Subtotal, not the PO's", () => {
+		const r = parseOcrPasses([
+			`4500479438  25.09.2025  1 de/of 4
+00010   100000   625RALAMBRAR Y LIMPIAR CONDUCTOMO   1.00 | SERVICE SERVICIO   980.0   Subtotal   980.00
+Total   1,092.70
+Subtotal   980.00
+Total IVU   112.70
+Total USD   1,092.70`,
+		])
+		expect(r.lines).toMatchObject([{ item: "00010", amount: 980 }])
+		expect(r.ivu115).toBe(112.7)
+	})
+
+	it("takes the PO date, not a buyer's note timestamp printed more often", () => {
+		// From PO 4500514761: the note is read by three passes, the date by two.
+		const r = parseOcrPasses([
+			"02,05.2026 16.35.51 GILBERTO MARTE (DOM06152)\n20.06.2026   1 defof 4",
+			"02.03.2026 15:39:51 GILBERTO MARTE (DOM96152",
+			"02.03.2026 15:39:51 GILBERTO MARTE (DOM96152]",
+			"20.06.2026   1 de/of 4\n02.03.2026 15:39:51 GILBERTO MARTE (DOM96152]",
+		])
+		expect(r.poDate).toBe("2026-06-20")
+	})
+
+	it("counts the pages from the later pages' headers, read as delof", () => {
+		const r = parseOcrPasses([
+			"PAGE NUMBER 2 delof 4\nHOJA NUMERO 3 delof 4\nPAGE NUMBER 4 delof 4",
+		])
+		expect(r.statedPages).toBe(4)
 	})
 })

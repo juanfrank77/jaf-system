@@ -499,6 +499,76 @@ describe("/finance/claro/:id Review", () => {
 		const page = (await load(copy.id)) as { po: { original: unknown } }
 		expect(page.po.original).toBeNull()
 	})
+	it("a rate already on the PO's lines is kept on save; a new odd rate is not", async () => {
+		const odd = await reviewPo({
+			extra: {
+				lines: [
+					{ item: "10", description: "x", amount: 100, ivuRate: 0.07, ivu: 7 },
+				],
+			},
+		})
+		const keep = (amount: number) =>
+			JSON.stringify([{ item: "10", description: "x", amount, ivuRate: 0.07 }])
+		// A header-only save posts the read line back unchanged.
+		expect(
+			await post(odd.id, {
+				intent: "fix",
+				...header(odd),
+				termsDays: "45",
+				lines: keep(100),
+			}),
+		).toEqual({ saved: true })
+		// A line edit that leaves the read rate alone.
+		expect(
+			await post(odd.id, {
+				intent: "fix",
+				...header(odd),
+				termsDays: "45",
+				lines: keep(90),
+			}),
+		).toEqual({ saved: true })
+		const row = await db.claroPo.findUniqueOrThrow({ where: { id: odd.id } })
+		expect(row.termsDays).toBe(45)
+		expect((row.lines as { amount: number }[])[0].amount).toBe(90)
+
+		const plain = await reviewPo()
+		const withLine = (rate: number) =>
+			JSON.stringify([
+				{ item: "10", description: "x", amount: 100, ivuRate: 0.115 },
+				{ item: "20", description: "y", amount: 10, ivuRate: rate },
+			])
+		expect(
+			await post(plain.id, {
+				intent: "fix",
+				...header(plain),
+				lines: withLine(0.07),
+			}),
+		).toEqual({ errorKey: "claro.errors.bad_lines" })
+		for (const rate of [0.04, 0.115])
+			expect(
+				await post(plain.id, {
+					intent: "fix",
+					...header(plain),
+					lines: withLine(rate),
+				}),
+			).toEqual({ saved: true })
+	})
+
+	it("override reasons for missing pages or a duplicate are ignored: still hard_stop, no invoice", async () => {
+		const po = await reviewPo({ statedPages: 3 })
+		expect(
+			await post(po.id, {
+				intent: "generate",
+				workMonth: "2026-08",
+				"override-pages_missing": "the file is complete",
+				"override-duplicate": "not a duplicate",
+			}),
+		).toEqual({ errorKey: "claro.errors.hard_stop" })
+		expect(await db.claroInvoice.count({ where: { claroPoId: po.id } })).toBe(0)
+		const row = await db.claroPo.findUniqueOrThrow({ where: { id: po.id } })
+		expect(row.status).toBe("BLOCKED")
+		expect(row.overrides).toBeNull()
+	})
 })
 
 describe("/finance/claro/:id Submit", () => {

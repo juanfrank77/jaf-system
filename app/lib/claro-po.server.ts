@@ -142,7 +142,10 @@ export function parseFixForm(form: FormData, po: ClaroPoView): FixParse {
 
 	const raw = text(form, "lines")
 	if (raw !== undefined && raw !== "") {
-		const lines = parseLines(raw)
+		const lines = parseLines(
+			raw,
+			po.lines.map((l) => l.ivuRate),
+		)
 		if (!lines) return { ok: false, error: "bad_lines" }
 		const same =
 			lines.length === po.lines.length &&
@@ -154,7 +157,12 @@ export function parseFixForm(form: FormData, po: ClaroPoView): FixParse {
 
 type LineInput = Omit<PoLine, "ivu">
 
-function parseLines(raw: string): LineInput[] | null {
+/** 4% and 11.5%, or a rate the reader already put on this PO's lines (so a
+ * PO read with an odd rate can still be saved; a new odd rate cannot). */
+const rateOk = (rate: number, known: number[]) =>
+	[...IVU_RATES, ...known].some((r) => Math.abs(r - rate) < 1e-9)
+
+function parseLines(raw: string, knownRates: number[]): LineInput[] | null {
 	let v: unknown
 	try {
 		v = JSON.parse(raw)
@@ -169,7 +177,7 @@ function parseLines(raw: string): LineInput[] | null {
 		const amount = o.amount
 		const ivuRate = o.ivuRate
 		if (typeof amount !== "number" || !amountOk(amount)) return null
-		if (typeof ivuRate !== "number" || !IVU_RATES.includes(ivuRate)) return null
+		if (typeof ivuRate !== "number" || !rateOk(ivuRate, knownRates)) return null
 		out.push({
 			item: String(o.item ?? "").slice(0, 40),
 			description: String(o.description ?? "").slice(0, 500),

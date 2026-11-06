@@ -373,6 +373,82 @@ describe("PO inbox", () => {
 		)
 	})
 
+	it("a line save keeps the IVU as read on lines it did not change, so Claro's one-cent rounding stays green", async () => {
+		const { user, avisoNumber } = await setup()
+		const tag = runToken("ivu")
+		const [id] = await ingestPoFiles(
+			[{ name: "i.pdf", bytes: pdf(tag) }],
+			user.id,
+		)
+		t.track("claroPo", { id })
+		// Claro rounds from unrounded quantities: 33.33 at 11.5% prints 3.84,
+		// a cent over 3.83. Line 20 was misread as 0.00.
+		await processPending(
+			readerOf({
+				[tag]: read({
+					avisoCandidates: [avisoNumber],
+					lines: [
+						{
+							item: "10",
+							description: "a",
+							amount: 33.33,
+							ivuRate: 0.115,
+							ivu: 3.84,
+						},
+						{ item: "20", description: "b", amount: 0, ivuRate: 0.115, ivu: 0 },
+					],
+					subtotal: 133.33,
+					ivu4: 0,
+					ivu115: 15.34,
+					total: 148.67,
+				}),
+			}),
+			1,
+		)
+		await fixPo(id, user.id, {
+			lines: [
+				{ item: "10", description: "a", amount: 33.33, ivuRate: 0.115 },
+				{ item: "20", description: "b", amount: 100, ivuRate: 0.115 },
+			],
+		})
+		const row = await db.claroPo.findUniqueOrThrow({ where: { id } })
+		expect((row.lines as { ivu: number }[]).map((l) => l.ivu)).toEqual([
+			3.84, 11.5,
+		])
+		expect(Number(row.ivu115)).toBe(15.34)
+		expect(Number(row.total)).toBe(148.67)
+		expect(row.checks).toEqual([])
+		expect(row.status).toBe("READY")
+	})
+
+	it("a save that edits lines and the money header keeps the header as typed", async () => {
+		const { user, avisoNumber } = await setup()
+		const tag = runToken("both")
+		const [id] = await ingestPoFiles(
+			[{ name: "b.pdf", bytes: pdf(tag) }],
+			user.id,
+		)
+		t.track("claroPo", { id })
+		await processPending(
+			readerOf({ [tag]: read({ avisoCandidates: [avisoNumber] }) }),
+			1,
+		)
+		await fixPo(id, user.id, {
+			lines: [{ item: "10", description: "x", amount: 200, ivuRate: 0.115 }],
+			total: 250,
+		})
+		const row = await db.claroPo.findUniqueOrThrow({ where: { id } })
+		// Lines rebuild what was not typed; the typed total stands, stored and printed.
+		expect(Number(row.subtotal)).toBe(200)
+		expect(Number(row.ivu115)).toBe(23)
+		expect(Number(row.total)).toBe(250)
+		expect((row.printed as { total: number }).total).toBe(250)
+		expect(Object.keys(row.entered as object).sort()).toEqual([
+			"lines",
+			"total",
+		])
+	})
+
 	it("a line reading 0.00 can be corrected in place", async () => {
 		const { user, avisoNumber } = await setup()
 		const tag = runToken("z")

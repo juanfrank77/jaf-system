@@ -194,6 +194,46 @@ describe("ClaroReviewView", () => {
 		).toBeInTheDocument()
 	})
 
+	it("a missing PO date takes no reason: it must be entered, and Generate waits for it", async ({
+		renderStub,
+	}) => {
+		await render(renderStub, {
+			...base,
+			poDate: null,
+			checks: [{ code: "po_date_missing", severity: "needs_look" }],
+		})
+		const row = await screen.findByTestId("check-po_date_missing")
+		expect(row).toHaveAttribute("data-state", "fail")
+		expect(within(row).queryByLabelText("Reason to override")).toBeNull()
+		expect(within(row).getByText("This cannot be overridden.")).toBeVisible()
+		expect(screen.getByLabelText("PO date")).toHaveAttribute(
+			"aria-invalid",
+			"true",
+		)
+		expect(
+			screen.queryByRole("button", { name: "Generate invoice" }),
+		).toBeNull()
+		expect(
+			screen.getByText(/needs the PO number and the PO date/),
+		).toBeVisible()
+	})
+
+	it("a PO number in the wrong format still takes a reason", async ({
+		renderStub,
+	}) => {
+		await render(renderStub, {
+			...base,
+			checks: [
+				{ code: "po_number_format", severity: "needs_look", detail: "123" },
+			],
+		})
+		const row = await screen.findByTestId("check-po_number_format")
+		expect(within(row).getByLabelText("Reason to override")).toBeInTheDocument()
+		expect(
+			screen.getByRole("button", { name: "Generate invoice" }),
+		).toBeInTheDocument()
+	})
+
 	it("a short copy of a PO already loaded offers the discard beside the upload", async ({
 		renderStub,
 	}) => {

@@ -4,7 +4,7 @@
  */
 import type { ClaroStep } from "~/lib/claro-steps"
 import {
-	HARD_STOPS,
+	isOverridable,
 	type PoCheck,
 	type PoCheckCode,
 	type PoLine,
@@ -132,7 +132,7 @@ export type CheckRow = {
 	failing: PoCheck[]
 	/** Failing codes a reason can override, one reason each. */
 	overridable: PoCheckCode[]
-	/** A failing code here stops the PO outright. */
+	/** A failing code here takes no reason: a hard stop, or a value to enter. */
 	hardStop: boolean
 	fields: ReviewField[]
 }
@@ -153,12 +153,15 @@ export function checkRows(
 	const row = (key: CheckRowKey, codes: PoCheckCode[]): CheckRow => {
 		const failing = checks.filter((c) => codes.includes(c.code))
 		const failCodes = [...new Set(failing.map((c) => c.code))]
+		// A code takes a reason only when every failure under it can.
+		const takesReason = (code: PoCheckCode) =>
+			failing.filter((c) => c.code === code).every(isOverridable)
 		return {
 			key,
 			failed: failing.length > 0,
 			failing,
-			overridable: failCodes.filter((c) => !HARD_STOPS.has(c)),
-			hardStop: failCodes.some((c) => HARD_STOPS.has(c)),
+			overridable: failCodes.filter(takesReason),
+			hardStop: failCodes.some((c) => !takesReason(c)),
 			fields: [...new Set(failCodes.flatMap((c) => CHECK_FIELDS[c]))],
 		}
 	}
@@ -213,6 +216,7 @@ export type ClaroDetailError =
 	| "claro.errors.aviso_missing"
 	| "claro.errors.future_date"
 	| "claro.errors.bad_po_number"
+	| "claro.errors.needs_entry"
 	| "po_inbox.errors.not_pdf"
 	| "po_inbox.errors.no_files"
 	| "po_inbox.errors.incomplete"

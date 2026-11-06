@@ -78,14 +78,13 @@ describe("runPoChecks", () => {
 		const checks = runPoChecks(good(), { ...ctx, filePages: 3 })
 		expect(statusFromChecks(checks, true)).toBe("BLOCKED")
 	})
-	it("only pages_missing and duplicate are not overridable", () => {
+	it("only the hard stops and a missing PO date or number take no reason", () => {
 		const codesAll = [
 			"lines_sum",
 			"totals",
 			"ivu_line",
 			"po_number_format",
 			"pages_unknown",
-			"po_date_missing",
 			"terms_missing",
 			"over_billed",
 			"unreadable",
@@ -94,6 +93,17 @@ describe("runPoChecks", () => {
 			expect(isOverridable({ code, severity: "needs_look" })).toBe(true)
 		for (const code of ["pages_missing", "duplicate"] as const)
 			expect(isOverridable({ code, severity: "blocked" })).toBe(false)
+		// A value no invoice can do without is entered, never overridden.
+		expect(
+			isOverridable({ code: "po_date_missing", severity: "needs_look" }),
+		).toBe(false)
+		expect(
+			isOverridable({
+				code: "po_number_format",
+				severity: "needs_look",
+				detail: "missing",
+			}),
+		).toBe(false)
 	})
 	it("recomputes totals from the lines", () => {
 		expect(recomputeFromLines([])).toEqual({

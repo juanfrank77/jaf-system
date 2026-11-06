@@ -3385,7 +3385,8 @@
 			"stored": "La factura llevará {{amount}}",
 			"money_printed": "Según impreso en la PO:",
 			"needs_aviso": "Para generar hace falta un Aviso. Escriba el número de Aviso a la izquierda y guarde.",
-			"duplicate_no_original": "No se encontró la PO que esta repite. Léala de nuevo o revise el número de PO."
+			"duplicate_no_original": "No se encontró la PO que esta repite. Léala de nuevo o revise el número de PO.",
+			"needs_entry": "Para generar hacen falta el número y la fecha de la PO. Escriba lo que falta a la izquierda y guarde."
 		},
 		"lines": {
 			"description": "Descripción",
@@ -3436,7 +3437,8 @@
 			"number_taken": "Ese número M19 ya está en el sistema. Vincule esta línea a esa factura.",
 			"po_not_available": "Ese PO no es un PO confirmado en espera de factura.",
 			"bad_total": "Esta línea no tiene un monto para usar como total de la factura.",
-			"ja_line": "Esta es una fila de instalador (JA). Se cierra en el escritorio de Carmen, no aquí."
+			"ja_line": "Esta es una fila de instalador (JA). Se cierra en el escritorio de Carmen, no aquí.",
+			"needs_entry": "La factura necesita el número y la fecha de la PO. Escríbalos y guarde primero."
 		},
 		"close": {
 			"title": "Cerrar",

@@ -20,7 +20,7 @@ import {
 	hasCheck,
 	type ReviewField,
 } from "~/lib/claro-po-view"
-import { HARD_STOPS } from "~/lib/po-reading"
+import { HARD_STOPS, needsEntry } from "~/lib/po-reading"
 import { cn, formatMoney } from "~/lib/utils"
 
 function Field({
@@ -120,13 +120,15 @@ export function ClaroReviewView({
 	const toFix = fieldsToFix(po.checks)
 	if (noAviso) toFix.add("avisoNumber")
 	const hardStop = po.checks.some((c) => HARD_STOPS.has(c.code))
+	// A PO date or number no invoice can do without: entered, never overridden.
+	const entryMissing = po.checks.some(needsEntry)
 	const pagesMissing = hasCheck(po.checks, "pages_missing")
 	// Beside missing pages too: a short copy of a PO already loaded is discarded.
 	const duplicate = hasCheck(po.checks, "duplicate")
 	const unreadable = !!po.readError || hasCheck(po.checks, "unreadable")
 	// A duplicate whose original cannot be found is read again.
 	const canReread = unreadable || (duplicate && !po.original)
-	const canGenerate = !hardStop && !po.invoice && !noAviso
+	const canGenerate = !hardStop && !po.invoice && !noAviso && !entryMissing
 	const askReasons = canGenerate && !readOnly
 	// The money header is what the PO printed (a header edit states it); what
 	// the invoice will carry, rebuilt from edited lines, is shown beneath.
@@ -349,6 +351,12 @@ export function ClaroReviewView({
 					{noAviso && !hardStop && (
 						<p className="rounded-lg border bg-card p-3 text-sm text-status-danger">
 							{t("claro.review.needs_aviso")}
+						</p>
+					)}
+
+					{entryMissing && !hardStop && (
+						<p className="rounded-lg border bg-card p-3 text-sm text-status-danger">
+							{t("claro.review.needs_entry")}
 						</p>
 					)}
 

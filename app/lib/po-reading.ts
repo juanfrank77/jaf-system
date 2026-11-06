@@ -146,8 +146,20 @@ export const HARD_STOPS: ReadonlySet<PoCheckCode> = new Set<PoCheckCode>([
 	"duplicate",
 ])
 
+/**
+ * A value no invoice can be made without is missing (the PO date, or the PO
+ * number altogether). No reason stands in for it: it is entered.
+ */
+export function needsEntry(c: PoCheck): boolean {
+	return (
+		c.code === "po_date_missing" ||
+		(c.code === "po_number_format" && c.detail === "missing")
+	)
+}
+
+/** A reason can carry this failing check past Review. */
 export function isOverridable(c: PoCheck): boolean {
-	return !HARD_STOPS.has(c.code)
+	return !HARD_STOPS.has(c.code) && !needsEntry(c)
 }
 
 /** Subtotal, IVU split and total rebuilt from the lines, cent-exact. */

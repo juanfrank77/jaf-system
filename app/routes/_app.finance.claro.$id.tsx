@@ -30,7 +30,7 @@ import {
 	recheckPo,
 	rereadPo,
 } from "~/lib/po-inbox.server"
-import { HARD_STOPS } from "~/lib/po-reading"
+import { HARD_STOPS, needsEntry } from "~/lib/po-reading"
 import { getInvoiceSignature } from "~/lib/system-settings.server"
 import { useAutoRevalidate } from "~/lib/use-auto-revalidate"
 import type { Route } from "./+types/_app.finance.claro.$id"
@@ -127,6 +127,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 						const now = await loadClaroPo(po.id)
 						if (now?.checks.some((c) => HARD_STOPS.has(c.code)))
 							return fail("claro.errors.hard_stop")
+						// No reason can stand in for a PO date or number either.
+						if (now?.checks.some(needsEntry))
+							return fail("claro.errors.needs_entry")
 						// No reason can stand in for an Aviso: an invoice needs one.
 						if (!now?.avisoNumber) return fail("claro.errors.aviso_missing")
 						return fail("claro.errors.reason_required")

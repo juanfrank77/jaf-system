@@ -503,16 +503,40 @@ type PoFixFields = {
 	avisoNumber?: string
 }
 
-/** A line as typed on Review; its IVU is worked out from amount and rate. */
+/** A line as typed on Review; its IVU is kept or worked out (`linesAsSaved`). */
 type PoLineInput = Omit<PoLine, "ivu"> & { ivu?: number }
+
+/**
+ * The lines as saved. A line whose amount and rate did not change keeps the
+ * IVU it had (as read: Claro rounds from unrounded quantities, a cent off
+ * amount x rate); any other line's IVU is worked out from amount and rate.
+ */
+function linesAsSaved(input: PoLineInput[], before: PoLine[]): PoLine[] {
+	const left = [...before]
+	const same = (a: PoLineInput, b: PoLine) =>
+		cents(a.amount) === cents(b.amount) && a.ivuRate === b.ivuRate
+	return input.map((l) => {
+		let at = left.findIndex((b) => b.item === l.item && same(l, b))
+		if (at < 0) at = left.findIndex((b) => same(l, b))
+		const kept = at >= 0 ? left.splice(at, 1)[0].ivu : null
+		return {
+			item: l.item,
+			description: l.description,
+			amount: l.amount,
+			ivuRate: l.ivuRate,
+			ivu: kept ?? cents(l.amount * l.ivuRate) / 100,
+		}
+	})
+}
 
 /**
  * Fix a field by hand. The change is remembered as ENTERED, with who and when
  * (Rule 4). A subtotal, IVU or total typed by hand is what the PO really
  * prints, so it is written to `printed` too. Lines replace the read ones whole
  * and rebuild subtotal, IVU and total, leaving `printed` alone so the checks
- * compare the edited lines against it. A row read before `printed` was kept
- * gets it from its header as it stood before this edit.
+ * compare the edited lines against it; a money field typed in the same save
+ * stands over the rebuild. A row read before `printed` was kept gets it from
+ * its header as it stood before this edit.
  */
 export async function fixPo(
 	id: string,
@@ -533,6 +557,16 @@ export async function fixPo(
 		data.poDate = f.poDate ? new Date(`${f.poDate}T12:00:00Z`) : null
 		touched.push("poDate")
 	}
+	if (f.lines !== undefined) {
+		const lines = linesAsSaved(
+			f.lines,
+			Array.isArray(row.lines) ? (row.lines as unknown as PoLine[]) : [],
+		)
+		data.lines = lines as unknown as Prisma.InputJsonValue
+		Object.assign(data, recomputeFromLines(lines))
+		touched.push("lines")
+	}
+	// After the rebuild from lines: a money field typed by hand stands.
 	for (const k of [
 		"termsDays",
 		"statedPages",
@@ -555,18 +589,6 @@ export async function fixPo(
 	for (const k of ["subtotal", "ivu4", "ivu115", "total"] as const)
 		if (f[k] !== undefined) printed[k] = f[k]
 	data.printed = printed as unknown as Prisma.InputJsonValue
-	if (f.lines !== undefined) {
-		const lines: PoLine[] = f.lines.map((l) => ({
-			item: l.item,
-			description: l.description,
-			amount: l.amount,
-			ivuRate: l.ivuRate,
-			ivu: cents(l.amount * l.ivuRate) / 100,
-		}))
-		data.lines = lines as unknown as Prisma.InputJsonValue
-		Object.assign(data, recomputeFromLines(lines))
-		touched.push("lines")
-	}
 	if (f.avisoNumber !== undefined) {
 		const n = f.avisoNumber.replace(/\D/g, "")
 		const doc = await db.jafInvoice.findFirst({
@@ -635,16 +657,18 @@ function gate(
 	byId: string,
 ) {
 	const failing = checksOf(row.checks)
+	// A hard stop, or a value that must be entered, takes no reason.
 	const confirmable =
-		row.status === "READY" ||
-		row.status === "NEEDS_LOOK" ||
-		(row.status === "BLOCKED" && failing.every(isOverridable))
+		(row.status === "READY" ||
+			row.status === "NEEDS_LOOK" ||
+			row.status === "BLOCKED") &&
+		failing.every(isOverridable)
 	if (!confirmable) throw new PoError("not_confirmable")
 	if (!overrides) return null
 	const at = new Date().toISOString()
 	return [...new Set(failing.map((c) => c.code))].map((check) => {
 		const reason = overrides.find((o) => o.check === check)?.reason.trim()
-		if (HARD_STOPS.has(check) || !reason) throw new PoError("not_confirmable")
+		if (!reason) throw new PoError("not_confirmable")
 		return { check, reason, byId, at }
 	})
 }

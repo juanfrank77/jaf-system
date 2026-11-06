@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto"
+import fs from "node:fs/promises"
 import {
 	defaultWorkMonth,
 	dueDateOf,
@@ -119,6 +121,7 @@ export async function makeInvoice(args: {
 		await makeable(po, args.workMonth)
 
 	for (let attempt = 0; ; attempt++) {
+		let written: string | null = null
 		try {
 			const made = await db.$transaction(
 				async (tx) => {
@@ -140,11 +143,14 @@ export async function makeInvoice(args: {
 						total,
 						signature,
 					})
+					// Its own file: a make that loses the number to another must not
+					// overwrite the winner's PDF under the same name.
 					const filePath = await saveBuffer(
 						"claro-invoices",
-						`${number}.pdf`,
+						`${number}-${randomUUID()}.pdf`,
 						pdf,
 					)
+					written = filePath
 					const row = await tx.claroInvoice.create({
 						data: {
 							series: NEW_SERIES,
@@ -181,6 +187,8 @@ export async function makeInvoice(args: {
 			)
 			return made
 		} catch (e) {
+			// The row was rolled back: its PDF goes too.
+			if (written) await fs.rm(written, { force: true }).catch(() => {})
 			const code = (e as { code?: string }).code
 			// Another make took this number first: try the next one.
 			if ((code === "P2002" || code === "P2034") && attempt < 5) {

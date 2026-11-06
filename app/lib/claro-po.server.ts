@@ -200,15 +200,14 @@ const OVERRIDE_CODES: PoCheckCode[] = [
 	"ivu_line",
 	"po_number_format",
 	"pages_unknown",
-	"po_date_missing",
 	"terms_missing",
 	"over_billed",
 	"unreadable",
 ]
 
 /** One `override-<code>` reason per red check; blank ones are left out. The
- * hard stops (missing pages, duplicate) are never read: they cannot be
- * overridden. */
+ * hard stops (missing pages, duplicate) and a missing PO date are never read:
+ * they cannot be overridden (a missing PO number is refused by the gate). */
 export function parseOverrides(form: FormData) {
 	return OVERRIDE_CODES.flatMap((check) => {
 		const reason = text(form, `override-${check}`)

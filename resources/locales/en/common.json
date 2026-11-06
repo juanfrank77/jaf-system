@@ -3385,7 +3385,8 @@
 			"stored": "The invoice will carry {{amount}}",
 			"money_printed": "As printed on the PO:",
 			"needs_aviso": "Generate needs an Aviso. Enter the Aviso number on the left and save.",
-			"duplicate_no_original": "The PO it repeats could not be found. Read it again or check the PO number."
+			"duplicate_no_original": "The PO it repeats could not be found. Read it again or check the PO number.",
+			"needs_entry": "Generate needs the PO number and the PO date. Enter what is missing on the left and save."
 		},
 		"lines": {
 			"description": "Description",
@@ -3436,7 +3437,8 @@
 			"number_taken": "That M19 number is already in the system. Link this line to it instead.",
 			"po_not_available": "That PO is not a confirmed PO waiting for an invoice.",
 			"bad_total": "This line has no amount to enter as the invoice total.",
-			"ja_line": "This is an installer (JA) row. It is closed on Carmen’s desk, not here."
+			"ja_line": "This is an installer (JA) row. It is closed on Carmen’s desk, not here.",
+			"needs_entry": "An invoice needs the PO number and the PO date. Enter them and save first."
 		},
 		"close": {
 			"title": "Close",

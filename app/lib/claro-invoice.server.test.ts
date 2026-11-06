@@ -496,6 +496,39 @@ describe("Claro invoices", () => {
 		expect(seqs[3] - seqs[0]).toBe(3)
 	})
 
+	it("two POs generated at the same time each get a PDF carrying their own number", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		// A few rounds: the clash needs both makes to pick the same number.
+		for (let round = 0; round < 3; round++) {
+			const pos = await Promise.all([
+				reviewPo(u.id, { amount: 100 }),
+				reviewPo(u.id, { amount: 200 }),
+			])
+			const made = await Promise.all(
+				pos.map((p) =>
+					generateFromPo({
+						poId: p.id,
+						userId: u.id,
+						workMonth: "2026-05",
+						overrides: [],
+					}),
+				),
+			)
+			const invs = await Promise.all(
+				made.map((m) =>
+					db.claroInvoice.findUniqueOrThrow({ where: { id: m.invoiceId } }),
+				),
+			)
+			expect(invs[0].filePath).not.toBe(invs[1].filePath)
+			for (const [i, inv] of invs.entries()) {
+				const bytes = new Uint8Array(await fs.readFile(inv.filePath as string))
+				const { text } = await extractText(bytes, { mergePages: true })
+				expect(text).toContain(`M20-${String(inv.seq).padStart(3, "0")}`)
+				expect(text).toContain(pos[i].poNumber as string)
+			}
+		}
+	}, 60_000)
+
 	it("refuses a second invoice for the same PO, and a PO that is not confirmed", async () => {
 		const u = t.track("user", await seedUser({ role: "FINANCE" }))
 		const po = await confirmedPo(u.id)

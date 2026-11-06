@@ -591,6 +591,42 @@ describe("/finance/claro/:id Review", () => {
 			).toEqual({ saved: true })
 	})
 
+	it("a missing PO date or PO number takes no reason: generate asks for it to be entered", async () => {
+		const noDate = await reviewPo({ extra: { poDate: null } })
+		const noNumber = await reviewPo({ extra: { poNumber: null } })
+		for (const [po, code] of [
+			[noDate, "po_date_missing"],
+			[noNumber, "po_number_format"],
+		] as const) {
+			expect(
+				await post(po.id, {
+					intent: "generate",
+					workMonth: "2026-08",
+					[`override-${code}`]: "it is on the PO",
+				}),
+			).toEqual({ errorKey: "claro.errors.needs_entry" })
+			expect(await db.claroInvoice.count({ where: { claroPoId: po.id } })).toBe(
+				0,
+			)
+			const row = await db.claroPo.findUniqueOrThrow({ where: { id: po.id } })
+			expect(row.status).not.toBe("CONFIRMED")
+			expect(row.overrides).toBeNull()
+		}
+		// Entered, it goes on.
+		expect(
+			await post(noDate.id, {
+				intent: "fix",
+				...header(noDate),
+				poDate: "2026-09-04",
+			}),
+		).toEqual({ saved: true })
+		const res = await post(noDate.id, {
+			intent: "generate",
+			workMonth: "2026-08",
+		})
+		expect(location(res)).toBe(`/finance/claro/${noDate.id}?step=generate`)
+	})
+
 	it("override reasons for missing pages or a duplicate are ignored: still hard_stop, no invoice", async () => {
 		const po = await reviewPo({ statedPages: 3 })
 		expect(

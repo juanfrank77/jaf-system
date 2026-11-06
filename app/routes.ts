@@ -71,6 +71,7 @@ export default [
 		route("finance/queue", "routes/_app.finance.queue.tsx"),
 		route("finance/lc-requests", "routes/_app.finance.lc-requests.tsx"),
 		route("finance/receivables", "routes/_app.finance.receivables.tsx"),
+		route("finance/claro", "routes/_app.finance.claro.tsx"),
 		route("finance/awaiting-po", "routes/_app.finance.awaiting-po.tsx"),
 		route("finance/avisos", "routes/_app.finance.avisos.tsx"),
 		route("finance/avisos/:id", "routes/_app.finance.avisos.$id.tsx"),

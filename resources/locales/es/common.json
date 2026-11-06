@@ -3455,5 +3455,23 @@
 			"held": "Retenido por PBCC (20%)",
 			"fee": "Cargo de transferencia"
 		}
+	},
+	"claro": {
+		"title": "Facturas de Claro",
+		"aria": "Pasos de la factura de Claro",
+		"step": {
+			"load": "Cargar",
+			"review": "Revisar",
+			"generate": "Generar",
+			"submit": "Enviar",
+			"close": "Cerrar"
+		},
+		"load": {
+			"intro": "Elija uno o más PDFs de PO de Claro y presione Procesar. No se lee nada hasta que lo haga.",
+			"process": "Procesar",
+			"processing": "Procesando…",
+			"queue": "En curso",
+			"empty": "No hay POs en curso."
+		}
 	}
 }

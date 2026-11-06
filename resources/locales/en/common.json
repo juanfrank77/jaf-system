@@ -3455,5 +3455,23 @@
 			"held": "Held by PBCC (20%)",
 			"fee": "Wire fee"
 		}
+	},
+	"claro": {
+		"title": "Claro invoices",
+		"aria": "Claro invoice steps",
+		"step": {
+			"load": "Load",
+			"review": "Review",
+			"generate": "Generate",
+			"submit": "Submit",
+			"close": "Close"
+		},
+		"load": {
+			"intro": "Choose one or more Claro PO PDFs, then press Process. Nothing is read until you do.",
+			"process": "Process",
+			"processing": "Processing…",
+			"queue": "In progress",
+			"empty": "No POs in progress."
+		}
 	}
 }

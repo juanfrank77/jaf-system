@@ -105,6 +105,43 @@ async function setup() {
 }
 
 describe("PO inbox", () => {
+	it("same bytes twice in one batch: one row, the same id returned twice", async () => {
+		const { user } = await setup()
+		const tag = runToken("dup")
+		const f = { name: `${tag}.pdf`, bytes: pdf(tag) }
+		const ids = await ingestPoFiles([f, f], user.id)
+		t.track("claroPo", { id: ids[0] })
+		expect(ids[1]).toBe(ids[0])
+		expect(await db.claroPo.count({ where: { fileName: f.name } })).toBe(1)
+	})
+
+	it("same bytes again after the first was read creates no new row", async () => {
+		const { user } = await setup()
+		const tag = runToken("again")
+		const f = { name: `${tag}.pdf`, bytes: pdf(tag) }
+		const [first] = await ingestPoFiles([f], user.id)
+		t.track("claroPo", { id: first })
+		await processPending(readerOf({ [tag]: read() }), 1)
+		const [second] = await ingestPoFiles([f], user.id)
+		expect(second).toBe(first)
+		expect(await db.claroPo.count({ where: { fileName: f.name } })).toBe(1)
+	})
+
+	it("a SUPERSEDED row with the same hash does not block a new upload", async () => {
+		const { user } = await setup()
+		const tag = runToken("sup")
+		const f = { name: `${tag}.pdf`, bytes: pdf(tag) }
+		const [first] = await ingestPoFiles([f], user.id)
+		t.track("claroPo", { id: first })
+		await db.claroPo.update({
+			where: { id: first },
+			data: { status: "SUPERSEDED" },
+		})
+		const [second] = await ingestPoFiles([f], user.id)
+		t.track("claroPo", { id: second })
+		expect(second).not.toBe(first)
+	})
+
 	it("rejects a non-PDF", async () => {
 		const { user } = await setup()
 		await expect(

@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { useTranslation } from "react-i18next"
 import { redirect, useRevalidator } from "react-router"
 import { ClaroLoadView, type ClaroQueueRow } from "~/components/claro-load-view"
@@ -81,15 +81,17 @@ export default function Claro({
 	const { t } = useTranslation()
 	const { queue } = loaderData
 	const { revalidate, state } = useRevalidator()
+	const stateRef = useRef(state)
+	stateRef.current = state
 	const reading = queue.some((r) => r.step === 1)
 	useEffect(() => {
 		if (!reading) return
 		const id = window.setInterval(() => {
-			if (document.visibilityState === "visible" && state === "idle")
+			if (document.visibilityState === "visible" && stateRef.current === "idle")
 				revalidate()
 		}, READING_REFRESH_MS)
 		return () => window.clearInterval(id)
-	}, [reading, revalidate, state])
+	}, [reading, revalidate])
 	return (
 		<div className="space-y-4">
 			<h1 className="text-xl font-semibold">{t("claro.title")}</h1>

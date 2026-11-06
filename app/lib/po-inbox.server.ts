@@ -52,6 +52,17 @@ export async function ingestPoFiles(
 		if (Buffer.from(f.bytes.subarray(0, 5)).toString() !== "%PDF-")
 			throw new PoError("not_pdf")
 		const hash = createHash("sha256").update(f.bytes).digest("hex")
+		// Idempotent by file: the same bytes again (a double-click, a re-upload)
+		// reuses the live row rather than adding a hard-stopped duplicate.
+		const existing = await db.claroPo.findFirst({
+			where: { fileHash: hash, status: { not: "SUPERSEDED" } },
+			orderBy: { receivedAt: "asc" },
+			select: { id: true },
+		})
+		if (existing) {
+			ids.push(existing.id)
+			continue
+		}
 		const stored = await saveBuffer(
 			"claro-po",
 			`${randomUUID()}.pdf`,

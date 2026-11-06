@@ -72,6 +72,7 @@ export default [
 		route("finance/lc-requests", "routes/_app.finance.lc-requests.tsx"),
 		route("finance/receivables", "routes/_app.finance.receivables.tsx"),
 		route("finance/claro", "routes/_app.finance.claro.tsx"),
+		route("finance/claro/close", "routes/_app.finance.claro.close.tsx"),
 		route("finance/claro/:id", "routes/_app.finance.claro.$id.tsx"),
 		route("finance/claro/:id/file", "routes/_app.finance.claro.$id.file.tsx"),
 		route(

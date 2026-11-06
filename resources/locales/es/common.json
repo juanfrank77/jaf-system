@@ -3566,6 +3566,36 @@
 			"aviso_missing": "La factura necesita un Aviso. Escriba el número de Aviso y guarde primero.",
 			"future_date": "Ese día todavía no ha llegado. Escriba el día en que se registró.",
 			"bad_po_number": "El número de PO necesita sus dígitos."
+		},
+		"close": {
+			"title": "Cerrar",
+			"intro": "Suba el estado de pago de Claro, léalo y cierre los expedientes que coincidieron. Los pagos cortos quedan abiertos hasta que los acepte.",
+			"choose_file": "Elija el PDF del estado de pago",
+			"read": "Leer estado",
+			"empty": "No hay ningún estado esperando cierre.",
+			"statement_title": "Estado {{date}} · Ref {{ref}} · {{total}}",
+			"open_pdf": "Abrir el PDF",
+			"apply": "Cerrar expedientes coincidentes",
+			"apply_hint": "Las líneas sin coincidencia se conservan; los pagos cortos quedan abiertos.",
+			"reason": "Motivo",
+			"accept_short": "Aceptar pago corto",
+			"invoice_number": "Número de factura",
+			"link": "Vincular",
+			"shorts": "Pagado corto, aún abierto",
+			"shorts_hint": "Claro pagó menos que la factura. El expediente sigue abierto hasta que acepte la diferencia con un motivo.",
+			"unmatched": "Líneas sin coincidencia de estados anteriores",
+			"col": {
+				"line": "Línea del estado",
+				"matched": "Factura coincidente",
+				"amount": "Monto",
+				"result": "Resultado"
+			},
+			"result": {
+				"close": "Cerrar",
+				"short": "Corto {{diff}}",
+				"already_paid": "Ya pagado",
+				"unmatched": "Sin coincidencia"
+			}
 		}
 	}
 }

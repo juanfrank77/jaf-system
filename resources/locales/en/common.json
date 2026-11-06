@@ -3566,6 +3566,36 @@
 			"aviso_missing": "An invoice needs an Aviso. Enter the Aviso number and save first.",
 			"future_date": "That day has not come yet. Enter the day it was filed.",
 			"bad_po_number": "The PO number needs its digits."
+		},
+		"close": {
+			"title": "Close",
+			"intro": "Drop the Claro payment statement, read it, then close the files that matched. Short pays stay open until you accept them.",
+			"choose_file": "Choose the payment statement PDF",
+			"read": "Read statement",
+			"empty": "No statement is waiting to be closed.",
+			"statement_title": "Statement {{date}} · Ref {{ref}} · {{total}}",
+			"open_pdf": "Open the PDF",
+			"apply": "Close matched files",
+			"apply_hint": "Unmatched lines are kept; short pays stay open.",
+			"reason": "Reason",
+			"accept_short": "Accept short",
+			"invoice_number": "Invoice number",
+			"link": "Link",
+			"shorts": "Paid short, still open",
+			"shorts_hint": "Claro paid less than the invoice. The file stays open until you accept the difference with a reason.",
+			"unmatched": "Unmatched lines from earlier statements",
+			"col": {
+				"line": "Statement line",
+				"matched": "Matched invoice",
+				"amount": "Amount",
+				"result": "Result"
+			},
+			"result": {
+				"close": "Close",
+				"short": "Short {{diff}}",
+				"already_paid": "Already paid",
+				"unmatched": "Unmatched"
+			}
 		}
 	}
 }

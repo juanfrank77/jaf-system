@@ -39,6 +39,8 @@ import {
 	seedUser,
 } from "~/test/helpers"
 import { action, loader } from "./_app.finance.claro.$id"
+import { loader as fileLoader } from "./_app.finance.claro.$id.file"
+import { loader as invoiceLoader } from "./_app.finance.claro.$id.invoice"
 
 const PNG =
 	"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
@@ -114,6 +116,8 @@ async function reviewPo(
 		termsDays: number | null
 		status: "NEEDS_LOOK" | "CONFIRMED"
 		poNumber: string
+		/** Fields set last, over the defaults (status, docId, lines, ...). */
+		extra: Record<string, unknown>
 	}> = {},
 ) {
 	const doc = await billedDoc()
@@ -147,10 +151,11 @@ async function reviewPo(
 			...(over.status === "CONFIRMED"
 				? { confirmedAt: new Date(), confirmedById: userId }
 				: {}),
-		},
+			...over.extra,
+		} as never,
 	})
 	t.track("claroPo", po)
-	return po
+	return { ...po, avisoNumber: doc.avisoNumber as string }
 }
 
 async function seedInvoice(poId: string, docId: string, loaded = false) {
@@ -352,6 +357,148 @@ describe("/finance/claro/:id Review", () => {
 		expect(row.status).toBe("SUPERSEDED")
 		expect(row.supersededById).toBe(original.id)
 	})
+	it("an Unmatched PO says it needs an Aviso, and generates once one is saved", async () => {
+		const po = await reviewPo({
+			extra: { status: "UNMATCHED", docId: null },
+		})
+		const page = (await load(po.id)) as {
+			po: { avisoNumber: string | null; status: string }
+		}
+		expect(page.po.avisoNumber).toBeNull()
+		expect(
+			await post(po.id, { intent: "generate", workMonth: "2026-08" }),
+		).toEqual({ errorKey: "claro.errors.aviso_missing" })
+		expect(
+			await post(po.id, {
+				intent: "fix",
+				...header(po),
+				avisoNumber: po.avisoNumber,
+			}),
+		).toEqual({ saved: true })
+		const res = await post(po.id, { intent: "generate", workMonth: "2026-08" })
+		expect(location(res)).toBe(`/finance/claro/${po.id}?step=generate`)
+	})
+
+	it("the money header is what the PO printed: a second save typing the rebuilt subtotal updates printed and greens the checks", async () => {
+		// The reader misread line 10 as 10.00 and the printed subtotal as 50.00.
+		const po = await reviewPo({
+			extra: {
+				lines: [
+					{
+						item: "10",
+						description: "x",
+						amount: 10,
+						ivuRate: 0.115,
+						ivu: 11.5,
+					},
+				],
+				subtotal: 50,
+				printed: { subtotal: 50, ivu4: 0, ivu115: 11.5, total: 111.5 },
+			},
+		})
+		const asPrinted = { ...header(po), subtotal: "50" }
+		const line100 = JSON.stringify([
+			{ item: "10", description: "x", amount: 100, ivuRate: 0.115 },
+		])
+		// Save 1: the line. Stored is rebuilt from lines; printed stays.
+		expect(
+			await post(po.id, { intent: "fix", ...asPrinted, lines: line100 }),
+		).toEqual({ saved: true })
+		let row = await db.claroPo.findUniqueOrThrow({ where: { id: po.id } })
+		expect(Number(row.subtotal)).toBe(100)
+		expect((row.printed as { subtotal: number }).subtotal).toBe(50)
+		expect(codes(row.checks)).toContain("lines_sum")
+		// The form shows what was printed, 50, not the rebuilt 100.
+		const page = (await load(po.id)) as {
+			po: { printed: { subtotal: number } }
+		}
+		expect(page.po.printed.subtotal).toBe(50)
+		// Save 2: the subtotal the PO really printed, equal to the rebuilt value.
+		expect(
+			await post(po.id, {
+				intent: "fix",
+				...asPrinted,
+				subtotal: "100",
+				lines: line100,
+			}),
+		).toEqual({ saved: true })
+		row = await db.claroPo.findUniqueOrThrow({ where: { id: po.id } })
+		expect((row.printed as { subtotal: number }).subtotal).toBe(100)
+		expect(Object.keys(row.entered as object)).toContain("subtotal")
+		expect(codes(row.checks)).not.toContain("lines_sum")
+		expect(codes(row.checks)).not.toContain("totals")
+	})
+
+	it("fix validates each field and answers with a key, never a 500", async () => {
+		const po = await reviewPo()
+		const line = (o: Record<string, unknown>) =>
+			JSON.stringify([
+				{ item: "10", description: "x", amount: 100, ivuRate: 0.115, ...o },
+			])
+		const bad: [Record<string, string>, string][] = [
+			[{ lines: line({ ivuRate: 0.07 }) }, "claro.errors.bad_lines"],
+			[{ lines: line({ amount: -5 }) }, "claro.errors.bad_lines"],
+			[{ lines: line({ amount: 2e9 }) }, "claro.errors.bad_lines"],
+			[{ termsDays: "400" }, "claro.errors.bad_number"],
+			[{ termsDays: "-1" }, "claro.errors.bad_number"],
+			[{ statedPages: "0" }, "claro.errors.bad_number"],
+			[{ statedPages: "100" }, "claro.errors.bad_number"],
+			[{ subtotal: "-1" }, "claro.errors.bad_number"],
+			[{ total: "2000000000" }, "claro.errors.bad_number"],
+			[{ poDate: "2026-02-31" }, "claro.errors.bad_number"],
+			[{ poNumber: "PO" }, "claro.errors.bad_po_number"],
+			[{ poNumber: "" }, "claro.errors.bad_po_number"],
+		]
+		for (const [field, key] of bad)
+			expect(
+				await post(po.id, { intent: "fix", ...header(po), ...field }),
+			).toEqual({
+				errorKey: key,
+			})
+		const row = await db.claroPo.findUniqueOrThrow({ where: { id: po.id } })
+		expect(row.entered).toBeNull()
+		expect(row.poNumber).toBe(po.poNumber)
+	})
+
+	it("a row still being read or replaced answers not_ready to every intent", async () => {
+		// READING, not PENDING: a parallel test's processPending claims PENDING rows.
+		const pending = await reviewPo({ extra: { status: "READING" } })
+		const gone = await reviewPo({ extra: { status: "SUPERSEDED" } })
+		for (const id of [pending.id, gone.id])
+			for (const intent of [
+				"fix",
+				"generate",
+				"upload_complete",
+				"discard",
+				"submit",
+			])
+				expect(await post(id, { intent })).toEqual({
+					errorKey: "claro.errors.not_ready",
+				})
+	})
+
+	it("no Discard link when the only earlier twin is stopped on missing pages", async () => {
+		const number = poNumber()
+		await reviewPo({
+			poNumber: number,
+			extra: {
+				status: "BLOCKED",
+				statedPages: 2,
+				checks: [{ code: "pages_missing", severity: "blocked" }],
+				receivedAt: new Date(Date.now() - 60_000),
+			},
+		})
+		// Stale: says duplicate though its only twin does not count.
+		const copy = await reviewPo({
+			poNumber: number,
+			extra: {
+				status: "BLOCKED",
+				checks: [{ code: "duplicate", severity: "blocked" }],
+			},
+		})
+		const page = (await load(copy.id)) as { po: { original: unknown } }
+		expect(page.po.original).toBeNull()
+	})
 })
 
 describe("/finance/claro/:id Submit", () => {
@@ -377,6 +524,18 @@ describe("/finance/claro/:id Submit", () => {
 			(await db.claroInvoice.findUniqueOrThrow({ where: { id: inv.id } }))
 				.loadedAt,
 		).toBeNull()
+	})
+	it("submit refuses a day after tomorrow, allows one before the invoice was made", async () => {
+		const po = await reviewPo({ status: "CONFIRMED" })
+		const inv = await seedInvoice(po.id, po.docId as string)
+		const later = new Date(Date.now() + 3 * 86_400_000)
+			.toISOString()
+			.slice(0, 10)
+		expect(await post(po.id, { intent: "submit", loadedOn: later })).toEqual({
+			errorKey: "claro.errors.future_date",
+		})
+		const res = await post(po.id, { intent: "submit", loadedOn: "2020-01-02" })
+		expect(location(res)).toBe(`/finance/claro?submitted=${inv.id}`)
 	})
 })
 
@@ -438,6 +597,58 @@ describe("/finance/claro/:id roles", () => {
 		try {
 			expect(location(await load(po.id))).toBe("/dashboard")
 			expect(location(await post(po.id, { intent: "discard" }))).toBe(
+				"/dashboard",
+			)
+		} finally {
+			mocks.user.role = "FINANCE"
+		}
+	})
+})
+
+describe("/finance/claro/:id file routes", () => {
+	const get = (
+		fn: (args: never) => Promise<unknown>,
+		id: string,
+		sub: string,
+	) =>
+		fn({
+			request: new Request(`http://localhost/finance/claro/${id}/${sub}`),
+			params: { id },
+			context: {},
+		} as never).catch((r: unknown) => r) as Promise<Response>
+
+	it("/file serves the PO PDF with nosniff, and refuses other roles", async () => {
+		const file = path.join(dir, `${runToken("po")}.pdf`)
+		await fs.writeFile(file, pdf(runToken("f")))
+		const po = await reviewPo({ extra: { filePath: file } })
+		const res = await get(fileLoader, po.id, "file")
+		expect(res.status).toBe(200)
+		expect(res.headers.get("Content-Type")).toBe("application/pdf")
+		expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff")
+		mocks.user.role = "INSTALLER"
+		try {
+			expect(location(await get(fileLoader, po.id, "file"))).toBe("/dashboard")
+		} finally {
+			mocks.user.role = "FINANCE"
+		}
+	})
+
+	it("/invoice serves the PO's invoice PDF with nosniff, and refuses other roles", async () => {
+		const file = path.join(dir, `${runToken("inv")}.pdf`)
+		await fs.writeFile(file, pdf(runToken("i")))
+		const po = await reviewPo({ status: "CONFIRMED" })
+		const inv = await seedInvoice(po.id, po.docId as string)
+		await db.claroInvoice.update({
+			where: { id: inv.id },
+			data: { filePath: file },
+		})
+		const res = await get(invoiceLoader, po.id, "invoice")
+		expect(res.status).toBe(200)
+		expect(res.headers.get("Content-Type")).toBe("application/pdf")
+		expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff")
+		mocks.user.role = "INSTALLER"
+		try {
+			expect(location(await get(invoiceLoader, po.id, "invoice"))).toBe(
 				"/dashboard",
 			)
 		} finally {

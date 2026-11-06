@@ -3487,7 +3487,9 @@
 			"over_billed": "Dentro de lo facturado por JAF",
 			"unreadable": "PO leída automáticamente",
 			"pass": "OK",
-			"fail": "Falló"
+			"fail": "Falló",
+			"aviso": "Aviso encontrado",
+			"aviso_detail": "Esta PO no tiene un Aviso vinculado. La factura necesita uno: escriba el número de Aviso a la izquierda y guarde."
 		},
 		"review": {
 			"as_read": "PO según se leyó",
@@ -3497,7 +3499,6 @@
 			"file_pages_one": "El archivo tiene {{count}} página.",
 			"file_pages_other": "El archivo tiene {{count}} páginas.",
 			"candidates": "Leídos de la PO: {{numbers}}",
-			"printed": "La PO imprimió {{amount}}",
 			"save": "Guardar cambios",
 			"save_first": "Guarde sus cambios antes de generar.",
 			"fix_in": "Corrija a la izquierda: {{fields}}",
@@ -3514,7 +3515,11 @@
 			"duplicate_title": "Esta PO ya está cargada.",
 			"duplicate_body": "Abra la PO existente, o descarte esta copia.",
 			"open_original": "Abrir la PO existente",
-			"discard": "Descartar esta copia"
+			"discard": "Descartar esta copia",
+			"stored": "La factura llevará {{amount}}",
+			"money_printed": "Según impreso en la PO:",
+			"needs_aviso": "Para generar hace falta un Aviso. Escriba el número de Aviso a la izquierda y guarde.",
+			"duplicate_no_original": "No se encontró la PO que esta repite. Léala de nuevo o revise el número de PO."
 		},
 		"lines": {
 			"description": "Descripción",
@@ -3531,7 +3536,6 @@
 		"generate": {
 			"title": "Factura {{number}}",
 			"format": "Formato de Claro / Ariba",
-			"vendor": "Núm. de suplidor",
 			"signed": "La firma de Lissette ya está en la factura",
 			"download": "Descargar PDF",
 			"back": "Volver a revisar",
@@ -3557,7 +3561,11 @@
 			"work_month_required": "Elija el mes de trabajo.",
 			"already_submitted": "Esta factura ya está marcada como enviada.",
 			"no_invoice": "Esta PO aún no tiene factura.",
-			"not_editable": "Esta PO ya pasó la revisión, así que sus campos ya no pueden cambiar."
+			"not_editable": "Esta PO ya pasó la revisión, así que sus campos ya no pueden cambiar.",
+			"not_ready": "Esta PO todavía se está leyendo, o una copia más nueva la reemplazó. Ábrala desde la cola.",
+			"aviso_missing": "La factura necesita un Aviso. Escriba el número de Aviso y guarde primero.",
+			"future_date": "Ese día todavía no ha llegado. Escriba el día en que se registró.",
+			"bad_po_number": "El número de PO necesita sus dígitos."
 		}
 	}
 }

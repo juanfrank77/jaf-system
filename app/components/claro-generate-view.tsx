@@ -3,7 +3,7 @@ import { Link } from "react-router"
 import { Badge } from "~/components/ui/badge"
 import { buttonVariants } from "~/components/ui/button"
 import { usDate, zoneOf } from "~/lib/claro-invoice"
-import { CLARO_VENDOR_NUMBER, type ClaroPoView } from "~/lib/claro-po-view"
+import type { ClaroPoView } from "~/lib/claro-po-view"
 import { formatMoney } from "~/lib/utils"
 
 /**
@@ -35,12 +35,6 @@ export function ClaroGenerateView({ po }: { po: ClaroPoView }) {
 				</p>
 			</div>
 			<dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
-				<div>
-					<dt className="text-xs text-muted-foreground">
-						{t("claro.generate.vendor")}
-					</dt>
-					<dd className="font-mono">{CLARO_VENDOR_NUMBER}</dd>
-				</div>
 				<div>
 					<dt className="text-xs text-muted-foreground">
 						{t("po_inbox.field.po")}

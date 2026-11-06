@@ -18,6 +18,8 @@ function useRowLabel() {
 				return t("claro.check.pages")
 			case "duplicate":
 				return t("claro.check.duplicate")
+			case "aviso":
+				return t("claro.check.aviso")
 			case "po_number_format":
 				return t("claro.check.po_number_format")
 			case "po_date_missing":
@@ -87,7 +89,7 @@ export function ClaroCheckList({
 			</h2>
 			<ul className="space-y-2">
 				{rows.map((row) => {
-					const failed = row.failing.length > 0
+					const failed = row.failed
 					return (
 						<li
 							key={row.key}
@@ -108,6 +110,9 @@ export function ClaroCheckList({
 							{failed && (
 								<>
 									<ul className="list-disc pl-5 text-sm">
+										{row.key === "aviso" && (
+											<li>{t("claro.check.aviso_detail")}</li>
+										)}
 										{row.failing.map((c) => (
 											<li key={`${c.code}-${c.detail ?? ""}`}>
 												{checkText(c)}

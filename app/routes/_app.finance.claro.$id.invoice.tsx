@@ -17,6 +17,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	return new Response(new Uint8Array(bytes), {
 		headers: {
 			"Content-Type": "application/pdf",
+			"X-Content-Type-Options": "nosniff",
 			"Content-Disposition": `attachment; filename="${f.name}"`,
 		},
 	})

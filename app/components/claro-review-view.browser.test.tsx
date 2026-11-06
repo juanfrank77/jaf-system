@@ -144,4 +144,49 @@ describe("ClaroReviewView", () => {
 			screen.queryByRole("button", { name: "Generate invoice" }),
 		).toBeNull()
 	})
+
+	it("Unmatched: an Aviso row fails with no override box, the Aviso field is marked, no Generate", async ({
+		renderStub,
+	}) => {
+		await render(renderStub, {
+			...base,
+			status: "UNMATCHED",
+			avisoNumber: null,
+			checks: [],
+		})
+		const row = await screen.findByTestId("check-aviso")
+		expect(row).toHaveAttribute("data-state", "fail")
+		expect(within(row).queryByLabelText("Reason to override")).toBeNull()
+		expect(screen.getByLabelText("Aviso #")).toHaveAttribute(
+			"aria-invalid",
+			"true",
+		)
+		expect(
+			screen.queryByRole("button", { name: "Generate invoice" }),
+		).toBeNull()
+		expect(screen.getByText(/needs an Aviso/)).toBeInTheDocument()
+	})
+
+	it("the money fields show what the PO printed, not the totals rebuilt from lines", async ({
+		renderStub,
+	}) => {
+		await render(renderStub, base)
+		expect(await screen.findByLabelText("Subtotal")).toHaveValue(100)
+		expect(screen.getByLabelText("Total")).toHaveValue(111.5)
+	})
+
+	it("a duplicate whose original is not found offers no Discard", async ({
+		renderStub,
+	}) => {
+		await render(renderStub, {
+			...base,
+			status: "BLOCKED",
+			checks: [{ code: "duplicate", severity: "blocked" }],
+			original: null,
+		})
+		await screen.findByTestId("check-duplicate")
+		expect(
+			screen.queryByRole("button", { name: "Discard this copy" }),
+		).toBeNull()
+	})
 })

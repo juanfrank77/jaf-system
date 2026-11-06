@@ -147,6 +147,8 @@ export function ClaroLinesEditor({
 											aria-label={t("claro.lines.amount_n", { n })}
 											type="number"
 											step="0.01"
+											min={0}
+											max={1e9}
 											required
 											className="text-right font-mono"
 											value={r.amount}

@@ -109,6 +109,8 @@ export type CheckRowKey =
 	| "totals"
 	| "pages"
 	| "duplicate"
+	/** Not a stored check: the PO has no Aviso linked (Unmatched). */
+	| "aviso"
 	| Exclude<
 			PoCheckCode,
 			"lines_sum" | "totals" | "ivu_line" | "pages_missing" | "pages_unknown"
@@ -124,7 +126,9 @@ const FIXED: { key: CheckRowKey; codes: PoCheckCode[] }[] = [
 
 export type CheckRow = {
 	key: CheckRowKey
-	/** The checks failing in this row; empty means it passed. */
+	/** Red. Usually because of `failing`; the Aviso row fails on its own. */
+	failed: boolean
+	/** The stored checks failing in this row. */
 	failing: PoCheck[]
 	/** Failing codes a reason can override, one reason each. */
 	overridable: PoCheckCode[]
@@ -133,13 +137,25 @@ export type CheckRow = {
 	fields: ReviewField[]
 }
 
-/** The fixed rows, then one row per other failing check. */
-export function checkRows(checks: PoCheck[]): CheckRow[] {
+/** No Aviso is linked to a PO still under review: an invoice needs one. */
+export const avisoMissing = (po: Pick<ClaroPoView, "status" | "avisoNumber">) =>
+	po.status !== "CONFIRMED" && !po.avisoNumber
+
+/**
+ * The fixed rows, then one row per other failing check. With `avisoMissing`,
+ * an Aviso row that fails and takes no reason (no reason makes an invoice
+ * without an Aviso).
+ */
+export function checkRows(
+	checks: PoCheck[],
+	opts: { avisoMissing?: boolean } = {},
+): CheckRow[] {
 	const row = (key: CheckRowKey, codes: PoCheckCode[]): CheckRow => {
 		const failing = checks.filter((c) => codes.includes(c.code))
 		const failCodes = [...new Set(failing.map((c) => c.code))]
 		return {
 			key,
+			failed: failing.length > 0,
 			failing,
 			overridable: failCodes.filter((c) => !HARD_STOPS.has(c)),
 			hardStop: failCodes.some((c) => HARD_STOPS.has(c)),
@@ -149,9 +165,25 @@ export function checkRows(checks: PoCheck[]): CheckRow[] {
 	const fixedCodes = new Set(FIXED.flatMap((f) => f.codes))
 	const extra = [
 		...new Set(checks.map((c) => c.code).filter((c) => !fixedCodes.has(c))),
-	] as Exclude<CheckRowKey, "lines_sum" | "totals" | "pages" | "duplicate">[]
+	] as Exclude<
+		CheckRowKey,
+		"lines_sum" | "totals" | "pages" | "duplicate" | "aviso"
+	>[]
+	const aviso: CheckRow[] = opts.avisoMissing
+		? [
+				{
+					key: "aviso",
+					failed: true,
+					failing: [],
+					overridable: [],
+					hardStop: true,
+					fields: ["avisoNumber"],
+				},
+			]
+		: []
 	return [
 		...FIXED.map((f) => row(f.key, f.codes)),
+		...aviso,
 		...extra.map((code) => row(code, [code])),
 	]
 }
@@ -170,9 +202,6 @@ export function onlyDuplicateStops(checks: PoCheck[]): boolean {
 	return hard.length > 0 && hard.every((c) => c.code === "duplicate")
 }
 
-/** JAF's vendor number at Claro, as printed on every Claro PO. */
-export const CLARO_VENDOR_NUMBER = "400000077"
-
 export type ClaroDetailError =
 	| "claro.errors.bad_number"
 	| "claro.errors.bad_lines"
@@ -186,6 +215,10 @@ export type ClaroDetailError =
 	| "claro.errors.already_submitted"
 	| "claro.errors.no_invoice"
 	| "claro.errors.not_editable"
+	| "claro.errors.not_ready"
+	| "claro.errors.aviso_missing"
+	| "claro.errors.future_date"
+	| "claro.errors.bad_po_number"
 	| "po_inbox.errors.not_pdf"
 	| "po_inbox.errors.no_files"
 	| "po_inbox.errors.incomplete"

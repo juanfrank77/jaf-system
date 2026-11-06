@@ -3487,7 +3487,9 @@
 			"over_billed": "Within what JAF billed",
 			"unreadable": "PO read automatically",
 			"pass": "OK",
-			"fail": "Failed"
+			"fail": "Failed",
+			"aviso": "Aviso found",
+			"aviso_detail": "No Aviso is linked to this PO. An invoice needs one: enter the Aviso number on the left and save."
 		},
 		"review": {
 			"as_read": "PO as read",
@@ -3497,7 +3499,6 @@
 			"file_pages_one": "The file has {{count}} page.",
 			"file_pages_other": "The file has {{count}} pages.",
 			"candidates": "Read from the PO: {{numbers}}",
-			"printed": "The PO printed {{amount}}",
 			"save": "Save changes",
 			"save_first": "Save your changes before generating.",
 			"fix_in": "Fix on the left: {{fields}}",
@@ -3514,7 +3515,11 @@
 			"duplicate_title": "This PO is already loaded.",
 			"duplicate_body": "Open the existing PO, or discard this copy.",
 			"open_original": "Open the existing PO",
-			"discard": "Discard this copy"
+			"discard": "Discard this copy",
+			"stored": "The invoice will carry {{amount}}",
+			"money_printed": "As printed on the PO:",
+			"needs_aviso": "Generate needs an Aviso. Enter the Aviso number on the left and save.",
+			"duplicate_no_original": "The PO it repeats could not be found. Read it again or check the PO number."
 		},
 		"lines": {
 			"description": "Description",
@@ -3531,7 +3536,6 @@
 		"generate": {
 			"title": "Invoice {{number}}",
 			"format": "Claro / Ariba format",
-			"vendor": "Vendor no.",
 			"signed": "Lissette's signature already on the invoice",
 			"download": "Download PDF",
 			"back": "Back to review",
@@ -3557,7 +3561,11 @@
 			"work_month_required": "Choose the work month.",
 			"already_submitted": "This invoice is already marked as submitted.",
 			"no_invoice": "There is no invoice for this PO yet.",
-			"not_editable": "This PO already passed Review, so its fields can no longer change."
+			"not_editable": "This PO already passed Review, so its fields can no longer change.",
+			"not_ready": "This PO is still being read, or a newer copy replaced it. Open it from the queue.",
+			"aviso_missing": "An invoice needs an Aviso. Enter the Aviso number and save first.",
+			"future_date": "That day has not come yet. Enter the day it was filed.",
+			"bad_po_number": "The PO number needs its digits."
 		}
 	}
 }

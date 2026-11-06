@@ -15,6 +15,7 @@ export async function loadClaroPo(id: string): Promise<ClaroPoView | null> {
 			select: {
 				status: true,
 				fileHash: true,
+				receivedAt: true,
 				avisoCandidates: true,
 				printed: true,
 				supersededById: true,
@@ -48,6 +49,7 @@ export async function loadClaroPo(id: string): Promise<ClaroPoView | null> {
 					id,
 					poNumber: detail.poNumber,
 					fileHash: r.fileHash,
+					receivedAt: r.receivedAt,
 				}).then((o) => (o ? { id: o.id, poNumber: o.poNumber } : null))
 			: null,
 		invoice: inv
@@ -77,31 +79,42 @@ export async function loadClaroPo(id: string): Promise<ClaroPoView | null> {
 type FixInput = Parameters<typeof fixPo>[2]
 type FixParse =
 	| { ok: true; fields: FixInput }
-	| { ok: false; error: "bad_number" | "bad_lines" }
+	| { ok: false; error: "bad_number" | "bad_lines" | "bad_po_number" }
 
 const text = (form: FormData, k: string) => {
 	const v = form.get(k)
 	return typeof v === "string" ? v.trim() : undefined
 }
 
+/** The largest amount a PO field or line may carry. */
+const MAX_AMOUNT = 1e9
+const amountOk = (n: number) => Number.isFinite(n) && n >= 0 && n <= MAX_AMOUNT
+/** The only IVU rates Claro bills, the two `recomputeFromLines` splits. */
+const IVU_RATES = [0.04, 0.115]
+const INT_RANGE = { termsDays: [0, 365], statedPages: [1, 99] } as const
+
 /**
  * The Review form, reduced to what changed against the PO as it stands. Every
  * field is posted on each save, so sending them all to `fixPo` would mark
- * untouched ones as typed by hand, and a header sent back after a line edit
- * would overwrite what the PO printed with the totals rebuilt from the lines.
- * A number that is not finite, or a malformed line, refuses the whole save.
+ * untouched ones as typed by hand. The money header is what the PO printed
+ * (a header edit states it), so it is compared against `printed`, falling
+ * back to the stored value only where nothing printed was kept. Any invalid
+ * field refuses the whole save.
  */
 export function parseFixForm(form: FormData, po: ClaroPoView): FixParse {
 	const fields: FixInput = {}
 	const poNumber = text(form, "poNumber")
-	if (
-		poNumber !== undefined &&
-		poNumber.replace(/\D/g, "") !== (po.poNumber ?? "")
-	)
-		fields.poNumber = poNumber
+	if (poNumber !== undefined) {
+		const digits = poNumber.replace(/\D/g, "")
+		if (digits !== (po.poNumber ?? "")) {
+			// A number typed without a digit would clear the PO number silently.
+			if (digits === "") return { ok: false, error: "bad_po_number" }
+			fields.poNumber = poNumber
+		}
+	}
 	const poDate = text(form, "poDate")
 	if (poDate !== undefined && poDate !== (po.poDate ?? "")) {
-		if (poDate !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(poDate))
+		if (poDate !== "" && !parseDay(poDate))
 			return { ok: false, error: "bad_number" }
 		fields.poDate = poDate
 	}
@@ -113,7 +126,8 @@ export function parseFixForm(form: FormData, po: ClaroPoView): FixParse {
 		const v = text(form, k)
 		if (v === undefined || v === "") continue
 		const n = Number(v)
-		if (!Number.isInteger(n) || n < 0 || (k === "statedPages" && n < 1))
+		const [lo, hi] = INT_RANGE[k]
+		if (!Number.isInteger(n) || n < lo || n > hi)
 			return { ok: false, error: "bad_number" }
 		if (n !== po[k]) fields[k] = n
 	}
@@ -121,8 +135,8 @@ export function parseFixForm(form: FormData, po: ClaroPoView): FixParse {
 		const v = text(form, k)
 		if (v === undefined || v === "") continue
 		const n = Number(v)
-		if (!Number.isFinite(n)) return { ok: false, error: "bad_number" }
-		const was = po[k]
+		if (!amountOk(n)) return { ok: false, error: "bad_number" }
+		const was = po.printed?.[k] ?? po[k]
 		if (was === null || cents(n) !== cents(was)) fields[k] = n
 	}
 
@@ -154,14 +168,8 @@ function parseLines(raw: string): LineInput[] | null {
 		const o = l as Record<string, unknown>
 		const amount = o.amount
 		const ivuRate = o.ivuRate
-		if (typeof amount !== "number" || !Number.isFinite(amount)) return null
-		if (
-			typeof ivuRate !== "number" ||
-			!Number.isFinite(ivuRate) ||
-			ivuRate < 0 ||
-			ivuRate > 1
-		)
-			return null
+		if (typeof amount !== "number" || !amountOk(amount)) return null
+		if (typeof ivuRate !== "number" || !IVU_RATES.includes(ivuRate)) return null
 		out.push({
 			item: String(o.item ?? "").slice(0, 40),
 			description: String(o.description ?? "").slice(0, 500),
@@ -183,8 +191,6 @@ const OVERRIDE_CODES: PoCheckCode[] = [
 	"totals",
 	"ivu_line",
 	"po_number_format",
-	"duplicate",
-	"pages_missing",
 	"pages_unknown",
 	"po_date_missing",
 	"terms_missing",
@@ -192,7 +198,9 @@ const OVERRIDE_CODES: PoCheckCode[] = [
 	"unreadable",
 ]
 
-/** One `override-<code>` reason per red check; blank ones are left out. */
+/** One `override-<code>` reason per red check; blank ones are left out. The
+ * hard stops (missing pages, duplicate) are never read: they cannot be
+ * overridden. */
 export function parseOverrides(form: FormData) {
 	return OVERRIDE_CODES.flatMap((check) => {
 		const reason = text(form, `override-${check}`)
@@ -212,3 +220,10 @@ export function parseDay(v: string | undefined): Date | null {
 /** Today on the Puerto Rico calendar, YYYY-MM-DD. */
 export const todayInPr = (now = new Date()) =>
 	now.toLocaleDateString("en-CA", { timeZone: "America/Puerto_Rico" })
+
+/** Later than tomorrow on the Puerto Rico calendar (a day of slack for time
+ * zones). Days in the past are fine. */
+export function afterTomorrow(day: Date, now = new Date()): boolean {
+	const today = parseDay(todayInPr(now)) as Date
+	return day.getTime() > today.getTime() + 86_400_000
+}

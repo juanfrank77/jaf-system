@@ -12,6 +12,7 @@ import { Callout } from "~/components/ui/callout"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import {
+	avisoMissing,
 	type ClaroDetailError,
 	type ClaroPoView,
 	checkRows,
@@ -30,6 +31,8 @@ function Field({
 	readOnly,
 	type = "text",
 	step,
+	min,
+	max,
 	list,
 	hint,
 }: {
@@ -39,6 +42,8 @@ function Field({
 	readOnly: boolean
 	type?: string
 	step?: string
+	min?: number
+	max?: number
 	list?: string
 	hint?: string | null
 }) {
@@ -51,6 +56,8 @@ function Field({
 				name={name}
 				type={type}
 				step={step}
+				min={min}
+				max={max}
 				list={list}
 				defaultValue={value ?? ""}
 				disabled={readOnly}
@@ -61,6 +68,9 @@ function Field({
 		</div>
 	)
 }
+
+const MONEY = ["subtotal", "ivu4", "ivu115", "total"] as const
+type MoneyKey = (typeof MONEY)[number]
 
 /** Every value the form shows, so a save that changes one remounts it. */
 const formKey = (po: ClaroPoView) =>
@@ -74,6 +84,7 @@ const formKey = (po: ClaroPoView) =>
 		po.ivu4,
 		po.ivu115,
 		po.total,
+		po.printed,
 		po.lines,
 	])
 
@@ -105,21 +116,24 @@ export function ClaroReviewView({
 	}, [nav.state, nav.formData, errorKey])
 
 	const readOnly = po.status === "CONFIRMED"
-	const rows = checkRows(po.checks)
+	const noAviso = avisoMissing(po)
+	const rows = checkRows(po.checks, { avisoMissing: noAviso })
 	const toFix = fieldsToFix(po.checks)
+	if (noAviso) toFix.add("avisoNumber")
 	const hardStop = po.checks.some((c) => HARD_STOPS.has(c.code))
 	const pagesMissing = hasCheck(po.checks, "pages_missing")
 	const duplicate = onlyDuplicateStops(po.checks)
 	const unreadable = !!po.readError || hasCheck(po.checks, "unreadable")
-	const canGenerate = !hardStop && !po.invoice
+	const canGenerate = !hardStop && !po.invoice && !noAviso
 	const askReasons = canGenerate && !readOnly
-	const printedHint = (k: "subtotal" | "ivu4" | "ivu115" | "total") => {
-		const p = po.printed?.[k]
+	// The money header is what the PO printed (a header edit states it); what
+	// the invoice will carry, rebuilt from edited lines, is shown beneath.
+	const asPrinted = (k: MoneyKey) => po.printed?.[k] ?? po[k]
+	const storedHint = (k: MoneyKey) => {
+		const p = asPrinted(k)
 		const s = po[k]
-		return p !== null &&
-			p !== undefined &&
-			(s === null || p.toFixed(2) !== s.toFixed(2))
-			? t("claro.review.printed", { amount: formatMoney(p) })
+		return s !== null && (p === null || p.toFixed(2) !== s.toFixed(2))
+			? t("claro.review.stored", { amount: formatMoney(s) })
 			: null
 	}
 	const fileUrl = `/finance/claro/${po.id}/file`
@@ -198,6 +212,8 @@ export function ClaroReviewView({
 								name="termsDays"
 								type="number"
 								step="1"
+								min={0}
+								max={365}
 								value={po.termsDays}
 								invalid={toFix.has("termsDays")}
 								readOnly={readOnly}
@@ -206,6 +222,8 @@ export function ClaroReviewView({
 								name="statedPages"
 								type="number"
 								step="1"
+								min={1}
+								max={99}
 								value={po.statedPages}
 								invalid={toFix.has("statedPages")}
 								readOnly={readOnly}
@@ -223,17 +241,21 @@ export function ClaroReviewView({
 								onEdit={() => setDirty(true)}
 							/>
 						</div>
+						<p className="text-xs text-muted-foreground">
+							{t("claro.review.money_printed")}
+						</p>
 						<div className="grid grid-cols-2 gap-3">
-							{(["subtotal", "ivu4", "ivu115", "total"] as const).map((k) => (
+							{MONEY.map((k) => (
 								<Field
 									key={k}
 									name={k}
 									type="number"
 									step="0.01"
-									value={po[k]}
+									min={0}
+									value={asPrinted(k)}
 									invalid={toFix.has(k)}
 									readOnly={readOnly}
-									hint={printedHint(k)}
+									hint={storedHint(k)}
 								/>
 							))}
 						</div>
@@ -283,9 +305,11 @@ export function ClaroReviewView({
 
 					{duplicate && (
 						<Callout tone="danger" title={t("claro.review.duplicate_title")}>
-							{t("claro.review.duplicate_body")}
-							<div className="mt-2 flex flex-wrap items-center gap-2">
-								{po.original && (
+							{po.original
+								? t("claro.review.duplicate_body")
+								: t("claro.review.duplicate_no_original")}
+							{po.original && (
+								<div className="mt-2 flex flex-wrap items-center gap-2">
 									<Link
 										to={`/finance/claro/${po.original.id}`}
 										className={buttonVariants({
@@ -295,19 +319,19 @@ export function ClaroReviewView({
 									>
 										{t("claro.review.open_original")}
 									</Link>
-								)}
-								<Form method="post">
-									<input type="hidden" name="intent" value="discard" />
-									<Button
-										type="submit"
-										variant="destructive"
-										size="sm"
-										disabled={busy}
-									>
-										{t("claro.review.discard")}
-									</Button>
-								</Form>
-							</div>
+									<Form method="post">
+										<input type="hidden" name="intent" value="discard" />
+										<Button
+											type="submit"
+											variant="destructive"
+											size="sm"
+											disabled={busy}
+										>
+											{t("claro.review.discard")}
+										</Button>
+									</Form>
+								</div>
+							)}
 						</Callout>
 					)}
 
@@ -318,6 +342,12 @@ export function ClaroReviewView({
 								{t("po_inbox.reread")}
 							</Button>
 						</Form>
+					)}
+
+					{noAviso && !hardStop && (
+						<p className="rounded-lg border bg-card p-3 text-sm text-status-danger">
+							{t("claro.review.needs_aviso")}
+						</p>
 					)}
 
 					{canGenerate && (

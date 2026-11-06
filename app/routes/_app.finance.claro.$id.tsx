@@ -11,6 +11,7 @@ import {
 	markLoaded,
 } from "~/lib/claro-invoice.server"
 import {
+	afterTomorrow,
 	loadClaroPo,
 	parseDay,
 	parseFixForm,
@@ -79,6 +80,9 @@ const INVOICE_ERRORS: Partial<Record<string, ClaroDetailError>> = {
 
 const fail = (errorKey: ClaroDetailError) => ({ errorKey })
 
+/** Not on Review yet (still being read) or no longer (replaced). */
+const NOT_READY = new Set(["PENDING", "READING", "SUPERSEDED"])
+
 export async function action({ request, params }: Route.ActionArgs) {
 	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])
 	const form = await request.formData()
@@ -86,11 +90,11 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const self = `/finance/claro/${params.id}`
 	const po = await loadClaroPo(params.id)
 	if (!po) throw new Response("Not Found", { status: 404 })
+	if (NOT_READY.has(po.status)) return fail("claro.errors.not_ready")
 	try {
 		switch (intent) {
 			case "fix": {
-				if (po.status === "CONFIRMED" || po.status === "SUPERSEDED")
-					return fail("claro.errors.not_editable")
+				if (po.status === "CONFIRMED") return fail("claro.errors.not_editable")
 				const parsed = parseFixForm(form, po)
 				if (!parsed.ok) return fail(`claro.errors.${parsed.error}`)
 				if (Object.keys(parsed.fields).length > 0)
@@ -113,10 +117,11 @@ export async function action({ request, params }: Route.ActionArgs) {
 					if (e instanceof PoError && e.code === "not_confirmable") {
 						// Read the checks as they stand after the refresh.
 						const now = await loadClaroPo(po.id)
-						const hard = now?.checks.some((c) => HARD_STOPS.has(c.code))
-						return fail(
-							hard ? "claro.errors.hard_stop" : "claro.errors.reason_required",
-						)
+						if (now?.checks.some((c) => HARD_STOPS.has(c.code)))
+							return fail("claro.errors.hard_stop")
+						// No reason can stand in for an Aviso: an invoice needs one.
+						if (!now?.avisoNumber) return fail("claro.errors.aviso_missing")
+						return fail("claro.errors.reason_required")
 					}
 					throw e
 				}
@@ -153,6 +158,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 				if (!po.invoice) return fail("claro.errors.no_invoice")
 				const day = parseDay(String(form.get("loadedOn") ?? ""))
 				if (!day) return fail("claro.errors.bad_date")
+				if (afterTomorrow(day)) return fail("claro.errors.future_date")
 				const { marked } = await markLoaded([po.invoice.id], user.id, day)
 				if (marked === 0) return fail("claro.errors.already_submitted")
 				throw redirect(`/finance/claro?submitted=${po.invoice.id}`)

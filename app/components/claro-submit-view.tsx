@@ -98,6 +98,7 @@ export function ClaroSubmitView({
 							name="loadedOn"
 							type="date"
 							required
+							max={today}
 							defaultValue={today}
 							className="w-44"
 						/>

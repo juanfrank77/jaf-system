@@ -158,6 +158,25 @@ const typedNumber = (entered: Prisma.JsonValue | null) =>
 	!Array.isArray(entered) &&
 	"poNumber" in entered
 
+type Twin = {
+	id: string
+	status: string
+	checks: Prisma.JsonValue | null
+	receivedAt: Date
+	invoice: { id: string } | null
+}
+
+/**
+ * The first-copy rule: a twin makes `row` a duplicate when it is confirmed or
+ * invoiced, or was uploaded earlier and is not stopped only by missing pages.
+ */
+const counts = (o: Twin, row: { id: string; receivedAt: Date }) =>
+	o.status === "CONFIRMED" ||
+	o.invoice !== null ||
+	((o.receivedAt < row.receivedAt ||
+		(o.receivedAt.getTime() === row.receivedAt.getTime() && o.id < row.id)) &&
+		!onlyPagesMissing(checksOf(o.checks)))
+
 /** Only these rows may still get a verdict; a confirm or a supersede wins. */
 const STILL_OPEN = {
 	notIn: ["CONFIRMED", "SUPERSEDED"],
@@ -265,14 +284,7 @@ export async function evaluatePo(
 			invoice: { select: { id: true } },
 		},
 	})
-	const duplicate = twins.some(
-		(o) =>
-			o.status === "CONFIRMED" ||
-			o.invoice !== null ||
-			((o.receivedAt < row.receivedAt ||
-				(o.receivedAt.getTime() === row.receivedAt.getTime() && o.id < id)) &&
-				!onlyPagesMissing(checksOf(o.checks))),
-	)
+	const duplicate = twins.some((o) => counts(o, row))
 
 	const ctx = {
 		filePages: row.filePages ?? 0,
@@ -715,12 +727,13 @@ export async function confirmPo(
 
 /**
  * The copy a duplicate repeats: one already confirmed or invoiced, else the
- * first uploaded. Null when no other live copy shares its number or file.
+ * first earlier copy that counts. Null when no twin makes this a duplicate.
  */
 export async function findOriginal(row: {
 	id: string
 	poNumber: string | null
 	fileHash: string
+	receivedAt: Date
 }): Promise<{
 	id: string
 	poNumber: string | null
@@ -741,12 +754,16 @@ export async function findOriginal(row: {
 			poNumber: true,
 			docId: true,
 			status: true,
+			checks: true,
+			receivedAt: true,
 			invoice: { select: { id: true } },
 		},
 	})
+	// Only a twin that makes this a duplicate (the rule `evaluatePo` uses).
+	const qualifying = twins.filter((o) => counts(o, row))
 	const pick =
-		twins.find((o) => o.status === "CONFIRMED" || o.invoice !== null) ??
-		twins[0]
+		qualifying.find((o) => o.status === "CONFIRMED" || o.invoice !== null) ??
+		qualifying[0]
 	return pick
 		? { id: pick.id, poNumber: pick.poNumber, docId: pick.docId }
 		: null

@@ -666,6 +666,7 @@ enum ClaroPoStatus {
   BLOCKED
   UNMATCHED // no Aviso found
   CONFIRMED
+  SUPERSEDED // replaced by a corrected PO; see supersededById
 }
 
 // A purchase order Claro sent, as uploaded to the PO inbox. One row per file;
@@ -692,6 +693,11 @@ model ClaroPo {
   checks          Json? // [{ code, severity, detail }]
   readError       String?
   entered         Json? // { field: { byId, at } } for values typed by hand
+  printed         Json? // { subtotal, ivu4, ivu115, total } as the PO printed them; set once by the reader
+  overrides       Json? // [{ check, reason, byId, at }] checks a person accepted with a reason
+  supersededById  String?
+  supersededBy    ClaroPo?      @relation("ClaroPoSupersede", fields: [supersededById], references: [id])
+  supersedes      ClaroPo[]     @relation("ClaroPoSupersede")
   receivedAt      DateTime      @default(now())
   readStartedAt   DateTime?
   uploadedById    String
@@ -705,6 +711,7 @@ model ClaroPo {
   @@index([poNumber])
   @@index([docId])
   @@index([fileHash])
+  @@index([supersededById])
 }
 
 // The "Factura de Pago - Claro" JAF makes from a confirmed PO and loads in Ariba

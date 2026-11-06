@@ -11,7 +11,6 @@ import {
 	invoiceFile,
 	listInvoices,
 	makeInvoice,
-	makeInvoices,
 	markLoaded,
 	zipInvoices,
 } from "~/lib/claro-invoice.server"
@@ -552,20 +551,6 @@ describe("Claro invoices", () => {
 		await expect(
 			makeInvoice({ poId: po.id, workMonth: "2026-05", madeById: u.id }),
 		).rejects.toMatchObject({ code: "total_mismatch" })
-	})
-
-	it("make-many counts the ones that could not be made", async () => {
-		const u = t.track("user", await seedUser({ role: "FINANCE" }))
-		const good = await confirmedPo(u.id)
-		const bad = await confirmedPo(u.id, { total: 1 })
-		const r = await makeInvoices(
-			[
-				{ poId: good.id, workMonth: "2026-05" },
-				{ poId: bad.id, workMonth: "2026-05" },
-			],
-			u.id,
-		)
-		expect(r).toEqual({ made: 1, failed: 1 })
 	})
 
 	it("mark loaded stamps the date and sets due = loaded + PO terms, once", async () => {

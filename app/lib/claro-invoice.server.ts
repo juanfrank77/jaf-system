@@ -322,24 +322,6 @@ export async function addOldInvoice(args: {
 	return { id: row.id }
 }
 
-export async function makeInvoices(
-	items: { poId: string; workMonth: string | null }[],
-	madeById: string,
-): Promise<{ made: number; failed: number }> {
-	let made = 0
-	let failed = 0
-	for (const it of items) {
-		try {
-			await makeInvoice({ ...it, madeById })
-			made++
-		} catch (e) {
-			if (!(e instanceof ClaroInvoiceError)) throw e
-			failed++
-		}
-	}
-	return { made, failed }
-}
-
 /** Lissette ticks the ones she loaded in Ariba. Sets loaded date and due date = loaded + PO terms. */
 export async function markLoaded(
 	ids: string[],

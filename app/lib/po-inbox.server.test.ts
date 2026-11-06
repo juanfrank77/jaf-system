@@ -1,10 +1,9 @@
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 import { db } from "~/lib/db.server"
 import {
-	confirmAllGreen,
 	confirmPo,
 	discardPo,
 	fixPo,
@@ -233,7 +232,7 @@ describe("PO inbox", () => {
 		const trail = await db.auditTrail.findFirst({
 			where: { docId: doc.id, action: "PO_CONFIRMED" },
 		})
-		expect((trail?.diffJson as { source: string }).source).toBe("STAMPED")
+		expect(trail?.diffJson).toMatchObject({ source: "STAMPED" })
 		expect(await db.poLink.count({ where: { docId: doc.id } })).toBe(1)
 		await expect(confirmPo(id, user.id)).rejects.toMatchObject({
 			code: "already_confirmed",
@@ -259,33 +258,6 @@ describe("PO inbox", () => {
 		const winner = first.find((r) => r.status === "READY")
 		expect(winner).toBeDefined()
 		await confirmPo(winner!.id, user.id)
-	})
-
-	it("confirm-all-green confirms only green rows", async () => {
-		const { user, avisoNumber } = await setup()
-		const tagG = runToken("g")
-		const tagR = runToken("r")
-		const [g, r] = await ingestPoFiles(
-			[tagG, tagR].map((tag) => ({ name: `${tag}.pdf`, bytes: pdf(tag) })),
-			user.id,
-		)
-		t.track("claroPo", { id: g })
-		t.track("claroPo", { id: r })
-		await processPending(
-			readerOf({
-				[tagG]: read({ avisoCandidates: [avisoNumber] }),
-				[tagR]: read({ avisoCandidates: [avisoNumber], subtotal: 1 }),
-			}),
-			1,
-		)
-		const { confirmed } = await confirmAllGreen(user.id)
-		expect(confirmed).toBeGreaterThanOrEqual(1)
-		expect(
-			(await db.claroPo.findUniqueOrThrow({ where: { id: g } })).status,
-		).toBe("CONFIRMED")
-		expect(
-			(await db.claroPo.findUniqueOrThrow({ where: { id: r } })).status,
-		).toBe("NEEDS_LOOK")
 	})
 
 	it("fixing a field re-runs the checks and remembers who entered it", async () => {
@@ -924,6 +896,59 @@ describe("PO inbox", () => {
 		const row = await db.claroPo.findUniqueOrThrow({ where: { id: b } })
 		expect(row.status).toBe("SUPERSEDED")
 		expect(row.supersededById).toBe(a)
+	})
+
+	it("confirmPo without reasons refuses a PO with a red check", async () => {
+		const { user, avisoNumber } = await setup()
+		const tag = runToken("noreason")
+		const [id] = await ingestPoFiles(
+			[{ name: "n.pdf", bytes: pdf(tag) }],
+			user.id,
+		)
+		t.track("claroPo", { id })
+		await processPending(
+			readerOf({
+				[tag]: read({ avisoCandidates: [avisoNumber], termsDays: null }),
+			}),
+			1,
+		)
+		await expect(confirmPo(id, user.id)).rejects.toMatchObject({
+			code: "not_confirmable",
+		})
+		const row = await db.claroPo.findUniqueOrThrow({ where: { id } })
+		expect(row.status).toBe("NEEDS_LOOK")
+		expect(row.confirmedAt).toBeNull()
+	})
+
+	it("a fix that lands after a confirm changes nothing", async () => {
+		const { user, avisoNumber } = await setup()
+		const tag = runToken("late")
+		const [id] = await ingestPoFiles(
+			[{ name: "l.pdf", bytes: pdf(tag) }],
+			user.id,
+		)
+		t.track("claroPo", { id })
+		await processPending(
+			readerOf({ [tag]: read({ avisoCandidates: [avisoNumber] }) }),
+			1,
+		)
+		// The fix read the row just before the confirm went through.
+		const stale = await db.claroPo.findUniqueOrThrow({ where: { id } })
+		await confirmPo(id, user.id)
+		const spy = vi
+			.spyOn(db.claroPo, "findUnique")
+			.mockResolvedValueOnce(stale as never)
+		try {
+			await expect(fixPo(id, user.id, { termsDays: 30 })).rejects.toMatchObject(
+				{ code: "already_confirmed" },
+			)
+		} finally {
+			spy.mockRestore()
+		}
+		const row = await db.claroPo.findUniqueOrThrow({ where: { id } })
+		expect(row.status).toBe("CONFIRMED")
+		expect(row.termsDays).toBe(60)
+		expect(row.entered).toBeNull()
 	})
 
 	it("discardPo refuses a PO that is not a duplicate", async () => {

@@ -547,7 +547,7 @@ export async function fixPo(
 	if (!row) throw new PoError("unknown_po")
 	if (row.status === "CONFIRMED") throw new PoError("already_confirmed")
 	if (row.status === "SUPERSEDED") throw new PoError("not_confirmable")
-	const data: Prisma.ClaroPoUpdateInput = {}
+	const data: Prisma.ClaroPoUncheckedUpdateManyInput = {}
 	const touched: string[] = []
 	if (f.poNumber !== undefined) {
 		data.poNumber = f.poNumber.replace(/\D/g, "") || null
@@ -596,7 +596,7 @@ export async function fixPo(
 			select: { id: true },
 		})
 		if (!doc) throw new PoError("aviso_not_found")
-		data.doc = { connect: { id: doc.id } }
+		data.docId = doc.id
 		touched.push("aviso")
 	}
 	const entered = {
@@ -605,10 +605,20 @@ export async function fixPo(
 			touched.map((k) => [k, { byId, at: new Date().toISOString() }]),
 		),
 	}
-	await db.claroPo.update({
-		where: { id },
+	// Only while still open: a confirm (or a supersede) since the read wins.
+	const r = await db.claroPo.updateMany({
+		where: { id, status: STILL_OPEN },
 		data: { ...data, entered: entered as Prisma.InputJsonValue },
 	})
+	if (r.count === 0) {
+		const now = await db.claroPo.findUnique({
+			where: { id },
+			select: { status: true },
+		})
+		throw new PoError(
+			now?.status === "CONFIRMED" ? "already_confirmed" : "not_confirmable",
+		)
+	}
 	await evaluatePo(id, { supersede: f.statedPages !== undefined })
 }
 
@@ -647,13 +657,14 @@ async function refreshChecks(id: string) {
 }
 
 /**
- * Whether a PO can be confirmed as its checks stand, and with `overrides` the
- * reasons to record: one per failing check, however many lines it failed on.
- * A hard stop, or a failing check without a reason, refuses.
+ * Whether a PO can be confirmed as its checks stand, and the reasons to
+ * record: one per failing check, however many lines it failed on. A hard
+ * stop, a value to enter, or a failing check without a reason, refuses; so
+ * only a PO with nothing failing is confirmed without reasons.
  */
 function gate(
 	row: { status: string; checks: Prisma.JsonValue | null },
-	overrides: PoOverride[] | undefined,
+	overrides: PoOverride[],
 	byId: string,
 ) {
 	const failing = checksOf(row.checks)
@@ -664,7 +675,6 @@ function gate(
 			row.status === "BLOCKED") &&
 		failing.every(isOverridable)
 	if (!confirmable) throw new PoError("not_confirmable")
-	if (!overrides) return null
 	const at = new Date().toISOString()
 	return [...new Set(failing.map((c) => c.code))].map((check) => {
 		const reason = overrides.find((o) => o.check === check)?.reason.trim()
@@ -694,9 +704,9 @@ export async function assertReviewed(
 /**
  * Confirm one PO under its Aviso: saves it there and stamps received /
  * confirmed. The checks are run again first, since an edit can leave the
- * status stale. A Blocked PO is accepted only when nothing failing is a hard
- * stop. With `overrides` (the Generate step), every failing check must carry
- * a reason; they are stored and each is audited in the same transaction.
+ * status stale. Every failing check must carry a reason in `overrides` (the
+ * Generate step), and none may be a hard stop or a value to enter; the
+ * reasons are stored and each is audited in the same transaction.
  */
 export async function confirmPo(
 	id: string,
@@ -708,7 +718,7 @@ export async function confirmPo(
 		const row = await tx.claroPo.findUnique({ where: { id } })
 		if (!row) throw new PoError("unknown_po")
 		if (row.status === "CONFIRMED") throw new PoError("already_confirmed")
-		const accepted = gate(row, opts.overrides, userId)
+		const accepted = gate(row, opts.overrides ?? [], userId)
 		if (!row.docId || !row.poNumber || !row.poDate)
 			throw new PoError("incomplete")
 		// Two copies read side by side can both look new: the first to confirm wins.
@@ -733,13 +743,13 @@ export async function confirmPo(
 				status: "CONFIRMED",
 				confirmedAt: new Date(),
 				confirmedById: userId,
-				...(accepted
+				...(accepted.length > 0
 					? { overrides: accepted as unknown as Prisma.InputJsonValue }
 					: {}),
 			},
 		})
 		if (claimed.count === 0) throw new PoError("already_confirmed")
-		for (const o of accepted ?? [])
+		for (const o of accepted)
 			await tx.auditTrail.create({
 				data: {
 					docId: row.docId,
@@ -748,7 +758,8 @@ export async function confirmPo(
 					diffJson: { source: "ENTERED", claroPoId: id, ...o },
 				},
 			})
-		// The older Receivables screens look for a PoLink to know a PO arrived.
+		// The Aviso's finance stage (Verify, PBCC) and its LC page read the
+		// PoLink to know a PO arrived.
 		await tx.poLink.create({
 			data: {
 				docId: row.docId,
@@ -862,29 +873,6 @@ export async function discardPo(id: string, userId: string): Promise<string> {
 			},
 		})
 	return original.id
-}
-
-/** Confirm every green PO. Only green ones: anything else is left for a look. */
-export async function confirmAllGreen(
-	userId: string,
-): Promise<{ confirmed: number; skipped: number }> {
-	const ids = await db.claroPo.findMany({
-		where: { status: "READY" },
-		orderBy: [{ receivedAt: "asc" }, { id: "asc" }],
-		select: { id: true },
-	})
-	let confirmed = 0
-	let skipped = 0
-	for (const { id } of ids) {
-		try {
-			await confirmPo(id, userId)
-			confirmed++
-		} catch (e) {
-			if (!(e instanceof PoError)) throw e
-			skipped++
-		}
-	}
-	return { confirmed, skipped }
 }
 
 /** Counts for the tabs and the Home box. */

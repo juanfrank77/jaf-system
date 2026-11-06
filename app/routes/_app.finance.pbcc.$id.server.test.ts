@@ -352,6 +352,23 @@ describe("L2 Packet", () => {
 		expect((result as Response).headers.get("Location")).toBe(
 			"/finance/payroll",
 		)
+		// Not yet sold nor accepted: back to Packets, where it waits.
+		const unverified = t.track(
+			"jafInvoice",
+			await seedFinanceableInvoice({
+				contractorAccountCode: null,
+				pbccRequestSentAt: null,
+			}),
+		)
+		const back = await action({
+			request: new Request(`http://localhost/finance/pbcc/${unverified.id}`, {
+				method: "POST",
+				body: new URLSearchParams({ intent: "generate_pbcc" }),
+			}),
+			params: { id: unverified.id },
+			context: {},
+		} as never).catch((r: unknown) => r)
+		expect((back as Response).headers.get("Location")).toBe("/finance/queue")
 	})
 
 	it("keeps a swept job's frozen figures when its catalog price and lines change (Review Focus)", async () => {

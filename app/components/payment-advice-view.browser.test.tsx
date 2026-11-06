@@ -105,7 +105,6 @@ describe("PaymentAdviceView", () => {
 					path: "/",
 					Component: () => (
 						<PaymentAdviceView
-							kind="ja"
 							counts={{ pending: 0, applied: 1, unmatched: 1 }}
 							tab="applied"
 							advices={[
@@ -156,7 +155,6 @@ describe("PaymentAdviceView", () => {
 					path: "/",
 					Component: () => (
 						<PaymentAdviceView
-							kind="ja"
 							counts={{ pending: 1, applied: 0, unmatched: 1 }}
 							tab="upload"
 							advices={[

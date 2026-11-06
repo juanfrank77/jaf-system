@@ -278,6 +278,105 @@ describe("Claro Close step", () => {
 		expect(page.unmatched.some((u) => u.id === unLine?.id)).toBe(true)
 	}, 90000)
 
+	it("add_old enters a never-entered old M19 from its line, which then matches and closes", async () => {
+		const seq = 50_000 + Math.floor(Math.random() * 9_999)
+		const ref = `M19-${seq}`
+		const res = await upload(
+			await pdf([...head(), row(ref, 5920050410, 321.5), money(321.5)]),
+		)
+		const adviceId = res.adviceId as string
+		const line = (await find(adviceId))?.lines[0]
+		expect(line?.result).toBe("UNMATCHED")
+		const add = new FormData()
+		add.set("intent", "add_old")
+		add.set("lineId", line?.id ?? "")
+		expect(await post(add)).toEqual({})
+		const inv = await db.claroInvoice.findUniqueOrThrow({
+			where: { series_seq: { series: "M19", seq } },
+		})
+		expect(Number(inv.total)).toBe(321.5)
+		const after = (await find(adviceId))?.lines[0]
+		expect(after).toMatchObject({ result: "MATCHED", invoiceId: inv.id })
+		// Already matched: a second click is refused, and nothing is added twice.
+		expect(await post(add)).toMatchObject({
+			errorKey: "payment_advice.errors.line_not_unmatched",
+		})
+		const apply = new FormData()
+		apply.set("intent", "apply")
+		apply.set("adviceId", adviceId)
+		expect(await post(apply)).toEqual({})
+		const paid = await db.claroInvoice.findUniqueOrThrow({
+			where: { id: inv.id },
+		})
+		expect(paid.paidAt?.toISOString().slice(0, 10)).toBe("2026-10-01")
+	}, 90000)
+
+	it("add_old on an earlier statement's unmatched M19 pays it with that statement's date", async () => {
+		const seq = 60_000 + Math.floor(Math.random() * 9_999)
+		const ref = `M19-${seq}`
+		const res = await upload(
+			await pdf([...head(), row(ref, 5920050411, 87.25), money(87.25)]),
+		)
+		const adviceId = res.adviceId as string
+		const lineId = (await find(adviceId))?.lines[0].id as string
+		const apply = new FormData()
+		apply.set("intent", "apply")
+		apply.set("adviceId", adviceId)
+		expect(await post(apply)).toEqual({})
+		expect((await get()).unmatched.some((u) => u.id === lineId)).toBe(true)
+		const add = new FormData()
+		add.set("intent", "add_old")
+		add.set("lineId", lineId)
+		expect(await post(add)).toEqual({})
+		const inv = await db.claroInvoice.findUniqueOrThrow({
+			where: { series_seq: { series: "M19", seq } },
+		})
+		expect(inv.paidAt?.toISOString().slice(0, 10)).toBe("2026-10-01")
+		expect((await get()).unmatched.some((u) => u.id === lineId)).toBe(false)
+	}, 90000)
+
+	it("add_old refuses a JA row and a ref that is not an old M19 number", async () => {
+		const a = await m20Invoice()
+		const m20Ref = `M20-${a.seq + 80000}`
+		const res = await upload(
+			await pdf([
+				...head(),
+				row(m20Ref, 5920050412, 40),
+				"JA-1616299 5920042291 03.06.2026 60.00 (0.00) 0.00 60.00",
+				money(100),
+			]),
+		)
+		const adviceId = res.adviceId as string
+		const lines = await db.adviceLine.findMany({
+			where: { adviceId },
+			orderBy: { position: "asc" },
+		})
+		const ja = lines.find((l) => l.invoiceRef.startsWith("JA"))
+		const m20 = lines.find((l) => l.invoiceRef === m20Ref)
+		expect(ja?.result).toBe("UNMATCHED")
+		expect(m20?.result).toBe("UNMATCHED")
+		const add = (lineId: string) => {
+			const f = new FormData()
+			f.set("intent", "add_old")
+			f.set("lineId", lineId)
+			return post(f)
+		}
+		const invoices = await db.claroInvoice.count()
+		expect(await add(ja?.id ?? "")).toMatchObject({
+			errorKey: "claro.errors.ja_line",
+		})
+		expect(await add(m20?.id ?? "")).toMatchObject({
+			errorKey: "claro.errors.not_old_number",
+		})
+		expect(await add("no-such-line")).toMatchObject({
+			errorKey: "payment_advice.errors.not_found",
+		})
+		expect(await db.claroInvoice.count()).toBe(invoices)
+		expect(
+			(await db.adviceLine.findUniqueOrThrow({ where: { id: ja?.id } })).result,
+		).toBe("UNMATCHED")
+	}, 90000)
+
 	it("accept_short needs a reason; a double apply pays nothing twice", async () => {
 		const a = await m20Invoice()
 		const paid = a.total - 10

@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({ requireRole: vi.fn() }))
 vi.mock("~/lib/permissions.server", () => ({ requireRole: mocks.requireRole }))
 
 import { action, loader } from "./_app.comptroller.installers.claro"
-import { loader as lissetteLoader } from "./_app.finance.payment-advice"
+import { loader as lissetteLoader } from "./_app.finance.claro.close"
 
 const t = makeTracker()
 let dir: string
@@ -107,7 +107,7 @@ describe("Carmen's Claro desk vs Lissette's Payment Advice", () => {
 		mocks.requireRole.mockResolvedValue({ user: lissette })
 		const lis = await call(
 			lissetteLoader as never,
-			"http://localhost/finance/payment-advice?tab=upload",
+			"http://localhost/finance/claro/close",
 		)
 		const lisCard = lis.advices.find((a: { id: string }) => a.id === id)
 		expect(
@@ -115,7 +115,7 @@ describe("Carmen's Claro desk vs Lissette's Payment Advice", () => {
 		).toEqual(m19.map(([r]) => r))
 		const lisUn = await call(
 			lissetteLoader as never,
-			"http://localhost/finance/payment-advice?tab=unmatched",
+			"http://localhost/finance/claro/close",
 		)
 		expect(
 			lisUn.unmatched.some((u: { invoiceRef: string }) =>

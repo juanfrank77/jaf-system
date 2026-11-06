@@ -2716,9 +2716,6 @@
 		"open_pdf": "Open the advice PDF",
 		"apply": "Apply payments",
 		"unmatched_kept": "Unmatched rows are kept and never dropped.",
-		"invoice_number": "Invoice number",
-		"add_old": "Add old M19",
-		"link": "Link",
 		"reason": "Reason",
 		"ja_check_hint": "No installer invoice with this number (or it is voided or on hold). Needs a person to check.",
 		"ja_check_no_po": "The installer invoice exists but has no PO yet. Add its PO and this row is matched.",
@@ -3434,7 +3431,12 @@
 			"not_ready": "This PO is still being read, or a newer copy replaced it. Open it from the queue.",
 			"aviso_missing": "An invoice needs an Aviso. Enter the Aviso number and save first.",
 			"future_date": "That day has not come yet. Enter the day it was filed.",
-			"bad_po_number": "The PO number needs its digits."
+			"bad_po_number": "The PO number needs its digits.",
+			"not_old_number": "Only an old M19 number can be added as an old invoice. Link this line to its invoice instead.",
+			"number_taken": "That M19 number is already in the system. Link this line to it instead.",
+			"po_not_available": "That PO is not a confirmed PO waiting for an invoice.",
+			"bad_total": "This line has no amount to enter as the invoice total.",
+			"ja_line": "This is an installer (JA) row. It is closed on Carmen’s desk, not here."
 		},
 		"close": {
 			"title": "Close",
@@ -3465,7 +3467,9 @@
 				"already_paid": "Already paid",
 				"unmatched": "Unmatched"
 			},
-			"mark_reviewed": "Mark statement as reviewed"
+			"mark_reviewed": "Mark statement as reviewed",
+			"add_old": "Add as old invoice",
+			"add_old_hint": "Enter this M19 in the system with the amount Claro paid, so the line closes it."
 		}
 	}
 }

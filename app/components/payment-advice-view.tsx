@@ -88,51 +88,13 @@ function ResultBadge({ line }: { line: AdviceLineView }) {
 	return <Badge variant="danger">{t("payment_advice.result.unmatched")}</Badge>
 }
 
-/** An old M19 row the system has no invoice for: add it, and the row finds it. */
-function AddOldLink({ invoiceRef, net }: { invoiceRef: string; net: number }) {
-	const { t } = useTranslation()
-	if (!invoiceRef.toUpperCase().startsWith("M19")) return null
-	return (
-		<a
-			href={`/finance/awaiting-ariba?old=${encodeURIComponent(invoiceRef)}&amount=${net.toFixed(2)}`}
-			className="ml-2 text-xs underline"
-		>
-			{t("payment_advice.add_old")}
-		</a>
-	)
-}
-
-function LinkForm({ lineId }: { lineId: string }) {
-	const { t } = useTranslation()
-	return (
-		<Form method="post" className="flex items-center gap-1">
-			<input type="hidden" name="intent" value="link" />
-			<input type="hidden" name="lineId" value={lineId} />
-			<Input
-				name="invoice"
-				required
-				placeholder="M20-000"
-				aria-label={t("payment_advice.invoice_number")}
-				className="h-7 w-28"
-			/>
-			<Button type="submit" size="xs" variant="outline">
-				{t("payment_advice.link")}
-			</Button>
-		</Form>
-	)
-}
-
-export type AdviceKind = "m19" | "ja"
-
 const defaultFileHref = (id: string) => `/finance/payment-advice/${id}/file`
 
 function AdviceCard({
 	a,
-	kind,
 	fileHref,
 }: {
 	a: AdviceCardView
-	kind: AdviceKind
 	fileHref: (id: string) => string
 }) {
 	const { t } = useTranslation()
@@ -205,13 +167,7 @@ function AdviceCard({
 									<ResultBadge line={l} />
 								</td>
 								<td className="p-2">
-									{l.result === "UNMATCHED" && kind === "m19" && (
-										<>
-											<LinkForm lineId={l.id} />
-											<AddOldLink invoiceRef={l.invoiceRef} net={l.net} />
-										</>
-									)}
-									{l.result === "UNMATCHED" && kind === "ja" && (
+									{l.result === "UNMATCHED" && (
 										<span className="text-xs text-status-danger">
 											{t(
 												l.jaNoPo
@@ -220,24 +176,14 @@ function AdviceCard({
 											)}
 										</span>
 									)}
-									{l.needsAccept && (kind === "ja" || l.invoiceId) && (
+									{l.needsAccept && (
 										<Form method="post" className="flex items-center gap-1">
 											<input
 												type="hidden"
 												name="intent"
-												value={
-													kind === "ja" ? "accept_ja_short" : "accept_short"
-												}
+												value="accept_ja_short"
 											/>
-											{kind === "ja" ? (
-												<input type="hidden" name="lineId" value={l.id} />
-											) : (
-												<input
-													type="hidden"
-													name="invoiceId"
-													value={l.invoiceId ?? ""}
-												/>
-											)}
+											<input type="hidden" name="lineId" value={l.id} />
 											<Input
 												name="reason"
 												required
@@ -281,14 +227,17 @@ function TabLabel({ tab }: { tab: AdviceTabKey }) {
 			: t("payment_advice.tab.unmatched")
 }
 
-/** W7: upload Claro's advice, review the match results, apply the payments. */
+/**
+ * Carmen's desk for Claro's Payment Advice: upload it, review the JA
+ * (installer invoice) rows, apply the payments. Lissette's M19/M20 rows are
+ * worked on Close, step 5 of the Claro path.
+ */
 export function PaymentAdviceView({
 	counts,
 	tab,
 	advices,
 	unmatched,
 	errorKey,
-	kind = "m19",
 	fileHref = defaultFileHref,
 }: {
 	counts: AdviceCounts
@@ -296,7 +245,6 @@ export function PaymentAdviceView({
 	advices: AdviceCardView[]
 	unmatched: UnmatchedView[]
 	errorKey?: AdviceErrorKey
-	kind?: AdviceKind
 	/** Where the advice PDF opens for this desk. */
 	fileHref?: (id: string) => string
 }) {
@@ -377,20 +325,13 @@ export function PaymentAdviceView({
 											{usDate(u.adviceDate)} · {u.reference ?? "—"}
 										</td>
 										<td className="p-2">
-											{kind === "m19" ? (
-												<>
-													<LinkForm lineId={u.id} />
-													<AddOldLink invoiceRef={u.invoiceRef} net={u.net} />
-												</>
-											) : (
-												<span className="text-xs text-status-danger">
-													{t(
-														u.jaNoPo
-															? "payment_advice.ja_check_no_po"
-															: "payment_advice.ja_check_hint",
-													)}
-												</span>
-											)}
+											<span className="text-xs text-status-danger">
+												{t(
+													u.jaNoPo
+														? "payment_advice.ja_check_no_po"
+														: "payment_advice.ja_check_hint",
+												)}
+											</span>
 										</td>
 									</tr>
 								))}
@@ -407,7 +348,7 @@ export function PaymentAdviceView({
 			) : (
 				<div className="space-y-3">
 					{advices.map((a) => (
-						<AdviceCard key={a.id} a={a} kind={kind} fileHref={fileHref} />
+						<AdviceCard key={a.id} a={a} fileHref={fileHref} />
 					))}
 				</div>
 			)}

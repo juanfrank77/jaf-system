@@ -2716,9 +2716,6 @@
 		"open_pdf": "Abrir el PDF del aviso",
 		"apply": "Aplicar pagos",
 		"unmatched_kept": "Las filas sin coincidencia se conservan; nunca se descartan.",
-		"invoice_number": "Número de factura",
-		"add_old": "Añadir M19 vieja",
-		"link": "Enlazar",
 		"reason": "Motivo",
 		"ja_check_hint": "No hay factura de instalador con este número (o está anulada o retenida). Necesita que una persona lo revise.",
 		"ja_check_no_po": "La factura de instalador existe pero aún no tiene PO. Añada su PO y esta fila queda conciliada.",
@@ -3434,7 +3431,12 @@
 			"not_ready": "Esta PO todavía se está leyendo, o una copia más nueva la reemplazó. Ábrala desde la cola.",
 			"aviso_missing": "La factura necesita un Aviso. Escriba el número de Aviso y guarde primero.",
 			"future_date": "Ese día todavía no ha llegado. Escriba el día en que se registró.",
-			"bad_po_number": "El número de PO necesita sus dígitos."
+			"bad_po_number": "El número de PO necesita sus dígitos.",
+			"not_old_number": "Solo un número M19 viejo se puede añadir como factura vieja. Vincule esta línea a su factura.",
+			"number_taken": "Ese número M19 ya está en el sistema. Vincule esta línea a esa factura.",
+			"po_not_available": "Ese PO no es un PO confirmado en espera de factura.",
+			"bad_total": "Esta línea no tiene un monto para usar como total de la factura.",
+			"ja_line": "Esta es una fila de instalador (JA). Se cierra en el escritorio de Carmen, no aquí."
 		},
 		"close": {
 			"title": "Cerrar",
@@ -3465,7 +3467,9 @@
 				"already_paid": "Ya pagado",
 				"unmatched": "Sin coincidencia"
 			},
-			"mark_reviewed": "Marcar estado como revisado"
+			"mark_reviewed": "Marcar estado como revisado",
+			"add_old": "Añadir como factura vieja",
+			"add_old_hint": "Registra esta M19 en el sistema con el monto que Claro pagó, para que la línea la cierre."
 		}
 	}
 }

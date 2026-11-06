@@ -24,6 +24,7 @@ import {
 	financeLineItems,
 } from "~/lib/finance-pipeline.server"
 import {
+	armAStepOf,
 	FINANCE_STEP_HREF,
 	FINANCE_STEPS,
 	pbccStep,
@@ -193,7 +194,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	)
 	// Not ready for a PBCC request: back to the Arm A list the job is on.
 	if (stage !== "PBCC_REQUEST_PENDING") {
-		throw redirect(FINANCE_STEP_HREF[pbccStep(doc)])
+		throw redirect(FINANCE_STEP_HREF[armAStepOf(doc)])
 	}
 
 	const serviceCodes = await db.serviceCode.findMany()

@@ -3,7 +3,7 @@ import { Form, Link } from "react-router"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
-import { usDate } from "~/lib/claro-invoice"
+import { OLD_SERIES, parseInvoiceRef, usDate } from "~/lib/claro-invoice"
 import { formatMoney } from "~/lib/utils"
 
 export type ClaroCloseError =
@@ -20,6 +20,11 @@ export type ClaroCloseError =
 	| "payment_advice.errors.line_not_unmatched"
 	| "payment_advice.errors.not_ja_line"
 	| "payment_advice.errors.no_file"
+	| "claro.errors.not_old_number"
+	| "claro.errors.number_taken"
+	| "claro.errors.po_not_available"
+	| "claro.errors.bad_total"
+	| "claro.errors.ja_line"
 
 type Line = {
 	id: string
@@ -98,6 +103,42 @@ function LinkForm({ lineId }: { lineId: string }) {
 	)
 }
 
+/** An old M19 Claro paid that was never entered: enter it from this line. */
+function AddOldForm({
+	lineId,
+	invoiceRef,
+}: {
+	lineId: string
+	invoiceRef: string
+}) {
+	const { t } = useTranslation()
+	if (parseInvoiceRef(invoiceRef)?.series !== OLD_SERIES) return null
+	return (
+		<Form method="post" title={t("claro.close.add_old_hint")}>
+			<input type="hidden" name="intent" value="add_old" />
+			<input type="hidden" name="lineId" value={lineId} />
+			<Button type="submit" size="xs" variant="outline">
+				{t("claro.close.add_old")}
+			</Button>
+		</Form>
+	)
+}
+
+function UnmatchedActions({
+	lineId,
+	invoiceRef,
+}: {
+	lineId: string
+	invoiceRef: string
+}) {
+	return (
+		<div className="flex flex-wrap items-center gap-2">
+			<LinkForm lineId={lineId} />
+			<AddOldForm lineId={lineId} invoiceRef={invoiceRef} />
+		</div>
+	)
+}
+
 function StatementCard({ a, fresh }: { a: Advice; fresh: boolean }) {
 	const { t } = useTranslation()
 	const closing = a.lines.filter(
@@ -155,7 +196,9 @@ function StatementCard({ a, fresh }: { a: Advice; fresh: boolean }) {
 									<ResultBadge line={l} />
 								</td>
 								<td className="p-2">
-									{l.result === "UNMATCHED" && <LinkForm lineId={l.id} />}
+									{l.result === "UNMATCHED" && (
+										<UnmatchedActions lineId={l.id} invoiceRef={l.invoiceRef} />
+									)}
 								</td>
 							</tr>
 						))}
@@ -271,7 +314,7 @@ export function ClaroCloseView({
 								<span className="text-xs text-muted-foreground">
 									{usDate(u.adviceDate)}
 								</span>
-								<LinkForm lineId={u.id} />
+								<UnmatchedActions lineId={u.id} invoiceRef={u.invoiceRef} />
 							</li>
 						))}
 					</ul>

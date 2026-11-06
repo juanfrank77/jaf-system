@@ -86,11 +86,7 @@ export default function ClaroPayments({
 		<div className="space-y-4 p-6">
 			<h1 className="text-2xl font-bold">{t("installers.claro.title")}</h1>
 			<InstallerStepper current="claro" />
-			<PaymentAdviceView
-				{...loaderData}
-				kind="ja"
-				errorKey={actionData?.errorKey}
-			/>
+			<PaymentAdviceView {...loaderData} errorKey={actionData?.errorKey} />
 		</div>
 	)
 }

@@ -5,9 +5,14 @@ import { db } from "~/lib/db.server"
 import { computeInvoiceTotals } from "~/lib/invoice-totals"
 import { getPoReader, type PoReader } from "~/lib/po-reader.server"
 import {
+	cents,
+	HARD_STOPS,
+	isOverridable,
 	type PoCheck,
+	type PoCheckCode,
 	type PoLine,
 	type PoRead,
+	recomputeFromLines,
 	runPoChecks,
 	statusFromChecks,
 } from "~/lib/po-reading"
@@ -104,15 +109,74 @@ function readOf(row: RowLike): PoRead {
 	}
 }
 
+type Printed = Pick<PoRead, "subtotal" | "ivu4" | "ivu115" | "total">
+
+/** What the PO printed, as first read; null for rows read before it was kept. */
+function printedOf(v: Prisma.JsonValue | null): Printed | null {
+	if (!v || typeof v !== "object" || Array.isArray(v)) return null
+	const o = v as Record<string, unknown>
+	const n = (x: unknown) => (typeof x === "number" ? x : null)
+	return {
+		subtotal: n(o.subtotal),
+		ivu4: n(o.ivu4),
+		ivu115: n(o.ivu115),
+		total: n(o.total),
+	}
+}
+
+const checksOf = (v: Prisma.JsonValue | null): PoCheck[] =>
+	Array.isArray(v) ? (v as unknown as PoCheck[]) : []
+
+/** The file has every page the PO says it has. */
+const isComplete = (r: {
+	statedPages: number | null
+	filePages: number | null
+}) => r.statedPages !== null && r.statedPages === (r.filePages ?? 0)
+
+/** Stopped by missing pages and nothing else that stops a PO. */
+const onlyPagesMissing = (checks: PoCheck[]) => {
+	const hard = checks.filter((c) => HARD_STOPS.has(c.code))
+	return hard.length > 0 && hard.every((c) => c.code === "pages_missing")
+}
+
 /**
  * Work out an Aviso for the PO (the one already linked, else the first
  * candidate number that is an Aviso) and run the checks. Writes the verdict.
- * Safe to call again after any field changes.
+ * Safe to call again after any field changes. A complete PO replaces an
+ * earlier copy of the same number that is stuck on missing pages.
  */
-async function evaluatePo(id: string): Promise<void> {
+export async function evaluatePo(id: string): Promise<void> {
 	const row = await db.claroPo.findUnique({ where: { id } })
 	if (!row) throw new PoError("unknown_po")
-	if (row.status === "CONFIRMED") return
+	if (row.status === "CONFIRMED" || row.status === "SUPERSEDED") return
+
+	// Other read copies of the same PO number not yet confirmed, oldest first.
+	const open = row.poNumber
+		? await db.claroPo.findMany({
+				where: {
+					poNumber: row.poNumber,
+					id: { not: id },
+					status: { notIn: ["CONFIRMED", "SUPERSEDED", "PENDING", "READING"] },
+					invoice: null,
+				},
+				orderBy: [{ receivedAt: "asc" }, { id: "asc" }],
+				select: { id: true, checks: true, statedPages: true, filePages: true },
+			})
+		: []
+	// A complete file supersedes the copies stuck on missing pages.
+	if (isComplete(row)) {
+		const short = open
+			.filter((o) => checksOf(o.checks).some((c) => c.code === "pages_missing"))
+			.map((o) => o.id)
+		if (short.length > 0)
+			await db.claroPo.updateMany({
+				where: {
+					id: { in: short },
+					status: { notIn: ["CONFIRMED", "SUPERSEDED"] },
+				},
+				data: { status: "SUPERSEDED", supersededById: id },
+			})
+	}
 
 	let docId = row.docId
 	if (!docId && row.avisoCandidates.length > 0) {
@@ -149,43 +213,82 @@ async function evaluatePo(id: string): Promise<void> {
 		alreadyPod = others.reduce((s, o) => s + (num(o.subtotal) ?? 0), 0)
 	}
 
-	// The first copy wins: a PO number (or a file) already confirmed, or
-	// uploaded earlier, makes this one the duplicate.
-	const duplicate =
-		(await db.claroPo.count({
-			where: {
-				id: { not: id },
-				OR: [
-					...(row.poNumber
-						? [
-								{
-									poNumber: row.poNumber,
-									OR: [
-										{ status: "CONFIRMED" as const },
-										{ receivedAt: { lt: row.receivedAt } },
-										{ receivedAt: row.receivedAt, id: { lt: id } },
-									],
-								},
-							]
-						: []),
-					{
-						fileHash: row.fileHash,
-						OR: [
-							{ status: "CONFIRMED" as const },
-							{ receivedAt: { lt: row.receivedAt } },
-							{ receivedAt: row.receivedAt, id: { lt: id } },
-						],
-					},
-				],
-			},
-		})) > 0
+	// The first copy wins: a PO number (or a file) already confirmed or
+	// invoiced, or uploaded earlier, makes this one the duplicate. A replaced
+	// copy, or one stopped only by missing pages, does not count.
+	const twins = await db.claroPo.findMany({
+		where: {
+			id: { not: id },
+			status: { not: "SUPERSEDED" },
+			OR: [
+				...(row.poNumber ? [{ poNumber: row.poNumber }] : []),
+				{ fileHash: row.fileHash },
+			],
+		},
+		select: {
+			id: true,
+			status: true,
+			checks: true,
+			receivedAt: true,
+			invoice: { select: { id: true } },
+		},
+	})
+	const duplicate = twins.some(
+		(o) =>
+			o.status === "CONFIRMED" ||
+			o.invoice !== null ||
+			((o.receivedAt < row.receivedAt ||
+				(o.receivedAt.getTime() === row.receivedAt.getTime() && o.id < id)) &&
+				!onlyPagesMissing(checksOf(o.checks))),
+	)
 
-	const checks = runPoChecks(readOf(row), {
+	const ctx = {
 		filePages: row.filePages ?? 0,
 		duplicate,
 		billedPreIvu,
 		alreadyPod,
-	})
+	}
+	const stored = readOf(row)
+	let checks = runPoChecks(stored, ctx)
+	// Lines edited by hand are checked against what the PO printed, not against
+	// the totals rebuilt from them.
+	const printed = printedOf(row.printed)
+	if (printed) {
+		const vsPrinted = (c: PoCheck) =>
+			c.code === "lines_sum" || c.code === "totals"
+		const asPrinted = runPoChecks(
+			{
+				...stored,
+				subtotal: printed.subtotal ?? stored.subtotal,
+				ivu4: printed.ivu4 ?? stored.ivu4,
+				ivu115: printed.ivu115 ?? stored.ivu115,
+				total: printed.total ?? stored.total,
+			},
+			ctx,
+		)
+		checks = [
+			...checks.filter((c) => !vsPrinted(c)),
+			...asPrinted.filter(vsPrinted),
+		]
+	}
+	// A short copy read after its complete twin (both in one batch) is the one
+	// replaced; the twin is looked at again now that this copy no longer counts.
+	const full = checks.some((c) => c.code === "pages_missing")
+		? open.find(isComplete)
+		: undefined
+	if (full) {
+		await db.claroPo.update({
+			where: { id },
+			data: {
+				docId,
+				checks: checks as unknown as Prisma.InputJsonValue,
+				status: "SUPERSEDED",
+				supersededById: full.id,
+			},
+		})
+		await evaluatePo(full.id)
+		return
+	}
 	await db.claroPo.update({
 		where: { id },
 		data: {
@@ -236,6 +339,17 @@ async function readPo(id: string, reader: PoReader) {
 			ivu4: read.ivu4,
 			ivu115: read.ivu115,
 			total: read.total,
+			// Kept from the first read on, so hand edits are checked against it.
+			...(row.printed === null
+				? {
+						printed: {
+							subtotal: read.subtotal,
+							ivu4: read.ivu4,
+							ivu115: read.ivu115,
+							total: read.total,
+						},
+					}
+				: {}),
 		},
 	})
 	await evaluatePo(id)
@@ -326,11 +440,23 @@ type PoFixFields = {
 	avisoNumber?: string
 }
 
-/** Fix a field by hand. The change is remembered as ENTERED, with who and when (Rule 4). */
-export async function fixPo(id: string, byId: string, f: PoFixFields) {
+/** A line as typed on Review; its IVU is worked out from amount and rate. */
+type PoLineInput = Omit<PoLine, "ivu"> & { ivu?: number }
+
+/**
+ * Fix a field by hand. The change is remembered as ENTERED, with who and when
+ * (Rule 4). Lines replace the read ones whole and rebuild subtotal, IVU and
+ * total; what the PO printed is left as it was read.
+ */
+export async function fixPo(
+	id: string,
+	byId: string,
+	f: PoFixFields & { statedPages?: number; lines?: PoLineInput[] },
+) {
 	const row = await db.claroPo.findUnique({ where: { id } })
 	if (!row) throw new PoError("unknown_po")
 	if (row.status === "CONFIRMED") throw new PoError("already_confirmed")
+	if (row.status === "SUPERSEDED") throw new PoError("not_confirmable")
 	const data: Prisma.ClaroPoUpdateInput = {}
 	const touched: string[] = []
 	if (f.poNumber !== undefined) {
@@ -343,6 +469,7 @@ export async function fixPo(id: string, byId: string, f: PoFixFields) {
 	}
 	for (const k of [
 		"termsDays",
+		"statedPages",
 		"subtotal",
 		"ivu4",
 		"ivu115",
@@ -352,6 +479,18 @@ export async function fixPo(id: string, byId: string, f: PoFixFields) {
 			data[k] = f[k]
 			touched.push(k)
 		}
+	}
+	if (f.lines !== undefined) {
+		const lines: PoLine[] = f.lines.map((l) => ({
+			item: l.item,
+			description: l.description,
+			amount: l.amount,
+			ivuRate: l.ivuRate,
+			ivu: cents(l.amount * l.ivuRate) / 100,
+		}))
+		data.lines = lines as unknown as Prisma.InputJsonValue
+		Object.assign(data, recomputeFromLines(lines))
+		touched.push("lines")
 	}
 	if (f.avisoNumber !== undefined) {
 		const n = f.avisoNumber.replace(/\D/g, "")
@@ -376,14 +515,51 @@ export async function fixPo(id: string, byId: string, f: PoFixFields) {
 	await evaluatePo(id)
 }
 
-/** Confirm one PO under its Aviso: saves it there and stamps received / confirmed. */
-export async function confirmPo(id: string, userId: string) {
+export type PoOverride = { check: PoCheckCode; reason: string }
+
+const REVIEWABLE = ["READY", "NEEDS_LOOK", "BLOCKED", "UNMATCHED"] as const
+
+/**
+ * Confirm one PO under its Aviso: saves it there and stamps received /
+ * confirmed. The checks are run again first, since an edit can leave the
+ * status stale. A Blocked PO is accepted only when nothing failing is a hard
+ * stop. With `overrides` (the Generate step), every failing check must carry
+ * a reason; they are stored and each is audited in the same transaction.
+ */
+export async function confirmPo(
+	id: string,
+	userId: string,
+	opts: { overrides?: PoOverride[] } = {},
+) {
+	const before = await db.claroPo.findUnique({
+		where: { id },
+		select: { status: true },
+	})
+	if (!before) throw new PoError("unknown_po")
+	if ((REVIEWABLE as readonly string[]).includes(before.status))
+		await evaluatePo(id)
 	await db.$transaction(async (tx) => {
 		const row = await tx.claroPo.findUnique({ where: { id } })
 		if (!row) throw new PoError("unknown_po")
 		if (row.status === "CONFIRMED") throw new PoError("already_confirmed")
-		if (row.status !== "READY" && row.status !== "NEEDS_LOOK")
-			throw new PoError("not_confirmable")
+		const failing = checksOf(row.checks)
+		const confirmable =
+			row.status === "READY" ||
+			row.status === "NEEDS_LOOK" ||
+			(row.status === "BLOCKED" && failing.every(isOverridable))
+		if (!confirmable) throw new PoError("not_confirmable")
+		const at = new Date().toISOString()
+		// One reason per check, however many lines it failed on.
+		const accepted = opts.overrides
+			? [...new Set(failing.map((c) => c.code))].map((check) => {
+					const reason = opts.overrides
+						?.find((o) => o.check === check)
+						?.reason.trim()
+					if (HARD_STOPS.has(check) || !reason)
+						throw new PoError("not_confirmable")
+					return { check, reason, byId: userId, at }
+				})
+			: null
 		if (!row.docId || !row.poNumber || !row.poDate)
 			throw new PoError("incomplete")
 		// Two copies read side by side can both look new: the first to confirm wins.
@@ -403,14 +579,26 @@ export async function confirmPo(id: string, userId: string) {
 			throw new PoError("duplicate")
 		}
 		const claimed = await tx.claroPo.updateMany({
-			where: { id, status: { in: ["READY", "NEEDS_LOOK"] } },
+			where: { id, status: row.status },
 			data: {
 				status: "CONFIRMED",
 				confirmedAt: new Date(),
 				confirmedById: userId,
+				...(accepted
+					? { overrides: accepted as unknown as Prisma.InputJsonValue }
+					: {}),
 			},
 		})
 		if (claimed.count === 0) throw new PoError("already_confirmed")
+		for (const o of accepted ?? [])
+			await tx.auditTrail.create({
+				data: {
+					docId: row.docId,
+					userId,
+					action: "PO_CHECK_OVERRIDDEN",
+					diffJson: { source: "ENTERED", claroPoId: id, ...o },
+				},
+			})
 		// The older Receivables screens look for a PoLink to know a PO arrived.
 		await tx.poLink.create({
 			data: {

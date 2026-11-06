@@ -12,6 +12,7 @@ import { db } from "~/lib/db.server"
 import { zipPackage } from "~/lib/package-zip.server"
 import { matchWaitingLines } from "~/lib/payment-advice.server"
 import { generateFacturaDePagoPdf } from "~/lib/pdf/factura-de-pago.server"
+import { confirmPo, PoError, type PoOverride } from "~/lib/po-inbox.server"
 import { getInvoiceSignature } from "~/lib/system-settings.server"
 import { saveBuffer } from "~/lib/uploads.server"
 import { Prisma } from "../../generated/prisma/client"
@@ -59,6 +60,35 @@ export async function listToMake() {
 /** Whose signature the invoice carries, for the audit trail. */
 const SIGNER = "Lissette Cintron"
 
+/** What an invoice for this PO would carry, or why it cannot be made. */
+async function makeable(
+	po: {
+		poDate: Date | null
+		subtotal: Prisma.Decimal | null
+		ivu4: Prisma.Decimal | null
+		ivu115: Prisma.Decimal | null
+		total: Prisma.Decimal | null
+		doc: { fieldStartedAt: Date | null } | null
+	},
+	asked: string | null,
+) {
+	const workMonth =
+		asked && isWorkMonth(asked)
+			? asked
+			: defaultWorkMonth(po.doc?.fieldStartedAt ?? null, po.poDate)
+	if (!workMonth) throw new ClaroInvoiceError("work_month_required")
+	const subtotal = num(po.subtotal) ?? 0
+	const ivu4 = num(po.ivu4) ?? 0
+	const ivu115 = num(po.ivu115) ?? 0
+	const total = num(po.total) ?? 0
+	// The invoice must equal the PO to the cent.
+	if (round2(subtotal + ivu4 + ivu115) !== round2(total))
+		throw new ClaroInvoiceError("total_mismatch")
+	const signature = await getInvoiceSignature()
+	if (!signature) throw new ClaroInvoiceError("no_signature")
+	return { workMonth, subtotal, ivu4, ivu115, total, signature }
+}
+
 /**
  * Make the invoice for one confirmed PO, signed. This is the one place the stored
  * signature is stamped, so it cannot appear on anything but an invoice made from a
@@ -80,20 +110,8 @@ export async function makeInvoice(args: {
 	if (po.status !== "CONFIRMED" || !po.docId || !po.poNumber)
 		throw new ClaroInvoiceError("po_not_confirmable")
 	if (po.invoice) throw new ClaroInvoiceError("already_made")
-	const workMonth =
-		args.workMonth && isWorkMonth(args.workMonth)
-			? args.workMonth
-			: defaultWorkMonth(po.doc?.fieldStartedAt ?? null, po.poDate)
-	if (!workMonth) throw new ClaroInvoiceError("work_month_required")
-	const subtotal = num(po.subtotal) ?? 0
-	const ivu4 = num(po.ivu4) ?? 0
-	const ivu115 = num(po.ivu115) ?? 0
-	const total = num(po.total) ?? 0
-	// The invoice must equal the PO to the cent.
-	if (round2(subtotal + ivu4 + ivu115) !== round2(total))
-		throw new ClaroInvoiceError("total_mismatch")
-	const signature = await getInvoiceSignature()
-	if (!signature) throw new ClaroInvoiceError("no_signature")
+	const { workMonth, subtotal, ivu4, ivu115, total, signature } =
+		await makeable(po, args.workMonth)
 
 	for (let attempt = 0; ; attempt++) {
 		try {
@@ -170,6 +188,47 @@ export async function makeInvoice(args: {
 			throw e
 		}
 	}
+}
+
+/**
+ * The Generate step: confirm the PO as reviewed and make its invoice. Missing
+ * pages and duplicates refuse outright; any other red check needs a reason,
+ * stored on the PO and audited per check (`confirmPo`). A PO that already has
+ * an invoice is refused before anything is touched, so no number is taken. A
+ * PO confirmed earlier (old screens, or a make that failed) is just made.
+ */
+export async function generateFromPo(args: {
+	poId: string
+	userId: string
+	workMonth: string | null
+	overrides: PoOverride[]
+}): Promise<{ invoiceId: string; seq: number }> {
+	const po = await db.claroPo.findUnique({
+		where: { id: args.poId },
+		include: {
+			doc: { select: { fieldStartedAt: true } },
+			invoice: { select: { id: true } },
+		},
+	})
+	if (!po) throw new ClaroInvoiceError("not_found")
+	if (po.invoice) throw new ClaroInvoiceError("already_made")
+	if (po.status !== "CONFIRMED") {
+		// Refuse here what the make would refuse, so a PO is never left
+		// confirmed (and closed to edits) without an invoice it can get.
+		await makeable(po, args.workMonth)
+		try {
+			await confirmPo(args.poId, args.userId, { overrides: args.overrides })
+		} catch (e) {
+			// Confirmed by a second click in between: carry on to the make.
+			if (!(e instanceof PoError && e.code === "already_confirmed")) throw e
+		}
+	}
+	const made = await makeInvoice({
+		poId: args.poId,
+		workMonth: args.workMonth,
+		madeById: args.userId,
+	})
+	return { invoiceId: made.id, seq: made.seq }
 }
 
 /**

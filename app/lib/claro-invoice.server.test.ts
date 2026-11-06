@@ -7,6 +7,7 @@ import {
 	addOldInvoice,
 	ClaroInvoiceError,
 	claroInvoiceCounts,
+	generateFromPo,
 	invoiceFile,
 	listInvoices,
 	makeInvoice,
@@ -78,7 +79,167 @@ async function confirmedPo(
 	return po
 }
 
+/** A read PO waiting on Review: one 100.00 line at 11.5%, billed 500 on its Aviso. */
+async function reviewPo(
+	userId: string,
+	over: Partial<{
+		statedPages: number
+		termsDays: number | null
+		amount: number
+	}> = {},
+) {
+	const doc = t.track(
+		"jafInvoice",
+		await seedFinanceableInvoice({
+			jafInvoiceLines: [
+				{
+					serviceCodeId: "sc",
+					claroCode: "c",
+					name: "n",
+					unit: "u",
+					qty: 1,
+					unitPrice: 500,
+					lineAmount: 500,
+				},
+			],
+		}),
+	)
+	const amount = over.amount ?? 100
+	const ivu = Math.round(amount * 0.115 * 100) / 100
+	const po = await db.claroPo.create({
+		data: {
+			poNumber: String(4500000000 + Math.floor(Math.random() * 99999999)),
+			poDate: new Date("2026-09-04T12:00:00Z"),
+			termsDays: over.termsDays === undefined ? 60 : over.termsDays,
+			statedPages: over.statedPages ?? 1,
+			filePages: 1,
+			filePath: "x",
+			fileName: "x.pdf",
+			fileHash: runToken("h"),
+			status: "NEEDS_LOOK",
+			docId: doc.id,
+			lines: [{ item: "10", description: "x", amount, ivuRate: 0.115, ivu }],
+			subtotal: amount,
+			ivu4: 0,
+			ivu115: ivu,
+			total: amount + ivu,
+			uploadedById: userId,
+		},
+	})
+	t.track("claroPo", po)
+	return po
+}
+
 describe("Claro invoices", () => {
+	it("generateFromPo refuses missing pages", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const po = await reviewPo(u.id, { statedPages: 3 })
+		await expect(
+			generateFromPo({
+				poId: po.id,
+				userId: u.id,
+				workMonth: "2026-05",
+				overrides: [{ check: "pages_missing", reason: "it is all there" }],
+			}),
+		).rejects.toMatchObject({ name: "PoError", code: "not_confirmable" })
+		expect(await db.claroInvoice.count({ where: { claroPoId: po.id } })).toBe(0)
+		expect(
+			(await db.claroPo.findUniqueOrThrow({ where: { id: po.id } })).status,
+		).toBe("BLOCKED")
+	})
+
+	it("refuses a red check without a reason", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const po = await reviewPo(u.id, { termsDays: null })
+		for (const overrides of [
+			[],
+			[{ check: "terms_missing" as const, reason: "  " }],
+		])
+			await expect(
+				generateFromPo({
+					poId: po.id,
+					userId: u.id,
+					workMonth: "2026-05",
+					overrides,
+				}),
+			).rejects.toMatchObject({ name: "PoError", code: "not_confirmable" })
+		const row = await db.claroPo.findUniqueOrThrow({ where: { id: po.id } })
+		expect(row.status).toBe("NEEDS_LOOK")
+		expect(row.overrides).toBeNull()
+		expect(await db.claroInvoice.count({ where: { claroPoId: po.id } })).toBe(0)
+	})
+
+	it("generateFromPo with a reason makes one invoice and one audit row per override", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		// 600 against 500 billed, and no terms: two red checks.
+		const po = await reviewPo(u.id, { termsDays: null, amount: 600 })
+		const made = await generateFromPo({
+			poId: po.id,
+			userId: u.id,
+			workMonth: "2026-05",
+			overrides: [
+				{ check: "over_billed", reason: "Claro added a line" },
+				{ check: "terms_missing", reason: "60 days per contract" },
+			],
+		})
+		expect(await db.claroInvoice.count({ where: { claroPoId: po.id } })).toBe(1)
+		const inv = await db.claroInvoice.findUniqueOrThrow({
+			where: { id: made.invoiceId },
+		})
+		expect(inv.seq).toBe(made.seq)
+		const row = await db.claroPo.findUniqueOrThrow({ where: { id: po.id } })
+		expect(row.status).toBe("CONFIRMED")
+		expect(row.overrides).toHaveLength(2)
+		expect(row.overrides).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					check: "over_billed",
+					reason: "Claro added a line",
+					byId: u.id,
+				}),
+				expect.objectContaining({
+					check: "terms_missing",
+					reason: "60 days per contract",
+					byId: u.id,
+				}),
+			]),
+		)
+		const trail = await db.auditTrail.findMany({
+			where: { docId: po.docId as string, action: "PO_CHECK_OVERRIDDEN" },
+		})
+		expect(trail).toHaveLength(2)
+		expect(trail.map((a) => a.diffJson)).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					check: "over_billed",
+					reason: "Claro added a line",
+					byId: u.id,
+					at: expect.any(String),
+				}),
+				expect.objectContaining({ check: "terms_missing", byId: u.id }),
+			]),
+		)
+	})
+
+	it("generateFromPo twice returns already_made and the next invoice number is seq+1, not seq+2", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const po = await reviewPo(u.id)
+		const args = {
+			poId: po.id,
+			userId: u.id,
+			workMonth: "2026-05",
+			overrides: [],
+		}
+		const first = await generateFromPo(args)
+		await expect(generateFromPo(args)).rejects.toMatchObject({
+			name: "ClaroInvoiceError",
+			code: "already_made",
+		})
+		const other = await reviewPo(u.id)
+		const next = await generateFromPo({ ...args, poId: other.id })
+		expect(next.seq).toBe(first.seq + 1)
+	})
+
 	it("makes an invoice that matches the sample field for field", async () => {
 		const u = t.track("user", await seedUser({ role: "FINANCE" }))
 		const po = await confirmedPo(u.id)

@@ -52,7 +52,8 @@ export type PoCheck = {
 
 type PoStatusResult = "READY" | "NEEDS_LOOK" | "BLOCKED" | "UNMATCHED"
 
-const cents = (n: number) => Math.round((n + Number.EPSILON) * 100)
+/** A money amount in whole cents, rounded half up. */
+export const cents = (n: number) => Math.round((n + Number.EPSILON) * 100)
 const same = (a: number, b: number) => cents(a) === cents(b)
 
 /** Claro writes dates day-first: "04.09.2026" is Sep 4, 2026 (Rule 3). Null if it is not a real date. */

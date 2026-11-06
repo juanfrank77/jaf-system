@@ -295,4 +295,156 @@ describe("PO inbox", () => {
 		expect(row.docId).toBe(doc.id)
 		expect(row.status).toBe("READY")
 	})
+
+	it("fixPo with lines recomputes totals", async () => {
+		const { user, avisoNumber } = await setup()
+		const tag = runToken("ln")
+		const [id] = await ingestPoFiles(
+			[{ name: "l.pdf", bytes: pdf(tag) }],
+			user.id,
+		)
+		t.track("claroPo", { id })
+		await processPending(
+			readerOf({ [tag]: read({ avisoCandidates: [avisoNumber] }) }),
+			1,
+		)
+		await fixPo(id, user.id, {
+			lines: [
+				{ item: "10", description: "a", amount: 100, ivuRate: 0.04 },
+				{ item: "20", description: "b", amount: 200, ivuRate: 0.115 },
+			],
+		})
+		const row = await db.claroPo.findUniqueOrThrow({ where: { id } })
+		expect(Number(row.subtotal)).toBe(300)
+		expect(Number(row.ivu4)).toBe(4)
+		expect(Number(row.ivu115)).toBe(23)
+		expect(Number(row.total)).toBe(327)
+		expect((row.lines as { ivu: number }[]).map((l) => l.ivu)).toEqual([4, 23])
+		// What the PO printed is kept, so the edited lines are checked against it.
+		expect(row.printed).toEqual({
+			subtotal: 100,
+			ivu4: 0,
+			ivu115: 11.5,
+			total: 111.5,
+		})
+		expect((row.checks as { code: string }[]).map((c) => c.code)).toContain(
+			"lines_sum",
+		)
+		expect((row.entered as Record<string, { byId: string }>).lines.byId).toBe(
+			user.id,
+		)
+	})
+
+	it("a line reading 0.00 can be corrected in place", async () => {
+		const { user, avisoNumber } = await setup()
+		const tag = runToken("z")
+		const [id] = await ingestPoFiles(
+			[{ name: "z.pdf", bytes: pdf(tag) }],
+			user.id,
+		)
+		t.track("claroPo", { id })
+		await processPending(
+			readerOf({
+				[tag]: read({
+					avisoCandidates: [avisoNumber],
+					lines: [
+						{ item: "10", description: "x", amount: 0, ivuRate: 0.115, ivu: 0 },
+					],
+				}),
+			}),
+			1,
+		)
+		// A row read before only missing pages and duplicates hard-stopped.
+		await db.claroPo.update({ where: { id }, data: { status: "BLOCKED" } })
+		await fixPo(id, user.id, {
+			lines: [{ item: "10", description: "x", amount: 100, ivuRate: 0.115 }],
+		})
+		const row = await db.claroPo.findUniqueOrThrow({ where: { id } })
+		expect(row.status).not.toBe("BLOCKED")
+		expect(row.status).toBe("READY")
+	})
+
+	it("complete re-upload supersedes a missing-pages PO", async () => {
+		const { user, avisoNumber } = await setup()
+		const number = String(4700000000 + Math.floor(Math.random() * 99999999))
+		const tagA = runToken("short")
+		const [a] = await ingestPoFiles(
+			[{ name: "a.pdf", bytes: pdf(tagA, 1) }],
+			user.id,
+		)
+		t.track("claroPo", { id: a })
+		const r = read({
+			avisoCandidates: [avisoNumber],
+			poNumber: number,
+			statedPages: 2,
+		})
+		await processPending(readerOf({ [tagA]: r }), 1)
+		expect(
+			(await db.claroPo.findUniqueOrThrow({ where: { id: a } })).status,
+		).toBe("BLOCKED")
+		const tagB = runToken("full")
+		const [b] = await ingestPoFiles(
+			[{ name: "b.pdf", bytes: pdf(tagB, 2) }],
+			user.id,
+		)
+		t.track("claroPo", { id: b })
+		await processPending(readerOf({ [tagB]: r }), 1)
+		const old = await db.claroPo.findUniqueOrThrow({ where: { id: a } })
+		expect(old.status).toBe("SUPERSEDED")
+		expect(old.supersededById).toBe(b)
+		const fresh = await db.claroPo.findUniqueOrThrow({ where: { id: b } })
+		expect(
+			(fresh.checks as { code: string }[]).map((c) => c.code),
+		).not.toContain("duplicate")
+		expect(fresh.status).toBe("READY")
+	})
+
+	it("a short copy read after its complete twin is superseded by it", async () => {
+		const { user, avisoNumber } = await setup()
+		const number = String(4800000000 + Math.floor(Math.random() * 99999999))
+		const r = read({
+			avisoCandidates: [avisoNumber],
+			poNumber: number,
+			statedPages: 2,
+		})
+		const tagB = runToken("full2")
+		const [b] = await ingestPoFiles(
+			[{ name: "b.pdf", bytes: pdf(tagB, 2) }],
+			user.id,
+		)
+		t.track("claroPo", { id: b })
+		await processPending(readerOf({ [tagB]: r }), 1)
+		const tagA = runToken("short2")
+		const [a] = await ingestPoFiles(
+			[{ name: "a.pdf", bytes: pdf(tagA, 1) }],
+			user.id,
+		)
+		t.track("claroPo", { id: a })
+		await processPending(readerOf({ [tagA]: r }), 1)
+		const short = await db.claroPo.findUniqueOrThrow({ where: { id: a } })
+		expect(short.status).toBe("SUPERSEDED")
+		expect(short.supersededById).toBe(b)
+		expect(
+			(await db.claroPo.findUniqueOrThrow({ where: { id: b } })).status,
+		).toBe("READY")
+	})
+
+	it("second identical upload after confirm is a duplicate", async () => {
+		const { user, avisoNumber } = await setup()
+		const tag = runToken("same")
+		const bytes = pdf(tag)
+		const [a] = await ingestPoFiles([{ name: "a.pdf", bytes }], user.id)
+		t.track("claroPo", { id: a })
+		const r = read({ avisoCandidates: [avisoNumber] })
+		await processPending(readerOf({ [tag]: r }), 1)
+		await confirmPo(a, user.id)
+		const [b] = await ingestPoFiles([{ name: "a.pdf", bytes }], user.id)
+		t.track("claroPo", { id: b })
+		await processPending(readerOf({ [tag]: r }), 1)
+		const row = await db.claroPo.findUniqueOrThrow({ where: { id: b } })
+		expect(row.status).toBe("BLOCKED")
+		expect((row.checks as { code: string }[]).map((c) => c.code)).toContain(
+			"duplicate",
+		)
+	})
 })

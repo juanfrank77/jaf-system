@@ -12,7 +12,12 @@ import { db } from "~/lib/db.server"
 import { zipPackage } from "~/lib/package-zip.server"
 import { matchWaitingLines } from "~/lib/payment-advice.server"
 import { generateFacturaDePagoPdf } from "~/lib/pdf/factura-de-pago.server"
-import { confirmPo, PoError, type PoOverride } from "~/lib/po-inbox.server"
+import {
+	assertReviewed,
+	confirmPo,
+	PoError,
+	type PoOverride,
+} from "~/lib/po-inbox.server"
 import { getInvoiceSignature } from "~/lib/system-settings.server"
 import { saveBuffer } from "~/lib/uploads.server"
 import { Prisma } from "../../generated/prisma/client"
@@ -213,9 +218,15 @@ export async function generateFromPo(args: {
 	if (!po) throw new ClaroInvoiceError("not_found")
 	if (po.invoice) throw new ClaroInvoiceError("already_made")
 	if (po.status !== "CONFIRMED") {
-		// Refuse here what the make would refuse, so a PO is never left
-		// confirmed (and closed to edits) without an invoice it can get.
-		await makeable(po, args.workMonth)
+		// The review first, so a stopped PO says why; then what the make would
+		// refuse, so a PO is never left confirmed (and closed to edits) without
+		// an invoice it can get.
+		await assertReviewed(args.poId, args.overrides, args.userId)
+		const fresh = await db.claroPo.findUniqueOrThrow({
+			where: { id: args.poId },
+			include: { doc: { select: { fieldStartedAt: true } } },
+		})
+		await makeable(fresh, args.workMonth)
 		try {
 			await confirmPo(args.poId, args.userId, { overrides: args.overrides })
 		} catch (e) {

@@ -431,20 +431,223 @@ describe("PO inbox", () => {
 
 	it("second identical upload after confirm is a duplicate", async () => {
 		const { user, avisoNumber } = await setup()
-		const tag = runToken("same")
-		const bytes = pdf(tag)
-		const [a] = await ingestPoFiles([{ name: "a.pdf", bytes }], user.id)
+		// A different file (own hash) of the same PO number: the number alone decides.
+		const tagA = runToken("same1")
+		const tagB = runToken("same2")
+		const [a] = await ingestPoFiles(
+			[{ name: "a.pdf", bytes: pdf(tagA) }],
+			user.id,
+		)
 		t.track("claroPo", { id: a })
 		const r = read({ avisoCandidates: [avisoNumber] })
-		await processPending(readerOf({ [tag]: r }), 1)
+		await processPending(readerOf({ [tagA]: r }), 1)
 		await confirmPo(a, user.id)
-		const [b] = await ingestPoFiles([{ name: "a.pdf", bytes }], user.id)
+		const [b] = await ingestPoFiles(
+			[{ name: "a.pdf", bytes: pdf(tagB) }],
+			user.id,
+		)
 		t.track("claroPo", { id: b })
-		await processPending(readerOf({ [tag]: r }), 1)
+		await processPending(readerOf({ [tagB]: r }), 1)
 		const row = await db.claroPo.findUniqueOrThrow({ where: { id: b } })
+		expect(row.fileHash).not.toBe(
+			(await db.claroPo.findUniqueOrThrow({ where: { id: a } })).fileHash,
+		)
 		expect(row.status).toBe("BLOCKED")
 		expect((row.checks as { code: string }[]).map((c) => c.code)).toContain(
 			"duplicate",
+		)
+	})
+
+	it("a twin that already has an invoice stays a duplicate", async () => {
+		const { user, avisoNumber, doc } = await setup()
+		const number = String(4900000000 + Math.floor(Math.random() * 99999999))
+		// An older copy stuck on missing pages, yet invoiced (an old M19 added by hand).
+		const old = await db.claroPo.create({
+			data: {
+				poNumber: number,
+				statedPages: 2,
+				filePages: 1,
+				filePath: "x",
+				fileName: "x.pdf",
+				fileHash: runToken("h"),
+				status: "BLOCKED",
+				checks: [{ code: "pages_missing", severity: "blocked" }],
+				docId: doc.id,
+				uploadedById: user.id,
+				receivedAt: new Date(Date.now() - 60_000),
+			},
+		})
+		t.track("claroPo", old)
+		await db.claroInvoice.create({
+			data: {
+				series: "M19",
+				seq: 8_400_000 + Math.floor(Math.random() * 900_000),
+				claroPoId: old.id,
+				docId: doc.id,
+				workMonth: "",
+				subtotal: 100,
+				ivu4: 0,
+				ivu115: 11.5,
+				total: 111.5,
+				madeById: user.id,
+			},
+		})
+		const tag = runToken("inv")
+		const [b] = await ingestPoFiles(
+			[{ name: "b.pdf", bytes: pdf(tag, 2) }],
+			user.id,
+		)
+		t.track("claroPo", { id: b })
+		await processPending(
+			readerOf({
+				[tag]: read({
+					avisoCandidates: [avisoNumber],
+					poNumber: number,
+					statedPages: 2,
+				}),
+			}),
+			1,
+		)
+		const row = await db.claroPo.findUniqueOrThrow({ where: { id: b } })
+		expect((row.checks as { code: string }[]).map((c) => c.code)).toContain(
+			"duplicate",
+		)
+		expect(row.status).toBe("BLOCKED")
+		expect(
+			(await db.claroPo.findUniqueOrThrow({ where: { id: old.id } })).status,
+		).toBe("BLOCKED")
+	})
+
+	it("a hand-typed PO number does not supersede a short PO", async () => {
+		const { user, avisoNumber } = await setup()
+		const number = String(4910000000 + Math.floor(Math.random() * 99999999))
+		const tagS = runToken("hs")
+		const [short] = await ingestPoFiles(
+			[{ name: "s.pdf", bytes: pdf(tagS, 1) }],
+			user.id,
+		)
+		t.track("claroPo", { id: short })
+		await processPending(
+			readerOf({
+				[tagS]: read({
+					avisoCandidates: [avisoNumber],
+					poNumber: number,
+					statedPages: 2,
+				}),
+			}),
+			1,
+		)
+		const tagC = runToken("hc")
+		const [complete] = await ingestPoFiles(
+			[{ name: "c.pdf", bytes: pdf(tagC, 1) }],
+			user.id,
+		)
+		t.track("claroPo", { id: complete })
+		await processPending(
+			readerOf({
+				[tagC]: read({ avisoCandidates: [avisoNumber], poNumber: "123" }),
+			}),
+			1,
+		)
+		await fixPo(complete, user.id, { poNumber: number })
+		const s = await db.claroPo.findUniqueOrThrow({ where: { id: short } })
+		expect(s.status).toBe("BLOCKED")
+		expect(s.supersededById).toBeNull()
+	})
+
+	it("a header typed by hand is what the PO printed: lines that disagree stay red", async () => {
+		const { user, avisoNumber } = await setup()
+		const tag = runToken("hd")
+		const [id] = await ingestPoFiles(
+			[{ name: "h.pdf", bytes: pdf(tag) }],
+			user.id,
+		)
+		t.track("claroPo", { id })
+		await processPending(
+			readerOf({ [tag]: read({ avisoCandidates: [avisoNumber] }) }),
+			1,
+		)
+		await fixPo(id, user.id, { subtotal: 10, ivu115: 1.15, total: 11.15 })
+		const row = await db.claroPo.findUniqueOrThrow({ where: { id } })
+		expect(row.printed).toEqual({
+			subtotal: 10,
+			ivu4: 0,
+			ivu115: 1.15,
+			total: 11.15,
+		})
+		const codes = (row.checks as { code: string }[]).map((c) => c.code)
+		expect(codes).toContain("lines_sum")
+		expect(codes).toContain("totals")
+		expect(row.status).toBe("NEEDS_LOOK")
+	})
+
+	it("correcting a misread printed subtotal turns the checks green", async () => {
+		const { user, avisoNumber } = await setup()
+		const tag = runToken("mr")
+		const [id] = await ingestPoFiles(
+			[{ name: "m.pdf", bytes: pdf(tag) }],
+			user.id,
+		)
+		t.track("claroPo", { id })
+		await processPending(
+			readerOf({
+				[tag]: read({ avisoCandidates: [avisoNumber], subtotal: 90 }),
+			}),
+			1,
+		)
+		expect((await db.claroPo.findUniqueOrThrow({ where: { id } })).status).toBe(
+			"NEEDS_LOOK",
+		)
+		await fixPo(id, user.id, { subtotal: 100 })
+		const row = await db.claroPo.findUniqueOrThrow({ where: { id } })
+		expect(row.checks).toEqual([])
+		expect(row.status).toBe("READY")
+	})
+
+	it("a row with no printed value is checked against its header before the first line edit", async () => {
+		const { user, doc } = await setup()
+		const legacy = await db.claroPo.create({
+			data: {
+				poNumber: String(4920000000 + Math.floor(Math.random() * 99999999)),
+				poDate: new Date("2026-09-04T12:00:00Z"),
+				termsDays: 60,
+				statedPages: 1,
+				filePages: 1,
+				filePath: "x",
+				fileName: "x.pdf",
+				fileHash: runToken("h"),
+				status: "READY",
+				docId: doc.id,
+				lines: [
+					{
+						item: "10",
+						description: "x",
+						amount: 100,
+						ivuRate: 0.115,
+						ivu: 11.5,
+					},
+				],
+				subtotal: 100,
+				ivu4: 0,
+				ivu115: 11.5,
+				total: 111.5,
+				uploadedById: user.id,
+			},
+		})
+		t.track("claroPo", legacy)
+		await fixPo(legacy.id, user.id, {
+			lines: [{ item: "10", description: "x", amount: 200, ivuRate: 0.115 }],
+		})
+		const row = await db.claroPo.findUniqueOrThrow({ where: { id: legacy.id } })
+		expect(row.printed).toEqual({
+			subtotal: 100,
+			ivu4: 0,
+			ivu115: 11.5,
+			total: 111.5,
+		})
+		expect(Number(row.total)).toBe(223)
+		expect((row.checks as { code: string }[]).map((c) => c.code)).toContain(
+			"lines_sum",
 		)
 	})
 })

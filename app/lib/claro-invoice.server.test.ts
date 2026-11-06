@@ -16,6 +16,7 @@ import {
 	zipInvoices,
 } from "~/lib/claro-invoice.server"
 import { db } from "~/lib/db.server"
+import { fixPo } from "~/lib/po-inbox.server"
 import {
 	makeTracker,
 	runToken,
@@ -86,6 +87,7 @@ async function reviewPo(
 		statedPages: number
 		termsDays: number | null
 		amount: number
+		total: number
 	}> = {},
 ) {
 	const doc = t.track(
@@ -122,7 +124,7 @@ async function reviewPo(
 			subtotal: amount,
 			ivu4: 0,
 			ivu115: ivu,
-			total: amount + ivu,
+			total: over.total ?? amount + ivu,
 			uploadedById: userId,
 		},
 	})
@@ -131,6 +133,77 @@ async function reviewPo(
 }
 
 describe("Claro invoices", () => {
+	it("generateFromPo on missing pages says not_confirmable even when the amounts are off", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const po = await reviewPo(u.id, { statedPages: 3, total: 999 })
+		await expect(
+			generateFromPo({
+				poId: po.id,
+				userId: u.id,
+				workMonth: "2026-05",
+				overrides: [{ check: "totals", reason: "x" }],
+			}),
+		).rejects.toMatchObject({ name: "PoError", code: "not_confirmable" })
+	})
+
+	it("a line edited off the printed total is red, and generates once a reason is given", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const po = await reviewPo(u.id)
+		await fixPo(po.id, u.id, {
+			lines: [{ item: "10", description: "x", amount: 120, ivuRate: 0.115 }],
+		})
+		const row = await db.claroPo.findUniqueOrThrow({ where: { id: po.id } })
+		const codes = (row.checks as { code: string }[]).map((c) => c.code)
+		expect(codes).toEqual(expect.arrayContaining(["lines_sum", "totals"]))
+		const args = { poId: po.id, userId: u.id, workMonth: "2026-05" }
+		await expect(
+			generateFromPo({ ...args, overrides: [] }),
+		).rejects.toMatchObject({ code: "not_confirmable" })
+		const made = await generateFromPo({
+			...args,
+			overrides: [
+				{ check: "lines_sum", reason: "Claro raised the line" },
+				{ check: "totals", reason: "Claro raised the line" },
+			],
+		})
+		const inv = await db.claroInvoice.findUniqueOrThrow({
+			where: { id: made.invoiceId },
+		})
+		expect(Number(inv.total)).toBe(133.8)
+	})
+
+	it("generateFromPo clicked twice at once makes one invoice, one PoLink and one confirm", async () => {
+		const u = t.track("user", await seedUser({ role: "FINANCE" }))
+		const po = await reviewPo(u.id)
+		const args = {
+			poId: po.id,
+			userId: u.id,
+			workMonth: "2026-05",
+			overrides: [],
+		}
+		const results = await Promise.allSettled([
+			generateFromPo(args),
+			generateFromPo(args),
+		])
+		expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1)
+		const lost = results.find((r) => r.status === "rejected")
+		expect((lost as PromiseRejectedResult).reason).toMatchObject({
+			code: "already_made",
+		})
+		expect(await db.claroInvoice.count({ where: { claroPoId: po.id } })).toBe(1)
+		expect(
+			await db.poLink.count({ where: { docId: po.docId as string } }),
+		).toBe(1)
+		expect(
+			await db.auditTrail.count({
+				where: { docId: po.docId as string, action: "PO_CONFIRMED" },
+			}),
+		).toBe(1)
+		expect(
+			(await db.claroPo.findUniqueOrThrow({ where: { id: po.id } })).status,
+		).toBe("CONFIRMED")
+	})
+
 	it("generateFromPo refuses missing pages", async () => {
 		const u = t.track("user", await seedUser({ role: "FINANCE" }))
 		const po = await reviewPo(u.id, { statedPages: 3 })

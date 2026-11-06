@@ -139,13 +139,30 @@ const onlyPagesMissing = (checks: PoCheck[]) => {
 	return hard.length > 0 && hard.every((c) => c.code === "pages_missing")
 }
 
+/** The PO number was typed by hand, not read off the file. */
+const typedNumber = (entered: Prisma.JsonValue | null) =>
+	!!entered &&
+	typeof entered === "object" &&
+	!Array.isArray(entered) &&
+	"poNumber" in entered
+
+/** Only these rows may still get a verdict; a confirm or a supersede wins. */
+const STILL_OPEN = {
+	notIn: ["CONFIRMED", "SUPERSEDED"],
+} as Prisma.EnumClaroPoStatusFilter
+
 /**
  * Work out an Aviso for the PO (the one already linked, else the first
- * candidate number that is an Aviso) and run the checks. Writes the verdict.
- * Safe to call again after any field changes. A complete PO replaces an
- * earlier copy of the same number that is stuck on missing pages.
+ * candidate number that is an Aviso) and run the checks. Writes the verdict,
+ * unless the row was confirmed or superseded meanwhile. Safe to call again
+ * after any field changes. With `supersede` (a read, or pages corrected by
+ * hand), a complete copy replaces copies of the same number stuck on missing
+ * pages; never on a number typed by hand, since a supersede cannot be undone.
  */
-export async function evaluatePo(id: string): Promise<void> {
+export async function evaluatePo(
+	id: string,
+	opts: { supersede?: boolean } = {},
+): Promise<void> {
 	const row = await db.claroPo.findUnique({ where: { id } })
 	if (!row) throw new PoError("unknown_po")
 	if (row.status === "CONFIRMED" || row.status === "SUPERSEDED") return
@@ -160,20 +177,23 @@ export async function evaluatePo(id: string): Promise<void> {
 					invoice: null,
 				},
 				orderBy: [{ receivedAt: "asc" }, { id: "asc" }],
-				select: { id: true, checks: true, statedPages: true, filePages: true },
+				select: {
+					id: true,
+					checks: true,
+					statedPages: true,
+					filePages: true,
+					entered: true,
+				},
 			})
 		: []
 	// A complete file supersedes the copies stuck on missing pages.
-	if (isComplete(row)) {
+	if (opts.supersede && isComplete(row) && !typedNumber(row.entered)) {
 		const short = open
 			.filter((o) => checksOf(o.checks).some((c) => c.code === "pages_missing"))
 			.map((o) => o.id)
 		if (short.length > 0)
 			await db.claroPo.updateMany({
-				where: {
-					id: { in: short },
-					status: { notIn: ["CONFIRMED", "SUPERSEDED"] },
-				},
+				where: { id: { in: short }, status: STILL_OPEN },
 				data: { status: "SUPERSEDED", supersededById: id },
 			})
 	}
@@ -270,15 +290,29 @@ export async function evaluatePo(id: string): Promise<void> {
 			...checks.filter((c) => !vsPrinted(c)),
 			...asPrinted.filter(vsPrinted),
 		]
+		// The money to be invoiced must also be what the PO printed.
+		const off = (["subtotal", "ivu4", "ivu115", "total"] as const).filter(
+			(k) => {
+				const [s, p] = [stored[k], printed[k]]
+				return p !== null && (s === null || cents(s) !== cents(p))
+			},
+		)
+		if (off.length > 0 && !checks.some((c) => c.code === "totals"))
+			checks.push({
+				code: "totals",
+				severity: "needs_look",
+				detail: `${off.join(", ")} vs printed`,
+			})
 	}
 	// A short copy read after its complete twin (both in one batch) is the one
 	// replaced; the twin is looked at again now that this copy no longer counts.
-	const full = checks.some((c) => c.code === "pages_missing")
-		? open.find(isComplete)
-		: undefined
+	const full =
+		opts.supersede && checks.some((c) => c.code === "pages_missing")
+			? open.find((o) => isComplete(o) && !typedNumber(o.entered))
+			: undefined
 	if (full) {
-		await db.claroPo.update({
-			where: { id },
+		const r = await db.claroPo.updateMany({
+			where: { id, status: STILL_OPEN },
 			data: {
 				docId,
 				checks: checks as unknown as Prisma.InputJsonValue,
@@ -286,11 +320,11 @@ export async function evaluatePo(id: string): Promise<void> {
 				supersededById: full.id,
 			},
 		})
-		await evaluatePo(full.id)
+		if (r.count > 0) await evaluatePo(full.id)
 		return
 	}
-	await db.claroPo.update({
-		where: { id },
+	await db.claroPo.updateMany({
+		where: { id, status: STILL_OPEN },
 		data: {
 			docId,
 			checks: checks as unknown as Prisma.InputJsonValue,
@@ -324,6 +358,7 @@ async function readPo(id: string, reader: PoReader) {
 	} catch (e) {
 		return unreadable(e instanceof Error ? e.message : "read_failed")
 	}
+	const prev = printedOf(row.printed)
 	await db.claroPo.update({
 		where: { id },
 		data: {
@@ -339,20 +374,17 @@ async function readPo(id: string, reader: PoReader) {
 			ivu4: read.ivu4,
 			ivu115: read.ivu115,
 			total: read.total,
-			// Kept from the first read on, so hand edits are checked against it.
-			...(row.printed === null
-				? {
-						printed: {
-							subtotal: read.subtotal,
-							ivu4: read.ivu4,
-							ivu115: read.ivu115,
-							total: read.total,
-						},
-					}
-				: {}),
+			// Kept from the first read on, so hand edits are checked against it;
+			// a value already known (read earlier or stated by hand) is kept.
+			printed: {
+				subtotal: prev?.subtotal ?? read.subtotal,
+				ivu4: prev?.ivu4 ?? read.ivu4,
+				ivu115: prev?.ivu115 ?? read.ivu115,
+				total: prev?.total ?? read.total,
+			},
 		},
 	})
-	await evaluatePo(id)
+	await evaluatePo(id, { supersede: true })
 }
 
 /** Take the oldest queued PO for this worker; two workers never get the same one. */
@@ -445,8 +477,11 @@ type PoLineInput = Omit<PoLine, "ivu"> & { ivu?: number }
 
 /**
  * Fix a field by hand. The change is remembered as ENTERED, with who and when
- * (Rule 4). Lines replace the read ones whole and rebuild subtotal, IVU and
- * total; what the PO printed is left as it was read.
+ * (Rule 4). A subtotal, IVU or total typed by hand is what the PO really
+ * prints, so it is written to `printed` too. Lines replace the read ones whole
+ * and rebuild subtotal, IVU and total, leaving `printed` alone so the checks
+ * compare the edited lines against it. A row read before `printed` was kept
+ * gets it from its header as it stood before this edit.
  */
 export async function fixPo(
 	id: string,
@@ -480,6 +515,15 @@ export async function fixPo(
 			touched.push(k)
 		}
 	}
+	const printed = printedOf(row.printed) ?? {
+		subtotal: num(row.subtotal),
+		ivu4: num(row.ivu4),
+		ivu115: num(row.ivu115),
+		total: num(row.total),
+	}
+	for (const k of ["subtotal", "ivu4", "ivu115", "total"] as const)
+		if (f[k] !== undefined) printed[k] = f[k]
+	data.printed = printed as unknown as Prisma.InputJsonValue
 	if (f.lines !== undefined) {
 		const lines: PoLine[] = f.lines.map((l) => ({
 			item: l.item,
@@ -512,12 +556,66 @@ export async function fixPo(
 		where: { id },
 		data: { ...data, entered: entered as Prisma.InputJsonValue },
 	})
-	await evaluatePo(id)
+	await evaluatePo(id, { supersede: f.statedPages !== undefined })
 }
 
 export type PoOverride = { check: PoCheckCode; reason: string }
 
 const REVIEWABLE = ["READY", "NEEDS_LOOK", "BLOCKED", "UNMATCHED"] as const
+
+/** Run the checks again on a PO under review; an edit can leave them stale. */
+async function refreshChecks(id: string) {
+	const before = await db.claroPo.findUnique({
+		where: { id },
+		select: { status: true },
+	})
+	if (!before) throw new PoError("unknown_po")
+	if ((REVIEWABLE as readonly string[]).includes(before.status))
+		await evaluatePo(id)
+}
+
+/**
+ * Whether a PO can be confirmed as its checks stand, and with `overrides` the
+ * reasons to record: one per failing check, however many lines it failed on.
+ * A hard stop, or a failing check without a reason, refuses.
+ */
+function gate(
+	row: { status: string; checks: Prisma.JsonValue | null },
+	overrides: PoOverride[] | undefined,
+	byId: string,
+) {
+	const failing = checksOf(row.checks)
+	const confirmable =
+		row.status === "READY" ||
+		row.status === "NEEDS_LOOK" ||
+		(row.status === "BLOCKED" && failing.every(isOverridable))
+	if (!confirmable) throw new PoError("not_confirmable")
+	if (!overrides) return null
+	const at = new Date().toISOString()
+	return [...new Set(failing.map((c) => c.code))].map((check) => {
+		const reason = overrides.find((o) => o.check === check)?.reason.trim()
+		if (HARD_STOPS.has(check) || !reason) throw new PoError("not_confirmable")
+		return { check, reason, byId, at }
+	})
+}
+
+/**
+ * The Generate step's review gate, before anything is made: the checks as
+ * they stand now, with these reasons, must allow a confirm. A PO already
+ * confirmed passes (the make decides what happens next).
+ */
+export async function assertReviewed(
+	id: string,
+	overrides: PoOverride[],
+	byId: string,
+) {
+	await refreshChecks(id)
+	const row = await db.claroPo.findUniqueOrThrow({
+		where: { id },
+		select: { status: true, checks: true },
+	})
+	if (row.status !== "CONFIRMED") gate(row, overrides, byId)
+}
 
 /**
  * Confirm one PO under its Aviso: saves it there and stamps received /
@@ -531,35 +629,12 @@ export async function confirmPo(
 	userId: string,
 	opts: { overrides?: PoOverride[] } = {},
 ) {
-	const before = await db.claroPo.findUnique({
-		where: { id },
-		select: { status: true },
-	})
-	if (!before) throw new PoError("unknown_po")
-	if ((REVIEWABLE as readonly string[]).includes(before.status))
-		await evaluatePo(id)
+	await refreshChecks(id)
 	await db.$transaction(async (tx) => {
 		const row = await tx.claroPo.findUnique({ where: { id } })
 		if (!row) throw new PoError("unknown_po")
 		if (row.status === "CONFIRMED") throw new PoError("already_confirmed")
-		const failing = checksOf(row.checks)
-		const confirmable =
-			row.status === "READY" ||
-			row.status === "NEEDS_LOOK" ||
-			(row.status === "BLOCKED" && failing.every(isOverridable))
-		if (!confirmable) throw new PoError("not_confirmable")
-		const at = new Date().toISOString()
-		// One reason per check, however many lines it failed on.
-		const accepted = opts.overrides
-			? [...new Set(failing.map((c) => c.code))].map((check) => {
-					const reason = opts.overrides
-						?.find((o) => o.check === check)
-						?.reason.trim()
-					if (HARD_STOPS.has(check) || !reason)
-						throw new PoError("not_confirmable")
-					return { check, reason, byId: userId, at }
-				})
-			: null
+		const accepted = gate(row, opts.overrides, userId)
 		if (!row.docId || !row.poNumber || !row.poDate)
 			throw new PoError("incomplete")
 		// Two copies read side by side can both look new: the first to confirm wins.

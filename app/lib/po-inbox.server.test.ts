@@ -6,6 +6,7 @@ import { db } from "~/lib/db.server"
 import {
 	confirmAllGreen,
 	confirmPo,
+	discardPo,
 	fixPo,
 	ingestPoFiles,
 	PoError,
@@ -686,5 +687,57 @@ describe("PO inbox", () => {
 		expect((row.checks as { code: string }[]).map((c) => c.code)).toContain(
 			"lines_sum",
 		)
+	})
+
+	it("discardPo retires a duplicate copy under the confirmed original, audited", async () => {
+		const { user, avisoNumber, doc } = await setup()
+		const number = String(4920000000 + Math.floor(Math.random() * 99999999))
+		const tagA = runToken("orig")
+		const tagB = runToken("copy")
+		const [a] = await ingestPoFiles(
+			[{ name: "a.pdf", bytes: pdf(tagA) }],
+			user.id,
+		)
+		t.track("claroPo", { id: a })
+		const r = read({ avisoCandidates: [avisoNumber], poNumber: number })
+		await processPending(readerOf({ [tagA]: r }), 1)
+		await confirmPo(a, user.id)
+		const [b] = await ingestPoFiles(
+			[{ name: "b.pdf", bytes: pdf(tagB) }],
+			user.id,
+		)
+		t.track("claroPo", { id: b })
+		await processPending(readerOf({ [tagB]: r }), 1)
+		await discardPo(b, user.id)
+		const row = await db.claroPo.findUniqueOrThrow({ where: { id: b } })
+		expect(row.status).toBe("SUPERSEDED")
+		expect(row.supersededById).toBe(a)
+		expect(
+			await db.auditTrail.count({
+				where: { docId: doc.id, action: "PO_DISCARDED", userId: user.id },
+			}),
+		).toBe(1)
+	})
+
+	it("discardPo refuses a PO that is not a duplicate", async () => {
+		const { user, avisoNumber } = await setup()
+		const tag = runToken("lone")
+		const [a] = await ingestPoFiles(
+			[{ name: "a.pdf", bytes: pdf(tag) }],
+			user.id,
+		)
+		t.track("claroPo", { id: a })
+		await processPending(
+			readerOf({
+				[tag]: read({ avisoCandidates: [avisoNumber], termsDays: null }),
+			}),
+			1,
+		)
+		await expect(discardPo(a, user.id)).rejects.toMatchObject({
+			code: "not_discardable",
+		})
+		const row = await db.claroPo.findUniqueOrThrow({ where: { id: a } })
+		expect(row.status).toBe("NEEDS_LOOK")
+		expect(row.supersededById).toBeNull()
 	})
 })

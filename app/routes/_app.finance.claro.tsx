@@ -1,17 +1,19 @@
-import { useEffect, useRef } from "react"
 import { useTranslation } from "react-i18next"
-import { redirect, useRevalidator } from "react-router"
+import { redirect } from "react-router"
 import { ClaroLoadView, type ClaroQueueRow } from "~/components/claro-load-view"
 import { ClaroStepRail } from "~/components/claro-step-rail"
+import { ClaroClock } from "~/components/claro-submit-view"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { Callout } from "~/components/ui/callout"
+import { invoiceNumber } from "~/lib/claro-invoice"
 import { claroStepOf } from "~/lib/claro-steps"
 import { db } from "~/lib/db.server"
 import { validateFile } from "~/lib/file-upload.server"
 import { requireRole } from "~/lib/permissions.server"
 import { ingestPoFiles, kickProcessing, PoError } from "~/lib/po-inbox.server"
+import { useAutoRevalidate } from "~/lib/use-auto-revalidate"
 import type { Route } from "./+types/_app.finance.claro"
 
-const READING_REFRESH_MS = 5000
 const QUEUE_MAX = 200
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -37,7 +39,23 @@ export async function loader({ request }: Route.LoaderArgs) {
 		fileName: p.fileName,
 		step: claroStepOf(p),
 	}))
-	return { queue }
+	// Back from Submit: the invoice just filed and its Claro clock.
+	const submittedId = new URL(request.url).searchParams.get("submitted")
+	const inv = submittedId
+		? await db.claroInvoice.findUnique({
+				where: { id: submittedId },
+				include: { claroPo: { select: { termsDays: true } } },
+			})
+		: null
+	const submitted = inv?.loadedAt
+		? {
+				number: invoiceNumber(inv),
+				loadedAt: inv.loadedAt.toISOString(),
+				dueDate: inv.dueDate?.toISOString() ?? null,
+				termsDays: inv.claroPo?.termsDays ?? null,
+			}
+		: null
+	return { queue, submitted }
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -79,23 +97,24 @@ export default function Claro({
 	actionData,
 }: Route.ComponentProps) {
 	const { t } = useTranslation()
-	const { queue } = loaderData
-	const { revalidate, state } = useRevalidator()
-	const stateRef = useRef(state)
-	stateRef.current = state
-	const reading = queue.some((r) => r.step === 1)
-	useEffect(() => {
-		if (!reading) return
-		const id = window.setInterval(() => {
-			if (document.visibilityState === "visible" && stateRef.current === "idle")
-				revalidate()
-		}, READING_REFRESH_MS)
-		return () => window.clearInterval(id)
-	}, [reading, revalidate])
+	const { queue, submitted } = loaderData
+	useAutoRevalidate(queue.some((r) => r.step === 1))
 	return (
 		<div className="space-y-4">
 			<h1 className="text-xl font-semibold">{t("claro.title")}</h1>
 			<ClaroStepRail current={1} />
+			{submitted && (
+				<Callout
+					tone="ok"
+					title={t("claro.submitted", { number: submitted.number })}
+				>
+					<ClaroClock
+						loadedAt={submitted.loadedAt}
+						dueDate={submitted.dueDate}
+						termsDays={submitted.termsDays}
+					/>
+				</Callout>
+			)}
 			<ClaroLoadView queue={queue} errorKey={actionData?.errorKey} />
 		</div>
 	)

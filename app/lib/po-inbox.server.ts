@@ -27,6 +27,7 @@ type PoErrorCode =
 	| "already_confirmed"
 	| "not_pdf"
 	| "unknown_po"
+	| "not_discardable"
 
 export class PoError extends Error {
 	constructor(readonly code: PoErrorCode) {
@@ -710,6 +711,94 @@ export async function confirmPo(
 			},
 		})
 	})
+}
+
+/**
+ * The copy a duplicate repeats: one already confirmed or invoiced, else the
+ * first uploaded. Null when no other live copy shares its number or file.
+ */
+export async function findOriginal(row: {
+	id: string
+	poNumber: string | null
+	fileHash: string
+}): Promise<{
+	id: string
+	poNumber: string | null
+	docId: string | null
+} | null> {
+	const twins = await db.claroPo.findMany({
+		where: {
+			id: { not: row.id },
+			status: { not: "SUPERSEDED" },
+			OR: [
+				...(row.poNumber ? [{ poNumber: row.poNumber }] : []),
+				{ fileHash: row.fileHash },
+			],
+		},
+		orderBy: [{ receivedAt: "asc" }, { id: "asc" }],
+		select: {
+			id: true,
+			poNumber: true,
+			docId: true,
+			status: true,
+			invoice: { select: { id: true } },
+		},
+	})
+	const pick =
+		twins.find((o) => o.status === "CONFIRMED" || o.invoice !== null) ??
+		twins[0]
+	return pick
+		? { id: pick.id, poNumber: pick.poNumber, docId: pick.docId }
+		: null
+}
+
+/**
+ * Retire a copy stopped only as a duplicate: it is kept, marked Superseded
+ * and linked to the original, and leaves the queue. Who and when are kept on
+ * the row and in the audit trail. Returns the original's id.
+ */
+export async function discardPo(id: string, userId: string): Promise<string> {
+	await refreshChecks(id)
+	const row = await db.claroPo.findUniqueOrThrow({ where: { id } })
+	const hard = checksOf(row.checks).filter((c) => HARD_STOPS.has(c.code))
+	const reviewable = (REVIEWABLE as readonly string[]).includes(row.status)
+	if (
+		!reviewable ||
+		hard.length === 0 ||
+		hard.some((c) => c.code !== "duplicate")
+	)
+		throw new PoError("not_discardable")
+	const original = await findOriginal(row)
+	if (!original) throw new PoError("not_discardable")
+	const at = new Date().toISOString()
+	const r = await db.claroPo.updateMany({
+		where: { id, status: STILL_OPEN },
+		data: {
+			status: "SUPERSEDED",
+			supersededById: original.id,
+			entered: {
+				...((row.entered as Record<string, unknown> | null) ?? {}),
+				discarded: { byId: userId, at },
+			} as Prisma.InputJsonValue,
+		},
+	})
+	if (r.count === 0) throw new PoError("not_discardable")
+	const docId = row.docId ?? original.docId
+	if (docId)
+		await db.auditTrail.create({
+			data: {
+				docId,
+				userId,
+				action: "PO_DISCARDED",
+				diffJson: {
+					source: "ENTERED",
+					claroPoId: id,
+					poNumber: row.poNumber,
+					originalId: original.id,
+				},
+			},
+		})
+	return original.id
 }
 
 /** Confirm every green PO. Only green ones: anything else is left for a look. */

@@ -1,0 +1,214 @@
+import { defaultWorkMonth, invoiceNumber } from "~/lib/claro-invoice"
+import { type ClaroPoView, hasCheck } from "~/lib/claro-po-view"
+import { claroStepOf } from "~/lib/claro-steps"
+import { db } from "~/lib/db.server"
+import { findOriginal, type fixPo } from "~/lib/po-inbox.server"
+import { loadPoDetail } from "~/lib/po-inbox-view.server"
+import { cents, type PoCheckCode, type PoLine } from "~/lib/po-reading"
+
+/** Everything the Review, Generate and Submit steps show of one PO. */
+export async function loadClaroPo(id: string): Promise<ClaroPoView | null> {
+	const [detail, r] = await Promise.all([
+		loadPoDetail(id),
+		db.claroPo.findUnique({
+			where: { id },
+			select: {
+				status: true,
+				fileHash: true,
+				avisoCandidates: true,
+				printed: true,
+				supersededById: true,
+				doc: { select: { fieldStartedAt: true } },
+				invoice: true,
+			},
+		}),
+	])
+	if (!detail || !r) return null
+	const p =
+		r.printed && typeof r.printed === "object" && !Array.isArray(r.printed)
+			? (r.printed as Record<string, unknown>)
+			: null
+	const n = (x: unknown) => (typeof x === "number" ? x : null)
+	const inv = r.invoice
+	return {
+		...detail,
+		status: r.status,
+		avisoCandidates: r.avisoCandidates,
+		supersededById: r.supersededById,
+		printed: p
+			? {
+					subtotal: n(p.subtotal),
+					ivu4: n(p.ivu4),
+					ivu115: n(p.ivu115),
+					total: n(p.total),
+				}
+			: null,
+		original: hasCheck(detail.checks, "duplicate")
+			? await findOriginal({
+					id,
+					poNumber: detail.poNumber,
+					fileHash: r.fileHash,
+				}).then((o) => (o ? { id: o.id, poNumber: o.poNumber } : null))
+			: null,
+		invoice: inv
+			? {
+					id: inv.id,
+					number: invoiceNumber(inv),
+					workMonth: inv.workMonth,
+					subtotal: Number(inv.subtotal),
+					ivu4: Number(inv.ivu4),
+					ivu115: Number(inv.ivu115),
+					total: Number(inv.total),
+					hasFile: inv.filePath !== null,
+					madeAt: inv.madeAt.toISOString(),
+					loadedAt: inv.loadedAt?.toISOString() ?? null,
+					dueDate: inv.dueDate?.toISOString() ?? null,
+					paidAt: inv.paidAt?.toISOString() ?? null,
+				}
+			: null,
+		step: claroStepOf({ status: r.status, invoice: inv }),
+		suggestedMonth: defaultWorkMonth(
+			r.doc?.fieldStartedAt ?? null,
+			detail.poDate ? new Date(`${detail.poDate}T12:00:00Z`) : null,
+		),
+	}
+}
+
+type FixInput = Parameters<typeof fixPo>[2]
+type FixParse =
+	| { ok: true; fields: FixInput }
+	| { ok: false; error: "bad_number" | "bad_lines" }
+
+const text = (form: FormData, k: string) => {
+	const v = form.get(k)
+	return typeof v === "string" ? v.trim() : undefined
+}
+
+/**
+ * The Review form, reduced to what changed against the PO as it stands. Every
+ * field is posted on each save, so sending them all to `fixPo` would mark
+ * untouched ones as typed by hand, and a header sent back after a line edit
+ * would overwrite what the PO printed with the totals rebuilt from the lines.
+ * A number that is not finite, or a malformed line, refuses the whole save.
+ */
+export function parseFixForm(form: FormData, po: ClaroPoView): FixParse {
+	const fields: FixInput = {}
+	const poNumber = text(form, "poNumber")
+	if (
+		poNumber !== undefined &&
+		poNumber.replace(/\D/g, "") !== (po.poNumber ?? "")
+	)
+		fields.poNumber = poNumber
+	const poDate = text(form, "poDate")
+	if (poDate !== undefined && poDate !== (po.poDate ?? "")) {
+		if (poDate !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(poDate))
+			return { ok: false, error: "bad_number" }
+		fields.poDate = poDate
+	}
+	const aviso = text(form, "avisoNumber")
+	if (aviso && aviso.replace(/\D/g, "") !== (po.avisoNumber ?? ""))
+		fields.avisoNumber = aviso
+
+	for (const k of ["termsDays", "statedPages"] as const) {
+		const v = text(form, k)
+		if (v === undefined || v === "") continue
+		const n = Number(v)
+		if (!Number.isInteger(n) || n < 0 || (k === "statedPages" && n < 1))
+			return { ok: false, error: "bad_number" }
+		if (n !== po[k]) fields[k] = n
+	}
+	for (const k of ["subtotal", "ivu4", "ivu115", "total"] as const) {
+		const v = text(form, k)
+		if (v === undefined || v === "") continue
+		const n = Number(v)
+		if (!Number.isFinite(n)) return { ok: false, error: "bad_number" }
+		const was = po[k]
+		if (was === null || cents(n) !== cents(was)) fields[k] = n
+	}
+
+	const raw = text(form, "lines")
+	if (raw !== undefined && raw !== "") {
+		const lines = parseLines(raw)
+		if (!lines) return { ok: false, error: "bad_lines" }
+		const same =
+			lines.length === po.lines.length &&
+			lines.every((l, i) => sameLine(l, po.lines[i]))
+		if (!same) fields.lines = lines
+	}
+	return { ok: true, fields }
+}
+
+type LineInput = Omit<PoLine, "ivu">
+
+function parseLines(raw: string): LineInput[] | null {
+	let v: unknown
+	try {
+		v = JSON.parse(raw)
+	} catch {
+		return null
+	}
+	if (!Array.isArray(v) || v.length > 500) return null
+	const out: LineInput[] = []
+	for (const l of v) {
+		if (!l || typeof l !== "object") return null
+		const o = l as Record<string, unknown>
+		const amount = o.amount
+		const ivuRate = o.ivuRate
+		if (typeof amount !== "number" || !Number.isFinite(amount)) return null
+		if (
+			typeof ivuRate !== "number" ||
+			!Number.isFinite(ivuRate) ||
+			ivuRate < 0 ||
+			ivuRate > 1
+		)
+			return null
+		out.push({
+			item: String(o.item ?? "").slice(0, 40),
+			description: String(o.description ?? "").slice(0, 500),
+			amount: cents(amount) / 100,
+			ivuRate,
+		})
+	}
+	return out
+}
+
+const sameLine = (a: LineInput, b: PoLine) =>
+	a.item === b.item &&
+	a.description === b.description &&
+	cents(a.amount) === cents(b.amount) &&
+	a.ivuRate === b.ivuRate
+
+const OVERRIDE_CODES: PoCheckCode[] = [
+	"lines_sum",
+	"totals",
+	"ivu_line",
+	"po_number_format",
+	"duplicate",
+	"pages_missing",
+	"pages_unknown",
+	"po_date_missing",
+	"terms_missing",
+	"over_billed",
+	"unreadable",
+]
+
+/** One `override-<code>` reason per red check; blank ones are left out. */
+export function parseOverrides(form: FormData) {
+	return OVERRIDE_CODES.flatMap((check) => {
+		const reason = text(form, `override-${check}`)
+		return reason ? [{ check, reason: reason.slice(0, 500) }] : []
+	})
+}
+
+/** A real calendar day as YYYY-MM-DD, or null. */
+export function parseDay(v: string | undefined): Date | null {
+	if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null
+	const d = new Date(`${v}T12:00:00Z`)
+	return Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== v
+		? null
+		: d
+}
+
+/** Today on the Puerto Rico calendar, YYYY-MM-DD. */
+export const todayInPr = (now = new Date()) =>
+	now.toLocaleDateString("en-CA", { timeZone: "America/Puerto_Rico" })

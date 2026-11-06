@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest"
 import {
 	coercePoRead,
 	isOverridable,
-	recomputeFromLines,
 	type PoRead,
 	parseClaroDate,
+	recomputeFromLines,
 	runPoChecks,
 	statusFromChecks,
 } from "./po-reading"

@@ -7,7 +7,6 @@ import type {
 import { db } from "./db.server"
 import { hasFieldTable, warehouseUsedLines } from "./field-materials"
 import type { FinanceStage } from "./finance-pipeline"
-import { computeInvoiceTotals } from "./invoice-totals"
 import { getAvisoAmountTolerance, getIvuRate } from "./system-settings.server"
 import { toNumberPrice } from "./utils"
 

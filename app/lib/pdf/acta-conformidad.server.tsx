@@ -64,6 +64,8 @@ export async function generateActaConformidadPdf(params: {
 	invoiceDate: string
 	lineItems: LineItem[]
 	supervisorName: string
+	/** The Claro supervisor who dispatched the work; omitted when none is set. */
+	claroSupervisorName?: string | null
 	ivuRate: number // fetched from system_settings — never hardcoded
 }): Promise<Buffer> {
 	const totals = computeInvoiceTotals(params.lineItems, params.ivuRate)
@@ -166,6 +168,9 @@ export async function generateActaConformidadPdf(params: {
 					<Text style={{ marginTop: 4 }}>
 						Supervisor: {params.supervisorName}
 					</Text>
+					{params.claroSupervisorName ? (
+						<Text>Supervisor de Claro: {params.claroSupervisorName}</Text>
+					) : null}
 				</View>
 			</Page>
 		</Document>

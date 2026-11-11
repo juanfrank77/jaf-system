@@ -34,6 +34,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 			brigade: { select: { name: true } },
 			completedBy: { select: { name: true } },
 			supervisor: { select: { name: true } },
+			claroSupervisor: { select: { name: true } },
 		},
 	})
 	if (!doc?.jafInvoiceGeneratedAt)
@@ -62,6 +63,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		// The first send's rate, so a re-download never re-prices the IVU.
 		ivuRate: await ivuRateAtFirstSend(params.id),
 		supervisorName: doc.completedBy?.name ?? doc.supervisor.name,
+		claroSupervisorName: doc.claroSupervisor?.name ?? null,
 	})
 	const safeName = doc.controlNumber.replace(/[^A-Za-z0-9._-]/g, "_")
 	return new Response(new Uint8Array(pdf), {

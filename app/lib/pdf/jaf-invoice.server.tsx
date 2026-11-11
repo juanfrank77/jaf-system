@@ -80,6 +80,8 @@ interface JafInvoiceParams {
 	lineItems: LineItem[]
 	ivuRate: number
 	supervisorName: string
+	/** The Claro supervisor who dispatched the work; omitted when none is set. */
+	claroSupervisorName?: string | null
 }
 
 export async function generateJafInvoicePdf(
@@ -198,6 +200,12 @@ export async function generateJafInvoicePdf(
 						<Text style={styles.label}>Authorized by: </Text>
 						{params.supervisorName}
 					</Text>
+					{params.claroSupervisorName ? (
+						<Text>
+							<Text style={styles.label}>Claro supervisor: </Text>
+							{params.claroSupervisorName}
+						</Text>
+					) : null}
 					<Text style={{ marginTop: 4 }}>
 						Claro Work Order (Aviso) #: {params.avisoNumber ?? "—"}
 					</Text>

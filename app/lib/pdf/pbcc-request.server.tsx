@@ -69,6 +69,8 @@ interface PbccRequestParams {
 	debtor: string
 	lineItems: LineItem[]
 	supervisorName: string
+	/** The Claro supervisor who dispatched the work; omitted when none is set. */
+	claroSupervisorName?: string | null
 	requestDate: string
 	lcPbccAdvanceRate: number
 }
@@ -133,6 +135,12 @@ export async function generatePbccRequestPdf(
 						<Text style={styles.label}>Supervisor:</Text>
 						<Text style={styles.value}>{params.supervisorName}</Text>
 					</View>
+					{params.claroSupervisorName ? (
+						<View style={styles.row}>
+							<Text style={styles.label}>Claro supervisor:</Text>
+							<Text style={styles.value}>{params.claroSupervisorName}</Text>
+						</View>
+					) : null}
 				</View>
 
 				<View style={styles.section}>

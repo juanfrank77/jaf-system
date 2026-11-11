@@ -55,6 +55,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
+		include: { claroSupervisor: { select: { name: true } } },
 	})
 	if (!canTransition(doc.status, "LC_REQUEST_GENERATED", user.role))
 		throw redirect(`/docs/${params.id}`)
@@ -103,6 +104,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 			invoiceDate: today,
 			lineItems,
 			supervisorName: supervisor?.name ?? "",
+			claroSupervisorName: doc.claroSupervisor?.name ?? null,
 			ivuRate,
 		})
 		const localPath = path.join(lcDir, `${params.id}-acta.pdf`)

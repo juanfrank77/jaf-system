@@ -139,6 +139,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 		where: { id: params.id },
 		include: {
 			supervisor: true,
+			claroSupervisor: { select: { name: true } },
 			poLinks: true,
 			paymentRecords: { select: { type: true } },
 			bankSchedule: { select: { number: true, sentAt: true } },
@@ -222,6 +223,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 		debtor: "PRT/CLARO",
 		lineItems,
 		supervisorName: doc.supervisor?.name ?? "",
+		claroSupervisorName: doc.claroSupervisor?.name ?? null,
 		requestDate: today,
 		lcPbccAdvanceRate,
 	})

@@ -259,7 +259,7 @@ export function PbccBatchDetailView({
 					<input type="hidden" name="intent" value="mark_sent" />
 					<Button
 						type="submit"
-						variant="outline"
+						variant="success"
 						disabled={!green || submitting}
 					>
 						{t("pbcc_batch.detail.mark_sent")}

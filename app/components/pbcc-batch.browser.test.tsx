@@ -195,6 +195,13 @@ describe("closed PBCC batch", () => {
 		expect(
 			screen.getByRole("button", { name: "Mark sent to PBCC" }),
 		).toBeEnabled()
+		// Send and Mark sent read as two different buttons: primary vs green.
+		expect(
+			screen.getByRole("button", { name: "Mark sent to PBCC" }),
+		).toHaveClass("bg-status-ok")
+		expect(
+			screen.getByRole("button", { name: "Mark sent to PBCC" }),
+		).not.toHaveClass("bg-primary")
 	})
 
 	it("with a failing check blocks every download and Mark sent", async ({

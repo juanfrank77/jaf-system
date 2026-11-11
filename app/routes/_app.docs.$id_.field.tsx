@@ -16,6 +16,7 @@ import {
 	AddFieldService,
 	RemoveAddedService,
 } from "~/components/add-field-service"
+import { CodeSearchSelect } from "~/components/code-search-select"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import {
 	FieldMaterialsTable,
@@ -1488,31 +1489,22 @@ export default function FieldUpdate({
 									<p className="text-xs text-muted-foreground">
 										{t("docs_field.materials.hint")}
 									</p>
-									<select
-										aria-label={t("docs_field.materials.add")}
-										className="h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm"
-										value=""
-										onChange={(e) => {
-											if (!e.target.value) return
+									<CodeSearchSelect
+										items={serviceCodes}
+										placeholder={t("docs_field.materials.add")}
+										onPick={(c) =>
 											setRows([
 												...rows,
 												{
-													serviceCodeId: e.target.value,
+													serviceCodeId: c.id,
 													used: 0,
 													returned: 0,
 													source: "TRUCK_STOCK",
 													...(w.id ? { brigadeId: w.id } : {}),
 												},
 											])
-										}}
-									>
-										<option value="">{t("docs_field.materials.add")}</option>
-										{serviceCodes.map((c) => (
-											<option key={c.id} value={c.id}>
-												{c.claroCode} · {c.name}
-											</option>
-										))}
-									</select>
+										}
+									/>
 								</CardContent>
 							</Card>
 						</>

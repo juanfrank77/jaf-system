@@ -21,6 +21,7 @@ export function CodeSearchSelect({
 	placeholder,
 	label,
 	selected,
+	codeLast,
 	autoFocus,
 }: {
 	items: CodeSearchItem[]
@@ -30,6 +31,8 @@ export function CodeSearchSelect({
 	label?: string
 	/** When set, the box shows this item instead of clearing after a pick. */
 	selected?: CodeSearchItem | null
+	/** Name first, code (or an email) after it: for people, not catalog rows. */
+	codeLast?: boolean
 	autoFocus?: boolean
 }) {
 	const { t } = useTranslation()
@@ -45,7 +48,11 @@ export function CodeSearchSelect({
 			)
 		: items
 	const shown =
-		selected && !open ? `${selected.claroCode} · ${selected.name}` : query
+		selected && !open
+			? codeLast
+				? `${selected.name} · ${selected.claroCode}`
+				: `${selected.claroCode} · ${selected.name}`
+			: query
 
 	return (
 		<div className="space-y-2">
@@ -98,7 +105,9 @@ export function CodeSearchSelect({
 										}}
 										className="flex w-full items-center gap-3 px-2 py-1.5 text-left hover:bg-muted"
 									>
-										<span className="font-mono text-xs text-muted-foreground">
+										<span
+											className={`font-mono text-xs text-muted-foreground ${codeLast ? "order-2" : ""}`}
+										>
 											{m.claroCode}
 										</span>
 										<span className="flex-1">{m.name}</span>

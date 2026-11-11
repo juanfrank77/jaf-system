@@ -352,3 +352,54 @@ describe("PacketStepCard package files", () => {
 		},
 	)
 })
+
+describe("PacketStepCard Claro supervisor search", () => {
+	const options = [
+		{ id: "c1", name: "Hector D Hoyos", email: "hector.dehoyos@claropr.com" },
+		{ id: "c2", name: "Ramón Claro", email: "ramon.now@claro.example" },
+	]
+
+	it("typing part of a name lists the match, and picking it is what Save posts", async ({
+		renderStub,
+	}) => {
+		const action = vi.fn(async () => null)
+		await mount(
+			renderStub,
+			packet({
+				claroSupervisorId: null,
+				claroSupervisor: null,
+				claroOptions: options,
+			}),
+			action,
+		)
+		await userEvent.type(screen.getByRole("searchbox"), "hoy")
+		expect(screen.queryByRole("button", { name: /Ramón Claro/ })).toBeNull()
+		await userEvent.click(
+			screen.getByRole("button", { name: /Hector D Hoyos/ }),
+		)
+		expect(
+			(
+				document.querySelector(
+					'input[name="claroSupervisorId"]',
+				) as HTMLInputElement
+			).value,
+		).toBe("c1")
+	})
+
+	it("searches by email too", async ({ renderStub }) => {
+		await mount(
+			renderStub,
+			packet({
+				claroSupervisorId: null,
+				claroSupervisor: null,
+				claroOptions: options,
+			}),
+			vi.fn(async () => null),
+		)
+		await userEvent.type(screen.getByRole("searchbox"), "claropr")
+		expect(
+			screen.getByRole("button", { name: /Hector D Hoyos/ }),
+		).toBeInTheDocument()
+		expect(screen.queryByRole("button", { name: /Ramón Claro/ })).toBeNull()
+	})
+})

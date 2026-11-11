@@ -1,7 +1,8 @@
 import type { ParseKeys } from "i18next"
-import { type RefObject, useEffect, useRef } from "react"
+import { type RefObject, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, Link, useNavigation } from "react-router"
+import { CodeSearchSelect } from "~/components/code-search-select"
 import { DownloadIconLink, FileViewerButton } from "~/components/file-viewer"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { Card, CardContent, CardHeader } from "~/components/ui/card"
@@ -169,6 +170,8 @@ function PacketDetailsForm({
 }) {
 	const { t } = useTranslation()
 	const navigation = useNavigation()
+	const [claroId, setClaroId] = useState(packet.claroSupervisorId ?? "")
+	const claroPicked = packet.claroOptions.find((c) => c.id === claroId)
 	const saving =
 		navigation.state !== "idle" &&
 		navigation.formData?.get("intent") === "save_packet_details"
@@ -182,21 +185,27 @@ function PacketDetailsForm({
 			<input type="hidden" name="intent" value="save_packet_details" />
 			<div className="space-y-1">
 				<Label htmlFor="packet-claro">{t("packet.claro_label")}</Label>
-				<select
-					id="packet-claro"
-					name="claroSupervisorId"
-					defaultValue={packet.claroSupervisorId ?? ""}
-					className="h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm"
-				>
-					{!packet.claroSupervisorId && (
-						<option value="">{t("packet.claro_placeholder")}</option>
-					)}
-					{packet.claroOptions.map((c) => (
-						<option key={c.id} value={c.id}>
-							{c.name} · {c.email}
-						</option>
-					))}
-				</select>
+				<input type="hidden" name="claroSupervisorId" value={claroId} />
+				<CodeSearchSelect
+					items={packet.claroOptions.map((c) => ({
+						id: c.id,
+						claroCode: c.email,
+						name: c.name,
+					}))}
+					selected={
+						claroPicked
+							? {
+									id: claroPicked.id,
+									claroCode: claroPicked.email,
+									name: claroPicked.name,
+								}
+							: null
+					}
+					codeLast
+					placeholder={t("packet.claro_placeholder")}
+					label={t("packet.claro_label")}
+					onPick={(c) => setClaroId(c.id)}
+				/>
 			</div>
 			{blueprintNeeded && (
 				<div className="space-y-1">

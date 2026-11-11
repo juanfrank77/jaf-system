@@ -355,8 +355,20 @@ describe("PacketStepCard package files", () => {
 
 describe("PacketStepCard Claro supervisor search", () => {
 	const options = [
-		{ id: "c1", name: "Hector D Hoyos", email: "hector.dehoyos@claropr.com" },
-		{ id: "c2", name: "Ramón Claro", email: "ramon.now@claro.example" },
+		{
+			id: "c1",
+			name: "Hector D Hoyos",
+			email: "hector.dehoyos@claropr.com",
+			requiresPrefield: false,
+			requiresBlueprint: false,
+		},
+		{
+			id: "c2",
+			name: "Ramón Claro",
+			email: "ramon.now@claro.example",
+			requiresPrefield: false,
+			requiresBlueprint: false,
+		},
 	]
 
 	it("typing part of a name lists the match, and picking it is what Save posts", async ({

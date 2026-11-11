@@ -437,6 +437,7 @@
 		"time_on_site": "Tiempo en sitio",
 		"aviso_number": "# de aviso",
 		"supervisor": "Supervisor",
+		"claro_supervisor": "Supervisor de Claro",
 		"crew": "Cuadrilla",
 		"created": "Creado",
 		"estimated_materials": "Materiales estimados",
@@ -804,6 +805,7 @@
 		"job_type": "Tipo de trabajo",
 		"address": "Dirección",
 		"supervisor": "Supervisor",
+		"claro_supervisor": "Supervisor de Claro",
 		"table": {
 			"code": "Código",
 			"description": "Descripción",
@@ -1043,6 +1045,7 @@
 		"address": "Dirección",
 		"aviso_number": "# de aviso",
 		"supervisor": "Supervisor",
+		"claro_supervisor": "Supervisor de Claro",
 		"claro_pdf_title": "PDF de orden de trabajo Claro",
 		"claro_pdf_iframe_title": "PDF de Claro",
 		"no_claro_pdf": "No hay PDF de Claro en archivo.",

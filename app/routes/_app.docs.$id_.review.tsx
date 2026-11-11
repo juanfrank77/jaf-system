@@ -594,7 +594,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 				} as unknown as T)
 			: x
 
-	const { claroSupervisor: _claro, ...docData } = doc
+	const { claroSupervisor: claroRow, ...docRest } = doc
+	// The name travels with the doc so every step can print it beside the JAF supervisor's.
+	const docData = { ...docRest, claroSupervisorName: claroRow?.name ?? null }
 	return {
 		doc: showPrices ? docData : withoutPrices(docData),
 		user,
@@ -2561,6 +2563,9 @@ export default function ReviewDoc({
 					) : null}
 					<p className="text-xs text-muted-foreground">
 						{t("docs_review.supervisor")}: {supervisor?.name ?? user.name}
+						{doc.claroSupervisorName
+							? ` · ${t("docs_review.claro_supervisor")}: ${doc.claroSupervisorName}`
+							: ""}
 					</p>
 				</section>
 			)}

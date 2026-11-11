@@ -137,7 +137,10 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	refuseCrew(user.role)
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
-		include: { brigade: { select: { area: true } } },
+		include: {
+			brigade: { select: { area: true } },
+			claroSupervisor: { select: { name: true } },
+		},
 	})
 	if (
 		doc.status === "LC_REQUEST_GENERATED" &&
@@ -784,6 +787,14 @@ export default function DocView({
 					</span>{" "}
 					{supervisor?.name}
 				</p>
+				{doc.claroSupervisor && (
+					<p>
+						<span className="text-muted-foreground">
+							{t("docs_view.claro_supervisor")}:
+						</span>{" "}
+						{doc.claroSupervisor.name}
+					</p>
+				)}
 				<AssignedCrew
 					brigades={assignedBrigades}
 					memberNames={assignedCrew.map((c) => c.name)}

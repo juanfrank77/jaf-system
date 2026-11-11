@@ -28,6 +28,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 	const { user } = await requireRole(request, ["FINANCE", "ADMIN"])
 	const doc = await db.jafInvoice.findUniqueOrThrow({
 		where: { id: params.id },
+		include: { claroSupervisor: { select: { name: true } } },
 	})
 	if (!canTransition(doc.status, "LC_REQUEST_GENERATED", user.role))
 		throw redirect(`/docs/${params.id}`)
@@ -212,6 +213,14 @@ export default function LcView({ loaderData }: Route.ComponentProps) {
 							</span>{" "}
 							{loaderData.supervisor?.name}
 						</p>
+						{loaderData.doc.claroSupervisor && (
+							<p>
+								<span className="text-muted-foreground">
+									{t("docs_lc.claro_supervisor")}:
+								</span>{" "}
+								{loaderData.doc.claroSupervisor.name}
+							</p>
+						)}
 					</div>
 					<div className="mt-3">
 						<MaterialLineItems

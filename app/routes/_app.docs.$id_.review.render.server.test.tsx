@@ -421,9 +421,11 @@ describe("Packet → Claro step (render)", () => {
 			}),
 		)
 		expect(html).toContain('value="save_packet_details"')
-		expect(html).toMatch(/<select[^>]*name="claroSupervisorId"/)
-		expect(html).toMatch(/<option value="claro-1" selected="">Ramón Claro/)
-		expect(html).toContain("Ana Claro")
+		// A type-to-search box (the list opens on focus), posting the chosen id.
+		expect(html).toMatch(
+			/<input type="hidden" name="claroSupervisorId" value="claro-1"/,
+		)
+		expect(html).toContain('value="Ramón Claro · ramon.now@claro.example"')
 		// The Prefield boxes are Claro's; the Aviso # comes at step 6.
 		for (const name of [
 			"ordenNumber",

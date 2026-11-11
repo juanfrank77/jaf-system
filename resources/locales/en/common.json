@@ -437,6 +437,7 @@
 		"time_on_site": "Time on site",
 		"aviso_number": "Aviso #",
 		"supervisor": "Supervisor",
+		"claro_supervisor": "Claro supervisor",
 		"crew": "Crew",
 		"created": "Created",
 		"estimated_materials": "Estimated Materials",
@@ -804,6 +805,7 @@
 		"job_type": "Job Type",
 		"address": "Address",
 		"supervisor": "Supervisor",
+		"claro_supervisor": "Claro supervisor",
 		"table": {
 			"code": "Code",
 			"description": "Description",
@@ -1043,6 +1045,7 @@
 		"address": "Address",
 		"aviso_number": "Aviso #",
 		"supervisor": "Supervisor",
+		"claro_supervisor": "Claro supervisor",
 		"claro_pdf_title": "Claro Work Order PDF",
 		"claro_pdf_iframe_title": "Claro PDF",
 		"no_claro_pdf": "No Claro PDF on file.",

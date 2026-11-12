@@ -146,3 +146,57 @@ describe("native form guidance", () => {
 		expect(document.querySelector(".guide-flagged")).toBeNull()
 	})
 })
+
+function RowsDemo() {
+	const ref = useRef<HTMLFormElement>(null)
+	const [rows, setRows] = useState([0])
+	const guide = useNativeGuidance(
+		ref,
+		rows.flatMap((key, i) =>
+			["a", "b"].map((name) => ({
+				id: `g-${key}-${name}`,
+				label: `${name}${i + 1}`,
+				name,
+				at: i,
+				...(i === 0 ? {} : { unlessRowBlank: ["a", "b"] }),
+			})),
+		),
+	)
+	return (
+		<form ref={ref}>
+			<GuideCounter guide={guide} />
+			{rows.map((key) => (
+				<div key={key}>
+					<GuideBox id={`g-${key}-a`} guide={guide}>
+						<input aria-label={`a-${key}`} name="a" />
+					</GuideBox>
+					<GuideBox id={`g-${key}-b`} guide={guide}>
+						<input aria-label={`b-${key}`} name="b" />
+					</GuideBox>
+				</div>
+			))}
+			<button type="button" onClick={() => setRows([...rows, rows.length])}>
+				Add line
+			</button>
+		</form>
+	)
+}
+
+describe("repeating rows", () => {
+	it("needs the first row complete, and a later row only once it is started", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			entries: [{ path: "/", Component: () => <RowsDemo /> }],
+		})
+		expect(screen.getByText("2 boxes left")).toBeInTheDocument()
+		await userEvent.type(screen.getByLabelText("a-0"), "x")
+		await userEvent.type(screen.getByLabelText("b-0"), "y")
+		expect(screen.queryByTestId("guide-counter")).toBeNull()
+		await userEvent.click(screen.getByRole("button", { name: "Add line" }))
+		expect(screen.queryByTestId("guide-counter")).toBeNull()
+		await userEvent.type(screen.getByLabelText("a-1"), "z")
+		expect(screen.getByText("1 box left")).toBeInTheDocument()
+		expect(screen.getByRole("button", { name: "b2" })).toBeInTheDocument()
+	})
+})

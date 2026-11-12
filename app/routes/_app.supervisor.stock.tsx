@@ -1,8 +1,13 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Link, useFetcher } from "react-router"
 import { CodeSearchSelect } from "~/components/code-search-select"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import {
+	GuideBox,
+	GuideCounter,
+	useNativeGuidance,
+} from "~/components/form-guidance"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import {
@@ -206,9 +211,43 @@ function RestockForm({
 	const { t } = useTranslation()
 	const fetcher = useFetcher<typeof action>()
 	const [rows, setRows] = useState([0])
+	const formRef = useRef<HTMLFormElement>(null)
+	// The first line must be complete; later lines only once they are started.
+	const guide = useNativeGuidance(
+		formRef,
+		rows.flatMap((key, i) => {
+			const row =
+				i === 0 ? {} : { unlessRowBlank: ["brigadeId", "serviceCodeId", "qty"] }
+			const n = rows.length > 1 ? ` ${i + 1}` : ""
+			return [
+				{
+					id: `g-${key}-brigade`,
+					label: `${t("brigade_stock.col_brigade")}${n}`,
+					name: "brigadeId",
+					at: i,
+					...row,
+				},
+				{
+					id: `g-${key}-material`,
+					label: `${t("brigade_stock.col_material")}${n}`,
+					name: "serviceCodeId",
+					at: i,
+					...row,
+				},
+				{
+					id: `g-${key}-qty`,
+					label: `${t("brigade_stock.col_qty")}${n}`,
+					name: "qty",
+					at: i,
+					...row,
+				},
+			]
+		}),
+	)
 	return (
 		<fetcher.Form
 			method="post"
+			ref={formRef}
 			className="space-y-3 rounded-lg border p-4"
 			onSubmit={() => setRows([0])}
 		>
@@ -218,29 +257,35 @@ function RestockForm({
 			</h2>
 			{rows.map((key) => (
 				<div key={key} className="grid gap-2 md:grid-cols-[1fr_2fr_6rem]">
-					<select
-						name="brigadeId"
-						aria-label={t("brigade_stock.col_brigade")}
-						className={SELECT_CLASS}
-						defaultValue=""
-					>
-						<option value="">{t("brigade_stock.pick_brigade")}</option>
-						{brigades.map((b) => (
-							<option key={b.id} value={b.id}>
-								{b.code ? `${b.code} ` : ""}
-								{b.name}
-							</option>
-						))}
-					</select>
-					<MaterialSearch materials={materials} />
-					<Input
-						name="qty"
-						type="number"
-						min={1}
-						step={1}
-						aria-label={t("brigade_stock.col_qty")}
-						placeholder={t("brigade_stock.col_qty")}
-					/>
+					<GuideBox id={`g-${key}-brigade`} guide={guide}>
+						<select
+							name="brigadeId"
+							aria-label={t("brigade_stock.col_brigade")}
+							className={SELECT_CLASS}
+							defaultValue=""
+						>
+							<option value="">{t("brigade_stock.pick_brigade")}</option>
+							{brigades.map((b) => (
+								<option key={b.id} value={b.id}>
+									{b.code ? `${b.code} ` : ""}
+									{b.name}
+								</option>
+							))}
+						</select>
+					</GuideBox>
+					<GuideBox id={`g-${key}-material`} guide={guide}>
+						<MaterialSearch materials={materials} />
+					</GuideBox>
+					<GuideBox id={`g-${key}-qty`} guide={guide}>
+						<Input
+							name="qty"
+							type="number"
+							min={1}
+							step={1}
+							aria-label={t("brigade_stock.col_qty")}
+							placeholder={t("brigade_stock.col_qty")}
+						/>
+					</GuideBox>
 				</div>
 			))}
 			<div className="flex gap-2">
@@ -252,10 +297,16 @@ function RestockForm({
 				>
 					{t("brigade_stock.add_line")}
 				</Button>
-				<Button type="submit" size="sm" disabled={fetcher.state !== "idle"}>
+				<Button
+					type="submit"
+					size="sm"
+					disabled={fetcher.state !== "idle"}
+					onClick={(e) => guide.holdContinue(e)}
+				>
 					{t("brigade_stock.send")}
 				</Button>
 			</div>
+			<GuideCounter guide={guide} />
 			<Err data={fetcher.data} />
 		</fetcher.Form>
 	)

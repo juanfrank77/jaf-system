@@ -165,6 +165,11 @@ export type NativeGuideSpec = {
 	label: string
 	/** Read the form's inputs with this name; empty when none has text. */
 	name?: string
+	/** With `name`: read only the nth box of that name (rows of a repeating form). */
+	at?: number
+	/** With `at`: a blank row needs nothing; it counts as missing only once one of
+	 * these names in the same row has something in it. */
+	unlessRowBlank?: string[]
 	/** For state-held controls (pickers, radios): the page says. Wins over `name`. */
 	empty?: boolean
 	blocking?: boolean
@@ -204,19 +209,29 @@ export function useNativeGuidance(
 		}
 	}, [formRef])
 
-	const nativeEmpty = (name: string) => {
+	const boxes = (name: string) => {
 		const form = formRef.current
-		if (!ready || !form) return true
-		return Array.from(
-			form.querySelectorAll<HTMLInputElement>(`[name="${name}"]`),
-		).every((el) => el.value.trim() === "")
+		return form
+			? Array.from(form.querySelectorAll<HTMLInputElement>(`[name="${name}"]`))
+			: []
+	}
+	const nativeEmpty = (spec: NativeGuideSpec & { name: string }) => {
+		if (!ready) return spec.unlessRowBlank ? false : true
+		const filled = (name: string) =>
+			spec.at === undefined
+				? boxes(name).some((el) => el.value.trim() !== "")
+				: (boxes(name)[spec.at]?.value.trim() ?? "") !== ""
+		if (spec.unlessRowBlank && !spec.unlessRowBlank.some(filled)) return false
+		return !filled(spec.name)
 	}
 	return useFormGuidance(
 		specs.map((spec) => ({
 			id: spec.id,
 			label: spec.label,
 			blocking: spec.blocking,
-			empty: spec.empty ?? (spec.name ? nativeEmpty(spec.name) : true),
+			empty:
+				spec.empty ??
+				(spec.name ? nativeEmpty({ ...spec, name: spec.name }) : true),
 		})),
 	)
 }

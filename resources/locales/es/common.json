@@ -733,8 +733,6 @@
 		"saved": "Guardado",
 		"draft_saving": "Guardando…",
 		"draft_saved": "Guardado {{time}}",
-		"boxes_left_one": "Falta {{count}} casilla: {{items}}",
-		"boxes_left_other": "Faltan {{count}} casillas: {{items}}",
 		"save_progress": "Guardar progreso",
 		"continue_to_signoff": "Continuar a {{n}}. Firma",
 		"materials": {
@@ -1556,6 +1554,11 @@
 		"precert_download": "Descargar hoja de pre-certificación",
 		"precert_signers": "Firmado por: {{supervisor}}, {{contractor}}, {{claro}}",
 		"precert_missing": "Falta hoja de pre-certificación"
+	},
+	"guidance": {
+		"fill_this_in": "Llena esto",
+		"boxes_left_one": "Falta {{count}} casilla",
+		"boxes_left_other": "Faltan {{count}} casillas"
 	},
 	"code_search": {
 		"clear": "Quitar",

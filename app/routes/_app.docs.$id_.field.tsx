@@ -22,6 +22,14 @@ import {
 	FieldMaterialsTable,
 	type FieldMaterialsTableRow,
 } from "~/components/field-materials-table"
+import {
+	type Guide,
+	GuideBox,
+	GuideCounter,
+	type GuideField,
+	scrollToBox,
+	useFormGuidance,
+} from "~/components/form-guidance"
 import { AddedInFieldLabel } from "~/components/service-lines-table"
 import { StepActionBar } from "~/components/step-action-bar"
 import { SupervisorStepRail } from "~/components/supervisor-step-rail"
@@ -54,7 +62,7 @@ import {
 	fieldMaterialsOrDefault,
 	parseFieldMaterials,
 } from "~/lib/field-materials"
-import { blockingMissing, fieldTargets, nextEmpty } from "~/lib/field-progress"
+import { fieldTargets, nextEmpty } from "~/lib/field-progress"
 import {
 	type AddressCorrection,
 	buildAddressCorrection,
@@ -87,7 +95,6 @@ import {
 	SUPERVISOR_STAGES,
 } from "~/lib/supervisor-stage"
 import { photosThatLoad, saveUpload } from "~/lib/uploads.server"
-import { cn } from "~/lib/utils"
 import type { Prisma } from "../../generated/prisma/client"
 import type { Route } from "./+types/_app.docs.$id_.field"
 
@@ -810,24 +817,21 @@ function PhotoBox({
 	labelKey,
 	photos,
 	boxId,
-	next = false,
+	guide,
 }: {
 	name: string
 	labelKey: ParseKeys
 	photos: { id: string; src: string }[]
 	/** Anchor for "jump to the missing box". */
 	boxId?: string
-	/** This is the box to fill next. */
-	next?: boolean
+	/** The page's guidance: lights this box when it is next, flags it when held. */
+	guide?: Guide
 }) {
 	const { t } = useTranslation()
 	const upload = useFileAutosave()
 	const room = Math.max(0, MAX_PHOTOS_PER_BOX - photos.length)
-	return (
-		<div
-			id={boxId}
-			className={cn("space-y-2", next && "field-next rounded-lg p-1")}
-		>
+	const body = (
+		<>
 			<div className="flex items-baseline justify-between gap-2">
 				<Label htmlFor={room > 0 ? name : undefined}>{t(labelKey)}</Label>
 				<span className="text-xs text-muted-foreground">
@@ -898,7 +902,14 @@ function PhotoBox({
 					{t(upload.errorKey)}
 				</p>
 			)}
-		</div>
+		</>
+	)
+	return boxId && guide ? (
+		<GuideBox id={boxId} guide={guide} className="space-y-2 rounded-lg p-1">
+			{body}
+		</GuideBox>
+	) : (
+		<div className="space-y-2">{body}</div>
 	)
 }
 
@@ -1174,7 +1185,6 @@ export default function FieldUpdate({
 		beforePhotos: photos.BEFORE.length,
 		afterPhotos: photos.AFTER.length,
 	})
-	const next = nextEmpty(targets)
 	// A crew with no quantity at all, or a ticked line with its box empty, blocks
 	// Continue like a missing photo.
 	const crewMissing = windows.flatMap((w) => {
@@ -1187,38 +1197,43 @@ export default function FieldUpdate({
 				id: empty
 					? actualId(w.id, empty.serviceCodeId)
 					: tickId(w.id, w.rows[0].serviceCodeId),
-				kind: "crew" as const,
-				name: w.name ?? "",
-			},
+				label: t("docs_field.crew_quantities", { name: w.name ?? "" }),
+				empty: true,
+				blocking: true,
+			} satisfies GuideField,
 		]
 	})
-	const missing = [...crewMissing, ...blockingMissing(targets)]
-	const missingLabels = missing.map((m) =>
-		m.kind === "crew"
-			? t("docs_field.crew_quantities", { name: m.name })
-			: m.kind === "tick"
-				? t("docs_field.tick_line", {
-						code:
-							serviceLines.find((l) => m.id.endsWith(`-${l.serviceCodeId}`))
-								?.claroCode ?? "",
-					})
-				: t(
-						m.kind === "notes"
+	const targetLabel = (target: (typeof targets)[number]) =>
+		target.kind === "tick"
+			? t("docs_field.tick_line", {
+					code:
+						serviceLines.find((l) => target.id.endsWith(`-${l.serviceCodeId}`))
+							?.claroCode ?? "",
+				})
+			: t(
+					target.kind === "actual"
+						? "docs_field.services.actual"
+						: target.kind === "notes"
 							? "docs_field.field_notes_label"
-							: m.kind === "before"
+							: target.kind === "before"
 								? "docs_field.photos_before_label"
 								: "docs_field.photos_after_label",
-					),
-	)
-	const jumpTo = (id: string | undefined) => {
-		const el = id ? document.getElementById(id) : null
-		if (!el) return
-		el.scrollIntoView({ block: "center", behavior: "smooth" })
-		const box = el.matches("input, textarea")
-			? el
-			: el.querySelector<HTMLElement>("input, textarea")
-		box?.focus({ preventScroll: true })
-	}
+				)
+	const crewIds = new Set(crewMissing.map((c) => c.id))
+	const guide = useFormGuidance([
+		...crewMissing,
+		...targets
+			.filter((tg) => !crewIds.has(tg.id))
+			.map(
+				(tg): GuideField => ({
+					id: tg.id,
+					label: targetLabel(tg),
+					empty: tg.empty,
+					// Actual quantities guide the cursor but never block Continue.
+					blocking: tg.kind !== "actual",
+				}),
+			),
+	])
 
 	// On a computer the cursor starts in the first empty box. Not on a phone:
 	// that would open the keyboard and scroll the page under the supervisor.
@@ -1227,7 +1242,7 @@ export default function FieldUpdate({
 		if (!window.matchMedia("(pointer: fine)").matches) return
 		const first = nextEmpty(targets)
 		if (first && (first.kind === "actual" || first.kind === "notes"))
-			jumpTo(first.id)
+			scrollToBox(first.id)
 	}, [])
 
 	// Auto-save the draft a moment after any box changes. Address fields stay out
@@ -1358,22 +1373,27 @@ export default function FieldUpdate({
 																>
 																	{w.id && (
 																		<td className="py-1.5 pr-2">
-																			<Checkbox
+																			<GuideBox
 																				id={tickId(w.id, r.serviceCodeId)}
-																				checked={addedHere || owner === w.id}
-																				disabled={addedHere || otherCrew}
-																				aria-label={t(
-																					"docs_field.services.done_aria",
-																					{ code: r.claroCode },
-																				)}
-																				onCheckedChange={(v) =>
-																					toggleTick(
-																						w.id as string,
-																						r.serviceCodeId,
-																						v === true,
-																					)
-																				}
-																			/>
+																				guide={guide}
+																				className="inline-block rounded p-0.5"
+																			>
+																				<Checkbox
+																					checked={addedHere || owner === w.id}
+																					disabled={addedHere || otherCrew}
+																					aria-label={t(
+																						"docs_field.services.done_aria",
+																						{ code: r.claroCode },
+																					)}
+																					onCheckedChange={(v) =>
+																						toggleTick(
+																							w.id as string,
+																							r.serviceCodeId,
+																							v === true,
+																						)
+																					}
+																				/>
+																			</GuideBox>
 																		</td>
 																	)}
 																	<td className="py-1.5 pr-2 font-mono text-xs">
@@ -1404,33 +1424,33 @@ export default function FieldUpdate({
 																				{t("docs_field.services.other_crew")}
 																			</span>
 																		) : (
-																			<Input
-																				disabled={!addedHere && !isMine(w, r)}
-																				type="number"
-																				min={0}
-																				inputMode="decimal"
-																				id={boxId}
-																				className={cn(
-																					"field-required w-20",
-																					next?.id === boxId && "field-next",
-																				)}
-																				aria-label={`${t("docs_field.services.actual")} ${r.claroCode}`}
-																				onKeyDown={(e) => {
-																					// Enter moves on to the next empty box instead of
-																					// submitting the form.
-																					if (e.key !== "Enter") return
-																					e.preventDefault()
-																					jumpTo(nextEmpty(targets, boxId)?.id)
-																				}}
-																				value={actualOf(w, r)}
-																				onChange={(e) =>
-																					setActuals({
-																						...actuals,
-																						[boxKey(w.id, r.serviceCodeId)]:
-																							e.target.value,
-																					})
-																				}
-																			/>
+																			<GuideBox id={boxId} guide={guide}>
+																				<Input
+																					disabled={!addedHere && !isMine(w, r)}
+																					type="number"
+																					min={0}
+																					inputMode="decimal"
+																					className="field-required w-20"
+																					aria-label={`${t("docs_field.services.actual")} ${r.claroCode}`}
+																					onKeyDown={(e) => {
+																						// Enter moves on to the next empty box instead of
+																						// submitting the form.
+																						if (e.key !== "Enter") return
+																						e.preventDefault()
+																						scrollToBox(
+																							nextEmpty(targets, boxId)?.id,
+																						)
+																					}}
+																					value={actualOf(w, r)}
+																					onChange={(e) =>
+																						setActuals({
+																							...actuals,
+																							[boxKey(w.id, r.serviceCodeId)]:
+																								e.target.value,
+																						})
+																					}
+																				/>
+																			</GuideBox>
 																		)}
 																	</td>
 																	<td className="py-1.5 pr-2 text-xs">
@@ -1565,13 +1585,7 @@ export default function FieldUpdate({
 											? "photo-box-after"
 											: undefined
 								}
-								next={
-									tag === "BEFORE"
-										? next?.id === "photo-box-before"
-										: tag === "AFTER"
-											? next?.id === "photo-box-after"
-											: false
-								}
+								guide={guide}
 							/>
 						))}
 						<BlueprintBox
@@ -1582,18 +1596,15 @@ export default function FieldUpdate({
 					</CardContent>
 				</Card>
 
-				<div className="space-y-1">
-					<Label htmlFor="fieldNotes">
+				<GuideBox id="fieldNotes" guide={guide} className="space-y-1">
+					<Label htmlFor="fieldNotes-input">
 						{t("docs_field.field_notes_label")}
 					</Label>
 					<Textarea
-						id="fieldNotes"
+						id="fieldNotes-input"
 						name="fieldNotes"
 						rows={3}
-						className={cn(
-							"field-required",
-							next?.id === "fieldNotes" && "field-next",
-						)}
+						className="field-required"
 						placeholder={t("docs_field.field_notes_placeholder")}
 						value={notes}
 						onChange={(e) => setNotes(e.target.value)}
@@ -1602,7 +1613,7 @@ export default function FieldUpdate({
 							if (e.target.value === "N/A") e.target.select()
 						}}
 					/>
-				</div>
+				</GuideBox>
 
 				<Card>
 					<CardHeader>{t("docs_field.address_heading")}</CardHeader>
@@ -1679,18 +1690,7 @@ export default function FieldUpdate({
 				<StepActionBar
 					status={
 						<>
-							{missing.length > 0 && (
-								<button
-									type="button"
-									onClick={() => jumpTo(missing[0].id)}
-									className="text-left text-xs text-muted-foreground underline-offset-4 hover:underline md:text-sm"
-								>
-									{t("docs_field.boxes_left", {
-										count: missing.length,
-										items: missingLabels.join(", "),
-									})}
-								</button>
-							)}
+							<GuideCounter guide={guide} />
 							<p
 								className="text-xs text-muted-foreground"
 								aria-live="polite"
@@ -1746,14 +1746,10 @@ export default function FieldUpdate({
 							name="intent"
 							value="continue"
 							disabled={busy}
-							aria-disabled={missing.length > 0 || undefined}
-							className={cn("h-10", missing.length > 0 && "opacity-50")}
-							onClick={(e) => {
-								// Not ready: go to the first missing box instead.
-								if (missing.length === 0) return
-								e.preventDefault()
-								jumpTo(missing[0].id)
-							}}
+							className="h-10"
+							// Never faded: with a gap it stays here, scrolls to the first
+							// missing box and marks it in red.
+							onClick={(e) => guide.holdContinue(e)}
 						>
 							{t("docs_field.continue_to_signoff", { n: SIGN_OFF_STEP })}
 						</Button>

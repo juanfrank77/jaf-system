@@ -733,8 +733,6 @@
 		"saved": "Saved",
 		"draft_saving": "Saving…",
 		"draft_saved": "Saved {{time}}",
-		"boxes_left_one": "{{count}} box left: {{items}}",
-		"boxes_left_other": "{{count}} boxes left: {{items}}",
 		"save_progress": "Save progress",
 		"continue_to_signoff": "Continue to {{n}}. Sign off",
 		"materials": {
@@ -1556,6 +1554,11 @@
 		"precert_download": "Download pre-cert sheet",
 		"precert_signers": "Signed by: {{supervisor}}, {{contractor}}, {{claro}}",
 		"precert_missing": "Pre-cert sheet missing"
+	},
+	"guidance": {
+		"fill_this_in": "Fill this in",
+		"boxes_left_one": "{{count}} box left",
+		"boxes_left_other": "{{count}} boxes left"
 	},
 	"code_search": {
 		"clear": "Clear",

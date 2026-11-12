@@ -22,7 +22,10 @@ const groups = [
 ]
 
 // Same loose typing the other component tests use for the stub fixture.
-const mount = (renderStub: any, action = vi.fn(async () => null)) =>
+const mount = (
+	renderStub: any,
+	action = vi.fn(async (_form?: unknown) => null),
+) =>
 	renderStub({
 		entries: [
 			{
@@ -55,7 +58,7 @@ describe("RestockHandOver", () => {
 	it("will not sign a short line without a note, and sends nothing", async ({
 		renderStub,
 	}) => {
-		const action = vi.fn(async () => null)
+		const action = vi.fn(async (_form?: unknown) => null)
 		await mount(renderStub, action)
 		await userEvent.fill(screen.getByLabelText("Given"), "4")
 		await userEvent.click(

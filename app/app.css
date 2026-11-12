@@ -180,6 +180,25 @@
 	outline-offset: 2px;
 }
 
+/* Form guidance (supervisors' forms): the box to fill next, thick and
+   unmistakable, and the box Continue was held back for, in red. */
+.guide-next {
+	outline: 4px solid #f5c400;
+	outline-offset: 3px;
+	border-radius: 0.5rem;
+}
+.guide-flagged {
+	outline: 4px solid var(--status-danger);
+	outline-offset: 3px;
+	border-radius: 0.5rem;
+}
+.guide-message {
+	margin-top: 0.5rem;
+	font-size: 1rem;
+	font-weight: 700;
+	color: var(--status-danger);
+}
+
 @layer base {
 	/* Native <select> popups are painted by the browser from the option's own
 	   colours, not the select's: a transparent select gives a white popup with

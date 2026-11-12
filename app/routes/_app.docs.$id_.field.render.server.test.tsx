@@ -128,11 +128,13 @@ describe("Field screen (render)", () => {
 		)
 	})
 
-	it("greys out Continue and says what is missing: the After photo", async () => {
+	it("counts what is missing with a button to it, and keeps Continue pressable", async () => {
 		const html = await render()
-		expect(html).toContain("1 box left: After Photos")
+		expect(html).toContain("1 box left")
+		expect(html).toMatch(/<button[^>]*>After Photos<\/button>/)
+		// Never faded or disabled: pressed with a gap it scrolls to the box instead.
 		expect(html).toMatch(
-			/<button[^>]*aria-disabled="true"[^>]*>Continue to 4\. Sign off/,
+			/<button(?![^>]*(aria-disabled=|\sdisabled[=\s>]))[^>]*>Continue to 4\. Sign off/,
 		)
 	})
 
@@ -141,14 +143,15 @@ describe("Field screen (render)", () => {
 		;(data.photos as any).AFTER = [photo("a1")]
 		const html = await render(data)
 		expect(html).not.toMatch(/box(es)? left/)
-		expect(html).not.toMatch(/aria-disabled="true"/)
 	})
 
 	it("rings the first empty box (Actual) as the next one to fill", async () => {
 		const html = await render()
-		expect(inputs(html, /aria-label="Actual 34006301"/)[0]).toMatch(
-			/class="[^"]*field-next/,
+		expect(html).toMatch(
+			/data-guide="next" class="guide-next"><input[^>]*aria-label="Actual 34006301"/,
 		)
+		// Only one box glows at a time.
+		expect(html.match(/guide-next/g)).toHaveLength(1)
 	})
 
 	it("marks Actual, Used and Source as required fields and offers Back", async () => {

@@ -150,16 +150,17 @@ describe("PrepMaterialsTable", () => {
 				name: /More/,
 			}),
 		)
-		const select = within(screen.getByTestId("prep-row-extras")).getByLabelText(
-			"Replace with",
+		await userEvent.click(
+			within(screen.getByTestId("prep-row-extras")).getByRole("searchbox", {
+				name: "Replace with",
+			}),
 		)
-		const options = within(select)
-			.getAllByRole("option")
-			.map((o) => o.textContent)
-		expect(options).toEqual([
-			"No replacement",
-			"1003729 — FITTING POLE PLATE ALT",
-		])
+		// Only the catalog material that is not already on the list is offered.
+		expect(
+			screen.getByRole("button", { name: /FITTING POLE PLATE ALT/ }),
+		).toBeInTheDocument()
+		expect(screen.queryByRole("button", { name: /CLIP RECTOS/ })).toBeNull()
+		expect(screen.queryByRole("button", { name: /Abrazadera/ })).toBeNull()
 	})
 
 	it("starts open for a row that already has a flag, a replacement or a note", async ({
@@ -227,9 +228,9 @@ describe("PrepMaterialsTable", () => {
 				onRemove={onRemove}
 			/>,
 		)
-		await userEvent.selectOptions(
-			screen.getByLabelText("Select material…"),
-			codes[1].id,
+		await userEvent.click(screen.getByRole("searchbox"))
+		await userEvent.click(
+			screen.getByRole("button", { name: new RegExp(codes[1].name) }),
 		)
 		expect(onChange).toHaveBeenCalledWith(0, {
 			serviceCodeId: codes[1].id,

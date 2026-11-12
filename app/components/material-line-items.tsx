@@ -2,16 +2,10 @@ import { Cancel01Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
+import { CodeSearchSelect } from "~/components/code-search-select"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { QtyStepper } from "~/components/ui/qty-stepper"
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "~/components/ui/select"
 import { toNumberPrice } from "~/lib/utils"
 
 function debounce<T extends (items: LineItem[]) => void>(
@@ -69,23 +63,6 @@ interface Props {
 
 let _counter = 0
 const nextKey = () => `item-${(_counter++).toString()}`
-
-function buildDropdownItems(
-	available: ServiceCode[],
-	code: ServiceCode | undefined,
-) {
-	const availableItems = available.map((c) => ({
-		value: c.id,
-		label: `${c.claroCode} — ${c.name}`,
-	}))
-	if (code && !available.find((c) => c.id === code.id)) {
-		availableItems.push({
-			value: code.id,
-			label: `${code.claroCode} — ${code.name}`,
-		})
-	}
-	return availableItems
-}
 
 export function MaterialLineItems({
 	serviceCodes,
@@ -151,7 +128,6 @@ export function MaterialLineItems({
 			<input type="hidden" name={name} value={JSON.stringify(serialized)} />
 			{items.map((item) => {
 				const code = serviceCodes.find((c) => c.id === item.serviceCodeId)
-				const dropdownItems = buildDropdownItems(available, code)
 				if (readOnly) {
 					// Only compute over-draw/counter-added tags if estimatedItems was provided
 					const estimatedQty = estimatedMap?.get(item.serviceCodeId) ?? 0
@@ -201,28 +177,15 @@ export function MaterialLineItems({
 					item.serviceCodeId !== "" &&
 					listedQty === undefined
 				const picker = (
-					<Select
-						items={dropdownItems}
-						value={item.serviceCodeId}
-						onValueChange={(v) =>
-							updateItem(item._key, { serviceCodeId: v ?? "" })
-						}
-					>
-						<SelectTrigger
-							className={touch ? "h-11 min-w-0 flex-1 text-base" : "flex-1"}
-						>
-							<SelectValue
-								placeholder={t("material_line_items.select_placeholder")}
-							/>
-						</SelectTrigger>
-						<SelectContent>
-							{dropdownItems.map((c) => (
-								<SelectItem key={c.value} value={c.value}>
-									{c.label}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
+					<div className="min-w-0 flex-1">
+						<CodeSearchSelect
+							items={code ? [code, ...available] : available}
+							selected={code ?? null}
+							placeholder={t("material_line_items.select_placeholder")}
+							inputClassName={touch ? "h-11 text-base" : undefined}
+							onPick={(c) => updateItem(item._key, { serviceCodeId: c.id })}
+						/>
+					</div>
 				)
 				const removeButton = (
 					<button

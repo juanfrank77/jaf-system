@@ -57,4 +57,31 @@ describe("CodeSearchSelect", () => {
 		await search("zzz")
 		expect(screen.getByText("No materials match.")).toBeInTheDocument()
 	})
+
+	it("never renders a huge catalog in full", async ({ renderStub }) => {
+		const many = Array.from({ length: 300 }, (_, i) => ({
+			id: `m${i}`,
+			claroCode: String(1000 + i),
+			name: `ITEM ${i}`,
+		}))
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<CodeSearchSelect
+							items={many}
+							onPick={() => {}}
+							placeholder="Pick"
+						/>
+					),
+				},
+			],
+		})
+		await userEvent.click(screen.getByRole("searchbox"))
+		expect(screen.getAllByRole("button")).toHaveLength(50)
+		expect(
+			screen.getByText("Showing 50 of 300: keep typing to narrow it down."),
+		).toBeInTheDocument()
+	})
 })

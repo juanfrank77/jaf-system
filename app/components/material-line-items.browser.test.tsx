@@ -128,15 +128,17 @@ describe("MaterialLineItems picking a material", () => {
 			/>,
 		)
 		await userEvent.click(screen.getByRole("button", { name: /add material/i }))
-		await userEvent.click(screen.getByRole("combobox"))
+		await userEvent.click(screen.getByRole("searchbox"))
 		// The catalog is actually listed...
 		expect(
-			await screen.findByRole("option", { name: /Span clamp/ }),
+			await screen.findByRole("button", { name: /Span clamp/ }),
 		).toBeInTheDocument()
-		// ...and choosing one puts it on the line.
-		await userEvent.click(screen.getByRole("option", { name: /Tape/ }))
+		// ...typing narrows it, and choosing one puts it on the line.
+		await userEvent.type(screen.getByRole("searchbox"), "tap")
+		expect(screen.queryByRole("button", { name: /Span clamp/ })).toBeNull()
+		await userEvent.click(screen.getByRole("button", { name: /Tape/ }))
 		await waitFor(() =>
-			expect(screen.getByRole("combobox")).toHaveTextContent(/Tape/),
+			expect(screen.getByRole("searchbox")).toHaveValue("1044 · Tape"),
 		)
 		const hidden = document.querySelector<HTMLInputElement>(
 			'input[name="lines"]',

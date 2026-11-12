@@ -2,6 +2,7 @@ import { Cancel01Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Fragment, useState } from "react"
 import { useTranslation } from "react-i18next"
+import { CodeSearchSelect } from "~/components/code-search-select"
 import { Button } from "~/components/ui/button"
 import { Checkbox } from "~/components/ui/checkbox"
 import { Input } from "~/components/ui/input"
@@ -135,28 +136,17 @@ export function PrepMaterialsTable({
 										{requested === 0 ? (
 											// A material the warehouse added stays changeable, so a
 											// wrong pick can be corrected or the line removed.
-											<select
-												aria-label={t("docs_prep.select_material")}
-												className="h-8 w-full max-w-64 rounded-lg border border-input bg-transparent px-2 text-sm"
-												value={row.serviceCodeId}
-												onChange={(e) =>
+											<CodeSearchSelect
+												items={codes.filter((c) => !taken.has(c.id))}
+												selected={code ?? null}
+												placeholder={t("docs_prep.select_material")}
+												onPick={(c) =>
 													onChange(index, {
-														serviceCodeId: e.target.value,
+														serviceCodeId: c.id,
 														substitutedWith: null,
 													})
 												}
-											>
-												<option value="">
-													{t("docs_prep.select_material")}
-												</option>
-												{codes
-													.filter((c) => !taken.has(c.id))
-													.map((c) => (
-														<option key={c.id} value={c.id}>
-															{c.claroCode} · {c.name}
-														</option>
-													))}
-											</select>
+											/>
 										) : (
 											(code?.name ?? row.serviceCodeId)
 										)}
@@ -273,25 +263,20 @@ export function PrepMaterialsTable({
 													>
 														{t("docs_prep.replace_with")}
 													</Label>
-													<select
-														id={`replace-${row._key}`}
-														className="h-8 max-w-64 rounded-lg border border-input bg-transparent px-2 text-sm"
-														value={row.substitutedWith ?? ""}
-														onChange={(e) =>
-															onChange(index, {
-																substitutedWith: e.target.value || null,
-															})
+													<CodeSearchSelect
+														items={replacements}
+														selected={
+															codeOf.get(row.substitutedWith ?? "") ?? null
 														}
-													>
-														<option value="">
-															{t("docs_prep.replace_placeholder")}
-														</option>
-														{replacements.map((c) => (
-															<option key={c.id} value={c.id}>
-																{c.claroCode} — {c.name}
-															</option>
-														))}
-													</select>
+														placeholder={t("docs_prep.replace_placeholder")}
+														label={t("docs_prep.replace_with")}
+														onPick={(c) =>
+															onChange(index, { substitutedWith: c.id })
+														}
+														onClear={() =>
+															onChange(index, { substitutedWith: null })
+														}
+													/>
 												</div>
 												<div className="flex min-w-48 flex-1 items-center gap-2">
 													<Label

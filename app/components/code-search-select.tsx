@@ -1,6 +1,9 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
+import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
+
+const MAX_ROWS = 50
 
 export type CodeSearchItem = {
 	id: string
@@ -15,24 +18,30 @@ export type CodeSearchItem = {
  * lists everything (scrollable). It clears itself after a pick, so it works
  * as an "add" box; pass `selected` to keep the choice shown instead.
  */
-export function CodeSearchSelect({
+export function CodeSearchSelect<T extends CodeSearchItem>({
 	items,
 	onPick,
 	placeholder,
 	label,
 	selected,
 	codeLast,
+	inputClassName,
+	onClear,
 	autoFocus,
 }: {
-	items: CodeSearchItem[]
-	onPick: (item: CodeSearchItem) => void
+	items: T[]
+	onPick: (item: T) => void
 	placeholder: string
 	/** Accessible name; defaults to the placeholder. */
 	label?: string
 	/** When set, the box shows this item instead of clearing after a pick. */
-	selected?: CodeSearchItem | null
+	selected?: T | null
 	/** Name first, code (or an email) after it: for people, not catalog rows. */
 	codeLast?: boolean
+	/** Sizing for phone layouts (the touch rows use a taller box). */
+	inputClassName?: string
+	/** Shows a Clear button next to a kept choice, for optional fields. */
+	onClear?: () => void
 	autoFocus?: boolean
 }) {
 	const { t } = useTranslation()
@@ -47,6 +56,9 @@ export function CodeSearchSelect({
 					m.name.toLowerCase().includes(term),
 			)
 		: items
+	// A long catalog must never render in full: the old drop-downs froze the
+	// browser on a big list. Show the first rows and ask for a narrower term.
+	const visible = matches.slice(0, MAX_ROWS)
 	const shown =
 		selected && !open
 			? codeLast
@@ -56,32 +68,40 @@ export function CodeSearchSelect({
 
 	return (
 		<div className="space-y-2">
-			<Input
-				type="search"
-				value={shown}
-				autoFocus={autoFocus}
-				onChange={(e) => {
-					setQuery(e.target.value)
-					setOpen(true)
-				}}
-				onFocus={() => setOpen(true)}
-				onClick={() => setOpen(true)}
-				onBlur={() => setOpen(false)}
-				onKeyDown={(e) => {
-					if (e.key === "Escape") setOpen(false)
-					// Inside a form, Enter must not submit; it picks a lone match.
-					if (e.key === "Enter") {
-						e.preventDefault()
-						if (matches.length === 1) {
-							onPick(matches[0])
-							setQuery("")
-							setOpen(false)
+			<div className="flex items-center gap-2">
+				<Input
+					type="search"
+					className={inputClassName}
+					value={shown}
+					autoFocus={autoFocus}
+					onChange={(e) => {
+						setQuery(e.target.value)
+						setOpen(true)
+					}}
+					onFocus={() => setOpen(true)}
+					onClick={() => setOpen(true)}
+					onBlur={() => setOpen(false)}
+					onKeyDown={(e) => {
+						if (e.key === "Escape") setOpen(false)
+						// Inside a form, Enter must not submit; it picks a lone match.
+						if (e.key === "Enter") {
+							e.preventDefault()
+							if (matches.length === 1) {
+								onPick(matches[0])
+								setQuery("")
+								setOpen(false)
+							}
 						}
-					}
-				}}
-				placeholder={placeholder}
-				aria-label={label ?? placeholder}
-			/>
+					}}
+					placeholder={placeholder}
+					aria-label={label ?? placeholder}
+				/>
+				{selected && onClear && (
+					<Button type="button" variant="ghost" size="sm" onClick={onClear}>
+						{t("code_search.clear")}
+					</Button>
+				)}
+			</div>
 			{open && (
 				// biome-ignore lint/a11y/noStaticElementInteractions: keeps focus in the search field while the list (or its scrollbar) is pressed, so the blur handler doesn't close it before the click lands
 				<div
@@ -94,7 +114,7 @@ export function CodeSearchSelect({
 						</p>
 					) : (
 						<ul>
-							{matches.map((m) => (
+							{visible.map((m) => (
 								<li key={m.id}>
 									<button
 										type="button"
@@ -120,6 +140,14 @@ export function CodeSearchSelect({
 								</li>
 							))}
 						</ul>
+					)}
+					{matches.length > MAX_ROWS && (
+						<p className="border-t p-2 text-xs text-muted-foreground">
+							{t("code_search.more", {
+								shown: MAX_ROWS,
+								total: matches.length,
+							})}
+						</p>
 					)}
 				</div>
 			)}

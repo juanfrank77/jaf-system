@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useFetcher, useRevalidator } from "react-router"
+import { CodeSearchSelect } from "~/components/code-search-select"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
@@ -40,6 +41,7 @@ export function AdjustPanel({
 		crypto.randomUUID(),
 	)
 	const wasSubmitting = useRef(false)
+	const [material, setMaterial] = useState<MaterialCode | null>(null)
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: fetcher/revalidator identity is stable; react to fetcher.state/data only
 	useEffect(() => {
@@ -48,6 +50,7 @@ export function AdjustPanel({
 			wasSubmitting.current = false
 			if (fetcher.data?.ok) {
 				setIdempotencyKey(crypto.randomUUID())
+				setMaterial(null)
 				revalidator.revalidate()
 			}
 		}
@@ -69,17 +72,18 @@ export function AdjustPanel({
 						<span className="mb-1 block text-muted-foreground">
 							{t("stock.adjust.material_label")}
 						</span>
-						<select
+						<input
+							type="hidden"
 							name="serviceCodeId"
-							required
-							className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
-						>
-							{materialCodes.map((c) => (
-								<option key={c.id} value={c.id}>
-									{c.claroCode} — {c.name}
-								</option>
-							))}
-						</select>
+							value={material?.id ?? ""}
+						/>
+						<CodeSearchSelect
+							items={materialCodes}
+							selected={material}
+							placeholder={t("stock.adjust.material_placeholder")}
+							label={t("stock.adjust.material_label")}
+							onPick={setMaterial}
+						/>
 					</label>
 					<label
 						className="w-full text-sm sm:w-28"
@@ -106,7 +110,9 @@ export function AdjustPanel({
 							required
 						/>
 					</label>
-					<Button type="submit">{t("stock.adjust.submit")}</Button>
+					<Button type="submit" disabled={!material}>
+						{t("stock.adjust.submit")}
+					</Button>
 				</fetcher.Form>
 				{fetcher.data?.errorKey && (
 					<p className="text-xs text-status-danger">

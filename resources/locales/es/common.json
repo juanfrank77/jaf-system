@@ -117,6 +117,7 @@
 		"adjust": {
 			"heading": "Ajustar inventario",
 			"material_label": "Material",
+			"material_placeholder": "Buscar por código o nombre…",
 			"delta_label": "Delta (+/-)",
 			"reason_label": "Motivo",
 			"submit": "Registrar ajuste",
@@ -1555,6 +1556,10 @@
 		"precert_download": "Descargar hoja de pre-certificación",
 		"precert_signers": "Firmado por: {{supervisor}}, {{contractor}}, {{claro}}",
 		"precert_missing": "Falta hoja de pre-certificación"
+	},
+	"code_search": {
+		"clear": "Quitar",
+		"more": "Mostrando {{shown}} de {{total}}: siga escribiendo para acotar."
 	},
 	"material_picker": {
 		"results_count": "{{shown}} de {{total}} materiales mostrados",

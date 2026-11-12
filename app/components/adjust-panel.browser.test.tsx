@@ -33,6 +33,10 @@ describe("AdjustPanel", () => {
 			],
 		})
 
+		await userEvent.type(screen.getByRole("searchbox"), "splice")
+		await userEvent.click(
+			screen.getByRole("button", { name: /SPLICE ENCLOSURE/ }),
+		)
 		await userEvent.type(screen.getByLabelText("Delta (+/-)"), "-5")
 		// The action itself is mocked to always return the error — a native
 		// `required` attribute would otherwise block submission before it's
@@ -66,6 +70,10 @@ describe("AdjustPanel", () => {
 			],
 		})
 
+		await userEvent.type(screen.getByRole("searchbox"), "splice")
+		await userEvent.click(
+			screen.getByRole("button", { name: /SPLICE ENCLOSURE/ }),
+		)
 		await userEvent.type(screen.getByLabelText("Delta (+/-)"), "-5")
 		await userEvent.type(screen.getByLabelText("Reason"), "cycle count")
 		await userEvent.click(
@@ -75,5 +83,28 @@ describe("AdjustPanel", () => {
 		await waitFor(() => {
 			expect(screen.getByText("Adjustment posted.")).toBeInTheDocument()
 		})
+	})
+
+	it("cannot post until a material is picked", async ({ renderStub }) => {
+		await renderStub({
+			entries: [
+				{
+					path: "/",
+					Component: () => (
+						<AdjustPanel warehouseId="wh-1" materialCodes={materialCodes} />
+					),
+				},
+			],
+		})
+		expect(
+			screen.getByRole("button", { name: "Post adjustment" }),
+		).toBeDisabled()
+		await userEvent.type(screen.getByRole("searchbox"), "34006")
+		await userEvent.click(
+			screen.getByRole("button", { name: /SPLICE ENCLOSURE/ }),
+		)
+		expect(
+			screen.getByRole("button", { name: "Post adjustment" }),
+		).toBeEnabled()
 	})
 })

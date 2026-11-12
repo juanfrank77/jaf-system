@@ -161,11 +161,30 @@ describe("PacketStepCard send button", () => {
 		expect(action).toHaveBeenCalledWith("send_packet")
 	})
 
-	it("cannot be pressed while a blocker stands", async ({ renderStub }) => {
-		await mount(renderStub, packet({ blockers: ["blueprint"] }), vi.fn())
+	it("cannot be pressed while a blocker from an earlier step stands", async ({
+		renderStub,
+	}) => {
+		await mount(renderStub, packet({ blockers: ["stale"] }), vi.fn())
 		expect(
 			screen.getByRole("button", { name: "Send to Ramón Claro" }),
 		).toBeDisabled()
+	})
+
+	it("with the blueprint missing stays pressable, sends nothing and points at the blueprint box", async ({
+		renderStub,
+	}) => {
+		const confirm = vi.spyOn(window, "confirm").mockReturnValue(true)
+		const action = vi.fn(async () => null)
+		await mount(renderStub, packet({ blockers: ["blueprint"] }), action)
+		expect(screen.getByText("1 box left")).toBeInTheDocument()
+		const send = screen.getByRole("button", { name: "Send to Ramón Claro" })
+		expect(send).toBeEnabled()
+		await userEvent.click(send)
+		expect(confirm).not.toHaveBeenCalled()
+		expect(action).not.toHaveBeenCalled()
+		const box = document.getElementById("g-blueprint")
+		expect(box).toHaveClass("guide-flagged")
+		expect(box).toHaveTextContent("Fill this in")
 	})
 })
 
@@ -328,7 +347,7 @@ describe("PacketStepCard package files", () => {
 	it.for([
 		["prefield_pdf", true],
 		["stale", true],
-		["blueprint", true],
+		["blueprint", false],
 		[null, false],
 	] as const)(
 		"with email off, blocker %s → I sent the package to Claro disabled: %s",

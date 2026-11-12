@@ -4,6 +4,12 @@ import { useTranslation } from "react-i18next"
 import { Form, Link, useNavigation } from "react-router"
 import { CodeSearchSelect } from "~/components/code-search-select"
 import { DownloadIconLink, FileViewerButton } from "~/components/file-viewer"
+import {
+	type Guide,
+	GuideBox,
+	GuideCounter,
+	useFormGuidance,
+} from "~/components/form-guidance"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { Card, CardContent, CardHeader } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
@@ -114,6 +120,7 @@ function ConfirmedSubmit({
 	disabled = false,
 	variant,
 	inFlight,
+	guide,
 }: {
 	intent: "send_packet" | "mark_packet_sent"
 	confirmText: string
@@ -122,6 +129,8 @@ function ConfirmedSubmit({
 	variant?: "outline"
 	/** Shared by Send and Mark as sent manually: one packet request at a time. */
 	inFlight: RefObject<boolean>
+	/** With a box still missing the button stays pressable and points to it. */
+	guide?: Guide
 }) {
 	const { t } = useTranslation()
 	const navigation = useNavigation()
@@ -149,6 +158,7 @@ function ConfirmedSubmit({
 				className="w-full"
 				disabled={disabled || anyBusy}
 				data-confirm={confirmText}
+				onClick={(e) => guide?.holdContinue(e)}
 			>
 				{busy ? t("packet.sending") : label}
 			</Button>
@@ -164,9 +174,11 @@ function ConfirmedSubmit({
 function PacketDetailsForm({
 	packet,
 	blueprintNeeded,
+	guide,
 }: {
 	packet: PacketStepData
 	blueprintNeeded: boolean
+	guide: Guide
 }) {
 	const { t } = useTranslation()
 	const navigation = useNavigation()
@@ -183,7 +195,7 @@ function PacketDetailsForm({
 			data-testid="packet-details-form"
 		>
 			<input type="hidden" name="intent" value="save_packet_details" />
-			<div className="space-y-1">
+			<GuideBox id="g-claro" guide={guide} className="space-y-1">
 				<Label htmlFor="packet-claro">{t("packet.claro_label")}</Label>
 				<input type="hidden" name="claroSupervisorId" value={claroId} />
 				<CodeSearchSelect
@@ -206,9 +218,9 @@ function PacketDetailsForm({
 					label={t("packet.claro_label")}
 					onPick={(c) => setClaroId(c.id)}
 				/>
-			</div>
+			</GuideBox>
 			{blueprintNeeded && (
-				<div className="space-y-1">
+				<GuideBox id="g-blueprint" guide={guide} className="space-y-1">
 					<Label htmlFor="packet-blueprint">
 						{t("packet.blueprint_upload")}
 					</Label>
@@ -220,7 +232,7 @@ function PacketDetailsForm({
 						multiple
 						className="h-auto py-1.5 text-xs"
 					/>
-				</div>
+				</GuideBox>
 			)}
 			<p className="text-xs text-muted-foreground">
 				{t("packet.details_hint")}
@@ -313,6 +325,24 @@ export function PacketStepCard({
 	const editable = interactive && !packet.sent
 	const last = packet.history[0]?.outcome ?? null
 	const blocked = packet.blockers.length > 0
+	// The Claro supervisor and the blueprint are boxes on this page: Send stays
+	// pressable and points at them. Any other blocker (Prefield PDF, a stale
+	// package) is fixed at an earlier step, so Send waits with its message.
+	const guide = useFormGuidance([
+		{
+			id: "g-claro",
+			label: t("packet.claro_label"),
+			empty: editable && !packet.claroSupervisor,
+		},
+		{
+			id: "g-blueprint",
+			label: t("packet.blueprint_upload"),
+			empty: editable && packet.blockers.includes("blueprint"),
+		},
+	])
+	const hardBlocked = packet.blockers.some(
+		(b) => b !== "blueprint" && b !== "claro_supervisor",
+	)
 	return (
 		<Card data-testid="packet-step">
 			<CardHeader className="items-start">
@@ -362,6 +392,7 @@ export function PacketStepCard({
 						<PacketDetailsForm
 							packet={packet}
 							blueprintNeeded={packet.blockers.includes("blueprint")}
+							guide={guide}
 						/>
 					</section>
 				)}
@@ -385,6 +416,7 @@ export function PacketStepCard({
 				)}
 
 				<div className="space-y-2">
+					{editable && <GuideCounter guide={guide} />}
 					{!packet.emailEnabled && (
 						<p className="text-sm font-medium">
 							{packet.packetHref
@@ -400,8 +432,9 @@ export function PacketStepCard({
 								confirmText={t("packet.confirm_manual", {
 									email: claro?.email ?? "",
 								})}
-								disabled={!claro || blocked || !packet.packetHref}
+								disabled={hardBlocked || !packet.packetHref}
 								inFlight={inFlight}
+								guide={guide}
 							/>
 							<p className="text-xs text-muted-foreground">
 								{t("packet.manual_only_hint")}
@@ -432,8 +465,9 @@ export function PacketStepCard({
 									packet.sent ? "packet.confirm_resend" : "packet.confirm_send",
 									{ email: claro?.email ?? "" },
 								)}
-								disabled={!claro || blocked}
+								disabled={hardBlocked}
 								inFlight={inFlight}
+								guide={guide}
 							/>
 							{packet.canMarkManual && (
 								<>

@@ -1,4 +1,11 @@
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
+import {
+	type ReactNode,
+	type RefObject,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from "react"
 import { useTranslation } from "react-i18next"
 import { cn } from "~/lib/utils"
 
@@ -47,7 +54,6 @@ export function useFormGuidance(fields: GuideField[]) {
 	// on the first render (the page just opened), and never while typing in
 	// the box that is still being filled: it moves once that box has content.
 	const lastNext = useRef<string | undefined>(next?.id)
-	// biome-ignore lint/correctness/useExhaustiveDependencies: only when the next box changes
 	useEffect(() => {
 		if (lastNext.current !== undefined && next?.id !== lastNext.current)
 			scrollToBox(next?.id, false)
@@ -140,5 +146,67 @@ export function GuideCounter({ guide }: { guide: Guide }) {
 				))}
 			</ul>
 		</div>
+	)
+}
+
+/** A native box the adapter reads from the form, or one the page already knows about. */
+export type NativeGuideSpec = {
+	id: string
+	label: string
+	/** Read the form's inputs with this name; empty when none has text. */
+	name?: string
+	/** For state-held controls (pickers, radios): the page says. Wins over `name`. */
+	empty?: boolean
+	blocking?: boolean
+}
+
+/**
+ * The same guidance for a plain `<form>` of uncontrolled inputs: it reads the
+ * values from the form itself and re-reads on every change (typing, picking,
+ * and the hidden inputs a picker adds), so the page keeps no copy of them.
+ * Before it mounts every native box counts as empty, which is what the server
+ * rendered.
+ */
+export function useNativeGuidance(
+	formRef: RefObject<HTMLFormElement | null>,
+	specs: NativeGuideSpec[],
+) {
+	const [, bump] = useState(0)
+	const [ready, setReady] = useState(false)
+	useEffect(() => {
+		const form = formRef.current
+		if (!form) return
+		setReady(true)
+		const rerun = () => bump((n) => n + 1)
+		form.addEventListener("input", rerun)
+		form.addEventListener("change", rerun)
+		const watcher = new MutationObserver(rerun)
+		watcher.observe(form, {
+			childList: true,
+			subtree: true,
+			attributes: true,
+			attributeFilter: ["value"],
+		})
+		return () => {
+			form.removeEventListener("input", rerun)
+			form.removeEventListener("change", rerun)
+			watcher.disconnect()
+		}
+	}, [formRef])
+
+	const nativeEmpty = (name: string) => {
+		const form = formRef.current
+		if (!ready || !form) return true
+		return Array.from(
+			form.querySelectorAll<HTMLInputElement>(`[name="${name}"]`),
+		).every((el) => el.value.trim() === "")
+	}
+	return useFormGuidance(
+		specs.map((spec) => ({
+			id: spec.id,
+			label: spec.label,
+			blocking: spec.blocking,
+			empty: spec.empty ?? (spec.name ? nativeEmpty(spec.name) : true),
+		})),
 	)
 }

@@ -1,5 +1,5 @@
 import { screen } from "@testing-library/react"
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { describe, expect, it } from "vitest"
 import { userEvent } from "vitest/browser"
 import {
@@ -7,6 +7,7 @@ import {
 	GuideCounter,
 	type GuideField,
 	useFormGuidance,
+	useNativeGuidance,
 } from "./form-guidance"
 
 function Demo({ extra = false }: { extra?: boolean }) {
@@ -96,5 +97,52 @@ describe("form guidance", () => {
 		await mount(renderStub, { extra: true })
 		expect(screen.getByText("2 boxes left")).toBeInTheDocument()
 		expect(screen.queryByRole("button", { name: "Optional" })).toBeNull()
+	})
+})
+
+function NativeDemo() {
+	const ref = useRef<HTMLFormElement>(null)
+	const [picked, setPicked] = useState<string[]>([])
+	const guide = useNativeGuidance(ref, [
+		{ id: "g-type", label: "Job type", name: "jobType" },
+		{ id: "g-crew", label: "Crew", name: "brigadeId" },
+		{ id: "g-choice", label: "Materials?", empty: false },
+	])
+	return (
+		<form ref={ref}>
+			<GuideCounter guide={guide} />
+			<GuideBox id="g-type" guide={guide}>
+				<input aria-label="type" name="jobType" />
+			</GuideBox>
+			<GuideBox id="g-crew" guide={guide}>
+				<button type="button" onClick={() => setPicked(["b1"])}>
+					Pick crew
+				</button>
+				{picked.map((id) => (
+					<input key={id} type="hidden" name="brigadeId" value={id} />
+				))}
+			</GuideBox>
+			<button type="submit" onClick={(e) => guide.holdContinue(e)}>
+				Create
+			</button>
+		</form>
+	)
+}
+
+describe("native form guidance", () => {
+	it("reads typed values and hidden picker inputs from the form itself", async ({
+		renderStub,
+	}) => {
+		await renderStub({
+			entries: [{ path: "/", Component: () => <NativeDemo /> }],
+		})
+		expect(screen.getByText("2 boxes left")).toBeInTheDocument()
+		await userEvent.type(screen.getByLabelText("type"), "Mantenimiento")
+		expect(screen.getByText("1 box left")).toBeInTheDocument()
+		await userEvent.click(screen.getByRole("button", { name: "Create" }))
+		expect(document.getElementById("g-crew")).toHaveClass("guide-flagged")
+		await userEvent.click(screen.getByRole("button", { name: "Pick crew" }))
+		expect(screen.queryByTestId("guide-counter")).toBeNull()
+		expect(document.querySelector(".guide-flagged")).toBeNull()
 	})
 })

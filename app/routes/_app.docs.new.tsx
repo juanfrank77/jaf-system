@@ -1,9 +1,15 @@
 import type { ParseKeys } from "i18next"
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Form, Link, redirect } from "react-router"
 import { CrewPicker } from "~/components/crew-picker"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import {
+	type Guide,
+	GuideBox,
+	GuideCounter,
+	useNativeGuidance,
+} from "~/components/form-guidance"
 import {
 	MaterialsSourceChoice,
 	PrefieldNeededChoice,
@@ -284,6 +290,51 @@ export default function NewDoc({
 	}
 	const error = actionData as { errorKey?: ParseKeys } | undefined
 	const { t } = useTranslation()
+	const formRef = useRef<HTMLFormElement>(null)
+	const guide = useNativeGuidance(formRef, [
+		{
+			id: "g-claro",
+			label: t("docs_new.claro_supervisor_label"),
+			empty: claroId === "",
+		},
+		{ id: "g-jobType", label: t("docs_new.job_type_label"), name: "jobType" },
+		{
+			id: "g-direccion1",
+			label: t("docs_new.direccion1_label"),
+			name: "direccion1",
+		},
+		{ id: "g-tipo", label: t("docs_new.tipo_label"), name: "tipo" },
+		{
+			id: "g-tipoPlanta",
+			label: t("docs_new.tipo_planta_label"),
+			name: "tipoPlanta",
+		},
+		{
+			id: "g-grupoPlan",
+			label: t("docs_new.grupo_plan_label"),
+			name: "grupoPlan",
+		},
+		{
+			id: "g-jobDescription",
+			label: t("docs_new.job_description_label"),
+			name: "jobDescription",
+		},
+		{
+			id: "g-crew",
+			label: t("docs_new.assigned_crew_label"),
+			name: "brigadeId",
+		},
+		{
+			id: "g-materials",
+			label: t("intake_choices.materials_question"),
+			empty: materialsChoice === "",
+		},
+		{
+			id: "g-prefield",
+			label: t("intake_choices.prefield_question"),
+			empty: prefieldChoice === "",
+		},
+	])
 	return (
 		<div className="space-y-4">
 			<PageHeader title={t("docs_new.title")} />
@@ -305,10 +356,10 @@ export default function NewDoc({
 					{t("docs_new.callout_body")}
 				</p>
 			</details>
-			<Form method="post">
+			<Form method="post" ref={formRef}>
 				<Card>
 					<CardContent className="space-y-5">
-						<div>
+						<GuideBox id="g-claro" guide={guide}>
 							<Label htmlFor="claroSupervisorId">
 								{t("docs_new.claro_supervisor_label")}
 							</Label>
@@ -351,7 +402,7 @@ export default function NewDoc({
 									</span>
 								</div>
 							)}
-						</div>
+						</GuideBox>
 						<div className="grid gap-4 md:grid-cols-2">
 							<div>
 								<Label htmlFor="workOrderNumber">
@@ -366,7 +417,7 @@ export default function NewDoc({
 								/>
 								<Hint>{t("docs_new.work_order_hint")}</Hint>
 							</div>
-							<div>
+							<GuideBox id="g-jobType" guide={guide}>
 								<Label htmlFor="jobType">{t("docs_new.job_type_label")}</Label>
 								<Input
 									id="jobType"
@@ -375,7 +426,7 @@ export default function NewDoc({
 									placeholder="Mantenimiento, Instalación..."
 									className="mt-1"
 								/>
-							</div>
+							</GuideBox>
 						</div>
 						<fieldset className="space-y-3">
 							<legend className="text-sm font-semibold">
@@ -386,6 +437,7 @@ export default function NewDoc({
 								<TextField name="sector" label={t("docs_new.sector_label")} />
 								<TextField
 									name="direccion1"
+									guide={guide}
 									label={t("docs_new.direccion1_label")}
 									required
 								/>
@@ -400,6 +452,7 @@ export default function NewDoc({
 								/>
 								<TextField
 									name="tipo"
+									guide={guide}
 									label={t("docs_new.tipo_label")}
 									required
 									options={suggestions.tipo}
@@ -407,19 +460,21 @@ export default function NewDoc({
 								<TextField name="ciudad" label={t("docs_new.ciudad_label")} />
 								<TextField
 									name="tipoPlanta"
+									guide={guide}
 									label={t("docs_new.tipo_planta_label")}
 									required
 									options={suggestions.tipoPlanta}
 								/>
 								<TextField
 									name="grupoPlan"
+									guide={guide}
 									label={t("docs_new.grupo_plan_label")}
 									required
 									options={suggestions.grupoPlan}
 								/>
 							</div>
 						</fieldset>
-						<div>
+						<GuideBox id="g-jobDescription" guide={guide}>
 							<Label htmlFor="jobDescription">
 								{t("docs_new.job_description_label")}
 							</Label>
@@ -430,36 +485,40 @@ export default function NewDoc({
 								required
 								className="mt-1"
 							/>
-						</div>
-						<div>
+						</GuideBox>
+						<GuideBox id="g-crew" guide={guide}>
 							<Label>{t("docs_new.assigned_crew_label")}</Label>
 							<div className="mt-1">
 								<CrewPicker brigades={brigades} />
 							</div>
 							<Hint>{t("docs_new.crew_hint")}</Hint>
-						</div>
+						</GuideBox>
 						<div>
 							<Label>{t("docs_new.service_codes_label")}</Label>
 							<div className="mt-1">
 								<ServicePicker showPrices={showPrices} />
 							</div>
 						</div>
-						<MaterialsSourceChoice
-							value={materialsChoice}
-							onChange={setMaterialsChoice}
-						>
-							<div>
-								<Label>{t("docs_new.estimated_materials_label")}</Label>
-								<Hint>{t("docs_new.estimated_materials_hint")}</Hint>
-								<div className="mt-1">
-									<MaterialPicker materials={serviceCodes} />
+						<GuideBox id="g-materials" guide={guide}>
+							<MaterialsSourceChoice
+								value={materialsChoice}
+								onChange={setMaterialsChoice}
+							>
+								<div>
+									<Label>{t("docs_new.estimated_materials_label")}</Label>
+									<Hint>{t("docs_new.estimated_materials_hint")}</Hint>
+									<div className="mt-1">
+										<MaterialPicker materials={serviceCodes} />
+									</div>
 								</div>
-							</div>
-						</MaterialsSourceChoice>
-						<PrefieldNeededChoice
-							value={prefieldChoice}
-							onChange={setPrefieldChoice}
-						/>
+							</MaterialsSourceChoice>
+						</GuideBox>
+						<GuideBox id="g-prefield" guide={guide}>
+							<PrefieldNeededChoice
+								value={prefieldChoice}
+								onChange={setPrefieldChoice}
+							/>
+						</GuideBox>
 						{error?.errorKey && (
 							<p className="text-sm text-status-danger">{t(error.errorKey)}</p>
 						)}
@@ -474,6 +533,7 @@ export default function NewDoc({
 								: t("docs_new.flow_warehouse")}
 						</span>
 					</div>
+					<GuideCounter guide={guide} />
 					<div className="flex items-center justify-between gap-3">
 						<Link
 							to="/dashboard"
@@ -481,7 +541,11 @@ export default function NewDoc({
 						>
 							{t("docs_new.cancel")}
 						</Link>
-						<Button type="submit" className="h-10 px-5">
+						<Button
+							type="submit"
+							className="h-10 px-5"
+							onClick={(e) => guide.holdContinue(e)}
+						>
 							{t("docs_new.submit")}
 						</Button>
 					</div>
@@ -496,15 +560,17 @@ function TextField({
 	label,
 	required,
 	options,
+	guide,
 }: {
 	name: string
 	label: string
 	required?: boolean
 	options?: string[]
+	guide?: Guide
 }) {
 	const listId = options ? `${name}-options` : undefined
-	return (
-		<div>
+	const body = (
+		<>
 			<Label htmlFor={name}>{label}</Label>
 			<Input
 				id={name}
@@ -520,7 +586,14 @@ function TextField({
 					))}
 				</datalist>
 			)}
-		</div>
+		</>
+	)
+	return guide && required ? (
+		<GuideBox id={`g-${name}`} guide={guide}>
+			{body}
+		</GuideBox>
+	) : (
+		<div>{body}</div>
 	)
 }
 

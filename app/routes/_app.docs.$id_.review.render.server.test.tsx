@@ -131,6 +131,17 @@ describe("Sign off step (render)", () => {
 		expect(html).not.toContain("Approve field work")
 	})
 
+	it("lights the signature box, counts it, and keeps the Sign off button pressable", async () => {
+		const html = await render(loaderData())
+		expect(html).toContain("1 box left")
+		expect(html).toMatch(
+			/data-guide="next" class="[^"]*guide-next[^"]*"><canvas/,
+		)
+		expect(html).toMatch(
+			/<button(?![^>]*(aria-disabled=|\sdisabled[=\s>]))[^>]*>Sign off<\/button>/,
+		)
+	})
+
 	it("once signed, shows the signature and who signed instead of the pad", async () => {
 		const html = await render({
 			...loaderData(

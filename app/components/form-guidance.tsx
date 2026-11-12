@@ -41,7 +41,12 @@ export function scrollToBox(id: string | undefined, focus = true) {
 	box?.focus({ preventScroll: true })
 }
 
-export function useFormGuidance(fields: GuideField[]) {
+export function useFormGuidance(
+	fields: GuideField[],
+	/** `glow: false` keeps the hold-Continue marking but never lights the next box
+	 * (a page with several separate forms would light one in each). */
+	{ glow = true }: { glow?: boolean } = {},
+) {
 	const missing = fields.filter((f) => f.empty && f.blocking !== false)
 	const next = fields.find((f) => f.empty)
 	const [flagged, setFlagged] = useState<string | null>(null)
@@ -53,12 +58,13 @@ export function useFormGuidance(fields: GuideField[]) {
 	// When a box gets filled the light moves on, and the page follows it. Not
 	// on the first render (the page just opened), and never while typing in
 	// the box that is still being filled: it moves once that box has content.
-	const lastNext = useRef<string | undefined>(next?.id)
+	const lastNext = useRef<string | undefined>(glow ? next?.id : undefined)
 	useEffect(() => {
+		if (!glow) return
 		if (lastNext.current !== undefined && next?.id !== lastNext.current)
 			scrollToBox(next?.id, false)
 		lastNext.current = next?.id
-	}, [next?.id])
+	}, [next?.id, glow])
 
 	const jumpTo = useCallback((id: string | undefined) => {
 		scrollToBox(id)
@@ -85,7 +91,11 @@ export function useFormGuidance(fields: GuideField[]) {
 		jumpTo,
 		holdContinue,
 		stateOf: (id: string): "flagged" | "next" | undefined =>
-			id === flaggedId ? "flagged" : id === next?.id ? "next" : undefined,
+			id === flaggedId
+				? "flagged"
+				: glow && id === next?.id
+					? "next"
+					: undefined,
 	}
 }
 

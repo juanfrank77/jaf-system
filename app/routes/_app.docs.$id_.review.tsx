@@ -9,6 +9,11 @@ import { RouteErrorBoundary } from "~/components/error-boundary"
 import { DownloadIconLink } from "~/components/file-viewer"
 import { FixMistakeCard } from "~/components/fix-mistake-card"
 import {
+	GuideBox,
+	GuideCounter,
+	useFormGuidance,
+} from "~/components/form-guidance"
+import {
 	type PacketStepBlocker,
 	PacketStepCard,
 	type PacketStepData,
@@ -1664,6 +1669,7 @@ function SignatureBlock({
 	fieldName = "signature",
 	submitLabelKey = "precert.sign",
 	sheetId,
+	guided = false,
 }: {
 	/** The certificate being signed, when the job has one per crew. */
 	sheetId?: string
@@ -1679,10 +1685,22 @@ function SignatureBlock({
 	optional?: boolean
 	encType?: "multipart/form-data"
 	readOnly?: boolean
+	/** The only signature on the page: light it and count it, as on Sign off. */
+	guided?: boolean
 }) {
 	const { t } = useTranslation()
 	const padRef = useRef<SignaturePadHandle>(null)
 	const [cleared, setCleared] = useState(0)
+	const [padEmpty, setPadEmpty] = useState(true)
+	const [hasScan, setHasScan] = useState(false)
+	const boxId = `g-sig-${intent}${sheetId ? `-${sheetId}` : ""}`
+	// A required signature (or its scan) is the box; Continue never goes quiet.
+	const guide = useFormGuidance(
+		optional
+			? []
+			: [{ id: boxId, label: t(labelKey), empty: padEmpty && !hasScan }],
+		{ glow: guided },
+	)
 	const header = (
 		<div className="flex items-start justify-between gap-2">
 			<p className="text-sm font-medium">{t(labelKey)}</p>
@@ -1715,6 +1733,10 @@ function SignatureBlock({
 			method="post"
 			encType={encType}
 			className={box}
+			onChange={(e) => {
+				const target = e.target as unknown as HTMLInputElement
+				if (target.name === "scan") setHasScan(!!target.files?.length)
+			}}
 			onSubmit={(e) => {
 				const pad = padRef.current
 				const form = e.currentTarget
@@ -1735,18 +1757,20 @@ function SignatureBlock({
 			<input type="hidden" name={fieldName} />
 			{header}
 			{children}
-			<div className="space-y-1">
+			<GuideBox id={boxId} guide={guide} className="space-y-1">
 				<SignaturePad
 					key={cleared}
 					ref={padRef}
 					width={280}
 					height={90}
 					className="w-full border rounded bg-card"
+					onChange={setPadEmpty}
 				/>
 				<p className="text-xs text-muted-foreground">
 					{t("precert.sign_here")}
 				</p>
-			</div>
+			</GuideBox>
+			{guided && <GuideCounter guide={guide} />}
 			<div className="flex items-center gap-2">
 				<Button
 					type="button"
@@ -1756,7 +1780,12 @@ function SignatureBlock({
 				>
 					{t("precert.clear_signature")}
 				</Button>
-				<Button type="submit" size="sm" className="ml-auto">
+				<Button
+					type="submit"
+					size="sm"
+					className="ml-auto"
+					onClick={(e) => guide.holdContinue(e)}
+				>
 					{t(submitLabelKey)}
 				</Button>
 			</div>
@@ -1797,6 +1826,7 @@ function SignOffCard({
 				</p>
 				<SignatureBlock
 					intent="approve"
+					guided
 					fieldName="completionSignature"
 					labelKey="docs_review.approve"
 					submitLabelKey="docs_review.approve_field_work"

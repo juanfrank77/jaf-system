@@ -52,6 +52,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 		where: { id: params.id },
 		include: {
 			supervisor: true,
+			claroSupervisor: { select: { name: true } },
 			poLinks: true,
 			paymentRecords: { select: { type: true } },
 			preCertSheets: {

@@ -58,6 +58,7 @@ const PRICE_FREE_DOC_SELECT = {
 	jobAddressEstimated: true,
 	createdAt: true,
 	avisoNumber: true,
+	claroSupervisor: { select: { name: true } },
 	assignedCrewIds: true,
 	sendBackHistory: true,
 	estimatedMaterials: true,
@@ -99,7 +100,10 @@ function findDashboardDocs(
 ): Promise<DashboardListDoc[]> {
 	return isPriceBlind(role)
 		? db.jafInvoice.findMany({ ...args, select: PRICE_FREE_DOC_SELECT })
-		: db.jafInvoice.findMany(args)
+		: db.jafInvoice.findMany({
+				...args,
+				include: { claroSupervisor: { select: { name: true } } },
+			})
 }
 
 /** "My open jobs" lists every job before the packet; the other lists stay short. */
@@ -127,6 +131,7 @@ type QueueRow = {
 	jobAddressEstimated: string
 	jobAddressActual: string | null
 	brigadeName: string | null
+	claroSupervisorName: string | null
 	stage: SupervisorStage
 	note?: string | null
 	/** When the job entered this queue (submitted / returned / approved). */
@@ -167,6 +172,7 @@ const queueSelect = {
 	materialsFromWarehouse: true,
 	fieldMaterials: true,
 	brigade: { select: { name: true } },
+	claroSupervisor: { select: { name: true } },
 } as const
 
 function toRow(
@@ -180,6 +186,7 @@ function toRow(
 		materialsUsed?: unknown
 		materialsReturned?: unknown
 		brigade?: { name: string } | null
+		claroSupervisor?: { name: string } | null
 	},
 	stage: SupervisorStage,
 	since: Date | null,
@@ -191,6 +198,7 @@ function toRow(
 		jobAddressEstimated: d.jobAddressEstimated,
 		jobAddressActual: d.jobAddressActual ?? null,
 		brigadeName: d.brigade?.name ?? null,
+		claroSupervisorName: d.claroSupervisor?.name ?? null,
 		stage,
 		note,
 		since,

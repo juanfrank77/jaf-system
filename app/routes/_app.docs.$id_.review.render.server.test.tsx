@@ -661,6 +661,13 @@ describe("Pre-cert step (render)", () => {
 		sheets: [precertSheet],
 	})
 
+	it("lists the Claro supervisor in the job info", async () => {
+		const html = await render(
+			precert(true, { claroSupervisorName: "Ramón Claro" }),
+		)
+		expect(html).toMatch(/Claro supervisor<\/dt><dd[^>]*>Ramón Claro<\/dd>/)
+	})
+
 	it("a completed (read-only) step offers no Continue or back-to-Aviso button, only the banner's way back", async () => {
 		const html = await render(precert(false))
 		expect(html).toContain("Completed step.")

@@ -28,6 +28,7 @@ type QueueRow = {
 	jobAddressEstimated: string
 	jobAddressActual: string | null
 	brigadeName: string | null
+	claroSupervisorName?: string | null
 	stage: SupervisorStage
 	note?: string | null
 	/** When the job entered this queue (submitted / returned / approved). */
@@ -134,6 +135,7 @@ function Queue({
 						<th className="py-1">{t("dashboard.col.work_order")}</th>
 						<th className="py-1">{t("dashboard.col.address")}</th>
 						<th className="py-1">{t("dashboard.col.crew")}</th>
+						<th className="py-1">{t("dashboard.col.claro_supervisor")}</th>
 						<th className="py-1">{t("dashboard.col.stage")}</th>
 					</tr>
 				</thead>
@@ -149,6 +151,7 @@ function Queue({
 								{r.jobAddressActual ?? r.jobAddressEstimated}
 							</td>
 							<td className="py-1.5">{r.brigadeName ?? "—"}</td>
+							<td className="py-1.5">{r.claroSupervisorName ?? "—"}</td>
 							<td className="py-1.5">
 								{t(
 									r.openLabel

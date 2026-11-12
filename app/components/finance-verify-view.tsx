@@ -512,6 +512,14 @@ function VerifyPacket({ loaderData, actionData }: ViewProps) {
 									</span>{" "}
 									{loaderData.doc.supervisor?.name}
 								</p>
+								{loaderData.doc.claroSupervisor && (
+									<p>
+										<span className="text-muted-foreground">
+											{t("finance_verify.claro_supervisor")}:
+										</span>{" "}
+										{loaderData.doc.claroSupervisor.name}
+									</p>
+								)}
 							</div>
 						</div>
 						<BrigadeStockTracked lines={brigadeStock} />

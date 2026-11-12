@@ -72,6 +72,7 @@ export type DashboardDocRow = {
 	status: DocStatus
 	jobType: string
 	jobAddressEstimated: string
+	claroSupervisor?: { name: string } | null
 	createdAt: Date
 	assignedCrewIds?: string[]
 	sendBackHistory?: unknown
@@ -217,6 +218,13 @@ export function DashboardDocList({
 							</div>
 							<p className="mt-1 text-sm text-muted-foreground">
 								{doc.jobType} — {doc.jobAddressEstimated}
+								{doc.claroSupervisor && (
+									<>
+										{" · "}
+										{t("dashboard.col.claro_supervisor")}:{" "}
+										{doc.claroSupervisor.name}
+									</>
+								)}
 							</p>
 							{(overage || shortage) && (
 								<div className="mt-2 flex flex-wrap items-center gap-1">

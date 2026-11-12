@@ -39,6 +39,20 @@ describe("DashboardDocList billing visibility", () => {
 		expect(screen.queryByText(/12345678/)).not.toBeInTheDocument()
 	})
 
+	it("names the Claro supervisor under the job line when the row has one", async ({
+		renderStub,
+	}) => {
+		await mount(
+			renderStub,
+			<DashboardDocList
+				docs={[{ ...doc, claroSupervisor: { name: "Ramón Claro" } }]}
+			/>,
+		)
+		expect(
+			screen.getByText(/Claro supervisor: Ramón Claro/),
+		).toBeInTheDocument()
+	})
+
 	it("prefers the server-derived stage and localizes it to Spanish", async ({
 		renderStub,
 	}) => {

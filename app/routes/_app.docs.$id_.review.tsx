@@ -2465,6 +2465,7 @@ export default function ReviewDoc({
 								["address", invoiceHeader.address ?? "—"],
 								["aviso", doc.avisoNumber ?? "—"],
 								["supervisor", supervisor?.name ?? user.name],
+								["claro_supervisor", doc.claroSupervisorName ?? "—"],
 								["crew", invoiceHeader.brigadeName ?? "—"],
 							] as const
 						).map(([key, value]) => (

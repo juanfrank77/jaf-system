@@ -1003,6 +1003,7 @@
 			"address": "Address",
 			"aviso": "Aviso #",
 			"supervisor": "Supervisor",
+			"claro_supervisor": "Claro supervisor",
 			"crew": "Crew"
 		},
 		"heading": "Contractor Pre-Certification Sheet",
@@ -1469,6 +1470,7 @@
 		"address": "Address",
 		"aviso_number": "Aviso #",
 		"supervisor": "Supervisor",
+		"claro_supervisor": "Claro supervisor",
 		"previous_send_backs": "Previous Finance Send-backs",
 		"verify_note_placeholder": "Optional verification note…",
 		"mark_verified": "Mark Verified",
@@ -1633,6 +1635,7 @@
 			"work_order": "Work order",
 			"address": "Address",
 			"crew": "Crew",
+			"claro_supervisor": "Claro supervisor",
 			"stage": "Stage",
 			"jaf_invoice": "JAF invoice"
 		},

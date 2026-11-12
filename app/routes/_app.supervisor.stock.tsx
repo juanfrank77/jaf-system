@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Link, useFetcher } from "react-router"
+import { CodeSearchSelect } from "~/components/code-search-select"
 import { RouteErrorBoundary } from "~/components/error-boundary"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
@@ -20,7 +21,6 @@ import {
 	createRestock,
 	recordCount,
 	requestReturn,
-	signPickup,
 	supervisorBrigadeIds,
 } from "~/lib/brigade-inventory.server"
 import { db } from "~/lib/db.server"
@@ -91,16 +91,18 @@ export async function loader({ request }: Route.LoaderArgs) {
 		materials,
 		restocks: restocks.map((r) => ({
 			id: r.id,
+			number: r.number,
 			status: r.status,
 			requestedAt: r.requestedAt.toISOString(),
-			supervisorSigned: !!r.supervisorSignedAt,
-			warehouseSigned: !!r.warehouseSignedAt,
+			requestedBy: user.name,
 			lines: r.lines.map((l) => ({
 				id: l.id,
 				brigade: brigadeById.get(l.brigadeId)?.name ?? l.brigadeId,
 				material: materialById.get(l.serviceCodeId)?.name ?? l.serviceCodeId,
 				unit: materialById.get(l.serviceCodeId)?.unit ?? null,
 				qty: l.qty,
+				givenQty: l.givenQty,
+				note: l.note,
 			})),
 		})),
 		balances: balances
@@ -153,8 +155,6 @@ export async function action({ request }: Route.ActionArgs) {
 			}
 			case "cancel_restock":
 				return cancelRestock(str("id"), user.id)
-			case "sign_pickup":
-				return signPickup(str("id"), user, "supervisor")
 			case "count":
 				return recordCount({
 					brigadeId: str("brigadeId"),
@@ -232,20 +232,7 @@ function RestockForm({
 							</option>
 						))}
 					</select>
-					<select
-						name="serviceCodeId"
-						aria-label={t("brigade_stock.col_material")}
-						className={SELECT_CLASS}
-						defaultValue=""
-					>
-						<option value="">{t("brigade_stock.pick_material")}</option>
-						{materials.map((m) => (
-							<option key={m.id} value={m.id}>
-								{m.claroCode} · {m.name}
-								{m.unit ? ` (${m.unit})` : ""}
-							</option>
-						))}
-					</select>
+					<MaterialSearch materials={materials} />
 					<Input
 						name="qty"
 						type="number"
@@ -274,6 +261,26 @@ function RestockForm({
 	)
 }
 
+/** One Material box of the request: type a code or words, tap to pick. */
+function MaterialSearch({ materials }: Pick<LoaderData, "materials">) {
+	const { t } = useTranslation()
+	const [picked, setPicked] = useState<LoaderData["materials"][number] | null>(
+		null,
+	)
+	return (
+		<div>
+			<input type="hidden" name="serviceCodeId" value={picked?.id ?? ""} />
+			<CodeSearchSelect
+				items={materials}
+				selected={picked}
+				onPick={setPicked}
+				placeholder={t("brigade_stock.pick_material")}
+				label={t("brigade_stock.col_material")}
+			/>
+		</div>
+	)
+}
+
 function RestockCard({ r }: { r: LoaderData["restocks"][number] }) {
 	const { t } = useTranslation()
 	const fetcher = useFetcher<typeof action>()
@@ -283,44 +290,49 @@ function RestockCard({ r }: { r: LoaderData["restocks"][number] }) {
 				<Badge variant={STATUS_VARIANT[r.status]}>
 					{t(`brigade_stock.status.${r.status}`)}
 				</Badge>
-				<span className="text-xs text-muted-foreground">
-					{new Date(r.requestedAt).toLocaleDateString()}
+				<span
+					className="text-xs text-muted-foreground"
+					suppressHydrationWarning
+				>
+					{t("brigade_stock.req_line", {
+						number: r.number ?? t("brigade_stock.no_number"),
+						name: r.requestedBy,
+						when: new Date(r.requestedAt).toLocaleString(),
+					})}
 				</span>
-				{r.status === "READY" && (
-					<span className="text-xs text-muted-foreground">
-						{t("brigade_stock.signatures", {
-							you: r.supervisorSigned ? "✓" : "–",
-							warehouse: r.warehouseSigned ? "✓" : "–",
-						})}
-					</span>
-				)}
 			</div>
 			<ul className="text-sm">
 				{r.lines.map((l) => (
 					<li key={l.id}>
-						{l.brigade} · {l.material} · {l.qty} {l.unit ?? ""}
+						{l.brigade} · {l.material} ·{" "}
+						{r.status === "PICKED_UP" && l.givenQty !== null
+							? l.givenQty < l.qty
+								? t("brigade_stock.given_of", {
+										given: l.givenQty,
+										qty: l.qty,
+										note: l.note ?? "",
+									})
+								: t("brigade_stock.given_of_ok", {
+										given: l.givenQty,
+										qty: l.qty,
+									})
+							: l.qty}{" "}
+						{l.unit ?? ""}
 					</li>
 				))}
 			</ul>
 			{(r.status === "READY" || r.status === "REQUESTED") && (
 				<fetcher.Form method="post" className="flex flex-wrap gap-2">
 					<input type="hidden" name="id" value={r.id} />
-					{r.status === "READY" && !r.supervisorSigned && (
-						<Button type="submit" name="intent" value="sign_pickup" size="sm">
-							{t("brigade_stock.sign_pickup")}
-						</Button>
-					)}
-					{!r.supervisorSigned && !r.warehouseSigned && (
-						<Button
-							type="submit"
-							name="intent"
-							value="cancel_restock"
-							variant="outline"
-							size="sm"
-						>
-							{t("brigade_stock.cancel")}
-						</Button>
-					)}
+					<Button
+						type="submit"
+						name="intent"
+						value="cancel_restock"
+						variant="outline"
+						size="sm"
+					>
+						{t("brigade_stock.cancel")}
+					</Button>
 					<Err data={fetcher.data} />
 				</fetcher.Form>
 			)}

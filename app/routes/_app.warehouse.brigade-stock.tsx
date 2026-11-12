@@ -1,18 +1,25 @@
+import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useFetcher } from "react-router"
 import { RouteErrorBoundary } from "~/components/error-boundary"
+import { RestockHandOver } from "~/components/restock-hand-over"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { EmptyState } from "~/components/ui/empty-state"
 import { PageHeader } from "~/components/ui/page-header"
 import {
 	confirmReturn,
+	handOverRestock,
 	markRestockReady,
-	signPickup,
 } from "~/lib/brigade-inventory.server"
 import { db } from "~/lib/db.server"
 import { canReleaseToVan, rolesMatching } from "~/lib/permissions"
 import { requireRole } from "~/lib/permissions.server"
+import {
+	findPickupSigner,
+	type PickupSignerGroup,
+	pickupSignerGroups,
+} from "~/lib/pickup-signer.server"
 import type { Route } from "./+types/_app.warehouse.brigade-stock"
 
 export const meta: Route.MetaFunction = () => [
@@ -21,12 +28,42 @@ export const meta: Route.MetaFunction = () => [
 
 /**
  * The warehouse side of brigade stock: prepare a supervisor's restock order
- * (Requested → Ready alerts the supervisor), hand it over (both sides sign the
- * pickup) and confirm the returns supervisors record. No prices.
+ * (Requested → Ready alerts the supervisor), hand it over (the brigade's crew
+ * signs with the warehouse; the supervisor signs nothing) and confirm the
+ * returns supervisors record. No prices.
  */
+
+/** Who can sign for a restock: the people of every brigade it is for. */
+async function signerGroupsFor(
+	brigadeIds: string[],
+): Promise<PickupSignerGroup[]> {
+	if (brigadeIds.length === 0) return []
+	const [brigades, crewUsers] = await Promise.all([
+		db.brigade.findMany({
+			where: { id: { in: brigadeIds } },
+			select: {
+				id: true,
+				name: true,
+				code: true,
+				leadName: true,
+				memberIds: true,
+			},
+		}),
+		db.user.findMany({
+			where: { role: "CREW", active: true },
+			select: { id: true, name: true },
+			orderBy: { name: "asc" },
+		}),
+	])
+	const inOrder = brigadeIds.flatMap((id) => {
+		const b = brigades.find((x) => x.id === id)
+		return b ? [b] : []
+	})
+	return pickupSignerGroups(inOrder, crewUsers)
+}
 export async function loader({ request }: Route.LoaderArgs) {
 	await requireRole(request, rolesMatching(canReleaseToVan))
-	const [restocks, returns] = await Promise.all([
+	const [restocks, returns, warehouseUsers] = await Promise.all([
 		db.brigadeRestock.findMany({
 			where: { status: { in: ["REQUESTED", "READY"] } },
 			include: { lines: true, requestedBy: { select: { name: true } } },
@@ -37,7 +74,25 @@ export async function loader({ request }: Route.LoaderArgs) {
 			include: { requestedBy: { select: { name: true } } },
 			orderBy: { requestedAt: "asc" },
 		}),
+		db.user.findMany({
+			where: { role: "WAREHOUSE", active: true },
+			select: { id: true, name: true },
+			orderBy: { name: "asc" },
+		}),
 	])
+	const groupsByRestock = new Map(
+		await Promise.all(
+			restocks.map(
+				async (r) =>
+					[
+						r.id,
+						await signerGroupsFor([
+							...new Set(r.lines.map((l) => l.brigadeId)),
+						]),
+					] as const,
+			),
+		),
+	)
 	const brigades = new Map(
 		(
 			await db.brigade.findMany({
@@ -76,11 +131,16 @@ export async function loader({ request }: Route.LoaderArgs) {
 	return {
 		restocks: restocks.map((r) => ({
 			id: r.id,
+			number: r.number,
 			status: r.status,
 			supervisor: r.requestedBy.name,
 			requestedAt: r.requestedAt.toISOString(),
-			warehouseSigned: !!r.warehouseSignedAt,
-			supervisorSigned: !!r.supervisorSignedAt,
+			signerGroups: (groupsByRestock.get(r.id) ?? []).map((g) => ({
+				brigadeId: g.brigadeId,
+				brigadeName: g.brigadeName,
+				brigadeCode: g.brigadeCode,
+				signers: g.signers.map((x) => ({ key: x.key, name: x.name })),
+			})),
 			lines: r.lines.map((l) => ({
 				id: l.id,
 				brigade: brigadeName(l.brigadeId),
@@ -89,6 +149,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 				qty: l.qty,
 			})),
 		})),
+		warehouseUsers,
 		returns: returns.map((r) => ({
 			id: r.id,
 			supervisor: r.requestedBy.name,
@@ -108,8 +169,60 @@ export async function action({ request }: Route.ActionArgs) {
 		switch (form.get("intent")) {
 			case "ready":
 				return markRestockReady(id, user.id)
-			case "hand_over":
-				return signPickup(id, user, "warehouse")
+			case "hand_over": {
+				const restock = await db.brigadeRestock.findUnique({
+					where: { id },
+					include: { lines: true },
+				})
+				if (!restock)
+					return {
+						ok: false as const,
+						errorKey: "brigade_stock.errors.not_found",
+					}
+				const groups = await signerGroupsFor([
+					...new Set(restock.lines.map((l) => l.brigadeId)),
+				])
+				const crew = findPickupSigner(
+					groups,
+					String(form.get("crewSigner") ?? ""),
+				)
+				if (!crew)
+					return {
+						ok: false as const,
+						errorKey: "brigade_stock.errors.crew_signer_required",
+					}
+				const releaser = await db.user.findFirst({
+					where: {
+						id: String(form.get("releasedById") ?? ""),
+						role: "WAREHOUSE",
+						active: true,
+					},
+					select: { id: true },
+				})
+				if (!releaser)
+					return {
+						ok: false as const,
+						errorKey: "docs_sign.alerts.release_signer_required",
+					}
+				let lines: { lineId: string; givenQty: number; note?: string }[] = []
+				try {
+					lines = JSON.parse(String(form.get("lines") ?? "[]"))
+				} catch {
+					return {
+						ok: false as const,
+						errorKey: "brigade_stock.errors.bad_given",
+					}
+				}
+				return handOverRestock({
+					id,
+					releasedById: releaser.id,
+					crewSignerName: crew.name,
+					crewSignerBrigadeId: crew.brigadeId,
+					releaseSignature: String(form.get("releaseSignature") ?? ""),
+					crewSignature: String(form.get("crewSignature") ?? ""),
+					lines,
+				})
+			}
 			case "confirm_return":
 				return confirmReturn(id, user.id)
 			default:
@@ -120,6 +233,40 @@ export async function action({ request }: Route.ActionArgs) {
 		}
 	})()
 	return result.ok ? { ok: true as const } : { errorKey: result.errorKey }
+}
+
+/** "Ready. Waiting for the crew…" with a Hand over button that opens the signing. */
+function HandOver({
+	restock,
+	warehouseUsers,
+}: {
+	restock: { id: string } & Pick<
+		Route.ComponentProps["loaderData"]["restocks"][number],
+		"lines" | "signerGroups"
+	>
+	warehouseUsers: { id: string; name: string }[]
+}) {
+	const { t } = useTranslation()
+	const [open, setOpen] = useState(false)
+	return (
+		<div className="space-y-2">
+			<p className="text-xs text-muted-foreground">
+				{t("brigade_stock.wh_waiting_crew")}
+			</p>
+			{open ? (
+				<RestockHandOver
+					id={restock.id}
+					lines={restock.lines}
+					warehouseUsers={warehouseUsers}
+					signerGroups={restock.signerGroups}
+				/>
+			) : (
+				<Button type="button" size="sm" onClick={() => setOpen(true)}>
+					{t("brigade_stock.wh_hand_over")}
+				</Button>
+			)}
+		</div>
+	)
 }
 
 function RowAction({
@@ -154,7 +301,7 @@ function RowAction({
 export default function WarehouseBrigadeStock({
 	loaderData,
 }: Route.ComponentProps) {
-	const { restocks, returns } = loaderData
+	const { restocks, returns, warehouseUsers } = loaderData
 	const { t } = useTranslation()
 	return (
 		<div className="space-y-6">
@@ -176,9 +323,17 @@ export default function WarehouseBrigadeStock({
 								<Badge variant={r.status === "READY" ? "ok" : "info"}>
 									{t(`brigade_stock.status.${r.status}`)}
 								</Badge>
+								{r.number && (
+									<span className="font-mono text-sm font-medium">
+										{r.number}
+									</span>
+								)}
 								<span className="text-sm">{r.supervisor}</span>
-								<span className="text-xs text-muted-foreground">
-									{new Date(r.requestedAt).toLocaleDateString()}
+								<span
+									className="text-xs text-muted-foreground"
+									suppressHydrationWarning
+								>
+									{new Date(r.requestedAt).toLocaleString()}
 								</span>
 							</div>
 							<ul className="text-sm">
@@ -195,17 +350,8 @@ export default function WarehouseBrigadeStock({
 									label={t("brigade_stock.wh_mark_ready")}
 								/>
 							)}
-							{r.status === "READY" && !r.warehouseSigned && (
-								<RowAction
-									id={r.id}
-									intent="hand_over"
-									label={t("brigade_stock.wh_hand_over")}
-								/>
-							)}
-							{r.status === "READY" && r.warehouseSigned && (
-								<p className="text-xs text-muted-foreground">
-									{t("brigade_stock.wh_waiting_supervisor")}
-								</p>
+							{r.status === "READY" && (
+								<HandOver restock={r} warehouseUsers={warehouseUsers} />
 							)}
 						</li>
 					))}

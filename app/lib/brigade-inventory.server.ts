@@ -114,11 +114,29 @@ export type RestockLineInput = {
 	qty: number
 }
 
+/** `REQ-YYMMDD-NNN` for today in Puerto Rico; NNN restarts at 001 each day. */
+export async function nextRestockNumber(
+	client: Client,
+	now: Date = new Date(),
+): Promise<string> {
+	const [y, m, d] = now
+		.toLocaleDateString("en-CA", { timeZone: "America/Puerto_Rico" })
+		.split("-")
+	const prefix = `REQ-${y.slice(2)}${m}${d}-`
+	const last = await client.brigadeRestock.findFirst({
+		where: { number: { startsWith: prefix } },
+		orderBy: { number: "desc" },
+		select: { number: true },
+	})
+	const n = last?.number ? Number(last.number.slice(prefix.length)) + 1 : 1
+	return `${prefix}${String(n).padStart(3, "0")}`
+}
+
 /** One request per visit: lines for any of the supervisor's brigades. */
 export async function createRestock(
 	supervisorId: string,
 	lines: RestockLineInput[],
-): Promise<StockResult & { id?: string }> {
+): Promise<StockResult & { id?: string; number?: string }> {
 	if (lines.length === 0) return err("no_lines")
 	if (!lines.every((l) => isQty(l.qty))) return err("bad_qty")
 	const mine = new Set(await supervisorBrigadeIds(db, supervisorId))
@@ -135,20 +153,35 @@ export async function createRestock(
 		where: { role: "WAREHOUSE", active: true },
 		select: { id: true },
 	})
-	const request = await db.brigadeRestock.create({
-		data: {
-			requestedById: supervisorId,
-			lines: { create: lines },
-		},
-	})
+	// REQ-YYMMDD-NNN: take the day's next number; two sends at once collide on
+	// the unique column and the loser simply takes the next one.
+	let request: { id: string; number: string | null } | null = null
+	for (let attempt = 0; attempt < 5 && !request; attempt++) {
+		try {
+			request = await db.brigadeRestock.create({
+				data: {
+					requestedById: supervisorId,
+					number: await nextRestockNumber(db),
+					lines: { create: lines },
+				},
+			})
+		} catch (e) {
+			const clash =
+				typeof e === "object" &&
+				e !== null &&
+				(e as { code?: string }).code === "P2002"
+			if (!clash || attempt === 4) throw e
+		}
+	}
+	if (!request) return err("not_found")
 	if (warehouse.length > 0)
 		await db.notification.createMany({
 			data: warehouse.map((w) => ({
 				userId: w.id,
-				message: "Brigade restock requested — prepare the order",
+				message: `${request?.number ?? "Brigade restock"} requested — prepare the order`,
 			})),
 		})
-	return { ok: true, id: request.id }
+	return { ok: true, id: request.id, number: request.number ?? undefined }
 }
 
 /** Orlando has the order ready: the requester is alerted. */
@@ -165,7 +198,11 @@ export async function markRestockReady(
 	await db.notification.create({
 		data: {
 			userId: request.requestedById,
-			message: "Your brigade restock is ready for pickup",
+			message:
+				`Your brigade restock ${request.number ?? ""} is ready for pickup`.replace(
+					"  ",
+					" ",
+				),
 		},
 	})
 	return { ok: true }
@@ -181,63 +218,106 @@ export async function cancelRestock(
 			id,
 			requestedById: supervisorId,
 			status: { in: ["REQUESTED", "READY"] },
-			supervisorSignedAt: null,
-			warehouseSignedAt: null,
 		},
 		data: { status: "CANCELLED" },
 	})
 	return done.count === 1 ? { ok: true } : err("cannot_cancel")
 }
 
+export type HandOverInput = {
+	id: string
+	/** The warehouse user handing over (the signer picked on the form). */
+	releasedById: string
+	crewSignerName: string
+	crewSignerBrigadeId: string | null
+	releaseSignature: string
+	crewSignature: string
+	/** One entry per line: what was actually given, and why if short. */
+	lines: { lineId: string; givenQty: number; note?: string | null }[]
+}
+
+const blankSignature = (v: string) => !v || v === "data:,"
+
 /**
- * Both sides sign the pickup. When the second signature lands the request is
- * picked up and each line is added to its brigade's balance, in one
- * transaction so a double click cannot add it twice.
+ * The hand over: the warehouse gives what it has, the brigade's crew signs
+ * with the warehouse, and the request closes as Picked up. Each line adds
+ * what was GIVEN (not what was asked) to its brigade's balance; a short line
+ * needs a note and alerts the supervisor. One transaction, claimed on the
+ * READY status, so a double click cannot add it twice. The supervisor signs
+ * nothing.
  */
-export async function signPickup(
-	id: string,
-	user: { id: string },
-	side: "supervisor" | "warehouse",
+export async function handOverRestock(
+	input: HandOverInput,
 ): Promise<StockResult> {
+	if (
+		blankSignature(input.releaseSignature) ||
+		blankSignature(input.crewSignature)
+	)
+		return err("signature_required")
+	if (!input.crewSignerName.trim()) return err("crew_signer_required")
 	return db.$transaction(async (tx) => {
 		const request = await tx.brigadeRestock.findUnique({
-			where: { id },
+			where: { id: input.id },
 			include: { lines: true },
 		})
 		if (!request) return err("not_found")
-		if (side === "supervisor" && request.requestedById !== user.id)
-			return err("not_yours")
-		const signedKey =
-			side === "supervisor" ? "supervisorSignedAt" : "warehouseSignedAt"
+		if (request.status !== "READY") return err("cannot_sign")
+
+		const byId = new Map(input.lines.map((l) => [l.lineId, l]))
+		const given = []
+		for (const line of request.lines) {
+			const entry = byId.get(line.id)
+			if (!entry) return err("bad_given")
+			const n = entry.givenQty
+			if (!Number.isInteger(n) || n < 0 || n > line.qty) return err("bad_given")
+			const note = entry.note?.trim() || null
+			if (n < line.qty && !note) return err("short_needs_note")
+			given.push({ line, n, note })
+		}
+
 		const claimed = await tx.brigadeRestock.updateMany({
-			where: { id, status: "READY", [signedKey]: null },
-			data:
-				side === "supervisor"
-					? { supervisorSignedAt: new Date(), supervisorSignedById: user.id }
-					: { warehouseSignedAt: new Date(), warehouseSignedById: user.id },
+			where: { id: input.id, status: "READY" },
+			data: {
+				status: "PICKED_UP",
+				pickedUpAt: new Date(),
+				warehouseSignedAt: new Date(),
+				warehouseSignedById: input.releasedById,
+				releaseSignature: input.releaseSignature,
+				crewSignature: input.crewSignature,
+				crewSignerName: input.crewSignerName.trim(),
+				crewSignerBrigadeId: input.crewSignerBrigadeId,
+			},
 		})
 		if (claimed.count !== 1) return err("cannot_sign")
 
-		const otherSigned =
-			side === "supervisor"
-				? request.warehouseSignedAt
-				: request.supervisorSignedAt
-		if (otherSigned) {
-			await tx.brigadeRestock.update({
-				where: { id },
-				data: { status: "PICKED_UP", pickedUpAt: new Date() },
+		for (const g of given)
+			await tx.brigadeRestockLine.update({
+				where: { id: g.line.id },
+				data: { givenQty: g.n, note: g.note },
 			})
-			await tx.brigadeStockMovement.createMany({
-				data: request.lines.map((l) => ({
-					brigadeId: l.brigadeId,
-					serviceCodeId: l.serviceCodeId,
-					type: "PICKUP" as const,
-					qty: l.qty,
-					refRestockId: id,
-					byUserId: user.id,
-				})),
-			})
-		}
+		const movements = given
+			.filter((g) => g.n > 0)
+			.map((g) => ({
+				brigadeId: g.line.brigadeId,
+				serviceCodeId: g.line.serviceCodeId,
+				type: "PICKUP" as const,
+				qty: g.n,
+				refRestockId: input.id,
+				byUserId: input.releasedById,
+			}))
+		if (movements.length > 0)
+			await tx.brigadeStockMovement.createMany({ data: movements })
+
+		const short = given.filter((g) => g.n < g.line.qty).length
+		await tx.notification.create({
+			data: {
+				userId: request.requestedById,
+				message:
+					short > 0
+						? `${request.number ?? "Brigade restock"} picked up, but ${short} line${short === 1 ? "" : "s"} came up short. Open it to see the notes`
+						: `${request.number ?? "Brigade restock"} picked up. The brigade balance is updated`,
+			},
+		})
 		return { ok: true }
 	})
 }

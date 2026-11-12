@@ -1344,6 +1344,9 @@ enum BrigadeRestockStatus {
 
 model BrigadeRestock {
   id                   String               @id @default(cuid())
+  // REQ-YYMMDD-NNN, made when the supervisor sends it; NNN restarts each day.
+  // Null on requests made before numbering.
+  number               String?              @unique
   requestedById        String
   requestedBy          User                 @relation("BrigadeRestockRequester", fields: [requestedById], references: [id])
   status               BrigadeRestockStatus @default(REQUESTED)
@@ -1357,6 +1360,12 @@ model BrigadeRestock {
   warehouseSignedAt    DateTime?
   warehouseSignedById  String?
   warehouseSignedBy    User?                @relation("BrigadeRestockWarehouseSig", fields: [warehouseSignedById], references: [id])
+  // The hand over: the crew signs with the warehouse. Names are copied so the
+  // record stays what was signed. The supervisor signs nothing.
+  releaseSignature     String?
+  crewSignature        String?
+  crewSignerName       String?
+  crewSignerBrigadeId  String?
   pickedUpAt           DateTime?
   lines                BrigadeRestockLine[]
 
@@ -1372,7 +1381,9 @@ model BrigadeRestockLine {
   brigadeId     String
   brigade       Brigade        @relation(fields: [brigadeId], references: [id], onDelete: Restrict)
   serviceCodeId String
-  qty           Int
+  qty           Int // requested
+  givenQty      Int? // what the warehouse actually gave; set at hand over
+  note          String? // required when givenQty < qty ("out of stock")
 
   @@index([restockId])
   @@map("brigade_restock_line")

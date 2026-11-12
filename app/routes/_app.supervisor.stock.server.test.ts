@@ -16,7 +16,6 @@ vi.mock("~/lib/brigade-inventory.server", () => ({
 	createRestock: vi.fn(),
 	recordCount: vi.fn(),
 	requestReturn: vi.fn(),
-	signPickup: vi.fn(),
 	supervisorBrigadeIds: vi.fn(),
 }))
 
@@ -26,14 +25,13 @@ import {
 	createRestock,
 	recordCount,
 	requestReturn,
-	signPickup,
 	supervisorBrigadeIds,
 } from "~/lib/brigade-inventory.server"
 import { db } from "~/lib/db.server"
 import { requireRole } from "~/lib/permissions.server"
 import * as route from "./_app.supervisor.stock"
 
-const sup = { id: "sup-1", role: "SUPERVISOR" }
+const sup = { id: "sup-1", role: "SUPERVISOR", name: "Charlie González" }
 
 const post = (fields: [string, string][]) => {
 	const form = new FormData()
@@ -58,7 +56,6 @@ beforeEach(() => {
 	vi.mocked(requireRole).mockResolvedValue({ user: sup, session: {} } as never)
 	vi.mocked(createRestock).mockResolvedValue({ ok: true, id: "r1" })
 	vi.mocked(cancelRestock).mockResolvedValue({ ok: true })
-	vi.mocked(signPickup).mockResolvedValue({ ok: true })
 	vi.mocked(recordCount).mockResolvedValue({ ok: true })
 	vi.mocked(requestReturn).mockResolvedValue({ ok: true })
 })
@@ -90,12 +87,15 @@ describe("POST /supervisor/stock", () => {
 		])
 	})
 
-	it("signs the pickup as the supervisor and can cancel", async () => {
-		await post([
-			["intent", "sign_pickup"],
-			["id", "r1"],
-		])
-		expect(signPickup).toHaveBeenCalledWith("r1", sup, "supervisor")
+	it("can cancel, and has no pickup to sign: the crew signs at the warehouse", async () => {
+		expect(
+			await post([
+				["intent", "sign_pickup"],
+				["id", "r1"],
+			]),
+		).toEqual({
+			errorKey: "brigade_stock.errors.bad_intent",
+		})
 		await post([
 			["intent", "cancel_restock"],
 			["id", "r1"],
@@ -192,6 +192,35 @@ describe("GET /supervisor/stock", () => {
 			["JESUS MARTINEZ", "TIE WRAP", 30],
 		])
 		expect(data.balances[0].lastCountAt).toBe("2026-11-02T10:00:00.000Z")
+	})
+
+	it("shows each request with its REQ number, and what was given on a short line", async () => {
+		vi.mocked(db.brigadeRestock.findMany).mockResolvedValue([
+			{
+				id: "r1",
+				number: "REQ-261110-001",
+				status: "PICKED_UP",
+				requestedAt: new Date("2026-11-10T13:12:00Z"),
+				lines: [
+					{
+						id: "l1",
+						brigadeId: "b1",
+						serviceCodeId: "m1",
+						qty: 5,
+						givenQty: 4,
+						note: "out of stock",
+					},
+				],
+			},
+		] as never)
+		const data = await load()
+		expect(data.restocks[0]).toMatchObject({
+			number: "REQ-261110-001",
+			status: "PICKED_UP",
+			requestedBy: sup.name,
+			lines: [{ qty: 5, givenQty: 4, note: "out of stock" }],
+		})
+		expect(data.restocks[0]).not.toHaveProperty("supervisorSigned")
 	})
 
 	it("filters by brigade, and the log only opens for one of his brigades", async () => {

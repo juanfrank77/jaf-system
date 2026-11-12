@@ -1,5 +1,6 @@
 /**
- * Brigade stock: restock request → both sign → balance; counts with a reason
+ * Brigade stock: restock request (REQ number) → hand over (crew signs with the
+ * warehouse) → balance by what was given; counts with a reason
  * and a variance; returns the warehouse confirms; field use charged once
  * (real shadow database).
  */
@@ -9,10 +10,11 @@ import {
 	cancelRestock,
 	confirmReturn,
 	createRestock,
+	handOverRestock,
 	markRestockReady,
+	nextRestockNumber,
 	recordCount,
 	requestReturn,
-	signPickup,
 	syncUsedFromJob,
 } from "~/lib/brigade-inventory.server"
 import { db } from "~/lib/db.server"
@@ -94,44 +96,151 @@ describe("restock request", () => {
 		).toMatchObject({ errorKey: "brigade_stock.errors.bad_material" })
 	})
 
-	it("adds to the balance only once both sides have signed, and only once", async () => {
+	const SIG = "data:image/png;base64,AAAA"
+	const handOver = (
+		id: string,
+		lines: { lineId: string; givenQty: number; note?: string }[],
+		over: Record<string, unknown> = {},
+	) =>
+		handOverRestock({
+			id,
+			releasedById: wh.id,
+			crewSignerName: "Edgard Ocasio",
+			crewSignerBrigadeId: angel.id,
+			releaseSignature: SIG,
+			crewSignature: SIG,
+			lines,
+			...over,
+		})
+	const linesOf = async (id: string) =>
+		db.brigadeRestockLine.findMany({
+			where: { restockId: id },
+			orderBy: { qty: "desc" },
+		})
+
+	it("numbers a request REQ-YYMMDD-NNN, restarting at 001 each day", async () => {
+		const made = await createRestock(sup.id, [
+			{ brigadeId: angel.id, serviceCodeId: anchor.id, qty: 1 },
+		])
+		if (!made.ok || !made.id) throw new Error("not created")
+		expect(made.number).toMatch(/^REQ-\d{6}-\d{3}$/)
+		const row = await db.brigadeRestock.findUniqueOrThrow({
+			where: { id: made.id },
+		})
+		expect(row.number).toBe(made.number)
+
+		// 10 Nov 2026 noon in Puerto Rico: the first of the day is 001, then 002.
+		const noon = new Date("2026-11-10T16:00:00Z")
+		expect(await nextRestockNumber(db, noon)).toBe("REQ-261110-001")
+		await db.brigadeRestock.create({
+			data: { requestedById: sup.id, number: "REQ-261110-001" },
+		})
+		expect(await nextRestockNumber(db, noon)).toBe("REQ-261110-002")
+		// Late evening still counts as that Puerto Rico day, not tomorrow's UTC.
+		expect(await nextRestockNumber(db, new Date("2026-11-11T01:30:00Z"))).toBe(
+			"REQ-261110-002",
+		)
+		expect(await nextRestockNumber(db, new Date("2031-03-04T12:00:00Z"))).toBe(
+			"REQ-310304-001",
+		)
+	})
+
+	it("adds what was given to the balance when the crew signs, and only once", async () => {
 		const made = await createRestock(sup.id, [
 			{ brigadeId: angel.id, serviceCodeId: anchor.id, qty: 20 },
 			{ brigadeId: angel.id, serviceCodeId: wrap.id, qty: 10 },
 		])
 		if (!made.ok || !made.id) throw new Error("not created")
 		const id = made.id
+		const lines = await linesOf(id)
+		const full = lines.map((l) => ({ lineId: l.id, givenQty: l.qty }))
 
-		// Not ready yet: nobody can sign.
-		expect(await signPickup(id, sup, "supervisor")).toMatchObject({ ok: false })
+		// Not ready yet: nothing can be handed over.
+		expect(await handOver(id, full)).toMatchObject({ ok: false })
 		expect(await markRestockReady(id, wh.id)).toEqual({ ok: true })
 		expect(await markRestockReady(id, wh.id)).toMatchObject({ ok: false })
 		const alert = await db.notification.findFirst({
 			where: { userId: sup.id, message: { contains: "ready" } },
 		})
-		expect(alert).not.toBeNull()
-
-		// Only the requester signs for the supervisor side.
-		expect(await signPickup(id, other, "supervisor")).toMatchObject({
-			errorKey: "brigade_stock.errors.not_yours",
-		})
-		expect(await signPickup(id, sup, "supervisor")).toEqual({ ok: true })
-		expect(await signPickup(id, sup, "supervisor")).toMatchObject({
-			ok: false,
-		})
+		expect(alert?.message).toContain(made.number)
 		expect(await balance(angel.id, anchor.id)).toBeUndefined()
 
-		expect(await signPickup(id, wh, "warehouse")).toEqual({ ok: true })
+		expect(await handOver(id, full)).toEqual({ ok: true })
 		expect(await balance(angel.id, anchor.id)).toBe(20)
 		expect(await balance(angel.id, wrap.id)).toBe(10)
-		expect(await signPickup(id, wh, "warehouse")).toMatchObject({ ok: false })
+		expect(await handOver(id, full)).toMatchObject({ ok: false })
 		expect(await balance(angel.id, anchor.id)).toBe(20)
 
 		const done = await db.brigadeRestock.findUniqueOrThrow({ where: { id } })
-		expect(done.status).toBe("PICKED_UP")
+		expect(done).toMatchObject({
+			status: "PICKED_UP",
+			crewSignerName: "Edgard Ocasio",
+			crewSignature: SIG,
+			releaseSignature: SIG,
+			warehouseSignedById: wh.id,
+			supervisorSignedAt: null,
+		})
+		expect(done.pickedUpAt).toBeInstanceOf(Date)
 	})
 
-	it("can be cancelled until someone signs", async () => {
+	it("a short line needs a note, closes the request, credits only what was given and alerts the supervisor", async () => {
+		const made = await createRestock(sup.id, [
+			{ brigadeId: angel.id, serviceCodeId: anchor.id, qty: 5 },
+		])
+		if (!made.ok || !made.id) throw new Error("not created")
+		const id = made.id
+		const [line] = await linesOf(id)
+		await markRestockReady(id, wh.id)
+		const before = (await balance(angel.id, anchor.id)) ?? 0
+
+		expect(
+			await handOver(id, [{ lineId: line.id, givenQty: 4 }]),
+		).toMatchObject({ errorKey: "brigade_stock.errors.short_needs_note" })
+		expect(
+			await handOver(id, [{ lineId: line.id, givenQty: 4, note: "  " }]),
+		).toMatchObject({ errorKey: "brigade_stock.errors.short_needs_note" })
+		expect(
+			await handOver(id, [{ lineId: line.id, givenQty: 6, note: "x" }]),
+		).toMatchObject({ errorKey: "brigade_stock.errors.bad_given" })
+		expect(await balance(angel.id, anchor.id)).toBe(before)
+
+		expect(
+			await handOver(id, [
+				{ lineId: line.id, givenQty: 4, note: "out of stock" },
+			]),
+		).toEqual({ ok: true })
+		expect(await balance(angel.id, anchor.id)).toBe(before + 4)
+		const [after] = await linesOf(id)
+		expect(after).toMatchObject({ qty: 5, givenQty: 4, note: "out of stock" })
+		expect(
+			(await db.brigadeRestock.findUniqueOrThrow({ where: { id } })).status,
+		).toBe("PICKED_UP")
+		const alert = await db.notification.findFirst({
+			where: { userId: sup.id, message: { contains: "short" } },
+		})
+		expect(alert?.message).toContain(made.number)
+	})
+
+	it("refuses a blank signature or a missing crew signer", async () => {
+		const made = await createRestock(sup.id, [
+			{ brigadeId: angel.id, serviceCodeId: wrap.id, qty: 2 },
+		])
+		if (!made.ok || !made.id) throw new Error("not created")
+		const [line] = await linesOf(made.id)
+		await markRestockReady(made.id, wh.id)
+		const ok = [{ lineId: line.id, givenQty: 2 }]
+		expect(
+			await handOver(made.id, ok, { crewSignature: "data:," }),
+		).toMatchObject({ errorKey: "brigade_stock.errors.signature_required" })
+		expect(await handOver(made.id, ok, { releaseSignature: "" })).toMatchObject(
+			{ errorKey: "brigade_stock.errors.signature_required" },
+		)
+		expect(await handOver(made.id, ok, { crewSignerName: " " })).toMatchObject({
+			errorKey: "brigade_stock.errors.crew_signer_required",
+		})
+	})
+
+	it("can be cancelled until it is picked up", async () => {
 		const made = await createRestock(sup.id, [
 			{ brigadeId: angel.id, serviceCodeId: wrap.id, qty: 3 },
 		])
